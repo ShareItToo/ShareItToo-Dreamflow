@@ -61,7 +61,7 @@
   },
   "sourceBindings": {
     "backend/src/openai_listing_ai_provider.js": "95287eaf41efadf048e0b48bfb4c45c2b2d70552f67abed4f7f8a3f1f738e426",
-    "backend/src/app.js": "6a10db4bff5d044eb8cba11574806f195f01aade17ba193692c90ba5f7013850",
+    "backend/src/app.js": "3a30a389612dddf4b5d636d9da2eaa35451596e7dac3add80c5f0a192badce55",
     "backend/compose.staging.listing-ai.yml": "65a3f228a2e7e66fe518470369f554439dae8d078b11b0649a83acabb53c1be1",
     "backend/ops/validate_openai_staging_secret.mjs": "c71dc3986145dee854fa87274afb28c3b154e8bec85662536196161e0705409a",
     "backend/ops/deploy_release.sh": "7b0958cba5d2169da3283e214630ddd55bba882eefb726aa6895b917b94ee477",

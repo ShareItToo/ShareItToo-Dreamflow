@@ -119,7 +119,7 @@
   },
   "ratchets": {
     "privacyManifestSha256": "d96fd0ef4917a166daefca4b7defdde14efeec3301764f1bff8f3114c0e114bb",
-    "retentionManifestSha256": "d6fee9f41cf436030011e7fee20c26c294b307a2ce313a13ad89157e13f43a3b",
+    "retentionManifestSha256": "47202c5178792f767b7f638bf93c78e7589c10f1c3fb75005f3979788c164bf3",
     "activeProviderEvidenceSha256": "94d4d32554f252c712eefdf998d1ca6274f5dea79b3f89460c3d37e8d23d2e07",
     "activeProviderState": "prepared-hold",
     "completedOwnerDecisions": 0,
@@ -161,7 +161,7 @@
   "sourceInventory": [
     {
       "path": "backend/src/app.js",
-      "sha256": "6a10db4bff5d044eb8cba11574806f195f01aade17ba193692c90ba5f7013850"
+      "sha256": "3a30a389612dddf4b5d636d9da2eaa35451596e7dac3add80c5f0a192badce55"
     },
     {
       "path": "backend/src/moderation_workflow.js",

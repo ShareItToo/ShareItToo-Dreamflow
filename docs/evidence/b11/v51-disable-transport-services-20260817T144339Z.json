@@ -46,7 +46,7 @@
     "candidateBuiltOrRelabeled": false
   },
   "sourceHashesSha256": {
-    "backend/src/app.js": "6a10db4bff5d044eb8cba11574806f195f01aade17ba193692c90ba5f7013850",
+    "backend/src/app.js": "3a30a389612dddf4b5d636d9da2eaa35451596e7dac3add80c5f0a192badce55",
     "backend/src/booking_workflow.js": "2d4af5495ac59afdf2bf6730c5d55ac5b68c3e071345628d4ef5a416e549f4e1",
     "backend/src/v51_transport_domain.js": "23203dff7ae70545d534cee19dfbe434b0c64ff4144780186fc30aad523d0e72",
     "backend/test/v51_transport_disabled.test.js": "ac9e7e3b0fbe2a59b8e084ca68ef849d45720cd298ebcab3e65efc4d5cc18fb3",

@@ -58,7 +58,7 @@
     "diffCheck": "passed"
   },
   "sourceHashesSha256": {
-    "backend/src/app.js": "6a10db4bff5d044eb8cba11574806f195f01aade17ba193692c90ba5f7013850",
+    "backend/src/app.js": "3a30a389612dddf4b5d636d9da2eaa35451596e7dac3add80c5f0a192badce55",
     "backend/src/notifications.js": "72d400d24b5fe98fd1ed71e2d9e1e8614740a575d967a45ea89b0408368f9582",
     "lib/screens/payment_checkout_screen.dart": "154ae02a27644d6e366b07014bcbeccc946bb687f6e8fdf9f1fa224dffc9a8fc",
     "test/payment_provider_truthfulness_test.dart": "4a34d22b010efdf13039d3f7a1ee222f2c16ca2072280b2f92f4fd22f83100e7",

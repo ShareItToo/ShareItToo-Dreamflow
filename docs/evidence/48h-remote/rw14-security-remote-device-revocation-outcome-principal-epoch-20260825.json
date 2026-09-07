@@ -131,9 +131,9 @@
     ]
   },
   "ratchets": {
-    "privacyManifestSha256": "2e8fa3713571239f7f285a8047e00c0a488dc661e12948458268b884e2cc1e8a",
-    "retentionManifestSha256": "d6fee9f41cf436030011e7fee20c26c294b307a2ce313a13ad89157e13f43a3b",
-    "activeProviderEvidenceSha256": "3139da065da706964a04074d08ebed1e0260319a52eba032f1c0ff50da8ac286",
+    "privacyManifestSha256": "356977fa402ac96ac4919a8557d3a5768f411064cc30409f50cbf837c29bf493",
+    "retentionManifestSha256": "47202c5178792f767b7f638bf93c78e7589c10f1c3fb75005f3979788c164bf3",
+    "activeProviderEvidenceSha256": "f5c788f0c5888928df14c955455155ae589497e8ac4bf3aad56fdb23e0ef1bec",
     "activeProviderState": "prepared-hold",
     "completedOwnerDecisions": 0,
     "requiredOwnerDecisions": 10,
@@ -176,7 +176,7 @@
   "sourceInventory": [
     {
       "path": "backend/src/app.js",
-      "sha256": "6a10db4bff5d044eb8cba11574806f195f01aade17ba193692c90ba5f7013850"
+      "sha256": "3a30a389612dddf4b5d636d9da2eaa35451596e7dac3add80c5f0a192badce55"
     },
     {
       "path": "lib/screens/security_screen.dart",
@@ -200,23 +200,23 @@
     },
     {
       "path": "store/privacy-disclosures.json",
-      "sha256": "2e8fa3713571239f7f285a8047e00c0a488dc661e12948458268b884e2cc1e8a"
+      "sha256": "356977fa402ac96ac4919a8557d3a5768f411064cc30409f50cbf837c29bf493"
     },
     {
       "path": "store/retention-deletion-readiness.json",
-      "sha256": "d6fee9f41cf436030011e7fee20c26c294b307a2ce313a13ad89157e13f43a3b"
+      "sha256": "47202c5178792f767b7f638bf93c78e7589c10f1c3fb75005f3979788c164bf3"
     },
     {
       "path": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
-      "sha256": "3139da065da706964a04074d08ebed1e0260319a52eba032f1c0ff50da8ac286"
+      "sha256": "f5c788f0c5888928df14c955455155ae589497e8ac4bf3aad56fdb23e0ef1bec"
     },
     {
       "path": "docs/evidence/48h-remote/rw10-local-security-control-truthfulness-20260825.json",
-      "sha256": "e168acf9898d8b3c3ef103cf7260919f7c0bfce3287360d618065a44fe529c9b"
+      "sha256": "7073006104c89ae3db4fe873372dfd13f1265345a5c348d9bbc44effa1997dd8"
     },
     {
       "path": "docs/evidence/48h-remote/rw13-security-logout-all-outcome-principal-epoch-20260825.json",
-      "sha256": "9a2d82db08944975a62947f184c8e10f68d8745087b9a8b29d55b904e377942c"
+      "sha256": "f970f7ed477621f845f95677c92938f7de6adc8603f767de1e5691a38f2738f7"
     },
     {
       "path": "scripts/technical_regression_check.sh",

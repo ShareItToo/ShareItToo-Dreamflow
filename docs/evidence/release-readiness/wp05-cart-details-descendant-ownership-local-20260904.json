@@ -99,15 +99,15 @@
     },
     {
       "path": "docs/evidence/48h-remote/rw17-account-deletion-principal-epoch-transaction-20260826.json",
-      "sha256": "ddd5f898cf22e1763feab8eb56e968a247b476b33550c296b31869854cf53307"
+      "sha256": "e5ad7a5dc7753c8a728d53b1c8059afebffcc0c865c327388959d31af0db8fb4"
     },
     {
       "path": "docs/evidence/48h-remote/rw18-contact-verification-principal-epoch-transaction-20260826.json",
-      "sha256": "13ca04350d1e979a2f347cdf66035fc01bb93643959b2d1a1f77db41afd19369"
+      "sha256": "290995ed29e5a7444287f01b15db93be182c0e1367f9af7c9c210be3b8ff393c"
     },
     {
       "path": "docs/evidence/48h-remote/rw19-profile-location-mutation-principal-epoch-transaction-20260826.json",
-      "sha256": "77d917e352bf677dcc278cf1bed04d484c47a63c4061c25768810f9e5f920e21"
+      "sha256": "0a0253823019f3bdb53af390c23040d2dab7b72a2c3036df6f88506d63c96b49"
     },
     {
       "path": "docs/evidence/48h-remote/rw2-reduced-wave0-local-state-truth-recovery-20260825.json",
@@ -147,15 +147,15 @@
     },
     {
       "path": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
-      "sha256": "3139da065da706964a04074d08ebed1e0260319a52eba032f1c0ff50da8ac286"
+      "sha256": "30118ea6a2e6036c7ebc5cb323649f7c14a6d49343ff66d6c6a52bf72325762b"
     },
     {
       "path": "store/privacy-disclosures.json",
-      "sha256": "2e8fa3713571239f7f285a8047e00c0a488dc661e12948458268b884e2cc1e8a"
+      "sha256": "356977fa402ac96ac4919a8557d3a5768f411064cc30409f50cbf837c29bf493"
     },
     {
       "path": "store/retention-deletion-readiness.json",
-      "sha256": "d6fee9f41cf436030011e7fee20c26c294b307a2ce313a13ad89157e13f43a3b"
+      "sha256": "47202c5178792f767b7f638bf93c78e7589c10f1c3fb75005f3979788c164bf3"
     },
     {
       "path": "tool/validate_active_infrastructure_mail_provider_readiness.mjs",
