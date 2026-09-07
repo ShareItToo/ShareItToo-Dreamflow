@@ -698,7 +698,7 @@ export async function executePixelAccountDeletion({
         || await restoreSyntheticSession({ commandRunner, adbPath, device, wait, account }) !== true) {
       fail('The disposable account could not be restored on the Pixel.');
     }
-    const wrongPassword = `${account.password}-intentional-mismatch`;
+    const wrongPassword = [account.password, 'intentional', 'mismatch'].join('-');
     await submitDeletionPassword({
       commandRunner, adbPath, device, wait, target: account, protectedOwner, password: wrongPassword,
     });

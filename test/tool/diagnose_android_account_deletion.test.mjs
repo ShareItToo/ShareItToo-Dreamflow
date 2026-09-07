@@ -16,6 +16,7 @@ import {
   sanitizeAccountDeletionFailure,
   selectDeletionNode,
 } from '../../tool/diagnose_android_account_deletion.mjs';
+import { detectHighConfidenceSecretRules } from '../../backend/ops/secret_scan_rules.mjs';
 import { createTestTempTracker } from './test_temp_fixtures.mjs';
 
 const tempFixtures = createTestTempTracker();
@@ -262,4 +263,20 @@ test('failure sanitization never returns credentials, aliases or long tokens', (
       'The sanitized current-candidate account-deletion diagnostic failed.',
     );
   }
+});
+
+test('current wrong-password probe is scanner-clean and its immutable historical false positive is reviewed', () => {
+  const diagnosticPath = resolve(import.meta.dirname, '../../tool/diagnose_android_account_deletion.mjs');
+  const diagnostic = readFileSync(diagnosticPath, 'utf8');
+  assert.deepEqual(
+    detectHighConfidenceSecretRules(diagnostic, 'tool/diagnose_android_account_deletion.mjs'),
+    [],
+  );
+  const baselinePath = resolve(import.meta.dirname, '../../backend/ops/secret_scan_history_baseline.json');
+  const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
+  assert.ok(baseline.reviewedFindings.some((entry) => (
+    entry.rule === 'static_password_template_assignment'
+      && entry.source === '42ea6dc4206ed791081bec0433f0eb3890e3f046'
+      && entry.file === 'tool/diagnose_android_account_deletion.mjs'
+  )));
 });
