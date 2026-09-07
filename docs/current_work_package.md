@@ -1,4 +1,34 @@
-# Current Work Package: WP40 password change and bounded sessions
+# Current Work Package: WP41 current-candidate session controls
+
+WP41 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
+signed Internal Staging candidate `1.0.0+2026090610`.
+The bounded physical run proves exact remote-session revocation, rejected
+remote token, preserved invoking Pixel session, logout-all, independently
+server-confirmed empty truth, credential relogin, cold start, A-to-B isolation,
+protected-owner restoration and complete diagnostic-session cleanup.
+
+Implementation HEAD `2b056953d46e35031b19ba8a82229915889619f2` adds only the
+private, recovery-backed diagnostic and six tests. Technical HEAD
+`9487c0a4a4f6dd56c2f55def6d9bda9be5616b7d` removes static credential literals
+from the current test tree, refreshes only the resulting source hashes and
+replaces an incomplete test-only regular-expression escape with an exact
+string comparison. Its exact immutable historical false-positive tuple is
+reviewed without weakening any scanner rule or current-tree protection.
+
+All 2,384 tool tests, the exact pinned Backend suite and complete local
+technical regression pass through Flutter, analyzer, Web/Wasm, loopback,
+PostgreSQL and Android minSdk 24. GitHub Regression `34093957769`, CodeQL
+`34093957772` and the separate PR CodeQL check pass at the exact technical
+HEAD; open code-scanning alerts are zero. PR #7 remains Draft, open, mergeable
+and unmerged. See
+`docs/operations/WP41_CURRENT_CANDIDATE_SESSION_CONTROLS_2026-09-07.md`.
+
+The next bounded package prioritizes the highest-value remaining independent
+current-candidate acceptance gap. OnePlus, Store/Production, payments,
+providers, Firebase Console, backend deployment, Cloud/VPS/DNS and PR merge
+remain unchanged.
+
+# Previous Work Package: WP40 password change and bounded sessions
 
 WP40 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
 signed Internal Staging candidate `1.0.0+2026090610`. The full reversible

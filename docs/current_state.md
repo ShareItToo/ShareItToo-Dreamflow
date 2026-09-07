@@ -1,5 +1,34 @@
 # ShareItToo Current State
 
+WP41 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
+immutable candidate `1.0.0+2026090610`, source HEAD
+`2fd793bac970866aa94a2940f28d6bbc3e04e377`. Exact remote-session revocation,
+revoked-token rejection, preservation of the invoking Pixel session,
+`logout-all`, server-confirmed empty truth, independent relogin, cold start,
+Account-A-to-B isolation, protected-owner restoration and cleanup all pass.
+
+The owner-only journal is closed with no recovery required. Implementation
+HEAD `2b056953d46e35031b19ba8a82229915889619f2` adds only the bounded diagnostic
+and six tests. Technical HEAD
+`9487c0a4a4f6dd56c2f55def6d9bda9be5616b7d` removes literal synthetic
+credentials from the current test tree, records the immutable historical
+false positive as one exact reviewed commit/rule/file tuple, refreshes the
+hash-only evidence chain and replaces an incomplete test-only regular-
+expression escape with an exact string comparison. Scanner rules and scope
+are unchanged; the current full scan has zero unexpected findings.
+
+All 2,384 tool tests and the complete local technical regression pass,
+including Backend, Flutter, analyzer, Web/Wasm, loopback, PostgreSQL, Android
+minSdk 24 and capacity. Exact-head GitHub Regression `34093957769`, CodeQL
+`34093957772` and the separate PR CodeQL check pass; open code-scanning alerts
+are zero. PR #7 remains Draft, open, mergeable and unmerged. The app, candidate
+and Backend runtime were not changed or deployed. See
+`docs/operations/WP41_CURRENT_CANDIDATE_SESSION_CONTROLS_2026-09-07.md`.
+
+The next bounded package prioritizes the highest-value remaining independent
+current-candidate acceptance gap. OnePlus, Store/Production, payments,
+providers, Firebase Console, Cloud/VPS/DNS and PR merge remain unchanged.
+
 WP40 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
 signed Internal Staging candidate `1.0.0+2026090610`, source HEAD
 `2fd793bac970866aa94a2940f28d6bbc3e04e377`. The reversible direct-password
