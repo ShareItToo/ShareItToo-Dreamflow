@@ -305,9 +305,9 @@
     ]
   },
   "ratchets": {
-    "privacyManifestSha256": "e9789509b6f1710cc660f7d2b62833bde3a932823c4a7e10d73b132815bd33ae",
+    "privacyManifestSha256": "c03c1659812d601ef224edebf664a0c88ddb294cb5f5985b45d66ceb7675c424",
     "retentionManifestSha256": "683667f212f89f44680f2fb6bd9556beb16417bf1d0d2ec3a83a37f68413762c",
-    "activeProviderEvidenceSha256": "79a29daa2de67249a764bebb4724b82e7dda5454efb0a04bbd4f6bf1b2e4a7c8",
+    "activeProviderEvidenceSha256": "53f3926b959d4688164afb64bd4243d01ec54b0ea1af9997bb6440afb57694a5",
     "activeProviderState": "prepared-hold",
     "completedOwnerDecisions": 0,
     "requiredOwnerDecisions": 10,
@@ -419,7 +419,7 @@
     },
     {
       "path": "store/privacy-disclosures.json",
-      "sha256": "e9789509b6f1710cc660f7d2b62833bde3a932823c4a7e10d73b132815bd33ae"
+      "sha256": "c03c1659812d601ef224edebf664a0c88ddb294cb5f5985b45d66ceb7675c424"
     },
     {
       "path": "store/retention-deletion-readiness.json",
@@ -427,11 +427,11 @@
     },
     {
       "path": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
-      "sha256": "79a29daa2de67249a764bebb4724b82e7dda5454efb0a04bbd4f6bf1b2e4a7c8"
+      "sha256": "53f3926b959d4688164afb64bd4243d01ec54b0ea1af9997bb6440afb57694a5"
     },
     {
       "path": "docs/evidence/48h-remote/rw10-local-security-control-truthfulness-20260825.json",
-      "sha256": "7389be4bf6bb8623ba242cf2210fc97cc3dac9fb3ee31b3e02aa458c41a423e8"
+      "sha256": "b8a07c4bd92ab259077477b6bd0ec31169c3f12db48082360367909c57a3db3b"
     },
     {
       "path": "docs/evidence/48h-remote/rw11-regression-completeness-stale-support-wiring-20260825.json",
@@ -439,7 +439,7 @@
     },
     {
       "path": "docs/evidence/48h-remote/rw14-security-remote-device-revocation-outcome-principal-epoch-20260825.json",
-      "sha256": "b0ddfac87ad0bba722a8310b6e46004a89db2454a747afbd82532386bed51912"
+      "sha256": "68233776accf1c912b0c78565d8d090f6290f43f9e00c14e3f5caa8c59078ff9"
     },
     {
       "path": "scripts/technical_regression_check.sh",
