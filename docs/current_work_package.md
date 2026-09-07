@@ -1,4 +1,32 @@
-# Current Work Package: WP47 current-candidate SMS verification
+# Current Work Package: WP48 current-candidate support follow-up readiness
+
+WP48 is **COMPLETE AS A READ-ONLY CURRENT-CANDIDATE PROOF; STAFF FOLLOW-UP
+REMAINS EXTERNALLY BLOCKED** for exact signed Internal Staging candidate
+`1.0.0+2026090610`. The protected owner can read its one retained simulation
+case on the Pixel; status, test-mode disclosure and initial timeline are
+truthful. The isolated renter sees no case and cannot directly read the
+owner-only target. Both ordinary identities are denied staff inventory access.
+
+No authorized elevated staff identity exists, so WP48 made no support mutation,
+created no second case and left the overdue case unchanged. The exact remaining
+gate is `authorized-elevated-staff-identity-required`. Technical HEAD
+`65fc926fa288ae3346514369c602a4b18963e56c` keeps the Secret scanner strict,
+records only the immutable test-fixture false positive and converges the
+dependent evidence hashes.
+
+Seven focused checks, all 2,422 tool tests and the complete local regression
+pass. Exact-head GitHub Regression `34129245800`, CodeQL `34129245723` and
+independent clean-checkout reproducibility pass with zero open alerts. PR #7
+remains Draft and unmerged. See
+`docs/operations/WP48_CURRENT_CANDIDATE_SUPPORT_FOLLOWUP_READINESS_2026-09-07.md`.
+
+Current Pixel acceptance remains sixteen DONE, two PARTIAL and six OPEN. The
+next package should consolidate the final current-candidate acceptance and
+external-gate handover; further independent broad hardening has lower expected
+value while the remaining gaps require staff/provider/legal/deployment or
+owner-bound evidence.
+
+# Previous Work Package: WP47 current-candidate SMS verification
 
 WP47 is **COMPLETE ON THE PHYSICAL PIXEL WITH EXACT CLEANUP** for exact signed
 Internal Staging candidate `1.0.0+2026090610`. One real challenge, current code,

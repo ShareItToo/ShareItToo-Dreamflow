@@ -1,5 +1,43 @@
 # ShareItToo Current State
 
+WP48 is **COMPLETE AS A READ-ONLY CURRENT-CANDIDATE PROOF; STAFF FOLLOW-UP
+REMAINS EXTERNALLY BLOCKED** for immutable Internal Staging candidate
+`1.0.0+2026090610`. The exact candidate loads the protected owner's one
+retained simulation support case and its truthful received status, test-mode
+disclosure and initial timeline on the physical Pixel. No public staff message
+or error surface is invented.
+
+The isolated renter has no support cases and receives the structured not-found
+contract on a direct read of the owner-only target. Both ordinary accounts are
+denied the staff inventory. No authorized elevated staff identity is available;
+therefore the diagnostic made no staff mutation, created no second case and
+left the overdue case unchanged. The precise remaining gate is
+`authorized-elevated-staff-identity-required`, and support/staff follow-up
+remains PARTIAL/degraded.
+
+Implementation HEAD `5f2c1123cf24960040f0efdb6caa332e276d31d9` adds only the
+bounded diagnostic and tests. Technical HEAD
+`65fc926fa288ae3346514369c602a4b18963e56c` removes static synthetic
+credentials from the current test, records one exact immutable historical
+false-positive tuple and converges only the resulting SHA-256 evidence chain.
+Scanner rules and scope remain unchanged.
+
+Seven focused checks, all 2,422 tool tests and the complete local regression
+pass through 904 Flutter tests with 33 intentional skips, Backend, PostgreSQL,
+analyzer, Web/Wasm, loopback and Android minSdk 24/build. Exact-head GitHub
+Regression `34129245800`, CodeQL `34129245723` and independent clean-checkout
+reproducibility pass with zero open alerts. PR #7 remains Draft, open,
+mergeable and unmerged. See
+`docs/operations/WP48_CURRENT_CANDIDATE_SUPPORT_FOLLOWUP_READINESS_2026-09-07.md`.
+
+Current Pixel acceptance remains sixteen DONE, two PARTIAL and six OPEN. The
+remaining PARTIAL areas are support/staff follow-up and repository/Backend
+deployment parity. Manual TalkBack, positive authorized address reveal,
+support deadline owner action, social-provider gates, real external Listing AI
+and binding V5.2/legal/payment remain OPEN. No app/Backend runtime, Store,
+Production, payment, provider, Firebase Console, deployment, Cloud/VPS/DNS,
+OnePlus or PR-merge state changed.
+
 WP47 is **COMPLETE ON THE PHYSICAL PIXEL WITH EXACT CLEANUP** for immutable
 Internal Staging candidate `1.0.0+2026090610`. The exact candidate enforces
 German input and explicit SMS consent, rejects a known-invalid code, accepts
