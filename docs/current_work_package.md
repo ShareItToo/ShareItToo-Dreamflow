@@ -1,4 +1,29 @@
-# Current Work Package: WP43 current-candidate account deletion
+# Current Work Package: WP44 current-candidate password recovery
+
+WP44 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
+signed Internal Staging candidate `1.0.0+2026090610`. Fresh registration,
+verification, login, neutral reset, old/new credential truth, terminated-
+process cold starts, single-use action truth, A-to-B isolation, disposable-
+account cleanup and protected-owner restoration pass without exposing private
+material.
+
+Implementation HEAD `173faf82cdba176da9152eff19b97e15846d1466` adds the bounded
+private-input mail-action helper and tests. Technical HEAD
+`0fa3ad9257c00a6275c47857601fff6a5128d871` preserves confirmed reset truth
+across exact replay throttling, provides read-only reconciliation and makes
+Pixel login restoration depend on exact software-keyboard and clickable-node
+state. App and Backend runtime code are unchanged.
+
+All 2,409 tool tests and the complete local regression pass. Exact-head GitHub
+Regression `34115059330`, CodeQL `34115059258` and independent clean-checkout
+reproducibility pass with zero open code-scanning alerts. PR #7 remains Draft
+and unmerged. See
+`docs/operations/WP44_CURRENT_CANDIDATE_PASSWORD_RECOVERY_2026-09-07.md`.
+
+OnePlus, Store/Production, payment, providers, Firebase Console, Backend
+deployment, Cloud/VPS/DNS and PR merge remain unchanged.
+
+# Previous Work Package: WP43 current-candidate account deletion
 
 WP43 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
 signed Internal Staging candidate `1.0.0+2026090610`. A fresh disposable,

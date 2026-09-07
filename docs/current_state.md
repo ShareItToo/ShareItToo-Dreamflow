@@ -1,5 +1,30 @@
 # ShareItToo Current State
 
+WP44 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for immutable
+candidate `1.0.0+2026090610`, source HEAD
+`2fd793bac970866aa94a2940f28d6bbc3e04e377`. A fresh disposable Staging
+identity passes registration, verification and replay rejection, credential
+login/cold start, neutral reset request, exact old-password rejection, new-
+password login/cold start, consumed reset-link truth, A-to-B isolation, final
+account deletion, Guest cold start and protected-owner restoration.
+
+Implementation HEAD `173faf82cdba176da9152eff19b97e15846d1466` adds only a
+private-input action helper and tests. Technical HEAD
+`0fa3ad9257c00a6275c47857601fff6a5128d871` separates confirmed reset truth
+from a rate-limited replay reconciliation and dismisses the Android keyboard
+only under exact shown-state ownership before requiring the clickable login
+action. No credentials, identities, links or tokens enter Git.
+
+All 2,409 tool tests and the complete local regression pass through Backend,
+Flutter, analyzer, Web/Wasm, loopback, PostgreSQL, Android minSdk 24 and
+capacity. Exact-head GitHub Regression `34115059330` and CodeQL `34115059258`
+pass with independent clean-checkout reproducibility and zero open code-
+scanning alerts. PR #7 remains Draft, open, mergeable and unmerged. See
+`docs/operations/WP44_CURRENT_CANDIDATE_PASSWORD_RECOVERY_2026-09-07.md`.
+
+OnePlus, Store/Production, payment, providers, Firebase Console, Backend
+deployment, Cloud/VPS/DNS and PR merge remain unchanged.
+
 WP43 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
 immutable candidate `1.0.0+2026090610`, source HEAD
 `2fd793bac970866aa94a2940f28d6bbc3e04e377`. A fresh verified disposable
