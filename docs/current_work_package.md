@@ -1,4 +1,28 @@
-# Current Work Package: WP37 current-candidate messaging, media, time and location
+# Current Work Package: WP38 current-candidate authentication, session and Google
+
+WP38 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB**. Exact signed
+Internal Staging candidate `1.0.0+2026090610`, source HEAD
+`2fd793bac970866aa94a2940f28d6bbc3e04e377`, passes authenticated online and
+verified-offline cold-start restoration, original-network restoration and
+private Google first-login/cold-start/repeat-login with one stable Staging
+profile and no duplicate. The protected synthetic owner is restored.
+
+Diagnostic HEAD `3feae7b18ba3daea08158f8cc3ed5455c07ab96d` binds session and
+Google diagnostics to the explicit validated private archive instead of stale
+tracked device-manifest identity. It changes no app/runtime or authentication
+policy. All 2,375 tool tests, complete local regression, exact clean checkout
+and byte-identical double Android build pass. GitHub Regression `34078229911`
+and CodeQL `34078229819` pass with zero open alerts; PR #7 remains Draft and
+unmerged. See
+`docs/operations/WP38_CURRENT_CANDIDATE_AUTH_SESSION_GOOGLE_2026-09-07.md`.
+
+The next package is current-candidate account-security action acceptance with
+exact outcome semantics and protected-principal restoration. Owner-interactive
+mail/SMS steps remain separable. Legal, money, Store/Production, Firebase
+Console, backend deployment, Cloud/VPS/DNS, OnePlus and PR merge remain
+unchanged.
+
+# Previous Work Package: WP37 current-candidate messaging, media, time and location
 
 WP37 is **COMPLETE ON THE PHYSICAL PIXEL** for exact signed Internal Staging
 candidate `1.0.0+2026090610`, source HEAD

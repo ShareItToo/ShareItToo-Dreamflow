@@ -1,5 +1,30 @@
 # ShareItToo Current State
 
+WP38 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
+signed Internal Staging candidate `1.0.0+2026090610`, source HEAD
+`2fd793bac970866aa94a2940f28d6bbc3e04e377`. Online and verified-offline
+force-stop/cold-start session restoration pass; the original network is
+restored. Exact private Google first login, cold start and repeat login resolve
+to one identical Staging profile without a duplicate, after which the
+protected synthetic owner is restored.
+
+Diagnostic HEAD `3feae7b18ba3daea08158f8cc3ed5455c07ab96d` removes a stale
+tracked-device-manifest dependency from explicit private-candidate session and
+Google checks. The exact private archive is now required and validated; no app
+runtime, auth policy, provider setting, timeout, retry or assertion changed.
+All 2,375 tool tests, complete local regression and independent clean checkout
+with byte-identical double Android build pass. GitHub Regression `34078229911`
+and CodeQL `34078229819` pass at the exact diagnostic HEAD with zero open
+alerts. PR #7 remains Draft, open, mergeable and unmerged. See
+`docs/operations/WP38_CURRENT_CANDIDATE_AUTH_SESSION_GOOGLE_2026-09-07.md`.
+
+The next autonomous package should exercise current-candidate account-security
+actions with exact outcome semantics and protected-principal restoration,
+starting with the lowest-risk reversible action. E-mail reset, SMS and external
+provider configuration remain separate where owner interaction or one-time
+delivery is required. Legal, money, Store/Production, Firebase Console,
+backend deployment, Cloud/VPS/DNS, OnePlus and PR merge remain unchanged.
+
 WP37 is **COMPLETE ON THE PHYSICAL PIXEL** for exact signed Internal Staging
 candidate `1.0.0+2026090610`, source HEAD
 `2fd793bac970866aa94a2940f28d6bbc3e04e377`. A fresh isolated two-role journey
