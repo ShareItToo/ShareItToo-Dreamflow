@@ -1,4 +1,25 @@
-# Current Work Package: WP51 Staging runtime read-only inventory preparation
+# Current Work Package: WP52 Drive source reconciliation
+
+WP52 is **COMPLETE AND VALIDATED; NO SOURCE DRIFT FOUND**. The current Google
+Drive SIT Codex and Support Packet folders were reconciled read-only against
+the exact repository bindings. V5.2 core/legal and Support source-of-truth,
+status machine, matrix and manifest retain their file IDs, modification times,
+sizes and SHA-256 values. No newer Support Packet or binding professional legal
+approval was found; Maximus remains operational context only.
+
+Technical HEAD `0048ece49b7819fb09600465a027a4e0b530ccda` passes six focused
+checks, all 2,448 tool tests and the complete local regression. Exact-head
+GitHub Regression `34148058475`, CodeQL `34148058618` and clean-checkout
+reproducibility pass with zero open alerts. The required protected-source hash
+ratchets were refreshed without weakening any rule. PR #7 remains Draft and
+unmerged.
+
+The portfolio remains sixteen DONE, two PARTIAL and six OPEN with
+`hold-no-go`. `SUP-159` and authenticated VPS observation remain open; no
+external gate or state changed. See
+`docs/operations/WP52_DRIVE_SOURCE_RECONCILIATION_2026-09-07.md`.
+
+# Previous Work Package: WP51 Staging runtime read-only inventory preparation
 
 WP51 is **TECHNICALLY COMPLETE; AUTHENTICATED VPS OBSERVATION REMAINS OPEN**.
 It adds a single fail-closed read-only inventory for the exact current Staging
