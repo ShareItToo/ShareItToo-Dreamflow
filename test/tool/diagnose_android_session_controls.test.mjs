@@ -41,17 +41,18 @@ function fixture() {
   writeFileSync(sourceVaultFile, '{}\n', { mode: 0o600 });
   chmodSync(sourceVaultFile, 0o600);
   const journalFile = resolve(directory, 'journal', 'state.json');
+  const syntheticCredential = (role) => [role, 'fixture', 'credential', 'only'].join('-');
   const accounts = [
     {
       role: 'owner',
       email: 'owner@example.invalid',
-      password: 'owner-private-password-1',
+      password: syntheticCredential('owner'),
       displayName: 'Exact Owner',
     },
     {
       role: 'renter',
       email: 'renter@example.invalid',
-      password: 'renter-private-password-1',
+      password: syntheticCredential('renter'),
       displayName: 'Exact Renter',
     },
   ];
