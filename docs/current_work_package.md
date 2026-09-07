@@ -1,4 +1,37 @@
-# Current Work Package: WP34 Staging acceptance and operations checkpoint
+# Current Work Package: WP35 Pixel message-refresh current candidate
+
+WP35 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for signed
+Internal Staging candidate `1.0.0+2026090610` at source HEAD
+`2fd793bac970866aa94a2940f28d6bbc3e04e377`.
+
+The exact previous failure was a recursive passive message refresh: the primary
+server read announced its own cache write, and the listening messages screen
+started another server read. Passive remote cache updates are now silent while
+real communication mutations still notify. Loading, safe failure and
+server-confirmed empty remain separate; the production-wiring ratchet and
+sanitized diagnostic prevent regression or private-title leakage.
+
+The signed candidate, private archive, hashes, canonical signature and privacy
+scan pass. The Pixel replace update preserves app data and installed identity.
+The complete real two-role journey passes owner publication, public renter
+discovery, non-binding request/acceptance, FCM foreground/background/terminated,
+owner/renter presentation, renter chat at the former failure point,
+Account-A-to-B isolation and complete cleanup. The protected owner is restored,
+its source vault is unchanged and no active isolated journey remains.
+
+All 2,372 tool tests and the complete local regression pass. Independent clean
+checkout produces two byte-identical Android builds. GitHub Regression
+`34070194520` and CodeQL `34070194527` pass with zero open alerts. PR #7 remains
+Draft and unmerged. See
+`docs/operations/WP35_PIXEL_MESSAGE_REFRESH_CURRENT_CANDIDATE_2026-09-07.md`.
+
+The next package must be chosen from the remaining exact-current-candidate
+acceptance cells, with a compact decision overview before implementation.
+Support owner action, binding V5.2, real money, external providers, Store/
+Production, Firebase Console, backend deployment, Cloud/VPS/DNS, OnePlus and PR
+merge remain separate and unchanged.
+
+# Previous Work Package: WP34 Staging acceptance and operations checkpoint
 
 WP34 is **COMPLETE AS A CHECKPOINT**. It binds the portfolio to exact signed
 Pixel candidate `1.0.0+2026090609` and distinguishes current-APK proof from
@@ -15,12 +48,12 @@ Support Packet V1 classifies this as `SUP-159` `PILOT_BLOCKER`; no newer packet
 or professional V5.2 approval supersedes it. The exact case requires an
 authorized stepped-up staff session and was neither guessed nor mutated.
 
-Next package: bounded exact-`2026090609` Pixel acceptance replay of existing
-non-binding journeys, starting with low-mutation authentication and two-role
-product truth. Reuse the existing APK and fixtures; do not create a new build
-without a reproduced candidate defect. Keep OnePlus, binding V5.2, real money,
-external AI, Facebook/Apple, Store/Production, Firebase Console, backend
-deployment, Cloud/VPS/DNS and PR merge closed.
+WP34 selected a bounded exact-current Pixel acceptance replay, starting with
+low-mutation authentication and two-role product truth. WP35 completed the
+two-role product slice and produced the newer defect-corrected candidate.
+OnePlus, binding V5.2, real money, external AI, Facebook/Apple, Store/
+Production, Firebase Console, backend deployment, Cloud/VPS/DNS and PR merge
+remained closed.
 
 See `docs/operations/SIT_STAGING_ACCEPTANCE_CHECKPOINT_2026-09-07.md` and
 `docs/evidence/release-readiness/wp34-staging-acceptance-operations-checkpoint-20260907.json`.

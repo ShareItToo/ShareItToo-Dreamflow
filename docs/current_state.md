@@ -1,17 +1,40 @@
 # ShareItToo Current State
 
-WP34 is **COMPLETE AS AN EVIDENCE CHECKPOINT; CURRENT-CANDIDATE ACCEPTANCE IS
-PARTIAL AND SUPPORT OPERATIONS ARE DEGRADED**. It binds all current evidence to
-signed Pixel candidate `1.0.0+2026090609` and conservatively keeps physical
-proof from predecessor candidates as `PARTIAL`, never promoting green CI into
-an unperformed exact-APK journey.
+WP35 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
+signed Internal Staging candidate `1.0.0+2026090610`, source HEAD
+`2fd793bac970866aa94a2940f28d6bbc3e04e377`. The previous candidate's
+recursive message refresh was reproduced twice, traced to a passive remote
+cache write announcing itself, corrected through the established silent
+read-only persistence path and protected by a production-wiring ratchet.
 
-Exact current-candidate provenance/install, complete regression/security,
-privacy-export isolation and safe mock-only Listing AI are `DONE`. Authentic
-predecessor-candidate evidence exists for e-mail and Google authentication,
-password/account security, SMS, listing/search/saved/cart/project/two-role
-product paths, attachments/appointments, FCM and bounded theme/offline/
-accessibility cells. Their consolidated `2026090609` replay remains open.
+The Pixel update preserved installed bytes/signature, first-install time and
+application-data identity. A fresh physical two-role journey passes owner
+publication, public renter discovery, non-binding request/acceptance,
+controlled FCM in foreground/background/terminated states, correct owner and
+renter presentation, renter chat at the former failure point, Principal A-to-B
+isolation and complete booking/listing cleanup. The protected owner is restored
+and its source vault remains unchanged; zero active isolated journeys remain.
+
+All 2,372 tool tests, the secret scan, full local regression, exact clean
+checkout and byte-identical double Android build pass. GitHub Regression
+`34070194520`, CodeQL `34070194527` and all required jobs pass with zero open
+alerts. PR #7 remains Draft, open, mergeable and unmerged. See
+`docs/operations/WP35_PIXEL_MESSAGE_REFRESH_CURRENT_CANDIDATE_2026-09-07.md`.
+
+WP34 remains **COMPLETE AS AN EVIDENCE CHECKPOINT; BROAD CURRENT-CANDIDATE
+ACCEPTANCE IS PARTIAL AND SUPPORT OPERATIONS ARE DEGRADED**. It bound the prior
+portfolio to signed Pixel candidate `1.0.0+2026090609` and conservatively kept
+physical proof from predecessor candidates as `PARTIAL`, never promoting green
+CI into an unperformed exact-APK journey.
+
+At the WP34 checkpoint, candidate provenance/install, complete regression/
+security, privacy-export isolation and safe mock-only Listing AI were `DONE`.
+WP35 now advances the two-role product, renter-chat and FCM path to exact
+`2026090610` physical proof. Authentic predecessor-candidate evidence still
+exists for e-mail and Google authentication, password/account security, SMS,
+listing/search/saved/cart/project, attachments/appointments and bounded theme/
+offline/accessibility cells; their exact-`2026090610` consolidation remains
+open.
 Facebook/Apple, external runtime AI, positive address reveal, binding V5.2,
 money/refund/damage lifecycle, complete staff support transitions and OnePlus
 remain `OPEN`.
@@ -25,8 +48,8 @@ requires a legitimate stepped-up staff session; no credential was bypassed and
 no case was changed. See
 `docs/operations/SIT_STAGING_ACCEPTANCE_CHECKPOINT_2026-09-07.md`.
 
-The next autonomous package is a bounded exact-`2026090609` Pixel replay of
-already implemented non-binding journeys. It remains separate from the overdue
+The next autonomous package must select the highest-value remaining bounded
+exact-`2026090610` Pixel acceptance cell. It remains separate from the overdue
 support owner action and from all legal, payment/provider, Store/Production,
 Firebase Console, backend deployment, Cloud/VPS/DNS, OnePlus and PR-merge
 gates.
