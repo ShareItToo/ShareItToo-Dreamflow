@@ -1,4 +1,30 @@
-# Current Work Package: WP49 current-candidate external intervention map
+# Current Work Package: WP50 Staging Backend parity deployment preflight
+
+WP50 is **COMPLETE AND VALIDATED AS A READ-ONLY PREFLIGHT; DEPLOYMENT REMAINS
+HOLD/NO-GO**. It binds the observed Staging Backend
+`68c97a437969dc98f17eb151da3e006259ffbafa` to the fully tested proposed parity
+target `9de283ab0d5386f054606ac615a52ff05059f4db`, proves an exact eight-file
+Backend delta with no SQL migration and supplies a six-step deployment and
+rollback runway.
+
+The only functional target change is the 100-active-session security limit.
+No schema migration or deploy-harness change is required. Protected Staging
+must retain pilot, FCM and SMTP; Stripe and external Listing AI remain excluded.
+An authenticated current VPS readback, exact target image, rollback image and
+resource-headroom proof are still required before the separate
+`STAGING_BACKEND_PARITY_DEPLOYMENT_GO` gate may open.
+
+Technical HEAD `64b1a2ffa1dceca7021bce773c38e692f4a7df39` passes
+seven focused checks, all 2,436 tool tests and the complete local regression.
+Exact-head GitHub Regression `34137175855`, CodeQL `34137175853` and independent
+clean-checkout reproducibility pass with zero open alerts. PR #7 remains Draft
+and unmerged. See
+`docs/operations/WP50_STAGING_BACKEND_PARITY_DEPLOYMENT_PREFLIGHT_2026-09-07.md`.
+
+WP50 changes no runtime, deployment, Staging data, Store, Production, payment,
+provider, Firebase Console, Cloud/VPS/DNS, device or merge state.
+
+# Previous Work Package: WP49 current-candidate external intervention map
 
 WP49 is **COMPLETE AND VALIDATED; EXTERNAL RUNWAY REMAINS HOLD/NO-GO**. It
 binds the exact `2026090610` candidate and immutable WP45–WP48 evidence into a

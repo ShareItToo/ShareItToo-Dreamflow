@@ -1,5 +1,33 @@
 # ShareItToo Current State
 
+WP50 is **COMPLETE AND VALIDATED AS A READ-ONLY DEPLOYMENT PREFLIGHT; STAGING
+DEPLOYMENT REMAINS HOLD/NO-GO**. Public readback binds Staging to Backend commit
+`68c97a437969dc98f17eb151da3e006259ffbafa`; the proposed parity target is the
+fully proven WP49 technical HEAD `9de283ab0d5386f054606ac615a52ff05059f4db`.
+
+The exact Backend delta is eight files with no SQL migration. Its only
+functional runtime addition is the tested 100-active-session limit, including
+account-row locking, oldest-session and refresh-token revocation, associated
+push-device removal and session-preserving refresh rotation. Deployment harness
+and base Staging Compose are unchanged. A later rollout must retain only the
+pilot, FCM and SMTP overlays; Stripe and external Listing AI remain forbidden.
+
+Technical package HEAD `64b1a2ffa1dceca7021bce773c38e692f4a7df39`
+adds the machine-readable preflight, strict validator and seven tests. All 2,436
+tool tests and the complete local regression pass through 904 Flutter passes
+with 33 intentional skips, Backend, PostgreSQL, analyzer, Web/Wasm, loopback and
+Android minSdk 24/build. Exact-head GitHub Regression `34137175855`, CodeQL
+`34137175853` and clean-checkout reproducibility pass with zero open alerts.
+PR #7 remains Draft, open, mergeable and unmerged. See
+`docs/operations/WP50_STAGING_BACKEND_PARITY_DEPLOYMENT_PREFLIGHT_2026-09-07.md`.
+
+The exact deployment gate `STAGING_BACKEND_PARITY_DEPLOYMENT_GO` remains closed.
+Before it can open, the authenticated VPS commit/image/runtime shape, release
+record, rollback image and resource headroom must be re-read and an exact target
+image must be proven available. WP50 made no deployment, Staging-data, Store,
+Production, payment, provider, Firebase Console, Cloud/VPS/DNS, device,
+OnePlus or PR-merge mutation.
+
 WP49 is **COMPLETE AND VALIDATED; EXTERNAL RUNWAY REMAINS HOLD/NO-GO** for
 immutable Internal Staging candidate `1.0.0+2026090610`. It cryptographically
 binds the WP45 convergence checkpoint and completed WP46 permission, WP47 SMS
