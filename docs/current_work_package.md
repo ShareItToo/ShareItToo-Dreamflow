@@ -1,4 +1,28 @@
-# Current Work Package: WP54 Pixel listing-report candidate closure
+# Current Work Package: WP55 authenticated Staging parity deployment readiness
+
+WP55 is **BUILD READY; RUNTIME ROLLOUT IS NOT YET PERFORMED**. The authenticated
+WP51 inventory passed read-only at `2026-09-07T22:56:44.622Z`: both exact
+Staging containers are healthy with zero restarts, runtime/image/release bind
+to `68c97a437969dc98f17eb151da3e006259ffbafa`, rollback is present and resource
+headroom passes. No secret value/path or container configuration was emitted.
+
+Target HEAD `d8d1df7f59052c202f824f759693a472b6b8afa1` has Backend tree
+`d991765a159810b88e4e4db874ac6193ae3e804d`, exactly equal to reviewed WP50
+target `9de283ab…`. Exact-head workflow-dispatch Regression `34168650985`
+passes Backend, PostgreSQL, Android/Flutter, clean reproducibility and private
+image publication. The image manifest is
+`sha256:e4ae94d740ef83fa80d59762805e1f64cc76f80ecd46531f955ce27ab0289908`;
+existing exact-head CodeQL `34160161823` passes.
+
+The macOS session locked after checkout preparation was submitted, so its end
+state is deliberately unclaimed. The continuation must first verify or safely
+quarantine that checkout, then verify the exact registry image and current
+protected overlays before the current deploy harness may change Staging. No
+pull, rollout, Staging-data, Production, payment/provider, Store, DNS, OnePlus
+or PR-merge mutation is claimed. See
+`docs/operations/WP55_AUTHENTICATED_STAGING_PARITY_DEPLOYMENT_READINESS_2026-09-08.md`.
+
+# Previous Work Package: WP54 Pixel listing-report candidate closure
 
 WP54 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB**. Candidate
 `1.0.0+2026090711` is bound to source
