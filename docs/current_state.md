@@ -1,5 +1,36 @@
 # ShareItToo Current State
 
+WP40 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
+signed Internal Staging candidate `1.0.0+2026090610`, source HEAD
+`2fd793bac970866aa94a2940f28d6bbc3e04e377`. The reversible direct-password
+transaction passes definite success, local-session clearing, old/new
+credential truth, terminated-process cold start, Account-A-to-B isolation,
+original-password restoration, protected-owner restoration and revocation of
+all diagnostic sessions. The owner-only rollback journal is closed and no
+replacement credential remains.
+
+The red-first cause was 274 active sessions on the isolated synthetic renter,
+above the strict 100-session client inventory. Staging cleanup used the
+intended logout-all path only for that synthetic account. Implementation HEAD
+`146e0d29b81089768959ee8473ac73ac3f63e627` now serializes new session
+issuance, revokes oldest excess sessions and their refresh tokens, removes
+associated push devices and leaves refresh rotation on its existing session.
+Ratchet HEAD `55ea4e5b85cb4b2f936d11559036c391eba2883a` changes only reviewed
+SHA-256 bindings; all 2,378 tool tests pass.
+
+The complete local regression and clean R10 pass at the exact technical HEAD;
+two 231,444,311-byte, 794-entry Android builds are byte-identical. GitHub
+Regression `34086350422`, CodeQL `34086350502` and all required jobs pass;
+open code-scanning alerts are zero. PR #7 remains Draft, open, mergeable and
+unmerged. See
+`docs/operations/WP40_CURRENT_CANDIDATE_PASSWORD_CHANGE_SESSION_BOUND_2026-09-07.md`.
+
+The highest-value next bounded package is physical current-candidate session
+control: create one isolated secondary session, revoke only that remote
+session, then prove UI logout-all, relogin and protected-owner restoration.
+It must not deploy the new Backend limit or touch OnePlus, Store/Production,
+payments, providers, Firebase Console, Cloud/VPS/DNS or PR merge.
+
 WP39 is **COMPLETE ON THE PHYSICAL PIXEL** for exact signed Internal Staging
 candidate `1.0.0+2026090610`. All nine authenticated account destinations plus
 Help Center and the support-contact entry are reachable through the real UI.

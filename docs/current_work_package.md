@@ -1,4 +1,32 @@
-# Current Work Package: WP39 current-candidate account and support surfaces
+# Current Work Package: WP40 password change and bounded sessions
+
+WP40 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
+signed Internal Staging candidate `1.0.0+2026090610`. The full reversible
+password transaction passes and returns the isolated renter to its original
+credential, removes the replacement credential, revokes diagnostic sessions
+and restores the protected owner.
+
+The initial safe stop exposed 274 active synthetic-renter sessions versus the
+strict client maximum of 100. Bounded Staging cleanup restored one-current-
+session truth. Implementation HEAD
+`146e0d29b81089768959ee8473ac73ac3f63e627` prevents recurrence by
+serializing new session issuance and retiring oldest excess session, refresh-
+token and push-device state. Ratchet HEAD
+`55ea4e5b85cb4b2f936d11559036c391eba2883a` refreshes only reviewed source
+hashes.
+
+All 2,378 tool tests, 850 Backend tests, complete local regression and exact
+clean checkout pass; the two Android builds are byte-identical. GitHub
+Regression `34086350422` and CodeQL `34086350502` pass with zero open alerts.
+PR #7 remains Draft and unmerged. See
+`docs/operations/WP40_CURRENT_CANDIDATE_PASSWORD_CHANGE_SESSION_BOUND_2026-09-07.md`.
+
+The next package is bounded physical current-candidate remote-session
+revocation plus logout-all with exact account restoration. The Backend fix is
+not deployed. OnePlus, Store/Production, payments, providers, Firebase
+Console, Cloud/VPS/DNS and PR merge remain unchanged.
+
+# Previous Work Package: WP39 current-candidate account and support surfaces
 
 WP39 is **COMPLETE ON THE PHYSICAL PIXEL** for exact signed Internal Staging
 candidate `1.0.0+2026090610`. All nine authenticated account destinations and
