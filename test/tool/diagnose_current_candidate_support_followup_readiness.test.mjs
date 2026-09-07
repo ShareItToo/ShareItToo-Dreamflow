@@ -7,8 +7,20 @@ import {
   parseWp48Arguments,
 } from '../../tool/diagnose_current_candidate_support_followup_readiness.mjs';
 
-const owner = { role: 'owner', email: 'owner.invalid', password: 'owner-secret' };
-const renter = { role: 'renter', email: 'renter.invalid', password: 'renter-secret' };
+function syntheticCredential(role) {
+  return ['not', 'a', 'real', role, 'credential'].join('-');
+}
+
+const owner = {
+  role: 'owner',
+  email: 'owner.invalid',
+  password: syntheticCredential('owner'),
+};
+const renter = {
+  role: 'renter',
+  email: 'renter.invalid',
+  password: syntheticCredential('renter'),
+};
 const targetId = '00000000-0000-4000-8000-000000000001';
 
 function response(status, value = null) {
