@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/screens/public_profile_screen.dart';
+import 'package:lendify/screens/report_user_screen.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/app_link_service.dart';
 import 'package:lendify/services/listing_feedback_service.dart';
@@ -511,6 +512,18 @@ Future<List<_ListingOption>> _buildOptions(
         builder: (_) => PublicProfileScreen(userId: item.ownerId)));
   }
 
+  Future<void> reportListing() async {
+    if (!context.mounted) return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => ReportUserScreen(
+        reportedUserId: item.ownerId,
+        reportedListingId: item.id,
+        reportedListingTitle: item.title,
+        reference: 'listing_options',
+      ),
+    ));
+  }
+
   Future<void> placeholder(String title,
       {IconData icon = Icons.info_outline}) async {
     if (!context.mounted) return;
@@ -568,8 +581,7 @@ Future<List<_ListingOption>> _buildOptions(
     _ListingOption(
         icon: Icons.flag_outlined,
         label: 'Melden',
-        onTap: () =>
-            placeholder('Anzeige melden folgt bald', icon: Icons.flag_outlined),
+        onTap: reportListing,
         destructive: true),
   ];
 }

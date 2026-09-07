@@ -328,6 +328,27 @@ class SafetyActionService {
       );
 
   @protected
+  Future<Map<String, dynamic>> createListingReportRemote({
+    required SafetyActionContext context,
+    required String listingId,
+    required String reasonCode,
+    required String idempotencyKey,
+    required String details,
+    required List<String> evidenceUploadIds,
+    String? reference,
+  }) =>
+      BackendRepository.createReportForOwner(
+        owner: context.owner.authOwner,
+        targetType: 'listing',
+        targetId: listingId,
+        reasonCode: reasonCode,
+        idempotencyKey: idempotencyKey,
+        details: details,
+        reference: reference,
+        evidenceUploadIds: evidenceUploadIds,
+      );
+
+  @protected
   Future<Map<String, dynamic>> createHarassmentReportRemote({
     required SafetyActionContext context,
     required String reportedUserId,
@@ -483,6 +504,28 @@ class SafetyActionService {
         principal: context.localPrincipal,
         reporterUserId: context.user.id,
         reportedUserId: reportedUserId,
+        reasonCode: reasonCode,
+        details: details,
+        evidenceNames: evidenceNames,
+        reference: reference,
+      );
+
+  @protected
+  Future<void> createListingReportLocal({
+    required SafetyActionContext context,
+    required String listingId,
+    required String listingOwnerUserId,
+    required String reasonCode,
+    required String details,
+    required List<String> evidenceNames,
+    String? reference,
+  }) =>
+      LocalSafetyPrivacyService.addReportForPrincipal(
+        principal: context.localPrincipal,
+        reporterUserId: context.user.id,
+        reportedUserId: listingOwnerUserId,
+        targetType: 'listing',
+        targetId: listingId,
         reasonCode: reasonCode,
         details: details,
         evidenceNames: evidenceNames,
@@ -742,6 +785,91 @@ class SafetyActionService {
       }
       throw const SafetyActionFailure.localUnavailable(
         'local_report_failed',
+      );
+    }
+  }
+
+  Future<SafetyReportResult> submitListingReport({
+    required SafetyActionContext context,
+    required String listingId,
+    required String listingOwnerUserId,
+    required String reasonCode,
+    required String idempotencyKey,
+    required String details,
+    required List<String> evidenceNames,
+    required List<String> evidenceUploadIds,
+    String? reference,
+  }) async {
+    final normalizedListingId = listingId.trim();
+    final normalizedOwnerId = listingOwnerUserId.trim();
+    if (normalizedListingId.isEmpty || normalizedOwnerId.isEmpty) {
+      throw const SafetyActionFailure.rejected('invalid_report_target');
+    }
+    await _requireCurrent(context);
+    var remoteAccepted = false;
+    try {
+      if (backendEnabled && !qaRuntimeEnabled) {
+        await _requireCurrent(context);
+        await createListingReportRemote(
+          context: context,
+          listingId: normalizedListingId,
+          reasonCode: reasonCode,
+          idempotencyKey: idempotencyKey,
+          details: details,
+          evidenceUploadIds: evidenceUploadIds,
+          reference: reference,
+        );
+        remoteAccepted = true;
+        await _requireCurrent(
+          context,
+          remoteAcceptedOrConfirmed: true,
+        );
+        return const SafetyReportResult();
+      }
+
+      await createListingReportLocal(
+        context: context,
+        listingId: normalizedListingId,
+        listingOwnerUserId: normalizedOwnerId,
+        reasonCode: reasonCode,
+        details: details,
+        evidenceNames: evidenceNames,
+        reference: reference,
+      );
+      await _requireCurrent(context);
+      return const SafetyReportResult();
+    } on SafetyActionFailure {
+      rethrow;
+    } on BackendException catch (error) {
+      if (!await isContextCurrent(context)) {
+        throw SafetyActionFailure.principalChanged(
+          remoteAcceptedOrConfirmed: remoteAccepted,
+        );
+      }
+      final kind = classifyBackendFailure(error);
+      if (kind == SafetyActionFailureKind.rejected) {
+        throw SafetyActionFailure.rejected(error.code);
+      }
+      throw SafetyActionFailure.outcomeUnknown(error.code);
+    } catch (_) {
+      if (!await isContextCurrent(context)) {
+        throw SafetyActionFailure.principalChanged(
+          remoteAcceptedOrConfirmed: remoteAccepted,
+        );
+      }
+      if (remoteAccepted) {
+        throw const SafetyActionFailure.localUnavailable(
+          'local_listing_report_state_failed',
+          remoteAcceptedOrConfirmed: true,
+        );
+      }
+      if (backendEnabled && !qaRuntimeEnabled) {
+        throw const SafetyActionFailure.outcomeUnknown(
+          'listing_report_transport_failed',
+        );
+      }
+      throw const SafetyActionFailure.localUnavailable(
+        'local_listing_report_failed',
       );
     }
   }

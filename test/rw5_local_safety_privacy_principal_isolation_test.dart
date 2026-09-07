@@ -300,6 +300,28 @@ void main() {
     expect((await NotificationPreferencesService.get()).showMessages, isFalse);
   });
 
+  test('local listing reports retain listing target semantics', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    await useAccount('rw5-listing-reporter@example.invalid');
+    final principal = await LocalPrincipalScope.current();
+
+    await LocalSafetyPrivacyService.addReportForPrincipal(
+      principal: principal,
+      reporterUserId: 'listing-reporter',
+      reportedUserId: 'listing-owner',
+      targetType: 'listing',
+      targetId: 'listing-target',
+      reasonCode: 'fraud_or_deception',
+      reference: 'listing_options',
+    );
+
+    final export = await LocalSafetyPrivacyService.exportCurrentPrincipal();
+    final report = (export['reports'] as List).single as Map;
+    expect(report['reportedUserId'], 'listing-owner');
+    expect(report['targetType'], 'listing');
+    expect(report['targetId'], 'listing-target');
+  });
+
   test('already-invoked mutations cannot cross an immediate session switch',
       () async {
     SharedPreferences.setMockInitialValues(<String, Object>{});

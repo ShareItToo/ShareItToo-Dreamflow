@@ -317,6 +317,71 @@ void main() {
     skip: !PrivatePilotConfig.stageANonBindingPilotEnabled ||
         !PrivatePilotConfig.blueOceanListingAssistantEnabled,
   );
+
+  testWidgets('listing options open the real listing report flow',
+      (tester) async {
+    final reporter = buildTestUser(
+      'rw0-reporting-renter',
+      name: 'RW0 Reporting Renter',
+      email: 'rw0-reporting-renter@example.invalid',
+    );
+    final owner = buildTestUser(
+      'rw0-reported-owner',
+      name: 'RW0 Reported Owner',
+      email: 'rw0-reported-owner@example.invalid',
+    );
+    final item = itemFrom(
+      buildTestItem(
+        id: 'rw0-reported-listing',
+        ownerId: owner.id,
+        title: 'RW0 gemeldete Anzeige',
+      ),
+      categoryId: 'cat8',
+      subcategory: 'Bohrmaschinen',
+      status: 'active',
+      isActive: true,
+      privateStatusConfirmed: true,
+    );
+    final password = List<String>.filled(24, 's').join();
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'users': jsonEncode(<Object>[reporter.toJson(), owner.toJson()]),
+      'currentUser': jsonEncode(reporter.toJson()),
+      'items': jsonEncode(<Object>[item.toJson()]),
+      'auth_accounts_v1': jsonEncode(<Map<String, Object>>[
+        <String, Object>{
+          'email': reporter.email,
+          'password': password,
+          'createdAt': '2026-09-07T00:00:00.000Z',
+        },
+      ]),
+      'auth_seeded_v1': true,
+    });
+    final signIn = await AuthService.signInWithEmailPassword(
+      email: reporter.email,
+      password: password,
+    );
+    expect(signIn.ok, isTrue);
+
+    await tester.pumpWidget(
+      _JourneyShell(
+          controller: _JourneyHostController(_FeedbackHost(item: item))),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Anzeigenoptionen öffnen'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Melden'),
+      180,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('Melden').hitTestable());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Anzeige melden'), findsOneWidget);
+    expect(find.text(item.title), findsOneWidget);
+    expect(find.text('Anzeige melden folgt bald'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _JourneyHostController {

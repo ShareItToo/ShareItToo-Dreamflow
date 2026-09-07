@@ -20,15 +20,22 @@ enum ReportReason {
 
 class ReportUserScreen extends StatefulWidget {
   final String? reportedUserId;
+  final String? reportedListingId;
+  final String? reportedListingTitle;
   final String? reference;
   final SafetyActionService? safetyActionService;
 
   const ReportUserScreen({
     super.key,
     this.reportedUserId,
+    this.reportedListingId,
+    this.reportedListingTitle,
     this.reference,
     this.safetyActionService,
-  });
+  }) : assert(
+          reportedListingId == null || reportedUserId != null,
+          'A listing report must retain its owner user.',
+        );
 
   @override
   State<ReportUserScreen> createState() => _ReportUserScreenState();
@@ -56,6 +63,17 @@ class _ReportUserScreenState extends State<ReportUserScreen> {
   String _reportIdempotencyKey = '';
   final TextEditingController _detailsController = TextEditingController();
   final List<_ReportEvidence> _evidence = [];
+
+  bool get _isListingReport =>
+      widget.reportedListingId?.trim().isNotEmpty == true;
+
+  List<ReportReason> get _availableReasons => _isListingReport
+      ? const <ReportReason>[
+          ReportReason.inappropriate,
+          ReportReason.fraud,
+          ReportReason.other,
+        ]
+      : ReportReason.values;
 
   @override
   void initState() {
@@ -238,19 +256,31 @@ class _ReportUserScreenState extends State<ReportUserScreen> {
       final evidenceNames = _evidence.map((entry) => entry.name).toList();
       final evidenceUploadIds =
           _evidence.map((entry) => entry.uploadId).whereType<String>().toList();
-      final result = await _safetyService.submitReport(
-        context: owner.context,
-        reportedUserId: reported.id,
-        reasonCode: _reasonCode(reason),
-        idempotencyKey: reason == ReportReason.harassment
-            ? _harassmentIdempotencyKey
-            : _reportIdempotencyKey,
-        details: _detailsController.text.trim(),
-        evidenceNames: evidenceNames,
-        evidenceUploadIds: evidenceUploadIds,
-        reference: widget.reference,
-        harassment: reason == ReportReason.harassment,
-      );
+      final result = _isListingReport
+          ? await _safetyService.submitListingReport(
+              context: owner.context,
+              listingId: widget.reportedListingId!.trim(),
+              listingOwnerUserId: reported.id,
+              reasonCode: _reasonCode(reason),
+              idempotencyKey: _reportIdempotencyKey,
+              details: _detailsController.text.trim(),
+              evidenceNames: evidenceNames,
+              evidenceUploadIds: evidenceUploadIds,
+              reference: widget.reference,
+            )
+          : await _safetyService.submitReport(
+              context: owner.context,
+              reportedUserId: reported.id,
+              reasonCode: _reasonCode(reason),
+              idempotencyKey: reason == ReportReason.harassment
+                  ? _harassmentIdempotencyKey
+                  : _reportIdempotencyKey,
+              details: _detailsController.text.trim(),
+              evidenceNames: evidenceNames,
+              evidenceUploadIds: evidenceUploadIds,
+              reference: widget.reference,
+              harassment: reason == ReportReason.harassment,
+            );
       if (!mounted || !await _safetyActions.isCurrent(_safetyService, owner)) {
         return;
       }
@@ -346,7 +376,7 @@ class _ReportUserScreenState extends State<ReportUserScreen> {
             tooltip: MaterialLocalizations.of(context).backButtonTooltip,
             onPressed: () => Navigator.of(context).maybePop(),
             icon: const Icon(Icons.arrow_back)),
-        title: const Text('Nutzer melden'),
+        title: Text(_isListingReport ? 'Anzeige melden' : 'Nutzer melden'),
       ),
       body: SafeArea(
         child: _loading
@@ -369,13 +399,14 @@ class _ReportUserScreenState extends State<ReportUserScreen> {
                             children: [
                               _ReportedUserCard(
                                   user: _reportedUser,
+                                  listingTitle: widget.reportedListingTitle,
                                   reference: widget.reference),
                               const SizedBox(height: 16),
                               _Section(
                                 title: 'Grund',
                                 child: Column(
                                   children: [
-                                    for (final r in ReportReason.values) ...[
+                                    for (final r in _availableReasons) ...[
                                       _ReasonTile(
                                         icon: _reasonIcon(r),
                                         title: _reasonLabel(r),
@@ -385,7 +416,7 @@ class _ReportUserScreenState extends State<ReportUserScreen> {
                                           _immediateDanger = null;
                                         }),
                                       ),
-                                      if (r != ReportReason.values.last)
+                                      if (r != _availableReasons.last)
                                         const SizedBox(height: 10),
                                     ],
                                   ],
@@ -562,8 +593,13 @@ class _ReportEvidence {
 
 class _ReportedUserCard extends StatelessWidget {
   final User? user;
+  final String? listingTitle;
   final String? reference;
-  const _ReportedUserCard({required this.user, this.reference});
+  const _ReportedUserCard({
+    required this.user,
+    required this.listingTitle,
+    this.reference,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -583,14 +619,19 @@ class _ReportedUserCard extends StatelessWidget {
         Expanded(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(u?.displayName ?? 'Unbekannter Nutzer',
+            Text(
+                listingTitle?.trim().isNotEmpty == true
+                    ? listingTitle!.trim()
+                    : u?.displayName ?? 'Unbekannter Nutzer',
                 style: theme.textTheme.bodyLarge
                     ?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 3),
             Text(
-              reference?.trim().isNotEmpty == true
-                  ? reference!.trim()
-                  : 'Meldung zu Chat/Übergabe (optional)',
+              listingTitle?.trim().isNotEmpty == true
+                  ? 'Anzeige von ${u?.displayName ?? 'unbekanntem Nutzer'}'
+                  : reference?.trim().isNotEmpty == true
+                      ? reference!.trim()
+                      : 'Meldung zu Chat/Übergabe (optional)',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall

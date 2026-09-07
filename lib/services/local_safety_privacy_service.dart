@@ -896,6 +896,8 @@ class LocalSafetyPrivacyService {
     required String reporterUserId,
     required String reportedUserId,
     required String reasonCode,
+    String targetType = 'user',
+    String? targetId,
     String details = '',
     List<String> evidenceNames = const <String>[],
     String? reference,
@@ -903,6 +905,8 @@ class LocalSafetyPrivacyService {
     final reporter = reporterUserId.trim();
     final reported = reportedUserId.trim();
     final reason = reasonCode.trim();
+    final normalizedTargetType = targetType.trim();
+    final normalizedTargetId = (targetId ?? reportedUserId).trim();
     final normalizedDetails = details.trim();
     if (reporter.isEmpty ||
         reporter.length > 300 ||
@@ -910,6 +914,9 @@ class LocalSafetyPrivacyService {
         reported.length > 300 ||
         reason.isEmpty ||
         reason.length > 100 ||
+        !const <String>{'user', 'listing'}.contains(normalizedTargetType) ||
+        normalizedTargetId.isEmpty ||
+        normalizedTargetId.length > 300 ||
         normalizedDetails.length > 4000 ||
         evidenceNames.length > 10 ||
         evidenceNames.any(
@@ -923,6 +930,8 @@ class LocalSafetyPrivacyService {
       'id': 'rep_${now.microsecondsSinceEpoch}',
       'reporterUserId': reporter,
       'reportedUserId': reported,
+      'targetType': normalizedTargetType,
+      'targetId': normalizedTargetId,
       'reasonCode': reason,
       'details': normalizedDetails,
       'evidenceNames': evidenceNames.map((entry) => entry.trim()).toList(),
@@ -968,6 +977,8 @@ class LocalSafetyPrivacyService {
     required String reporterUserId,
     required String reportedUserId,
     required String reasonCode,
+    String targetType = 'user',
+    String? targetId,
     String details = '',
     List<String> evidenceNames = const <String>[],
     String? reference,
@@ -982,6 +993,8 @@ class LocalSafetyPrivacyService {
           reporterUserId: reporterUserId,
           reportedUserId: reportedUserId,
           reasonCode: reasonCode,
+          targetType: targetType,
+          targetId: targetId,
           details: details,
           evidenceNames: evidenceNames,
           reference: reference,

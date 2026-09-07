@@ -154,6 +154,65 @@ void main() {
     );
   });
 
+  test('listing report preserves the exact listing target and owner', () async {
+    final service = _SwitchableSafetyActionService();
+
+    final result = await service.submitListingReport(
+      context: _contextA,
+      listingId: 'listing-a',
+      listingOwnerUserId: 'listing-owner-a',
+      reasonCode: 'fraud_or_deception',
+      idempotencyKey: 'listing-report-account-a-1',
+      details: 'Synthetischer Listing-Regressionstest',
+      evidenceNames: const <String>[],
+      evidenceUploadIds: const <String>[],
+      reference: 'listing_options',
+    );
+
+    expect(result.directContactBlocked, isFalse);
+    expect(service.listingReportCalls, 1);
+    expect(service.lastListingId, 'listing-a');
+  });
+
+  test('accepted A listing report is never shown as B truth', () async {
+    final remote = Completer<Map<String, dynamic>>();
+    final service = _SwitchableSafetyActionService(
+      listingReportRemote: remote,
+    );
+    final result = service.submitListingReport(
+      context: _contextA,
+      listingId: 'listing-a',
+      listingOwnerUserId: 'listing-owner-a',
+      reasonCode: 'inappropriate_behavior',
+      idempotencyKey: 'listing-report-account-a-2',
+      details: 'Synthetischer Listing-Regressionstest',
+      evidenceNames: const <String>[],
+      evidenceUploadIds: const <String>[],
+    );
+
+    await Future<void>.delayed(Duration.zero);
+    expect(service.listingReportCalls, 1);
+    service.activateAccountB();
+    remote.complete(<String, dynamic>{'id': 'listing-report-a'});
+
+    await expectLater(
+      result,
+      throwsA(
+        isA<SafetyActionFailure>()
+            .having(
+              (failure) => failure.kind,
+              'kind',
+              SafetyActionFailureKind.principalChanged,
+            )
+            .having(
+              (failure) => failure.remoteAcceptedOrConfirmed,
+              'remote accepted',
+              true,
+            ),
+      ),
+    );
+  });
+
   test('post-acceptance local block failure is not described as rejection',
       () async {
     final service = _SwitchableSafetyActionService(localBlockFails: true);
@@ -295,6 +354,54 @@ void main() {
     expect(find.text('Meldung senden'), findsOneWidget);
     expect(find.text('Sendestatus unklar'), findsNothing);
   });
+
+  testWidgets('listing report UI submits an exact listing target',
+      (tester) async {
+    final listingOwner = buildTestUser(
+      'listing-owner',
+      name: 'Listing Owner',
+      email: 'listing-owner@example.invalid',
+    );
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'users': jsonEncode(<Object>[
+        _userA.toJson(),
+        listingOwner.toJson(),
+      ]),
+      'currentUser': jsonEncode(_userA.toJson()),
+    });
+    final service = _SwitchableSafetyActionService();
+    tester.view.physicalSize = const Size(800, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ReportUserScreen(
+          reportedUserId: listingOwner.id,
+          reportedListingId: 'listing-target',
+          reportedListingTitle: 'Synthetischer Akkuschrauber',
+          reference: 'listing_options',
+          safetyActionService: service,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Anzeige melden'), findsOneWidget);
+    expect(find.text('Synthetischer Akkuschrauber'), findsOneWidget);
+    expect(find.text('Beleidigung / Belästigung'), findsNothing);
+    expect(find.text('Problem bei Übergabe'), findsNothing);
+    await tester.tap(find.text('Betrug / Täuschung'));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Meldung senden'));
+    await tester.tap(find.text('Meldung senden'));
+    await tester.pumpAndSettle();
+
+    expect(service.listingReportCalls, 1);
+    expect(service.lastListingId, 'listing-target');
+    expect(find.text('Meldung gesendet'), findsOneWidget);
+  });
 }
 
 final User _userA = buildTestUser(
@@ -333,15 +440,19 @@ final SafetyActionContext _contextB = _context('account-b', _userB, 2);
 class _SwitchableSafetyActionService extends SafetyActionService {
   final Completer<void>? blockRemote;
   final Completer<Map<String, dynamic>>? reportRemote;
+  final Completer<Map<String, dynamic>>? listingReportRemote;
   final bool localBlockFails;
   SafetyActionContext activeContext = _contextA;
   int blockCalls = 0;
   int reportCalls = 0;
+  int listingReportCalls = 0;
   int localBlockCalls = 0;
+  String? lastListingId;
 
   _SwitchableSafetyActionService({
     this.blockRemote,
     this.reportRemote,
+    this.listingReportRemote,
     this.localBlockFails = false,
   });
 
@@ -392,5 +503,22 @@ class _SwitchableSafetyActionService extends SafetyActionService {
     return reportRemote == null
         ? <String, dynamic>{'id': 'report-a'}
         : reportRemote!.future;
+  }
+
+  @override
+  Future<Map<String, dynamic>> createListingReportRemote({
+    required SafetyActionContext context,
+    required String listingId,
+    required String reasonCode,
+    required String idempotencyKey,
+    required String details,
+    required List<String> evidenceUploadIds,
+    String? reference,
+  }) async {
+    listingReportCalls += 1;
+    lastListingId = listingId;
+    return listingReportRemote == null
+        ? <String, dynamic>{'id': 'listing-report-a'}
+        : listingReportRemote!.future;
   }
 }
