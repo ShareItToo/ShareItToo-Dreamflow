@@ -353,11 +353,11 @@
     },
     {
       "path": "docs/evidence/48h-remote/rw15-security-interaction-owner-route-invariant-20260825.json",
-      "sha256": "a0d640bcb30ebae0550be32c2e6e761e66cd4eb5c2302b7f88e98c8a048f3c6d"
+      "sha256": "8b8d94ae7eb7a7701412886aa81dd8cf7fff22518b0b1a452a135d67c887145c"
     },
     {
       "path": "scripts/technical_regression_check.sh",
-      "sha256": "34270a229093d27eaf9b70ea4c9a0937897a6cdf335730c7f1b390b406dbfd6d"
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
     },
     {
       "path": "test/rw16_session_transition_principal_epoch_test.dart",

@@ -386,11 +386,11 @@
     },
     {
       "path": "docs/evidence/48h-remote/rw16-session-transition-principal-epoch-20260826.json",
-      "sha256": "de692553852d997546625dbf0a7aef8325c6b7e9edd2190c77bcac36624aaf3b"
+      "sha256": "6642a719c0d1788a95ad0664110e4bfb15cfde7fbbe0b2281d35ab239ae20f9f"
     },
     {
       "path": "scripts/technical_regression_check.sh",
-      "sha256": "34270a229093d27eaf9b70ea4c9a0937897a6cdf335730c7f1b390b406dbfd6d"
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
     },
     {
       "path": "test/rw17_account_deletion_principal_epoch_transaction_test.dart",
