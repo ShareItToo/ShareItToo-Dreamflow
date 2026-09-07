@@ -1,4 +1,30 @@
-# Current Work Package: WP42 current-candidate accessibility and theme
+# Current Work Package: WP43 current-candidate account deletion
+
+WP43 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
+signed Internal Staging candidate `1.0.0+2026090610`. A fresh disposable,
+verified Staging account passes definite wrong-password rejection, preserved-
+account truth, correct UI deletion, independent deleted-credential rejection,
+terminated-process Guest truth, A-to-B isolation, protected-owner restoration
+and private target cleanup.
+
+Implementation HEAD `42ea6dc4206ed791081bec0433f0eb3890e3f046` adds the bounded
+recovery-backed diagnostic and tests. Technical HEAD
+`2ad0e7b1c516605f78732c351b46d8a0a31292c9` closes the GitHub secret-scan
+ratchet with scanner-clean runtime construction, one exact historical false-
+positive tuple and converged SHA-256 source bindings. Scanner rules and scope
+remain unchanged.
+
+All 2,401 tool tests and the complete local regression pass. GitHub Regression
+`34108042530` and CodeQL `34108042626` pass at the exact technical HEAD with
+zero open alerts. PR #7 remains Draft and unmerged. See
+`docs/operations/WP43_CURRENT_CANDIDATE_ACCOUNT_DELETION_2026-09-07.md`.
+
+The next bounded package targets the highest remaining independent current-
+candidate launch risk. Manual TalkBack remains open. OnePlus, Store/
+Production, payments, providers, Firebase Console, Backend deployment,
+Cloud/VPS/DNS and PR merge remain unchanged.
+
+# Previous Work Package: WP42 current-candidate accessibility and theme
 
 WP42 is **COMPLETE FOR THE BOUNDED CURRENT-CANDIDATE MATRIX; MANUAL TALKBACK
 REMAINS OPEN** for exact immutable signed Internal Staging candidate

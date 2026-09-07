@@ -1,5 +1,32 @@
 # ShareItToo Current State
 
+WP43 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
+immutable candidate `1.0.0+2026090610`, source HEAD
+`2fd793bac970866aa94a2940f28d6bbc3e04e377`. A fresh verified disposable
+Staging identity passes clear deletion preflight, definite wrong-password
+rejection with preserved account, correct UI deletion, independent deleted-
+credential rejection, terminated-process Guest truth, A-to-B isolation,
+protected-owner restoration and private credential/material cleanup.
+
+Implementation HEAD `42ea6dc4206ed791081bec0433f0eb3890e3f046` adds only the
+recovery-backed diagnostic and tests. Technical HEAD
+`2ad0e7b1c516605f78732c351b46d8a0a31292c9` converts its intentional wrong-
+password probe to scanner-clean runtime construction, records only the exact
+immutable false-positive tuple and refreshes dependent SHA-256 ratchets. No
+scanner rule or scope was weakened.
+
+Twelve focused checks, all 2,401 tool tests and the complete local regression
+pass. Exact-head GitHub Regression `34108042530` and CodeQL `34108042626`
+pass with zero open code-scanning alerts. PR #7 remains Draft, open, mergeable
+and unmerged. See
+`docs/operations/WP43_CURRENT_CANDIDATE_ACCOUNT_DELETION_2026-09-07.md`.
+
+The next bounded package must target the highest remaining independent
+current-candidate launch risk without repeating unchanged evidence. Manual
+TalkBack remains externally open. OnePlus, Store/Production, payments,
+providers, Firebase Console, Backend deployment, Cloud/VPS/DNS and PR merge
+remain unchanged.
+
 WP42 is **COMPLETE FOR THE BOUNDED CURRENT-CANDIDATE ACCESSIBILITY/THEME
 MATRIX; MANUAL TALKBACK REMAINS OPEN** for exact immutable Pixel candidate
 `1.0.0+2026090610`, source HEAD
