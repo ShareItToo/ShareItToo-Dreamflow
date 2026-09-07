@@ -47,7 +47,7 @@ export function parseAndroidNightMode(value) {
   return match[1];
 }
 
-function readAndroidNightMode(commandRunner, adbPath, device) {
+export function readAndroidNightMode(commandRunner, adbPath, device) {
   return parseAndroidNightMode(currentHeadAndroidAdb(
     commandRunner,
     adbPath,
@@ -56,7 +56,7 @@ function readAndroidNightMode(commandRunner, adbPath, device) {
   ));
 }
 
-function setAndroidNightMode(commandRunner, adbPath, device, mode) {
+export function setAndroidNightMode(commandRunner, adbPath, device, mode) {
   if (!['yes', 'no', 'auto'].includes(mode)) fail('Unsupported Android night mode.');
   currentHeadAndroidAdb(
     commandRunner,
@@ -75,7 +75,7 @@ function centerOfNode(node, label) {
   return { x: Math.floor((x1 + x2) / 2), y: Math.floor((y1 + y2) / 2) };
 }
 
-function tapSingleNamedNode(commandRunner, adbPath, device, hierarchy, label) {
+export function tapSingleNamedNode(commandRunner, adbPath, device, hierarchy, label) {
   const enabled = currentHeadAndroidNamedNodes(hierarchy, label)
     .filter((node) => currentHeadAndroidNodeAttribute(node, 'enabled') !== 'false');
   const clickable = enabled
@@ -102,7 +102,7 @@ async function waitForLabels({ commandRunner, adbPath, device, labels, wait, fai
   fail(failure);
 }
 
-function capturePrivateScreenshot(commandRunner, adbPath, device, directory, name) {
+export function capturePrivateScreenshot(commandRunner, adbPath, device, directory, name) {
   const bytes = currentHeadAndroidAdb(
     commandRunner,
     adbPath,
@@ -149,7 +149,7 @@ async function captureMode({
   return { mode, sha256, candidateBuildNumber: candidate.buildNumber };
 }
 
-async function openBackgroundOptions({ commandRunner, adbPath, device, wait }) {
+export async function openBackgroundOptions({ commandRunner, adbPath, device, wait }) {
   launchCurrentHeadAndroidCandidate(commandRunner, adbPath, device);
   const main = await waitForCurrentHeadAndroidMainNavigation({
     commandRunner,

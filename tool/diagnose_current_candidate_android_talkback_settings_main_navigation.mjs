@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   exactTalkBackConfiguration,
@@ -26,9 +26,15 @@ import {
   parseAdbDevices,
   selectSinglePhysicalDevice,
 } from './prepare_android_device_test.mjs';
+import {
+  validatePrivateAndroidReleaseArchive,
+} from './validate_current_head_android_release_archive.mjs';
+import {
+  assertCurrentCandidateNoPostCandidateMobileSourceDrift,
+  collectCurrentCandidateDriftPaths,
+  validateCurrentPrivateAndroidCandidate,
+} from './run_n28_current_candidate_pixel_surface_matrix.mjs';
 
-const expectedCommit = '1b3e86ef1bcfa5a88b1baf965fdad00e9d64f54b';
-const expectedBuildNumber = '2026082302';
 const talkBackComponent =
   'com.google.android.marvin.talkback/com.google.android.marvin.talkback.TalkBackService';
 const talkBackPackage = 'com.google.android.marvin.talkback';
@@ -254,9 +260,17 @@ export async function diagnoseCurrentCandidateAndroidTalkBackSettingsMainNavigat
   capturedAt = new Date().toISOString(),
   wait = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds)),
 }) {
-  if (candidate?.commit !== expectedCommit
-      || candidate?.buildNumber !== expectedBuildNumber) {
-    fail('PF21 requires the exact verified current candidate.');
+  if (candidate?.applicationId !== 'com.shareittoo.app'
+      || candidate?.bundleId !== 'com.shareittoo.app'
+      || !/^\d{10}$/u.test(candidate?.buildNumber ?? '')
+      || !/^[a-f0-9]{40}$/u.test(candidate?.commit ?? '')
+      || !/^[a-f0-9]{64}$/u.test(candidate?.android?.apkSha256 ?? '')
+      || candidate?.releaseChannel !== 'internal'
+      || candidate?.apiBaseUrl !== 'https://staging.shareittoo.com/api/v1'
+      || candidate?.firebaseConfigured !== true
+      || candidate?.paymentMode !== 'memory'
+      || candidate?.stripeLivemode !== false) {
+    fail('TalkBack Settings requires an exact verified Internal Staging candidate.');
   }
   assertCurrentHeadAndroidDeviceAlreadyUnlocked(commandRunner, adbPath, device);
   const installed = verifyCurrentHeadAndroidInstalledCandidate(
@@ -426,22 +440,48 @@ export async function diagnoseCurrentCandidateAndroidTalkBackSettingsMainNavigat
 export function parseTalkBackSettingsArguments(values) {
   let adbPath = 'adb';
   let probeOnly = false;
+  let candidateDirectory;
   for (let index = 0; index < values.length; index += 1) {
     if (values[index] === '--adb') {
       adbPath = values[index + 1] ?? fail('--adb requires a path.');
       index += 1;
     } else if (values[index] === '--probe-only') {
       probeOnly = true;
+    } else if (values[index] === '--candidate-dir') {
+      candidateDirectory = resolve(
+        values[index + 1] ?? fail('--candidate-dir requires a path.'),
+      );
+      index += 1;
     } else {
       fail(`Unknown argument: ${values[index]}`);
     }
   }
-  return { adbPath, probeOnly };
+  return {
+    adbPath,
+    probeOnly,
+    ...(candidateDirectory === undefined ? {} : { candidateDirectory }),
+  };
 }
 
 async function run() {
-  const { adbPath, probeOnly } = parseTalkBackSettingsArguments(process.argv.slice(2));
-  const { candidate } = await loadPf16CurrentCandidate();
+  const root = fileURLToPath(new URL('../', import.meta.url));
+  const { adbPath, probeOnly, candidateDirectory } =
+    parseTalkBackSettingsArguments(process.argv.slice(2));
+  let candidate;
+  if (candidateDirectory === undefined) {
+    ({ candidate } = await loadPf16CurrentCandidate());
+  } else {
+    const archive = await validatePrivateAndroidReleaseArchive({
+      root,
+      candidateDirectory,
+    });
+    candidate = validateCurrentPrivateAndroidCandidate(archive);
+    const changedPaths = collectCurrentCandidateDriftPaths({
+      root,
+      candidateCommit: candidate.commit,
+    });
+    assertCurrentCandidateNoPostCandidateMobileSourceDrift(changedPaths);
+  }
   const devices = parseAdbDevices(
     defaultCurrentHeadAndroidCommandRunner(adbPath, ['devices', '-l']),
   );

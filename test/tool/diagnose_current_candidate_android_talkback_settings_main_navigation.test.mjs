@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { resolve } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -271,7 +272,18 @@ test('fails closed when exact accessibility restoration is refused', async () =>
   await assert.rejects(() => diagnose(runner), /not restored exactly/u);
 });
 
-test('accepts only the optional ADB path and probe flag', () => {
+test('rejects an unverified candidate before any device mutation', async () => {
+  const runner = fakeRunner();
+  await assert.rejects(
+    () => diagnose(runner, {
+      candidate: { ...candidate, buildNumber: 'invalid' },
+    }),
+    /exact verified Internal Staging candidate/u,
+  );
+  assert.deepEqual(runner.writes, []);
+});
+
+test('accepts only the optional candidate, ADB path and probe flag', () => {
   assert.deepEqual(parseTalkBackSettingsArguments([]), {
     adbPath: 'adb',
     probeOnly: false,
@@ -284,6 +296,18 @@ test('accepts only the optional ADB path and probe flag', () => {
     adbPath: 'adb',
     probeOnly: true,
   });
+  assert.deepEqual(
+    parseTalkBackSettingsArguments(['--candidate-dir', './private-candidate']),
+    {
+      adbPath: 'adb',
+      probeOnly: false,
+      candidateDirectory: resolve('./private-candidate'),
+    },
+  );
   assert.throws(() => parseTalkBackSettingsArguments(['--adb']), /requires a path/u);
+  assert.throws(
+    () => parseTalkBackSettingsArguments(['--candidate-dir']),
+    /requires a path/u,
+  );
   assert.throws(() => parseTalkBackSettingsArguments(['--unknown']), /Unknown argument/u);
 });
