@@ -35,7 +35,7 @@ import {
   readEmailVerifiedJourneyVault,
 } from './run_staging_email_verified_two_role_journey.mjs';
 import {
-  validateCurrentHeadAndroidReleaseArchive,
+  validatePrivateAndroidReleaseArchive,
 } from './validate_current_head_android_release_archive.mjs';
 
 const applicationId = 'com.shareittoo.app';
@@ -429,7 +429,29 @@ function requiredEnvironment(name) {
   return value;
 }
 
+export function parseGoogleSocialAuthArguments(values) {
+  let candidateDirectory = null;
+  let adbPath = 'adb';
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] === '--candidate-dir') {
+      candidateDirectory = values[index + 1]
+        ?? fail('--candidate-dir requires a path.');
+      index += 1;
+    } else if (values[index] === '--adb') {
+      adbPath = values[index + 1] ?? fail('--adb requires a path.');
+      index += 1;
+    } else {
+      fail(`Unknown argument: ${values[index]}`);
+    }
+  }
+  if (candidateDirectory === null) {
+    fail('--candidate-dir is required.');
+  }
+  return { candidateDirectory, adbPath };
+}
+
 async function run() {
+  const args = parseGoogleSocialAuthArguments(process.argv.slice(2));
   const mailboxFile = requiredEnvironment('SIT_N23_GOOGLE_MAILBOX_FILE');
   const protectedOwnerVaultFile = requiredEnvironment(
     'SIT_N23_PROTECTED_OWNER_VAULT_FILE',
@@ -437,14 +459,20 @@ async function run() {
   const privateEvidenceDirectory = requiredEnvironment(
     'SIT_N23_PRIVATE_EVIDENCE_DIR',
   );
-  const candidate = await validateCurrentHeadAndroidReleaseArchive();
+  const candidate = await validatePrivateAndroidReleaseArchive({
+    candidateDirectory: resolve(args.candidateDirectory),
+  });
   const devices = parseAdbDevices(
-    defaultCurrentHeadAndroidCommandRunner('adb', ['devices', '-l']),
+    defaultCurrentHeadAndroidCommandRunner(args.adbPath, ['devices', '-l']),
   );
   const device = selectSinglePhysicalDevice(devices);
-  const deviceSummary = inspectPhysicalDevice({ adbPath: 'adb', device });
+  const deviceSummary = inspectPhysicalDevice({
+    adbPath: args.adbPath,
+    device,
+  });
   try {
     const evidence = await diagnoseAndroidGoogleSocialAuth({
+      adbPath: args.adbPath,
       device,
       deviceSummary,
       candidate,

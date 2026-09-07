@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   classifyGoogleSocialAuthSurface,
   googleProfileFingerprint,
+  parseGoogleSocialAuthArguments,
   sanitizeGoogleSocialAuthFailure,
 } from '../../tool/diagnose_android_google_social_auth.mjs';
 
@@ -65,7 +66,7 @@ test('post-provider surfaces retain a sanitized actionable classification', () =
 
 test('real Google diagnostic is exact-account and restoration scoped', () => {
   for (const marker of [
-    'validateCurrentHeadAndroidReleaseArchive',
+    'validatePrivateAndroidReleaseArchive',
     'verifyCurrentHeadAndroidInstalledCandidate',
     'exactPrivateGoogleAccountSelected: true',
     'sameStagingProfileAcrossAllThreeObservations: true',
@@ -79,4 +80,24 @@ test('real Google diagnostic is exact-account and restoration scoped', () => {
   ]) assert.match(source, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
   assert.doesNotMatch(source, /console\.log\(.*mailbox|JSON\.stringify\(.*mailbox/gu);
   assert.doesNotMatch(source, /clear data|pm clear|uninstall/gu);
+});
+
+test('Google diagnostic requires one explicit private candidate archive', () => {
+  assert.deepEqual(parseGoogleSocialAuthArguments([
+    '--candidate-dir',
+    '/private/candidate',
+    '--adb',
+    '/safe/adb',
+  ]), {
+    candidateDirectory: '/private/candidate',
+    adbPath: '/safe/adb',
+  });
+  assert.throws(
+    () => parseGoogleSocialAuthArguments([]),
+    /candidate-dir is required/u,
+  );
+  assert.throws(
+    () => parseGoogleSocialAuthArguments(['--unknown']),
+    /Unknown argument/u,
+  );
 });

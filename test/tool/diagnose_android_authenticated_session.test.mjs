@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import test from 'node:test';
 
 import {
+  bindAuthenticatedSessionCandidateArchive,
   diagnoseAndroidAuthenticatedSession,
   parseAuthenticatedSessionArguments,
 } from '../../tool/diagnose_android_authenticated_session.mjs';
@@ -34,6 +35,33 @@ const candidate = {
   android: { apkSha256 },
 };
 const archive = { apkSha256 };
+
+test('binds the explicit private archive without stale store-manifest truth', () => {
+  const privateArchive = {
+    ...candidate,
+    privacyScan: 'passed',
+    apkSha256,
+    aabSha256: 'a'.repeat(64),
+    signingCertificateSha256: 'b'.repeat(64),
+    android: {
+      apkSha256,
+      aabSha256: 'a'.repeat(64),
+      signingCertificateSha256: 'b'.repeat(64),
+    },
+  };
+  const bound = bindAuthenticatedSessionCandidateArchive(privateArchive);
+  assert.equal(bound.buildNumber, candidate.buildNumber);
+  assert.equal(bound.commit, candidate.commit);
+  assert.equal(bound.paymentMode, 'memory');
+  assert.equal(bound.stripeLivemode, false);
+  assert.throws(
+    () => bindAuthenticatedSessionCandidateArchive({
+      ...privateArchive,
+      releaseChannel: 'production',
+    }),
+    /exact signed Internal Staging candidate/u,
+  );
+});
 
 function node(label, bounds, extra = '') {
   return `<node text="" content-desc="${label}" enabled="true" clickable="true" bounds="${bounds}" ${extra}/>`;

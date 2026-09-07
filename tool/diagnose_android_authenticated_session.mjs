@@ -2,20 +2,20 @@
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { homedir } from 'node:os';
 import { resolve } from 'node:path';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   inspectPhysicalDevice,
   parseAdbDevices,
   selectSinglePhysicalDevice,
-  validateCandidateArchive,
 } from './prepare_android_device_test.mjs';
 import {
   loadCurrentHeadAndroidDeviceCandidate,
 } from './validate_current_head_android_candidate.mjs';
+import {
+  validatePrivateAndroidReleaseArchive,
+} from './validate_current_head_android_release_archive.mjs';
 
 const applicationId = 'com.shareittoo.app';
 const remoteUiDump = '/sdcard/sit-authenticated-session-diagnostic.xml';
@@ -24,9 +24,24 @@ function fail(message) {
   throw new Error(message);
 }
 
-function nonEmptyString(value, label) {
-  if (typeof value !== 'string' || value.trim() === '') fail(`${label} must be a non-empty string.`);
-  return value.trim();
+export function bindAuthenticatedSessionCandidateArchive(archive) {
+  if (archive?.applicationId !== applicationId
+      || archive?.bundleId !== applicationId
+      || archive?.releaseChannel !== 'internal'
+      || archive?.apiBaseUrl !== 'https://staging.shareittoo.com/api/v1'
+      || archive?.firebaseConfigured !== true
+      || archive?.privacyScan !== 'passed'
+      || archive?.android?.apkSha256 !== archive?.apkSha256
+      || archive?.android?.aabSha256 !== archive?.aabSha256
+      || archive?.android?.signingCertificateSha256
+        !== archive?.signingCertificateSha256) {
+    fail('The private authenticated-session candidate archive is not an exact signed Internal Staging candidate.');
+  }
+  return Object.freeze({
+    ...archive,
+    paymentMode: 'memory',
+    stripeLivemode: false,
+  });
 }
 
 function defaultCommandRunner(file, args, { binary = false } = {}) {
@@ -556,21 +571,15 @@ async function run() {
     candidate = await loadCurrentHeadAndroidDeviceCandidate();
     archive = Object.freeze({ apkSha256: candidate.android.apkSha256 });
   } else {
-    const manifest = JSON.parse(readFileSync(resolve(root, 'store/device-validation.json'), 'utf8'));
-    candidate = manifest.candidate;
     const candidateDirectory = resolve(
       args.candidateDirectory
-        ?? resolve(
-          homedir(),
-          'Library',
-          'Application Support',
-          'ShareItToo',
-          'release',
-          'android',
-          `${nonEmptyString(candidate.buildNumber, 'candidate.buildNumber')}-${nonEmptyString(candidate.commit, 'candidate.commit')}`,
-        ),
+        ?? fail('--candidate-dir is required unless --current-head is used.'),
     );
-    archive = await validateCandidateArchive({ root, candidateDirectory });
+    archive = await validatePrivateAndroidReleaseArchive({
+      root,
+      candidateDirectory,
+    });
+    candidate = bindAuthenticatedSessionCandidateArchive(archive);
   }
   const devices = parseAdbDevices(defaultCommandRunner(args.adbPath, ['devices', '-l']));
   const device = selectSinglePhysicalDevice(devices);
