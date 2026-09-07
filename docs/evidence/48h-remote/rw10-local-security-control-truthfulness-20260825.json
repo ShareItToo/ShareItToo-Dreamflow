@@ -219,7 +219,7 @@
     },
     {
       "path": "backend/ops/secret_scan_history_baseline.json",
-      "sha256": "0ea0eb8904ea6d6494e5667aedb532d6283fd857300f2028eca5454fb3d70993"
+      "sha256": "1961d551f430fdc22cf125853dfe122d9938ec1c91647d5d07dfb3276581c31a"
     },
     {
       "path": "store/privacy-disclosures.json",

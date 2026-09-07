@@ -50,7 +50,7 @@ test('local return truth is bound to the exact owner before persistence', () => 
     'addTimelineEventForOwner({',
     'addNotificationForOwner({',
   ]) {
-    assert.match(data, new RegExp(marker.replace(/[({]/g, '\\$&'), 'u'));
+    assert.ok(data.includes(marker), `missing exact owner-bound marker: ${marker}`);
   }
   assert.match(
     data,
