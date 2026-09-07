@@ -1,4 +1,28 @@
-# Current Work Package: WP53 listing report runtime closure
+# Current Work Package: WP54 Pixel listing-report candidate closure
+
+WP54 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB**. Candidate
+`1.0.0+2026090711` is bound to source
+`c819c5f4445d0b998b2ee319e64f8c95cfb01eda`, exact Staging and the canonical
+upload certificate. Its owner-only signed APK/AAB archive and binary privacy
+scan pass; the direct Pixel update preserved installation and app-data
+identity.
+
+The physical renter role opened `Anzeige melden` from one exact isolated
+listing. The resulting canonical receipt was independently verified as exactly
+one recent `received` simulation support case linked to that listing with the
+expected technical subtype. The listing and fixture were retired, the listing
+is absent from the public catalog, the protected source vault is unchanged and
+the protected owner role is restored. No booking, reservation, contract,
+payment or monetary effect occurred.
+
+All 2,448 tool tests and the complete local regression pass. Exact-head GitHub
+Regression `34157382861`, including clean-checkout reproducibility, and CodeQL
+`34157382862` pass with zero open alerts. PR #7 remains Draft and unmerged. No
+OnePlus, Play, Production, Backend deployment, Firebase Console, provider,
+payment, Cloud/VPS/DNS, public-registration or tester state changed. See
+`docs/operations/WP54_PIXEL_LISTING_REPORT_CANDIDATE_2026090711_CLOSURE_2026-09-07.md`.
+
+# Previous Work Package: WP53 listing report runtime closure
 
 WP53 is **COMPLETE AND VALIDATED LOCALLY AND ON GITHUB**. The reachable
 listing-options placeholder is replaced by

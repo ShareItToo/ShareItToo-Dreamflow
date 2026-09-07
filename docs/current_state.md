@@ -1,5 +1,30 @@
 # ShareItToo Current State
 
+WP54 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB**. Exact signed
+Internal Staging candidate `1.0.0+2026090711`, source
+`c819c5f4445d0b998b2ee319e64f8c95cfb01eda`, carries the WP53 listing-report
+closure. Its private APK/AAB archive, canonical upload certificate and binary
+privacy scan pass. The Pixel replace-update from `2026090610` preserved its
+installation and application-data identity.
+
+Using two separately email-verified synthetic Staging principals, the renter
+found one isolated listing and opened `Anzeige melden` from that exact listing.
+The physical intake returned a canonical server receipt; authenticated
+readback proved exactly one `received` simulation support case linked to the
+same listing with the expected general-help technical subtype. The temporary
+listing is ended and absent from the public catalog, the isolated fixture is
+retired, the protected source vault is unchanged and the protected owner
+session is restored. No booking, reservation, contract, payment or monetary
+effect occurred.
+
+All 2,448 tool tests and the complete local regression pass. Exact candidate
+source Regression `34157382861`, including clean-checkout reproducibility, and
+CodeQL `34157382862` pass; open alerts are zero. PR #7 remains Draft, open,
+mergeable and unmerged. Google Play, OnePlus, Production, Backend deployment,
+Firebase Console, payment, provider, public registration, Cloud/VPS/DNS and
+tester state were not changed. See
+`docs/operations/WP54_PIXEL_LISTING_REPORT_CANDIDATE_2026090711_CLOSURE_2026-09-07.md`.
+
 WP53 is **COMPLETE AND VALIDATED LOCALLY AND ON GITHUB**. The listing-options
 action `Melden` no longer ends in a placeholder. It opens the existing safety
 report surface and binds the exact
