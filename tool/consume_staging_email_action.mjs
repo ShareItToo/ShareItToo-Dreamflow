@@ -9,6 +9,7 @@ import {
   realpathSync,
 } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
+import { createInterface } from 'node:readline';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const stagingOrigin = 'https://staging.shareittoo.com';
@@ -90,12 +91,48 @@ async function htmlResponse(response) {
   return response.text();
 }
 
-async function requireConsumedLink(fetchImpl, url) {
+async function inspectConsumedLink(fetchImpl, url) {
   const replay = await boundedFetch(fetchImpl, url);
-  const body = await htmlResponse(replay);
-  if (replay.status !== 400 || !htmlHasExactHeading(body, 'Link nicht mehr gültig')) {
-    fail('The Staging email action did not prove single-use consumption.');
+  const type = replay.headers?.get?.('content-type') ?? '';
+  if (replay.status === 400 && /^text\/html(?:;|$)/iu.test(type)) {
+    const body = await replay.text();
+    if (htmlHasExactHeading(body, 'Link nicht mehr gültig')) {
+      return Object.freeze({ status: 'consumed', httpStatus: 400, retryAfterSeconds: null });
+    }
   }
+  if (replay.status === 429 && /^application\/json(?:;|$)/iu.test(type)) {
+    let value;
+    try { value = await replay.json(); } catch { value = null; }
+    const retryAfter = Number(replay.headers?.get?.('retry-after'));
+    if (value?.error === 'rate_limit_exceeded'
+        && Number.isSafeInteger(retryAfter)
+        && retryAfter > 0
+        && retryAfter <= 900) {
+      return Object.freeze({
+        status: 'rate-limited-reconciliation-required',
+        httpStatus: 429,
+        retryAfterSeconds: retryAfter,
+      });
+    }
+  }
+  fail('The Staging email action did not prove single-use consumption.');
+}
+
+export async function verifyConsumedStagingEmailAction({
+  content,
+  kind,
+  fetchImpl = globalThis.fetch,
+} = {}) {
+  const url = extractStagingEmailActionUrl(content, kind);
+  const result = await inspectConsumedLink(fetchImpl, url);
+  return Object.freeze({
+    status: result.status,
+    httpStatus: result.httpStatus,
+    retryAfterSeconds: result.retryAfterSeconds,
+    containsActionUrl: false,
+    containsToken: false,
+    containsCredential: false,
+  });
 }
 
 export async function consumeStagingEmailVerification({
@@ -108,11 +145,14 @@ export async function consumeStagingEmailVerification({
   if (response.status !== 200 || !htmlHasExactHeading(body, 'E-Mail bestätigt')) {
     fail('The Staging email-verification result is not a definite success.');
   }
-  await requireConsumedLink(fetchImpl, url);
+  const replay = await inspectConsumedLink(fetchImpl, url);
   return Object.freeze({
-    status: 'email-verification-confirmed-single-use',
+    status: replay.status === 'consumed'
+      ? 'email-verification-confirmed-single-use'
+      : 'email-verification-confirmed-replay-reconciliation-required',
     initialHttpStatus: 200,
-    replayHttpStatus: 400,
+    replayHttpStatus: replay.httpStatus,
+    replayRetryAfterSeconds: replay.retryAfterSeconds,
     containsActionUrl: false,
     containsToken: false,
     containsCredential: false,
@@ -188,12 +228,15 @@ export async function consumeStagingPasswordReset({
   if (submitted.status !== 200 || !htmlHasExactHeading(submittedBody, 'Passwort geändert')) {
     fail('The Staging password-reset submission is not a definite success.');
   }
-  await requireConsumedLink(fetchImpl, url);
+  const replay = await inspectConsumedLink(fetchImpl, url);
   return Object.freeze({
-    status: 'password-reset-confirmed-single-use',
+    status: replay.status === 'consumed'
+      ? 'password-reset-confirmed-single-use'
+      : 'password-reset-confirmed-replay-reconciliation-required',
     formHttpStatus: 200,
     submissionHttpStatus: 200,
-    replayHttpStatus: 400,
+    replayHttpStatus: replay.httpStatus,
+    replayRetryAfterSeconds: replay.retryAfterSeconds,
     containsActionUrl: false,
     containsToken: false,
     containsCredential: false,
@@ -206,11 +249,13 @@ function argumentValue(args, flag) {
 }
 
 async function readStandardInput() {
-  let value = '';
-  for await (const chunk of process.stdin) {
-    value += chunk;
-    if (value.length > 1024 * 1024) fail('The private email input exceeds the bounded size.');
-  }
+  const input = createInterface({ input: process.stdin, terminal: false });
+  const value = await new Promise((resolvePromise, reject) => {
+    input.once('line', resolvePromise);
+    input.once('error', reject);
+  });
+  input.close();
+  if (value.length > 1024 * 1024) fail('The private email input exceeds the bounded size.');
   try {
     const parsed = JSON.parse(value);
     if (typeof parsed?.content !== 'string' || parsed.content.length === 0) {
@@ -227,7 +272,10 @@ async function run() {
   const args = process.argv.slice(2);
   const kind = argumentValue(args, '--kind') ?? fail('--kind is required.');
   const content = await readStandardInput();
-  const result = kind === 'email-verification'
+  const consumedKind = /^(email-verification|password-reset)-consumed$/u.exec(kind)?.[1] ?? null;
+  const result = consumedKind !== null
+    ? await verifyConsumedStagingEmailAction({ content, kind: consumedKind })
+    : kind === 'email-verification'
     ? await consumeStagingEmailVerification({ content })
     : kind === 'password-reset'
       ? await consumeStagingPasswordReset({

@@ -295,6 +295,12 @@ export async function sendOppositeRoleMessage(vaultFile, signedInRole, sender) {
   }
 }
 
+export function isAndroidSoftwareKeyboardShown(inputMethodState) {
+  const value = String(inputMethodState);
+  return /\bmInputShown=true\b/u.test(value)
+    && /\bmIsInputViewShown=true\b/u.test(value);
+}
+
 async function openProfile({ commandRunner, adbPath, device, wait }) {
   launchCandidate(commandRunner, adbPath, device);
   const main = await waitForHierarchy({
@@ -335,7 +341,22 @@ export async function restoreSyntheticSession({ commandRunner, adbPath, device, 
   inputText(commandRunner, adbPath, device, form, 'E-Mail', nonEmptyString(account.email, 'account.email'));
   const passwordForm = dumpUi(commandRunner, adbPath, device);
   inputText(commandRunner, adbPath, device, passwordForm, 'Passwort', nonEmptyString(account.password, 'account.password'));
-  const submitForm = dumpUi(commandRunner, adbPath, device);
+  if (isAndroidSoftwareKeyboardShown(
+    adb(commandRunner, adbPath, device, ['shell', 'dumpsys', 'input_method']),
+  )) {
+    adb(commandRunner, adbPath, device, ['shell', 'input', 'keyevent', '4']);
+    await wait(350);
+  }
+  const submitForm = await waitForHierarchy({
+    commandRunner,
+    adbPath,
+    device,
+    predicate: (hierarchy) => namedNodes(hierarchy, 'Anmelden').some(
+      (tag) => attribute(tag, 'clickable') === 'true' && attribute(tag, 'enabled') !== 'false',
+    ),
+    wait,
+    attempts: 12,
+  });
   tapNamedNode(commandRunner, adbPath, device, submitForm, 'Anmelden', { chooseLast: true });
   await waitForHierarchy({
     commandRunner,

@@ -7,6 +7,7 @@ import {
   consumeStagingEmailVerification,
   consumeStagingPasswordReset,
   extractStagingEmailActionUrl,
+  verifyConsumedStagingEmailAction,
 } from '../../tool/consume_staging_email_action.mjs';
 import { createTestTempTracker } from './test_temp_fixtures.mjs';
 
@@ -135,6 +136,50 @@ test('fails closed for transport, intermediary and unstructured outcomes', async
     }),
     /non-HTML/u,
   );
+});
+
+test('keeps definite reset success distinct from a rate-limited replay check', async () => {
+  const root = tempFixtures.makeSync('sit-email-action-rate-limit-');
+  let call = 0;
+  const result = await consumeStagingPasswordReset({
+    content: actionUrl('password-reset'),
+    resetVaultFile: resetVault(root),
+    fetchImpl: async () => {
+      call += 1;
+      if (call === 1) {
+        return response(200, 'Neues Passwort festlegen',
+          '<input name="token"><input name="password"><input name="passwordConfirm">');
+      }
+      if (call === 2) return response(200, 'Passwort geändert');
+      return new Response('{"error":"rate_limit_exceeded"}', {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': '120',
+        },
+      });
+    },
+  });
+  assert.equal(result.status, 'password-reset-confirmed-replay-reconciliation-required');
+  assert.equal(result.submissionHttpStatus, 200);
+  assert.equal(result.replayHttpStatus, 429);
+  assert.equal(result.replayRetryAfterSeconds, 120);
+});
+
+test('reconciles a consumed link without resubmitting an action', async () => {
+  const requests = [];
+  const result = await verifyConsumedStagingEmailAction({
+    content: actionUrl('password-reset'),
+    kind: 'password-reset',
+    fetchImpl: async (url, options) => {
+      requests.push({ url: String(url), options });
+      return response(400, 'Link nicht mehr gültig');
+    },
+  });
+  assert.equal(result.status, 'consumed');
+  assert.equal(result.httpStatus, 400);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].options.method, undefined);
 });
 
 test('requires an owner-only pending reset vault before any network call', async () => {

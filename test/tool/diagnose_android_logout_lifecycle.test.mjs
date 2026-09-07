@@ -2,9 +2,22 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  isAndroidSoftwareKeyboardShown,
   isV52ForegroundPushPopup,
   sendOppositeRoleMessage,
 } from '../../tool/diagnose_android_logout_lifecycle.mjs';
+
+test('dismisses login input only for an exact visible Android software keyboard', () => {
+  assert.equal(isAndroidSoftwareKeyboardShown(
+    'mImeWindowVis=3\n  mInputShown=true\n  mIsInputViewShown=true mStatusIcon=0',
+  ), true);
+  assert.equal(isAndroidSoftwareKeyboardShown(
+    'mInputShown=false\n  mIsInputViewShown=false',
+  ), false);
+  assert.equal(isAndroidSoftwareKeyboardShown(
+    'mInputShown=true\n  mIsInputViewShown=false',
+  ), false);
+});
 
 test('recognizes only the exact V5.2 in-app push surface', () => {
   assert.equal(isV52ForegroundPushPopup(
