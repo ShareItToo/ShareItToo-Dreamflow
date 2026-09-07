@@ -1,4 +1,31 @@
-# Current Work Package: WP41 current-candidate session controls
+# Current Work Package: WP42 current-candidate accessibility and theme
+
+WP42 is **COMPLETE FOR THE BOUNDED CURRENT-CANDIDATE MATRIX; MANUAL TALKBACK
+REMAINS OPEN** for exact immutable signed Internal Staging candidate
+`1.0.0+2026090610`. Authenticated navigation, legal surfaces, 200-percent
+text, 48-dp touch targets, process restarts and all five authoritative
+appearance choices pass on the physical Pixel. Private visual review passes;
+the original font, appearance, night mode and accessibility settings are
+restored exactly.
+
+Android Settings enabled and bound TalkBack, but the Pixel runtime did not
+establish touch exploration or its secure grant. The diagnostic stopped before
+traversal, claimed no TalkBack pass and restored accessibility completely.
+Technical HEAD `1c2cea7ce3c7a2e4cdeea02d3da79514b5e783cb` changes only
+fail-closed diagnostic tooling and tests.
+
+All 2,389 tool tests and the complete local regression pass through Backend,
+Flutter, analyzer, Web/Wasm, loopback, PostgreSQL, Android minSdk 24 and
+capacity. Exact-head CodeQL `34097689617` passes and Regression `34097689673`
+is the matching closure run. PR #7 remains Draft and unmerged. See
+`docs/operations/WP42_CURRENT_CANDIDATE_ACCESSIBILITY_THEME_2026-09-07.md`.
+
+The next bounded package must target the highest remaining independent
+current-candidate acceptance risk without duplicating unchanged proofs.
+OnePlus, Store/Production, payments, providers, Firebase Console, Backend
+deployment, Cloud/VPS/DNS and PR merge remain unchanged.
+
+# Previous Work Package: WP41 current-candidate session controls
 
 WP41 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
 signed Internal Staging candidate `1.0.0+2026090610`.

@@ -1,5 +1,33 @@
 # ShareItToo Current State
 
+WP42 is **COMPLETE FOR THE BOUNDED CURRENT-CANDIDATE ACCESSIBILITY/THEME
+MATRIX; MANUAL TALKBACK REMAINS OPEN** for exact immutable Pixel candidate
+`1.0.0+2026090610`, source HEAD
+`2fd793bac970866aa94a2940f28d6bbc3e04e377`. Authenticated cold start, all five
+primary destinations, seven legal documents, every destination at 200-percent
+text, 48-dp navigation targets, five process restarts and all five authoritative
+appearance choices pass. Private visual review passes and the exact original
+font, appearance and night mode are restored.
+
+TalkBack was enabled, running and bound through Android Settings, but Android
+did not establish runtime touch exploration or its secure grant. No traversal
+was attempted and no TalkBack pass or app-defect claim is made. The exact
+previous accessibility state was restored. Technical HEAD
+`1c2cea7ce3c7a2e4cdeea02d3da79514b5e783cb` adds only fail-closed diagnostics
+and tests; the app, installed candidate and Backend runtime are unchanged.
+
+Fifteen focused checks, all 2,389 tool tests and the complete local regression
+pass through Backend, Flutter, analyzer, Web/Wasm, loopback, PostgreSQL,
+Android minSdk 24 and capacity. Exact-head CodeQL `34097689617` passes;
+Regression `34097689673` is the matching closure run. PR #7 remains Draft,
+open, mergeable and unmerged. See
+`docs/operations/WP42_CURRENT_CANDIDATE_ACCESSIBILITY_THEME_2026-09-07.md`.
+
+The next bounded package must target the highest remaining independent
+current-candidate acceptance risk without repeating unchanged evidence.
+OnePlus, Store/Production, payments, providers, Firebase Console, Backend
+deployment, Cloud/VPS/DNS and PR merge remain unchanged.
+
 WP41 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
 immutable candidate `1.0.0+2026090610`, source HEAD
 `2fd793bac970866aa94a2940f28d6bbc3e04e377`. Exact remote-session revocation,
