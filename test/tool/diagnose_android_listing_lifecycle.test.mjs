@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  ownerListingSurfaceClassification,
   runAndroidListingLifecycle,
 } from '../../tool/diagnose_android_listing_lifecycle.mjs';
 
@@ -78,6 +79,25 @@ function passingOperations(calls) {
     },
   };
 }
+
+test('classifies a missing owner listing without exposing its title', () => {
+  const title = 'SIT Rollenpruefung private-fixture';
+  const hierarchy = '<hierarchy>'
+    + '<node text="Meine Anzeigen" content-desc="Meine Anzeigen" />'
+    + '<node text="Deine Anzeigen konnten nicht sicher geladen werden." />'
+    + '<node class="android.widget.ProgressBar" />'
+    + '</hierarchy>';
+  const classification = ownerListingSurfaceClassification(
+    hierarchy,
+    title,
+    'Aktiv',
+  );
+  assert.equal(
+    classification,
+    'my-listings-1_drafts-tab-0_title-0_status-action-0_expected-status-0_load-failed-1_empty-active-0_empty-draft-0_progress-1',
+  );
+  assert.equal(classification.includes(title), false);
+});
 
 test('closes the exact Pixel listing lifecycle with sanitized evidence', async () => {
   const calls = [];

@@ -76,6 +76,25 @@ function titleEditorNode(hierarchy, expectedValue) {
   return matches[0];
 }
 
+export function ownerListingSurfaceClassification(
+  hierarchy,
+  exactTitle,
+  expectedStatusLabel,
+) {
+  const count = (label) => currentHeadAndroidNamedNodes(hierarchy, label).length;
+  return [
+    `my-listings-${count('Meine Anzeigen')}`,
+    `drafts-tab-${count('für später gespeichert')}`,
+    `title-${count(exactTitle)}`,
+    `status-action-${count('Status ändern')}`,
+    `expected-status-${count(expectedStatusLabel)}`,
+    `load-failed-${count('Deine Anzeigen konnten nicht sicher geladen werden.')}`,
+    `empty-active-${count('Du hast noch keine aktive Anzeige.')}`,
+    `empty-draft-${count('Du hast noch keine Anzeige für später gespeichert.')}`,
+    `progress-${String(hierarchy).includes('class="android.widget.ProgressBar"') ? 1 : 0}`,
+  ].join('_');
+}
+
 async function findOrScroll({
   commandRunner,
   adbPath,
@@ -172,18 +191,39 @@ async function openOwnerListings({
   if (draft) {
     tapLabel(commandRunner, adbPath, device, hierarchy, 'für später gespeichert');
   }
-  hierarchy = await waitForHierarchy({
-    commandRunner,
-    adbPath,
-    device,
-    wait,
-    attempts: 36,
-    label: 'exact owner lifecycle listing',
-    predicate: (value) => containsAllLabels(
-      value,
-      [title, 'Status ändern', expectedStatusLabel],
-    ),
-  });
+  try {
+    hierarchy = await waitForHierarchy({
+      commandRunner,
+      adbPath,
+      device,
+      wait,
+      attempts: 36,
+      label: 'exact owner lifecycle listing',
+      predicate: (value) => containsAllLabels(
+        value,
+        [title, 'Status ändern', expectedStatusLabel],
+      ),
+    });
+  } catch (error) {
+    try {
+      const observed = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+      fail(
+        'The sanitized exact owner lifecycle listing failed with surface '
+        + `classification ${ownerListingSurfaceClassification(
+          observed,
+          title,
+          expectedStatusLabel,
+        )}.`,
+      );
+    } catch (classificationError) {
+      if (classificationError?.message?.startsWith(
+        'The sanitized exact owner lifecycle listing failed with surface classification ',
+      )) {
+        throw classificationError;
+      }
+      throw error;
+    }
+  }
   return hierarchy;
 }
 
