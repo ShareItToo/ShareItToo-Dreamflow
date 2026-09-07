@@ -1,4 +1,27 @@
-# Current Work Package: WP50 Staging Backend parity deployment preflight
+# Current Work Package: WP51 Staging runtime read-only inventory preparation
+
+WP51 is **TECHNICALLY COMPLETE; AUTHENTICATED VPS OBSERVATION REMAINS OPEN**.
+It adds a single fail-closed read-only inventory for the exact current Staging
+container/image/release binding, protected non-secret runtime shape, restart
+state and resource headroom. It emits neither credential values nor credential
+paths, never dumps Docker configuration and performs no external mutation.
+
+Technical HEAD `590a5b443f951953fa85c0c2f4706934f4d30fe7` passes six focused
+tests, all 2,442 tool tests and the complete local regression. Exact-head GitHub
+Regression `34143191343`, CodeQL `34143191259` and clean-checkout
+reproducibility pass with zero open alerts; image publication remains skipped
+and PR #7 remains Draft/unmerged. Fresh public Staging readback remains on Backend
+`68c97a437969dc98f17eb151da3e006259ffbafa`, degraded only by one noncritical
+support update.
+
+The authenticated Hostinger session is unavailable to this local GUI context,
+and Docker is absent locally. The required current VPS observation, rollback
+image proof and exact target-image availability are therefore not claimed.
+`STAGING_BACKEND_PARITY_DEPLOYMENT_GO` remains closed and no deployment was
+started. See
+`docs/operations/WP51_STAGING_RUNTIME_READONLY_INVENTORY_PREPARATION_2026-09-07.md`.
+
+# Previous Work Package: WP50 Staging Backend parity deployment preflight
 
 WP50 is **COMPLETE AND VALIDATED AS A READ-ONLY PREFLIGHT; DEPLOYMENT REMAINS
 HOLD/NO-GO**. It binds the observed Staging Backend

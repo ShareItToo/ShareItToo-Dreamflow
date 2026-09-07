@@ -1,5 +1,29 @@
 # ShareItToo Current State
 
+WP51 is **TECHNICALLY COMPLETE; AUTHENTICATED VPS OBSERVATION REMAINS OPEN**.
+Technical HEAD `590a5b443f951953fa85c0c2f4706934f4d30fe7` adds a fixed,
+fail-closed, read-only Staging inventory that checks exact container/image/
+release binding, protected non-secret runtime shape, restart state and resource
+headroom without credential values, credential paths, Docker configuration
+dumps or server/data mutation.
+
+Six focused tests and all 2,442 tool tests pass. The exact technical HEAD passes
+the complete local regression through 904 Flutter passes with 33 intentional
+skips, Backend, PostgreSQL, analyzer, Web/Wasm, loopback and Android minSdk
+24/build. Exact-head GitHub Regression `34143191343`, CodeQL `34143191259` and
+independent clean-checkout reproducibility pass with zero open alerts. The image
+publication job is correctly skipped. PR #7 remains Draft, open, mergeable and
+unmerged.
+
+Fresh public readback at `2026-09-07T16:27:05Z` still binds Staging to
+`68c97a437969dc98f17eb151da3e006259ffbafa`; readiness remains degraded only by
+one overdue noncritical support update. The authenticated Hostinger terminal is
+not available to this local GUI context, and Docker is absent locally.
+Therefore the current VPS image/runtime/release, rollback availability and
+resource proof remain open. No target image was published and no deployment was
+started. `STAGING_BACKEND_PARITY_DEPLOYMENT_GO` remains closed. See
+`docs/operations/WP51_STAGING_RUNTIME_READONLY_INVENTORY_PREPARATION_2026-09-07.md`.
+
 WP50 is **COMPLETE AND VALIDATED AS A READ-ONLY DEPLOYMENT PREFLIGHT; STAGING
 DEPLOYMENT REMAINS HOLD/NO-GO**. Public readback binds Staging to Backend commit
 `68c97a437969dc98f17eb151da3e006259ffbafa`; the proposed parity target is the
