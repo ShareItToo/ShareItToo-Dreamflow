@@ -1,5 +1,28 @@
 # ShareItToo Current State
 
+WP37 is **COMPLETE ON THE PHYSICAL PIXEL** for exact signed Internal Staging
+candidate `1.0.0+2026090610`, source HEAD
+`2fd793bac970866aa94a2940f28d6bbc3e04e377`. A fresh isolated two-role journey
+proves an exactly-once synthetic image attachment with equal participant
+projection, counterparty-confirmed handover and return times, authoritative
+state after force-stop/restart, and fail-closed pre-window location sharing
+with persistent truthful feedback and no location message.
+
+Cleanup cancelled the non-binding booking, ended and removed the listing,
+deleted the synthetic Pixel file and restored the protected owner. Zero active
+isolated journeys remain and the source vault is byte-, mode- and timestamp-
+identical. All 12 focused checks and 2,373 tool tests pass. The unchanged code
+retains WP36's complete local/clean proof; GitHub Regression `34076566068` and
+CodeQL `34076566054` pass at exact technical baseline
+`79dbffca5fb43756a6125856f80cfb6691ad57e0`, with zero open alerts. See
+`docs/operations/WP37_CURRENT_CANDIDATE_MESSAGING_MEDIA_TIME_LOCATION_2026-09-07.md`.
+
+The next bounded current-candidate package should consolidate low-mutation
+authentication and account-session evidence before attempting any owner-
+interactive SMS or external provider path. All support owner, legal, money,
+provider, Store/Production, Firebase Console, backend deployment,
+Cloud/VPS/DNS, OnePlus and PR-merge boundaries remain unchanged.
+
 WP36 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB**. The exact
 signed Internal Staging candidate `1.0.0+2026090610`, source HEAD
 `2fd793bac970866aa94a2940f28d6bbc3e04e377`, passes three isolated current-

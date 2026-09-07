@@ -1,4 +1,29 @@
-# Current Work Package: WP36 current-candidate core marketplace lifecycles
+# Current Work Package: WP37 current-candidate messaging, media, time and location
+
+WP37 is **COMPLETE ON THE PHYSICAL PIXEL** for exact signed Internal Staging
+candidate `1.0.0+2026090610`, source HEAD
+`2fd793bac970866aa94a2940f28d6bbc3e04e377`. The fresh isolated two-role lane
+passes exactly-once synthetic attachment, equal participant server truth,
+counterparty-confirmed handover and return times, force-stop/restart
+persistence and the fail-closed pre-window location gate with no location
+message.
+
+The isolated booking/listing and synthetic device file are removed, the
+protected owner is restored, zero active journeys remain and the source vault
+is unchanged. All 12 focused checks and 2,373 tool tests pass. The codebase is
+unchanged from WP36's complete local and clean-checkout proof. GitHub
+Regression `34076566068` and CodeQL `34076566054` pass at exact technical
+baseline `79dbffca5fb43756a6125856f80cfb6691ad57e0`; open alerts are zero and
+PR #7 remains Draft and unmerged. See
+`docs/operations/WP37_CURRENT_CANDIDATE_MESSAGING_MEDIA_TIME_LOCATION_2026-09-07.md`.
+
+The next package is low-mutation current-candidate authentication and session
+consolidation. Owner-interactive SMS and external provider flows remain later
+separate cells. Support owner action, binding V5.2, real money, Store/
+Production, Firebase Console, backend deployment, Cloud/VPS/DNS, OnePlus and
+PR merge remain unchanged.
+
+# Previous Work Package: WP36 current-candidate core marketplace lifecycles
 
 WP36 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB**. Exact signed
 Internal Staging candidate `1.0.0+2026090610`, source HEAD
