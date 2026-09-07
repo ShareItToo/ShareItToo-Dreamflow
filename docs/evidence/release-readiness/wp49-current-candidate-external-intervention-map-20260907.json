@@ -6,9 +6,9 @@
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "implementationBaseHead": "0ac889bb154aabcd8b06c20359b21df95382fb51",
-    "verifiedTechnicalHead": "65fc926fa288ae3346514369c602a4b18963e56c",
-    "githubRegressionRun": 34129245800,
-    "githubCodeqlRun": 34129245723,
+    "packageTechnicalHead": "9de283ab0d5386f054606ac615a52ff05059f4db",
+    "githubRegressionRun": 34132354257,
+    "githubCodeqlRun": 34132354214,
     "openCodeScanningAlerts": 0,
     "pullRequest7": "draft-open-mergeable-unmerged"
   },

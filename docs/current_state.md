@@ -1,5 +1,33 @@
 # ShareItToo Current State
 
+WP49 is **COMPLETE AND VALIDATED; EXTERNAL RUNWAY REMAINS HOLD/NO-GO** for
+immutable Internal Staging candidate `1.0.0+2026090610`. It cryptographically
+binds the WP45 convergence checkpoint and completed WP46 permission, WP47 SMS
+and WP48 support-read evidence into the current 24-area portfolio: sixteen
+DONE, two PARTIAL and six OPEN.
+
+Every unresolved area is mapped into one of nine ordered external lanes with
+dependencies, minimum authentic closure evidence and bounded rollback. No lane
+is marked externally ready or automatically executable. Staging Backend parity
+is first because current source contains the tested active-session cap while
+the observed Staging release does not. Staff/deadline recovery follows; binding
+legal approval must precede PSP sandbox and authorized address reveal. Social
+providers, external Listing AI, manual TalkBack and later Play/OnePlus retain
+their separate exact gates.
+
+Technical package HEAD `9de283ab0d5386f054606ac615a52ff05059f4db`
+adds the machine-readable map, strict validator and seven tests. All 2,429 tool
+tests and the complete local regression pass through 904 Flutter passes with 33
+intentional skips, Backend, PostgreSQL, analyzer, Web/Wasm, loopback and Android
+minSdk 24/build. Exact-head GitHub Regression `34132354257`, CodeQL
+`34132354214` and independent clean-checkout reproducibility pass with zero
+open alerts. PR #7 remains Draft, open, mergeable and unmerged. See
+`docs/operations/WP49_CURRENT_CANDIDATE_EXTERNAL_INTERVENTION_MAP_2026-09-07.md`.
+
+WP49 changes no application/Backend runtime, deployment, Store, Production,
+provider, Firebase Console, payment, Cloud/VPS/DNS, device, OnePlus or PR-merge
+state. Preparation alone does not close any external gate.
+
 WP48 is **COMPLETE AS A READ-ONLY CURRENT-CANDIDATE PROOF; STAFF FOLLOW-UP
 REMAINS EXTERNALLY BLOCKED** for immutable Internal Staging candidate
 `1.0.0+2026090610`. The exact candidate loads the protected owner's one

@@ -1,4 +1,26 @@
-# Current Work Package: WP48 current-candidate support follow-up readiness
+# Current Work Package: WP49 current-candidate external intervention map
+
+WP49 is **COMPLETE AND VALIDATED; EXTERNAL RUNWAY REMAINS HOLD/NO-GO**. It
+binds the exact `2026090610` candidate and immutable WP45–WP48 evidence into a
+non-dilutable 24-area portfolio: sixteen DONE, two PARTIAL and six OPEN.
+
+Nine ordered external lanes now carry explicit dependencies, minimum closure
+evidence and bounded rollback. None is falsely marked externally ready or
+automatically executable. The highest-priority next lane is Staging Backend
+parity because current source contains the tested active-session cap while the
+observed Staging release does not.
+
+Technical package HEAD `9de283ab0d5386f054606ac615a52ff05059f4db`
+passes seven focused checks, all 2,429 tool tests and the complete local
+regression. Exact-head GitHub Regression `34132354257`, CodeQL `34132354214`
+and independent clean-checkout reproducibility pass with zero open alerts.
+PR #7 remains Draft and unmerged. See
+`docs/operations/WP49_CURRENT_CANDIDATE_EXTERNAL_INTERVENTION_MAP_2026-09-07.md`.
+
+No application/Backend runtime, deployment, Store, Production, provider,
+Firebase Console, payment, Cloud/VPS/DNS, device or merge state changed.
+
+# Previous Work Package: WP48 current-candidate support follow-up readiness
 
 WP48 is **COMPLETE AS A READ-ONLY CURRENT-CANDIDATE PROOF; STAFF FOLLOW-UP
 REMAINS EXTERNALLY BLOCKED** for exact signed Internal Staging candidate
