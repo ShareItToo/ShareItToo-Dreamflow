@@ -1,4 +1,24 @@
-# Current Work Package: WP46 current-candidate Android permission lifecycle
+# Current Work Package: WP47 current-candidate SMS verification
+
+WP47 is **COMPLETE ON THE PHYSICAL PIXEL WITH EXACT CLEANUP** for exact signed
+Internal Staging candidate `1.0.0+2026090610`. One real challenge, current code,
+independent server reconciliation and terminated-process cold restart prove
+valid SMS verification. The immediate UI result stayed unproven rather than
+becoming false success or failure. The temporary phone was then removed with
+exact mutation/readback confirmation, and the protected owner was restored.
+
+The private input artifact was deleted immediately and no phone, code,
+credential, identity or token entered Git or Evidence. No source changed.
+Thirty-four focused checks pass; the unchanged technical baseline retains the
+complete local and GitHub Regression/CodeQL proof. See
+`docs/operations/WP47_CURRENT_CANDIDATE_SMS_VERIFICATION_2026-09-07.md`.
+
+Current Pixel acceptance is now sixteen DONE, two PARTIAL and six OPEN. The
+next package must target the highest remaining independent gap without opening
+Store/Production, payment, providers, Firebase Console, Backend deployment,
+Cloud/VPS/DNS, OnePlus or PR merge.
+
+# Previous Work Package: WP46 current-candidate Android permission lifecycle
 
 WP46 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
 signed Internal Staging candidate `1.0.0+2026090610`. Camera, coarse/fine

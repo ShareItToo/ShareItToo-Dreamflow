@@ -1,5 +1,31 @@
 # ShareItToo Current State
 
+WP47 is **COMPLETE ON THE PHYSICAL PIXEL WITH EXACT CLEANUP** for immutable
+Internal Staging candidate `1.0.0+2026090610`. The exact candidate enforces
+German input and explicit SMS consent, rejects a known-invalid code, accepts
+one current owner code, preserves verified truth across terminated-process cold
+start and then removes the temporary phone with independent cleared-state
+readback. The protected synthetic owner is restored.
+
+The missing immediate confirmation surface was retained as unproven. No second
+challenge was requested; fresh authentication established authoritative server
+truth before cold-start acceptance. The private code file and directory were
+deleted immediately, and no code, phone, credential, account identity or token
+entered Git or Evidence.
+
+No source changed. Thirty-four focused checks pass, while the unchanged
+technical HEAD `9f5f7761e0ae01cedf282d9ad7cc4eddc8ceff69` retains 2,415
+passing tool tests, complete local regression, GitHub Regression `34120973447`,
+CodeQL `34120973588`, clean reproducibility and zero open alerts. PR #7 remains
+Draft and unmerged. See
+`docs/operations/WP47_CURRENT_CANDIDATE_SMS_VERIFICATION_2026-09-07.md`.
+
+Current Pixel acceptance now has sixteen DONE areas, two PARTIAL areas and six
+OPEN areas. The remaining PARTIAL areas are support/staff follow-up and
+repository/Backend deployment parity. Manual TalkBack, positive authorized
+address reveal, support deadline owner action, social-provider gates, real
+external Listing AI and binding V5.2/legal/payment remain OPEN.
+
 WP46 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
 immutable Internal Staging candidate `1.0.0+2026090610`, source HEAD
 `2fd793bac970866aa94a2940f28d6bbc3e04e377`. Camera, coarse/fine location and
