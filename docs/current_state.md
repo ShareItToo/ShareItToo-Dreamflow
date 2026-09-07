@@ -1,5 +1,30 @@
 # ShareItToo Current State
 
+WP46 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
+immutable Internal Staging candidate `1.0.0+2026090610`, source HEAD
+`2fd793bac970866aa94a2940f28d6bbc3e04e377`. Camera, coarse/fine location and
+notifications each pass denied, allowed, authenticated restart and exact
+restoration. The Android permission-settings surface is proven read-only;
+package/data identity and the authenticated principal remain intact.
+
+Technical HEAD `9f5f7761e0ae01cedf282d9ad7cc4eddc8ceff69` adds only the
+recovery-backed diagnostic and six tests. The final acceptance requires exact
+runtime grants/flags and exact effective AppOps modes, avoiding Android's
+nondurable equivalent internal `default`/explicit representation. The owner-
+only journal is closed with no recovery required.
+
+All 2,415 tool tests and the complete local regression pass. Exact-head GitHub
+Regression `34120973447`, CodeQL `34120973588` and independent clean-checkout
+reproducibility pass with zero open alerts. PR #7 remains Draft, open,
+mergeable and unmerged. See
+`docs/operations/WP46_CURRENT_CANDIDATE_ANDROID_PERMISSION_LIFECYCLE_2026-09-07.md`.
+
+The next bounded package must target the highest remaining independent
+current-candidate gap. Exact-candidate SMS requires a fresh owner-visible OTP;
+manual TalkBack requires physical/runtime cooperation. OnePlus, Store/
+Production, payment, providers, Firebase Console, Backend deployment,
+Cloud/VPS/DNS and PR merge remain unchanged.
+
 WP45 is a **COMPLETE CURRENT-CANDIDATE CONVERGENCE CHECKPOINT; PIXEL
 ACCEPTANCE REMAINS PARTIAL**. Exact `2026090610` evidence now closes candidate
 identity/install, full regression/security, two-role publish/discover/request/

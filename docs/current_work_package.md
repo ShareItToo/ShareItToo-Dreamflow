@@ -1,4 +1,23 @@
-# Current Work Package: WP45 current-candidate acceptance convergence
+# Current Work Package: WP46 current-candidate Android permission lifecycle
+
+WP46 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
+signed Internal Staging candidate `1.0.0+2026090610`. Camera, coarse/fine
+location and notifications pass denied, allowed and authenticated restart
+states. The Android app-permission settings surface is reachable read-only,
+and the exact original runtime grants/flags and effective AppOps modes are
+restored with package/data identity preserved.
+
+Technical HEAD `9f5f7761e0ae01cedf282d9ad7cc4eddc8ceff69` adds only the
+bounded owner-recoverable diagnostic and six tests. All 2,415 tool tests and
+the full local regression pass. Exact-head GitHub Regression `34120973447`,
+CodeQL `34120973588` and clean-checkout reproducibility pass with zero open
+alerts. PR #7 remains Draft and unmerged. See
+`docs/operations/WP46_CURRENT_CANDIDATE_ANDROID_PERMISSION_LIFECYCLE_2026-09-07.md`.
+
+No app/runtime, Backend, Store, Production, payment, provider, Firebase
+Console, deployment, Cloud/VPS/DNS or OnePlus state changed.
+
+# Previous Work Package: WP45 current-candidate acceptance convergence
 
 WP45 is **COMPLETE AS A TRUTHFUL CHECKPOINT; PIXEL ACCEPTANCE REMAINS
 PARTIAL**. It replaces the stale pre-WP35 portfolio view with exact
