@@ -1,4 +1,24 @@
-# Current Work Package: WP38 current-candidate authentication, session and Google
+# Current Work Package: WP39 current-candidate account and support surfaces
+
+WP39 is **COMPLETE ON THE PHYSICAL PIXEL** for exact signed Internal Staging
+candidate `1.0.0+2026090610`. All nine authenticated account destinations and
+the Help/Support entry are physically reachable. Payment and payout retain the
+explicit Staging provider holds; no account, preference, export, support,
+invoice, phone, message or payment state changed. WP38's immediately preceding
+logout/restore proof on the same immutable candidate was not redundantly rerun.
+
+WP39 changes no source. Exact technical HEAD
+`3feae7b18ba3daea08158f8cc3ed5455c07ab96d` retains the complete local and
+clean-checkout proof, GitHub Regression `34078229911`, CodeQL `34078229819`
+and zero open alerts. PR #7 remains Draft and unmerged. See
+`docs/operations/WP39_CURRENT_CANDIDATE_ACCOUNT_SUPPORT_SURFACES_2026-09-07.md`.
+
+The next package is reversible direct-password-change acceptance on the exact
+current candidate, with an owner-only rollback journal and guaranteed original
+credential and protected-owner restoration. SMS, deletion and every external/
+live boundary remain separate.
+
+# Previous Work Package: WP38 current-candidate authentication, session and Google
 
 WP38 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB**. Exact signed
 Internal Staging candidate `1.0.0+2026090610`, source HEAD

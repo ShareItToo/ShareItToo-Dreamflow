@@ -1,5 +1,27 @@
 # ShareItToo Current State
 
+WP39 is **COMPLETE ON THE PHYSICAL PIXEL** for exact signed Internal Staging
+candidate `1.0.0+2026090610`. All nine authenticated account destinations plus
+Help Center and the support-contact entry are reachable through the real UI.
+Payment and payout show the correct Staging provider holds. No profile,
+contact, password, notification, device, block, privacy/export, support or
+payment state changed. The immediately preceding WP38 run already proves
+current-candidate logout and protected-owner restoration, so it was not
+duplicated.
+
+WP39 changed no source. Exact technical HEAD
+`3feae7b18ba3daea08158f8cc3ed5455c07ab96d` retains 2,375 passing tool tests,
+complete local and clean-checkout proof, GitHub Regression `34078229911`,
+CodeQL `34078229819` and zero open alerts. PR #7 remains Draft, open, mergeable
+and unmerged. See
+`docs/operations/WP39_CURRENT_CANDIDATE_ACCOUNT_SUPPORT_SURFACES_2026-09-07.md`.
+
+The next package should prove the reversible direct-password-change transaction
+on the exact current candidate using the existing owner-only rollback journal,
+including old/new credential truth, cold start, cross-account isolation,
+original-password restoration and protected-owner restoration. SMS, account
+deletion and external/live boundaries remain separate.
+
 WP38 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
 signed Internal Staging candidate `1.0.0+2026090610`, source HEAD
 `2fd793bac970866aa94a2940f28d6bbc3e04e377`. Online and verified-offline
