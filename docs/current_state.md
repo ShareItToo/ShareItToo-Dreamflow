@@ -1,5 +1,29 @@
 # ShareItToo Current State
 
+WP53 is **COMPLETE AND VALIDATED LOCALLY AND ON GITHUB**. The listing-options
+action `Melden` no longer ends in a placeholder. It opens the existing safety
+report surface and binds the exact
+listing ID, owner and listing-relevant reason to the authenticated Backend or
+principal-scoped local-QA record.
+
+Implementation HEAD `e8bb56e78f999935e25093efaec9bf88a561f4dd` preserves the
+existing principal/epoch and typed outcome invariants: delayed Account-A
+results never appear under Account B, structured rejection remains distinct
+from transport-unknown, and remote acceptance cannot be rewritten as failure by
+a later local problem. Focused analysis, focused Flutter/Node tests, all 2,448
+tool tests and the complete local regression pass through Backend, PostgreSQL,
+analyzer, Web/Wasm, loopback and Android minSdk 24/build. Exact-head Regression
+`34155471330`, including clean-checkout reproducibility, and CodeQL
+`34155471300` pass; open code-scanning alerts are zero.
+
+Privacy, retention, active-provider hold and dependent RW evidence received
+only their required cryptographic source/dependency refresh. No semantic rule,
+historical result or external gate changed. No Staging/Production runtime,
+deployment, Firebase Console, Store, payment, provider, Cloud/VPS/DNS, device,
+OnePlus or merge state changed. The Pixel still runs `1.0.0+2026090610`, which
+does not contain WP53. See
+`docs/operations/WP53_LISTING_REPORT_RUNTIME_CLOSURE_2026-09-07.md`.
+
 WP52 is **COMPLETE AND VALIDATED; NO DRIVE SOURCE DRIFT WAS FOUND**. The current
 SIT Codex and Support Packet Drive folders were reconciled read-only against
 the repository's exact file IDs, modification times, sizes and SHA-256 values.

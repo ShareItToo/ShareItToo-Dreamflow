@@ -1,4 +1,26 @@
-# Current Work Package: WP52 Drive source reconciliation
+# Current Work Package: WP53 listing report runtime closure
+
+WP53 is **COMPLETE AND VALIDATED LOCALLY AND ON GITHUB**. The reachable
+listing-options placeholder is replaced by
+the real authenticated listing-report flow. Exact listing/owner identity,
+principal/epoch isolation and typed rejection/unknown/accepted-result semantics
+are preserved for both Backend and local-QA paths.
+
+Implementation HEAD `e8bb56e78f999935e25093efaec9bf88a561f4dd` passes focused
+analysis, 27 focused Flutter tests with one existing profile skip, 12 focused
+Node tests, all 2,448 tool tests and the complete local regression. Exact-head
+Regression `34155471330`, including clean-checkout reproducibility, and CodeQL
+`34155471300` pass; open code-scanning alerts are zero.
+
+The privacy, retention, provider-hold and RW0–RW20 hash chains were refreshed
+only because their protected source files changed. No rule, result, gate,
+provider decision or retention decision was weakened. No external or device
+state changed. The installed Pixel candidate does not contain WP53. The next
+bounded package is a strictly newer signed Internal Staging candidate followed
+by physical Pixel acceptance. See
+`docs/operations/WP53_LISTING_REPORT_RUNTIME_CLOSURE_2026-09-07.md`.
+
+# Previous Work Package: WP52 Drive source reconciliation
 
 WP52 is **COMPLETE AND VALIDATED; NO SOURCE DRIFT FOUND**. The current Google
 Drive SIT Codex and Support Packet folders were reconciled read-only against
