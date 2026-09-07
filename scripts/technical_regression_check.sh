@@ -97,6 +97,9 @@ node --check tool/validate_privacy_disclosures.mjs
 node --check tool/validate_support_test_matrix_traceability.mjs
 node --test test/tool/validate_support_test_matrix_traceability.test.mjs
 node tool/validate_support_test_matrix_traceability.mjs
+node --check tool/validate_wp52_drive_source_reconciliation.mjs
+node --test test/tool/validate_wp52_drive_source_reconciliation.test.mjs
+node tool/validate_wp52_drive_source_reconciliation.mjs
 node --check tool/validate_support_evidence_external_readiness.mjs
 node --test test/tool/validate_support_evidence_external_readiness.test.mjs
 node tool/validate_support_evidence_external_readiness.mjs
