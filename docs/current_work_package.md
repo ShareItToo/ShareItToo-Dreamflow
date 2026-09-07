@@ -1,4 +1,29 @@
-# Current Work Package: WP35 Pixel message-refresh current candidate
+# Current Work Package: WP36 current-candidate core marketplace lifecycles
+
+WP36 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB**. Exact signed
+Internal Staging candidate `1.0.0+2026090610`, source HEAD
+`2fd793bac970866aa94a2940f28d6bbc3e04e377`, passes the isolated listing
+lifecycle, search/saved and cart/project lanes with full cleanup, protected-
+owner restoration and no active isolated journey left behind.
+
+One initial late owner-listing surface timeout cleaned up safely and did not
+reproduce on the unchanged rerun. Diagnostic HEAD
+`474d87339371d3f70b032dbc55fbd14c44413490` adds sanitized count-only failure
+classification; it changes no app/runtime code and weakens no timeout, retry,
+assertion or acceptance condition. All 2,373 tool tests, the complete local
+regression and independent clean checkout with byte-identical double Android
+build pass. GitHub Regression `34075140223` and CodeQL `34075140221` pass with
+zero open alerts. PR #7 remains Draft and unmerged. See
+`docs/operations/WP36_CURRENT_CANDIDATE_CORE_MARKETPLACE_LIFECYCLES_2026-09-07.md`.
+
+The next package is the bounded exact-current messaging attachments,
+appointment/time and location-sharing acceptance lane. WP35 already proves
+base chat and controlled FCM. The new package must preserve the immutable
+candidate and remain isolated from support owner action, binding V5.2, real
+money, external providers, Store/Production, Firebase Console, backend
+deployment, Cloud/VPS/DNS, OnePlus and PR merge.
+
+# Previous Work Package: WP35 Pixel message-refresh current candidate
 
 WP35 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for signed
 Internal Staging candidate `1.0.0+2026090610` at source HEAD

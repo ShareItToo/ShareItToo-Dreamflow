@@ -1,5 +1,29 @@
 # ShareItToo Current State
 
+WP36 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB**. The exact
+signed Internal Staging candidate `1.0.0+2026090610`, source HEAD
+`2fd793bac970866aa94a2940f28d6bbc3e04e377`, passes three isolated current-
+candidate lanes: full listing lifecycle, search/saved persistence and
+isolation, and idempotent cart/project persistence and isolation. Cleanup and
+protected-owner restoration pass after every lane; zero active isolated
+journeys remain and the protected source vault is unchanged.
+
+One initial late owner-listing surface timeout cleaned up safely and did not
+reproduce on the exact unchanged rerun. Diagnostic HEAD
+`474d87339371d3f70b032dbc55fbd14c44413490` adds count-only classification
+without changing the app or candidate and without weakening timeouts, retries
+or assertions. All 2,373 tool tests, full local regression and exact clean
+checkout with byte-identical double Android build pass. GitHub Regression
+`34075140223`, CodeQL `34075140221` and all required jobs pass with zero open
+alerts. PR #7 remains Draft, open, mergeable and unmerged. See
+`docs/operations/WP36_CURRENT_CANDIDATE_CORE_MARKETPLACE_LIFECYCLES_2026-09-07.md`.
+
+The next bounded exact-current acceptance package is messaging attachments,
+appointment/time and location sharing. It remains separate from the completed
+WP35 base chat/FCM proof and from support owner action, binding V5.2, real
+money, external providers, Store/Production, Firebase Console, backend
+deployment, Cloud/VPS/DNS, OnePlus and PR merge.
+
 WP35 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
 signed Internal Staging candidate `1.0.0+2026090610`, source HEAD
 `2fd793bac970866aa94a2940f28d6bbc3e04e377`. The previous candidate's
