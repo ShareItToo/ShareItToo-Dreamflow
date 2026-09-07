@@ -26,6 +26,7 @@ import {
 } from './account_actions.js';
 import {
   deletePushDevicesForSession,
+  enforceActiveSessionLimitBeforeIssue,
   revokeAllSessionsForCredentialChange,
   revokeSessionByRefreshToken,
 } from './auth_session_actions.js';
@@ -1199,6 +1200,10 @@ async function issueSession(client, user, {
   const activeSessionId = sessionId ?? crypto.randomUUID();
   const activeFamilyId = familyId ?? crypto.randomUUID();
   if (!sessionId) {
+    await enforceActiveSessionLimitBeforeIssue(client, {
+      userId: user.id,
+      maximumActiveSessions: config.maximumActiveSessionsPerUser,
+    });
     await client.query(
       `INSERT INTO auth_sessions (
          id, user_id, device_label, user_agent, ip_address

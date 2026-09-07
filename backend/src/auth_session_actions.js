@@ -5,6 +5,63 @@ const accountCredentialChangeReasons = new Set([
   'password_changed',
 ]);
 
+export async function enforceActiveSessionLimitBeforeIssue(client, {
+  userId,
+  maximumActiveSessions,
+}) {
+  if (typeof userId !== 'string' || !userId
+      || !Number.isInteger(maximumActiveSessions)
+      || maximumActiveSessions < 1
+      || maximumActiveSessions > 1000) {
+    throw new Error('invalid_active_session_limit_scope');
+  }
+  await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
+  const excess = await client.query(
+    `SELECT id
+       FROM auth_sessions
+      WHERE user_id = $1 AND revoked_at IS NULL
+      ORDER BY last_seen_at DESC, created_at DESC, id DESC
+      OFFSET $2
+      FOR UPDATE`,
+    [userId, maximumActiveSessions - 1],
+  );
+  const sessionIds = excess.rows.map((row) => row.id);
+  if (sessionIds.length === 0) {
+    return Object.freeze({
+      revokedSessionCount: 0,
+      revokedRefreshTokenCount: 0,
+      deletedPushDeviceCount: 0,
+    });
+  }
+  const sessions = await client.query(
+    `UPDATE auth_sessions
+        SET revoked_at = COALESCE(revoked_at, now()),
+            revoked_reason = COALESCE(revoked_reason, 'session_limit')
+      WHERE id = ANY($1::uuid[]) AND user_id = $2 AND revoked_at IS NULL
+      RETURNING id`,
+    [sessionIds, userId],
+  );
+  const refreshTokens = await client.query(
+    `UPDATE refresh_tokens
+        SET revoked_at = COALESCE(revoked_at, now()),
+            revoked_reason = COALESCE(revoked_reason, 'session_limit')
+      WHERE session_id = ANY($1::uuid[]) AND user_id = $2 AND revoked_at IS NULL
+      RETURNING id`,
+    [sessionIds, userId],
+  );
+  const pushDevices = await client.query(
+    `DELETE FROM push_devices
+      WHERE session_id = ANY($1::uuid[]) AND user_id = $2
+      RETURNING id`,
+    [sessionIds, userId],
+  );
+  return Object.freeze({
+    revokedSessionCount: sessions.rowCount,
+    revokedRefreshTokenCount: refreshTokens.rowCount,
+    deletedPushDeviceCount: pushDevices.rowCount,
+  });
+}
+
 export async function deletePushDevicesForSession(client, { sessionId, userId = null }) {
   const result = await client.query(
     `DELETE FROM push_devices

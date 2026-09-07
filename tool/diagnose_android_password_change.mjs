@@ -823,6 +823,18 @@ async function waitForPasswordSurface({
 
 export function classifyPasswordChangeSurface(hierarchy) {
   const value = String(hierarchy);
+  if (currentHeadAndroidNamedNodes(value, 'Passwort geändert').length > 0) {
+    return 'definite-password-change-success';
+  }
+  if (currentHeadAndroidNamedNodes(value, 'Passwort nicht geändert').length > 0) {
+    return 'definite-password-change-rejection';
+  }
+  if (currentHeadAndroidNamedNodes(value, 'Passwort serverseitig geändert').length > 0) {
+    return 'confirmed-password-change-local-finalization-failed';
+  }
+  if (currentHeadAndroidNamedNodes(value, 'Ergebnis der Passwortänderung unklar').length > 0) {
+    return 'password-change-outcome-unknown';
+  }
   if (['Aktuelles Passwort', 'Neues Passwort', 'Neues Passwort bestätigen']
     .every((entry) => editableNodesForLabel(value, entry).length > 0)) {
     return 'password-form';
@@ -840,6 +852,54 @@ export function classifyPasswordChangeSurface(hierarchy) {
     return 'login';
   }
   return 'unclassified';
+}
+
+export function isPasswordInteractionOwnerReadySurface(hierarchy) {
+  const currentDeviceNodes = (String(hierarchy).match(/<node\b[^>]*>/gu) ?? [])
+    .filter((node) => [
+      currentHeadAndroidNodeAttribute(node, 'text'),
+      currentHeadAndroidNodeAttribute(node, 'content-desc'),
+    ].some((value) => value?.includes('(Dieses Gerät)') === true));
+  return currentDeviceNodes.length === 1
+    && currentHeadAndroidNamedNodes(hierarchy, 'Alle Geräte abmelden').length > 0;
+}
+
+async function waitForPasswordInteractionOwnerReady({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+}) {
+  let lastClassification = 'unclassified';
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    wakePasswordChangeScreen(commandRunner, adbPath, device);
+    await wait(500);
+    const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+    if (isPasswordInteractionOwnerReadySurface(hierarchy)) break;
+    lastClassification = classifyPasswordChangeSurface(hierarchy);
+    if (currentHeadAndroidNamedNodes(hierarchy, 'Erneut laden').length > 0) {
+      fail('The sanitized account-security session inventory reported a load failure.');
+    }
+    currentHeadAndroidAdb(commandRunner, adbPath, device, [
+      'shell', 'input', 'swipe', '720', '2450', '720', '700', '450',
+    ]);
+    if (attempt === 23) {
+      fail('The sanitized account-security interaction owner did not become ready; '
+        + `last classification: ${lastClassification}.`);
+    }
+  }
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+    if (['Aktuelles Passwort', 'Neues Passwort', 'Neues Passwort bestätigen']
+      .every((entry) => editableNodesForLabel(hierarchy, entry).length > 0)) {
+      return hierarchy;
+    }
+    currentHeadAndroidAdb(commandRunner, adbPath, device, [
+      'shell', 'input', 'swipe', '720', '700', '720', '2450', '450',
+    ]);
+    await wait(400);
+  }
+  fail('The sanitized password form did not return after owner readiness was confirmed.');
 }
 
 async function findPasswordAction({ commandRunner, adbPath, device, wait, label }) {
@@ -950,17 +1010,39 @@ export async function preflightPixelPasswordChange({
   let formReached = false;
   let preflightError;
   try {
-    if (await ensureGuest({ commandRunner, adbPath, device, wait }) !== true
-        || await restoreSession({
+    let guestReady;
+    try {
+      guestReady = await ensureGuest({ commandRunner, adbPath, device, wait });
+    } catch {
+      fail('The sanitized password-change preflight guest transition failed.');
+    }
+    if (guestReady !== true) {
+      fail('The sanitized password-change preflight guest transition was not confirmed.');
+    }
+    let renterRestored;
+    try {
+      renterRestored = await restoreSession({
           commandRunner,
           adbPath,
           device,
           wait,
           account: renter,
-        }) !== true) {
-      fail('The protected password-change account could not be restored on the Pixel.');
+        });
+    } catch {
+      fail('The sanitized password-change preflight renter-session restoration failed.');
     }
-    const hierarchy = await openSurface({ commandRunner, adbPath, device, wait });
+    if (renterRestored !== true) {
+      fail('The sanitized password-change preflight renter session was not confirmed.');
+    }
+    let hierarchy;
+    try {
+      hierarchy = await openSurface({ commandRunner, adbPath, device, wait });
+    } catch (error) {
+      const sanitized = sanitizePasswordChangeFailure(error);
+      fail(sanitized === 'The sanitized current-candidate password diagnostic failed.'
+        ? 'The sanitized password-change preflight form navigation failed.'
+        : sanitized);
+    }
     for (const label of ['Aktuelles Passwort', 'Neues Passwort', 'Neues Passwort bestätigen']) {
       const field = editableNodeForLabel(hierarchy, label);
       if ((currentHeadAndroidNodeAttribute(field, 'text') ?? '').length !== 0) {
@@ -1016,17 +1098,46 @@ async function performPixelPasswordChangeUi({
   account,
   replacementPassword: replacement,
 }) {
-  if (await ensureAndroidGuestSession({ commandRunner, adbPath, device, wait }) !== true
-      || await restoreSyntheticSession({
+  let guestReady;
+  try {
+    guestReady = await ensureAndroidGuestSession({ commandRunner, adbPath, device, wait });
+  } catch {
+    fail('The sanitized password-change guest transition failed.');
+  }
+  if (guestReady !== true) {
+    fail('The sanitized password-change guest transition was not confirmed.');
+  }
+  let renterRestored;
+  try {
+    renterRestored = await restoreSyntheticSession({
         commandRunner,
         adbPath,
         device,
         wait,
         account,
-      }) !== true) {
-    fail('The protected password-change account could not be restored on the Pixel.');
+      });
+  } catch {
+    fail('The sanitized password-change renter-session restoration failed.');
   }
-  let hierarchy = await openPasswordChangeSurface({ commandRunner, adbPath, device, wait });
+  if (renterRestored !== true) {
+    fail('The sanitized password-change renter session was not confirmed.');
+  }
+  try {
+    await openPasswordChangeSurface({ commandRunner, adbPath, device, wait });
+  } catch {
+    fail('The sanitized password-change form navigation failed.');
+  }
+  let hierarchy;
+  try {
+    hierarchy = await waitForPasswordInteractionOwnerReady({
+      commandRunner,
+      adbPath,
+      device,
+      wait,
+    });
+  } catch (error) {
+    throw new Error(sanitizePasswordChangeFailure(error));
+  }
   replaceSecretInput(commandRunner, adbPath, device, hierarchy, 'Aktuelles Passwort', account.password);
   hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
   replaceSecretInput(commandRunner, adbPath, device, hierarchy, 'Neues Passwort', replacement);
@@ -1051,6 +1162,7 @@ async function performPixelPasswordChangeUi({
     predicate: (value) => ['Passwort geändert', 'Passwort nicht geändert',
       'Passwort serverseitig geändert', 'Ergebnis der Passwortänderung unklar']
       .some((entry) => currentHeadAndroidNamedNodes(value, entry).length > 0),
+    classify: classifyPasswordChangeSurface,
   });
   const succeeded = currentHeadAndroidNamedNodes(hierarchy, 'Passwort geändert').length > 0;
   if (!succeeded) fail('The Pixel did not present the definite password-changed result.');

@@ -22,6 +22,7 @@ import {
   completePixelPasswordChange,
   executePixelPasswordChange,
   isPasswordChangeLoginSurface,
+  isPasswordInteractionOwnerReadySurface,
   passwordSuccessResultRequiresExplicitDismissal,
   preflightPixelPasswordChange,
   preparePasswordChangeJournal,
@@ -143,7 +144,27 @@ test('password surface classification stays sanitized and distinguishes navigati
   assert.equal(classifyPasswordChangeSurface(node('Kontoeinstellungen')), 'account-settings-entry');
   assert.equal(classifyPasswordChangeSurface(node('Abmelden')), 'authenticated-profile');
   assert.equal(classifyPasswordChangeSurface(node('Anmelden')), 'login');
+  assert.equal(classifyPasswordChangeSurface(node('Passwort geändert')),
+    'definite-password-change-success');
+  assert.equal(classifyPasswordChangeSurface(node('Passwort nicht geändert')),
+    'definite-password-change-rejection');
+  assert.equal(classifyPasswordChangeSurface(node('Passwort serverseitig geändert')),
+    'confirmed-password-change-local-finalization-failed');
+  assert.equal(classifyPasswordChangeSurface(node('Ergebnis der Passwortänderung unklar')),
+    'password-change-outcome-unknown');
   assert.equal(classifyPasswordChangeSurface(node('private-unrecognized-value')), 'unclassified');
+});
+
+test('password mutation readiness requires one current device and the loaded session action', () => {
+  const node = (label) => `<node text="${label}" enabled="true" />`;
+  const ready = [node('Pixel (Dieses Gerät)'), node('Alle Geräte abmelden')].join('');
+  assert.equal(isPasswordInteractionOwnerReadySurface(ready), true);
+  assert.equal(isPasswordInteractionOwnerReadySurface(node('Pixel (Dieses Gerät)')), false);
+  assert.equal(isPasswordInteractionOwnerReadySurface([
+    node('Pixel (Dieses Gerät)'),
+    node('Other (Dieses Gerät)'),
+    node('Alle Geräte abmelden'),
+  ].join('')), false);
 });
 
 test('password navigation selects the final same-label action when semantics are merged', () => {

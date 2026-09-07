@@ -330,6 +330,7 @@ export const config = Object.freeze({
   accessTokenLifetime: '15m',
   accessTokenLifetimeSeconds: 15 * 60,
   refreshTokenLifetimeDays: 30,
+  maximumActiveSessionsPerUser: 100,
   emailVerificationLifetimeHours: 24,
   passwordResetLifetimeMinutes: 30,
   accountDeletionLifetimeMinutes: 30,
