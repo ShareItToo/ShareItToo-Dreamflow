@@ -1,5 +1,29 @@
 # ShareItToo Current State
 
+WP45 is a **COMPLETE CURRENT-CANDIDATE CONVERGENCE CHECKPOINT; PIXEL
+ACCEPTANCE REMAINS PARTIAL**. Exact `2026090610` evidence now closes candidate
+identity/install, full regression/security, two-role publish/discover/request/
+FCM/chat, listing lifecycle, search/saved, cart/projects, attachments/times,
+E-mail registration/recovery, Google, password/session/deletion, account/help
+surfaces, themes/large text/touch targets and the safe mock Listing-AI contract.
+
+The remaining current Pixel gaps are explicit: exact-candidate SMS requires a
+fresh owner-visible OTP; the consolidated Android permission lifecycle is not
+yet run; manual TalkBack touch exploration remains blocked by the Pixel
+runtime; positive address reveal and exact support/staff follow-up remain
+unproved. Social providers, real external AI, binding V5.2/legal/payment,
+Backend deployment parity and Play/OnePlus stay separate gates.
+
+Read-only Staging readiness remains HTTP 503 solely for one overdue
+noncritical support `next_update_at`; database, mail, notifications, P0 owner,
+critical/privacy deadlines and watchdog freshness remain healthy. Current
+source contains the tested WP40 active-session cap, but the observed Staging
+release does not; no deployment is inferred.
+
+The next autonomous package is WP46, a reversible exact-candidate Android
+permission deny/allow/settings/restart/restoration matrix. See
+`docs/operations/WP45_CURRENT_CANDIDATE_ACCEPTANCE_CONVERGENCE_2026-09-07.md`.
+
 WP44 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for immutable
 candidate `1.0.0+2026090610`, source HEAD
 `2fd793bac970866aa94a2940f28d6bbc3e04e377`. A fresh disposable Staging

@@ -1,4 +1,20 @@
-# Current Work Package: WP44 current-candidate password recovery
+# Current Work Package: WP45 current-candidate acceptance convergence
+
+WP45 is **COMPLETE AS A TRUTHFUL CHECKPOINT; PIXEL ACCEPTANCE REMAINS
+PARTIAL**. It replaces the stale pre-WP35 portfolio view with exact
+`2026090610` evidence through WP44 and does not promote older device evidence.
+
+Fourteen areas are now DONE. The next fully autonomous gap is WP46 Android
+permission lifecycle. Exact-candidate SMS awaits a fresh owner-visible OTP;
+TalkBack awaits physical/runtime cooperation. Address reveal, support staff,
+social providers, external AI, binding V5.2/legal/payment, Backend deployment
+parity and Play/OnePlus remain separate explicit gates.
+
+Read-only Staging readiness remains degraded only by one overdue noncritical
+support update. No device or external state was changed. See
+`docs/operations/WP45_CURRENT_CANDIDATE_ACCEPTANCE_CONVERGENCE_2026-09-07.md`.
+
+# Previous Work Package: WP44 current-candidate password recovery
 
 WP44 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for exact
 signed Internal Staging candidate `1.0.0+2026090610`. Fresh registration,
