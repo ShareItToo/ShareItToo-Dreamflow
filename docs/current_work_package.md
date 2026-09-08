@@ -6,10 +6,10 @@ alerts even though the exact-head workflow succeeded. Two high-severity file
 races now verify and read each private JSON file through one non-symlinked file
 descriptor. The intentional medium-severity disposable-Staging-login data flow
 is additionally bound to the exact compile-time HTTPS Staging login destination,
-validated input and exact two-field payload, with one narrowly documented
-source suppression. The CodeQL workflow and security-extended suite remain
-unchanged. All 25 focused tests and the full local regression pass without a
-workaround. See
+validated input and exact two-field payload, with one durable intentional-
+egress marker for individual GitHub triage. No source suppression is used. The
+CodeQL workflow and security-extended suite remain unchanged. All 25 focused
+tests and the full local regression pass without a workaround. See
 `docs/operations/WP61_CODEQL_CURRENT_BRANCH_ALERT_CLOSURE_2026-09-08.md`.
 
 # Previous Work Package: WP60 OnePlus current Play candidate runway

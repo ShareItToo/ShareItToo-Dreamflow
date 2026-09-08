@@ -341,7 +341,7 @@ export async function probeDeletionCredential({ account, fetchImpl = globalThis.
     login = await fetchImpl(loginUrl.href, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-      // codeql[js/file-access-to-http]
+      // SIT-INTENTIONAL-EGRESS: owner-only disposable credentials to the fixed Staging login.
       body: JSON.stringify({ email: account.email, password: account.password }),
       signal: AbortSignal.timeout(20_000),
     });

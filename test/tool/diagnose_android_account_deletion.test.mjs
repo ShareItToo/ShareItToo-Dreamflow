@@ -280,9 +280,10 @@ test('current wrong-password probe is scanner-clean and its immutable historical
   const diagnosticPath = resolve(import.meta.dirname, '../../tool/diagnose_android_account_deletion.mjs');
   const diagnostic = readFileSync(diagnosticPath, 'utf8');
   assert.equal(
-    diagnostic.match(/codeql\[js\/file-access-to-http\]/gu)?.length,
+    diagnostic.match(/SIT-INTENTIONAL-EGRESS/gu)?.length,
     1,
   );
+  assert.doesNotMatch(diagnostic, /codeql\[js\/file-access-to-http\]/u);
   assert.match(diagnostic, /loginUrl\.origin !== 'https:\/\/staging\.shareittoo\.com'/u);
   assert.match(diagnostic, /loginUrl\.pathname !== '\/api\/v1\/auth\/login'/u);
   assert.deepEqual(

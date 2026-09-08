@@ -43,8 +43,9 @@
     "credentialProbeDestination": "compile-time-https-staging-origin-and-exact-login-path",
     "credentialProbeInput": "exact-email-and-password-shape",
     "credentialProbePayload": "exact-email-and-password-fields-only",
-    "codeqlSuppressionCount": 1,
-    "codeqlSuppressionScope": "only-reviewed-intentional-fixed-staging-login-sink",
+    "sourceCodeqlSuppressionCount": 0,
+    "intentionalEgressAuditMarkerCount": 1,
+    "intentionalEgressTriage": "pending-used-in-tests-for-exact-alert-543",
     "codeqlWorkflowOrQuerySuiteChanged": false,
     "globalQueryExcluded": false
   },

@@ -6,8 +6,9 @@ branch alerts despite a green CodeQL conclusion. The two high-severity file
 races now use one non-symlinked descriptor for metadata and content. The one
 medium intentional disposable-Staging-login flow is constrained to the exact
 compile-time HTTPS Staging origin and login path, exact credential/payload
-shape and one locally documented CodeQL suppression. No query or workflow is
-excluded. All 25 focused tests and the complete local regression pass. See
+shape and one durable intentional-egress audit marker for individual GitHub
+triage. No source suppression, query or workflow is excluded. All 25 focused
+tests and the complete local regression pass. See
 `docs/operations/WP61_CODEQL_CURRENT_BRANCH_ALERT_CLOSURE_2026-09-08.md`.
 
 WP60 is **TECHNICALLY COMPLETE LOCALLY AND ON GITHUB; PHYSICAL ONEPLUS RESULT

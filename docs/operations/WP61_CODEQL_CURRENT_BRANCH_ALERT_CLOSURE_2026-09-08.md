@@ -26,10 +26,10 @@ non-empty owner-only regular file opened with `O_NOFOLLOW`; the destination is
 now additionally constructed and checked as the exact compile-time HTTPS
 origin `staging.shareittoo.com` and exact `/api/v1/auth/login` path, with no URL
 credentials, query or fragment. The account and two-field payload shapes are
-tested. A single source-level `codeql[js/file-access-to-http]` suppression is
-placed only at that reviewed sink, as supported by CodeQL. The workflow,
-security-extended suite and every other finding remain enabled; there is no
-query-wide exclusion.
+tested. A durable `SIT-INTENTIONAL-EGRESS` marker binds this exact reviewed
+sink to individual GitHub triage as `used in tests`, following the established
+WP24 pattern. There is no source suppression or query-wide exclusion. The
+workflow, security-extended suite and every other finding remain enabled.
 
 ## Verification and boundaries
 
