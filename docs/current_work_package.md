@@ -1,4 +1,24 @@
-# Current Work Package: WP57 current Pixel Staging core revalidation
+# Current Work Package: WP59 Google Play Internal release 2026090711
+
+WP59 has completed the bounded Store action and is **ACTIVE IN GOOGLE PLAY
+INTERNAL; LOCAL REGRESSION PASSES; EXACT-HEAD GITHUB EVIDENCE IS PENDING**. The
+exact existing AAB
+for `com.shareittoo.app` `1.0.0+2026090711`, source
+`c819c5f4445d0b998b2ee319e64f8c95cfb01eda`, passed a fresh byte/structure/
+certificate check and was processed by Google Play as API 24+ / target SDK 36.
+It was released only on Internal testing as
+`1.0.0-internal-2026090711`.
+
+Post-action readback reports the release active and available to internal
+testers. The one existing tester list still contains two users; Open/Closed
+testing are unstarted and Production is unavailable/inactive. No tester,
+Store-listing, Data Safety, Firebase, provider, payment, Production, Cloud/VPS/
+DNS, PR or device state changed. The incomplete Data Safety declaration remains
+untouched and blocks later public readiness. Play propagation may take an hour
+or longer; OnePlus delivery and functional testing remain `NOT_RUN`. See
+`docs/operations/WP59_GOOGLE_PLAY_INTERNAL_2026090711_RELEASE_2026-09-08.md`.
+
+# Previous Work Package: WP57 current Pixel Staging core revalidation
 
 WP57 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB**.
 The exact installed direct APK `1.0.0+2026090711` remains byte- and
