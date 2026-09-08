@@ -1,14 +1,19 @@
 # ShareItToo Current State
 
-WP61 is **LOCAL REGRESSION PASSED; EXACT-HEAD GITHUB AND ZERO-ALERT READBACK
-PENDING**. WP60's successful exact-head GitHub runs exposed three older open
+WP61 is **COMPLETE LOCALLY AND ON GITHUB; ZERO OPEN CURRENT PR-MERGE ALERTS**.
+WP60's successful exact-head GitHub runs exposed three older open
 branch alerts despite a green CodeQL conclusion. The two high-severity file
 races now use one non-symlinked descriptor for metadata and content. The one
 medium intentional disposable-Staging-login flow is constrained to the exact
 compile-time HTTPS Staging origin and login path, exact credential/payload
 shape and one durable intentional-egress audit marker for individual GitHub
-triage. No source suppression, query or workflow is excluded. All 25 focused
-tests and the complete local regression pass. See
+triage. Alerts 544 and 545 are fixed; only alert 543 was individually dismissed
+as `used in tests`. No source suppression, query or workflow is excluded. All
+25 focused tests and the complete local regression pass. Exact implementation
+HEAD `7a372bab9a50478cab2534082d43a918b8a82f0f` passes GitHub Regression
+`34264664595`, CodeQL `34264664414`, independent clean checkout and a current
+PR-merge readback of zero open alerts. A fresh read-only Pixel check confirms
+the installed current build `1.0.0+2026090711`; no device state changed. See
 `docs/operations/WP61_CODEQL_CURRENT_BRANCH_ALERT_CLOSURE_2026-09-08.md`.
 
 WP60 is **TECHNICALLY COMPLETE LOCALLY AND ON GITHUB; PHYSICAL ONEPLUS RESULT

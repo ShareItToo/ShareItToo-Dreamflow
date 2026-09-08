@@ -1,15 +1,20 @@
 # Current Work Package: WP61 current-branch CodeQL alert closure
 
-WP61 is **LOCAL REGRESSION PASSED; EXACT-HEAD GITHUB AND ZERO-ALERT READBACK
-PENDING**. The explicit post-WP60 branch readback found three older open CodeQL
+WP61 is **COMPLETE LOCALLY AND ON GITHUB; ZERO OPEN CURRENT PR-MERGE ALERTS**.
+The explicit post-WP60 branch readback found three older open CodeQL
 alerts even though the exact-head workflow succeeded. Two high-severity file
 races now verify and read each private JSON file through one non-symlinked file
 descriptor. The intentional medium-severity disposable-Staging-login data flow
 is additionally bound to the exact compile-time HTTPS Staging login destination,
 validated input and exact two-field payload, with one durable intentional-
-egress marker for individual GitHub triage. No source suppression is used. The
-CodeQL workflow and security-extended suite remain unchanged. All 25 focused
-tests and the full local regression pass without a workaround. See
+egress marker. Alerts 544 and 545 are fixed; only alert 543 was individually
+triaged as `used in tests`. No source suppression is used. The CodeQL workflow
+and security-extended suite remain unchanged. All 25 focused tests and the full
+local regression pass without a workaround. Exact implementation HEAD
+`7a372bab9a50478cab2534082d43a918b8a82f0f` passes GitHub Regression
+`34264664595`, CodeQL `34264664414`, independent clean checkout and a current
+PR-merge readback of zero open alerts. A fresh read-only Pixel check confirms
+`1.0.0+2026090711`; no device state changed. See
 `docs/operations/WP61_CODEQL_CURRENT_BRANCH_ALERT_CLOSURE_2026-09-08.md`.
 
 # Previous Work Package: WP60 OnePlus current Play candidate runway

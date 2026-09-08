@@ -1,7 +1,6 @@
 # WP61 — current-branch CodeQL alert closure
 
-Status: **LOCAL REGRESSION PASSED; EXACT-HEAD GITHUB AND ZERO-ALERT READBACK
-PENDING**.
+Status: **COMPLETE LOCALLY AND ON GITHUB; ZERO OPEN CURRENT PR-MERGE ALERTS**.
 
 ## Trigger and scope
 
@@ -39,11 +38,23 @@ profiles, analyzer with zero issues, Web/Wasm, loopback smoke and Android debug
 build at minSdk 24. No timing, cache, retry or parallelism workaround was
 introduced.
 
-No credential value was read or printed during WP61, no network request was
-sent, and no device, Android binary, Staging, Store, Production, Payment,
-Firebase/provider, Cloud/VPS/DNS or PR state changed. Closure requires exact-
-head GitHub Regression, CodeQL success and a branch readback of zero open code-
-scanning alerts.
+Exact implementation HEAD `7a372bab9a50478cab2534082d43a918b8a82f0f`
+passes GitHub Regression `34264664595`: Flutter/Android job `102191121079`,
+Backend job `102191120897`, PostgreSQL job `102191120964` and independent
+clean-checkout job `102191120645` all succeeded. CodeQL `34264664414` / job
+`102190911969` succeeded at the same HEAD. The current PR-merge analysis
+`d821123d119615f5fce126f4d961feaa23eda6a0` reports zero open alerts. Alerts
+`544` and `545` are structurally fixed. Only exact alert `543` was individually
+dismissed as `used in tests` with the fixed-Staging-destination and regression-
+locked boundary recorded in GitHub; no other alert, rule or query was dismissed
+or excluded.
+
+No credential value was read or printed and the credential probe itself sent
+no network request during WP61. A read-only Pixel preflight freshly confirmed
+`com.shareittoo.app` `1.0.0+2026090711` on the attached Pixel 7 Pro; it performed
+no install, launch, account read or device-state mutation. No Android binary,
+Staging, Store, Production, Payment, Firebase/provider, Cloud/VPS/DNS or PR
+state changed. PR #7 remains Draft, open, mergeable and unmerged.
 
 Machine-readable evidence:
 `docs/evidence/release-readiness/wp61-codeql-current-branch-alert-closure-20260908.json`.

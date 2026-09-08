@@ -1,13 +1,14 @@
 {
   "schemaVersion": 1,
   "kind": "sit-wp61-codeql-current-branch-alert-closure",
-  "status": "local-regression-passed-exact-head-github-pending",
-  "capturedAt": "2026-09-08T18:22:00Z",
+  "status": "complete-local-github-zero-current-pr-merge-alerts",
+  "capturedAt": "2026-09-08T19:03:32Z",
   "repository": {
     "worktree": "/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808",
     "branch": "codex/master-workflow-20260808",
     "baseHead": "d2c2fe28e220fd591efe876f33130addd6a98a2c",
     "baseRemoteDivergence": "0/0",
+    "implementationHead": "7a372bab9a50478cab2534082d43a918b8a82f0f",
     "pullRequest7": "draft-open-mergeable-unmerged"
   },
   "trigger": {
@@ -45,7 +46,9 @@
     "credentialProbePayload": "exact-email-and-password-fields-only",
     "sourceCodeqlSuppressionCount": 0,
     "intentionalEgressAuditMarkerCount": 1,
-    "intentionalEgressTriage": "pending-used-in-tests-for-exact-alert-543",
+    "intentionalEgressTriage": "alert-543-dismissed-used-in-tests",
+    "fileRaceAlert544": "fixed",
+    "fileRaceAlert545": "fixed",
     "codeqlWorkflowOrQuerySuiteChanged": false,
     "globalQueryExcluded": false
   },
@@ -61,17 +64,40 @@
     "androidDebugBuildMinSdk24": "passed",
     "fullLocalRegression": "passed-exit-0",
     "workaroundIntroduced": false,
-    "githubRegression": "pending",
-    "githubCodeql": "pending",
-    "openCodeScanningAlerts": "pending"
+    "githubRegression": {
+      "run": 34264664595,
+      "head": "7a372bab9a50478cab2534082d43a918b8a82f0f",
+      "conclusion": "success",
+      "flutterAndroidJob": 102191121079,
+      "backendJob": 102191120897,
+      "postgresJob": 102191120964,
+      "cleanCheckoutJob": 102191120645
+    },
+    "githubCodeql": {
+      "run": 34264664414,
+      "job": 102190911969,
+      "head": "7a372bab9a50478cab2534082d43a918b8a82f0f",
+      "conclusion": "success"
+    },
+    "currentPrMergeAnalysisSha": "d821123d119615f5fce126f4d961feaa23eda6a0",
+    "openCodeScanningAlerts": 0,
+    "physicalPixelReadOnlyPreflight": {
+      "deviceClass": "Pixel 7 Pro",
+      "androidRelease": "17",
+      "package": "com.shareittoo.app",
+      "versionName": "1.0.0",
+      "versionCode": 2026090711,
+      "validatedWifi": true
+    }
   },
   "boundaries": {
     "applicationRuntimeChanged": false,
     "androidBinaryChanged": false,
     "credentialValueReadDuringWp61": false,
     "credentialValuePrinted": false,
-    "networkRequestSentDuringWp61": false,
-    "deviceContacted": false,
+    "credentialProbeNetworkRequestSentDuringWp61": false,
+    "deviceContacted": "read-only-pixel-preflight",
+    "deviceStateChanged": false,
     "stagingChanged": false,
     "productionChanged": false,
     "storeChanged": false,
