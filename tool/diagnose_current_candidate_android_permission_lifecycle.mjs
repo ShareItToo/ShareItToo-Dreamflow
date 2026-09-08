@@ -3,10 +3,13 @@
 import { execFileSync } from 'node:child_process';
 import {
   chmodSync,
+  closeSync,
+  constants,
+  fstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   renameSync,
-  statSync,
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
@@ -500,14 +503,18 @@ function atomicJournal(path, value) {
   chmodSync(path, 0o600);
 }
 
-function readJournal(path) {
+export function readWp46PermissionJournal(path) {
+  let descriptor;
   try {
-    const stat = statSync(path);
+    descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const stat = fstatSync(descriptor);
     if ((stat.mode & 0o077) !== 0 || !stat.isFile()) fail('WP46 journal is not owner-only.');
-    return JSON.parse(readFileSync(path, 'utf8'));
+    return JSON.parse(readFileSync(descriptor, 'utf8'));
   } catch (error) {
     if (error?.code === 'ENOENT') return null;
     throw error;
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
   }
 }
 
@@ -577,7 +584,7 @@ async function run() {
     device,
   );
 
-  const previous = readJournal(args.journalPath);
+  const previous = readWp46PermissionJournal(args.journalPath);
   if (previous?.status === 'in-progress') {
     restorePhysicalPermissionState(
       defaultCurrentHeadAndroidCommandRunner,

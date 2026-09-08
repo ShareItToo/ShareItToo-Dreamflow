@@ -170,11 +170,18 @@ test('detects target and protected-source drift before deletion', () => {
 
 test('classifies only exact 401 invalid_credentials as deleted', async () => {
   const account = { email: 'target@example.test', password: `Target${'p'.repeat(28)}` };
+  const calls = [];
   const deleted = await probeDeletionCredential({
     account,
-    fetchImpl: async () => response(401, { error: 'invalid_credentials' }),
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return response(401, { error: 'invalid_credentials' });
+    },
   });
   assert.equal(deleted.state, 'deleted');
+  assert.equal(calls[0].url, 'https://staging.shareittoo.com/api/v1/auth/login');
+  assert.deepEqual(JSON.parse(calls[0].options.body), account);
+  assert.deepEqual(Object.keys(JSON.parse(calls[0].options.body)).sort(), ['email', 'password']);
   const timeout = await probeDeletionCredential({
     account,
     fetchImpl: async () => response(408, { error: 'invalid_credentials' }),
@@ -185,6 +192,10 @@ test('classifies only exact 401 invalid_credentials as deleted', async () => {
     fetchImpl: async () => response(401, { error: 'proxy_rejection' }),
   });
   assert.equal(unstructured.state, 'unknown');
+  await assert.rejects(() => probeDeletionCredential({
+    account: { email: 'target@example.test', password: 'short' },
+    fetchImpl: async () => response(401, { error: 'invalid_credentials' }),
+  }), /probe input is invalid/u);
 });
 
 test('accepts an exact active principal only after revoking its probe session', async () => {
@@ -268,6 +279,12 @@ test('failure sanitization never returns credentials, aliases or long tokens', (
 test('current wrong-password probe is scanner-clean and its immutable historical false positive is reviewed', () => {
   const diagnosticPath = resolve(import.meta.dirname, '../../tool/diagnose_android_account_deletion.mjs');
   const diagnostic = readFileSync(diagnosticPath, 'utf8');
+  assert.equal(
+    diagnostic.match(/codeql\[js\/file-access-to-http\]/gu)?.length,
+    1,
+  );
+  assert.match(diagnostic, /loginUrl\.origin !== 'https:\/\/staging\.shareittoo\.com'/u);
+  assert.match(diagnostic, /loginUrl\.pathname !== '\/api\/v1\/auth\/login'/u);
   assert.deepEqual(
     detectHighConfidenceSecretRules(diagnostic, 'tool/diagnose_android_account_deletion.mjs'),
     [],

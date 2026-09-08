@@ -1,7 +1,17 @@
 # ShareItToo Current State
 
-WP60 is **TECHNICALLY COMPLETE LOCALLY; PHYSICAL ONEPLUS RESULT AND GITHUB
-EVIDENCE ARE NOT YET COMPLETE**. A new fail-closed current-candidate manifest binds the
+WP61 is **LOCAL REGRESSION PASSED; EXACT-HEAD GITHUB AND ZERO-ALERT READBACK
+PENDING**. WP60's successful exact-head GitHub runs exposed three older open
+branch alerts despite a green CodeQL conclusion. The two high-severity file
+races now use one non-symlinked descriptor for metadata and content. The one
+medium intentional disposable-Staging-login flow is constrained to the exact
+compile-time HTTPS Staging origin and login path, exact credential/payload
+shape and one locally documented CodeQL suppression. No query or workflow is
+excluded. All 25 focused tests and the complete local regression pass. See
+`docs/operations/WP61_CODEQL_CURRENT_BRANCH_ALERT_CLOSURE_2026-09-08.md`.
+
+WP60 is **TECHNICALLY COMPLETE LOCALLY AND ON GITHUB; PHYSICAL ONEPLUS RESULT
+IS NOT YET COMPLETE**. A new fail-closed current-candidate manifest binds the
 active Google Play Internal build `1.0.0+2026090711` to its exact source, AAB,
 Staging API and the previous proven OnePlus Play build `2026090204`, without
 rewriting historical RW20 evidence.
@@ -16,7 +26,9 @@ loopback and Android minSdk 24/build. The current-host check correctly rejected
 the attached non-OnePlus device before querying the app package. The MacBook
 Codex host is visible, but no OnePlus physical command has run and no installed
 version, propagation, lifecycle or functional result is claimed. Exact-head
-GitHub verification remains next. See
+GitHub Regression `34259777038` and CodeQL `34259776885` pass at implementation
+HEAD `d2c2fe28e220fd591efe876f33130addd6a98a2c`; their branch-alert readback
+triggered WP61 before further device work. See
 `docs/operations/WP60_ONEPLUS_CURRENT_PLAY_CANDIDATE_RUNWAY_2026-09-08.md`.
 
 WP59 is **COMPLETE ON GOOGLE PLAY INTERNAL, LOCALLY AND ON GITHUB**. The exact

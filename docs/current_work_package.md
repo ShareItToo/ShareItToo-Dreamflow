@@ -1,7 +1,21 @@
-# Current Work Package: WP60 OnePlus current Play candidate runway
+# Current Work Package: WP61 current-branch CodeQL alert closure
 
-WP60 is **TECHNICALLY COMPLETE LOCALLY; PHYSICAL ONEPLUS RESULT AND GITHUB
-EVIDENCE ARE PENDING**. It adds a separate current-candidate manifest and runner for the
+WP61 is **LOCAL REGRESSION PASSED; EXACT-HEAD GITHUB AND ZERO-ALERT READBACK
+PENDING**. The explicit post-WP60 branch readback found three older open CodeQL
+alerts even though the exact-head workflow succeeded. Two high-severity file
+races now verify and read each private JSON file through one non-symlinked file
+descriptor. The intentional medium-severity disposable-Staging-login data flow
+is additionally bound to the exact compile-time HTTPS Staging login destination,
+validated input and exact two-field payload, with one narrowly documented
+source suppression. The CodeQL workflow and security-extended suite remain
+unchanged. All 25 focused tests and the full local regression pass without a
+workaround. See
+`docs/operations/WP61_CODEQL_CURRENT_BRANCH_ALERT_CLOSURE_2026-09-08.md`.
+
+# Previous Work Package: WP60 OnePlus current Play candidate runway
+
+WP60 is **TECHNICALLY COMPLETE LOCALLY AND ON GITHUB; PHYSICAL ONEPLUS RESULT
+IS PENDING**. It adds a separate current-candidate manifest and runner for the
 active Internal build `1.0.0+2026090711`, exact source
 `c819c5f4445d0b998b2ee319e64f8c95cfb01eda`, while preserving all historical
 RW20 evidence.
@@ -17,7 +31,8 @@ passes 2,470 tool tests, 909 Flutter tests, randomized security profiles,
 analyzer, Web/Wasm, loopback and Android minSdk 24/build without a workaround.
 The current-host check rejected the attached non-OnePlus device before any app
 package query. No physical OnePlus result is claimed yet. Exact-head GitHub
-evidence is next. See
+Regression and CodeQL pass; their explicit alert readback opened WP61 before
+device continuation. See
 `docs/operations/WP60_ONEPLUS_CURRENT_PLAY_CANDIDATE_RUNWAY_2026-09-08.md`.
 
 # Previous Work Package: WP59 Google Play Internal release 2026090711

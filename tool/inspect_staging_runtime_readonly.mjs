@@ -2,7 +2,11 @@
 
 import { execFileSync } from 'node:child_process';
 import {
+  closeSync,
+  constants,
+  fstatSync,
   lstatSync,
+  openSync,
   readFileSync,
   readdirSync,
   realpathSync,
@@ -279,18 +283,22 @@ function latestReleaseRecord(releaseDirectory) {
     .at(-1);
   if (!name) fail('release_record_missing');
   const path = join(canonicalDirectory, name);
-  const metadata = lstatSync(path);
-  if (!metadata.isFile() || metadata.isSymbolicLink()
-      || metadata.size < 2 || metadata.size > 16 * 1024
-      || (metadata.mode & 0o777) !== 0o600
-      || realpathSync(path) !== path) {
-    fail('release_record_file_invalid');
-  }
+  let descriptor;
   let value;
   try {
-    value = JSON.parse(readFileSync(path, 'utf8'));
-  } catch {
+    descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const metadata = fstatSync(descriptor);
+    if (!metadata.isFile()
+        || metadata.size < 2 || metadata.size > 16 * 1024
+        || (metadata.mode & 0o777) !== 0o600) {
+      fail('release_record_file_invalid');
+    }
+    value = JSON.parse(readFileSync(descriptor, 'utf8'));
+  } catch (error) {
+    if (error instanceof StagingRuntimeInventoryError) throw error;
     fail('release_record_unreadable');
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
   }
   const fields = [
     'environment',

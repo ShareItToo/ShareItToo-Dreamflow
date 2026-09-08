@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp61-codeql-current-branch-alert-closure",
+  "status": "local-regression-passed-exact-head-github-pending",
+  "capturedAt": "2026-09-08T18:22:00Z",
+  "repository": {
+    "worktree": "/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808",
+    "branch": "codex/master-workflow-20260808",
+    "baseHead": "d2c2fe28e220fd591efe876f33130addd6a98a2c",
+    "baseRemoteDivergence": "0/0",
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "trigger": {
+    "codeqlRun": 34259776885,
+    "codeqlConclusion": "success",
+    "openAlertCount": 3,
+    "alerts": [
+      {
+        "number": 543,
+        "rule": "js/file-access-to-http",
+        "severity": "medium",
+        "path": "tool/diagnose_android_account_deletion.mjs",
+        "disposition": "reviewed-intentional-fixed-staging-credential-probe"
+      },
+      {
+        "number": 544,
+        "rule": "js/file-system-race",
+        "severity": "high",
+        "path": "tool/diagnose_current_candidate_android_permission_lifecycle.mjs",
+        "disposition": "remediated-single-file-descriptor-read"
+      },
+      {
+        "number": 545,
+        "rule": "js/file-system-race",
+        "severity": "high",
+        "path": "tool/inspect_staging_runtime_readonly.mjs",
+        "disposition": "remediated-single-file-descriptor-read"
+      }
+    ]
+  },
+  "remediation": {
+    "filesystemRaceChecks": "open-once-no-follow-fstat-and-read-same-descriptor",
+    "credentialProbeDestination": "compile-time-https-staging-origin-and-exact-login-path",
+    "credentialProbeInput": "exact-email-and-password-shape",
+    "credentialProbePayload": "exact-email-and-password-fields-only",
+    "codeqlSuppressionCount": 1,
+    "codeqlSuppressionScope": "only-reviewed-intentional-fixed-staging-login-sink",
+    "codeqlWorkflowOrQuerySuiteChanged": false,
+    "globalQueryExcluded": false
+  },
+  "verification": {
+    "focusedTests": "passed-25",
+    "fullToolTests": "passed-2471",
+    "flutterTests": 909,
+    "declaredFlutterSkips": 33,
+    "mandatoryRandomizedSecurityProfiles": "passed",
+    "analyzer": "passed-zero-issues",
+    "webWasm": "passed",
+    "loopbackSmoke": "passed",
+    "androidDebugBuildMinSdk24": "passed",
+    "fullLocalRegression": "passed-exit-0",
+    "workaroundIntroduced": false,
+    "githubRegression": "pending",
+    "githubCodeql": "pending",
+    "openCodeScanningAlerts": "pending"
+  },
+  "boundaries": {
+    "applicationRuntimeChanged": false,
+    "androidBinaryChanged": false,
+    "credentialValueReadDuringWp61": false,
+    "credentialValuePrinted": false,
+    "networkRequestSentDuringWp61": false,
+    "deviceContacted": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "firebaseProviderCloudVpsDnsChanged": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false,
+    "containsTesterIdentity": false,
+    "containsRawDeviceIdentifier": false
+  }
+}

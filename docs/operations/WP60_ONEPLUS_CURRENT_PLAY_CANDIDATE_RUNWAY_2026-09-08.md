@@ -1,7 +1,7 @@
 # WP60 — OnePlus current Play candidate runway
 
-Status: **TECHNICALLY COMPLETE LOCALLY; PHYSICAL ONEPLUS RESULT NOT RUN;
-GITHUB EVIDENCE PENDING**.
+Status: **TECHNICALLY COMPLETE LOCALLY AND ON GITHUB; PHYSICAL ONEPLUS RESULT
+NOT RUN**.
 
 ## Decision and exact candidate
 
@@ -75,6 +75,16 @@ device before querying any application package. No physical OnePlus command
 has run in WP60, so installed version, Play propagation, lifecycle and
 functional behavior remain unclaimed.
 
+Exact implementation HEAD
+`d2c2fe28e220fd591efe876f33130addd6a98a2c` passes GitHub Regression
+`34259777038`: Flutter job `102174535079`, Backend `102174535270`, PostgreSQL
+`102174535286` and clean-checkout reproducibility `102174535391`. CodeQL run
+`34259776885`, job `102174532980`, also succeeds. The post-run branch readback
+found three older open CodeQL alerts in diagnostic tooling; none points to a
+WP60 file. They are not hidden by the green workflow conclusion and are
+escalated as the separate, higher-priority WP61 security closure before any
+pilot-readiness claim.
+
 ## Boundaries, rollback and next action
 
 No Android binary, Staging runtime, Google Play release, tester list, Store
@@ -83,11 +93,11 @@ Production/Open/Closed track, Cloud/VPS/DNS state, PR or device state changed.
 Rollback is deletion of the new WP60-only tooling and evidence; historical
 evidence and the active Internal release remain untouched.
 
-After exact-head GitHub verification, execute `inspect` on the
-MacBook-connected OnePlus. If `2026090204` is reported, expose only the
-existing Internal Play update to the owner. Do not uninstall or sideload. Once
-Play supplies `2026090711`, run `verify`, then the bounded lifecycle proof, and
-record the sanitized result in a distinct physical-evidence commit.
+After WP61 closes the three branch alerts, execute `inspect` on the
+MacBook-connected OnePlus. If `2026090204` is reported, expose only the existing
+Internal Play update to the owner. Do not uninstall or sideload. Once Play
+supplies `2026090711`, run `verify`, then the bounded lifecycle proof, and record
+the sanitized result in a distinct physical-evidence commit.
 
 Machine-readable evidence:
 `docs/evidence/release-readiness/wp60-oneplus-current-play-candidate-runway-20260908.json`.

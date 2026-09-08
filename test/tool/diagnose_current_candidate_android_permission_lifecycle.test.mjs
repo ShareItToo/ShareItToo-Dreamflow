@@ -1,4 +1,13 @@
 import assert from 'node:assert/strict';
+import {
+  chmodSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -9,6 +18,7 @@ import {
   parseAndroidRuntimePermissionSnapshot,
   parseDeclaredAndroidPermissions,
   parseWp46Arguments,
+  readWp46PermissionJournal,
 } from '../../tool/diagnose_current_candidate_android_permission_lifecycle.mjs';
 
 const names = [
@@ -216,4 +226,21 @@ test('requires explicit private archive and parses bounded tool paths', () => {
   );
   assert.throws(() => parseWp46Arguments([]), /candidate-dir is required/u);
   assert.throws(() => parseWp46Arguments(['--other']), /Unknown argument/u);
+});
+
+test('reads the WP46 journal through one owner-only non-symlinked file handle', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'sit-wp46-journal-'));
+  const journal = join(directory, 'journal.json');
+  const linked = join(directory, 'linked.json');
+  try {
+    writeFileSync(journal, JSON.stringify({ status: 'in-progress' }), { mode: 0o600 });
+    assert.deepEqual(readWp46PermissionJournal(journal), { status: 'in-progress' });
+    symlinkSync(journal, linked);
+    assert.throws(() => readWp46PermissionJournal(linked));
+    chmodSync(journal, 0o644);
+    assert.throws(() => readWp46PermissionJournal(journal), /owner-only/u);
+    assert.equal(readWp46PermissionJournal(join(directory, 'missing.json')), null);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

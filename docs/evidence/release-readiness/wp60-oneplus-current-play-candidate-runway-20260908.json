@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "sit-wp60-oneplus-current-play-candidate-runway",
-  "status": "technical-runway-local-passed-physical-not-run-github-pending",
+  "status": "technical-runway-local-github-passed-physical-not-run",
   "capturedAt": "2026-09-08T17:41:26Z",
   "repository": {
     "worktree": "/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808",
@@ -66,10 +66,18 @@
     "androidDebugBuildMinSdk24": "passed",
     "workaroundIntroduced": false,
     "fullLocalRegression": "passed-exit-0",
-    "githubRegression": "pending",
-    "githubCodeql": "pending",
-    "cleanCheckout": "pending",
-    "openCodeScanningAlerts": null
+    "githubRegression": "passed-run-34259777038-exact-head-d2c2fe28e220fd591efe876f33130addd6a98a2c",
+    "githubRegressionJobs": {
+      "flutter": 102174535079,
+      "backend": 102174535270,
+      "postgres": 102174535286,
+      "cleanCheckout": 102174535391
+    },
+    "githubCodeql": "passed-run-34259776885-job-102174532980",
+    "cleanCheckout": "passed",
+    "openCodeScanningAlertsAtReadback": 3,
+    "openAlertsAttributedToWp60": 0,
+    "openAlertsEscalatedTo": "WP61"
   },
   "availability": {
     "macBookCodexHostVisibleOnline": true,

@@ -321,9 +321,25 @@ async function jsonResponse(response) {
 
 export async function probeDeletionCredential({ account, fetchImpl = globalThis.fetch } = {}) {
   if (typeof fetchImpl !== 'function') fail('The deletion-state fetch implementation is invalid.');
+  if (!/^[A-Za-z0-9._+@-]+$/u.test(account?.email ?? '')
+      || !/^[A-Za-z0-9_-]{24,}$/u.test(account?.password ?? '')) {
+    fail('The deletion-state credential probe input is invalid.');
+  }
+  const loginUrl = new URL('/api/v1/auth/login', 'https://staging.shareittoo.com');
+  if (loginUrl.origin !== 'https://staging.shareittoo.com'
+      || loginUrl.pathname !== '/api/v1/auth/login'
+      || loginUrl.username !== ''
+      || loginUrl.password !== ''
+      || loginUrl.search !== ''
+      || loginUrl.hash !== '') {
+    fail('The deletion-state credential probe destination is invalid.');
+  }
   let login;
   try {
-    login = await fetchImpl(`${stagingApiBaseUrl}/auth/login`, {
+    // The owner-only disposable Staging credential is intentionally submitted only to the
+    // exact compile-time HTTPS Staging login above; schema, origin, path and payload are bounded.
+    // codeql[js/file-access-to-http]
+    login = await fetchImpl(loginUrl.href, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
       body: JSON.stringify({ email: account.email, password: account.password }),
