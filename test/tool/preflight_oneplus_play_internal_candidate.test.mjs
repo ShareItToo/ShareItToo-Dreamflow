@@ -129,3 +129,17 @@ test('fails closed for wrong device, transport, candidate SDK or installer', () 
     packagePathOutput: 'package:/data/app/one/base.apk\npackage:/data/app/two/base.apk\n',
   })), /split paths are missing or ambiguous/u);
 });
+
+test('permits an explicitly scoped USB transport without weakening the wireless default', () => {
+  const fake = fakeRunner();
+  const result = preflight(fake, {
+    device: { serial: 'SYNTHETIC_USB', state: 'device', attributes: { usb: '1-2' } },
+    allowedTransports: ['usb', 'wireless-adb'],
+  });
+  assert.equal(result.transport.type, 'usb');
+  assert.equal(result.installedApplication.versionCode, '2026082601');
+
+  assert.throws(() => preflight(fake, {
+    allowedTransports: ['usb', 'unknown'],
+  }), /transports are invalid/u);
+});

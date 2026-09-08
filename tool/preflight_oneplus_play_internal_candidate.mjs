@@ -90,13 +90,22 @@ export function preflightOnePlusPlayInternalCandidate({
   expectedCandidate,
   releaseGoConfirmed = false,
   capturedAt = new Date().toISOString(),
+  allowedTransports = ['wireless-adb'],
 } = {}) {
   if (releaseGoConfirmed !== true) {
     fail('OnePlus candidate preflight is not authorized before the release gate.');
   }
   const transport = classifyAdbTransport(device);
-  if (transport !== 'wireless-adb') {
-    fail('Exactly one OnePlus phone must be connected through Wireless debugging.');
+  if (!Array.isArray(allowedTransports)
+      || allowedTransports.length === 0
+      || allowedTransports.some((value) => !['usb', 'wireless-adb'].includes(value))) {
+    fail('Allowed OnePlus ADB transports are invalid.');
+  }
+  if (!allowedTransports.includes(transport)) {
+    if (allowedTransports.length === 1 && allowedTransports[0] === 'wireless-adb') {
+      fail('Exactly one OnePlus phone must be connected through Wireless debugging.');
+    }
+    fail('The OnePlus is not connected through an explicitly allowed ADB transport.');
   }
   const deviceSummary = inspectPhysicalDevice({ commandRunner, adbPath, device });
   if (!/oneplus/iu.test(deviceSummary.manufacturer)) {

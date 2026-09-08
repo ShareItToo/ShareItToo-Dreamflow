@@ -1,4 +1,26 @@
-# Current Work Package: WP59 Google Play Internal release 2026090711
+# Current Work Package: WP60 OnePlus current Play candidate runway
+
+WP60 is **TECHNICALLY COMPLETE LOCALLY; PHYSICAL ONEPLUS RESULT AND GITHUB
+EVIDENCE ARE PENDING**. It adds a separate current-candidate manifest and runner for the
+active Internal build `1.0.0+2026090711`, exact source
+`c819c5f4445d0b998b2ee319e64f8c95cfb01eda`, while preserving all historical
+RW20 evidence.
+
+The runner recognizes only the previously proven OnePlus Play build
+`2026090204` or the exact current build `2026090711`; any other version fails
+closed. It enforces Google Play split delivery, supports explicit USB or
+Wireless ADB, checks package continuity and separates read-only inspection,
+exact-current verification and bounded lifecycle proof. It cannot install,
+sideload, uninstall, clear data, enter a passcode or inspect account content.
+The manifest validator and 18 focused tests pass. The full local regression
+passes 2,470 tool tests, 909 Flutter tests, randomized security profiles,
+analyzer, Web/Wasm, loopback and Android minSdk 24/build without a workaround.
+The current-host check rejected the attached non-OnePlus device before any app
+package query. No physical OnePlus result is claimed yet. Exact-head GitHub
+evidence is next. See
+`docs/operations/WP60_ONEPLUS_CURRENT_PLAY_CANDIDATE_RUNWAY_2026-09-08.md`.
+
+# Previous Work Package: WP59 Google Play Internal release 2026090711
 
 WP59 is **COMPLETE ON GOOGLE PLAY INTERNAL, LOCALLY AND ON GITHUB**. The exact
 existing AAB

@@ -142,6 +142,7 @@ export function runOnePlusPlayInternalOwnerSmoke({
   releaseGoConfirmed = false,
   ownerWindowConfirmed = false,
   capturedAt = new Date().toISOString(),
+  allowedTransports = ['wireless-adb'],
 } = {}) {
   if (releaseGoConfirmed !== true || ownerWindowConfirmed !== true) {
     fail('OnePlus owner smoke is not authorized before both exact gates.');
@@ -154,6 +155,7 @@ export function runOnePlusPlayInternalOwnerSmoke({
     expectedCandidate,
     releaseGoConfirmed,
     capturedAt,
+    allowedTransports,
   });
   assertAlreadyUnlocked(commandRunner, adbPath, device);
 

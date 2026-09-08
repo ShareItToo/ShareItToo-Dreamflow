@@ -1,5 +1,24 @@
 # ShareItToo Current State
 
+WP60 is **TECHNICALLY COMPLETE LOCALLY; PHYSICAL ONEPLUS RESULT AND GITHUB
+EVIDENCE ARE NOT YET COMPLETE**. A new fail-closed current-candidate manifest binds the
+active Google Play Internal build `1.0.0+2026090711` to its exact source, AAB,
+Staging API and the previous proven OnePlus Play build `2026090204`, without
+rewriting historical RW20 evidence.
+
+The new runner distinguishes previous/current/unknown installs, enforces the
+Google Play installer and continuity markers, and supports the owner's actual
+USB attachment as well as Wireless ADB. It cannot install, sideload, uninstall,
+clear data, enter a passcode or inspect account content. The validator and all
+18 focused tests pass. The complete local regression also passes all 2,470 tool
+tests, 909 Flutter tests, randomized security profiles, analyzer, Web/Wasm,
+loopback and Android minSdk 24/build. The current-host check correctly rejected
+the attached non-OnePlus device before querying the app package. The MacBook
+Codex host is visible, but no OnePlus physical command has run and no installed
+version, propagation, lifecycle or functional result is claimed. Exact-head
+GitHub verification remains next. See
+`docs/operations/WP60_ONEPLUS_CURRENT_PLAY_CANDIDATE_RUNWAY_2026-09-08.md`.
+
 WP59 is **COMPLETE ON GOOGLE PLAY INTERNAL, LOCALLY AND ON GITHUB**. The exact
 Pixel-verified candidate
 `1.0.0+2026090711`, source
