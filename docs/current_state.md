@@ -1,6 +1,6 @@
 # ShareItToo Current State
 
-WP57 is **PHYSICALLY AND LOCALLY COMPLETE; GITHUB EVIDENCE CLOSURE IS PENDING** for
+WP57 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for
 the exact direct-installed Pixel candidate `1.0.0+2026090711`, source
 `c819c5f4445d0b998b2ee319e64f8c95cfb01eda`, against deployed Staging Backend
 `d8d1df7f59052c202f824f759693a472b6b8afa1`.
@@ -25,23 +25,13 @@ because it contained unrelated personal notifications. No Production, Store,
 payment, provider, Firebase Console, OnePlus or PR-merge boundary changed. See
 `docs/operations/WP57_CURRENT_PIXEL_STAGING_CORE_REVALIDATION_2026-09-08.md`.
 
-WP55 is **BUILD READY; RUNTIME ROLLOUT IS NOT YET PERFORMED**. Authenticated
-Hostinger inventory at `2026-09-07T22:56:44.622Z` passed read-only: API and
-PostgreSQL are healthy with zero restarts, runtime/image/release identity binds
-exactly to deployed Staging `68c97a437969dc98f17eb151da3e006259ffbafa`, the
-rollback image is present and disk/memory headroom passes. Protected Staging
-remains FCM/SMTP Heilbronn-pilot, payment memory-only/not-live and Listing AI
-mock-only/zero-budget.
-
-Current target HEAD `d8d1df7f59052c202f824f759693a472b6b8afa1` has the exact
-same Backend tree `d991765a159810b88e4e4db874ac6193ae3e804d` as reviewed WP50
-target `9de283ab…`. Workflow-dispatch Regression `34168650985`, including clean
-reproducibility and private image publication, passes; the commit-tagged image
-manifest is `sha256:e4ae94d740ef83fa80d59762805e1f64cc76f80ecd46531f955ce27ab0289908`.
-Existing CodeQL `34160161823` passes. The terminal session then auto-locked, so
-the submitted versioned-checkout preparation remains unverified and no pull,
-deployment, Staging-data or Production change is claimed. See
-`docs/operations/WP55_AUTHENTICATED_STAGING_PARITY_DEPLOYMENT_READINESS_2026-09-08.md`.
+WP55 is **COMPLETE — EXACT STAGING RUNTIME DEPLOYED AND VERIFIED**. Staging runs
+source `d8d1df7f59052c202f824f759693a472b6b8afa1`; API and PostgreSQL are healthy,
+the bounded 100-session smoke and privacy-preserving cleanup pass, and the
+protected pilot/FCM/SMTP shape remains intact. Payment remains memory-only and
+Listing AI remains mock-only with zero external budget. Public readiness stays
+HTTP 503 solely for the separate overdue noncritical Support update. See
+`docs/operations/WP55_AUTHENTICATED_STAGING_PARITY_DEPLOYMENT_CLOSURE_2026-09-08.md`.
 
 WP54 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB**. Exact signed
 Internal Staging candidate `1.0.0+2026090711`, source

@@ -1,13 +1,14 @@
 {
   "schemaVersion": 1,
   "kind": "sit-wp57-current-pixel-staging-core-revalidation",
-  "status": "physical-local-matrix-complete-github-pending",
+  "status": "complete-physical-local-github",
   "workPackage": "WP57",
   "capturedOn": "2026-09-08",
   "repository": {
     "worktree": "/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808",
     "branch": "codex/master-workflow-20260808",
     "evidenceBaseHead": "3de2ba7a8013086013f84888ad850bbc1665ddd2",
+    "evidenceCommit": "1c498a3abe81db81f0820879dd48de5f70515cdc",
     "cleanBeforeEvidence": true,
     "remoteDivergenceBeforeEvidence": "0/0",
     "pullRequest7": "draft-open-mergeable-unmerged"
@@ -114,10 +115,10 @@
     "webWasmBuild": "passed",
     "loopbackSmoke": "passed",
     "androidDebugBuildMinSdk24": "passed",
-    "githubRegression": "pending",
-    "githubCodeql": "pending",
-    "cleanCheckout": "pending",
-    "openCodeScanningAlerts": null
+    "githubRegression": "passed-run-34245261987",
+    "githubCodeql": "passed-run-34245261993",
+    "cleanCheckout": "passed-in-regression-run-34245261987",
+    "openCodeScanningAlerts": 0
   },
   "boundaries": {
     "directApkOnly": true,

@@ -1,6 +1,6 @@
 # WP57 — Current Pixel Staging core revalidation
 
-Status: **PHYSICAL AND LOCAL MATRIX COMPLETE; GITHUB CLOSURE PENDING**.
+Status: **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB**.
 
 ## Exact candidate and runtime
 
@@ -67,6 +67,12 @@ APFS cache profile. It includes the `909`-test Flutter suite, randomized
 principal/epoch and security suites, Web/Wasm compilation, loopback-only web
 smoke, Android metadata validation and the Android debug build at minSdk 24.
 No cache, timing, rate-limit or test-parallelism workaround was introduced.
+
+Exact evidence commit `1c498a3abe81db81f0820879dd48de5f70515cdc`
+passes GitHub Regression `34245261987` across Flutter/Android, Backend,
+PostgreSQL and independent clean-checkout reproducibility. GitHub CodeQL
+`34245261993` passes at the same commit and the repository has zero open
+code-scanning alerts. PR #7 remains Draft, open, mergeable and unmerged.
 
 ## Boundaries and remaining scope
 
