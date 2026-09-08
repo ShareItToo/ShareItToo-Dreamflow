@@ -52,7 +52,8 @@ function fakeRunner({
         + 'package:/data/app/example/split_config.arm64_v8a.apk\n';
     }
     if (command === 'shell pm list packages -i com.shareittoo.app') {
-      return `package:com.shareittoo.app installer=${installer}\n`;
+      return `package:com.shareittoo.app installer=${installer}\n`
+        + 'package:com.shareittoo.app.qa installer=com.google.android.packageinstaller\n';
     }
     if (command === 'shell pidof com.shareittoo.app') return '987654321\n';
     throw new Error(`Unexpected command: ${command}`);

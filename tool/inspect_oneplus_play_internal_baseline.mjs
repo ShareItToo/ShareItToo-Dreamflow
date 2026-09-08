@@ -64,12 +64,14 @@ export function parseInstalledOnePlusPackage(output) {
 }
 
 export function parsePlayInstaller(output, applicationId) {
-  const value = String(output).trim();
-  const match = /^package:([^\s]+)\s+installer=([^\s]+)$/u.exec(value);
-  if (match === null || match[1] !== applicationId) {
+  const matches = String(output)
+    .split(/\r?\n/u)
+    .map((line) => /^package:([^\s]+)\s+installer=([^\s]+)$/u.exec(line.trim()))
+    .filter((match) => match !== null && match[1] === applicationId);
+  if (matches.length !== 1) {
     fail('Installed ShareItToo package source is unavailable.');
   }
-  if (match[2] !== 'com.android.vending') {
+  if (matches[0][2] !== 'com.android.vending') {
     fail('Installed ShareItToo package was not delivered by Google Play.');
   }
   return 'com.android.vending';

@@ -70,10 +70,37 @@ test('parses only the bounded installed package and Play installer truth', () =>
     targetSdk: 35,
   });
   assert.equal(
-    parsePlayInstaller('package:com.shareittoo.app installer=com.android.vending',
+    parsePlayInstaller(
+      'package:com.shareittoo.app installer=com.android.vending\n'
+        + 'package:com.shareittoo.app.qa installer=com.google.android.packageinstaller\n',
       'com.shareittoo.app'),
     'com.android.vending',
   );
+});
+
+test('selects only the exact package and rejects missing or ambiguous exact sources', () => {
+  assert.equal(
+    parsePlayInstaller(
+      'package:com.shareittoo.app.qa installer=com.google.android.packageinstaller\n'
+        + 'package:com.shareittoo.app installer=com.android.vending\n',
+      'com.shareittoo.app',
+    ),
+    'com.android.vending',
+  );
+  assert.throws(() => parsePlayInstaller(
+    'package:com.shareittoo.app.qa installer=com.android.vending\n',
+    'com.shareittoo.app',
+  ), /source is unavailable/u);
+  assert.throws(() => parsePlayInstaller(
+    'package:com.shareittoo.app installer=com.android.vending\n'
+      + 'package:com.shareittoo.app installer=com.android.vending\n',
+    'com.shareittoo.app',
+  ), /source is unavailable/u);
+  assert.throws(() => parsePlayInstaller(
+    'package:com.shareittoo.app installer=com.android.vending\n'
+      + 'package:com.shareittoo.app installer=com.example.sideload\n',
+    'com.shareittoo.app',
+  ), /source is unavailable/u);
 });
 
 test('classifies wireless ADB without returning the address', () => {
