@@ -6579,3 +6579,28 @@ Actual provider execution remains off until the separate owner-only backend
 credential and exact external-execution flag are configured. No external AI
 call, provider charge, Production change, public release, Play mutation, PR
 merge or real-money action is part of this package.
+
+## Completed package: WP55 authenticated Staging parity deployment
+
+The exact candidate Backend at
+`d8d1df7f59052c202f824f759693a472b6b8afa1` is deployed to Staging with its
+reviewed OCI digest, protected pilot plus FCM plus SMTP overlays and automatic
+rollback retained. Authenticated post-deployment inventory and the public
+version endpoint bind the running API exactly; API and PostgreSQL are healthy
+with zero restarts.
+
+The bounded-session runtime smoke and product-path pseudonymous cleanup pass.
+The only readiness degradation remains one noncritical overdue Support update.
+Machine GUI lock is no longer a prerequisite for independent Staging work:
+the authorized Codex unlock path may be attempted, credentials are never
+extracted, and a verified dedicated headless connection carries safe
+continuation.
+
+No Production, real-money, external Listing-AI, Firebase Console, DNS, Store,
+device or PR-merge boundary moved. See
+`docs/operations/WP55_AUTHENTICATED_STAGING_PARITY_DEPLOYMENT_CLOSURE_2026-09-08.md`.
+
+The fail-closed Android rollover binding was also corrected from stale build
+`2026090204` to the already verified, locally archived WP54 candidate
+`1.0.0+2026090711`. This is metadata reconciliation only: no build, upload,
+activation, tester-list or device change occurred.

@@ -1,6 +1,11 @@
 # WP55 — Authenticated Staging parity deployment readiness
 
-Status: **BUILD READY; RUNTIME ROLLOUT NOT YET PERFORMED**.
+Status: **SUPERSEDED BY VERIFIED WP55 RUNTIME CLOSURE**.
+
+The prepared runway was executed on 8 September 2026. Exact runtime, protected
+configuration, rollback availability, the isolated 100-session bound and
+privacy-preserving cleanup all pass. See
+`docs/operations/WP55_AUTHENTICATED_STAGING_PARITY_DEPLOYMENT_CLOSURE_2026-09-08.md`.
 
 ## Frozen scope
 

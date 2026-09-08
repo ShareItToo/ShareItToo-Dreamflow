@@ -6487,3 +6487,34 @@ without changing historical status, legal/provider/billing truth or live
 gates. The
 booking return-case `report_issue_screen.dart` workflow remains outside WP27
 for a distinct later package. No candidate or external/device state changed.
+
+## WP55 authenticated Staging parity closure (2026-09-08)
+
+WP55 is complete. Staging now runs exact source
+`d8d1df7f59052c202f824f759693a472b6b8afa1`, version
+`0.1.0-d8d1df7f5905` and image digest
+`sha256:e4ae94d740ef83fa80d59762805e1f64cc76f80ecd46531f955ce27ab0289908`.
+Authenticated inventory, all 354 foreign-key constraints, API/PostgreSQL
+health, zero restarts, protected pilot/FCM/SMTP configuration and exact public
+version binding pass. Payment remains memory-only and external Listing AI is
+off.
+
+The isolated 100-active-session smoke passes against the deployed API: the
+oldest excess session and refresh token are revoked, its push device is
+removed, the replacement is active and the total remains bounded at 100. The
+product account-deletion path then removed every dependent identity row and
+retained only the intended pseudonymous tombstone and immutable audit history.
+
+Readiness remains honestly degraded only by one noncritical overdue Support
+next update; no critical or privacy deadline is overdue. The authorized Codex
+unlock helper is used opportunistically without credential extraction, while
+dedicated headless Staging access now prevents GUI lock state from blocking
+independent work. Production, real payment, external providers, Store,
+Firebase Console, DNS, devices and PR #7 remain unchanged.
+
+The canonical Android rollover record now points to the already verified WP54
+candidate `1.0.0+2026090711` at artifact source
+`c819c5f4445d0b998b2ee319e64f8c95cfb01eda`. Its owner-only four-file archive
+and hashes are unchanged. The correction replaces the stale `2026090204`
+pointer only; the current candidate is not uploaded to Play and no Store state
+or device changed.
