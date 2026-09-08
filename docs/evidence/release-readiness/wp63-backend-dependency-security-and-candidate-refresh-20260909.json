@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp63-backend-dependency-security-and-candidate-refresh",
+  "status": "source-prepared-signed-candidate-and-exact-head-closure-pending",
+  "capturedAt": "2026-09-08T22:17:28Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "triggerHead": "9200b6334e8ac0751278188e49f9b7a5e2c77f8a",
+    "candidateSourceHead": "preparation-commit"
+  },
+  "advisories": [
+    {
+      "package": "sharp",
+      "advisory": "GHSA-rgj7-g3m4-5g8c",
+      "severity": "high",
+      "affected": "<0.35.4",
+      "patched": "0.35.4",
+      "selected": "0.35.4",
+      "runtimeReachability": "listing-image-processing"
+    },
+    {
+      "package": "nodemailer",
+      "advisory": "GHSA-8m3c-c648-2xjj",
+      "severity": "moderate",
+      "affected": "<=9.1.0",
+      "patched": "9.1.1",
+      "selected": "9.1.1",
+      "affectedLegacyResolveContentPathUsed": false
+    }
+  ],
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090901",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "strictlyHigherThanActiveInternal": true,
+    "unusedInLocalGitRefsBeforeReservation": true,
+    "unusedInPrivateCandidateArchiveBeforeReservation": true,
+    "signedArchiveCreated": false,
+    "storeUploaded": false
+  },
+  "verification": {
+    "focusedSecurityFloorTests": "passed-2",
+    "backendSuite": "passed-850-skipped-2",
+    "backendSyntax": "passed",
+    "productionDependencyAudit": "passed-zero-known-vulnerabilities",
+    "completeRegression": "pending-new-candidate-binding",
+    "cleanCheckout": "pending-new-candidate-binding",
+    "githubRegression": "pending-new-candidate-binding",
+    "githubCodeql": "pending-new-candidate-binding"
+  },
+  "boundaries": {
+    "advisorySuppressed": false,
+    "auditExcluded": false,
+    "workaroundIntroduced": false,
+    "existingArtifactRewritten": false,
+    "deviceChanged": false,
+    "storeOrTesterListChanged": false,
+    "stagingOrProductionChanged": false,
+    "paymentProviderFirebaseCloudVpsDnsChanged": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false,
+    "containsTesterIdentity": false,
+    "containsRawDeviceIdentifier": false
+  }
+}

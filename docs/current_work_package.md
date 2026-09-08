@@ -1,4 +1,23 @@
-# Current Work Package: WP62 OnePlus Play installer compatibility and inspection
+# Current Work Package: WP63 backend dependency security and candidate refresh
+
+WP63 is **SOURCE PREPARED; SIGNED CANDIDATE AND EXACT-HEAD CLOSURE PENDING**.
+The final WP62 clean-checkout discovered two newly published dependency
+advisories. Direct Backend dependencies are updated to the reviewed patched
+floors `sharp 0.35.4` and `nodemailer 9.1.1`; the production audit is clean,
+two deterministic floor/reachability tests pass, and the complete Backend
+suite passes 850 tests with two declared skips.
+
+The existing `1.0.0+2026090711` Play/Internal artifact remains immutable.
+Because the Backend lock is runtime-affecting, the full gate correctly requires
+a new source-bound candidate. Version `1.0.0+2026090901` is reserved as a
+strictly newer unused Internal Staging build. All resulting source hash ratchets
+were refreshed without changing non-hash claims, and all 2,472 tool tests pass.
+Next: commit the exact source freeze, build and verify one canonical signed
+APK/AAB, bind current rollover evidence to those bytes, and rerun complete
+local/GitHub gates. No Store upload is part of this preparation. See
+`docs/operations/WP63_BACKEND_DEPENDENCY_SECURITY_AND_CANDIDATE_REFRESH_2026-09-09.md`.
+
+# Previous Work Package: WP62 OnePlus Play installer compatibility and inspection
 
 WP62 is **IMPLEMENTED AND VERIFIED LOCALLY/GITHUB; READ-ONLY PHYSICAL ONEPLUS
 INSPECTION PASSED; CURRENT CANDIDATE UPDATE IS PENDING OWNER ACTION**. A real

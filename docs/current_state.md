@@ -1,5 +1,21 @@
 # ShareItToo Current State
 
+WP63 is **SOURCE PREPARED; SIGNED CANDIDATE AND EXACT-HEAD CLOSURE PENDING**.
+A fresh clean-checkout audit exposed newly published reviewed advisories for
+the direct Backend dependencies Sharp and Nodemailer. The selected patched
+floors are `sharp 0.35.4` and `nodemailer 9.1.1`; the production audit now
+reports no known vulnerabilities, the two new deterministic guard tests pass,
+and the complete Backend suite passes 850 tests with two declared skips.
+
+Because Backend dependency changes are correctly runtime-affecting, the
+existing `1.0.0+2026090711` Play/Internal candidate remains immutable and is
+not relabelled. The strictly newer unused Internal Staging identity
+`1.0.0+2026090901` is reserved for one new canonical signed candidate. Source
+hash ratchets were refreshed mechanically without changing their rules or
+historical results; all 2,472 tool tests pass. No Store, device, Staging,
+Production or provider state changed. See
+`docs/operations/WP63_BACKEND_DEPENDENCY_SECURITY_AND_CANDIDATE_REFRESH_2026-09-09.md`.
+
 WP62 is **IMPLEMENTED AND VERIFIED LOCALLY/GITHUB; READ-ONLY PHYSICAL ONEPLUS
 INSPECTION PASSED; CURRENT CANDIDATE UPDATE IS PENDING OWNER ACTION**. The first
 physical WP60 attempt exposed an OxygenOS/Android 16 command-shape mismatch:
