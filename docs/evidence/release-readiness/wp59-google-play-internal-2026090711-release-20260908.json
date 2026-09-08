@@ -1,13 +1,14 @@
 {
   "schemaVersion": 1,
   "kind": "sit-wp59-google-play-internal-release",
-  "status": "internal-release-active-local-passed-github-pending",
+  "status": "complete-play-internal-local-github",
   "workPackage": "WP59",
   "capturedAt": "2026-09-08T16:50:54Z",
   "repository": {
     "worktree": "/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808",
     "branch": "codex/master-workflow-20260808",
     "baseHead": "779f84fa2a35c6ae38d91266afacd3ca5e02b3ed",
+    "evidenceCommit": "88e16532068e1cc128764286e9caf59333e34273",
     "cleanBeforeStoreAction": true,
     "remoteDivergenceBeforeStoreAction": "0/0",
     "pullRequest7": "draft-open-mergeable-unmerged"
@@ -78,10 +79,16 @@
     "loopbackSmoke": "passed",
     "androidDebugBuildMinSdk24": "passed",
     "workaroundIntroduced": false,
-    "githubRegression": "pending",
-    "githubCodeql": "pending",
-    "cleanCheckout": "pending",
-    "openCodeScanningAlerts": null
+    "githubRegression": "passed-run-34254619389",
+    "githubRegressionJobs": {
+      "cleanCheckout": "102157161415",
+      "postgres": "102157161665",
+      "backend": "102157161689",
+      "flutterAndroid": "102157161815"
+    },
+    "githubCodeql": "passed-run-34254619365-job-102157161134",
+    "cleanCheckout": "passed-in-regression-run-34254619389",
+    "openCodeScanningAlerts": 0
   },
   "boundaries": {
     "testerListChanged": false,

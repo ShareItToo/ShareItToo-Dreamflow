@@ -1,7 +1,7 @@
 # ShareItToo Current State
 
-WP59 is **ACTIVE IN GOOGLE PLAY INTERNAL; LOCAL REGRESSION PASSES; EXACT-HEAD
-GITHUB EVIDENCE IS PENDING**. The exact Pixel-verified candidate
+WP59 is **COMPLETE ON GOOGLE PLAY INTERNAL, LOCALLY AND ON GITHUB**. The exact
+Pixel-verified candidate
 `1.0.0+2026090711`, source
 `c819c5f4445d0b998b2ee319e64f8c95cfb01eda`, was uploaded from its unchanged
 owner-only AAB (SHA-256
@@ -13,8 +13,11 @@ to internal testers. The existing tester list remains unchanged at two users;
 Open and Closed testing remain unstarted and Production remains unavailable
 and inactive. Store listing and Data Safety were not edited. The existing
 incomplete Data Safety declaration remains a public-release compliance blocker.
-No device was contacted, so Play delivery and current-build behavior on the
-OnePlus remain `NOT_RUN`. See
+Exact evidence commit `88e16532068e1cc128764286e9caf59333e34273` passes
+GitHub Regression `34254619389`, including independent clean-checkout
+reproducibility, and CodeQL `34254619365`; open code-scanning alerts are zero.
+PR #7 remains Draft, open, mergeable and unmerged. No device was contacted, so
+Play delivery and current-build behavior on the OnePlus remain `NOT_RUN`. See
 `docs/operations/WP59_GOOGLE_PLAY_INTERNAL_2026090711_RELEASE_2026-09-08.md`.
 
 WP57 is **COMPLETE ON THE PHYSICAL PIXEL, LOCALLY AND ON GITHUB** for

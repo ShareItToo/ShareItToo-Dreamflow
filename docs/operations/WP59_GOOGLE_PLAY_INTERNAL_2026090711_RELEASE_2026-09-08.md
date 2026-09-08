@@ -1,7 +1,6 @@
 # WP59 — Google Play Internal release 2026090711
 
-Status: **INTERNAL RELEASE ACTIVE; LOCAL REGRESSION PASSED; EXACT-HEAD GITHUB
-EVIDENCE PENDING**.
+Status: **COMPLETE ON GOOGLE PLAY INTERNAL, LOCALLY AND ON GITHUB**.
 
 ## Authorized scope and preflight
 
@@ -78,5 +77,12 @@ The complete local candidate-rollover regression passes at standard repository
 settings through all repository validators, the 909-test Flutter suite, the
 mandatory randomized security profiles, analyzer, Web/Wasm, loopback smoke and
 Android debug build at minSdk 24. No timing, cache, parallelism or retry
-accommodation was introduced. Exact-head GitHub Regression and CodeQL remain
-pending until the evidence commit is pushed.
+accommodation was introduced.
+
+Exact evidence commit `88e16532068e1cc128764286e9caf59333e34273`
+passes GitHub Regression `34254619389` across Flutter/Android, Backend,
+PostgreSQL and independent clean-checkout reproducibility. Its job IDs are
+`102157161815`, `102157161689`, `102157161665` and `102157161415`
+respectively. GitHub CodeQL `34254619365` / job `102157161134` passes at the
+same commit and the repository has zero open code-scanning alerts. PR #7
+remains Draft, open, mergeable and unmerged.
