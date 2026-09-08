@@ -43,7 +43,11 @@ export function validateWp60OnePlusCurrentCandidate({
   same(value.status, 'prepared-play-active-oneplus-update-pending', 'status');
 
   const refs = object(value.sourceRefs, 'sourceRefs');
-  same(refs.candidate, 'store/google-play/current-rollover-candidate.json', 'candidate ref');
+  same(
+    refs.candidate,
+    'store/google-play/rollover-candidate-2026090711.json',
+    'candidate ref',
+  );
   same(
     refs.playRelease,
     'docs/evidence/release-readiness/wp59-google-play-internal-2026090711-release-20260908.json',

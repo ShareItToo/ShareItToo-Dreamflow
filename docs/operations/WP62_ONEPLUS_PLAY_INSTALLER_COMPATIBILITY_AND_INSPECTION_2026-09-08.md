@@ -1,7 +1,7 @@
 # WP62 — OnePlus Play installer compatibility and physical inspection
 
-Status: **IMPLEMENTATION AND READ-ONLY PHYSICAL INSPECTION COMPLETE; CURRENT
-CANDIDATE UPDATE PENDING OWNER ACTION**.
+Status: **IMPLEMENTATION AND CURRENT PLAY-CANDIDATE PHYSICAL VERIFICATION
+COMPLETE**.
 
 ## Trigger and root cause
 
@@ -52,23 +52,23 @@ OnePlus:
 - classification `UPDATE_REQUIRED`;
 - current candidate `1.0.0+2026090711` not yet installed.
 
-This is a successful inspection of the previous accepted Play candidate, not a
-pass for the current candidate. `verify` and `lifecycle` correctly did not run.
-No device or account content was inspected, and no application or device state
-changed.
+This was a successful inspection of the previous accepted Play candidate, not
+yet a pass for the current candidate. `verify` and `lifecycle` correctly did
+not run at that point. No device or account content was inspected.
+
+After Google Play delivered the approved Internal update, the same bounded
+runner was executed again. It verified exact package `com.shareittoo.app`,
+version `1.0.0+2026090711`, installer `com.android.vending`, four delivered
+splits and the expected signing certificate. `inspect`, exact-candidate
+`verify` and lifecycle all pass with no blocker. The update came from Google
+Play; Codex did not sideload, uninstall, clear data or automate private UI.
 
 ## Boundary and next action
 
-The existing Play-signed installation must be updated only through the existing
-Google Play Internal track. Sideloading, uninstalling, clearing data, UI
-automation on the owner's private phone, changing a tester list or creating a
-new Store release remain outside this package. Walid was notified once through
-Maximus to tap `Aktualisieren` in Google Play and leave the OnePlus unlocked and
-USB-connected.
-
-After Google Play supplies `1.0.0+2026090711`, rerun `inspect`, then `verify`
-and the bounded lifecycle proof. A current-candidate physical PASS may be
-recorded only from those fresh results.
+The current Play-signed `2026090711` installation is now verified. Sideloading,
+uninstalling, clearing data, UI automation on the owner's private phone,
+changing a tester list or creating a new Store release remain outside this
+package.
 
 Machine-readable evidence:
 `docs/evidence/release-readiness/wp62-oneplus-play-installer-compatibility-and-inspection-20260908.json`.

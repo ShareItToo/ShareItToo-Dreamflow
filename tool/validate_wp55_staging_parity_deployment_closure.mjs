@@ -14,6 +14,8 @@ const readinessHead = '7c9713d4797d5b145ee41d9ac7a2de140f898c38';
 const runtimeHead = 'd8d1df7f59052c202f824f759693a472b6b8afa1';
 const previousHead = '68c97a437969dc98f17eb151da3e006259ffbafa';
 const backendTree = 'd991765a159810b88e4e4db874ac6193ae3e804d';
+const previousRolloverVersionCode = '2026090711';
+const currentRolloverPath = 'store/google-play/current-rollover-candidate.json';
 const imageDigest =
   'sha256:e4ae94d740ef83fa80d59762805e1f64cc76f80ecd46531f955ce27ab0289908';
 
@@ -42,6 +44,36 @@ function assertAncestor(repositoryRoot, ancestor, descendant = 'HEAD') {
   } catch {
     fail(`WP55 commit ancestry is invalid: ${ancestor} -> ${descendant}`);
   }
+}
+
+export function validateWp55CurrentBackendBinding({
+  deployedBackendTree,
+  currentBackendTree,
+  candidateBackendTree = null,
+  rollover = null,
+} = {}) {
+  if (deployedBackendTree !== backendTree) {
+    fail('WP55 deployed Backend tree has drifted.');
+  }
+  if (currentBackendTree === backendTree) return 'deployed-backend-exact';
+
+  const candidate = rollover?.candidate;
+  const artifact = rollover?.artifact;
+  if (rollover?.schemaVersion !== 1
+      || rollover?.kind !== 'android-current-rollover-candidate'
+      || rollover?.status !== 'build-ready-play-internal-upload-pending'
+      || candidate?.applicationId !== 'com.shareittoo.app'
+      || candidate?.releaseChannel !== 'internal'
+      || candidate?.apiBaseUrl !== 'https://staging.shareittoo.com/api/v1'
+      || !/^[0-9a-f]{40}$/u.test(candidate?.artifactSourceHead ?? '')
+      || !/^\d{10}$/u.test(candidate?.versionCode ?? '')
+      || BigInt(candidate.versionCode) <= BigInt(previousRolloverVersionCode)
+      || !/^[0-9a-f]{64}$/u.test(artifact?.aabSha256 ?? '')
+      || !/^[0-9a-f]{64}$/u.test(artifact?.apkSha256 ?? '')
+      || candidateBackendTree !== currentBackendTree) {
+    fail('WP55 newer Backend tree is not bound to the current signed Staging candidate.');
+  }
+  return 'newer-signed-staging-candidate-deployment-pending';
 }
 
 function inspectPrivateShape(value, trail = []) {
@@ -89,10 +121,28 @@ export function validateWp55StagingParityDeploymentClosure({
   if (checkGit) {
     assertAncestor(repositoryRoot, runtimeHead);
     assertAncestor(repositoryRoot, readinessHead);
-    if (git(repositoryRoot, ['rev-parse', `${runtimeHead}:backend`]) !== backendTree
-        || git(repositoryRoot, ['rev-parse', 'HEAD:backend']) !== backendTree) {
-      fail('WP55 reviewed Backend tree has drifted.');
+    const deployedBackendTree = git(repositoryRoot, ['rev-parse', `${runtimeHead}:backend`]);
+    const currentBackendTree = git(repositoryRoot, ['rev-parse', 'HEAD:backend']);
+    let candidateBackendTree = null;
+    let rollover = null;
+    if (currentBackendTree !== backendTree) {
+      rollover = JSON.parse(readFileSync(resolve(repositoryRoot, currentRolloverPath), 'utf8'));
+      const candidateSourceHead = rollover?.candidate?.artifactSourceHead;
+      if (!/^[0-9a-f]{40}$/u.test(candidateSourceHead ?? '')) {
+        fail('WP55 current candidate source binding is invalid.');
+      }
+      assertAncestor(repositoryRoot, candidateSourceHead);
+      candidateBackendTree = git(
+        repositoryRoot,
+        ['rev-parse', `${candidateSourceHead}:backend`],
+      );
     }
+    validateWp55CurrentBackendBinding({
+      deployedBackendTree,
+      currentBackendTree,
+      candidateBackendTree,
+      rollover,
+    });
     for (const path of ['backend/ops/deploy_release.sh', 'backend/compose.staging.yml']) {
       if (git(repositoryRoot, ['show', `${runtimeHead}:${path}`])
           !== git(repositoryRoot, ['show', `HEAD:${path}`])) {

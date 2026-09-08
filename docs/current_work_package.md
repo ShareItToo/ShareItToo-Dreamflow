@@ -1,26 +1,35 @@
 # Current Work Package: WP63 backend dependency security and candidate refresh
 
-WP63 is **SOURCE PREPARED; SIGNED CANDIDATE AND EXACT-HEAD CLOSURE PENDING**.
-The final WP62 clean-checkout discovered two newly published dependency
-advisories. Direct Backend dependencies are updated to the reviewed patched
-floors `sharp 0.35.4` and `nodemailer 9.1.1`; the production audit is clean,
-two deterministic floor/reachability tests pass, and the complete Backend
-suite passes 850 tests with two declared skips.
+WP63 is **SIGNED CANDIDATE BUILT; EXACT-HEAD CLOSURE PENDING**.
+The final WP62 clean-checkout discovered newly published Sharp and Nodemailer
+advisories. A required follow-up registry audit then found three high-severity
+Multer advisories published after the first local candidate build. Direct
+Backend dependencies are updated to the reviewed patched floors `sharp 0.35.4`,
+`nodemailer 9.1.1` and `multer 2.3.0`; the production audit is clean, two
+deterministic floor/reachability tests pass, and the complete Backend suite
+passes 850 tests with two declared skips.
 
 The existing `1.0.0+2026090711` Play/Internal artifact remains immutable.
 Because the Backend lock is runtime-affecting, the full gate correctly requires
-a new source-bound candidate. Version `1.0.0+2026090901` is reserved as a
-strictly newer unused Internal Staging build. All resulting source hash ratchets
-were refreshed without changing non-hash claims, and all 2,472 tool tests pass.
-Next: commit the exact source freeze, build and verify one canonical signed
-APK/AAB, bind current rollover evidence to those bytes, and rerun complete
-local/GitHub gates. No Store upload is part of this preparation. See
+a new source-bound candidate. Version `1.0.0+2026090902` is the strictly newer
+Internal Staging candidate built from source commit
+`2055a5c508689596c0f776c2cdf38b54f7e106c3`. Canonical signing, Firebase
+Android, exact package/version, ZIP, Bundletool 1.18.1 and binary privacy checks
+pass; AAB SHA-256 is
+`b1de03f47d8d185f6cbfe2e28b0db6bd56163e8d1aeeed5f9ebe289a40a3af5c`
+and APK SHA-256 is
+`a30404283c92c2dd20e231d385af80e2dcbef510c12210a461f5469759f82dd6`.
+The never-uploaded `2026090901` candidate is retained only as superseded
+historical evidence and must never be uploaded.
+The `2026090711` Play/OnePlus binding is preserved as immutable history. Next:
+validate the new current binding and rerun complete local/GitHub gates. No
+Store upload is part of this preparation. See
 `docs/operations/WP63_BACKEND_DEPENDENCY_SECURITY_AND_CANDIDATE_REFRESH_2026-09-09.md`.
 
 # Previous Work Package: WP62 OnePlus Play installer compatibility and inspection
 
-WP62 is **IMPLEMENTED AND VERIFIED LOCALLY/GITHUB; READ-ONLY PHYSICAL ONEPLUS
-INSPECTION PASSED; CURRENT CANDIDATE UPDATE IS PENDING OWNER ACTION**. A real
+WP62 is **IMPLEMENTED AND VERIFIED LOCALLY/GITHUB; PHYSICAL ONEPLUS CURRENT
+PLAY-CANDIDATE VERIFICATION PASSED**. A real
 OxygenOS/Android 16 package query returned the exact production application and
 a prefix-matching QA sibling. The corrected parser selects the exact requested
 application ID, requires exactly one match and preserves fail-closed Google
@@ -32,11 +41,11 @@ local regression and exact implementation-head GitHub Regression
 `34280112694`, CodeQL `34280112554`, independent clean checkout and zero current
 PR-merge alerts pass at
 `a105a5fdd08c224e8556c5e67f5474ddb8a46cb4`. The corrected physical read-only
-inspection passes and classifies the Play-installed `1.0.0+2026090204` as
-`UPDATE_REQUIRED`; `2026090711`, `verify` and `lifecycle` remain pending. The
-only allowed update is through the existing Google Play Internal track. Walid
-was notified once through Maximus. No device automation, sideload, uninstall,
-data reset, Store/tester or external-provider change occurred. See
+inspection first classified the Play-installed `1.0.0+2026090204` as
+`UPDATE_REQUIRED`. After the Google Play update, read-only `inspect`, `verify`
+and lifecycle checks pass for exact `1.0.0+2026090711`, installer
+`com.android.vending`, four splits and matching certificate. No sideload,
+uninstall, data reset, Store/tester or external-provider change occurred. See
 `docs/operations/WP62_ONEPLUS_PLAY_INSTALLER_COMPATIBILITY_AND_INSPECTION_2026-09-08.md`.
 
 # Previous Work Package: WP61 current-branch CodeQL alert closure

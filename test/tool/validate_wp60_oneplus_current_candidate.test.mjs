@@ -16,6 +16,10 @@ function manifest() {
 }
 
 test('binds the active 2026090711 Internal candidate to the previous OnePlus state', () => {
+  assert.equal(
+    manifest().sourceRefs.candidate,
+    'store/google-play/rollover-candidate-2026090711.json',
+  );
   const result = validateWp60OnePlusCurrentCandidate({ root });
   assert.equal(result.applicationId, 'com.shareittoo.app');
   assert.equal(result.versionCode, '2026090711');

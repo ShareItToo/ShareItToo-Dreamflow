@@ -1,23 +1,34 @@
 # ShareItToo Current State
 
-WP63 is **SOURCE PREPARED; SIGNED CANDIDATE AND EXACT-HEAD CLOSURE PENDING**.
+WP63 is **SIGNED CANDIDATE BUILT; EXACT-HEAD CLOSURE PENDING**.
 A fresh clean-checkout audit exposed newly published reviewed advisories for
-the direct Backend dependencies Sharp and Nodemailer. The selected patched
-floors are `sharp 0.35.4` and `nodemailer 9.1.1`; the production audit now
-reports no known vulnerabilities, the two new deterministic guard tests pass,
-and the complete Backend suite passes 850 tests with two declared skips.
+the direct Backend dependencies Sharp and Nodemailer. A later registry audit,
+performed before closure, also exposed three new high-severity Multer
+advisories published after the first local candidate build. The selected
+patched floors are `sharp 0.35.4`, `nodemailer 9.1.1` and `multer 2.3.0`; the
+production audit now reports no known vulnerabilities, the two deterministic
+guard tests pass, and the complete Backend suite passes 850 tests with two
+declared skips.
 
 Because Backend dependency changes are correctly runtime-affecting, the
 existing `1.0.0+2026090711` Play/Internal candidate remains immutable and is
 not relabelled. The strictly newer unused Internal Staging identity
-`1.0.0+2026090901` is reserved for one new canonical signed candidate. Source
-hash ratchets were refreshed mechanically without changing their rules or
-historical results; all 2,472 tool tests pass. No Store, device, Staging,
-Production or provider state changed. See
+`1.0.0+2026090902` is now the canonical signed candidate at source commit
+`2055a5c508689596c0f776c2cdf38b54f7e106c3`. Its AAB SHA-256 is
+`b1de03f47d8d185f6cbfe2e28b0db6bd56163e8d1aeeed5f9ebe289a40a3af5c`
+and its APK SHA-256 is
+`a30404283c92c2dd20e231d385af80e2dcbef510c12210a461f5469759f82dd6`.
+Canonical signing, Firebase Android, package/version, ZIP, Bundletool 1.18.1 and
+binary-privacy checks pass. Source hash ratchets were refreshed mechanically
+without weakening their historical deployment proof; all 2,473 tool tests pass.
+The never-uploaded local `2026090901` bytes are retained only as superseded
+historical evidence and are explicitly prohibited from future upload.
+The Play/OnePlus `2026090711` candidate remains immutable in a separate
+snapshot. No Store, device, Staging, Production or provider state changed. See
 `docs/operations/WP63_BACKEND_DEPENDENCY_SECURITY_AND_CANDIDATE_REFRESH_2026-09-09.md`.
 
-WP62 is **IMPLEMENTED AND VERIFIED LOCALLY/GITHUB; READ-ONLY PHYSICAL ONEPLUS
-INSPECTION PASSED; CURRENT CANDIDATE UPDATE IS PENDING OWNER ACTION**. The first
+WP62 is **IMPLEMENTED AND VERIFIED LOCALLY/GITHUB; PHYSICAL ONEPLUS CURRENT
+PLAY-CANDIDATE VERIFICATION PASSED**. The first
 physical WP60 attempt exposed an OxygenOS/Android 16 command-shape mismatch:
 the package query returned both the exact production package and a prefix-
 matching QA sibling. The parser now selects exactly `com.shareittoo.app`,
@@ -29,11 +40,12 @@ local regression pass at implementation HEAD
 `a105a5fdd08c224e8556c5e67f5474ddb8a46cb4`. Exact-head GitHub Regression
 `34280112694`, CodeQL `34280112554`, independent clean checkout and a current
 PR-merge readback of zero open alerts pass. The corrected physical `inspect`
-identifies the OnePlus as Play-installed `1.0.0+2026090204`, four splits,
-Android 16 / SDK 36, and correctly returns `UPDATE_REQUIRED`; current candidate
-`2026090711`, `verify` and `lifecycle` remain pending. Walid was notified once
-through Maximus to perform the Google Play Internal update. No device, Store,
-tester, account or external-provider state changed. See
+initially identified the OnePlus as Play-installed `1.0.0+2026090204`, four
+splits, Android 16 / SDK 36, and correctly returned `UPDATE_REQUIRED`. The
+subsequent Google-Play-delivered update is now verified read-only as exact
+`1.0.0+2026090711`, installer `com.android.vending`, four splits, matching
+certificate, with `inspect`, `verify` and lifecycle all passing. No sideload,
+uninstall, data reset, tester, account or external-provider state changed. See
 `docs/operations/WP62_ONEPLUS_PLAY_INSTALLER_COMPATIBILITY_AND_INSPECTION_2026-09-08.md`.
 
 WP61 is **COMPLETE LOCALLY AND ON GITHUB; ZERO OPEN CURRENT PR-MERGE ALERTS**.

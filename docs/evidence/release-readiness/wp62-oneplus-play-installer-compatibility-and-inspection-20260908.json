@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "kind": "sit-wp62-oneplus-play-installer-compatibility-and-inspection",
-  "status": "implementation-and-readonly-physical-inspection-complete-current-candidate-update-pending-owner-action",
-  "capturedAt": "2026-09-08T21:56:48Z",
+  "status": "implementation-and-current-play-candidate-physical-verification-complete",
+  "capturedAt": "2026-09-09T00:05:00Z",
   "repository": {
     "worktree": "/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808",
     "branch": "codex/master-workflow-20260808",
@@ -76,9 +76,25 @@
     "verify": "NOT_RUN",
     "lifecycle": "NOT_RUN"
   },
+  "currentCandidatePhysicalVerification": {
+    "adbState": "authorized",
+    "deviceClass": "OnePlus",
+    "model": "CPH2581",
+    "package": "com.shareittoo.app",
+    "installedVersionName": "1.0.0",
+    "installedVersionCode": "2026090711",
+    "installer": "com.android.vending",
+    "splitCount": 4,
+    "certificateMatch": true,
+    "currentCandidateInstalled": true,
+    "inspect": "PASS",
+    "verify": "PASS",
+    "lifecycle": "PASS",
+    "blocker": "NONE"
+  },
   "ownerAction": {
-    "needed": true,
-    "action": "update-existing-internal-test-install-through-google-play",
+    "needed": false,
+    "action": "completed-existing-internal-test-update-through-google-play",
     "maximusNotificationSent": true,
     "automationAttemptedOnPrivateDevice": false
   },

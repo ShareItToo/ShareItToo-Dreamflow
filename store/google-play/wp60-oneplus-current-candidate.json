@@ -4,7 +4,7 @@
   "status": "prepared-play-active-oneplus-update-pending",
   "generatedAt": "2026-09-08T17:25:00Z",
   "sourceRefs": {
-    "candidate": "store/google-play/current-rollover-candidate.json",
+    "candidate": "store/google-play/rollover-candidate-2026090711.json",
     "playRelease": "docs/evidence/release-readiness/wp59-google-play-internal-2026090711-release-20260908.json",
     "previousOnePlus": "docs/evidence/release-readiness/oneplus-play-internal-2026090204-read-only.json"
   },

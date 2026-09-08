@@ -1,6 +1,6 @@
 # WP63 — backend dependency security and candidate refresh
 
-Status: **SOURCE PREPARED; SIGNED CANDIDATE AND EXACT-HEAD CLOSURE PENDING**.
+Status: **SIGNED CANDIDATE BUILT; EXACT-HEAD CLOSURE PENDING**.
 
 ## Trigger and decision
 
@@ -21,20 +21,54 @@ refreshes only their locked package graph, and adds deterministic floors plus a
 negative legacy-path check. The production audit then reports no known
 vulnerabilities; the focused tests and complete Backend suite pass.
 
+A mandatory fresh registry audit before closure then found three high-severity
+Multer advisories published after the first local candidate was built:
+`GHSA-wc9g-mqfw-jrwm`, `GHSA-qfvm-cv95-jqjf` and
+`GHSA-535w-7cp7-47q4`. Multer is directly reachable through listing-image
+uploads, so `2.2.0` was replaced with the common patched floor `2.3.0` and
+added to the deterministic dependency-floor guard. The audit and complete
+Backend suite were rerun successfully.
+
 ## Candidate consequence
 
 Backend dependency files are deliberately classified as runtime-affecting by
 the current-candidate gate. The existing Play/Internal candidate
 `1.0.0+2026090711` remains immutable historical evidence and is not relabelled.
-The security fix therefore reserves the strictly newer, previously unused
-Internal Staging identity `1.0.0+2026090901` for a new signed candidate at the
-eventual exact source-freeze commit.
+The first local `1.0.0+2026090901` candidate was never uploaded. It is retained
+only as superseded historical evidence and is permanently prohibited from
+future upload because the Multer advisories arrived after its build.
 
-No Store upload or activation is part of this source preparation. After the
-source commit passes all non-candidate checks, build and verify one canonical
-signed APK/AAB, update the current rollover binding to those exact bytes, rerun
-the complete local and GitHub gates, and only then consider a separately gated
-Google Play Internal update.
+The complete security fix therefore uses the next strictly newer, previously
+unused Internal Staging identity `1.0.0+2026090902` for the canonical signed
+candidate at source commit
+`2055a5c508689596c0f776c2cdf38b54f7e106c3`.
+
+The AAB is 109,599,360 bytes with SHA-256
+`b1de03f47d8d185f6cbfe2e28b0db6bd56163e8d1aeeed5f9ebe289a40a3af5c`;
+the APK is 136,761,953 bytes with SHA-256
+`a30404283c92c2dd20e231d385af80e2dcbef510c12210a461f5469759f82dd6`.
+Upload-certificate, package/version identity, ZIP integrity, Bundletool 1.18.1,
+binary privacy and Firebase Android checks pass. The private archive is
+non-overwriting and owner-only.
+
+No Store upload or activation is part of WP63. The current rollover binding now
+targets these exact bytes, while the active Play/OnePlus `2026090711` candidate
+is retained in its own immutable snapshot. Next rerun the complete local and
+GitHub gates, then consider a separately gated Google Play Internal update.
+
+## Historical Staging ratchet
+
+The WP55 validator previously required the current Backend tree to remain
+identical to the deployed WP55 tree forever. That correctly caught this
+runtime-affecting security update, but could not distinguish reviewed successor
+work from unbound drift. The deployed WP55 commit and Backend tree remain
+strictly exact. A different current Backend tree is now accepted only when it
+equals the tree at a newer signed Internal/Staging candidate source commit,
+that source is an ancestor of the current HEAD, and the candidate retains exact
+package, API, artifact-hash and fail-closed upload-pending boundaries. Six
+focused WP55 tests cover acceptance and status/version/channel/hash/tree drift.
+This records a pending Staging deployment; it does not claim parity or mutate
+the existing runtime.
 
 ## Boundaries
 
@@ -43,5 +77,5 @@ Staging or Production runtime, Firebase/provider/payment configuration,
 Cloud/VPS/DNS state or PR state changed. No workaround, advisory suppression or
 audit exclusion is allowed.
 
-Machine-readable preparation evidence:
+Machine-readable candidate evidence:
 `docs/evidence/release-readiness/wp63-backend-dependency-security-and-candidate-refresh-20260909.json`.
