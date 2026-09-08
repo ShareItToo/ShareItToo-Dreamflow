@@ -1,4 +1,31 @@
-# Current Work Package: WP55 authenticated Staging parity deployment readiness
+# Current Work Package: WP57 current Pixel Staging core revalidation
+
+WP57 is **PHYSICALLY AND LOCALLY COMPLETE; GITHUB EVIDENCE CLOSURE IS PENDING**.
+The exact installed direct APK `1.0.0+2026090711` remains byte- and
+certificate-bound to source `c819c5f4445d0b998b2ee319e64f8c95cfb01eda`; no
+mobile source has changed after the candidate. Deployed Staging is exact
+Backend `d8d1df7f59052c202f824f759693a472b6b8afa1`.
+
+The Pixel passes authenticated surface/restart coverage and the complete
+non-binding two-role core: publication/readback, discovery, request/acceptance,
+chat, A-to-B isolation and FCM in all three process states. The first push
+attempt safely exposed the app-level voluntary push choice as disabled after a
+prior account-deletion test. Its temporary state was retired. Push was then
+enabled through the actual disclosure/confirmation UI under the owner's
+explicit push-test instruction; Crashlytics stayed off and the unchanged run
+passed.
+
+Signed-out Guest online-empty truth, offline error, validated WLAN restoration
+and recovery pass. The final public catalog is empty, new fixture state is
+retired and the protected owner session is restored. A sensitive notification
+capture was deleted after the ShareItToo icon was visually confirmed. The
+focused evidence tests pass `17/17`; the complete local release regression
+passes, including `909` Flutter tests, randomized focused security suites,
+Web/Wasm, loopback smoke and the Android debug build. No live or external gate
+moved. The remaining WP57 step is exact GitHub evidence closure. See
+`docs/operations/WP57_CURRENT_PIXEL_STAGING_CORE_REVALIDATION_2026-09-08.md`.
+
+# Previous Work Package: WP55 authenticated Staging parity deployment readiness
 
 WP55 is **BUILD READY; RUNTIME ROLLOUT IS NOT YET PERFORMED**. The authenticated
 WP51 inventory passed read-only at `2026-09-07T22:56:44.622Z`: both exact

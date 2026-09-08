@@ -1,5 +1,30 @@
 # ShareItToo Current State
 
+WP57 is **PHYSICALLY AND LOCALLY COMPLETE; GITHUB EVIDENCE CLOSURE IS PENDING** for
+the exact direct-installed Pixel candidate `1.0.0+2026090711`, source
+`c819c5f4445d0b998b2ee319e64f8c95cfb01eda`, against deployed Staging Backend
+`d8d1df7f59052c202f824f759693a472b6b8afa1`.
+
+Candidate bytes/signature, authenticated surface and restart matrix, two
+email-verified synthetic roles, Pixel publication, public discovery,
+non-binding request/acceptance, chat, A-to-B isolation and controlled FCM in
+foreground/background/terminated states pass. The first FCM attempt exposed
+the correctly disabled voluntary in-app push choice after an earlier account
+deletion; its fixture cleanup passed. The explicit owner push-test instruction
+was applied through the real disclosure dialog, while Crashlytics stayed off,
+and the unchanged rerun passed.
+
+Guest server-confirmed empty truth, explicit offline failure, validated WLAN
+restore and online recovery also pass. Final public Staging contains zero
+active listings and zero technical fixtures; the protected owner session is
+restored. The focused evidence tests pass `17/17`; the complete local release
+regression passes, including the `909`-test Flutter suite, randomized focused
+security suites, Web/Wasm, loopback smoke and Android debug build. The private
+notification capture was visually reviewed, then deleted
+because it contained unrelated personal notifications. No Production, Store,
+payment, provider, Firebase Console, OnePlus or PR-merge boundary changed. See
+`docs/operations/WP57_CURRENT_PIXEL_STAGING_CORE_REVALIDATION_2026-09-08.md`.
+
 WP55 is **BUILD READY; RUNTIME ROLLOUT IS NOT YET PERFORMED**. Authenticated
 Hostinger inventory at `2026-09-07T22:56:44.622Z` passed read-only: API and
 PostgreSQL are healthy with zero restarts, runtime/image/release identity binds
