@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp62-oneplus-play-installer-compatibility-and-inspection",
+  "status": "implementation-and-readonly-physical-inspection-complete-current-candidate-update-pending-owner-action",
+  "capturedAt": "2026-09-08T21:56:48Z",
+  "repository": {
+    "worktree": "/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808",
+    "branch": "codex/master-workflow-20260808",
+    "baseHead": "18f94ec21a1bc3fc4b97cb6434977ccd8bd2f875",
+    "implementationHead": "a105a5fdd08c224e8556c5e67f5474ddb8a46cb4",
+    "remoteDivergenceAtImplementationHead": "0/0",
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "defect": {
+    "surface": "google-play-installer-source-parser",
+    "observedShape": "exact-production-package-plus-prefix-matching-qa-sibling",
+    "previousBehavior": "rejected-multiline-prefix-result-as-unavailable",
+    "rootCause": "whole-command-output-required-to-be-one-exact-line",
+    "correctedInvariant": "select-exact-requested-package-id-and-require-one-exact-match-before-installer-enforcement",
+    "missingExactPackageFailsClosed": true,
+    "duplicateExactPackageFailsClosed": true,
+    "conflictingExactInstallerFailsClosed": true
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "currentVersionCode": "2026090711",
+    "previousAcceptedVersionCode": "2026090204",
+    "requiredInstaller": "com.android.vending",
+    "requiredDelivery": "google-play-split",
+    "requiredUpdateMechanism": "google-play-internal-only"
+  },
+  "verification": {
+    "focusedLocalTests": "passed-13",
+    "focusedMacBookTests": "passed-10",
+    "fullToolTests": "passed-2472",
+    "flutterTests": 909,
+    "declaredFlutterSkips": 33,
+    "mandatoryRandomizedSecurityProfiles": "passed",
+    "analyzer": "passed-zero-issues",
+    "webWasm": "passed",
+    "loopbackSmoke": "passed",
+    "androidDebugBuildMinSdk24": "passed",
+    "fullLocalRegression": "passed-exit-0",
+    "workaroundIntroduced": false,
+    "githubRegression": {
+      "run": 34280112694,
+      "head": "a105a5fdd08c224e8556c5e67f5474ddb8a46cb4",
+      "conclusion": "success",
+      "postgresJob": 102242767544,
+      "backendJob": 102242767806,
+      "flutterAndroidJob": 102242767856,
+      "cleanCheckoutJob": 102242767975
+    },
+    "githubCodeql": {
+      "run": 34280112554,
+      "job": 102242568787,
+      "head": "a105a5fdd08c224e8556c5e67f5474ddb8a46cb4",
+      "conclusion": "success"
+    },
+    "openCurrentPrMergeCodeScanningAlerts": 0
+  },
+  "physicalInspection": {
+    "adbState": "authorized",
+    "deviceClass": "OnePlus",
+    "androidRelease": "16",
+    "sdk": 36,
+    "package": "com.shareittoo.app",
+    "installedVersionName": "1.0.0",
+    "installedVersionCode": "2026090204",
+    "installer": "com.android.vending",
+    "splitCount": 4,
+    "classification": "UPDATE_REQUIRED",
+    "currentCandidateInstalled": false,
+    "inspect": "PASS",
+    "verify": "NOT_RUN",
+    "lifecycle": "NOT_RUN"
+  },
+  "ownerAction": {
+    "needed": true,
+    "action": "update-existing-internal-test-install-through-google-play",
+    "maximusNotificationSent": true,
+    "automationAttemptedOnPrivateDevice": false
+  },
+  "boundaries": {
+    "androidBinaryChanged": false,
+    "applicationInstalledOrUpdatedByWp62": false,
+    "applicationUninstalled": false,
+    "applicationDataCleared": false,
+    "accountContentInspected": false,
+    "screenshotOrUiHierarchyCaptured": false,
+    "deviceSettingChanged": false,
+    "storeOrTesterListChanged": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "paymentProviderFirebaseCloudVpsDnsChanged": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false,
+    "containsTesterIdentity": false,
+    "containsRawDeviceIdentifier": false,
+    "containsNetworkAddress": false
+  }
+}

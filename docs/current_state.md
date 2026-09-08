@@ -1,5 +1,25 @@
 # ShareItToo Current State
 
+WP62 is **IMPLEMENTED AND VERIFIED LOCALLY/GITHUB; READ-ONLY PHYSICAL ONEPLUS
+INSPECTION PASSED; CURRENT CANDIDATE UPDATE IS PENDING OWNER ACTION**. The first
+physical WP60 attempt exposed an OxygenOS/Android 16 command-shape mismatch:
+the package query returned both the exact production package and a prefix-
+matching QA sibling. The parser now selects exactly `com.shareittoo.app`,
+requires one exact match and still fails closed on missing, duplicate or
+conflicting rows before enforcing `com.android.vending`.
+
+Thirteen focused local tests, ten synchronized MacBook tests and the complete
+local regression pass at implementation HEAD
+`a105a5fdd08c224e8556c5e67f5474ddb8a46cb4`. Exact-head GitHub Regression
+`34280112694`, CodeQL `34280112554`, independent clean checkout and a current
+PR-merge readback of zero open alerts pass. The corrected physical `inspect`
+identifies the OnePlus as Play-installed `1.0.0+2026090204`, four splits,
+Android 16 / SDK 36, and correctly returns `UPDATE_REQUIRED`; current candidate
+`2026090711`, `verify` and `lifecycle` remain pending. Walid was notified once
+through Maximus to perform the Google Play Internal update. No device, Store,
+tester, account or external-provider state changed. See
+`docs/operations/WP62_ONEPLUS_PLAY_INSTALLER_COMPATIBILITY_AND_INSPECTION_2026-09-08.md`.
+
 WP61 is **COMPLETE LOCALLY AND ON GITHUB; ZERO OPEN CURRENT PR-MERGE ALERTS**.
 WP60's successful exact-head GitHub runs exposed three older open
 branch alerts despite a green CodeQL conclusion. The two high-severity file

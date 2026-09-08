@@ -1,4 +1,26 @@
-# Current Work Package: WP61 current-branch CodeQL alert closure
+# Current Work Package: WP62 OnePlus Play installer compatibility and inspection
+
+WP62 is **IMPLEMENTED AND VERIFIED LOCALLY/GITHUB; READ-ONLY PHYSICAL ONEPLUS
+INSPECTION PASSED; CURRENT CANDIDATE UPDATE IS PENDING OWNER ACTION**. A real
+OxygenOS/Android 16 package query returned the exact production application and
+a prefix-matching QA sibling. The corrected parser selects the exact requested
+application ID, requires exactly one match and preserves fail-closed Google
+Play installer enforcement. Missing, duplicate and conflicting exact results
+are regression-tested.
+
+Thirteen local and ten synchronized MacBook focused tests pass. The complete
+local regression and exact implementation-head GitHub Regression
+`34280112694`, CodeQL `34280112554`, independent clean checkout and zero current
+PR-merge alerts pass at
+`a105a5fdd08c224e8556c5e67f5474ddb8a46cb4`. The corrected physical read-only
+inspection passes and classifies the Play-installed `1.0.0+2026090204` as
+`UPDATE_REQUIRED`; `2026090711`, `verify` and `lifecycle` remain pending. The
+only allowed update is through the existing Google Play Internal track. Walid
+was notified once through Maximus. No device automation, sideload, uninstall,
+data reset, Store/tester or external-provider change occurred. See
+`docs/operations/WP62_ONEPLUS_PLAY_INSTALLER_COMPATIBILITY_AND_INSPECTION_2026-09-08.md`.
+
+# Previous Work Package: WP61 current-branch CodeQL alert closure
 
 WP61 is **COMPLETE LOCALLY AND ON GITHUB; ZERO OPEN CURRENT PR-MERGE ALERTS**.
 The explicit post-WP60 branch readback found three older open CodeQL
