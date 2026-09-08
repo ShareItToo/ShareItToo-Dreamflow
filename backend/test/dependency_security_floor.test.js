@@ -39,6 +39,11 @@ test('backend image and mail dependencies retain the reviewed advisory floors', 
       minimum: '9.1.1',
       advisory: 'GHSA-8m3c-c648-2xjj',
     },
+    {
+      packageName: 'multer',
+      minimum: '2.3.0',
+      advisory: 'GHSA-wc9g-mqfw-jrwm / GHSA-qfvm-cv95-jqjf / GHSA-535w-7cp7-47q4',
+    },
   ];
 
   for (const requirement of requirements) {
