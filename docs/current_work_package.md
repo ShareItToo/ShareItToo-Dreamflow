@@ -1,6 +1,6 @@
 # Current Work Package: WP63 backend dependency security and candidate refresh
 
-WP63 is **SIGNED CANDIDATE BUILT; EXACT-HEAD CLOSURE PENDING**.
+WP63 is **SIGNED CANDIDATE LOCALLY VERIFIED; EXACT-HEAD GITHUB CLOSURE PENDING**.
 The final WP62 clean-checkout discovered newly published Sharp and Nodemailer
 advisories. A required follow-up registry audit then found three high-severity
 Multer advisories published after the first local candidate build. Direct
@@ -22,8 +22,11 @@ and APK SHA-256 is
 The never-uploaded `2026090901` candidate is retained only as superseded
 historical evidence and must never be uploaded.
 The `2026090711` Play/OnePlus binding is preserved as immutable history. Next:
-validate the new current binding and rerun complete local/GitHub gates. No
-Store upload is part of this preparation. See
+complete exact-head GitHub Regression, CodeQL and current alert readback. The
+local technical profile and independent clean checkout already pass at binding
+HEAD `f67cf5a6427d777cd5fd0a9f62064c0316b7e57c`; the clean proof uses fresh
+caches and produces byte-identical Android debug artifacts. No Store upload is
+part of this preparation. See
 `docs/operations/WP63_BACKEND_DEPENDENCY_SECURITY_AND_CANDIDATE_REFRESH_2026-09-09.md`.
 
 # Previous Work Package: WP62 OnePlus Play installer compatibility and inspection

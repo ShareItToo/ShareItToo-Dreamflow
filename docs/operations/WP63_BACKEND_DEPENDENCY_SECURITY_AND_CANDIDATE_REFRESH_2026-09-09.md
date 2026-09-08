@@ -1,6 +1,7 @@
 # WP63 — backend dependency security and candidate refresh
 
-Status: **SIGNED CANDIDATE BUILT; EXACT-HEAD CLOSURE PENDING**.
+Status: **SIGNED CANDIDATE LOCALLY VERIFIED; EXACT-HEAD GITHUB CLOSURE
+PENDING**.
 
 ## Trigger and decision
 
@@ -69,6 +70,19 @@ package, API, artifact-hash and fail-closed upload-pending boundaries. Six
 focused WP55 tests cover acceptance and status/version/channel/hash/tree drift.
 This records a pending Staging deployment; it does not claim parity or mutate
 the existing runtime.
+
+## Local closure verification
+
+The complete local technical profile passes at binding HEAD
+`f67cf5a6427d777cd5fd0a9f62064c0316b7e57c`, including all 2,473 tool tests,
+the complete Backend and Flutter suites, isolated PostgreSQL, randomized
+security profiles, analyzer with zero issues, Web/Wasm, loopback smoke and the
+Android minSdk 24 build. The independent clean-checkout runner cloned the exact
+detached HEAD without hardlinks, restored all dependencies into fresh isolated
+caches, reran the complete gate and built Android twice. Both debug APKs are
+byte-identical, source inventories remain unchanged, resource use stays inside
+the deterministic bounds and all temporary inputs and artifacts are removed.
+No timing, concurrency, cache or retry workaround was accepted.
 
 ## Boundaries
 

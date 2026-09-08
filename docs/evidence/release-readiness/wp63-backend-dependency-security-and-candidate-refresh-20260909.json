@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "sit-wp63-backend-dependency-security-and-candidate-refresh",
-  "status": "signed-candidate-built-exact-head-closure-pending",
+  "status": "signed-candidate-locally-verified-exact-head-github-pending",
   "capturedAt": "2026-09-08T23:11:13Z",
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -103,8 +103,8 @@
     "signedReleaseBuild": "passed",
     "canonicalUploadSigning": "passed",
     "firebaseAndroidConfiguration": "passed",
-    "completeRegression": "pending-candidate-binding",
-    "cleanCheckout": "pending-candidate-binding",
+    "completeRegression": "passed-f67cf5a6427d777cd5fd0a9f62064c0316b7e57c",
+    "cleanCheckout": "passed-f67cf5a6427d777cd5fd0a9f62064c0316b7e57c-byte-identical-android",
     "githubRegression": "pending-candidate-binding",
     "githubCodeql": "pending-candidate-binding"
   },
