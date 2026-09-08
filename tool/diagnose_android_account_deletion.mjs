@@ -338,10 +338,10 @@ export async function probeDeletionCredential({ account, fetchImpl = globalThis.
   try {
     // The owner-only disposable Staging credential is intentionally submitted only to the
     // exact compile-time HTTPS Staging login above; schema, origin, path and payload are bounded.
-    // codeql[js/file-access-to-http]
     login = await fetchImpl(loginUrl.href, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+      // codeql[js/file-access-to-http]
       body: JSON.stringify({ email: account.email, password: account.password }),
       signal: AbortSignal.timeout(20_000),
     });
