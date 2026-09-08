@@ -94,7 +94,7 @@ function loadCleanupScope(vaultRoot) {
     for (const id of vaultProtectedIds) scopedOwner.protectedIds.add(id);
     owners.set(key, scopedOwner);
   }
-  if (validVaults === 0 || owners.size === 0 || protectedIds.size === 0) {
+  if (validVaults === 0 || owners.size === 0) {
     fail('The private Staging vault scope is incomplete.');
   }
   return { owners: [...owners.values()], protectedIds, validVaults };
@@ -141,6 +141,15 @@ async function request(fetchImpl, path, { method = 'GET', token, body, expected 
 function isTechnical(listing) {
   return /^SIT Rollenprüfung\b/u.test(listing?.title ?? '');
 }
+
+function isStrictSyntheticRoleFixture(listing) {
+  const tags = Array.isArray(listing?.tags) ? listing.tags : [];
+  return isTechnical(listing) && tags.includes('sit') && tags.includes('role-fixture');
+}
+
+const terminalBookingStatuses = new Set([
+  'completed', 'declined', 'cancelled', 'refunded',
+]);
 
 function activeListings(value) {
   return (Array.isArray(value?.listings) ? value.listings : [])
@@ -233,6 +242,7 @@ export async function cleanStagingStoreFeed({
 }) {
   readVault(vaultFile); // Explicit operator-selected private anchor; its secrets are never emitted.
   const { owners, protectedIds, validVaults } = loadCleanupScope(vaultRoot);
+  if (protectedIds.size === 0) fail('The private Staging vault scope is incomplete.');
   const sessions = [];
   let skippedHistoricalOwners = 0;
   for (const owner of owners) {
@@ -340,11 +350,116 @@ export async function cleanStagingStoreFeed({
   };
 }
 
-async function main() {
-  const result = await cleanStagingStoreFeed({
-    vaultFile: process.env.SIT_STAGING_ACCOUNT_VAULT,
-    vaultRoot: process.env.SIT_STAGING_ACCOUNT_VAULT_ROOT,
+export async function retireOrphanedStagingTechnicalListings({
+  vaultRoot,
+  fetchImpl = globalThis.fetch,
+} = {}) {
+  const { owners, validVaults } = loadCleanupScope(vaultRoot);
+  const sessions = [];
+  let skippedHistoricalOwners = 0;
+  for (const owner of owners) {
+    const token = await login(fetchImpl, owner);
+    if (token === null) {
+      skippedHistoricalOwners += 1;
+      continue;
+    }
+    const [mine, requests] = await Promise.all([
+      request(fetchImpl, '/listings/mine', { token }),
+      request(fetchImpl, '/rental-requests', { token }),
+    ]);
+    sessions.push({
+      token,
+      listings: Array.isArray(mine?.listings) ? mine.listings : [],
+      bookings: Array.isArray(requests?.requests) ? requests.requests : [],
+    });
+  }
+  if (sessions.length === 0) fail('No accessible synthetic Staging owner remains.');
+
+  const mutations = [];
+  let paused = 0;
+  let protectedByBooking = 0;
+  try {
+    const seen = new Set();
+    for (const session of sessions) {
+      for (const listing of activeListings({ listings: session.listings })) {
+        if (seen.has(listing.id) || !isStrictSyntheticRoleFixture(listing)) continue;
+        seen.add(listing.id);
+        const activeBooking = session.bookings.some((booking) => (
+          booking?.itemId === listing.id
+          && typeof booking?.workflowStatus === 'string'
+          && !terminalBookingStatuses.has(booking.workflowStatus)
+        ));
+        if (activeBooking) {
+          protectedByBooking += 1;
+          continue;
+        }
+        await request(fetchImpl, `/listings/${encodeURIComponent(listing.id)}/status`, {
+          method: 'PATCH', token: session.token, body: { status: 'paused' },
+        });
+        mutations.push({ kind: 'pause', token: session.token, listing });
+        paused += 1;
+      }
+    }
+
+    for (const session of sessions) {
+      const [mine, requests] = await Promise.all([
+        request(fetchImpl, '/listings/mine', { token: session.token }),
+        request(fetchImpl, '/rental-requests', { token: session.token }),
+      ]);
+      const activeBookings = Array.isArray(requests?.requests) ? requests.requests : [];
+      const unsafe = activeListings(mine).filter(isStrictSyntheticRoleFixture).filter(
+        (listing) => !activeBookings.some((booking) => (
+          booking?.itemId === listing.id
+          && typeof booking?.workflowStatus === 'string'
+          && !terminalBookingStatuses.has(booking.workflowStatus)
+        )),
+      );
+      if (unsafe.length > 0) fail('An orphaned active technical listing remained after cleanup.');
+    }
+    const publicListings = await publicActiveListings(fetchImpl);
+    if (publicListings.some((listing) => (
+      isStrictSyntheticRoleFixture(listing)
+      && !sessions.some((session) => session.bookings.some((booking) => (
+        booking?.itemId === listing.id
+        && typeof booking?.workflowStatus === 'string'
+        && !terminalBookingStatuses.has(booking.workflowStatus)
+      )))
+    ))) {
+      fail('The public Staging catalog still contains an unprotected technical listing.');
+    }
+  } catch (error) {
+    await rollback(fetchImpl, mutations);
+    throw error;
+  }
+
+  return Object.freeze({
+    status: 'orphaned-staging-technical-listings-retired',
+    privateVaultsChecked: validVaults,
+    syntheticOwnersChecked: sessions.length,
+    skippedHistoricalOwners,
+    pausedTechnicalListings: paused,
+    activeTechnicalListingsProtectedByBooking: protectedByBooking,
+    productionChanged: false,
+    listingDeleted: false,
+    paymentEndpointCalled: false,
+    containsSecrets: false,
+    containsEmailAddresses: false,
+    containsListingIdentifiers: false,
   });
+}
+
+async function main() {
+  const mode = process.env.SIT_STAGING_FEED_MODE?.trim() || 'store-curated';
+  const result = mode === 'technical-only'
+    ? await retireOrphanedStagingTechnicalListings({
+      vaultRoot: process.env.SIT_STAGING_ACCOUNT_VAULT_ROOT,
+    })
+    : mode === 'store-curated'
+      ? await cleanStagingStoreFeed({
+        vaultFile: process.env.SIT_STAGING_ACCOUNT_VAULT,
+        vaultRoot: process.env.SIT_STAGING_ACCOUNT_VAULT_ROOT,
+      })
+      : fail('SIT_STAGING_FEED_MODE must be store-curated or technical-only.');
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 

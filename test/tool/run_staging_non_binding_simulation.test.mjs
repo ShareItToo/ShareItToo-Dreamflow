@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import {
+  retireStagingNonBindingSimulation,
   runStagingNonBindingSimulation,
 } from '../../tool/run_staging_non_binding_simulation.mjs';
 
@@ -135,5 +136,118 @@ test('requires a private vault outside the repository', async () => {
       fetchImpl: async () => response(500, {}),
     }),
     /outside the repository/u,
+  );
+});
+
+test('retires the exact accepted non-binding simulation without payment or deletion', async () => {
+  const vaultFile = testVault();
+  const listingId = 'listing-fixture';
+  const bookingId = 'booking-fixture';
+  const vault = JSON.parse(readFileSync(vaultFile, 'utf8'));
+  vault.status = 'non-binding-simulation-active';
+  vault.nonBindingSimulation = {
+    schemaVersion: 1,
+    status: 'accepted-chat-ready',
+    listingId,
+    bookingId,
+    threadId: 'thread-fixture',
+    paymentEndpointCalled: false,
+    stripeLivemode: false,
+  };
+  writeFileSync(vaultFile, `${JSON.stringify(vault)}\n`, { mode: 0o600 });
+  const calls = [];
+  let cancelled = false;
+  let paused = false;
+  const booking = (workflowStatus) => ({
+    id: bookingId,
+    itemId: listingId,
+    workflowStatus,
+    simulationOnly: true,
+    platformContract: null,
+    bindingExpiresAt: null,
+    contractCreated: false,
+    paymentCreated: false,
+    reservationCreated: false,
+    monetaryEffectMinor: 0,
+  });
+  const fetchImpl = async (url, options = {}) => {
+    const parsed = new URL(url);
+    const path = parsed.pathname.replace('/api/v1', '') + parsed.search;
+    calls.push({ path, method: options.method ?? 'GET' });
+    if (path === '/auth/login') return response(200, { accessToken: 'x'.repeat(24) });
+    if (path === '/rental-requests') {
+      return response(200, { requests: [booking(cancelled ? 'cancelled' : 'accepted')] });
+    }
+    if (path === `/bookings/${bookingId}/transitions`) {
+      cancelled = true;
+      return response(200, { booking: booking('cancelled') });
+    }
+    if (path === '/listings/mine') {
+      return response(200, { listings: [{
+        id: listingId,
+        title: 'SIT Rollenprüfung 20260902t150639z-6c5984c2',
+        status: paused ? 'paused' : 'active',
+        isActive: !paused,
+      }] });
+    }
+    if (path === `/listings/${listingId}/status`) {
+      paused = true;
+      return response(200, { listing: { status: 'paused', isActive: false } });
+    }
+    if (path === '/listings?limit=100&offset=0') {
+      return response(200, { listings: [] });
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  };
+
+  const result = await retireStagingNonBindingSimulation({
+    vaultFile,
+    fetchImpl,
+    now: new Date('2026-09-08T04:00:00.000Z'),
+  });
+  assert.equal(result.status, 'staging-non-binding-simulation-retired');
+  assert.equal(result.bookingCancelled, true);
+  assert.equal(result.listingPaused, true);
+  assert.equal(result.publicCatalogEntryRemoved, true);
+  assert.equal(result.monetaryEffectMinor, 0);
+  assert.equal(calls.some(({ path }) => /payment|delete/iu.test(path)), false);
+  const stored = JSON.parse(readFileSync(vaultFile, 'utf8'));
+  assert.equal(stored.status, 'non-binding-simulation-retired');
+  assert.equal(stored.nonBindingSimulation.workflowStatus, 'cancelled');
+  assert.equal(stored.nonBindingSimulation.listingStatus, 'paused');
+});
+
+test('retirement fails closed when the server booking is not an exact simulation', async () => {
+  const vaultFile = testVault();
+  const vault = JSON.parse(readFileSync(vaultFile, 'utf8'));
+  vault.status = 'non-binding-simulation-active';
+  vault.nonBindingSimulation = {
+    schemaVersion: 1,
+    status: 'accepted-chat-ready',
+    listingId: 'listing-fixture',
+    bookingId: 'booking-fixture',
+    paymentEndpointCalled: false,
+    stripeLivemode: false,
+  };
+  writeFileSync(vaultFile, `${JSON.stringify(vault)}\n`, { mode: 0o600 });
+
+  await assert.rejects(
+    retireStagingNonBindingSimulation({
+      vaultFile,
+      fetchImpl: async (url) => {
+        const path = new URL(url).pathname.replace('/api/v1', '');
+        if (path === '/auth/login') return response(200, { accessToken: 'x'.repeat(24) });
+        if (path === '/rental-requests') {
+          return response(200, { requests: [{
+            id: 'booking-fixture',
+            itemId: 'listing-fixture',
+            workflowStatus: 'accepted',
+            simulationOnly: false,
+          }] });
+        }
+        throw new Error(`Unexpected request: ${path}`);
+      },
+    }),
+    /not safely represented as accepted/u,
   );
 });

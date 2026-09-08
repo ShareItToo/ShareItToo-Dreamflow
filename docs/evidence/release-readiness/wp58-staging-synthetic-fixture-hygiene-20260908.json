@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp58-staging-synthetic-fixture-hygiene",
+  "status": "complete-public-feed-clean-hidden-legacy-fixtures-held",
+  "observedOn": "2026-09-08",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationBaseHead": "b4e9e1431bd39b847c05faafe1240c199f92e0ac"
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026090711",
+    "sourceHead": "c819c5f4445d0b998b2ee319e64f8c95cfb01eda",
+    "delivery": "direct-apk",
+    "environment": "staging"
+  },
+  "implementation": {
+    "simulationRetirementPath": "tool/run_staging_non_binding_simulation.mjs",
+    "technicalFeedCleanupPath": "tool/clean_staging_store_feed.mjs",
+    "exactSimulationRequired": true,
+    "activeBookingProtectionRequired": true,
+    "rollbackOnFeedFailure": true,
+    "listingDeletionAllowed": false,
+    "paymentEndpointAllowed": false
+  },
+  "stagingResult": {
+    "nonBindingSimulationCancelled": true,
+    "simulationListingPaused": true,
+    "simulationPublicEntryRemoved": true,
+    "contractCreated": false,
+    "reservationCreated": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "monetaryEffectMinor": 0,
+    "additionalPublicOrphansPaused": 4,
+    "publicActiveListingCount": 0,
+    "publicTechnicalListingCount": 0,
+    "hiddenLegacyTechnicalListingCount": 3,
+    "hiddenLegacyListingsWithActiveBookingCount": 0,
+    "foreignKeyConstraintCount": 354,
+    "foreignKeyIntegrity": "passed",
+    "readinessHttp": 503,
+    "readinessCause": "existing-noncritical-overdue-support-update-only"
+  },
+  "heldBoundary": {
+    "hiddenLegacyListingsMutated": false,
+    "reason": "no-current-authorized-owner-session",
+    "directDatabaseCleanupAllowed": false,
+    "requiredNextPath": "dedicated-exact-synthetic-owner-or-audited-operator-cleanup"
+  },
+  "qa": {
+    "focusedTestsPassed": 14,
+    "syntaxChecks": "passed",
+    "diffCheck": "passed",
+    "fullLocalRegression": "passed",
+    "githubRegression": "pending",
+    "githubCodeql": "pending"
+  },
+  "ratchetClosure": {
+    "cause": "staging-simulation-retirement-source-change",
+    "privacySemanticsChanged": false,
+    "retentionSemanticsChanged": false,
+    "providerDecisionChanged": false,
+    "providerGateChanged": false,
+    "privacySourceBindingRefreshed": true,
+    "dependentSourceInventoriesRefreshed": true,
+    "validatorConditionsWeakened": false,
+    "verification": "focused-and-complete-candidate-rollover-regression-passed"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "firebaseConsoleChanged": false,
+    "providerConfigurationChanged": false,
+    "realMoneyUsed": false,
+    "listingDeleted": false,
+    "accountDeleted": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsEmailAddress": false,
+    "containsListingIdentifier": false,
+    "containsRawDeviceIdentifier": false,
+    "containsPrivateFilesystemPath": false
+  }
+}

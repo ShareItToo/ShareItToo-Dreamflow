@@ -6518,3 +6518,27 @@ candidate `1.0.0+2026090711` at artifact source
 and hashes are unchanged. The correction replaces the stale `2026090204`
 pointer only; the current candidate is not uploaded to Play and no Store state
 or device changed.
+
+## WP58 Staging synthetic fixture hygiene (2026-09-08)
+
+WP58 adds the missing symmetric retirement for a non-binding two-role Staging
+simulation and a strict orphan-only technical-feed cleanup. The retained
+simulation was server-confirmed as non-contractual, non-reserving,
+payment-free and zero-minor before cancellation; its listing and four further
+public orphan fixtures were paused, never deleted.
+
+The public catalog now contains zero active or technical listings and all 354
+Staging foreign-key constraints pass. Three older technical rows remain
+active but non-public with zero active bookings. They are held because no
+current authorized owner session exists; direct database cleanup is not an
+acceptable substitute. Readiness remains degraded only by the pre-existing
+noncritical Support deadline. Candidate, Production, Store, Firebase,
+providers, payment, accounts, OnePlus and PR #7 are unchanged.
+
+Fourteen focused checks and the complete local candidate-rollover regression
+pass: 2,461 repository tool tests, zero analyzer issues, 909 Flutter tests plus
+33 declared skips, Web/Wasm, loopback smoke and Android build/surface checks.
+The privacy and dependent Evidence ratchets were refreshed only because the
+simulation retirement source changed; privacy semantics, retention,
+provider decisions and gates did not change. Exact-head GitHub Regression and
+CodeQL remain the final WP58 closure step.

@@ -20,6 +20,7 @@ const readyVaultStates = new Set([
   'synthetic-booking-completed',
   'synthetic-booking-terminal',
   'non-binding-simulation-active',
+  'non-binding-simulation-retired',
 ]);
 
 function fail(message) {
@@ -352,22 +353,149 @@ export async function runStagingNonBindingSimulation({
   });
 }
 
+export async function retireStagingNonBindingSimulation({
+  vaultFile,
+  fetchImpl = globalThis.fetch,
+  now = new Date(),
+} = {}) {
+  if (typeof fetchImpl !== 'function') fail('The simulation dependencies are invalid.');
+  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
+    fail('The simulation retirement timestamp is invalid.');
+  }
+  const { path: vaultPath, vault, accounts } = readVault(vaultFile);
+  const fixture = vault.nonBindingSimulation;
+  if (!fixture
+      || !['accepted-chat-ready', 'retired'].includes(fixture.status)
+      || typeof fixture.listingId !== 'string'
+      || typeof fixture.bookingId !== 'string'
+      || fixture.paymentEndpointCalled !== false
+      || fixture.stripeLivemode !== false) {
+    fail('The non-binding simulation retirement target is missing or unsafe.');
+  }
+
+  const [ownerToken, renterToken] = await Promise.all([
+    login(fetchImpl, accounts.get('owner')),
+    login(fetchImpl, accounts.get('renter')),
+  ]);
+  const { value: renterRequests } = await request(fetchImpl, '/rental-requests', {
+    token: renterToken,
+  });
+  const booking = Array.isArray(renterRequests?.requests)
+    ? renterRequests.requests.find((entry) => entry?.id === fixture.bookingId)
+    : null;
+  if (!booking) fail('The non-binding simulation booking is not server-visible.');
+  if (booking.workflowStatus === 'accepted') {
+    validateSimulationBooking(booking, 'accepted');
+    const { value: cancelled } = await request(
+      fetchImpl,
+      `/bookings/${encodeURIComponent(fixture.bookingId)}/transitions`,
+      {
+        method: 'POST',
+        token: renterToken,
+        headers: { 'Idempotency-Key': `${fixture.bookingId}-retire` },
+        body: { status: 'cancelled' },
+      },
+    );
+    validateSimulationBooking(cancelled?.booking, 'cancelled');
+  } else {
+    validateSimulationBooking(booking, 'cancelled');
+  }
+
+  const { value: mine } = await request(fetchImpl, '/listings/mine', { token: ownerToken });
+  const listing = Array.isArray(mine?.listings)
+    ? mine.listings.find((entry) => entry?.id === fixture.listingId)
+    : null;
+  if (!listing
+      || listing.title !== `SIT Rollenprüfung ${vault.runId}`) {
+    fail('The non-binding simulation listing identity is not exact.');
+  }
+  if (listing.status === 'active' || listing.isActive !== false) {
+    const { value: paused } = await request(
+      fetchImpl,
+      `/listings/${encodeURIComponent(fixture.listingId)}/status`,
+      {
+        method: 'PATCH',
+        token: ownerToken,
+        body: { status: 'paused' },
+      },
+    );
+    if (paused?.listing?.status !== 'paused' || paused.listing.isActive !== false) {
+      fail('The non-binding simulation listing was not paused safely.');
+    }
+  } else if (!['paused', 'ended'].includes(listing.status)) {
+    fail('The non-binding simulation listing has an unsafe terminal state.');
+  }
+
+  const [{ value: verifiedRequests }, { value: verifiedMine }, { value: publicCatalog }] =
+    await Promise.all([
+      request(fetchImpl, '/rental-requests', { token: renterToken }),
+      request(fetchImpl, '/listings/mine', { token: ownerToken }),
+      request(fetchImpl, '/listings?limit=100&offset=0'),
+    ]);
+  const verifiedBooking = Array.isArray(verifiedRequests?.requests)
+    ? verifiedRequests.requests.find((entry) => entry?.id === fixture.bookingId)
+    : null;
+  validateSimulationBooking(verifiedBooking, 'cancelled');
+  const verifiedListing = Array.isArray(verifiedMine?.listings)
+    ? verifiedMine.listings.find((entry) => entry?.id === fixture.listingId)
+    : null;
+  if (!verifiedListing
+      || !['paused', 'ended'].includes(verifiedListing.status)
+      || verifiedListing.isActive !== false) {
+    fail('The non-binding simulation listing retirement is not server-confirmed.');
+  }
+  if ((publicCatalog?.listings ?? []).some((entry) => entry?.id === fixture.listingId)) {
+    fail('The retired non-binding simulation remains visible in the public catalog.');
+  }
+
+  fixture.status = 'retired';
+  fixture.workflowStatus = 'cancelled';
+  fixture.listingStatus = verifiedListing.status;
+  fixture.retiredAt = now.toISOString();
+  vault.status = 'non-binding-simulation-retired';
+  saveVault(vaultPath, vault);
+  return Object.freeze({
+    status: 'staging-non-binding-simulation-retired',
+    bookingCancelled: true,
+    listingPaused: verifiedListing.status === 'paused',
+    listingEnded: verifiedListing.status === 'ended',
+    publicCatalogEntryRemoved: true,
+    contractCreated: false,
+    reservationCreated: false,
+    paymentEndpointCalled: false,
+    stripeLivemode: false,
+    monetaryEffectMinor: 0,
+    containsSecrets: false,
+    containsEmailAddresses: false,
+    containsTokens: false,
+    containsFixtureIdentifiers: false,
+  });
+}
+
 function parseArguments(values) {
   let vaultFile = null;
+  let phase = 'run';
   for (let index = 0; index < values.length; index += 1) {
     if (values[index] === '--vault-file') {
       vaultFile = values[index + 1] ?? fail('--vault-file requires a path.');
+      index += 1;
+    } else if (values[index] === '--phase') {
+      phase = values[index + 1] ?? fail('--phase requires a value.');
       index += 1;
     } else {
       fail(`Unknown argument: ${values[index]}`);
     }
   }
   if (!vaultFile) fail('--vault-file is required.');
-  return { vaultFile };
+  if (!['run', 'retire'].includes(phase)) fail('--phase must be run or retire.');
+  return { vaultFile, phase };
 }
 
 async function main() {
-  const result = await runStagingNonBindingSimulation(parseArguments(process.argv.slice(2)));
+  const { phase, ...options } = parseArguments(process.argv.slice(2));
+  const result = phase === 'retire'
+    ? await retireStagingNonBindingSimulation(options)
+    : await runStagingNonBindingSimulation(options);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 

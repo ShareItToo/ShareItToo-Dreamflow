@@ -4,7 +4,10 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { cleanStagingStoreFeed } from '../../tool/clean_staging_store_feed.mjs';
+import {
+  cleanStagingStoreFeed,
+  retireOrphanedStagingTechnicalListings,
+} from '../../tool/clean_staging_store_feed.mjs';
 import { createTestTempTracker } from './test_temp_fixtures.mjs';
 
 const tempFixtures = createTestTempTracker();
@@ -200,4 +203,62 @@ test('fails closed when an accepted protected listing is inaccessible', async ()
   await assert.rejects(cleanStagingStoreFeed({
     vaultFile: data.vaultFile, vaultRoot: data.root, fetchImpl,
   }), /no accessible owner listing/);
+});
+
+test('pauses only strict orphaned technical listings and preserves active bookings', async () => {
+  const data = fixture();
+  const state = new Map([
+    ['one@example.invalid', [
+      { id: 'orphan', title: 'SIT Rollenprüfung orphan', tags: ['sit', 'role-fixture'], status: 'active', isActive: true },
+      { id: 'booked', title: 'SIT Rollenprüfung booked', tags: ['sit', 'role-fixture'], status: 'active', isActive: true },
+      { id: 'similar', title: 'SIT Rollenprüfung customer', tags: ['customer'], status: 'active', isActive: true },
+    ]],
+    ['two@example.invalid', []],
+  ]);
+  const tokens = new Map();
+  const fetchImpl = async (url, options = {}) => {
+    const parsed = new URL(url);
+    const path = parsed.pathname.replace('/api/v1', '');
+    if (path === '/auth/login') {
+      const email = JSON.parse(options.body).email;
+      if (email === 'stale@example.invalid') return response(401, {});
+      const token = `token-${email}`;
+      tokens.set(token, email);
+      return response(200, { accessToken: token });
+    }
+    const token = options.headers?.Authorization?.replace('Bearer ', '');
+    const email = tokens.get(token);
+    if (path === '/listings/mine') return response(200, { listings: state.get(email) });
+    if (path === '/rental-requests') {
+      return response(200, { requests: email === 'one@example.invalid'
+        ? [{ id: 'request', itemId: 'booked', workflowStatus: 'accepted' }]
+        : [] });
+    }
+    if (path === '/listings' && (options.method ?? 'GET') === 'GET') {
+      return response(200, {
+        listings: [...state.values()].flat().filter((entry) => entry.status === 'active'),
+        page: { hasMore: false },
+      });
+    }
+    const statusMatch = /^\/listings\/([^/]+)\/status$/u.exec(path);
+    if (statusMatch && options.method === 'PATCH') {
+      const wanted = JSON.parse(options.body).status;
+      state.set(email, state.get(email).map((entry) => entry.id === statusMatch[1]
+        ? { ...entry, status: wanted, isActive: wanted === 'active' }
+        : entry));
+      return response(200, { listing: { status: wanted, isActive: wanted === 'active' } });
+    }
+    throw new Error(`Unexpected ${(options.method ?? 'GET')} ${path}`);
+  };
+
+  const result = await retireOrphanedStagingTechnicalListings({
+    vaultRoot: data.root,
+    fetchImpl,
+  });
+  assert.equal(result.status, 'orphaned-staging-technical-listings-retired');
+  assert.equal(result.pausedTechnicalListings, 1);
+  assert.equal(result.activeTechnicalListingsProtectedByBooking, 1);
+  assert.equal(state.get('one@example.invalid').find(({ id }) => id === 'orphan').status, 'paused');
+  assert.equal(state.get('one@example.invalid').find(({ id }) => id === 'booked').status, 'active');
+  assert.equal(state.get('one@example.invalid').find(({ id }) => id === 'similar').status, 'active');
 });

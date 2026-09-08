@@ -6604,3 +6604,22 @@ The fail-closed Android rollover binding was also corrected from stale build
 `2026090204` to the already verified, locally archived WP54 candidate
 `1.0.0+2026090711`. This is metadata reconciliation only: no build, upload,
 activation, tester-list or device change occurred.
+
+## Active package: WP58 Staging synthetic fixture hygiene
+
+The missing non-binding simulation retirement is implemented and applied.
+The exact accepted simulation is cancelled through its participant API, its
+listing is paused and the private vault records the independently verified
+terminal truth. A separate strict-title-plus-tags cleanup pauses only orphaned
+technical listings and protects every non-terminal booking.
+
+Public Staging is now empty instead of exposing old technical copy; no listing
+was deleted and no payment, contract, reservation or monetary effect exists.
+Three non-public Legacy rows without active bookings remain held behind an
+authentic owner/operator cleanup path. Fourteen focused checks and the complete
+candidate-rollover regression pass locally, including repository tests,
+analyzer, Flutter, Web/Wasm, loopback and Android. The resulting privacy and
+dependent source-hash ratchets were refreshed mechanically without changing
+privacy semantics, retention, provider decisions or gates. Exact-head GitHub
+Regression and CodeQL are the remaining WP58 closure steps. Pixel WP57 resumes
+when the physical phone is unlocked.
