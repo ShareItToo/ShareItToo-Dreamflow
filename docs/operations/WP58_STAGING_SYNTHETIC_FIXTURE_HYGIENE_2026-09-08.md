@@ -1,6 +1,6 @@
 # WP58 — Staging synthetic fixture hygiene
 
-Status: **IMPLEMENTED, APPLIED AND LOCALLY VERIFIED; GITHUB CLOSURE PENDING**.
+Status: **COMPLETE**.
 
 ## Why this package was selected
 
@@ -56,3 +56,8 @@ intended dependent Evidence and validator ratchets. Those hashes were
 mechanically propagated through the existing source inventories. The
 retirement path adds no personal-data category, retention behavior, provider
 decision or gate change, and no validator condition was weakened.
+
+Exact implementation HEAD `11c2bc91eb9f6e9b3fae14423f710b8868c42352`
+passes GitHub Regression `34185296223`, including the independent clean
+checkout, and CodeQL `34185296219`. Open code-scanning alerts are zero. PR #7
+remains Draft, open, mergeable and unmerged.

@@ -6605,7 +6605,7 @@ The fail-closed Android rollover binding was also corrected from stale build
 `1.0.0+2026090711`. This is metadata reconciliation only: no build, upload,
 activation, tester-list or device change occurred.
 
-## Active package: WP58 Staging synthetic fixture hygiene
+## Completed package: WP58 Staging synthetic fixture hygiene
 
 The missing non-binding simulation retirement is implemented and applied.
 The exact accepted simulation is cancelled through its participant API, its
@@ -6621,5 +6621,7 @@ candidate-rollover regression pass locally, including repository tests,
 analyzer, Flutter, Web/Wasm, loopback and Android. The resulting privacy and
 dependent source-hash ratchets were refreshed mechanically without changing
 privacy semantics, retention, provider decisions or gates. Exact-head GitHub
-Regression and CodeQL are the remaining WP58 closure steps. Pixel WP57 resumes
-when the physical phone is unlocked.
+Regression `34185296223`, including clean checkout, and CodeQL `34185296219`
+pass on implementation HEAD `11c2bc91eb9f6e9b3fae14423f710b8868c42352`;
+open code-scanning alerts are zero. PR #7 remains Draft and unmerged. Pixel
+WP57 resumes when the physical phone is unlocked.

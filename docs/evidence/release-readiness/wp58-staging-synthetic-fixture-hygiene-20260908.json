@@ -5,7 +5,8 @@
   "observedOn": "2026-09-08",
   "repository": {
     "branch": "codex/master-workflow-20260808",
-    "implementationBaseHead": "b4e9e1431bd39b847c05faafe1240c199f92e0ac"
+    "implementationBaseHead": "b4e9e1431bd39b847c05faafe1240c199f92e0ac",
+    "implementationHead": "11c2bc91eb9f6e9b3fae14423f710b8868c42352"
   },
   "candidate": {
     "applicationId": "com.shareittoo.app",
@@ -54,8 +55,20 @@
     "syntaxChecks": "passed",
     "diffCheck": "passed",
     "fullLocalRegression": "passed",
-    "githubRegression": "pending",
-    "githubCodeql": "pending"
+    "githubRegression": "passed",
+    "githubCodeql": "passed"
+  },
+  "githubVerification": {
+    "head": "11c2bc91eb9f6e9b3fae14423f710b8868c42352",
+    "regressionRunId": 34185296223,
+    "regressionConclusion": "success",
+    "cleanCheckoutConclusion": "success",
+    "codeqlRunId": 34185296219,
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0,
+    "pullRequestNumber": 7,
+    "pullRequestDraft": true,
+    "pullRequestMerged": false
   },
   "ratchetClosure": {
     "cause": "staging-simulation-retirement-source-change",

@@ -6541,4 +6541,7 @@ pass: 2,461 repository tool tests, zero analyzer issues, 909 Flutter tests plus
 The privacy and dependent Evidence ratchets were refreshed only because the
 simulation retirement source changed; privacy semantics, retention,
 provider decisions and gates did not change. Exact-head GitHub Regression and
-CodeQL remain the final WP58 closure step.
+CodeQL are also green on implementation HEAD
+`11c2bc91eb9f6e9b3fae14423f710b8868c42352`: Regression `34185296223`,
+including clean checkout, and CodeQL `34185296219`. Open code-scanning alerts
+are zero; PR #7 remains Draft, open, mergeable and unmerged.
