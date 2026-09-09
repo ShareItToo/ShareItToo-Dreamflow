@@ -1,4 +1,18 @@
-# Current Work Package: WP67 Staging, Pixel and cross-device runway
+# Current Work Package: WP68 Staging Support Lifecycle
+
+WP68 is **STAGING-SIMULATION COMPLETE; FINAL GITHUB REGRESSION PENDING**.
+The corrected source is exact commit
+`f34571371c55d0cf88e9b33f180f69eebc635e7e`. Three new temporary Staging-only
+roles proved simulation support intake, separate-admin yellow-message review,
+in-app publication and recipient readback. All temporary sessions, refresh
+tokens and elevations were revoked, roles removed, accounts closed and the
+local credential vault deleted. No real identity, external delivery, existing
+Support case, payment, provider, Store or production state was changed. The
+first compatibility attempt stopped before any database operation; the
+corrected run is recorded in
+`docs/operations/WP68_STAGING_SUPPORT_LIFECYCLE_2026-09-09.md`.
+
+# Previous Work Package: WP67 Staging, Pixel and cross-device runway
 
 WP67 is **COMPLETE ON STAGING AND PIXEL; ONEPLUS USB AUTHORIZATION PENDING**.
 Staging runs exact HEAD `78c663248aec089b08d19fd0fb40a9a63f19408b` and the
