@@ -18,6 +18,7 @@ test('accepts technical rehearsals while keeping missing human evidence on hold'
     state: 'hold-external-assignments-and-human-absence-tests',
     requiredRoles: 6,
     assignedRoles: 0,
+    soleFounderPrimaryRoleMappings: 6,
     technicalRehearsalsPassed: 4,
     humanAbsenceTestsPassed: 0,
     operationsReady: false,

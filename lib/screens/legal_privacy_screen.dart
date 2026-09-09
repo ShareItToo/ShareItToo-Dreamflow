@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lendify/config/draft_operator_config.dart';
 import 'package:lendify/screens/legal_detail_scaffold.dart';
 
 class LegalPrivacyScreen extends StatelessWidget {
@@ -11,6 +12,20 @@ class LegalPrivacyScreen extends StatelessWidget {
       intro:
           'Wir verarbeiten personenbezogene Daten nur, soweit dies für die Bereitstellung und Sicherheit der Plattform erforderlich ist. Diese Übersicht erklärt dir, welche Daten typischerweise anfallen, warum wir sie benötigen und welche Rechte du nach DSGVO hast.',
       sections: [
+        const LegalSectionCard(
+          icon: Icons.person_outline,
+          title: 'Verantwortlicher im gesperrten Entwurf',
+          badge: 'Nicht öffentlich',
+          children: [
+            LegalParagraph(DraftOperatorConfig.readinessText),
+            SizedBox(height: 10),
+            LegalParagraph(
+              'Die Angaben gelten nur für die interne Entwurfsvorbereitung. '
+              'Rechtsgrundlagen, Empfänger, Aufbewahrung, DPA/Transfers und '
+              'DSA-Pflichten bleiben bis zur unabhängigen Prüfung offen.',
+            ),
+          ],
+        ),
         LegalSectionCard(
           icon: Icons.inventory_2_outlined,
           title: 'Welche Daten Nutzer angeben',

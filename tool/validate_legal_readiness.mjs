@@ -46,6 +46,14 @@ const requiredApprovalKeys = [
   'cancellationRefundNoDepositConsistency',
 ];
 
+const operatorReadinessDraftContract = Object.freeze({
+  status: 'confirmed-sole-proprietor-draft-only',
+  sourceFile: 'assets/legal/de/operator_readiness_draft_20260909.json',
+  businessDesignation: 'ShareItToo – Inhaber Walid Chraibi',
+  proprietorName: 'Walid Chraibi',
+  serviceAddress: 'Bernhaldenweg 47, 71579 Spiegelberg, Deutschland',
+});
+
 const v51SuccessorDecisionContract = [
   {
     manifestKey: 'platformContractAndWithdrawalTiming',
@@ -245,6 +253,48 @@ function assertProviderIdentityFailsClosed({ root, sourceTexts }) {
   }
 }
 
+function assertOperatorReadinessDraft({ root, sourceTexts, legal }) {
+  const draft = object(legal.operatorReadinessDraft, 'operatorReadinessDraft');
+  if (draft.status !== operatorReadinessDraftContract.status
+      || draft.sourceFile !== operatorReadinessDraftContract.sourceFile
+      || draft.publicCommercialOperationAllowed !== false
+      || draft.bindingContractAcceptanceAllowed !== false) {
+    fail('operatorReadinessDraft must retain the confirmed but non-activating sole-proprietor state.');
+  }
+  assertSha256(draft.currentContentSha256, 'operatorReadinessDraft.currentContentSha256');
+  const serialized = sourceText(root, sourceTexts, draft.sourceFile);
+  if (sha256(serialized) !== draft.currentContentSha256) {
+    fail('operatorReadinessDraft.currentContentSha256 is stale.');
+  }
+  const source = JSON.parse(serialized);
+  if (source?.kind !== 'sit-operator-readiness-draft'
+      || source.status !== 'confirmed-facts-draft-only'
+      || source.operator?.businessDesignation !== operatorReadinessDraftContract.businessDesignation
+      || source.operator?.legalForm !== 'sole-proprietor'
+      || source.operator?.proprietorName !== operatorReadinessDraftContract.proprietorName
+      || source.operator?.serviceAddress !== operatorReadinessDraftContract.serviceAddress
+      || source.operator?.businessRegistration !== 'required-at-actual-start-not-yet-recorded'
+      || source.operator?.taxNumber !== 'applied-for-not-issued-not-recorded'
+      || source.operationBoundary?.publicCommercialOperationAllowed !== false
+      || source.operationBoundary?.realInvitationsAllowed !== false
+      || source.operationBoundary?.realMoneyAllowed !== false
+      || source.operationBoundary?.bindingContractAcceptanceAllowed !== false
+      || source.legalReview?.professionallyReviewed !== false
+      || source.legalReview?.publicLegalApprovalClaimAllowed !== false) {
+    fail('operator readiness source must preserve confirmed sole-proprietor facts and every fail-closed boundary.');
+  }
+  for (const path of [
+    'lib/config/draft_operator_config.dart',
+    'lib/screens/legal_terms_screen.dart',
+    'lib/screens/legal_privacy_screen.dart',
+    'lib/screens/legal_imprint_screen.dart',
+  ]) {
+    if (!sourceText(root, sourceTexts, path).includes('DraftOperatorConfig')) {
+      fail(`Current legal surface is missing the operator readiness draft: ${path}`);
+    }
+  }
+}
+
 function assertInterimPilotContract({ root, sourceTexts, legal }) {
   const policy = object(legal.interimPilotRules, 'interimPilotRules');
   const expectedPolicyKeys = [
@@ -400,6 +450,7 @@ export function validateLegalReadiness({
   }
   assertExplicitConsentContract({ root, sourceTexts, consent });
   assertProviderIdentityFailsClosed({ root, sourceTexts });
+  assertOperatorReadinessDraft({ root, sourceTexts, legal });
   assertInterimPilotContract({ root, sourceTexts, legal });
 
   const documents = object(legal.documents, 'documents');

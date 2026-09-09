@@ -21,11 +21,11 @@
       },
       {
         "path": "backend/src/operational_readiness_gate.js",
-        "sha256": "fd61d8e6afdc61c46d45251f1741e183cf95c9428b2e6d7b228a62a6354c76ea"
+        "sha256": "ab7036fb3d76b8114a1dc2d65972fe8240f2390615d8c6c8fe2f3969a60e9ecb"
       },
       {
         "path": "backend/test/operational_readiness_gate.test.js",
-        "sha256": "d21f97aa7c4406750205f18b0921a1d850569431d294b181a10302e38c320d10"
+        "sha256": "42db9efbb55a8841657e374f2ed77529c518bd04e4a665c95b5f7c585623de6e"
       },
       {
         "path": "docs/operations/P0B_OPS_ASSIGNMENT_AND_ABSENCE_RUNBOOK.md",
@@ -55,75 +55,109 @@
     "repositoryStoresEmails": false,
     "repositoryStoresCredentials": false,
     "repositoryStoresOpaqueEvidenceRefsOnly": true,
+    "soleFounderPrimaryPrincipalRef": "principal-ref:sole-founder-primary",
+    "soleFounderPrimaryRolesConfirmed": true,
     "authoritativeSystem": null,
     "companySystemOwnershipVerified": false
   },
+  "delegationTargets": [
+    {
+      "targetId": "technical-admin-backup",
+      "status": "open",
+      "principalRef": null,
+      "coveredRoleIds": [
+        "software_automation",
+        "technical_owner_on_call",
+        "finance_compliance"
+      ],
+      "differentPersonFromSoleFounderRequired": true,
+      "ownEnterpriseAccountRequired": true,
+      "mfaRequired": true,
+      "leastPrivilegeRequired": true,
+      "testedHandoverRequired": true
+    },
+    {
+      "targetId": "operations-trust-safety-backup",
+      "status": "open",
+      "principalRef": null,
+      "coveredRoleIds": [
+        "operations_general_manager",
+        "trust_safety_support",
+        "country_lead_launch_partner"
+      ],
+      "differentPersonFromSoleFounderRequired": true,
+      "ownEnterpriseAccountRequired": true,
+      "mfaRequired": true,
+      "leastPrivilegeRequired": true,
+      "testedHandoverRequired": true
+    }
+  ],
   "roleAssignments": [
     {
       "roleId": "software_automation",
-      "primaryPrincipalRef": null,
+      "primaryPrincipalRef": "principal-ref:sole-founder-primary",
       "delegatePrincipalRef": null,
       "companySystemRef": null,
       "primaryRbacEvidenceRef": null,
       "delegateRbacEvidenceRef": null,
       "primaryMfaVerified": false,
       "delegateMfaVerified": false,
-      "ownerApproved": false
+      "ownerApproved": true
     },
     {
       "roleId": "operations_general_manager",
-      "primaryPrincipalRef": null,
+      "primaryPrincipalRef": "principal-ref:sole-founder-primary",
       "delegatePrincipalRef": null,
       "companySystemRef": null,
       "primaryRbacEvidenceRef": null,
       "delegateRbacEvidenceRef": null,
       "primaryMfaVerified": false,
       "delegateMfaVerified": false,
-      "ownerApproved": false
+      "ownerApproved": true
     },
     {
       "roleId": "trust_safety_support",
-      "primaryPrincipalRef": null,
+      "primaryPrincipalRef": "principal-ref:sole-founder-primary",
       "delegatePrincipalRef": null,
       "companySystemRef": null,
       "primaryRbacEvidenceRef": null,
       "delegateRbacEvidenceRef": null,
       "primaryMfaVerified": false,
       "delegateMfaVerified": false,
-      "ownerApproved": false
+      "ownerApproved": true
     },
     {
       "roleId": "technical_owner_on_call",
-      "primaryPrincipalRef": null,
+      "primaryPrincipalRef": "principal-ref:sole-founder-primary",
       "delegatePrincipalRef": null,
       "companySystemRef": null,
       "primaryRbacEvidenceRef": null,
       "delegateRbacEvidenceRef": null,
       "primaryMfaVerified": false,
       "delegateMfaVerified": false,
-      "ownerApproved": false
+      "ownerApproved": true
     },
     {
       "roleId": "finance_compliance",
-      "primaryPrincipalRef": null,
+      "primaryPrincipalRef": "principal-ref:sole-founder-primary",
       "delegatePrincipalRef": null,
       "companySystemRef": null,
       "primaryRbacEvidenceRef": null,
       "delegateRbacEvidenceRef": null,
       "primaryMfaVerified": false,
       "delegateMfaVerified": false,
-      "ownerApproved": false
+      "ownerApproved": true
     },
     {
       "roleId": "country_lead_launch_partner",
-      "primaryPrincipalRef": null,
+      "primaryPrincipalRef": "principal-ref:sole-founder-primary",
       "delegatePrincipalRef": null,
       "companySystemRef": null,
       "primaryRbacEvidenceRef": null,
       "delegateRbacEvidenceRef": null,
       "primaryMfaVerified": false,
       "delegateMfaVerified": false,
-      "ownerApproved": false
+      "ownerApproved": true
     }
   ],
   "processAbsenceTests": [
@@ -216,6 +250,7 @@
   "evaluation": {
     "requiredRoleCount": 6,
     "assignedRoleCount": 0,
+    "soleFounderPrimaryRoleMappings": 6,
     "requiredProcessCount": 4,
     "technicalRehearsalsPassed": 4,
     "humanAbsenceTestsPassed": 0,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lendify/config/consumer_dispute_config.dart';
+import 'package:lendify/config/draft_operator_config.dart';
 import 'package:lendify/config/legal_provider_config.dart';
 import 'package:lendify/screens/legal_detail_scaffold.dart';
 
@@ -13,7 +14,7 @@ class LegalImprintScreen extends StatelessWidget {
       title: 'Impressum',
       intro: approved
           ? 'Hier findest du die Anbieterkennzeichnung sowie Kontaktinformationen.'
-          : 'Diese interne Testversion ist nicht für öffentliche Verbrauchertransaktionen bestimmt. Die Anbieterkennzeichnung wird vor dem öffentlichen Start rechtlich geprüft und vollständig eingesetzt.',
+          : 'Diese interne Testversion ist nicht für öffentliche Verbrauchertransaktionen bestimmt. Die bestätigten Betreiberangaben gelten nur für den gesperrten Entwurf; die Anbieterkennzeichnung wird vor einem öffentlichen Start rechtlich geprüft und vollständig eingesetzt.',
       sections: [
         LegalSectionCard(
           icon: Icons.apartment_outlined,
@@ -23,7 +24,7 @@ class LegalImprintScreen extends StatelessWidget {
             LegalParagraph(
               approved
                   ? '${LegalProviderConfig.providerName}\n${LegalProviderConfig.providerAddress}'
-                  : 'Noch nicht zur Veröffentlichung freigegeben.',
+                  : DraftOperatorConfig.readinessText,
             ),
             if (approved) ...[
               const SizedBox(height: 12),
@@ -33,6 +34,22 @@ class LegalImprintScreen extends StatelessWidget {
             ],
           ],
         ),
+        if (!approved)
+          const LegalSectionCard(
+            icon: Icons.lock_outline,
+            title: 'Startgrenze',
+            badge: 'Interne Vorbereitung',
+            children: [
+              LegalParagraph(DraftOperatorConfig.internalOnlyText),
+              SizedBox(height: 10),
+              LegalParagraph(
+                'Register-, Steuer-, Rechtsprüfungs-, DSA-, Datenschutz- und '
+                'Vertragsfragen bleiben offen. Es wird keine öffentliche '
+                'Anbieterkennzeichnung oder kommerzielle Betriebsfreigabe '
+                'behauptet.',
+              ),
+            ],
+          ),
         LegalSectionCard(
           icon: Icons.contact_mail_outlined,
           title: 'Kontakt',

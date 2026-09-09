@@ -83,7 +83,11 @@ function humanAbsenceTestReady(test) {
     && test.productionMutationUsed === false;
 }
 
-export function evaluateOperationalReadinessGate({ roleAssignments, processAbsenceTests }) {
+export function evaluateOperationalReadinessGate({
+  roleAssignments,
+  processAbsenceTests,
+  soleFounderPrimaryPrincipalRef = null,
+}) {
   exactIds(
     roleAssignments,
     REQUIRED_ROLE_IDS,
@@ -101,6 +105,12 @@ export function evaluateOperationalReadinessGate({ roleAssignments, processAbsen
   for (const assignment of roleAssignments) {
     if (roleAssignmentReady(assignment)) assignedRoleCount += 1;
   }
+  const soleFounderPrimaryRoleMappings = nonEmpty(soleFounderPrimaryPrincipalRef)
+    ? roleAssignments.filter((assignment) => (
+      assignment.primaryPrincipalRef === soleFounderPrimaryPrincipalRef
+        && assignment.ownerApproved === true
+    )).length
+    : 0;
 
   let technicalRehearsalsPassed = 0;
   let humanAbsenceTestsPassed = 0;
@@ -136,6 +146,7 @@ export function evaluateOperationalReadinessGate({ roleAssignments, processAbsen
       : 'hold-external-assignments-and-human-absence-tests',
     requiredRoleCount: REQUIRED_ROLE_IDS.length,
     assignedRoleCount,
+    soleFounderPrimaryRoleMappings,
     requiredProcessCount: REQUIRED_PROCESSES.length,
     technicalRehearsalsPassed,
     humanAbsenceTestsPassed,

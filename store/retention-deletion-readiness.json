@@ -765,7 +765,7 @@
     },
     {
       "path": "lib/screens/legal_privacy_screen.dart",
-      "sha256": "54d00bc3988330165f53c2c9f430460b074534308c94f41db6fe7db50d117bde"
+      "sha256": "7de576e32c1d30feaab7ecf4bf0523e136f28a299ab353751442b59513fd53e8"
     },
     {
       "path": "store/g2-data-lifecycle.json",

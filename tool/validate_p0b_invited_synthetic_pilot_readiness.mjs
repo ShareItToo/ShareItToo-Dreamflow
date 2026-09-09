@@ -16,7 +16,7 @@ const manifestPath = 'docs/evidence/p0b-next/invited-synthetic-pilot-spiegelberg
 const expectedRepoSources = Object.freeze([
   Object.freeze(['docs/evidence/p0b/pilot-go-no-go-dossier.json', '3566a46c018b7685adfe0f9df296c2060294f811deb5b61dd79ec818c25f27dd']),
   Object.freeze(['assets/legal/de/legal_review_intake_p0b_20260821.json', '2ce69106a3ea06ad6fa08a365a22716bf1342c44b107fa03cdda5a399e165696']),
-  Object.freeze(['docs/operations/p0b-ops-role-delegate-absence-gate.json', 'e872221ce222f5fc715b25f3a6104b1c76760d17b59e8603731aa6af90b5ad98']),
+  Object.freeze(['docs/operations/p0b-ops-role-delegate-absence-gate.json', 'eb5cd54c3894f74534d21d04c079c942b276aa553324cd581b0d6519ae8800ff']),
   Object.freeze(['docs/evidence/p0b-next/signed-device-evidence.json', '9c7ec43fe113177095220514a07b238d0a2ed4177aaecb623590447fecce23aa']),
   Object.freeze(['docs/evidence/p0b-next/psp-sandbox-e2e-evidence.json', '769650b9d4fb633c053ecfa7df9aaf05a324a239d59e4ca8bc729feb658c4097']),
   Object.freeze(['backend/src/config.js', '90922f999317f81e466f6d120a4655d775587552e52d2004372e36687ad73966']),

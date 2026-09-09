@@ -2,6 +2,13 @@
   "schemaVersion": 1,
   "state": "draft",
   "approvalAllowed": false,
+  "operatorReadinessDraft": {
+    "status": "confirmed-sole-proprietor-draft-only",
+    "sourceFile": "assets/legal/de/operator_readiness_draft_20260909.json",
+    "currentContentSha256": "35fd214b0cf355a2f1ee6084a89294f63495d0def49dffa8036105adb778bfcf",
+    "publicCommercialOperationAllowed": false,
+    "bindingContractAcceptanceAllowed": false
+  },
   "interimPilotRules": {
     "version": "V5.1-2026-08-16",
     "status": "active-for-internal-and-closed-testing",
@@ -25,7 +32,7 @@
     "terms": {
       "status": "draft",
       "sourceFile": "lib/screens/legal_terms_screen.dart",
-      "currentContentSha256": "637f6450739b8185e6f89495f85cbe697e5d15c5e080258c242f94d36457b6d9",
+      "currentContentSha256": "cd3b51d55ff7ecc306451d6357d5e53ecaf6eaad10b7b994a476e9e3b1cb7acd",
       "approvedContentSha256": null,
       "publicUrl": null,
       "approvalEvidenceRef": null
@@ -57,7 +64,7 @@
     "privacy": {
       "status": "draft",
       "sourceFile": "lib/screens/legal_privacy_screen.dart",
-      "currentContentSha256": "54d00bc3988330165f53c2c9f430460b074534308c94f41db6fe7db50d117bde",
+      "currentContentSha256": "7de576e32c1d30feaab7ecf4bf0523e136f28a299ab353751442b59513fd53e8",
       "approvedContentSha256": null,
       "publicUrl": null,
       "approvalEvidenceRef": null
@@ -65,7 +72,7 @@
     "imprint": {
       "status": "draft",
       "sourceFile": "lib/screens/legal_imprint_screen.dart",
-      "currentContentSha256": "8f885e2ce9597fe16841d1270bfe3382ebb40ca0077f7cd9ae4d1c83b1df1f08",
+      "currentContentSha256": "735afd6ad9200ce8f5e7e44716be572e8f890eb05826673e32843603fc0d2658",
       "approvedContentSha256": null,
       "publicUrl": null,
       "approvalEvidenceRef": null

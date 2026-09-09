@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lendify/config/draft_operator_config.dart';
 import 'package:lendify/config/private_pilot_config.dart';
 import 'package:lendify/screens/legal_detail_scaffold.dart';
 
@@ -24,6 +25,22 @@ class LegalTermsScreen extends StatelessWidget {
             ),
             LegalParagraph(
               'Das Öffnen des Checkouts erzeugt noch keine Buchungsanfrage, keinen Vertrag und keine Zahlung. Erst die dort eindeutig bezeichnete Schaltfläche sendet die verbindliche Buchungsanfrage. Das V5.1-Modell wird mit Dokumentversion und Zeitstempel protokolliert; externe Rechts-, PSP- und Livefreigaben bleiben davon getrennte Voraussetzungen.',
+            ),
+          ],
+        ),
+        LegalSectionCard(
+          icon: Icons.business_outlined,
+          title: 'Entwurfsbetreiber und Startgrenze',
+          badge: 'Nicht öffentlich',
+          children: [
+            LegalParagraph(DraftOperatorConfig.readinessText),
+            SizedBox(height: 10),
+            LegalParagraph(DraftOperatorConfig.internalOnlyText),
+            SizedBox(height: 10),
+            LegalParagraph(
+              'Diese bestätigten Entwurfsangaben ersetzen keine professionelle '
+              'Rechtsprüfung und keine Freigabe von Verbraucher-, '
+              'Marketplace-, Datenschutz- oder DSA-Pflichten.',
             ),
           ],
         ),

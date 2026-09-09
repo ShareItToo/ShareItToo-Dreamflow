@@ -48,6 +48,7 @@ test('reports technical rehearsal separately from missing people and absence evi
     state: 'hold-external-assignments-and-human-absence-tests',
     requiredRoleCount: 6,
     assignedRoleCount: 0,
+    soleFounderPrimaryRoleMappings: 0,
     requiredProcessCount: 4,
     technicalRehearsalsPassed: 4,
     humanAbsenceTestsPassed: 0,
@@ -83,8 +84,26 @@ test('accepts only complete distinct company-system assignments and 72-hour evid
   const result = evaluateOperationalReadinessGate({ roleAssignments, processAbsenceTests });
   assert.equal(result.operationsReady, true);
   assert.equal(result.assignedRoleCount, 6);
+  assert.equal(result.soleFounderPrimaryRoleMappings, 0);
   assert.equal(result.humanAbsenceTestsPassed, 4);
   assert.equal(result.busFactorEvidenced, true);
+});
+
+test('records a founder primary map without treating it as independent delegation', () => {
+  const soleFounderPrimaryPrincipalRef = 'principal-ref:sole-founder-primary';
+  const roleAssignments = openRoleAssignments().map((assignment) => ({
+    ...assignment,
+    primaryPrincipalRef: soleFounderPrimaryPrincipalRef,
+    ownerApproved: true,
+  }));
+  const result = evaluateOperationalReadinessGate({
+    roleAssignments,
+    processAbsenceTests: technicalOnlyTests(),
+    soleFounderPrimaryPrincipalRef,
+  });
+  assert.equal(result.soleFounderPrimaryRoleMappings, 6);
+  assert.equal(result.assignedRoleCount, 0);
+  assert.equal(result.operationsReady, false);
 });
 
 test('same primary and delegate principal never satisfies the role gate', () => {

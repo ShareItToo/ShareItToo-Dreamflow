@@ -14,8 +14,8 @@ const expectedRepoSources = Object.freeze([
   Object.freeze(['docs/operations/founder-independence-guardrails.json', '5eea114535745f4d62befc536ed7c1e3706c8f0bf06782d20a8184f44c48cd87']),
   Object.freeze(['docs/operations/fi1-operational-delegation.json', '19618947751ef13b61cefbf6835fb10b7a25ab77c8422f86bf10bd91944a04d1']),
   Object.freeze(['docs/evidence/p0b/pilot-go-no-go-dossier.json', '3566a46c018b7685adfe0f9df296c2060294f811deb5b61dd79ec818c25f27dd']),
-  Object.freeze(['backend/src/operational_readiness_gate.js', 'fd61d8e6afdc61c46d45251f1741e183cf95c9428b2e6d7b228a62a6354c76ea']),
-  Object.freeze(['backend/test/operational_readiness_gate.test.js', 'd21f97aa7c4406750205f18b0921a1d850569431d294b181a10302e38c320d10']),
+  Object.freeze(['backend/src/operational_readiness_gate.js', 'ab7036fb3d76b8114a1dc2d65972fe8240f2390615d8c6c8fe2f3969a60e9ecb']),
+  Object.freeze(['backend/test/operational_readiness_gate.test.js', '42db9efbb55a8841657e374f2ed77529c518bd04e4a665c95b5f7c585623de6e']),
   Object.freeze(['docs/operations/P0B_OPS_ASSIGNMENT_AND_ABSENCE_RUNBOOK.md', '8567575eca28749cc90833c83addee87e9979613a0d9015da0c895f8e193e6d4']),
 ]);
 
@@ -37,6 +37,31 @@ const expectedProbes = Object.freeze([
   'SUP-162',
   'SUP-163',
   'SUP-164',
+]);
+
+const expectedDelegationTargets = Object.freeze([
+  Object.freeze({
+    targetId: 'technical-admin-backup',
+    status: 'open',
+    principalRef: null,
+    coveredRoleIds: ['software_automation', 'technical_owner_on_call', 'finance_compliance'],
+    differentPersonFromSoleFounderRequired: true,
+    ownEnterpriseAccountRequired: true,
+    mfaRequired: true,
+    leastPrivilegeRequired: true,
+    testedHandoverRequired: true,
+  }),
+  Object.freeze({
+    targetId: 'operations-trust-safety-backup',
+    status: 'open',
+    principalRef: null,
+    coveredRoleIds: ['operations_general_manager', 'trust_safety_support', 'country_lead_launch_partner'],
+    differentPersonFromSoleFounderRequired: true,
+    ownEnterpriseAccountRequired: true,
+    mfaRequired: true,
+    leastPrivilegeRequired: true,
+    testedHandoverRequired: true,
+  }),
 ]);
 
 function fail(message) {
@@ -95,10 +120,15 @@ function assertPrivacyAndBoundaries(value) {
     repositoryStoresEmails: false,
     repositoryStoresCredentials: false,
     repositoryStoresOpaqueEvidenceRefsOnly: true,
+    soleFounderPrimaryPrincipalRef: 'principal-ref:sole-founder-primary',
+    soleFounderPrimaryRolesConfirmed: true,
     authoritativeSystem: null,
     companySystemOwnershipVerified: false,
   })) {
     fail('P0B operations assignment privacy is unsafe or overstated.');
+  }
+  if (!exact(value.delegationTargets, expectedDelegationTargets)) {
+    fail('P0B operations two-person delegate target is incomplete or overstated.');
   }
   const boundaries = value.boundaries;
   for (const field of [
@@ -134,6 +164,7 @@ function assertEvaluation(value) {
   const evaluated = evaluateOperationalReadinessGate({
     roleAssignments: value.roleAssignments,
     processAbsenceTests: value.processAbsenceTests,
+    soleFounderPrimaryPrincipalRef: value.assignmentPrivacy?.soleFounderPrimaryPrincipalRef,
   });
   const { state: _state, ...expected } = evaluated;
   if (!exact(value.evaluation, expected)) {
@@ -141,6 +172,7 @@ function assertEvaluation(value) {
   }
   if (evaluated.state !== value.state
       || evaluated.assignedRoleCount !== 0
+      || evaluated.soleFounderPrimaryRoleMappings !== 6
       || evaluated.technicalRehearsalsPassed !== 4
       || evaluated.humanAbsenceTestsPassed !== 0
       || evaluated.operationsReady !== false) {
@@ -165,6 +197,7 @@ export function validateP0BOpsReadiness({
     state: value.state,
     requiredRoles: evaluation.requiredRoleCount,
     assignedRoles: evaluation.assignedRoleCount,
+    soleFounderPrimaryRoleMappings: evaluation.soleFounderPrimaryRoleMappings,
     technicalRehearsalsPassed: evaluation.technicalRehearsalsPassed,
     humanAbsenceTestsPassed: evaluation.humanAbsenceTestsPassed,
     operationsReady: evaluation.operationsReady,

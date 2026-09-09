@@ -99,6 +99,22 @@ test('rejects a stale legal source hash', () => {
   );
 });
 
+test('rejects an operator draft that becomes public or loses its source binding', () => {
+  const legalManifest = clone(baseLegalManifest);
+  legalManifest.operatorReadinessDraft.publicCommercialOperationAllowed = true;
+  assert.throws(
+    () => validate({ legalManifest }),
+    /operatorReadinessDraft must retain/u,
+  );
+
+  legalManifest.operatorReadinessDraft.publicCommercialOperationAllowed = false;
+  legalManifest.operatorReadinessDraft.currentContentSha256 = '0'.repeat(64);
+  assert.throws(
+    () => validate({ legalManifest }),
+    /operatorReadinessDraft.currentContentSha256 is stale/u,
+  );
+});
+
 test('rejects hardcoded client consent', () => {
   const authPath = baseLegalManifest.consentContract.authServiceSource;
   const authSource = readFileSync(resolve(repositoryRoot, authPath), 'utf8')

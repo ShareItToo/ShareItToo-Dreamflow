@@ -1,5 +1,17 @@
 # ShareItToo Current State
 
+WP76 is **COMPLETE AS DRAFT-ONLY OPERATOR, LEGAL AND ROLE READINESS**. The
+current authoritative draft source confirms `ShareItToo – Inhaber Walid
+Chraibi` as sole proprietor at Bernhaldenweg 47, 71579 Spiegelberg. It binds
+the current legal screens without rewriting the preserved V5/V5.2 historical
+legal baseline. Six opaque sole-founder primary role mappings are confirmed;
+the two separate future delegate targets, their enterprise accounts, MFA,
+least privilege and tested handover remain open. Public/commercial operation,
+binding contracts, real money, real invitations, public registration, Store,
+provider and production activation all remain NO-GO. Professional legal review
+also remains open. Focused validators and full local technical regression pass.
+See `docs/operations/WP76_OPERATOR_LEGAL_AND_ROLE_READINESS_2026-09-09.md`.
+
 WP75 is **FUNCTIONALLY COMPLETE ON THE CURRENT PIXEL CANDIDATE AND STAGING**.
 The verified signed candidate is `com.shareittoo.app` `1.0.0+2026090905`,
 source `e1c182ea496f013989863155c13bfda649255a7e`; the live Staging runtime is

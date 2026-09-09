@@ -1,4 +1,18 @@
-# Current Work Package: WP75 Current Candidate Pixel and Staging Execution
+# Current Work Package: WP76 Operator, Legal and Role Readiness
+
+WP76 is **COMPLETE AS DRAFT-ONLY READINESS**. The authoritative current draft
+binds the confirmed sole proprietor `ShareItToo – Inhaber Walid Chraibi` at
+Bernhaldenweg 47, 71579 Spiegelberg to unapproved legal-screen copy, while
+preserving the V5/V5.2 historical manifests and their evidence hashes. The
+sole founder holds six opaque primary role mappings; zero independent delegates
+are assigned. Two distinct future delegate targets require own enterprise
+accounts, MFA, least privilege and tested handover; founder self-delegation is
+not allowed. Professional legal review and all public/commercial, contract,
+money, registration, Store, provider and production gates remain closed.
+Focused validators and the full local technical regression pass. See
+`docs/operations/WP76_OPERATOR_LEGAL_AND_ROLE_READINESS_2026-09-09.md`.
+
+# Previous Work Package: WP75 Current Candidate Pixel and Staging Execution
 
 WP75 is **FUNCTIONALLY COMPLETE ON PIXEL AND STAGING**. The exact signed
 Internal/Staging candidate `1.0.0+2026090905`, source
