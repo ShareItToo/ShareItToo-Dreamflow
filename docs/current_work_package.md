@@ -1,4 +1,21 @@
-# Current Work Package: WP78 V5.3 Operator-Aligned Legal Draft
+# Current Work Package: WP79 Current Candidate Acceptance Matrix
+
+WP79 is **CURRENT PIXEL/STAGING CORE CLOSED; EXTERNAL GATES REMAIN OPEN**.
+It binds the installed signed Internal/Staging candidate `1.0.0+2026090905`
+to source `e1c182ea496f013989863155c13bfda649255a7e`, Staging runtime
+`baf9267c8bff7533230f3234c1f543649df6e4aa`, its exact APK/AAB hashes and the
+current GitHub Regression/CodeQL baseline. The acceptance matrix records 12
+`PASS`, 11 `PARTIAL` and 9 `OPEN` requirements without promoting predecessor
+or provider proof beyond its unchanged route scope. Its strict local candidate
+profile correctly refuses to call later V5.3 legal runtime sources part of the
+installed candidate; WP80 must establish successor-candidate/Staging parity
+before any new build. The full local source-quality gate passes in explicit
+CI-metadata-only rollover mode and does not alter the physical-candidate
+boundary. Production and all provider, legal, payment, Store,
+OnePlus and public-release gates remain closed. See
+`docs/operations/WP79_CURRENT_CANDIDATE_ACCEPTANCE_MATRIX_2026-09-09.md`.
+
+# Previous Work Package: WP78 V5.3 Operator-Aligned Legal Draft
 
 WP78 is **COMPLETE AS A REPOSITORY-ONLY DRAFT**. The new hash-bound V5.3 map
 contains all nine legal subjects with sole-proprietor operator facts and no

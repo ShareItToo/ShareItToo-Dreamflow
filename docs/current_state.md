@@ -1,5 +1,21 @@
 # ShareItToo Current State
 
+## WP79 current candidate acceptance matrix
+
+The installed Internal/Staging candidate is `1.0.0+2026090905`, source
+`e1c182ea496f013989863155c13bfda649255a7e`, with Staging runtime
+`baf9267c8bff7533230f3234c1f543649df6e4aa`. WP79 binds current evidence to
+12 `PASS`, 11 `PARTIAL` and 9 `OPEN` requirements. It preserves predecessor
+evidence only outside the verified successor delta and never promotes
+provider, legal, privacy or second-device work without direct proof. The
+strict local candidate profile correctly refuses to treat later V5.3 legal
+runtime sources as part of the installed candidate; successor parity must be
+proved before any new build. The complete local source-quality gate is green
+in explicit CI-metadata-only rollover mode, without changing that physical
+candidate truth. The release remains **HOLD / NOT PRODUCTION READY**. See
+`docs/operations/WP79_CURRENT_CANDIDATE_ACCEPTANCE_MATRIX_2026-09-09.md`.
+
+
 WP78 is **COMPLETE AS A NEW NINE-PART V5.3 DRAFT ONLY**. It aligns the future
 operator facts to sole proprietor Walid Chraibi while preserving V5/V5.2 as
 historical evidence. Tax/invoice, consumer, payment/refund, privacy,
