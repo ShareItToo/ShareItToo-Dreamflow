@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 
 import Stripe from 'stripe';
 
-import { PaymentDomainError } from './payment_domain.js';
+import { PaymentDomainError, requestHash } from './payment_domain.js';
 
 function memoryId(prefix) {
   return `${prefix}_${crypto.randomBytes(12).toString('hex')}`;
@@ -242,6 +242,25 @@ export class StripeProvider {
     idempotencyKey,
   }) {
     if (this.mode === 'memory') {
+      const idempotencyFingerprint = requestHash({
+        paymentId,
+        bookingId,
+        customerId,
+        amountMinor,
+        currency,
+        itemTitle,
+        transferGroup,
+        successUrl,
+        cancelUrl,
+        expiresAt,
+      });
+      const replay = this.memory.get(`checkout-idempotency:${idempotencyKey}`);
+      if (replay) {
+        if (replay.fingerprint !== idempotencyFingerprint) {
+          throw new PaymentDomainError(409, 'provider_idempotency_payload_mismatch');
+        }
+        return replay.result;
+      }
       const id = memoryId('cs_memory');
       const paymentIntent = memoryId('pi_memory');
       const url = `${successUrl}${successUrl.includes('?') ? '&' : '?'}session_id=${encodeURIComponent(id)}&memory=1`;
@@ -255,6 +274,10 @@ export class StripeProvider {
         livemode: false,
       };
       this.memory.set(id, { ...result, bookingId, paymentId, amountMinor, currency, transferGroup });
+      this.memory.set(`checkout-idempotency:${idempotencyKey}`, {
+        fingerprint: idempotencyFingerprint,
+        result,
+      });
       return result;
     }
     return this.call((client) => client.checkout.sessions.create({

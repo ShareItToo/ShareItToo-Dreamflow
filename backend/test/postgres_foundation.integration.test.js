@@ -6250,7 +6250,29 @@ if (!databaseUrl) {
       assert.equal(b8CheckoutReplay.status, 200);
       assert.equal((await b8CheckoutReplay.json()).replayed, true);
 
+      const b8CheckoutAfterClientRestart = await fetch(
+        `${baseUrl}/v1/bookings/b8-payment-flow/payment/checkout`,
+        {
+          method: 'POST',
+          headers: {
+            ...renterAHeaders,
+            'Idempotency-Key': 'b8-checkout-payment-booking-after-restart',
+          },
+          body: '{}',
+        },
+      );
+      assert.equal(b8CheckoutAfterClientRestart.status, 200);
+      const b8RestartPayload = await b8CheckoutAfterClientRestart.json();
+      assert.equal(b8RestartPayload.replayed, true);
+      assert.equal(b8RestartPayload.checkoutUrl, b8CheckoutPayload.checkoutUrl);
+      assert.equal(b8RestartPayload.payment.id, b8CheckoutPayload.payment.id);
+
       const paymentId = b8CheckoutPayload.payment.id;
+      const providerBinding = (await setupPool.query(
+        `SELECT provider_payment_id, provider_customer_id, transfer_group
+         FROM payments WHERE id = $1`,
+        [paymentId],
+      )).rows[0];
       const amountMismatchEvent = {
         id: 'evt_memory_b8_amount_mismatch',
         object: 'event',
@@ -6258,12 +6280,14 @@ if (!databaseUrl) {
         created: 1799539200,
         livemode: false,
         data: { object: {
-          id: b8CheckoutPayload.payment.id,
+          id: providerBinding.provider_payment_id,
           object: 'payment_intent',
           status: 'succeeded',
           amount: 3299,
           amount_received: 3299,
           currency: 'eur',
+          customer: providerBinding.provider_customer_id,
+          transfer_group: providerBinding.transfer_group,
           metadata: { sit_payment_id: paymentId, sit_booking_id: 'b8-payment-flow' },
         } },
       };
@@ -6282,6 +6306,27 @@ if (!databaseUrl) {
         [amountMismatchEvent.id],
       );
       assert.deepEqual(failedProviderEvent.rows[0], { status: 'failed', processing_attempts: 2 });
+
+      const bindingMismatchEvent = {
+        ...amountMismatchEvent,
+        id: 'evt_memory_b8_binding_mismatch',
+        data: { object: {
+          ...amountMismatchEvent.data.object,
+          amount: 3300,
+          amount_received: 3300,
+          metadata: {
+            sit_payment_id: paymentId,
+            sit_booking_id: 'different-booking',
+          },
+        } },
+      };
+      await assert.rejects(
+        applyProviderEvent(
+          bindingMismatchEvent,
+          Buffer.from(JSON.stringify(bindingMismatchEvent)),
+        ),
+        (error) => error?.code === 'provider_payment_binding_mismatch',
+      );
 
       const simulateRequiresAction = await fetch(`${baseUrl}/v1/payments/${paymentId}/simulate`, {
         method: 'POST', headers: renterAHeaders,

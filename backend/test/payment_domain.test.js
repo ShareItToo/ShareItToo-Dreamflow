@@ -3,6 +3,7 @@ import test from 'node:test';
 import { StripeProvider } from '../src/stripe_provider.js';
 
 import {
+  assertProviderPaymentBinding,
   captureLedger,
   paymentAmounts,
   paymentStatusForProvider,
@@ -10,6 +11,7 @@ import {
   requestHash,
   splitRefund,
   privatePilotReleasableOwnerAmount,
+  providerOperationIdempotencyKey,
   stripeSignatureHeader,
   transferLedger,
   verifyStripeSignature,
@@ -101,6 +103,103 @@ test('provider events map to authoritative payment states', () => {
 
 test('request hashes are stable across object key order', () => {
   assert.equal(requestHash({ b: 2, a: { d: 4, c: 3 } }), requestHash({ a: { c: 3, d: 4 }, b: 2 }));
+});
+
+test('provider idempotency is durable, namespaced and does not expose local identifiers', () => {
+  const first = providerOperationIdempotencyKey('checkout', 'private-payment-id');
+  assert.equal(first, providerOperationIdempotencyKey('checkout', 'private-payment-id'));
+  assert.notEqual(first, providerOperationIdempotencyKey('refund', 'private-payment-id'));
+  assert.notEqual(first, providerOperationIdempotencyKey('checkout', 'different-payment-id'));
+  assert.equal(first.includes('private-payment-id'), false);
+  assert.match(first, /^sit_checkout_[a-f0-9]{64}$/u);
+  assert.throws(
+    () => providerOperationIdempotencyKey('Invalid namespace', 'payment'),
+    /invalid_provider_operation_identity/u,
+  );
+});
+
+test('provider payment events require exact local principal, object and mode binding', () => {
+  const payment = {
+    id: 'payment-1',
+    booking_id: 'booking-1',
+    provider_payment_id: 'pi-1',
+    provider_checkout_session_id: 'cs-1',
+    provider_customer_id: 'cus-1',
+    transfer_group: 'booking_booking-1',
+    livemode: false,
+  };
+  const event = { livemode: false };
+  const intent = {
+    id: 'pi-1',
+    object: 'payment_intent',
+    customer: 'cus-1',
+    transfer_group: 'booking_booking-1',
+    metadata: { sit_payment_id: 'payment-1', sit_booking_id: 'booking-1' },
+  };
+  assert.equal(assertProviderPaymentBinding({ payment, event, object: intent }), true);
+  assert.equal(assertProviderPaymentBinding({
+    payment: { ...payment, provider_payment_id: null },
+    event,
+    object: intent,
+  }), true);
+  assert.equal(assertProviderPaymentBinding({
+    payment,
+    event,
+    object: {
+      id: 'cs-1',
+      object: 'checkout.session',
+      customer: 'cus-1',
+      client_reference_id: 'booking-1',
+      metadata: { sit_payment_id: 'payment-1', sit_booking_id: 'booking-1' },
+    },
+  }), true);
+
+  for (const [changedPayment, changedEvent, changedObject] of [
+    [payment, event, { ...intent, id: 'pi-other' }],
+    [payment, event, { ...intent, customer: 'cus-other' }],
+    [payment, event, { ...intent, transfer_group: 'booking_other' }],
+    [payment, event, { ...intent, metadata: { ...intent.metadata, sit_payment_id: 'payment-other' } }],
+    [payment, event, { ...intent, metadata: { ...intent.metadata, sit_booking_id: 'booking-other' } }],
+    [payment, { livemode: true }, intent],
+    [payment, event, { ...intent, object: 'charge' }],
+  ]) {
+    assert.throws(
+      () => assertProviderPaymentBinding({
+        payment: changedPayment,
+        event: changedEvent,
+        object: changedObject,
+      }),
+      (error) => error.status === 409 && error.code === 'provider_payment_binding_mismatch',
+    );
+  }
+});
+
+test('memory Checkout emulates provider idempotency and rejects parameter drift', async () => {
+  const provider = new StripeProvider({ mode: 'memory' });
+  const request = {
+    paymentId: 'payment-1',
+    bookingId: 'booking-1',
+    customerId: 'customer-1',
+    amountMinor: 1190,
+    currency: 'EUR',
+    itemTitle: 'Kamera',
+    transferGroup: 'booking_booking-1',
+    successUrl: 'https://example.test/success',
+    cancelUrl: 'https://example.test/cancel',
+    expiresAt: 1799539200,
+    idempotencyKey: 'stable-provider-key',
+  };
+  const first = await provider.createPaymentCheckout(request);
+  assert.deepEqual(await provider.createPaymentCheckout(request), first);
+  await assert.rejects(
+    provider.createPaymentCheckout({ ...request, expiresAt: request.expiresAt + 60 }),
+    (error) => error.status === 409 && error.code === 'provider_idempotency_payload_mismatch',
+  );
+  const second = await provider.createPaymentCheckout({
+    ...request,
+    idempotencyKey: 'different-provider-key',
+  });
+  assert.notEqual(second.id, first.id);
 });
 
 test('Stripe transport creates recipient-only Accounts v2 onboarding', async () => {

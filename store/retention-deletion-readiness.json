@@ -761,7 +761,7 @@
     },
     {
       "path": "lib/screens/payment_checkout_screen.dart",
-      "sha256": "154ae02a27644d6e366b07014bcbeccc946bb687f6e8fdf9f1fa224dffc9a8fc"
+      "sha256": "552f08b2c2037f0513dfbbcc49f106dbb815831a657da1c8e435085cac41dda2"
     },
     {
       "path": "lib/screens/legal_privacy_screen.dart",

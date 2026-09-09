@@ -121,6 +121,10 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen>
           'Zahlungen sind für dieses Konto noch nicht freigeschaltet.',
         'payment_provider_unavailable' =>
           'Für dieses Konto ist noch kein echter Marketplace-Zahlungsdienst freigeschaltet.',
+        'payment_checkout_in_progress' =>
+          'Für diese Buchung läuft bereits ein sicherer Checkout. Es wird kein zweiter Zahlungsvorgang gestartet.',
+        'payment_checkout_reconciliation_required' =>
+          'Der Status des bisherigen Checkouts wird sicher abgeglichen. Bitte später aktualisieren; es wird kein zweiter Zahlungsvorgang gestartet.',
         'booking_already_paid' => 'Diese Buchung wurde bereits bezahlt.',
         _ => 'Die Zahlungsaktion konnte gerade nicht abgeschlossen werden.',
       };

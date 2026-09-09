@@ -70,6 +70,8 @@ test('direct checkout is server- and client-gated by the same capability', () =>
   );
   assert.match(checkout, /Zahlung noch nicht freigeschaltet/u);
   assert.match(checkout, /Test-Checkout öffnen/u);
+  assert.match(checkout, /payment_checkout_reconciliation_required/u);
+  assert.match(checkout, /es wird kein zweiter Zahlungsvorgang gestartet/u);
 });
 
 test('connected accounts use Accounts v2 recipient capability truth', () => {

@@ -31,6 +31,62 @@ export function paymentIdempotencyKey(value, prefix) {
   throw new PaymentDomainError(400, 'invalid_idempotency_key', { prefix });
 }
 
+export function providerOperationIdempotencyKey(kind, durableId) {
+  const namespace = typeof kind === 'string' ? kind.trim() : '';
+  const identifier = typeof durableId === 'string' ? durableId.trim() : '';
+  if (!/^[a-z][a-z0-9_]{2,40}$/u.test(namespace) || identifier.length < 1) {
+    throw new PaymentDomainError(500, 'invalid_provider_operation_identity');
+  }
+  const digest = crypto.createHash('sha256')
+    .update(`${namespace}\0${identifier}`)
+    .digest('hex');
+  return `sit_${namespace}_${digest}`;
+}
+
+function providerObjectId(value) {
+  if (typeof value === 'string') return value.trim();
+  return value && typeof value === 'object' && typeof value.id === 'string'
+    ? value.id.trim()
+    : '';
+}
+
+export function assertProviderPaymentBinding({ payment, event, object }) {
+  const paymentId = typeof payment?.id === 'string' ? payment.id : '';
+  const bookingId = typeof payment?.booking_id === 'string' ? payment.booking_id : '';
+  const metadata = object?.metadata;
+  const objectType = typeof object?.object === 'string' ? object.object : '';
+  const sameMode = payment?.livemode === true === (event?.livemode === true);
+  const sameMetadata = metadata?.sit_payment_id === paymentId
+    && metadata?.sit_booking_id === bookingId;
+  const knownCustomer = providerObjectId(payment?.provider_customer_id);
+  const eventCustomer = providerObjectId(object?.customer);
+  const sameCustomer = !knownCustomer || eventCustomer === knownCustomer;
+
+  let sameProviderObject = true;
+  let sameCheckoutReference = true;
+  let sameTransferGroup = true;
+  if (objectType === 'payment_intent') {
+    const knownPaymentIntent = providerObjectId(payment?.provider_payment_id);
+    sameProviderObject = !knownPaymentIntent || providerObjectId(object?.id) === knownPaymentIntent;
+    sameTransferGroup = typeof payment?.transfer_group === 'string'
+      && payment.transfer_group.length > 0
+      && object?.transfer_group === payment.transfer_group;
+  } else if (objectType === 'checkout.session') {
+    const knownCheckoutSession = providerObjectId(payment?.provider_checkout_session_id);
+    sameProviderObject = !knownCheckoutSession
+      || providerObjectId(object?.id) === knownCheckoutSession;
+    sameCheckoutReference = object?.client_reference_id === bookingId;
+  } else {
+    sameProviderObject = false;
+  }
+
+  if (!paymentId || !bookingId || !sameMode || !sameMetadata || !sameCustomer
+      || !sameProviderObject || !sameCheckoutReference || !sameTransferGroup) {
+    throw new PaymentDomainError(409, 'provider_payment_binding_mismatch');
+  }
+  return true;
+}
+
 export function normalizePaymentCurrency(value, expected = 'EUR') {
   const currency = typeof value === 'string' ? value.trim().toUpperCase() : '';
   if (!/^[A-Z]{3}$/.test(currency)) throw new PaymentDomainError(400, 'invalid_payment_currency');

@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { config } from './config.js';
 import { inTransaction, pool } from './db.js';
 import {
+  assertProviderPaymentBinding,
   captureLedger,
   PaymentDomainError,
   paymentAmounts,
@@ -10,6 +11,7 @@ import {
   paymentStatusForProvider,
   payloadHash,
   privatePilotReleasableOwnerAmount,
+  providerOperationIdempotencyKey,
   refundLedger,
   requestHash,
   splitRefund,
@@ -293,7 +295,7 @@ export async function createConnectOnboarding({ actor, raw, key: rawKey }) {
       email: actor.email,
       country,
       currency,
-      idempotencyKey: `${key}:account`,
+      idempotencyKey: providerOperationIdempotencyKey('connect_account', actor.id),
     });
     const snapshot = connectedAccountSnapshot(created);
     if (snapshot.apiVersion !== 'v2'
@@ -364,7 +366,7 @@ export async function createConnectOnboarding({ actor, raw, key: rawKey }) {
   return response;
 }
 
-async function ensureCustomer(actor, key) {
+async function ensureCustomer(actor) {
   const existing = await pool.query('SELECT * FROM stripe_customers WHERE user_id = $1', [actor.id]);
   if (existing.rowCount) return existing.rows[0];
   const name = text(actor.profile?.displayName, 120);
@@ -372,7 +374,7 @@ async function ensureCustomer(actor, key) {
     userId: actor.id,
     email: actor.email,
     name,
-    idempotencyKey: `${key}:customer`,
+    idempotencyKey: providerOperationIdempotencyKey('customer', actor.id),
   });
   const result = await pool.query(
     `INSERT INTO stripe_customers (user_id, provider_customer_id, livemode)
@@ -387,7 +389,7 @@ async function ensureCustomer(actor, key) {
 export async function createPaymentCheckout({ actor, bookingId, key: rawKey }) {
   ensurePaymentsEnabled(actor.id);
   const key = paymentIdempotencyKey(rawKey, 'payment.checkout');
-  const checkoutExpiresAt = new Date(Date.now() + 45 * 60_000);
+  const requestedCheckoutExpiresAt = new Date(Date.now() + 45 * 60_000);
   const request = { bookingId };
   const prepared = await inTransaction(async (client) => {
     const command = await beginCommand(client, {
@@ -444,7 +446,7 @@ export async function createPaymentCheckout({ actor, bookingId, key: rawKey }) {
           paymentId, bookingId, key, amounts.amountMinor, amounts.currency,
           amounts.rentalSubtotalMinor, amounts.platformFeeMinor,
           amounts.ownerPayoutMinor, amounts.securityDepositMinor,
-          `booking_${bookingId}`, key, checkoutExpiresAt, config.payments.livemode,
+          `booking_${bookingId}`, key, requestedCheckoutExpiresAt, config.payments.livemode,
         ],
       );
       payment = inserted.rows[0];
@@ -454,15 +456,33 @@ export async function createPaymentCheckout({ actor, bookingId, key: rawKey }) {
         [payment.id, JSON.stringify({ transport: config.payments.transport })],
       );
     } else {
-      const activeExpiry = payment.checkout_expires_at ? new Date(payment.checkout_expires_at).getTime() : Infinity;
-      if (payment.checkout_command_key && payment.checkout_command_key !== key && activeExpiry > Date.now()) {
-        throw new PaymentDomainError(409, 'payment_checkout_in_progress');
+      const activeExpiry = payment.checkout_expires_at
+        ? new Date(payment.checkout_expires_at).getTime()
+        : Number.NaN;
+      if (!Number.isFinite(activeExpiry) || activeExpiry <= Date.now()) {
+        throw new PaymentDomainError(409, 'payment_checkout_reconciliation_required');
       }
-      await client.query(
-        `UPDATE payments SET checkout_command_key = $2, checkout_expires_at = $3 WHERE id = $1`,
-        [payment.id, key, checkoutExpiresAt],
-      );
-      payment = { ...payment, checkout_command_key: key, checkout_expires_at: checkoutExpiresAt };
+      if (!payment.checkout_command_key) {
+        throw new PaymentDomainError(409, 'payment_checkout_reconciliation_required');
+      }
+      if (payment.checkout_command_key !== key) {
+        const priorCommandResult = await client.query(
+          `SELECT actor_id, command_type, request_hash, response_payload, completed_at
+           FROM payment_commands WHERE idempotency_key = $1 FOR UPDATE`,
+          [payment.checkout_command_key],
+        );
+        const priorCommand = priorCommandResult.rows[0];
+        if (priorCommand?.completed_at
+            && priorCommand.actor_id === actor.id
+            && priorCommand.command_type === 'payment.checkout'
+            && priorCommand.request_hash === requestHash(request)
+            && priorCommand.response_payload?.payment?.id === payment.id
+            && priorCommand.response_payload?.payment?.bookingId === bookingId
+            && typeof priorCommand.response_payload?.checkoutUrl === 'string') {
+          await completeCommand(client, key, payment.id, priorCommand.response_payload);
+          return { replay: priorCommand.response_payload };
+        }
+      }
     }
     await client.query(
       'UPDATE payment_commands SET payment_id = $2 WHERE idempotency_key = $1',
@@ -488,12 +508,20 @@ export async function createPaymentCheckout({ actor, bookingId, key: rawKey }) {
         workflowStatus: 'payment_pending',
       });
     }
-    return { booking, payment, amounts };
+    return {
+      booking,
+      payment,
+      amounts,
+      checkoutExpiresAt: new Date(payment.checkout_expires_at),
+      commandKeysToComplete: payment.checkout_command_key === key
+        ? [key]
+        : [payment.checkout_command_key, key],
+    };
   });
   if (prepared.replay) return { ...prepared.replay, replayed: true };
 
-  const customer = await ensureCustomer(actor, key);
-  const expiresAt = Math.floor(checkoutExpiresAt.getTime() / 1000);
+  const customer = await ensureCustomer(actor);
+  const expiresAt = Math.floor(prepared.checkoutExpiresAt.getTime() / 1000);
   const title = text(prepared.booking.listing_payload?.title, 240) || `ShareItToo Buchung ${bookingId}`;
   const successUrl = `${config.publicBaseUrl}/open/payment/${encodeURIComponent(bookingId)}?result=success&session_id={CHECKOUT_SESSION_ID}`;
   const cancelUrl = `${config.publicBaseUrl}/open/payment/${encodeURIComponent(bookingId)}?result=cancelled`;
@@ -508,7 +536,7 @@ export async function createPaymentCheckout({ actor, bookingId, key: rawKey }) {
     successUrl,
     cancelUrl,
     expiresAt,
-    idempotencyKey: `${key}:checkout`,
+    idempotencyKey: providerOperationIdempotencyKey('checkout', prepared.payment.id),
   });
   const response = {
     payment: shapePayment({
@@ -531,7 +559,9 @@ export async function createPaymentCheckout({ actor, bookingId, key: rawKey }) {
        WHERE id = $1`,
       [prepared.payment.id, session.id, providerId(session.payment_intent), customer.provider_customer_id, providerInstant(session.expires_at)],
     );
-    await completeCommand(client, key, prepared.payment.id, response);
+    for (const commandKey of new Set(prepared.commandKeysToComplete)) {
+      await completeCommand(client, commandKey, prepared.payment.id, response);
+    }
     await audit(client, {
       actorId: actor.id,
       actorRole: actor.role,
@@ -726,6 +756,7 @@ async function processProviderEvent(client, event) {
     );
     if (!paymentResult.rowCount) return 'ignored';
     const payment = paymentResult.rows[0];
+    assertProviderPaymentBinding({ payment, event, object });
     if (mappedStatus === 'captured') {
       await recordCapture(client, payment, event);
     } else {
@@ -961,6 +992,7 @@ export async function simulatePaymentEvent({ actor, paymentId, scenario, duplica
       latest_charge: scenario === 'succeeded' ? `ch_memory_${payment.id.replaceAll('-', '').slice(0, 20)}` : null,
       customer: payment.provider_customer_id,
       payment_method: `pm_memory_${payment.id.replaceAll('-', '').slice(0, 20)}`,
+      transfer_group: payment.transfer_group,
       metadata: { sit_payment_id: payment.id, sit_booking_id: payment.booking_id },
       ...(scenario === 'failed' ? { last_payment_error: { code: 'card_declined' } } : {}),
     } },
@@ -1067,7 +1099,10 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
       const reversal = await stripeProvider.reverseTransfer({
         transferId: prepared.payment.provider_transfer_id,
         amountMinor: reverseAmount,
-        idempotencyKey: `${key}:transfer-reversal`,
+        idempotencyKey: providerOperationIdempotencyKey(
+          'refund_transfer_reversal',
+          prepared.refund.id,
+        ),
         metadata: { sit_booking_id: prepared.payment.booking_id, sit_payment_id: paymentId },
       });
       const reversalInserted = await inTransaction(async (client) => {
@@ -1109,7 +1144,7 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
     amountMinor: Number(prepared.refund.amount_minor),
     reverseTransfer: false,
     refundPlatformFee: false,
-    idempotencyKey: `${key}:refund`,
+    idempotencyKey: providerOperationIdempotencyKey('refund', prepared.refund.id),
     metadata: { sit_booking_id: prepared.payment.booking_id, sit_payment_id: paymentId, currency: prepared.payment.currency },
   });
   const response = await inTransaction(async (client) => {
@@ -1299,7 +1334,7 @@ export async function releasePayout({ actor = null, paymentId, key: rawKey }) {
     amountMinor: prepared.amount,
     currency: prepared.payment.currency,
     transferGroup: prepared.payment.transfer_group,
-    idempotencyKey: `${key}:transfer`,
+    idempotencyKey: providerOperationIdempotencyKey('payout_transfer', prepared.payout.id),
     metadata: { sit_booking_id: prepared.payment.booking_id, sit_payment_id: paymentId, sit_payout_id: prepared.payout.id },
   });
   return inTransaction(async (client) => {
