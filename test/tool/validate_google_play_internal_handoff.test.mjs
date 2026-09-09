@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 
-import { validateGooglePlayInternalHandoff } from '../../tool/validate_google_play_internal_handoff.mjs';
+import {
+  candidateRolloverRuntimeDrift,
+  validateGooglePlayInternalHandoff,
+} from '../../tool/validate_google_play_internal_handoff.mjs';
 
 const repositoryRoot = new URL('../../', import.meta.url).pathname;
 const canonicalHandoff = JSON.parse(await readFile(
@@ -17,6 +20,20 @@ const canonicalLiveReadiness = JSON.parse(await readFile(
 const canonicalInternalRelease = JSON.parse(await readFile(
   new URL(`../../${canonicalHandoff.internalReleaseEvidenceRef}`, import.meta.url),
   'utf8'));
+
+test('candidate rollover ignores test-only drift but retains runtime drift', () => {
+  assert.deepEqual(candidateRolloverRuntimeDrift([
+    'backend/test/postgres_foundation.integration.test.js',
+    'docs/evidence/current.json',
+    'test/tool/guard.test.mjs',
+    'tool/validate_guard.mjs',
+  ]), []);
+  assert.deepEqual(candidateRolloverRuntimeDrift([
+    'backend/src/app.js',
+    'backend/test/postgres_foundation.integration.test.js',
+    'lib/main.dart',
+  ]), ['backend/src/app.js', 'lib/main.dart']);
+});
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'sit-play-handoff-'));

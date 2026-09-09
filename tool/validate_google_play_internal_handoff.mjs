@@ -82,6 +82,21 @@ function sha256File(path) {
 export const playApi36ReplacementStatus =
   'superseded-play-api36-replacement-pending';
 
+export const candidateRolloverNonRuntimePrefixes = Object.freeze([
+  '.github/',
+  'backend/test/',
+  'docs/',
+  'scripts/',
+  'store/',
+  'test/',
+  'tool/',
+]);
+
+export function candidateRolloverRuntimeDrift(changedPaths) {
+  return [...changedPaths].filter((path) =>
+    !candidateRolloverNonRuntimePrefixes.some((prefix) => path.startsWith(prefix)));
+}
+
 export const playApi36ReplacementRuntimePaths = Object.freeze([
   'android/app/build.gradle',
   'android/build.gradle',
@@ -803,14 +818,6 @@ async function runCli() {
       ...git(['diff', '--name-only']).split('\n'),
       ...git(['diff', '--cached', '--name-only']).split('\n'),
     ].filter(Boolean));
-    const allowedEvidencePrefixes = [
-      '.github/',
-      'docs/',
-      'scripts/',
-      'store/',
-      'test/',
-      'tool/',
-    ];
     if (rollover.status === playApi36ReplacementStatus) {
       validatePlayApi36ReplacementTransition({
         repositoryRoot,
@@ -819,8 +826,7 @@ async function runCli() {
       });
       rolloverMode = 'api36-replacement-transition-verified';
     } else {
-      const runtimeDrift = [...changedPaths].filter((path) =>
-        !allowedEvidencePrefixes.some((prefix) => path.startsWith(prefix)));
+      const runtimeDrift = candidateRolloverRuntimeDrift(changedPaths);
       if (runtimeDrift.length > 0) {
         fail('Runtime-affecting files changed after the rollover artifact source commit.');
       }
