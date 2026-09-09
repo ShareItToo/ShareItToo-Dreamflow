@@ -430,7 +430,7 @@
     },
     {
       "path": "backend/test/postgres_foundation.integration.test.js",
-      "sha256": "ec6764f6ad8b1e03bbe0011225b1f427c8f7e0816a2567ce563fa6dacc8de2e9"
+      "sha256": "8a40cb8e23a96aff88e75130058d2a9955aacf1c96aeb69de476fc7b674cd1a2"
     },
     {
       "path": "lib/screens/contact_data_screen.dart",
@@ -470,7 +470,7 @@
     },
     {
       "path": "docs/evidence/48h-remote/rw17-account-deletion-principal-epoch-transaction-20260826.json",
-      "sha256": "de9f7323d641c216be9d4cd192dd74237988d339d2bf01d33775c16eb274eca8"
+      "sha256": "831958cdf464c44d4efecf92704378c0ca8f6b73c0a2d2025de233b6470abaf1"
     },
     {
       "path": "scripts/technical_regression_check.sh",

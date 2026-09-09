@@ -522,7 +522,10 @@ export async function createPaymentCheckout({ actor, bookingId, key: rawKey }) {
 
   const customer = await ensureCustomer(actor);
   const expiresAt = Math.floor(prepared.checkoutExpiresAt.getTime() / 1000);
-  const title = text(prepared.booking.listing_payload?.title, 240) || `ShareItToo Buchung ${bookingId}`;
+  // Keep provider parameters immutable across retries. Listing fields remain
+  // editable after booking creation and must not change the payload associated
+  // with this payment's durable provider idempotency key.
+  const title = 'ShareItToo Buchung';
   const successUrl = `${config.publicBaseUrl}/open/payment/${encodeURIComponent(bookingId)}?result=success&session_id={CHECKOUT_SESSION_ID}`;
   const cancelUrl = `${config.publicBaseUrl}/open/payment/${encodeURIComponent(bookingId)}?result=cancelled`;
   const session = await stripeProvider.createPaymentCheckout({

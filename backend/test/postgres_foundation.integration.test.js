@@ -6250,6 +6250,18 @@ if (!databaseUrl) {
       assert.equal(b8CheckoutReplay.status, 200);
       assert.equal((await b8CheckoutReplay.json()).replayed, true);
 
+      const b8TitleDriftUpdate = await fetch(`${baseUrl}/v1/listings/listing-1`, {
+        method: 'PUT',
+        headers: ownerHeaders,
+        body: JSON.stringify({
+          ...neutralizedListing,
+          title: 'Geaenderter Titel nach Checkout',
+          catalogRevision: Number(neutralizedListing.catalogRevision),
+        }),
+      });
+      assert.equal(b8TitleDriftUpdate.status, 200);
+      const b8ChangedListing = (await b8TitleDriftUpdate.json()).listing;
+
       const b8CheckoutAfterClientRestart = await fetch(
         `${baseUrl}/v1/bookings/b8-payment-flow/payment/checkout`,
         {
@@ -6266,6 +6278,16 @@ if (!databaseUrl) {
       assert.equal(b8RestartPayload.replayed, true);
       assert.equal(b8RestartPayload.checkoutUrl, b8CheckoutPayload.checkoutUrl);
       assert.equal(b8RestartPayload.payment.id, b8CheckoutPayload.payment.id);
+      const b8TitleRestore = await fetch(`${baseUrl}/v1/listings/listing-1`, {
+        method: 'PUT',
+        headers: ownerHeaders,
+        body: JSON.stringify({
+          ...b8ChangedListing,
+          title: 'Camera',
+          catalogRevision: Number(b8ChangedListing.catalogRevision),
+        }),
+      });
+      assert.equal(b8TitleRestore.status, 200);
 
       const paymentId = b8CheckoutPayload.payment.id;
       const providerBinding = (await setupPool.query(

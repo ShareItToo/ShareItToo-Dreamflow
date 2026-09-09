@@ -16,9 +16,9 @@ const manifestPath = 'docs/evidence/p0b-next/psp-sandbox-e2e-evidence.json';
 const expectedRepoSources = Object.freeze([
   Object.freeze(['backend/src/stripe_provider.js', 'da0515456298f197c283742585a445470b822a73e0c159eed3e1d70be94a593a']),
   Object.freeze(['backend/src/payment_domain.js', '753670c55caf486bf1f8a67afd5f668296704f20883ddbca72575660896c6c61']),
-  Object.freeze(['backend/src/payment_workflow.js', '8da31c04e2294f65713c977766614c1876863e0aa9857c92596eb2a565a08a9c']),
+  Object.freeze(['backend/src/payment_workflow.js', '7a58f65c83959c3277e1fc69f06ea386b238b0afbaa34d324acb89122edff2a7']),
   Object.freeze(['backend/test/payment_domain.test.js', 'f8d92b32cd3d7c9eeadbaa9e02f2f3e179fa7901c764d970353fd0ea6273b718']),
-  Object.freeze(['backend/test/postgres_foundation.integration.test.js', 'ec6764f6ad8b1e03bbe0011225b1f427c8f7e0816a2567ce563fa6dacc8de2e9']),
+  Object.freeze(['backend/test/postgres_foundation.integration.test.js', '8a40cb8e23a96aff88e75130058d2a9955aacf1c96aeb69de476fc7b674cd1a2']),
   Object.freeze(['backend/src/psp_sandbox_readiness_gate.js', '81e80a617e90b4184e32fa4b7d2f8f7cb6243735b1c85f73b2e880b8b42c6979']),
   Object.freeze(['backend/test/psp_sandbox_readiness_gate.test.js', '575384b897d0b93693c6014e8109bda714ac924c9530f96cc034456780f090ea']),
   Object.freeze(['docs/operations/P0B_PSP_SANDBOX_E2E_RUNBOOK.md', '55ec008f8ad9b790ba2af6f708a01c13362a155991dc7eb6255d01918dcb3dde']),
