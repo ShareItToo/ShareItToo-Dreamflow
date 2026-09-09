@@ -50,6 +50,14 @@ test('allows Backend drift only when exact newer signed Staging candidate bytes 
     rollover,
   }), 'newer-signed-staging-candidate-deployment-pending');
 
+  assert.equal(validateWp55CurrentBackendBinding({
+    deployedBackendTree: 'd991765a159810b88e4e4db874ac6193ae3e804d',
+    currentBackendTree: 'current-tree-with-test-only-drift',
+    candidateBackendTree: 'candidate-tree-before-test-only-drift',
+    candidateBackendRuntimeMatchesCurrent: true,
+    rollover,
+  }), 'newer-signed-staging-candidate-deployment-pending');
+
   for (const mutate of [
     (value) => { value.status = 'play-internal-active-device-verification-pending'; },
     (value) => { value.candidate.versionCode = '2026090711'; },
@@ -69,6 +77,13 @@ test('allows Backend drift only when exact newer signed Staging candidate bytes 
     deployedBackendTree: 'd991765a159810b88e4e4db874ac6193ae3e804d',
     currentBackendTree: 'new-tree',
     candidateBackendTree: 'different-tree',
+    rollover,
+  }), /not bound to the current signed Staging candidate/u);
+  assert.throws(() => validateWp55CurrentBackendBinding({
+    deployedBackendTree: 'd991765a159810b88e4e4db874ac6193ae3e804d',
+    currentBackendTree: 'current-tree-with-runtime-drift',
+    candidateBackendTree: 'candidate-tree-before-runtime-drift',
+    candidateBackendRuntimeMatchesCurrent: false,
     rollover,
   }), /not bound to the current signed Staging candidate/u);
 });

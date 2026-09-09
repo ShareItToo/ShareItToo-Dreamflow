@@ -50,6 +50,7 @@ export function validateWp55CurrentBackendBinding({
   deployedBackendTree,
   currentBackendTree,
   candidateBackendTree = null,
+  candidateBackendRuntimeMatchesCurrent = false,
   rollover = null,
 } = {}) {
   if (deployedBackendTree !== backendTree) {
@@ -70,7 +71,8 @@ export function validateWp55CurrentBackendBinding({
       || BigInt(candidate.versionCode) <= BigInt(previousRolloverVersionCode)
       || !/^[0-9a-f]{64}$/u.test(artifact?.aabSha256 ?? '')
       || !/^[0-9a-f]{64}$/u.test(artifact?.apkSha256 ?? '')
-      || candidateBackendTree !== currentBackendTree) {
+      || (candidateBackendTree !== currentBackendTree
+        && candidateBackendRuntimeMatchesCurrent !== true)) {
     fail('WP55 newer Backend tree is not bound to the current signed Staging candidate.');
   }
   return 'newer-signed-staging-candidate-deployment-pending';
@@ -124,6 +126,7 @@ export function validateWp55StagingParityDeploymentClosure({
     const deployedBackendTree = git(repositoryRoot, ['rev-parse', `${runtimeHead}:backend`]);
     const currentBackendTree = git(repositoryRoot, ['rev-parse', 'HEAD:backend']);
     let candidateBackendTree = null;
+    let candidateBackendRuntimeMatchesCurrent = false;
     let rollover = null;
     if (currentBackendTree !== backendTree) {
       rollover = JSON.parse(readFileSync(resolve(repositoryRoot, currentRolloverPath), 'utf8'));
@@ -136,11 +139,25 @@ export function validateWp55StagingParityDeploymentClosure({
         repositoryRoot,
         ['rev-parse', `${candidateSourceHead}:backend`],
       );
+      try {
+        execFileSync(
+          'git',
+          [
+            'diff', '--quiet', candidateSourceHead, 'HEAD', '--',
+            'backend', ':(exclude)backend/test/**',
+          ],
+          { cwd: repositoryRoot, stdio: ['ignore', 'ignore', 'ignore'] },
+        );
+        candidateBackendRuntimeMatchesCurrent = true;
+      } catch {
+        candidateBackendRuntimeMatchesCurrent = false;
+      }
     }
     validateWp55CurrentBackendBinding({
       deployedBackendTree,
       currentBackendTree,
       candidateBackendTree,
+      candidateBackendRuntimeMatchesCurrent,
       rollover,
     });
     for (const path of ['backend/ops/deploy_release.sh', 'backend/compose.staging.yml']) {
