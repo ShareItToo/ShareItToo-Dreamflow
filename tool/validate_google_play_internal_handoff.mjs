@@ -92,9 +92,14 @@ export const candidateRolloverNonRuntimePrefixes = Object.freeze([
   'tool/',
 ]);
 
+export const candidateRolloverNonRuntimeExactPaths = Object.freeze([
+  'AGENTS.md',
+]);
+
 export function candidateRolloverRuntimeDrift(changedPaths) {
   return [...changedPaths].filter((path) =>
-    !candidateRolloverNonRuntimePrefixes.some((prefix) => path.startsWith(prefix)));
+    !candidateRolloverNonRuntimeExactPaths.includes(path)
+    && !candidateRolloverNonRuntimePrefixes.some((prefix) => path.startsWith(prefix)));
 }
 
 export const playApi36ReplacementRuntimePaths = Object.freeze([

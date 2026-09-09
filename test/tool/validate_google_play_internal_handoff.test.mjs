@@ -23,6 +23,7 @@ const canonicalInternalRelease = JSON.parse(await readFile(
 
 test('candidate rollover ignores test-only drift but retains runtime drift', () => {
   assert.deepEqual(candidateRolloverRuntimeDrift([
+    'AGENTS.md',
     'backend/test/postgres_foundation.integration.test.js',
     'docs/evidence/current.json',
     'test/tool/guard.test.mjs',
@@ -33,6 +34,10 @@ test('candidate rollover ignores test-only drift but retains runtime drift', () 
     'backend/test/postgres_foundation.integration.test.js',
     'lib/main.dart',
   ]), ['backend/src/app.js', 'lib/main.dart']);
+  assert.deepEqual(candidateRolloverRuntimeDrift([
+    'AGENTS.md.backup',
+    'android/app/build.gradle',
+  ]), ['AGENTS.md.backup', 'android/app/build.gradle']);
 });
 
 async function fixture() {

@@ -53,6 +53,14 @@ the immutable candidate API and stopped before any server or device mutation.
 The correct private-candidate validation passed immediately afterward. No
 retry, timeout, clock, cache or device workaround is a release prerequisite.
 
+The first complete local regression then correctly stopped because the
+candidate rollover guard treated root `AGENTS.md` guidance as runtime drift.
+The guard now excludes only that exact non-binary path; a similarly named file,
+Android, `lib` and Backend runtime still fail closed, with explicit regression
+coverage. A separate direct handoff-validator invocation without the normal
+rollover context stopped on its unavailable default private AAB and is not used
+as acceptance evidence. The complete standard profile is rerun unchanged.
+
 Only the disposable Staging account was deleted. No protected owner,
 Production, app or Backend runtime, deployment, Google Play, tester, Firebase,
 external identity provider, payment provider, money, Cloud/VPS/DNS, OnePlus or

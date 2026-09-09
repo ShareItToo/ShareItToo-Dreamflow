@@ -173,7 +173,7 @@ export function validateWp71CurrentCandidateAccountDeletion({
   validateProof(value);
   validateClosure(value);
   validateVerification(value);
-  if (!Array.isArray(value.technicalDebt) || value.technicalDebt.length !== 2
+  if (!Array.isArray(value.technicalDebt) || value.technicalDebt.length !== 4
       || value.technicalDebt.some((entry) => typeof entry !== 'string' || entry.length < 100)) {
     fail('WP71 technical-debt record is incomplete.');
   }

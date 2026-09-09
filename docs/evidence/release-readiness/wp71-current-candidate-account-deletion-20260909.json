@@ -103,7 +103,9 @@
   },
   "technicalDebt": [
     "One read-only archive check initially selected the current-HEAD CLI instead of the immutable private-candidate API and stopped before any device or server mutation; the immutable archive validator then passed exactly.",
-    "The disposable account deletion is intentionally irreversible, but its target credentials were independently rejected before the private vault was scrubbed and the protected account source remained byte-identical."
+    "The disposable account deletion is intentionally irreversible, but its target credentials were independently rejected before the private vault was scrubbed and the protected account source remained byte-identical.",
+    "The first full local regression stopped because the candidate-rollover guard classified the root AGENTS.md guidance as runtime drift; the exact non-binary path is now covered while similarly named and actual runtime paths remain blocked.",
+    "One standalone handoff-validator invocation omitted the normal rollover context and stopped on its unavailable default private AAB; it is not acceptance evidence and the complete standard profile is rerun without weakening artifact checks."
   ],
   "boundaries": {
     "stagingDisposableAccountDeleted": true,
