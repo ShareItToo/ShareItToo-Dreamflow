@@ -1,5 +1,22 @@
 # ShareItToo Current State
 
+WP69 is **LOCALLY COMPLETE; EXACT PACKAGE GITHUB VERIFICATION PENDING**. The
+active goal now has a strict 32-area current-candidate audit bound to Android
+`1.0.0+2026090904`, source
+`12b88cf97f91973d6dfd59fe3f4dcb9c915dc7d0`, and Staging runtime
+`78c663248aec089b08d19fd0fb40a9a63f19408b`: eleven PASS, twelve PARTIAL and
+nine OPEN. Exact or safely unchanged physical proof is retained; older or
+narrower proof is not promoted.
+
+The Pixel remains connected and authorized. The OnePlus is currently not
+visible to ADB. Current open gates include Facebook/Apple, real runtime image
+analysis, Stripe sandbox money, professionally approved V5.2 binding state,
+human TalkBack, OnePlus cross-device proof, durable private-registry pull and
+two historical noncritical Support deadlines. No runtime, deployment,
+Production, Store, provider, Firebase, payment, legal, VPS/DNS, device or merge
+state changed. WP70 is the next Pixel-only auth/safety/hold revalidation. See
+`docs/operations/WP69_CURRENT_GOAL_ACCEPTANCE_AUDIT_2026-09-09.md`.
+
 WP68 is **COMPLETE ON STAGING, LOCALLY AND GITHUB**.
 The exact Staging runtime and Android candidate now have a proven, isolated
 support lifecycle: temporary reporter plus separate author/reviewer admin

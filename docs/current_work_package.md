@@ -1,4 +1,23 @@
-# Current Work Package: WP68 Staging Support Lifecycle
+# Current Work Package: WP69 Current-Goal Acceptance Audit
+
+WP69 is **LOCALLY COMPLETE; EXACT PACKAGE GITHUB VERIFICATION PENDING**. It
+binds the active app-readiness goal to exact Android candidate
+`1.0.0+2026090904`, source
+`12b88cf97f91973d6dfd59fe3f4dcb9c915dc7d0`, and Staging runtime
+`78c663248aec089b08d19fd0fb40a9a63f19408b`. Thirty-two explicit areas are
+classified conservatively as eleven PASS, twelve PARTIAL and nine OPEN. Older
+physical proof is inherited only where relevant runtime paths are unchanged
+and no current observation contradicts it.
+
+The Pixel is connected and exact-current; the OnePlus is currently absent from
+ADB. Provider, professional legal, test-money, authorized staff, human
+TalkBack, durable private-registry pull and cross-device gates remain OPEN.
+WP70 is the next safe Pixel-only package: current-candidate auth/session,
+report/block and visible payment-hold revalidation without provider traffic,
+money, legal binding or external configuration. See
+`docs/operations/WP69_CURRENT_GOAL_ACCEPTANCE_AUDIT_2026-09-09.md`.
+
+# Previous Work Package: WP68 Staging Support Lifecycle
 
 WP68 is **COMPLETE ON STAGING, LOCALLY AND GITHUB**.
 The corrected source is exact commit
