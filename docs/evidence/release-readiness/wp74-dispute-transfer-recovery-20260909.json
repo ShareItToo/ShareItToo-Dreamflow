@@ -50,6 +50,14 @@
     {
       "path": "tool/validate_wp73_stripe_sandbox_compatibility_inventory.mjs",
       "sha256": "05280428f1ade8dd0548103770de4c244f036426f52bfedeb307e004cf201834"
+    },
+    {
+      "path": "tool/run_r9_database_recovery.mjs",
+      "sha256": "d68b92b3e6bc9ca1d1a746071c169886186c52484a789c397212bc8d25d4e156"
+    },
+    {
+      "path": "tool/validate_r9_database_recovery.mjs",
+      "sha256": "72dac39220a3b6cd35f7122fd1622796bc29963789c827fac7a4297217279536"
     }
   ],
   "outcomes": {
@@ -60,12 +68,13 @@
     "fundsReinstated": "cancel-or-compensating-owner-payable-without-auto-release",
     "readiness": "pending-or-review-recovery-is-degraded",
     "privacyAndRetention": "safe-status-export-and-inventory-covered",
-    "historicalWp73Evidence": "bound-to-its-implementation-head"
+    "historicalWp73Evidence": "bound-to-its-implementation-head",
+    "currentMigration072RecoveryProof": "passed-and-cleaned-local-postgresql-16"
   },
   "verification": {
-    "implementationHead": "9924d90081a7476e332f6c4b11bf6cb2e7ddd9c9",
-    "focusedTests": "passed-39",
-    "postgresIntegration": "passed",
+    "implementationHead": "7ad51fd012ed947a0f7de6b8980b0911f7f5ec30",
+    "focusedTests": "passed-48",
+    "postgresIntegration": "passed-current-r9-postgresql-16",
     "fullLocalRegression": "passed",
     "localToolTestsPassed": 2542,
     "githubRegressionRun": null,

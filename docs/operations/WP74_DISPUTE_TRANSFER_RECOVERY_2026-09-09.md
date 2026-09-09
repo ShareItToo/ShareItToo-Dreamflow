@@ -45,5 +45,15 @@ workaround.
 
 All 2,542 repository tool tests and the complete deterministic local
 regression pass, including PostgreSQL, Flutter, analyzer, Web/Wasm, loopback
-and Android minSdk-24. The next step is normal GitHub verification for the
-source/binding sequence. No external release action is authorized or implied.
+and Android minSdk-24. The current isolated PostgreSQL-16 R9 recovery proof
+also passes after the new migration: fresh bootstrap, backup/restore,
+upgrade-from-migration-027, integrity checks and cleanup all succeed with 72
+migrations ending in `072_dispute_transfer_recovery.up.sql`.
+
+GitHub correctly stopped its prior PostgreSQL recovery job because that runner
+still asserted the former 71-migration inventory after migration 072 was
+added. The correction advances the *current* runner to 72 and keeps the
+historical R9 evidence bound to its original implementation source; it is not
+a retry, timing or warning-suppression workaround. The next step is normal
+GitHub verification for this corrected source/binding sequence. No external
+release action is authorized or implied.

@@ -15,11 +15,15 @@ Internal/Staging candidate is `1.0.0+2026090905`, source
 installed. Its AAB SHA-256 is
 `ed3d5e5af99a6577e09afc96a880ac4ca7c9c0bd86c54bcaa3f5a07fd6255295`.
 
-Thirty-nine focused tests, two PostgreSQL integration tests, all 2,542 tool
-tests and the complete local technical regression pass. The compatible local
-Android Build-Tools 36.1 correction eliminated the former SDK-XML diagnostic;
-no warning suppression or runtime workaround was introduced. GitHub Regression,
-CodeQL and clean-checkout CI are pending. No Stripe API/Dashboard, money,
+Forty-eight focused tests, the current isolated PostgreSQL-16 recovery proof,
+all 2,542 tool tests and the complete local technical regression pass. The
+compatible local Android Build-Tools 36.1 correction eliminated the former
+SDK-XML diagnostic; no warning suppression or runtime workaround was
+introduced. GitHub stopped the predecessor runner before recovery because its
+hard-coded 71-migration inventory predated migration 072; the current runner
+and its historical proof boundary are now corrected and locally proven.
+GitHub Regression, CodeQL and clean-checkout CI are pending. No Stripe
+API/Dashboard, money,
 Staging, Production, Store, tester, Firebase, Cloud/VPS/DNS, device or merge
 action occurred. See
 `docs/operations/WP74_DISPUTE_TRANSFER_RECOVERY_2026-09-09.md`.

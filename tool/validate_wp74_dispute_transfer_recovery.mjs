@@ -19,6 +19,8 @@ const sourcePaths = [
   'backend/src/retention_inventory.js',
   'backend/ops/validate_staging_deployment_readiness.mjs',
   'tool/validate_wp73_stripe_sandbox_compatibility_inventory.mjs',
+  'tool/run_r9_database_recovery.mjs',
+  'tool/validate_r9_database_recovery.mjs',
 ];
 
 function fail(message) { throw new Error(message); }
@@ -135,9 +137,9 @@ function validateVerification(repositoryRoot, value, checkGitState) {
     return;
   }
   const localComplete = {
-    implementationHead: '9924d90081a7476e332f6c4b11bf6cb2e7ddd9c9',
-    focusedTests: 'passed-39',
-    postgresIntegration: 'passed',
+    implementationHead: '7ad51fd012ed947a0f7de6b8980b0911f7f5ec30',
+    focusedTests: 'passed-48',
+    postgresIntegration: 'passed-current-r9-postgresql-16',
     fullLocalRegression: 'passed',
     localToolTestsPassed: 2542,
     githubRegressionRun: null,
@@ -198,6 +200,7 @@ export function validateWp74DisputeTransferRecovery({
     readiness: 'pending-or-review-recovery-is-degraded',
     privacyAndRetention: 'safe-status-export-and-inventory-covered',
     historicalWp73Evidence: 'bound-to-its-implementation-head',
+    currentMigration072RecoveryProof: 'passed-and-cleaned-local-postgresql-16',
   })) fail('WP74 outcomes are incomplete or overstated.');
   if (!exact(value.boundaries, {
     stripeApiCalled: false,
