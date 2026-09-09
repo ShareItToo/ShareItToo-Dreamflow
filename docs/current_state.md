@@ -1,5 +1,20 @@
 # ShareItToo Current State
 
+## WP81 source-to-Staging parity preflight
+
+The installed `1.0.0+2026090905` candidate and its recorded Staging runtime
+have identical Backend and Flutter runtime trees; the physical acceptance
+evidence remains valid for that exact pair. Sixteen later V5.3
+legal/operator-readiness runtime paths are a separate successor source delta,
+not installed-candidate behavior. The existing release harness continues to
+require a commit-labelled image, no-build rollout, exact health readback,
+automatic rollback and named Staging volumes. WP77's missing persistent,
+authoritative remote source/recreate proof remains a hard fail-closed block,
+so WP81 made no remote, deployment, Store, device, provider, payment or
+Production change. Focused checks and the full local technical regression
+pass. See
+`docs/operations/WP81_SOURCE_TO_STAGING_PARITY_PREFLIGHT_2026-09-10.md`.
+
 ## WP80 CodeQL file-descriptor race remediation
 
 The final WP79 GitHub security readback found two open high-severity local

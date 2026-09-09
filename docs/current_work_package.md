@@ -1,15 +1,28 @@
-# Current Work Package: WP80 CodeQL File-Descriptor Race Remediation
+# Current Work Package: WP81 Source-to-Staging Parity Preflight
 
-WP80 is **COMPLETE LOCALLY AND ON GITHUB**.
-Two open high-severity `js/file-system-race` findings were newly observed in
-the final WP79 GitHub readback. The local diagnostic readers now validate and
-read bounded JSON through one no-follow file descriptor and fail closed on
-metadata or size drift. This is source-tooling-only: the installed Pixel
-candidate and all external systems remain unchanged. The complete local gate,
-GitHub Regression, CodeQL and the current PR-merge zero-alert readback pass.
-The old branch-specific snapshot remains explicitly historical rather than
-being misreported as current. WP81 now resumes the source-to-Staging parity
-preflight. See
+WP81 is **COMPLETE AS A READ-ONLY PREFLIGHT; SUCCESSOR DEPLOYMENT REMAINS
+BLOCKED**. The installed 2026090905 candidate and its recorded Staging runtime
+have exactly equal Mobile/Backend runtime trees. The later V5.3 legal and
+operator-readiness source changes are separately identified and may not be
+called installed or physically accepted. The checked-in release harness retains
+commit-labelled-image, no-build, health-readback, rollback and named-volume
+guards, but WP77's authoritative persistent remote-source/recreate proof is
+still absent. No remote, deployment, Store, device, provider, payment or
+Production action occurred. Focused checks, the full local technical
+regression and the 2,560-test tool inventory pass. See
+`docs/operations/WP81_SOURCE_TO_STAGING_PARITY_PREFLIGHT_2026-09-10.md`.
+
+# Previous Work Package: WP80 CodeQL File-Descriptor Race Remediation
+
+WP80 is **COMPLETE LOCALLY AND ON GITHUB**. Two open high-severity
+`js/file-system-race` findings were newly observed in the final WP79 GitHub
+readback. The local diagnostic readers now validate and read bounded JSON
+through one no-follow file descriptor and fail closed on metadata or size
+drift. This is source-tooling-only: the installed Pixel candidate and all
+external systems remain unchanged. The complete local gate, GitHub Regression,
+CodeQL and the current PR-merge zero-alert readback pass. The old
+branch-specific snapshot remains explicitly historical rather than being
+misreported as current. See
 `docs/operations/WP80_CODEQL_FILE_DESCRIPTOR_RACE_REMEDIATION_2026-09-10.md`.
 
 # Previous Work Package: WP79 Current Candidate Acceptance Matrix

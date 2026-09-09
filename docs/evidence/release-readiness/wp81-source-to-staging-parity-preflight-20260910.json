@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp81-source-to-staging-parity-preflight",
+  "status": "complete-read-only-deployment-blocked",
+  "capturedOn": "2026-09-10",
+  "workPackage": "WP81",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "candidateSourceHead": "e1c182ea496f013989863155c13bfda649255a7e",
+    "stagingRuntimeHead": "baf9267c8bff7533230f3234c1f543649df6e4aa",
+    "preflightHead": "4cab7d4ddb4546296e35350c564e37f755199669",
+    "candidateToStagingRuntimePaths": [],
+    "currentSourceRuntimePaths": [
+      "assets/legal/de/legal_manifest_v53.json",
+      "assets/legal/de/operator_readiness_draft_20260909.json",
+      "assets/legal/de/v53/part_a_platform_terms.html",
+      "assets/legal/de/v53/part_b_private_rental_terms.html",
+      "assets/legal/de/v53/part_c_cancellation_refund.html",
+      "assets/legal/de/v53/part_d_handover_return_damage.html",
+      "assets/legal/de/v53/part_e_payment_payout.html",
+      "assets/legal/de/v53/part_f_community_safety.html",
+      "assets/legal/de/v53/part_g_reporting_moderation_review.html",
+      "assets/legal/de/v53/part_h_privacy.html",
+      "assets/legal/de/v53/part_i_imprint_withdrawal_shorttexts.html",
+      "backend/src/operational_readiness_gate.js",
+      "lib/config/draft_operator_config.dart",
+      "lib/screens/legal_imprint_screen.dart",
+      "lib/screens/legal_privacy_screen.dart",
+      "lib/screens/legal_terms_screen.dart"
+    ]
+  },
+  "runtimeTreeBinding": {
+    "candidateBackendTree": "cbcbe352819eae2a2f524b15fefba91239df3e06",
+    "stagingBackendTree": "cbcbe352819eae2a2f524b15fefba91239df3e06",
+    "candidateFlutterTree": "49f6551aa69625bb5fed166df8dfd98cfa0b1fb8",
+    "stagingFlutterTree": "49f6551aa69625bb5fed166df8dfd98cfa0b1fb8",
+    "candidateAndStagingRuntimeEqual": true,
+    "currentSourceMayNotBeClaimedAsInstalledCandidate": true
+  },
+  "verification": {
+    "focusedWp81Tests": "passed-6",
+    "completeToolInventory": "passed-2560",
+    "fullTechnicalRegression": "passed",
+    "webWasmLoopback": "passed",
+    "androidDebugBuildAndMinSdk24": "passed",
+    "r11AndroidSecuritySurface": "passed"
+  },
+  "deploymentSafety": {
+    "immutableCommitLabeledImageRequired": true,
+    "noBuildRuntimeRolloutRequired": true,
+    "healthCommitReadbackRequired": true,
+    "automaticRollbackVerificationRequired": true,
+    "namedStagingDataVolumesRequired": true,
+    "persistentAuthoritativeRemoteSourceProven": false,
+    "remoteSourceBlocker": "WP77_PUBLIC_LEGAL_RUNTIME_TARGET_AND_SOURCE_MISMATCH",
+    "deploymentAuthorized": false
+  },
+  "externalGate": {
+    "name": "STAGING_SUCCESSOR_SOURCE_AND_RUNTIME_BINDING",
+    "state": "closed",
+    "reason": "The WP77 persistent authoritative remote source and safe recreate proof remain absent.",
+    "nextSafeAction": "Establish the exact persistent remote source and recreate proof read-only before any successor deployment."
+  },
+  "boundaries": {
+    "remoteRead": false,
+    "deployment": false,
+    "container": false,
+    "database": false,
+    "store": false,
+    "device": false,
+    "provider": false,
+    "payment": false,
+    "production": false,
+    "pullRequestMerge": false
+  }
+}
