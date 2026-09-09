@@ -1,5 +1,33 @@
 # ShareItToo Current State
 
+WP66 is **COMPLETE LOCALLY; GITHUB VERIFICATION PENDING; STAGING/DEVICE
+ROLLOUT PENDING**. Provider retries now use opaque durable operation keys,
+freeze checkout expiry and immutable provider parameters, recover completed
+commands across a new client request key, and require exact payment, booking,
+customer, object-family, transfer-group and test/live binding before provider
+events can mutate local state. Uncertain or expired reconciliation never opens
+a second payment path.
+
+The signed Internal/Staging successor is `1.0.0+2026090904`, source
+`12b88cf97f91973d6dfd59fe3f4dcb9c915dc7d0`. Its AAB SHA-256 is
+`fcc6c36055a978ffb3c70761f2630d942c8e65ac30c9600f3963be48b7d56696`
+and APK SHA-256 is
+`8c5e02d309f39d808d900c5d8d59a862efbf9d1928a6baacf7fc2d7e2b62b8e4`.
+Signature, package/version, Bundletool, Firebase Android and binary privacy
+checks pass. Candidate `2026090903` was never uploaded and is permanently
+superseded because its recoverable provider payload still used an editable
+listing title.
+
+Twenty-one focused tests, two isolated PostgreSQL integration tests, all 2,487
+tool tests and the full local technical regression pass at binding HEAD
+`6dbde0df83cd480398fcf29081dc8095454f88fb`. Staging remains memory-only and
+non-live at source `7a73de4aba2b4ae4d6785e8dfbd466a5ad5aa60c`; Play Internal remains
+`2026090711`, and the Pixel remains on `2026090902`. Stripe reauthentication,
+V5.2 approval/snapshots, Staging deployment and physical device rollout remain
+open. No Store, tester, Production, provider, Firebase, VPS/DNS or merge state
+changed. See
+`docs/operations/WP66_PAYMENT_PROVIDER_INTEGRITY_AND_CANDIDATE_2026-09-09.md`.
+
 WP64 is **COMPLETE ON STAGING, PIXEL, LOCALLY AND ON GITHUB; PLAY INTERNAL
 UPLOAD PENDING**. The exact Backend technical HEAD
 `7a73de4aba2b4ae4d6785e8dfbd466a5ad5aa60c` is deployed and healthy on Staging.

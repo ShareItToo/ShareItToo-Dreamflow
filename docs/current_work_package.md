@@ -1,4 +1,30 @@
-# Current Work Package: WP64 Staging security parity and Pixel candidate
+# Current Work Package: WP66 payment provider integrity and successor candidate
+
+WP66 is **COMPLETE LOCALLY; GITHUB VERIFICATION PENDING; STAGING/DEVICE
+ROLLOUT PENDING**. Durable provider idempotency, restart recovery, frozen
+checkout expiry and exact event-to-payment/booking/customer/object/live-mode
+binding are implemented and proven. Uncertain reconciliation cannot create a
+second payment attempt.
+
+The exact signed Internal/Staging successor is `1.0.0+2026090904`, source
+`12b88cf97f91973d6dfd59fe3f4dcb9c915dc7d0`, AAB SHA-256
+`fcc6c36055a978ffb3c70761f2630d942c8e65ac30c9600f3963be48b7d56696`
+and APK SHA-256
+`8c5e02d309f39d808d900c5d8d59a862efbf9d1928a6baacf7fc2d7e2b62b8e4`.
+The never-uploaded `2026090903` build is permanently superseded. Twenty-one
+focused tests, two isolated PostgreSQL tests, all 2,487 tool tests and the full
+local Backend/Flutter/analyzer/Web/Wasm/loopback/Android profile pass at binding
+HEAD `6dbde0df83cd480398fcf29081dc8095454f88fb`.
+
+No provider or real-money traffic occurred. Stripe connection
+reauthentication, V5.2 approval/snapshots, exact Staging deployment and device
+rollout remain open. Play Internal remains `2026090711`; Pixel remains
+`2026090902`. The next package is WP67: deploy the exact candidate-compatible
+Backend to Staging, install the exact APK on Pixel, then execute the full
+OnePlus cross-device matrix as soon as the physical device is unlocked. See
+`docs/operations/WP66_PAYMENT_PROVIDER_INTEGRITY_AND_CANDIDATE_2026-09-09.md`.
+
+# Previous Work Package: WP64 Staging security parity and Pixel candidate
 
 WP64 is **COMPLETE ON STAGING, PIXEL, LOCALLY AND ON GITHUB; PLAY INTERNAL
 UPLOAD PENDING**. Exact Backend technical HEAD
