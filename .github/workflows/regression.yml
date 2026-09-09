@@ -302,8 +302,8 @@ jobs:
         working-directory: backend
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/shareittoo-api
         run: |
+          REGISTRY_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/shareittoo-api"
           APP_VERSION="0.1.0-${GITHUB_SHA::12}"
           APP_BUILD_TIME="$(git show -s --format=%cI "$GITHUB_SHA")"
           APP_SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"

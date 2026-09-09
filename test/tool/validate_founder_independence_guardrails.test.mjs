@@ -83,6 +83,19 @@ test('a named person cannot return to a critical runtime source', () => {
   );
 });
 
+test('the GHCR repository owner is normalized to a valid lowercase image path', () => {
+  const workflowPath = '.github/workflows/regression.yml';
+  const workflow = readFileSync(resolve(root, workflowPath), 'utf8');
+  assert.match(
+    workflow,
+    /REGISTRY_IMAGE="ghcr\.io\/\$\{GITHUB_REPOSITORY_OWNER,,\}\/shareittoo-api"/u,
+  );
+  assert.doesNotMatch(
+    workflow,
+    /REGISTRY_IMAGE:\s*ghcr\.io\/\$\{\{\s*github\.repository_owner\s*\}\}/u,
+  );
+});
+
 test('external assignments and account changes remain open', () => {
   const changed = structuredClone(manifest);
   changed.externalGates.accountRbacChanges = 'complete';
