@@ -20,6 +20,19 @@ search before rereading large sources, avoid unchanged duplicate gates and
 retain all audit evidence. Efficiency must never weaken deterministic tests,
 exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 
+## Project-safe handoffs
+
+- Before every handoff, message, automation or task routing action, identify the
+  exact target project from verified context. A host, computer or device is not
+  a project and must never be used as a substitute for one.
+- Never send a task, chat follow-up or automation into another project. Create
+  a new Codex task only when Walid explicitly requests a new task.
+- If the target project is unclear, do not delegate. Ask Walid through the
+  established Maximus channel using a content-light message with no secrets or
+  project details; if that channel is unavailable, ask in the current chat.
+- If work was misrouted, stop only the wrongly routed work and perform the
+  smallest safe cleanup. Do not disturb unrelated tasks, projects or evidence.
+
 ## Non-negotiable boundaries
 
 - Do not reset, rebase, squash, force-push, delete branches, rewrite history or
