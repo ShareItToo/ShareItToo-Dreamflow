@@ -1,6 +1,7 @@
 # Current Work Package: WP73 Stripe Sandbox Compatibility Inventory
 
-WP73 is **IMPLEMENTED; LOCAL/GITHUB VERIFICATION PENDING**. The repository's
+WP73 is **COMPLETE LOCALLY AND ON GITHUB; READ-ONLY PROVIDER VERIFICATION
+PENDING**. The repository's
 Accounts v2 recipient model, separate charges and transfers, test-only file
 secret boundary and separate snapshot/thin webhooks are compatible in
 principle with the intended isolated Stripe sandbox. A proven P0 gap keeps all
@@ -13,6 +14,15 @@ device, Store or merge state changed. The owner gate is
 `WP73_STRIPE_READONLY_REAUTH_REQUIRED`; WP74 may independently implement and
 prove dispute transfer recovery without contacting Stripe. See
 `docs/operations/WP73_STRIPE_SANDBOX_COMPATIBILITY_INVENTORY_2026-09-09.md`.
+
+Sixty-three focused tests, all 2,538 tool tests and the complete local
+technical regression pass at exact implementation HEAD
+`441ad54d80d85aa9d84ea5c3c3f7219822649a77`. Exact-head GitHub Regression
+`34371160170`, CodeQL `34371160266` and zero open PR-merge Code Scanning alerts
+pass. PR #7 remains Draft, open, mergeable and unmerged. The one initial
+CI-only failure was permanently corrected by removing the validator's
+dependency on installed Backend modules and binding the SDK contract to
+tracked repository inputs.
 
 # Previous Work Package: WP72 Current-Candidate Report and Block
 

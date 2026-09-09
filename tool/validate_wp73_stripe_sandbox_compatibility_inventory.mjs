@@ -191,12 +191,12 @@ function validateVerification(repositoryRoot, value, checkGitState) {
     return;
   }
   const complete = {
-    implementationHead: '__IMPLEMENTATION_HEAD__',
-    focusedTests: 'passed-51',
+    implementationHead: '441ad54d80d85aa9d84ea5c3c3f7219822649a77',
+    focusedTests: 'passed-63',
     fullLocalRegression: 'passed',
-    localToolTestsPassed: '__TOOL_TEST_COUNT__',
-    githubRegressionRun: '__REGRESSION_RUN__',
-    githubCodeqlRun: '__CODEQL_RUN__',
+    localToolTestsPassed: 2538,
+    githubRegressionRun: 34371160170,
+    githubCodeqlRun: 34371160266,
     openPrMergeAlerts: 0,
     pullRequest7: 'draft-open-mergeable-unmerged',
   };

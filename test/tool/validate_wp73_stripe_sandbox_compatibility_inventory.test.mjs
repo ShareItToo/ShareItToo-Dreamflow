@@ -27,7 +27,7 @@ function validate(changed = evidence) {
 
 test('accepts the exact read-only WP73 compatibility inventory', () => {
   assert.deepEqual(validate(), {
-    status: 'implemented-pending-local-github',
+    status: 'complete-local-github',
     overallVerdict:
       'compatible-after-required-dispute-recovery-correction-and-read-only-provider-verification',
     blockingFinding: 'stripe-dispute-paid-transfer-recovery',
@@ -84,6 +84,6 @@ test('rejects source drift and private or secret-shaped values', () => {
 
 test('rejects incomplete verification closure', () => {
   const changed = structuredClone(evidence);
-  changed.status = 'complete-local-github';
+  changed.verification.githubRegressionRun = null;
   assert.throws(() => validate(changed), /complete verification/u);
 });

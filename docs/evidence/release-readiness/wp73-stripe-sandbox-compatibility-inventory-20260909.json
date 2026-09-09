@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "sit-wp73-stripe-sandbox-compatibility-inventory",
-  "status": "implemented-pending-local-github",
+  "status": "complete-local-github",
   "capturedOn": "2026-09-09",
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -192,13 +192,13 @@
     "scope": "Close the proven paid-transfer chargeback recovery gap locally with deterministic provider fakes, PostgreSQL integration coverage, explicit uncertain-state recovery and no external Stripe call."
   },
   "verification": {
-    "implementationHead": null,
-    "focusedTests": "pending",
-    "fullLocalRegression": "pending",
-    "localToolTestsPassed": null,
-    "githubRegressionRun": null,
-    "githubCodeqlRun": null,
-    "openPrMergeAlerts": null,
+    "implementationHead": "441ad54d80d85aa9d84ea5c3c3f7219822649a77",
+    "focusedTests": "passed-63",
+    "fullLocalRegression": "passed",
+    "localToolTestsPassed": 2538,
+    "githubRegressionRun": 34371160170,
+    "githubCodeqlRun": 34371160266,
+    "openPrMergeAlerts": 0,
     "pullRequest7": "draft-open-mergeable-unmerged"
   },
   "boundaries": {

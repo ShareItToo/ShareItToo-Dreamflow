@@ -1,6 +1,7 @@
 # ShareItToo Current State
 
-WP73 is **IMPLEMENTED; LOCAL/GITHUB VERIFICATION PENDING**. The read-only
+WP73 is **COMPLETE LOCALLY AND ON GITHUB; READ-ONLY PROVIDER VERIFICATION
+PENDING**. The read-only
 Stripe sandbox compatibility inventory finds the current Accounts v2,
 separate-charges-and-transfers, test-only secret and dual webhook architecture
 compatible in principle. It also proves one P0 payment-integrity gap before any
@@ -14,6 +15,15 @@ object, provider setting, money, deployment, device, runtime or merge state was
 changed. The exact owner gate is `WP73_STRIPE_READONLY_REAUTH_REQUIRED`; all
 independent local correction work may continue as WP74. See
 `docs/operations/WP73_STRIPE_SANDBOX_COMPATIBILITY_INVENTORY_2026-09-09.md`.
+
+Sixty-three focused tests, all 2,538 tool tests and the complete local
+technical regression pass at exact implementation HEAD
+`441ad54d80d85aa9d84ea5c3c3f7219822649a77`. Exact-head GitHub Regression
+`34371160170`, CodeQL `34371160266` and zero open PR-merge Code Scanning alerts
+pass. PR #7 remains Draft, open, mergeable and unmerged. The initial CI-only
+failure was caused by an invalid dependency on installed Backend modules from
+the Flutter job; the checkout-independent SDK/configuration ratchet is now
+permanently tested.
 
 WP72 is **COMPLETE ON THE EXACT PIXEL CANDIDATE, LOCALLY AND ON GITHUB**. The
 unchanged signed `1.0.0+2026090904` candidate passes the

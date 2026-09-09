@@ -1,6 +1,6 @@
 # WP73 — Stripe sandbox compatibility inventory
 
-Status: **IMPLEMENTED; LOCAL/GITHUB VERIFICATION PENDING**.
+Status: **COMPLETE LOCALLY AND ON GITHUB; READ-ONLY PROVIDER VERIFICATION PENDING**.
 
 ## Decision
 
@@ -91,3 +91,22 @@ to close the proven dispute-recovery gap.
 
 Machine-readable evidence:
 `docs/evidence/release-readiness/wp73-stripe-sandbox-compatibility-inventory-20260909.json`.
+
+## Verification closure
+
+Sixty-three focused payment, Stripe boundary and evidence tests pass. All 2,538
+tool tests and the complete local technical regression pass at exact
+implementation HEAD `441ad54d80d85aa9d84ea5c3c3f7219822649a77`, including
+Backend/PostgreSQL, Flutter, analyzer, Web/Wasm, loopback smoke and the Android
+debug build. Exact-head GitHub Regression `34371160170` and CodeQL
+`34371160266` pass; the current PR merge ref has zero open Code Scanning
+alerts. PR #7 remains Draft, open, mergeable and unmerged.
+
+The first GitHub Regression at inventory commit
+`e0d7094ac9f75ab956f355540d2e6c1a7f37370e` exposed a test-infrastructure
+defect: the repository validator read generated Stripe SDK metadata from
+`backend/node_modules` in the Flutter job, which intentionally does not install
+Backend dependencies. The permanent correction binds the exact SDK and Node
+versions to tracked `backend/package.json` plus both configured API-version
+sites, and a regression rejects any renewed dependency on installed Backend
+modules. This does not weaken the locally observed SDK/API-version match.
