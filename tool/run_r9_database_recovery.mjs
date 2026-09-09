@@ -28,7 +28,7 @@ const requireFromBackend = createRequire(
   new URL('../backend/package.json', import.meta.url),
 );
 
-export const r9RequiredMigrationCount = 71;
+export const r9RequiredMigrationCount = 72;
 export const r9SyntheticAccountCount = 12;
 export const r9SyntheticListingCount = 6;
 export const r9ResultClassification = 'LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF';
@@ -138,7 +138,7 @@ async function readMigrationPlan(root) {
   }
   if (plan.length !== r9RequiredMigrationCount
       || plan[0]?.filename !== '001_b3_foundation.up.sql'
-      || plan.at(-1)?.filename !== '071_stripe_connect_accounts_v2.up.sql') {
+      || plan.at(-1)?.filename !== '072_dispute_transfer_recovery.up.sql') {
     fail('r9_migration_inventory_unexpected');
   }
   return Object.freeze(plan);
@@ -652,7 +652,7 @@ async function closePools(pools) {
 
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
-  requiredLastMigration = '071_stripe_connect_accounts_v2.up.sql',
+  requiredLastMigration = '072_dispute_transfer_recovery.up.sql',
 } = {}) {
   if (value?.schemaVersion !== 1
       || value.kind !== 'sit-r9-database-recovery-observation'

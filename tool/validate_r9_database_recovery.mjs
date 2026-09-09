@@ -7,6 +7,7 @@ import {
   r9ResultClassification,
   validateR9Observation,
 } from './run_r9_database_recovery.mjs';
+import { readHistoricalRepositoryFile } from './read_historical_repository_file.mjs';
 import { readRepositoryFile } from './read_repository_file.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -23,6 +24,12 @@ function exact(actual, expected) {
 
 function source(repositoryRoot, path) {
   return readRepositoryFile(repositoryRoot, path, { label: `R9 source ${path}` });
+}
+
+function sourceAtImplementationHead(repositoryRoot, path) {
+  return readHistoricalRepositoryFile(repositoryRoot, implementationHead, path, {
+    label: `R9 implementation source`,
+  });
 }
 
 function requireMarkers(content, path, markers) {
@@ -158,8 +165,7 @@ export function validateR9DatabaseRecovery({
   if (value.nextPackage !== 'R10') fail('R9 next package is invalid.');
 
   const runnerPath = 'tool/run_r9_database_recovery.mjs';
-  requireMarkers(source(repositoryRoot, runnerPath), runnerPath, [
-    "r9RequiredMigrationCount = 71",
+  requireMarkers(sourceAtImplementationHead(repositoryRoot, runnerPath), runnerPath, [
     "r9SyntheticAccountCount = 12",
     "r9SyntheticListingCount = 6",
     "'pg_dump'",
@@ -169,12 +175,12 @@ export function validateR9DatabaseRecovery({
     'backupArchiveRemoved: true',
   ]);
   const workflowPath = '.github/workflows/regression.yml';
-  requireMarkers(source(repositoryRoot, workflowPath), workflowPath, [
+  requireMarkers(sourceAtImplementationHead(repositoryRoot, workflowPath), workflowPath, [
     'Run repository-owned PostgreSQL 16 R9 recovery proof',
     'node ../tool/run_r9_database_recovery.mjs',
   ]);
   const regressionPath = 'scripts/technical_regression_check.sh';
-  requireMarkers(source(repositoryRoot, regressionPath), regressionPath, [
+  requireMarkers(sourceAtImplementationHead(repositoryRoot, regressionPath), regressionPath, [
     'node --check tool/run_r9_database_recovery.mjs',
     'node --test test/tool/run_r9_database_recovery.test.mjs',
     'node --check tool/validate_r9_database_recovery.mjs',
