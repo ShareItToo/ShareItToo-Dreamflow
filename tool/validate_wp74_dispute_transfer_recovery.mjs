@@ -134,6 +134,24 @@ function validateVerification(repositoryRoot, value, checkGitState) {
     if (!exact(value.verification, pending)) fail('WP74 pending verification is invalid.');
     return;
   }
+  const localComplete = {
+    implementationHead: '9924d90081a7476e332f6c4b11bf6cb2e7ddd9c9',
+    focusedTests: 'passed-39',
+    postgresIntegration: 'passed',
+    fullLocalRegression: 'passed',
+    localToolTestsPassed: 2542,
+    githubRegressionRun: null,
+    githubCodeqlRun: null,
+    openPrMergeAlerts: null,
+    pullRequest7: 'draft-open-mergeable-unmerged',
+  };
+  if (value.status === 'complete-local-github-pending') {
+    if (!exact(value.verification, localComplete)) {
+      fail('WP74 local-completion verification is invalid.');
+    }
+    if (checkGitState) assertAncestor(repositoryRoot, localComplete.implementationHead);
+    return;
+  }
   const verification = value.verification;
   if (value.status !== 'complete-local-github'
       || !/^[a-f0-9]{40}$/u.test(verification?.implementationHead ?? '')

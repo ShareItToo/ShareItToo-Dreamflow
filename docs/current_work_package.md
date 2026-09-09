@@ -1,4 +1,30 @@
-# Current Work Package: WP73 Stripe Sandbox Compatibility Inventory
+# Current Work Package: WP74 Dispute Transfer Recovery
+
+WP74 is **COMPLETE LOCALLY; GITHUB VERIFICATION PENDING**. It closes the
+previous P0 gap in the dispute path: an owner transfer paid before a chargeback
+now has durable, idempotent, provider-bound recovery. Only known, structured
+provider invalid-request errors are definite rejection. Timeouts, transport
+failure and unstructured responses remain uncertain and require review; they
+cannot be shown as success or as “not changed”. Funds reinstated mid-recovery
+never automatically reopen a booking, dispute, payout or release.
+
+The former private candidate `1.0.0+2026090904` is preserved and permanently
+not uploadable because it predates the backend change. The new signed private
+Internal/Staging candidate is `1.0.0+2026090905`, source
+`e1c182ea496f013989863155c13bfda649255a7e`; it has not been uploaded or
+installed. Its AAB SHA-256 is
+`ed3d5e5af99a6577e09afc96a880ac4ca7c9c0bd86c54bcaa3f5a07fd6255295`.
+
+Thirty-nine focused tests, two PostgreSQL integration tests, all 2,542 tool
+tests and the complete local technical regression pass. The compatible local
+Android Build-Tools 36.1 correction eliminated the former SDK-XML diagnostic;
+no warning suppression or runtime workaround was introduced. GitHub Regression,
+CodeQL and clean-checkout CI are pending. No Stripe API/Dashboard, money,
+Staging, Production, Store, tester, Firebase, Cloud/VPS/DNS, device or merge
+action occurred. See
+`docs/operations/WP74_DISPUTE_TRANSFER_RECOVERY_2026-09-09.md`.
+
+# Previous Work Package: WP73 Stripe Sandbox Compatibility Inventory
 
 WP73 is **COMPLETE LOCALLY AND ON GITHUB; READ-ONLY PROVIDER VERIFICATION
 PENDING**. The repository's

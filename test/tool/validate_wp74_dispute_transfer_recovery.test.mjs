@@ -27,7 +27,7 @@ function validate(changed = evidence) {
 
 test('accepts the exact WP74 payment-integrity evidence', () => {
   assert.deepEqual(validate(), {
-    status: 'implemented-pending-full-regression',
+    status: 'complete-local-github-pending',
     package: 'WP74',
     paidTransferRecovery: 'durable-idempotent-provider-bound',
     providerTrafficChanged: false,

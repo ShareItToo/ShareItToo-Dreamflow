@@ -1,5 +1,27 @@
 # ShareItToo Current State
 
+WP74 is **COMPLETE LOCALLY; GITHUB VERIFICATION PENDING**. Durable recovery
+now exists for an owner transfer already paid when a later dispute occurs.
+Safe provider rejection is deliberately narrow; timeout, transport and
+unstructured failures remain uncertain/reviewable and can never produce a
+false success or false “not changed” outcome. Reinstated funds do not auto-open
+or auto-release anything.
+
+The previous candidate `1.0.0+2026090904` is historically retained and cannot
+be uploaded. A new private signed Internal/Staging candidate
+`1.0.0+2026090905`, source `e1c182ea496f013989863155c13bfda649255a7e`, is
+locally archived and verified but neither uploaded nor installed. Its AAB SHA-256
+is `ed3d5e5af99a6577e09afc96a880ac4ca7c9c0bd86c54bcaa3f5a07fd6255295`.
+
+Thirty-nine focused tests, two PostgreSQL integration tests, 2,542 tool tests
+and the complete Backend, Flutter, analyzer, Web/Wasm, loopback and Android
+local regression pass. GitHub Regression, CodeQL and clean-checkout CI remain
+pending. No provider, money, deployment, Store, tester, Firebase, production,
+Cloud/VPS/DNS, device or merge change occurred. See
+`docs/operations/WP74_DISPUTE_TRANSFER_RECOVERY_2026-09-09.md`.
+
+## Previous package: WP73
+
 WP73 is **COMPLETE LOCALLY AND ON GITHUB; READ-ONLY PROVIDER VERIFICATION
 PENDING**. The read-only
 Stripe sandbox compatibility inventory finds the current Accounts v2,

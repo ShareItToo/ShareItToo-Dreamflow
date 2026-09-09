@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "sit-wp74-dispute-transfer-recovery",
-  "status": "implemented-pending-full-regression",
+  "status": "complete-local-github-pending",
   "capturedOn": "2026-09-09",
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -63,11 +63,11 @@
     "historicalWp73Evidence": "bound-to-its-implementation-head"
   },
   "verification": {
-    "implementationHead": null,
-    "focusedTests": "passed",
+    "implementationHead": "9924d90081a7476e332f6c4b11bf6cb2e7ddd9c9",
+    "focusedTests": "passed-39",
     "postgresIntegration": "passed",
-    "fullLocalRegression": "pending",
-    "localToolTestsPassed": null,
+    "fullLocalRegression": "passed",
+    "localToolTestsPassed": 2542,
     "githubRegressionRun": null,
     "githubCodeqlRun": null,
     "openPrMergeAlerts": null,

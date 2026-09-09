@@ -44,17 +44,17 @@
   "sourceVerification": {
     "closedPilotFocusedTests": "passed",
     "privacyAndPackageRatchets": "passed",
-    "fullToolInventory": "pending-candidate-binding",
-    "localCiProfileRegression": "pending-candidate-binding",
-    "cleanCheckoutReproducibility": "pending-candidate-binding",
+    "fullToolInventory": "passed-2542",
+    "localCiProfileRegression": "passed-21f812517475223c92fa42ce039eb7693a1b7740",
+    "cleanCheckoutReproducibility": "github-pending",
     "githubVerifiedHead": null,
     "githubRegressionRunId": null,
-    "githubRegressionConclusion": "pending-candidate-binding",
+    "githubRegressionConclusion": "pending",
     "githubCodeqlRunId": null,
-    "githubCodeqlConclusion": "pending-candidate-binding",
+    "githubCodeqlConclusion": "pending",
     "githubApiImagePublishRunId": null,
     "githubApiImagePublishConclusion": "not-requested",
-    "openCodeScanningAlerts": "pending-candidate-binding"
+    "openCodeScanningAlerts": "pending"
   },
   "stagingStateAtReadback": {
     "sourceHead": "7a73de4aba2b4ae4d6785e8dfbd466a5ad5aa60c",

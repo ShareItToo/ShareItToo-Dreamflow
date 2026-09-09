@@ -1,6 +1,6 @@
 # WP74 — dispute transfer recovery
 
-Status: **SIGNED SUCCESSOR CANDIDATE BUILT; LOCAL/GITHUB CLOSURE PENDING**.
+Status: **LOCAL REGRESSION COMPLETE; GITHUB CLOSURE PENDING**.
 
 WP74 adds durable, idempotent recovery of an owner transfer after a payment
 dispute. A provider timeout or an unstructured response never becomes a local
@@ -43,6 +43,7 @@ locally; the repeated AAB and APK build completed without that diagnostic.
 This is a toolchain correction, not a warning suppression or a product
 workaround.
 
-The next step is the full deterministic regression and then normal GitHub
-verification for the source/binding sequence. No external release action is
-authorized or implied.
+All 2,542 repository tool tests and the complete deterministic local
+regression pass, including PostgreSQL, Flutter, analyzer, Web/Wasm, loopback
+and Android minSdk-24. The next step is normal GitHub verification for the
+source/binding sequence. No external release action is authorized or implied.
