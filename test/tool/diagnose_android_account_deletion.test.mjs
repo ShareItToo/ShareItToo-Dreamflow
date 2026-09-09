@@ -15,6 +15,7 @@ import {
   readAccountDeletionJournal,
   sanitizeAccountDeletionFailure,
   selectDeletionNode,
+  verifyDeletionRecoveryPreconditions,
 } from '../../tool/diagnose_android_account_deletion.mjs';
 import { detectHighConfidenceSecretRules } from '../../backend/ops/secret_scan_rules.mjs';
 import { createTestTempTracker } from './test_temp_fixtures.mjs';
@@ -229,6 +230,50 @@ test('does not call an unreachable backend a deleted account', async () => {
   });
   assert.equal(result.state, 'unknown');
   assert.equal(result.acceptedSessionRevoked, false);
+});
+
+test('proves both target and protected recovery credentials before deletion preflight', async () => {
+  const calls = [];
+  const result = await verifyDeletionRecoveryPreconditions({
+    account: { email: 'target@example.test' },
+    protectedOwner: { email: 'protected@example.test' },
+    fetchImpl: async () => response(500, {}),
+    probeCredential: async ({ account }) => {
+      calls.push(`probe:${account.email}`);
+      return { state: 'active' };
+    },
+    runDeletionPreflight: async ({ account }) => {
+      calls.push(`preflight:${account.email}`);
+      return true;
+    },
+  });
+  assert.deepEqual(result, {
+    targetCredentialActive: true,
+    protectedRecoveryCredentialActive: true,
+    deletionPreflightClear: true,
+  });
+  assert.deepEqual(calls, [
+    'probe:target@example.test',
+    'probe:protected@example.test',
+    'preflight:target@example.test',
+  ]);
+});
+
+test('stops before deletion preflight when protected recovery truth is unavailable', async () => {
+  let preflightCalled = false;
+  await assert.rejects(() => verifyDeletionRecoveryPreconditions({
+    account: { email: 'target@example.test' },
+    protectedOwner: { email: 'protected@example.test' },
+    fetchImpl: async () => response(500, {}),
+    probeCredential: async ({ account }) => ({
+      state: account.email.startsWith('target') ? 'active' : 'unknown',
+    }),
+    runDeletionPreflight: async () => {
+      preflightCalled = true;
+      return true;
+    },
+  }), /protected recovery account/u);
+  assert.equal(preflightCalled, false);
 });
 
 test('selects only an enabled exact owned deletion action', () => {

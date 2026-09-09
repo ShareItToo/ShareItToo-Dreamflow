@@ -433,6 +433,32 @@ async function deletionPreflight({ account, fetchImpl }) {
   return true;
 }
 
+export async function verifyDeletionRecoveryPreconditions({
+  account,
+  protectedOwner,
+  fetchImpl = globalThis.fetch,
+  probeCredential = probeDeletionCredential,
+  runDeletionPreflight = deletionPreflight,
+} = {}) {
+  if (typeof fetchImpl !== 'function'
+      || typeof probeCredential !== 'function'
+      || typeof runDeletionPreflight !== 'function') {
+    fail('The account-deletion recovery preflight dependencies are invalid.');
+  }
+  if ((await probeCredential({ account, fetchImpl })).state !== 'active') {
+    fail('The deletion target does not have exact active credential truth.');
+  }
+  if ((await probeCredential({ account: protectedOwner, fetchImpl })).state !== 'active') {
+    fail('The protected recovery account does not have exact active credential truth.');
+  }
+  await runDeletionPreflight({ account, fetchImpl });
+  return Object.freeze({
+    targetCredentialActive: true,
+    protectedRecoveryCredentialActive: true,
+    deletionPreflightClear: true,
+  });
+}
+
 function nodeBounds(node) {
   const match = /^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$/u.exec(
     currentHeadAndroidNodeAttribute(node, 'bounds') ?? '',
@@ -695,10 +721,7 @@ export async function executePixelAccountDeletion({
   const installed = verifyInstalled(commandRunner, adbPath, device, exactCandidate);
   const account = target.value.account;
   const protectedOwner = protectedSource.owner;
-  if ((await probeDeletionCredential({ account, fetchImpl })).state !== 'active') {
-    fail('The deletion target does not have exact active credential truth.');
-  }
-  await deletionPreflight({ account, fetchImpl });
+  await verifyDeletionRecoveryPreconditions({ account, protectedOwner, fetchImpl });
   transitionJournal({
     journalFile,
     expectedStatus: 'prepared-before-deletion',
@@ -758,6 +781,7 @@ export async function executePixelAccountDeletion({
       installedVersionName: installed.versionName,
       installedBuildNumber: installed.buildNumber,
       deletionPreflightClear: true,
+      protectedOwnerRecoveryPreflightPassed: true,
       wrongPasswordDefinitelyRejected: true,
       rejectedAttemptPreservedAccount: true,
       accountDeletionUiConfirmed: true,
