@@ -24,7 +24,7 @@ function validate(changed = evidence) {
 
 test('accepts exact-candidate auth, safety and provider-hold evidence', () => {
   assert.deepEqual(validate(), {
-    status: 'implemented-pending-local-github',
+    status: 'complete-local-github',
     candidateVersionCode: '2026090904',
     closedRequirementCount: 2,
     paymentProviderCalled: false,
@@ -43,7 +43,7 @@ test('rejects candidate, source and package-verification drift', () => {
 
   const verification = structuredClone(evidence);
   verification.packageVerification.githubRegressionRun = 1;
-  assert.throws(() => validate(verification), /pending verification/u);
+  assert.throws(() => validate(verification), /complete verification/u);
 });
 
 test('rejects missing session and single-use action proof', () => {

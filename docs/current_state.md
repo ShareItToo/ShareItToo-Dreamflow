@@ -1,6 +1,6 @@
 # ShareItToo Current State
 
-WP70 is **IMPLEMENTED; LOCAL AND GITHUB VERIFICATION PENDING**. On the exact
+WP70 is **COMPLETE LOCALLY AND ON GITHUB**. On the exact
 Pixel candidate `1.0.0+2026090904`, fresh e-mail registration, single-use
 verification, login/cold start, password reset, exact old-password rejection,
 password change/rollback, session inventory/revocation/logout-all,
@@ -17,6 +17,15 @@ creating binding state or using money. The OnePlus was not contacted. No app or
 Backend runtime, deployment, Production, Store, tester, Firebase, provider,
 legal, Cloud/VPS/DNS or merge state changed. See
 `docs/operations/WP70_CURRENT_CANDIDATE_AUTH_SAFETY_HOLD_2026-09-09.md`.
+
+Exact implementation HEAD
+`523f1693e701371654888e5a3ce22598acdc8858` passes 48 focused tests, the full
+local technical regression with 2,511 tool tests, GitHub Regression
+`34345166849`, CodeQL `34345166833` and zero open PR-merge Code Scanning
+alerts. PR #7 remains Draft, open, mergeable and unmerged. A date-dependent
+shared-listing fixture collision discovered by GitHub was removed with an
+isolated fixture; candidate guards now admit only test-tree drift while actual
+mobile or Backend runtime drift remains fail-closed.
 
 WP69 is **COMPLETE LOCALLY AND ON GITHUB**. The
 active goal now has a strict 32-area current-candidate audit bound to Android

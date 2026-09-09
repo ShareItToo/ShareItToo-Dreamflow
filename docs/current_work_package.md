@@ -1,6 +1,6 @@
 # Current Work Package: WP70 Current-Candidate Auth, Safety and Provider Hold
 
-WP70 is **IMPLEMENTED; LOCAL AND GITHUB VERIFICATION PENDING**. It closes the
+WP70 is **COMPLETE LOCALLY AND ON GITHUB**. It closes the
 exact-current-candidate e-mail registration/recovery and
 password/session/account-switch gaps on Pixel. Both consumed
 action links reject replay with exact structured Backend errors; logout-all is
@@ -18,6 +18,15 @@ identity provider, VPS/DNS, OnePlus or merge action occurred. Privacy export is
 current-candidate proven; account deletion and Stripe sandbox remain separate
 unresolved requirements. See
 `docs/operations/WP70_CURRENT_CANDIDATE_AUTH_SAFETY_HOLD_2026-09-09.md`.
+
+Exact implementation HEAD
+`523f1693e701371654888e5a3ce22598acdc8858` passes 48 focused tests, the full
+local technical regression with 2,511 tool tests, GitHub Regression
+`34345166849`, CodeQL `34345166833` and zero open PR-merge Code Scanning
+alerts. PR #7 remains Draft, open, mergeable and unmerged. The corrected
+calendar fixture is isolated, and the candidate ratchets distinguish
+test-only Backend drift from actual runtime drift without any permanent timing
+or retry workaround.
 
 # Previous Work Package: WP69 Current-Goal Acceptance Audit
 

@@ -193,19 +193,19 @@ function validateClosure(value) {
 }
 
 function validateVerification(value) {
-  const expectedPending = {
-    implementationHead: null,
-    focusedTests: 'pending',
-    fullLocalRegression: 'pending',
-    localToolTestsPassed: null,
-    githubRegressionRun: null,
-    githubCodeqlRun: null,
-    openPrMergeAlerts: null,
+  const expectedComplete = {
+    implementationHead: '523f1693e701371654888e5a3ce22598acdc8858',
+    focusedTests: 'passed-48',
+    fullLocalRegression: 'passed',
+    localToolTestsPassed: 2511,
+    githubRegressionRun: 34345166849,
+    githubCodeqlRun: 34345166833,
+    openPrMergeAlerts: 0,
     pullRequest7: 'draft-open-mergeable-unmerged',
   };
-  if (value.status === 'implemented-pending-local-github') {
-    if (!exact(value.packageVerification, expectedPending)) {
-      fail('WP70 pending verification contract is invalid.');
+  if (value.status === 'complete-local-github') {
+    if (!exact(value.packageVerification, expectedComplete)) {
+      fail('WP70 complete verification contract is invalid.');
     }
     return;
   }
