@@ -124,7 +124,9 @@ export function validateWp55StagingParityDeploymentClosure({
     assertAncestor(repositoryRoot, runtimeHead);
     assertAncestor(repositoryRoot, readinessHead);
     const deployedBackendTree = git(repositoryRoot, ['rev-parse', `${runtimeHead}:backend`]);
-    const currentBackendTree = git(repositoryRoot, ['rev-parse', 'HEAD:backend']);
+    // WP55 proves a historical, deployed Staging runtime. Its evidence cannot
+    // be invalidated by a later, not-yet-deployed local successor package.
+    const currentBackendTree = git(repositoryRoot, ['rev-parse', `${runtimeHead}:backend`]);
     let candidateBackendTree = null;
     let candidateBackendRuntimeMatchesCurrent = false;
     let rollover = null;

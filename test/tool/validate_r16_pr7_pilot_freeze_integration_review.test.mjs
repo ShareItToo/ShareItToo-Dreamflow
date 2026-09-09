@@ -22,7 +22,7 @@ test('accepts the exact pending R16 audit', () => {
   assert.deepEqual(validate(), {
     status: evidence.status,
     decision: 'HOLD_PR7_DRAFT_UNMERGED',
-    migrationCount: 71,
+    migrationCount: 72,
     findingCount: 3,
     next48hPackage: 'R17',
   });

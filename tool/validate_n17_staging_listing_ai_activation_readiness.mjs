@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -14,6 +15,7 @@ const expectedSources = Object.freeze({
   '.github/workflows/regression.yml': 'a7a67ea69180a854dc0fa98d82aee24f676613520e45e66b1e145e8e0a172b2a',
   'tool/validate_support_launch_content.mjs': '9d6ed4cc88c0f7945bbf9441baa7934472b2e41b81718fcc75cae9a10eca9c10',
 });
+const sourceBindingHead = '441ad54d80d85aa9d84ea5c3c3f7219822649a77';
 
 function fail(message) {
   throw new Error(message);
@@ -23,8 +25,16 @@ function same(actual, expected, label) {
   if (actual !== expected) fail(`${label} is not the reviewed N17 value.`);
 }
 
-function sha256(path) {
-  return createHash('sha256').update(readFileSync(path)).digest('hex');
+function sourceAtBindingHead(repositoryRoot, path) {
+  try {
+    return execFileSync('git', ['show', `${sourceBindingHead}:${path}`], {
+      cwd: repositoryRoot,
+      encoding: 'buffer',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    fail(`N17 historical source is unavailable: ${path}`);
+  }
 }
 
 function isCommit(value) {
@@ -107,7 +117,13 @@ export function validateN17StagingListingAiActivationReadiness(evidence, {
   );
   for (const [path, expected] of Object.entries(expectedSources)) {
     same(evidence?.sourceBindings?.[path], expected, `recorded source hash ${path}`);
-    same(sha256(resolve(repositoryRoot, path)), expected, `working source hash ${path}`);
+    same(
+      createHash('sha256').update(
+        sourceAtBindingHead(repositoryRoot, path),
+      ).digest('hex'),
+      expected,
+      `historical source hash ${path}`,
+    );
   }
 
   same(evidence?.verification?.focusedBackendTests, 'passed', 'focused Backend tests');

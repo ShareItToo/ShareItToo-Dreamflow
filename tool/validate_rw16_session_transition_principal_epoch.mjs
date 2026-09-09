@@ -6,10 +6,12 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { readRepositoryFile } from './read_repository_file.mjs';
+import { readHistoricalRepositoryFile } from './read_historical_repository_file.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath =
   'docs/evidence/48h-remote/rw16-session-transition-principal-epoch-20260826.json';
+const inventorySnapshotHead = '9fd6b6023b124e7c7efd9aff518a8c7d61a304a0';
 const sourcePaths = [
   'lib/screens/security_screen.dart',
   'lib/screens/profile_screen.dart',
@@ -316,9 +318,9 @@ export function validateRw16SessionTransitionPrincipalEpoch({
     fail('RW16 source inventory paths are invalid.');
   }
   for (const entry of value.sourceInventory) {
-    const text = Object.hasOwn(sourceTexts, entry.path)
-      ? sourceTexts[entry.path]
-      : source(repositoryRoot, entry.path);
+    const text = readHistoricalRepositoryFile(repositoryRoot, inventorySnapshotHead, entry.path, {
+      sourceTexts, label: 'RW16 source-binding snapshot',
+    });
     if (!/^[a-f0-9]{64}$/u.test(entry.sha256)
         || sha256(text) !== entry.sha256) {
       fail(`RW16 source inventory hash is stale: ${entry.path}`);

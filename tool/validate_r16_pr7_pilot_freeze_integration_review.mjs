@@ -93,16 +93,16 @@ export function validateR16Pr7PilotFreezeIntegrationReview({
   const migrationNames = readdirSync(migrationDirectory);
   const up = migrationNames.filter((name) => /^\d{3}_.+\.up\.sql$/u.test(name)).sort();
   const down = migrationNames.filter((name) => /^\d{3}_.+\.down\.sql$/u.test(name)).sort();
-  if (up.length !== 71 || down.length !== 44
+  if (up.length !== 72 || down.length !== 45
       || up[0] !== value.migrationInventory.first
       || up.at(-1) !== value.migrationInventory.last
       || !exact(value.migrationInventory, {
         first: '001_b3_foundation.up.sql',
-        last: '071_stripe_connect_accounts_v2.up.sql',
-        orderedUpScripts: 71,
-        pairedDownScripts: 44,
+        last: '072_dispute_transfer_recovery.up.sql',
+        orderedUpScripts: 72,
+        pairedDownScripts: 45,
         forwardOnlyRange: '001-027',
-        pairedRange: '028-071',
+        pairedRange: '028-072',
         checksumBound: true,
         secondRunChanges: 0,
         restoredTables: 136,
@@ -113,6 +113,7 @@ export function validateR16Pr7PilotFreezeIntegrationReview({
           '069_regional_price_engine_r6_hardening',
           '070_stage_a_non_binding_simulation_guard',
           '071_stripe_connect_accounts_v2',
+          '072_dispute_transfer_recovery',
         ],
       })) fail('R16 migration inventory is invalid.');
 

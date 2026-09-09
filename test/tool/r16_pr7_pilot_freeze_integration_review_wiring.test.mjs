@@ -18,11 +18,11 @@ test('R16 preserves exact Draft and unmerged PR truth', () => {
   assert.match(report, /HOLD_PR7_DRAFT_UNMERGED/u);
 });
 
-test('R16 binds the current 71-up 44-down migration inventory', () => {
-  assert.equal(evidence.migrationInventory.orderedUpScripts, 71);
-  assert.equal(evidence.migrationInventory.pairedDownScripts, 44);
+test('R16 binds the current 72-up 45-down migration inventory', () => {
+  assert.equal(evidence.migrationInventory.orderedUpScripts, 72);
+  assert.equal(evidence.migrationInventory.pairedDownScripts, 45);
   assert.equal(evidence.migrationInventory.forwardOnlyRange, '001-027');
-  assert.equal(evidence.migrationInventory.pairedRange, '028-071');
+  assert.equal(evidence.migrationInventory.pairedRange, '028-072');
 });
 
 test('R16 keeps snapshot or forward fix as the data rollback default', () => {
@@ -36,6 +36,7 @@ test('R16 keeps snapshot or forward fix as the data rollback default', () => {
     '069_regional_price_engine_r6_hardening',
     '070_stage_a_non_binding_simulation_guard',
     '071_stripe_connect_accounts_v2',
+    '072_dispute_transfer_recovery',
   ]);
 });
 

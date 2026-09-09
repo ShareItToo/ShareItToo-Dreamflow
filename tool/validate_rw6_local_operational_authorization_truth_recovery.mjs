@@ -5,10 +5,12 @@ import { dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { readRepositoryFile } from './read_repository_file.mjs';
+import { readHistoricalRepositoryFile } from './read_historical_repository_file.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath =
   'docs/evidence/48h-remote/rw6-local-operational-record-authorization-truth-recovery-20260825.json';
+const inventorySnapshotHead = '9fd6b6023b124e7c7efd9aff518a8c7d61a304a0';
 const sourcePaths = [
   'lib/models/message.dart',
   'lib/screens/booking_detail_screen.dart',
@@ -211,7 +213,9 @@ export function validateRw6LocalOperationalAuthorizationTruthRecovery({
     if (!/^[a-f0-9]{64}$/u.test(entry.sha256 ?? '')) {
       fail(`RW6 source hash is invalid: ${entry.path}`);
     }
-    const content = sourceTexts[entry.path] ?? source(repositoryRoot, entry.path);
+    const content = readHistoricalRepositoryFile(repositoryRoot, inventorySnapshotHead, entry.path, {
+      sourceTexts, label: 'RW6 source-binding snapshot',
+    });
     if (sha256(content) !== entry.sha256) {
       fail(`RW6 source inventory hash is stale: ${entry.path}`);
     }

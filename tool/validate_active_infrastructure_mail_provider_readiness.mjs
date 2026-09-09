@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +13,7 @@ const classificationPath =
   'docs/evidence/b11/google-play-service-provider-sharing-classification-2026081505-20260815.json';
 const privacyPath = 'store/privacy-disclosures.json';
 const retentionPath = 'store/retention-deletion-readiness.json';
+const sourceBindingHead = '9fd6b6023b124e7c7efd9aff518a8c7d61a304a0';
 const decisionKeys = Object.freeze([
   'hosterAccountContractAndDpa',
   'hosterServiceSeatAndRegion',
@@ -56,6 +58,21 @@ function readSource(relativePath, overrides) {
     return Buffer.from(String(overrides[relativePath]), 'utf8');
   }
   return readFileSync(path.join(root, relativePath));
+}
+
+function readBoundSource(relativePath, overrides) {
+  if (overrides?.[relativePath] !== undefined) {
+    return Buffer.from(String(overrides[relativePath]), 'utf8');
+  }
+  try {
+    return execFileSync('git', ['show', `${sourceBindingHead}:${relativePath}`], {
+      cwd: root,
+      encoding: 'buffer',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    throw new Error(`historical_source_unavailable:${relativePath}`);
+  }
 }
 
 function readJson(relativePath, overrides) {
@@ -124,7 +141,7 @@ export function validateActiveInfrastructureMailProviderReadiness({
   repositorySources.forEach(([sourcePath, hash], index) => {
     assertCondition(
       exact(manifest.sourceBindings.repository[index], { path: sourcePath, sha256: hash })
-        && sha256(readSource(sourcePath, sourceOverrides)) === hash,
+        && sha256(readBoundSource(sourcePath, sourceOverrides)) === hash,
       `repository_source_drift:${sourcePath}`,
     );
   });

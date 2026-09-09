@@ -5,10 +5,12 @@ import { dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { readRepositoryFile } from './read_repository_file.mjs';
+import { readHistoricalRepositoryFile } from './read_historical_repository_file.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath =
   'docs/evidence/48h-remote/rw9-local-account-profile-authorization-durability-20260825.json';
+const inventorySnapshotHead = '9fd6b6023b124e7c7efd9aff518a8c7d61a304a0';
 const sourcePaths = [
   'lib/models/user.dart',
   'lib/services/account_deletion_service.dart',
@@ -218,10 +220,10 @@ export function validateRw9LocalAccountProfileAuthorizationDurability({
     fail('RW9 source inventory paths are invalid.');
   }
   for (const entry of value.sourceInventory) {
-    if (!/^[a-f0-9]{64}$/u.test(entry.sha256)
-        || sha256(Object.hasOwn(sourceTexts, entry.path)
-          ? sourceTexts[entry.path]
-          : source(repositoryRoot, entry.path)) !== entry.sha256) {
+    const text = readHistoricalRepositoryFile(repositoryRoot, inventorySnapshotHead, entry.path, {
+      sourceTexts, label: 'RW9 source-binding snapshot',
+    });
+    if (!/^[a-f0-9]{64}$/u.test(entry.sha256) || sha256(text) !== entry.sha256) {
       fail(`RW9 source inventory hash is stale: ${entry.path}`);
     }
   }

@@ -49,11 +49,11 @@
   },
   "migrationInventory": {
     "first": "001_b3_foundation.up.sql",
-    "last": "071_stripe_connect_accounts_v2.up.sql",
-    "orderedUpScripts": 71,
-    "pairedDownScripts": 44,
+    "last": "072_dispute_transfer_recovery.up.sql",
+    "orderedUpScripts": 72,
+    "pairedDownScripts": 45,
     "forwardOnlyRange": "001-027",
-    "pairedRange": "028-071",
+    "pairedRange": "028-072",
     "checksumBound": true,
     "secondRunChanges": 0,
     "restoredTables": 136,
@@ -63,7 +63,8 @@
       "066_blue_ocean_listing_ai_foundation",
       "069_regional_price_engine_r6_hardening",
       "070_stage_a_non_binding_simulation_guard",
-      "071_stripe_connect_accounts_v2"
+      "071_stripe_connect_accounts_v2",
+      "072_dispute_transfer_recovery"
     ]
   },
   "domainAudit": {

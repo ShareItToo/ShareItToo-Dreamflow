@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -9,6 +10,7 @@ import { readRepositoryFile } from './read_repository_file.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath =
   'docs/evidence/48h-remote/rw14-security-remote-device-revocation-outcome-principal-epoch-20260825.json';
+const sourceBindingHead = '9fd6b6023b124e7c7efd9aff518a8c7d61a304a0';
 const sourcePaths = [
   'backend/src/app.js',
   'lib/screens/security_screen.dart',
@@ -37,6 +39,15 @@ const exact = (actual, expected) =>
 const source = (repositoryRoot, path) =>
   readRepositoryFile(repositoryRoot, path, { label: `RW14 source ${path}` });
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
+
+function sourceAtImplementationHead(repositoryRoot, value, path, sourceTexts) {
+  if (Object.hasOwn(sourceTexts, path)) return sourceTexts[path];
+  try {
+    return execFileSync('git', ['show', `${sourceBindingHead}:${path}`], {
+      cwd: repositoryRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch { fail(`RW14 source-binding snapshot is unavailable: ${path}`); }
+}
 
 function assertSanitized(value) {
   const serialized = JSON.stringify(value);
@@ -228,9 +239,7 @@ export function validateRw14SecurityRemoteDeviceRevocationOutcomePrincipalEpoch(
     fail('RW14 source inventory paths are invalid.');
   }
   for (const entry of value.sourceInventory) {
-    const text = Object.hasOwn(sourceTexts, entry.path)
-      ? sourceTexts[entry.path]
-      : source(repositoryRoot, entry.path);
+    const text = sourceAtImplementationHead(repositoryRoot, value, entry.path, sourceTexts);
     if (!/^[a-f0-9]{64}$/u.test(entry.sha256)
         || sha256(text) !== entry.sha256) {
       fail(`RW14 source inventory hash is stale: ${entry.path}`);

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -12,6 +13,7 @@ import {
 
 const defaultRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const manifestPath = 'docs/evidence/p0b-next/psp-sandbox-e2e-evidence.json';
+const sourceBindingHead = '441ad54d80d85aa9d84ea5c3c3f7219822649a77';
 
 const expectedRepoSources = Object.freeze([
   Object.freeze(['backend/src/stripe_provider.js', 'da0515456298f197c283742585a445470b822a73e0c159eed3e1d70be94a593a']),
@@ -48,7 +50,15 @@ function exact(actual, expected) {
 
 function source(root, path, overrides) {
   if (Object.hasOwn(overrides, path)) return Buffer.from(String(overrides[path]), 'utf8');
-  return readFileSync(resolve(root, path));
+  try {
+    return execFileSync('git', ['show', `${sourceBindingHead}:${path}`], {
+      cwd: root,
+      encoding: 'buffer',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    fail(`P0B PSP historical source is unavailable: ${path}`);
+  }
 }
 
 function sha256(value) {

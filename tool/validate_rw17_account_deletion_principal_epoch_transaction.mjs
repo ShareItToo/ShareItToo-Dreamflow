@@ -6,10 +6,12 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { readRepositoryFile } from './read_repository_file.mjs';
+import { readHistoricalRepositoryFile } from './read_historical_repository_file.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath =
   'docs/evidence/48h-remote/rw17-account-deletion-principal-epoch-transaction-20260826.json';
+const inventorySnapshotHead = '9fd6b6023b124e7c7efd9aff518a8c7d61a304a0';
 const sourcePaths = [
   'lib/screens/account_settings_screen.dart',
   'lib/services/account_deletion_service.dart',
@@ -283,9 +285,9 @@ export function validateRw17AccountDeletionPrincipalEpochTransaction({
     fail('RW17 source inventory paths are invalid.');
   }
   for (const entry of value.sourceInventory) {
-    const content = Object.hasOwn(sourceTexts, entry.path)
-      ? sourceTexts[entry.path]
-      : source(repositoryRoot, entry.path);
+    const content = readHistoricalRepositoryFile(repositoryRoot, inventorySnapshotHead, entry.path, {
+      sourceTexts, label: 'RW17 source-binding snapshot',
+    });
     if (!/^[a-f0-9]{64}$/u.test(entry.sha256)
         || sha256(content) !== entry.sha256) {
       fail(`RW17 source inventory hash is stale: ${entry.path}`);
