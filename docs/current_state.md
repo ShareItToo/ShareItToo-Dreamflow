@@ -1,5 +1,18 @@
 # ShareItToo Current State
 
+WP71 is **IMPLEMENTED ON PIXEL; LOCAL AND GITHUB VERIFICATION PENDING**. The
+unchanged exact candidate `1.0.0+2026090904` now passes the complete disposable
+Staging account-deletion lifecycle: target and protected recovery credentials
+were preflighted, the wrong password was definitely rejected without deleting
+the account, the correct deletion was confirmed in-app and independently by
+Staging credential rejection, a terminated-process cold start showed Guest,
+and the protected owner was restored. Private target credentials were scrubbed
+only after exact deletion truth. Privacy export plus deletion is now `PASS`.
+
+No real account, Production, runtime, deployment, Store, tester, Firebase,
+identity/payment provider, money, Cloud/VPS/DNS, OnePlus or merge state changed.
+See `docs/operations/WP71_CURRENT_CANDIDATE_ACCOUNT_DELETION_2026-09-09.md`.
+
 WP70 is **COMPLETE LOCALLY AND ON GITHUB**. On the exact
 Pixel candidate `1.0.0+2026090904`, fresh e-mail registration, single-use
 verification, login/cold start, password reset, exact old-password rejection,
