@@ -9690,14 +9690,30 @@ if (!databaseUrl) {
           + (24 * 60 * 60 * 1000),
       ).toISOString().slice(0, 10);
       await setupPool.query(
+        `INSERT INTO listings (
+           id, owner_id, payload, is_active, catalog_version, catalog_revision,
+           status, currency, price_per_day_minor,
+           title, description, category_id, condition, location_text, city, country,
+           latitude, longitude, min_days, max_days, protection_model
+         ) VALUES (
+           's4l-listing', 'owner',
+           '{"id":"s4l-listing","ownerId":"owner","title":"S4L handover fixture","description":"Dedicated date-independent handover-exception fixture","categoryId":"cat3","subcategory":"Kameras","pricePerDay":10,"priceRaw":10,"priceUnit":"day","currency":"EUR","deposit":null,"photos":[],"locationText":"Owner exact address","lat":52.5201,"lng":13.4051,"geohash":"private","condition":"good","minDays":1,"maxDays":30,"createdAt":"2026-08-08T20:00:00.000Z","isActive":true,"verificationStatus":"pending","city":"Berlin","country":"Deutschland","status":"active","timesLent":0,"protectionModel":"none"}'::jsonb,
+           true, 1, 1, 'active', 'EUR', 1000,
+           'S4L handover fixture',
+           'Dedicated date-independent handover-exception fixture',
+           'cat3', 'good', 'Owner exact address', 'Berlin', 'Deutschland',
+           52.5201, 13.4051, 1, 30, 'none'
+         )`,
+      );
+      await setupPool.query(
         `INSERT INTO rental_requests (
            id, item_id, owner_id, renter_id, status, payload
          ) VALUES (
-           's4l-handover', 'listing-1', 'owner', 'renter-a', 'accepted',
+           's4l-handover', 's4l-listing', 'owner', 'renter-a', 'accepted',
            jsonb_build_object(
              'status', 'accepted',
              'workflowStatus', 'accepted',
-             'itemId', 'listing-1',
+             'itemId', 's4l-listing',
              'handoverTimeIso', $1::text,
              'handoverTimeRequestedByUserId', 'owner',
              'handoverTimeConfirmed', true,
@@ -9718,7 +9734,7 @@ if (!databaseUrl) {
            pickup_fee_minor, express_fee_minor, owner_payout_minor,
            quote_version, quote_breakdown, requested_at, accepted_at
          ) VALUES (
-           's4l-handover', 'listing-1', 'owner', 'renter-a', 'accepted',
+           's4l-handover', 's4l-listing', 'owner', 'renter-a', 'accepted',
            $1::timestamptz, $1::timestamptz + interval '1 day',
            'EUR', 1000, 0, 'accepted', 1, 1,
            $2::date, $3::date, 'Europe/Berlin', 1,
@@ -9732,7 +9748,7 @@ if (!databaseUrl) {
            id, request_id, booking_id, item_id, user1_id, user2_id,
            payload, communication_version
          ) VALUES (
-           's4l-thread', 's4l-handover', 's4l-handover', 'listing-1',
+           's4l-thread', 's4l-handover', 's4l-handover', 's4l-listing',
            'renter-a', 'owner', '{}'::jsonb, 1
          )`,
       );
