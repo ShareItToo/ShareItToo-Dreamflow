@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "kind": "android-current-rollover-candidate",
-  "status": "build-ready-play-internal-upload-pending",
-  "generatedAt": "2026-09-09T17:20:41Z",
+  "status": "superseded-never-uploaded",
+  "generatedAt": "2026-09-09T04:52:47Z",
   "candidate": {
     "applicationId": "com.shareittoo.app",
     "versionName": "1.0.0",
-    "versionCode": "2026090905",
-    "artifactSourceHead": "e1c182ea496f013989863155c13bfda649255a7e",
+    "versionCode": "2026090904",
+    "artifactSourceHead": "12b88cf97f91973d6dfd59fe3f4dcb9c915dc7d0",
     "releaseChannel": "internal",
     "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
     "compileSdkVersion": 36,
@@ -24,14 +24,14 @@
     "g5ListingSetsTechnicalUiEnabled": true
   },
   "artifact": {
-    "archiveDirectoryName": "2026090905-e1c182ea496f013989863155c13bfda649255a7e",
-    "aabFileName": "shareittoo-1.0.0-2026090905-e1c182ea496f013989863155c13bfda649255a7e.aab",
-    "aabBytes": 109455469,
-    "aabSha256": "ed3d5e5af99a6577e09afc96a880ac4ca7c9c0bd86c54bcaa3f5a07fd6255295",
-    "apkFileName": "shareittoo-1.0.0-2026090905-e1c182ea496f013989863155c13bfda649255a7e.apk",
+    "archiveDirectoryName": "2026090904-12b88cf97f91973d6dfd59fe3f4dcb9c915dc7d0",
+    "aabFileName": "shareittoo-1.0.0-2026090904-12b88cf97f91973d6dfd59fe3f4dcb9c915dc7d0.aab",
+    "aabBytes": 109455561,
+    "aabSha256": "fcc6c36055a978ffb3c70761f2630d942c8e65ac30c9600f3963be48b7d56696",
+    "apkFileName": "shareittoo-1.0.0-2026090904-12b88cf97f91973d6dfd59fe3f4dcb9c915dc7d0.apk",
     "apkBytes": 136368737,
-    "apkSha256": "1864b9c17e7813df887fb1e9961a1746665b4b57b6dbd831526e1c3a2f58eaa6",
-    "privacyReportSha256": "de29db662f406e9040b67a8d3e2a49d956d1c0c372fb946b310f3359d63edca8",
+    "apkSha256": "8c5e02d309f39d808d900c5d8d59a862efbf9d1928a6baacf7fc2d7e2b62b8e4",
+    "privacyReportSha256": "d5e9c8e9446efa1363d6aac7fde7ac78e49b84a58a24e1e65593e817195f6dc9",
     "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
     "signatureVerified": true,
     "zipStructureValidation": "passed",
@@ -44,7 +44,7 @@
   "sourceVerification": {
     "closedPilotFocusedTests": "passed",
     "privacyAndPackageRatchets": "passed",
-    "fullToolInventory": "pending-candidate-binding",
+    "fullToolInventory": "passed-2482",
     "localCiProfileRegression": "pending-candidate-binding",
     "cleanCheckoutReproducibility": "pending-candidate-binding",
     "githubVerifiedHead": null,
@@ -92,6 +92,11 @@
     "cloudVpsDnsChanged": false,
     "pullRequestMerged": false
   },
+  "supersession": {
+    "reason": "Dispute transfer recovery introduced new backend runtime behavior after this candidate was built.",
+    "supersededByVersionCode": "2026090905",
+    "uploadAllowed": false
+  },
   "legalAndPilotHold": {
     "legalManifestVersion": "V5.2-2026-08-16",
     "legalManifestStatus": "draft-blocked",
@@ -106,14 +111,14 @@
   "deviceVerification": {
     "preferredDeviceExactApkInstalled": false,
     "preferredDeviceDataPreserved": false,
-    "exactListingReportFlow": "not-run-for-2026090905",
-    "guestCatalogOnline": "not-run-for-2026090905",
-    "offlineTruthfulError": "not-run-for-2026090905",
-    "onlineRecovery": "not-run-for-2026090905",
-    "processRestart": "not-run-for-2026090905",
+    "exactListingReportFlow": "not-run-for-2026090904",
+    "guestCatalogOnline": "not-run-for-2026090904",
+    "offlineTruthfulError": "not-run-for-2026090904",
+    "onlineRecovery": "not-run-for-2026090904",
+    "processRestart": "not-run-for-2026090904",
     "storeDeliveredSplitVerified": false,
-    "authenticatedPilotMatrix": "not-run-for-2026090905",
-    "secondaryDevice": "not-run-for-2026090905"
+    "authenticatedPilotMatrix": "not-run-for-2026090904",
+    "secondaryDevice": "not-run-for-2026090904"
   },
   "privateDriveHandoff": {
     "status": "not-required-for-current-mac-mini-session",
@@ -124,9 +129,9 @@
     "fileCount": 0,
     "shared": false
   },
-  "evidenceRef": "docs/evidence/release-readiness/wp74-dispute-transfer-recovery-20260909.json",
+  "evidenceRef": "docs/evidence/release-readiness/wp66-payment-provider-integrity-and-candidate-20260909.json",
   "playCompletionEvidenceRef": null,
-  "handoverRef": "docs/operations/WP74_DISPUTE_TRANSFER_RECOVERY_2026-09-09.md",
+  "handoverRef": "docs/operations/WP66_PAYMENT_PROVIDER_INTEGRITY_AND_CANDIDATE_2026-09-09.md",
   "releaseNotesRef": "store/google-play/de-DE/internal_release_notes.txt",
   "containsSecrets": false,
   "containsTesterIdentity": false,
