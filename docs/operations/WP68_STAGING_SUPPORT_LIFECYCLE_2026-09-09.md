@@ -1,6 +1,6 @@
 # WP68 — Staging Support Lifecycle
 
-Status: **STAGING SIMULATION PASSED; FINAL GITHUB REGRESSION PENDING**.
+Status: **COMPLETE ON STAGING, LOCALLY AND GITHUB**.
 
 ## Purpose and exact binding
 
@@ -52,5 +52,7 @@ immutable legal snapshots.
 
 Machine-readable evidence:
 `docs/evidence/release-readiness/wp68-staging-support-lifecycle-20260909.json`.
-The final GitHub Regression for the corrected source commit is still required
-before WP68 is marked fully closed.
+GitHub Regression `34328892643` and CodeQL `34328892603` both pass on the
+evidence commit `b10528a15e4061dc528087d41297976f07bef3e0`; the current
+PR-merge Code Scanning result has zero open alerts (historic entries are fixed
+or dismissed). PR #7 remains Draft, open, clean and unmerged.

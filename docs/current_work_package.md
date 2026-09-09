@@ -1,6 +1,6 @@
 # Current Work Package: WP68 Staging Support Lifecycle
 
-WP68 is **STAGING-SIMULATION COMPLETE; FINAL GITHUB REGRESSION PENDING**.
+WP68 is **COMPLETE ON STAGING, LOCALLY AND GITHUB**.
 The corrected source is exact commit
 `f34571371c55d0cf88e9b33f180f69eebc635e7e`. Three new temporary Staging-only
 roles proved simulation support intake, separate-admin yellow-message review,
@@ -9,7 +9,9 @@ tokens and elevations were revoked, roles removed, accounts closed and the
 local credential vault deleted. No real identity, external delivery, existing
 Support case, payment, provider, Store or production state was changed. The
 first compatibility attempt stopped before any database operation; the
-corrected run is recorded in
+corrected source and evidence pass GitHub Regression `34328892643` and CodeQL
+`34328892603` with zero current open Code Scanning alerts. The run is recorded
+in
 `docs/operations/WP68_STAGING_SUPPORT_LIFECYCLE_2026-09-09.md`.
 
 # Previous Work Package: WP67 Staging, Pixel and cross-device runway

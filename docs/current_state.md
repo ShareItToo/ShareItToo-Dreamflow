@@ -1,6 +1,6 @@
 # ShareItToo Current State
 
-WP68 is **STAGING-SIMULATION COMPLETE; FINAL GITHUB REGRESSION PENDING**.
+WP68 is **COMPLETE ON STAGING, LOCALLY AND GITHUB**.
 The exact Staging runtime and Android candidate now have a proven, isolated
 support lifecycle: temporary reporter plus separate author/reviewer admin
 roles, simulation intake, independent review, authenticated recipient
@@ -9,8 +9,9 @@ closure and local credential-vault deletion. No external message was sent and
 no existing Support case, production, payment, real user, Store, Firebase,
 provider, DNS or merge state changed. The initial runner compatibility failure
 stopped before database work and is fixed by the portable standard-input path.
-The remaining WP68 closure check is the GitHub Regression for exact source
-`f34571371c55d0cf88e9b33f180f69eebc635e7e`. See
+GitHub Regression `34328892643` and CodeQL `34328892603` pass on evidence
+commit `b10528a15e4061dc528087d41297976f07bef3e0`; the PR-merge analysis has
+zero open Code Scanning alerts. See
 `docs/operations/WP68_STAGING_SUPPORT_LIFECYCLE_2026-09-09.md`.
 
 WP67 is **COMPLETE ON STAGING AND PIXEL; ONEPLUS USB AUTHORIZATION PENDING**.
