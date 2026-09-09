@@ -118,19 +118,19 @@ function validateClosure(value) {
 }
 
 function validateVerification(value) {
-  const pending = {
-    implementationHead: null,
-    focusedTests: 'pending',
-    fullLocalRegression: 'pending',
-    localToolTestsPassed: null,
-    githubRegressionRun: null,
-    githubCodeqlRun: null,
-    openPrMergeAlerts: null,
+  const complete = {
+    implementationHead: '2d31208adf150f85f5d1b9fd828780212dcde56a',
+    focusedTests: 'passed-38',
+    fullLocalRegression: 'passed',
+    localToolTestsPassed: 2517,
+    githubRegressionRun: 34351116545,
+    githubCodeqlRun: 34351116530,
+    openPrMergeAlerts: 0,
     pullRequest7: 'draft-open-mergeable-unmerged',
   };
-  if (value.status !== 'implemented-pending-local-github'
-      || !exact(value.packageVerification, pending)) {
-    fail('WP71 pending verification contract is invalid.');
+  if (value.status !== 'complete-local-github'
+      || !exact(value.packageVerification, complete)) {
+    fail('WP71 complete verification contract is invalid.');
   }
 }
 

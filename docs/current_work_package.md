@@ -1,6 +1,6 @@
 # Current Work Package: WP71 Current-Candidate Account Deletion
 
-WP71 is **IMPLEMENTED ON PIXEL; LOCAL AND GITHUB VERIFICATION PENDING**. The
+WP71 is **COMPLETE ON PIXEL, LOCALLY AND ON GITHUB**. The
 fresh disposable Staging identity retained by WP70 has been deleted on the
 unchanged exact Pixel candidate `1.0.0+2026090904`. Both target and protected
 recovery credentials passed before arming; wrong-password rejection preserved
@@ -12,6 +12,12 @@ No real account, Production, app or Backend runtime, deployment, Store,
 tester, Firebase, external identity/payment provider, money, Cloud/VPS/DNS,
 OnePlus or merge state changed. See
 `docs/operations/WP71_CURRENT_CANDIDATE_ACCOUNT_DELETION_2026-09-09.md`.
+
+Thirty-eight focused tests, all 2,517 tool tests and the complete local
+technical regression pass at exact implementation HEAD
+`2d31208adf150f85f5d1b9fd828780212dcde56a`. Exact-head GitHub Regression
+`34351116545`, CodeQL `34351116530` and zero open PR-merge Code Scanning alerts
+pass. PR #7 remains Draft, open, mergeable and unmerged.
 
 # Previous Work Package: WP70 Current-Candidate Auth, Safety and Provider Hold
 

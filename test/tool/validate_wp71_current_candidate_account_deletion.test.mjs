@@ -24,7 +24,7 @@ function validate(changed = evidence) {
 
 test('accepts exact current-candidate disposable-account deletion evidence', () => {
   assert.deepEqual(validate(), {
-    status: 'implemented-pending-local-github',
+    status: 'complete-local-github',
     candidateVersionCode: '2026090904',
     privacyRequirementState: 'PASS',
     protectedOwnerRestored: true,
@@ -32,7 +32,7 @@ test('accepts exact current-candidate disposable-account deletion evidence', () 
   });
 });
 
-test('rejects candidate, source and pending-verification drift', () => {
+test('rejects candidate, source and complete-verification drift', () => {
   const candidate = structuredClone(evidence);
   candidate.candidate.versionCode = '2026090905';
   assert.throws(() => validate(candidate), /candidate binding/u);
@@ -43,7 +43,7 @@ test('rejects candidate, source and pending-verification drift', () => {
 
   const verification = structuredClone(evidence);
   verification.packageVerification.githubRegressionRun = 1;
-  assert.throws(() => validate(verification), /pending verification/u);
+  assert.throws(() => validate(verification), /complete verification/u);
 });
 
 test('rejects ambiguous rejection or deletion truth', () => {

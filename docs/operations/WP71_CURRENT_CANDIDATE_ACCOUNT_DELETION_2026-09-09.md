@@ -1,6 +1,6 @@
 # WP71 — current-candidate account deletion
 
-Status: **IMPLEMENTED ON PIXEL; LOCAL AND GITHUB VERIFICATION PENDING**.
+Status: **COMPLETE ON PIXEL, LOCALLY AND ON GITHUB**.
 
 ## Exact scope
 
@@ -60,6 +60,16 @@ Android, `lib` and Backend runtime still fail closed, with explicit regression
 coverage. A separate direct handoff-validator invocation without the normal
 rollover context stopped on its unavailable default private AAB and is not used
 as acceptance evidence. The complete standard profile is rerun unchanged.
+
+## Verification closure
+
+Thirty-eight focused tests and all 2,517 tool tests pass. The complete local
+technical regression passes at exact implementation HEAD
+`2d31208adf150f85f5d1b9fd828780212dcde56a`, including Flutter analyzer, the
+full Flutter and targeted security/product suites, Web/Wasm, loopback smoke and
+the Android debug build. Exact-head GitHub Regression `34351116545` and CodeQL
+`34351116530` pass, and the current PR merge ref has zero open Code Scanning
+alerts. PR #7 remains Draft, open, mergeable and unmerged.
 
 Only the disposable Staging account was deleted. No protected owner,
 Production, app or Backend runtime, deployment, Google Play, tester, Firebase,

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "sit-wp71-current-candidate-account-deletion",
-  "status": "implemented-pending-local-github",
+  "status": "complete-local-github",
   "capturedOn": "2026-09-09",
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -92,13 +92,13 @@
     }
   ],
   "packageVerification": {
-    "implementationHead": null,
-    "focusedTests": "pending",
-    "fullLocalRegression": "pending",
-    "localToolTestsPassed": null,
-    "githubRegressionRun": null,
-    "githubCodeqlRun": null,
-    "openPrMergeAlerts": null,
+    "implementationHead": "2d31208adf150f85f5d1b9fd828780212dcde56a",
+    "focusedTests": "passed-38",
+    "fullLocalRegression": "passed",
+    "localToolTestsPassed": 2517,
+    "githubRegressionRun": 34351116545,
+    "githubCodeqlRun": 34351116530,
+    "openPrMergeAlerts": 0,
     "pullRequest7": "draft-open-mergeable-unmerged"
   },
   "technicalDebt": [
