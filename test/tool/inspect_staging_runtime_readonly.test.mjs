@@ -299,4 +299,6 @@ test('source never dumps container configuration or reads credential contents', 
   assert.match(source, /\{\{\.Image\}\}/u);
   assert.match(source, /credentialContentsRead:\s*false/u);
   assert.match(source, /credentialPathsEmitted:\s*false/u);
+  assert.match(source, /readSync\(descriptor, bytes/u);
+  assert.doesNotMatch(source, /readFileSync\(descriptor/u);
 });

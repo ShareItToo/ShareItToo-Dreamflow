@@ -8,7 +8,7 @@ import {
   fstatSync,
   mkdirSync,
   openSync,
-  readFileSync,
+  readSync,
   renameSync,
   writeFileSync,
 } from 'node:fs';
@@ -493,6 +493,37 @@ async function openReadOnlyPermissionSettings(commandRunner, adbPath, device) {
   currentHeadAndroidAdb(commandRunner, adbPath, device, ['shell', 'input', 'keyevent', '4']);
 }
 
+const maxPermissionJournalBytes = 16 * 1024;
+
+function readStableBoundedUtf8(descriptor, stat) {
+  if (!stat.isFile()
+      || !Number.isSafeInteger(stat.size)
+      || stat.size < 2
+      || stat.size > maxPermissionJournalBytes
+      || (stat.mode & 0o077) !== 0) {
+    fail('WP46 journal is not owner-only.');
+  }
+  const bytes = Buffer.allocUnsafe(stat.size);
+  let offset = 0;
+  while (offset < bytes.length) {
+    const read = readSync(descriptor, bytes, offset, bytes.length - offset, offset);
+    if (read <= 0) fail('WP46 journal is not owner-only.');
+    offset += read;
+  }
+  if (readSync(descriptor, Buffer.alloc(1), 0, 1, stat.size) !== 0) {
+    fail('WP46 journal is not owner-only.');
+  }
+  const afterRead = fstatSync(descriptor);
+  if (afterRead.dev !== stat.dev
+      || afterRead.ino !== stat.ino
+      || afterRead.size !== stat.size
+      || afterRead.mtimeMs !== stat.mtimeMs
+      || afterRead.ctimeMs !== stat.ctimeMs) {
+    fail('WP46 journal is not owner-only.');
+  }
+  return bytes.toString('utf8');
+}
+
 function atomicJournal(path, value) {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   chmodSync(dirname(path), 0o700);
@@ -508,8 +539,7 @@ export function readWp46PermissionJournal(path) {
   try {
     descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
     const stat = fstatSync(descriptor);
-    if ((stat.mode & 0o077) !== 0 || !stat.isFile()) fail('WP46 journal is not owner-only.');
-    return JSON.parse(readFileSync(descriptor, 'utf8'));
+    return JSON.parse(readStableBoundedUtf8(descriptor, stat));
   } catch (error) {
     if (error?.code === 'ENOENT') return null;
     throw error;

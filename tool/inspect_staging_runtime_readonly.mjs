@@ -7,6 +7,7 @@ import {
   fstatSync,
   lstatSync,
   openSync,
+  readSync,
   readFileSync,
   readdirSync,
   realpathSync,
@@ -82,6 +83,35 @@ class StagingRuntimeInventoryError extends Error {
     super('Staging runtime inventory failed.');
     this.code = code;
   }
+}
+
+function readStableBoundedUtf8(descriptor, metadata, failureCode) {
+  if (!metadata.isFile()
+      || !Number.isSafeInteger(metadata.size)
+      || metadata.size < 2
+      || metadata.size > 16 * 1024
+      || (metadata.mode & 0o777) !== 0o600) {
+    fail(failureCode);
+  }
+  const bytes = Buffer.allocUnsafe(metadata.size);
+  let offset = 0;
+  while (offset < bytes.length) {
+    const read = readSync(descriptor, bytes, offset, bytes.length - offset, offset);
+    if (read <= 0) fail(failureCode);
+    offset += read;
+  }
+  if (readSync(descriptor, Buffer.alloc(1), 0, 1, metadata.size) !== 0) {
+    fail(failureCode);
+  }
+  const afterRead = fstatSync(descriptor);
+  if (afterRead.dev !== metadata.dev
+      || afterRead.ino !== metadata.ino
+      || afterRead.size !== metadata.size
+      || afterRead.mtimeMs !== metadata.mtimeMs
+      || afterRead.ctimeMs !== metadata.ctimeMs) {
+    fail(failureCode);
+  }
+  return bytes.toString('utf8');
 }
 
 function fail(code) {
@@ -288,12 +318,11 @@ function latestReleaseRecord(releaseDirectory) {
   try {
     descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
     const metadata = fstatSync(descriptor);
-    if (!metadata.isFile()
-        || metadata.size < 2 || metadata.size > 16 * 1024
-        || (metadata.mode & 0o777) !== 0o600) {
-      fail('release_record_file_invalid');
-    }
-    value = JSON.parse(readFileSync(descriptor, 'utf8'));
+    value = JSON.parse(readStableBoundedUtf8(
+      descriptor,
+      metadata,
+      'release_record_file_invalid',
+    ));
   } catch (error) {
     if (error instanceof StagingRuntimeInventoryError) throw error;
     fail('release_record_unreadable');

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp80-codeql-file-descriptor-race-remediation",
+  "status": "complete-local-github-pending",
+  "capturedOn": "2026-09-10",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "baseHead": "6966ec9499a39d516e092129799b20d8f1bae5a2",
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "trigger": {
+    "source": "github-code-scanning-readback",
+    "openAlerts": [
+      {
+        "number": 544,
+        "rule": "js/file-system-race",
+        "severity": "high",
+        "path": "tool/diagnose_current_candidate_android_permission_lifecycle.mjs"
+      },
+      {
+        "number": 545,
+        "rule": "js/file-system-race",
+        "severity": "high",
+        "path": "tool/inspect_staging_runtime_readonly.mjs"
+      }
+    ],
+    "scope": "local-diagnostic-tooling-only"
+  },
+  "remediation": {
+    "openMode": "read-only-no-follow",
+    "metadata": "same-descriptor-pre-and-post-read",
+    "read": "bounded-exact-byte-read-from-same-descriptor",
+    "growthOrShrink": "fail-closed",
+    "journalMaximumBytes": 16384,
+    "releaseRecordMaximumBytes": 16384,
+    "pathBasedReadAfterCheck": false,
+    "runtimeOrCandidateBehaviorChanged": false
+  },
+  "verification": {
+    "focusedTests": "passed-14",
+    "syntaxChecks": "passed-2",
+    "fullLocalRegression": "passed-exit-0-ci-metadata-candidate-rollover",
+    "githubRegression": "pending-exact-package-head",
+    "githubCodeql": "pending-exact-package-head"
+  },
+  "boundaries": {
+    "androidBinaryChanged": false,
+    "deviceContacted": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "firebaseProviderCloudVpsDnsChanged": false,
+    "pullRequestMerged": false,
+    "containsCredential": false,
+    "containsPrivateFilesystemPath": false
+  },
+  "nextSafePackage": {
+    "id": "WP81",
+    "name": "successor-candidate-staging-parity-preflight",
+    "scope": "Establish an exact persistent source-to-Staging-runtime binding before any signed successor candidate is built, installed, uploaded or deployed.",
+    "externalMutationAllowed": false
+  }
+}

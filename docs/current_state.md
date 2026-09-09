@@ -1,5 +1,15 @@
 # ShareItToo Current State
 
+## WP80 CodeQL file-descriptor race remediation
+
+The final WP79 GitHub security readback found two open high-severity local
+diagnostic-tool file-race findings. WP80 hardens both readers to use one
+no-follow descriptor, bounded exact-byte reads, and post-read descriptor
+metadata verification; it does not change the Android candidate or any runtime.
+Focused and full local regression are green. Exact-head GitHub Regression and
+CodeQL remain required before this P0 closure is complete. See
+`docs/operations/WP80_CODEQL_FILE_DESCRIPTOR_RACE_REMEDIATION_2026-09-10.md`.
+
 ## WP79 current candidate acceptance matrix
 
 The installed Internal/Staging candidate is `1.0.0+2026090905`, source

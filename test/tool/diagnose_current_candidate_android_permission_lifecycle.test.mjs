@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   chmodSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -239,8 +240,20 @@ test('reads the WP46 journal through one owner-only non-symlinked file handle', 
     assert.throws(() => readWp46PermissionJournal(linked));
     chmodSync(journal, 0o644);
     assert.throws(() => readWp46PermissionJournal(journal), /owner-only/u);
+    writeFileSync(journal, 'x'.repeat(16 * 1024 + 1), { mode: 0o600 });
+    chmodSync(journal, 0o600);
+    assert.throws(() => readWp46PermissionJournal(journal), /owner-only/u);
     assert.equal(readWp46PermissionJournal(join(directory, 'missing.json')), null);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('reads the bounded journal bytes from the validated descriptor, never by path', () => {
+  const source = readFileSync(
+    new URL('../../tool/diagnose_current_candidate_android_permission_lifecycle.mjs', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /readSync\(descriptor, bytes/u);
+  assert.doesNotMatch(source, /readFileSync\(descriptor/u);
 });
