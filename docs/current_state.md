@@ -1,5 +1,13 @@
 # ShareItToo Current State
 
+WP77 is **BLOCKED FAIL-CLOSED**: the public root legal pages and the healthy
+Staging API cannot currently be proved to be one runtime target, and no
+persistent, authoritative source configuration is bound to the Staging
+container. No remote value, container, database, DNS, provider, payment,
+Store or Production state was changed. The residual non-running container was
+also retained because its data-volume relevance is unknown. See
+`docs/operations/WP77_PUBLIC_LEGAL_STAGING_SOURCE_MISMATCH_2026-09-09.md`.
+
 WP76 is **COMPLETE AS DRAFT-ONLY OPERATOR, LEGAL AND ROLE READINESS**. The
 current authoritative draft source confirms `ShareItToo – Inhaber Walid
 Chraibi` as sole proprietor at Bernhaldenweg 47, 71579 Spiegelberg. It binds

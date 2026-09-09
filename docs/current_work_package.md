@@ -1,4 +1,13 @@
-# Current Work Package: WP76 Operator, Legal and Role Readiness
+# Current Work Package: WP77 Public Legal Runtime and Staging Source Mismatch
+
+WP77 is **BLOCKED FAIL-CLOSED WITH NO REMOTE MUTATION**. Public root legal
+routes, the healthy Staging API and an authoritative persistent source file
+cannot yet be bound to one safe runtime/recreate path. The prior Control-Panel
+recreate failure is not retried; a residual non-running container is retained
+because it owns a separate, unproven data volume. See
+`docs/operations/WP77_PUBLIC_LEGAL_STAGING_SOURCE_MISMATCH_2026-09-09.md`.
+
+# Previous Work Package: WP76 Operator, Legal and Role Readiness
 
 WP76 is **COMPLETE AS DRAFT-ONLY READINESS**. The authoritative current draft
 binds the confirmed sole proprietor `ShareItToo – Inhaber Walid Chraibi` at
