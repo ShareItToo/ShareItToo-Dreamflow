@@ -1,5 +1,20 @@
 # ShareItToo Current State
 
+WP73 is **IMPLEMENTED; LOCAL/GITHUB VERIFICATION PENDING**. The read-only
+Stripe sandbox compatibility inventory finds the current Accounts v2,
+separate-charges-and-transfers, test-only secret and dual webhook architecture
+compatible in principle. It also proves one P0 payment-integrity gap before any
+provider traffic: a normal refund reverses an already-paid owner transfer, but
+the `charge.dispute.*` path currently only records the dispute/ledger effect
+and blocks future payout; it does not recover a transfer already paid.
+
+The reported isolated ShareItToo sandbox was not independently re-read because
+the official connector requires reauthentication. No credential, Stripe API
+object, provider setting, money, deployment, device, runtime or merge state was
+changed. The exact owner gate is `WP73_STRIPE_READONLY_REAUTH_REQUIRED`; all
+independent local correction work may continue as WP74. See
+`docs/operations/WP73_STRIPE_SANDBOX_COMPATIBILITY_INVENTORY_2026-09-09.md`.
+
 WP72 is **COMPLETE ON THE EXACT PIXEL CANDIDATE, LOCALLY AND ON GITHUB**. The
 unchanged signed `1.0.0+2026090904` candidate passes the
 physical listing-report UI with independent Staging readback, reversible
