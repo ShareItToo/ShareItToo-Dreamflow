@@ -55,8 +55,9 @@ function validateGitLineage(repositoryRoot, value, checkGitState) {
     fail('WP71 candidate lineage is overstated.');
   }
   if (!checkGitState) return;
+  // Validate the frozen package snapshot, never a later successor candidate.
   const changed = execFileSync('git', [
-    'diff', '--name-only', `${value.repository.candidateSourceHead}..HEAD`, '--',
+    'diff', '--name-only', `${value.repository.candidateSourceHead}..${value.repository.packageBaseHead}`, '--',
     'lib', 'android', 'pubspec.yaml', 'pubspec.lock', 'backend/src', 'backend/sql',
   ], {
     cwd: repositoryRoot,

@@ -22,7 +22,9 @@ export function validateWp67StagingPixelCrossDeviceRunway(input = {}) {
   const evidence = input.evidence ?? load(
     'docs/evidence/release-readiness/wp67-staging-pixel-cross-device-runway-20260909.json',
   );
-  const candidate = input.candidate ?? load('store/google-play/current-rollover-candidate.json');
+  // WP67 records the physical result for 2026090904, not whichever candidate
+  // succeeds it later.
+  const candidate = input.candidate ?? load('store/google-play/rollover-candidate-2026090904.json');
   const diagnostic = input.diagnostic ?? readFileSync(resolve(
     root, 'tool/diagnose_android_rental_cart_project_lifecycle.mjs',
   ), 'utf8');

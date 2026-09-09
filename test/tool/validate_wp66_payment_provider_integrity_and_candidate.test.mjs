@@ -11,7 +11,7 @@ const root = resolve(import.meta.dirname, '..', '..');
 const evidenceFixture = JSON.parse(readFileSync(resolve(root,
   'docs/evidence/release-readiness/wp66-payment-provider-integrity-and-candidate-20260909.json'), 'utf8'));
 const candidateFixture = JSON.parse(readFileSync(resolve(root,
-  'store/google-play/current-rollover-candidate.json'), 'utf8'));
+  'store/google-play/rollover-candidate-2026090904.json'), 'utf8'));
 const supersededFixture = JSON.parse(readFileSync(resolve(root,
   'store/google-play/rollover-candidate-2026090903.json'), 'utf8'));
 

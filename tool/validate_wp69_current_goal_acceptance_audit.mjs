@@ -152,10 +152,12 @@ function validateLineage(repositoryRoot, value, checkGitLineage) {
   if (!exact(preCandidate, changedMobilePaths)) {
     fail('WP69 pre-candidate mobile lineage has drifted.');
   }
+  // This is a historical audit: it proves the state at its own verified
+  // package head, not that no later candidate can legitimately change runtime.
   const afterCandidate = gitChangedPaths(
     repositoryRoot,
     value.repository.candidateSourceHead,
-    'HEAD',
+    value.packageVerification.packageHead,
     ['lib', 'android', 'pubspec.yaml', 'pubspec.lock', 'backend/src', 'backend/sql'],
   );
   if (!exact(afterCandidate, [])) {

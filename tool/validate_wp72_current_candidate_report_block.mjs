@@ -64,8 +64,9 @@ function validateGitLineage(repositoryRoot, value, checkGitState) {
     fail('WP72 candidate lineage is overstated.');
   }
   if (!checkGitState) return;
+  // WP72 is historical physical proof; validate only through its package head.
   const changed = execFileSync('git', [
-    'diff', '--name-only', `${value.repository.candidateSourceHead}..HEAD`, '--',
+    'diff', '--name-only', `${value.repository.candidateSourceHead}..${value.repository.packageBaseHead}`, '--',
     'lib', 'android', 'pubspec.yaml', 'pubspec.lock', 'backend/src', 'backend/sql',
   ], {
     cwd: repositoryRoot,

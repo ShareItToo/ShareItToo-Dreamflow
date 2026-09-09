@@ -22,7 +22,9 @@ export function validateWp66PaymentProviderIntegrityAndCandidate(input = {}) {
   const evidence = input.evidence ?? load(
     'docs/evidence/release-readiness/wp66-payment-provider-integrity-and-candidate-20260909.json',
   );
-  const candidate = input.candidate ?? load('store/google-play/current-rollover-candidate.json');
+  // WP66 is evidence for the signed 2026090904 candidate. Later candidates
+  // must not retroactively rewrite that historical binding.
+  const candidate = input.candidate ?? load('store/google-play/rollover-candidate-2026090904.json');
   const superseded = input.superseded ?? load('store/google-play/rollover-candidate-2026090903.json');
 
   exact(evidence.kind, 'sit-wp66-payment-provider-integrity-and-candidate', 'evidence.kind');

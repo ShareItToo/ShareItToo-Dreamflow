@@ -11,7 +11,7 @@ const root = resolve(import.meta.dirname, '..', '..');
 const evidenceFixture = JSON.parse(readFileSync(resolve(root,
   'docs/evidence/release-readiness/wp67-staging-pixel-cross-device-runway-20260909.json'), 'utf8'));
 const candidateFixture = JSON.parse(readFileSync(resolve(root,
-  'store/google-play/current-rollover-candidate.json'), 'utf8'));
+  'store/google-play/rollover-candidate-2026090904.json'), 'utf8'));
 const diagnosticFixture = readFileSync(resolve(root,
   'tool/diagnose_android_rental_cart_project_lifecycle.mjs'), 'utf8');
 

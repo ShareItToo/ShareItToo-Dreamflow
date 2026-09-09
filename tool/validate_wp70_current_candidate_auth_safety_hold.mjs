@@ -82,8 +82,10 @@ function validateGitLineage(repositoryRoot, value, checkGitState) {
     fail('WP70 candidate lineage is overstated.');
   }
   if (!checkGitState) return;
+  // Keep the evidence bound to the package's own completion point. A later
+  // signed candidate must not invalidate a completed, exact-candidate proof.
   const changed = execFileSync('git', [
-    'diff', '--name-only', `${value.repository.candidateSourceHead}..HEAD`, '--',
+    'diff', '--name-only', `${value.repository.candidateSourceHead}..${value.repository.packageBaseHead}`, '--',
     'lib', 'android', 'pubspec.yaml', 'pubspec.lock', 'backend/src', 'backend/sql',
   ], {
     cwd: repositoryRoot,
