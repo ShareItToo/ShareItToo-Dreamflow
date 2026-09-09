@@ -1,6 +1,6 @@
 # WP74 — dispute transfer recovery
 
-Status: **LOCAL REGRESSION COMPLETE; GITHUB CLOSURE PENDING**.
+Status: **COMPLETE LOCALLY AND ON GITHUB**.
 
 WP74 adds durable, idempotent recovery of an owner transfer after a payment
 dispute. A provider timeout or an unstructured response never becomes a local
@@ -54,6 +54,10 @@ GitHub correctly stopped its prior PostgreSQL recovery job because that runner
 still asserted the former 71-migration inventory after migration 072 was
 added. The correction advances the *current* runner to 72 and keeps the
 historical R9 evidence bound to its original implementation source; it is not
-a retry, timing or warning-suppression workaround. The next step is normal
-GitHub verification for this corrected source/binding sequence. No external
-release action is authorized or implied.
+a retry, timing or warning-suppression workaround.
+
+GitHub Regression `34385168799` passed at exact HEAD
+`276b103ad937d234b692c14832530f8b3bb438f1`: Backend, PostgreSQL fresh and R9
+recovery, Flutter and clean-checkout reproducibility all passed. CodeQL
+`34385168800` passed with zero open Code Scanning alerts. PR #7 remains Draft,
+open, clean and unmerged. No external release action is authorized or implied.

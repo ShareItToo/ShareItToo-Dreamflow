@@ -27,7 +27,7 @@ function validate(changed = evidence) {
 
 test('accepts the exact WP74 payment-integrity evidence', () => {
   assert.deepEqual(validate(), {
-    status: 'complete-local-github-pending',
+    status: 'complete-local-github',
     package: 'WP74',
     paidTransferRecovery: 'durable-idempotent-provider-bound',
     providerTrafficChanged: false,
@@ -55,7 +55,7 @@ test('rejects changed recovery outcomes, source hashes and live-boundary overcla
 
 test('rejects incomplete completion claims and secret-shaped evidence', () => {
   const completion = structuredClone(evidence);
-  completion.status = 'complete-local-github';
+  completion.verification.githubRegressionRun = null;
   assert.throws(() => validate(completion), /complete verification/u);
 
   const secret = structuredClone(evidence);

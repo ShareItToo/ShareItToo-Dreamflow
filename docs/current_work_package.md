@@ -1,6 +1,6 @@
 # Current Work Package: WP74 Dispute Transfer Recovery
 
-WP74 is **COMPLETE LOCALLY; GITHUB VERIFICATION PENDING**. It closes the
+WP74 is **COMPLETE LOCALLY AND ON GITHUB**. It closes the
 previous P0 gap in the dispute path: an owner transfer paid before a chargeback
 now has durable, idempotent, provider-bound recovery. Only known, structured
 provider invalid-request errors are definite rejection. Timeouts, transport
@@ -22,8 +22,9 @@ SDK-XML diagnostic; no warning suppression or runtime workaround was
 introduced. GitHub stopped the predecessor runner before recovery because its
 hard-coded 71-migration inventory predated migration 072; the current runner
 and its historical proof boundary are now corrected and locally proven.
-GitHub Regression, CodeQL and clean-checkout CI are pending. No Stripe
-API/Dashboard, money,
+Exact-head GitHub Regression `34385168799`, CodeQL `34385168800` and zero open
+Code Scanning alerts pass; PR #7 remains Draft, open, clean and unmerged. No
+Stripe API/Dashboard, money,
 Staging, Production, Store, tester, Firebase, Cloud/VPS/DNS, device or merge
 action occurred. See
 `docs/operations/WP74_DISPUTE_TRANSFER_RECOVERY_2026-09-09.md`.

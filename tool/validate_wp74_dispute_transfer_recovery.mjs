@@ -139,7 +139,7 @@ function validateVerification(repositoryRoot, value, checkGitState) {
   const localComplete = {
     implementationHead: '7ad51fd012ed947a0f7de6b8980b0911f7f5ec30',
     focusedTests: 'passed-48',
-    postgresIntegration: 'passed-current-r9-postgresql-16',
+    postgresIntegration: 'passed',
     fullLocalRegression: 'passed',
     localToolTestsPassed: 2542,
     githubRegressionRun: null,
@@ -169,6 +169,36 @@ function validateVerification(repositoryRoot, value, checkGitState) {
     fail('WP74 complete verification is invalid.');
   }
   if (checkGitState) assertAncestor(repositoryRoot, verification.implementationHead);
+  if (!exact(value.githubVerification, {
+    verifiedHead: '276b103ad937d234b692c14832530f8b3bb438f1',
+    regression: {
+      runId: 34385168799,
+      conclusion: 'success',
+      backendJobId: 102579847634,
+      backendConclusion: 'success',
+      postgresJobId: 102579847536,
+      postgresConclusion: 'success',
+      r9RecoveryExecuted: true,
+      flutterJobId: 102579847468,
+      flutterConclusion: 'success',
+      cleanCheckoutJobId: 102579847265,
+      cleanCheckoutConclusion: 'success',
+      apiImagePublished: false,
+    },
+    codeql: {
+      runId: 34385168800,
+      conclusion: 'success',
+      backendJobId: 102579499772,
+      backendConclusion: 'success',
+      openAlerts: 0,
+    },
+    pullRequest7: {
+      state: 'open',
+      draft: true,
+      mergeState: 'clean',
+      merged: false,
+    },
+  })) fail('WP74 exact GitHub verification is invalid.');
 }
 
 export function validateWp74DisputeTransferRecovery({

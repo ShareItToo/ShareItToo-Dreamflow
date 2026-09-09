@@ -1,6 +1,6 @@
 # ShareItToo Current State
 
-WP74 is **COMPLETE LOCALLY; GITHUB VERIFICATION PENDING**. Durable recovery
+WP74 is **COMPLETE LOCALLY AND ON GITHUB**. Durable recovery
 now exists for an owner transfer already paid when a later dispute occurs.
 Safe provider rejection is deliberately narrow; timeout, transport and
 unstructured failures remain uncertain/reviewable and can never produce a
@@ -18,9 +18,9 @@ Forty-eight focused tests, the current isolated PostgreSQL-16 recovery proof,
 loopback and Android local regression pass. GitHub found the former recovery
 runner's stale 71-migration inventory before it executed; the current runner
 is now bound to migration 072, its historical proof remains source-bound, and
-the corrected local proof passes. GitHub Regression, CodeQL and clean-checkout
-CI remain pending for that corrected source. No provider, money, deployment,
-Store, tester, Firebase, production,
+the corrected local proof passes. Exact-head GitHub Regression `34385168799`,
+CodeQL `34385168800` and zero open Code Scanning alerts pass; PR #7 remains
+Draft, open, clean and unmerged. No provider, money, deployment, Store, tester, Firebase, production,
 Cloud/VPS/DNS, device or merge change occurred. See
 `docs/operations/WP74_DISPUTE_TRANSFER_RECOVERY_2026-09-09.md`.
 
