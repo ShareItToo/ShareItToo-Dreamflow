@@ -115,6 +115,20 @@ test('rejects an operator draft that becomes public or loses its source binding'
   );
 });
 
+test('rejects stale V5.3 source evidence even while the legacy baseline remains unchanged', () => {
+  const path = 'assets/legal/de/legal_manifest_v53.json';
+  const source = readFileSync(resolve(repositoryRoot, path), 'utf8');
+  assert.throws(
+    () => validateLegalReadiness({
+      root: repositoryRoot,
+      legalManifest: JSON.parse(readFileSync(resolve(repositoryRoot, 'store/legal-readiness.json'), 'utf8')),
+      submissionManifest: JSON.parse(readFileSync(resolve(repositoryRoot, 'store/submission.json'), 'utf8')),
+      sourceTexts: { [path]: `${source}\n` },
+    }),
+    /v53OperatorAlignedDraft\.currentContentSha256 is stale/u,
+  );
+});
+
 test('rejects hardcoded client consent', () => {
   const authPath = baseLegalManifest.consentContract.authServiceSource;
   const authSource = readFileSync(resolve(repositoryRoot, authPath), 'utf8')

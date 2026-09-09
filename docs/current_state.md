@@ -1,5 +1,12 @@
 # ShareItToo Current State
 
+WP78 is **COMPLETE AS A NEW NINE-PART V5.3 DRAFT ONLY**. It aligns the future
+operator facts to sole proprietor Walid Chraibi while preserving V5/V5.2 as
+historical evidence. Tax/invoice, consumer, payment/refund, privacy,
+retention/DPA/transfer, DSA and public-delivery review gates remain open; no
+public route, contract, money, provider, Maps, Store or Production state
+changed. See `docs/operations/WP78_V53_OPERATOR_ALIGNED_LEGAL_DRAFT_2026-09-09.md`.
+
 WP77 is **BLOCKED FAIL-CLOSED**: the public root legal pages and the healthy
 Staging API cannot currently be proved to be one runtime target, and no
 persistent, authoritative source configuration is bound to the Staging

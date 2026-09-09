@@ -9,6 +9,14 @@
     "publicCommercialOperationAllowed": false,
     "bindingContractAcceptanceAllowed": false
   },
+  "v53OperatorAlignedDraft": {
+    "status": "draft-blocked-sole-proprietor",
+    "sourceFile": "assets/legal/de/legal_manifest_v53.json",
+    "currentContentSha256": "d1265d31f68a7c616d782a78cd77c22eadb03dabbbd7e9ebe36a485d6d1a49c6",
+    "documentCount": 9,
+    "publicCommercialOperationAllowed": false,
+    "bindingContractAcceptanceAllowed": false
+  },
   "interimPilotRules": {
     "version": "V5.1-2026-08-16",
     "status": "active-for-internal-and-closed-testing",

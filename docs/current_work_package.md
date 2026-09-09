@@ -1,4 +1,13 @@
-# Current Work Package: WP77 Public Legal Runtime and Staging Source Mismatch
+# Current Work Package: WP78 V5.3 Operator-Aligned Legal Draft
+
+WP78 is **COMPLETE AS A REPOSITORY-ONLY DRAFT**. The new hash-bound V5.3 map
+contains all nine legal subjects with sole-proprietor operator facts and no
+assumed tax, payment, DSA or Maps activation. V5/V5.2 remain historical,
+unaltered evidence. Professional review and all live/public gates remain open;
+WP77's independent public-runtime/source mismatch is unchanged. See
+`docs/operations/WP78_V53_OPERATOR_ALIGNED_LEGAL_DRAFT_2026-09-09.md`.
+
+# Previous Work Package: WP77 Public Legal Runtime and Staging Source Mismatch
 
 WP77 is **BLOCKED FAIL-CLOSED WITH NO REMOTE MUTATION**. Public root legal
 routes, the healthy Staging API and an authoritative persistent source file

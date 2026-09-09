@@ -54,6 +54,13 @@ const operatorReadinessDraftContract = Object.freeze({
   serviceAddress: 'Bernhaldenweg 47, 71579 Spiegelberg, Deutschland',
 });
 
+const v53OperatorAlignedDraftContract = Object.freeze({
+  status: 'draft-blocked-sole-proprietor',
+  sourceFile: 'assets/legal/de/legal_manifest_v53.json',
+  businessDesignation: 'ShareItToo – Inhaber Walid Chraibi',
+  serviceAddress: 'Bernhaldenweg 47, 71579 Spiegelberg, Deutschland',
+});
+
 const v51SuccessorDecisionContract = [
   {
     manifestKey: 'platformContractAndWithdrawalTiming',
@@ -295,6 +302,42 @@ function assertOperatorReadinessDraft({ root, sourceTexts, legal }) {
   }
 }
 
+function assertV53OperatorAlignedDraft({ root, sourceTexts, legal }) {
+  const draft = object(legal.v53OperatorAlignedDraft, 'v53OperatorAlignedDraft');
+  if (draft.status !== v53OperatorAlignedDraftContract.status
+      || draft.sourceFile !== v53OperatorAlignedDraftContract.sourceFile
+      || draft.documentCount !== 9
+      || draft.publicCommercialOperationAllowed !== false
+      || draft.bindingContractAcceptanceAllowed !== false) {
+    fail('v53OperatorAlignedDraft must retain the inactive nine-part sole-proprietor draft.');
+  }
+  assertSha256(draft.currentContentSha256, 'v53OperatorAlignedDraft.currentContentSha256');
+  const serialized = sourceText(root, sourceTexts, draft.sourceFile);
+  if (sha256(serialized) !== draft.currentContentSha256) {
+    fail('v53OperatorAlignedDraft.currentContentSha256 is stale.');
+  }
+  const source = JSON.parse(serialized);
+  if (source?.schemaVersion !== 3
+      || source.version !== 'V5.3-2026-09-09'
+      || source.status !== 'draft-blocked'
+      || source.activationAllowed !== false
+      || source.publiclyPublished !== false
+      || source.operator?.businessDesignation !== v53OperatorAlignedDraftContract.businessDesignation
+      || source.operator?.ownerName !== 'Walid Chraibi'
+      || source.operator?.legalForm !== 'sole-proprietor'
+      || source.operator?.serviceAddress !== v53OperatorAlignedDraftContract.serviceAddress
+      || source.operator?.taxNumber !== 'applied-for-not-issued-not-recorded'
+      || source.taxAndConsumerBoundaries?.taxTreatmentAssumed !== false
+      || source.taxAndConsumerBoundaries?.paymentOrPayoutEnabled !== false
+      || source.dsaBoundaries?.noticeAndActionImplementationComplete !== false
+      || source.externalBoundaries?.realMoney !== false
+      || source.externalBoundaries?.mapsConfigurationChanged !== false
+      || !Array.isArray(source.documents)
+      || source.documents.length !== draft.documentCount) {
+    fail('V5.3 source must remain a complete inactive sole-proprietor draft.');
+  }
+}
+
 function assertInterimPilotContract({ root, sourceTexts, legal }) {
   const policy = object(legal.interimPilotRules, 'interimPilotRules');
   const expectedPolicyKeys = [
@@ -451,6 +494,7 @@ export function validateLegalReadiness({
   assertExplicitConsentContract({ root, sourceTexts, consent });
   assertProviderIdentityFailsClosed({ root, sourceTexts });
   assertOperatorReadinessDraft({ root, sourceTexts, legal });
+  assertV53OperatorAlignedDraft({ root, sourceTexts, legal });
   assertInterimPilotContract({ root, sourceTexts, legal });
 
   const documents = object(legal.documents, 'documents');
