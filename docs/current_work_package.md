@@ -1,33 +1,31 @@
-# Current Work Package: WP74 Dispute Transfer Recovery
+# Current Work Package: WP75 Current Candidate Pixel and Staging Execution
 
-WP74 is **COMPLETE LOCALLY AND ON GITHUB**. It closes the
-previous P0 gap in the dispute path: an owner transfer paid before a chargeback
-now has durable, idempotent, provider-bound recovery. Only known, structured
-provider invalid-request errors are definite rejection. Timeouts, transport
-failure and unstructured responses remain uncertain and require review; they
-cannot be shown as success or as “not changed”. Funds reinstated mid-recovery
-never automatically reopen a booking, dispute, payout or release.
+WP75 is **FUNCTIONALLY COMPLETE ON PIXEL AND STAGING**. The exact signed
+Internal/Staging candidate `1.0.0+2026090905`, source
+`e1c182ea496f013989863155c13bfda649255a7e`, is installed as a
+data-preserving Pixel update and is bound to the Staging runtime
+`baf9267c8bff7533230f3234c1f543649df6e4aa`. There is no Mobile or Backend
+runtime drift between candidate source and deployment.
 
-The former private candidate `1.0.0+2026090904` is preserved and permanently
-not uploadable because it predates the backend change. The new signed private
-Internal/Staging candidate is `1.0.0+2026090905`, source
-`e1c182ea496f013989863155c13bfda649255a7e`; it has not been uploaded or
-installed. Its AAB SHA-256 is
-`ed3d5e5af99a6577e09afc96a880ac4ca7c9c0bd86c54bcaa3f5a07fd6255295`.
+The physical two-role synthetic journey passes owner publication, public
+discovery, non-binding request/acceptance, chat, A-to-B isolation, cleanup and
+protected-owner restoration. The initially missing foreground FCM banner was
+traced to the app's separate privacy-default Push choice being off. After
+enabling only Push for this Pixel and confirming Android notification
+permission, foreground, background and terminated-process delivery all pass.
+Crash diagnostics stays disabled.
 
-Forty-eight focused tests, the current isolated PostgreSQL-16 recovery proof,
-all 2,542 tool tests and the complete local technical regression pass. The
-compatible local Android Build-Tools 36.1 correction eliminated the former
-SDK-XML diagnostic; no warning suppression or runtime workaround was
-introduced. GitHub stopped the predecessor runner before recovery because its
-hard-coded 71-migration inventory predated migration 072; the current runner
-and its historical proof boundary are now corrected and locally proven.
-Exact-head GitHub Regression `34385168799`, CodeQL `34385168800` and zero open
-Code Scanning alerts pass; PR #7 remains Draft, open, clean and unmerged. No
-Stripe API/Dashboard, money,
-Staging, Production, Store, tester, Firebase, Cloud/VPS/DNS, device or merge
-action occurred. See
-`docs/operations/WP74_DISPUTE_TRANSFER_RECOVERY_2026-09-09.md`.
+Staging database and mail are healthy; FCM is Staging-only; payment remains
+memory-only and external Listing AI remains mock-only with zero external
+budget. Readiness is degraded solely by two noncritical Support next-update
+deadlines. The private notification-icon image review remains open; its capture
+is owner-only and outside Git. No Production, Store, tester, provider,
+real-money, OnePlus or merge action occurred. See
+`docs/operations/WP75_CURRENT_CANDIDATE_PIXEL_STAGING_2026-09-09.md`.
+
+The complete local regression passed with 2,542 tool tests. Exact-head GitHub
+Regression `34387992280`, CodeQL `34387992392` and zero open Code Scanning
+alerts pass; PR #7 remains Draft, open, clean and unmerged.
 
 # Previous Work Package: WP73 Stripe Sandbox Compatibility Inventory
 

@@ -1,28 +1,33 @@
 # ShareItToo Current State
 
-WP74 is **COMPLETE LOCALLY AND ON GITHUB**. Durable recovery
-now exists for an owner transfer already paid when a later dispute occurs.
-Safe provider rejection is deliberately narrow; timeout, transport and
-unstructured failures remain uncertain/reviewable and can never produce a
-false success or false “not changed” outcome. Reinstated funds do not auto-open
-or auto-release anything.
+WP75 is **FUNCTIONALLY COMPLETE ON THE CURRENT PIXEL CANDIDATE AND STAGING**.
+The verified signed candidate is `com.shareittoo.app` `1.0.0+2026090905`,
+source `e1c182ea496f013989863155c13bfda649255a7e`; the live Staging runtime is
+`baf9267c8bff7533230f3234c1f543649df6e4aa`. The candidate APK,
+certificate, package and data-preserving Pixel update all match. There is no
+Mobile or Backend runtime drift from the candidate source to Staging.
 
-The previous candidate `1.0.0+2026090904` is historically retained and cannot
-be uploaded. A new private signed Internal/Staging candidate
-`1.0.0+2026090905`, source `e1c182ea496f013989863155c13bfda649255a7e`, is
-locally archived and verified but neither uploaded nor installed. Its AAB SHA-256
-is `ed3d5e5af99a6577e09afc96a880ac4ca7c9c0bd86c54bcaa3f5a07fd6255295`.
+Two separately email-verified synthetic Staging roles now prove the real Pixel
+owner publication, renter discovery, non-binding request/acceptance, chat and
+A-to-B session isolation. FCM passes while the app is foregrounded,
+backgrounded and terminated. The earlier FCM failure was a correct
+privacy-default: Push was off. The Pixel now has Push enabled and Android
+notifications allowed; Crash diagnostics remains disabled. The sensitive
+notification-icon capture is private and not committed, so its visual review
+is explicitly still pending.
 
-Forty-eight focused tests, the current isolated PostgreSQL-16 recovery proof,
-2,542 tool tests and the complete Backend, Flutter, analyzer, Web/Wasm,
-loopback and Android local regression pass. GitHub found the former recovery
-runner's stale 71-migration inventory before it executed; the current runner
-is now bound to migration 072, its historical proof remains source-bound, and
-the corrected local proof passes. Exact-head GitHub Regression `34385168799`,
-CodeQL `34385168800` and zero open Code Scanning alerts pass; PR #7 remains
-Draft, open, clean and unmerged. No provider, money, deployment, Store, tester, Firebase, production,
-Cloud/VPS/DNS, device or merge change occurred. See
-`docs/operations/WP74_DISPUTE_TRANSFER_RECOVERY_2026-09-09.md`.
+Staging database and mail are healthy. It uses FCM only for Staging, payment
+memory mode with Stripe live mode false, and Listing-AI mock-only external
+execution with zero budget. Readiness is degraded only by two noncritical
+Support next-update deadlines. Binding contract/reservation flows remain held
+by the V5.2 legal gate.
+
+No Production, Google Play, tester-list, public-registration, Stripe/provider,
+real-money, external Listing-AI, OnePlus or PR merge action occurred. Full
+local regression (2,542 tool tests), GitHub Regression `34387992280`, CodeQL
+`34387992392` and zero open Code Scanning alerts pass. PR #7 remains Draft,
+open, clean and unmerged. See
+`docs/operations/WP75_CURRENT_CANDIDATE_PIXEL_STAGING_2026-09-09.md`.
 
 ## Previous package: WP73
 
