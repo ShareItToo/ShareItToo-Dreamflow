@@ -55,6 +55,14 @@ export const selectedIntentRemoteSettle = Object.freeze({
   intervalMs: 650,
 });
 
+// AppPopup.toast is intentionally visible for only two seconds. Start the
+// first UIAutomator snapshot promptly so a cold hierarchy dump cannot consume
+// the complete acknowledgement window before the assertion observes it.
+export const cartAcknowledgementProbe = Object.freeze({
+  attempts: 24,
+  intervalMs: 75,
+});
+
 function sanitizedFailure(error) {
   const detail = typeof error?.message === 'string' ? error.message.trim() : '';
   if (detail.length === 0 || detail.length > 300
@@ -277,6 +285,8 @@ async function addExactIntentTwiceOnPixel({
       adbPath,
       device,
       wait,
+      attempts: cartAcknowledgementProbe.attempts,
+      intervalMs: cartAcknowledgementProbe.intervalMs,
       label: 'non-reserving cart acknowledgement',
       predicate: (value) => (
         currentHeadAndroidNamedNodes(

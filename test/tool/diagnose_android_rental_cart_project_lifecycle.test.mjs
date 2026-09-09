@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   calendarMonthLabel,
+  cartAcknowledgementProbe,
   firstServerEligibleRentalDate,
   nextCalendarMonthActionNode,
   rentalCartItemActionVisible,
@@ -117,6 +118,12 @@ test('remote availability settling outlives the 20-second transport contract', (
     selectedIntentRemoteSettle.intervalMs * selectedIntentRemoteSettle.attempts
       >= 26000,
   );
+});
+
+test('starts the short-lived cart acknowledgement probe before a cold dump can miss it', () => {
+  assert.equal(cartAcknowledgementProbe.intervalMs, 75);
+  assert.equal(cartAcknowledgementProbe.attempts, 24);
+  assert.ok(cartAcknowledgementProbe.intervalMs < 200);
 });
 
 test('classifies selected-intent failure states without private values', () => {
