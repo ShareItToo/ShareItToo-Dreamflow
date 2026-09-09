@@ -29,12 +29,113 @@ import {
   validateCurrentHeadAndroidReleaseArchive,
 } from './validate_current_head_android_release_archive.mjs';
 
+const rolloverManifestPath = 'store/google-play/current-rollover-candidate.json';
+const rolloverInstallStatuses = new Set([
+  'build-ready-play-internal-upload-pending',
+  'build-ready-play-internal-activation-pending',
+  'play-internal-active-device-verification-pending',
+]);
+const postCandidateEvidencePrefixes = [
+  '.github/',
+  'docs/',
+  'scripts/',
+  'store/',
+  'test/',
+  'tool/',
+];
+
 function fail(message) {
   throw new Error(message);
 }
 
 function sha256Bytes(value) {
   return createHash('sha256').update(value).digest('hex');
+}
+
+export function validateRolloverAndroidInstallBinding({
+  rollover,
+  candidate,
+  sourceIsAncestor,
+  changedPaths = [],
+} = {}) {
+  const identity = rollover?.candidate;
+  const artifact = rollover?.artifact;
+  if (rollover?.schemaVersion !== 1
+      || rollover?.kind !== 'android-current-rollover-candidate'
+      || !rolloverInstallStatuses.has(rollover?.status)
+      || identity?.applicationId !== 'com.shareittoo.app'
+      || identity?.releaseChannel !== 'internal'
+      || identity?.apiBaseUrl !== 'https://staging.shareittoo.com/api/v1'
+      || !/^\d+\.\d+\.\d+$/u.test(identity?.versionName ?? '')
+      || !/^\d{10}$/u.test(identity?.versionCode ?? '')
+      || !/^[a-f0-9]{40}$/u.test(identity?.artifactSourceHead ?? '')
+      || sourceIsAncestor !== true) {
+    fail('Current rollover candidate is not eligible for direct device installation.');
+  }
+  for (const [actual, expected] of [
+    [candidate.applicationId, identity.applicationId],
+    [candidate.versionName, identity.versionName],
+    [candidate.buildNumber, identity.versionCode],
+    [candidate.commit, identity.artifactSourceHead],
+    [candidate.releaseChannel, identity.releaseChannel],
+    [candidate.apiBaseUrl, identity.apiBaseUrl],
+    [candidate.apkSha256, artifact?.apkSha256],
+    [candidate.aabSha256, artifact?.aabSha256],
+    [candidate.signingCertificateSha256, artifact?.uploadCertificateSha256],
+  ]) {
+    if (actual !== expected) {
+      fail('Private archive does not match the current rollover candidate.');
+    }
+  }
+  const runtimeDrift = changedPaths.filter((path) =>
+    !postCandidateEvidencePrefixes.some((prefix) => path.startsWith(prefix)));
+  if (runtimeDrift.length > 0) {
+    fail('Runtime-affecting files changed after the rollover candidate was built.');
+  }
+  return candidate;
+}
+
+async function validateCurrentRolloverAndroidReleaseArchive({
+  root,
+  candidateDirectory,
+  commandRunner = execFileSync,
+} = {}) {
+  const rollover = JSON.parse(readFileSync(resolve(root, rolloverManifestPath), 'utf8'));
+  const identity = rollover?.candidate ?? {};
+  const candidate = await validateCurrentHeadAndroidReleaseArchive({
+    root,
+    candidateDirectory,
+    expectedIdentity: {
+      versionName: identity.versionName,
+      buildNumber: identity.versionCode,
+      commit: identity.artifactSourceHead,
+    },
+  });
+  let sourceIsAncestor = true;
+  try {
+    commandRunner('git', ['merge-base', '--is-ancestor', candidate.commit, 'HEAD'], {
+      cwd: root,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+  } catch {
+    sourceIsAncestor = false;
+  }
+  const gitLines = (args) => String(commandRunner('git', args, {
+    cwd: root,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  })).trim().split('\n').filter(Boolean);
+  const changedPaths = [...new Set([
+    ...gitLines(['diff', '--name-only', `${candidate.commit}..HEAD`]),
+    ...gitLines(['diff', '--name-only']),
+    ...gitLines(['diff', '--cached', '--name-only']),
+  ])];
+  return validateRolloverAndroidInstallBinding({
+    rollover,
+    candidate,
+    sourceIsAncestor,
+    changedPaths,
+  });
 }
 
 export function parseAndroidInstalledPackageSnapshot(output, userId = '0') {
@@ -400,7 +501,7 @@ function parseArguments(values) {
 async function run() {
   const root = fileURLToPath(new URL('../', import.meta.url));
   const args = parseArguments(process.argv.slice(2));
-  const candidate = await validateCurrentHeadAndroidReleaseArchive({
+  const candidate = await validateCurrentRolloverAndroidReleaseArchive({
     root,
     candidateDirectory: args.candidateDirectory,
   });

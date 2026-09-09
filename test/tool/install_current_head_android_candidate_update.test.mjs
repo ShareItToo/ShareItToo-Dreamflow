@@ -6,6 +6,7 @@ import {
   installCurrentHeadAndroidCandidateUpdate,
   parseAndroidInstalledPackageSnapshot,
   preflightCurrentHeadAndroidCandidateUpdate,
+  validateRolloverAndroidInstallBinding,
 } from '../../tool/install_current_head_android_candidate_update.mjs';
 
 const certificate = 'a'.repeat(64);
@@ -193,4 +194,55 @@ test('rejects a candidate signed by a different certificate before install', () 
     /does not match the verified private archive/,
   );
   assert.equal(data.commands.some((args) => args[0] === 'install'), false);
+});
+
+function rolloverFixture() {
+  return {
+    schemaVersion: 1,
+    kind: 'android-current-rollover-candidate',
+    status: 'build-ready-play-internal-upload-pending',
+    candidate: {
+      applicationId: candidate.applicationId,
+      versionName: candidate.versionName,
+      versionCode: candidate.buildNumber,
+      artifactSourceHead: candidate.commit,
+      releaseChannel: candidate.releaseChannel,
+      apiBaseUrl: candidate.apiBaseUrl,
+    },
+    artifact: {
+      apkSha256: candidate.apkSha256,
+      aabSha256: 'c'.repeat(64),
+      uploadCertificateSha256: candidate.signingCertificateSha256,
+    },
+  };
+}
+
+test('accepts the exact current rollover archive after evidence-only commits', () => {
+  const archive = { ...candidate, aabSha256: 'c'.repeat(64) };
+  assert.equal(validateRolloverAndroidInstallBinding({
+    rollover: rolloverFixture(),
+    candidate: archive,
+    sourceIsAncestor: true,
+    changedPaths: ['docs/current_state.md', 'store/google-play/current-rollover-candidate.json'],
+  }), archive);
+});
+
+test('rejects superseded bytes, non-ancestor sources and post-build runtime drift', () => {
+  const archive = { ...candidate, aabSha256: 'c'.repeat(64) };
+  assert.throws(() => validateRolloverAndroidInstallBinding({
+    rollover: rolloverFixture(),
+    candidate: { ...archive, apkSha256: 'd'.repeat(64) },
+    sourceIsAncestor: true,
+  }), /does not match/u);
+  assert.throws(() => validateRolloverAndroidInstallBinding({
+    rollover: rolloverFixture(),
+    candidate: archive,
+    sourceIsAncestor: false,
+  }), /not eligible/u);
+  assert.throws(() => validateRolloverAndroidInstallBinding({
+    rollover: rolloverFixture(),
+    candidate: archive,
+    sourceIsAncestor: true,
+    changedPaths: ['lib/main.dart'],
+  }), /Runtime-affecting/u);
 });
