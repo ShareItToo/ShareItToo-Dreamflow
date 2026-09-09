@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp82-staging-persistent-source-proof-contract",
+  "status": "prepared-local-read-only-observation-blocked",
+  "capturedOn": "2026-09-10",
+  "workPackage": "WP82",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "preflightHead": "1fa6d5c8bc758c938031d25d8d533039912327ca",
+    "sourceInventory": [
+      {
+        "path": "backend/ops/deploy_release.sh",
+        "sha256": "7b0958cba5d2169da3283e214630ddd55bba882eefb726aa6895b917b94ee477"
+      },
+      {
+        "path": "backend/compose.staging.yml",
+        "sha256": "a5669d8b01672ec1b2da240607a6dc592d9cb17474d6ec40d648ffb54fc416b4"
+      },
+      {
+        "path": "tool/inspect_staging_runtime_readonly.mjs",
+        "sha256": "8a893f44a4c248361a9af091948c8e6fb7a61140d6347e53421a5819494619b7"
+      },
+      {
+        "path": "docs/evidence/release-readiness/wp77-public-legal-staging-source-mismatch-20260909.json",
+        "sha256": "3edefcc2d77b621d3fd99ac4aa465da58feab490054099df9e14ec8cb932a3cd"
+      }
+    ]
+  },
+  "requiredReadOnlyProof": {
+    "activeContainerBinding": [
+      "exact-staging-compose-project-label",
+      "active-compose-working-directory-is-persistent-regular-directory",
+      "active-compose-config-file-is-regular-nonsymlink-and-contained"
+    ],
+    "persistentSource": [
+      "source-compose-metadata-is-regular-nonsymlink",
+      "source-environment-metadata-is-regular-nonsymlink-owner-restricted",
+      "source-deploy-script-is-present-and-uses-immutable-image-no-build-rollback-path",
+      "source-data-volume-names-match-the-running-staging-project"
+    ],
+    "runtimeComparison": [
+      "runtime-image-release-record-commit-version-build-time-exact-match",
+      "nonsecret-legal-runtime-values-match-source-without-emitting-values",
+      "current-and-rollback-image-identities-are-read-only-verified"
+    ],
+    "prohibited": [
+      "credential-content-read",
+      "full-environment-or-container-configuration-dump",
+      "remote-source-or-container-mutation",
+      "implicit-local-image-fallback",
+      "failed-control-panel-recreate-retry"
+    ]
+  },
+  "remoteObservation": {
+    "protocol": "dedicated-read-only-staging-source-observation",
+    "connectionAttempt": "host-alias-unresolvable-before-authentication",
+    "remoteAuthenticationPerformed": false,
+    "remoteCommandPerformed": false,
+    "remoteEvidenceCaptured": false
+  },
+  "verification": {
+    "focusedWp82Tests": "passed-5",
+    "completeToolInventory": "passed-2567",
+    "fullTechnicalRegression": "passed",
+    "webWasmLoopback": "passed",
+    "androidDebugBuildAndMinSdk24": "passed",
+    "r11AndroidSecuritySurface": "passed"
+  },
+  "externalGate": {
+    "name": "STAGING_PERSISTENT_SOURCE_READONLY_OBSERVATION",
+    "state": "blocked",
+    "blocker": "The configured Staging SSH alias does not currently resolve before authentication.",
+    "completionCondition": "A dedicated read-only observation proves every contract item without source, container, data or provider mutation."
+  },
+  "boundaries": {
+    "sshAuthentication": false,
+    "remoteRead": false,
+    "remoteConfiguration": false,
+    "deployment": false,
+    "container": false,
+    "database": false,
+    "store": false,
+    "device": false,
+    "provider": false,
+    "payment": false,
+    "production": false,
+    "pullRequestMerge": false
+  }
+}

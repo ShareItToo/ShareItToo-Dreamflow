@@ -132,7 +132,7 @@
     },
     {
       "path": "scripts/technical_regression_check.sh",
-      "sha256": "2cb8f34f14fdb800ef3c6c9776d9d3dcf6f701942e292a0ea067aee807915c22"
+      "sha256": "7e9e3e1a6006145fd4f345f9d9923c019a45eab56c3a115c15d5386b0ef1fb9c"
     },
     {
       "path": "test/reduced_wave0_local_state_truth_recovery_test.dart",

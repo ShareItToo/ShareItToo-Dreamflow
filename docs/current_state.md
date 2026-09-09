@@ -1,5 +1,17 @@
 # ShareItToo Current State
 
+## WP82 Staging persistent-source proof contract
+
+WP82 prepares one exact, source-hash-bound contract for reconstructing the
+authoritative Staging release source. It requires proof of active Compose
+binding, persistent regular source metadata, the immutable no-build rollback
+path, named volumes and a nonsecret runtime comparison. The configured Staging
+SSH alias failed hostname resolution before authentication; no key, remote
+command, remote evidence or external mutation occurred. The next action remains
+a dedicated read-only observation after an authoritative reachable hostname is
+available. See
+`docs/operations/WP82_STAGING_PERSISTENT_SOURCE_PROOF_CONTRACT_2026-09-10.md`.
+
 ## WP81 source-to-Staging parity preflight
 
 The installed `1.0.0+2026090905` candidate and its recorded Staging runtime
