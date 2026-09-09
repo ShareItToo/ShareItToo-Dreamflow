@@ -1,7 +1,22 @@
-# Current Work Package: WP66 payment provider integrity and successor candidate
+# Current Work Package: WP67 Staging, Pixel and cross-device runway
 
-WP66 is **COMPLETE LOCALLY; GITHUB VERIFICATION PENDING; STAGING/DEVICE
-ROLLOUT PENDING**. Durable provider idempotency, restart recovery, frozen
+WP67 is **COMPLETE ON STAGING AND PIXEL; ONEPLUS USB AUTHORIZATION PENDING**.
+Staging runs exact HEAD `78c663248aec089b08d19fd0fb40a9a63f19408b` and the
+Pixel runs the exact signed `1.0.0+2026090904` candidate. The current-candidate
+surface, two-role product, FCM, messaging/media/time/location and
+rental-cart/project lifecycles pass with cleanup and owner restoration.
+
+The only physical device blocker is the OnePlus USB-debugging prompt. Its
+MacBook can already access a private hash-verified copy of the exact APK, but
+no install or cross-device claim is made while ADB remains unauthorized. V5.2
+binding return/damage remains separately and correctly held by the missing
+professionally approved immutable legal snapshots. See
+`docs/operations/WP67_STAGING_PIXEL_CROSS_DEVICE_RUNWAY_2026-09-09.md`.
+
+# Previous Work Package: WP66 payment provider integrity and successor candidate
+
+WP66 is **COMPLETE LOCALLY AND ON GITHUB; STAGING/PIXEL ROLLOUT COMPLETE**.
+Durable provider idempotency, restart recovery, frozen
 checkout expiry and exact event-to-payment/booking/customer/object/live-mode
 binding are implemented and proven. Uncertain reconciliation cannot create a
 second payment attempt.

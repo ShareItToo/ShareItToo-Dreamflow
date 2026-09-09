@@ -1,7 +1,28 @@
 # ShareItToo Current State
 
-WP66 is **COMPLETE LOCALLY; GITHUB VERIFICATION PENDING; STAGING/DEVICE
-ROLLOUT PENDING**. Provider retries now use opaque durable operation keys,
+WP67 is **COMPLETE ON STAGING AND PIXEL; ONEPLUS USB AUTHORIZATION PENDING**.
+Exact technical HEAD `78c663248aec089b08d19fd0fb40a9a63f19408b` is deployed on
+Staging and the Pixel runs the data-preserving signed candidate
+`1.0.0+2026090904`. Authenticated surfaces, two-role publication/discovery,
+non-binding request/acceptance, chat, FCM foreground/background/terminated,
+attachment and time proposals, location gating, rental cart, projects,
+restart persistence, account isolation and cleanup pass. A two-second cart
+toast measurement race was closed deterministically at
+`8f671e5a3a5ec6f3e4abed929e9e1212565fcf6f`; all 2,488 tool tests and a fresh
+physical replay pass without changing candidate bytes.
+
+The V5.2 return/damage path remains correctly blocked before binding by
+`409:v52_contract_documents_unavailable`. Drive contains the V5.2 decision
+version, but no professionally approved immutable snapshots; the document
+itself requires that approval and real operator/provider facts. The exact APK
+has reached the MacBook privately and its hash is verified, but the connected
+OnePlus has not authorized USB debugging, so it was not installed or tested.
+No Production, Play, tester, Firebase, external-AI, provider, real-money, DNS
+or merge state changed. See
+`docs/operations/WP67_STAGING_PIXEL_CROSS_DEVICE_RUNWAY_2026-09-09.md`.
+
+WP66 is **COMPLETE LOCALLY AND ON GITHUB; STAGING/PIXEL ROLLOUT COMPLETE**.
+Provider retries now use opaque durable operation keys,
 freeze checkout expiry and immutable provider parameters, recover completed
 commands across a new client request key, and require exact payment, booking,
 customer, object-family, transfer-group and test/live binding before provider
