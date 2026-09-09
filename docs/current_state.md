@@ -12,7 +12,8 @@ automatic rollback and named Staging volumes. WP77's missing persistent,
 authoritative remote source/recreate proof remains a hard fail-closed block,
 so WP81 made no remote, deployment, Store, device, provider, payment or
 Production change. Focused checks and the full local technical regression
-pass. See
+pass; exact-head GitHub Regression and CodeQL pass with zero open PR-merge
+Code Scanning alerts. See
 `docs/operations/WP81_SOURCE_TO_STAGING_PARITY_PREFLIGHT_2026-09-10.md`.
 
 ## WP80 CodeQL file-descriptor race remediation

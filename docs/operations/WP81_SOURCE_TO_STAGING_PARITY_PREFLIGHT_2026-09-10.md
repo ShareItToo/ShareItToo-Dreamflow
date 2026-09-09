@@ -49,6 +49,10 @@ Focused WP81 tests and the complete 2,560-test tool inventory pass. The full
 local technical regression also passes: Flutter analysis/tests, Web/Wasm and
 loopback smoke, Android debug build/minSdk 24 and the R11 Android security
 surface audit all complete without a temporary timing or parallelism exception.
+Exact-head GitHub Regression `34415756777` passes Backend, Flutter,
+PostgreSQL and clean-checkout jobs; image publication is skipped. CodeQL
+`34415756339` passes, and the current PR-merge scan has zero open alerts.
+PR #7 remains Draft, open, clean and unmerged.
 
 Machine-readable evidence:
 `docs/evidence/release-readiness/wp81-source-to-staging-parity-preflight-20260910.json`.

@@ -60,6 +60,15 @@ test('rejects a partial verification claim', () => {
   );
 });
 
+test('rejects a GitHub verification that masks an open PR security finding', () => {
+  const value = evidence();
+  value.githubVerification.openPullRequestMergeCodeScanningAlerts = 1;
+  assert.throws(
+    () => validateWp81SourceToStagingParityPreflight({ evidence: value, checkGit: false }),
+    /GitHub verification is invalid/u,
+  );
+});
+
 test('rejects a credential-shaped value in the evidence', () => {
   const value = evidence();
   value.diagnosticNote = 'sk_test_placeholder';

@@ -152,6 +152,17 @@ export function validateWp81SourceToStagingParityPreflight({
     androidDebugBuildAndMinSdk24: 'passed',
     r11AndroidSecuritySurface: 'passed',
   })) fail('WP81 verification is invalid.');
+  if (!exact(value.githubVerification, {
+    sourceHead: '60f62ce4a44bd20d9e4c2136109c7b921a660932',
+    regressionRun: 34415756777,
+    regression: 'passed-all-required-jobs',
+    codeqlRun: 34415756339,
+    codeql: 'passed',
+    cleanCheckoutReproducibility: 'passed',
+    apiImagePublication: 'skipped',
+    openPullRequestMergeCodeScanningAlerts: 0,
+    pullRequest7: 'draft-open-clean-unmerged',
+  })) fail('WP81 GitHub verification is invalid.');
   if (!exact(value.deploymentSafety, {
     immutableCommitLabeledImageRequired: true,
     noBuildRuntimeRolloutRequired: true,

@@ -9,7 +9,9 @@ commit-labelled-image, no-build, health-readback, rollback and named-volume
 guards, but WP77's authoritative persistent remote-source/recreate proof is
 still absent. No remote, deployment, Store, device, provider, payment or
 Production action occurred. Focused checks, the full local technical
-regression and the 2,560-test tool inventory pass. See
+regression and the 2,560-test tool inventory pass. Exact-head GitHub
+Regression/CodeQL pass, PR-merge Code Scanning has zero open alerts, and PR #7
+remains Draft/open/clean/unmerged. See
 `docs/operations/WP81_SOURCE_TO_STAGING_PARITY_PREFLIGHT_2026-09-10.md`.
 
 # Previous Work Package: WP80 CodeQL File-Descriptor Race Remediation
