@@ -1,4 +1,36 @@
-# Current Work Package: WP63 backend dependency security and candidate refresh
+# Current Work Package: WP64 Staging security parity and Pixel candidate
+
+WP64 is **COMPLETE ON STAGING, PIXEL, LOCALLY AND ON GITHUB; PLAY INTERNAL
+UPLOAD PENDING**. Exact Backend technical HEAD
+`7a73de4aba2b4ae4d6785e8dfbd466a5ad5aa60c` is deployed to Staging and is
+Backend-tree-identical to signed Android candidate source
+`2055a5c508689596c0f776c2cdf38b54f7e106c3`. API/PostgreSQL health, 354 foreign
+keys, rollback, FCM, SMTP and both protected roles pass. Listing AI remains
+mock/off with zero external budget; payment remains memory-only and non-live.
+Readiness is degraded only by two separate noncritical overdue Support
+follow-ups.
+
+The physical Pixel now runs the exact data-preserving signed update
+`1.0.0+2026090902`. Authenticated surfaces, accessibility/restart/theme checks,
+the two-role publish/discover/non-binding request/accept/chat flow,
+Account-A-to-B isolation and FCM in foreground/background/terminated states all
+pass. Test state was cleaned up, zero public active listings remain, the
+protected owner is restored and no contract, reservation, payment or real
+money was created. The privacy-sensitive notification screenshot was deleted
+after visual verification; only its hash remains.
+
+Exact technical-head GitHub publication/regression `34296797104`, PR Regression
+`34296801776` and CodeQL `34296801791` pass; current PR-merge alerts are zero
+and PR #7 remains Draft/unmerged. One release-infrastructure debt stays open:
+the existing VPS registry authorization cannot pull the newly published private
+organization image. Staging therefore used the repository-supported local
+build from the exact hash-verified checkout. A durable least-privilege package
+read path and reproducible pull test are required before release maturity.
+The exact `2026090902` Play/Internal upload remains the next separately bounded
+Store step. See
+`docs/operations/WP64_STAGING_SECURITY_PARITY_AND_PIXEL_CANDIDATE_2026-09-09.md`.
+
+# Previous Work Package: WP63 backend dependency security and candidate refresh
 
 WP63 is **COMPLETE LOCALLY AND ON GITHUB; BUILD READY; PLAY INTERNAL UPLOAD
 PENDING**.

@@ -1,5 +1,37 @@
 # ShareItToo Current State
 
+WP64 is **COMPLETE ON STAGING, PIXEL, LOCALLY AND ON GITHUB; PLAY INTERNAL
+UPLOAD PENDING**. The exact Backend technical HEAD
+`7a73de4aba2b4ae4d6785e8dfbd466a5ad5aa60c` is deployed and healthy on Staging.
+It has the same Backend tree as signed Android candidate source
+`2055a5c508689596c0f776c2cdf38b54f7e106c3`; no mobile runtime changed after
+that candidate was built. FCM/SMTP and protected-role authentication pass,
+while Listing AI remains mock/off, payment remains memory-only/non-live and the
+pilot remains `heilbronn_wave0`. The only readiness degradation is two overdue
+noncritical Support follow-ups.
+
+The physical Pixel runs the data-preserving exact signed update
+`1.0.0+2026090902`. Authenticated navigation, legal/large-text/accessibility,
+restart, theme/background, account and Help/Support surfaces pass. Two distinct
+email-verified synthetic roles successfully complete listing publication,
+discovery, non-binding request/acceptance, chat, Account-A-to-B isolation and
+FCM in foreground, background and terminated-process states. Cleanup restored
+the protected owner and left zero public active listings; no contract,
+reservation, payment or real money was created. A notification capture that
+also contained unrelated personal notifications was deleted immediately after
+visual review; only its content hash remains.
+
+Exact technical-head GitHub image publication/regression `34296797104`, PR
+Regression `34296801776`, CodeQL `34296801791`, independent clean checkout and
+zero current PR-merge alerts pass. PR #7 remains Draft, open, mergeable and
+unmerged. The private GHCR image was published, but the VPS's existing registry
+authorization cannot pull the organization package. The exact hash-verified
+checkout build is running safely on Staging; durable least-privilege package
+read and a reproducible pull test remain explicit release-infrastructure debt.
+No Production, public Store, tester, Firebase, external AI, Stripe/real-payment,
+VPS/DNS topology or merge boundary changed. See
+`docs/operations/WP64_STAGING_SECURITY_PARITY_AND_PIXEL_CANDIDATE_2026-09-09.md`.
+
 WP63 is **COMPLETE LOCALLY AND ON GITHUB; BUILD READY; PLAY INTERNAL UPLOAD
 PENDING**.
 A fresh clean-checkout audit exposed newly published reviewed advisories for
