@@ -1,12 +1,13 @@
 {
   "schemaVersion": 1,
   "kind": "sit-wp63-backend-dependency-security-and-candidate-refresh",
-  "status": "signed-candidate-locally-verified-exact-head-github-pending",
-  "capturedAt": "2026-09-08T23:11:13Z",
+  "status": "complete-local-and-github-build-ready-play-internal-upload-pending",
+  "capturedAt": "2026-09-09T00:02:46Z",
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "triggerHead": "9200b6334e8ac0751278188e49f9b7a5e2c77f8a",
-    "candidateSourceHead": "2055a5c508689596c0f776c2cdf38b54f7e106c3"
+    "candidateSourceHead": "2055a5c508689596c0f776c2cdf38b54f7e106c3",
+    "githubVerifiedHead": "17d749895da3ac7723a8b855ee1ea004931b3b32"
   },
   "advisories": [
     {
@@ -105,8 +106,9 @@
     "firebaseAndroidConfiguration": "passed",
     "completeRegression": "passed-f67cf5a6427d777cd5fd0a9f62064c0316b7e57c",
     "cleanCheckout": "passed-f67cf5a6427d777cd5fd0a9f62064c0316b7e57c-byte-identical-android",
-    "githubRegression": "pending-candidate-binding",
-    "githubCodeql": "pending-candidate-binding"
+    "githubRegression": "passed-34291902058-head-17d749895da3ac7723a8b855ee1ea004931b3b32",
+    "githubCodeql": "passed-34291902100-head-17d749895da3ac7723a8b855ee1ea004931b3b32",
+    "currentPrMergeOpenCodeScanningAlerts": 0
   },
   "historicalStagingRatchet": {
     "cause": "runtime-affecting-backend-security-update-after-wp55-deployment",

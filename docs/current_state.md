@@ -1,6 +1,7 @@
 # ShareItToo Current State
 
-WP63 is **SIGNED CANDIDATE LOCALLY VERIFIED; EXACT-HEAD GITHUB CLOSURE PENDING**.
+WP63 is **COMPLETE LOCALLY AND ON GITHUB; BUILD READY; PLAY INTERNAL UPLOAD
+PENDING**.
 A fresh clean-checkout audit exposed newly published reviewed advisories for
 the direct Backend dependencies Sharp and Nodemailer. A later registry audit,
 performed before closure, also exposed three new high-severity Multer
@@ -29,7 +30,10 @@ debug APKs within the deterministic storage bounds before complete cleanup.
 The never-uploaded local `2026090901` bytes are retained only as superseded
 historical evidence and are explicitly prohibited from future upload.
 The Play/OnePlus `2026090711` candidate remains immutable in a separate
-snapshot. No Store, device, Staging, Production or provider state changed. See
+snapshot. Exact-head GitHub Regression `34291902058` and CodeQL `34291902100`
+pass at `17d749895da3ac7723a8b855ee1ea004931b3b32`; the current PR-merge ref has
+zero open code-scanning alerts and PR #7 remains Draft, open, mergeable and
+unmerged. No Store, device, Staging, Production or provider state changed. See
 `docs/operations/WP63_BACKEND_DEPENDENCY_SECURITY_AND_CANDIDATE_REFRESH_2026-09-09.md`.
 
 WP62 is **IMPLEMENTED AND VERIFIED LOCALLY/GITHUB; PHYSICAL ONEPLUS CURRENT

@@ -1,6 +1,7 @@
 # Current Work Package: WP63 backend dependency security and candidate refresh
 
-WP63 is **SIGNED CANDIDATE LOCALLY VERIFIED; EXACT-HEAD GITHUB CLOSURE PENDING**.
+WP63 is **COMPLETE LOCALLY AND ON GITHUB; BUILD READY; PLAY INTERNAL UPLOAD
+PENDING**.
 The final WP62 clean-checkout discovered newly published Sharp and Nodemailer
 advisories. A required follow-up registry audit then found three high-severity
 Multer advisories published after the first local candidate build. Direct
@@ -21,12 +22,15 @@ and APK SHA-256 is
 `a30404283c92c2dd20e231d385af80e2dcbef510c12210a461f5469759f82dd6`.
 The never-uploaded `2026090901` candidate is retained only as superseded
 historical evidence and must never be uploaded.
-The `2026090711` Play/OnePlus binding is preserved as immutable history. Next:
-complete exact-head GitHub Regression, CodeQL and current alert readback. The
-local technical profile and independent clean checkout already pass at binding
+The `2026090711` Play/OnePlus binding is preserved as immutable history.
+Exact-head GitHub Regression `34291902058` and CodeQL `34291902100` pass at
+`17d749895da3ac7723a8b855ee1ea004931b3b32`; all four Regression jobs are green,
+the current PR-merge ref has zero open alerts, and PR #7 remains Draft, open,
+mergeable and unmerged. The local technical profile and independent clean checkout pass at binding
 HEAD `f67cf5a6427d777cd5fd0a9f62064c0316b7e57c`; the clean proof uses fresh
 caches and produces byte-identical Android debug artifacts. No Store upload is
-part of this preparation. See
+part of this preparation. The next bounded package must first re-read Staging,
+published-image and Play state before any external candidate rollout. See
 `docs/operations/WP63_BACKEND_DEPENDENCY_SECURITY_AND_CANDIDATE_REFRESH_2026-09-09.md`.
 
 # Previous Work Package: WP62 OnePlus Play installer compatibility and inspection

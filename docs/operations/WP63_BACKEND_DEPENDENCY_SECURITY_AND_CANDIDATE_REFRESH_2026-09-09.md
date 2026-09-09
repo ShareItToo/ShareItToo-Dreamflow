@@ -1,6 +1,6 @@
 # WP63 — backend dependency security and candidate refresh
 
-Status: **SIGNED CANDIDATE LOCALLY VERIFIED; EXACT-HEAD GITHUB CLOSURE
+Status: **COMPLETE LOCALLY AND ON GITHUB; BUILD READY; PLAY INTERNAL UPLOAD
 PENDING**.
 
 ## Trigger and decision
@@ -54,8 +54,9 @@ non-overwriting and owner-only.
 
 No Store upload or activation is part of WP63. The current rollover binding now
 targets these exact bytes, while the active Play/OnePlus `2026090711` candidate
-is retained in its own immutable snapshot. Next rerun the complete local and
-GitHub gates, then consider a separately gated Google Play Internal update.
+is retained in its own immutable snapshot. A later separately bounded package
+may publish the exact Backend image, deploy it to Staging and replace the Play
+Internal build only after fresh read-only preconditions and rollback checks.
 
 ## Historical Staging ratchet
 
@@ -83,6 +84,15 @@ caches, reran the complete gate and built Android twice. Both debug APKs are
 byte-identical, source inventories remain unchanged, resource use stays inside
 the deterministic bounds and all temporary inputs and artifacts are removed.
 No timing, concurrency, cache or retry workaround was accepted.
+
+Exact-head GitHub Regression `34291902058` passes all four required jobs at
+`17d749895da3ac7723a8b855ee1ea004931b3b32`: Backend, PostgreSQL, Flutter and
+independent clean-checkout reproducibility. CodeQL `34291902100` passes at the
+same HEAD, and the current PR-merge ref has zero open code-scanning alerts. PR
+#7 remains Draft, open, mergeable and unmerged. The two branch-ref alerts still
+returned by GitHub point only to historical analysis commit `0048ece4`; their
+findings were already corrected and the current PR-merge analysis is clean, so
+they are not misstated as current candidate findings.
 
 ## Boundaries
 

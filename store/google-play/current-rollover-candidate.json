@@ -47,14 +47,14 @@
     "fullToolInventory": "passed-2473",
     "localCiProfileRegression": "passed-f67cf5a6427d777cd5fd0a9f62064c0316b7e57c",
     "cleanCheckoutReproducibility": "passed-f67cf5a6427d777cd5fd0a9f62064c0316b7e57c-byte-identical-android",
-    "githubVerifiedHead": null,
-    "githubRegressionRunId": null,
-    "githubRegressionConclusion": "pending-candidate-binding",
-    "githubCodeqlRunId": null,
-    "githubCodeqlConclusion": "pending-candidate-binding",
+    "githubVerifiedHead": "17d749895da3ac7723a8b855ee1ea004931b3b32",
+    "githubRegressionRunId": 34291902058,
+    "githubRegressionConclusion": "success",
+    "githubCodeqlRunId": 34291902100,
+    "githubCodeqlConclusion": "success",
     "githubApiImagePublishRunId": null,
     "githubApiImagePublishConclusion": "not-requested",
-    "openCodeScanningAlerts": "pending-candidate-binding"
+    "openCodeScanningAlerts": 0
   },
   "stagingStateAtReadback": {
     "sourceHead": "d8d1df7f59052c202f824f759693a472b6b8afa1",
