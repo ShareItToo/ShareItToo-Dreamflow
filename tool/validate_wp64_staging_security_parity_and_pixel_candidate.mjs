@@ -279,7 +279,7 @@ export function validateWp64Files({ root }) {
   ), 'utf8'));
   const rollover = JSON.parse(readFileSync(resolve(
     root,
-    'store/google-play/current-rollover-candidate.json',
+    'store/google-play/rollover-candidate-2026090902.json',
   ), 'utf8'));
   return validateWp64StagingSecurityParityAndPixelCandidate({ evidence, rollover });
 }

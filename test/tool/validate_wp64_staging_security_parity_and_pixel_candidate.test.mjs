@@ -14,7 +14,7 @@ const evidenceFixture = JSON.parse(readFileSync(resolve(
 ), 'utf8'));
 const rolloverFixture = JSON.parse(readFileSync(resolve(
   root,
-  'store/google-play/current-rollover-candidate.json',
+  'store/google-play/rollover-candidate-2026090902.json',
 ), 'utf8'));
 
 function fixtures() {
