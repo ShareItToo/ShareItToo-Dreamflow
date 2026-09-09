@@ -12,6 +12,10 @@ const evidence = JSON.parse(readFileSync(resolve(
   root,
   'docs/evidence/release-readiness/wp73-stripe-sandbox-compatibility-inventory-20260909.json',
 ), 'utf8'));
+const validatorSource = readFileSync(resolve(
+  root,
+  'tool/validate_wp73_stripe_sandbox_compatibility_inventory.mjs',
+), 'utf8');
 
 function validate(changed = evidence) {
   return validateWp73StripeSandboxCompatibilityInventory({
@@ -31,6 +35,11 @@ test('accepts the exact read-only WP73 compatibility inventory', () => {
     nextLocalPackage: 'WP74',
     providerChanged: false,
   });
+});
+
+test('keeps the repository validator independent of installed backend dependencies', () => {
+  assert.doesNotMatch(validatorSource, /backend\/node_modules/u);
+  assert.match(validatorSource, /backend\/package\.json/u);
 });
 
 test('rejects provider-state or credential overclaims', () => {

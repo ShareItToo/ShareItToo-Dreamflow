@@ -14,6 +14,7 @@ const sourcePaths = [
   'backend/src/stripe_secret_files.js',
   'backend/src/payment_workflow.js',
   'backend/src/config.js',
+  'backend/package.json',
   'backend/compose.staging.stripe.yml',
   'backend/ops/validate_stripe_staging_secrets.mjs',
   'docs/operations/P0B_PSP_SANDBOX_E2E_RUNBOOK.md',
@@ -53,7 +54,7 @@ function validateRepositoryContracts(repositoryRoot) {
   const config = readFileSync(resolve(repositoryRoot, 'backend/src/config.js'), 'utf8');
   const secrets = readFileSync(resolve(repositoryRoot, 'backend/src/stripe_secret_files.js'), 'utf8');
   const overlay = readFileSync(resolve(repositoryRoot, 'backend/compose.staging.stripe.yml'), 'utf8');
-  const sdkVersion = readFileSync(resolve(repositoryRoot, 'backend/node_modules/stripe/cjs/apiVersion.js'), 'utf8');
+  const packageJson = JSON.parse(readFileSync(resolve(repositoryRoot, 'backend/package.json'), 'utf8'));
 
   for (const pattern of [
     /client\.v2\.core\.accounts\.create/u,
@@ -86,8 +87,11 @@ function validateRepositoryContracts(repositoryRoot) {
       || (overlay.match(/read_only: true/gu) ?? []).length !== 3) {
     fail('WP73 test or secret boundary has drifted.');
   }
-  if (!/2026-08-26\.dahlia/u.test(sdkVersion)) {
-    fail('WP73 installed Stripe SDK API version has drifted.');
+  if (packageJson.dependencies?.stripe !== '22.6.1'
+      || packageJson.engines?.node !== '>=22'
+      || !/2026-08-26\.dahlia/u.test(config)
+      || !/2026-08-26\.dahlia/u.test(provider)) {
+    fail('WP73 pinned Stripe SDK or API version contract has drifted.');
   }
 }
 

@@ -28,6 +28,10 @@
       "sha256": "90922f999317f81e466f6d120a4655d775587552e52d2004372e36687ad73966"
     },
     {
+      "path": "backend/package.json",
+      "sha256": "232de848233204fe8be9c8c865b4e809d092db39948f6dbcdc56a1f154da4db1"
+    },
+    {
       "path": "backend/compose.staging.stripe.yml",
       "sha256": "e0cee3bd22174e9bb3e4fc87acb0e1b395f8c636e494b80db952764c787e978a"
     },
