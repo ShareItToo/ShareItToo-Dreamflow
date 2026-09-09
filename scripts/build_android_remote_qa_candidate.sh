@@ -147,6 +147,29 @@ grep -Fq "native-code: 'arm64-v8a'" <<< "$badging" || {
   echo "ERROR: Remote QA APK is not the expected arm64 split." >&2
   exit 1
 }
+flutter_runtime_entries="$(
+  unzip -Z1 "$apk" |
+    grep -E '^lib/[^/]+/(libapp|libflutter)\.so$' |
+    LC_ALL=C sort
+)"
+expected_flutter_runtime_entries="$(printf '%s\n' \
+  'lib/arm64-v8a/libapp.so' \
+  'lib/arm64-v8a/libflutter.so')"
+[[ "$flutter_runtime_entries" == "$expected_flutter_runtime_entries" ]] || {
+  echo "ERROR: Remote QA APK Flutter runtime must be arm64-v8a only." >&2
+  exit 1
+}
+packaged_native_abis="$(
+  unzip -Z1 "$apk" |
+    grep -E '^lib/[^/]+/[^/]+\.so$' |
+    cut -d/ -f2 |
+    LC_ALL=C sort -u |
+    paste -sd, -
+)"
+[[ "$packaged_native_abis" == 'arm64-v8a,armeabi-v7a,x86_64' ]] || {
+  echo "ERROR: Remote QA APK packaged native ABI inventory changed unexpectedly." >&2
+  exit 1
+}
 
 manifest_dump="$("$build_tools/aapt" dump xmltree "$apk" AndroidManifest.xml)"
 if grep -Fq 'android:debuggable(0x0101000f)=(type 0x12)0xffffffff' <<< "$manifest_dump"; then
@@ -211,6 +234,9 @@ printf '%s\n' \
   "    \"aabSha256\": \"$aab_sha\"," \
   "    \"privacyReportSha256\": \"$privacy_sha\"," \
   "    \"abi\": \"arm64-v8a\"," \
+  "    \"abiScope\": \"flutter-runtime-only\"," \
+  "    \"flutterRuntimeAbi\": \"arm64-v8a\"," \
+  "    \"packagedNativeAbis\": [\"arm64-v8a\", \"armeabi-v7a\", \"x86_64\"]," \
   "    \"canonicalOwnerSigningVerified\": true," \
   "    \"debuggable\": false" \
   "  }," \

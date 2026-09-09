@@ -29,6 +29,15 @@ test('Remote QA Android wiring is separate, staging-only and owner-distributed',
   assert.match(build, /--target-platform android-arm64/u);
   assert.match(build, /app-release\.apk/u);
   assert.doesNotMatch(build, /--split-per-abi/u);
+  assert.match(build, /lib\/arm64-v8a\/libapp\.so/u);
+  assert.match(build, /lib\/arm64-v8a\/libflutter\.so/u);
+  assert.match(build, /Remote QA APK Flutter runtime must be arm64-v8a only/u);
+  assert.ok(build.includes("packaged_native_abis\" == 'arm64-v8a,armeabi-v7a,x86_64'"));
+  assert.ok(build.includes('\\"abiScope\\": \\"flutter-runtime-only\\"'));
+  assert.ok(build.includes('\\"flutterRuntimeAbi\\": \\"arm64-v8a\\"'));
+  assert.ok(build.includes(
+    '\\"packagedNativeAbis\\": [\\"arm64-v8a\\", \\"armeabi-v7a\\", \\"x86_64\\"]',
+  ));
   assert.match(build, /SIT_SOCIAL_GOOGLE_ENABLED=false/u);
   assert.match(build, /SIT_SOCIAL_APPLE_ENABLED=false/u);
   assert.match(build, /SIT_SOCIAL_FACEBOOK_ENABLED=false/u);
