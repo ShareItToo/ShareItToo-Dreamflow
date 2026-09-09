@@ -67,11 +67,11 @@
   "bindingInventory": [
     {
       "path": "docs/evidence/48h-remote/rw0-reduced-wave0-product-journey-20260825.json",
-      "sha256": "dd6b514314d19309f916a356d9f97f4fc0cca5a4c4ae3947a614c64daee2ce37"
+      "sha256": "7086a1e5cec4c5864aaeab1a92fb581680c5c4cbf6b01638a69f12ca09b085e7"
     },
     {
       "path": "docs/evidence/48h-remote/rw10-local-security-control-truthfulness-20260825.json",
-      "sha256": "0c33271a8fceaf3dab8065e2f9e1c54e5221e800ca9c9a5ea90c792e31d15633"
+      "sha256": "a46d7da7a95c61de7138545495123cc3550bdfcfc402c4014e401777cc14f516"
     },
     {
       "path": "docs/evidence/48h-remote/rw11-regression-completeness-stale-support-wiring-20260825.json",
@@ -79,35 +79,35 @@
     },
     {
       "path": "docs/evidence/48h-remote/rw12-security-success-ui-principal-epoch-20260825.json",
-      "sha256": "d2ffebb8282d8e8422dcf3f7470db61aba55560e627bee31681f68678363f858"
+      "sha256": "99f46a94678a11b20263c7953061c3694ebd5322c49a96ecfbd770f8c3c158c3"
     },
     {
       "path": "docs/evidence/48h-remote/rw13-security-logout-all-outcome-principal-epoch-20260825.json",
-      "sha256": "56b419c91828621fa46e68a5aaca1bdedad6435d38b8dc069564f2d5d9f24642"
+      "sha256": "301a799db5aa334b5a56b5a908e936ab644dfccbb8f5675ee11dac059996063c"
     },
     {
       "path": "docs/evidence/48h-remote/rw14-security-remote-device-revocation-outcome-principal-epoch-20260825.json",
-      "sha256": "c1754f21757f71b8adf4bc13b9a8981dcd01de2cb5faea0ea17c049fc565f556"
+      "sha256": "388ed9875da1f3980cb18e78f84749e922f84cb97679b922a2ba13787cb68abd"
     },
     {
       "path": "docs/evidence/48h-remote/rw15-security-interaction-owner-route-invariant-20260825.json",
-      "sha256": "e61e4babc4745a5cd3912f6c4cf061026c3a1766bd9ca45e11e851958d155759"
+      "sha256": "5a2532a8c992574b190b5b1da4b76f1816d314b89aad0a1b931a2ebf77e3db92"
     },
     {
       "path": "docs/evidence/48h-remote/rw16-session-transition-principal-epoch-20260826.json",
-      "sha256": "cf9eb18d691b7c863538423f0533b3b5b2233de2ed99d9e0e57462c8f9db2fe1"
+      "sha256": "9e99669ea358b02cee07150d564f3ede6e5da3c7d6517b8b6a8d87e853fd2d58"
     },
     {
       "path": "docs/evidence/48h-remote/rw17-account-deletion-principal-epoch-transaction-20260826.json",
-      "sha256": "c788f015f9fae180915dc1fb6b9b38c881a46948224e222e52ec40a9e58a3e3e"
+      "sha256": "de9f7323d641c216be9d4cd192dd74237988d339d2bf01d33775c16eb274eca8"
     },
     {
       "path": "docs/evidence/48h-remote/rw18-contact-verification-principal-epoch-transaction-20260826.json",
-      "sha256": "041aaecb97553865fa97ed6bf5dd28693407a3c3f06ec0eafdefbea3252c7018"
+      "sha256": "29b15533fad8115aed2ba9088844da9ef7cb1e57c154fd5bcad7cc581bdbbf5a"
     },
     {
       "path": "docs/evidence/48h-remote/rw19-profile-location-mutation-principal-epoch-transaction-20260826.json",
-      "sha256": "9a2c0ad8cdb21d0a2000b6b4dffbaca2dcada4d63515388b0021a57a2d795880"
+      "sha256": "23b037d323db0d838d2b68a8b12dfa00a5c0873b082c875132a4b4456e3b2fcb"
     },
     {
       "path": "docs/evidence/48h-remote/rw2-reduced-wave0-local-state-truth-recovery-20260825.json",
@@ -115,7 +115,7 @@
     },
     {
       "path": "docs/evidence/48h-remote/rw20-listing-mutation-principal-epoch-transaction-20260826.json",
-      "sha256": "20052cc56af6112484f44510a22b6d2714e8e57dbd4e9a298664244b4e383159"
+      "sha256": "53281817c5e124f0b3c32a5c92278fae6aa4d5b250bc0cefd5f8a2d9af78e259"
     },
     {
       "path": "docs/evidence/48h-remote/rw3-reduced-wave0-local-concurrency-consistency-20260825.json",
@@ -123,59 +123,59 @@
     },
     {
       "path": "docs/evidence/48h-remote/rw4-reduced-wave0-local-principal-isolation-20260825.json",
-      "sha256": "25f7b31676d2b19b87ca754055cecf7700485d4d759d6e9135b7f45b842eef0e"
+      "sha256": "9050723f2a0ce22b9f3a77e2759fef6f6477b43184cc17ca65d2c165c95bfd6d"
     },
     {
       "path": "docs/evidence/48h-remote/rw5-local-safety-privacy-principal-isolation-20260825.json",
-      "sha256": "1b4861afaa2c92785c0671354ac9b78a4523f0cfb8afc6d8d93fdeda647593de"
+      "sha256": "ae8d51eb165cdac0868c3ef2cac4e8c4e022c28fda41a63b3938c9eab599d545"
     },
     {
       "path": "docs/evidence/48h-remote/rw6-local-operational-record-authorization-truth-recovery-20260825.json",
-      "sha256": "47284dd2c3453c5b1061d3784d042bec50221ceef3ed92e2f39e33ec75ec58c7"
+      "sha256": "f1c6e73b73f40c2f270a020d5b69152243591fb5a5161a18670831576ea7be6c"
     },
     {
       "path": "docs/evidence/48h-remote/rw7-local-listing-catalog-authorization-durability-20260825.json",
-      "sha256": "f6771b23ab234df60e09154de01bf2636d2ced108ed58342334b9c5e34ec3d6a"
+      "sha256": "66fcd6fe299a1828a7dabd55c98706901d9cdbb0c56c1e971f247d66895907b6"
     },
     {
       "path": "docs/evidence/48h-remote/rw8-local-review-reputation-authorization-durability-20260825.json",
-      "sha256": "767b2b6e2f5f1968c743464d8a01347b0eb599d85d15947bb340786c76b4a705"
+      "sha256": "8f3d5be9e336b3b4aaa82f15623344b9f5a87f50b1abe9a536e1f949bfe60762"
     },
     {
       "path": "docs/evidence/48h-remote/rw9-local-account-profile-authorization-durability-20260825.json",
-      "sha256": "f0b2ffd3138c73ef9294fd1e2a6ce3e81cc8fc63d2454087d7f1fba0043ecc54"
+      "sha256": "048351c9170cc76e787468ca1b99140f85a0fac074a4029772938b0cb016761b"
     },
     {
       "path": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
-      "sha256": "2f8571f607d8cf9cbae1c3b0685dd70141ac2cc766dc1b818b6bbb0c6d41e60e"
+      "sha256": "ca48f755a768aaba6b7e55c486444ab930542d0a12da6c2aa255ece2da5faf7e"
     },
     {
       "path": "store/privacy-disclosures.json",
-      "sha256": "d561cb1c02fb3b79227ee6890c1a8c06d0d322b6a6dbd9c3102e4260be3b8a32"
+      "sha256": "197f3449103cd0a30924e99a03a2d95cd6d80ddfea646e87592ea919bd4c3cb1"
     },
     {
       "path": "store/retention-deletion-readiness.json",
-      "sha256": "683667f212f89f44680f2fb6bd9556beb16417bf1d0d2ec3a83a37f68413762c"
+      "sha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8"
     },
     {
       "path": "tool/validate_active_infrastructure_mail_provider_readiness.mjs",
-      "sha256": "b03d8a729de71e3d0b8624b28dd9588dd489a59cdb525b447e8c29d61797e69c"
+      "sha256": "4b39021ebff1aab913b576b513216bbd1617534516df3247d5300195ed893185"
     },
     {
       "path": "tool/validate_rw16_session_transition_principal_epoch.mjs",
-      "sha256": "bd42e0a8239754e2afb87e9c2e105c0cef6d4a6b5e3023e6ce0d826f919cae70"
+      "sha256": "2a962846e345731cfc39c693b8ba4e28786bb7d108085e62c321cb01577f75a7"
     },
     {
       "path": "tool/validate_rw7_local_listing_catalog_authorization_durability.mjs",
-      "sha256": "6918f445626691b19c3c977cbe56c9a41d97baf3aeeff5fae6c38cf4fc1c6cb7"
+      "sha256": "dc33f8dd550ce064fe354512f6444c417f5baf887927024320066cd7b9e9f716"
     },
     {
       "path": "tool/validate_rw8_local_review_reputation_authorization_durability.mjs",
-      "sha256": "bac2ef5e65f3f5c8424bfcf3870524854a7ccdc2916bf07c22a3ef1410b9e3a8"
+      "sha256": "f1e80191c78cb2c1a162ace70383286ed1d615d90b0934396f1cf709c16c5ac1"
     },
     {
       "path": "tool/validate_rw9_local_account_profile_authorization_durability.mjs",
-      "sha256": "7db717fff2308e8d90f99fc6ca14579000c1c56e60c766e807e926a0bb75d93a"
+      "sha256": "85382a779340b12e75d85d77f974d7fc993666fbb62a7578078bcae42a4b6ab9"
     }
   ],
   "hashPropagation": {
