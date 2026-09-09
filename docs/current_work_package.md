@@ -1,4 +1,25 @@
-# Current Work Package: WP69 Current-Goal Acceptance Audit
+# Current Work Package: WP70 Current-Candidate Auth, Safety and Provider Hold
+
+WP70 is **IMPLEMENTED; LOCAL AND GITHUB VERIFICATION PENDING**. It closes the
+exact-current-candidate e-mail registration/recovery and
+password/session/account-switch gaps on Pixel. Both consumed
+action links reject replay with exact structured Backend errors; logout-all is
+accepted only after server-confirmed empty truth. All diagnostic sessions are
+revoked, the synthetic listing is retired, temporary blocking is empty and the
+protected owner session is restored.
+
+Authenticated direct Staging report/readback, private export and block/unblock
+cleanup pass, but the physical Pixel UI submission remains `PARTIAL` and is not
+promoted from indirect evidence.
+
+Payment and payout surfaces visibly remain held in Staging. No Stripe/provider,
+money, binding contract/reservation, Store, Production, Firebase, external
+identity provider, VPS/DNS, OnePlus or merge action occurred. Privacy export is
+current-candidate proven; account deletion and Stripe sandbox remain separate
+unresolved requirements. See
+`docs/operations/WP70_CURRENT_CANDIDATE_AUTH_SAFETY_HOLD_2026-09-09.md`.
+
+# Previous Work Package: WP69 Current-Goal Acceptance Audit
 
 WP69 is **COMPLETE LOCALLY AND ON GITHUB**. It
 binds the active app-readiness goal to exact Android candidate

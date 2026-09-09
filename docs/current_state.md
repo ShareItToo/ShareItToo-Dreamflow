@@ -1,5 +1,23 @@
 # ShareItToo Current State
 
+WP70 is **IMPLEMENTED; LOCAL AND GITHUB VERIFICATION PENDING**. On the exact
+Pixel candidate `1.0.0+2026090904`, fresh e-mail registration, single-use
+verification, login/cold start, password reset, exact old-password rejection,
+password change/rollback, session inventory/revocation/logout-all,
+server-confirmed empty truth and Account-A-to-B isolation all pass. Both
+consumed e-mail links reject replay
+with exact structured application errors. All diagnostic sessions are revoked,
+the public fixtures are retired and the protected owner is restored. A separate
+authenticated Staging diagnostic proves report/readback, private export and
+block/unblock cleanup, but the physical Pixel UI submission remains explicitly
+unproven.
+
+The visible Staging payment and payout holds pass without calling Stripe,
+creating binding state or using money. The OnePlus was not contacted. No app or
+Backend runtime, deployment, Production, Store, tester, Firebase, provider,
+legal, Cloud/VPS/DNS or merge state changed. See
+`docs/operations/WP70_CURRENT_CANDIDATE_AUTH_SAFETY_HOLD_2026-09-09.md`.
+
 WP69 is **COMPLETE LOCALLY AND ON GITHUB**. The
 active goal now has a strict 32-area current-candidate audit bound to Android
 `1.0.0+2026090904`, source
