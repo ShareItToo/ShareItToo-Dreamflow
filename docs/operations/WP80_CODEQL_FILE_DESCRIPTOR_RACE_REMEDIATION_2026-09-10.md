@@ -1,6 +1,6 @@
 # WP80 — CodeQL file-descriptor race remediation
 
-Status: **LOCAL CLOSURE COMPLETE; EXACT-HEAD GITHUB VERIFICATION PENDING**.
+Status: **COMPLETE LOCALLY AND ON GITHUB**.
 
 ## Why this package supersedes the prior parity preflight
 
@@ -32,14 +32,21 @@ no scanner suppression, alert dismissal, timing workaround or test exclusion.
 
 Fourteen focused tests and both syntax checks pass. The complete local
 CI-metadata rollover regression passes through Backend, Flutter/analyzer,
-Web/Wasm/loopback, Android minSdk/build and capacity checks. The exact package
-commit must still pass GitHub Regression and CodeQL before the two original
-alerts may be called closed.
+Web/Wasm/loopback, Android minSdk/build and capacity checks. Exact package
+commit `099c18958936aa56b59d4eb1f3dc09898de6f09c` passes GitHub Regression
+`34412250285`, including clean-checkout reproducibility, and CodeQL
+`34412250399`. The current PR-merge CodeQL analysis has zero open alerts.
+
+The branch-specific code-scanning endpoint separately retains two historical
+open entries from an older branch analysis. This workflow intentionally runs
+on pull requests, so that stale branch snapshot is not current security proof.
+It is recorded rather than hidden; no duplicate push-triggered CodeQL workflow
+was added merely to change a historical endpoint count.
 
 No device, candidate, Staging, production, Store, payment, provider,
 Firebase, Cloud/VPS/DNS or PR state changed. The installed Pixel candidate
 remains `1.0.0+2026090905`; WP80 does not make the newer source an installed
 candidate.
 
-WP81 will resume the strictly read-only source-to-Staging-runtime parity
-preflight only after this security closure.
+WP81 now resumes the strictly read-only source-to-Staging-runtime parity
+preflight.

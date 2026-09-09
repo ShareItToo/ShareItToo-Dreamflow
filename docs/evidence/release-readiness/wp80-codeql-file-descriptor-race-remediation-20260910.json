@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "sit-wp80-codeql-file-descriptor-race-remediation",
-  "status": "complete-local-github-pending",
+  "status": "complete-local-github-pr-merge-codeql-zero-alerts",
   "capturedOn": "2026-09-10",
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -40,8 +40,24 @@
     "focusedTests": "passed-14",
     "syntaxChecks": "passed-2",
     "fullLocalRegression": "passed-exit-0-ci-metadata-candidate-rollover",
-    "githubRegression": "pending-exact-package-head",
-    "githubCodeql": "pending-exact-package-head"
+    "githubRegression": {
+      "run": 34412250285,
+      "head": "099c18958936aa56b59d4eb1f3dc09898de6f09c",
+      "conclusion": "success",
+      "cleanCheckout": "success"
+    },
+    "githubCodeql": {
+      "run": 34412250399,
+      "head": "099c18958936aa56b59d4eb1f3dc09898de6f09c",
+      "conclusion": "success",
+      "prMergeOpenAlerts": 0,
+      "prMergeAnalysis": "ac8b66eb170664c4fa76562aed9963d6b10aa187"
+    },
+    "historicalBranchSnapshot": {
+      "analysis": "0048ece49b7819fb09600465a027a4e0b530ccda",
+      "reportedOpenAlerts": 2,
+      "meaning": "This old branch analysis remains visible because the workflow is pull-request-only; it is not the current PR-merge security result."
+    }
   },
   "boundaries": {
     "androidBinaryChanged": false,

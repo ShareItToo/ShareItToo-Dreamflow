@@ -1,13 +1,14 @@
 # Current Work Package: WP80 CodeQL File-Descriptor Race Remediation
 
-WP80 is **LOCAL CLOSURE COMPLETE; EXACT-HEAD GITHUB VERIFICATION PENDING**.
+WP80 is **COMPLETE LOCALLY AND ON GITHUB**.
 Two open high-severity `js/file-system-race` findings were newly observed in
 the final WP79 GitHub readback. The local diagnostic readers now validate and
 read bounded JSON through one no-follow file descriptor and fail closed on
 metadata or size drift. This is source-tooling-only: the installed Pixel
-candidate and all external systems remain unchanged. The complete local gate
-passes; GitHub Regression and CodeQL on the exact package commit must complete
-before security closure. WP81 will then resume the source-to-Staging parity
+candidate and all external systems remain unchanged. The complete local gate,
+GitHub Regression, CodeQL and the current PR-merge zero-alert readback pass.
+The old branch-specific snapshot remains explicitly historical rather than
+being misreported as current. WP81 now resumes the source-to-Staging parity
 preflight. See
 `docs/operations/WP80_CODEQL_FILE_DESCRIPTOR_RACE_REMEDIATION_2026-09-10.md`.
 
