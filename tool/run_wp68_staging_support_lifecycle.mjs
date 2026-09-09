@@ -210,10 +210,11 @@ async function runRemoteJson(script, payload, { sshHost = wp68SshHost } = {}) {
 }
 
 const remoteBootstrapScript = `
-import { readFile } from 'node:fs/promises';
 import { pool, inTransaction } from './src/db.js';
 
-const input = JSON.parse(await readFile(0, 'utf8'));
+const inputChunks = [];
+for await (const chunk of process.stdin) inputChunks.push(chunk);
+const input = JSON.parse(Buffer.concat(inputChunks).toString('utf8'));
 if (input?.schemaVersion !== 1 || input?.purpose !== 'wp68_staging_support_simulation_only'
     || !Array.isArray(input?.accounts) || input.accounts.length !== 3) {
   throw new Error('wp68_bootstrap_input_invalid');
@@ -264,10 +265,11 @@ process.stdout.write(JSON.stringify({
 `;
 
 const remoteDecommissionScript = `
-import { readFile } from 'node:fs/promises';
 import { pool, inTransaction } from './src/db.js';
 
-const input = JSON.parse(await readFile(0, 'utf8'));
+const inputChunks = [];
+for await (const chunk of process.stdin) inputChunks.push(chunk);
+const input = JSON.parse(Buffer.concat(inputChunks).toString('utf8'));
 const expectedRoles = ['user', 'admin', 'admin'];
 if (input?.schemaVersion !== 1 || !Array.isArray(input?.accounts)
     || input.accounts.length !== 3

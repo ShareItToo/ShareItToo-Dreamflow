@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
@@ -67,6 +68,12 @@ test('WP68 private bootstrap identities have only temporary role shape and passw
   assert.equal(new Set(vault.accounts.map((account) => account.id)).size, 3);
   assert.ok(vault.accounts.every((account) => account.email.endsWith('@staging.shareittoo.invalid')));
   assert.ok(vault.accounts.every((account) => account.passwordHash.startsWith('scrypt$')));
+});
+
+test('WP68 remote scripts use the Node-compatible stdin stream instead of a numeric filesystem path', async () => {
+  const source = await readFile(new URL('../../tool/run_wp68_staging_support_lifecycle.mjs', import.meta.url), 'utf8');
+  assert.match(source, /for await \(const chunk of process\.stdin\)/u);
+  assert.doesNotMatch(source, /readFile\(0,/u);
 });
 
 test('WP68 evidence rejects a production, external-message, incomplete-review or retained-credential claim', () => {
