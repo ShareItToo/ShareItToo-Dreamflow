@@ -206,7 +206,7 @@ export function validateWp69CurrentGoalAcceptanceAudit({
 
   if (value.schemaVersion !== 1
       || value.kind !== 'sit-wp69-current-goal-acceptance-audit'
-      || value.status !== 'prepared-local-github-package-verification-pending'
+      || value.status !== 'complete-local-github'
       || value.capturedOn !== '2026-09-09') {
     fail('WP69 identity is invalid.');
   }
@@ -223,8 +223,20 @@ export function validateWp69CurrentGoalAcceptanceAudit({
   })) {
     fail('WP69 repository binding is invalid.');
   }
+  if (!exact(value.packageVerification, {
+    packageHead: '1f09df3e000047d03198163d34c10d077926e559',
+    fullLocalRegression: 'passed',
+    localToolTestsPassed: 2504,
+    githubRegressionRun: 34333546679,
+    githubCodeqlRun: 34333546716,
+    openPrMergeAlerts: 0,
+    pullRequest7: 'draft-open-mergeable-unmerged',
+  })) {
+    fail('WP69 package verification binding is invalid.');
+  }
   if (checkGitState) {
     for (const commit of [
+      value.packageVerification.packageHead,
       value.repository.auditBaseHead,
       value.repository.candidateSourceHead,
       value.repository.stagingRuntimeHead,

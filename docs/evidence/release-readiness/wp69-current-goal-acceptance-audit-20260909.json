@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "sit-wp69-current-goal-acceptance-audit",
-  "status": "prepared-local-github-package-verification-pending",
+  "status": "complete-local-github",
   "capturedOn": "2026-09-09",
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -12,6 +12,15 @@
     "sourceEvidenceGithubRegressionRun": 34328892643,
     "sourceEvidenceGithubCodeqlRun": 34328892603,
     "sourceEvidenceOpenPrMergeAlerts": 0,
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "packageVerification": {
+    "packageHead": "1f09df3e000047d03198163d34c10d077926e559",
+    "fullLocalRegression": "passed",
+    "localToolTestsPassed": 2504,
+    "githubRegressionRun": 34333546679,
+    "githubCodeqlRun": 34333546716,
+    "openPrMergeAlerts": 0,
     "pullRequest7": "draft-open-mergeable-unmerged"
   },
   "candidate": {

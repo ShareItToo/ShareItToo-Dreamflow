@@ -1,6 +1,6 @@
 # ShareItToo Current State
 
-WP69 is **LOCALLY COMPLETE; EXACT PACKAGE GITHUB VERIFICATION PENDING**. The
+WP69 is **COMPLETE LOCALLY AND ON GITHUB**. The
 active goal now has a strict 32-area current-candidate audit bound to Android
 `1.0.0+2026090904`, source
 `12b88cf97f91973d6dfd59fe3f4dcb9c915dc7d0`, and Staging runtime
@@ -16,6 +16,12 @@ two historical noncritical Support deadlines. No runtime, deployment,
 Production, Store, provider, Firebase, payment, legal, VPS/DNS, device or merge
 state changed. WP70 is the next Pixel-only auth/safety/hold revalidation. See
 `docs/operations/WP69_CURRENT_GOAL_ACCEPTANCE_AUDIT_2026-09-09.md`.
+
+Exact WP69 package commit
+`1f09df3e000047d03198163d34c10d077926e559` passes the full local technical
+regression, 2,504 local tool tests, GitHub Regression `34333546679`, CodeQL
+`34333546716`, and zero current PR-merge alerts. PR #7 remains Draft, open,
+mergeable and unmerged.
 
 WP68 is **COMPLETE ON STAGING, LOCALLY AND GITHUB**.
 The exact Staging runtime and Android candidate now have a proven, isolated

@@ -24,7 +24,7 @@ function validate(changed = evidence) {
 
 test('accepts the conservative current-goal acceptance audit', () => {
   assert.deepEqual(validate(), {
-    status: 'prepared-local-github-package-verification-pending',
+    status: 'complete-local-github',
     candidateVersionCode: '2026090904',
     passCount: 11,
     partialCount: 12,
@@ -32,6 +32,12 @@ test('accepts the conservative current-goal acceptance audit', () => {
     nextPackage: 'WP70',
     releaseDecision: 'hold-not-production-ready',
   });
+});
+
+test('rejects package verification drift', () => {
+  const changed = structuredClone(evidence);
+  changed.packageVerification.githubRegressionRun = 0;
+  assert.throws(() => validate(changed), /package verification/u);
 });
 
 test('rejects candidate and runtime lineage promotion', () => {

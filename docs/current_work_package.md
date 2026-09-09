@@ -1,6 +1,6 @@
 # Current Work Package: WP69 Current-Goal Acceptance Audit
 
-WP69 is **LOCALLY COMPLETE; EXACT PACKAGE GITHUB VERIFICATION PENDING**. It
+WP69 is **COMPLETE LOCALLY AND ON GITHUB**. It
 binds the active app-readiness goal to exact Android candidate
 `1.0.0+2026090904`, source
 `12b88cf97f91973d6dfd59fe3f4dcb9c915dc7d0`, and Staging runtime
@@ -16,6 +16,11 @@ WP70 is the next safe Pixel-only package: current-candidate auth/session,
 report/block and visible payment-hold revalidation without provider traffic,
 money, legal binding or external configuration. See
 `docs/operations/WP69_CURRENT_GOAL_ACCEPTANCE_AUDIT_2026-09-09.md`.
+
+Package commit `1f09df3e000047d03198163d34c10d077926e559` passes the full
+local technical regression, 2,504 local tool tests, GitHub Regression
+`34333546679`, CodeQL `34333546716`, and zero current PR-merge alerts. PR #7
+remains Draft, open, mergeable and unmerged.
 
 # Previous Work Package: WP68 Staging Support Lifecycle
 

@@ -1,6 +1,6 @@
 # WP69 — current-goal acceptance audit
 
-Status: **LOCAL AUDIT COMPLETE; EXACT PACKAGE GITHUB VERIFICATION PENDING**.
+Status: **COMPLETE LOCALLY AND ON GITHUB**.
 
 ## Exact candidate and runtime
 
@@ -60,8 +60,10 @@ The most important open classes are:
 The source/evidence baseline remains green at
 `b10528a15e4061dc528087d41297976f07bef3e0`: GitHub Regression
 `34328892643`, CodeQL `34328892603` and zero current PR-merge alerts. PR #7
-remains Draft, open, mergeable and unmerged. WP69's exact package commit must
-still receive its own GitHub verification before closure.
+remains Draft, open, mergeable and unmerged. WP69 package commit
+`1f09df3e000047d03198163d34c10d077926e559` also passes the full local
+technical regression, 2,504 local tool tests, GitHub Regression `34333546679`,
+CodeQL `34333546716`, and zero current PR-merge alerts.
 
 ## Next safe package
 
