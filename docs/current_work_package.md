@@ -1,4 +1,20 @@
-# Current Work Package: WP71 Current-Candidate Account Deletion
+# Current Work Package: WP72 Current-Candidate Report and Block
+
+WP72 is **IMPLEMENTED ON PIXEL; LOCAL AND GITHUB CLOSURE PENDING**. The exact
+unchanged `1.0.0+2026090904` candidate completes physical report submission,
+independent report readback, reversible owner block/unblock, same-owner listing
+visibility isolation and message-list isolation. An accepted upcoming
+simulation correctly blocked the block action until its verified non-binding,
+zero-money cancellation.
+
+All isolated listings and the test booking are retired, temporary blocking is
+empty, diagnostic sessions are revoked and the protected owner is restored.
+The moderation report is retained as audit history. No runtime, deployment,
+Production, Store, tester, Firebase, provider, money, OnePlus or merge state
+changed. See
+`docs/operations/WP72_CURRENT_CANDIDATE_REPORT_BLOCK_2026-09-09.md`.
+
+# Previous Work Package: WP71 Current-Candidate Account Deletion
 
 WP71 is **COMPLETE ON PIXEL, LOCALLY AND ON GITHUB**. The
 fresh disposable Staging identity retained by WP70 has been deleted on the

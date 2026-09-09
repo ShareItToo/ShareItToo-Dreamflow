@@ -1,5 +1,20 @@
 # ShareItToo Current State
 
+WP72 is **IMPLEMENTED ON THE EXACT PIXEL CANDIDATE; LOCAL AND GITHUB CLOSURE
+PENDING**. The unchanged signed `1.0.0+2026090904` candidate now passes the
+physical listing-report UI with independent Staging readback, reversible
+owner block/unblock, Explore visibility isolation and physical message-list
+isolation. The UI also correctly refused blocking while an accepted upcoming
+simulation existed; the final proof proceeded only after its confirmed
+non-binding, zero-money cancellation.
+
+All isolated listings are ended and absent from the public catalog, the block
+set is empty, diagnostic sessions are revoked, the protected owner is restored
+and the moderation report remains intentionally as audit history. No runtime,
+deployment, Production, Store, tester, Firebase, provider, money, OnePlus or
+merge state changed. See
+`docs/operations/WP72_CURRENT_CANDIDATE_REPORT_BLOCK_2026-09-09.md`.
+
 WP71 is **COMPLETE ON PIXEL, LOCALLY AND ON GITHUB**. The
 unchanged exact candidate `1.0.0+2026090904` now passes the complete disposable
 Staging account-deletion lifecycle: target and protected recovery credentials
