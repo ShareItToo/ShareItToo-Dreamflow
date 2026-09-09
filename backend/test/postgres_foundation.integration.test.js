@@ -193,6 +193,7 @@ if (!databaseUrl) {
         '069_regional_price_engine_r6_hardening.up.sql',
         '070_stage_a_non_binding_simulation_guard.up.sql',
         '071_stripe_connect_accounts_v2.up.sql',
+        '072_dispute_transfer_recovery.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);
@@ -2120,7 +2121,10 @@ if (!databaseUrl) {
         '../src/support_privacy_incident_workflow.js'
       );
       const { drainNotificationOutbox } = await import('../src/notifications.js');
-      const { applyProviderEvent } = await import('../src/payment_workflow.js');
+      const {
+        applyProviderEvent,
+        reconcileDisputeTransferRecoveries,
+      } = await import('../src/payment_workflow.js');
       const { buildAccountExport } = await import('../src/privacy_export.js');
       const { createSupportCase } = await import('../src/support_case_workflow.js');
       const { hashActionToken, hashPassword, signAccessToken } = await import('../src/security.js');
@@ -6477,6 +6481,191 @@ if (!databaseUrl) {
       assert.equal(payoutPayload.payout.status, 'paid');
       assert.equal(payoutPayload.payout.amountMinor, 3000);
 
+      const paidOutDisputeObject = {
+        id: 'dp_memory_b8_paid_transfer_chargeback',
+        object: 'dispute',
+        charge: capturedProviderPayment.rows[0].provider_charge_id,
+        amount: 1650,
+        currency: 'eur',
+        reason: 'fraudulent',
+        status: 'under_review',
+        evidence_details: { due_by: 1800000100 },
+      };
+      const paidOutDisputeCreated = {
+        id: 'evt_memory_b8_paid_transfer_dispute_created',
+        object: 'event',
+        type: 'charge.dispute.created',
+        created: 1799539400,
+        livemode: false,
+        data: { object: paidOutDisputeObject },
+      };
+      const paidOutDisputeWithdrawn = {
+        ...paidOutDisputeCreated,
+        id: 'evt_memory_b8_paid_transfer_dispute_withdrawn',
+        type: 'charge.dispute.funds_withdrawn',
+      };
+      assert.equal((await applyProviderEvent(
+        paidOutDisputeCreated,
+        Buffer.from(JSON.stringify(paidOutDisputeCreated)),
+      )).status, 'processed');
+      assert.equal((await applyProviderEvent(
+        paidOutDisputeWithdrawn,
+        Buffer.from(JSON.stringify(paidOutDisputeWithdrawn)),
+      )).status, 'processed');
+
+      const uncertainReversalProvider = {
+        async findTransferReversal() {
+          return null;
+        },
+        async reverseTransfer() {
+          const error = new Error('Synthetic provider transport timeout.');
+          error.status = 503;
+          error.code = 'stripe_transport_timeout';
+          error.details = { providerStatus: 0 };
+          throw error;
+        },
+      };
+      const uncertainPaidTransferRecovery = await reconcileDisputeTransferRecoveries({
+        provider: uncertainReversalProvider,
+        now: new Date(Date.now() + 1_000),
+      });
+      assert.deepEqual(uncertainPaidTransferRecovery, {
+        scheduled: 1,
+        deferred: 0,
+        needsReview: 0,
+        recovered: 0,
+        retryable: 0,
+        uncertain: 1,
+        manualReview: 0,
+        cancelled: 0,
+      });
+      const uncertainTransfer = await setupPool.query(
+        `SELECT recovery.status, recovery.needs_review,
+                dispute.transfer_recovery_state,
+                dispute.transfer_recovery_needs_review
+           FROM dispute_transfer_recoveries AS recovery
+           JOIN disputes AS dispute ON dispute.id = recovery.dispute_id
+          WHERE dispute.provider_dispute_id = $1`,
+        [paidOutDisputeObject.id],
+      );
+      assert.deepEqual(uncertainTransfer.rows[0], {
+        status: 'uncertain',
+        needs_review: true,
+        transfer_recovery_state: 'needs_review',
+        transfer_recovery_needs_review: true,
+      });
+
+      const paidTransferRecovery = await reconcileDisputeTransferRecoveries({
+        now: new Date(Date.now() + 32_000),
+      });
+      assert.deepEqual(paidTransferRecovery, {
+        scheduled: 0,
+        deferred: 0,
+        needsReview: 0,
+        recovered: 1,
+        retryable: 0,
+        uncertain: 0,
+        manualReview: 0,
+        cancelled: 0,
+      });
+      const recoveredTransfer = await setupPool.query(
+        `SELECT recovery.status, recovery.amount_minor, recovery.recovered_minor,
+                recovery.needs_review, recovery.provider_reversal_id,
+                dispute.transfer_recovery_state,
+                dispute.transfer_recovery_needs_review
+           FROM dispute_transfer_recoveries AS recovery
+           JOIN disputes AS dispute ON dispute.id = recovery.dispute_id
+          WHERE dispute.provider_dispute_id = $1`,
+        [paidOutDisputeObject.id],
+      );
+      const {
+        provider_reversal_id: recoveredProviderReversalId,
+        ...recoveredTransferShape
+      } = recoveredTransfer.rows[0];
+      assert.deepEqual(recoveredTransferShape, {
+        status: 'succeeded',
+        amount_minor: '1500',
+        recovered_minor: '1500',
+        needs_review: false,
+        transfer_recovery_state: 'recovered',
+        transfer_recovery_needs_review: false,
+      });
+      assert.match(recoveredProviderReversalId, /^trr_memory_/u);
+      const paidTransferRecoveryReplay = await reconcileDisputeTransferRecoveries();
+      assert.deepEqual(paidTransferRecoveryReplay, {
+        scheduled: 0,
+        deferred: 0,
+        needsReview: 0,
+        recovered: 0,
+        retryable: 0,
+        uncertain: 0,
+        manualReview: 0,
+        cancelled: 0,
+      });
+      assert.equal((await applyProviderEvent(
+        paidOutDisputeWithdrawn,
+        Buffer.from(JSON.stringify(paidOutDisputeWithdrawn)),
+      )).duplicate, true);
+      const recoveredPayoutState = await setupPool.query(
+        `SELECT payout.status, payout.reversed_minor, payment.transferred_minor
+           FROM payouts AS payout
+           JOIN payments AS payment ON payment.id = payout.payment_id
+          WHERE payout.payment_id = $1`,
+        [paymentId],
+      );
+      assert.deepEqual(recoveredPayoutState.rows[0], {
+        status: 'paid',
+        reversed_minor: '1500',
+        transferred_minor: '1500',
+      });
+      const paidOutDisputeReinstated = {
+        ...paidOutDisputeCreated,
+        id: 'evt_memory_b8_paid_transfer_dispute_reinstated',
+        type: 'charge.dispute.funds_reinstated',
+        data: { object: { ...paidOutDisputeObject, status: 'won' } },
+      };
+      assert.equal((await applyProviderEvent(
+        paidOutDisputeReinstated,
+        Buffer.from(JSON.stringify(paidOutDisputeReinstated)),
+      )).status, 'processed');
+      const recoveryReinstatementLedger = await setupPool.query(
+        `SELECT transaction_type FROM ledger_transactions
+          WHERE payment_id = $1
+            AND transaction_type IN (
+              'chargeback_owner_transfer_recovered',
+              'chargeback_owner_recovery_reinstated'
+            )
+          ORDER BY transaction_type`,
+        [paymentId],
+      );
+      assert.deepEqual(
+        recoveryReinstatementLedger.rows.map((row) => row.transaction_type),
+        ['chargeback_owner_recovery_reinstated', 'chargeback_owner_transfer_recovered'],
+      );
+      const reinstatedDisputeHold = await setupPool.query(
+        `SELECT dispute.status, booking.workflow_status
+           FROM disputes AS dispute
+           JOIN bookings AS booking ON booking.id = dispute.booking_id
+          WHERE dispute.provider_dispute_id = $1`,
+        [paidOutDisputeObject.id],
+      );
+      assert.deepEqual(reinstatedDisputeHold.rows[0], {
+        status: 'investigating',
+        workflow_status: 'disputed',
+      });
+      // Funds being reinstated does not replace the separate, human dispute
+      // closure. Only that closure may re-open ordinary payout/refund handling.
+      await setupPool.query(
+        `UPDATE disputes SET status = 'closed', resolved_at = now()
+          WHERE provider_dispute_id = $1`,
+        [paidOutDisputeObject.id],
+      );
+      await setupPool.query(
+        `UPDATE bookings SET workflow_status = 'completed',
+             workflow_revision = workflow_revision + 1
+          WHERE id = 'b8-payment-flow'`,
+      );
+
       const partialRefundAfterPayout = await fetch(`${baseUrl}/v1/payments/${paymentId}/refunds`, {
         method: 'POST',
         headers: { ...adminHeaders, 'Idempotency-Key': 'b8-partial-refund-after-owner-payout' },
@@ -6489,16 +6678,27 @@ if (!databaseUrl) {
         `SELECT status, reversed_minor FROM payouts WHERE payment_id = $1`,
         [paymentId],
       );
-      assert.equal(partiallyReversedPayout.rows[0].status, 'paid');
-      assert.equal(partiallyReversedPayout.rows[0].reversed_minor, '1500');
+      assert.equal(partiallyReversedPayout.rows[0].status, 'reversed');
+      assert.equal(partiallyReversedPayout.rows[0].reversed_minor, '3000');
 
-      const noDuplicatePayout = await fetch(`${baseUrl}/v1/payments/${paymentId}/payout-release`, {
+      // A reinstated recovery creates a compensating owner payable, but it
+      // cannot pay automatically: the human dispute closure above is the
+      // separate authorization that allows this fresh, residual payout.
+      const payoutAfterHumanDisputeClosure = await fetch(`${baseUrl}/v1/payments/${paymentId}/payout-release`, {
         method: 'POST',
         headers: { ...adminHeaders, 'Idempotency-Key': 'b8-no-duplicate-payout-after-partial-refund' },
         body: '{}',
       });
-      assert.equal(noDuplicatePayout.status, 200);
-      assert.equal((await noDuplicatePayout.json()).replayed, true);
+      assert.equal(payoutAfterHumanDisputeClosure.status, 201);
+      const payoutAfterHumanDisputeClosurePayload = await payoutAfterHumanDisputeClosure.json();
+      assert.equal(payoutAfterHumanDisputeClosurePayload.payout.amountMinor, 1500);
+      const payoutAfterHumanDisputeClosureReplay = await fetch(`${baseUrl}/v1/payments/${paymentId}/payout-release`, {
+        method: 'POST',
+        headers: { ...adminHeaders, 'Idempotency-Key': 'b8-no-duplicate-payout-after-partial-refund' },
+        body: '{}',
+      });
+      assert.equal(payoutAfterHumanDisputeClosureReplay.status, 200);
+      assert.equal((await payoutAfterHumanDisputeClosureReplay.json()).replayed, true);
 
       const refundAfterPayout = await fetch(`${baseUrl}/v1/payments/${paymentId}/refunds`, {
         method: 'POST',
@@ -6509,11 +6709,15 @@ if (!databaseUrl) {
       const refundPayload = await refundAfterPayout.json();
       assert.equal(refundPayload.refund.status, 'succeeded');
       assert.equal(refundPayload.payment.status, 'refunded');
-      const reversedPayout = await setupPool.query(
-        `SELECT status FROM payouts WHERE payment_id = $1`,
+      const reversedPayouts = await setupPool.query(
+        `SELECT status, amount_minor, reversed_minor
+           FROM payouts WHERE payment_id = $1 ORDER BY created_at, id`,
         [paymentId],
       );
-      assert.equal(reversedPayout.rows[0].status, 'reversed');
+      assert.deepEqual(reversedPayouts.rows, [
+        { status: 'reversed', amount_minor: '3000', reversed_minor: '3000' },
+        { status: 'reversed', amount_minor: '1500', reversed_minor: '1500' },
+      ]);
 
       const ledgerBalance = await setupPool.query(
         `SELECT transaction_id, sum(debit_minor)::bigint AS debit, sum(credit_minor)::bigint AS credit
@@ -6933,6 +7137,9 @@ if (!databaseUrl) {
       assert.ok(evidenceRetentionInventory.categories
         .find((entry) => entry.category === 'securityAudit')
         .datasets.some((entry) => entry.dataset === 'support_evidence_access_grants'));
+      assert.ok(evidenceRetentionInventory.categories
+        .find((entry) => entry.category === 'transactions')
+        .datasets.some((entry) => entry.dataset === 'dispute_transfer_recoveries'));
 
       const supportTemplateCatalog = await fetch(
         `${baseUrl}/v1/admin/support/message-templates`,
@@ -8702,6 +8909,12 @@ if (!databaseUrl) {
         1,
       );
       assert.ok(accountExport.data.trustAndSafety.reviews.some((entry) => entry.relationship === 'submitted'));
+      assert.ok(accountExport.data.financialActivity.disputeTransferRecoveries.some((entry) => (
+        entry.status === 'succeeded'
+          && entry.amount_minor === '1500'
+          && entry.recovered_minor === '1500'
+          && entry.needs_review === false
+      )));
       assert.ok(accountExport.data.auditEvents.some((entry) => (
         entry.action === 'account.data_exported'
           && entry.request_id === 'b10-owner-export'

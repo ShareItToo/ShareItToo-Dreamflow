@@ -178,7 +178,7 @@ if [[ "$url" == */health/ready ]]; then
     if [[ "$previous" == --output ]]; then output="$argument"; fi
     previous="$argument"
   done
-  printf '%s\\n' '{"status":"degraded","service":"shareittoo-api","checks":{"database":"ok","mail":"ok","notifications":{"pending":0,"dead":0},"payments":{"failedEvents":0,"unbalanced":0},"supportDeadlines":{"status":"degraded","stale":false,"lastErrorCode":null,"p0WithoutOwner":0,"nextUpdateOverdue":1,"criticalNextUpdateOverdue":0,"privacyDeadlineNear":0,"privacyDeadlineOverdue":0,"privacyIncidentDeadlineNear":0,"privacyIncidentDeadlineOverdue":0}}}' > "$output"
+  printf '%s\\n' '{"status":"degraded","service":"shareittoo-api","checks":{"database":"ok","mail":"ok","notifications":{"pending":0,"dead":0},"payments":{"failedEvents":0,"unbalanced":0,"recoveryPending":0,"recoveryNeedsReview":0},"supportDeadlines":{"status":"degraded","stale":false,"lastErrorCode":null,"p0WithoutOwner":0,"nextUpdateOverdue":1,"criticalNextUpdateOverdue":0,"privacyDeadlineNear":0,"privacyDeadlineOverdue":0,"privacyIncidentDeadlineNear":0,"privacyIncidentDeadlineOverdue":0}}}' > "$output"
   printf '503'
   exit 0
 fi

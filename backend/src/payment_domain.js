@@ -164,6 +164,124 @@ export function splitRefund({ amountMinor, paymentAmountMinor, ownerPayoutMinor 
   });
 }
 
+export function disputeTransferRecoveryAmount({
+  disputeAmountMinor,
+  paymentAmountMinor,
+  ownerPayoutMinor,
+  transferredMinor,
+  alreadyRecoveredMinor = 0,
+}) {
+  const values = [
+    disputeAmountMinor,
+    paymentAmountMinor,
+    ownerPayoutMinor,
+    transferredMinor,
+    alreadyRecoveredMinor,
+  ];
+  if (!values.every(Number.isSafeInteger)
+      || disputeAmountMinor <= 0
+      || disputeAmountMinor > paymentAmountMinor
+      || ownerPayoutMinor < 0
+      || ownerPayoutMinor > paymentAmountMinor
+      || transferredMinor < 0
+      || alreadyRecoveredMinor < 0) {
+    throw new PaymentDomainError(400, 'invalid_dispute_transfer_recovery_amount');
+  }
+  const disputedOwnerShareMinor = splitRefund({
+    amountMinor: disputeAmountMinor,
+    paymentAmountMinor,
+    ownerPayoutMinor,
+  }).ownerShareMinor;
+  const paidOwnerExposureMinor = transferredMinor + alreadyRecoveredMinor;
+  const targetOwnerRecoveryMinor = Math.min(
+    disputedOwnerShareMinor,
+    paidOwnerExposureMinor,
+  );
+  return Object.freeze({
+    disputedOwnerShareMinor,
+    targetOwnerRecoveryMinor,
+    remainingOwnerRecoveryMinor: Math.max(
+      0,
+      targetOwnerRecoveryMinor - alreadyRecoveredMinor,
+    ),
+  });
+}
+
+export function disputeOwnerRecoveryLedger({ amountMinor }) {
+  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
+    throw new PaymentDomainError(500, 'invalid_dispute_owner_recovery_amount');
+  }
+  return Object.freeze([
+    { accountCode: 'stripe_clearing', accountOwnerId: null, debitMinor: amountMinor, creditMinor: 0 },
+    { accountCode: 'chargeback_expense', accountOwnerId: null, debitMinor: 0, creditMinor: amountMinor },
+  ]);
+}
+
+export function disputeOwnerRecoveryReinstatementLedger({ amountMinor, ownerId }) {
+  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0
+      || typeof ownerId !== 'string' || ownerId.length === 0) {
+    throw new PaymentDomainError(500, 'invalid_dispute_owner_reinstatement_amount');
+  }
+  return Object.freeze([
+    { accountCode: 'chargeback_expense', accountOwnerId: null, debitMinor: amountMinor, creditMinor: 0 },
+    { accountCode: 'owner_payable', accountOwnerId: ownerId, debitMinor: 0, creditMinor: amountMinor },
+  ]);
+}
+
+const definiteDisputeRecoveryRejectionCodes = new Set([
+  'amount_too_large',
+  'parameter_invalid_integer',
+  'parameter_missing',
+  'resource_missing',
+  'transfer_reversal_amount_too_large',
+]);
+
+export function classifyDisputeTransferRecoveryFailure(error) {
+  const code = typeof error?.code === 'string' && error.code
+    ? error.code.slice(0, 120)
+    : 'unstructured_provider_failure';
+  const providerStatus = Number(error?.details?.providerStatus ?? 0);
+  const providerType = typeof error?.details?.providerType === 'string'
+    ? error.details.providerType.slice(0, 80)
+    : '';
+  if (code === 'balance_insufficient') {
+    return Object.freeze({
+      category: 'insufficient_balance',
+      disposition: 'retryable',
+      needsReview: true,
+      safeCode: code,
+    });
+  }
+  if (providerStatus === 0 || providerStatus === 408 || providerStatus === 425
+      || providerStatus === 429 || providerStatus >= 500
+      || Number(error?.status ?? 0) === 503) {
+    return Object.freeze({
+      category: 'uncertain_provider_outcome',
+      disposition: 'uncertain',
+      needsReview: true,
+      safeCode: code,
+    });
+  }
+  const structuredStripeRejection = providerType === 'StripeInvalidRequestError'
+    && providerStatus >= 400
+    && providerStatus < 500
+    && definiteDisputeRecoveryRejectionCodes.has(code);
+  if (structuredStripeRejection) {
+    return Object.freeze({
+      category: 'definite_provider_rejection',
+      disposition: 'manual_review',
+      needsReview: true,
+      safeCode: code,
+    });
+  }
+  return Object.freeze({
+    category: 'uncertain_provider_outcome',
+    disposition: 'uncertain',
+    needsReview: true,
+    safeCode: code,
+  });
+}
+
 export function privatePilotReleasableOwnerAmount({
   paymentAmountMinor,
   ownerPayoutMinor,

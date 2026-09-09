@@ -36,25 +36,38 @@ function assertAncestor(repositoryRoot, commit) {
   }
 }
 
+function sourceAtImplementationHead(repositoryRoot, value, path) {
+  try {
+    return execFileSync(
+      'git',
+      ['show', `${value.verification.implementationHead}:${path}`],
+      { cwd: repositoryRoot, encoding: 'buffer', stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+  } catch {
+    fail(`WP73 historical source is unavailable: ${path}`);
+  }
+}
+
 function validateSources(repositoryRoot, value) {
   if (!exact(value.sourceInventory?.map((entry) => entry.path), sourcePaths)) {
     fail('WP73 source inventory is incomplete or reordered.');
   }
   for (const entry of value.sourceInventory) {
     if (!/^[a-f0-9]{64}$/u.test(entry.sha256 ?? '')
-        || sha256(readFileSync(resolve(repositoryRoot, entry.path))) !== entry.sha256) {
+        || sha256(sourceAtImplementationHead(repositoryRoot, value, entry.path)) !== entry.sha256) {
       fail(`WP73 source hash drift: ${entry.path}`);
     }
   }
 }
 
-function validateRepositoryContracts(repositoryRoot) {
-  const provider = readFileSync(resolve(repositoryRoot, 'backend/src/stripe_provider.js'), 'utf8');
-  const workflow = readFileSync(resolve(repositoryRoot, 'backend/src/payment_workflow.js'), 'utf8');
-  const config = readFileSync(resolve(repositoryRoot, 'backend/src/config.js'), 'utf8');
-  const secrets = readFileSync(resolve(repositoryRoot, 'backend/src/stripe_secret_files.js'), 'utf8');
-  const overlay = readFileSync(resolve(repositoryRoot, 'backend/compose.staging.stripe.yml'), 'utf8');
-  const packageJson = JSON.parse(readFileSync(resolve(repositoryRoot, 'backend/package.json'), 'utf8'));
+function validateRepositoryContracts(repositoryRoot, value) {
+  const sourceText = (path) => sourceAtImplementationHead(repositoryRoot, value, path).toString('utf8');
+  const provider = sourceText('backend/src/stripe_provider.js');
+  const workflow = sourceText('backend/src/payment_workflow.js');
+  const config = sourceText('backend/src/config.js');
+  const secrets = sourceText('backend/src/stripe_secret_files.js');
+  const overlay = sourceText('backend/compose.staging.stripe.yml');
+  const packageJson = JSON.parse(sourceText('backend/package.json'));
 
   for (const pattern of [
     /client\.v2\.core\.accounts\.create/u,
@@ -224,7 +237,7 @@ export function validateWp73StripeSandboxCompatibilityInventory({
   })) fail('WP73 repository binding is invalid.');
   if (checkGitState) assertAncestor(repositoryRoot, value.repository.packageBaseHead);
   validateSources(repositoryRoot, value);
-  validateRepositoryContracts(repositoryRoot);
+  validateRepositoryContracts(repositoryRoot, value);
   validateProviderObservation(value);
   validateCompatibility(value);
   validateGate(value);

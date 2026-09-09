@@ -4,7 +4,11 @@ import { config } from './config.js';
 import { inTransaction, pool } from './db.js';
 import {
   assertProviderPaymentBinding,
+  classifyDisputeTransferRecoveryFailure,
   captureLedger,
+  disputeOwnerRecoveryLedger,
+  disputeOwnerRecoveryReinstatementLedger,
+  disputeTransferRecoveryAmount,
   PaymentDomainError,
   paymentAmounts,
   paymentIdempotencyKey,
@@ -264,6 +268,558 @@ async function insertLedger(client, {
     );
   }
   return { id: transaction.rows[0].id, inserted: true };
+}
+
+async function updateDisputeRecoveryAggregate(client, disputeId) {
+  const disputeResult = await client.query(
+    `SELECT provider_funds_withdrawn_at, provider_funds_reinstated_at
+     FROM disputes WHERE id = $1 FOR UPDATE`,
+    [disputeId],
+  );
+  if (!disputeResult.rowCount) throw new PaymentDomainError(500, 'dispute_recovery_missing');
+  const recoveries = await client.query(
+    `SELECT status, needs_review, last_error_code
+     FROM dispute_transfer_recoveries
+     WHERE dispute_id = $1 ORDER BY updated_at DESC, created_at DESC`,
+    [disputeId],
+  );
+  let state = 'not_required';
+  let needsReview = false;
+  let issueCode = null;
+  if (recoveries.rowCount) {
+    const rows = recoveries.rows;
+    const review = rows.find((row) => row.needs_review === true
+      || ['manual_review', 'uncertain', 'retryable'].includes(row.status));
+    const processing = rows.some((row) => row.status === 'processing');
+    const pending = rows.some((row) => row.status === 'pending');
+    const succeeded = rows.some((row) => row.status === 'succeeded');
+    if (review) {
+      state = 'needs_review';
+      needsReview = true;
+      issueCode = text(review.last_error_code, 120) || 'dispute_transfer_recovery_review';
+    } else if (processing) {
+      state = 'in_progress';
+    } else if (pending) {
+      state = 'pending';
+    } else if (succeeded) {
+      state = 'recovered';
+    } else {
+      state = 'cancelled';
+    }
+  } else if (disputeResult.rows[0].provider_funds_reinstated_at) {
+    state = 'cancelled';
+  }
+  await client.query(
+    `UPDATE disputes
+     SET transfer_recovery_state = $2,
+         transfer_recovery_needs_review = $3,
+         transfer_recovery_issue_code = $4
+     WHERE id = $1`,
+    [disputeId, state, needsReview, issueCode],
+  );
+  return { state, needsReview, issueCode };
+}
+
+async function recordDisputeRecoveryReinstatement(client, recovery) {
+  const amountMinor = Number(recovery.amount_minor);
+  const inserted = await insertLedger(client, {
+    key: `dispute-recovery:${recovery.id}:funds-reinstated`,
+    bookingId: recovery.booking_id,
+    paymentId: recovery.payment_id,
+    payoutId: recovery.payout_id,
+    type: 'chargeback_owner_recovery_reinstated',
+    currency: recovery.currency,
+    providerReference: recovery.provider_dispute_id,
+    metadata: {
+      providerDisputeId: recovery.provider_dispute_id,
+      disputeRecoveryId: recovery.id,
+    },
+    entries: disputeOwnerRecoveryReinstatementLedger({
+      amountMinor,
+      ownerId: recovery.owner_id,
+    }),
+  });
+  if (inserted.inserted) {
+    await audit(client, {
+      action: 'payment.dispute_owner_recovery_reinstated',
+      resourceType: 'dispute_transfer_recovery',
+      resourceId: recovery.id,
+      metadata: {
+        disputeId: recovery.dispute_id,
+        paymentId: recovery.payment_id,
+        amountMinor,
+      },
+    });
+  }
+  return inserted.inserted;
+}
+
+async function handleDisputeFundsReinstated(client, disputeId) {
+  await client.query(
+    `UPDATE dispute_transfer_recoveries
+     SET cancel_requested = true,
+         status = CASE
+           WHEN status IN ('pending', 'retryable') THEN 'cancelled'
+           ELSE status
+         END,
+         needs_review = CASE
+           WHEN status IN ('processing', 'uncertain') THEN true
+           ELSE needs_review
+         END,
+         last_error_category = CASE
+           WHEN status IN ('processing', 'uncertain')
+             THEN 'uncertain_provider_outcome'
+           ELSE last_error_category
+         END,
+         last_error_code = CASE
+           WHEN status IN ('processing', 'uncertain')
+             THEN 'funds_reinstated_during_uncertain_reversal'
+           ELSE last_error_code
+         END,
+         lease_expires_at = CASE
+           WHEN status IN ('pending', 'retryable') THEN NULL
+           ELSE lease_expires_at
+         END
+     WHERE dispute_id = $1 AND status NOT IN ('succeeded', 'manual_review', 'cancelled')`,
+    [disputeId],
+  );
+  const succeeded = await client.query(
+    `SELECT recovery.*, dispute.provider_dispute_id,
+            payment.booking_id, booking.owner_id
+     FROM dispute_transfer_recoveries AS recovery
+     JOIN disputes AS dispute ON dispute.id = recovery.dispute_id
+     JOIN payments AS payment ON payment.id = recovery.payment_id
+     JOIN bookings AS booking ON booking.id = payment.booking_id
+     WHERE recovery.dispute_id = $1 AND recovery.status = 'succeeded'
+     ORDER BY recovery.created_at`,
+    [disputeId],
+  );
+  for (const recovery of succeeded.rows) {
+    await recordDisputeRecoveryReinstatement(client, recovery);
+  }
+  return updateDisputeRecoveryAggregate(client, disputeId);
+}
+
+export async function scheduleDisputeTransferRecoveries({ limit = 20 } = {}) {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    throw new PaymentDomainError(500, 'invalid_dispute_recovery_limit');
+  }
+  return inTransaction(async (client) => {
+    const disputes = await client.query(
+      `SELECT dispute.id, dispute.payment_id, dispute.provider_dispute_id,
+              dispute.provider_disputed_amount_minor,
+              dispute.provider_funds_withdrawn_event_id,
+              dispute.livemode, payment.amount_minor,
+              payment.owner_payout_minor, payment.transferred_minor,
+              payment.currency
+       FROM disputes AS dispute
+       JOIN payments AS payment ON payment.id = dispute.payment_id
+       WHERE dispute.provider_funds_withdrawn_at IS NOT NULL
+         AND dispute.provider_funds_reinstated_at IS NULL
+         AND dispute.payment_id IS NOT NULL
+         AND dispute.provider_disputed_amount_minor IS NOT NULL
+         AND payment.transferred_minor > 0
+       ORDER BY dispute.provider_funds_withdrawn_at, dispute.id
+       LIMIT $1
+       FOR UPDATE OF dispute, payment SKIP LOCKED`,
+      [limit],
+    );
+    let scheduled = 0;
+    let deferred = 0;
+    let needsReview = 0;
+    for (const dispute of disputes.rows) {
+      const activeRefund = await client.query(
+        `SELECT 1 FROM refunds
+         WHERE payment_id = $1 AND status IN ('created', 'pending') LIMIT 1`,
+        [dispute.payment_id],
+      );
+      if (activeRefund.rowCount) {
+        deferred += 1;
+        await client.query(
+          `UPDATE disputes SET transfer_recovery_state = 'pending',
+               transfer_recovery_needs_review = false,
+               transfer_recovery_issue_code = 'waiting_for_active_refund'
+           WHERE id = $1`,
+          [dispute.id],
+        );
+        continue;
+      }
+      const totals = await client.query(
+        `SELECT
+           COALESCE(sum(amount_minor) FILTER (WHERE status = 'succeeded'), 0)::bigint
+             AS recovered_minor,
+           COALESCE(sum(amount_minor) FILTER (WHERE status <> 'cancelled'), 0)::bigint
+             AS allocated_minor
+         FROM dispute_transfer_recoveries WHERE dispute_id = $1`,
+        [dispute.id],
+      );
+      const alreadyRecoveredMinor = Number(totals.rows[0].recovered_minor);
+      const allocatedMinor = Number(totals.rows[0].allocated_minor);
+      const recovery = disputeTransferRecoveryAmount({
+        disputeAmountMinor: Number(dispute.provider_disputed_amount_minor),
+        paymentAmountMinor: Number(dispute.amount_minor),
+        ownerPayoutMinor: Number(dispute.owner_payout_minor),
+        transferredMinor: Number(dispute.transferred_minor),
+        alreadyRecoveredMinor,
+      });
+      let remaining = Math.max(0, recovery.targetOwnerRecoveryMinor - allocatedMinor);
+      if (remaining > 0) {
+        const payouts = await client.query(
+          `SELECT payout.*,
+                  COALESCE(reserved.amount_minor, 0)::bigint AS reserved_minor
+           FROM payouts AS payout
+           LEFT JOIN LATERAL (
+             SELECT sum(amount_minor)::bigint AS amount_minor
+             FROM dispute_transfer_recoveries AS reserved_recovery
+             WHERE reserved_recovery.payout_id = payout.id
+               AND reserved_recovery.status NOT IN ('succeeded', 'cancelled')
+           ) AS reserved ON true
+           WHERE payout.payment_id = $1
+             AND payout.provider_transfer_id IS NOT NULL
+             AND payout.status IN ('paid', 'reversed')
+             AND payout.amount_minor > payout.reversed_minor
+           ORDER BY payout.transferred_at DESC NULLS LAST, payout.created_at DESC, payout.id
+           FOR UPDATE OF payout`,
+          [dispute.payment_id],
+        );
+        for (const payout of payouts.rows) {
+          if (remaining <= 0) break;
+          const available = Math.max(
+            0,
+            Number(payout.amount_minor)
+              - Number(payout.reversed_minor)
+              - Number(payout.reserved_minor),
+          );
+          const amountMinor = Math.min(remaining, available);
+          if (amountMinor <= 0) continue;
+          const id = crypto.randomUUID();
+          const inserted = await client.query(
+            `INSERT INTO dispute_transfer_recoveries (
+               id, dispute_id, payment_id, payout_id, trigger_provider_event_id,
+               provider_transfer_id, provider_idempotency_key, amount_minor,
+               currency, livemode
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             ON CONFLICT (dispute_id, payout_id) DO NOTHING
+             RETURNING id`,
+            [
+              id, dispute.id, dispute.payment_id, payout.id,
+              dispute.provider_funds_withdrawn_event_id,
+              payout.provider_transfer_id,
+              providerOperationIdempotencyKey('dispute_transfer_reversal', id),
+              amountMinor, dispute.currency, dispute.livemode,
+            ],
+          );
+          if (inserted.rowCount) {
+            scheduled += 1;
+            remaining -= amountMinor;
+          }
+        }
+      }
+      await updateDisputeRecoveryAggregate(client, dispute.id);
+      if (remaining > 0) {
+        needsReview += 1;
+        await client.query(
+          `UPDATE disputes SET transfer_recovery_state = 'needs_review',
+               transfer_recovery_needs_review = true,
+               transfer_recovery_issue_code = 'dispute_transfer_exposure_mismatch'
+           WHERE id = $1`,
+          [dispute.id],
+        );
+      }
+    }
+    return { scheduled, deferred, needsReview };
+  }, { deadlockRetries: 2 });
+}
+
+function disputeRecoveryNextAttempt(now, attemptCount) {
+  const delays = [30, 120, 600, 3_600, 21_600];
+  const seconds = delays[Math.min(Math.max(0, attemptCount - 1), delays.length - 1)];
+  return new Date(now.getTime() + seconds * 1000);
+}
+
+async function claimDisputeTransferRecovery(now) {
+  return inTransaction(async (client) => {
+    const result = await client.query(
+      `SELECT recovery.*, dispute.provider_dispute_id,
+              dispute.provider_funds_reinstated_at,
+              payment.booking_id, payment.transferred_minor,
+              booking.owner_id, payout.provider_transfer_id AS current_transfer_id
+       FROM dispute_transfer_recoveries AS recovery
+       JOIN disputes AS dispute ON dispute.id = recovery.dispute_id
+       JOIN payments AS payment ON payment.id = recovery.payment_id
+       JOIN bookings AS booking ON booking.id = payment.booking_id
+       JOIN payouts AS payout ON payout.id = recovery.payout_id
+       WHERE (
+         recovery.status IN ('pending', 'retryable', 'uncertain')
+           AND recovery.next_attempt_at <= $1
+       ) OR (
+         recovery.status = 'processing'
+           AND recovery.lease_expires_at <= $1
+       )
+       ORDER BY recovery.next_attempt_at, recovery.created_at
+       LIMIT 1
+       FOR UPDATE OF recovery SKIP LOCKED`,
+      [now],
+    );
+    if (!result.rowCount) return null;
+    const recovery = result.rows[0];
+    const priorStatus = recovery.status;
+    const cancelRequested = recovery.cancel_requested === true
+      || recovery.provider_funds_reinstated_at != null;
+    if (cancelRequested && ['pending', 'retryable'].includes(priorStatus)) {
+      await client.query(
+        `UPDATE dispute_transfer_recoveries
+         SET status = 'cancelled', cancel_requested = true,
+             lease_expires_at = NULL, needs_review = false,
+             last_error_category = NULL, last_error_code = NULL
+         WHERE id = $1`,
+        [recovery.id],
+      );
+      await updateDisputeRecoveryAggregate(client, recovery.dispute_id);
+      return { terminal: 'cancelled' };
+    }
+    const leaseExpiresAt = new Date(now.getTime() + 120_000);
+    await client.query(
+      `UPDATE dispute_transfer_recoveries
+       SET status = 'processing', attempt_count = attempt_count + 1,
+           lease_expires_at = $2, cancel_requested = $3
+       WHERE id = $1`,
+      [recovery.id, leaseExpiresAt, cancelRequested],
+    );
+    await client.query(
+      `UPDATE disputes SET transfer_recovery_state = 'in_progress'
+       WHERE id = $1 AND transfer_recovery_needs_review = false`,
+      [recovery.dispute_id],
+    );
+    return {
+      ...recovery,
+      prior_status: priorStatus,
+      cancel_requested: cancelRequested,
+      attempt_count: Number(recovery.attempt_count) + 1,
+    };
+  }, { deadlockRetries: 2 });
+}
+
+async function markDisputeRecoveryFailure(recovery, classification, now) {
+  return inTransaction(async (client) => {
+    const status = classification.disposition === 'retryable'
+      ? 'retryable'
+      : classification.disposition === 'manual_review'
+        ? 'manual_review'
+        : 'uncertain';
+    const nextAttemptAt = status === 'manual_review'
+      ? now
+      : disputeRecoveryNextAttempt(now, recovery.attempt_count);
+    await client.query(
+      `UPDATE dispute_transfer_recoveries
+       SET status = $2, next_attempt_at = $3, lease_expires_at = NULL,
+           needs_review = $4, last_error_category = $5,
+           last_error_code = $6
+       WHERE id = $1 AND status = 'processing'`,
+      [
+        recovery.id, status, nextAttemptAt, classification.needsReview,
+        classification.category, classification.safeCode,
+      ],
+    );
+    await updateDisputeRecoveryAggregate(client, recovery.dispute_id);
+    await audit(client, {
+      action: 'payment.dispute_transfer_recovery_deferred',
+      resourceType: 'dispute_transfer_recovery',
+      resourceId: recovery.id,
+      metadata: {
+        disputeId: recovery.dispute_id,
+        paymentId: recovery.payment_id,
+        category: classification.category,
+        attemptCount: recovery.attempt_count,
+      },
+    });
+    return status;
+  });
+}
+
+async function completeDisputeTransferRecovery(recovery, reversal) {
+  const reversalId = providerId(reversal?.id);
+  const reversalTransferId = providerId(reversal?.transfer);
+  const amountMinor = Number(recovery.amount_minor);
+  if (!reversalId || reversalTransferId !== recovery.provider_transfer_id
+      || Number(reversal?.amount) !== amountMinor) {
+    throw new PaymentDomainError(409, 'provider_reversal_binding_mismatch');
+  }
+  return inTransaction(async (client) => {
+    const result = await client.query(
+      `SELECT recovery.*, dispute.provider_dispute_id,
+              dispute.provider_funds_reinstated_at,
+              payment.booking_id, payment.transferred_minor,
+              booking.owner_id, payout.provider_transfer_id AS current_transfer_id,
+              payout.amount_minor AS payout_amount_minor,
+              payout.reversed_minor AS payout_reversed_minor
+       FROM dispute_transfer_recoveries AS recovery
+       JOIN disputes AS dispute ON dispute.id = recovery.dispute_id
+       JOIN payments AS payment ON payment.id = recovery.payment_id
+       JOIN bookings AS booking ON booking.id = payment.booking_id
+       JOIN payouts AS payout ON payout.id = recovery.payout_id
+       WHERE recovery.id = $1
+       FOR UPDATE OF recovery, payment, payout, dispute`,
+      [recovery.id],
+    );
+    if (!result.rowCount) throw new PaymentDomainError(500, 'dispute_recovery_missing');
+    const stored = result.rows[0];
+    if (stored.status === 'succeeded') {
+      if (stored.provider_reversal_id !== reversalId) {
+        throw new PaymentDomainError(409, 'provider_reversal_binding_mismatch');
+      }
+      return false;
+    }
+    if (stored.current_transfer_id !== stored.provider_transfer_id
+        || stored.livemode !== config.payments.livemode
+        || Number(stored.transferred_minor) < amountMinor
+        || Number(stored.payout_amount_minor) - Number(stored.payout_reversed_minor) < amountMinor) {
+      throw new PaymentDomainError(409, 'dispute_recovery_state_mismatch');
+    }
+    const ledger = await insertLedger(client, {
+      key: `dispute-recovery:${stored.id}:owner-transfer`,
+      bookingId: stored.booking_id,
+      paymentId: stored.payment_id,
+      payoutId: stored.payout_id,
+      type: 'chargeback_owner_transfer_recovered',
+      currency: stored.currency,
+      providerReference: reversalId,
+      metadata: {
+        providerDisputeId: stored.provider_dispute_id,
+        disputeRecoveryId: stored.id,
+      },
+      entries: disputeOwnerRecoveryLedger({ amountMinor }),
+    });
+    if (ledger.inserted) {
+      const payout = await client.query(
+        `UPDATE payouts
+         SET reversed_minor = reversed_minor + $2,
+             status = CASE
+               WHEN reversed_minor + $2 >= amount_minor THEN 'reversed'
+               ELSE status
+             END
+         WHERE id = $1 AND amount_minor - reversed_minor >= $2
+         RETURNING id`,
+        [stored.payout_id, amountMinor],
+      );
+      const payment = await client.query(
+        `UPDATE payments
+         SET transferred_minor = transferred_minor - $2
+         WHERE id = $1 AND transferred_minor >= $2
+         RETURNING id`,
+        [stored.payment_id, amountMinor],
+      );
+      if (!payout.rowCount || !payment.rowCount) {
+        throw new PaymentDomainError(409, 'dispute_recovery_state_mismatch');
+      }
+    } else {
+      // The ledger insert and every recovery-state mutation share this
+      // transaction. A pre-existing ledger with a non-succeeded recovery is
+      // therefore corruption, not a successful replay we may silently accept.
+      throw new PaymentDomainError(409, 'dispute_recovery_state_mismatch');
+    }
+    await client.query(
+      `UPDATE dispute_transfer_recoveries
+       SET status = 'succeeded', provider_reversal_id = $2,
+           recovered_minor = amount_minor, succeeded_at = now(),
+           lease_expires_at = NULL, needs_review = false,
+           last_error_category = NULL, last_error_code = NULL
+       WHERE id = $1`,
+      [stored.id, reversalId],
+    );
+    if (stored.provider_funds_reinstated_at) {
+      await recordDisputeRecoveryReinstatement(client, {
+        ...stored,
+        amount_minor: amountMinor,
+      });
+    }
+    await updateDisputeRecoveryAggregate(client, stored.dispute_id);
+    await audit(client, {
+      action: 'payment.dispute_transfer_recovered',
+      resourceType: 'dispute_transfer_recovery',
+      resourceId: stored.id,
+      metadata: {
+        disputeId: stored.dispute_id,
+        paymentId: stored.payment_id,
+        amountMinor,
+        attemptCount: Number(stored.attempt_count),
+      },
+    });
+    return true;
+  }, { deadlockRetries: 2 });
+}
+
+export async function reconcileDisputeTransferRecoveries({
+  provider = stripeProvider,
+  now = new Date(),
+  limit = 20,
+} = {}) {
+  const scheduled = await scheduleDisputeTransferRecoveries({ limit });
+  const result = {
+    ...scheduled,
+    recovered: 0,
+    retryable: 0,
+    uncertain: 0,
+    manualReview: scheduled.needsReview,
+    cancelled: 0,
+  };
+  for (let index = 0; index < limit; index += 1) {
+    const recovery = await claimDisputeTransferRecovery(now);
+    if (!recovery) break;
+    if (recovery.terminal === 'cancelled') {
+      result.cancelled += 1;
+      continue;
+    }
+    try {
+      let reversal = null;
+      if (['uncertain', 'processing'].includes(recovery.prior_status)
+          || recovery.cancel_requested) {
+        reversal = await provider.findTransferReversal({
+          transferId: recovery.provider_transfer_id,
+          recoveryId: recovery.id,
+        });
+        if (!reversal && recovery.cancel_requested) {
+          const status = await markDisputeRecoveryFailure(recovery, {
+            category: 'uncertain_provider_outcome',
+            disposition: 'manual_review',
+            needsReview: true,
+            safeCode: 'reinstated_reversal_outcome_unresolved',
+          }, now);
+          result.manualReview += status === 'manual_review' ? 1 : 0;
+          continue;
+        }
+      }
+      reversal ??= await provider.reverseTransfer({
+        transferId: recovery.provider_transfer_id,
+        amountMinor: Number(recovery.amount_minor),
+        idempotencyKey: recovery.provider_idempotency_key,
+        metadata: {
+          sit_booking_id: recovery.booking_id,
+          sit_payment_id: recovery.payment_id,
+          sit_dispute_id: recovery.dispute_id,
+          sit_recovery_id: recovery.id,
+        },
+      });
+      if (await completeDisputeTransferRecovery(recovery, reversal)) {
+        result.recovered += 1;
+      }
+    } catch (error) {
+      const classification = ['provider_reversal_binding_mismatch', 'dispute_recovery_state_mismatch']
+        .includes(error?.code)
+        ? {
+          category: 'integrity_conflict',
+          disposition: 'manual_review',
+          needsReview: true,
+          safeCode: error.code,
+        }
+        : classifyDisputeTransferRecoveryFailure(error);
+      const status = await markDisputeRecoveryFailure(recovery, classification, now);
+      if (status === 'retryable') result.retryable += 1;
+      if (status === 'uncertain') result.uncertain += 1;
+      if (status === 'manual_review') result.manualReview += 1;
+    }
+  }
+  return result;
 }
 
 export async function getConnectStatus(userId) {
@@ -804,23 +1360,62 @@ async function processProviderEvent(client, event) {
     if (!paymentResult.rowCount) return 'ignored';
     const payment = paymentResult.rows[0];
     const disputeStatus = text(object.status, 60);
-    await client.query(
+    const amount = Number(object.amount);
+    const currency = text(object.currency, 3).toUpperCase() || payment.currency;
+    if (!Number.isSafeInteger(amount) || amount <= 0
+        || amount > Number(payment.captured_minor)
+        || currency !== payment.currency
+        || payment.livemode !== (event.livemode === true)) {
+      throw new PaymentDomainError(409, 'provider_dispute_binding_mismatch');
+    }
+    const disputeResult = await client.query(
       `INSERT INTO disputes (
          booking_id, opened_by, status, reason_code, summary, resolution,
-         provider_dispute_id, provider_status, provider_evidence_due_at, livemode
-       ) VALUES ($1, $2, 'investigating', $3, $4, $5::jsonb, $6, $7, $8, $9)
+         provider_dispute_id, provider_status, provider_evidence_due_at, livemode,
+         payment_id, provider_disputed_amount_minor
+       ) VALUES ($1, $2, 'investigating', $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (provider_dispute_id) WHERE provider_dispute_id IS NOT NULL
        DO UPDATE SET provider_status = EXCLUDED.provider_status,
-         provider_evidence_due_at = EXCLUDED.provider_evidence_due_at, updated_at = now()`,
+         provider_evidence_due_at = EXCLUDED.provider_evidence_due_at, updated_at = now()
+       WHERE disputes.payment_id = EXCLUDED.payment_id
+         AND disputes.provider_disputed_amount_minor = EXCLUDED.provider_disputed_amount_minor
+         AND disputes.livemode = EXCLUDED.livemode
+       RETURNING id`,
       [
         payment.booking_id, payment.renter_id, text(object.reason, 120) || 'provider_chargeback',
         'Stripe-Streitfall; Auszahlung automatisch gesperrt.',
         JSON.stringify({ source: 'stripe', amountMinor: object.amount }), object.id,
         disputeStatus, providerInstant(object.evidence_details?.due_by), event.livemode === true,
+        payment.id, amount,
       ],
     );
-    const amount = Number(object.amount);
-    const currency = text(object.currency, 3).toUpperCase() || payment.currency;
+    if (!disputeResult.rowCount) {
+      throw new PaymentDomainError(409, 'provider_dispute_binding_mismatch');
+    }
+    const disputeId = disputeResult.rows[0].id;
+    const eventAt = providerInstant(event.created) ?? new Date();
+    if (event.type === 'charge.dispute.funds_withdrawn') {
+      await client.query(
+        `UPDATE disputes
+         SET provider_funds_withdrawn_at = COALESCE(provider_funds_withdrawn_at, $2),
+             provider_funds_withdrawn_event_id = COALESCE(provider_funds_withdrawn_event_id, $3),
+             transfer_recovery_state = CASE
+               WHEN transfer_recovery_state = 'not_required' THEN 'pending'
+               ELSE transfer_recovery_state
+             END
+         WHERE id = $1`,
+        [disputeId, eventAt, event.id],
+      );
+    }
+    if (event.type === 'charge.dispute.funds_reinstated') {
+      await client.query(
+        `UPDATE disputes
+         SET provider_funds_reinstated_at = COALESCE(provider_funds_reinstated_at, $2),
+             provider_funds_reinstated_event_id = COALESCE(provider_funds_reinstated_event_id, $3)
+         WHERE id = $1`,
+        [disputeId, eventAt, event.id],
+      );
+    }
     if (Number.isSafeInteger(amount) && amount > 0 && currency === payment.currency
         && event.type === 'charge.dispute.funds_withdrawn') {
       await insertLedger(client, {
@@ -859,6 +1454,9 @@ async function processProviderEvent(client, event) {
         eventKey: `booking:${payment.booking_id}:disputed:${event.id}`,
         workflowStatus: 'disputed',
       });
+    }
+    if (event.type === 'charge.dispute.funds_reinstated') {
+      await handleDisputeFundsReinstated(client, disputeId);
     }
     return 'processed';
   }
@@ -1032,6 +1630,17 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
     if (!['captured', 'partially_refunded'].includes(payment.status)) {
       if (payment.status === 'refunded') return { replay: true, payment };
       throw new PaymentDomainError(409, 'payment_not_refundable');
+    }
+    const providerDispute = await client.query(
+      `SELECT 1 FROM disputes
+       WHERE payment_id = $1
+         AND provider_funds_withdrawn_at IS NOT NULL
+         AND provider_funds_reinstated_at IS NULL
+       LIMIT 1`,
+      [paymentId],
+    );
+    if (providerDispute.rowCount) {
+      throw new PaymentDomainError(409, 'refund_blocked_by_provider_dispute');
     }
     const activeRefund = await client.query(
       `SELECT idempotency_key FROM refunds
@@ -1375,10 +1984,27 @@ export async function releasePayout({ actor = null, paymentId, key: rawKey }) {
 }
 
 export async function reconcilePaymentLifecycle() {
-  if (!config.payments.enabled) return { refunds: 0, payouts: 0, failures: 0 };
+  if (!config.payments.enabled) {
+    return {
+      refunds: 0,
+      payouts: 0,
+      failures: 0,
+      disputeRecoveries: {
+        scheduled: 0,
+        deferred: 0,
+        needsReview: 0,
+        recovered: 0,
+        retryable: 0,
+        uncertain: 0,
+        manualReview: 0,
+        cancelled: 0,
+      },
+    };
+  }
   let refunds = 0;
   let payouts = 0;
   let failures = 0;
+  const disputeRecoveries = await reconcileDisputeTransferRecoveries();
   const cancelled = await pool.query(
     `SELECT payment.id, payment.captured_minor, payment.refunded_minor,
             request.payload AS booking_payload
@@ -1486,15 +2112,28 @@ export async function reconcilePaymentLifecycle() {
       if (!['payout_blocked_by_dispute', 'owner_payout_account_not_ready'].includes(error.code)) failures += 1;
     }
   }
-  return { refunds, payouts, failures };
+  return { refunds, payouts, failures, disputeRecoveries };
 }
 
 export async function paymentHealth() {
-  if (!config.payments.enabled) return { transport: 'disabled', pending: 0, failedEvents: 0, unbalanced: 0 };
+  if (!config.payments.enabled) {
+    return {
+      transport: 'disabled',
+      pending: 0,
+      failedEvents: 0,
+      unbalanced: 0,
+      recoveryPending: 0,
+      recoveryNeedsReview: 0,
+    };
+  }
   const result = await pool.query(
     `SELECT
        (SELECT count(*)::int FROM payments WHERE status IN ('created', 'requires_action', 'authorized')) AS pending,
        (SELECT count(*)::int FROM payment_provider_events WHERE status = 'failed') AS failed_events,
+       (SELECT count(*)::int FROM dispute_transfer_recoveries
+        WHERE status IN ('pending', 'processing', 'retryable', 'uncertain')) AS recovery_pending,
+       (SELECT count(*)::int FROM disputes
+        WHERE transfer_recovery_needs_review = true) AS recovery_needs_review,
        (SELECT count(*)::int FROM (
           SELECT transaction_id FROM ledger_entries GROUP BY transaction_id
           HAVING sum(debit_minor) <> sum(credit_minor)
@@ -1506,5 +2145,7 @@ export async function paymentHealth() {
     pending: result.rows[0].pending,
     failedEvents: result.rows[0].failed_events,
     unbalanced: result.rows[0].unbalanced,
+    recoveryPending: result.rows[0].recovery_pending,
+    recoveryNeedsReview: result.rows[0].recovery_needs_review,
   };
 }

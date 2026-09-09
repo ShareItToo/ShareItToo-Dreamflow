@@ -1790,6 +1790,8 @@ export function createApp({
     res.json({
       status: mail === 'ok' && notifications.dead === 0
         && payments.failedEvents === 0 && payments.unbalanced === 0
+        && payments.recoveryPending === 0
+        && payments.recoveryNeedsReview === 0
         && supportDeadlines.status === 'ok' ? 'ok' : 'degraded',
       service: 'shareittoo-api',
       checks: {
@@ -1820,6 +1822,8 @@ export function createApp({
     ]);
     const ready = mail !== 'error' && mail !== 'unverified' && notifications.dead === 0
       && payments.failedEvents === 0 && payments.unbalanced === 0
+      && payments.recoveryPending === 0
+      && payments.recoveryNeedsReview === 0
       && supportDeadlines.status === 'ok';
     res.status(ready ? 200 : 503).json({
       status: ready ? 'ok' : 'degraded',

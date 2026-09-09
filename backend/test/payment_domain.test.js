@@ -4,7 +4,11 @@ import { StripeProvider } from '../src/stripe_provider.js';
 
 import {
   assertProviderPaymentBinding,
+  classifyDisputeTransferRecoveryFailure,
   captureLedger,
+  disputeOwnerRecoveryLedger,
+  disputeOwnerRecoveryReinstatementLedger,
+  disputeTransferRecoveryAmount,
   paymentAmounts,
   paymentStatusForProvider,
   refundLedger,
@@ -75,6 +79,80 @@ test('capture, transfer and refund ledger entries always balance', () => {
   assert.equal(balanced(transfer), true);
   assert.equal(balanced(refund), true);
   assert.deepEqual(split, { ownerShareMinor: 500, platformShareMinor: 95 });
+});
+
+test('chargeback recovery is proportional, paid-exposure-bounded and replay-aware', () => {
+  assert.deepEqual(disputeTransferRecoveryAmount({
+    disputeAmountMinor: 595,
+    paymentAmountMinor: 1190,
+    ownerPayoutMinor: 1000,
+    transferredMinor: 800,
+  }), {
+    disputedOwnerShareMinor: 500,
+    targetOwnerRecoveryMinor: 500,
+    remainingOwnerRecoveryMinor: 500,
+  });
+  assert.deepEqual(disputeTransferRecoveryAmount({
+    disputeAmountMinor: 1190,
+    paymentAmountMinor: 1190,
+    ownerPayoutMinor: 1000,
+    transferredMinor: 200,
+    alreadyRecoveredMinor: 300,
+  }), {
+    disputedOwnerShareMinor: 1000,
+    targetOwnerRecoveryMinor: 500,
+    remainingOwnerRecoveryMinor: 200,
+  });
+});
+
+test('chargeback owner recovery and later reinstatement remain balanced and distinct', () => {
+  const recovered = disputeOwnerRecoveryLedger({ amountMinor: 500 });
+  const reinstated = disputeOwnerRecoveryReinstatementLedger({
+    amountMinor: 500,
+    ownerId: 'owner-1',
+  });
+  assert.equal(balanced(recovered), true);
+  assert.equal(balanced(reinstated), true);
+  assert.deepEqual(recovered.map((entry) => entry.accountCode), [
+    'stripe_clearing',
+    'chargeback_expense',
+  ]);
+  assert.deepEqual(reinstated.map((entry) => entry.accountCode), [
+    'chargeback_expense',
+    'owner_payable',
+  ]);
+});
+
+test('only exact structured reversal rejections are definite', () => {
+  const definite = classifyDisputeTransferRecoveryFailure({
+    status: 409,
+    code: 'resource_missing',
+    details: { providerStatus: 404, providerType: 'StripeInvalidRequestError' },
+  });
+  assert.equal(definite.disposition, 'manual_review');
+  assert.equal(definite.category, 'definite_provider_rejection');
+
+  for (const error of [
+    { status: 503, code: 'stripe_request_failed', details: { providerStatus: 0 } },
+    { status: 409, code: 'timeout', details: { providerStatus: 408 } },
+    { status: 409, code: 'too_many_requests', details: { providerStatus: 429 } },
+    { status: 409, code: 'bad_request', details: { providerStatus: 400 } },
+    { status: 409, code: 'resource_missing', details: { providerStatus: 404 } },
+    { status: 409, code: 'resource_missing', details: {
+      providerStatus: 404,
+      providerType: 'ProxyError',
+    } },
+  ]) {
+    assert.equal(
+      classifyDisputeTransferRecoveryFailure(error).disposition,
+      'uncertain',
+    );
+  }
+  assert.equal(classifyDisputeTransferRecoveryFailure({
+    status: 409,
+    code: 'balance_insufficient',
+    details: { providerStatus: 400, providerType: 'StripeInvalidRequestError' },
+  }).disposition, 'retryable');
 });
 
 test('Stripe webhook signatures reject tampering, expiry and malformed headers', () => {
@@ -328,11 +406,53 @@ test('Stripe SDK checkout, refund and transfer preserve separate-charges semanti
 
   await provider.reverseTransfer({
     transferId: 'tr_test', amountMinor: 100, idempotencyKey: 'reversal:payment-1',
-    metadata: { sit_payment_id: 'payment-1' },
+    metadata: { sit_payment_id: 'payment-1', sit_recovery_id: 'recovery-1' },
   });
   assert.equal(captured[4][1], 'tr_test');
   assert.equal(captured[4][2].amount, 100);
   assert.equal(captured[4][3].idempotencyKey, 'reversal:payment-1');
+
+  stripeClient.transfers.listReversals = async (...args) => {
+    captured.push(['reversal-list', ...args]);
+    return {
+      data: [{
+        id: 'trr_test',
+        transfer: 'tr_test',
+        amount: 100,
+        metadata: { sit_recovery_id: 'recovery-1' },
+      }],
+      has_more: false,
+    };
+  };
+  assert.equal((await provider.findTransferReversal({
+    transferId: 'tr_test',
+    recoveryId: 'recovery-1',
+  })).id, 'trr_test');
+  assert.deepEqual(captured[5].slice(0, 3), [
+    'reversal-list',
+    'tr_test',
+    { limit: 100 },
+  ]);
+});
+
+test('memory transfer reversal is idempotent and discoverable after an uncertain replay', async () => {
+  const provider = new StripeProvider({ mode: 'memory' });
+  const request = {
+    transferId: 'tr_memory_test',
+    amountMinor: 250,
+    idempotencyKey: 'stable-recovery-key',
+    metadata: { sit_recovery_id: 'recovery-memory-1' },
+  };
+  const first = await provider.reverseTransfer(request);
+  assert.deepEqual(await provider.reverseTransfer(request), first);
+  assert.deepEqual(await provider.findTransferReversal({
+    transferId: request.transferId,
+    recoveryId: request.metadata.sit_recovery_id,
+  }), first);
+  await assert.rejects(
+    provider.reverseTransfer({ ...request, amountMinor: 251 }),
+    (error) => error.code === 'provider_idempotency_payload_mismatch',
+  );
 });
 
 test('Stripe SDK verifies both snapshot and thin webhook envelopes', () => {

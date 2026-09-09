@@ -18,7 +18,12 @@ function payload({
       database: 'ok',
       mail: 'ok',
       notifications: { pending: 0, dead: 0 },
-      payments: { failedEvents: 0, unbalanced: 0 },
+      payments: {
+        failedEvents: 0,
+        unbalanced: 0,
+        recoveryPending: 0,
+        recoveryNeedsReview: 0,
+      },
       supportDeadlines: {
         status: supportStatus,
         stale: false,
@@ -71,6 +76,22 @@ test('keeps technical and critical operational degradation fail-closed', () => {
   assert.throws(
     () => evaluateStagingDeploymentReadiness(technical, { httpStatus: 503 }),
     (error) => error.code === 'notifications_unready',
+  );
+
+  const recovery = payload();
+  recovery.status = 'degraded';
+  recovery.checks.payments.recoveryNeedsReview = 1;
+  assert.throws(
+    () => evaluateStagingDeploymentReadiness(recovery, { httpStatus: 503 }),
+    (error) => error.code === 'payments_unready',
+  );
+
+  const pendingRecovery = payload();
+  pendingRecovery.status = 'degraded';
+  pendingRecovery.checks.payments.recoveryPending = 1;
+  assert.throws(
+    () => evaluateStagingDeploymentReadiness(pendingRecovery, { httpStatus: 503 }),
+    (error) => error.code === 'payments_unready',
   );
 
   assert.throws(

@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp74-dispute-transfer-recovery",
+  "status": "implemented-pending-full-regression",
+  "capturedOn": "2026-09-09",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "packageBaseHead": "9fd6b6023b124e7c7efd9aff518a8c7d61a304a0",
+    "pullRequest7": "draft-open-mergeable-unmerged",
+    "mobileRuntimeChanged": false,
+    "providerTrafficChanged": false
+  },
+  "sourceInventory": [
+    {
+      "path": "backend/sql/migrations/072_dispute_transfer_recovery.up.sql",
+      "sha256": "b70f76fc8db76e53635de4594d5f588e7ec20d0f9fcc8f3f3191b0ebd04ba04b"
+    },
+    {
+      "path": "backend/sql/migrations/072_dispute_transfer_recovery.down.sql",
+      "sha256": "e090132e4116dff9568c70b61e2f38f7f06852f1701ea2e00acf4dda3af27ea5"
+    },
+    {
+      "path": "backend/src/payment_domain.js",
+      "sha256": "78c93d6c3a9a9ee47274fd379fb4d000547473d5264824d5a69b944c95f6d851"
+    },
+    {
+      "path": "backend/src/payment_workflow.js",
+      "sha256": "b9ff35567499a5f993166d8ca6422e9cb9f774a4aefe69b873a5bd8abb4bead7"
+    },
+    {
+      "path": "backend/src/stripe_provider.js",
+      "sha256": "a55c87c0b147e0b488c9cfcead0fa4d0c13747bb8cc4245e727b76f203036f88"
+    },
+    {
+      "path": "backend/src/app.js",
+      "sha256": "b9397663ab9df4c3494d740e80bf4e371e785e2326f560f95e0394b5af6a4be2"
+    },
+    {
+      "path": "backend/src/privacy_export.js",
+      "sha256": "f03271aec191088c0d90ca2c5662f5b54a8d74207d8d788422e3963d7761f196"
+    },
+    {
+      "path": "backend/src/retention_inventory.js",
+      "sha256": "841e2a762bade7e147e8af5451e329058dace7324d9df3e8c6eacfaf454d7f9f"
+    },
+    {
+      "path": "backend/ops/validate_staging_deployment_readiness.mjs",
+      "sha256": "08683c727320caac0f0627d9f333f40babf49a9dc29acab1b525e388aef7b1e2"
+    },
+    {
+      "path": "tool/validate_wp73_stripe_sandbox_compatibility_inventory.mjs",
+      "sha256": "05280428f1ade8dd0548103770de4c244f036426f52bfedeb307e004cf201834"
+    }
+  ],
+  "outcomes": {
+    "paidTransferRecovery": "durable-idempotent-provider-bound",
+    "definiteRejection": "only-structured-stripe-invalid-request-errors",
+    "timeoutAndUnstructuredFailure": "uncertain-needs-review-no-local-success",
+    "insufficientBalance": "retryable-needs-review",
+    "fundsReinstated": "cancel-or-compensating-owner-payable-without-auto-release",
+    "readiness": "pending-or-review-recovery-is-degraded",
+    "privacyAndRetention": "safe-status-export-and-inventory-covered",
+    "historicalWp73Evidence": "bound-to-its-implementation-head"
+  },
+  "verification": {
+    "implementationHead": null,
+    "focusedTests": "passed",
+    "postgresIntegration": "passed",
+    "fullLocalRegression": "pending",
+    "localToolTestsPassed": null,
+    "githubRegressionRun": null,
+    "githubCodeqlRun": null,
+    "openPrMergeAlerts": null,
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "boundaries": {
+    "stripeApiCalled": false,
+    "credentialReadExtractedOrCommitted": false,
+    "stripeDashboardChanged": false,
+    "providerObjectCreatedOrChanged": false,
+    "moneyMoved": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "cloudVpsDnsChanged": false,
+    "firebaseChanged": false,
+    "googlePlayChanged": false,
+    "deviceContacted": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false
+  }
+}

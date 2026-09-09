@@ -42,7 +42,9 @@ export function evaluateStagingDeploymentReadiness(payload, { httpStatus } = {})
   const payments = checks.payments;
   if (!payments || typeof payments !== 'object'
       || exactCount(payments.failedEvents, 'payment_failed_events') !== 0
-      || exactCount(payments.unbalanced, 'payment_unbalanced') !== 0) {
+      || exactCount(payments.unbalanced, 'payment_unbalanced') !== 0
+      || exactCount(payments.recoveryPending, 'payment_recovery_pending') !== 0
+      || exactCount(payments.recoveryNeedsReview, 'payment_recovery_needs_review') !== 0) {
     fail('payments_unready');
   }
 
