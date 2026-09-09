@@ -1,6 +1,6 @@
 # Current Work Package: WP72 Current-Candidate Report and Block
 
-WP72 is **IMPLEMENTED ON PIXEL; LOCAL AND GITHUB CLOSURE PENDING**. The exact
+WP72 is **COMPLETE ON PIXEL, LOCALLY AND ON GITHUB**. The exact
 unchanged `1.0.0+2026090904` candidate completes physical report submission,
 independent report readback, reversible owner block/unblock, same-owner listing
 visibility isolation and message-list isolation. An accepted upcoming
@@ -13,6 +13,12 @@ The moderation report is retained as audit history. No runtime, deployment,
 Production, Store, tester, Firebase, provider, money, OnePlus or merge state
 changed. See
 `docs/operations/WP72_CURRENT_CANDIDATE_REPORT_BLOCK_2026-09-09.md`.
+
+Forty-two focused tests, all 2,531 tool tests and the complete local technical
+regression pass at exact implementation HEAD
+`104ee9c166d3e56e0edebc3db7d638d6017ecd66`. Exact-head GitHub Regression
+`34363123880`, CodeQL `34363123877` and zero open PR-merge Code Scanning alerts
+pass. PR #7 remains Draft, open, mergeable and unmerged.
 
 # Previous Work Package: WP71 Current-Candidate Account Deletion
 

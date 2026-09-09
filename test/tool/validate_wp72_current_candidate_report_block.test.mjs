@@ -71,9 +71,14 @@ test('rejects cleanup, boundary and private-data drift', () => {
   assert.throws(() => validate(privateValue), /private or secret-shaped/u);
 });
 
-test('rejects invented complete verification', () => {
+test('rejects incomplete complete verification', () => {
   const changed = structuredClone(evidence);
-  changed.status = 'complete-local-github';
-  changed.packageVerification.fullLocalRegression = 'passed';
+  changed.packageVerification.githubCodeqlRun = null;
+  assert.throws(() => validate(changed), /complete verification/u);
+});
+
+test('rejects exact-head GitHub verification drift', () => {
+  const changed = structuredClone(evidence);
+  changed.packageVerification.githubRegressionRun += 1;
   assert.throws(() => validate(changed), /complete verification/u);
 });

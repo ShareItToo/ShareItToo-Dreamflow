@@ -141,16 +141,18 @@ function validateVerification(repositoryRoot, value, checkGitState) {
     }
     return;
   }
+  const complete = {
+    implementationHead: '104ee9c166d3e56e0edebc3db7d638d6017ecd66',
+    focusedTests: 'passed-42',
+    fullLocalRegression: 'passed',
+    localToolTestsPassed: 2531,
+    githubRegressionRun: 34363123880,
+    githubCodeqlRun: 34363123877,
+    openPrMergeAlerts: 0,
+    pullRequest7: 'draft-open-mergeable-unmerged',
+  };
   if (value.status !== 'complete-local-github'
-      || !/^[a-f0-9]{40}$/u.test(value.packageVerification?.implementationHead ?? '')
-      || !/^passed-\d+$/u.test(value.packageVerification?.focusedTests ?? '')
-      || value.packageVerification.fullLocalRegression !== 'passed'
-      || !Number.isInteger(value.packageVerification.localToolTestsPassed)
-      || value.packageVerification.localToolTestsPassed < 2520
-      || !Number.isInteger(value.packageVerification.githubRegressionRun)
-      || !Number.isInteger(value.packageVerification.githubCodeqlRun)
-      || value.packageVerification.openPrMergeAlerts !== 0
-      || value.packageVerification.pullRequest7 !== 'draft-open-mergeable-unmerged') {
+      || !exact(value.packageVerification, complete)) {
     fail('WP72 complete verification contract is invalid.');
   }
   if (checkGitState) {

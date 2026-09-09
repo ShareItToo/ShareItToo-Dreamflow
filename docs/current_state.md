@@ -1,7 +1,7 @@
 # ShareItToo Current State
 
-WP72 is **IMPLEMENTED ON THE EXACT PIXEL CANDIDATE; LOCAL AND GITHUB CLOSURE
-PENDING**. The unchanged signed `1.0.0+2026090904` candidate now passes the
+WP72 is **COMPLETE ON THE EXACT PIXEL CANDIDATE, LOCALLY AND ON GITHUB**. The
+unchanged signed `1.0.0+2026090904` candidate passes the
 physical listing-report UI with independent Staging readback, reversible
 owner block/unblock, Explore visibility isolation and physical message-list
 isolation. The UI also correctly refused blocking while an accepted upcoming
@@ -14,6 +14,12 @@ and the moderation report remains intentionally as audit history. No runtime,
 deployment, Production, Store, tester, Firebase, provider, money, OnePlus or
 merge state changed. See
 `docs/operations/WP72_CURRENT_CANDIDATE_REPORT_BLOCK_2026-09-09.md`.
+
+Forty-two focused tests, all 2,531 tool tests and the complete local technical
+regression pass at exact implementation HEAD
+`104ee9c166d3e56e0edebc3db7d638d6017ecd66`. Exact-head GitHub Regression
+`34363123880`, CodeQL `34363123877` and zero open PR-merge Code Scanning alerts
+pass. PR #7 remains Draft, open, mergeable and unmerged.
 
 WP71 is **COMPLETE ON PIXEL, LOCALLY AND ON GITHUB**. The
 unchanged exact candidate `1.0.0+2026090904` now passes the complete disposable
