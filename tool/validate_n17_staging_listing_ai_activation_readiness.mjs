@@ -11,7 +11,7 @@ const expectedSources = Object.freeze({
   'backend/compose.staging.listing-ai.yml': '65a3f228a2e7e66fe518470369f554439dae8d078b11b0649a83acabb53c1be1',
   'backend/ops/validate_openai_staging_secret.mjs': 'c71dc3986145dee854fa87274afb28c3b154e8bec85662536196161e0705409a',
   'backend/ops/deploy_release.sh': '7b0958cba5d2169da3283e214630ddd55bba882eefb726aa6895b917b94ee477',
-  '.github/workflows/regression.yml': '4a815a72439d2ed637fc87e72c6ee930f23721fbe6517a1e42ffba5a2104e60d',
+  '.github/workflows/regression.yml': 'a7a67ea69180a854dc0fa98d82aee24f676613520e45e66b1e145e8e0a172b2a',
   'tool/validate_support_launch_content.mjs': '9d6ed4cc88c0f7945bbf9441baa7934472b2e41b81718fcc75cae9a10eca9c10',
 });
 
