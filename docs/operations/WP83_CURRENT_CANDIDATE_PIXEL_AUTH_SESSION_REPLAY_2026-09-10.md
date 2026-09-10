@@ -102,5 +102,13 @@ until the owner completes the external e-mail link and a new authenticated
 Pixel replay can be made. No Staging, provider, store, payment, OnePlus or
 Production state changed.
 
+The runner now performs that authenticated-profile check before it creates a
+new permission-recovery journal or performs its first grant/revoke operation.
+On the current Pixel it stopped at that preflight, wrote no new journal and
+left the already verified runtime-permission and AppOp snapshot unchanged. A
+failed preflight also restores the ordinary Explore navigation surface. This
+is a deterministic safety boundary, not a timing accommodation: the complete
+lifecycle can resume only after a genuine authenticated profile is visible.
+
 Machine-readable evidence:
 `docs/evidence/release-readiness/wp83-current-candidate-pixel-auth-session-replay-20260910.json`.
