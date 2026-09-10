@@ -20,6 +20,7 @@ import {
   parseAndroidRuntimePermissionSnapshot,
   parseDeclaredAndroidPermissions,
   parseWp46Arguments,
+  preflightAuthenticatedPermissionLifecycle,
   profileMenuScrollArguments,
   readWp46PermissionJournal,
 } from '../../tool/diagnose_current_candidate_android_permission_lifecycle.mjs';
@@ -105,6 +106,29 @@ test('derives a bounded, display-relative profile-menu scroll without identity d
     /usable display size/u,
   );
   assert.equal(JSON.stringify(profileMenuScrollArguments(display)).includes('/Users/'), false);
+});
+
+test('requires an authenticated profile before a new permission lifecycle starts', async () => {
+  let calls = 0;
+  const result = await preflightAuthenticatedPermissionLifecycle({
+    assertAuthenticated: async () => {
+      calls += 1;
+    },
+  });
+  assert.equal(calls, 1);
+  assert.deepEqual(result, { authenticatedProfile: true });
+  await assert.rejects(
+    () => preflightAuthenticatedPermissionLifecycle({
+      assertAuthenticated: async () => {
+        throw new Error('guest profile');
+      },
+    }),
+    /guest profile/u,
+  );
+  await assert.rejects(
+    () => preflightAuthenticatedPermissionLifecycle({}),
+    /preflight is unavailable/u,
+  );
 });
 
 function fakeOperations({ failOn = null } = {}) {
@@ -284,4 +308,18 @@ test('reads the bounded journal bytes from the validated descriptor, never by pa
   );
   assert.match(source, /readSync\(descriptor, bytes/u);
   assert.doesNotMatch(source, /readFileSync\(descriptor/u);
+});
+
+test('preflights authenticated state before recording a new mutable permission snapshot', () => {
+  const source = readFileSync(
+    new URL('../../tool/diagnose_current_candidate_android_permission_lifecycle.mjs', import.meta.url),
+    'utf8',
+  );
+  const preflight = source.lastIndexOf('await preflightAuthenticatedPermissionLifecycle({');
+  const snapshot = source.indexOf('const originalPermissionState = readPhysicalPermissionState');
+  const journal = source.indexOf('atomicJournal(args.journalPath, {');
+  assert.ok(preflight >= 0 && snapshot >= 0 && journal >= 0);
+  assert.ok(preflight < snapshot);
+  assert.ok(snapshot < journal);
+  assert.match(source, /async function restartAuthenticated[\s\S]*?finally \{\s*restoreCurrentHeadAndroidExplore/u);
 });

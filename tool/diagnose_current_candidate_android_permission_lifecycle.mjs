@@ -410,6 +410,14 @@ export function profileMenuScrollArguments(display) {
   ]);
 }
 
+export async function preflightAuthenticatedPermissionLifecycle({ assertAuthenticated }) {
+  if (typeof assertAuthenticated !== 'function') {
+    fail('The authenticated permission-lifecycle preflight is unavailable.');
+  }
+  await assertAuthenticated();
+  return Object.freeze({ authenticatedProfile: true });
+}
+
 function scrollProfileMenu(commandRunner, adbPath, device) {
   const display = parseAndroidDisplaySize(currentHeadAndroidAdb(
     commandRunner,
@@ -513,24 +521,27 @@ function restorePhysicalPermissionState(commandRunner, adbPath, device, snapshot
 
 async function restartAuthenticated(commandRunner, adbPath, device) {
   launchCurrentHeadAndroidCandidate(commandRunner, adbPath, device);
-  const main = await waitForCurrentHeadAndroidMainNavigation({
-    commandRunner, adbPath, device, wait,
-  });
-  tapNamed(commandRunner, adbPath, device, main, 'Mein SIT');
-  await waitForLabels(
-    commandRunner,
-    adbPath,
-    device,
-    ['Meine Anzeigen', 'Mietanfragen', 'Abmelden'],
-    'authenticated profile',
-    {
-      // The profile menu begins below the header. This changes only its
-      // temporary viewport; navigation is restored before the diagnostic
-      // continues and no account or business action is invoked.
-      onMissing: () => scrollProfileMenu(commandRunner, adbPath, device),
-    },
-  );
-  restoreCurrentHeadAndroidExplore(commandRunner, adbPath, device);
+  try {
+    const main = await waitForCurrentHeadAndroidMainNavigation({
+      commandRunner, adbPath, device, wait,
+    });
+    tapNamed(commandRunner, adbPath, device, main, 'Mein SIT');
+    await waitForLabels(
+      commandRunner,
+      adbPath,
+      device,
+      ['Meine Anzeigen', 'Mietanfragen', 'Abmelden'],
+      'authenticated profile',
+      {
+        // The profile menu begins below the header. This changes only its
+        // temporary viewport; navigation is restored before the diagnostic
+        // continues and no account or business action is invoked.
+        onMissing: () => scrollProfileMenu(commandRunner, adbPath, device),
+      },
+    );
+  } finally {
+    restoreCurrentHeadAndroidExplore(commandRunner, adbPath, device);
+  }
 }
 
 async function openReadOnlyPermissionSettings(commandRunner, adbPath, device) {
@@ -712,6 +723,16 @@ async function run() {
       normalizePermissionState(previous.originalPermissionState),
     )) fail('The previous WP46 permission snapshot could not be recovered.');
   }
+  // Prove that the candidate still has an authenticated profile before the
+  // first new permission transition. A fresh e-mail-pending/guest state is a
+  // valid stop condition and must not cause a grant/revoke round trip.
+  await preflightAuthenticatedPermissionLifecycle({
+    assertAuthenticated: async () => restartAuthenticated(
+      defaultCurrentHeadAndroidCommandRunner,
+      args.adbPath,
+      device,
+    ),
+  });
   const originalPermissionState = readPhysicalPermissionState(
     defaultCurrentHeadAndroidCommandRunner,
     args.adbPath,
