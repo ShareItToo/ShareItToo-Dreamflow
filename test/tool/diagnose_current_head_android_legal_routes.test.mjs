@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { resolve } from 'node:path';
 import test from 'node:test';
 
 import {
   diagnoseCurrentHeadAndroidLegalRoutes,
   parseLegalRouteArguments,
+  summarizeCurrentCandidateLegalRootPreparation,
 } from '../../tool/diagnose_current_head_android_legal_routes.mjs';
 
 function digest(value) {
@@ -178,14 +180,47 @@ test('requires the explicit current-head route and accepts only an ADB override'
   assert.deepEqual(parseLegalRouteArguments(['--current-head']), {
     currentHead: true,
     adbPath: 'adb',
+    candidateDirectory: null,
+    onlyLabel: null,
+    prepareLegalRoot: false,
+    fromCurrentLegalRoot: false,
+    retainLegalRoot: false,
   });
   assert.deepEqual(parseLegalRouteArguments(['--current-head', '--adb', '/safe/adb']), {
     currentHead: true,
     adbPath: '/safe/adb',
+    candidateDirectory: null,
+    onlyLabel: null,
+    prepareLegalRoot: false,
+    fromCurrentLegalRoot: false,
+    retainLegalRoot: false,
   });
-  assert.throws(() => parseLegalRouteArguments([]), /requires --current-head/u);
+  assert.deepEqual(parseLegalRouteArguments([
+    '--candidate-dir', 'private-candidate', '--prepare-legal-root',
+  ]), {
+    currentHead: false,
+    adbPath: 'adb',
+    candidateDirectory: resolve('private-candidate'),
+    onlyLabel: null,
+    prepareLegalRoot: true,
+    fromCurrentLegalRoot: false,
+    retainLegalRoot: false,
+  });
+  assert.throws(() => parseLegalRouteArguments([]), /requires --current-head or --candidate-dir/u);
   assert.throws(
     () => parseLegalRouteArguments(['--current-head', '--candidate-dir', 'x']),
-    /Unknown argument/u,
+    /cannot be combined/u,
   );
+});
+
+test('prepares an exact current-candidate legal root without treating it as a document result', () => {
+  const result = summarizeCurrentCandidateLegalRootPreparation({
+    candidate,
+    deviceSummary,
+    sourceDrift: { mobileSourceChanged: false },
+    capturedAt: '2026-08-23T13:00:00.000Z',
+  });
+  assert.equal(result.status, 'prepared-read-only-legal-root');
+  assert.equal(result.tests.legalRootVisible, true);
+  assert.equal(result.tests.documentVerified, false);
 });
