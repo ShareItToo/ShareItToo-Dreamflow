@@ -651,6 +651,11 @@ class AuthService {
         if (error.code == 'registration_consents_required') {
           return const AuthResult.failure(AuthFailure.consentRequired);
         }
+        if (error.code == 'verification_delivery_unavailable') {
+          return const AuthResult.failure(
+            AuthFailure.verificationDeliveryUnavailable,
+          );
+        }
         debugPrint('[AuthService] remote registration failed: $error');
         return const AuthResult.failure(AuthFailure.network);
       } catch (error) {
@@ -1743,6 +1748,7 @@ enum AuthFailure {
   emailVerificationRequired,
   weakPassword,
   consentRequired,
+  verificationDeliveryUnavailable,
   network,
   emailInUse,
   notImplemented,

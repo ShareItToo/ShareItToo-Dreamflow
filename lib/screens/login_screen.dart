@@ -390,9 +390,9 @@ class _LoginScreenState extends State<LoginScreen> {
             await _showLoginVerificationResult(
               loginOwner,
               icon: Icons.mark_email_read_outlined,
-              title: 'Bestätigungs-E-Mail angefordert',
+              title: 'Bestätigungsanfrage verarbeitet',
               message:
-                  'Wenn das Konto existiert und noch unbestätigt ist, erhältst du einen neuen Link.',
+                  'Wenn dein Konto existiert und noch unbestätigt ist, prüfe dein Postfach auf einen Link. Kommt keiner an, versuche es später erneut.',
             );
           } on ContactActionFailure catch (failure) {
             if (!_isLoginEmailOwnerCurrent(loginOwner)) return;
@@ -641,7 +641,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await AppPopup.toast(
           context,
           icon: Icons.mark_email_read_outlined,
-          title: 'Bestätigungs-E-Mail gesendet',
+          title: 'Bestätigungsanfrage verarbeitet',
           message:
               'Bestätige einmal deine E-Mail und melde dich danach erneut mit $providerLabel an.',
         );
@@ -1149,9 +1149,9 @@ class _EmailVerificationPendingNotice extends StatelessWidget {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  'Wenn die Registrierung möglich war, wurde ein '
-                  'Bestätigungslink an $address gesendet. Öffne ihn und '
-                  'melde dich anschließend hier an.',
+                  'Wenn die Registrierung möglich war, wurde eine '
+                  'Bestätigungsanfrage für $address verarbeitet. Prüfe dein '
+                  'Postfach und melde dich anschließend hier an.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: Colors.white.withValues(alpha: 0.84),
                     height: 1.4,

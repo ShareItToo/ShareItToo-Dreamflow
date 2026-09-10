@@ -1580,6 +1580,7 @@ async function listThreads(client, userId) {
 export function createApp({
   verifySocialToken = verifyFirebaseSocialToken,
   verifyPhoneToken = verifyFirebasePhoneToken,
+  deliverVerification = createAndSendVerification,
   deletePhoneIdentity = deleteFirebasePhoneIdentity,
   drainFirebaseIdentityDeletions = (ids) => drainFirebaseIdentityDeletionOutbox({
     client: pool,
@@ -1913,9 +1914,10 @@ export function createApp({
     });
     if (verificationUser) {
       try {
-        await createAndSendVerification(verificationUser);
+        await deliverVerification(verificationUser);
       } catch (error) {
         console.error('[auth] registration verification delivery failed', safeOperationalErrorCode(error, 'verification_delivery_failed'));
+        throw new HttpError(503, 'verification_delivery_unavailable');
       }
     }
     res.status(202).json({ accepted: true });
@@ -2143,9 +2145,10 @@ export function createApp({
     });
     if (outcome.verificationUser) {
       try {
-        await createAndSendVerification(outcome.verificationUser);
+        await deliverVerification(outcome.verificationUser);
       } catch (error) {
         console.error('[auth] social verification delivery failed', safeOperationalErrorCode(error, 'verification_delivery_failed'));
+        throw new HttpError(503, 'verification_delivery_unavailable');
       }
       return res.status(202).json({
         accepted: true,
@@ -2391,7 +2394,7 @@ export function createApp({
     const user = result.rows[0];
     if (user && !user.email_verified_at) {
       try {
-        await createAndSendVerification(user);
+        await deliverVerification(user);
       } catch (error) {
         console.error('[auth] verification delivery failed', safeOperationalErrorCode(error, 'verification_delivery_failed'));
       }

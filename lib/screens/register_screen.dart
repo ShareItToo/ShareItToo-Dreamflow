@@ -194,6 +194,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             'Das Passwort muss mindestens 10 Zeichen, einen Buchstaben und eine Zahl enthalten.',
           AuthFailure.consentRequired =>
             'Bitte bestätige: 18 Jahre oder älter, AGB und Datenschutz.',
+          AuthFailure.verificationDeliveryUnavailable =>
+            'Dein Konto wurde vorgemerkt, aber die Bestätigungs-E-Mail konnte nicht angefordert werden. Bitte versuche die Registrierung später mit derselben E-Mail erneut.',
           AuthFailure.network =>
             'Es ist ein Netzwerkfehler aufgetreten. Bitte versuche es erneut.',
           _ => 'Es ist ein Fehler aufgetreten. Bitte versuche es erneut.',

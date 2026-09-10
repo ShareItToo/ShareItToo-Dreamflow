@@ -9763,6 +9763,42 @@ if (!databaseUrl) {
       const duplicateRegistration = await register();
       assert.equal(duplicateRegistration.status, 202);
       assert.deepEqual(await duplicateRegistration.json(), { accepted: true });
+
+      const unavailableRegistrationBody = {
+        ...registrationBody,
+        email: 'verification-delivery-unavailable@example.com',
+      };
+      applicationOptions.deliverVerification = async () => {
+        const error = new Error('synthetic_verification_delivery_unavailable');
+        error.code = 'mail_delivery_failed';
+        throw error;
+      };
+      await restartApplicationServer();
+      const unavailableRegistration = await fetch(`${baseUrl}/v1/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(unavailableRegistrationBody),
+      });
+      assert.equal(unavailableRegistration.status, 503);
+      assert.equal(
+        (await unavailableRegistration.json()).error,
+        'verification_delivery_unavailable',
+      );
+
+      applicationOptions.deliverVerification = undefined;
+      await restartApplicationServer();
+      const recoveredRegistration = await fetch(`${baseUrl}/v1/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(unavailableRegistrationBody),
+      });
+      assert.equal(recoveredRegistration.status, 202);
+      assert.deepEqual(await recoveredRegistration.json(), { accepted: true });
+
       const unverifiedLogin = await fetch(`${baseUrl}/v1/auth/login`, {
         method: 'POST',
         headers: {
@@ -9863,6 +9899,32 @@ if (!databaseUrl) {
         (await unsafeFacebookLink.json()).error,
         'social_account_link_requires_reauthentication',
       );
+
+      socialClaims.set('facebook-delivery-unavailable', {
+        provider: 'facebook',
+        subject: 'firebase-facebook-delivery-unavailable',
+        firebaseUserId: 'firebase-user-facebook-delivery-unavailable',
+        email: 'social-delivery-unavailable@example.com',
+        emailVerified: false,
+        displayName: 'Facebook Delivery Unavailable',
+      });
+      applicationOptions.deliverVerification = async () => {
+        const error = new Error('synthetic_social_verification_delivery_unavailable');
+        error.code = 'mail_delivery_failed';
+        throw error;
+      };
+      await restartApplicationServer();
+      const unavailableFacebookRegistration = await socialRequest(
+        'facebook-delivery-unavailable',
+        true,
+      );
+      assert.equal(unavailableFacebookRegistration.status, 503);
+      assert.equal(
+        (await unavailableFacebookRegistration.json()).error,
+        'verification_delivery_unavailable',
+      );
+      applicationOptions.deliverVerification = undefined;
+      await restartApplicationServer();
 
       socialClaims.set('facebook-new', {
         provider: 'facebook',
