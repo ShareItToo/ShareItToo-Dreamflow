@@ -233,6 +233,13 @@ function hasGuestProfile(hierarchy) {
     && namedNodes(hierarchy, 'Konto erstellen').length >= 1;
 }
 
+export function hasEnteredNamedLoginInput(hierarchy, label) {
+  return namedNodes(hierarchy, label).some((tag) => (
+    attribute(tag, 'class') === 'android.widget.EditText'
+    && (attribute(tag, 'text') ?? '').length > 0
+  ));
+}
+
 function hasProtectedChatGate(hierarchy) {
   return hierarchy.includes('Bitte zuerst anmelden')
     && hierarchy.includes('Anmelden')
@@ -339,7 +346,14 @@ export async function restoreSyntheticSession({ commandRunner, adbPath, device, 
     wait,
   });
   inputText(commandRunner, adbPath, device, form, 'E-Mail', nonEmptyString(account.email, 'account.email'));
-  const passwordForm = dumpUi(commandRunner, adbPath, device);
+  const passwordForm = await waitForHierarchy({
+    commandRunner,
+    adbPath,
+    device,
+    predicate: (hierarchy) => hasEnteredNamedLoginInput(hierarchy, 'E-Mail'),
+    wait,
+    attempts: 12,
+  });
   inputText(commandRunner, adbPath, device, passwordForm, 'Passwort', nonEmptyString(account.password, 'account.password'));
   if (isAndroidSoftwareKeyboardShown(
     adb(commandRunner, adbPath, device, ['shell', 'dumpsys', 'input_method']),
@@ -351,9 +365,11 @@ export async function restoreSyntheticSession({ commandRunner, adbPath, device, 
     commandRunner,
     adbPath,
     device,
-    predicate: (hierarchy) => namedNodes(hierarchy, 'Anmelden').some(
-      (tag) => attribute(tag, 'clickable') === 'true' && attribute(tag, 'enabled') !== 'false',
-    ),
+    predicate: (hierarchy) => hasEnteredNamedLoginInput(hierarchy, 'E-Mail')
+      && hasEnteredNamedLoginInput(hierarchy, 'Passwort')
+      && namedNodes(hierarchy, 'Anmelden').some(
+        (tag) => attribute(tag, 'clickable') === 'true' && attribute(tag, 'enabled') !== 'false',
+      ),
     wait,
     attempts: 12,
   });

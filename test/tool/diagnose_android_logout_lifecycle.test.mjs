@@ -2,10 +2,22 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  hasEnteredNamedLoginInput,
   isAndroidSoftwareKeyboardShown,
   isV52ForegroundPushPopup,
   sendOppositeRoleMessage,
 } from '../../tool/diagnose_android_logout_lifecycle.mjs';
+
+test('login restoration requires populated editable fields rather than static labels', () => {
+  const emailInput = '<node class="android.widget.EditText" hint="E-Mail" text="synthetic@example.invalid" />';
+  const emptyPassword = '<node class="android.widget.EditText" hint="Passwort" text="" />';
+  const populatedPassword = '<node class="android.widget.EditText" hint="Passwort" text="••••••••" />';
+  const staticLabel = '<node class="android.widget.TextView" text="Passwort" />';
+  assert.equal(hasEnteredNamedLoginInput(emailInput, 'E-Mail'), true);
+  assert.equal(hasEnteredNamedLoginInput(emptyPassword, 'Passwort'), false);
+  assert.equal(hasEnteredNamedLoginInput(populatedPassword, 'Passwort'), true);
+  assert.equal(hasEnteredNamedLoginInput(staticLabel, 'Passwort'), false);
+});
 
 test('dismisses login input only for an exact visible Android software keyboard', () => {
   assert.equal(isAndroidSoftwareKeyboardShown(
