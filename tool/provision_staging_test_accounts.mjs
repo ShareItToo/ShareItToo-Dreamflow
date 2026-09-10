@@ -98,6 +98,55 @@ async function defaultRegister(account) {
   return { accepted: response.status === 202, status: response.status };
 }
 
+async function defaultVerifyEmailLinkedAccount(account, { fetchImpl = globalThis.fetch } = {}) {
+  if (typeof fetchImpl !== 'function') fail('The Staging verification transport is invalid.');
+  let refreshToken = null;
+  try {
+    const login = await fetchImpl(`${stagingApiBaseUrl}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+      },
+      body: JSON.stringify({ email: account.email, password: account.password }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (login.status !== 200) return { verified: false, status: login.status };
+    const session = await login.json();
+    if (typeof session?.accessToken !== 'string' || session.accessToken.length < 20
+        || typeof session?.refreshToken !== 'string' || session.refreshToken.length < 20) {
+      return { verified: false, status: login.status };
+    }
+    refreshToken = session.refreshToken;
+    const me = await fetchImpl(`${stagingApiBaseUrl}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${session.accessToken}`,
+        'Cache-Control': 'no-store',
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (me.status !== 200) return { verified: false, status: me.status };
+    const identity = await me.json();
+    return {
+      verified: String(identity?.user?.email ?? '').toLowerCase() === account.email.toLowerCase(),
+      status: me.status,
+    };
+  } finally {
+    if (refreshToken !== null) {
+      const logout = await fetchImpl(`${stagingApiBaseUrl}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+        },
+        body: JSON.stringify({ refreshToken }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (logout.status !== 204) fail('Staging verification-session cleanup failed.');
+    }
+  }
+}
+
 export async function provisionSyntheticAccounts({
   baseEmail,
   vaultRoot = resolve(
@@ -245,9 +294,92 @@ export function recordSyntheticAccountVerification({
   });
 }
 
+export async function verifyEmailLinkedSyntheticAccounts({
+  runId,
+  vaultRoot = resolve(
+    homedir(),
+    'Library',
+    'Application Support',
+    'ShareItToo',
+    'qa',
+    'staging-accounts',
+  ),
+  verifiedAt = new Date(),
+  fetchImpl = globalThis.fetch,
+  verify = null,
+} = {}) {
+  if (!/^[a-z0-9-]{8,48}$/.test(runId ?? '')) fail('The staging test run ID is invalid.');
+  if (!(verifiedAt instanceof Date) || !Number.isFinite(verifiedAt.getTime())) {
+    fail('The staging verification timestamp is invalid.');
+  }
+  if (typeof fetchImpl !== 'function') fail('The Staging verification transport is invalid.');
+  if (verify !== null && typeof verify !== 'function') fail('The Staging verification function is invalid.');
+  const verifier = verify ?? ((account) => defaultVerifyEmailLinkedAccount(account, { fetchImpl }));
+  const safeVaultRoot = outsideRepository(vaultRoot, 'The staging account vault');
+  const vaultPath = privateInputFile(
+    resolve(safeVaultRoot, runId, 'accounts.json'),
+    'The staging account vault file',
+  );
+  let vault;
+  try {
+    vault = JSON.parse(readFileSync(vaultPath, 'utf8'));
+  } catch {
+    fail('The staging account vault file is invalid.');
+  }
+  if (vault?.schemaVersion !== 1
+      || vault?.kind !== 'sit-staging-synthetic-account-vault'
+      || vault?.runId !== runId
+      || vault?.status !== 'registration-accepted-pending-verification'
+      || !Array.isArray(vault?.accounts)
+      || vault.accounts.length !== roles.length
+      || !vault.accounts.every((account, index) => (
+        account?.role === roles[index].role
+          && account?.registrationStatus === 'accepted'
+          && account?.verificationStatus === 'pending'
+          && typeof account?.email === 'string'
+          && typeof account?.password === 'string'
+      ))) {
+    fail('The staging account vault is not pending exact e-mail verification.');
+  }
+  for (const account of vault.accounts) {
+    let result;
+    try {
+      result = await verifier(account);
+    } catch {
+      fail(`Staging e-mail verification could not be confirmed for the ${account.role} role.`);
+    }
+    if (result?.verified !== true || result.status !== 200) {
+      fail(`Staging e-mail verification is not confirmed for the ${account.role} role.`);
+    }
+  }
+  for (const account of vault.accounts) {
+    account.verificationStatus = 'email-link-verified';
+    account.verifiedAt = verifiedAt.toISOString();
+  }
+  vault.status = 'email-link-verified-ready-for-login';
+  vault.verificationMethod = 'email-link';
+  privateJson(vaultPath, vault);
+  return Object.freeze({
+    status: vault.status,
+    runId,
+    roles: vault.accounts.map((account) => Object.freeze({
+      role: account.role,
+      registrationStatus: account.registrationStatus,
+      verificationStatus: account.verificationStatus,
+    })),
+    serverVerified: true,
+    verificationSessionsCleaned: true,
+    vaultReady: true,
+    containsSecrets: false,
+    containsEmailAddresses: false,
+  });
+}
+
 function parseArguments(values) {
   let mailboxFile = null;
   let vaultRoot = null;
+  let runId = null;
+  let verifyEmailLinks = false;
   for (let index = 0; index < values.length; index += 1) {
     if (values[index] === '--mailbox-file') {
       mailboxFile = values[index + 1] ?? fail('--mailbox-file requires a path.');
@@ -255,16 +387,35 @@ function parseArguments(values) {
     } else if (values[index] === '--vault-root') {
       vaultRoot = values[index + 1] ?? fail('--vault-root requires a path.');
       index += 1;
+    } else if (values[index] === '--run-id') {
+      runId = values[index + 1] ?? fail('--run-id requires a value.');
+      index += 1;
+    } else if (values[index] === '--verify-email-links') {
+      verifyEmailLinks = true;
     } else {
       fail(`Unknown argument: ${values[index]}`);
     }
   }
-  if (!mailboxFile) fail('--mailbox-file is required so the mailbox is not exposed in the process list.');
-  return { mailboxFile, vaultRoot };
+  if (verifyEmailLinks) {
+    if (mailboxFile !== null || !runId) {
+      fail('--verify-email-links requires only --run-id and an optional --vault-root.');
+    }
+  } else if (!mailboxFile || runId !== null) {
+    fail('--mailbox-file is required so the mailbox is not exposed in the process list.');
+  }
+  return { mailboxFile, vaultRoot, runId, verifyEmailLinks };
 }
 
 async function run() {
   const args = parseArguments(process.argv.slice(2));
+  if (args.verifyEmailLinks) {
+    const result = await verifyEmailLinkedSyntheticAccounts({
+      runId: args.runId,
+      ...(args.vaultRoot ? { vaultRoot: resolve(args.vaultRoot) } : {}),
+    });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
   const result = await provisionSyntheticAccounts({
     baseEmail: readFileSync(privateInputFile(args.mailboxFile, 'The mailbox input file'), 'utf8'),
     ...(args.vaultRoot ? { vaultRoot: resolve(args.vaultRoot) } : {}),

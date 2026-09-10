@@ -8,6 +8,7 @@ import {
   provisionSyntheticAccounts,
   recordSyntheticAccountVerification,
   stagingRegistrationPayload,
+  verifyEmailLinkedSyntheticAccounts,
 } from '../../tool/provision_staging_test_accounts.mjs';
 import { createTestTempTracker } from './test_temp_fixtures.mjs';
 
@@ -162,4 +163,100 @@ test('records fixture verification without exposing the private accounts', async
   ));
   assert.equal(vault.verificationMethod, 'isolated-staging-fixture');
   assert.equal(vault.accounts.every((entry) => entry.verifiedAt === '2026-08-10T09:35:00.000Z'), true);
+});
+
+test('promotes e-mail verification only after both roles are server-verified', async () => {
+  const vaultRoot = tempFixtures.makeSync('sit-staging-account-email-link-');
+  const provisioned = await provisionSyntheticAccounts({
+    baseEmail: 'walid@example.com',
+    vaultRoot,
+    now: fixedNow,
+    random: deterministicRandom,
+    register: async () => ({ accepted: true, status: 202 }),
+  });
+  const calls = [];
+  const verified = await verifyEmailLinkedSyntheticAccounts({
+    runId: provisioned.runId,
+    vaultRoot,
+    verifiedAt: new Date('2026-08-10T09:35:00.000Z'),
+    verify: async (account) => {
+      calls.push(account.role);
+      return { verified: true, status: 200 };
+    },
+  });
+  assert.equal(verified.status, 'email-link-verified-ready-for-login');
+  assert.equal(verified.serverVerified, true);
+  assert.equal(verified.verificationSessionsCleaned, true);
+  assert.deepEqual(calls, ['owner', 'renter']);
+  assert.equal(JSON.stringify(verified).includes('walid@example.com'), false);
+  const vault = JSON.parse(readFileSync(
+    resolve(vaultRoot, provisioned.runId, 'accounts.json'),
+    'utf8',
+  ));
+  assert.equal(vault.verificationMethod, 'email-link');
+  assert.equal(vault.accounts.every((entry) => entry.verificationStatus === 'email-link-verified'), true);
+});
+
+test('proves each verified principal and revokes the short-lived verification session', async () => {
+  const vaultRoot = tempFixtures.makeSync('sit-staging-account-server-verification-');
+  const provisioned = await provisionSyntheticAccounts({
+    baseEmail: 'walid@example.com',
+    vaultRoot,
+    now: fixedNow,
+    random: deterministicRandom,
+    register: async () => ({ accepted: true, status: 202 }),
+  });
+  const calls = [];
+  let activeEmail = null;
+  const verified = await verifyEmailLinkedSyntheticAccounts({
+    runId: provisioned.runId,
+    vaultRoot,
+    verifiedAt: new Date('2026-08-10T09:35:00.000Z'),
+    fetchImpl: async (url, options = {}) => {
+      const path = new URL(url).pathname.replace('/api/v1', '');
+      calls.push(path);
+      if (path === '/auth/login') {
+        activeEmail = JSON.parse(options.body).email;
+        return new Response(JSON.stringify({
+          accessToken: 'a'.repeat(24),
+          refreshToken: 'r'.repeat(24),
+        }), { status: 200 });
+      }
+      if (path === '/auth/me') return new Response(JSON.stringify({ user: { email: activeEmail } }), { status: 200 });
+      if (path === '/auth/logout') return new Response(null, { status: 204 });
+      return new Response(null, { status: 404 });
+    },
+  });
+  assert.equal(verified.serverVerified, true);
+  assert.equal(verified.verificationSessionsCleaned, true);
+  assert.deepEqual(calls, [
+    '/auth/login', '/auth/me', '/auth/logout',
+    '/auth/login', '/auth/me', '/auth/logout',
+  ]);
+});
+
+test('does not promote either role when a server verification is incomplete', async () => {
+  const vaultRoot = tempFixtures.makeSync('sit-staging-account-email-link-refusal-');
+  const provisioned = await provisionSyntheticAccounts({
+    baseEmail: 'walid@example.com',
+    vaultRoot,
+    now: fixedNow,
+    random: deterministicRandom,
+    register: async () => ({ accepted: true, status: 202 }),
+  });
+  let calls = 0;
+  await assert.rejects(
+    verifyEmailLinkedSyntheticAccounts({
+      runId: provisioned.runId,
+      vaultRoot,
+      verify: async () => ({ verified: ++calls === 1, status: calls === 1 ? 200 : 403 }),
+    }),
+    /renter role/,
+  );
+  const vault = JSON.parse(readFileSync(
+    resolve(vaultRoot, provisioned.runId, 'accounts.json'),
+    'utf8',
+  ));
+  assert.equal(vault.status, 'registration-accepted-pending-verification');
+  assert.equal(vault.accounts.every((entry) => entry.verificationStatus === 'pending'), true);
 });

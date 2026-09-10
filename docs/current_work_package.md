@@ -17,9 +17,12 @@ credentials and mailbox aliases exist only in a new owner-only local vault
 outside Git; the runner emitted no address, password or link. Their normal
 e-mail confirmations are now the only owner action required before a Pixel
 login may start. Delivery and link confirmation are not inferred from a `202`
-registration response. The known two noncritical overdue Support follow-ups
-remain a separate legitimate staff-action hold and are not changed by this
-package. Independent provider-readiness audits continue. See
+registration response: the follow-up verifier must establish a separate
+server-confirmed session for each exact role, read back its principal and
+immediately revoke that short-lived session before it promotes the private
+vault. The known two noncritical overdue Support follow-ups remain a separate
+legitimate staff-action hold and are not changed by this package. Independent
+provider-readiness audits continue. See
 `docs/operations/WP101_FRESH_TWO_ROLE_SOURCE_READINESS_2026-09-10.md`.
 
 # Previous Work Package: WP100 Current-Candidate Pixel Read-Only Surface Closure — COMPLETE

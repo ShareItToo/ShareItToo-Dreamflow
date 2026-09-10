@@ -31,13 +31,24 @@ mailbox. Only after both genuine confirmations are recorded may the isolated
 source be used for a Pixel login. Existing sessions and all retired Journey
 material remain untouched.
 
+The follow-up verifier is deliberately stronger than a local manual marker:
+for each pending role, it establishes one bounded Staging session, verifies
+that `/auth/me` resolves to that exact private principal, and revokes the
+session through the normal logout route before the local vault can be promoted
+to `email-link-verified-ready-for-login`. A failed role, mismatched principal,
+transport error or failed session cleanup leaves both roles pending. It never
+prints or persists a token outside the existing owner-only vault.
+
 Codex must never read, copy, print or commit either address, password or link.
 The known two noncritical overdue Support follow-ups are a separate
 staff-owned operational hold. This package neither identifies nor changes them.
 
 ## Verification
 
-The focused audit tests cover: an all-retired safe directory, refusal of an
+The focused vault audit covers: an all-retired safe directory, refusal of an
 active source even with correct file permissions, and refusal of a symlinked
-entry. All three pass. This work is local-only; it makes no Pixel, Staging,
-mail, provider, Store, OnePlus or Production change.
+entry. The registration verifier tests cover successful two-role promotion,
+exact principal readback plus per-role logout, and refusal that leaves both
+roles pending. All focused checks pass. The verifier is prepared but has not
+run against the new private accounts; it awaits the owner-controlled mail
+confirmations. No Pixel, provider, Store, OnePlus or Production state changed.
