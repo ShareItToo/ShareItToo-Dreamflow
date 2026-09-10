@@ -23,6 +23,7 @@ import {
   parseAndroidRuntimePermissionSnapshot,
   parseDeclaredAndroidPermissions,
   parseWp46Arguments,
+  normalizeWp46LifecycleCheckpoint,
   preflightAuthenticatedPermissionLifecycle,
   profileMenuScrollArguments,
   readWp46PermissionJournal,
@@ -143,6 +144,7 @@ function fakeOperations({ failOn = null } = {}) {
     calls,
     operations: {
       readState: async () => structuredClone(current),
+      checkpoint: async (checkpoint) => calls.push(`checkpoint:${checkpoint.group}:${checkpoint.phase}`),
       setGroupGranted: async (group, granted) => {
         calls.push(`set:${group.id}:${granted}`);
         for (const permission of group.permissions) {
@@ -172,7 +174,12 @@ test('exercises deny and allow with authenticated restarts, then restores exactl
   assert.equal(result.observations.location.deniedRestartPassed, true);
   assert.equal(result.observations.notifications.allowedRestartPassed, true);
   assert.equal(fake.calls.filter((value) => value === 'restart').length, 7);
-  assert.equal(fake.calls.at(-2), 'restore');
+  const restoreIndex = fake.calls.lastIndexOf('restore');
+  assert.ok(restoreIndex > 0);
+  assert.equal(fake.calls[restoreIndex - 1], 'checkpoint:lifecycle:before-restore');
+  assert.equal(fake.calls[restoreIndex + 1], 'checkpoint:lifecycle:after-restore');
+  assert.equal(fake.calls.includes('checkpoint:camera:before-denied-restart'), true);
+  assert.equal(fake.calls.includes('checkpoint:lifecycle:before-final-restart'), true);
 });
 
 test('restores exact state even when an intermediate authenticated restart fails', async () => {
@@ -342,6 +349,7 @@ test('records a restored but unproven lifecycle failure without claiming success
   assert.equal(result.status, 'restored-after-failed-run');
   assert.equal(result.lifecycleResult, 'unproven');
   assert.equal(result.failureClass, 'other-fail-closed-diagnostic-error');
+  assert.equal(result.lastLifecycleCheckpoint, null);
   assert.equal(result.recoveryRequired, false);
   assert.deepEqual(result.restoredPermissionState, originalPermissionState);
   assert.equal(JSON.stringify(result).includes('/Users/'), false);
@@ -354,6 +362,18 @@ test('records a restored but unproven lifecycle failure without claiming success
       candidate: {}, originalPermissionState, failureClass: 'untrusted raw error',
     }),
     /restoration class is not safe/u,
+  );
+});
+
+test('accepts only fixed non-private lifecycle checkpoints', () => {
+  assert.deepEqual(
+    normalizeWp46LifecycleCheckpoint({ group: 'camera', phase: 'before-denied-restart' }),
+    { group: 'camera', phase: 'before-denied-restart' },
+  );
+  assert.equal(normalizeWp46LifecycleCheckpoint(null), null);
+  assert.throws(
+    () => normalizeWp46LifecycleCheckpoint({ group: 'camera', phase: 'private-ui-text' }),
+    /checkpoint is not safe/u,
   );
 });
 

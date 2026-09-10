@@ -208,21 +208,51 @@ function assertGroupGranted(snapshot, group, granted) {
   }
 }
 
+export function normalizeWp46LifecycleCheckpoint(checkpoint) {
+  if (checkpoint === null || checkpoint === undefined) return null;
+  const group = checkpoint?.group;
+  const phase = checkpoint?.phase;
+  if (!['camera', 'location', 'notifications', 'lifecycle'].includes(group)
+      || ![
+        'before-deny', 'denied-state-verified', 'before-denied-restart',
+        'denied-restart-verified', 'before-allow', 'allowed-state-verified',
+        'before-allowed-restart', 'allowed-restart-verified', 'before-settings',
+        'before-restore', 'after-restore', 'before-final-restart',
+      ].includes(phase)) {
+    fail('The WP46 lifecycle checkpoint is not safe.');
+  }
+  return Object.freeze({ group, phase });
+}
+
+async function recordLifecycleCheckpoint(operations, checkpoint) {
+  if (typeof operations.checkpoint === 'function') {
+    await operations.checkpoint(normalizeWp46LifecycleCheckpoint(checkpoint));
+  }
+}
+
 export async function exercisePermissionGroups({ operations }) {
   const before = await operations.readState();
   const observations = {};
   let primaryFailure = null;
   try {
     for (const group of permissionGroups) {
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'before-deny' });
       await operations.setGroupGranted(group, false);
       const denied = await operations.readState();
       assertGroupGranted(denied, group, false);
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'denied-state-verified' });
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'before-denied-restart' });
       await operations.restartAuthenticated();
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'denied-restart-verified' });
 
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'before-allow' });
       await operations.setGroupGranted(group, true);
       const allowed = await operations.readState();
       assertGroupGranted(allowed, group, true);
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'allowed-state-verified' });
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'before-allowed-restart' });
       await operations.restartAuthenticated();
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'allowed-restart-verified' });
 
       observations[group.id] = {
         denied: true,
@@ -231,16 +261,20 @@ export async function exercisePermissionGroups({ operations }) {
         allowedRestartPassed: true,
       };
     }
+    await recordLifecycleCheckpoint(operations, { group: 'lifecycle', phase: 'before-settings' });
     await operations.openReadOnlySettings();
   } catch (error) {
     primaryFailure = error;
   } finally {
+    await recordLifecycleCheckpoint(operations, { group: 'lifecycle', phase: 'before-restore' });
     await operations.restoreState(before);
+    await recordLifecycleCheckpoint(operations, { group: 'lifecycle', phase: 'after-restore' });
   }
   const after = await operations.readState();
   if (!exact(after, before)) {
     fail('The exact Android permission and app-op snapshot was not restored.');
   }
+  await recordLifecycleCheckpoint(operations, { group: 'lifecycle', phase: 'before-final-restart' });
   await operations.restartAuthenticated();
   if (primaryFailure !== null) throw primaryFailure;
   return Object.freeze({ before, after, observations });
@@ -647,6 +681,7 @@ export function buildWp46FailedAfterRestorationJournal({
   candidate,
   originalPermissionState,
   failureClass = 'other-fail-closed-diagnostic-error',
+  lastLifecycleCheckpoint = null,
 }) {
   if (candidate === undefined || originalPermissionState === undefined) {
     fail('The failed WP46 restoration record is incomplete.');
@@ -655,6 +690,7 @@ export function buildWp46FailedAfterRestorationJournal({
     fail('The failed WP46 restoration class is not safe.');
   }
   const restoredPermissionState = normalizePermissionState(originalPermissionState);
+  const normalizedCheckpoint = normalizeWp46LifecycleCheckpoint(lastLifecycleCheckpoint);
   return Object.freeze({
     schemaVersion: 1,
     status: 'restored-after-failed-run',
@@ -664,6 +700,7 @@ export function buildWp46FailedAfterRestorationJournal({
     recoveryRequired: false,
     lifecycleResult: 'unproven',
     failureClass,
+    lastLifecycleCheckpoint: normalizedCheckpoint,
     containsCredentials: false,
     containsAccountIdentity: false,
     containsRawDeviceIdentifier: false,
@@ -805,7 +842,8 @@ async function run() {
     args.adbPath,
     device,
   );
-  atomicJournal(args.journalPath, {
+  let lastLifecycleCheckpoint = null;
+  const persistInProgress = () => atomicJournal(args.journalPath, {
     schemaVersion: 1,
     status: 'in-progress',
     candidate: {
@@ -814,15 +852,21 @@ async function run() {
       commit: candidate.commit,
     },
     originalPermissionState,
+    lastLifecycleCheckpoint,
     containsCredentials: false,
     containsAccountIdentity: false,
     containsRawDeviceIdentifier: false,
   });
+  persistInProgress();
 
   let lifecycle;
   try {
     lifecycle = await exercisePermissionGroups({
       operations: {
+        checkpoint: async (checkpoint) => {
+          lastLifecycleCheckpoint = checkpoint;
+          persistInProgress();
+        },
         readState: async () => readPhysicalPermissionState(
           defaultCurrentHeadAndroidCommandRunner,
           args.adbPath,
@@ -866,6 +910,7 @@ async function run() {
         },
         originalPermissionState,
         failureClass: classifyWp46FailClosedDiagnosticError(error),
+        lastLifecycleCheckpoint,
       }));
     }
     throw error;

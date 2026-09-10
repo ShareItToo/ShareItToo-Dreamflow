@@ -1,5 +1,13 @@
 # ShareItToo Current State
 
+## WP92 Pixel permission matrix and final restart
+
+The exact Pixel candidate passed deny/allow/authenticated-restart checks for
+camera, location and notifications, then restored all four runtime states
+exactly. The final in-cycle restart alone lacked navigation; an independent
+normal navigation pass afterwards does not erase that gap. See
+`docs/operations/WP92_PIXEL_PERMISSION_MATRIX_FINAL_RESTART_2026-09-10.md`.
+
 ## WP91 Pixel cold-start stability
 
 The exact Pixel candidate passed three separate non-mutating cold starts with

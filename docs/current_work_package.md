@@ -1,4 +1,15 @@
-# Current Work Package: WP91 Pixel Cold-Start Stability
+# Current Work Package: WP92 Pixel Permission Matrix and Final Restart
+
+WP92 is **PARTIAL WITH THE COMPLETE THREE-GROUP MATRIX AND EXACT RESTORATION
+PROVEN**. Camera, location and notifications each passed deny/allow/restart;
+the read-only settings surface and exact four-permission recovery also passed.
+The private checkpoint reached `lifecycle-before-final-restart`, whose
+navigation was absent. An independent normal navigation pass afterwards does
+not accept that final in-cycle restart. No account, business, provider, Store,
+Production, OnePlus or merge state changed. See
+`docs/operations/WP92_PIXEL_PERMISSION_MATRIX_FINAL_RESTART_2026-09-10.md`.
+
+# Previous Work Package: WP91 Pixel Cold-Start Stability
 
 WP91 is **COMPLETE FOR THREE BOUNDED READ-ONLY COLD STARTS**. The exact Pixel
 candidate's explicit archive was validated and three controlled launches each

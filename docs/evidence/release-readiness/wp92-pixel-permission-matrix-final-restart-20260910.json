@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp92-pixel-permission-matrix-final-restart",
+  "status": "partial-complete-permission-matrix-restored-final-restart-unproven",
+  "capturedOn": "2026-09-10",
+  "workPackage": "WP92",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090905",
+    "sourceHead": "e1c182ea496f013989863155c13bfda649255a7e",
+    "releaseChannel": "internal",
+    "delivery": "direct-apk",
+    "apkSha256": "1864b9c17e7813df887fb1e9961a1746665b4b57b6dbd831526e1c3a2f58eaa6",
+    "physicalPixelPackageMatched": true
+  },
+  "preflight": {
+    "candidateArchiveValidated": true,
+    "cleanCandidateSourceMatched": true,
+    "manifestPermissionsExact": true,
+    "physicalDeviceReachable": true,
+    "deviceAlreadyUnlocked": true,
+    "authenticatedNavigationBeforeTransitions": true
+  },
+  "permissionMatrix": {
+    "camera": "deny-allow-restarts-passed",
+    "location": "deny-allow-restarts-passed",
+    "notifications": "deny-allow-restarts-passed",
+    "readOnlyAppPermissionSettings": "passed",
+    "permissionStateRestoredExactly": true,
+    "runtimePermissionsChecked": 4,
+    "fullLifecycleAccepted": false
+  },
+  "finalRestart": {
+    "lastSafeCheckpoint": "lifecycle-before-final-restart",
+    "result": "navigation-bottom-navigation-absent",
+    "rootCauseProven": false,
+    "independentPostRecoveryFiveDestinationNavigation": "passed"
+  },
+  "safetyRecovery": {
+    "ownerOnlyJournalMode": "0600",
+    "journalStatus": "restored-after-failed-run",
+    "recoveryRequired": false,
+    "lifecycleResult": "unproven",
+    "credentialsRead": false,
+    "accountIdentityRead": false,
+    "rawDeviceIdentifierRecorded": false
+  },
+  "scope": {
+    "candidateWideAcceptance": false,
+    "postRestorationNormalStartExplainsFinalRestart": false,
+    "nextSafeAction": "Collect a bounded, non-private foreground-process classification at the final restart boundary before any further permission lifecycle replay."
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "firebaseConsoleChanged": false,
+    "paymentProviderChanged": false,
+    "realMoneyUsed": false,
+    "externalListingAiEnabled": false,
+    "publicRegistrationChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "credentialsRecorded": false,
+    "containsAccountIdentity": false,
+    "containsTokens": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}
