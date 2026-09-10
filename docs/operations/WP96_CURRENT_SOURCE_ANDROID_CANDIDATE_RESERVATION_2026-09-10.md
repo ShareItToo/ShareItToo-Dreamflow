@@ -16,6 +16,15 @@ last physically evidenced Pixel APK, `1.0.0+2026090905`, and is not reused.
 - Local release preflight confirms Android Firebase configuration and the
   canonical signing relationship without disclosing configuration values.
 
+## Version-bound privacy inventory
+
+The reservation changes only the Android build identity and its matching
+client-build fallback. The reviewed privacy inventory therefore refreshes the
+two corresponding source hashes. Its content, `draft` state,
+`approvalAllowed: false` and every external/legal gate are unchanged. The
+complete privacy test suite verifies both the refreshed baseline and its
+negative cases.
+
 ## Boundaries
 
 This reservation does not create an artifact or make any external change. In
