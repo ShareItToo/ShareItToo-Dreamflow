@@ -1,5 +1,14 @@
 # ShareItToo Current State
 
+## WP95 startup session-future stability
+
+Current source retains one pending startup session read for the mounted app
+root, preventing harmless parent/inherited-widget rebuilds from restarting
+authentication loading. A dedicated Widget test proves this without a timing
+allowance. This corrects only future source; it does not promote the installed
+Pixel candidate or the distinct WP93 physical boundary. See
+`docs/operations/WP95_STARTUP_SESSION_FUTURE_STABILITY_2026-09-10.md`.
+
 ## WP94 Pixel permission/startup source boundary
 
 The exact installed candidate has no automatic startup permission request or

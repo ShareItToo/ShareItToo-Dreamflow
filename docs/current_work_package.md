@@ -1,4 +1,13 @@
-# Current Work Package: WP94 Pixel Permission/Startup Source Boundary
+# Current Work Package: WP95 Startup Session-Future Stability
+
+WP95 is **COMPLETE FOR CURRENT SOURCE ONLY**. `AppRoot` owns one pending
+session future for its mounted lifetime, so an unrelated rebuild cannot restart
+authentication loading or replace the startup surface. A dedicated Widget test
+proves this deterministically. It is not evidence about the earlier direct-APK
+Pixel candidate and does not reopen WP93's stopped physical permission replay.
+See `docs/operations/WP95_STARTUP_SESSION_FUTURE_STABILITY_2026-09-10.md`.
+
+# Previous Work Package: WP94 Pixel Permission/Startup Source Boundary
 
 WP94 is **COMPLETE AS A SOURCE-LEVEL BOUNDARY AUDIT**. The clean exact-candidate
 source has no automatic startup permission request and no native activity

@@ -916,6 +916,7 @@ node tool/validate_wp93_pixel_final_restart_foreground_boundary.mjs
 node --check tool/validate_wp94_pixel_permission_startup_source_boundary.mjs
 node --test test/tool/validate_wp94_pixel_permission_startup_source_boundary.test.mjs
 node tool/validate_wp94_pixel_permission_startup_source_boundary.mjs
+flutter test --concurrency=1 test/main_startup_session_stability_test.dart
 node --check tool/validate_wp83_current_candidate_pixel_auth_session_replay.mjs
 node --test test/tool/validate_wp83_current_candidate_pixel_auth_session_replay.test.mjs
 node tool/validate_wp83_current_candidate_pixel_auth_session_replay.mjs

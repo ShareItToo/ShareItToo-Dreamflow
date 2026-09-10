@@ -142,11 +142,35 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class AppRoot extends StatelessWidget {
-  const AppRoot({super.key});
+class AppRoot extends StatefulWidget {
+  /// Tests may provide a held session read to prove that a harmless rebuild
+  /// cannot restart startup authentication.
+  @visibleForTesting
+  final Future<AuthSession?> Function()? sessionLoader;
+
+  const AppRoot({super.key, this.sessionLoader});
+
+  @override
+  State<AppRoot> createState() => _AppRootState();
+}
+
+class _AppRootState extends State<AppRoot> {
 
   // Preview-only: auto sign-in with a local demo user in developer builds.
   static const bool _enableDeveloperPreviewDemoAuth = true;
+
+  late final Future<AuthSession?> _sessionFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    // The future is intentionally owned by this state, not recreated by
+    // FutureBuilder on every inherited-widget rebuild. Restarting a pending
+    // session read could otherwise put the visible startup surface back into
+    // loading without a new process or principal transition.
+    _sessionFuture = widget.sessionLoader?.call() ??
+        _loadSessionWithPreviewFallback();
+  }
 
   Future<AuthSession?> _loadSessionWithPreviewFallback() async {
     try {
@@ -202,7 +226,7 @@ class AppRoot extends StatelessWidget {
     }
 
     return FutureBuilder<AuthSession?>(
-      future: _loadSessionWithPreviewFallback(),
+      future: _sessionFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const _StartupBrandLoader();
