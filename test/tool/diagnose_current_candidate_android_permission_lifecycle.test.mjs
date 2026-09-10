@@ -13,6 +13,8 @@ import test from 'node:test';
 
 import {
   assertExactDeclaredAndroidPermissions,
+  buildWp46FailedAfterRestorationJournal,
+  buildRecoveredWp46PermissionJournal,
   buildWp46PermissionEvidence,
   exercisePermissionGroups,
   parseAndroidDisplaySize,
@@ -299,6 +301,52 @@ test('reads the WP46 journal through one owner-only non-symlinked file handle', 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('marks a successfully restored interrupted run as recovered before a new preflight', () => {
+  const originalPermissionState = state({ 'android.permission.POST_NOTIFICATIONS': true });
+  const recovered = buildRecoveredWp46PermissionJournal({
+    status: 'in-progress',
+    candidate: {
+      applicationId: 'com.shareittoo.app',
+      buildNumber: '2026090905',
+      commit: 'e1c182ea496f013989863155c13bfda649255a7e',
+    },
+    originalPermissionState,
+    containsCredentials: false,
+    containsAccountIdentity: false,
+    containsRawDeviceIdentifier: false,
+  });
+  assert.equal(recovered.status, 'recovered-before-new-run');
+  assert.equal(recovered.recoveryRequired, false);
+  assert.equal(recovered.recoveredFromInterruptedRun, true);
+  assert.deepEqual(recovered.restoredPermissionState, originalPermissionState);
+  assert.equal(JSON.stringify(recovered).includes('/Users/'), false);
+  assert.throws(
+    () => buildRecoveredWp46PermissionJournal({ status: 'in-progress' }),
+    /recovery journal is incomplete/u,
+  );
+});
+
+test('records a restored but unproven lifecycle failure without claiming success', () => {
+  const originalPermissionState = state({ 'android.permission.POST_NOTIFICATIONS': true });
+  const result = buildWp46FailedAfterRestorationJournal({
+    candidate: {
+      applicationId: 'com.shareittoo.app',
+      buildNumber: '2026090905',
+      commit: 'e1c182ea496f013989863155c13bfda649255a7e',
+    },
+    originalPermissionState,
+  });
+  assert.equal(result.status, 'restored-after-failed-run');
+  assert.equal(result.lifecycleResult, 'unproven');
+  assert.equal(result.recoveryRequired, false);
+  assert.deepEqual(result.restoredPermissionState, originalPermissionState);
+  assert.equal(JSON.stringify(result).includes('/Users/'), false);
+  assert.throws(
+    () => buildWp46FailedAfterRestorationJournal({}),
+    /restoration record is incomplete/u,
+  );
 });
 
 test('reads the bounded journal bytes from the validated descriptor, never by path', () => {

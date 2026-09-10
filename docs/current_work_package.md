@@ -1,4 +1,16 @@
-# Current Work Package: WP87 Pixel Two-Role Core Journey on Successor Staging
+# Current Work Package: WP88 Pixel Permission-Lifecycle Recovery
+
+WP88 is **PARTIAL WITH A PROVEN SAFE RECOVERY**. The exact Pixel candidate's
+private archive, source, package and four-runtime-permission manifest were
+verified. The authenticated main navigation did not appear deterministically
+after restart, so no full deny/allow/restart acceptance is claimed. Every
+temporary permission state was exactly restored; the owner-only recovery
+journal reports `restored-after-failed-run` with recovery not required. No
+account, business, provider, Store, Production, OnePlus or merge state
+changed. See
+`docs/operations/WP88_PIXEL_PERMISSION_LIFECYCLE_RECOVERY_2026-09-10.md`.
+
+# Previous Work Package: WP87 Pixel Two-Role Core Journey on Successor Staging
 
 WP87 is **COMPLETE FOR THE EXECUTED NON-BINDING PIXEL CORE PATH**. The exact
 Pixel `1.0.0+2026090905` candidate now re-proves owner publication, renter

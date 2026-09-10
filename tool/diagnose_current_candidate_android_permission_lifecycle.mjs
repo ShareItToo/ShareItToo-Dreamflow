@@ -618,6 +618,50 @@ export function readWp46PermissionJournal(path) {
   }
 }
 
+// A prior interrupted run is safe to leave behind only until its original
+// snapshot has been re-applied and verified. Persist that recovery before the
+// next authenticated-preflight: otherwise a harmless preflight failure would
+// keep the journal falsely marked as mutable work in progress forever.
+export function buildRecoveredWp46PermissionJournal(previous) {
+  if (previous?.status !== 'in-progress'
+      || previous?.candidate === undefined
+      || previous?.originalPermissionState === undefined) {
+    fail('The interrupted WP46 recovery journal is incomplete.');
+  }
+  const restoredPermissionState = normalizePermissionState(previous.originalPermissionState);
+  return Object.freeze({
+    schemaVersion: 1,
+    status: 'recovered-before-new-run',
+    candidate: previous.candidate,
+    originalPermissionState: restoredPermissionState,
+    restoredPermissionState,
+    recoveryRequired: false,
+    recoveredFromInterruptedRun: true,
+    containsCredentials: false,
+    containsAccountIdentity: false,
+    containsRawDeviceIdentifier: false,
+  });
+}
+
+export function buildWp46FailedAfterRestorationJournal({ candidate, originalPermissionState }) {
+  if (candidate === undefined || originalPermissionState === undefined) {
+    fail('The failed WP46 restoration record is incomplete.');
+  }
+  const restoredPermissionState = normalizePermissionState(originalPermissionState);
+  return Object.freeze({
+    schemaVersion: 1,
+    status: 'restored-after-failed-run',
+    candidate,
+    originalPermissionState: restoredPermissionState,
+    restoredPermissionState,
+    recoveryRequired: false,
+    lifecycleResult: 'unproven',
+    containsCredentials: false,
+    containsAccountIdentity: false,
+    containsRawDeviceIdentifier: false,
+  });
+}
+
 export function parseWp46Arguments(values) {
   const result = {
     candidateDirectory: null,
@@ -722,6 +766,7 @@ async function run() {
       readPhysicalPermissionState(defaultCurrentHeadAndroidCommandRunner, args.adbPath, device),
       normalizePermissionState(previous.originalPermissionState),
     )) fail('The previous WP46 permission snapshot could not be recovered.');
+    atomicJournal(args.journalPath, buildRecoveredWp46PermissionJournal(previous));
   }
   // Prove that the candidate still has an authenticated profile before the
   // first new permission transition. A fresh e-mail-pending/guest state is a
@@ -752,38 +797,56 @@ async function run() {
     containsRawDeviceIdentifier: false,
   });
 
-  const lifecycle = await exercisePermissionGroups({
-    operations: {
-      readState: async () => readPhysicalPermissionState(
-        defaultCurrentHeadAndroidCommandRunner,
-        args.adbPath,
-        device,
-      ),
-      setGroupGranted: async (group, granted) => setPhysicalGroupGranted(
-        defaultCurrentHeadAndroidCommandRunner,
-        args.adbPath,
-        device,
-        group,
-        granted,
-      ),
-      restartAuthenticated: async () => restartAuthenticated(
-        defaultCurrentHeadAndroidCommandRunner,
-        args.adbPath,
-        device,
-      ),
-      openReadOnlySettings: async () => openReadOnlyPermissionSettings(
-        defaultCurrentHeadAndroidCommandRunner,
-        args.adbPath,
-        device,
-      ),
-      restoreState: async (state) => restorePhysicalPermissionState(
-        defaultCurrentHeadAndroidCommandRunner,
-        args.adbPath,
-        device,
-        state,
-      ),
-    },
-  });
+  let lifecycle;
+  try {
+    lifecycle = await exercisePermissionGroups({
+      operations: {
+        readState: async () => readPhysicalPermissionState(
+          defaultCurrentHeadAndroidCommandRunner,
+          args.adbPath,
+          device,
+        ),
+        setGroupGranted: async (group, granted) => setPhysicalGroupGranted(
+          defaultCurrentHeadAndroidCommandRunner,
+          args.adbPath,
+          device,
+          group,
+          granted,
+        ),
+        restartAuthenticated: async () => restartAuthenticated(
+          defaultCurrentHeadAndroidCommandRunner,
+          args.adbPath,
+          device,
+        ),
+        openReadOnlySettings: async () => openReadOnlyPermissionSettings(
+          defaultCurrentHeadAndroidCommandRunner,
+          args.adbPath,
+          device,
+        ),
+        restoreState: async (state) => restorePhysicalPermissionState(
+          defaultCurrentHeadAndroidCommandRunner,
+          args.adbPath,
+          device,
+          state,
+        ),
+      },
+    });
+  } catch (error) {
+    if (exact(
+      readPhysicalPermissionState(defaultCurrentHeadAndroidCommandRunner, args.adbPath, device),
+      normalizePermissionState(originalPermissionState),
+    )) {
+      atomicJournal(args.journalPath, buildWp46FailedAfterRestorationJournal({
+        candidate: {
+          applicationId: candidate.applicationId,
+          buildNumber: candidate.buildNumber,
+          commit: candidate.commit,
+        },
+        originalPermissionState,
+      }));
+    }
+    throw error;
+  }
   const installedAfter = packageSnapshot(
     defaultCurrentHeadAndroidCommandRunner,
     args.adbPath,

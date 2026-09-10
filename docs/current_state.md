@@ -1,5 +1,15 @@
 # ShareItToo Current State
 
+## WP88 Pixel permission-lifecycle recovery
+
+WP88 confirms that an interrupted exact-candidate Android permission run leaves
+camera, location and notifications exactly restored, while recording the
+result as unproven rather than falsely passed. The authenticated Pixel main
+navigation did not appear deterministically after restart, so the complete
+deny/allow/restart matrix remains open. The recovery journal is owner-only and
+requires no recovery; no account or external state changed. See
+`docs/operations/WP88_PIXEL_PERMISSION_LIFECYCLE_RECOVERY_2026-09-10.md`.
+
 ## WP87 Pixel two-role core journey on successor Staging
 
 The exact Pixel candidate `1.0.0+2026090905` now physically passes owner

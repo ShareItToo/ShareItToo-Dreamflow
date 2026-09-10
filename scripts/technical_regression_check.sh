@@ -895,6 +895,9 @@ node tool/validate_wp86_staging_rollout_pixel_fcm.mjs
 node --check tool/validate_wp87_pixel_two_role_successor_staging.mjs
 node --test test/tool/validate_wp87_pixel_two_role_successor_staging.test.mjs
 node tool/validate_wp87_pixel_two_role_successor_staging.mjs
+node --check tool/validate_wp88_pixel_permission_lifecycle_recovery.mjs
+node --test test/tool/validate_wp88_pixel_permission_lifecycle_recovery.test.mjs
+node tool/validate_wp88_pixel_permission_lifecycle_recovery.mjs
 node --check tool/validate_wp83_current_candidate_pixel_auth_session_replay.mjs
 node --test test/tool/validate_wp83_current_candidate_pixel_auth_session_replay.test.mjs
 node tool/validate_wp83_current_candidate_pixel_auth_session_replay.mjs
