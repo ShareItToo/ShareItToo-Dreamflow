@@ -23,9 +23,15 @@ import {
 import {
   loadCurrentHeadAndroidDeviceCandidate,
 } from './validate_current_head_android_candidate.mjs';
+import {
+  validatePrivateAndroidReleaseArchive,
+} from './validate_current_head_android_release_archive.mjs';
+import {
+  validateCurrentPrivateAndroidCandidate,
+} from './run_n28_current_candidate_pixel_surface_matrix.mjs';
 
 const targetFontScale = 2;
-const navigationChecks = Object.freeze([
+export const largeTextNavigationChecks = Object.freeze([
   Object.freeze({
     label: 'Entdecken',
     requiredAll: [],
@@ -52,9 +58,22 @@ const navigationChecks = Object.freeze([
     requiredAny: [],
   }),
 ]);
+const largeTextNavigationCheckByLabel = new Map(
+  largeTextNavigationChecks.map((check) => [check.label, check]),
+);
 
 function fail(message) {
   throw new Error(message);
+}
+
+function validateLargeTextChecks(checks) {
+  if (!Array.isArray(checks)
+      || checks.length === 0
+      || checks.some((check) => !largeTextNavigationCheckByLabel.has(check?.label))
+      || new Set(checks.map((check) => check.label)).size !== checks.length) {
+    fail('The requested large-text navigation diagnostic scope is invalid.');
+  }
+  return checks.map((check) => largeTextNavigationCheckByLabel.get(check.label));
 }
 
 export function parseAndroidFontScale(value) {
@@ -186,9 +205,11 @@ export async function diagnoseCurrentHeadAndroidLargeTextMainNavigation({
   device,
   deviceSummary,
   candidate,
+  checks = largeTextNavigationChecks,
   capturedAt = new Date().toISOString(),
   wait = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds)),
 }) {
+  const selectedChecks = validateLargeTextChecks(checks);
   assertCurrentHeadAndroidDeviceAlreadyUnlocked(commandRunner, adbPath, device);
   const installed = verifyCurrentHeadAndroidInstalledCandidate(
     commandRunner,
@@ -207,7 +228,7 @@ export async function diagnoseCurrentHeadAndroidLargeTextMainNavigation({
     }
     try {
       launchCurrentHeadAndroidCandidate(commandRunner, adbPath, device);
-      for (const check of navigationChecks) {
+      for (const check of selectedChecks) {
         await openAndVerifyLargeTextNavigation({
           commandRunner,
           adbPath,
@@ -228,10 +249,13 @@ export async function diagnoseCurrentHeadAndroidLargeTextMainNavigation({
     );
   }
 
+  const complete = selectedChecks.length === largeTextNavigationChecks.length;
   return {
     schemaVersion: 1,
     kind: 'android-current-head-authenticated-large-text-main-navigation-diagnostic',
-    status: 'passed-bounded-authenticated-large-text-main-navigation-diagnostic',
+    status: complete
+      ? 'passed-bounded-authenticated-large-text-main-navigation-diagnostic'
+      : 'passed-bounded-authenticated-large-text-main-navigation-subset',
     capturedAt,
     candidate: {
       applicationId: candidate.applicationId,
@@ -260,7 +284,7 @@ export async function diagnoseCurrentHeadAndroidLargeTextMainNavigation({
       restoredFontScale,
       exactPreviousFontScaleRestored: true,
     },
-    tests: Object.fromEntries(navigationChecks.map((check) => [
+    tests: Object.fromEntries(selectedChecks.map((check) => [
       check.label,
       {
         status: 'passed',
@@ -270,7 +294,9 @@ export async function diagnoseCurrentHeadAndroidLargeTextMainNavigation({
     boundaries: {
       directDiagnosticOnly: true,
       storeInstallationGateSatisfied: false,
-      authenticatedMainNavigationAtLargeTextPassed: true,
+      authenticatedMainNavigationAtLargeTextPassed: complete,
+      completeLargeTextNavigationMatrixPassed: complete,
+      ...(complete ? {} : { largeTextDestinationsTested: selectedChecks.map((check) => check.label) }),
       manualVisualLargeTextReviewPassed: false,
       manualTalkBackTraversalPassed: false,
       talkBackSettingModified: false,
@@ -294,23 +320,38 @@ export async function diagnoseCurrentHeadAndroidLargeTextMainNavigation({
 export function parseLargeTextMainNavigationArguments(values) {
   let currentHead = false;
   let adbPath = 'adb';
+  let candidateDirectory = null;
+  let onlyLabel = null;
   for (let index = 0; index < values.length; index += 1) {
     if (values[index] === '--current-head') {
       currentHead = true;
     } else if (values[index] === '--adb') {
       adbPath = values[index + 1] ?? fail('--adb requires a path.');
       index += 1;
+    } else if (values[index] === '--candidate-dir') {
+      candidateDirectory = values[index + 1] ?? fail('--candidate-dir requires a path.');
+      index += 1;
+    } else if (values[index] === '--only') {
+      onlyLabel = values[index + 1] ?? fail('--only requires one exact navigation label.');
+      if (!largeTextNavigationCheckByLabel.has(onlyLabel)) {
+        fail('--only must name one supported large-text navigation label.');
+      }
+      index += 1;
     } else {
       fail(`Unknown argument: ${values[index]}`);
     }
   }
   if (!currentHead) fail('The large-text diagnostic requires --current-head.');
-  return { currentHead, adbPath };
+  return { currentHead, adbPath, candidateDirectory, onlyLabel };
 }
 
 async function run() {
   const args = parseLargeTextMainNavigationArguments(process.argv.slice(2));
-  const candidate = await loadCurrentHeadAndroidDeviceCandidate();
+  const candidate = args.candidateDirectory === null
+    ? await loadCurrentHeadAndroidDeviceCandidate()
+    : validateCurrentPrivateAndroidCandidate(await validatePrivateAndroidReleaseArchive({
+      candidateDirectory: args.candidateDirectory,
+    }));
   const devices = parseAdbDevices(
     defaultCurrentHeadAndroidCommandRunner(args.adbPath, ['devices', '-l']),
   );
@@ -321,6 +362,9 @@ async function run() {
     device,
     deviceSummary,
     candidate,
+    ...(args.onlyLabel === null
+      ? {}
+      : { checks: [largeTextNavigationCheckByLabel.get(args.onlyLabel)] }),
   });
   process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
 }

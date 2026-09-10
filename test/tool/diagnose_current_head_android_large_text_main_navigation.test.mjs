@@ -152,6 +152,23 @@ test('proves five authenticated destinations at 200 percent and restores the exa
   assert.equal(JSON.stringify(evidence).includes('PRIVATE-SERIAL'), false);
 });
 
+test('accepts one large-text destination only as an explicit subset', async () => {
+  const runner = fakeRunner();
+  const evidence = await diagnoseCurrentHeadAndroidLargeTextMainNavigation({
+    commandRunner: runner,
+    device: { serial: 'PRIVATE-SERIAL', state: 'device', attributes: {} },
+    deviceSummary,
+    candidate,
+    checks: [{ label: 'Nachrichten' }],
+    capturedAt: '2026-08-23T13:00:00.000Z',
+    wait: async () => {},
+  });
+  assert.equal(evidence.status, 'passed-bounded-authenticated-large-text-main-navigation-subset');
+  assert.deepEqual(Object.keys(evidence.tests), ['Nachrichten']);
+  assert.equal(evidence.boundaries.completeLargeTextNavigationMatrixPassed, false);
+  assert.deepEqual(runner.settingsWrites, ['2', '0.85']);
+});
+
 test('refuses a locked phone before modifying the system font scale', async () => {
   const runner = fakeRunner({ locked: true });
   await assert.rejects(() => diagnose(runner), /never enters a passcode/u);
@@ -185,14 +202,27 @@ test('parses bounded Android font scales and explicit current-head arguments', (
   assert.deepEqual(parseLargeTextMainNavigationArguments(['--current-head']), {
     currentHead: true,
     adbPath: 'adb',
+    candidateDirectory: null,
+    onlyLabel: null,
   });
   assert.deepEqual(
     parseLargeTextMainNavigationArguments(['--current-head', '--adb', '/safe/adb']),
-    { currentHead: true, adbPath: '/safe/adb' },
+    { currentHead: true, adbPath: '/safe/adb', candidateDirectory: null, onlyLabel: null },
   );
   assert.throws(() => parseLargeTextMainNavigationArguments([]), /requires --current-head/u);
   assert.throws(
-    () => parseLargeTextMainNavigationArguments(['--current-head', '--candidate-dir', 'x']),
-    /Unknown argument/u,
+    () => parseLargeTextMainNavigationArguments(['--current-head', '--only', 'Unbekannt']),
+    /must name one supported/u,
+  );
+  assert.deepEqual(
+    parseLargeTextMainNavigationArguments([
+      '--current-head', '--candidate-dir', 'private-candidate', '--only', 'Entdecken',
+    ]),
+    {
+      currentHead: true,
+      adbPath: 'adb',
+      candidateDirectory: 'private-candidate',
+      onlyLabel: 'Entdecken',
+    },
   );
 });
