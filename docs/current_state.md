@@ -1,5 +1,21 @@
 # ShareItToo Current State
 
+## WP84 Staging Compose override persistence
+
+WP84 fixes a release-harness reproducibility defect locally: a completed
+read-only Staging observation found that one of five active Compose metadata
+references was a retired temporary image override. The running runtime identity
+and named data volumes remain correct, but exact recreation from persistent
+remote files is not yet proved. The harness now retains owner-restricted,
+non-symlinked deployment and verified-rollback overrides after success; failed
+or unfinished attempts still clean up. The full local technical regression at
+`ed8c973ad8dd70968a7797d40e2e3b68ec16cfe8` passes. No deployment or other
+external state changed. Exact-head GitHub Regression `34438480359` and CodeQL
+`34438480362` pass, with PR #7 Draft/open/clean/unmerged and zero
+merge-reference Code Scanning alerts. A separately authorized exact-commit
+Staging rollout and read-only proof remain required. See
+`docs/operations/WP84_STAGING_COMPOSE_OVERRIDE_PERSISTENCE_2026-09-10.md`.
+
 ## WP83 current-candidate Pixel auth and session replay
 
 WP83 has physically re-proven on the installed Internal/Staging

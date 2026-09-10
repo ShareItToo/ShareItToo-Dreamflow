@@ -1,4 +1,23 @@
-# Current Work Package: WP83 Current-Candidate Pixel Auth and Session Replay
+# Current Work Package: WP84 Staging Compose Override Persistence
+
+WP84 is **COMPLETE LOCALLY; THE STAGING ROLLOUT AND READBACK REMAIN HELD**.
+A dedicated credential-free, configuration-content-free observation completed
+the WP82 remote contract and found one retired temporary Compose image override
+among five active configuration references. The running runtime identity and
+data volumes remain correct, but the configuration cannot be exactly recreated
+from persistent remote files while that override is absent. The release harness
+now retains owner-restricted deployment and verified-rollback overrides in an
+authoritative non-symlink directory, while unfinished attempts still clean up.
+The full local technical regression passes at
+`ed8c973ad8dd70968a7797d40e2e3b68ec16cfe8`. No Staging deployment, remote
+mutation, provider, payment, Store, device, Production or merge state changed.
+Exact-head GitHub Regression `34438480359` and CodeQL `34438480362` also pass;
+PR #7 remains Draft/open/clean/unmerged with zero merge-reference Code
+Scanning alerts. A separately authorized exact-commit rollout plus read-only
+proof is required before declaring remote reproducibility closed. See
+`docs/operations/WP84_STAGING_COMPOSE_OVERRIDE_PERSISTENCE_2026-09-10.md`.
+
+# Previous Work Package: WP83 Current-Candidate Pixel Auth and Session Replay
 
 WP83 is **PARTIAL; THE ONLY ACTIVE EXTERNAL STEP IS OWNER-CONTROLLED E-MAIL
 LINK CONFIRMATION**. The exact installed Internal/Staging candidate
