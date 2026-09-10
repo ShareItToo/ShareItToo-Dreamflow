@@ -2,11 +2,13 @@
 
 ## WP96 current-source Android candidate reservation
 
-Version `1.0.0+2026091001` is reserved for a new Android Internal/Staging
-candidate from the current source. It is strictly newer than the historical
-Pixel candidate and has not been built, uploaded, installed or used as runtime
-evidence yet. The preceding WP95 source is green in GitHub Regression, CodeQL
-and clean-checkout reproducibility.
+The owner-only Android Internal/Staging candidate `1.0.0+2026091001` from
+`f30dfb281e8a0e84bb4c041218b8872fc8a45670` is built and independently bound
+by AAB/APK hashes, canonical signing certificate, package identity, SDK values,
+privacy scan and ZIP validation. It is strictly newer than the historical
+Pixel candidate but is not uploaded, installed or runtime evidence. Exact-head
+GitHub Regression and CodeQL remain pending; all Store, payment, provider and
+legal gates remain unchanged.
 
 ## WP95 startup session-future stability
 

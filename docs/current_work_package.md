@@ -1,11 +1,13 @@
 # Current Work Package: WP96 Current-Source Android Candidate Reservation
 
-WP96 reserves `1.0.0+2026091001`, a strictly higher Android version than the
-historical, physically evidenced Pixel candidate `1.0.0+2026090905`. It is a
-source-bound reservation only until a signed artifact is built, structurally
-verified, archived and separately installed on the Pixel. It neither changes
-Staging, Google Play, a tester list nor any device. WP95's GitHub Regression,
-CodeQL and clean-checkout verification are all green before this reservation.
+WP96 has built and independently verified the private signed Android
+Internal/Staging candidate `1.0.0+2026091001` from
+`f30dfb281e8a0e84bb4c041218b8872fc8a45670`. It is strictly newer than the
+historical, physically evidenced Pixel candidate `1.0.0+2026090905`; its AAB,
+APK, privacy scan, canonical certificate, package identity and ZIP structures
+are bound in the owner-only archive. It is neither uploaded, installed nor
+runtime evidence. Staging, Google Play, tester lists and devices are unchanged.
+The exact-head GitHub Regression/CodeQL gate remains pending.
 
 # Previous Work Package: WP95 Startup Session-Future Stability
 
