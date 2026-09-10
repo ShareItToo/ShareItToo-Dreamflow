@@ -15,16 +15,25 @@ insufficiently fresh and never emits a filename, address, password or token.
 
 ## Current boundary
 
-No fresh registration or e-mail message has been initiated, so no owner action
-is pending yet. In particular, no verification link exists that an owner could
-legitimately confirm. The next external sequence may begin only after a new,
-owner-controlled Staging test inbox target is deliberately selected. It must
-then create two new synthetic registrations, confirm their two normal e-mail
-links in the owner-controlled mailbox, and store only the resulting credentials
-in a new owner-only private source vault outside Git.
+One owner-only mailbox selector outside the repository was structurally
+validated without retaining its path or value. It generated a valid new alias
+for each role. At `2026-09-10T13:40:20Z`, exactly two new isolated Staging
+registrations were accepted through the normal public route under private run
+reference `20260910t134020z-44a5c983`: one owner and one renter. A new local
+owner-only vault holds the two aliases and generated credentials outside Git;
+the registration runner returned only role status and did not emit an address,
+password, verification URL or local path.
+
+Acceptance (`202`) proves that the server accepted both registration requests;
+it does not prove delivery or confirmation of either e-mail. The next required
+owner action is to open each normal verification link in the owner-controlled
+mailbox. Only after both genuine confirmations are recorded may the isolated
+source be used for a Pixel login. Existing sessions and all retired Journey
+material remain untouched.
 
 Codex must never read, copy, print or commit either address, password or link.
-The existing source and all retired Journey material remain untouched.
+The known two noncritical overdue Support follow-ups are a separate
+staff-owned operational hold. This package neither identifies nor changes them.
 
 ## Verification
 

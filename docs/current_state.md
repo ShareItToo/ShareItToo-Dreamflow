@@ -9,9 +9,14 @@ owner-only, non-symlinked and structurally valid. The audit never emits a path,
 address, password, token or other credential material, and its source-ready
 state is rejected rather than reused as fresh evidence.
 
-No fresh registration, e-mail send, confirmation link, Pixel account action or
-Staging mutation has occurred. A distinct, new owner-confirmed e-mail source is
-still required before functional owner/renter flows may begin. See
+Two new isolated Staging registrations (owner and renter) have now been
+accepted through the normal public registration path. Their aliases and
+generated credentials exist only in a new private local vault outside Git.
+Neither delivery nor confirmation of their normal e-mail links is inferred
+from the accepted registration responses. Both genuine links must be confirmed
+in the owner-controlled mailbox before a functional Pixel login begins. The
+known two noncritical overdue Support follow-ups remain a distinct staff-owned
+operational hold and were not changed. See
 `docs/operations/WP101_FRESH_TWO_ROLE_SOURCE_READINESS_2026-09-10.md`.
 
 ## WP100 Pixel read-only surface closure — complete
