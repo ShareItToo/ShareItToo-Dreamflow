@@ -7,9 +7,12 @@ complete nine-surface account/privacy/support read-only set through independent
 state-anchored diagnostics. Payment and payout remain visibly held in Staging;
 the privacy export section and Support entry were visible without either action
 being invoked. This adds no account, device-service, provider, Store, Staging,
-OnePlus or Production mutation. Physical legal routes, 200-percent text
+OnePlus or Production mutation. The same exact candidate also passes all seven
+informational legal routes through independent root-anchored read-only
+diagnostics; professional legal approval remains open. 200-percent text
 navigation and light/dark/background evidence remain separate WP100 work. See
 `docs/operations/WP100_PIXEL_ACCOUNT_PRIVACY_SUPPORT_READ_ONLY_2026-09-10.md`.
+See also `docs/operations/WP100_PIXEL_LEGAL_ROUTES_READ_ONLY_2026-09-10.md`.
 
 ## WP99 Staging authoritative-source reconciliation — complete
 

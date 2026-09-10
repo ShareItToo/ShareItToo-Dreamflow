@@ -10,8 +10,12 @@ The account/privacy/support portion is complete through nine independently
 state-anchored Pixel diagnostics; payment and payout retain their visible
 Staging hold, and neither data export nor support submission was invoked. See
 `docs/operations/WP100_PIXEL_ACCOUNT_PRIVACY_SUPPORT_READ_ONLY_2026-09-10.md`.
-The active remainder is limited to physical legal, large-text and
-theme/background evidence with exact restoration.
+The physical seven-document legal set is also complete with independent
+candidate-bound root-anchored diagnostics; that does not promote the separate
+professional legal approval gate. See
+`docs/operations/WP100_PIXEL_LEGAL_ROUTES_READ_ONLY_2026-09-10.md`. The active
+remainder is limited to large-text and theme/background evidence with exact
+restoration.
 
 # Previous Work Package: WP99 Staging Authoritative-Source Reconciliation — COMPLETE
 
