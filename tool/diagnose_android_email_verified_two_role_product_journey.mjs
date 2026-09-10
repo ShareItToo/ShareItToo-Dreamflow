@@ -67,6 +67,28 @@ export async function retryIdempotentPixelState(operation) {
   throw lastFailure;
 }
 
+export async function restoreExactRoleWithBoundedRetries({
+  operation,
+  wait = async () => {},
+  attempts = 3,
+} = {}) {
+  if (typeof operation !== 'function' || typeof wait !== 'function'
+      || !Number.isInteger(attempts) || attempts < 1 || attempts > 3) {
+    fail('The exact-role restoration retry contract is invalid.');
+  }
+  let lastFailure = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      if (await operation() === true) return true;
+      lastFailure = new Error('The exact role was not restored.');
+    } catch (error) {
+      lastFailure = error;
+    }
+    if (attempt + 1 < attempts) await wait(750);
+  }
+  throw lastFailure;
+}
+
 function pointForNode(node, label) {
   const bounds = /\[(\d+),(\d+)\]\[(\d+),(\d+)\]/u.exec(
     currentHeadAndroidNodeAttribute(node, 'bounds') ?? '',
@@ -582,38 +604,62 @@ export async function runAndroidEmailVerifiedTwoRoleProductJourney({
   let retirement = null;
   let restored = false;
   let primaryFailure = null;
+  let primaryFailurePhase = null;
   let cleanupFailure = null;
+  let cleanupFailurePhase = null;
+  let activePhase = 'prepare';
   try {
     prepared = await operations.prepare();
+    activePhase = 'owner-publish-ui';
     publish = await operations.publishOwnerDraft(prepared);
+    activePhase = 'server-publish-verify';
     published = await operations.verifyPublished(prepared);
+    activePhase = 'simulation';
     simulation = await operations.simulate(prepared);
+    activePhase = 'fcm';
     controlledFcm = await operations.verifyFcm(prepared);
+    activePhase = 'owner-surface';
     owner = await operations.verifyOwner(prepared);
+    activePhase = 'renter-surface';
     renter = await operations.verifyRenter(prepared);
   } catch (error) {
     primaryFailure = error;
+    primaryFailurePhase = activePhase;
   } finally {
     if (prepared !== null) {
       try {
         retirement = await operations.retire(prepared);
       } catch (error) {
         cleanupFailure = error;
+        cleanupFailurePhase = 'retire';
       }
     }
     try {
       restored = await operations.restoreOwner() === true;
     } catch (error) {
       cleanupFailure ??= error;
+      cleanupFailurePhase ??= 'restore-owner';
     }
   }
   if (primaryFailure !== null) {
     if (cleanupFailure !== null) {
-      fail(`${sanitizedFailure(primaryFailure)} Cleanup also failed safely: ${sanitizedFailure(cleanupFailure)}.`);
+      fail(
+        `Product-journey phase ${primaryFailurePhase} failed safely: `
+        + `${sanitizedFailure(primaryFailure)} Cleanup also failed safely in `
+        + `${cleanupFailurePhase}: ${sanitizedFailure(cleanupFailure)}.`,
+      );
     }
-    throw primaryFailure;
+    fail(
+      `Product-journey phase ${primaryFailurePhase} failed safely: `
+      + `${sanitizedFailure(primaryFailure)}.`,
+    );
   }
-  if (cleanupFailure !== null) throw cleanupFailure;
+  if (cleanupFailure !== null) {
+    fail(
+      `Product-journey cleanup phase ${cleanupFailurePhase} failed safely: `
+      + `${sanitizedFailure(cleanupFailure)}.`,
+    );
+  }
   if (publish?.status !== 'pixel-owner-draft-publish-submitted'
       || published?.status !== 'pixel-owner-publish-server-confirmed'
       || simulation?.status !== 'email-verified-two-role-simulation-ready-for-pixel-review'
@@ -759,19 +805,28 @@ async function main() {
       vaultFile, commandRunner, adbPath, device, wait,
     }),
     retire: ({ vaultFile }) => retireStagingEmailVerifiedTwoRoleJourney({ vaultFile }),
-    restoreOwner: async () => {
-      const source = readEmailVerifiedJourneyVault(sourceVaultFile).vault;
-      const bound = await bindExactRole({
-        vault: source,
-        role: 'owner',
-        commandRunner,
-        adbPath,
-        device,
-        wait,
-      });
-      return currentHeadAndroidNamedNodes(bound.hierarchy, bound.account.displayName).length === 1
-        && currentHeadAndroidNamedNodes(bound.hierarchy, bound.other.displayName).length === 0;
-    },
+    restoreOwner: () => restoreExactRoleWithBoundedRetries({
+      wait,
+      operation: async () => {
+        const source = readEmailVerifiedJourneyVault(sourceVaultFile).vault;
+        const bound = await bindExactRole({
+          vault: source,
+          role: 'owner',
+          commandRunner,
+          adbPath,
+          device,
+          wait,
+        });
+        return currentHeadAndroidNamedNodes(
+          bound.hierarchy,
+          bound.account.displayName,
+        ).length === 1
+          && currentHeadAndroidNamedNodes(
+            bound.hierarchy,
+            bound.other.displayName,
+          ).length === 0;
+      },
+    }),
   };
   const evidence = await runAndroidEmailVerifiedTwoRoleProductJourney({
     candidate,

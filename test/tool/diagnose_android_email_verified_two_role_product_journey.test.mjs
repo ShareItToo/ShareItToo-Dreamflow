@@ -6,6 +6,7 @@ import {
   renterBookingChatSurfaceClassification,
   renterBookingChatVisible,
   renterNonBindingDetailVisible,
+  restoreExactRoleWithBoundedRetries,
   retryIdempotentPixelState,
   runAndroidEmailVerifiedTwoRoleProductJourney,
 } from '../../tool/diagnose_android_email_verified_two_role_product_journey.mjs';
@@ -129,6 +130,24 @@ test('retries an idempotent Pixel state transition exactly once', async () => {
   assert.equal(attempts, 2);
 });
 
+test('restores an exact role with at most three deterministically checked attempts', async () => {
+  let attempts = 0;
+  let waits = 0;
+  const restored = await restoreExactRoleWithBoundedRetries({
+    operation: async () => {
+      attempts += 1;
+      return attempts === 3;
+    },
+    wait: async (milliseconds) => {
+      assert.equal(milliseconds, 750);
+      waits += 1;
+    },
+  });
+  assert.equal(restored, true);
+  assert.equal(attempts, 3);
+  assert.equal(waits, 2);
+});
+
 test('closes the Pixel email-verified two-role journey and records only sanitized truth', async () => {
   const calls = [];
   const result = await runAndroidEmailVerifiedTwoRoleProductJourney({
@@ -220,7 +239,7 @@ test('retires prepared state and restores the owner after a product-surface fail
       deviceSummary: { model: 'Pixel 7 Pro', physical: true },
       operations,
     }),
-    /renter surface failed safely/u,
+    /Product-journey phase renter-surface failed safely: The renter surface failed safely/u,
   );
   assert.deepEqual(calls.slice(-2), ['retire', 'restore-owner']);
 });
@@ -242,7 +261,7 @@ test('reports a fail-closed cleanup error if both the journey and retirement fai
       deviceSummary: { model: 'Pixel 7 Pro', physical: true },
       operations,
     }),
-    /Cleanup also failed safely/u,
+    /Cleanup also failed safely in retire/u,
   );
   assert.equal(calls.at(-1), 'restore-owner');
 });
