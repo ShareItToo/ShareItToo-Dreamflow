@@ -902,16 +902,51 @@ async function waitForPasswordInteractionOwnerReady({
   fail('The sanitized password form did not return after owner readiness was confirmed.');
 }
 
-async function findPasswordAction({ commandRunner, adbPath, device, wait, label }) {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
-    if (currentHeadAndroidNamedNodes(hierarchy, label).length > 0) return hierarchy;
-    currentHeadAndroidAdb(commandRunner, adbPath, device, [
-      'shell', 'input', 'swipe', '720', '2450', '720', '700', '450',
-    ]);
+export async function findPasswordAction({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+  label,
+  dumpUi = dumpCurrentHeadAndroidUi,
+  swipe = currentHeadAndroidAdb,
+}) {
+  // The section heading and its action label can render before the semantic
+  // action is enabled. Wait for a genuinely interactable node on the initial
+  // viewport before scrolling, otherwise a one-way search can hide an action
+  // which is about to become available above the fold.
+  const hasInteractableAction = (hierarchy) => {
+    try {
+      selectNamedPasswordActionNode(hierarchy, label);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const hierarchy = dumpUi(commandRunner, adbPath, device);
+    if (hasInteractableAction(hierarchy)) return hierarchy;
     await wait(400);
   }
-  fail(`The sanitized ${label} action is unavailable after bounded scrolling.`);
+
+  const directions = [
+    ['2450', '700'],
+    ['700', '2450'],
+  ];
+  for (const [startY, endY] of directions) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const hierarchy = dumpUi(commandRunner, adbPath, device);
+      if (hasInteractableAction(hierarchy)) return hierarchy;
+      swipe(commandRunner, adbPath, device, [
+        'shell', 'input', 'swipe', '720', startY, '720', endY, '450',
+      ]);
+      await wait(400);
+    }
+  }
+  const finalHierarchy = dumpUi(commandRunner, adbPath, device);
+  if (hasInteractableAction(finalHierarchy)) return finalHierarchy;
+  fail(`The sanitized ${label} action is unavailable after bounded viewport search; `
+    + `final classification: ${classifyPasswordChangeSurface(finalHierarchy)}.`);
 }
 
 async function openPasswordChangeSurface({ commandRunner, adbPath, device, wait }) {

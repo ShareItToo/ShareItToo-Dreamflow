@@ -21,6 +21,7 @@ import {
   classifyPasswordChangeSurface,
   completePixelPasswordChange,
   executePixelPasswordChange,
+  findPasswordAction,
   isPasswordChangeLoginSurface,
   isPasswordInteractionOwnerReadySurface,
   passwordSuccessResultRequiresExplicitDismissal,
@@ -179,6 +180,85 @@ test('password navigation selects the final same-label action when semantics are
     selectNamedPasswordActionNode(`${first}${clickable}`, 'Passwort ändern'),
     clickable,
   );
+});
+
+test('password navigation waits for delayed action rows before any viewport movement', async () => {
+  const action = '<node text="Passwort ändern" enabled="true" bounds="[10,300][500,420]" />';
+  const snapshots = ['', '', action];
+  const waits = [];
+  let swipes = 0;
+  const result = await findPasswordAction({
+    commandRunner: () => '',
+    adbPath: 'adb',
+    device: { serial: 'synthetic-device' },
+    label: 'Passwort ändern',
+    dumpUi: () => snapshots.shift() ?? action,
+    swipe: () => {
+      swipes += 1;
+    },
+    wait: async (milliseconds) => waits.push(milliseconds),
+  });
+  assert.equal(result, action);
+  assert.deepEqual(waits, [400, 400]);
+  assert.equal(swipes, 0);
+});
+
+test('password navigation waits for a visible action to become interactable before movement', async () => {
+  const disabled = '<node text="Passwort ändern" enabled="false" bounds="[10,300][500,420]" />';
+  const enabled = '<node text="Passwort ändern" enabled="true" bounds="[10,300][500,420]" />';
+  const snapshots = [disabled, enabled];
+  const waits = [];
+  let swipes = 0;
+  const result = await findPasswordAction({
+    commandRunner: () => '',
+    adbPath: 'adb',
+    device: { serial: 'synthetic-device' },
+    label: 'Passwort ändern',
+    dumpUi: () => snapshots.shift() ?? enabled,
+    swipe: () => {
+      swipes += 1;
+    },
+    wait: async (milliseconds) => waits.push(milliseconds),
+  });
+  assert.equal(result, enabled);
+  assert.deepEqual(waits, [400]);
+  assert.equal(swipes, 0);
+});
+
+test('password navigation searches both bounded viewport directions after the initial settle', async () => {
+  const action = '<node content-desc="Kontoeinstellungen" enabled="true" bounds="[10,300][500,420]" />';
+  const snapshots = Array.from({ length: 11 }, () => '').concat(action);
+  const swipes = [];
+  const result = await findPasswordAction({
+    commandRunner: () => '',
+    adbPath: 'adb',
+    device: { serial: 'synthetic-device' },
+    label: 'Kontoeinstellungen',
+    dumpUi: () => snapshots.shift() ?? action,
+    swipe: (_commandRunner, _adbPath, _device, args) => swipes.push(args),
+    wait: async () => {},
+  });
+  assert.equal(result, action);
+  assert.equal(swipes.length, 5);
+  assert.deepEqual(swipes.slice(0, 4).map((args) => [args[4], args[6]]), [
+    ['2450', '700'],
+    ['2450', '700'],
+    ['2450', '700'],
+    ['2450', '700'],
+  ]);
+  assert.deepEqual([swipes[4][4], swipes[4][6]], ['700', '2450']);
+});
+
+test('password navigation failure exposes only a sanitized route classification', async () => {
+  await assert.rejects(findPasswordAction({
+    commandRunner: () => '',
+    adbPath: 'adb',
+    device: { serial: 'synthetic-device' },
+    label: 'Passwort ändern',
+    dumpUi: () => '<node text="private@example.invalid" />',
+    swipe: () => {},
+    wait: async () => {},
+  }), /Passwort ändern action is unavailable after bounded viewport search; final classification: unclassified\./u);
 });
 
 test('password success toast does not require a nonexistent dismissal action', () => {
