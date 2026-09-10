@@ -6,6 +6,13 @@ account/support, large-text and theme/accessibility evidence. It keeps the
 unknown existing authenticated session read-only. No listing, booking, message,
 account, provider, Store or remote source action is within this scope.
 
+The account/privacy/support portion is complete through nine independently
+state-anchored Pixel diagnostics; payment and payout retain their visible
+Staging hold, and neither data export nor support submission was invoked. See
+`docs/operations/WP100_PIXEL_ACCOUNT_PRIVACY_SUPPORT_READ_ONLY_2026-09-10.md`.
+The active remainder is limited to physical legal, large-text and
+theme/background evidence with exact restoration.
+
 # Previous Work Package: WP99 Staging Authoritative-Source Reconciliation — COMPLETE
 
 The Staging API/Database runtime, release record, healthy state, rollback image,
