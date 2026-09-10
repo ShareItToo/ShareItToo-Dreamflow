@@ -16,6 +16,9 @@ task_previous_version='unknown'
 task_previous_build_time='unknown'
 task_rollback_override=''
 task_deployment_override=''
+task_rollback_override_retained=false
+task_deployment_override_retained=false
+task_runtime_override_dir=''
 task_ready_payload_file=''
 task_release_dir="${RELEASE_LOG_DIR:-/docker/shareittoo/releases}"
 task_staging_pilot_id="${SIT_STAGING_PILOT_ID:-}"
@@ -26,15 +29,35 @@ task_staging_stripe_enabled=false
 task_rollback_compose_args=()
 
 cleanup() {
-  if [[ -n "$task_rollback_override" ]]; then
+  if [[ -n "$task_rollback_override" && "$task_rollback_override_retained" != true ]]; then
     rm -f -- "$task_rollback_override"
   fi
-  if [[ -n "$task_deployment_override" ]]; then
+  if [[ -n "$task_deployment_override" && "$task_deployment_override_retained" != true ]]; then
     rm -f -- "$task_deployment_override"
   fi
   if [[ -n "$task_ready_payload_file" ]]; then
     rm -f -- "$task_ready_payload_file"
   fi
+}
+
+prepare_runtime_override_dir() {
+  task_runtime_override_dir="$task_backend_root/.runtime-overrides"
+  if [[ -e "$task_runtime_override_dir" &&
+        ( ! -d "$task_runtime_override_dir" || -L "$task_runtime_override_dir" ) ]]; then
+    echo "Runtime override directory must be a regular directory." >&2
+    exit 1
+  fi
+  install -d -m 700 "$task_runtime_override_dir"
+  if [[ ! -d "$task_runtime_override_dir" || -L "$task_runtime_override_dir" ]]; then
+    echo "Runtime override directory is unsafe." >&2
+    exit 1
+  fi
+  chmod 700 "$task_runtime_override_dir"
+}
+
+create_runtime_override() {
+  local task_override_kind="$1"
+  mktemp "$task_runtime_override_dir/${task_environment}-${task_commit:0:12}-${task_override_kind}-XXXXXX.yml"
 }
 
 rollback_failed_deployment() {
@@ -43,7 +66,8 @@ rollback_failed_deployment() {
   set +e
 
   if [[ "$task_deployment_started" == true && -n "$task_previous_image_id" ]]; then
-    task_rollback_override="$(mktemp)"
+    task_rollback_override="$(create_runtime_override rollback)"
+    chmod 600 "$task_rollback_override"
     printf 'services:\n  api:\n    image: "%s"\n' \
       "$task_previous_image_id" > "$task_rollback_override"
     if [[ "$task_staging_listing_ai_enabled" == true ||
@@ -82,6 +106,7 @@ rollback_failed_deployment() {
           "$task_rollback_health_status" == 0 &&
           "$task_restored_health" == healthy &&
           "$task_restored_image_id" == "$task_previous_image_id" ]]; then
+      task_rollback_override_retained=true
       install -d -m 700 "$task_release_dir"
       task_rollback_timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
       task_rollback_report="$task_release_dir/${task_environment}-rollback-${task_rollback_timestamp}-${task_commit:0:12}.json"
@@ -190,7 +215,9 @@ if [[ "$task_image_commit" != "$task_commit" ]]; then
   exit 1
 fi
 
-task_deployment_override="$(mktemp)"
+prepare_runtime_override_dir
+task_deployment_override="$(create_runtime_override deployment)"
+chmod 600 "$task_deployment_override"
 printf 'services:\n  api:\n    image: "%s"\n' \
   "$task_image" > "$task_deployment_override"
 
@@ -392,6 +419,7 @@ printf '{"environment":"%s","commit":"%s","previousCommit":"%s","version":"%s","
   "$task_staging_listing_ai_enabled" "$task_staging_stripe_enabled" \
   "$task_staging_pilot_id" "$task_staging_readiness" > "$task_report"
 chmod 600 "$task_report"
+task_deployment_override_retained=true
 task_deployment_started=false
 
 printf 'Deployment verified: %s %s\nEvidence: %s\n' \
