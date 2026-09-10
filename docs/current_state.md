@@ -1,6 +1,6 @@
 # ShareItToo Current State
 
-## WP100 Pixel account, privacy and support read-only closure — partial
+## WP100 Pixel read-only surface closure — complete
 
 The exact `1.0.0+2026091001` Internal/Staging Pixel candidate now passes the
 complete nine-surface account/privacy/support read-only set through independent
@@ -13,13 +13,16 @@ diagnostics; professional legal approval remains open. 200-percent text
 navigation now also passes independently for all five main destinations with
 exact system-setting restoration. System dark/light and all five background
 choices also passed private capture with exact restoration, leaving normal
-Entdecken visible. WP100's physical scope is complete pending its final
-technical/CI closure; it does not close any legal, provider, payment, Store or
-Production gate. See
+Entdecken visible. The complete local technical regression and the exact-head
+GitHub Regression and CodeQL readback are now successful at
+`5c8633d657f44883d2f7f2b414d62eb41b0afa18`. WP100 does not close any legal,
+provider, payment, Store or Production gate. See
 `docs/operations/WP100_PIXEL_ACCOUNT_PRIVACY_SUPPORT_READ_ONLY_2026-09-10.md`.
 See also `docs/operations/WP100_PIXEL_LEGAL_ROUTES_READ_ONLY_2026-09-10.md`.
 See also `docs/operations/WP100_PIXEL_LARGE_TEXT_NAVIGATION_2026-09-10.md`.
 See also `docs/operations/WP100_PIXEL_THEME_BACKGROUNDS_2026-09-10.md`.
+The package-level closure is recorded in
+`docs/operations/WP100_PIXEL_READ_ONLY_SURFACE_CLOSURE_2026-09-10.md`.
 
 ## WP99 Staging authoritative-source reconciliation — complete
 

@@ -1,4 +1,4 @@
-# Current Work Package: WP100 Current-Candidate Pixel Read-Only Surface Closure — IN PROGRESS
+# Current Work Package: WP100 Current-Candidate Pixel Read-Only Surface Closure — COMPLETE
 
 With the authoritative Staging source and the exact Pixel candidate now
 reconciled, WP100 closes the remaining non-mutating Pixel surfaces: legal,
@@ -22,9 +22,16 @@ exact restoration. See
 `docs/operations/WP100_PIXEL_LARGE_TEXT_NAVIGATION_2026-09-10.md` and
 `docs/operations/WP100_PIXEL_THEME_BACKGROUNDS_2026-09-10.md`.
 
-WP100 is now **PENDING FINAL TECHNICAL AND GITHUB CLOSURE ONLY**. No next work
-package begins until its full technical regression and current-head GitHub
-Regression/CodeQL status are recorded.
+WP100 is **COMPLETE**. The full local technical regression passed, and exact-head
+GitHub Regression `34476738557` plus CodeQL `34476738558` succeeded at
+`5c8633d657f44883d2f7f2b414d62eb41b0afa18`. Its package-level, no-mutation
+closure is recorded in
+`docs/operations/WP100_PIXEL_READ_ONLY_SURFACE_CLOSURE_2026-09-10.md`.
+
+The next package must begin with a new decision overview. It must not reuse the
+unknown authenticated Pixel session for a functional two-role flow: a fresh,
+explicitly email-verified synthetic source remains a prerequisite for listing,
+booking, messaging and notification mutation evidence.
 
 # Previous Work Package: WP99 Staging Authoritative-Source Reconciliation — COMPLETE
 
