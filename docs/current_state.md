@@ -1,5 +1,16 @@
 # ShareItToo Current State
 
+## WP85 current-candidate gate reconciliation
+
+The complete current-candidate matrix now binds WP83 and WP84 to the exact
+Internal/Staging Pixel candidate without promoting predecessor evidence or the
+later source tree. The result is 12 PASS, 11 PARTIAL and 9 OPEN. Exact
+password/session proof is stronger, but e-mail confirmation/recovery remains
+owner-controlled; Staging release reproducibility is corrected locally but
+still awaits controlled rollout/readback; Stripe still requires official
+owner reauthentication. No runtime or external state changed. See
+`docs/operations/WP85_CURRENT_CANDIDATE_GATE_RECONCILIATION_2026-09-10.md`.
+
 ## WP84 Staging Compose override persistence
 
 WP84 fixes a release-harness reproducibility defect locally: a completed

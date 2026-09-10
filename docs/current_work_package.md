@@ -1,4 +1,17 @@
-# Current Work Package: WP84 Staging Compose Override Persistence
+# Current Work Package: WP85 Current-Candidate Gate Reconciliation
+
+WP85 is **COMPLETE AS EVIDENCE RECONCILIATION; OWNER AND EXTERNAL GATES STAY
+OPEN**. It source-binds the latest exact Pixel auth/session evidence (WP83),
+the local Staging release-harness correction (WP84) and the enduring Stripe
+re-auth boundary into the complete 32-item current-candidate matrix. The
+result remains 12 PASS, 11 PARTIAL and 9 OPEN; no claim is promoted merely
+because source code, a predecessor candidate or a safe simulation exists. The
+smallest next action is owner-controlled normal Staging e-mail confirmation;
+then the exact Pixel login/cold-start/recovery replay can continue. No runtime,
+provider, payment, Store, device, Staging, Production or merge state changed.
+See `docs/operations/WP85_CURRENT_CANDIDATE_GATE_RECONCILIATION_2026-09-10.md`.
+
+# Previous Work Package: WP84 Staging Compose Override Persistence
 
 WP84 is **COMPLETE LOCALLY; THE STAGING ROLLOUT AND READBACK REMAIN HELD**.
 A dedicated credential-free, configuration-content-free observation completed

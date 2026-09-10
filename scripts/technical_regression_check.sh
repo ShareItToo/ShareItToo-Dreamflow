@@ -886,6 +886,9 @@ node tool/validate_wp81_source_to_staging_parity_preflight.mjs
 node --check tool/validate_wp82_staging_persistent_source_proof_contract.mjs
 node --test test/tool/validate_wp82_staging_persistent_source_proof_contract.test.mjs
 node tool/validate_wp82_staging_persistent_source_proof_contract.mjs
+node --check tool/validate_wp85_current_candidate_gate_reconciliation.mjs
+node --test test/tool/validate_wp85_current_candidate_gate_reconciliation.test.mjs
+node tool/validate_wp85_current_candidate_gate_reconciliation.mjs
 node --check tool/validate_wp83_current_candidate_pixel_auth_session_replay.mjs
 node --test test/tool/validate_wp83_current_candidate_pixel_auth_session_replay.test.mjs
 node tool/validate_wp83_current_candidate_pixel_auth_session_replay.mjs
