@@ -1,4 +1,24 @@
-# Current Work Package: WP103 Current-Source Android Candidate — BUILD READY
+# Current Work Package: WP104 Current-Candidate Staging and Pixel Closure — COMPLETE
+
+WP104 deploys the exact GitHub-published API image for
+`8916aa17fcb2f98d78a49314902a6fd0fcd0e75b` to Staging with healthy API,
+database, foreign keys, rollback and persistent source proof. The exact private
+`1.0.0+2026091002` candidate from
+`fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5` is installed on the Pixel through
+a data-preserving update. Cold starts, navigation, read-only account/legal
+surfaces, large text, themes and the complete email-verified two-role journey
+pass, including foreground/background/terminated FCM, principal isolation and
+server-confirmed cleanup.
+
+The public Staging catalog is empty after cleanup. Payment remains memory-only,
+Stripe live mode is false and Listing AI remains the zero-budget mock. Binding
+V5.2 booking correctly stops at `409 v52_contract_documents_unavailable` until
+professional legal snapshots exist. OnePlus, Play split delivery, external
+Listing AI, live payment, Production, public registration and PR merge remain
+open and unclaimed. See
+`docs/operations/WP104_CURRENT_CANDIDATE_STAGING_PIXEL_CLOSURE_2026-09-10.md`.
+
+# Previous Work Package: WP103 Current-Source Android Candidate — BUILD READY
 
 WP103 privately binds `1.0.0+2026091002` to source commit
 `fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5` after WP102 changed runtime
@@ -17,10 +37,11 @@ action occurs in WP103. See
 
 WP102 records the owner-reported absent verification messages and corrects the
 source so a server-known verification-delivery command failure cannot appear
-as a successful registration or as a delivered message. The correction is
-source-only: it neither resends email nor changes Staging, a provider, Store,
-payment, cloud, VPS, DNS or device. A `202` and SMTP readiness remain only
-request/transport facts, never proof of recipient inbox delivery. See
+as a successful registration or as a delivered message. The WP102 package was
+source-only and did not resend email or change an external provider. WP104 has
+since deployed the correction to Staging without claiming an inbox result. A
+`202` and SMTP readiness remain only request/transport facts, never proof of
+recipient inbox delivery. See
 `docs/operations/WP102_STAGING_VERIFICATION_DELIVERY_TRUTH_2026-09-10.md`.
 
 The local correction and focused checks are complete at source commit

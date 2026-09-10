@@ -1,5 +1,28 @@
 # ShareItToo Current State
 
+## WP104 current-candidate Staging and Pixel closure — complete
+
+The exact private `1.0.0+2026091002` candidate is installed on the Pixel by a
+data-preserving update and bound to candidate source
+`fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5`. Staging now runs the immutable
+GitHub-published API image for
+`8916aa17fcb2f98d78a49314902a6fd0fcd0e75b`; API, database, all 361 foreign
+keys, rollback availability and the five-file persistent source binding pass.
+FCM and SMTP remain active, while payment stays memory-only, Stripe live mode
+is false and Listing AI stays the zero-budget mock.
+
+Three cold starts, five main destinations, nine account/privacy/support
+surfaces, seven legal routes, 200-percent text and all seven theme/background
+phases pass with exact restoration. The email-verified two-role Pixel journey
+passes owner publication, public discovery, non-binding request/acceptance,
+chat, foreground/background/terminated FCM and principal-switch isolation.
+Cleanup cancelled the test booking, ended the listing, restored the owner
+session and left the public catalog empty. The binding path still correctly
+stops at `409 v52_contract_documents_unavailable`; professional legal
+snapshots remain required. No contract, reservation, payment, monetary effect,
+Production, Store, OnePlus or PR-merge action occurred. See
+`docs/operations/WP104_CURRENT_CANDIDATE_STAGING_PIXEL_CLOSURE_2026-09-10.md`.
+
 ## WP103 current-source Android candidate — build ready
 
 The private signed Internal/Staging successor `1.0.0+2026091002` is now bound
@@ -24,9 +47,10 @@ including spam. The local source correction at
 verification-delivery command failure returns a typed `503` instead of a false
 registration/delivery success and makes client wording state only that a
 request was processed. SMTP readiness and an accepted registration remain
-insufficient to claim inbox delivery. The correction has not been deployed;
-no message, account, Staging, provider, Store, payment, cloud, VPS, DNS or
-device state changed. Its first complete local gate correctly stopped at the
+insufficient to claim inbox delivery. WP104 has now deployed the correction to
+Staging as part of exact runtime
+`8916aa17fcb2f98d78a49314902a6fd0fcd0e75b`; that deployment still does not
+prove recipient inbox delivery. Its first complete local gate correctly stopped at the
 retained Android-candidate binding because runtime source differed from its
 artifact source. WP103 has since completed the separate private successor's
 local and GitHub verification. That candidate proof does not establish an
