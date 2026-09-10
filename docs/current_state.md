@@ -1,5 +1,19 @@
 # ShareItToo Current State
 
+## WP101 fresh two-role source readiness — in progress
+
+The intended owner-only two-role Journey area was inspected with a new
+fail-closed, privacy-preserving audit. It contains 96 explicitly retired
+journeys and no active source; all inspected directories and JSON inputs are
+owner-only, non-symlinked and structurally valid. The audit never emits a path,
+address, password, token or other credential material, and its source-ready
+state is rejected rather than reused as fresh evidence.
+
+No fresh registration, e-mail send, confirmation link, Pixel account action or
+Staging mutation has occurred. A distinct, new owner-confirmed e-mail source is
+still required before functional owner/renter flows may begin. See
+`docs/operations/WP101_FRESH_TWO_ROLE_SOURCE_READINESS_2026-09-10.md`.
+
 ## WP100 Pixel read-only surface closure — complete
 
 The exact `1.0.0+2026091001` Internal/Staging Pixel candidate now passes the

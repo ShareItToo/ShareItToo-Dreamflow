@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp101-fresh-two-role-source-readiness",
+  "status": "preflight-complete-fresh-source-not-yet-created",
+  "capturedOn": "2026-09-10",
+  "workPackage": "WP101",
+  "journeyVaultAudit": {
+    "recognizedVaultCount": 96,
+    "activeSourceVaultCount": 0,
+    "retiredJourneyVaultCount": 96,
+    "otherRecognizedVaultCount": 0,
+    "invalidRecognizedVaultCount": 0,
+    "unsafeEntryCount": 0,
+    "freshSourceProvenanceAvailable": false,
+    "safeForFreshSourceProvisioning": true
+  },
+  "verification": {
+    "focusedAuditTestsPassed": 3,
+    "privatePathEmitted": false,
+    "credentialMaterialEmitted": false
+  },
+  "boundaries": {
+    "existingPixelSessionReused": false,
+    "historicalJourneyReused": false,
+    "freshRegistrationSubmitted": false,
+    "emailSent": false,
+    "emailLinkConfirmed": false,
+    "freshSourceVaultCreated": false,
+    "pixelChanged": false,
+    "stagingChanged": false,
+    "providerChanged": false,
+    "storeChanged": false,
+    "onePlusTouched": false,
+    "productionChanged": false,
+    "containsPrivatePath": false,
+    "containsCredentialMaterial": false
+  },
+  "nextRequirement": "owner-controlled-selection-of-a-new-staging-test-inbox-target-before-two-fresh-registrations"
+}

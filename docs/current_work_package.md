@@ -1,37 +1,29 @@
-# Current Work Package: WP100 Current-Candidate Pixel Read-Only Surface Closure — COMPLETE
+# Current Work Package: WP101 Fresh Two-Role Source Readiness — IN PROGRESS
 
-With the authoritative Staging source and the exact Pixel candidate now
-reconciled, WP100 closes the remaining non-mutating Pixel surfaces: legal,
-account/support, large-text and theme/accessibility evidence. It keeps the
-unknown existing authenticated session read-only. No listing, booking, message,
-account, provider, Store or remote source action is within this scope.
+WP101 prepares the only safe starting point for the remaining functional Pixel
+Staging journey: two newly created, explicitly e-mail-verified and separate
+synthetic test principals. It cannot reuse the existing unknown Pixel session
+or any historical source vault. No listing, booking, message, account,
+provider, Store or remote source action is within this preparation scope.
 
-The account/privacy/support portion is complete through nine independently
-state-anchored Pixel diagnostics; payment and payout retain their visible
-Staging hold, and neither data export nor support submission was invoked. See
-`docs/operations/WP100_PIXEL_ACCOUNT_PRIVACY_SUPPORT_READ_ONLY_2026-09-10.md`.
-The physical seven-document legal set is also complete with independent
-candidate-bound root-anchored diagnostics; that does not promote the separate
-professional legal approval gate. See
-`docs/operations/WP100_PIXEL_LEGAL_ROUTES_READ_ONLY_2026-09-10.md`. The active
-remainder was closed by the theme/background evidence with exact restoration.
-The five 200-percent-text navigation destinations have independently passed
-and restored the exact prior system font scale after every run. System
-light/dark and all five background choices have also passed private capture and
-exact restoration. See
-`docs/operations/WP100_PIXEL_LARGE_TEXT_NAVIGATION_2026-09-10.md` and
-`docs/operations/WP100_PIXEL_THEME_BACKGROUNDS_2026-09-10.md`.
+The intended private Journey area contains 96 explicitly retired journeys, no
+active source and no unsafe entry. The new audited runner rejects any active
+source status as insufficiently fresh and never serializes account material.
+The focused test suite passes three cases. Fresh registration and e-mail-link
+confirmation remain open and cannot be simulated or delegated.
 
-WP100 is **COMPLETE**. The full local technical regression passed, and exact-head
-GitHub Regression `34476738557` plus CodeQL `34476738558` succeeded at
-`5c8633d657f44883d2f7f2b414d62eb41b0afa18`. Its package-level, no-mutation
-closure is recorded in
-`docs/operations/WP100_PIXEL_READ_ONLY_SURFACE_CLOSURE_2026-09-10.md`.
+The owner action is deliberately not requested yet: no fresh e-mail registration
+has been sent, so there is no legitimate verification link to act on. Independent
+work continues with source-creation safeguards and official provider-readiness
+audits. See `docs/operations/WP101_FRESH_TWO_ROLE_SOURCE_READINESS_2026-09-10.md`.
 
-The next package must begin with a new decision overview. It must not reuse the
-unknown authenticated Pixel session for a functional two-role flow: a fresh,
-explicitly email-verified synthetic source remains a prerequisite for listing,
-booking, messaging and notification mutation evidence.
+# Previous Work Package: WP100 Current-Candidate Pixel Read-Only Surface Closure — COMPLETE
+
+WP100 closed the non-mutating legal, account/support, large-text and
+theme/accessibility Pixel surface set. Its full local technical regression and
+exact-head GitHub Regression `34476738557` plus CodeQL `34476738558` succeeded
+at `5c8633d657f44883d2f7f2b414d62eb41b0afa18`. Its package-level closure is
+recorded in `docs/operations/WP100_PIXEL_READ_ONLY_SURFACE_CLOSURE_2026-09-10.md`.
 
 # Previous Work Package: WP99 Staging Authoritative-Source Reconciliation — COMPLETE
 
