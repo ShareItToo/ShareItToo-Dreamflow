@@ -32,6 +32,19 @@ on the Pixel. It contains no device identifier, account material, path or
 signing digest. The machine-readable evidence is
 `docs/evidence/release-readiness/wp98-pixel-current-candidate-update-preflight-20260910.json`.
 
+## Update and session result
+
+The explicitly invoked replace update then installed the exact candidate and
+re-proved all fail-closed preservation facts: installed package/version, APK
+bytes and signing relationship match the verified archive; first-install time
+and app-data inode are unchanged; the app became the foreground activity.
+
+The existing authenticated session then passed two force-stop/cold-start
+cycles while online and the same two cycles after a verified no-connectivity
+condition. Wi-Fi and mobile-data state were restored and verified online
+afterward. Neither diagnostic records account identity or content, and neither
+logged in, logged out or mutated an account.
+
 ## Verification and boundaries
 
 - focused update-tool tests: 9/9 PASS;
@@ -40,8 +53,7 @@ signing digest. The machine-readable evidence is
 - no Play, Staging, Firebase, provider, payment, Production, OnePlus or PR
   state changed.
 
-The next WP98 action is the already-preflighted, explicitly invoked Pixel
-replace-install, followed by a read-only installed-build/data-preservation
-proof. It remains only an Android diagnostic update: it cannot make any claim
-about the currently older Staging source until the separate authoritative
-Staging proof and successor rollout path are closed.
+The WP98 device-update scope is complete. It remains Android diagnostic
+evidence only: it cannot make any claim about the currently older Staging
+source until the separate authoritative Staging proof and successor rollout
+path are closed. The installed direct APK is not Google Play delivery evidence.

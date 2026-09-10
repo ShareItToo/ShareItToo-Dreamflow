@@ -1,15 +1,15 @@
 # ShareItToo Current State
 
-## WP98 Pixel current-candidate update preflight — in progress
+## WP98 Pixel current-candidate update — complete
 
-The exact owner-only `1.0.0+2026091001` Internal/Staging candidate passed a
-read-only Pixel update preflight. It is strictly newer than the installed
-build, has the matching package/signature relationship and can be installed
-only as a data-preserving replace update; no uninstall, reset, downgrade or
-unlock is needed. The update tool now requires an explicit preflight or install
-mode and fails closed otherwise. The preflight did not write to, launch or
-inspect account content on the Pixel. This does not yet prove the update or
-current Staging functionality. See
+The exact owner-only `1.0.0+2026091001` Internal/Staging candidate passed its
+read-only Pixel preflight and data-preserving replace update. Package, exact
+APK, signature relation, first-install time, app-data identity and foreground
+start passed. The existing authenticated session restored across two online and
+two controlled-offline cold starts; original network state was restored. No
+identity, content, account action or Store state was recorded or changed. The
+direct APK is not Google Play delivery evidence and it does not establish
+current Staging source parity. See
 `docs/operations/WP98_PIXEL_CURRENT_CANDIDATE_UPDATE_PREFLIGHT_2026-09-10.md`.
 
 ## WP97 PostgreSQL future-acceptance-window ratchet — complete

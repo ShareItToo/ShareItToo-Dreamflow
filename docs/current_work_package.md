@@ -1,13 +1,25 @@
-# Current Work Package: WP98 Pixel Current-Candidate Update Preflight — IN PROGRESS
+# Current Work Package: WP99 Staging Authoritative-Source Reconciliation — IN PROGRESS
 
-WP98 has passed a read-only, exact-candidate Pixel update preflight for the
-owner-only `1.0.0+2026091001` Internal/Staging archive sourced from
-`068c843a2660e2a4c44a1715f4f8e51a67b41d24`. The installed Pixel build is
-strictly older, package/signature identity matches and a replace-only update
-can preserve data without unlock, uninstall, reset or downgrade. The update
-tool now requires an explicit `--preflight-only` or `--install` mode, so it
-cannot accidentally write to a device. The preflight performed no device
-write. It is not yet a device install or a Staging-parity result; see
+The exact current Android candidate is now installed and narrowly verified on
+the Pixel, but its Staging endpoint still reports the older persisted source
+from the last readback. WP99 is the independent, read-only reconciliation of
+that remote-authority boundary: it must establish the persistent source,
+runtime/image relation, volumes and verified rollback source before any
+successor Staging deployment can be considered. No remote mutation or rollout
+is in scope. The prerequisite was previously blocked before authentication by
+an unresolvable configured SSH alias; no replacement hostname, credential or
+deployment target will be guessed.
+
+# Previous Work Package: WP98 Pixel Current-Candidate Update — COMPLETE
+
+WP98 passed its read-only preflight, then installed the exact owner-only
+`1.0.0+2026091001` Internal/Staging APK through a data-preserving Pixel
+replace update. Package, exact bytes, signature, first-install time, app-data
+inode and foreground activity all passed. The existing session restored across
+two online and two controlled-offline cold starts, with network state restored
+afterward. The update tool now requires an explicit `--preflight-only` or
+`--install` mode, so it cannot accidentally write to a device. This is direct
+diagnostic delivery, not a Play install or a Staging-parity result; see
 `docs/operations/WP98_PIXEL_CURRENT_CANDIDATE_UPDATE_PREFLIGHT_2026-09-10.md`.
 
 # Previous Work Package: WP97 PostgreSQL Future-Acceptance-Window Ratchet — COMPLETE
