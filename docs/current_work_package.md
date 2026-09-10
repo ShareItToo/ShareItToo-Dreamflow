@@ -14,8 +14,10 @@ The physical seven-document legal set is also complete with independent
 candidate-bound root-anchored diagnostics; that does not promote the separate
 professional legal approval gate. See
 `docs/operations/WP100_PIXEL_LEGAL_ROUTES_READ_ONLY_2026-09-10.md`. The active
-remainder is limited to large-text and theme/background evidence with exact
-restoration.
+remainder is limited to theme/background evidence with exact restoration. The
+five 200-percent-text navigation destinations have independently passed and
+restored the exact prior system font scale after every run. See
+`docs/operations/WP100_PIXEL_LARGE_TEXT_NAVIGATION_2026-09-10.md`.
 
 # Previous Work Package: WP99 Staging Authoritative-Source Reconciliation — COMPLETE
 

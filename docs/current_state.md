@@ -10,9 +10,12 @@ being invoked. This adds no account, device-service, provider, Store, Staging,
 OnePlus or Production mutation. The same exact candidate also passes all seven
 informational legal routes through independent root-anchored read-only
 diagnostics; professional legal approval remains open. 200-percent text
-navigation and light/dark/background evidence remain separate WP100 work. See
+navigation now also passes independently for all five main destinations with
+exact system-setting restoration. Light/dark/background evidence remains
+separate WP100 work. See
 `docs/operations/WP100_PIXEL_ACCOUNT_PRIVACY_SUPPORT_READ_ONLY_2026-09-10.md`.
 See also `docs/operations/WP100_PIXEL_LEGAL_ROUTES_READ_ONLY_2026-09-10.md`.
+See also `docs/operations/WP100_PIXEL_LARGE_TEXT_NAVIGATION_2026-09-10.md`.
 
 ## WP99 Staging authoritative-source reconciliation — complete
 
