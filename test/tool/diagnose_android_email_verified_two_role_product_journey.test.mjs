@@ -8,6 +8,7 @@ import {
   renterNonBindingDetailVisible,
   restoreExactRoleWithBoundedRetries,
   retryIdempotentPixelState,
+  runOwnerPublishUiSubphase,
   runAndroidEmailVerifiedTwoRoleProductJourney,
 } from '../../tool/diagnose_android_email_verified_two_role_product_journey.mjs';
 
@@ -146,6 +147,25 @@ test('restores an exact role with at most three deterministically checked attemp
   assert.equal(restored, true);
   assert.equal(attempts, 3);
   assert.equal(waits, 2);
+});
+
+test('reports the exact sanitized owner-publish UI subphase without leaking private detail', async () => {
+  await assert.rejects(
+    () => runOwnerPublishUiSubphase({
+      label: 'wait-exact-draft',
+      operation: async () => {
+        throw new Error('private@example.test /Users/private/secret');
+      },
+    }),
+    /Owner-publish subphase wait-exact-draft failed safely: safe diagnostic reason unavailable/u,
+  );
+  await assert.rejects(
+    () => runOwnerPublishUiSubphase({
+      label: 'unknown',
+      operation: async () => true,
+    }),
+    /owner-publish UI subphase contract is invalid/u,
+  );
 });
 
 test('closes the Pixel email-verified two-role journey and records only sanitized truth', async () => {

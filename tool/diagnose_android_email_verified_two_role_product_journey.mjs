@@ -52,6 +52,32 @@ function sanitizedFailure(error) {
   return detail;
 }
 
+const ownerPublishUiSubphases = new Set([
+  'read-vault',
+  'bind-owner',
+  'open-my-listings',
+  'wait-owner-listings',
+  'open-saved-listings',
+  'wait-exact-draft',
+  'open-status-dialog',
+  'wait-publish-action',
+  'submit-publish',
+  'observe-confirmation',
+]);
+
+export async function runOwnerPublishUiSubphase({ label, operation } = {}) {
+  if (!ownerPublishUiSubphases.has(label) || typeof operation !== 'function') {
+    fail('The owner-publish UI subphase contract is invalid.');
+  }
+  try {
+    return await operation();
+  } catch (error) {
+    fail(
+      `Owner-publish subphase ${label} failed safely: ${sanitizedFailure(error)}.`,
+    );
+  }
+}
+
 export async function retryIdempotentPixelState(operation) {
   if (typeof operation !== 'function') {
     fail('The idempotent Pixel state operation is unavailable.');
@@ -324,64 +350,112 @@ async function publishOwnerDraftOnPixel({
   device,
   wait,
 }) {
-  const { vault } = readEmailVerifiedJourneyVault(vaultFile);
+  const { vault } = await runOwnerPublishUiSubphase({
+    label: 'read-vault',
+    operation: async () => readEmailVerifiedJourneyVault(vaultFile),
+  });
   const title = vault.realTwoRoleJourney?.title
     ?? fail('The private product-journey title is unavailable.');
-  const owner = await bindExactRole({
-    vault,
-    role: 'owner',
-    commandRunner,
-    adbPath,
-    device,
-    wait,
+  const owner = await runOwnerPublishUiSubphase({
+    label: 'bind-owner',
+    operation: () => bindExactRole({
+      vault,
+      role: 'owner',
+      commandRunner,
+      adbPath,
+      device,
+      wait,
+    }),
   });
-  tapLabel(commandRunner, adbPath, device, owner.hierarchy, 'Meine Anzeigen');
-  let hierarchy = await waitForHierarchy({
-    commandRunner,
-    adbPath,
-    device,
-    wait,
-    label: 'owner listings',
-    predicate: (value) => containsAllLabels(value, ['Meine Anzeigen', 'für später gespeichert']),
+  await runOwnerPublishUiSubphase({
+    label: 'open-my-listings',
+    operation: async () => tapLabel(
+      commandRunner,
+      adbPath,
+      device,
+      owner.hierarchy,
+      'Meine Anzeigen',
+    ),
   });
-  tapLabel(commandRunner, adbPath, device, hierarchy, 'für später gespeichert');
-  hierarchy = await waitForHierarchy({
-    commandRunner,
-    adbPath,
-    device,
-    wait,
-    label: 'exact owner draft',
-    predicate: (value) => containsAllLabels(value, [title, 'Status ändern']),
+  let hierarchy = await runOwnerPublishUiSubphase({
+    label: 'wait-owner-listings',
+    operation: () => waitForHierarchy({
+      commandRunner,
+      adbPath,
+      device,
+      wait,
+      label: 'owner listings',
+      predicate: (value) => containsAllLabels(value, ['Meine Anzeigen', 'für später gespeichert']),
+    }),
   });
-  tapClosestToLabel(
-    commandRunner,
-    adbPath,
-    device,
-    hierarchy,
-    'Status ändern',
-    title,
-  );
-  hierarchy = await waitForHierarchy({
-    commandRunner,
-    adbPath,
-    device,
-    wait,
-    label: 'owner draft action',
-    predicate: (value) => containsAllLabels(value, ['Status ändern', 'Veröffentlichen']),
+  await runOwnerPublishUiSubphase({
+    label: 'open-saved-listings',
+    operation: async () => tapLabel(
+      commandRunner,
+      adbPath,
+      device,
+      hierarchy,
+      'für später gespeichert',
+    ),
   });
-  tapLabel(commandRunner, adbPath, device, hierarchy, 'Veröffentlichen');
+  hierarchy = await runOwnerPublishUiSubphase({
+    label: 'wait-exact-draft',
+    operation: () => waitForHierarchy({
+      commandRunner,
+      adbPath,
+      device,
+      wait,
+      label: 'exact owner draft',
+      predicate: (value) => containsAllLabels(value, [title, 'Status ändern']),
+    }),
+  });
+  await runOwnerPublishUiSubphase({
+    label: 'open-status-dialog',
+    operation: async () => tapClosestToLabel(
+      commandRunner,
+      adbPath,
+      device,
+      hierarchy,
+      'Status ändern',
+      title,
+    ),
+  });
+  hierarchy = await runOwnerPublishUiSubphase({
+    label: 'wait-publish-action',
+    operation: () => waitForHierarchy({
+      commandRunner,
+      adbPath,
+      device,
+      wait,
+      label: 'owner draft action',
+      predicate: (value) => containsAllLabels(value, ['Status ändern', 'Veröffentlichen']),
+    }),
+  });
+  await runOwnerPublishUiSubphase({
+    label: 'submit-publish',
+    operation: async () => tapLabel(
+      commandRunner,
+      adbPath,
+      device,
+      hierarchy,
+      'Veröffentlichen',
+    ),
+  });
   // The success UI is intentionally a two-second toast. It is useful visual
   // evidence when sampled, but it must not become a timing prerequisite. The
   // next phase binds success to the durable authenticated listing response and
   // public catalog instead.
-  const successConfirmationVisible = await observeHierarchy({
-    commandRunner,
-    adbPath,
-    device,
-    wait,
-    predicate: (value) => currentHeadAndroidNamedNodes(value, 'Anzeige veröffentlicht').length > 0,
-    attempts: 8,
-    intervalMs: 180,
+  const successConfirmationVisible = await runOwnerPublishUiSubphase({
+    label: 'observe-confirmation',
+    operation: () => observeHierarchy({
+      commandRunner,
+      adbPath,
+      device,
+      wait,
+      predicate: (value) => currentHeadAndroidNamedNodes(value, 'Anzeige veröffentlicht').length > 0,
+      attempts: 8,
+      intervalMs: 180,
+    }),
   });
   await wait(900);
   return Object.freeze({
