@@ -1,5 +1,18 @@
 # ShareItToo Current State
 
+## WP86 Staging rollout and controlled Pixel FCM
+
+WP86 deploys the exact GitHub-published `926a00c5` API image only to Staging,
+then proves healthy API/database readback, persistent Compose binding, and
+Staging-only FCM/SMTP with memory-only payment. The exact installed Pixel
+`1.0.0+2026090905` APK passes controlled foreground, background and
+terminated-process FCM delivery through a fresh, fully cleaned up,
+non-binding two-role simulation. The screenshot is private and its icon
+review remains pending. The Staging runtime has five legal/operator path
+differences from the Pixel source, so this is narrow transport evidence—not a
+whole-candidate or release promotion. Binding V5.2 flows stay blocked; OnePlus
+remains untouched. See `docs/operations/WP86_STAGING_ROLLOUT_PIXEL_FCM_2026-09-10.md`.
+
 ## WP85 current-candidate gate reconciliation
 
 The complete current-candidate matrix now binds WP83 and WP84 to the exact

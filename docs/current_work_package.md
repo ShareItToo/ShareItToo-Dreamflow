@@ -1,4 +1,18 @@
-# Current Work Package: WP85 Current-Candidate Gate Reconciliation
+# Current Work Package: WP86 Staging Rollout and Controlled Pixel FCM
+
+WP86 is **COMPLETE FOR STAGING ROLLOUT AND THE NARROW PIXEL FCM PROBE; RELEASE
+AND OWNER GATES STAY OPEN**. The GitHub-published API image at `926a00c5` now
+runs on Staging with a successful read-only health/configuration proof. The
+exact installed Pixel `1.0.0+2026090905` APK has separately passed foreground,
+background and terminated-process FCM delivery using a new payment-free
+two-role simulation that was cancelled and removed afterward. The successor
+Staging runtime differs in five legal/operator paths from the Pixel source;
+no broad candidate acceptance transfers. The private notification screenshot
+is outside Git and its icon review is still open. The binding V5.2 contract
+gate, Stripe, provider, Store, Production and OnePlus boundaries remain open.
+See `docs/operations/WP86_STAGING_ROLLOUT_PIXEL_FCM_2026-09-10.md`.
+
+# Previous Work Package: WP85 Current-Candidate Gate Reconciliation
 
 WP85 is **COMPLETE AS EVIDENCE RECONCILIATION; OWNER AND EXTERNAL GATES STAY
 OPEN**. It source-binds the latest exact Pixel auth/session evidence (WP83),
