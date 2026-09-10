@@ -1,5 +1,14 @@
 # ShareItToo Current State
 
+## WP90 Pixel permission-lifecycle restart recovery
+
+WP90 reconfirms exact recovery of the four runtime permissions but does not
+accept the lifecycle: the authenticated navigation was absent after a
+controlled in-cycle restart. The new fixed safe failure class records that
+condition without UI content. The root cause remains open; no account or
+external state changed. See
+`docs/operations/WP90_PIXEL_PERMISSION_LIFECYCLE_RESTART_RECOVERY_2026-09-10.md`.
+
 ## WP89 Pixel explicit-candidate navigation
 
 WP89 corrects a historical private-archive default in the local navigation

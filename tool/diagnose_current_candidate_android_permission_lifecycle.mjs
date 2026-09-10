@@ -643,9 +643,16 @@ export function buildRecoveredWp46PermissionJournal(previous) {
   });
 }
 
-export function buildWp46FailedAfterRestorationJournal({ candidate, originalPermissionState }) {
+export function buildWp46FailedAfterRestorationJournal({
+  candidate,
+  originalPermissionState,
+  failureClass = 'other-fail-closed-diagnostic-error',
+}) {
   if (candidate === undefined || originalPermissionState === undefined) {
     fail('The failed WP46 restoration record is incomplete.');
+  }
+  if (!/^(?:navigation-(?:system-notification-overlay|unauthenticated-session|bottom-navigation-absent|bottom-navigation-incomplete|navigation-labels-present-surface-pending)|other-fail-closed-diagnostic-error)$/u.test(failureClass)) {
+    fail('The failed WP46 restoration class is not safe.');
   }
   const restoredPermissionState = normalizePermissionState(originalPermissionState);
   return Object.freeze({
@@ -656,10 +663,25 @@ export function buildWp46FailedAfterRestorationJournal({ candidate, originalPerm
     restoredPermissionState,
     recoveryRequired: false,
     lifecycleResult: 'unproven',
+    failureClass,
     containsCredentials: false,
     containsAccountIdentity: false,
     containsRawDeviceIdentifier: false,
   });
+}
+
+export function classifyWp46FailClosedDiagnosticError(error) {
+  const safeNavigationClasses = new Set([
+    'system-notification-overlay',
+    'unauthenticated-session',
+    'bottom-navigation-absent',
+    'bottom-navigation-incomplete',
+    'navigation-labels-present-surface-pending',
+  ]);
+  const observed = /\(([^()]+)\)\.?$/u.exec(String(error?.message ?? ''))?.[1] ?? null;
+  return safeNavigationClasses.has(observed)
+    ? `navigation-${observed}`
+    : 'other-fail-closed-diagnostic-error';
 }
 
 export function parseWp46Arguments(values) {
@@ -843,6 +865,7 @@ async function run() {
           commit: candidate.commit,
         },
         originalPermissionState,
+        failureClass: classifyWp46FailClosedDiagnosticError(error),
       }));
     }
     throw error;

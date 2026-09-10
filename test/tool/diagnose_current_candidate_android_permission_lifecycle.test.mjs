@@ -15,6 +15,7 @@ import {
   assertExactDeclaredAndroidPermissions,
   buildWp46FailedAfterRestorationJournal,
   buildRecoveredWp46PermissionJournal,
+  classifyWp46FailClosedDiagnosticError,
   buildWp46PermissionEvidence,
   exercisePermissionGroups,
   parseAndroidDisplaySize,
@@ -340,12 +341,32 @@ test('records a restored but unproven lifecycle failure without claiming success
   });
   assert.equal(result.status, 'restored-after-failed-run');
   assert.equal(result.lifecycleResult, 'unproven');
+  assert.equal(result.failureClass, 'other-fail-closed-diagnostic-error');
   assert.equal(result.recoveryRequired, false);
   assert.deepEqual(result.restoredPermissionState, originalPermissionState);
   assert.equal(JSON.stringify(result).includes('/Users/'), false);
   assert.throws(
     () => buildWp46FailedAfterRestorationJournal({}),
     /restoration record is incomplete/u,
+  );
+  assert.throws(
+    () => buildWp46FailedAfterRestorationJournal({
+      candidate: {}, originalPermissionState, failureClass: 'untrusted raw error',
+    }),
+    /restoration class is not safe/u,
+  );
+});
+
+test('records only a fixed navigation failure class, never a raw Android error', () => {
+  assert.equal(
+    classifyWp46FailClosedDiagnosticError(
+      new Error('The current-head ShareItToo main navigation did not appear (bottom-navigation-absent).'),
+    ),
+    'navigation-bottom-navigation-absent',
+  );
+  assert.equal(
+    classifyWp46FailClosedDiagnosticError(new Error('private content should not leave the device')),
+    'other-fail-closed-diagnostic-error',
   );
 });
 

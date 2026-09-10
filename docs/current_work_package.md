@@ -1,4 +1,15 @@
-# Current Work Package: WP89 Pixel Explicit-Candidate Navigation
+# Current Work Package: WP90 Pixel Permission-Lifecycle Restart Recovery
+
+WP90 is **PARTIAL WITH EXACT RESTORATION**. The exact Pixel candidate completed
+artifact, source, manifest, device and authenticated-navigation preflight, then
+stopped during an in-cycle controlled restart with the fixed safe condition
+`navigation-bottom-navigation-absent`. Its four runtime-permission states were
+exactly restored and the owner-only journal requires no recovery. The full
+matrix and its root cause remain unaccepted. No account, business, provider,
+Store, Production, OnePlus or merge state changed. See
+`docs/operations/WP90_PIXEL_PERMISSION_LIFECYCLE_RESTART_RECOVERY_2026-09-10.md`.
+
+# Previous Work Package: WP89 Pixel Explicit-Candidate Navigation
 
 WP89 is **COMPLETE FOR THE PHYSICAL READ-ONLY NAVIGATION DIAGNOSTIC**. The
 exact Pixel `1.0.0+2026090905` candidate's explicit private archive passed
