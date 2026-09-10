@@ -1,4 +1,14 @@
-# Current Work Package: WP93 Pixel Final-Restart Foreground Boundary
+# Current Work Package: WP94 Pixel Permission/Startup Source Boundary
+
+WP94 is **COMPLETE AS A SOURCE-LEVEL BOUNDARY AUDIT**. The clean exact-candidate
+source has no automatic startup permission request and no native activity
+resume/pause override. The last physical final-restart condition remains
+unexplained: startup await boundaries support only a bounded scheduling or
+runner-observation hypothesis. No physical replay or timeout-only workaround
+is authorized by this evidence. See
+`docs/operations/WP94_PIXEL_PERMISSION_STARTUP_SOURCE_BOUNDARY_2026-09-10.md`.
+
+# Previous Work Package: WP93 Pixel Final-Restart Foreground Boundary
 
 WP93 is **PARTIAL AND STOPS FURTHER PHYSICAL PERMISSION REPLAYS**. The complete
 three-group matrix and exact restoration re-passed, but the final in-cycle

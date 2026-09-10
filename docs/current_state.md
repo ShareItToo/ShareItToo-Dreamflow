@@ -1,5 +1,15 @@
 # ShareItToo Current State
 
+## WP94 Pixel permission/startup source boundary
+
+The exact installed candidate has no automatic startup permission request or
+native activity resume/pause override. Its controlled permission requests are
+feature-initiated. Startup still has deliberate awaited Firebase, app-link and
+authenticated realtime boundaries; they support only a bounded scheduling or
+runner-observation hypothesis, not a root-cause claim. No new physical replay
+or timing workaround follows. See
+`docs/operations/WP94_PIXEL_PERMISSION_STARTUP_SOURCE_BOUNDARY_2026-09-10.md`.
+
 ## WP93 Pixel final-restart foreground boundary
 
 A repeat confirms the final-restart navigation gap after a complete restored
