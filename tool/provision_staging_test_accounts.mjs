@@ -12,12 +12,15 @@ import {
   readFileSync,
   writeFileSync,
 } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const stagingApiBaseUrl = 'https://staging.shareittoo.com/api/v1';
 const repositoryRoot = resolve(fileURLToPath(new URL('../', import.meta.url)));
+const macosKeychainHelper = resolve(repositoryRoot, 'tool', 'macos_keychain_json.swift');
+const keychainServicePrefix = 'com.shareittoo.qa.staging.synthetic-account-vault';
 const roles = Object.freeze([
   Object.freeze({ role: 'owner', displayName: 'SIT Test Vermieter' }),
   Object.freeze({ role: 'renter', displayName: 'SIT Test Mieter' }),
@@ -102,6 +105,77 @@ function readPrivateJson(path, label) {
     if (typeof error?.message === 'string' && error.message.startsWith(label)) throw error;
     fail(`${label} is invalid.`);
   }
+}
+
+function keychainService(runId) {
+  if (!/^[a-z0-9-]{8,48}$/.test(runId ?? '')) fail('The staging test run ID is invalid.');
+  return `${keychainServicePrefix}.${runId}`;
+}
+
+function defaultKeychainCommand(action, runId, value = undefined) {
+  if (process.platform !== 'darwin') fail('The Staging account keychain is available only on macOS.');
+  const result = spawnSync(
+    '/usr/bin/swift',
+    [macosKeychainHelper, action, keychainService(runId)],
+    {
+      encoding: 'utf8',
+      input: value === undefined ? undefined : JSON.stringify(value),
+      maxBuffer: 1024 * 1024,
+    },
+  );
+  if (result.error || result.status !== 0) fail('The Staging account keychain operation failed.');
+  return result.stdout;
+}
+
+const defaultKeychain = Object.freeze({
+  put(runId, value) {
+    defaultKeychainCommand('put', runId, value);
+  },
+  get(runId) {
+    const raw = defaultKeychainCommand('get', runId);
+    try {
+      return JSON.parse(raw);
+    } catch {
+      fail('The Staging account keychain entry is invalid.');
+    }
+  },
+});
+
+function validatePendingSyntheticVault(vault, runId) {
+  if (vault?.schemaVersion !== 1
+      || vault?.kind !== 'sit-staging-synthetic-account-vault'
+      || vault?.runId !== runId
+      || vault?.status !== 'registration-accepted-pending-verification'
+      || !Array.isArray(vault?.accounts)
+      || vault.accounts.length !== roles.length
+      || !vault.accounts.every((account, index) => (
+        account?.role === roles[index].role
+          && account?.registrationStatus === 'accepted'
+          && account?.verificationStatus === 'pending'
+          && typeof account?.email === 'string'
+          && typeof account?.password === 'string'
+      ))) {
+    fail('The staging account vault is not pending exact e-mail verification.');
+  }
+}
+
+function keychainMigrationManifest(vault) {
+  return {
+    schemaVersion: 2,
+    kind: 'sit-staging-synthetic-account-vault-manifest',
+    runId: vault.runId,
+    status: vault.status,
+    createdAt: vault.createdAt,
+    apiBaseUrl: vault.apiBaseUrl,
+    stripeLivemode: false,
+    containsProductionCredentials: false,
+    credentialStore: 'macos-keychain',
+    accounts: vault.accounts.map((account) => ({
+      role: account.role,
+      registrationStatus: account.registrationStatus,
+      verificationStatus: account.verificationStatus,
+    })),
+  };
 }
 
 function safeRunId(now, random) {
@@ -325,6 +399,43 @@ export function recordSyntheticAccountVerification({
   });
 }
 
+export function migrateSyntheticAccountVaultToKeychain({
+  runId,
+  vaultRoot = resolve(
+    homedir(),
+    'Library',
+    'Application Support',
+    'ShareItToo',
+    'qa',
+    'staging-accounts',
+  ),
+  keychain = defaultKeychain,
+} = {}) {
+  if (!/^[a-z0-9-]{8,48}$/.test(runId ?? '')) fail('The staging test run ID is invalid.');
+  if (!keychain || typeof keychain.put !== 'function') fail('The Staging account keychain is invalid.');
+  const safeVaultRoot = outsideRepository(vaultRoot, 'The staging account vault');
+  const { path: vaultPath, value: vault } = readPrivateJson(
+    resolve(safeVaultRoot, runId, 'accounts.json'),
+    'The staging account vault file',
+  );
+  validatePendingSyntheticVault(vault, runId);
+  keychain.put(runId, vault);
+  privateJson(vaultPath, keychainMigrationManifest(vault));
+  return Object.freeze({
+    status: 'registration-accepted-pending-verification',
+    runId,
+    credentialStore: 'macos-keychain',
+    roles: vault.accounts.map((account) => Object.freeze({
+      role: account.role,
+      registrationStatus: account.registrationStatus,
+      verificationStatus: account.verificationStatus,
+    })),
+    vaultReady: true,
+    containsSecrets: false,
+    containsEmailAddresses: false,
+  });
+}
+
 export async function verifyEmailLinkedSyntheticAccounts({
   runId,
   vaultRoot = resolve(
@@ -338,6 +449,7 @@ export async function verifyEmailLinkedSyntheticAccounts({
   verifiedAt = new Date(),
   fetchImpl = globalThis.fetch,
   verify = null,
+  keychain = defaultKeychain,
 } = {}) {
   if (!/^[a-z0-9-]{8,48}$/.test(runId ?? '')) fail('The staging test run ID is invalid.');
   if (!(verifiedAt instanceof Date) || !Number.isFinite(verifiedAt.getTime())) {
@@ -345,27 +457,13 @@ export async function verifyEmailLinkedSyntheticAccounts({
   }
   if (typeof fetchImpl !== 'function') fail('The Staging verification transport is invalid.');
   if (verify !== null && typeof verify !== 'function') fail('The Staging verification function is invalid.');
-  const verifier = verify ?? ((account) => defaultVerifyEmailLinkedAccount(account, { fetchImpl }));
-  const safeVaultRoot = outsideRepository(vaultRoot, 'The staging account vault');
-  const { path: vaultPath, value: vault } = readPrivateJson(
-    resolve(safeVaultRoot, runId, 'accounts.json'),
-    'The staging account vault file',
-  );
-  if (vault?.schemaVersion !== 1
-      || vault?.kind !== 'sit-staging-synthetic-account-vault'
-      || vault?.runId !== runId
-      || vault?.status !== 'registration-accepted-pending-verification'
-      || !Array.isArray(vault?.accounts)
-      || vault.accounts.length !== roles.length
-      || !vault.accounts.every((account, index) => (
-        account?.role === roles[index].role
-          && account?.registrationStatus === 'accepted'
-          && account?.verificationStatus === 'pending'
-          && typeof account?.email === 'string'
-          && typeof account?.password === 'string'
-      ))) {
-    fail('The staging account vault is not pending exact e-mail verification.');
+  if (!keychain || typeof keychain.get !== 'function' || typeof keychain.put !== 'function') {
+    fail('The Staging account keychain is invalid.');
   }
+  const verifier = verify ?? ((account) => defaultVerifyEmailLinkedAccount(account, { fetchImpl }));
+  outsideRepository(vaultRoot, 'The staging account vault');
+  const vault = keychain.get(runId);
+  validatePendingSyntheticVault(vault, runId);
   for (const account of vault.accounts) {
     let result;
     try {
@@ -383,7 +481,7 @@ export async function verifyEmailLinkedSyntheticAccounts({
   }
   vault.status = 'email-link-verified-ready-for-login';
   vault.verificationMethod = 'email-link';
-  privateJson(vaultPath, vault);
+  keychain.put(runId, vault);
   return Object.freeze({
     status: vault.status,
     runId,
@@ -405,6 +503,7 @@ function parseArguments(values) {
   let vaultRoot = null;
   let runId = null;
   let verifyEmailLinks = false;
+  let migrateVaultToKeychain = false;
   for (let index = 0; index < values.length; index += 1) {
     if (values[index] === '--mailbox-file') {
       mailboxFile = values[index + 1] ?? fail('--mailbox-file requires a path.');
@@ -417,24 +516,37 @@ function parseArguments(values) {
       index += 1;
     } else if (values[index] === '--verify-email-links') {
       verifyEmailLinks = true;
+    } else if (values[index] === '--migrate-vault-to-keychain') {
+      migrateVaultToKeychain = true;
     } else {
       fail(`Unknown argument: ${values[index]}`);
     }
   }
-  if (verifyEmailLinks) {
+  if (verifyEmailLinks || migrateVaultToKeychain) {
+    if (verifyEmailLinks && migrateVaultToKeychain) {
+      fail('--verify-email-links and --migrate-vault-to-keychain cannot be combined.');
+    }
     if (mailboxFile !== null || !runId) {
-      fail('--verify-email-links requires only --run-id and an optional --vault-root.');
+      fail('The requested action requires only --run-id and an optional --vault-root.');
     }
   } else if (!mailboxFile || runId !== null) {
     fail('--mailbox-file is required so the mailbox is not exposed in the process list.');
   }
-  return { mailboxFile, vaultRoot, runId, verifyEmailLinks };
+  return { mailboxFile, vaultRoot, runId, verifyEmailLinks, migrateVaultToKeychain };
 }
 
 async function run() {
   const args = parseArguments(process.argv.slice(2));
   if (args.verifyEmailLinks) {
     const result = await verifyEmailLinkedSyntheticAccounts({
+      runId: args.runId,
+      ...(args.vaultRoot ? { vaultRoot: resolve(args.vaultRoot) } : {}),
+    });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  if (args.migrateVaultToKeychain) {
+    const result = migrateSyntheticAccountVaultToKeychain({
       runId: args.runId,
       ...(args.vaultRoot ? { vaultRoot: resolve(args.vaultRoot) } : {}),
     });

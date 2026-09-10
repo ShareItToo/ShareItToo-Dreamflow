@@ -14,15 +14,17 @@ The focused test suite passes three cases.
 Exactly two new isolated Staging registrations (owner and renter) were accepted
 through the normal public registration route. Their randomly generated
 credentials and mailbox aliases exist only in a new owner-only local vault
-outside Git; the runner emitted no address, password or link. Their normal
-e-mail confirmations are now the only owner action required before a Pixel
-login may start. Delivery and link confirmation are not inferred from a `202`
-registration response: the follow-up verifier must establish a separate
-server-confirmed session for each exact role, read back its principal and
-immediately revoke that short-lived session before it promotes the private
-vault. The known two noncritical overdue Support follow-ups remain a separate
-legitimate staff-action hold and are not changed by this package. Independent
-provider-readiness audits continue. See
+outside Git; the runner emitted no address, password or link. Before any
+network verification, a separate local migration moves that exact credential
+set into a run-scoped macOS Keychain item and replaces the vault with a
+role-only manifest. Their normal e-mail confirmations are then the only owner
+action required before a Pixel login may start. Delivery and link confirmation
+are not inferred from a `202` registration response: the follow-up verifier
+must establish a separate server-confirmed session for each exact role, read
+back its principal and immediately revoke that short-lived session before it
+promotes the Keychain record. The known two noncritical overdue Support
+follow-ups remain a separate legitimate staff-action hold and are not changed
+by this package. Independent provider-readiness audits continue. See
 `docs/operations/WP101_FRESH_TWO_ROLE_SOURCE_READINESS_2026-09-10.md`.
 
 # Previous Work Package: WP100 Current-Candidate Pixel Read-Only Surface Closure — COMPLETE

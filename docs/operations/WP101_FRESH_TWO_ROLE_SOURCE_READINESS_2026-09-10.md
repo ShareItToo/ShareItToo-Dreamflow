@@ -25,19 +25,25 @@ the registration runner returned only role status and did not emit an address,
 password, verification URL or local path.
 
 Acceptance (`202`) proves that the server accepted both registration requests;
-it does not prove delivery or confirmation of either e-mail. The next required
-owner action is to open each normal verification link in the owner-controlled
-mailbox. Only after both genuine confirmations are recorded may the isolated
-source be used for a Pixel login. Existing sessions and all retired Journey
-material remain untouched.
+it does not prove delivery or confirmation of either e-mail. Before any remote
+verification, the pending credential vault must be migrated locally and
+offline into the macOS login Keychain. The migration rejects unsafe input,
+stores the credentials under an exact run-scoped Keychain service, and replaces
+the local vault content with a role-only manifest. It makes no network request.
+The next required owner action is then to open each normal verification link in
+the owner-controlled mailbox. Only after both genuine confirmations are
+recorded may the isolated source be used for a Pixel login. Existing sessions
+and all retired Journey material remain untouched.
 
 The follow-up verifier is deliberately stronger than a local manual marker:
-for each pending role, it establishes one bounded Staging session, verifies
-that `/auth/me` resolves to that exact private principal, and revokes the
-session through the normal logout route before the local vault can be promoted
-to `email-link-verified-ready-for-login`. A failed role, mismatched principal,
-transport error or failed session cleanup leaves both roles pending. It never
-prints or persists a token outside the existing owner-only vault.
+for each pending role, it loads the credential only from that run-scoped
+Keychain item, establishes one bounded Staging session, verifies that
+`/auth/me` resolves to that exact private principal, and revokes the session
+through the normal logout route before the Keychain record can be promoted to
+`email-link-verified-ready-for-login`. A failed role, mismatched principal,
+transport error or failed session cleanup leaves both roles pending. The
+network verifier never reads a credential file, prints a credential, or
+persists a session token.
 
 Codex must never read, copy, print or commit either address, password or link.
 The known two noncritical overdue Support follow-ups are a separate
@@ -62,8 +68,9 @@ external execution and automatic publication disabled.
 
 The focused vault audit covers: an all-retired safe directory, refusal of an
 active source even with correct file permissions, and refusal of a symlinked
-entry. The registration verifier tests cover successful two-role promotion,
-exact principal readback plus per-role logout, and refusal that leaves both
-roles pending. All focused checks pass. The verifier is prepared but has not
-run against the new private accounts; it awaits the owner-controlled mail
+entry. The focused migration and verifier checks cover a role-only local
+manifest, successful two-role promotion, exact principal readback plus
+per-role logout, and refusal that leaves both roles pending. All focused
+checks pass. The migration and verifier are prepared but have not run against
+the new private accounts; the verifier awaits the owner-controlled mail
 confirmations. No Pixel, provider, Store, OnePlus or Production state changed.

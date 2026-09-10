@@ -5,6 +5,7 @@ import test from 'node:test';
 
 import {
   buildSyntheticAlias,
+  migrateSyntheticAccountVaultToKeychain,
   provisionSyntheticAccounts,
   recordSyntheticAccountVerification,
   stagingRegistrationPayload,
@@ -19,6 +20,19 @@ const syntheticCredential = ['not', 'a', 'real', 'password'].join('-');
 
 function deterministicRandom(size) {
   return Buffer.alloc(size, size);
+}
+
+function createTestKeychain() {
+  const entries = new Map();
+  return {
+    put(runId, value) {
+      entries.set(runId, structuredClone(value));
+    },
+    get(runId) {
+      if (!entries.has(runId)) throw new Error('keychain entry unavailable');
+      return structuredClone(entries.get(runId));
+    },
+  };
 }
 
 test('builds distinct role aliases without retaining an existing plus tag', () => {
@@ -174,6 +188,13 @@ test('promotes e-mail verification only after both roles are server-verified', a
     random: deterministicRandom,
     register: async () => ({ accepted: true, status: 202 }),
   });
+  const keychain = createTestKeychain();
+  const migrated = migrateSyntheticAccountVaultToKeychain({
+    runId: provisioned.runId,
+    vaultRoot,
+    keychain,
+  });
+  assert.equal(migrated.credentialStore, 'macos-keychain');
   const calls = [];
   const verified = await verifyEmailLinkedSyntheticAccounts({
     runId: provisioned.runId,
@@ -183,18 +204,23 @@ test('promotes e-mail verification only after both roles are server-verified', a
       calls.push(account.role);
       return { verified: true, status: 200 };
     },
+    keychain,
   });
   assert.equal(verified.status, 'email-link-verified-ready-for-login');
   assert.equal(verified.serverVerified, true);
   assert.equal(verified.verificationSessionsCleaned, true);
   assert.deepEqual(calls, ['owner', 'renter']);
   assert.equal(JSON.stringify(verified).includes('walid@example.com'), false);
-  const vault = JSON.parse(readFileSync(
+  const manifest = JSON.parse(readFileSync(
     resolve(vaultRoot, provisioned.runId, 'accounts.json'),
     'utf8',
   ));
-  assert.equal(vault.verificationMethod, 'email-link');
-  assert.equal(vault.accounts.every((entry) => entry.verificationStatus === 'email-link-verified'), true);
+  assert.equal(manifest.credentialStore, 'macos-keychain');
+  assert.equal(JSON.stringify(manifest).includes('walid@example.com'), false);
+  assert.equal(JSON.stringify(manifest).includes(syntheticCredential), false);
+  const keychainVault = keychain.get(provisioned.runId);
+  assert.equal(keychainVault.verificationMethod, 'email-link');
+  assert.equal(keychainVault.accounts.every((entry) => entry.verificationStatus === 'email-link-verified'), true);
 });
 
 test('proves each verified principal and revokes the short-lived verification session', async () => {
@@ -206,6 +232,8 @@ test('proves each verified principal and revokes the short-lived verification se
     random: deterministicRandom,
     register: async () => ({ accepted: true, status: 202 }),
   });
+  const keychain = createTestKeychain();
+  migrateSyntheticAccountVaultToKeychain({ runId: provisioned.runId, vaultRoot, keychain });
   const calls = [];
   let activeEmail = null;
   const verified = await verifyEmailLinkedSyntheticAccounts({
@@ -226,6 +254,7 @@ test('proves each verified principal and revokes the short-lived verification se
       if (path === '/auth/logout') return new Response(null, { status: 204 });
       return new Response(null, { status: 404 });
     },
+    keychain,
   });
   assert.equal(verified.serverVerified, true);
   assert.equal(verified.verificationSessionsCleaned, true);
@@ -244,24 +273,24 @@ test('does not promote either role when a server verification is incomplete', as
     random: deterministicRandom,
     register: async () => ({ accepted: true, status: 202 }),
   });
+  const keychain = createTestKeychain();
+  migrateSyntheticAccountVaultToKeychain({ runId: provisioned.runId, vaultRoot, keychain });
   let calls = 0;
   await assert.rejects(
     verifyEmailLinkedSyntheticAccounts({
       runId: provisioned.runId,
       vaultRoot,
       verify: async () => ({ verified: ++calls === 1, status: calls === 1 ? 200 : 403 }),
+      keychain,
     }),
     /renter role/,
   );
-  const vault = JSON.parse(readFileSync(
-    resolve(vaultRoot, provisioned.runId, 'accounts.json'),
-    'utf8',
-  ));
-  assert.equal(vault.status, 'registration-accepted-pending-verification');
-  assert.equal(vault.accounts.every((entry) => entry.verificationStatus === 'pending'), true);
+  const keychainVault = keychain.get(provisioned.runId);
+  assert.equal(keychainVault.status, 'registration-accepted-pending-verification');
+  assert.equal(keychainVault.accounts.every((entry) => entry.verificationStatus === 'pending'), true);
 });
 
-test('refuses a symlinked private vault before any server verification request', async () => {
+test('refuses a symlinked private vault before any keychain migration', async () => {
   const vaultRoot = tempFixtures.makeSync('sit-staging-account-symlink-');
   const provisioned = await provisionSyntheticAccounts({
     baseEmail: 'walid@example.com',
@@ -274,17 +303,12 @@ test('refuses a symlinked private vault before any server verification request',
   const retainedPath = resolve(vaultRoot, provisioned.runId, 'retained-accounts.json');
   renameSync(vaultPath, retainedPath);
   symlinkSync(retainedPath, vaultPath);
-  let calls = 0;
   await assert.rejects(
-    verifyEmailLinkedSyntheticAccounts({
+    Promise.resolve().then(() => migrateSyntheticAccountVaultToKeychain({
       runId: provisioned.runId,
       vaultRoot,
-      verify: async () => {
-        calls += 1;
-        return { verified: true, status: 200 };
-      },
-    }),
+      keychain: createTestKeychain(),
+    })),
     /must be a non-empty owner-only file/,
   );
-  assert.equal(calls, 0);
 });
