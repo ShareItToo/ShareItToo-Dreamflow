@@ -1,4 +1,17 @@
-# Current Work Package: WP102 Staging Verification Delivery Truth — IN PROGRESS
+# Current Work Package: WP103 Current-Source Android Candidate — IN PROGRESS
+
+WP103 privately binds `1.0.0+2026091002` to source commit
+`fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5` after WP102 changed runtime
+behavior. Its canonical signature, package/API identity, archive integrity and
+binary privacy scan and complete isolated local technical regression pass.
+Clean-checkout reproducibility, GitHub Regression, CodeQL and fresh code-scan
+readback remain pending. The predecessor Pixel candidate is retained under its
+immutable versioned manifest; no historical device proof is transferred. No
+Store upload, activation, device install, deployment, provider, payment,
+Firebase, cloud, VPS, DNS or PR-merge action occurs in WP103. See
+`docs/operations/WP103_CURRENT_SOURCE_ANDROID_CANDIDATE_2026-09-10.md`.
+
+# Previous Work Package: WP102 Staging Verification Delivery Truth — SOURCE COMPLETE / EXTERNAL TRACE OPEN
 
 WP102 records the owner-reported absent verification messages and corrects the
 source so a server-known verification-delivery command failure cannot appear
@@ -11,12 +24,11 @@ request/transport facts, never proof of recipient inbox delivery. See
 The local correction and focused checks are complete at source commit
 `ccb247d356e56b96d956efc5839ed773013720e8`. The complete technical gate
 correctly stopped at the retained Android-candidate source binding because
-runtime source now differs from the candidate's artifact source. No candidate
-rollover has been created and no GitHub Regression may be described as green
-for this source until its own exact-candidate package exists. The external
-provider message trace is separately open and is the only next source for
-recipient-outcome truth. It must be read-only and retain no account identifier,
-link or message content in repository evidence.
+runtime source differed from the candidate's artifact source. WP103 now owns
+the separate exact-candidate package; its local regression passes and GitHub
+truth remains pending. The external provider message trace is separately open and is the
+only source for recipient-outcome truth. It must be read-only and retain no
+account identifier, link or message content in repository evidence.
 
 # Previous Work Package: WP101 Fresh Two-Role Source Readiness — PARTIAL
 

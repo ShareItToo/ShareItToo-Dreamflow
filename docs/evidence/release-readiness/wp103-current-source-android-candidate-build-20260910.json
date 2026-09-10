@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP103_CURRENT_SOURCE_ANDROID_CANDIDATE",
+  "status": "private-candidate-built-local-regression-passed-github-pending",
+  "recordedAt": "2026-09-10T17:02:49Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "artifactSourceHead": "fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5",
+    "predecessorCandidateVersionCode": "2026091001",
+    "predecessorManifest": "store/google-play/rollover-candidate-2026091001.json",
+    "runtimeCorrectionIncluded": "WP102 verification-delivery truth"
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091002",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "compileSdkVersion": 36,
+    "targetSdkVersion": 36,
+    "minSdkVersion": 24,
+    "firebaseAndroidConfigured": true,
+    "closedPilotEnvelopeEnabled": true,
+    "socialAuth": {
+      "googleEnabled": false,
+      "appleEnabled": false,
+      "facebookEnabled": false
+    }
+  },
+  "artifacts": {
+    "aabBytes": 109445679,
+    "aabSha256": "2afcc4f5d473c74708861c116e26e46233c0873aaaa23e3a6cceaa78ea377501",
+    "apkBytes": 136389066,
+    "apkSha256": "d0ac7a80232536a4c2f5e1d659b8b9ba4f973581f816142dc6419931742c3637",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "zipStructureValidation": "passed",
+    "binaryPrivacyScan": "passed",
+    "binaryPrivacyReportSha256": "323cd7886abf4efc6a89e1cc4d326338b4c42678996558a114cdb63a93276290",
+    "bundletoolValidation": "not-run-tool-unavailable"
+  },
+  "localVerification": {
+    "cleanCommitBoundPreflight": "passed",
+    "privateArchiveVerification": "passed",
+    "fullTechnicalRegression": "passed-isolated-local-profile",
+    "cleanCheckoutReproducibility": "pending-exact-github-regression",
+    "githubRegression": "pending",
+    "githubCodeql": "pending",
+    "currentCodeScanningReadback": "pending"
+  },
+  "boundaries": {
+    "storeUploadPerformed": false,
+    "storeActivationPerformed": false,
+    "testerListChanged": false,
+    "deviceInstalledOrContacted": false,
+    "stagingChanged": false,
+    "providerChanged": false,
+    "paymentChanged": false,
+    "firebaseChanged": false,
+    "cloudVpsDnsChanged": false,
+    "productionChanged": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false,
+    "containsTesterIdentity": false,
+    "containsPrivateFilesystemPath": false
+  }
+}

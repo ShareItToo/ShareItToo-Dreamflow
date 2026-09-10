@@ -10,7 +10,7 @@
     "artifactSourceHead": "068c843a2660e2a4c44a1715f4f8e51a67b41d24",
     "releaseChannel": "internal",
     "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
-    "artifactBindingRef": "store/google-play/current-rollover-candidate.json"
+    "artifactBindingRef": "store/google-play/rollover-candidate-2026091001.json"
   },
   "update": {
     "installedVersionBefore": "1.0.0+2026090905",

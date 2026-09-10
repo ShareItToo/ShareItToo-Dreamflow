@@ -1,6 +1,18 @@
 # ShareItToo Current State
 
-## WP102 staging verification delivery truth — in progress
+## WP103 current-source Android candidate — in progress
+
+The private signed Internal/Staging successor `1.0.0+2026091002` is now bound
+to `fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5`. Its package, canonical signing,
+archive structure and binary privacy report pass locally. The old 2026091001
+Pixel evidence now has an immutable versioned manifest and is not treated as
+evidence for this new binary. Its complete isolated local regression now
+passes; independent GitHub Regression, CodeQL and current code-scanning
+readback are still pending. No Store, tester, device, Staging, provider,
+payment, Firebase, cloud, VPS, DNS or production state changed. See
+`docs/operations/WP103_CURRENT_SOURCE_ANDROID_CANDIDATE_2026-09-10.md`.
+
+## WP102 staging verification delivery truth — source complete / external trace open
 
 An owner reported absent normal verification messages in the expected mailbox,
 including spam. The local source correction at
@@ -10,9 +22,10 @@ registration/delivery success and makes client wording state only that a
 request was processed. SMTP readiness and an accepted registration remain
 insufficient to claim inbox delivery. The correction has not been deployed;
 no message, account, Staging, provider, Store, payment, cloud, VPS, DNS or
-device state changed. Its complete local gate correctly stopped at the retained
-Android-candidate binding because this runtime source differs from its artifact
-source; no replacement candidate, deployment or GitHub-green claim exists.
+device state changed. Its first complete local gate correctly stopped at the
+retained Android-candidate binding because runtime source differed from its
+artifact source. WP103 has since built the separate private successor, whose
+isolated local regression passes and whose GitHub verification remains pending.
 The provider message trace is separately open and must remain read-only and
 sanitized. See
 `docs/operations/WP102_STAGING_VERIFICATION_DELIVERY_TRUTH_2026-09-10.md`.

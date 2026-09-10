@@ -72,6 +72,8 @@ candidate. This is expected candidate-binding truth, not a regression pass or
 a mail-delivery result. WP102 does not create a replacement signed candidate;
 that release-candidate action requires its own bounded package and exact
 artifact binding before a complete gate or GitHub Regression can be claimed.
+WP103 subsequently created that separate private candidate; its completion
+gates remain independently pending and do not alter this mail-outcome boundary.
 
 ## Remaining external gate
 

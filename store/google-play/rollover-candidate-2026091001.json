@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "kind": "android-current-rollover-candidate",
-  "status": "build-ready-play-internal-upload-pending",
-  "generatedAt": "2026-09-10T17:02:49Z",
+  "status": "superseded-never-uploaded",
+  "generatedAt": "2026-09-10T10:47:01Z",
   "candidate": {
     "applicationId": "com.shareittoo.app",
     "versionName": "1.0.0",
-    "versionCode": "2026091002",
-    "artifactSourceHead": "fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5",
+    "versionCode": "2026091001",
+    "artifactSourceHead": "068c843a2660e2a4c44a1715f4f8e51a67b41d24",
     "releaseChannel": "internal",
     "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
     "compileSdkVersion": 36,
@@ -24,14 +24,14 @@
     "g5ListingSetsTechnicalUiEnabled": true
   },
   "artifact": {
-    "archiveDirectoryName": "2026091002-fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5",
-    "aabFileName": "shareittoo-1.0.0-2026091002-fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5.aab",
-    "aabBytes": 109445679,
-    "aabSha256": "2afcc4f5d473c74708861c116e26e46233c0873aaaa23e3a6cceaa78ea377501",
-    "apkFileName": "shareittoo-1.0.0-2026091002-fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5.apk",
-    "apkBytes": 136389066,
-    "apkSha256": "d0ac7a80232536a4c2f5e1d659b8b9ba4f973581f816142dc6419931742c3637",
-    "privacyReportSha256": "323cd7886abf4efc6a89e1cc4d326338b4c42678996558a114cdb63a93276290",
+    "archiveDirectoryName": "2026091001-068c843a2660e2a4c44a1715f4f8e51a67b41d24",
+    "aabFileName": "shareittoo-1.0.0-2026091001-068c843a2660e2a4c44a1715f4f8e51a67b41d24.aab",
+    "aabBytes": 109446024,
+    "aabSha256": "3d3adea9437a97f45cf5652e2766948b23d39f507af445d151dfbc9afe6c8dd0",
+    "apkFileName": "shareittoo-1.0.0-2026091001-068c843a2660e2a4c44a1715f4f8e51a67b41d24.apk",
+    "apkBytes": 136389070,
+    "apkSha256": "a87eb30dd8717ef8b35ce7d519b4dd4f769c1dc176ee18ad76912f6bcbd3071d",
+    "privacyReportSha256": "acc6eb2de0cf8a6e2a9a2bb72d8c9d3254ca4add184cbfedd64de30842c2d289",
     "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
     "signatureVerified": true,
     "zipStructureValidation": "passed",
@@ -42,23 +42,23 @@
     "nonOverwritingArchive": true
   },
   "sourceVerification": {
-    "closedPilotFocusedTests": "passed-release-preflight",
+    "closedPilotFocusedTests": "passed-current-source-full-tool-inventory",
     "privacyAndPackageRatchets": "passed",
-    "fullToolInventory": "passed-exact-candidate-full-technical-regression",
-    "localCiProfileRegression": "passed-isolated-local-full-technical-regression",
-    "cleanCheckoutReproducibility": "pending-exact-head-github-regression",
-    "githubVerifiedHead": null,
-    "artifactHeadMatchesGithubVerifiedHead": false,
-    "githubRegressionRunId": null,
-    "githubRegressionConclusion": "pending-exact-head-github-regression",
-    "githubCodeqlRunId": null,
-    "githubCodeqlConclusion": "pending-exact-head-github-codeql",
+    "fullToolInventory": "passed-2619",
+    "localCiProfileRegression": "passed-local-full-technical-regression",
+    "cleanCheckoutReproducibility": "passed-exact-github-r10",
+    "githubVerifiedHead": "068c843a2660e2a4c44a1715f4f8e51a67b41d24",
+    "artifactHeadMatchesGithubVerifiedHead": true,
+    "githubRegressionRunId": 34465582435,
+    "githubRegressionConclusion": "success",
+    "githubCodeqlRunId": 34465582425,
+    "githubCodeqlConclusion": "success",
     "githubApiImagePublishRunId": null,
     "githubApiImagePublishConclusion": "not-requested",
-    "openCodeScanningAlertsPrHead": "pending-exact-head-scan",
-    "openCodeScanningAlertsPrMerge": "pending-exact-head-scan",
-    "staleDirectBranchAlertInstances": "not-refreshed-for-new-candidate",
-    "staleDirectBranchAlertCommit": null
+    "openCodeScanningAlertsPrHead": 0,
+    "openCodeScanningAlertsPrMerge": 0,
+    "staleDirectBranchAlertInstances": 2,
+    "staleDirectBranchAlertCommit": "0048ece49b7819fb09600465a027a4e0b530ccda"
   },
   "stagingStateAtReadback": {
     "sourceHead": "7a73de4aba2b4ae4d6785e8dfbd466a5ad5aa60c",
@@ -96,6 +96,11 @@
     "cloudVpsDnsChanged": false,
     "pullRequestMerged": false
   },
+  "supersession": {
+    "reason": "The verification-delivery truth correction introduced newer mobile and backend runtime behavior after this candidate was built.",
+    "supersededByVersionCode": "2026091002",
+    "uploadAllowed": false
+  },
   "legalAndPilotHold": {
     "legalManifestVersion": "V5.2-2026-08-16",
     "legalManifestStatus": "draft-blocked",
@@ -108,16 +113,16 @@
     "requiredNextGate": "independent-professional-v5.2-approval-and-approved-snapshot-provisioning"
   },
   "deviceVerification": {
-    "preferredDeviceExactApkInstalled": false,
-    "preferredDeviceDataPreserved": false,
-    "exactListingReportFlow": "not-run-for-2026091002",
-    "guestCatalogOnline": "not-run-for-2026091002",
-    "offlineTruthfulError": "not-run-for-2026091002",
-    "onlineRecovery": "not-run-for-2026091002",
-    "processRestart": "not-run-for-2026091002",
+    "preferredDeviceExactApkInstalled": true,
+    "preferredDeviceDataPreserved": true,
+    "exactListingReportFlow": "not-run-for-2026091001",
+    "guestCatalogOnline": "not-run-for-2026091001",
+    "offlineTruthfulError": "not-run-for-2026091001",
+    "onlineRecovery": "not-run-for-2026091001",
+    "processRestart": "passed-read-only-session-recovery",
     "storeDeliveredSplitVerified": false,
-    "authenticatedPilotMatrix": "not-run-for-2026091002",
-    "secondaryDevice": "not-run-for-2026091002"
+    "authenticatedPilotMatrix": "not-run-for-2026091001",
+    "secondaryDevice": "not-run-for-2026091001"
   },
   "privateDriveHandoff": {
     "status": "not-required-for-current-mac-mini-session",
@@ -128,9 +133,9 @@
     "fileCount": 0,
     "shared": false
   },
-  "evidenceRef": "docs/evidence/release-readiness/wp103-current-source-android-candidate-build-20260910.json",
+  "evidenceRef": "docs/evidence/release-readiness/wp96-current-source-android-candidate-build-20260910.json",
   "playCompletionEvidenceRef": null,
-  "handoverRef": "docs/operations/WP103_CURRENT_SOURCE_ANDROID_CANDIDATE_2026-09-10.md",
+  "handoverRef": "docs/operations/WP96_CURRENT_SOURCE_ANDROID_CANDIDATE_RESERVATION_2026-09-10.md",
   "releaseNotesRef": "store/google-play/de-DE/internal_release_notes.txt",
   "containsSecrets": false,
   "containsTesterIdentity": false,

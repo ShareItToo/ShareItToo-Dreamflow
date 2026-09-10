@@ -5,8 +5,10 @@
 WP98 removes one historical diagnostic ambiguity before touching the Pixel.
 The legacy generic Android preparation helper remains bound to the older
 tracked device-validation record. The current-candidate update route instead
-binds directly to `store/google-play/current-rollover-candidate.json`, then to
-the owner-only four-file archive and its exact source commit.
+bound directly to the then-current manifest, now preserved as
+`store/google-play/rollover-candidate-2026091001.json`, then to the owner-only
+four-file archive and its exact source commit. This historical binding must not
+move when a successor candidate is prepared.
 
 The CLI now requires an explicit mode: `--preflight-only` performs the
 read-only, data-preservation check; `--install` is required for the later
