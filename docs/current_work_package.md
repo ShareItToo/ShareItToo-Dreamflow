@@ -1,4 +1,13 @@
-# Current Work Package: WP90 Pixel Permission-Lifecycle Restart Recovery
+# Current Work Package: WP91 Pixel Cold-Start Stability
+
+WP91 is **COMPLETE FOR THREE BOUNDED READ-ONLY COLD STARTS**. The exact Pixel
+candidate's explicit archive was validated and three controlled launches each
+reached authenticated navigation. This makes a general start failure unproven,
+but does not explain or accept the distinct WP90 in-cycle navigation absence.
+No permission, account, business, provider, Store, Production, OnePlus or merge
+state changed. See `docs/operations/WP91_PIXEL_COLD_START_STABILITY_2026-09-10.md`.
+
+# Previous Work Package: WP90 Pixel Permission-Lifecycle Restart Recovery
 
 WP90 is **PARTIAL WITH EXACT RESTORATION**. The exact Pixel candidate completed
 artifact, source, manifest, device and authenticated-navigation preflight, then

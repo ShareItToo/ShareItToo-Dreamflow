@@ -1,5 +1,13 @@
 # ShareItToo Current State
 
+## WP91 Pixel cold-start stability
+
+The exact Pixel candidate passed three separate non-mutating cold starts with
+authenticated navigation visible each time. This narrows but does not explain
+the WP90 navigation absence during a permission lifecycle; it does not promote
+that lifecycle or any account/business outcome. See
+`docs/operations/WP91_PIXEL_COLD_START_STABILITY_2026-09-10.md`.
+
 ## WP90 Pixel permission-lifecycle restart recovery
 
 WP90 reconfirms exact recovery of the four runtime permissions but does not

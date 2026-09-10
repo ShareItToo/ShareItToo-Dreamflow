@@ -290,6 +290,106 @@ export async function waitForCurrentHeadAndroidMainNavigation({
   fail(`The current-head ShareItToo main navigation did not appear (${lastAbsence}).`);
 }
 
+function safeNavigationFailureClass(error) {
+  const observed = /\(([^()]+)\)\.?$/u.exec(String(error?.message ?? ''))?.[1] ?? null;
+  const permitted = new Set([
+    'system-notification-overlay',
+    'unauthenticated-session',
+    'bottom-navigation-absent',
+    'bottom-navigation-incomplete',
+    'navigation-labels-present-surface-pending',
+  ]);
+  return permitted.has(observed) ? observed : 'other-fail-closed-navigation-error';
+}
+
+export async function diagnoseCurrentHeadAndroidColdStartStability({
+  commandRunner = defaultCurrentHeadAndroidCommandRunner,
+  adbPath = 'adb',
+  device,
+  deviceSummary,
+  candidate,
+  attempts = 3,
+  capturedAt = new Date().toISOString(),
+  wait = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds)),
+}) {
+  if (!Number.isInteger(attempts) || attempts < 1 || attempts > 3) {
+    fail('Cold-start stability attempts must be between one and three.');
+  }
+  assertCurrentHeadAndroidDeviceAlreadyUnlocked(commandRunner, adbPath, device);
+  const installed = verifyCurrentHeadAndroidInstalledCandidate(
+    commandRunner,
+    adbPath,
+    device,
+    candidate,
+  );
+  const observed = [];
+  try {
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      launchCurrentHeadAndroidCandidate(commandRunner, adbPath, device);
+      try {
+        await waitForCurrentHeadAndroidMainNavigation({ commandRunner, adbPath, device, wait });
+        observed.push(Object.freeze({ attempt, result: 'navigation-visible' }));
+      } catch (error) {
+        observed.push(Object.freeze({
+          attempt,
+          result: 'navigation-unavailable',
+          failureClass: safeNavigationFailureClass(error),
+        }));
+        break;
+      }
+    }
+  } finally {
+    restoreCurrentHeadAndroidExplore(commandRunner, adbPath, device);
+  }
+  const firstFailure = observed.find((result) => result.result !== 'navigation-visible') ?? null;
+  return Object.freeze({
+    schemaVersion: 1,
+    kind: 'android-current-head-cold-start-stability-diagnostic',
+    status: firstFailure === null
+      ? 'passed-three-bounded-cold-start-navigation-observations'
+      : 'partial-fail-closed-cold-start-navigation-observation',
+    capturedAt,
+    candidate: {
+      applicationId: candidate.applicationId,
+      versionName: candidate.versionName,
+      buildNumber: candidate.buildNumber,
+      commit: candidate.commit,
+      releaseChannel: candidate.releaseChannel,
+      apiBaseUrl: candidate.apiBaseUrl,
+      apkSha256: candidate.android.apkSha256,
+    },
+    installed: {
+      packageIdentityVerified: true,
+      versionName: installed.versionName,
+      buildNumber: installed.buildNumber,
+      delivery: installed.delivery,
+      apkSha256: installed.apkSha256,
+    },
+    device: deviceSummary,
+    coldStarts: {
+      attemptsRequested: attempts,
+      attemptsCompleted: observed.length,
+      observations: observed,
+      firstFailure,
+    },
+    boundaries: {
+      directDiagnosticOnly: true,
+      permissionMutationPerformed: false,
+      accountMutationPerformed: false,
+      listingMutationPerformed: false,
+      bookingMutationPerformed: false,
+      messageSent: false,
+      loginPerformed: false,
+      logoutPerformed: false,
+      accountIdentityRecorded: false,
+      lockCodeUsed: false,
+      containsPersonalAccountData: false,
+      containsSecrets: false,
+      containsRawDeviceIdentifiers: false,
+    },
+  });
+}
+
 async function openAndVerifyNavigation({
   commandRunner,
   adbPath,
@@ -414,6 +514,7 @@ export function parseMainNavigationArguments(values) {
   let currentHead = false;
   let adbPath = 'adb';
   let candidateDirectory = null;
+  let coldStartAttempts = null;
   for (let index = 0; index < values.length; index += 1) {
     if (values[index] === '--current-head') {
       currentHead = true;
@@ -423,12 +524,17 @@ export function parseMainNavigationArguments(values) {
     } else if (values[index] === '--candidate-dir') {
       candidateDirectory = values[index + 1] ?? fail('--candidate-dir requires a path.');
       index += 1;
+    } else if (values[index] === '--cold-start-attempts') {
+      const raw = values[index + 1] ?? fail('--cold-start-attempts requires a value.');
+      if (!/^[1-3]$/u.test(raw)) fail('--cold-start-attempts must be between one and three.');
+      coldStartAttempts = Number(raw);
+      index += 1;
     } else {
       fail(`Unknown argument: ${values[index]}`);
     }
   }
   if (!currentHead) fail('The main-navigation diagnostic requires --current-head.');
-  return { currentHead, adbPath, candidateDirectory };
+  return { currentHead, adbPath, candidateDirectory, coldStartAttempts };
 }
 
 async function run() {
@@ -443,12 +549,14 @@ async function run() {
   );
   const device = selectSinglePhysicalDevice(devices);
   const deviceSummary = inspectPhysicalDevice({ adbPath: args.adbPath, device });
-  const evidence = await diagnoseCurrentHeadAndroidMainNavigation({
-    adbPath: args.adbPath,
-    device,
-    deviceSummary,
-    candidate,
-  });
+  const evidence = args.coldStartAttempts === null
+    ? await diagnoseCurrentHeadAndroidMainNavigation({
+      adbPath: args.adbPath, device, deviceSummary, candidate,
+    })
+    : await diagnoseCurrentHeadAndroidColdStartStability({
+      adbPath: args.adbPath, device, deviceSummary, candidate,
+      attempts: args.coldStartAttempts,
+    });
   process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
 }
 

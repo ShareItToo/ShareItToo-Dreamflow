@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   classifyCurrentHeadAndroidMainNavigationAbsence,
+  diagnoseCurrentHeadAndroidColdStartStability,
   diagnoseCurrentHeadAndroidMainNavigation,
   parseMainNavigationArguments,
 } from '../../tool/diagnose_current_head_android_main_navigation.mjs';
@@ -59,8 +60,10 @@ function fakeRunner({
   locked = false,
   changedApk = false,
   omitMessagesSurface = false,
+  hideNavigationOnLaunch = null,
 } = {}) {
   let active = 'Entdecken';
+  let launches = 0;
   return (_file, args, options = {}) => {
     const command = args.slice(2);
     const joined = command.join(' ');
@@ -76,6 +79,7 @@ function fakeRunner({
     }
     if (joined === 'shell am force-stop com.shareittoo.app') return '';
     if (command[0] === 'shell' && command[1] === 'monkey') {
+      launches += 1;
       active = 'Entdecken';
       return 'Events injected: 1';
     }
@@ -83,6 +87,7 @@ function fakeRunner({
       return 'UI hierarchy dumped';
     }
     if (joined === 'exec-out cat /sdcard/sit-main-navigation-diagnostic.xml') {
+      if (hideNavigationOnLaunch === launches) return '<hierarchy/>';
       return hierarchy(active, { omitMessagesSurface });
     }
     if (joined === 'shell rm -f /sdcard/sit-main-navigation-diagnostic.xml') return '';
@@ -167,16 +172,53 @@ test('classifies missing navigation with a fixed non-private vocabulary', () => 
   );
 });
 
+test('measures up to three cold starts and stops at the first safe navigation failure', async () => {
+  const passed = await diagnoseCurrentHeadAndroidColdStartStability({
+    commandRunner: fakeRunner(),
+    device: { serial: 'PRIVATE-SERIAL', state: 'device', attributes: {} },
+    deviceSummary,
+    candidate,
+    capturedAt: '2026-08-23T12:00:00.000Z',
+    wait: async () => {},
+  });
+  assert.equal(passed.status, 'passed-three-bounded-cold-start-navigation-observations');
+  assert.equal(passed.coldStarts.attemptsCompleted, 3);
+  assert.equal(JSON.stringify(passed).includes('PRIVATE-SERIAL'), false);
+
+  const failed = await diagnoseCurrentHeadAndroidColdStartStability({
+    commandRunner: fakeRunner({ hideNavigationOnLaunch: 2 }),
+    device: { serial: 'PRIVATE-SERIAL', state: 'device', attributes: {} },
+    deviceSummary,
+    candidate,
+    wait: async () => {},
+  });
+  assert.equal(failed.status, 'partial-fail-closed-cold-start-navigation-observation');
+  assert.deepEqual(failed.coldStarts.firstFailure, {
+    attempt: 2,
+    result: 'navigation-unavailable',
+    failureClass: 'bottom-navigation-absent',
+  });
+  await assert.rejects(
+    () => diagnoseCurrentHeadAndroidColdStartStability({
+      commandRunner: fakeRunner(), device: { serial: 'PRIVATE-SERIAL' }, deviceSummary, candidate,
+      attempts: 4, wait: async () => {},
+    }),
+    /between one and three/u,
+  );
+});
+
 test('requires the explicit current-head route and accepts safe ADB or candidate overrides', () => {
   assert.deepEqual(parseMainNavigationArguments(['--current-head']), {
     currentHead: true,
     adbPath: 'adb',
     candidateDirectory: null,
+    coldStartAttempts: null,
   });
   assert.deepEqual(parseMainNavigationArguments(['--current-head', '--adb', '/safe/adb']), {
     currentHead: true,
     adbPath: '/safe/adb',
     candidateDirectory: null,
+    coldStartAttempts: null,
   });
   assert.deepEqual(parseMainNavigationArguments([
     '--current-head', '--candidate-dir', '/private/candidate',
@@ -184,7 +226,9 @@ test('requires the explicit current-head route and accepts safe ADB or candidate
     currentHead: true,
     adbPath: 'adb',
     candidateDirectory: '/private/candidate',
+    coldStartAttempts: null,
   });
+  assert.equal(parseMainNavigationArguments(['--current-head', '--cold-start-attempts', '3']).coldStartAttempts, 3);
   assert.throws(() => parseMainNavigationArguments([]), /requires --current-head/u);
   assert.throws(
     () => parseMainNavigationArguments(['--current-head', '--other', 'x']),

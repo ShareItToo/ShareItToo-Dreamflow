@@ -904,6 +904,9 @@ node tool/validate_wp89_pixel_explicit_candidate_navigation.mjs
 node --check tool/validate_wp90_pixel_permission_lifecycle_restart_recovery.mjs
 node --test test/tool/validate_wp90_pixel_permission_lifecycle_restart_recovery.test.mjs
 node tool/validate_wp90_pixel_permission_lifecycle_restart_recovery.mjs
+node --check tool/validate_wp91_pixel_cold_start_stability.mjs
+node --test test/tool/validate_wp91_pixel_cold_start_stability.test.mjs
+node tool/validate_wp91_pixel_cold_start_stability.mjs
 node --check tool/validate_wp83_current_candidate_pixel_auth_session_replay.mjs
 node --test test/tool/validate_wp83_current_candidate_pixel_auth_session_replay.test.mjs
 node tool/validate_wp83_current_candidate_pixel_auth_session_replay.mjs
