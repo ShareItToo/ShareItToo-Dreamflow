@@ -1,4 +1,15 @@
-# Current Work Package: WP88 Pixel Permission-Lifecycle Recovery
+# Current Work Package: WP89 Pixel Explicit-Candidate Navigation
+
+WP89 is **COMPLETE FOR THE PHYSICAL READ-ONLY NAVIGATION DIAGNOSTIC**. The
+exact Pixel `1.0.0+2026090905` candidate's explicit private archive passed
+before device contact, and all five authenticated main destinations were
+observed. The repaired runner classifies a missing navigation without retaining
+raw UI content. No permission, account, business, provider, Store, Production,
+OnePlus or merge state changed. The separate permission lifecycle remains
+unaccepted until it independently passes exact restoration. See
+`docs/operations/WP89_PIXEL_EXPLICIT_CANDIDATE_NAVIGATION_2026-09-10.md`.
+
+# Previous Work Package: WP88 Pixel Permission-Lifecycle Recovery
 
 WP88 is **PARTIAL WITH A PROVEN SAFE RECOVERY**. The exact Pixel candidate's
 private archive, source, package and four-runtime-permission manifest were

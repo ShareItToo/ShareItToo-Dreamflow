@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import test from 'node:test';
 
 import {
+  classifyCurrentHeadAndroidMainNavigationAbsence,
   diagnoseCurrentHeadAndroidMainNavigation,
   parseMainNavigationArguments,
 } from '../../tool/diagnose_current_head_android_main_navigation.mjs';
@@ -142,18 +143,51 @@ test('fails closed when one authenticated destination surface is missing', async
   );
 });
 
-test('requires the explicit current-head route and accepts only an ADB override', () => {
+test('classifies missing navigation with a fixed non-private vocabulary', () => {
+  assert.equal(
+    classifyCurrentHeadAndroidMainNavigationAbsence('<hierarchy><node text="Bitte zuerst anmelden"/></hierarchy>'),
+    'unauthenticated-session',
+  );
+  assert.equal(
+    classifyCurrentHeadAndroidMainNavigationAbsence('<hierarchy/>'),
+    'bottom-navigation-absent',
+  );
+  assert.equal(
+    classifyCurrentHeadAndroidMainNavigationAbsence(hierarchy('Entdecken').replace('content-desc="Mietkorb', 'content-desc="x')),
+    'bottom-navigation-incomplete',
+  );
+  const allLabelsOnly = labels.map((label) => `<node content-desc="${label}"/>`).join('');
+  assert.equal(
+    classifyCurrentHeadAndroidMainNavigationAbsence(`<hierarchy>${allLabelsOnly}</hierarchy>`),
+    'navigation-labels-present-surface-pending',
+  );
+  assert.equal(
+    classifyCurrentHeadAndroidMainNavigationAbsence('<hierarchy><node content-desc="Benachrichtigung: test"/></hierarchy>'),
+    'system-notification-overlay',
+  );
+});
+
+test('requires the explicit current-head route and accepts safe ADB or candidate overrides', () => {
   assert.deepEqual(parseMainNavigationArguments(['--current-head']), {
     currentHead: true,
     adbPath: 'adb',
+    candidateDirectory: null,
   });
   assert.deepEqual(parseMainNavigationArguments(['--current-head', '--adb', '/safe/adb']), {
     currentHead: true,
     adbPath: '/safe/adb',
+    candidateDirectory: null,
+  });
+  assert.deepEqual(parseMainNavigationArguments([
+    '--current-head', '--candidate-dir', '/private/candidate',
+  ]), {
+    currentHead: true,
+    adbPath: 'adb',
+    candidateDirectory: '/private/candidate',
   });
   assert.throws(() => parseMainNavigationArguments([]), /requires --current-head/u);
   assert.throws(
-    () => parseMainNavigationArguments(['--current-head', '--candidate-dir', 'x']),
+    () => parseMainNavigationArguments(['--current-head', '--other', 'x']),
     /Unknown argument/u,
   );
 });

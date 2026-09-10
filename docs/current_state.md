@@ -1,5 +1,14 @@
 # ShareItToo Current State
 
+## WP89 Pixel explicit-candidate navigation
+
+WP89 corrects a historical private-archive default in the local navigation
+diagnostic, not the app. The exact Pixel candidate `1.0.0+2026090905` now
+passes all five authenticated, read-only main destinations through an explicit,
+validated archive binding. No permission, account or external state changed;
+the result does not promote the permission lifecycle or any business flow. See
+`docs/operations/WP89_PIXEL_EXPLICIT_CANDIDATE_NAVIGATION_2026-09-10.md`.
+
 ## WP88 Pixel permission-lifecycle recovery
 
 WP88 confirms that an interrupted exact-candidate Android permission run leaves

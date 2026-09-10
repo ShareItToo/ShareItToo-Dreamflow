@@ -13,6 +13,12 @@ import {
 import {
   loadCurrentHeadAndroidDeviceCandidate,
 } from './validate_current_head_android_candidate.mjs';
+import {
+  validatePrivateAndroidReleaseArchive,
+} from './validate_current_head_android_release_archive.mjs';
+import {
+  validateCurrentPrivateAndroidCandidate,
+} from './run_n28_current_candidate_pixel_surface_matrix.mjs';
 
 export const currentHeadAndroidApplicationId = 'com.shareittoo.app';
 const applicationId = currentHeadAndroidApplicationId;
@@ -213,6 +219,24 @@ export function currentHeadAndroidNamedNodes(hierarchy, label) {
   ));
 }
 
+// A UI dump can contain private account and listing content. Return only a
+// closed vocabulary derived from the navigation labels we already require, so
+// a physical test can explain a stop without retaining or printing that dump.
+export function classifyCurrentHeadAndroidMainNavigationAbsence(hierarchy) {
+  const navigationCount = navigationChecks.filter((check) => (
+    currentHeadAndroidNamedNodes(hierarchy, check.label).length >= 1
+  )).length;
+  if (String(hierarchy).includes('content-desc="Benachrichtigung:')) {
+    return 'system-notification-overlay';
+  }
+  if (currentHeadAndroidNamedNodes(hierarchy, 'Bitte zuerst anmelden').length >= 1) {
+    return 'unauthenticated-session';
+  }
+  if (navigationCount === 0) return 'bottom-navigation-absent';
+  if (navigationCount < navigationChecks.length) return 'bottom-navigation-incomplete';
+  return 'navigation-labels-present-surface-pending';
+}
+
 function tapBottomNavigationLabel(commandRunner, adbPath, device, hierarchy, label) {
   const candidates = currentHeadAndroidNamedNodes(hierarchy, label)
     .map((node) => {
@@ -243,10 +267,12 @@ export async function waitForCurrentHeadAndroidMainNavigation({
   device,
   wait,
 }) {
+  let lastAbsence = 'not-yet-observed';
   for (let attempt = 0; attempt < 12; attempt += 1) {
     await wait(600);
     const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
-    if (hierarchy.includes('content-desc="Benachrichtigung:')) {
+    lastAbsence = classifyCurrentHeadAndroidMainNavigationAbsence(hierarchy);
+    if (lastAbsence === 'system-notification-overlay') {
       currentHeadAndroidAdb(
         commandRunner,
         adbPath,
@@ -261,7 +287,7 @@ export async function waitForCurrentHeadAndroidMainNavigation({
       return hierarchy;
     }
   }
-  fail('The current-head ShareItToo main navigation did not appear.');
+  fail(`The current-head ShareItToo main navigation did not appear (${lastAbsence}).`);
 }
 
 async function openAndVerifyNavigation({
@@ -387,23 +413,31 @@ export async function diagnoseCurrentHeadAndroidMainNavigation({
 export function parseMainNavigationArguments(values) {
   let currentHead = false;
   let adbPath = 'adb';
+  let candidateDirectory = null;
   for (let index = 0; index < values.length; index += 1) {
     if (values[index] === '--current-head') {
       currentHead = true;
     } else if (values[index] === '--adb') {
       adbPath = values[index + 1] ?? fail('--adb requires a path.');
       index += 1;
+    } else if (values[index] === '--candidate-dir') {
+      candidateDirectory = values[index + 1] ?? fail('--candidate-dir requires a path.');
+      index += 1;
     } else {
       fail(`Unknown argument: ${values[index]}`);
     }
   }
   if (!currentHead) fail('The main-navigation diagnostic requires --current-head.');
-  return { currentHead, adbPath };
+  return { currentHead, adbPath, candidateDirectory };
 }
 
 async function run() {
   const args = parseMainNavigationArguments(process.argv.slice(2));
-  const candidate = await loadCurrentHeadAndroidDeviceCandidate();
+  const candidate = args.candidateDirectory === null
+    ? await loadCurrentHeadAndroidDeviceCandidate()
+    : validateCurrentPrivateAndroidCandidate(await validatePrivateAndroidReleaseArchive({
+      candidateDirectory: args.candidateDirectory,
+    }));
   const devices = parseAdbDevices(
     defaultCurrentHeadAndroidCommandRunner(args.adbPath, ['devices', '-l']),
   );
