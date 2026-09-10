@@ -26,6 +26,17 @@ test('validates the exact WP55 runtime, session smoke and retained gate', () => 
   assert.equal(result.readiness, 'only-noncritical-support-next-update-overdue');
 });
 
+test('binds deployment evidence to the historical runtime rather than a later source head', () => {
+  const source = readFileSync(
+    resolve(root, 'tool/validate_wp55_staging_parity_deployment_closure.mjs'),
+    'utf8',
+  );
+  assert.match(source, /protectedRuntimeSources/u);
+  assert.match(source, /7b0958cba5d2169da3283e214630ddd55bba882eefb726aa6895b917b94ee477/u);
+  assert.match(source, /a5669d8b01672ec1b2da240607a6dc592d9cb17474d6ec40d648ffb54fc416b4/u);
+  assert.doesNotMatch(source, /`HEAD:\$\{path\}`/u);
+});
+
 test('allows Backend drift only when exact newer signed Staging candidate bytes bind it', () => {
   const rollover = {
     schemaVersion: 1,

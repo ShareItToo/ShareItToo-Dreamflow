@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -18,6 +19,12 @@ const previousRolloverVersionCode = '2026090711';
 const currentRolloverPath = 'store/google-play/current-rollover-candidate.json';
 const imageDigest =
   'sha256:e4ae94d740ef83fa80d59762805e1f64cc76f80ecd46531f955ce27ab0289908';
+const protectedRuntimeSources = Object.freeze({
+  'backend/ops/deploy_release.sh':
+    '7b0958cba5d2169da3283e214630ddd55bba882eefb726aa6895b917b94ee477',
+  'backend/compose.staging.yml':
+    'a5669d8b01672ec1b2da240607a6dc592d9cb17474d6ec40d648ffb54fc416b4',
+});
 
 function fail(message) {
   throw new Error(message);
@@ -27,12 +34,24 @@ function exact(actual, expected) {
   return JSON.stringify(actual) === JSON.stringify(expected);
 }
 
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
 function git(repositoryRoot, args) {
   return execFileSync('git', args, {
     cwd: repositoryRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   }).trim();
+}
+
+function gitRaw(repositoryRoot, args) {
+  return execFileSync('git', args, {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 }
 
 function assertAncestor(repositoryRoot, ancestor, descendant = 'HEAD') {
@@ -162,10 +181,9 @@ export function validateWp55StagingParityDeploymentClosure({
       candidateBackendRuntimeMatchesCurrent,
       rollover,
     });
-    for (const path of ['backend/ops/deploy_release.sh', 'backend/compose.staging.yml']) {
-      if (git(repositoryRoot, ['show', `${runtimeHead}:${path}`])
-          !== git(repositoryRoot, ['show', `HEAD:${path}`])) {
-        fail(`WP55 protected deployment source drifted: ${path}`);
+    for (const [path, expectedHash] of Object.entries(protectedRuntimeSources)) {
+      if (sha256(gitRaw(repositoryRoot, ['show', `${runtimeHead}:${path}`])) !== expectedHash) {
+        fail(`WP55 protected runtime source is unavailable or changed: ${path}`);
       }
     }
   }
