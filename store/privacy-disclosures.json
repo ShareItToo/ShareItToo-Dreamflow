@@ -776,11 +776,11 @@
     },
     {
       "path": "lib/screens/login_screen.dart",
-      "sha256": "c53f2fb6e0612503869ffc0e81a6bdd8789730a191e06eacf97aa3315de8126a"
+      "sha256": "f9889db3f61e60e0f063e0b2aa0bad1805d919cf5d6e144719e41446b94e2272"
     },
     {
       "path": "lib/screens/register_screen.dart",
-      "sha256": "260857bf8105742d4825204e04220c34c7a356370f11eae5692d96f84ac234e9"
+      "sha256": "f1439bd36f164d24e8074502f4aa5bf26454ea339eea8a9775d4fe79ba08e836"
     },
     {
       "path": "lib/screens/wishlists_screen.dart",
@@ -880,7 +880,7 @@
     },
     {
       "path": "lib/services/auth_service.dart",
-      "sha256": "1607dfd6d0b7907aa9040d7ec10f649fcaab12b6fef872accc66b4b4602b2687"
+      "sha256": "6596092f68b4d6e4240a40c4fc353d450f727adea8c0a059ad3d8479a758f35d"
     },
     {
       "path": "lib/screens/notification_settings_screen.dart",
@@ -900,7 +900,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "b9397663ab9df4c3494d740e80bf4e371e785e2326f560f95e0394b5af6a4be2"
+      "sha256": "d1af19fb3eb777aa9787b816ab426a29041fadefe7e275da23af49d331582ca6"
     },
     {
       "path": "backend/src/rate_limit_policy.js",

@@ -35,6 +35,22 @@ claimed until every item below has reproducible evidence and is closed.
 
 ## Observation log
 
+- 10.09.2026, WP102: an owner reported absent normal Staging verification
+  messages, including the expected mailbox's spam view. Read-only application
+  checks established SMTP readiness but not recipient delivery; the affected
+  source previously swallowed a known verification-delivery command error and
+  still returned a successful pending-registration response. Source commit
+  `ccb247d356e56b96d956efc5839ed773013720e8` now returns a typed `503` for
+  that known error, preserves normal retry and uses processed-request wording
+  rather than delivery wording. Synthetic local regression covers regular and
+  unverified-social paths; no real message was sent and no external state was
+  changed. This is an observation, not a timing or retry accommodation: the
+  separate read-only provider message trace remains open, and only it can
+  classify the reported recipient outcome. The complete regression also
+  correctly stopped at the retained Android-candidate source binding; no
+  candidate rollover, version reuse, build bypass or CI overclaim is accepted
+  to turn that stop into a pass.
+
 - 02.09.2026, RW23: two local complete-gate attempts stopped only at the fixed
   capacity bounds after prior generated Android/Gradle output consumed the Mac
   mini reserve. Only rebuildable output/caches and the superseded private

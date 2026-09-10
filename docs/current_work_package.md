@@ -1,30 +1,30 @@
-# Current Work Package: WP101 Fresh Two-Role Source Readiness — IN PROGRESS
+# Current Work Package: WP102 Staging Verification Delivery Truth — IN PROGRESS
 
-WP101 prepares the only safe starting point for the remaining functional Pixel
-Staging journey: two newly created, explicitly e-mail-verified and separate
-synthetic test principals. It cannot reuse the existing unknown Pixel session
-or any historical source vault. No listing, booking, message, account,
-provider, Store or remote source action is within this preparation scope.
+WP102 records the owner-reported absent verification messages and corrects the
+source so a server-known verification-delivery command failure cannot appear
+as a successful registration or as a delivered message. The correction is
+source-only: it neither resends email nor changes Staging, a provider, Store,
+payment, cloud, VPS, DNS or device. A `202` and SMTP readiness remain only
+request/transport facts, never proof of recipient inbox delivery. See
+`docs/operations/WP102_STAGING_VERIFICATION_DELIVERY_TRUTH_2026-09-10.md`.
 
-The intended private Journey area contains 96 explicitly retired journeys, no
-active source and no unsafe entry. The new audited runner rejects any active
-source status as insufficiently fresh and never serializes account material.
-The focused test suite passes three cases.
+The local correction and focused checks are complete at source commit
+`ccb247d356e56b96d956efc5839ed773013720e8`. The complete technical gate
+correctly stopped at the retained Android-candidate source binding because
+runtime source now differs from the candidate's artifact source. No candidate
+rollover has been created and no GitHub Regression may be described as green
+for this source until its own exact-candidate package exists. The external
+provider message trace is separately open and is the only next source for
+recipient-outcome truth. It must be read-only and retain no account identifier,
+link or message content in repository evidence.
 
-Exactly two new isolated Staging registrations (owner and renter) were accepted
-through the normal public registration route. Their randomly generated
-credentials and mailbox aliases exist only in a new owner-only local vault
-outside Git; the runner emitted no address, password or link. The completed
-local migration moved that exact credential set into a run-scoped macOS
-Keychain item and replaced the vault with a role-only manifest before any
-network verification. Their normal e-mail confirmations are then the only
-owner action required before a Pixel login may start. Delivery and link confirmation
-are not inferred from a `202` registration response: the follow-up verifier
-must establish a separate server-confirmed session for each exact role, read
-back its principal and immediately revoke that short-lived session before it
-promotes the Keychain record. The known two noncritical overdue Support
-follow-ups remain a separate legitimate staff-action hold and are not changed
-by this package. Independent provider-readiness audits continue. See
+# Previous Work Package: WP101 Fresh Two-Role Source Readiness — PARTIAL
+
+WP101 prepared two isolated Staging registrations and migrated their private
+credentials to the owner-only macOS Keychain. Its separate link-confirmation
+and server-confirmed short-lived-session proof remain pending. The reported
+missing messages are not converted into a failed or confirmed result; WP102
+now owns the delivery-truth boundary. See
 `docs/operations/WP101_FRESH_TWO_ROLE_SOURCE_READINESS_2026-09-10.md`.
 
 # Previous Work Package: WP100 Current-Candidate Pixel Read-Only Surface Closure — COMPLETE

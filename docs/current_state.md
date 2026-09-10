@@ -1,25 +1,28 @@
 # ShareItToo Current State
 
-## WP101 fresh two-role source readiness — in progress
+## WP102 staging verification delivery truth — in progress
 
-The intended owner-only two-role Journey area was inspected with a new
-fail-closed, privacy-preserving audit. It contains 96 explicitly retired
-journeys and no active source; all inspected directories and JSON inputs are
-owner-only, non-symlinked and structurally valid. The audit never emits a path,
-address, password, token or other credential material, and its source-ready
-state is rejected rather than reused as fresh evidence.
+An owner reported absent normal verification messages in the expected mailbox,
+including spam. The local source correction at
+`ccb247d356e56b96d956efc5839ed773013720e8` ensures that a known
+verification-delivery command failure returns a typed `503` instead of a false
+registration/delivery success and makes client wording state only that a
+request was processed. SMTP readiness and an accepted registration remain
+insufficient to claim inbox delivery. The correction has not been deployed;
+no message, account, Staging, provider, Store, payment, cloud, VPS, DNS or
+device state changed. Its complete local gate correctly stopped at the retained
+Android-candidate binding because this runtime source differs from its artifact
+source; no replacement candidate, deployment or GitHub-green claim exists.
+The provider message trace is separately open and must remain read-only and
+sanitized. See
+`docs/operations/WP102_STAGING_VERIFICATION_DELIVERY_TRUTH_2026-09-10.md`.
 
-Two new isolated Staging registrations (owner and renter) have now been
-accepted through the normal public registration path. Their aliases and
-generated credentials are now held only in a run-scoped macOS Keychain item.
-The completed offline migration replaced the local vault with a role-only
-manifest before any network verifier could use it. Neither delivery nor
-confirmation of their normal e-mail links is inferred from the accepted registration
-responses. Both genuine links must be confirmed in the owner-controlled
-mailbox and then server-verified through separate short-lived, immediately
-revoked sessions before a functional Pixel login begins. The known two
-noncritical overdue Support follow-ups remain a distinct staff-owned
-operational hold and were not changed. See
+## WP101 fresh two-role source readiness — partial
+
+The owner-only fresh-role preparation remains structurally valid, but its
+genuine link confirmation and server-confirmed short-lived session proof are
+pending. The two registrations' mailbox outcome is intentionally neither
+inferred nor promoted. See
 `docs/operations/WP101_FRESH_TWO_ROLE_SOURCE_READINESS_2026-09-10.md`.
 
 While that owner-only confirmation is pending, `codex_local_dev` completed one
