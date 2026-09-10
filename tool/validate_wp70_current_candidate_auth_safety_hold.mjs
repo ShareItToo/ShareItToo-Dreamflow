@@ -42,6 +42,22 @@ function assertAncestor(repositoryRoot, commit) {
   }
 }
 
+function sourceAtImplementationHead(repositoryRoot, value, path) {
+  const commit = value?.repository?.packageBaseHead;
+  if (typeof commit !== 'string' || !/^[a-f0-9]{40}$/u.test(commit)) {
+    fail('WP70 historical package head is invalid.');
+  }
+  try {
+    return Buffer.from(execFileSync('git', ['show', `${commit}:${path}`], {
+      cwd: repositoryRoot,
+      encoding: 'buffer',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }));
+  } catch {
+    fail(`WP70 historical source is unavailable: ${path}`);
+  }
+}
+
 function inspectPrivateShape(value, trail = []) {
   if (Array.isArray(value)) {
     value.forEach((entry, index) => inspectPrivateShape(entry, [...trail, index]));
@@ -65,11 +81,11 @@ function validateSources(repositoryRoot, value) {
     if (!/^[a-f0-9]{64}$/u.test(entry.sha256 ?? '')) {
       fail(`WP70 source hash is invalid: ${entry.path}`);
     }
-    if (sha256(readFileSync(resolve(repositoryRoot, entry.path))) !== entry.sha256) {
+    if (sha256(sourceAtImplementationHead(repositoryRoot, value, entry.path)) !== entry.sha256) {
       fail(`WP70 source hash drift: ${entry.path}`);
     }
   }
-  const wp69 = JSON.parse(readFileSync(resolve(repositoryRoot, sourcePaths[0]), 'utf8'));
+  const wp69 = JSON.parse(sourceAtImplementationHead(repositoryRoot, value, sourcePaths[0]));
   if (wp69.status !== 'complete-local-github'
       || wp69.candidate?.versionCode !== '2026090904'
       || wp69.nextSafePackage?.id !== 'WP70') {

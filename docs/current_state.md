@@ -1,5 +1,21 @@
 # ShareItToo Current State
 
+## WP83 current-candidate Pixel auth and session replay
+
+WP83 has physically re-proven on the installed Internal/Staging
+`1.0.0+2026090905` Pixel candidate: reversible password change with old
+credential rejection, replacement login, cold start, A-to-B isolation and
+protected-owner restoration; plus remote-session revocation, logout-all,
+server-confirmed empty truth, independent relogin and cleanup. A fresh
+four-consent registration reached the e-mail-pending state, but only the
+owner-controlled mailbox can confirm its link. No link, credential or address
+is read or stored by Codex. The exact registration/login/recovery requirement
+and the distinct delayed-result isolation proof therefore remain PARTIAL.
+Runner corrections use bounded semantic readiness rather than timing/cache
+workarounds. No Production, Store, provider, payment, Firebase, VPS/DNS,
+OnePlus or merge state changed. See
+`docs/operations/WP83_CURRENT_CANDIDATE_PIXEL_AUTH_SESSION_REPLAY_2026-09-10.md`.
+
 ## WP82 Staging persistent-source proof contract
 
 WP82 prepares one exact, source-hash-bound contract for reconstructing the

@@ -886,6 +886,9 @@ node tool/validate_wp81_source_to_staging_parity_preflight.mjs
 node --check tool/validate_wp82_staging_persistent_source_proof_contract.mjs
 node --test test/tool/validate_wp82_staging_persistent_source_proof_contract.test.mjs
 node tool/validate_wp82_staging_persistent_source_proof_contract.mjs
+node --check tool/validate_wp83_current_candidate_pixel_auth_session_replay.mjs
+node --test test/tool/validate_wp83_current_candidate_pixel_auth_session_replay.test.mjs
+node tool/validate_wp83_current_candidate_pixel_auth_session_replay.mjs
 node --check tool/validate_google_play_internal_release_2026082601_completion.mjs
 node --test test/tool/validate_google_play_internal_release_2026082601_completion.test.mjs
 node tool/validate_google_play_internal_release_2026082601_completion.mjs

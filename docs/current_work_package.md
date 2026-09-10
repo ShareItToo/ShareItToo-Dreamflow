@@ -1,4 +1,21 @@
-# Current Work Package: WP82 Staging Persistent-Source Proof Contract
+# Current Work Package: WP83 Current-Candidate Pixel Auth and Session Replay
+
+WP83 is **PARTIAL; THE ONLY ACTIVE EXTERNAL STEP IS OWNER-CONTROLLED E-MAIL
+LINK CONFIRMATION**. The exact installed Internal/Staging candidate
+`1.0.0+2026090905` now physically passes a reversible password-change
+lifecycle and the full remote-session/logout-all lifecycle on the Pixel. A
+fresh four-consent registration has reached the normal e-mail-pending state;
+no address, credential or verification link is stored in the repository.
+The link must be confirmed outside Codex, then Pixel login/cold-start and the
+separate recovery-link lifecycle can complete. The password/session requirement
+also retains its explicit delayed-result proof gap. Three bounded, state-based
+diagnostic-runner corrections replace observed disabled-action, invalid-bounds
+and stale-input races; they do not relax a test or introduce a permanent
+timing workaround. No Production, Store, provider, payment, Firebase, VPS/DNS,
+OnePlus or merge state changed. See
+`docs/operations/WP83_CURRENT_CANDIDATE_PIXEL_AUTH_SESSION_REPLAY_2026-09-10.md`.
+
+# Previous Work Package: WP82 Staging Persistent-Source Proof Contract
 
 WP82 is **COMPLETE LOCALLY AND ON GITHUB; THE REMOTE READ-ONLY OBSERVATION IS
 BLOCKED BEFORE AUTHENTICATION**. It converts WP77's source/recreate uncertainty into one
