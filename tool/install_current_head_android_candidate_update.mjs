@@ -477,12 +477,19 @@ function resolveApksigner(root) {
   return path;
 }
 
-function parseArguments(values) {
+export function parseCurrentHeadAndroidCandidateUpdateArguments(values) {
   let candidateDirectory;
   let adbPath = 'adb';
   let apksignerPath;
+  let mode = null;
   for (let index = 0; index < values.length; index += 1) {
-    if (values[index] === '--candidate-dir') {
+    if (values[index] === '--preflight-only') {
+      if (mode !== null) fail('Choose exactly one of --preflight-only or --install.');
+      mode = 'preflight';
+    } else if (values[index] === '--install') {
+      if (mode !== null) fail('Choose exactly one of --preflight-only or --install.');
+      mode = 'install';
+    } else if (values[index] === '--candidate-dir') {
       candidateDirectory = values[index + 1] ?? fail('--candidate-dir requires a path.');
       index += 1;
     } else if (values[index] === '--adb') {
@@ -495,12 +502,15 @@ function parseArguments(values) {
       fail(`Unknown argument: ${values[index]}`);
     }
   }
-  return { candidateDirectory, adbPath, apksignerPath };
+  if (mode === null) {
+    fail('Choose --preflight-only for a read-only check or --install for the explicit device update.');
+  }
+  return { candidateDirectory, adbPath, apksignerPath, mode };
 }
 
 async function run() {
   const root = fileURLToPath(new URL('../', import.meta.url));
-  const args = parseArguments(process.argv.slice(2));
+  const args = parseCurrentHeadAndroidCandidateUpdateArguments(process.argv.slice(2));
   const candidate = await validateCurrentRolloverAndroidReleaseArchive({
     root,
     candidateDirectory: args.candidateDirectory,
@@ -511,7 +521,10 @@ async function run() {
   const device = selectSinglePhysicalDevice(devices);
   const deviceSummary = inspectPhysicalDevice({ adbPath: args.adbPath, device });
   const apksignerPath = resolve(args.apksignerPath ?? resolveApksigner(root));
-  const evidence = installCurrentHeadAndroidCandidateUpdate({
+  const operation = args.mode === 'preflight'
+    ? preflightCurrentHeadAndroidCandidateUpdate
+    : installCurrentHeadAndroidCandidateUpdate;
+  const evidence = operation({
     adbPath: args.adbPath,
     device,
     deviceSummary,

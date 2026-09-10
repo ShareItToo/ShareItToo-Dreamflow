@@ -1,5 +1,17 @@
 # ShareItToo Current State
 
+## WP98 Pixel current-candidate update preflight — in progress
+
+The exact owner-only `1.0.0+2026091001` Internal/Staging candidate passed a
+read-only Pixel update preflight. It is strictly newer than the installed
+build, has the matching package/signature relationship and can be installed
+only as a data-preserving replace update; no uninstall, reset, downgrade or
+unlock is needed. The update tool now requires an explicit preflight or install
+mode and fails closed otherwise. The preflight did not write to, launch or
+inspect account content on the Pixel. This does not yet prove the update or
+current Staging functionality. See
+`docs/operations/WP98_PIXEL_CURRENT_CANDIDATE_UPDATE_PREFLIGHT_2026-09-10.md`.
+
 ## WP97 PostgreSQL future-acceptance-window ratchet — complete
 
 The current-source GitHub Regression had a real deterministic-test failure:

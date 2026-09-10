@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   installCurrentHeadAndroidCandidateUpdate,
+  parseCurrentHeadAndroidCandidateUpdateArguments,
   parseAndroidInstalledPackageSnapshot,
   preflightCurrentHeadAndroidCandidateUpdate,
   validateRolloverAndroidInstallBinding,
@@ -108,6 +109,35 @@ test('parses the exact package facts required to prove update preservation', () 
       '  firstInstallTime=2026-08-01 12:34:56',
     ].join('\n'), '0'),
     /preservation facts/,
+  );
+});
+
+test('requires an explicit read-only preflight or install mode for the device CLI', () => {
+  assert.deepEqual(
+    parseCurrentHeadAndroidCandidateUpdateArguments(['--preflight-only']),
+    {
+      candidateDirectory: undefined,
+      adbPath: 'adb',
+      apksignerPath: undefined,
+      mode: 'preflight',
+    },
+  );
+  assert.deepEqual(
+    parseCurrentHeadAndroidCandidateUpdateArguments(['--install', '--adb', '/safe/adb']),
+    {
+      candidateDirectory: undefined,
+      adbPath: '/safe/adb',
+      apksignerPath: undefined,
+      mode: 'install',
+    },
+  );
+  assert.throws(
+    () => parseCurrentHeadAndroidCandidateUpdateArguments([]),
+    /preflight-only.*install/u,
+  );
+  assert.throws(
+    () => parseCurrentHeadAndroidCandidateUpdateArguments(['--preflight-only', '--install']),
+    /exactly one/u,
   );
 });
 

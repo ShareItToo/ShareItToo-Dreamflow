@@ -1,4 +1,16 @@
-# Current Work Package: WP97 PostgreSQL Future-Acceptance-Window Ratchet — COMPLETE
+# Current Work Package: WP98 Pixel Current-Candidate Update Preflight — IN PROGRESS
+
+WP98 has passed a read-only, exact-candidate Pixel update preflight for the
+owner-only `1.0.0+2026091001` Internal/Staging archive sourced from
+`068c843a2660e2a4c44a1715f4f8e51a67b41d24`. The installed Pixel build is
+strictly older, package/signature identity matches and a replace-only update
+can preserve data without unlock, uninstall, reset or downgrade. The update
+tool now requires an explicit `--preflight-only` or `--install` mode, so it
+cannot accidentally write to a device. The preflight performed no device
+write. It is not yet a device install or a Staging-parity result; see
+`docs/operations/WP98_PIXEL_CURRENT_CANDIDATE_UPDATE_PREFLIGHT_2026-09-10.md`.
+
+# Previous Work Package: WP97 PostgreSQL Future-Acceptance-Window Ratchet — COMPLETE
 
 The exact-source WP96 GitHub Regression exposed an expired static timestamp in
 the real PostgreSQL concurrency scenario. WP97 derives a single shared
