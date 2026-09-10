@@ -1,5 +1,13 @@
 # ShareItToo Current State
 
+## WP96 current-source Android candidate reservation
+
+Version `1.0.0+2026091001` is reserved for a new Android Internal/Staging
+candidate from the current source. It is strictly newer than the historical
+Pixel candidate and has not been built, uploaded, installed or used as runtime
+evidence yet. The preceding WP95 source is green in GitHub Regression, CodeQL
+and clean-checkout reproducibility.
+
 ## WP95 startup session-future stability
 
 Current source retains one pending startup session read for the mounted app

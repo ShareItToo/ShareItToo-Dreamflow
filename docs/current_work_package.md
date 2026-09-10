@@ -1,4 +1,13 @@
-# Current Work Package: WP95 Startup Session-Future Stability
+# Current Work Package: WP96 Current-Source Android Candidate Reservation
+
+WP96 reserves `1.0.0+2026091001`, a strictly higher Android version than the
+historical, physically evidenced Pixel candidate `1.0.0+2026090905`. It is a
+source-bound reservation only until a signed artifact is built, structurally
+verified, archived and separately installed on the Pixel. It neither changes
+Staging, Google Play, a tester list nor any device. WP95's GitHub Regression,
+CodeQL and clean-checkout verification are all green before this reservation.
+
+# Previous Work Package: WP95 Startup Session-Future Stability
 
 WP95 is **COMPLETE FOR CURRENT SOURCE ONLY**. `AppRoot` owns one pending
 session future for its mounted lifetime, so an unrelated rebuild cannot restart
