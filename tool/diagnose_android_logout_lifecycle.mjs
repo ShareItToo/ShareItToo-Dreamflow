@@ -316,6 +316,11 @@ async function openProfile({ commandRunner, adbPath, device, wait }) {
     device,
     predicate: hasMainNavigation,
     wait,
+    // A cold physical device can legitimately need longer than ten seconds
+    // to settle its authenticated Staging catalog before the bottom
+    // navigation becomes inspectable. Keep the wait bounded, but do not turn
+    // normal network-backed startup latency into a false guest-reset failure.
+    attempts: 36,
   });
   tapNamedNode(
     commandRunner,
@@ -330,6 +335,7 @@ async function openProfile({ commandRunner, adbPath, device, wait }) {
     device,
     predicate: (hierarchy) => hasAuthenticatedProfile(hierarchy) || hasGuestProfile(hierarchy),
     wait,
+    attempts: 36,
   });
 }
 
@@ -380,7 +386,7 @@ export async function restoreSyntheticSession({ commandRunner, adbPath, device, 
     device,
     predicate: hasMainNavigation,
     wait,
-    attempts: 24,
+    attempts: 36,
   });
   const restored = await openProfile({ commandRunner, adbPath, device, wait });
   return hasAuthenticatedProfile(restored);

@@ -291,7 +291,10 @@ export async function waitForCurrentHeadAndroidMainNavigation({
   wait,
 }) {
   let lastAbsence = 'not-yet-observed';
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  // Physical Staging cold starts include a network-backed catalog load. A
+  // slower device must still settle within a deterministic upper bound, but
+  // seven seconds was shorter than the observed valid OnePlus cold start.
+  for (let attempt = 0; attempt < 36; attempt += 1) {
     await wait(600);
     const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
     lastAbsence = classifyCurrentHeadAndroidMainNavigationAbsence(hierarchy);

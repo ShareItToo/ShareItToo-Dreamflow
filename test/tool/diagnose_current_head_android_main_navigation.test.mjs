@@ -8,6 +8,7 @@ import {
   diagnoseCurrentHeadAndroidColdStartStability,
   diagnoseCurrentHeadAndroidMainNavigation,
   parseMainNavigationArguments,
+  waitForCurrentHeadAndroidMainNavigation,
 } from '../../tool/diagnose_current_head_android_main_navigation.mjs';
 
 function digest(value) {
@@ -62,9 +63,11 @@ function fakeRunner({
   changedApk = false,
   omitMessagesSurface = false,
   hideNavigationOnLaunch = null,
+  hideInitialDumpCount = 0,
 } = {}) {
   let active = 'Entdecken';
   let launches = 0;
+  let dumps = 0;
   return (_file, args, options = {}) => {
     const command = args.slice(2);
     const joined = command.join(' ');
@@ -88,6 +91,8 @@ function fakeRunner({
       return 'UI hierarchy dumped';
     }
     if (joined === 'exec-out cat /sdcard/sit-main-navigation-diagnostic.xml') {
+      dumps += 1;
+      if (dumps <= hideInitialDumpCount) return '<hierarchy/>';
       if (hideNavigationOnLaunch === launches) return '<hierarchy/>';
       return hierarchy(active, { omitMessagesSurface });
     }
@@ -126,6 +131,21 @@ test('proves five authenticated read-only destinations and returns sanitized evi
   assert.equal(evidence.boundaries.bookingFlowPassed, false);
   assert.equal(evidence.boundaries.accountMutationPerformed, false);
   assert.equal(JSON.stringify(evidence).includes('PRIVATE-SERIAL'), false);
+});
+
+test('accepts a valid physical-device navigation surface after bounded slow cold start', async () => {
+  let waits = 0;
+  const observed = await waitForCurrentHeadAndroidMainNavigation({
+    commandRunner: fakeRunner({ hideInitialDumpCount: 20 }),
+    adbPath: 'adb',
+    device: { serial: 'PRIVATE-SERIAL', state: 'device', attributes: {} },
+    wait: async (milliseconds) => {
+      assert.equal(milliseconds, 600);
+      waits += 1;
+    },
+  });
+  assert.equal(classifyCurrentHeadAndroidMainNavigationAbsence(observed), 'navigation-labels-present-surface-pending');
+  assert.equal(waits, 21);
 });
 
 test('proves one explicitly scoped destination without representing it as the full matrix', async () => {
