@@ -21,7 +21,6 @@ function writeVault(rootPath, name, status) {
     schemaVersion: 1,
     kind: 'sit-staging-synthetic-account-vault',
     status,
-    accounts: [{ email: 'never-emitted@example.test', password: 'not-observed' }],
   }), { mode: 0o600 });
   chmodSync(file, 0o600);
 }
