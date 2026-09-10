@@ -51,6 +51,8 @@ const navigationChecks = Object.freeze([
   }),
 ]);
 
+const navigationCheckByLabel = new Map(navigationChecks.map((check) => [check.label, check]));
+
 function fail(message) {
   throw new Error(message);
 }
@@ -462,9 +464,17 @@ export async function diagnoseCurrentHeadAndroidMainNavigation({
   device,
   deviceSummary,
   candidate,
+  checks = navigationChecks,
   capturedAt = new Date().toISOString(),
   wait = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds)),
 }) {
+  if (!Array.isArray(checks)
+      || checks.length === 0
+      || checks.some((check) => !navigationCheckByLabel.has(check?.label))
+      || new Set(checks.map((check) => check.label)).size !== checks.length) {
+    fail('The requested main-navigation diagnostic scope is invalid.');
+  }
+  const selectedChecks = checks.map((check) => navigationCheckByLabel.get(check.label));
   assertCurrentHeadAndroidDeviceAlreadyUnlocked(commandRunner, adbPath, device);
   const installed = verifyCurrentHeadAndroidInstalledCandidate(
     commandRunner,
@@ -474,7 +484,7 @@ export async function diagnoseCurrentHeadAndroidMainNavigation({
   );
   try {
     launchCurrentHeadAndroidCandidate(commandRunner, adbPath, device);
-    for (const check of navigationChecks) {
+    for (const check of selectedChecks) {
       await openAndVerifyNavigation({ commandRunner, adbPath, device, check, wait });
     }
   } finally {
@@ -505,14 +515,15 @@ export async function diagnoseCurrentHeadAndroidMainNavigation({
       apkSha256: installed.apkSha256,
     },
     device: deviceSummary,
-    tests: Object.fromEntries(navigationChecks.map((check) => [
+    tests: Object.fromEntries(selectedChecks.map((check) => [
       check.label,
       { status: 'passed', result: 'authenticated-read-only-surface' },
     ])),
     boundaries: {
       directDiagnosticOnly: true,
       storeInstallationGateSatisfied: false,
-      authenticatedMainNavigationPassed: true,
+      authenticatedMainNavigationPassed: selectedChecks.length === navigationChecks.length,
+      authenticatedNavigationLabelsTested: selectedChecks.map((check) => check.label),
       bookingFlowPassed: false,
       messageSent: false,
       cartMutationPerformed: false,
@@ -536,6 +547,7 @@ export function parseMainNavigationArguments(values) {
   let adbPath = 'adb';
   let candidateDirectory = null;
   let coldStartAttempts = null;
+  let onlyLabel = null;
   for (let index = 0; index < values.length; index += 1) {
     if (values[index] === '--current-head') {
       currentHead = true;
@@ -550,12 +562,21 @@ export function parseMainNavigationArguments(values) {
       if (!/^[1-3]$/u.test(raw)) fail('--cold-start-attempts must be between one and three.');
       coldStartAttempts = Number(raw);
       index += 1;
+    } else if (values[index] === '--only') {
+      onlyLabel = values[index + 1] ?? fail('--only requires one exact navigation label.');
+      if (!navigationCheckByLabel.has(onlyLabel)) {
+        fail('--only must name one supported navigation label.');
+      }
+      index += 1;
     } else {
       fail(`Unknown argument: ${values[index]}`);
     }
   }
   if (!currentHead) fail('The main-navigation diagnostic requires --current-head.');
-  return { currentHead, adbPath, candidateDirectory, coldStartAttempts };
+  if (coldStartAttempts !== null && onlyLabel !== null) {
+    fail('--cold-start-attempts cannot be combined with --only.');
+  }
+  return { currentHead, adbPath, candidateDirectory, coldStartAttempts, onlyLabel };
 }
 
 async function run() {
@@ -572,7 +593,13 @@ async function run() {
   const deviceSummary = inspectPhysicalDevice({ adbPath: args.adbPath, device });
   const evidence = args.coldStartAttempts === null
     ? await diagnoseCurrentHeadAndroidMainNavigation({
-      adbPath: args.adbPath, device, deviceSummary, candidate,
+      adbPath: args.adbPath,
+      device,
+      deviceSummary,
+      candidate,
+      ...(args.onlyLabel === null
+        ? {}
+        : { checks: [navigationCheckByLabel.get(args.onlyLabel)] }),
     })
     : await diagnoseCurrentHeadAndroidColdStartStability({
       adbPath: args.adbPath, device, deviceSummary, candidate,

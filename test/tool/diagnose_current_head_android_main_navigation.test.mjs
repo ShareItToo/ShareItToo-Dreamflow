@@ -128,6 +128,19 @@ test('proves five authenticated read-only destinations and returns sanitized evi
   assert.equal(JSON.stringify(evidence).includes('PRIVATE-SERIAL'), false);
 });
 
+test('proves one explicitly scoped destination without representing it as the full matrix', async () => {
+  const evidence = await diagnose({ checks: [
+    Object.freeze({
+      label: 'Mietkorb',
+      requiredAll: ['Gemerkt'],
+      requiredAny: ['Im Mietkorb – noch nicht reserviert', 'Dein Mietkorb', 'Mietkorb'],
+    }),
+  ] });
+  assert.deepEqual(Object.keys(evidence.tests), ['Mietkorb']);
+  assert.equal(evidence.boundaries.authenticatedMainNavigationPassed, false);
+  assert.deepEqual(evidence.boundaries.authenticatedNavigationLabelsTested, ['Mietkorb']);
+});
+
 test('refuses a current Android lock state without entering a passcode', async () => {
   await assert.rejects(
     () => diagnose({ commandRunner: fakeRunner({ locked: true }) }),
@@ -227,12 +240,14 @@ test('requires the explicit current-head route and accepts safe ADB or candidate
     adbPath: 'adb',
     candidateDirectory: null,
     coldStartAttempts: null,
+    onlyLabel: null,
   });
   assert.deepEqual(parseMainNavigationArguments(['--current-head', '--adb', '/safe/adb']), {
     currentHead: true,
     adbPath: '/safe/adb',
     candidateDirectory: null,
     coldStartAttempts: null,
+    onlyLabel: null,
   });
   assert.deepEqual(parseMainNavigationArguments([
     '--current-head', '--candidate-dir', '/private/candidate',
@@ -241,9 +256,19 @@ test('requires the explicit current-head route and accepts safe ADB or candidate
     adbPath: 'adb',
     candidateDirectory: '/private/candidate',
     coldStartAttempts: null,
+    onlyLabel: null,
   });
   assert.equal(parseMainNavigationArguments(['--current-head', '--cold-start-attempts', '3']).coldStartAttempts, 3);
+  assert.equal(parseMainNavigationArguments(['--current-head', '--only', 'Nachrichten']).onlyLabel, 'Nachrichten');
   assert.throws(() => parseMainNavigationArguments([]), /requires --current-head/u);
+  assert.throws(
+    () => parseMainNavigationArguments(['--current-head', '--only', 'Unknown']),
+    /supported navigation label/u,
+  );
+  assert.throws(
+    () => parseMainNavigationArguments(['--current-head', '--only', 'Nachrichten', '--cold-start-attempts', '1']),
+    /cannot be combined/u,
+  );
   assert.throws(
     () => parseMainNavigationArguments(['--current-head', '--other', 'x']),
     /Unknown argument/u,
