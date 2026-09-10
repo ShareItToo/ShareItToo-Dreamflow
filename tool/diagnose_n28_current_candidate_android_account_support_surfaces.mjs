@@ -49,7 +49,12 @@ const accountChecks = Object.freeze([
     markers: ['Benachrichtigungseinstellungen', 'Gerätedienste'],
   }),
   Object.freeze({ entry: 'Blockierte Nutzer', markers: ['Blockierte Nutzer'] }),
-  Object.freeze({ entry: 'Datenschutz-Infos', markers: ['Datenschutz-Infos', 'Datenexport'] }),
+  // The settings-row label is also the privacy screen's app-bar title. Its
+  // presence alone cannot prove navigation occurred, so anchor this surface
+  // check to the first unique privacy section. The lower data-export section
+  // has its own current-page diagnostic so it can never be skipped because a
+  // long scroll competes with the process execution boundary.
+  Object.freeze({ entry: 'Datenschutz-Infos', markers: ['Öffentliche Informationen'] }),
 ]);
 const accountCheckByEntry = new Map(accountChecks.map((check) => [check.entry, check]));
 
@@ -179,6 +184,22 @@ async function inspectAccountEntry({ commandRunner, adbPath, device, check, wait
     destinationMarkers: ['Kontoeinstellungen', 'PROFIL', 'SICHERHEIT'],
     wait,
   });
+  return inspectAccountEntryFromSettings({ commandRunner, adbPath, device, check, wait });
+}
+
+async function verifyAccountSettingsRoot({ commandRunner, adbPath, device, wait }) {
+  return waitForMarkers({
+    commandRunner,
+    adbPath,
+    device,
+    markers: ['Kontoeinstellungen', 'PROFIL', 'SICHERHEIT'],
+    wait,
+    label: 'account settings root',
+  });
+}
+
+async function inspectAccountEntryFromSettings({ commandRunner, adbPath, device, check, wait }) {
+  await verifyAccountSettingsRoot({ commandRunner, adbPath, device, wait });
   const hierarchy = await findByScrolling({
     commandRunner, adbPath, device, label: check.entry, wait,
   });
@@ -205,6 +226,219 @@ async function inspectAccountEntry({ commandRunner, adbPath, device, check, wait
   });
 }
 
+async function returnToAccountSettingsRoot({ commandRunner, adbPath, device, wait }) {
+  currentHeadAndroidAdb(commandRunner, adbPath, device, [
+    'shell', 'input', 'keyevent', '4',
+  ]);
+  await verifyAccountSettingsRoot({ commandRunner, adbPath, device, wait });
+}
+
+export function summarizeN28AccountSupportSettingsPreparation({
+  candidate,
+  deviceSummary,
+  sourceDrift,
+  capturedAt,
+}) {
+  same(sourceDrift?.mobileSourceChanged, false, 'post-candidate mobile source');
+  const result = {
+    schemaVersion: 1,
+    kind: 'sit-n28-current-candidate-pixel-account-support-settings-preparation',
+    status: 'prepared-read-only-account-settings-root',
+    capturedAt,
+    candidate: {
+      applicationId: candidate.applicationId,
+      versionName: candidate.versionName,
+      buildNumber: candidate.buildNumber,
+      commit: candidate.commit,
+      apkSha256: candidate.android.apkSha256,
+      mobileSourceChangedAfterCandidate: sourceDrift.mobileSourceChanged,
+    },
+    device: deviceSummary,
+    tests: {
+      accountSettingsRootVisible: true,
+      entryVerified: false,
+    },
+    boundaries: {
+      readOnly: true,
+      supportSubmitted: false,
+      notificationPreferenceChanged: false,
+      deviceServiceChanged: false,
+      profileChanged: false,
+      contactDataChanged: false,
+      passwordChanged: false,
+      accountDeleted: false,
+      userUnblocked: false,
+      privacyExportRequested: false,
+      paymentEndpointCalled: false,
+      payoutOnboardingOpened: false,
+      invoiceDownloaded: false,
+      phoneVerificationRequested: false,
+      messageSent: false,
+      productionChanged: false,
+      googlePlayChanged: false,
+      onePlusContacted: false,
+      accountIdentityRecorded: false,
+      containsPersonalAccountData: false,
+      containsCredential: false,
+      containsRawDeviceIdentifier: false,
+      containsPrivateFilesystemPath: false,
+    },
+  };
+  if (/(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|\/Users\/|\+49[0-9]|BEGIN PRIVATE|\b(?:sk|rk)_(?:test|live)_|\bwhsec_)/iu.test(JSON.stringify(result))) {
+    fail('N28 account/support preparation evidence contains private or credential-shaped material.');
+  }
+  return result;
+}
+
+export function summarizeN28PrivacyDataExportFromCurrent({
+  candidate,
+  deviceSummary,
+  sourceDrift,
+  scrollsUsed,
+  capturedAt,
+}) {
+  same(sourceDrift?.mobileSourceChanged, false, 'post-candidate mobile source');
+  if (!Number.isInteger(scrollsUsed) || scrollsUsed < 0 || scrollsUsed > 4) {
+    fail('The privacy data-export diagnostic has an invalid bounded scroll count.');
+  }
+  const result = {
+    schemaVersion: 1,
+    kind: 'sit-n28-current-candidate-pixel-privacy-data-export-visibility-diagnostic',
+    status: 'passed-read-only-privacy-data-export-visible',
+    capturedAt,
+    candidate: {
+      applicationId: candidate.applicationId,
+      versionName: candidate.versionName,
+      buildNumber: candidate.buildNumber,
+      commit: candidate.commit,
+      apkSha256: candidate.android.apkSha256,
+      mobileSourceChangedAfterCandidate: sourceDrift.mobileSourceChanged,
+    },
+    device: deviceSummary,
+    tests: {
+      currentPrivacySurfaceVerified: true,
+      dataExportSectionVisible: true,
+      boundedReadOnlyScrollsUsed: scrollsUsed,
+    },
+    boundaries: {
+      readOnly: true,
+      privacyExportRequested: false,
+      exportPasswordEntered: false,
+      exportFileCreated: false,
+      exportShared: false,
+      accountIdentityRecorded: false,
+      containsPersonalAccountData: false,
+      containsCredential: false,
+      containsRawDeviceIdentifier: false,
+      containsPrivateFilesystemPath: false,
+      productionChanged: false,
+      googlePlayChanged: false,
+      onePlusContacted: false,
+    },
+  };
+  if (/(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|\/Users\/|\+49[0-9]|BEGIN PRIVATE|\b(?:sk|rk)_(?:test|live)_|\bwhsec_)/iu.test(JSON.stringify(result))) {
+    fail('N28 privacy data-export evidence contains private or credential-shaped material.');
+  }
+  return result;
+}
+
+export function summarizeN28HelpCenterPreparation({
+  candidate,
+  deviceSummary,
+  sourceDrift,
+  capturedAt,
+}) {
+  same(sourceDrift?.mobileSourceChanged, false, 'post-candidate mobile source');
+  const result = {
+    schemaVersion: 1,
+    kind: 'sit-n28-current-candidate-pixel-help-center-preparation',
+    status: 'prepared-read-only-help-center',
+    capturedAt,
+    candidate: {
+      applicationId: candidate.applicationId,
+      versionName: candidate.versionName,
+      buildNumber: candidate.buildNumber,
+      commit: candidate.commit,
+      apkSha256: candidate.android.apkSha256,
+      mobileSourceChangedAfterCandidate: sourceDrift.mobileSourceChanged,
+    },
+    device: deviceSummary,
+    tests: {
+      helpCenterVisible: true,
+      supportEntryVerified: false,
+    },
+    boundaries: {
+      readOnly: true,
+      supportSubmitted: false,
+      supportCaseOpened: false,
+      messageSent: false,
+      accountIdentityRecorded: false,
+      containsPersonalAccountData: false,
+      containsCredential: false,
+      containsRawDeviceIdentifier: false,
+      containsPrivateFilesystemPath: false,
+      productionChanged: false,
+      googlePlayChanged: false,
+      onePlusContacted: false,
+    },
+  };
+  if (/(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|\/Users\/|\+49[0-9]|BEGIN PRIVATE|\b(?:sk|rk)_(?:test|live)_|\bwhsec_)/iu.test(JSON.stringify(result))) {
+    fail('N28 help-center preparation evidence contains private or credential-shaped material.');
+  }
+  return result;
+}
+
+export function summarizeN28HelpSupportFromCurrent({
+  candidate,
+  deviceSummary,
+  sourceDrift,
+  scrollsUsed,
+  capturedAt,
+}) {
+  same(sourceDrift?.mobileSourceChanged, false, 'post-candidate mobile source');
+  if (!Number.isInteger(scrollsUsed) || scrollsUsed < 0 || scrollsUsed > 8) {
+    fail('The help support diagnostic has an invalid bounded scroll count.');
+  }
+  const result = {
+    schemaVersion: 1,
+    kind: 'sit-n28-current-candidate-pixel-help-support-visibility-diagnostic',
+    status: 'passed-read-only-help-support-visible',
+    capturedAt,
+    candidate: {
+      applicationId: candidate.applicationId,
+      versionName: candidate.versionName,
+      buildNumber: candidate.buildNumber,
+      commit: candidate.commit,
+      apkSha256: candidate.android.apkSha256,
+      mobileSourceChangedAfterCandidate: sourceDrift.mobileSourceChanged,
+    },
+    device: deviceSummary,
+    tests: {
+      currentHelpCenterVerified: true,
+      supportEntryVisible: true,
+      boundedReadOnlyScrollsUsed: scrollsUsed,
+    },
+    boundaries: {
+      readOnly: true,
+      supportSubmitted: false,
+      supportCaseOpened: false,
+      messageSent: false,
+      accountIdentityRecorded: false,
+      containsPersonalAccountData: false,
+      containsCredential: false,
+      containsRawDeviceIdentifier: false,
+      containsPrivateFilesystemPath: false,
+      productionChanged: false,
+      googlePlayChanged: false,
+      onePlusContacted: false,
+    },
+  };
+  if (/(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|\/Users\/|\+49[0-9]|BEGIN PRIVATE|\b(?:sk|rk)_(?:test|live)_|\bwhsec_)/iu.test(JSON.stringify(result))) {
+    fail('N28 help support evidence contains private or credential-shaped material.');
+  }
+  return result;
+}
+
 export function summarizeN28AccountSupportSurfaces({
   candidate,
   deviceSummary,
@@ -212,6 +446,7 @@ export function summarizeN28AccountSupportSurfaces({
   surfaces,
   helpSupportEntryReachable,
   checks = accountChecks,
+  accountSettingsRootRetained = false,
   capturedAt,
 }) {
   same(sourceDrift?.mobileSourceChanged, false, 'post-candidate mobile source');
@@ -266,6 +501,9 @@ export function summarizeN28AccountSupportSurfaces({
         : {
           completeAccountSupportMatrixPassed: false,
           accountEntriesTested: expectedEntries,
+          ...(accountSettingsRootRetained === true
+            ? { accountSettingsRootRetainedAfterEntryDiagnostic: true }
+            : {}),
         }),
     },
     boundaries: {
@@ -308,6 +546,9 @@ export async function diagnoseN28CurrentCandidateAndroidAccountSupportSurfaces({
   checks = accountChecks,
   capturedAt = new Date().toISOString(),
   wait = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds)),
+  prepareSettings = false,
+  fromCurrentSettings = false,
+  retainSettingsRoot = false,
 }) {
   const archive = await validatePrivateAndroidReleaseArchive({ root, candidateDirectory });
   const candidate = validateCurrentPrivateAndroidCandidate(archive);
@@ -330,13 +571,45 @@ export async function diagnoseN28CurrentCandidateAndroidAccountSupportSurfaces({
     fail('The requested account/support diagnostic scope is invalid.');
   }
   const selectedChecks = checks.map((check) => accountCheckByEntry.get(check.entry));
+  if (prepareSettings && (fromCurrentSettings || selectedChecks.length !== accountChecks.length)) {
+    fail('Account settings preparation cannot include an entry diagnostic.');
+  }
+  if (fromCurrentSettings && selectedChecks.length !== 1) {
+    fail('An existing account settings root can verify exactly one account entry.');
+  }
+  if (retainSettingsRoot && !fromCurrentSettings) {
+    fail('Retaining an account settings root requires an existing root and exactly one entry.');
+  }
   const complete = selectedChecks.length === accountChecks.length;
   const surfaces = {};
+  let preparedSettingsRoot = false;
+  let retainedSettingsRoot = false;
   try {
-    for (const check of selectedChecks) {
-      surfaces[check.entry] = await inspectAccountEntry({
-        commandRunner, adbPath, device, check, wait,
+    if (prepareSettings) {
+      await openProfileSearchResult({
+        commandRunner,
+        adbPath,
+        device,
+        query: 'Kontoeinstellungen',
+        destinationMarkers: ['Kontoeinstellungen', 'PROFIL', 'SICHERHEIT'],
+        wait,
       });
+      preparedSettingsRoot = true;
+      return summarizeN28AccountSupportSettingsPreparation({
+        candidate,
+        deviceSummary,
+        sourceDrift,
+        capturedAt,
+      });
+    }
+    for (const check of selectedChecks) {
+      surfaces[check.entry] = fromCurrentSettings
+        ? await inspectAccountEntryFromSettings({ commandRunner, adbPath, device, check, wait })
+        : await inspectAccountEntry({ commandRunner, adbPath, device, check, wait });
+    }
+    if (retainSettingsRoot) {
+      await returnToAccountSettingsRoot({ commandRunner, adbPath, device, wait });
+      retainedSettingsRoot = true;
     }
     if (complete) {
       await openProfileSearchResult({
@@ -363,17 +636,165 @@ export async function diagnoseN28CurrentCandidateAndroidAccountSupportSurfaces({
       surfaces,
       helpSupportEntryReachable: complete,
       checks: selectedChecks,
+      accountSettingsRootRetained: retainedSettingsRoot,
       capturedAt,
     });
+  } finally {
+    if ((!prepareSettings || !preparedSettingsRoot) && !retainedSettingsRoot) {
+      restoreCurrentHeadAndroidExplore(commandRunner, adbPath, device);
+    }
+  }
+}
+
+export async function diagnoseN28PrivacyDataExportFromCurrent({
+  root,
+  candidateDirectory,
+  commandRunner = defaultCurrentHeadAndroidCommandRunner,
+  adbPath = 'adb',
+  capturedAt = new Date().toISOString(),
+  wait = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds)),
+}) {
+  const archive = await validatePrivateAndroidReleaseArchive({ root, candidateDirectory });
+  const candidate = validateCurrentPrivateAndroidCandidate(archive);
+  const paths = collectCurrentCandidateDriftPaths({
+    root,
+    candidateCommit: candidate.commit,
+  });
+  const sourceDrift = assertCurrentCandidateNoPostCandidateMobileSourceDrift(paths);
+  const device = selectSinglePhysicalDevice(parseAdbDevices(
+    commandRunner(adbPath, ['devices', '-l']),
+  ));
+  const deviceSummary = inspectPhysicalDevice({ adbPath, device });
+  assertCurrentHeadAndroidDeviceAlreadyUnlocked(commandRunner, adbPath, device);
+  verifyCurrentHeadAndroidInstalledCandidate(commandRunner, adbPath, device, candidate);
+
+  try {
+    await waitForMarkers({
+      commandRunner,
+      adbPath,
+      device,
+      markers: ['Öffentliche Informationen', 'Private Informationen'],
+      wait,
+      label: 'current privacy information surface',
+      attempts: 4,
+    });
+    let scrollsUsed = 0;
+    for (; scrollsUsed <= 4; scrollsUsed += 1) {
+      const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+      if (currentHeadAndroidNamedNodes(hierarchy, 'Datenexport').length > 0) {
+        return summarizeN28PrivacyDataExportFromCurrent({
+          candidate,
+          deviceSummary,
+          sourceDrift,
+          scrollsUsed,
+          capturedAt,
+        });
+      }
+      if (scrollsUsed === 4) break;
+      currentHeadAndroidAdb(commandRunner, adbPath, device, [
+        'shell', 'input', 'swipe', '720', '2450', '720', '650', '600',
+      ]);
+      await wait(600);
+    }
+    fail('The read-only Datenexport section was not reachable within four verified privacy scrolls.');
   } finally {
     restoreCurrentHeadAndroidExplore(commandRunner, adbPath, device);
   }
 }
 
-function parseArguments(values) {
+export async function prepareN28HelpCenter({
+  root,
+  candidateDirectory,
+  commandRunner = defaultCurrentHeadAndroidCommandRunner,
+  adbPath = 'adb',
+  capturedAt = new Date().toISOString(),
+  wait = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds)),
+}) {
+  const archive = await validatePrivateAndroidReleaseArchive({ root, candidateDirectory });
+  const candidate = validateCurrentPrivateAndroidCandidate(archive);
+  const paths = collectCurrentCandidateDriftPaths({ root, candidateCommit: candidate.commit });
+  const sourceDrift = assertCurrentCandidateNoPostCandidateMobileSourceDrift(paths);
+  const device = selectSinglePhysicalDevice(parseAdbDevices(commandRunner(adbPath, ['devices', '-l'])));
+  const deviceSummary = inspectPhysicalDevice({ adbPath, device });
+  assertCurrentHeadAndroidDeviceAlreadyUnlocked(commandRunner, adbPath, device);
+  verifyCurrentHeadAndroidInstalledCandidate(commandRunner, adbPath, device, candidate);
+  let prepared = false;
+  try {
+    await openProfileSearchResult({
+      commandRunner,
+      adbPath,
+      device,
+      query: 'Hilfe-Center',
+      destinationMarkers: ['Hilfe-Center', 'Finde schnell Antworten'],
+      wait,
+    });
+    prepared = true;
+    return summarizeN28HelpCenterPreparation({ candidate, deviceSummary, sourceDrift, capturedAt });
+  } finally {
+    if (!prepared) restoreCurrentHeadAndroidExplore(commandRunner, adbPath, device);
+  }
+}
+
+export async function diagnoseN28HelpSupportFromCurrent({
+  root,
+  candidateDirectory,
+  commandRunner = defaultCurrentHeadAndroidCommandRunner,
+  adbPath = 'adb',
+  capturedAt = new Date().toISOString(),
+  wait = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds)),
+}) {
+  const archive = await validatePrivateAndroidReleaseArchive({ root, candidateDirectory });
+  const candidate = validateCurrentPrivateAndroidCandidate(archive);
+  const paths = collectCurrentCandidateDriftPaths({ root, candidateCommit: candidate.commit });
+  const sourceDrift = assertCurrentCandidateNoPostCandidateMobileSourceDrift(paths);
+  const device = selectSinglePhysicalDevice(parseAdbDevices(commandRunner(adbPath, ['devices', '-l'])));
+  const deviceSummary = inspectPhysicalDevice({ adbPath, device });
+  assertCurrentHeadAndroidDeviceAlreadyUnlocked(commandRunner, adbPath, device);
+  verifyCurrentHeadAndroidInstalledCandidate(commandRunner, adbPath, device, candidate);
+  try {
+    await waitForMarkers({
+      commandRunner,
+      adbPath,
+      device,
+      markers: ['Hilfe-Center', 'Finde schnell Antworten'],
+      wait,
+      label: 'current help center surface',
+      attempts: 4,
+    });
+    let scrollsUsed = 0;
+    for (; scrollsUsed <= 8; scrollsUsed += 1) {
+      const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+      if (currentHeadAndroidNamedNodes(hierarchy, 'Support kontaktieren').length > 0) {
+        return summarizeN28HelpSupportFromCurrent({
+          candidate,
+          deviceSummary,
+          sourceDrift,
+          scrollsUsed,
+          capturedAt,
+        });
+      }
+      if (scrollsUsed === 8) break;
+      currentHeadAndroidAdb(commandRunner, adbPath, device, [
+        'shell', 'input', 'swipe', '720', '2450', '720', '650', '600',
+      ]);
+      await wait(600);
+    }
+    fail('The read-only support entry was not reachable within eight verified help-center scrolls.');
+  } finally {
+    restoreCurrentHeadAndroidExplore(commandRunner, adbPath, device);
+  }
+}
+
+export function parseN28AccountSupportSurfaceArguments(values) {
   let candidateDirectory = null;
   let adbPath = 'adb';
   let onlyEntry = null;
+  let prepareSettings = false;
+  let fromCurrentSettings = false;
+  let retainSettingsRoot = false;
+  let privacyDataExportFromCurrent = false;
+  let prepareHelpCenter = false;
+  let helpSupportFromCurrent = false;
   for (let index = 0; index < values.length; index += 1) {
     if (values[index] === '--candidate-dir') {
       candidateDirectory = values[index + 1] ?? fail('--candidate-dir requires a path.');
@@ -387,22 +808,63 @@ function parseArguments(values) {
         fail('--only must name one supported account entry.');
       }
       index += 1;
+    } else if (values[index] === '--prepare-settings') {
+      prepareSettings = true;
+    } else if (values[index] === '--from-current-settings') {
+      fromCurrentSettings = true;
+    } else if (values[index] === '--retain-settings-root') {
+      retainSettingsRoot = true;
+    } else if (values[index] === '--privacy-data-export-from-current') {
+      privacyDataExportFromCurrent = true;
+    } else if (values[index] === '--prepare-help-center') {
+      prepareHelpCenter = true;
+    } else if (values[index] === '--help-support-from-current') {
+      helpSupportFromCurrent = true;
     } else {
       fail(`Unknown argument: ${values[index]}`);
     }
   }
   if (candidateDirectory === null) fail('--candidate-dir is required.');
-  return { candidateDirectory: resolve(candidateDirectory), adbPath, onlyEntry };
+  if (prepareSettings && (fromCurrentSettings || onlyEntry !== null)) {
+    fail('--prepare-settings cannot be combined with an account entry diagnostic.');
+  }
+  if (fromCurrentSettings && onlyEntry === null) {
+    fail('--from-current-settings requires --only with one exact account entry.');
+  }
+  if (retainSettingsRoot && !fromCurrentSettings) {
+    fail('--retain-settings-root requires --from-current-settings with one exact account entry.');
+  }
+  if (privacyDataExportFromCurrent && (prepareSettings || fromCurrentSettings || retainSettingsRoot || onlyEntry !== null)) {
+    fail('--privacy-data-export-from-current cannot be combined with an account settings diagnostic.');
+  }
+  const specialModes = [
+    prepareSettings,
+    privacyDataExportFromCurrent,
+    prepareHelpCenter,
+    helpSupportFromCurrent,
+  ].filter(Boolean).length;
+  if (specialModes > 1 || ((prepareHelpCenter || helpSupportFromCurrent) && (fromCurrentSettings || retainSettingsRoot || onlyEntry !== null))) {
+    fail('A help-center diagnostic cannot be combined with another account/support diagnostic mode.');
+  }
+  return {
+    candidateDirectory: resolve(candidateDirectory), adbPath, onlyEntry, prepareSettings, fromCurrentSettings, retainSettingsRoot, privacyDataExportFromCurrent, prepareHelpCenter, helpSupportFromCurrent,
+  };
 }
 
 async function run() {
   const root = fileURLToPath(new URL('../', import.meta.url));
-  const args = parseArguments(process.argv.slice(2));
-  const result = await diagnoseN28CurrentCandidateAndroidAccountSupportSurfaces({
-    root,
-    ...args,
-    ...(args.onlyEntry === null ? {} : { checks: [accountCheckByEntry.get(args.onlyEntry)] }),
-  });
+  const args = parseN28AccountSupportSurfaceArguments(process.argv.slice(2));
+  const result = args.privacyDataExportFromCurrent
+    ? await diagnoseN28PrivacyDataExportFromCurrent({ root, ...args })
+    : args.prepareHelpCenter
+      ? await prepareN28HelpCenter({ root, ...args })
+      : args.helpSupportFromCurrent
+        ? await diagnoseN28HelpSupportFromCurrent({ root, ...args })
+        : await diagnoseN28CurrentCandidateAndroidAccountSupportSurfaces({
+          root,
+          ...args,
+          ...(args.onlyEntry === null ? {} : { checks: [accountCheckByEntry.get(args.onlyEntry)] }),
+        });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
