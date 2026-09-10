@@ -1,4 +1,15 @@
-# Current Work Package: WP86 Staging Rollout and Controlled Pixel FCM
+# Current Work Package: WP87 Pixel Two-Role Core Journey on Successor Staging
+
+WP87 is **COMPLETE FOR THE EXECUTED NON-BINDING PIXEL CORE PATH**. The exact
+Pixel `1.0.0+2026090905` candidate now re-proves owner publication, renter
+discovery, non-binding request/acceptance, chat, principal isolation and all
+three FCM states against current Staging. The fresh synthetic journey was
+cancelled and removed. The five successor legal/operator paths, V5.2 binding
+contracts, payments, providers, Store, Production and OnePlus remain separate
+and unaccepted. See
+`docs/operations/WP87_PIXEL_TWO_ROLE_SUCCESSOR_STAGING_2026-09-10.md`.
+
+# Previous Work Package: WP86 Staging Rollout and Controlled Pixel FCM
 
 WP86 is **COMPLETE FOR STAGING ROLLOUT AND THE NARROW PIXEL FCM PROBE; RELEASE
 AND OWNER GATES STAY OPEN**. The GitHub-published API image at `926a00c5` now

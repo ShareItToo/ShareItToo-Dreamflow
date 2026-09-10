@@ -1,5 +1,16 @@
 # ShareItToo Current State
 
+## WP87 Pixel two-role core journey on successor Staging
+
+The exact Pixel candidate `1.0.0+2026090905` now physically passes owner
+publication, renter discovery, non-binding request/acceptance, chat,
+owner-to-renter isolation and foreground/background/terminated FCM against
+the current Staging runtime. Its synthetic journey was cancelled and removed.
+This is core-path evidence only: the successor has five legal/operator source
+differences, and V5.2 contracts, money, providers, Store gates and OnePlus
+remain outside the result. See
+`docs/operations/WP87_PIXEL_TWO_ROLE_SUCCESSOR_STAGING_2026-09-10.md`.
+
 ## WP86 Staging rollout and controlled Pixel FCM
 
 WP86 deploys the exact GitHub-published `926a00c5` API image only to Staging,
