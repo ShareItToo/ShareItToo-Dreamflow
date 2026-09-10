@@ -14,10 +14,17 @@ The physical seven-document legal set is also complete with independent
 candidate-bound root-anchored diagnostics; that does not promote the separate
 professional legal approval gate. See
 `docs/operations/WP100_PIXEL_LEGAL_ROUTES_READ_ONLY_2026-09-10.md`. The active
-remainder is limited to theme/background evidence with exact restoration. The
-five 200-percent-text navigation destinations have independently passed and
-restored the exact prior system font scale after every run. See
-`docs/operations/WP100_PIXEL_LARGE_TEXT_NAVIGATION_2026-09-10.md`.
+remainder was closed by the theme/background evidence with exact restoration.
+The five 200-percent-text navigation destinations have independently passed
+and restored the exact prior system font scale after every run. System
+light/dark and all five background choices have also passed private capture and
+exact restoration. See
+`docs/operations/WP100_PIXEL_LARGE_TEXT_NAVIGATION_2026-09-10.md` and
+`docs/operations/WP100_PIXEL_THEME_BACKGROUNDS_2026-09-10.md`.
+
+WP100 is now **PENDING FINAL TECHNICAL AND GITHUB CLOSURE ONLY**. No next work
+package begins until its full technical regression and current-head GitHub
+Regression/CodeQL status are recorded.
 
 # Previous Work Package: WP99 Staging Authoritative-Source Reconciliation — COMPLETE
 

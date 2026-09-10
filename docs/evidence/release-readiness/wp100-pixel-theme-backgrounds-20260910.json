@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp100-current-candidate-pixel-theme-and-backgrounds",
+  "status": "complete-private-theme-background-captures-exactly-restored",
+  "capturedOn": "2026-09-10",
+  "workPackage": "WP100",
+  "diagnosticImplementationHead": "ab6624dc1720bcf3af4203df42125480e2ee1d35",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091001",
+    "artifactSourceHead": "068c843a2660e2a4c44a1715f4f8e51a67b41d24",
+    "apkSha256": "a87eb30dd8717ef8b35ce7d519b4dd4f769c1dc176ee18ad76912f6bcbd3071d",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "pixelDelivery": "direct-diagnostic-apk",
+    "mobileSourceChangedAfterCandidate": false
+  },
+  "pixel": {
+    "physical": true,
+    "modelClass": "Pixel 7 Pro",
+    "apiLevel": 37,
+    "unlockedBeforeEveryDiagnostic": true,
+    "rawDeviceIdentifierRecorded": false
+  },
+  "systemTheme": {
+    "darkCaptured": true,
+    "lightCaptured": true,
+    "exactOriginalNightModeRestoredAfterEveryCapture": true,
+    "privateCaptures": {
+      "dark": "a7b684ac043d7760e5db13d92f67a67130167589458263699cc336042bfa49ac",
+      "light": "4e5e7e784b501e723e143f1dd6fecb50ab010da1eafd07bca9fe1248a9f469d5"
+    }
+  },
+  "backgrounds": {
+    "visibleOptions": ["Dark 1", "Dark 2", "Light 1", "Light 2"],
+    "exercisedChoices": ["system", "dark-1", "dark-2", "light-1", "light-2"],
+    "selectedSemanticsAuthoritativeForEveryChoice": true,
+    "originalChoiceExactlyRestoredAfterEveryChoice": true,
+    "backgroundPreferencePersistentlyChanged": false,
+    "privateCaptures": {
+      "system": "67c79f061796e3a3d46f18d5d3d5119d9f9e799e788af9d0507b3f2fcbe1e071",
+      "dark-1": "ccf1e75d42fd5be534c4092936279bb9db25fdab43ebffa526aab5ad6b75a24a",
+      "dark-2": "c075b5463e80320d6c1773f500b923d89fa05c393849689109bb4c6b465bb1fc",
+      "light-1": "5ea75346a0b24f22de6833d9581c7ec5b09d416c213bf01bad68bc4609cf9d37",
+      "light-2": "66b556291676252aebf070bb67bcd06138f92c1ca0cf01e2921d206973044308"
+    }
+  },
+  "normalExploreRestored": true,
+  "quality": {
+    "focusedThemePhaseToolTestsPassed": 4,
+    "completeNodeToolSuitePassed": 2640
+  },
+  "boundaries": {
+    "privateCapturesCommitted": false,
+    "privateCapturesDistributionAllowed": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsCredential": false,
+    "containsRawDeviceIdentifier": false,
+    "containsPrivateFilesystemPath": false,
+    "messageSent": false,
+    "paymentEndpointCalled": false,
+    "storeChanged": false,
+    "onePlusTouched": false,
+    "stagingChanged": false,
+    "productionChanged": false
+  },
+  "remainingWithinWP100": [
+    "final full technical regression and current-head GitHub CI closure"
+  ]
+}

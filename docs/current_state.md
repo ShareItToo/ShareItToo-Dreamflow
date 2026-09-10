@@ -11,11 +11,15 @@ OnePlus or Production mutation. The same exact candidate also passes all seven
 informational legal routes through independent root-anchored read-only
 diagnostics; professional legal approval remains open. 200-percent text
 navigation now also passes independently for all five main destinations with
-exact system-setting restoration. Light/dark/background evidence remains
-separate WP100 work. See
+exact system-setting restoration. System dark/light and all five background
+choices also passed private capture with exact restoration, leaving normal
+Entdecken visible. WP100's physical scope is complete pending its final
+technical/CI closure; it does not close any legal, provider, payment, Store or
+Production gate. See
 `docs/operations/WP100_PIXEL_ACCOUNT_PRIVACY_SUPPORT_READ_ONLY_2026-09-10.md`.
 See also `docs/operations/WP100_PIXEL_LEGAL_ROUTES_READ_ONLY_2026-09-10.md`.
 See also `docs/operations/WP100_PIXEL_LARGE_TEXT_NAVIGATION_2026-09-10.md`.
+See also `docs/operations/WP100_PIXEL_THEME_BACKGROUNDS_2026-09-10.md`.
 
 ## WP99 Staging authoritative-source reconciliation — complete
 
