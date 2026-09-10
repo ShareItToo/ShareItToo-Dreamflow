@@ -42,10 +42,21 @@ observation after the existing alias has an authoritative reachable hostname.
 
 ## Local verification
 
-- focused WP82 contract tests: **5 passed**;
-- complete Node tool inventory: **2,567 passed**;
+- focused WP82 contract tests: **6 passed**;
+- complete Node tool inventory: **2,568 passed**;
 - full technical regression, Web/Wasm loopback, Android debug build/minSdk 24,
   and the R11 Android-security surface check: **passed**.
+
+## Exact GitHub verification
+
+The exact implementation commit `7bfe42fbeafce1d65f8dc0373e4c7c88181df7e8`
+passes GitHub Regression
+[`34418503497`](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/34418503497):
+Backend, PostgreSQL, clean-checkout reproducibility and Flutter all pass; the
+image-publish job is skipped. CodeQL
+[`34418503596`](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/34418503596)
+passes. PR #7 remains Draft, open and clean with zero open alerts on its merge
+reference. These source-quality facts do not open the remote observation gate.
 
 Machine-readable contract:
 `docs/evidence/release-readiness/wp82-staging-persistent-source-proof-contract-20260910.json`.

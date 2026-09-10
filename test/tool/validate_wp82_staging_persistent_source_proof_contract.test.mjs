@@ -51,6 +51,15 @@ test('rejects opening the external gate without the remote proof', () => {
   );
 });
 
+test('rejects stale or incomplete GitHub verification', () => {
+  const value = evidence();
+  value.githubVerification.regression.requiredJobs.pop();
+  assert.throws(
+    () => validateWp82StagingPersistentSourceProofContract({ evidence: value, checkGit: false }),
+    /GitHub verification binding is invalid/u,
+  );
+});
+
 test('rejects protected source drift and secret-shaped evidence', () => {
   const sourceTexts = {
     'backend/ops/deploy_release.sh': 'drift',

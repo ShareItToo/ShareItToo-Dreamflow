@@ -1,14 +1,16 @@
 # Current Work Package: WP82 Staging Persistent-Source Proof Contract
 
-WP82 is **LOCALLY COMPLETE; THE REMOTE READ-ONLY OBSERVATION IS BLOCKED BEFORE
-AUTHENTICATION**. It converts WP77's source/recreate uncertainty into one
+WP82 is **COMPLETE LOCALLY AND ON GITHUB; THE REMOTE READ-ONLY OBSERVATION IS
+BLOCKED BEFORE AUTHENTICATION**. It converts WP77's source/recreate uncertainty into one
 hash-bound, machine-checked proof contract: active Compose binding, persistent
 source metadata, immutable no-build release/rollback path, named volumes and
 nonsecret runtime comparison must all be directly proven before any successor
 deployment can be considered. The configured Staging SSH alias failed hostname
 resolution before authentication; no key, remote command or remote evidence
 was used. No remote, deployment, Store, device, provider, payment or Production
-action occurred. See
+action occurred. Focused tests, full local regression, GitHub Regression
+`34418503497`, CodeQL `34418503596` and zero current merge-reference Code
+Scanning alerts pass; PR #7 remains Draft/open/clean/unmerged. See
 `docs/operations/WP82_STAGING_PERSISTENT_SOURCE_PROOF_CONTRACT_2026-09-10.md`.
 
 # Previous Work Package: WP81 Source-to-Staging Parity Preflight

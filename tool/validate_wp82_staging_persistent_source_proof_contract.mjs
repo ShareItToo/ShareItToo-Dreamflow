@@ -162,13 +162,38 @@ export function validateWp82StagingPersistentSourceProofContract({
     remoteEvidenceCaptured: false,
   })) fail('WP82 remote observation truth is invalid.');
   if (!exact(value.verification, {
-    focusedWp82Tests: 'passed-5',
-    completeToolInventory: 'passed-2567',
+    focusedWp82Tests: 'passed-6',
+    completeToolInventory: 'passed-2568',
     fullTechnicalRegression: 'passed',
     webWasmLoopback: 'passed',
     androidDebugBuildAndMinSdk24: 'passed',
     r11AndroidSecuritySurface: 'passed',
   })) fail('WP82 local verification binding is invalid.');
+  if (!exact(value.githubVerification, {
+    sourceHead: '7bfe42fbeafce1d65f8dc0373e4c7c88181df7e8',
+    regression: {
+      runId: '34418503497',
+      conclusion: 'success',
+      requiredJobs: [
+        'backend-regression',
+        'postgres-runner-proof',
+        'r10-clean-reproducibility',
+        'flutter-regression',
+      ],
+      publishApiImage: 'skipped',
+    },
+    codeql: {
+      runId: '34418503596',
+      conclusion: 'success',
+    },
+    pullRequest: {
+      number: 7,
+      state: 'open',
+      draft: true,
+      mergeState: 'clean',
+      openMergeCodeScanningAlerts: 0,
+    },
+  })) fail('WP82 GitHub verification binding is invalid.');
   if (!exact(value.externalGate, {
     name: 'STAGING_PERSISTENT_SOURCE_READONLY_OBSERVATION',
     state: 'blocked',

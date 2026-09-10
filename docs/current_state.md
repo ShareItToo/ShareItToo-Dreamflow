@@ -9,7 +9,9 @@ path, named volumes and a nonsecret runtime comparison. The configured Staging
 SSH alias failed hostname resolution before authentication; no key, remote
 command, remote evidence or external mutation occurred. The next action remains
 a dedicated read-only observation after an authoritative reachable hostname is
-available. See
+available. The exact WP82 source commit passes local full regression plus
+GitHub Regression `34418503497` and CodeQL `34418503596`; PR #7 is Draft/open/
+clean with zero open merge-reference Code Scanning alerts. See
 `docs/operations/WP82_STAGING_PERSISTENT_SOURCE_PROOF_CONTRACT_2026-09-10.md`.
 
 ## WP81 source-to-Staging parity preflight
