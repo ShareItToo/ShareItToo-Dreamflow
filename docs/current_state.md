@@ -1,26 +1,27 @@
 # ShareItToo Current State
 
-## WP97 PostgreSQL future-acceptance-window ratchet
+## WP97 PostgreSQL future-acceptance-window ratchet — complete
 
 The current-source GitHub Regression had a real deterministic-test failure:
 an expired fixed booking fixture made two concurrent acceptance attempts both
 correctly return `409`, instead of exercising the intended one-`200`/
 one-`409` overlap outcome. WP97 replaces that fixed date with one shared,
 UTC-normalized window safely in the future and adds a source-contract ratchet.
-The complete local PostgreSQL integration runner passes. Exact-head GitHub
-Regression, clean-checkout reproducibility and CodeQL remain required before
-the WP96 Android candidate can advance. See
+The complete local and exact-head GitHub Regression (including independent
+clean-checkout reproducibility) and CodeQL pass at
+`068c843a2660e2a4c44a1715f4f8e51a67b41d24`. A new owner-only archive is bound
+to that exact commit; the prior WP96 archive remains retained as superseded
+private evidence and was never uploaded. PR head/merge Code-Scanning instances
+are zero; two historical direct-branch instances remain visible while PR #7
+stays Draft and unmerged. See
 `docs/operations/WP97_POSTGRES_FUTURE_ACCEPTANCE_WINDOW_RATCHET_2026-09-10.md`.
 
 ## WP96 current-source Android candidate reservation
 
-The owner-only Android Internal/Staging candidate `1.0.0+2026091001` from
-`f30dfb281e8a0e84bb4c041218b8872fc8a45670` is built and independently bound
-by AAB/APK hashes, canonical signing certificate, package identity, SDK values,
-privacy scan and ZIP validation. It is strictly newer than the historical
-Pixel candidate but is not uploaded, installed or runtime evidence. Exact-head
-GitHub Regression and CodeQL remain pending; all Store, payment, provider and
-legal gates remain unchanged.
+WP96's first owner-only `1.0.0+2026091001` archive was superseded privately by
+the exact current-head WP97 archive. Neither archive was uploaded, installed
+or treated as runtime evidence. Store, payment, provider and legal gates remain
+unchanged.
 
 ## WP95 startup session-future stability
 

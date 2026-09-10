@@ -1,25 +1,24 @@
-# Current Work Package: WP97 PostgreSQL Future-Acceptance-Window Ratchet
+# Current Work Package: WP97 PostgreSQL Future-Acceptance-Window Ratchet — COMPLETE
 
 The exact-source WP96 GitHub Regression exposed an expired static timestamp in
 the real PostgreSQL concurrency scenario. WP97 derives a single shared
 30-day-future booking window for both competing requests and guards that
 fixture contract against reintroducing the expired static date. The local
-pinned-PNPM PostgreSQL runner passes. Exact-head GitHub Regression,
-clean-checkout reproducibility and CodeQL are now pending; no candidate,
-runtime, Store, provider, payment or device action may advance until they are
-all green. See
+pinned-PNPM PostgreSQL runner, full local technical gate, exact-head GitHub
+Regression/clean-checkout proof and CodeQL all pass at
+`068c843a2660e2a4c44a1715f4f8e51a67b41d24`. The exact-head archive validator
+correctly required and now verifies a separate owner-only Android archive for
+that commit; its predecessor remains only historical private evidence. PR #7
+remains Draft and unmerged. See
 `docs/operations/WP97_POSTGRES_FUTURE_ACCEPTANCE_WINDOW_RATCHET_2026-09-10.md`.
 
 # Previous Work Package: WP96 Current-Source Android Candidate Reservation
 
-WP96 has built and independently verified the private signed Android
-Internal/Staging candidate `1.0.0+2026091001` from
-`f30dfb281e8a0e84bb4c041218b8872fc8a45670`. It is strictly newer than the
-historical, physically evidenced Pixel candidate `1.0.0+2026090905`; its AAB,
-APK, privacy scan, canonical certificate, package identity and ZIP structures
-are bound in the owner-only archive. It is neither uploaded, installed nor
-runtime evidence. Staging, Google Play, tester lists and devices are unchanged.
-The exact-head GitHub Regression/CodeQL gate remains pending.
+WP96 first built and independently verified an owner-only signed Android
+Internal/Staging archive for `1.0.0+2026091001`. WP97 then retained a separate
+exact-head archive after its test correction. Neither archive is uploaded,
+installed or runtime evidence. Staging, Google Play, tester lists and devices
+are unchanged.
 
 # Previous Work Package: WP95 Startup Session-Future Stability
 

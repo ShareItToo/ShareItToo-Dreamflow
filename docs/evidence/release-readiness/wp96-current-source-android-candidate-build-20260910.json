@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "kind": "sit-wp96-current-source-android-private-candidate-build",
-  "status": "built-and-verified-owner-only-github-pending",
+  "status": "rebuilt-and-verified-owner-only-exact-current-head-gates-passed",
   "capturedOn": "2026-09-10",
   "candidate": {
     "applicationId": "com.shareittoo.app",
     "versionName": "1.0.0",
     "versionCode": "2026091001",
-    "sourceHead": "f30dfb281e8a0e84bb4c041218b8872fc8a45670",
+    "sourceHead": "068c843a2660e2a4c44a1715f4f8e51a67b41d24",
     "releaseChannel": "internal",
     "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
     "minSdkVersion": 24,
@@ -18,11 +18,11 @@
     "stageAPilotId": "heilbronn_wave0"
   },
   "artifact": {
-    "aabBytes": 109446065,
-    "aabSha256": "d70f5b5f794b663d880b07cc2eeb12671df4b7a4452b653ffc9864f558386dd5",
+    "aabBytes": 109446024,
+    "aabSha256": "3d3adea9437a97f45cf5652e2766948b23d39f507af445d151dfbc9afe6c8dd0",
     "apkBytes": 136389070,
-    "apkSha256": "e62c43ba1a0c49c370b4bbfeaf0c45ea1ba0007093f5a8d192e38e9d669ffe4a",
-    "privacyReportSha256": "ca2d9dbc499538615c17c62300bf22bf9793204ba770950962b5d38ba58439d8",
+    "apkSha256": "a87eb30dd8717ef8b35ce7d519b4dd4f769c1dc176ee18ad76912f6bcbd3071d",
+    "privacyReportSha256": "acc6eb2de0cf8a6e2a9a2bb72d8c9d3254ca4add184cbfedd64de30842c2d289",
     "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
     "jarSignature": "passed",
     "apkSignature": "passed",
@@ -31,6 +31,20 @@
     "bundletool": "not-run-tool-unavailable",
     "ownerOnlyArchive": true,
     "overwritten": false
+  },
+  "currentSourceVerification": {
+    "verifiedHead": "068c843a2660e2a4c44a1715f4f8e51a67b41d24",
+    "artifactHeadMatchesVerifiedHead": true,
+    "supersededPrivateArchiveSourceHead": "f30dfb281e8a0e84bb4c041218b8872fc8a45670",
+    "githubRegressionRun": 34465582435,
+    "githubRegression": "passed",
+    "githubCleanCheckout": "passed",
+    "githubCodeqlRun": 34465582425,
+    "githubCodeql": "passed",
+    "openCodeScanningAlertsPrHead": 0,
+    "openCodeScanningAlertsPrMerge": 0,
+    "staleDirectBranchAlertInstances": 2,
+    "staleDirectBranchAlertCommit": "0048ece49b7819fb09600465a027a4e0b530ccda"
   },
   "boundaries": {
     "stagingChanged": false,
@@ -43,7 +57,7 @@
     "productionChanged": false,
     "pullRequestMerged": false
   },
-  "nextGate": "exact-head-github-regression-and-codeql",
+  "nextGate": "owner-directed-runtime-or-store-candidate-step",
   "containsSecrets": false,
   "containsPrivateFilesystemPath": false
 }
