@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, renameSync, statSync, symlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import test from 'node:test';
 
@@ -259,4 +259,32 @@ test('does not promote either role when a server verification is incomplete', as
   ));
   assert.equal(vault.status, 'registration-accepted-pending-verification');
   assert.equal(vault.accounts.every((entry) => entry.verificationStatus === 'pending'), true);
+});
+
+test('refuses a symlinked private vault before any server verification request', async () => {
+  const vaultRoot = tempFixtures.makeSync('sit-staging-account-symlink-');
+  const provisioned = await provisionSyntheticAccounts({
+    baseEmail: 'walid@example.com',
+    vaultRoot,
+    now: fixedNow,
+    random: deterministicRandom,
+    register: async () => ({ accepted: true, status: 202 }),
+  });
+  const vaultPath = resolve(vaultRoot, provisioned.runId, 'accounts.json');
+  const retainedPath = resolve(vaultRoot, provisioned.runId, 'retained-accounts.json');
+  renameSync(vaultPath, retainedPath);
+  symlinkSync(retainedPath, vaultPath);
+  let calls = 0;
+  await assert.rejects(
+    verifyEmailLinkedSyntheticAccounts({
+      runId: provisioned.runId,
+      vaultRoot,
+      verify: async () => {
+        calls += 1;
+        return { verified: true, status: 200 };
+      },
+    }),
+    /must be a non-empty owner-only file/,
+  );
+  assert.equal(calls, 0);
 });

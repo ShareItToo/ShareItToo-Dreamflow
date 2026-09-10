@@ -1,7 +1,17 @@
 #!/usr/bin/env node
 
 import { randomBytes } from 'node:crypto';
-import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  closeSync,
+  constants,
+  fstatSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -55,16 +65,43 @@ function outsideRepository(path, label) {
 
 function privateInputFile(path, label) {
   const absolute = outsideRepository(path, label);
-  let stat;
+  let link;
   try {
-    stat = statSync(absolute);
+    link = lstatSync(absolute);
   } catch {
     fail(`${label} is missing.`);
   }
-  if (!stat.isFile() || stat.size === 0 || (stat.mode & 0o077) !== 0) {
+  if (!link.isFile() || link.isSymbolicLink() || link.size === 0 || (link.mode & 0o077) !== 0) {
     fail(`${label} must be a non-empty owner-only file.`);
   }
   return absolute;
+}
+
+function readPrivateText(path, label) {
+  const absolute = privateInputFile(path, label);
+  let descriptor;
+  try {
+    descriptor = openSync(absolute, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const stat = fstatSync(descriptor);
+    if (!stat.isFile() || stat.size === 0 || (stat.mode & 0o077) !== 0) {
+      fail(`${label} must be a non-empty owner-only file.`);
+    }
+    return readFileSync(descriptor, 'utf8');
+  } catch (error) {
+    if (typeof error?.message === 'string' && error.message.startsWith(label)) throw error;
+    fail(`${label} is invalid.`);
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+}
+
+function readPrivateJson(path, label) {
+  try {
+    return { path: privateInputFile(path, label), value: JSON.parse(readPrivateText(path, label)) };
+  } catch (error) {
+    if (typeof error?.message === 'string' && error.message.startsWith(label)) throw error;
+    fail(`${label} is invalid.`);
+  }
 }
 
 function safeRunId(now, random) {
@@ -248,16 +285,10 @@ export function recordSyntheticAccountVerification({
     fail('The staging verification method is invalid.');
   }
   const safeVaultRoot = outsideRepository(vaultRoot, 'The staging account vault');
-  const vaultPath = privateInputFile(
+  const { path: vaultPath, value: vault } = readPrivateJson(
     resolve(safeVaultRoot, runId, 'accounts.json'),
     'The staging account vault file',
   );
-  let vault;
-  try {
-    vault = JSON.parse(readFileSync(vaultPath, 'utf8'));
-  } catch {
-    fail('The staging account vault file is invalid.');
-  }
   if (vault?.schemaVersion !== 1
       || vault?.kind !== 'sit-staging-synthetic-account-vault'
       || vault?.runId !== runId
@@ -316,16 +347,10 @@ export async function verifyEmailLinkedSyntheticAccounts({
   if (verify !== null && typeof verify !== 'function') fail('The Staging verification function is invalid.');
   const verifier = verify ?? ((account) => defaultVerifyEmailLinkedAccount(account, { fetchImpl }));
   const safeVaultRoot = outsideRepository(vaultRoot, 'The staging account vault');
-  const vaultPath = privateInputFile(
+  const { path: vaultPath, value: vault } = readPrivateJson(
     resolve(safeVaultRoot, runId, 'accounts.json'),
     'The staging account vault file',
   );
-  let vault;
-  try {
-    vault = JSON.parse(readFileSync(vaultPath, 'utf8'));
-  } catch {
-    fail('The staging account vault file is invalid.');
-  }
   if (vault?.schemaVersion !== 1
       || vault?.kind !== 'sit-staging-synthetic-account-vault'
       || vault?.runId !== runId
@@ -417,7 +442,7 @@ async function run() {
     return;
   }
   const result = await provisionSyntheticAccounts({
-    baseEmail: readFileSync(privateInputFile(args.mailboxFile, 'The mailbox input file'), 'utf8'),
+    baseEmail: readPrivateText(args.mailboxFile, 'The mailbox input file'),
     ...(args.vaultRoot ? { vaultRoot: resolve(args.vaultRoot) } : {}),
   });
   console.log(JSON.stringify(result, null, 2));
