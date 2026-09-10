@@ -11,11 +11,10 @@ state is rejected rather than reused as fresh evidence.
 
 Two new isolated Staging registrations (owner and renter) have now been
 accepted through the normal public registration path. Their aliases and
-generated credentials exist only in a new private local vault outside Git. A
-separate offline migration will move that exact credential set into a
-run-scoped macOS Keychain item before any network verifier can use it, and
-replace the file with a role-only manifest. Neither delivery nor confirmation
-of their normal e-mail links is inferred from the accepted registration
+generated credentials are now held only in a run-scoped macOS Keychain item.
+The completed offline migration replaced the local vault with a role-only
+manifest before any network verifier could use it. Neither delivery nor
+confirmation of their normal e-mail links is inferred from the accepted registration
 responses. Both genuine links must be confirmed in the owner-controlled
 mailbox and then server-verified through separate short-lived, immediately
 revoked sessions before a functional Pixel login begins. The known two

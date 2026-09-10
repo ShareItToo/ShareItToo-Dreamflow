@@ -14,11 +14,11 @@ The focused test suite passes three cases.
 Exactly two new isolated Staging registrations (owner and renter) were accepted
 through the normal public registration route. Their randomly generated
 credentials and mailbox aliases exist only in a new owner-only local vault
-outside Git; the runner emitted no address, password or link. Before any
-network verification, a separate local migration moves that exact credential
-set into a run-scoped macOS Keychain item and replaces the vault with a
-role-only manifest. Their normal e-mail confirmations are then the only owner
-action required before a Pixel login may start. Delivery and link confirmation
+outside Git; the runner emitted no address, password or link. The completed
+local migration moved that exact credential set into a run-scoped macOS
+Keychain item and replaced the vault with a role-only manifest before any
+network verification. Their normal e-mail confirmations are then the only
+owner action required before a Pixel login may start. Delivery and link confirmation
 are not inferred from a `202` registration response: the follow-up verifier
 must establish a separate server-confirmed session for each exact role, read
 back its principal and immediately revoke that short-lived session before it

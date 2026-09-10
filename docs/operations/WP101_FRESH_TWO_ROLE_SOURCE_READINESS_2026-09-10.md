@@ -26,11 +26,11 @@ password, verification URL or local path.
 
 Acceptance (`202`) proves that the server accepted both registration requests;
 it does not prove delivery or confirmation of either e-mail. Before any remote
-verification, the pending credential vault must be migrated locally and
-offline into the macOS login Keychain. The migration rejects unsafe input,
-stores the credentials under an exact run-scoped Keychain service, and replaces
-the local vault content with a role-only manifest. It makes no network request.
-The next required owner action is then to open each normal verification link in
+verification, the pending credential vault was migrated locally and offline
+into the macOS login Keychain. The migration rejected unsafe input, stored the
+credentials under an exact run-scoped Keychain service, and replaced the local
+vault content with a role-only manifest. It made no network request. The next
+required owner action is then to open each normal verification link in
 the owner-controlled mailbox. Only after both genuine confirmations are
 recorded may the isolated source be used for a Pixel login. Existing sessions
 and all retired Journey material remain untouched.
@@ -71,6 +71,7 @@ active source even with correct file permissions, and refusal of a symlinked
 entry. The focused migration and verifier checks cover a role-only local
 manifest, successful two-role promotion, exact principal readback plus
 per-role logout, and refusal that leaves both roles pending. All focused
-checks pass. The migration and verifier are prepared but have not run against
-the new private accounts; the verifier awaits the owner-controlled mail
-confirmations. No Pixel, provider, Store, OnePlus or Production state changed.
+checks pass. The completed local migration left a `0600` role-only manifest;
+its keychain-backed network verifier has not run against the new private
+accounts and awaits the owner-controlled mail confirmations. No Pixel,
+provider, Store, OnePlus or Production state changed.
