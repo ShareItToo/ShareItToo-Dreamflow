@@ -40,6 +40,13 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 - Do not change production, VPS/OpenClaw/Maximus, DNS, cloud billing, repository
   visibility, live payment mode, stores or public rollout without a dedicated
   gate.
+- Before any production container recreate or Hostinger deploy, read
+  `docs/operations/SIT_PRODUCTION_RECREATE_GUARD_2026-09-10.md`, prepare a
+  sanitized plan and pass
+  `node tool/validate_production_recreate_plan.mjs <plan.json>`. Never use
+  `shareittoo-api:local`, `latest` or another unverified image fallback. After
+  success or abort, reread website, API, database, mail, containers, disk,
+  backup freshness, the Health service/timer and one automatic Health run.
 - Do not invent operator, register, provider, tax, legal, privacy, retention or
   approval facts. Existing draft/open/blocked states remain fail-closed until
   their named authority approves them.

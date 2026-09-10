@@ -154,6 +154,8 @@ node --check tool/validate_production_restore_readiness.mjs
 node --test test/tool/validate_production_restore_readiness.test.mjs
 node --test test/tool/deploy_release_automatic_rollback.test.mjs
 node tool/validate_production_restore_readiness.mjs
+node --check tool/validate_production_recreate_plan.mjs
+node --test test/tool/validate_production_recreate_plan.test.mjs
 
 node --check tool/diagnose_store_review_accounts.mjs
 node --test test/tool/diagnose_store_review_accounts.test.mjs
