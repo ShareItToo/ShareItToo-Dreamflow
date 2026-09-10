@@ -94,6 +94,9 @@ export const candidateRolloverNonRuntimePrefixes = Object.freeze([
 
 export const candidateRolloverNonRuntimeExactPaths = Object.freeze([
   'AGENTS.md',
+  // This reviewed scanner baseline is consumed only by repository security
+  // tooling. It is never packaged into the Android client or API runtime.
+  'backend/ops/secret_scan_history_baseline.json',
 ]);
 
 export function candidateRolloverRuntimeDrift(changedPaths) {
