@@ -1,4 +1,17 @@
-# Current Work Package: WP104 Current-Candidate Staging and Pixel Closure — COMPLETE
+# Current Work Package: WP105 Current-Candidate OnePlus Installation — COMPLETE
+
+WP105 proves the exact private `1.0.0+2026091002` candidate on the physically
+attached OnePlus CPH2581. The existing Play-signed `2026090711` installation
+could not accept the upload-signed private APK; the mismatch was confirmed
+before change. Only `com.shareittoo.app` was replaced, so its local session and
+preferences were reset without changing server accounts, server content,
+other packages or other device data. Candidate hash, certificate, package,
+version and launch passed. The private transfer endpoint and copies were
+removed. This is direct APK evidence, not Play split-delivery or an
+authenticated OnePlus/cross-device journey. See
+`docs/operations/WP105_CURRENT_CANDIDATE_ONEPLUS_INSTALLATION_2026-09-10.md`.
+
+# Previous Work Package: WP104 Current-Candidate Staging and Pixel Closure — COMPLETE
 
 WP104 deploys the exact GitHub-published API image for
 `8916aa17fcb2f98d78a49314902a6fd0fcd0e75b` to Staging with healthy API,

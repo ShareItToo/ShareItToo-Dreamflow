@@ -1,5 +1,18 @@
 # ShareItToo Current State
 
+## WP105 current-candidate OnePlus installation — complete
+
+The physical OnePlus CPH2581 now contains the exact private
+`1.0.0+2026091002` Staging candidate and passes package, version, candidate
+hash, upload-certificate and bounded launch/crash verification. Its previous
+Play-signed `2026090711` installation had a confirmed signing mismatch, so only
+`com.shareittoo.app` was replaced and its local session/preferences were reset.
+No server account/content, other package or other device data changed. The
+private Tailnet transfer was removed after use. This is not Play split-delivery
+evidence and does not yet prove an authenticated OnePlus or simultaneous
+two-device product journey. See
+`docs/operations/WP105_CURRENT_CANDIDATE_ONEPLUS_INSTALLATION_2026-09-10.md`.
+
 ## WP104 current-candidate Staging and Pixel closure — complete
 
 The exact private `1.0.0+2026091002` candidate is installed on the Pixel by a
