@@ -1,5 +1,17 @@
 # ShareItToo Current State
 
+## WP99 Staging authoritative-source reconciliation — complete
+
+The formerly blocked Staging source proof is now freshly read-only verified:
+healthy API/database runtime, image/release/runtime binding, rollback image,
+five persistent API Compose files, protected environment/override metadata,
+release script and named Staging volumes all pass. The current Pixel candidate
+uses an identical Backend runtime tree; its startup-session fix is mobile-only.
+Public Staging health/version/listings are successful and the empty catalog is
+visible on the Pixel. No remote, account, business, payment, Store, OnePlus or
+Production state changed. See
+`docs/operations/WP99_STAGING_AUTHORITATIVE_SOURCE_RECONCILIATION_2026-09-10.md`.
+
 ## WP98 Pixel current-candidate update — complete
 
 The exact owner-only `1.0.0+2026091001` Internal/Staging candidate passed its

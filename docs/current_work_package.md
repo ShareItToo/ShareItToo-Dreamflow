@@ -1,14 +1,20 @@
-# Current Work Package: WP99 Staging Authoritative-Source Reconciliation — IN PROGRESS
+# Current Work Package: WP100 Current-Candidate Pixel Read-Only Surface Closure — IN PROGRESS
 
-The exact current Android candidate is now installed and narrowly verified on
-the Pixel, but its Staging endpoint still reports the older persisted source
-from the last readback. WP99 is the independent, read-only reconciliation of
-that remote-authority boundary: it must establish the persistent source,
-runtime/image relation, volumes and verified rollback source before any
-successor Staging deployment can be considered. No remote mutation or rollout
-is in scope. The prerequisite was previously blocked before authentication by
-an unresolvable configured SSH alias; no replacement hostname, credential or
-deployment target will be guessed.
+With the authoritative Staging source and the exact Pixel candidate now
+reconciled, WP100 closes the remaining non-mutating Pixel surfaces: legal,
+account/support, large-text and theme/accessibility evidence. It keeps the
+unknown existing authenticated session read-only. No listing, booking, message,
+account, provider, Store or remote source action is within this scope.
+
+# Previous Work Package: WP99 Staging Authoritative-Source Reconciliation — COMPLETE
+
+The Staging API/Database runtime, release record, healthy state, rollback image,
+five persistent active API Compose files, owner-restricted environment/override
+metadata, release script and named Staging volumes were freshly re-proven
+read-only. Its Backend runtime tree equals the current Pixel candidate source;
+the candidate's startup correction is mobile-only. Public API endpoints are
+healthy and its empty catalog is confirmed both server-side and on Pixel.
+See `docs/operations/WP99_STAGING_AUTHORITATIVE_SOURCE_RECONCILIATION_2026-09-10.md`.
 
 # Previous Work Package: WP98 Pixel Current-Candidate Update — COMPLETE
 
