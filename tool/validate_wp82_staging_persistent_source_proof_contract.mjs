@@ -68,20 +68,34 @@ function inspectPrivateShape(value, trail = []) {
   }
 }
 
+function sourceAtPreflightHead(repositoryRoot, sourceTexts, path) {
+  if (Object.prototype.hasOwnProperty.call(sourceTexts ?? {}, path)) {
+    return sourceTexts[path];
+  }
+  try {
+    return execFileSync('git', ['show', `${preflightHead}:${path}`], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    fail(`WP82 historical source is unavailable: ${path}`);
+  }
+}
+
 function validateSource(repositoryRoot, sourceTexts) {
+  const sources = Object.fromEntries(sourceInventory.map((entry) => [
+    entry.path,
+    sourceAtPreflightHead(repositoryRoot, sourceTexts, entry.path),
+  ]));
   for (const entry of sourceInventory) {
-    const text = sourceTexts?.[entry.path]
-      ?? readFileSync(resolve(repositoryRoot, entry.path), 'utf8');
-    if (sha256(text) !== entry.sha256) {
+    if (sha256(sources[entry.path]) !== entry.sha256) {
       fail(`WP82 protected source hash is stale: ${entry.path}`);
     }
   }
-  const deployment = readFileSync(resolve(repositoryRoot, 'backend/ops/deploy_release.sh'), 'utf8');
-  const compose = readFileSync(resolve(repositoryRoot, 'backend/compose.staging.yml'), 'utf8');
-  const runtimeInventory = readFileSync(
-    resolve(repositoryRoot, 'tool/inspect_staging_runtime_readonly.mjs'),
-    'utf8',
-  );
+  const deployment = sources['backend/ops/deploy_release.sh'];
+  const compose = sources['backend/compose.staging.yml'];
+  const runtimeInventory = sources['tool/inspect_staging_runtime_readonly.mjs'];
   for (const marker of [
     'Image revision label does not match $task_commit.',
     'up -d --no-build --wait --wait-timeout 180',
