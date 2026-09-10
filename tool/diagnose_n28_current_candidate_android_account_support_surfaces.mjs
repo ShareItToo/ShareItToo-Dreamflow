@@ -51,6 +51,7 @@ const accountChecks = Object.freeze([
   Object.freeze({ entry: 'Blockierte Nutzer', markers: ['Blockierte Nutzer'] }),
   Object.freeze({ entry: 'Datenschutz-Infos', markers: ['Datenschutz-Infos', 'Datenexport'] }),
 ]);
+const accountCheckByEntry = new Map(accountChecks.map((check) => [check.entry, check]));
 
 function fail(message) {
   throw new Error(message);
@@ -210,30 +211,38 @@ export function summarizeN28AccountSupportSurfaces({
   sourceDrift,
   surfaces,
   helpSupportEntryReachable,
+  checks = accountChecks,
   capturedAt,
 }) {
   same(sourceDrift?.mobileSourceChanged, false, 'post-candidate mobile source');
-  const expectedEntries = accountChecks.map((check) => check.entry);
+  if (!Array.isArray(checks)
+      || checks.length === 0
+      || checks.some((check) => !accountCheckByEntry.has(check?.entry))
+      || new Set(checks.map((check) => check.entry)).size !== checks.length) {
+    fail('The requested account/support diagnostic scope is invalid.');
+  }
+  const selectedChecks = checks.map((check) => accountCheckByEntry.get(check.entry));
+  const complete = selectedChecks.length === accountChecks.length;
+  const expectedEntries = selectedChecks.map((check) => check.entry);
   same(Object.keys(surfaces ?? {}).length, expectedEntries.length, 'account surface count');
   for (const entry of expectedEntries) {
     same(surfaces?.[entry]?.status, 'passed', `${entry} surface status`);
   }
-  same(
-    surfaces?.Zahlungsmethoden?.result,
-    'read-only-staging-provider-hold-visible',
-    'payment provider hold',
-  );
-  same(
-    surfaces?.Auszahlungsmethoden?.result,
-    'read-only-staging-provider-hold-visible',
-    'payout provider hold',
-  );
-  same(helpSupportEntryReachable, true, 'help and support entry');
+  for (const check of selectedChecks.filter((entry) => entry.providerHold === true)) {
+    same(
+      surfaces?.[check.entry]?.result,
+      'read-only-staging-provider-hold-visible',
+      `${check.entry} provider hold`,
+    );
+  }
+  if (complete) same(helpSupportEntryReachable, true, 'help and support entry');
 
   const result = {
     schemaVersion: 1,
     kind: 'sit-n28-current-candidate-pixel-account-support-surface-diagnostic',
-    status: 'passed-account-support-read-only-provider-holds-confirmed',
+    status: complete
+      ? 'passed-account-support-read-only-provider-holds-confirmed'
+      : 'passed-account-support-read-only-surface-subset',
     capturedAt,
     candidate: {
       applicationId: candidate.applicationId,
@@ -247,10 +256,17 @@ export function summarizeN28AccountSupportSurfaces({
     tests: {
       accountSurfaceCount: expectedEntries.length,
       surfaces,
-      helpCenterReachable: true,
-      supportEntryReachableWithoutSubmission: true,
-      paymentProviderHoldVisible: true,
-      payoutProviderHoldVisible: true,
+      ...(complete
+        ? {
+          helpCenterReachable: true,
+          supportEntryReachableWithoutSubmission: true,
+          paymentProviderHoldVisible: true,
+          payoutProviderHoldVisible: true,
+        }
+        : {
+          completeAccountSupportMatrixPassed: false,
+          accountEntriesTested: expectedEntries,
+        }),
     },
     boundaries: {
       readOnly: true,
@@ -289,6 +305,7 @@ export async function diagnoseN28CurrentCandidateAndroidAccountSupportSurfaces({
   candidateDirectory,
   commandRunner = defaultCurrentHeadAndroidCommandRunner,
   adbPath = 'adb',
+  checks = accountChecks,
   capturedAt = new Date().toISOString(),
   wait = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds)),
 }) {
@@ -306,35 +323,46 @@ export async function diagnoseN28CurrentCandidateAndroidAccountSupportSurfaces({
   assertCurrentHeadAndroidDeviceAlreadyUnlocked(commandRunner, adbPath, device);
   verifyCurrentHeadAndroidInstalledCandidate(commandRunner, adbPath, device, candidate);
 
+  if (!Array.isArray(checks)
+      || checks.length === 0
+      || checks.some((check) => !accountCheckByEntry.has(check?.entry))
+      || new Set(checks.map((check) => check.entry)).size !== checks.length) {
+    fail('The requested account/support diagnostic scope is invalid.');
+  }
+  const selectedChecks = checks.map((check) => accountCheckByEntry.get(check.entry));
+  const complete = selectedChecks.length === accountChecks.length;
   const surfaces = {};
   try {
-    for (const check of accountChecks) {
+    for (const check of selectedChecks) {
       surfaces[check.entry] = await inspectAccountEntry({
         commandRunner, adbPath, device, check, wait,
       });
     }
-    await openProfileSearchResult({
-      commandRunner,
-      adbPath,
-      device,
-      query: 'Hilfe-Center',
-      destinationMarkers: ['Hilfe-Center'],
-      wait,
-    });
-    await findByScrolling({
-      commandRunner,
-      adbPath,
-      device,
-      label: 'Support kontaktieren',
-      wait,
-      requireUnique: false,
-    });
+    if (complete) {
+      await openProfileSearchResult({
+        commandRunner,
+        adbPath,
+        device,
+        query: 'Hilfe-Center',
+        destinationMarkers: ['Hilfe-Center'],
+        wait,
+      });
+      await findByScrolling({
+        commandRunner,
+        adbPath,
+        device,
+        label: 'Support kontaktieren',
+        wait,
+        requireUnique: false,
+      });
+    }
     return summarizeN28AccountSupportSurfaces({
       candidate,
       deviceSummary,
       sourceDrift,
       surfaces,
-      helpSupportEntryReachable: true,
+      helpSupportEntryReachable: complete,
+      checks: selectedChecks,
       capturedAt,
     });
   } finally {
@@ -345,6 +373,7 @@ export async function diagnoseN28CurrentCandidateAndroidAccountSupportSurfaces({
 function parseArguments(values) {
   let candidateDirectory = null;
   let adbPath = 'adb';
+  let onlyEntry = null;
   for (let index = 0; index < values.length; index += 1) {
     if (values[index] === '--candidate-dir') {
       candidateDirectory = values[index + 1] ?? fail('--candidate-dir requires a path.');
@@ -352,19 +381,27 @@ function parseArguments(values) {
     } else if (values[index] === '--adb') {
       adbPath = values[index + 1] ?? fail('--adb requires a path.');
       index += 1;
+    } else if (values[index] === '--only') {
+      onlyEntry = values[index + 1] ?? fail('--only requires one exact account entry.');
+      if (!accountCheckByEntry.has(onlyEntry)) {
+        fail('--only must name one supported account entry.');
+      }
+      index += 1;
     } else {
       fail(`Unknown argument: ${values[index]}`);
     }
   }
   if (candidateDirectory === null) fail('--candidate-dir is required.');
-  return { candidateDirectory: resolve(candidateDirectory), adbPath };
+  return { candidateDirectory: resolve(candidateDirectory), adbPath, onlyEntry };
 }
 
 async function run() {
   const root = fileURLToPath(new URL('../', import.meta.url));
+  const args = parseArguments(process.argv.slice(2));
   const result = await diagnoseN28CurrentCandidateAndroidAccountSupportSurfaces({
     root,
-    ...parseArguments(process.argv.slice(2)),
+    ...args,
+    ...(args.onlyEntry === null ? {} : { checks: [accountCheckByEntry.get(args.onlyEntry)] }),
   });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }

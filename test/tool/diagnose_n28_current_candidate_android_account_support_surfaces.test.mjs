@@ -55,6 +55,21 @@ test('accepts nine read-only account surfaces, help and exact provider holds', (
   assert.equal(result.boundaries.phoneVerificationRequested, false);
 });
 
+test('accepts one scoped account surface without claiming the complete account/support matrix', () => {
+  const input = validInput();
+  input.surfaces = {
+    'Zahlungsmethoden': input.surfaces.Zahlungsmethoden,
+  };
+  const result = summarizeN28AccountSupportSurfaces({
+    ...input,
+    checks: [{ entry: 'Zahlungsmethoden' }],
+    helpSupportEntryReachable: false,
+  });
+  assert.equal(result.status, 'passed-account-support-read-only-surface-subset');
+  assert.deepEqual(result.tests.accountEntriesTested, ['Zahlungsmethoden']);
+  assert.equal(result.tests.completeAccountSupportMatrixPassed, false);
+});
+
 test('rejects missing surfaces, provider drift, mutation claims and private output', () => {
   for (const mutate of [
     (value) => { delete value.surfaces['Blockierte Nutzer']; },
