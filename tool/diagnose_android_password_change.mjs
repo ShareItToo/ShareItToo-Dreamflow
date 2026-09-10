@@ -908,6 +908,7 @@ export async function findPasswordAction({
   device,
   wait,
   label,
+  chooseLast = false,
   dumpUi = dumpCurrentHeadAndroidUi,
   swipe = currentHeadAndroidAdb,
 }) {
@@ -917,7 +918,8 @@ export async function findPasswordAction({
   // which is about to become available above the fold.
   const hasInteractableAction = (hierarchy) => {
     try {
-      selectNamedPasswordActionNode(hierarchy, label);
+      const node = selectNamedPasswordActionNode(hierarchy, label, { chooseLast });
+      pointForNode(node, label);
       return true;
     } catch {
       return false;
@@ -988,6 +990,7 @@ async function openPasswordChangeSurface({ commandRunner, adbPath, device, wait 
     device,
     wait,
     label: 'Passwort ändern',
+    chooseLast: true,
   });
   tapNamedNode(commandRunner, adbPath, device, hierarchy, 'Passwort ändern', { chooseLast: true });
   return waitForPasswordSurface({
@@ -1185,7 +1188,14 @@ async function performPixelPasswordChangeUi({
     'Neues Passwort bestätigen',
     replacement,
   );
-  hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+  hierarchy = await findPasswordAction({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+    label: 'Passwort ändern',
+    chooseLast: true,
+  });
   tapNamedNode(commandRunner, adbPath, device, hierarchy, 'Passwort ändern', { chooseLast: true });
   hierarchy = await waitForPasswordSurface({
     commandRunner,

@@ -225,6 +225,31 @@ test('password navigation waits for a visible action to become interactable befo
   assert.equal(swipes, 0);
 });
 
+test('password navigation requires valid geometry for the same final action it will tap', async () => {
+  const unusableFinal = [
+    '<node text="Passwort ändern" enabled="true" bounds="[10,300][500,420]" />',
+    '<node text="Passwort ändern" enabled="true" />',
+  ].join('');
+  const usableFinal = [
+    '<node text="Passwort ändern" enabled="true" bounds="[10,300][500,420]" />',
+    '<node text="Passwort ändern" enabled="true" bounds="[10,500][500,620]" />',
+  ].join('');
+  const snapshots = [unusableFinal, usableFinal];
+  const waits = [];
+  const result = await findPasswordAction({
+    commandRunner: () => '',
+    adbPath: 'adb',
+    device: { serial: 'synthetic-device' },
+    label: 'Passwort ändern',
+    chooseLast: true,
+    dumpUi: () => snapshots.shift() ?? usableFinal,
+    swipe: () => {},
+    wait: async (milliseconds) => waits.push(milliseconds),
+  });
+  assert.equal(result, usableFinal);
+  assert.deepEqual(waits, [400]);
+});
+
 test('password navigation searches both bounded viewport directions after the initial settle', async () => {
   const action = '<node content-desc="Kontoeinstellungen" enabled="true" bounds="[10,300][500,420]" />';
   const snapshots = Array.from({ length: 11 }, () => '').concat(action);
