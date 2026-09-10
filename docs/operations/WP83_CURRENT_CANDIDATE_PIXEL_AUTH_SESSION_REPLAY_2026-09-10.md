@@ -83,5 +83,24 @@ principal from being silently resurrected. The safe successor is fresh
 owner-confirmed email verification that provisions new isolated test material;
 it does not authorize reuse of retired accounts or any live-provider change.
 
+## Permission-lifecycle follow-up
+
+The exact-candidate Android permission lifecycle runner was subsequently
+bound to the candidate's own clean source checkout rather than the later
+working-tree source. Its profile check now uses a bounded, display-relative
+scroll only to reveal the existing static menu; it never reads profile data,
+changes an account, captures a screenshot or retains raw UI XML.
+
+On the installed `2026090905` candidate, the allow-listed `Meine Anzeigen`
+and `Mietanfragen` markers appear after bounded scrolling, while `Abmelden`
+does not. This is the expected guest/e-mail-pending state of the fresh
+registration, not evidence of an authenticated session. Each attempted
+permission round-trip restored its original Android runtime-permission and
+AppOp snapshot exactly; its private recovery journal contains neither
+credentials nor account identity. The lifecycle therefore remains `PARTIAL`
+until the owner completes the external e-mail link and a new authenticated
+Pixel replay can be made. No Staging, provider, store, payment, OnePlus or
+Production state changed.
+
 Machine-readable evidence:
 `docs/evidence/release-readiness/wp83-current-candidate-pixel-auth-session-replay-20260910.json`.
