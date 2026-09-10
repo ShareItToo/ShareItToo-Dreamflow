@@ -15,10 +15,12 @@ import {
   assertExactDeclaredAndroidPermissions,
   buildWp46PermissionEvidence,
   exercisePermissionGroups,
+  parseAndroidDisplaySize,
   parseAndroidAppOpSnapshot,
   parseAndroidRuntimePermissionSnapshot,
   parseDeclaredAndroidPermissions,
   parseWp46Arguments,
+  profileMenuScrollArguments,
   readWp46PermissionJournal,
 } from '../../tool/diagnose_current_candidate_android_permission_lifecycle.mjs';
 
@@ -90,6 +92,19 @@ test('parses runtime permission flags and default versus explicit app-op state',
     source: 'default',
   });
   assert.equal(appOp['android.permission.CAMERA'].source, 'explicit');
+});
+
+test('derives a bounded, display-relative profile-menu scroll without identity data', () => {
+  const display = parseAndroidDisplaySize('Physical size: 1440x3120\nOverride size: 1080x2340\n');
+  assert.deepEqual(display, { width: 1080, height: 2340 });
+  assert.deepEqual(profileMenuScrollArguments(display), [
+    'shell', 'input', 'swipe', '540', '1684', '540', '631', '350',
+  ]);
+  assert.throws(
+    () => parseAndroidDisplaySize('Physical size: 100x200'),
+    /usable display size/u,
+  );
+  assert.equal(JSON.stringify(profileMenuScrollArguments(display)).includes('/Users/'), false);
 });
 
 function fakeOperations({ failOn = null } = {}) {

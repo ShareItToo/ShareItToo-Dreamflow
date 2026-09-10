@@ -379,12 +379,61 @@ function tapNamed(commandRunner, adbPath, device, hierarchy, label) {
   ]);
 }
 
-async function waitForLabels(commandRunner, adbPath, device, labels, label) {
+export function parseAndroidDisplaySize(output) {
+  const matches = [...String(output).matchAll(/(?:Physical|Override) size:\s*(\d+)x(\d+)/gu)];
+  const match = matches.at(-1);
+  if (match === undefined) fail('Android did not expose a usable display size.');
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isSafeInteger(width)
+      || !Number.isSafeInteger(height)
+      || width < 320
+      || height < 480) {
+    fail('Android did not expose a usable display size.');
+  }
+  return Object.freeze({ width, height });
+}
+
+export function profileMenuScrollArguments(display) {
+  const { width, height } = display;
+  const x = Math.floor(width / 2);
+  const startY = Math.floor(height * 0.72);
+  const endY = Math.floor(height * 0.27);
+  if (!Number.isSafeInteger(x)
+      || !Number.isSafeInteger(startY)
+      || !Number.isSafeInteger(endY)
+      || startY <= endY) {
+    fail('Android profile scroll bounds are invalid.');
+  }
+  return Object.freeze([
+    'shell', 'input', 'swipe', String(x), String(startY), String(x), String(endY), '350',
+  ]);
+}
+
+function scrollProfileMenu(commandRunner, adbPath, device) {
+  const display = parseAndroidDisplaySize(currentHeadAndroidAdb(
+    commandRunner,
+    adbPath,
+    device,
+    ['shell', 'wm', 'size'],
+  ));
+  currentHeadAndroidAdb(
+    commandRunner,
+    adbPath,
+    device,
+    profileMenuScrollArguments(display),
+  );
+}
+
+async function waitForLabels(commandRunner, adbPath, device, labels, label, { onMissing = null } = {}) {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     await wait(500);
     const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
     if (labels.every((value) => currentHeadAndroidNamedNodes(hierarchy, value).length > 0)) {
       return hierarchy;
+    }
+    if (onMissing !== null && attempt >= 2 && attempt % 4 === 2) {
+      onMissing();
     }
   }
   fail(`The sanitized ${label} surface did not appear.`);
@@ -474,6 +523,12 @@ async function restartAuthenticated(commandRunner, adbPath, device) {
     device,
     ['Meine Anzeigen', 'Mietanfragen', 'Abmelden'],
     'authenticated profile',
+    {
+      // The profile menu begins below the header. This changes only its
+      // temporary viewport; navigation is restored before the diagnostic
+      // continues and no account or business action is invoked.
+      onMissing: () => scrollProfileMenu(commandRunner, adbPath, device),
+    },
   );
   restoreCurrentHeadAndroidExplore(commandRunner, adbPath, device);
 }
