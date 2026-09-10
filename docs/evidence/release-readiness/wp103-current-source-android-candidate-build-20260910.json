@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "workPackage": "WP103_CURRENT_SOURCE_ANDROID_CANDIDATE",
-  "status": "private-candidate-built-local-regression-passed-github-pending",
-  "recordedAt": "2026-09-10T17:02:49Z",
+  "status": "build-ready-private-candidate-github-regression-codeql-passed",
+  "recordedAt": "2026-09-10T17:24:31Z",
   "source": {
     "branch": "codex/master-workflow-20260808",
     "artifactSourceHead": "fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5",
@@ -43,10 +43,26 @@
     "cleanCommitBoundPreflight": "passed",
     "privateArchiveVerification": "passed",
     "fullTechnicalRegression": "passed-isolated-local-profile",
-    "cleanCheckoutReproducibility": "pending-exact-github-regression",
-    "githubRegression": "pending",
-    "githubCodeql": "pending",
-    "currentCodeScanningReadback": "pending"
+    "cleanCheckoutReproducibility": "passed-github-regression-evidence-successor-no-runtime-drift",
+    "githubRegression": {
+      "runId": 34505947881,
+      "head": "fbfeb514911d7a747d7b3fa995db1f18be506498",
+      "conclusion": "success",
+      "artifactSourceHead": "fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5",
+      "artifactSourceIsAncestor": true,
+      "runtimeDriftAfterArtifactSource": "none-validated-by-candidate-rollover-guard"
+    },
+    "githubCodeql": {
+      "runId": 34505947825,
+      "head": "fbfeb514911d7a747d7b3fa995db1f18be506498",
+      "conclusion": "success"
+    },
+    "currentCodeScanningReadback": {
+      "prHeadOpenAlerts": 0,
+      "prMergeOpenAlerts": 0,
+      "directBranchHistoricalOpenInstances": 2,
+      "directBranchHistoricalCommit": "0048ece49b7819fb09600465a027a4e0b530ccda"
+    }
   },
   "boundaries": {
     "storeUploadPerformed": false,

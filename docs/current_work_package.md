@@ -1,14 +1,16 @@
-# Current Work Package: WP103 Current-Source Android Candidate — IN PROGRESS
+# Current Work Package: WP103 Current-Source Android Candidate — BUILD READY
 
 WP103 privately binds `1.0.0+2026091002` to source commit
 `fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5` after WP102 changed runtime
 behavior. Its canonical signature, package/API identity, archive integrity and
-binary privacy scan and complete isolated local technical regression pass.
-Clean-checkout reproducibility, GitHub Regression, CodeQL and fresh code-scan
-readback remain pending. The predecessor Pixel candidate is retained under its
-immutable versioned manifest; no historical device proof is transferred. No
-Store upload, activation, device install, deployment, provider, payment,
-Firebase, cloud, VPS, DNS or PR-merge action occurs in WP103. See
+binary privacy scan, complete isolated local technical regression, exact
+GitHub Regression/clean-checkout proof, CodeQL and current code-scan readback
+pass. The GitHub evidence head is documentation-only after the archive source;
+the committed rollover guard proves no runtime-affecting drift. The predecessor
+Pixel candidate is retained under its immutable versioned manifest; no
+historical device proof is transferred. No Store upload, activation, device
+install, deployment, provider, payment, Firebase, cloud, VPS, DNS or PR-merge
+action occurs in WP103. See
 `docs/operations/WP103_CURRENT_SOURCE_ANDROID_CANDIDATE_2026-09-10.md`.
 
 # Previous Work Package: WP102 Staging Verification Delivery Truth — SOURCE COMPLETE / EXTERNAL TRACE OPEN
@@ -25,8 +27,8 @@ The local correction and focused checks are complete at source commit
 `ccb247d356e56b96d956efc5839ed773013720e8`. The complete technical gate
 correctly stopped at the retained Android-candidate source binding because
 runtime source differed from the candidate's artifact source. WP103 now owns
-the separate exact-candidate package; its local regression passes and GitHub
-truth remains pending. The external provider message trace is separately open and is the
+the separate exact-candidate package; its local and GitHub proof passes. That
+candidate proof does not establish an inbox-delivery result. The external provider message trace is separately open and is the
 only source for recipient-outcome truth. It must be read-only and retain no
 account identifier, link or message content in repository evidence.
 

@@ -1,15 +1,19 @@
 # ShareItToo Current State
 
-## WP103 current-source Android candidate — in progress
+## WP103 current-source Android candidate — build ready
 
 The private signed Internal/Staging successor `1.0.0+2026091002` is now bound
 to `fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5`. Its package, canonical signing,
 archive structure and binary privacy report pass locally. The old 2026091001
 Pixel evidence now has an immutable versioned manifest and is not treated as
-evidence for this new binary. Its complete isolated local regression now
-passes; independent GitHub Regression, CodeQL and current code-scanning
-readback are still pending. No Store, tester, device, Staging, provider,
-payment, Firebase, cloud, VPS, DNS or production state changed. See
+evidence for this new binary. Its complete isolated local regression, GitHub
+Regression, clean-checkout proof and CodeQL now pass. GitHub verified the
+documentation/evidence successor `fbfeb514911d7a747d7b3fa995db1f18be506498`;
+the committed rollover guard proves the archive source remains its ancestor
+with no runtime-affecting drift. Current PR head and merge scans have zero
+open alerts; two older direct-branch instances remain explicitly historical.
+No Store, tester, device, Staging, provider, payment, Firebase, cloud, VPS,
+DNS or production state changed. See
 `docs/operations/WP103_CURRENT_SOURCE_ANDROID_CANDIDATE_2026-09-10.md`.
 
 ## WP102 staging verification delivery truth — source complete / external trace open
@@ -24,9 +28,9 @@ insufficient to claim inbox delivery. The correction has not been deployed;
 no message, account, Staging, provider, Store, payment, cloud, VPS, DNS or
 device state changed. Its first complete local gate correctly stopped at the
 retained Android-candidate binding because runtime source differed from its
-artifact source. WP103 has since built the separate private successor, whose
-isolated local regression passes and whose GitHub verification remains pending.
-The provider message trace is separately open and must remain read-only and
+artifact source. WP103 has since completed the separate private successor's
+local and GitHub verification. That candidate proof does not establish an
+inbox-delivery result. The provider message trace is separately open and must remain read-only and
 sanitized. See
 `docs/operations/WP102_STAGING_VERIFICATION_DELIVERY_TRUTH_2026-09-10.md`.
 

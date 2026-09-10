@@ -49,16 +49,20 @@ erased, reinterpreted or used as evidence for the new binary.
 private archive. Its full technical regression passed in the designated
 isolated Android build profile, including the maintained test inventories,
 analyzer, Web/Wasm build and loopback smoke, plus the Android debug reach
-check. Clean-checkout reproducibility, GitHub Regression, CodeQL and current
-code-scanning readback remain deliberately pending. No upload, installation or
-external state claim may rely on the candidate until those independent checks
-are completed.
+check. GitHub Regression `34505947881`, its fresh clean-checkout proof and
+CodeQL `34505947825` all passed. The GitHub verification head
+`fbfeb514911d7a747d7b3fa995db1f18be506498` is a documentation/evidence-only
+successor of the archive source, not the archive source itself. The committed
+candidate-rollover guard proved the source is its ancestor and that no
+runtime-affecting path changed in between. The PR-head and PR-merge scan
+readback each show zero open alerts. Two direct-branch historical instances
+remain recorded at older commit `0048ece49b7819fb09600465a027a4e0b530ccda`;
+they are not relabelled as current-candidate findings.
 
 ## Next bounded action
 
-Commit this local evidence, push the ordinary branch commits and await the
-GitHub Regression, CodeQL and code-scanning readback. The archive source commit
-will remain explicitly distinct from a documentation-only evidence successor;
-the CI candidate rollover guard must prove that no runtime-affecting drift was
-introduced. Stop before any Store upload, activation, tester change, device
-installation, deployment or public release.
+WP103 is **BUILD READY**: the next suitable action is a separately bounded
+physical-test/distribution package for this exact APK, with fresh owner/device
+consent and no assumption of a Store upload or activation. This package itself
+stops before any Store upload, activation, tester change, device installation,
+deployment or public release.
