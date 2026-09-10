@@ -15,6 +15,17 @@ timing workaround. No Production, Store, provider, payment, Firebase, VPS/DNS,
 OnePlus or merge state changed. See
 `docs/operations/WP83_CURRENT_CANDIDATE_PIXEL_AUTH_SESSION_REPLAY_2026-09-10.md`.
 
+The 2026-09-10 continuation preflight also retained two distinct owner-only
+inputs instead of substituting historical data: exact-candidate Google replay
+requires its dedicated private Google-account selector, which is not currently
+provisioned; and reusable two-role journeys require a fresh
+`email-link-verified-ready-for-login` source vault. The locally retained
+two-role journey vaults are all explicitly retired, so none may be reused as a
+source. Both checks stopped before account, provider, Staging or Pixel
+mutation and exposed no identity, credential or private path. The owner
+e-mail-link flow remains the safe route to provision fresh verified test
+material; independent non-owner work continues.
+
 # Previous Work Package: WP82 Staging Persistent-Source Proof Contract
 
 WP82 is **COMPLETE LOCALLY AND ON GITHUB; THE REMOTE READ-ONLY OBSERVATION IS

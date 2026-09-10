@@ -67,5 +67,21 @@ separate deliberately delayed-response injection not exercised by this package;
 it remains conservatively `PARTIAL` in the WP79 acceptance matrix until that
 specific current-candidate proof is independently recorded.
 
+## Continuation preflight
+
+Two independent exact-candidate replays were checked before any action. The
+Google replay correctly requires its dedicated owner-only account selector,
+which is not currently provisioned. The search/saved and other two-role
+replays correctly require a source vault in the explicit
+`email-link-verified-ready-for-login` state; every locally retained two-role
+journey vault is instead explicitly retired. Neither check selected, emitted,
+committed or retained an identity, credential, token or private path, and both
+stopped before a Pixel, Staging, provider or account mutation.
+
+The retired-vault condition is intentional: it prevents a historical test
+principal from being silently resurrected. The safe successor is fresh
+owner-confirmed email verification that provisions new isolated test material;
+it does not authorize reuse of retired accounts or any live-provider change.
+
 Machine-readable evidence:
 `docs/evidence/release-readiness/wp83-current-candidate-pixel-auth-session-replay-20260910.json`.

@@ -16,6 +16,13 @@ workarounds. No Production, Store, provider, payment, Firebase, VPS/DNS,
 OnePlus or merge state changed. See
 `docs/operations/WP83_CURRENT_CANDIDATE_PIXEL_AUTH_SESSION_REPLAY_2026-09-10.md`.
 
+A continuation preflight preserves two separate private-input holds: an exact
+Google replay needs its owner-only account selector, and fresh two-role
+replays need a source vault in the explicit email-link-verified ready state.
+No such source vault is currently active; retained journey vaults are retired
+and are deliberately not reused. Both checks stopped before any account,
+provider, Staging or Pixel mutation and did not record private data.
+
 ## WP82 Staging persistent-source proof contract
 
 WP82 prepares one exact, source-hash-bound contract for reconstructing the
