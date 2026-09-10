@@ -1,4 +1,16 @@
-# Current Work Package: WP96 Current-Source Android Candidate Reservation
+# Current Work Package: WP97 PostgreSQL Future-Acceptance-Window Ratchet
+
+The exact-source WP96 GitHub Regression exposed an expired static timestamp in
+the real PostgreSQL concurrency scenario. WP97 derives a single shared
+30-day-future booking window for both competing requests and guards that
+fixture contract against reintroducing the expired static date. The local
+pinned-PNPM PostgreSQL runner passes. Exact-head GitHub Regression,
+clean-checkout reproducibility and CodeQL are now pending; no candidate,
+runtime, Store, provider, payment or device action may advance until they are
+all green. See
+`docs/operations/WP97_POSTGRES_FUTURE_ACCEPTANCE_WINDOW_RATCHET_2026-09-10.md`.
+
+# Previous Work Package: WP96 Current-Source Android Candidate Reservation
 
 WP96 has built and independently verified the private signed Android
 Internal/Staging candidate `1.0.0+2026091001` from

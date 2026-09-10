@@ -1,5 +1,17 @@
 # ShareItToo Current State
 
+## WP97 PostgreSQL future-acceptance-window ratchet
+
+The current-source GitHub Regression had a real deterministic-test failure:
+an expired fixed booking fixture made two concurrent acceptance attempts both
+correctly return `409`, instead of exercising the intended one-`200`/
+one-`409` overlap outcome. WP97 replaces that fixed date with one shared,
+UTC-normalized window safely in the future and adds a source-contract ratchet.
+The complete local PostgreSQL integration runner passes. Exact-head GitHub
+Regression, clean-checkout reproducibility and CodeQL remain required before
+the WP96 Android candidate can advance. See
+`docs/operations/WP97_POSTGRES_FUTURE_ACCEPTANCE_WINDOW_RATCHET_2026-09-10.md`.
+
 ## WP96 current-source Android candidate reservation
 
 The owner-only Android Internal/Staging candidate `1.0.0+2026091001` from

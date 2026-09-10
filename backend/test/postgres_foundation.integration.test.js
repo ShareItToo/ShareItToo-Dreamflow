@@ -45,6 +45,22 @@ async function mapWithBoundedConcurrency(values, maximumWorkers, operation) {
   return results;
 }
 
+function futureAcceptanceWindow({
+  now = new Date(),
+  daysAhead = 30,
+  durationDays = 2,
+} = {}) {
+  const start = new Date(now.getTime());
+  start.setUTCDate(start.getUTCDate() + daysAhead);
+  start.setUTCHours(10, 0, 0, 0);
+  const end = new Date(start.getTime());
+  end.setUTCDate(end.getUTCDate() + durationDays);
+  return Object.freeze({
+    start: start.toISOString(),
+    end: end.toISOString(),
+  });
+}
+
 function humanStatementDecision({
   facts,
   basis,
@@ -1948,6 +1964,7 @@ if (!databaseUrl) {
         is_active: true,
       });
 
+      const acceptanceWindow = futureAcceptanceWindow();
       for (const [id, renterId] of [['booking-a', 'renter-a'], ['booking-b', 'renter-b']]) {
         const payload = {
           id,
@@ -1955,8 +1972,8 @@ if (!databaseUrl) {
           ownerId: 'owner',
           renterId,
           status: 'pending',
-          start: '2026-09-10T10:00:00.000Z',
-          end: '2026-09-12T10:00:00.000Z',
+          start: acceptanceWindow.start,
+          end: acceptanceWindow.end,
           createdAt: '2026-08-08T20:00:00.000Z',
         };
         await setupPool.query(
