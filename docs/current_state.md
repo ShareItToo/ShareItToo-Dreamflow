@@ -20,6 +20,14 @@ begins. The known two noncritical overdue Support follow-ups remain a distinct
 staff-owned operational hold and were not changed. See
 `docs/operations/WP101_FRESH_TWO_ROLE_SOURCE_READINESS_2026-09-10.md`.
 
+While that owner-only confirmation is pending, `codex_local_dev` completed one
+fresh, ephemeral synthetic-fixture evaluation under supported ChatGPT sign-in,
+without API billing, credential extraction or model tools. It produced only
+review-required suggestions and cannot become a Staging runtime provider; the
+Staging Listing-AI remains the zero-budget mock with external execution and
+automatic publication disabled. See
+`docs/evidence/release-readiness/wp101-codex-local-dev-synthetic-evaluation-20260910.json`.
+
 ## WP100 Pixel read-only surface closure — complete
 
 The exact `1.0.0+2026091001` Internal/Staging Pixel candidate now passes the

@@ -43,6 +43,21 @@ Codex must never read, copy, print or commit either address, password or link.
 The known two noncritical overdue Support follow-ups are a separate
 staff-owned operational hold. This package neither identifies nor changes them.
 
+## Independent local Listing-AI readiness check
+
+While the two normal e-mail confirmations remain owner-controlled, the
+existing `codex_local_dev` developer adapter was revalidated once against its
+allowlisted synthetic drill fixture. The ephemeral read-only evaluation used
+the supported ChatGPT sign-in, no API billing environment and no model tools.
+It produced a schema-valid category/subcategory proposal, preserved three
+clarification questions, created no authoritative price and required every
+owner confirmation and explicit publication action. The result is retained in
+`docs/evidence/release-readiness/wp101-codex-local-dev-synthetic-evaluation-20260910.json`.
+
+This is not an external Staging provider, not a user-image evaluation and not
+runtime image-analysis acceptance. Staging remains the zero-budget mock with
+external execution and automatic publication disabled.
+
 ## Verification
 
 The focused vault audit covers: an all-retired safe directory, refusal of an
