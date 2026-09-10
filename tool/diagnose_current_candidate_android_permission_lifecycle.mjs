@@ -24,6 +24,7 @@ import {
   defaultCurrentHeadAndroidCommandRunner,
   dumpCurrentHeadAndroidUi,
   launchCurrentHeadAndroidCandidate,
+  observeCurrentHeadAndroidForegroundOwner,
   restoreCurrentHeadAndroidExplore,
   verifyCurrentHeadAndroidInstalledCandidate,
   waitForCurrentHeadAndroidMainNavigation,
@@ -556,9 +557,19 @@ function restorePhysicalPermissionState(commandRunner, adbPath, device, snapshot
 async function restartAuthenticated(commandRunner, adbPath, device) {
   launchCurrentHeadAndroidCandidate(commandRunner, adbPath, device);
   try {
-    const main = await waitForCurrentHeadAndroidMainNavigation({
-      commandRunner, adbPath, device, wait,
-    });
+    let main;
+    try {
+      main = await waitForCurrentHeadAndroidMainNavigation({
+        commandRunner, adbPath, device, wait,
+      });
+    } catch (error) {
+      error.sitSafeForegroundOwner = observeCurrentHeadAndroidForegroundOwner(
+        commandRunner,
+        adbPath,
+        device,
+      );
+      throw error;
+    }
     tapNamed(commandRunner, adbPath, device, main, 'Mein SIT');
     await waitForLabels(
       commandRunner,
@@ -681,6 +692,7 @@ export function buildWp46FailedAfterRestorationJournal({
   candidate,
   originalPermissionState,
   failureClass = 'other-fail-closed-diagnostic-error',
+  foregroundOwner = 'unobserved',
   lastLifecycleCheckpoint = null,
 }) {
   if (candidate === undefined || originalPermissionState === undefined) {
@@ -688,6 +700,9 @@ export function buildWp46FailedAfterRestorationJournal({
   }
   if (!/^(?:navigation-(?:system-notification-overlay|unauthenticated-session|bottom-navigation-absent|bottom-navigation-incomplete|navigation-labels-present-surface-pending)|other-fail-closed-diagnostic-error)$/u.test(failureClass)) {
     fail('The failed WP46 restoration class is not safe.');
+  }
+  if (!['shareittoo-app', 'android-permission-controller', 'android-system-ui', 'no-focused-window', 'other-or-unavailable', 'unobserved'].includes(foregroundOwner)) {
+    fail('The failed WP46 foreground owner is not safe.');
   }
   const restoredPermissionState = normalizePermissionState(originalPermissionState);
   const normalizedCheckpoint = normalizeWp46LifecycleCheckpoint(lastLifecycleCheckpoint);
@@ -700,6 +715,7 @@ export function buildWp46FailedAfterRestorationJournal({
     recoveryRequired: false,
     lifecycleResult: 'unproven',
     failureClass,
+    foregroundOwner,
     lastLifecycleCheckpoint: normalizedCheckpoint,
     containsCredentials: false,
     containsAccountIdentity: false,
@@ -910,6 +926,7 @@ async function run() {
         },
         originalPermissionState,
         failureClass: classifyWp46FailClosedDiagnosticError(error),
+        foregroundOwner: error?.sitSafeForegroundOwner ?? 'unobserved',
         lastLifecycleCheckpoint,
       }));
     }

@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   classifyCurrentHeadAndroidMainNavigationAbsence,
+  classifyCurrentHeadAndroidForegroundOwner,
   diagnoseCurrentHeadAndroidColdStartStability,
   diagnoseCurrentHeadAndroidMainNavigation,
   parseMainNavigationArguments,
@@ -170,6 +171,19 @@ test('classifies missing navigation with a fixed non-private vocabulary', () => 
     classifyCurrentHeadAndroidMainNavigationAbsence('<hierarchy><node content-desc="Benachrichtigung: test"/></hierarchy>'),
     'system-notification-overlay',
   );
+});
+
+test('classifies only the foreground package on the focused-window line', () => {
+  assert.equal(
+    classifyCurrentHeadAndroidForegroundOwner('mCurrentFocus=Window{a u0 com.shareittoo.app/.MainActivity}'),
+    'shareittoo-app',
+  );
+  assert.equal(
+    classifyCurrentHeadAndroidForegroundOwner('mCurrentFocus=Window{a u0 com.google.android.permissioncontroller/.GrantPermissionsActivity}'),
+    'android-permission-controller',
+  );
+  assert.equal(classifyCurrentHeadAndroidForegroundOwner('mCurrentFocus=null'), 'no-focused-window');
+  assert.equal(classifyCurrentHeadAndroidForegroundOwner('unrelated'), 'other-or-unavailable');
 });
 
 test('measures up to three cold starts and stops at the first safe navigation failure', async () => {

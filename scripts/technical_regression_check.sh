@@ -910,6 +910,9 @@ node tool/validate_wp91_pixel_cold_start_stability.mjs
 node --check tool/validate_wp92_pixel_permission_matrix_final_restart.mjs
 node --test test/tool/validate_wp92_pixel_permission_matrix_final_restart.test.mjs
 node tool/validate_wp92_pixel_permission_matrix_final_restart.mjs
+node --check tool/validate_wp93_pixel_final_restart_foreground_boundary.mjs
+node --test test/tool/validate_wp93_pixel_final_restart_foreground_boundary.test.mjs
+node tool/validate_wp93_pixel_final_restart_foreground_boundary.mjs
 node --check tool/validate_wp83_current_candidate_pixel_auth_session_replay.mjs
 node --test test/tool/validate_wp83_current_candidate_pixel_auth_session_replay.test.mjs
 node tool/validate_wp83_current_candidate_pixel_auth_session_replay.mjs

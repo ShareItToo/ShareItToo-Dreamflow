@@ -1,4 +1,15 @@
-# Current Work Package: WP92 Pixel Permission Matrix and Final Restart
+# Current Work Package: WP93 Pixel Final-Restart Foreground Boundary
+
+WP93 is **PARTIAL AND STOPS FURTHER PHYSICAL PERMISSION REPLAYS**. The complete
+three-group matrix and exact restoration re-passed, but the final in-cycle
+restart again lacked navigation. Its bounded foreground class is
+`other-or-unavailable`, so it proves neither a permission-controller, System UI
+nor app root cause. The next step is source-level inspection before any new
+physical replay. No account, business, provider, Store, Production, OnePlus or
+merge state changed. See
+`docs/operations/WP93_PIXEL_FINAL_RESTART_FOREGROUND_BOUNDARY_2026-09-10.md`.
+
+# Previous Work Package: WP92 Pixel Permission Matrix and Final Restart
 
 WP92 is **PARTIAL WITH THE COMPLETE THREE-GROUP MATRIX AND EXACT RESTORATION
 PROVEN**. Camera, location and notifications each passed deny/allow/restart;

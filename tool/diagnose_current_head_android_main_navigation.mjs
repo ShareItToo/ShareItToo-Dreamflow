@@ -72,6 +72,27 @@ export function currentHeadAndroidAdb(commandRunner, adbPath, device, args, { bi
   }
 }
 
+export function classifyCurrentHeadAndroidForegroundOwner(output) {
+  const focus = String(output).split(/\r?\n/u).find((line) => (
+    /mCurrentFocus=|mFocusedWindow=/u.test(line)
+  )) ?? '';
+  const normalized = focus.toLowerCase();
+  if (/mcurrentfocus=null|mfocusedwindow=null/u.test(normalized)) return 'no-focused-window';
+  if (/permissioncontroller/u.test(normalized)) return 'android-permission-controller';
+  if (/systemui/u.test(normalized)) return 'android-system-ui';
+  if (normalized.includes(applicationId)) return 'shareittoo-app';
+  return 'other-or-unavailable';
+}
+
+export function observeCurrentHeadAndroidForegroundOwner(commandRunner, adbPath, device) {
+  return classifyCurrentHeadAndroidForegroundOwner(currentHeadAndroidAdb(
+    commandRunner,
+    adbPath,
+    device,
+    ['shell', 'dumpsys', 'window', 'windows'],
+  ));
+}
+
 function sha256Bytes(value) {
   return createHash('sha256').update(value).digest('hex');
 }

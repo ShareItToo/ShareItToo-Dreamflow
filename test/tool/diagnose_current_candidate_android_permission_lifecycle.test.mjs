@@ -349,6 +349,7 @@ test('records a restored but unproven lifecycle failure without claiming success
   assert.equal(result.status, 'restored-after-failed-run');
   assert.equal(result.lifecycleResult, 'unproven');
   assert.equal(result.failureClass, 'other-fail-closed-diagnostic-error');
+  assert.equal(result.foregroundOwner, 'unobserved');
   assert.equal(result.lastLifecycleCheckpoint, null);
   assert.equal(result.recoveryRequired, false);
   assert.deepEqual(result.restoredPermissionState, originalPermissionState);
@@ -356,6 +357,12 @@ test('records a restored but unproven lifecycle failure without claiming success
   assert.throws(
     () => buildWp46FailedAfterRestorationJournal({}),
     /restoration record is incomplete/u,
+  );
+  assert.throws(
+    () => buildWp46FailedAfterRestorationJournal({
+      candidate: {}, originalPermissionState, foregroundOwner: 'raw-package-name',
+    }),
+    /foreground owner is not safe/u,
   );
   assert.throws(
     () => buildWp46FailedAfterRestorationJournal({

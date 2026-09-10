@@ -1,5 +1,13 @@
 # ShareItToo Current State
 
+## WP93 Pixel final-restart foreground boundary
+
+A repeat confirms the final-restart navigation gap after a complete restored
+permission matrix. The bounded foreground class is intentionally unclassified,
+so no UI/root-cause conclusion is invented and no further physical permission
+replay follows from this evidence. See
+`docs/operations/WP93_PIXEL_FINAL_RESTART_FOREGROUND_BOUNDARY_2026-09-10.md`.
+
 ## WP92 Pixel permission matrix and final restart
 
 The exact Pixel candidate passed deny/allow/authenticated-restart checks for
