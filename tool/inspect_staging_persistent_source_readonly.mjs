@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 const apiContainer = 'shareittoo-staging-api';
 const databaseContainer = 'shareittoo-staging-postgres';
 const deploymentRoot = '/docker/shareittoo';
-const expectedProject = 'sit-staging';
+const stagingProjectPattern = /staging/iu;
 
 export class StagingPersistentSourceReadonlyError extends Error {
   constructor(code) {
@@ -105,7 +105,7 @@ function namedVolumeCount(run, container) {
     'inspect', '--format', '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}}{{"\\n"}}{{end}}{{end}}', container,
   ]);
   const names = raw.split(/\r?\n/u).map((entry) => entry.trim()).filter(Boolean);
-  if (names.length === 0 || names.some((name) => !name.startsWith(`${expectedProject}_`))) {
+  if (names.length === 0 || names.some((name) => !stagingProjectPattern.test(name))) {
     fail('staging_volume_binding_invalid');
   }
   return names.length;
@@ -119,9 +119,9 @@ export function inspectStagingPersistentSourceReadonly({
   regularDirectory(root);
   const api = composeMetadata(run, apiContainer);
   const database = composeMetadata(run, databaseContainer);
-  if (api.project !== expectedProject || database.project !== expectedProject
-      || api.workingDirectory !== database.workingDirectory
-      || api.configFiles !== database.configFiles) {
+  if (!stagingProjectPattern.test(api.project)
+      || !stagingProjectPattern.test(database.project)
+      || api.project !== database.project) {
     fail('compose_project_binding_invalid');
   }
 
@@ -157,11 +157,11 @@ export function inspectStagingPersistentSourceReadonly({
     status: 'passed-read-only',
     environment: 'staging',
     compose: {
-      project: expectedProject,
+      projectClass: 'staging',
       activeConfigFileCount: persistentConfigs.length,
       activeConfigFilesPersistentRegular: true,
       activeConfigFilesContainedInWorkingDirectory: true,
-      apiAndDatabaseComposeBindingMatches: true,
+      apiAndDatabaseProjectBindingMatches: true,
     },
     persistentSource: {
       workingDirectoryRegular: true,

@@ -88,6 +88,17 @@ test('fails closed for missing persistent override, unsafe environment file, or 
     permissions.cleanup();
   }
 
+  const project = setup();
+  try {
+    project.labels['com.docker.compose.project'] = 'production';
+    assert.throws(
+      () => inspectStagingPersistentSourceReadonly({ rootDirectory: project.root, run: project.run }),
+      /inspection failed/u,
+    );
+  } finally {
+    project.cleanup();
+  }
+
   const linked = setup();
   try {
     const original = join(linked.working, '.env.staging.source');
