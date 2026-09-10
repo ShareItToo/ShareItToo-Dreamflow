@@ -161,6 +161,52 @@ test('closes the Pixel email-verified two-role journey and records only sanitize
   assert.equal(JSON.stringify(result).includes('/private/'), false);
 });
 
+test('binds the same sanitized journey to the exact physical OnePlus profile', async () => {
+  const calls = [];
+  const result = await runAndroidEmailVerifiedTwoRoleProductJourney({
+    candidate,
+    deviceSummary: {
+      manufacturer: 'OnePlus',
+      model: 'CPH2581',
+      physical: true,
+    },
+    operations: passingOperations(calls),
+    deviceProfile: 'oneplus',
+    capturedAt: '2026-09-10T21:00:00.000Z',
+  });
+  assert.equal(result.kind, 'android-oneplus-email-verified-two-role-product-journey');
+  assert.equal(result.status, 'passed-oneplus-email-verified-two-role-product-journey');
+  assert.equal(
+    result.tests.ownerDraftPublishThroughOnePlusUi,
+    'passed-server-confirmed-active',
+  );
+  assert.equal('ownerDraftPublishThroughPixelUi' in result.tests, false);
+  assert.equal(result.boundaries.physicalPixelOnly, false);
+  assert.equal(result.boundaries.physicalOnePlusOnly, true);
+  assert.equal(result.boundaries.onePlusContacted, true);
+  assert.equal(result.boundaries.monetaryEffectMinor, 0);
+  assert.equal(result.boundaries.containsAccountIdentity, false);
+  assert.equal(result.boundaries.containsSecrets, false);
+});
+
+test('rejects a OnePlus claim for any other physical Android model', async () => {
+  const calls = [];
+  await assert.rejects(
+    () => runAndroidEmailVerifiedTwoRoleProductJourney({
+      candidate,
+      deviceSummary: {
+        manufacturer: 'Google',
+        model: 'Pixel 7 Pro',
+        physical: true,
+      },
+      operations: passingOperations(calls),
+      deviceProfile: 'oneplus',
+    }),
+    /exact physical CPH2581 device/u,
+  );
+  assert.deepEqual(calls, []);
+});
+
 test('retires prepared state and restores the owner after a product-surface failure', async () => {
   const calls = [];
   const operations = passingOperations(calls);

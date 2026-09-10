@@ -544,8 +544,19 @@ export async function runAndroidEmailVerifiedTwoRoleProductJourney({
   candidate,
   deviceSummary,
   operations,
+  deviceProfile = 'pixel',
   capturedAt = new Date().toISOString(),
 } = {}) {
+  if (!['pixel', 'oneplus'].includes(deviceProfile)) {
+    fail('The physical Android product-journey device profile is invalid.');
+  }
+  if (deviceProfile === 'oneplus'
+      && (deviceSummary?.physical !== true
+        || deviceSummary?.model !== 'CPH2581'
+        || !/^oneplus$/iu.test(String(deviceSummary?.manufacturer ?? '')))) {
+    fail('The OnePlus product journey requires the exact physical CPH2581 device.');
+  }
+  const onePlus = deviceProfile === 'oneplus';
   const required = [
     'prepare',
     'publishOwnerDraft',
@@ -615,8 +626,12 @@ export async function runAndroidEmailVerifiedTwoRoleProductJourney({
   }
   return Object.freeze({
     schemaVersion: 1,
-    kind: 'android-email-verified-two-role-product-journey',
-    status: 'passed-pixel-email-verified-two-role-product-journey',
+    kind: onePlus
+      ? 'android-oneplus-email-verified-two-role-product-journey'
+      : 'android-email-verified-two-role-product-journey',
+    status: onePlus
+      ? 'passed-oneplus-email-verified-two-role-product-journey'
+      : 'passed-pixel-email-verified-two-role-product-journey',
     capturedAt,
     candidate: {
       applicationId: candidate.applicationId,
@@ -631,7 +646,9 @@ export async function runAndroidEmailVerifiedTwoRoleProductJourney({
     device: deviceSummary,
     tests: {
       distinctEmailVerifiedPrincipals: 'passed',
-      ownerDraftPublishThroughPixelUi: 'passed-server-confirmed-active',
+      ...(onePlus
+        ? { ownerDraftPublishThroughOnePlusUi: 'passed-server-confirmed-active' }
+        : { ownerDraftPublishThroughPixelUi: 'passed-server-confirmed-active' }),
       ownerPublishFeedback: publish.successConfirmationVisible === true
         ? 'transient-toast-observed-and-server-confirmed'
         : 'durable-server-and-public-catalog-confirmed',
@@ -649,8 +666,9 @@ export async function runAndroidEmailVerifiedTwoRoleProductJourney({
       protectedOwnerSessionRestored: true,
     },
     boundaries: {
-      physicalPixelOnly: true,
-      onePlusContacted: false,
+      physicalPixelOnly: !onePlus,
+      physicalOnePlusOnly: onePlus,
+      onePlusContacted: onePlus,
       emailLinksWerePreviouslyOwnerConfirmed: true,
       paymentEndpointCalled: false,
       stripeLivemode: false,
@@ -691,6 +709,10 @@ async function main() {
       ?? fail('--private-artifact-dir is required.'),
   );
   const adbPath = argumentValue(args, '--adb') ?? 'adb';
+  const deviceProfile = argumentValue(args, '--device-profile') ?? 'pixel';
+  if (!['pixel', 'oneplus'].includes(deviceProfile)) {
+    fail('--device-profile must be pixel or oneplus.');
+  }
   const candidateArchive = await validatePrivateAndroidReleaseArchive({
     root: repositoryRoot,
     candidateDirectory,
@@ -755,6 +777,7 @@ async function main() {
     candidate,
     deviceSummary,
     operations,
+    deviceProfile,
   });
   process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
 }
