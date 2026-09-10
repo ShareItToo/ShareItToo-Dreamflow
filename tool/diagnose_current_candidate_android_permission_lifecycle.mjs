@@ -257,8 +257,12 @@ export function buildWp46PermissionEvidence({
   capturedAt = new Date().toISOString(),
 }) {
   if (candidate?.applicationId !== applicationId
-      || candidate?.buildNumber !== '2026090610'
-      || candidate?.commit !== '2fd793bac970866aa94a2940f28d6bbc3e04e377'
+      || typeof candidate?.versionName !== 'string'
+      || !/^\d+\.\d+\.\d+$/u.test(candidate.versionName)
+      || typeof candidate?.buildNumber !== 'string'
+      || !/^\d{10}$/u.test(candidate.buildNumber)
+      || typeof candidate?.commit !== 'string'
+      || !/^[a-f0-9]{40}$/u.test(candidate.commit)
       || candidate?.releaseChannel !== 'internal'
       || candidate?.apiBaseUrl !== 'https://staging.shareittoo.com/api/v1'
       || candidate?.firebaseConfigured !== true
@@ -551,6 +555,7 @@ export function readWp46PermissionJournal(path) {
 export function parseWp46Arguments(values) {
   const result = {
     candidateDirectory: null,
+    candidateSourceRoot: null,
     adbPath: 'adb',
     aapt2Path: 'aapt2',
     journalPath: resolve(
@@ -565,13 +570,34 @@ export function parseWp46Arguments(values) {
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
     if (value === '--candidate-dir') result.candidateDirectory = values[++index] ?? fail('--candidate-dir requires a path.');
+    else if (value === '--candidate-source-root') result.candidateSourceRoot = values[++index] ?? fail('--candidate-source-root requires a path.');
     else if (value === '--adb') result.adbPath = values[++index] ?? fail('--adb requires a path.');
     else if (value === '--aapt2') result.aapt2Path = values[++index] ?? fail('--aapt2 requires a path.');
     else if (value === '--journal') result.journalPath = values[++index] ?? fail('--journal requires a path.');
     else fail(`Unknown argument: ${value}`);
   }
   if (result.candidateDirectory === null) fail('--candidate-dir is required.');
+  if (result.candidateSourceRoot === null) fail('--candidate-source-root is required.');
   return result;
+}
+
+function assertCleanCandidateSourceRoot(root, candidateCommit) {
+  const candidateRoot = resolve(root);
+  const head = String(execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: candidateRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })).trim();
+  if (head !== candidateCommit) {
+    fail('Candidate source root does not resolve to the signed candidate commit.');
+  }
+  try {
+    execFileSync('git', ['diff', '--quiet'], { cwd: candidateRoot, stdio: 'ignore' });
+    execFileSync('git', ['diff', '--cached', '--quiet'], { cwd: candidateRoot, stdio: 'ignore' });
+  } catch {
+    fail('Candidate source root is not clean.');
+  }
+  return candidateRoot;
 }
 
 async function run() {
@@ -582,8 +608,12 @@ async function run() {
     candidateDirectory: args.candidateDirectory,
   });
   const candidate = validateCurrentPrivateAndroidCandidate(archive);
+  const candidateSourceRoot = assertCleanCandidateSourceRoot(
+    args.candidateSourceRoot,
+    candidate.commit,
+  );
   const sourceDrift = assertCurrentCandidateNoPostCandidateMobileSourceDrift(
-    collectCurrentCandidateDriftPaths({ root, candidateCommit: candidate.commit }),
+    collectCurrentCandidateDriftPaths({ root: candidateSourceRoot, candidateCommit: candidate.commit }),
   );
   const declared = parseDeclaredAndroidPermissions(String(execFileSync(
     args.aapt2Path,

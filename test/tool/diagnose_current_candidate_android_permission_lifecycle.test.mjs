@@ -210,16 +210,29 @@ test('builds sanitized exact-candidate WP46 evidence and rejects restoration dri
   assert.throws(() => buildWp46PermissionEvidence(changed), /restoration evidence/u);
 });
 
+test('binds evidence to a structurally valid signed candidate instead of a retired build', () => {
+  const input = validEvidenceInput();
+  input.candidate.buildNumber = '2026090905';
+  input.candidate.commit = 'e1c182ea496f013989863155c13bfda649255a7e';
+  input.installedBefore.buildNumber = input.candidate.buildNumber;
+  input.installedAfter.buildNumber = input.candidate.buildNumber;
+  const result = buildWp46PermissionEvidence(input);
+  assert.equal(result.candidate.buildNumber, '2026090905');
+  assert.equal(result.candidate.commit, 'e1c182ea496f013989863155c13bfda649255a7e');
+});
+
 test('requires explicit private archive and parses bounded tool paths', () => {
   assert.deepEqual(
     parseWp46Arguments([
       '--candidate-dir', '/private/candidate',
+      '--candidate-source-root', '/private/candidate-source',
       '--adb', '/safe/adb',
       '--aapt2', '/safe/aapt2',
       '--journal', '/private/journal',
     ]),
     {
       candidateDirectory: '/private/candidate',
+      candidateSourceRoot: '/private/candidate-source',
       adbPath: '/safe/adb',
       aapt2Path: '/safe/aapt2',
       journalPath: '/private/journal',
