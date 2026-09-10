@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -9,6 +10,7 @@ import { readRepositoryFile } from './read_repository_file.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath =
   'docs/evidence/48h-remote/rw2-reduced-wave0-local-state-truth-recovery-20260825.json';
+const sourceInventoryHead = '7d2df51c25ebbe94ee41dd075d8512c5e7439f11';
 const sourcePaths = [
   'lib/services/data_service.dart',
   'lib/screens/explore_screen.dart',
@@ -32,6 +34,19 @@ const exact = (actual, expected) => JSON.stringify(actual) === JSON.stringify(ex
 const source = (repositoryRoot, path) =>
   readRepositoryFile(repositoryRoot, path, { label: `RW2 source ${path}` });
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
+
+function inventorySource(repositoryRoot, sourceTexts, path) {
+  if (Object.prototype.hasOwnProperty.call(sourceTexts, path)) return sourceTexts[path];
+  try {
+    return execFileSync('git', ['show', `${sourceInventoryHead}:${path}`], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    fail(`RW2 historical source is unavailable: ${path}`);
+  }
+}
 
 function assertMarkers(content, path, expected) {
   for (const marker of expected) {
@@ -160,7 +175,7 @@ export function validateRw2ReducedWave0LocalStateTruthRecovery({
     if (!/^[a-f0-9]{64}$/u.test(entry.sha256 ?? '')) {
       fail(`RW2 source hash is invalid: ${entry.path}`);
     }
-    const text = sourceTexts[entry.path] ?? source(repositoryRoot, entry.path);
+    const text = inventorySource(repositoryRoot, sourceTexts, entry.path);
     if (sha256(text) !== entry.sha256) {
       fail(`RW2 source inventory hash is stale: ${entry.path}`);
     }
