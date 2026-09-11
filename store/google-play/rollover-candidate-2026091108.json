@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "kind": "android-current-rollover-candidate",
-  "status": "build-ready-play-internal-upload-pending",
-  "generatedAt": "2026-09-11T11:32:46Z",
+  "status": "superseded-by-newer-local-candidate",
+  "generatedAt": "2026-09-11T10:53:27Z",
   "candidate": {
     "applicationId": "com.shareittoo.app",
     "versionName": "1.0.0",
-    "versionCode": "2026091109",
-    "artifactSourceHead": "5d8b89c82926a9f0a28627a7f36d26a88a9574fe",
+    "versionCode": "2026091108",
+    "artifactSourceHead": "471ababf41bd1088208eeba046d1ac983e3ca76b",
     "releaseChannel": "internal",
     "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
     "compileSdkVersion": 36,
@@ -27,14 +27,14 @@
     "g5ListingSetsTechnicalUiEnabled": true
   },
   "artifact": {
-    "archiveDirectoryName": "2026091109-5d8b89c82926a9f0a28627a7f36d26a88a9574fe",
-    "aabFileName": "shareittoo-1.0.0-2026091109-5d8b89c82926a9f0a28627a7f36d26a88a9574fe.aab",
-    "aabBytes": 138721754,
-    "aabSha256": "b5f8531744035daa1801d7821d4c42feb5bafd217ffb54ec3c128a369777c9c7",
-    "apkFileName": "shareittoo-1.0.0-2026091109-5d8b89c82926a9f0a28627a7f36d26a88a9574fe.apk",
+    "archiveDirectoryName": "2026091108-471ababf41bd1088208eeba046d1ac983e3ca76b",
+    "aabFileName": "shareittoo-1.0.0-2026091108-471ababf41bd1088208eeba046d1ac983e3ca76b.aab",
+    "aabBytes": 138720468,
+    "aabSha256": "491bbbb819f4fb8f59a4b1ae37e9bb1ebc5970627cd95e66e050839784e50a88",
+    "apkFileName": "shareittoo-1.0.0-2026091108-471ababf41bd1088208eeba046d1ac983e3ca76b.apk",
     "apkBytes": 199608581,
-    "apkSha256": "381cbb6766772c2fba4f093913bf366e6bfe1deb0af7b7ae5efe2ae694cd21cf",
-    "privacyReportSha256": "58612d74dacb7d8b23e14bfa9fe4b68b8e4f297d73722a9edb222378b3d5b6bb",
+    "apkSha256": "59908ee9797adfe611f35133a9ab5aad412834a82fa037baf911e91d18e598a4",
+    "privacyReportSha256": "9808667ede8dba0d53bb6c362dbf050d16044edf1c6353fe3b938de20b9042a5",
     "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
     "signatureVerified": true,
     "zipStructureValidation": "passed",
@@ -47,10 +47,10 @@
   "sourceVerification": {
     "closedPilotFocusedTests": "passed-release-preflight",
     "privacyAndPackageRatchets": "passed",
-    "fullToolInventory": "pending-exact-candidate-run",
-    "backendSuite": "passed-focused-873-tests-2-documented-skips",
+    "fullToolInventory": "passed-exact-candidate-run",
+    "backendSuite": "passed-exact-candidate-run",
     "flutterAnalyzer": "passed-zero-issues",
-    "fullTechnicalRegression": "pending-exact-candidate-run",
+    "fullTechnicalRegression": "passed-exact-candidate-run",
     "cleanCheckoutReproducibility": "pending-github-regression",
     "githubVerifiedHead": null,
     "githubRegressionRunId": null,
@@ -63,12 +63,12 @@
     "sourceHead": "39faedf12dc0342df35b09fe6c06b5565f3c850c",
     "clientBuild": "1.0.0+2026091106",
     "health": "passed",
-    "readiness": "degraded-only-two-noncritical-support-followups-overdue",
+    "readiness": "degraded-only-noncritical-support-followups-overdue",
     "paymentTransport": "memory",
     "paymentLivemode": false,
     "listingAiProvider": "on_device",
     "externalListingAiEnabled": false,
-    "currentCandidateDeployment": "pending"
+    "currentCandidateDeployment": "not-deployed"
   },
   "playStateAtReadback": {
     "activeInternalVersionCode": "2026090711",
@@ -101,19 +101,19 @@
     "handoffRef": "store/google-play/on-device-listing-ai-data-safety-handoff.json"
   },
   "deviceVerification": {
-    "preferredDeviceExactApkInstalled": false,
-    "preferredDeviceDataPreserved": false,
-    "onDeviceListingAiPhysicalInference": "pending-pixel-install-and-test",
-    "authenticatedPilotMatrix": "pending-current-candidate",
-    "secondaryDevice": "not-required-for-current-pixel-first-run"
+    "preferredDeviceExactApkInstalled": true,
+    "preferredDeviceDataPreserved": true,
+    "onDeviceListingAiPhysicalInference": "not-run-in-this-package",
+    "authenticatedPilotMatrix": "failed-renter-history-hydration-fixed-in-successor",
+    "secondaryDevice": "not-contacted"
   },
   "privateDriveHandoff": {
     "status": "not-required-for-current-mac-mini-session",
     "shared": false
   },
-  "evidenceRef": "docs/evidence/release-readiness/wp110-pixel-renter-owner-journey-20260911.json",
+  "evidenceRef": null,
   "playCompletionEvidenceRef": null,
-  "handoverRef": "docs/operations/WP110_PIXEL_RENTER_OWNER_JOURNEY_2026-09-11.md",
+  "handoverRef": null,
   "releaseNotesRef": "store/google-play/de-DE/internal_release_notes.txt",
   "containsSecrets": false,
   "containsTesterIdentity": false,
