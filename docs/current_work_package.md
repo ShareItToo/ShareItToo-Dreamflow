@@ -1,4 +1,22 @@
-# Current Work Package: WP116 Current-Candidate Pixel TalkBack Runtime Gate — BLOCKED AND RESTORED
+# Current Work Package: WP117 OnePlus Current-Candidate Two-Role Runway — PREPARED, DEVICE PENDING
+
+WP117 provides one exact, fail-closed execution path for installing and running
+the complete renter/owner journey on the physical OnePlus CPH2581. It is bound
+to signed Internal/Staging candidate `1.0.0+2026091110`, preserves an exact
+installation, permits only an explicitly confirmed `com.shareittoo.app` reset
+when a different signing domain is present, requires a separate exact execution
+confirmation, verifies installed bytes and then requires the existing full
+two-role journey and cleanup. Six focused tests, a wrong-device physical Pixel
+rejection and the complete scoped local technical regression pass. The OnePlus
+run remains `NOT_RUN` solely because the MacBook ADB host is offline. See
+`docs/operations/WP117_ONEPLUS_CURRENT_CANDIDATE_TWO_ROLE_RUNWAY_2026-09-11.md`.
+
+Exact preceding HEAD `dd834a195ecbc0f210c6a661c4bd6da4007eec49`
+passes GitHub Regression `34645026777` with independent clean checkout and
+CodeQL `34645026767`. No device, account, product, provider/payment, Store,
+Production, Firebase, VPS/DNS or PR mutation occurred in the preparation.
+
+# Previous Work Package: WP116 Current-Candidate Pixel TalkBack Runtime Gate — BLOCKED AND RESTORED
 
 The exact installed signed Internal/Staging `1.0.0+2026091110` candidate
 completed a fresh physical TalkBack activation probe through Android's visible

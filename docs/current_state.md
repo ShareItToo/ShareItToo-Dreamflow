@@ -1,5 +1,24 @@
 # ShareItToo Current State
 
+## WP117 exact-current-candidate OnePlus two-role runway — prepared, device pending
+
+One fail-closed runner now binds the complete physical OnePlus renter/owner
+replay to exact signed Internal/Staging candidate `1.0.0+2026091110`. It accepts
+only one unlocked physical OnePlus CPH2581, preserves an already exact install,
+gates any different ShareItToo package behind an exact package-only reset and
+requires a separate exact execution confirmation before any physical action,
+then requires the complete sanitized two-role journey plus exact cleanup. Six
+focused tests pass. A physical negative probe on the Pixel rejected the wrong
+device before package or product activity, and the complete scoped local
+technical regression passes. The actual OnePlus run is still
+`NOT_RUN` because its MacBook ADB host is offline. See
+`docs/operations/WP117_ONEPLUS_CURRENT_CANDIDATE_TWO_ROLE_RUNWAY_2026-09-11.md`.
+
+Exact prior evidence HEAD `dd834a195ecbc0f210c6a661c4bd6da4007eec49`
+passes GitHub Regression `34645026777`, including independent clean checkout,
+and CodeQL `34645026767`. No device, account, Store, provider, payment,
+Production or PR state changed during WP117 preparation.
+
 ## WP116 exact-current-candidate Pixel TalkBack runtime gate — blocked and restored
 
 The exact installed signed Internal/Staging `1.0.0+2026091110` candidate
