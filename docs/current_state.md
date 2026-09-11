@@ -1,5 +1,22 @@
 # ShareItToo Current State
 
+## WP107 extended current-candidate Pixel two-role test — local complete / GitHub pending
+
+The exact signed Internal/Staging `1.0.0+2026091101` candidate passes every
+currently executable payment-free owner/renter path exercised in WP107:
+listing lifecycle, search and saved-state persistence/isolation, rental cart
+and projects, private media/chat, two-party handover/return times, fail-closed
+early location sharing and offline realtime recovery. All fixtures were retired,
+the protected owner was restored and the public Staging catalog is empty.
+
+Binding acceptance still returns the intended
+`409 v52_contract_documents_unavailable`; therefore binding contract, return,
+damage/needsReview, review and Stripe sandbox outcomes are not claimed. The
+OnePlus current-candidate replay also remains open. See
+`docs/operations/WP107_CURRENT_CANDIDATE_EXTENDED_PIXEL_TWO_ROLE_2026-09-11.md`.
+The complete scoped local technical regression passes; exact-head GitHub
+Regression and CodeQL are pending.
+
 ## WP106 authenticated logout and two-device closure — partial
 
 The successor Internal/Staging candidate `1.0.0+2026091101`, bound to exact

@@ -1,4 +1,17 @@
-# Current Work Package: WP106 Authenticated Logout and Two-Device Closure — PARTIAL
+# Current Work Package: WP107 Current-Candidate Extended Pixel Two-Role — LOCAL COMPLETE / GITHUB PENDING
+
+WP107 completes the full currently executable payment-free owner/renter scope
+on the exact signed `1.0.0+2026091101` Pixel candidate: listing lifecycle,
+search/saved isolation, cart/project idempotency, media/chat, two-party handover
+and return times, location reveal denial and offline realtime recovery. Cleanup
+restored the protected owner and left the public Staging catalog empty. Binding
+acceptance correctly stops at `409 v52_contract_documents_unavailable`; return,
+damage, review and Stripe sandbox paths remain separate closed gates. See
+`docs/operations/WP107_CURRENT_CANDIDATE_EXTENDED_PIXEL_TWO_ROLE_2026-09-11.md`.
+The complete scoped local regression passes; exact-head GitHub Regression and
+CodeQL are pending.
+
+# Previous Work Package: WP106 Authenticated Logout and Two-Device Closure — PARTIAL
 
 WP106 fixes the physical OnePlus logout hang without a timeout workaround and
 freezes the exact signed Internal/Staging successor `1.0.0+2026091101` at

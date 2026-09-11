@@ -241,6 +241,33 @@ function packageCrashEntries(commandRunner, adbPath, device, pid) {
   return log.split(/\r?\n/).filter((line) => /FATAL EXCEPTION|Fatal signal/.test(line)).length;
 }
 
+export function selectOfflineRealtimeFixture(vault) {
+  const bindingFixture = vault?.syntheticBooking;
+  const nonBindingFixture = vault?.nonBindingSimulation;
+  if (bindingFixture?.workflowStatus === 'accepted'
+      && bindingFixture.paymentMode === 'memory'
+      && bindingFixture.stripeLivemode === false
+      && bindingFixture.paymentEndpointCalled === false) {
+    return Object.freeze({ ...bindingFixture, nonBinding: false });
+  }
+  if (nonBindingFixture?.status === 'accepted-chat-ready'
+      && nonBindingFixture.availabilityUnaffected === true
+      && nonBindingFixture.paymentReadRejected === true
+      && nonBindingFixture.stripeLivemode === false
+      && nonBindingFixture.paymentEndpointCalled === false
+      && typeof vault?.realTwoRoleJourney?.title === 'string'
+      && vault.realTwoRoleJourney.title.trim() !== '') {
+    return Object.freeze({
+      ...nonBindingFixture,
+      workflowStatus: 'accepted',
+      paymentMode: 'memory',
+      title: vault.realTwoRoleJourney.title,
+      nonBinding: true,
+    });
+  }
+  return null;
+}
+
 export async function diagnoseAndroidOfflineRealtime({
   vaultFile,
   commandRunner = defaultCommandRunner,
@@ -256,10 +283,8 @@ export async function diagnoseAndroidOfflineRealtime({
   assertDeviceAlreadyUnlocked(commandRunner, adbPath, device);
   const installed = verifyInstalledCandidate(commandRunner, adbPath, device, candidate, archive);
   const vault = JSON.parse(readFileSync(vaultFile, 'utf8'));
-  const fixture = vault.syntheticBooking;
-  if (!fixture || fixture.workflowStatus !== 'accepted'
-      || fixture.paymentMode !== 'memory' || fixture.stripeLivemode !== false
-      || fixture.paymentEndpointCalled !== false) {
+  const fixture = selectOfflineRealtimeFixture(vault);
+  if (!fixture) {
     fail('The private synthetic booking is not safe for the offline/realtime diagnostic.');
   }
   const threadId = nonEmptyString(fixture.threadId, 'syntheticBooking.threadId');

@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   activeDefaultNetworkAbsent,
   isExpectedForegroundPushPopup,
+  selectOfflineRealtimeFixture,
   telephonyDataDisconnected,
   visibleMessageOccurrenceCount,
 } from '../../tool/diagnose_android_offline_realtime.mjs';
@@ -58,4 +59,31 @@ test('counts a repeated diagnostic message against the pre-send baseline', () =>
     2,
   );
   assert.equal(visibleMessageOccurrenceCount('<node content-desc="andere Nachricht" />', message), 0);
+});
+
+test('accepts a payment-free non-binding conversation without weakening binding validation', () => {
+  const safe = selectOfflineRealtimeFixture({
+    realTwoRoleJourney: { title: 'SIT Rollenprüfung current' },
+    nonBindingSimulation: {
+      status: 'accepted-chat-ready',
+      availabilityUnaffected: true,
+      paymentReadRejected: true,
+      stripeLivemode: false,
+      paymentEndpointCalled: false,
+      threadId: 'thread',
+    },
+  });
+  assert.equal(safe?.workflowStatus, 'accepted');
+  assert.equal(safe?.paymentMode, 'memory');
+  assert.equal(safe?.nonBinding, true);
+  assert.equal(selectOfflineRealtimeFixture({
+    realTwoRoleJourney: { title: 'SIT Rollenprüfung current' },
+    nonBindingSimulation: {
+      status: 'accepted-chat-ready',
+      availabilityUnaffected: false,
+      paymentReadRejected: true,
+      stripeLivemode: false,
+      paymentEndpointCalled: false,
+    },
+  }), null);
 });
