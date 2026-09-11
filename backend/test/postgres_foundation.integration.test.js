@@ -8950,15 +8950,27 @@ if (!databaseUrl) {
         ],
       );
       await setupPool.query(
-        `UPDATE message_threads
-            SET archived_for = jsonb_build_array($2::text)
-          WHERE id = $1`,
-        [b7Thread.id, 'owner'],
+        `INSERT INTO rental_requests (
+           id, item_id, owner_id, renter_id, status, payload
+         ) VALUES (
+           'privacy-export-unarchived-request', 'listing-1', 'owner',
+           'renter-b', 'pending', '{}'::jsonb
+         )`,
+      );
+      await setupPool.query(
+        `INSERT INTO message_threads (
+           id, request_id, item_id, user1_id, user2_id, payload, archived_for
+         ) VALUES (
+           'privacy-export-unarchived-thread',
+           'privacy-export-unarchived-request', 'listing-1', 'owner',
+           'renter-b', '{}'::jsonb, '[]'::jsonb
+         )`,
       );
       await setupPool.query(
         `UPDATE message_threads
-            SET archived_for = '[]'::jsonb
+            SET archived_for = jsonb_build_array($1::text)
           WHERE id = 'thread-1'`,
+        ['owner'],
       );
       const legacyGetExport = await fetch(`${baseUrl}/v1/account/export`, {
         headers: ownerHeaders,
@@ -9018,9 +9030,9 @@ if (!databaseUrl) {
         false,
       );
       const exportedMessageThread = accountExport.data.communication.messageThreads
-        .find((entry) => entry.id === b7Thread.id);
+        .find((entry) => entry.id === 'privacy-export-unarchived-thread');
       assert.ok(exportedMessageThread);
-      assert.equal(exportedMessageThread.archived_by_me, true);
+      assert.equal(exportedMessageThread.archived_by_me, false);
       assert.ok(accountExport.data.communication.messageThreads.every(
         (entry) => typeof entry.archived_by_me === 'boolean'
           && !Object.hasOwn(entry, 'archived_for'),
@@ -9028,7 +9040,7 @@ if (!databaseUrl) {
       assert.equal(
         accountExport.data.communication.messageThreads
           .find((entry) => entry.id === 'thread-1')?.archived_by_me,
-        false,
+        true,
       );
       const ownerLocationMessages = accountExport.data.communication.messages.filter(
         (entry) => entry.id.startsWith('s3t-location-'),
