@@ -8949,6 +8949,12 @@ if (!databaseUrl) {
           '📍 LOCATION_SHARE|Rückgabe|52.502|13.402|https://maps.example/renter|return|Fremdweg 9, 10117 Berlin|Renter A',
         ],
       );
+      await setupPool.query(
+        `UPDATE message_threads
+            SET archived_for = jsonb_build_array(user1_id, user2_id)
+          WHERE id = $1`,
+        [b7Thread.id],
+      );
       const legacyGetExport = await fetch(`${baseUrl}/v1/account/export`, {
         headers: ownerHeaders,
       });
@@ -9006,7 +9012,17 @@ if (!databaseUrl) {
         accountExport.data.marketplace.bookingQuotes.some((entry) => entry.id === quoted.quoteId),
         false,
       );
-      assert.ok(accountExport.data.communication.messageThreads.some((entry) => entry.id === b7Thread.id));
+      const exportedMessageThread = accountExport.data.communication.messageThreads
+        .find((entry) => entry.id === b7Thread.id);
+      assert.ok(exportedMessageThread);
+      assert.equal(exportedMessageThread.archived_by_me, true);
+      assert.ok(accountExport.data.communication.messageThreads.every(
+        (entry) => typeof entry.archived_by_me === 'boolean'
+          && !Object.hasOwn(entry, 'archived_for'),
+      ));
+      assert.ok(accountExport.data.communication.messageThreads.some(
+        (entry) => entry.archived_by_me === false,
+      ));
       const ownerLocationMessages = accountExport.data.communication.messages.filter(
         (entry) => entry.id.startsWith('s3t-location-'),
       );

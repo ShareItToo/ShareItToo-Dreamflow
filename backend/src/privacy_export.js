@@ -495,7 +495,8 @@ export async function buildAccountExport(client, userId) {
        JOIN v51_withdrawals AS withdrawal ON withdrawal.id = event.withdrawal_id
        WHERE withdrawal.user_id = $1 ORDER BY event.occurred_at`, userId),
     rows(client,
-      `SELECT id, booking_id, item_id, archived_for, created_at,
+      `SELECT id, booking_id, item_id,
+              (archived_for ? $1) AS archived_by_me, created_at,
               last_message_at, updated_at
        FROM message_threads
        WHERE user1_id = $1 OR user2_id = $1 ORDER BY created_at`, userId),
