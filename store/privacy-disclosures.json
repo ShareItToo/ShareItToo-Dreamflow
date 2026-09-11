@@ -80,7 +80,7 @@
     },
     {
       "path": "backend/src/privacy_export.js",
-      "sha256": "f03271aec191088c0d90ca2c5662f5b54a8d74207d8d788422e3963d7761f196"
+      "sha256": "e3525f3c7ed39669155c22ed82cbf178a87f79723ef9756b5b7cddfc8daa8651"
     },
     {
       "path": "backend/src/observability.js",

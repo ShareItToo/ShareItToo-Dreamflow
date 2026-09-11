@@ -8955,6 +8955,11 @@ if (!databaseUrl) {
           WHERE id = $1`,
         [b7Thread.id],
       );
+      await setupPool.query(
+        `UPDATE message_threads
+            SET archived_for = '[]'::jsonb
+          WHERE id = 'thread-1'`,
+      );
       const legacyGetExport = await fetch(`${baseUrl}/v1/account/export`, {
         headers: ownerHeaders,
       });
@@ -9020,9 +9025,11 @@ if (!databaseUrl) {
         (entry) => typeof entry.archived_by_me === 'boolean'
           && !Object.hasOwn(entry, 'archived_for'),
       ));
-      assert.ok(accountExport.data.communication.messageThreads.some(
-        (entry) => entry.archived_by_me === false,
-      ));
+      assert.equal(
+        accountExport.data.communication.messageThreads
+          .find((entry) => entry.id === 'thread-1')?.archived_by_me,
+        false,
+      );
       const ownerLocationMessages = accountExport.data.communication.messages.filter(
         (entry) => entry.id.startsWith('s3t-location-'),
       );
