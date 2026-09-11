@@ -1,4 +1,23 @@
-# Current Work Package: WP117 OnePlus Current-Candidate Two-Role Runway — PREPARED, DEVICE PENDING
+# Current Work Package: WP118 Fresh Pixel Two-Role Confirmation — COMPLETE; ONEPLUS PENDING
+
+The exact signed Internal/Staging `1.0.0+2026091110` candidate passes a fresh
+physical Pixel renter/owner core journey with owner publication, independent
+server/public readback, renter discovery, non-binding request/acceptance,
+chat, FCM in all three app states, role isolation and complete cleanup. One
+initial preparation attempt stopped before device activity on a transient
+public Staging TLS timeout; read-only infrastructure checks confirmed the API
+container healthy with zero restarts and the proxy route recovered before one
+controlled passing retry. No timeout or assertion was relaxed. The temporary
+booking is cancelled, the listing ended, the public catalog empty and the
+protected owner restored. See
+`docs/operations/WP118_FRESH_PIXEL_TWO_ROLE_CONFIRMATION_2026-09-12.md`.
+
+WP114 remains the complete extended same-candidate matrix. The MacBook host is
+still offline, so WP117's physical OnePlus execution remains `NOT_RUN`. No
+binding V5.2, Stripe sandbox, real-money, Production, Store, Firebase,
+public-registration or PR action occurred.
+
+# Previous Work Package: WP117 OnePlus Current-Candidate Two-Role Runway — PREPARED, DEVICE PENDING
 
 WP117 provides one exact, fail-closed execution path for installing and running
 the complete renter/owner journey on the physical OnePlus CPH2581. It is bound

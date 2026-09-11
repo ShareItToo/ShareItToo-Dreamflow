@@ -1,5 +1,23 @@
 # ShareItToo Current State
 
+## WP118 fresh current-candidate Pixel renter/owner confirmation — complete
+
+The exact signed Internal/Staging `1.0.0+2026091110` candidate passed a fresh
+physical Pixel two-role core journey: owner UI publication plus server/public
+readback, renter discovery, non-binding request/acceptance, renter-visible
+chat, foreground/background/terminated FCM, role presentation, Account-A/B
+isolation, cleanup and protected-owner restoration. The initial preparation
+attempt stopped safely on a transient public Staging TLS timeout; after the
+healthy API container, zero restarts, proxy route and public endpoint were
+read back, one controlled retry passed without relaxed timing or assertions.
+The fresh public catalog is empty. See
+`docs/operations/WP118_FRESH_PIXEL_TWO_ROLE_CONFIRMATION_2026-09-12.md`.
+
+WP114 remains the complete extended same-candidate matrix. The MacBook peer is
+offline, so WP117's physical OnePlus replay remains `NOT_RUN`. Binding V5.2 and
+Stripe sandbox remain separate open gates; no Production, Store, Firebase,
+public-registration, real-money or PR state changed.
+
 ## WP117 exact-current-candidate OnePlus two-role runway — prepared, device pending
 
 One fail-closed runner now binds the complete physical OnePlus renter/owner
