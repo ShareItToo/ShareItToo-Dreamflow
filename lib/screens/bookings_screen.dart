@@ -359,7 +359,7 @@ class _BookingsScreenState extends State<BookingsScreen>
     }.contains(r.workflowStatus ?? r.status)
         ? 'return'
         : 'pickup';
-    final addressVisibility = await DataService.getBookingAddressReveal(
+    final addressVisibility = await _safeBookingAddressVisibility(
       request: r,
       localExactAddress: it.locationText,
       segment: addressSegment,
@@ -372,9 +372,11 @@ class _BookingsScreenState extends State<BookingsScreen>
         ? revealedAddress
         : _approximateAddress(it.locationText, seed: r.id);
 
-    final flowState = await DataService.getHandoverReturnState(r.id);
-    final reviewSubmitted = await DataService.hasSubmittedReview(
-        requestId: r.id, reviewerId: reviewerId);
+    final flowState = await _safeHandoverReturnState(r.id);
+    final reviewSubmitted = await _safeReviewSubmittedState(
+      requestId: r.id,
+      reviewerId: reviewerId,
+    );
 
     return {
       'requestId': r.id,
@@ -467,6 +469,64 @@ class _BookingsScreenState extends State<BookingsScreen>
       'returnLocationSharedByName':
           (flowState['returnLocationSharedByName'] as String?) ?? '',
     };
+  }
+
+  Future<Map<String, dynamic>> _safeBookingAddressVisibility({
+    required RentalRequest request,
+    required String localExactAddress,
+    required String segment,
+  }) async {
+    try {
+      return await DataService.getBookingAddressReveal(
+        request: request,
+        localExactAddress: localExactAddress,
+        segment: segment,
+      );
+    } catch (error) {
+      debugPrint(
+        '[Bookings] optional address visibility unavailable (${error.runtimeType})',
+      );
+      return <String, dynamic>{
+        'version': 'v52_booking_address_reveal_v1',
+        'segment': segment,
+        'result': 'hidden',
+        'reason': 'optional_enrichment_unavailable',
+        'exactAddressReturned': false,
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> _safeHandoverReturnState(
+    String requestId,
+  ) async {
+    try {
+      return await DataService.getHandoverReturnState(requestId);
+    } catch (error) {
+      debugPrint(
+        '[Bookings] optional handover state unavailable (${error.runtimeType})',
+      );
+      return const <String, dynamic>{};
+    }
+  }
+
+  Future<bool> _safeReviewSubmittedState({
+    required String requestId,
+    required String reviewerId,
+  }) async {
+    try {
+      return await DataService.hasSubmittedReview(
+        requestId: requestId,
+        reviewerId: reviewerId,
+      );
+    } catch (error) {
+      debugPrint(
+        '[Bookings] optional review state unavailable (${error.runtimeType})',
+      );
+      // Suppress the review CTA when its local truth is unavailable. This is
+      // safer than offering a possibly duplicate or wrong-account action and
+      // does not hide the server-confirmed booking card itself.
+      return true;
+    }
   }
 
   // Builds a fake house number range like "Musterstraße 30–45" when a number exists; otherwise returns original.

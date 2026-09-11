@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
+import { chmodSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -40,6 +41,39 @@ const repositoryRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
 function fail(message) {
   throw new Error(message);
+}
+
+function preservePrivateRenterBookingsFailure({
+  directory,
+  hierarchy,
+  commandRunner,
+  adbPath,
+  device,
+}) {
+  try {
+    const canonical = realpathSync(directory);
+    const stat = statSync(canonical);
+    if (!stat.isDirectory()
+        || (stat.mode & 0o077) !== 0
+        || canonical === repositoryRoot
+        || canonical.startsWith(`${repositoryRoot}/`)) return false;
+    const hierarchyPath = resolve(canonical, 'renter-bookings-failure.xml');
+    const screenshotPath = resolve(canonical, 'renter-bookings-failure.png');
+    const screenshot = currentHeadAndroidAdb(
+      commandRunner,
+      adbPath,
+      device,
+      ['exec-out', 'screencap', '-p'],
+      { binary: true },
+    );
+    writeFileSync(hierarchyPath, String(hierarchy), { mode: 0o600, flag: 'wx' });
+    writeFileSync(screenshotPath, Buffer.from(screenshot), { mode: 0o600, flag: 'wx' });
+    chmodSync(hierarchyPath, 0o600);
+    chmodSync(screenshotPath, 0o600);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function sanitizedFailure(error) {
@@ -249,8 +283,14 @@ export function renterBookingChatSurfaceClassification(hierarchy, exactListingTi
 
 export function renterAcceptedCardSurfaceClassification(hierarchy, exactListingTitle) {
   const count = (label) => currentHeadAndroidNamedNodes(hierarchy, label).length;
+  const roleTitlePrefixCount = [...String(hierarchy).matchAll(/<node\b[^>]*>/gu)]
+    .filter((match) => ['text', 'content-desc'].some((attribute) => {
+      const value = new RegExp(`${attribute}=\"([^\"]*)\"`, 'u').exec(match[0])?.[1] ?? '';
+      return value.startsWith('SIT Rollenprüfung ');
+    })).length;
   return [
     `title-${count(exactListingTitle)}`,
+    `role-title-prefix-${roleTitlePrefixCount}`,
     `simulation-${count('Pilot-Simulation')}`,
     `empty-upcoming-${count('Du hast keine kommenden Buchungen')}`,
     `empty-pending-${count('Du hast keine ausstehenden Buchungen')}`,
@@ -258,7 +298,53 @@ export function renterAcceptedCardSurfaceClassification(hierarchy, exactListingT
     `pending-tab-${count('Ausstehend')}`,
     `loading-${count('Buchungen werden geladen')}`,
     `requests-load-error-${count('Buchungen konnten nicht geladen werden')}`,
+    `requests-load-error-text-${String(hierarchy).includes('Buchungen konnten nicht geladen werden') ? 1 : 0}`,
+    `review-reminder-${count('Zeit für eine Bewertung')}`,
   ].join('_');
+}
+
+export async function waitForRenterAcceptedCardRecovery({
+  wait,
+  observe,
+  retry,
+  matches,
+  attempts = 90,
+  repeatedErrorLimit = 8,
+} = {}) {
+  if (typeof wait !== 'function'
+      || typeof observe !== 'function'
+      || typeof retry !== 'function'
+      || typeof matches !== 'function'
+      || !Number.isInteger(attempts)
+      || attempts < 1
+      || attempts > 120
+      || !Number.isInteger(repeatedErrorLimit)
+      || repeatedErrorLimit < 1
+      || repeatedErrorLimit > 20) {
+    fail('The renter accepted-card recovery contract is invalid.');
+  }
+  let lastHierarchy = '';
+  let retryUsed = false;
+  let repeatedErrors = 0;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await wait(650);
+    lastHierarchy = String(await observe());
+    if (matches(lastHierarchy)) {
+      return Object.freeze({ hierarchy: lastHierarchy, retryUsed });
+    }
+    if (!lastHierarchy.includes('Buchungen konnten nicht geladen werden')) {
+      repeatedErrors = 0;
+      continue;
+    }
+    if (!retryUsed) {
+      await retry(lastHierarchy);
+      retryUsed = true;
+      continue;
+    }
+    repeatedErrors += 1;
+    if (repeatedErrors >= repeatedErrorLimit) break;
+  }
+  return Object.freeze({ hierarchy: null, lastHierarchy, retryUsed });
 }
 
 export async function openMainDestination({
@@ -540,6 +626,7 @@ async function verifyOwnerAcceptedSurface({
 
 async function verifyRenterProductSurfaces({
   vaultFile,
+  privateArtifactDirectory,
   commandRunner,
   adbPath,
   device,
@@ -588,23 +675,33 @@ async function verifyRenterProductSurfaces({
     predicate: (value) => containsAllLabels(value, ['Meine Buchungen', 'Kommend']),
   });
   tapLabel(commandRunner, adbPath, device, hierarchy, 'Kommend');
-  try {
-    hierarchy = await waitForHierarchy({
+  const acceptedCard = await waitForRenterAcceptedCardRecovery({
+    wait,
+    observe: () => dumpCurrentHeadAndroidUi(commandRunner, adbPath, device),
+    retry: (value) => tapLabel(
       commandRunner,
       adbPath,
       device,
-      wait,
-      label: 'renter accepted simulation card',
-      predicate: (value) => containsAllLabels(value, [title, 'Pilot-Simulation']),
-      attempts: 90,
+      value,
+      'Erneut laden',
+    ),
+    matches: (value) => containsAllLabels(value, [title, 'Pilot-Simulation']),
+  });
+  if (acceptedCard.hierarchy === null) {
+    const observed = acceptedCard.lastHierarchy;
+    preservePrivateRenterBookingsFailure({
+      directory: privateArtifactDirectory,
+      hierarchy: observed,
+      commandRunner,
+      adbPath,
+      device,
     });
-  } catch {
-    const observed = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
     fail(
       'The sanitized renter accepted simulation card failed with surface classification '
       + `${renterAcceptedCardSurfaceClassification(observed, title)}.`,
     );
   }
+  hierarchy = acceptedCard.hierarchy;
   tapLabel(commandRunner, adbPath, device, hierarchy, title);
   await waitForHierarchy({
     commandRunner,
@@ -899,7 +996,12 @@ async function main() {
       vaultFile, commandRunner, adbPath, device, wait,
     }),
     verifyRenter: ({ vaultFile }) => verifyRenterProductSurfaces({
-      vaultFile, commandRunner, adbPath, device, wait,
+      vaultFile,
+      privateArtifactDirectory,
+      commandRunner,
+      adbPath,
+      device,
+      wait,
     }),
     retire: ({ vaultFile }) => retireStagingEmailVerifiedTwoRoleJourney({ vaultFile }),
     restoreOwner: () => restoreExactRoleWithBoundedRetries({

@@ -77,6 +77,17 @@ void main() {
       contains('Eine gebuchte Anzeige ist nicht verfügbar.'),
       reason: 'A dangling booking must fail closed instead of disappearing.',
     );
+    expect(source, contains('_safeBookingAddressVisibility'));
+    expect(source, contains("'result': 'hidden'"));
+    expect(source, contains("'reason': 'optional_enrichment_unavailable'"));
+    expect(source, contains('_safeHandoverReturnState'));
+    expect(source, contains('return const <String, dynamic>{};'));
+    expect(source, contains('_safeReviewSubmittedState'));
+    expect(
+      source,
+      contains('return true;'),
+      reason: 'Unknown review truth must suppress, never enable, its CTA.',
+    );
   });
 
   if (!BackendConfig.enabled) {

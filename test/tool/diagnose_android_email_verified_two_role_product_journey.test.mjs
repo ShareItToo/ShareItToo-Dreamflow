@@ -9,6 +9,7 @@ import {
   renterNonBindingDetailVisible,
   restoreExactRoleWithBoundedRetries,
   retryIdempotentPixelState,
+  waitForRenterAcceptedCardRecovery,
   runOwnerPublishUiSubphase,
   runAndroidEmailVerifiedTwoRoleProductJourney,
 } from '../../tool/diagnose_android_email_verified_two_role_product_journey.mjs';
@@ -118,9 +119,46 @@ test('classifies a missing accepted renter card without exposing its title', () 
   const classification = renterAcceptedCardSurfaceClassification(hierarchy, title);
   assert.equal(
     classification,
-    'title-0_simulation-0_empty-upcoming-1_empty-pending-0_upcoming-tab-1_pending-tab-1_loading-0_requests-load-error-0',
+    'title-0_role-title-prefix-0_simulation-0_empty-upcoming-1_empty-pending-0_upcoming-tab-1_pending-tab-1_loading-0_requests-load-error-0_requests-load-error-text-0_review-reminder-0',
   );
   assert.equal(classification.includes(title), false);
+});
+
+test('retries one fail-closed renter booking read and then accepts exact truth', async () => {
+  const observations = [
+    '<hierarchy><node text="Buchungen konnten nicht geladen werden"/></hierarchy>',
+    '<hierarchy><node text="Buchungen werden geladen"/></hierarchy>',
+    '<hierarchy><node text="exact accepted card"/></hierarchy>',
+  ];
+  let retries = 0;
+  const result = await waitForRenterAcceptedCardRecovery({
+    wait: async () => {},
+    observe: async () => observations.shift(),
+    retry: async () => { retries += 1; },
+    matches: (value) => value.includes('exact accepted card'),
+  });
+  assert.equal(result.hierarchy?.includes('exact accepted card'), true);
+  assert.equal(result.retryUsed, true);
+  assert.equal(retries, 1);
+});
+
+test('stops after one bounded renter booking retry when the server stays unavailable', async () => {
+  let observations = 0;
+  let retries = 0;
+  const result = await waitForRenterAcceptedCardRecovery({
+    wait: async () => {},
+    observe: async () => {
+      observations += 1;
+      return '<hierarchy>Buchungen konnten nicht geladen werden</hierarchy>';
+    },
+    retry: async () => { retries += 1; },
+    matches: () => false,
+    repeatedErrorLimit: 3,
+  });
+  assert.equal(result.hierarchy, null);
+  assert.equal(result.retryUsed, true);
+  assert.equal(retries, 1);
+  assert.equal(observations, 4);
 });
 
 test('retries an idempotent Pixel state transition exactly once', async () => {
