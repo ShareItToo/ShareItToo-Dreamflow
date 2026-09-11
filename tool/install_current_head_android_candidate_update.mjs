@@ -37,6 +37,7 @@ const rolloverInstallStatuses = new Set([
 ]);
 const postCandidateEvidencePrefixes = [
   '.github/',
+  'backend/test/',
   'docs/',
   'scripts/',
   'store/',

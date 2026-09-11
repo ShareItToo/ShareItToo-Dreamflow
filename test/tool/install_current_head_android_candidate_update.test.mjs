@@ -253,7 +253,11 @@ test('accepts the exact current rollover archive after evidence-only commits', (
     rollover: rolloverFixture(),
     candidate: archive,
     sourceIsAncestor: true,
-    changedPaths: ['docs/current_state.md', 'store/google-play/current-rollover-candidate.json'],
+    changedPaths: [
+      'backend/test/postgres_foundation.integration.test.js',
+      'docs/current_state.md',
+      'store/google-play/current-rollover-candidate.json',
+    ],
   }), archive);
 });
 
