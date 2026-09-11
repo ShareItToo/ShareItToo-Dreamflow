@@ -1,4 +1,21 @@
-# Current Work Package: WP115 Current-Candidate Pixel Listing-AI Replay — COMPLETE
+# Current Work Package: WP116 Current-Candidate Pixel TalkBack Runtime Gate — BLOCKED AND RESTORED
+
+The exact installed signed Internal/Staging `1.0.0+2026091110` candidate
+completed a fresh physical TalkBack activation probe through Android's visible
+Accessibility Settings. Android started and bound TalkBack but did not expose
+runtime touch exploration, so the runner stopped before any focus, double-tap
+or ShareItToo destination action. It restored all five relevant Accessibility
+settings and the authenticated `Entdecken` destination exactly. No TalkBack
+pass is claimed. See
+`docs/operations/WP116_CURRENT_CANDIDATE_PIXEL_TALKBACK_RUNTIME_GATE_2026-09-11.md`.
+
+The full currently executable renter/owner Pixel matrix and physical on-device
+Listing AI remain green. Professional V5.2 binding, Stripe sandbox, manual
+TalkBack and the separate OnePlus exact-candidate two-device replay remain
+open. All Production, public Store, Firebase, tester-list, public-registration
+and PR-merge boundaries remain closed.
+
+# Previous Work Package: WP115 Current-Candidate Pixel Listing-AI Replay — COMPLETE
 
 The exact installed signed Internal/Staging `1.0.0+2026091110` candidate passes
 a fresh physical Pixel on-device image-analysis replay. A hash-bound synthetic

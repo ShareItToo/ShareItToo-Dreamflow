@@ -1,5 +1,22 @@
 # ShareItToo Current State
 
+## WP116 exact-current-candidate Pixel TalkBack runtime gate — blocked and restored
+
+The exact installed signed Internal/Staging `1.0.0+2026091110` candidate
+completed a fresh physical TalkBack activation probe through Android's
+user-visible Accessibility Settings. The TalkBack process became active and
+the service bound, but Android exposed neither runtime touch exploration nor
+its secure grant. The diagnostic therefore stopped before focus, double-tap or
+ShareItToo navigation and claims no automated or manual TalkBack pass. All five
+Accessibility values and the authenticated `Entdecken` destination were
+restored exactly. See
+`docs/operations/WP116_CURRENT_CANDIDATE_PIXEL_TALKBACK_RUNTIME_GATE_2026-09-11.md`.
+
+WP115 and the complete currently executable WP114 renter/owner matrix remain
+green. Professional V5.2 binding, Stripe sandbox, manual TalkBack and the
+separate OnePlus/two-device replay remain open. Production, Google Play,
+tester lists, Firebase, public registration and PR #7 are unchanged.
+
 ## WP115 exact-current-candidate Pixel Listing-AI replay — complete
 
 The exact installed signed Internal/Staging `1.0.0+2026091110` candidate now
