@@ -20,7 +20,7 @@
     },
     {
       "path": "pubspec.yaml",
-      "sha256": "d1add950356d59f4f6a37c27502c1f5595f553e2e74b25da6fdba5fa23f423a1"
+      "sha256": "e9f2cdb7f88a4819130fe57f453c3f3db6bc6c2388736b193a5edca919528aed"
     },
     {
       "path": "android/app/src/main/AndroidManifest.xml",
@@ -792,7 +792,7 @@
     },
     {
       "path": "lib/config/private_pilot_config.dart",
-      "sha256": "ea4347a94d502b39c5bc5df4a7019eea33acc50857d5d45419422d1c69eb170c"
+      "sha256": "587a7ae78d91d52187638d8d4c77cbb9b186a2959d577d53ae8c3556f4eaba08"
     },
     {
       "path": "lib/config/supply_enrichment_technical_config.dart",
@@ -824,7 +824,7 @@
     },
     {
       "path": "lib/screens/bookings_screen.dart",
-      "sha256": "53957751a8857559993d657291a353f2dd686bdc8a9eaae8f5bb19ecb7df557d"
+      "sha256": "9d439a52e9d22499ef4ac84106744bd3aa2830488f881a82ebe39020584ea06b"
     },
     {
       "path": "lib/screens/payment_methods_screen.dart",
