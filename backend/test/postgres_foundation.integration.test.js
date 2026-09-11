@@ -8951,9 +8951,9 @@ if (!databaseUrl) {
       );
       await setupPool.query(
         `UPDATE message_threads
-            SET archived_for = jsonb_build_array(user1_id, user2_id)
+            SET archived_for = jsonb_build_array($2::text)
           WHERE id = $1`,
-        [b7Thread.id],
+        [b7Thread.id, 'owner'],
       );
       await setupPool.query(
         `UPDATE message_threads
