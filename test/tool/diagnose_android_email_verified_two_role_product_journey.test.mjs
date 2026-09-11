@@ -118,7 +118,7 @@ test('classifies a missing accepted renter card without exposing its title', () 
   const classification = renterAcceptedCardSurfaceClassification(hierarchy, title);
   assert.equal(
     classification,
-    'title-0_simulation-0_empty-upcoming-1_empty-pending-0_upcoming-tab-1_pending-tab-1_requests-load-error-0',
+    'title-0_simulation-0_empty-upcoming-1_empty-pending-0_upcoming-tab-1_pending-tab-1_loading-0_requests-load-error-0',
   );
   assert.equal(classification.includes(title), false);
 });

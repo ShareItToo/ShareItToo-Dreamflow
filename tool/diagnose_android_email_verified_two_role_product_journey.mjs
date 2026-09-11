@@ -256,6 +256,7 @@ export function renterAcceptedCardSurfaceClassification(hierarchy, exactListingT
     `empty-pending-${count('Du hast keine ausstehenden Buchungen')}`,
     `upcoming-tab-${count('Kommend')}`,
     `pending-tab-${count('Ausstehend')}`,
+    `loading-${count('Buchungen werden geladen')}`,
     `requests-load-error-${count('Buchungen konnten nicht geladen werden')}`,
   ].join('_');
 }
@@ -595,6 +596,7 @@ async function verifyRenterProductSurfaces({
       wait,
       label: 'renter accepted simulation card',
       predicate: (value) => containsAllLabels(value, [title, 'Pilot-Simulation']),
+      attempts: 90,
     });
   } catch {
     const observed = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
