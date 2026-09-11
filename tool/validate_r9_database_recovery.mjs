@@ -72,6 +72,24 @@ export function validateR9DatabaseRecovery({
   validateR9Observation(value.observation, {
     requiredMigrationCount: 71,
     requiredLastMigration: '071_stripe_connect_accounts_v2.up.sql',
+    requiredRollbackGuards: [
+      {
+        filename: '032_support_case_foundation.down.sql',
+        message: 'Support rollback blocked: support data exists',
+      },
+      {
+        filename: '066_blue_ocean_listing_ai_foundation.down.sql',
+        message: 'N2 rollback blocked: listing AI foundation data exists',
+      },
+      {
+        filename: '069_regional_price_engine_r6_hardening.down.sql',
+        message: 'R6 rollback blocked: hardened price snapshot data exists',
+      },
+      {
+        filename: '071_stripe_connect_accounts_v2.down.sql',
+        message: 'Stripe Accounts v2 rollback blocked: v2 connected accounts exist',
+      },
+    ],
   });
   const observation = value.observation;
   if (observation.resultClassification !== r9ResultClassification

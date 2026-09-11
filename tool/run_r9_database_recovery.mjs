@@ -659,6 +659,7 @@ async function closePools(pools) {
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
   requiredLastMigration = '074_listing_ai_on_device_disclosure.up.sql',
+  requiredRollbackGuards = rollbackGuardExpectations,
 } = {}) {
   if (value?.schemaVersion !== 1
       || value.kind !== 'sit-r9-database-recovery-observation'
@@ -724,7 +725,7 @@ export function validateR9Observation(value, {
   })) fail('R9 older-schema upgrade proof is invalid.');
   if (!exact(value.rollback, {
     emptyR6RollbackAcceptedInsideRolledBackTransaction: true,
-    refusedGuards: rollbackGuardExpectations.map(
+    refusedGuards: requiredRollbackGuards.map(
       ({ filename, message }) => `${filename}:${message}`,
     ),
     allDestructiveRollbacksRefused: true,
