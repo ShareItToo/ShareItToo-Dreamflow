@@ -77,6 +77,7 @@ class RentalRequest {
   final Map<String, dynamic>? cancellationOutcome;
   final String? workflowStatus;
   final Map<String, dynamic>? platformWithdrawal;
+  final Map<String, dynamic>? listingSnapshot;
 
   RentalRequest({
     required this.id,
@@ -147,6 +148,7 @@ class RentalRequest {
     this.cancellationOutcome,
     this.workflowStatus,
     this.platformWithdrawal,
+    this.listingSnapshot,
   })  : startDate = startDate ?? _dateOnly(start.toLocal()),
         endDate = endDate ?? _dateOnly(end.toLocal()),
         createdAt = createdAt ?? DateTime.now();
@@ -214,6 +216,7 @@ class RentalRequest {
     Map<String, dynamic>? cancellationOutcome,
     String? workflowStatus,
     Map<String, dynamic>? platformWithdrawal,
+    Map<String, dynamic>? listingSnapshot,
   }) =>
       RentalRequest(
         id: id,
@@ -299,6 +302,7 @@ class RentalRequest {
         cancellationOutcome: cancellationOutcome ?? this.cancellationOutcome,
         workflowStatus: workflowStatus ?? this.workflowStatus,
         platformWithdrawal: platformWithdrawal ?? this.platformWithdrawal,
+        listingSnapshot: listingSnapshot ?? this.listingSnapshot,
       );
 
   factory RentalRequest.fromJson(Map<String, dynamic> json) {
@@ -398,6 +402,7 @@ class RentalRequest {
       cancellationOutcome: _parseMap(json['cancellationOutcome']),
       workflowStatus: json['workflowStatus'] as String?,
       platformWithdrawal: _parseMap(json['platformWithdrawal']),
+      listingSnapshot: _parseMap(json['listingSnapshot']),
     );
   }
 
@@ -498,6 +503,7 @@ class RentalRequest {
         'cancellationOutcome': cancellationOutcome,
         'workflowStatus': workflowStatus,
         'platformWithdrawal': platformWithdrawal,
+        'listingSnapshot': listingSnapshot,
       };
 }
 

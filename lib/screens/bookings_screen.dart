@@ -230,9 +230,27 @@ class _BookingsScreenState extends State<BookingsScreen>
       final Map<String, model.User?> userById = {};
       for (final request in requests) {
         if (itemById.containsKey(request.itemId)) continue;
-        final item = await DataService.getItemById(request.itemId);
-        await actionOwner.assertCurrent();
-        if (!mounted || revision != _loadRevision) return;
+        Item? item;
+        final snapshot = request.listingSnapshot;
+        if (snapshot != null) {
+          try {
+            final candidate = Item.fromJson(snapshot);
+            if (candidate.id == request.itemId &&
+                candidate.ownerId == request.ownerId) {
+              item = candidate;
+            }
+          } catch (error) {
+            debugPrint(
+              '[Bookings] participant listing snapshot unavailable '
+              '(${error.runtimeType})',
+            );
+          }
+        }
+        if (item == null) {
+          item = await DataService.getItemById(request.itemId);
+          await actionOwner.assertCurrent();
+          if (!mounted || revision != _loadRevision) return;
+        }
         if (item == null) {
           throw StateError('Eine gebuchte Anzeige ist nicht verfügbar.');
         }
@@ -359,11 +377,19 @@ class _BookingsScreenState extends State<BookingsScreen>
     }.contains(r.workflowStatus ?? r.status)
         ? 'return'
         : 'pickup';
-    final addressVisibility = await _safeBookingAddressVisibility(
-      request: r,
-      localExactAddress: it.locationText,
-      segment: addressSegment,
-    );
+    final addressVisibility = _requiresAddressVisibility(r)
+        ? await _safeBookingAddressVisibility(
+            request: r,
+            localExactAddress: it.locationText,
+            segment: addressSegment,
+          )
+        : <String, dynamic>{
+            'version': 'v52_booking_address_reveal_v1',
+            'segment': addressSegment,
+            'result': 'hidden',
+            'reason': 'not_applicable_for_booking_state',
+            'exactAddressReturned': false,
+          };
     final exactAddressRevealed = addressVisibility['result'] == 'revealed' &&
         addressVisibility['exactAddressReturned'] == true;
     final revealedAddress =
@@ -372,11 +398,15 @@ class _BookingsScreenState extends State<BookingsScreen>
         ? revealedAddress
         : _approximateAddress(it.locationText, seed: r.id);
 
-    final flowState = await _safeHandoverReturnState(r.id);
-    final reviewSubmitted = await _safeReviewSubmittedState(
-      requestId: r.id,
-      reviewerId: reviewerId,
-    );
+    final flowState = _requiresHandoverState(r)
+        ? await _safeHandoverReturnState(r.id)
+        : const <String, dynamic>{};
+    final reviewSubmitted = r.status == 'completed'
+        ? await _safeReviewSubmittedState(
+            requestId: r.id,
+            reviewerId: reviewerId,
+          )
+        : true;
 
     return {
       'requestId': r.id,
@@ -494,6 +524,32 @@ class _BookingsScreenState extends State<BookingsScreen>
         'exactAddressReturned': false,
       };
     }
+  }
+
+  bool _requiresAddressVisibility(RentalRequest request) {
+    final status = request.workflowStatus ?? request.status;
+    return const <String>{
+      'confirmed',
+      'active',
+      'running',
+      'withdrawalReturnRequired',
+      'returned',
+      'completed',
+    }.contains(status);
+  }
+
+  bool _requiresHandoverState(RentalRequest request) {
+    final status = request.workflowStatus ?? request.status;
+    return const <String>{
+      'accepted',
+      'payment_pending',
+      'confirmed',
+      'active',
+      'running',
+      'withdrawalReturnRequired',
+      'returned',
+      'completed',
+    }.contains(status);
   }
 
   Future<Map<String, dynamic>> _safeHandoverReturnState(

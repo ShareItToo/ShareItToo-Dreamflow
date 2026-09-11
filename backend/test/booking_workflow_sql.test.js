@@ -53,3 +53,14 @@ test('private booking eligibility is rechecked from persisted state at quote, re
     /listingForBooking\(client, row\.listing_id, \{ lock: true \}\)[\s\S]*allowedRegions: config\.privatePilot\?\.allowedRegions/u,
   );
 });
+
+test('participant booking history carries a privacy-shaped listing snapshot', async () => {
+  const source = await readFile(workflowPath, 'utf8');
+
+  assert.match(source, /listingSnapshot:\s*\{[\s\S]*shapePublicListing\(\{[\s\S]*photos: \[\]/u);
+  assert.match(source, /status: row\.listing_status/u);
+  assert.match(source, /isActive: row\.listing_is_active === true/u);
+  assert.match(source, /catalogRevision: Number\(row\.listing_catalog_revision\)/u);
+  assert.match(source, /JOIN listings AS listing ON listing\.id = booking\.listing_id/u);
+  assert.match(source, /listing\.payload AS listing_payload/u);
+});

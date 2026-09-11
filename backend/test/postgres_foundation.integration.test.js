@@ -4898,6 +4898,14 @@ if (!databaseUrl) {
       const swept = (await sweepResponse.json()).requests.find((entry) => entry.id === 'b6-expiring');
       assert.equal(swept.workflowStatus, 'cancelled');
       assert.equal(swept.cancelledBy, 'system');
+      assert.equal(swept.listingSnapshot.id, 'listing-1');
+      assert.equal(swept.listingSnapshot.ownerId, 'owner');
+      assert.equal(swept.listingSnapshot.title, 'Camera');
+      assert.equal(swept.listingSnapshot.locationText, 'Berlin, Deutschland');
+      assert.equal(swept.listingSnapshot.approximateLocation, true);
+      assert.deepEqual(swept.listingSnapshot.photos, []);
+      assert.equal(Number.isSafeInteger(swept.listingSnapshot.catalogRevision), true);
+      assert.equal(swept.listingSnapshot.catalogRevision > 0, true);
 
       const listingImage = await sharp({
         create: {

@@ -77,10 +77,16 @@ void main() {
       contains('Eine gebuchte Anzeige ist nicht verfügbar.'),
       reason: 'A dangling booking must fail closed instead of disappearing.',
     );
+    expect(loadSource, contains('request.listingSnapshot'));
+    expect(loadSource, contains('candidate.id == request.itemId'));
+    expect(loadSource, contains('candidate.ownerId == request.ownerId'));
     expect(source, contains('_safeBookingAddressVisibility'));
+    expect(source, contains('_requiresAddressVisibility'));
+    expect(source, contains("'reason': 'not_applicable_for_booking_state'"));
     expect(source, contains("'result': 'hidden'"));
     expect(source, contains("'reason': 'optional_enrichment_unavailable'"));
     expect(source, contains('_safeHandoverReturnState'));
+    expect(source, contains('_requiresHandoverState'));
     expect(source, contains('return const <String, dynamic>{};'));
     expect(source, contains('_safeReviewSubmittedState'));
     expect(

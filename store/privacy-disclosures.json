@@ -236,7 +236,7 @@
     },
     {
       "path": "backend/src/booking_workflow.js",
-      "sha256": "2d4af5495ac59afdf2bf6730c5d55ac5b68c3e071345628d4ef5a416e549f4e1"
+      "sha256": "f5a99a9209cec1ab946a59c459ea4ce2267272472da2d8b752935ac66b1268e4"
     },
     {
       "path": "backend/src/booking_flow_time.js",
@@ -812,7 +812,7 @@
     },
     {
       "path": "lib/models/rental_request.dart",
-      "sha256": "edfa985cfcd71bc391fd4ed6ce7d8161fa2b6671c3cfeda648666b8c1a0b6c9b"
+      "sha256": "882bc89f7ee61cc0b203bd34c0203f16fb3ba27c1826062ce77239de171a2ded"
     },
     {
       "path": "lib/screens/private_pilot_checkout_screen.dart",
@@ -824,7 +824,7 @@
     },
     {
       "path": "lib/screens/bookings_screen.dart",
-      "sha256": "9d439a52e9d22499ef4ac84106744bd3aa2830488f881a82ebe39020584ea06b"
+      "sha256": "9428afc0948b5fb612df70916fd4b378bf0ee9d495952dfd3575979246b1f24f"
     },
     {
       "path": "lib/screens/payment_methods_screen.dart",

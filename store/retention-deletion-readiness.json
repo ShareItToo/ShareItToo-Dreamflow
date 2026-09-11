@@ -297,7 +297,7 @@
     },
     {
       "path": "backend/src/booking_workflow.js",
-      "sha256": "2d4af5495ac59afdf2bf6730c5d55ac5b68c3e071345628d4ef5a416e549f4e1"
+      "sha256": "f5a99a9209cec1ab946a59c459ea4ce2267272472da2d8b752935ac66b1268e4"
     },
     {
       "path": "backend/src/booking_flow_time.js",

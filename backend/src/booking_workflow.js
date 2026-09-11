@@ -22,6 +22,7 @@ import { settleV51WithdrawalRefundAtReturn } from './v51_withdrawal_workflow.js'
 import { openV52ActualLossCase } from './v52_actual_loss_workflow.js';
 import { hasVerifiedBookingConfirmation } from './booking_confirmation_workflow.js';
 import { postgresDateText } from './postgres_date.js';
+import { shapePublicListing } from './listing_catalog.js';
 import {
   assertPrivatePilotAccountState,
   assertPrivatePilotBooking,
@@ -199,6 +200,21 @@ function bookingPayload(row, viewerUserId = null) {
       ownerPayoutMinor: Number(row.owner_payout_minor),
       securityDepositMinor: 0,
     },
+    // A participant must be able to render the durable booking record after
+    // the listing leaves the public catalog. Keep this snapshot limited to
+    // public listing fields, strip media defensively, and bind current status
+    // plus revision from relational columns instead of trusting JSON payload.
+    listingSnapshot: {
+      ...shapePublicListing({
+        ...(row.listing_payload ?? {}),
+        photos: [],
+      }),
+      id: row.listing_id,
+      ownerId: row.owner_id,
+      status: row.listing_status,
+      isActive: row.listing_is_active === true,
+      catalogRevision: Number(row.listing_catalog_revision),
+    },
   };
 }
 
@@ -215,6 +231,9 @@ const bookingProjection = `
   booking.owner_payout_minor, booking.quote_version, booking.quote_breakdown,
   booking.hold_expires_at, booking.created_at, booking.updated_at
   , booking.accepted_at, booking.simulation_only
+  , listing.payload AS listing_payload, listing.status AS listing_status
+  , listing.is_active AS listing_is_active
+  , listing.catalog_revision AS listing_catalog_revision
 `;
 
 async function writeAudit(client, {
@@ -613,6 +632,7 @@ export async function listBookings(client, userId) {
     `SELECT ${bookingProjection}
      FROM bookings AS booking
      JOIN rental_requests AS request ON request.id = booking.id
+     JOIN listings AS listing ON listing.id = booking.listing_id
      WHERE booking.workflow_version = 1
        AND (booking.owner_id = $1 OR booking.renter_id = $1)
      ORDER BY booking.created_at DESC`,
