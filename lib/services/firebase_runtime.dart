@@ -281,6 +281,12 @@ class FirebaseRuntime {
   static StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
   static bool _initialized = false;
   static bool _pushEnabled = false;
+  // Foreground delivery is account-session scoped even though the native FCM
+  // token is installation scoped. A logout closes this gate synchronously;
+  // only a successful backend registration for the next current session may
+  // reopen it.
+  static bool _authenticatedPushSessionActive = false;
+  static int _authenticatedPushSessionGeneration = 0;
   static bool _crashDiagnosticsEnabled = false;
   static bool _nativeActionLinkChannelInitialized = false;
   static final Set<String> _controlledCrashDiagnosticsInFlight = <String>{};
@@ -293,6 +299,26 @@ class FirebaseRuntime {
   static bool get isInitialized => _initialized;
   static bool get pushEnabled => _pushEnabled;
   static bool get crashDiagnosticsEnabled => _crashDiagnosticsEnabled;
+
+  @visibleForTesting
+  static bool get authenticatedPushSessionActive =>
+      _authenticatedPushSessionActive;
+
+  /// Ends the in-process push presentation boundary without awaiting a
+  /// provider SDK. The FCM token remains installation scoped and is safely
+  /// reassigned by the backend's token-hash upsert after the next confirmed
+  /// login. The exact old backend session is revoked separately and deletes
+  /// its push-device association.
+  static void closeAuthenticatedPushSessionForLogout() {
+    _authenticatedPushSessionGeneration += 1;
+    _authenticatedPushSessionActive = false;
+    _pendingActionLink = null;
+  }
+
+  @visibleForTesting
+  static void markAuthenticatedPushSessionActiveForTesting(bool active) {
+    _authenticatedPushSessionActive = active;
+  }
 
   static Future<bool> initialize() {
     return _initialization ??= _initialize();
@@ -478,6 +504,8 @@ class FirebaseRuntime {
   }
 
   static Future<bool> syncPushRegistration() async {
+    final operationGeneration = ++_authenticatedPushSessionGeneration;
+    _authenticatedPushSessionActive = false;
     if (!_initialized || !BackendConfig.enabled) return false;
     if (!_pushEnabled) {
       await _retryPendingPushBackendCleanup();
@@ -514,7 +542,11 @@ class FirebaseRuntime {
       }
       final token = await FirebaseMessaging.instance.getToken();
       if (token == null || token.trim().isEmpty) return false;
-      await _registerToken(token, platform);
+      final registered = await _registerToken(token, platform);
+      if (!registered ||
+          operationGeneration != _authenticatedPushSessionGeneration) {
+        return false;
+      }
       _tokenRefreshSubscription ??=
           FirebaseMessaging.instance.onTokenRefresh.listen(
         (refreshedToken) {
@@ -524,8 +556,13 @@ class FirebaseRuntime {
           debugPrint('[FirebaseRuntime] token refresh unavailable: $error');
         },
       );
+      if (operationGeneration != _authenticatedPushSessionGeneration) {
+        return false;
+      }
+      _authenticatedPushSessionActive = true;
       return true;
     } catch (error) {
+      _authenticatedPushSessionActive = false;
       debugPrint('[FirebaseRuntime] push registration unavailable: $error');
       return false;
     }
@@ -534,6 +571,7 @@ class FirebaseRuntime {
   static Future<bool> setPushEnabled(bool enabled) async {
     if (!await initialize()) return false;
     if (!enabled) {
+      closeAuthenticatedPushSessionForLogout();
       await FirebaseServicePreferencesStore.setPushEnabled(false);
       await FirebaseServicePreferencesStore.setPushBackendCleanupPending(true);
       await FirebaseServicePreferencesStore.setPushLocalCleanupPending(true);
@@ -607,19 +645,8 @@ class FirebaseRuntime {
     }
   }
 
-  static Future<void> clearPushRegistrationForLogout() async {
-    if (!_initialized) return;
-    await _tokenRefreshSubscription?.cancel();
-    _tokenRefreshSubscription = null;
-    try {
-      await FirebaseMessaging.instance.setAutoInitEnabled(false);
-      await FirebaseMessaging.instance.deleteToken();
-    } catch (error) {
-      debugPrint('[FirebaseRuntime] logout push cleanup unavailable: $error');
-    }
-  }
-
   static Future<void> deleteInstallationForAccountDeletion() async {
+    closeAuthenticatedPushSessionForLogout();
     _pushEnabled = false;
     _crashDiagnosticsEnabled = false;
     await FirebaseServicePreferencesStore.setPushEnabled(false);
@@ -678,15 +705,17 @@ class FirebaseRuntime {
     }
   }
 
-  static Future<void> _registerToken(String token, String platform) async {
+  static Future<bool> _registerToken(String token, String platform) async {
     try {
       await BackendRepository.registerPushDevice(
         token: token,
         platform: platform,
         locale: _locale,
       );
+      return true;
     } catch (error) {
       debugPrint('[FirebaseRuntime] push token sync unavailable: $error');
+      return false;
     }
   }
 
@@ -751,6 +780,7 @@ class FirebaseRuntime {
   }
 
   static void _captureForegroundMessage(RemoteMessage message) {
+    if (!_authenticatedPushSessionActive) return;
     for (final key in sharedPersistenceKeysForForegroundPush(message.data)) {
       SharedPersistenceSync.notifyWithCatchUpRetry(key);
     }

@@ -688,7 +688,7 @@
     },
     {
       "path": "lib/services/firebase_runtime.dart",
-      "sha256": "11d08d0c91d71210172844db9566aa3c8c285d1afd38bdbc814b9cfa16aa3d81"
+      "sha256": "60616a1d75e839e811f064f6968abccc1a55c8b58c1f8dc2f87a332d4d06b6d0"
     },
     {
       "path": "lib/services/firebase_service_preferences.dart",
@@ -880,7 +880,7 @@
     },
     {
       "path": "lib/services/auth_service.dart",
-      "sha256": "6596092f68b4d6e4240a40c4fc353d450f727adea8c0a059ad3d8479a758f35d"
+      "sha256": "43e6e8be75c6cb4f2cb662bfdc5674c71ec6549047be6d84830595f261884cdb"
     },
     {
       "path": "lib/screens/notification_settings_screen.dart",

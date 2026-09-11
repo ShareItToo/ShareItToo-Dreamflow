@@ -4,6 +4,19 @@ import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 void main() {
+  tearDown(() {
+    FirebaseRuntime.markAuthenticatedPushSessionActiveForTesting(false);
+  });
+
+  test('logout closes account-bound foreground push synchronously', () {
+    FirebaseRuntime.markAuthenticatedPushSessionActiveForTesting(true);
+    expect(FirebaseRuntime.authenticatedPushSessionActive, isTrue);
+
+    FirebaseRuntime.closeAuthenticatedPushSessionForLogout();
+
+    expect(FirebaseRuntime.authenticatedPushSessionActive, isFalse);
+  });
+
   group('FirebaseRuntimeConfig', () {
     test('requires all four platform identifiers', () {
       expect(

@@ -657,7 +657,7 @@
     },
     {
       "path": "lib/services/firebase_runtime.dart",
-      "sha256": "11d08d0c91d71210172844db9566aa3c8c285d1afd38bdbc814b9cfa16aa3d81"
+      "sha256": "60616a1d75e839e811f064f6968abccc1a55c8b58c1f8dc2f87a332d4d06b6d0"
     },
     {
       "path": "lib/services/firebase_service_preferences.dart",

@@ -303,11 +303,10 @@ class AuthService {
       _refreshInFlight = null;
       try {
         if (runLogoutCleanup) {
-          try {
-            await FirebaseRuntime.clearPushRegistrationForLogout();
-          } catch (_) {
-            // Logout remains authoritative if the local FCM SDK is offline.
-          }
+          // Close account-bound foreground presentation before the first
+          // awaited provider or network cleanup. Native FCM token work is
+          // installation scoped and must never block exact local sign-out.
+          FirebaseRuntime.closeAuthenticatedPushSessionForLogout();
         }
 
         final removed = await prefs.remove(_sessionKey);

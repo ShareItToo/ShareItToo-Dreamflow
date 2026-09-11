@@ -12,6 +12,7 @@ const data = read('lib/services/data_service.dart');
 const transitions = read('lib/services/session_transition_service.dart');
 const profile = read('lib/screens/profile_screen.dart');
 const login = read('lib/screens/login_screen.dart');
+const firebaseRuntime = read('lib/services/firebase_runtime.dart');
 const trackedRoute = read('lib/widgets/tracked_dialog_route.dart');
 const regression = read('scripts/technical_regression_check.sh');
 
@@ -47,12 +48,58 @@ test('every app-owned auth-session mutation is serialized and epoch ratcheted', 
     'static Future<AuthSessionClearReceipt?> clearSessionOwnerIfMatches(',
     '/// Removes a backend session only when the exact expected principal',
   );
-  assert.match(exactClear, /FirebaseRuntime\.clearPushRegistrationForLogout\(\)/u);
+  const pushBoundary = exactClear.indexOf(
+    'FirebaseRuntime.closeAuthenticatedPushSessionForLogout()',
+  );
+  const localRemovalAwait = exactClear.indexOf(
+    'final removed = await prefs.remove(_sessionKey)',
+  );
+  const localRemoval = exactClear.indexOf('prefs.remove(_sessionKey)');
+  assert.ok(pushBoundary >= 0 && pushBoundary < localRemoval);
+  assert.doesNotMatch(
+    exactClear.slice(pushBoundary, localRemovalAwait),
+    /await\s/u,
+  );
   assert.match(exactClear, /await BackendRealtimeService\.disconnect\(\)/u);
   assert.doesNotMatch(
     exactClear,
-    /FirebaseRuntime\.clearPushRegistrationForLogout\(\)\.timeout/u,
+    /FirebaseMessaging\.instance\.(?:deleteToken|setAutoInitEnabled)/u,
   );
+  assert.doesNotMatch(exactClear, /clearPushRegistrationForLogout/u);
+});
+
+test('logout push boundary is synchronous and stale registration cannot reopen it', () => {
+  const closeBoundary = method(
+    firebaseRuntime,
+    'static void closeAuthenticatedPushSessionForLogout()',
+    '@visibleForTesting\n  static void markAuthenticatedPushSessionActiveForTesting',
+  );
+  assert.match(closeBoundary, /_authenticatedPushSessionGeneration \+= 1/u);
+  assert.match(closeBoundary, /_authenticatedPushSessionActive = false/u);
+  assert.match(closeBoundary, /_pendingActionLink = null/u);
+  assert.doesNotMatch(closeBoundary, /await|FirebaseMessaging|deleteToken/u);
+
+  const syncRegistration = method(
+    firebaseRuntime,
+    'static Future<bool> syncPushRegistration() async',
+    'static Future<bool> setPushEnabled(bool enabled) async',
+  );
+  assert.match(
+    syncRegistration,
+    /final operationGeneration = \+\+_authenticatedPushSessionGeneration/u,
+  );
+  assert.match(syncRegistration, /final registered = await _registerToken/u);
+  assert.match(
+    syncRegistration,
+    /!registered \|\|\s*operationGeneration != _authenticatedPushSessionGeneration/u,
+  );
+  const gateOpen = syncRegistration.indexOf(
+    '_authenticatedPushSessionActive = true',
+  );
+  const finalGenerationCheck = syncRegistration.lastIndexOf(
+    'operationGeneration != _authenticatedPushSessionGeneration',
+  );
+  assert.ok(finalGenerationCheck >= 0 && finalGenerationCheck < gateOpen);
 });
 
 test('session transition cleanup preserves a successor profile and fails closed', () => {
