@@ -20,7 +20,7 @@
     },
     {
       "path": "pubspec.yaml",
-      "sha256": "8cb77b28f02b48905f49ff19278893157ea10b26d7b5b339f62ca61507c58576"
+      "sha256": "137dc05257bb084f21fafdce66f1d124923c0011160b80eee7b94ff22d07e2d8"
     },
     {
       "path": "android/app/src/main/AndroidManifest.xml",
@@ -704,7 +704,7 @@
     },
     {
       "path": "android/app/src/main/kotlin/com/shareittoo/app/MainActivity.kt",
-      "sha256": "146ae316618bbd56eada1e4d0208038b8ac6f4ab9b1b45a4d1b98e0870443941"
+      "sha256": "3f728b61bfa6f26415bf344872ce2bded2cd1a05856c26452f5a2100ab3d95a9"
     },
     {
       "path": "lib/widgets/app_image.dart",
@@ -744,7 +744,7 @@
     },
     {
       "path": "lib/services/backend_repository.dart",
-      "sha256": "e9f5a102ee95f8731bb2b91c068be7bdad358febef4d4de5c51cb9c692d7b840"
+      "sha256": "dcf9b2e4fc27e6e78ad7f1a4e79cf2ea3b379e848b37647868a53a2db668d0df"
     },
     {
       "path": "lib/screens/help_center_screen.dart",
@@ -792,7 +792,7 @@
     },
     {
       "path": "lib/config/private_pilot_config.dart",
-      "sha256": "c66b70151ff1bca4dd6221daca4e5c891630a67e666e5f3c1354149c38133ba7"
+      "sha256": "3b5520d02ab61e878485a1895220057edefb7136cdcfc35db6af5849da52340f"
     },
     {
       "path": "lib/config/supply_enrichment_technical_config.dart",
@@ -900,7 +900,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "d1af19fb3eb777aa9787b816ab426a29041fadefe7e275da23af49d331582ca6"
+      "sha256": "8b420eeac118633f625b7146fdf14f8ba9c12cb64ce2ba0f369e6d9c1cf3f6b2"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
@@ -916,7 +916,7 @@
     },
     {
       "path": "lib/screens/create_listing_screen.dart",
-      "sha256": "331b7c58116bc0fa76d25eca68c0352f76326dcbb0ab6521200a3d12f1988ce6"
+      "sha256": "2d8a65ab900602877f2159f862c26163bd6e79a389ab3a691527819d55bbc68f"
     },
     {
       "path": "lib/screens/explore_screen.dart",

@@ -110,6 +110,9 @@ test('deployment source keeps listing-AI opt-in, bounded and sanitized', async (
   assert.match(deploy, /task_listing_ai_budget_cents > 500/u);
   assert.match(deploy, /SIT_LISTING_AI_PROVIDER: mock/u);
   assert.match(deploy, /Staging listing-AI health does not confirm/u);
+  assert.match(deploy, /boundary\.provider === "on_device"/u);
+  assert.match(deploy, /boundary\.budgetCents === 0/u);
+  assert.match(deploy, /boundary\.externalProviderExecutionAllowed === false/u);
   assert.match(deploy, /task_rollback_compose_args/u);
   assert.match(
     deploy,

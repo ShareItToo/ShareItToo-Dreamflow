@@ -15,6 +15,12 @@ case "${SIT_BLUE_OCEAN_LISTING_ASSISTANT:-0}" in
     ;;
 esac
 stage_a_non_binding_pilot="$blue_ocean_listing_assistant"
+listing_ai_execution_location=disabled
+listing_ai_model=''
+if [[ "$blue_ocean_listing_assistant" == true ]]; then
+  listing_ai_execution_location=android_on_device
+  listing_ai_model='mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1'
+fi
 case "${SIT_CLOSED_PILOT_ENVELOPE:-0}" in
   1|true) closed_pilot_envelope=true ;;
   0|false|'') closed_pilot_envelope=false ;;
@@ -353,6 +359,9 @@ printf '%s\n' \
   "  \"apiBaseUrl\": \"$API_BASE_URL\"," \
   "  \"clientBuild\": \"$build_name+$build_number\"," \
   "  \"blueOceanListingAssistantEnabled\": $blue_ocean_listing_assistant," \
+  "  \"listingAiExecutionLocation\": \"$listing_ai_execution_location\"," \
+  "  \"listingAiModel\": \"$listing_ai_model\"," \
+  "  \"listingAiExternalImageProviderEnabled\": false," \
   "  \"stageANonBindingPilotEnabled\": $stage_a_non_binding_pilot," \
   "  \"closedPilotEnvelopeEnabled\": $closed_pilot_envelope," \
   "  \"stageAPilotId\": \"$stage_a_pilot_id\"," \

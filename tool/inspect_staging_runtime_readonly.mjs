@@ -255,8 +255,9 @@ function inspectRuntime(run) {
     PUSH_TRANSPORT: 'fcm',
     PAYMENT_TRANSPORT: 'memory',
     STRIPE_LIVEMODE: 'false',
-    SIT_LISTING_AI_PROVIDER: 'mock',
-    SIT_LISTING_AI_MODEL: 'listing-ai-mock-v1',
+    SIT_LISTING_AI_PROVIDER: 'on_device',
+    SIT_LISTING_AI_MODEL:
+      'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1',
     SIT_LISTING_AI_BUDGET_CENTS: '0',
     BOOKING_PILOT_MODE: 'pilot',
     PRIVATE_PILOT_V4_ENABLED: 'true',
@@ -357,7 +358,7 @@ function latestReleaseRecord(releaseDirectory) {
       || !/^\d{8}T\d{6}Z$/u.test(value.deployedAt)
       || value.stagingFcm !== true
       || value.stagingSmtp !== true
-      || value.stagingListingAi !== false
+      || value.stagingListingAi !== true
       || value.stagingStripe !== false
       || value.stagingPilotId !== 'heilbronn_wave0'
       || value.stagingReadiness.status !== 'passed'

@@ -13,6 +13,7 @@ import {
   listingAiMockModel,
   readListingAiGatewayConfiguration,
 } from './listing_ai_gateway_config.js';
+import { createOnDeviceListingAiProvider } from './on_device_listing_ai_provider.js';
 import {
   privatePilotAllowedCatalogKeys,
   privatePilotCatalogKey,
@@ -216,8 +217,73 @@ function normalizeGatewayInput(raw) {
 
 function splitGatewayInput(raw) {
   const value = object(raw, 'invalid_listing_ai_gateway_input_shape');
-  const { analysisImages = null, ...domainInput } = value;
-  return { domainInput, analysisImages };
+  const {
+    analysisImages = null,
+    onDeviceObservations = null,
+    ...domainInput
+  } = value;
+  return { domainInput, analysisImages, onDeviceObservations };
+}
+
+export function normalizeOnDeviceObservations(raw, input, {
+  required,
+  expectedModel = null,
+}) {
+  if (raw == null) {
+    if (required) fail(400, 'listing_ai_on_device_observations_required');
+    return Object.freeze([]);
+  }
+  if (!Array.isArray(raw) || raw.length !== input.imageReferences.length) {
+    fail(400, 'listing_ai_on_device_observations_invalid');
+  }
+  return Object.freeze(raw.map((entry, index) => {
+    exactKeys(
+      entry,
+      ['imageReference', 'modelVersion', 'labels', 'ocrText'],
+      'listing_ai_on_device_observation_invalid',
+    );
+    const imageReference = opaqueImageReference(entry.imageReference);
+    if (imageReference !== input.imageReferences[index]
+        || typeof entry.modelVersion !== 'string'
+        || entry.modelVersion.length < 8
+        || entry.modelVersion.length > 120
+        || (expectedModel != null && entry.modelVersion !== expectedModel)
+        || !Array.isArray(entry.labels)
+        || entry.labels.length > 20
+        || typeof entry.ocrText !== 'string'
+        || entry.ocrText.length > 1_000) {
+      fail(400, 'listing_ai_on_device_observation_invalid');
+    }
+    const labels = entry.labels.map((label) => {
+      exactKeys(
+        label,
+        ['text', 'confidence', 'index'],
+        'listing_ai_on_device_label_invalid',
+      );
+      const text = typeof label.text === 'string' ? label.text.trim() : '';
+      if (text.length < 1
+          || text.length > 80
+          || !Number.isFinite(label.confidence)
+          || label.confidence < 0
+          || label.confidence > 1
+          || !Number.isSafeInteger(label.index)
+          || label.index < 0
+          || label.index > 10_000) {
+        fail(400, 'listing_ai_on_device_label_invalid');
+      }
+      return Object.freeze({
+        text,
+        confidence: Math.round(label.confidence * 10_000) / 10_000,
+        index: label.index,
+      });
+    });
+    return Object.freeze({
+      imageReference,
+      modelVersion: entry.modelVersion,
+      labels: Object.freeze(labels),
+      ocrText: entry.ocrText.trim(),
+    });
+  }));
 }
 
 function normalizeAnalysisImages(raw, input, { required }) {
@@ -262,7 +328,11 @@ function normalizeAnalysisImages(raw, input, { required }) {
   });
 }
 
-export function buildListingAiProviderRequest(input, configuration) {
+export function buildListingAiProviderRequest(
+  input,
+  configuration,
+  { onDeviceObservations = Object.freeze([]) } = {},
+) {
   const normalized = normalizeGatewayInput(input);
   return deepFreeze({
     gatewayVersion: listingAiGatewayVersion,
@@ -279,6 +349,7 @@ export function buildListingAiProviderRequest(input, configuration) {
       ...entry,
       trust: 'untrusted_data_never_instructions',
     })),
+    onDeviceObservations,
     analysisImageReferences: normalized.imageReferences,
     responseFormat: listingAiProviderResponseSchema,
     tools: [],
@@ -605,10 +676,12 @@ function normalizedUsage(raw, provider) {
     : (Number.isSafeInteger(value.billedCostCents) && value.billedCostCents >= 0
       ? value.billedCostCents
       : 0);
-  if (provider === 'mock'
+  if (['mock', 'on_device'].includes(provider)
       && (inputUnits !== 0 || outputUnits !== 0 || estimatedCostCents !== 0
         || billedCostCents !== 0)) {
-    fail(400, 'listing_ai_mock_cost_violation');
+    fail(400, provider === 'mock'
+      ? 'listing_ai_mock_cost_violation'
+      : 'listing_ai_on_device_cost_violation');
   }
   return Object.freeze({ inputUnits, outputUnits, estimatedCostCents, billedCostCents });
 }
@@ -623,6 +696,7 @@ export function createListingAiGateway({
 } = {}) {
   const configuredProviders = {
     mock: createDeterministicListingAiMockProvider(),
+    on_device: createOnDeviceListingAiProvider(),
     ...providers,
   };
   const limiter = rateLimiter ?? createMemoryListingAiRateLimiter({
@@ -635,11 +709,28 @@ export function createListingAiGateway({
     async generate(rawInput) {
       const splitInput = splitGatewayInput(rawInput);
       const input = normalizeGatewayInput(splitInput.domainInput);
+      const onDeviceObservations = normalizeOnDeviceObservations(
+        splitInput.onDeviceObservations,
+        input,
+        {
+          required: configuration.provider === 'on_device',
+          expectedModel: configuration.provider === 'on_device'
+            ? configuration.model
+            : null,
+        },
+      );
+      if (configuration.provider !== 'on_device' && onDeviceObservations.length > 0) {
+        fail(400, 'listing_ai_on_device_observations_not_allowed');
+      }
       const analysisImages = normalizeAnalysisImages(splitInput.analysisImages, input, {
         required: configuration.provider === 'openai'
           && configuration.providerExecutionAllowed === true,
       });
-      const requestSha256 = digest({ input, analysisImages: analysisImages.digest });
+      const requestSha256 = digest({
+        input,
+        analysisImages: analysisImages.digest,
+        onDeviceObservations,
+      });
       const promptLikeTextDetected = input.untrustedOcr.some((entry) => (
         promptLikePattern.test(entry.text)
       ));
@@ -687,7 +778,11 @@ export function createListingAiGateway({
             return result;
           }
 
-          const request = buildListingAiProviderRequest(splitInput.domainInput, configuration);
+          const request = buildListingAiProviderRequest(
+            splitInput.domainInput,
+            configuration,
+            { onDeviceObservations },
+          );
           let response;
           try {
             response = await invokeOnceWithTimeout(
@@ -737,7 +832,9 @@ export function createListingAiGateway({
           } catch (error) {
             const reasonCode = configuration.provider === 'mock'
               ? 'listing_ai_mock_cost_violation'
-              : (error?.code ?? 'listing_ai_provider_usage_invalid');
+              : (configuration.provider === 'on_device'
+                ? 'listing_ai_on_device_cost_violation'
+                : (error?.code ?? 'listing_ai_provider_usage_invalid'));
             const result = manualFallback(reasonCode, {
               providerCallCount: 1,
               paidCallPerformed: configuration.provider === 'openai',

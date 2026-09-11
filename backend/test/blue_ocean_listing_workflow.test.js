@@ -8,6 +8,8 @@ import {
   assertBlueOceanExplicitPublication,
   blueOceanListingDisclosureText,
   blueOceanListingDisclosureVersion,
+  blueOceanOnDeviceDisclosureText,
+  blueOceanOnDeviceDisclosureVersion,
   blueOceanRegionalPriceRuleByCatalogKey,
   blueOceanListingWorkflowVersion,
   BlueOceanListingWorkflowError,
@@ -18,6 +20,7 @@ import { privatePilotAllowedCatalogKeys } from '../src/private_pilot_domain.js';
 import { regionalPriceCategoryRules } from '../src/regional_price_engine_v2.js';
 import {
   listingAiMockModel,
+  listingAiOnDeviceModel,
   listingAiOpenAiModel,
   readListingAiGatewayConfiguration,
 } from '../src/listing_ai_gateway_config.js';
@@ -59,6 +62,15 @@ function consent() {
     accepted: true,
     disclosureVersion: blueOceanListingDisclosureVersion,
     disclosureText: blueOceanListingDisclosureText,
+  };
+}
+
+function onDeviceConsent() {
+  return {
+    explicitlyInitiated: true,
+    accepted: true,
+    disclosureVersion: blueOceanOnDeviceDisclosureVersion,
+    disclosureText: blueOceanOnDeviceDisclosureText,
   };
 }
 
@@ -162,6 +174,87 @@ test('trusted local preflight composes N4, mock N3 and an editable non-published
   assert.equal(result.imageReview.temporaryDerivativeBytesPurged, true);
   assert.equal(result.billedCostCents, 0);
   assert.equal(result.autoPublishAllowed, false);
+});
+
+test('on-device image labels and OCR are privacy-screened and create a review-only draft', async () => {
+  const configuration = readListingAiGatewayConfiguration({
+    SIT_LISTING_AI_PROVIDER: 'on_device',
+    SIT_LISTING_AI_MODEL: listingAiOnDeviceModel,
+    SIT_LISTING_AI_BUDGET_CENTS: '0',
+  }, { deploymentEnvironment: 'staging' });
+  const workflow = createBlueOceanListingWorkflow({ configuration });
+  const bytes = await fixtureImage();
+  const result = await workflow.analyze({
+    draftId,
+    ownerId,
+    generationKey: key('on-device-analyze'),
+    images: [{
+      imageReference: 'listing_image_12345678',
+      mimeType: 'image/png',
+      bytes,
+    }],
+    consent: onDeviceConsent(),
+    onDeviceAnalysis: [{
+      modelVersion: listingAiOnDeviceModel,
+      labels: [{ text: 'Power drill', confidence: 0.93, index: 42 }],
+      ocrText: 'Bosch GSR18V',
+    }],
+  });
+
+  assert.equal(result.status, 'draft_ready');
+  assert.equal(result.disclosureVersion, blueOceanOnDeviceDisclosureVersion);
+  assert.equal(result.paidCallPerformed, false);
+  assert.equal(result.billedCostCents, 0);
+  assert.equal(result.autoPublishAllowed, false);
+  assert.equal(result.revision.fields.title.value, 'Bosch GSR18V Bohrmaschine');
+  assert.equal(result.revision.fields.category.value, 'cat8');
+  assert.equal(result.revision.fields.replacementValueMinor.value, null);
+});
+
+test('on-device sensitive labels and observation/model drift fail closed', async () => {
+  const configuration = readListingAiGatewayConfiguration({
+    SIT_LISTING_AI_PROVIDER: 'on_device',
+    SIT_LISTING_AI_MODEL: listingAiOnDeviceModel,
+    SIT_LISTING_AI_BUDGET_CENTS: '0',
+  }, { deploymentEnvironment: 'staging' });
+  const workflow = createBlueOceanListingWorkflow({ configuration });
+  const bytes = await fixtureImage();
+  const base = {
+    draftId,
+    ownerId,
+    images: [{
+      imageReference: 'listing_image_12345678',
+      mimeType: 'image/png',
+      bytes,
+    }],
+    consent: onDeviceConsent(),
+  };
+  const blocked = await workflow.analyze({
+    ...base,
+    generationKey: key('on-device-sensitive'),
+    onDeviceAnalysis: [{
+      modelVersion: listingAiOnDeviceModel,
+      labels: [{ text: 'Credit card', confidence: 0.91, index: 77 }],
+      ocrText: '',
+    }],
+  });
+  assert.equal(blocked.status, 'manual_fallback');
+  assert.equal(blocked.reasonCode, 'blue_ocean_sensitive_image_blocked');
+  assert.equal(blocked.autoPublishAllowed, false);
+
+  await assert.rejects(
+    workflow.analyze({
+      ...base,
+      generationKey: key('on-device-stale'),
+      onDeviceAnalysis: [{
+        modelVersion: 'stale-model',
+        labels: [],
+        ocrText: '',
+      }],
+    }),
+    (error) => error instanceof BlueOceanListingWorkflowError
+      && error.code === 'blue_ocean_on_device_analysis_invalid',
+  );
 });
 
 test('default incomplete local screening fails closed and preserves the manual editor', async () => {

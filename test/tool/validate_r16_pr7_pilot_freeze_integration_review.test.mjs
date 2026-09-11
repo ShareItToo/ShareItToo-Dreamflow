@@ -28,6 +28,10 @@ test('accepts the exact pending R16 audit', () => {
   });
 });
 
+test('preserves the frozen R16 prefix while allowing later paired migrations', () => {
+  assert.equal(validate().migrationCount, 72);
+});
+
 test('rejects a merged, non-Draft or rewritten PR claim', () => {
   const merged = structuredClone(evidence);
   merged.pullRequestSnapshot.draft = false;

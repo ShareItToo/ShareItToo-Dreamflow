@@ -33,8 +33,9 @@ function runtimeFixture() {
       PUSH_TRANSPORT: 'fcm',
       PAYMENT_TRANSPORT: 'memory',
       STRIPE_LIVEMODE: 'false',
-      SIT_LISTING_AI_PROVIDER: 'mock',
-      SIT_LISTING_AI_MODEL: 'listing-ai-mock-v1',
+      SIT_LISTING_AI_PROVIDER: 'on_device',
+      SIT_LISTING_AI_MODEL:
+        'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1',
       SIT_LISTING_AI_BUDGET_CENTS: '0',
       SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: null,
       BOOKING_PILOT_MODE: 'pilot',
@@ -78,7 +79,7 @@ function releaseFixture() {
     deployedAt: '20260906T054802Z',
     stagingFcm: true,
     stagingSmtp: true,
-    stagingListingAi: false,
+    stagingListingAi: true,
     stagingStripe: false,
     stagingPilotId: 'heilbronn_wave0',
     stagingReadiness: {

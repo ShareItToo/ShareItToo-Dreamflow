@@ -22,11 +22,13 @@ test('Flutter gate is default-off while the complete manual editor remains prese
 });
 
 test('UI requires exact disclosure, opt-in, explicit initiation and never promises auto-publication', () => {
-  assert.match(screen, /listing-ai-image-disclosure-v1/u);
-  assert.match(screen, /SIT analysiert deine ausgewählten Bilder/u);
+  assert.match(screen, /listing-ai-on-device-disclosure-v1/u);
+  assert.match(screen, /SIT wertet deine ausgewählten Bilder direkt/u);
+  assert.match(screen, /Android-Gerät/u);
+  assert.match(screen, /ML Kit sendet Bildinhalte und Erkennungsergebnisse nicht/u);
   assert.match(screen, /_blueOceanConsentAccepted/u);
   assert.match(screen, /Ausgewählte Fotos analysieren/u);
-  assert.match(screen, /Es wird nie automatisch veröffentlicht/u);
+  assert.match(screen, /Es wird nichts automatisch veröffentlicht/u);
 });
 
 test('UI exposes progress, editable fields, confidence text and at most three clarifications', () => {

@@ -25,6 +25,7 @@ task_staging_pilot_id="${SIT_STAGING_PILOT_ID:-}"
 task_pull_release_image="${PULL_RELEASE_IMAGE:-0}"
 task_staging_smtp_enabled=false
 task_staging_listing_ai_enabled=false
+task_staging_external_listing_ai_enabled=false
 task_staging_stripe_enabled=false
 task_rollback_compose_args=()
 
@@ -250,6 +251,7 @@ else
   task_database_name=shareittoo_staging
   if [[ "$task_staging_pilot_id" == heilbronn_wave0 ]]; then
     task_compose_args+=(-f "$task_backend_root/compose.staging.pilot.yml")
+    task_staging_listing_ai_enabled=true
   fi
   if [[ "$task_enable_staging_fcm" == 1 ]]; then
     FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-}" \
@@ -280,6 +282,7 @@ else
       "$task_node_binary" "$task_backend_root/ops/validate_openai_staging_secret.mjs"
     task_compose_args+=(-f "$task_backend_root/compose.staging.listing-ai.yml")
     task_staging_listing_ai_enabled=true
+    task_staging_external_listing_ai_enabled=true
   fi
   if [[ "$task_enable_staging_stripe" == 1 ]]; then
     STRIPE_SECRET_KEY_HOST_FILE="${STRIPE_SECRET_KEY_HOST_FILE:-}" \
@@ -374,7 +377,7 @@ else
     "$task_health_url/health/ready")"
   task_staging_readiness='null'
 fi
-if [[ "$task_staging_listing_ai_enabled" == true ]] &&
+if [[ "$task_staging_external_listing_ai_enabled" == true ]] &&
    ! printf '%s' "$task_ready_payload" | "$task_node_binary" -e '
      const { readFileSync } = require("node:fs");
      const payload = JSON.parse(readFileSync(0, "utf8"));
@@ -390,6 +393,25 @@ if [[ "$task_staging_listing_ai_enabled" == true ]] &&
      process.exitCode = valid ? 0 : 1;
    '; then
   echo "Staging listing-AI health does not confirm the exact enabled provider boundary." >&2
+  exit 1
+fi
+if [[ "$task_staging_listing_ai_enabled" == true
+      && "$task_staging_external_listing_ai_enabled" != true ]] &&
+   ! printf '%s' "$task_ready_payload" | "$task_node_binary" -e '
+     const { readFileSync } = require("node:fs");
+     const payload = JSON.parse(readFileSync(0, "utf8"));
+     const boundary = payload?.listingAi;
+     const valid = boundary?.status === "enabled"
+       && boundary.provider === "on_device"
+       && boundary.model === "mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1"
+       && boundary.promptVersion === "listing-ai-prompt-v1"
+       && boundary.schemaVersion === "listing-ai-draft-v1"
+       && boundary.budgetCents === 0
+       && boundary.externalProviderExecutionAllowed === false
+       && boundary.automaticPublicationAllowed === false;
+     process.exitCode = valid ? 0 : 1;
+   '; then
+  echo "Staging listing-AI health does not confirm the exact on-device provider boundary." >&2
   exit 1
 fi
 if [[ "$task_staging_stripe_enabled" == true ]] &&

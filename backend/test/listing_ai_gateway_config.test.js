@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   listingAiGatewayVersion,
   listingAiMockModel,
+  listingAiOnDeviceModel,
   listingAiOpenAiModel,
   ListingAiGatewayConfigurationError,
   readListingAiGatewayConfiguration,
@@ -41,6 +42,21 @@ test('mock configuration is deterministic, bounded and never billed', () => {
   assert.equal(result.rateLimitMaxRequests, 3);
 });
 
+test('on-device configuration is bundled, zero-cost and never externally authorized', () => {
+  const result = readListingAiGatewayConfiguration({
+    SIT_LISTING_AI_PROVIDER: 'on_device',
+    SIT_LISTING_AI_MODEL: listingAiOnDeviceModel,
+    SIT_LISTING_AI_BUDGET_CENTS: '0',
+  }, { deploymentEnvironment: 'staging' });
+  assert.equal(result.enabled, true);
+  assert.equal(result.providerExecutionAllowed, true);
+  assert.equal(result.externalProviderExecutionAllowed, false);
+  assert.equal(result.model, listingAiOnDeviceModel);
+  assert.equal(result.budgetCents, 0);
+  assert.equal(result.providerPublicationAllowed, false);
+  assert.equal(result.authoritativeProviderPriceAllowed, false);
+});
+
 test('openai execution requires the pinned model, budget and explicit external gate', () => {
   const held = readListingAiGatewayConfiguration({
     SIT_LISTING_AI_PROVIDER: 'openai',
@@ -68,11 +84,12 @@ test('openai execution requires the pinned model, budget and explicit external g
 test('production, version drift, invalid bounds and non-paid budgets fail closed', () => {
   for (const [env, options, code] of [
     [{ SIT_LISTING_AI_PROVIDER: 'mock' }, { deploymentEnvironment: 'production' }, /cannot be enabled in production/u],
-    [{ SIT_LISTING_AI_PROVIDER: 'other' }, {}, /must be disabled, mock, or openai/u],
+    [{ SIT_LISTING_AI_PROVIDER: 'other' }, {}, /must be disabled, mock, on_device, or openai/u],
     [{ SIT_LISTING_AI_PROMPT_VERSION: 'stale' }, {}, /PROMPT_VERSION is not supported/u],
     [{ SIT_LISTING_AI_SCHEMA_VERSION: 'stale' }, {}, /SCHEMA_VERSION is not supported/u],
     [{ SIT_LISTING_AI_BUDGET_CENTS: '1' }, {}, /non-paid listing AI providers/u],
     [{ SIT_LISTING_AI_PROVIDER: 'mock', SIT_LISTING_AI_MODEL: 'other' }, {}, /mock listing AI/u],
+    [{ SIT_LISTING_AI_PROVIDER: 'on_device', SIT_LISTING_AI_MODEL: 'other' }, {}, /on-device listing AI/u],
     [{ SIT_LISTING_AI_PROVIDER: 'openai' }, {}, /MODEL is required/u],
     [{ SIT_LISTING_AI_PROVIDER: 'openai', SIT_LISTING_AI_MODEL: 'floating-model' }, {}, /must use/u],
     [{ SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: 'yes' }, {}, /must be 0 or 1/u],

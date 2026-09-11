@@ -210,6 +210,7 @@ if (!databaseUrl) {
         '070_stage_a_non_binding_simulation_guard.up.sql',
         '071_stripe_connect_accounts_v2.up.sql',
         '072_dispute_transfer_recovery.up.sql',
+        '073_listing_ai_on_device_provider.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);
@@ -255,6 +256,23 @@ if (!databaseUrl) {
           [draftId],
         );
         assert.equal(draft.rows[0].current_revision, 1);
+
+        await n2Client.query(
+          `INSERT INTO listing_ai_cost_ledger (
+             draft_id, generation_key, provider, model, outcome
+           ) VALUES ($1, $2, 'on_device', $3, 'succeeded')`,
+          [
+            draftId,
+            'd'.repeat(64),
+            'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1',
+          ],
+        );
+        await n2Client.query(
+          `INSERT INTO listing_ai_budget_aggregates (
+             period_key, provider, budget_cents, spent_cents,
+             reserved_cents, call_count
+           ) VALUES ('2026-09', 'on_device', 0, 0, 0, 1)`,
+        );
 
         await n2Client.query('SAVEPOINT n2_append_only');
         await assert.rejects(

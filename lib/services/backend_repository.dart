@@ -401,6 +401,7 @@ class BackendRepository {
     required String generationKey,
     required List<String> photoUrls,
     required Map<String, dynamic> consent,
+    List<Map<String, dynamic>>? onDeviceAnalysis,
   }) async {
     final response = await _authorized(
       method: 'POST',
@@ -410,6 +411,7 @@ class BackendRepository {
         'generationKey': generationKey,
         'photoUrls': photoUrls,
         'consent': consent,
+        if (onDeviceAnalysis != null) 'onDeviceAnalysis': onDeviceAnalysis,
       },
       timeout: const Duration(seconds: 45),
     );
@@ -422,6 +424,7 @@ class BackendRepository {
     required String generationKey,
     required List<String> photoUrls,
     required Map<String, dynamic> consent,
+    List<Map<String, dynamic>>? onDeviceAnalysis,
   }) async {
     final response = await _authorizedForOwner(
       owner: owner,
@@ -432,6 +435,7 @@ class BackendRepository {
         'generationKey': generationKey,
         'photoUrls': photoUrls,
         'consent': consent,
+        if (onDeviceAnalysis != null) 'onDeviceAnalysis': onDeviceAnalysis,
       },
       timeout: const Duration(seconds: 45),
     );

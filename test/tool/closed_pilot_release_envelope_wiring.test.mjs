@@ -23,6 +23,8 @@ test('signed pilot envelope is bound to exact Internal Staging Wave-0 identity',
     '--dart-define=SIT_PLANNER_TECHNICAL_UI_ENABLED=$planner_technical_ui',
     '--dart-define=SIT_SUPPLY_ENRICHMENT_TECHNICAL_UI_ENABLED=$supply_enrichment_technical_ui',
     '--dart-define=SIT_LISTING_SETS_TECHNICAL_UI_ENABLED=$listing_sets_technical_ui',
+    'listingAiExecutionLocation',
+    'android_on_device',
   ]) assert.ok(builder.includes(marker), marker);
   assert.match(builder, /SIT_BOOKING_GROUPS_PUBLIC_RELEASE_ALLOWED=false/u);
 });
@@ -35,10 +37,12 @@ test('private archive rejects partial pilot identity or surface truth', () => {
     'manifest.g4TechnicalUiEnabled !== true',
     'manifest.g5SupplyEnrichmentTechnicalUiEnabled !== true',
     'manifest.g5ListingSetsTechnicalUiEnabled !== true',
+    'manifest.listingAiExecutionLocation',
+    'manifest.listingAiExternalImageProviderEnabled',
   ]) assert.ok(archive.includes(marker), marker);
 });
 
-test('staging pilot compose enables only mock, zero-cost and memory transports', () => {
+test('staging pilot compose enables only on-device, zero-cost and memory transports', () => {
   for (const marker of [
     'BOOKING_PILOT_MODE: pilot',
     'PRIVATE_PILOT_V4_ENABLED: "true"',
@@ -48,12 +52,14 @@ test('staging pilot compose enables only mock, zero-cost and memory transports',
     'PLANNER_INVENTORY_ENABLED: "true"',
     'LISTING_SUPPLY_ENRICHMENT_ENABLED: "true"',
     'LISTING_SETS_ENABLED: "true"',
-    'SIT_LISTING_AI_PROVIDER: mock',
+    'SIT_LISTING_AI_PROVIDER: on_device',
+    'SIT_LISTING_AI_MODEL: mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1',
     'SIT_LISTING_AI_BUDGET_CENTS: "0"',
+    'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: "0"',
     'MAIL_TRANSPORT: memory',
     'PUSH_TRANSPORT: memory',
   ]) assert.ok(pilotCompose.includes(marker), marker);
-  assert.doesNotMatch(pilotCompose, /production|openai|smtp|fcm|webhook/iu);
+  assert.doesNotMatch(pilotCompose, /production|gpt-4o|smtp|fcm|webhook/iu);
 });
 
 test('real Staging mail is isolated behind a TLS-only unauthenticated relay overlay', () => {

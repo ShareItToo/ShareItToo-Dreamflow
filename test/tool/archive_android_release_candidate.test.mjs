@@ -44,6 +44,9 @@ async function fixture(mutate = () => {}) {
     apiBaseUrl: 'https://staging.shareittoo.com/api/v1',
     clientBuild: `${versionName}+${buildNumber}`,
     blueOceanListingAssistantEnabled: false,
+    listingAiExecutionLocation: 'disabled',
+    listingAiModel: '',
+    listingAiExternalImageProviderEnabled: false,
     stageANonBindingPilotEnabled: false,
     closedPilotEnvelopeEnabled: false,
     stageAPilotId: '',
@@ -77,6 +80,13 @@ function archive(data) {
   });
 }
 
+function enableOnDeviceListingAi(manifest) {
+  manifest.blueOceanListingAssistantEnabled = true;
+  manifest.listingAiExecutionLocation = 'android_on_device';
+  manifest.listingAiModel =
+    'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1';
+}
+
 test('archives and verifies the exact candidate without exposing its path', async (t) => {
   const data = await fixture();
   t.after(() => rm(data.root, { recursive: true, force: true }));
@@ -86,6 +96,8 @@ test('archives and verifies the exact candidate without exposing its path', asyn
   assert.equal(result.boundaries.overwriteAllowed, false);
   assert.equal(result.boundaries.externalUploadPerformed, false);
   assert.equal(result.candidate.blueOceanListingAssistantEnabled, false);
+  assert.equal(result.candidate.listingAiExecutionLocation, 'disabled');
+  assert.equal(result.candidate.listingAiExternalImageProviderEnabled, false);
   assert.equal(result.candidate.stageANonBindingPilotEnabled, false);
   assert.equal(result.candidate.closedPilotEnvelopeEnabled, false);
   assert.equal(JSON.stringify(result).includes(data.root), false);
@@ -125,7 +137,7 @@ test('rejects a non-canonical upload certificate', async (t) => {
 
 test('rejects a Blue Ocean candidate without the non-binding Stage-A gate', async (t) => {
   const data = await fixture(({ manifest }) => {
-    manifest.blueOceanListingAssistantEnabled = true;
+    enableOnDeviceListingAi(manifest);
     manifest.stageANonBindingPilotEnabled = false;
   });
   t.after(() => rm(data.root, { recursive: true, force: true }));
@@ -134,7 +146,7 @@ test('rejects a Blue Ocean candidate without the non-binding Stage-A gate', asyn
 
 test('accepts only the exact fully bound closed heilbronn Wave-0 envelope', async (t) => {
   const data = await fixture(({ manifest }) => {
-    manifest.blueOceanListingAssistantEnabled = true;
+    enableOnDeviceListingAi(manifest);
     manifest.stageANonBindingPilotEnabled = true;
     manifest.closedPilotEnvelopeEnabled = true;
     manifest.stageAPilotId = 'heilbronn_wave0';
@@ -151,11 +163,13 @@ test('accepts only the exact fully bound closed heilbronn Wave-0 envelope', asyn
   assert.equal(result.candidate.g4TechnicalUiEnabled, true);
   assert.equal(result.candidate.g5SupplyEnrichmentTechnicalUiEnabled, true);
   assert.equal(result.candidate.g5ListingSetsTechnicalUiEnabled, true);
+  assert.equal(result.candidate.listingAiExecutionLocation, 'android_on_device');
+  assert.equal(result.candidate.listingAiExternalImageProviderEnabled, false);
 });
 
 test('rejects a partial or differently identified closed pilot envelope', async (t) => {
   const data = await fixture(({ manifest }) => {
-    manifest.blueOceanListingAssistantEnabled = true;
+    enableOnDeviceListingAi(manifest);
     manifest.stageANonBindingPilotEnabled = true;
     manifest.closedPilotEnvelopeEnabled = true;
     manifest.stageAPilotId = 'other_wave';

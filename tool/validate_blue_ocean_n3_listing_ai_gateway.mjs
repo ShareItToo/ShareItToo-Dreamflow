@@ -125,7 +125,7 @@ export function validateBlueOceanN3ListingAiGateway({
   requireMarkers(config, configPath, [
     "listingAiGatewayVersion = 'N3-2026-08-23.1'",
     "SIT_LISTING_AI_PROVIDER ?? 'disabled'",
-    "['disabled', 'mock', 'openai']",
+    "['disabled', 'mock', 'on_device', 'openai']",
     'externalProviderExecutionAllowed: openAiExecutionAllowed',
     'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED',
     "listingAiOpenAiModel = 'gpt-4o-mini-2024-07-18'",

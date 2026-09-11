@@ -638,6 +638,7 @@ node --check tool/validate_google_play_app_content_progress.mjs
 node --test test/tool/validate_google_play_app_content_progress.test.mjs
 node --check tool/validate_google_play_data_safety_answer_matrix.mjs
 node --test test/tool/validate_google_play_data_safety_answer_matrix.test.mjs
+node --test test/tool/on_device_listing_ai_data_safety_handoff.test.mjs
 if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" ]]; then
   node tool/validate_google_play_data_safety_answer_matrix.mjs --allow-candidate-rollover
 else

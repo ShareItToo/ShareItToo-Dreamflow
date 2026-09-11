@@ -5,6 +5,7 @@ import {
 
 export const listingAiGatewayVersion = 'N3-2026-08-23.1';
 export const listingAiMockModel = 'listing-ai-mock-v1';
+export const listingAiOnDeviceModel = 'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1';
 export const listingAiOpenAiModel = 'gpt-4o-mini-2024-07-18';
 
 export class ListingAiGatewayConfigurationError extends Error {
@@ -39,8 +40,8 @@ export function readListingAiGatewayConfiguration(
   { deploymentEnvironment = 'development' } = {},
 ) {
   const provider = String(env.SIT_LISTING_AI_PROVIDER ?? 'disabled').trim().toLowerCase();
-  if (!['disabled', 'mock', 'openai'].includes(provider)) {
-    fail('SIT_LISTING_AI_PROVIDER must be disabled, mock, or openai');
+  if (!['disabled', 'mock', 'on_device', 'openai'].includes(provider)) {
+    fail('SIT_LISTING_AI_PROVIDER must be disabled, mock, on_device, or openai');
   }
   const normalizedEnvironment = String(deploymentEnvironment).trim().toLowerCase();
   if (normalizedEnvironment === 'production' && provider !== 'disabled') {
@@ -88,9 +89,14 @@ export function readListingAiGatewayConfiguration(
   const configuredModel = String(env.SIT_LISTING_AI_MODEL ?? '').trim();
   const model = provider === 'mock'
     ? (configuredModel || listingAiMockModel)
-    : configuredModel;
+    : (provider === 'on_device'
+      ? (configuredModel || listingAiOnDeviceModel)
+      : configuredModel);
   if (provider === 'mock' && model !== listingAiMockModel) {
     fail('mock listing AI must use listing-ai-mock-v1');
+  }
+  if (provider === 'on_device' && model !== listingAiOnDeviceModel) {
+    fail(`on-device listing AI must use ${listingAiOnDeviceModel}`);
   }
   if (provider === 'openai' && (model.length < 1 || model.length > 120)) {
     fail('SIT_LISTING_AI_MODEL is required for the openai adapter boundary');
@@ -124,8 +130,9 @@ export function readListingAiGatewayConfiguration(
     timeoutMs,
     rateLimitWindowMs,
     rateLimitMaxRequests,
-    enabled: provider === 'mock' || openAiExecutionAllowed,
-    providerExecutionAllowed: provider === 'mock' || openAiExecutionAllowed,
+    enabled: provider === 'mock' || provider === 'on_device' || openAiExecutionAllowed,
+    providerExecutionAllowed: provider === 'mock' || provider === 'on_device'
+      || openAiExecutionAllowed,
     externalProviderExecutionAllowed: openAiExecutionAllowed,
     providerToolsAllowed: false,
     providerDatabaseWriteAllowed: false,

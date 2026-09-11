@@ -93,9 +93,13 @@ export function validateR16Pr7PilotFreezeIntegrationReview({
   const migrationNames = readdirSync(migrationDirectory);
   const up = migrationNames.filter((name) => /^\d{3}_.+\.up\.sql$/u.test(name)).sort();
   const down = migrationNames.filter((name) => /^\d{3}_.+\.down\.sql$/u.test(name)).sort();
-  if (up.length !== 72 || down.length !== 45
-      || up[0] !== value.migrationInventory.first
-      || up.at(-1) !== value.migrationInventory.last
+  const frozenUp = up.filter((name) => Number.parseInt(name.slice(0, 3), 10) <= 72);
+  const frozenDown = down.filter((name) => Number.parseInt(name.slice(0, 3), 10) <= 72);
+  const postFreezeUp = up.filter((name) => Number.parseInt(name.slice(0, 3), 10) > 72);
+  if (frozenUp.length !== 72 || frozenDown.length !== 45
+      || frozenUp[0] !== value.migrationInventory.first
+      || frozenUp.at(-1) !== value.migrationInventory.last
+      || postFreezeUp.some((name) => !down.includes(name.replace('.up.sql', '.down.sql')))
       || !exact(value.migrationInventory, {
         first: '001_b3_foundation.up.sql',
         last: '072_dispute_transfer_recovery.up.sql',
@@ -295,7 +299,7 @@ export function validateR16Pr7PilotFreezeIntegrationReview({
   return {
     status: value.status,
     decision: 'HOLD_PR7_DRAFT_UNMERGED',
-    migrationCount: up.length,
+    migrationCount: frozenUp.length,
     findingCount: value.findings.length,
     next48hPackage: value.next48hPackage,
   };

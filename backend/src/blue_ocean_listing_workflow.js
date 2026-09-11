@@ -6,10 +6,15 @@ import {
   listingAiDraftFieldKeys,
   listingAiOwnerConfirmationIds,
 } from './listing_ai_draft_domain.js';
-import { createListingAiGateway } from './listing_ai_gateway.js';
+import {
+  createListingAiGateway,
+  normalizeOnDeviceObservations,
+} from './listing_ai_gateway.js';
 import {
   listingAiImageDisclosureText,
   listingAiImageDisclosureVersion,
+  listingAiOnDeviceDisclosureText,
+  listingAiOnDeviceDisclosureVersion,
   runListingAiImagePrivacyPipeline,
 } from './listing_ai_image_pipeline.js';
 import {
@@ -26,6 +31,59 @@ import {
 export const blueOceanListingWorkflowVersion = 'N6-2026-08-24.1';
 export const blueOceanListingDisclosureVersion = listingAiImageDisclosureVersion;
 export const blueOceanListingDisclosureText = listingAiImageDisclosureText;
+export const blueOceanOnDeviceDisclosureVersion = listingAiOnDeviceDisclosureVersion;
+export const blueOceanOnDeviceDisclosureText = listingAiOnDeviceDisclosureText;
+
+const sensitiveOnDeviceLabelRules = Object.freeze([
+  Object.freeze({ type: 'face', pattern: /^(?:face|person|portrait|selfie|mensch|gesicht)$/iu }),
+  Object.freeze({ type: 'document', pattern: /^(?:document|passport|identity document|id card|driver license|ausweis|reisepass|führerschein)$/iu }),
+  Object.freeze({ type: 'financial_data', pattern: /^(?:credit card|payment card|bank card|kreditkarte|bankkarte)$/iu }),
+]);
+
+function onDeviceScreening(observation) {
+  const visualSignals = [];
+  for (const label of observation.labels) {
+    const match = sensitiveOnDeviceLabelRules.find((entry) => entry.pattern.test(label.text));
+    if (!match || label.confidence < 0.35) continue;
+    visualSignals.push({
+      type: match.type,
+      confidence: label.confidence >= 0.75 ? 'HIGH' : 'MEDIUM',
+    });
+  }
+  return Object.freeze({
+    localOcrText: observation.ocrText,
+    visualScanCompleted: true,
+    visualSignals: Object.freeze(visualSignals.slice(0, 12)),
+  });
+}
+
+function bindOnDeviceAnalysis(raw, images, configuration) {
+  if (configuration.provider !== 'on_device') return Object.freeze([]);
+  if (!Array.isArray(raw) || raw.length !== images.length) {
+    throw new BlueOceanListingWorkflowError(
+      400,
+      'blue_ocean_on_device_analysis_invalid',
+    );
+  }
+  const input = Object.freeze({
+    imageReferences: Object.freeze(images.map((entry) => entry.imageReference)),
+  });
+  const bound = raw.map((entry, index) => ({
+    ...(entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : {}),
+    imageReference: images[index].imageReference,
+  }));
+  try {
+    return normalizeOnDeviceObservations(bound, input, {
+      required: true,
+      expectedModel: configuration.model,
+    });
+  } catch {
+    throw new BlueOceanListingWorkflowError(
+      400,
+      'blue_ocean_on_device_analysis_invalid',
+    );
+  }
+}
 
 const confirmationForField = Object.freeze({
   title: 'item_identity',
@@ -290,22 +348,38 @@ export function createBlueOceanListingWorkflow({
 } = {}) {
   if (!configuration) fail(500, 'blue_ocean_configuration_required');
   return Object.freeze({
-    async analyze({ draftId, ownerId, generationKey, images, consent }) {
+    async analyze({
+      draftId,
+      ownerId,
+      generationKey,
+      images,
+      consent,
+      onDeviceAnalysis = null,
+    }) {
       if (!Array.isArray(images) || images.length < 1 || images.length > 4) {
         fail(400, 'blue_ocean_image_count_invalid');
       }
+      const boundOnDeviceAnalysis = bindOnDeviceAnalysis(
+        onDeviceAnalysis,
+        images,
+        configuration,
+      );
       const screenedImages = [];
-      for (const image of images) {
+      for (let index = 0; index < images.length; index += 1) {
+        const image = images[index];
         const value = object(image, 'blue_ocean_image_invalid');
+        const screening = configuration.provider === 'on_device'
+          ? onDeviceScreening(boundOnDeviceAnalysis[index])
+          : normalizeScreening(await screenImage({
+            imageReference: value.imageReference,
+            bytes: value.bytes,
+            mimeType: value.mimeType,
+          }));
         screenedImages.push({
           imageReference: identifier(value.imageReference, 'blue_ocean_image_reference_invalid'),
           originalFilename: null,
           bytes: value.bytes,
-          localScreening: normalizeScreening(await screenImage({
-            imageReference: value.imageReference,
-            bytes: value.bytes,
-            mimeType: value.mimeType,
-          })),
+          localScreening: screening,
         });
       }
       let preflight;
@@ -322,8 +396,16 @@ export function createBlueOceanListingWorkflow({
             generationKey,
             revision: 1,
             imageReferences: derivatives.map((entry) => entry.imageReference),
-            untrustedOcr: [],
+            untrustedOcr: configuration.provider === 'on_device'
+              ? boundOnDeviceAnalysis.map((entry) => ({
+                imageReference: entry.imageReference,
+                text: entry.ocrText,
+              }))
+              : [],
             manualInputPresent: true,
+            onDeviceObservations: configuration.provider === 'on_device'
+              ? boundOnDeviceAnalysis
+              : null,
             analysisImages: derivatives.map((entry) => ({
               imageReference: entry.imageReference,
               mimeType: entry.mimeType,
@@ -331,6 +413,12 @@ export function createBlueOceanListingWorkflow({
               sha256: entry.sha256,
             })),
           }),
+          disclosureVersion: configuration.provider === 'on_device'
+            ? listingAiOnDeviceDisclosureVersion
+            : listingAiImageDisclosureVersion,
+          disclosureText: configuration.provider === 'on_device'
+            ? listingAiOnDeviceDisclosureText
+            : listingAiImageDisclosureText,
         });
       } catch (error) {
         if (!String(error?.code ?? '').startsWith('listing_ai_image_visual_screen_')) {
@@ -381,7 +469,9 @@ export function createBlueOceanListingWorkflow({
         status: 'draft_ready',
         revision: generated.revision,
         imageReview: imageReviewMetadata(preflight),
-        disclosureVersion: blueOceanListingDisclosureVersion,
+        disclosureVersion: configuration.provider === 'on_device'
+          ? blueOceanOnDeviceDisclosureVersion
+          : blueOceanListingDisclosureVersion,
         disclosureAccepted: true,
         clarificationLimit: 3,
         ownerConfirmationIds: listingAiOwnerConfirmationIds,

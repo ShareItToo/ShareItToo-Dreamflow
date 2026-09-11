@@ -7,6 +7,8 @@ import { transitionListingAiDerivative } from './listing_ai_draft_domain.js';
 export const listingAiImagePipelineVersion = 'N4-2026-08-23.1';
 export const listingAiImageDisclosureVersion = 'listing-ai-image-disclosure-v1';
 export const listingAiImageDisclosureText = 'SIT analysiert deine ausgewählten Bilder mit einem externen KI-Dienst, um einen bearbeitbaren Anzeigenentwurf zu erstellen. Es wird nichts automatisch veröffentlicht.';
+export const listingAiOnDeviceDisclosureVersion = 'listing-ai-on-device-disclosure-v1';
+export const listingAiOnDeviceDisclosureText = 'SIT wertet deine ausgewählten Bilder direkt auf diesem Android-Gerät aus. Erkannte Objektbegriffe und Texte sowie die ausgewählten Anzeigenfotos werden an SIT übertragen, um einen bearbeitbaren Entwurf zu erstellen. ML Kit sendet Bildinhalte und Erkennungsergebnisse nicht an Google; technische ML-Kit-Nutzungs- und Diagnosedaten können an Google übertragen werden. Es wird nichts automatisch veröffentlicht.';
 
 const maximumImageCount = 4;
 const maximumInputBytes = 8 * 1024 * 1024;
@@ -95,7 +97,10 @@ function safeRandomId(randomId) {
   return value.toLowerCase();
 }
 
-function normalizeConsent(raw) {
+function normalizeConsent(raw, {
+  disclosureVersion = listingAiImageDisclosureVersion,
+  disclosureText = listingAiImageDisclosureText,
+} = {}) {
   exactKeys(raw, [
     'explicitlyInitiated',
     'accepted',
@@ -104,12 +109,12 @@ function normalizeConsent(raw) {
   ], 'listing_ai_image_consent_invalid');
   if (raw.explicitlyInitiated !== true) fail(409, 'listing_ai_image_action_not_explicit');
   if (raw.accepted !== true
-      || raw.disclosureVersion !== listingAiImageDisclosureVersion
-      || raw.disclosureText !== listingAiImageDisclosureText) {
+      || raw.disclosureVersion !== disclosureVersion
+      || raw.disclosureText !== disclosureText) {
     fail(409, 'listing_ai_image_consent_required');
   }
   return Object.freeze({
-    disclosureVersion: listingAiImageDisclosureVersion,
+    disclosureVersion,
     accepted: true,
     explicitlyInitiated: true,
   });
@@ -409,8 +414,10 @@ export async function runListingAiImagePrivacyPipeline({
   timeoutMs = defaultCleanupTimeoutMs,
   now = () => new Date(),
   randomId = () => crypto.randomUUID(),
+  disclosureVersion = listingAiImageDisclosureVersion,
+  disclosureText = listingAiImageDisclosureText,
 }) {
-  normalizeConsent(consent);
+  normalizeConsent(consent, { disclosureVersion, disclosureText });
   if (!Array.isArray(images)
       || images.length < 1
       || images.length > maximumImageCount) {
@@ -478,7 +485,7 @@ export async function runListingAiImagePrivacyPipeline({
           (total, entry) => total + (entry.screeningUsage?.estimatedCostCents ?? 0),
           0,
         ),
-        disclosureVersion: listingAiImageDisclosureVersion,
+        disclosureVersion,
         images: Object.freeze(derivatives.map(safeDerivativeView)),
         consumerResult: null,
       });
@@ -502,7 +509,7 @@ export async function runListingAiImagePrivacyPipeline({
         (total, entry) => total + (entry.screeningUsage?.estimatedCostCents ?? 0),
         0,
       ),
-      disclosureVersion: listingAiImageDisclosureVersion,
+      disclosureVersion,
       images: Object.freeze(derivatives.map(safeDerivativeView)),
       consumerResult,
     });

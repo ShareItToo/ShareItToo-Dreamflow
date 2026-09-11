@@ -19,6 +19,7 @@ import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/blue_ocean_draft_recovery_service.dart';
 import 'package:lendify/services/maps_service.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
+import 'package:lendify/services/on_device_listing_analysis_service.dart';
 import 'package:lendify/navigation/main_navigation.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/app_image.dart';
@@ -175,6 +176,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   };
   final BlueOceanDraftRecoveryService _blueOceanDraftRecovery =
       BlueOceanDraftRecoveryService();
+  final OnDeviceListingAnalysisService _onDeviceListingAnalysis =
+      const OnDeviceListingAnalysisService();
   Timer? _blueOceanRecoveryDebounce;
   String? _currentOwnerId;
   final _listingActions = ListingMutationInteractionController();
@@ -382,11 +385,14 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   }
 
   static const String _blueOceanDisclosureVersion =
-      'listing-ai-image-disclosure-v1';
+      'listing-ai-on-device-disclosure-v1';
   static const String _blueOceanDisclosureText =
-      'SIT analysiert deine ausgewählten Bilder mit einem externen KI-Dienst, '
-      'um einen bearbeitbaren Anzeigenentwurf zu erstellen. Es wird nichts '
-      'automatisch veröffentlicht.';
+      'SIT wertet deine ausgewählten Bilder direkt auf diesem Android-Gerät '
+      'aus. Erkannte Objektbegriffe und Texte sowie die ausgewählten '
+      'Anzeigenfotos werden an SIT übertragen, um einen bearbeitbaren Entwurf '
+      'zu erstellen. ML Kit sendet Bildinhalte und Erkennungsergebnisse nicht '
+      'an Google; technische ML-Kit-Nutzungs- und Diagnosedaten können an '
+      'Google übertragen werden. Es wird nichts automatisch veröffentlicht.';
 
   String _newBlueOceanUuid() {
     final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256));
@@ -800,10 +806,20 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     }
     setState(() {
       _blueOceanBusy = true;
-      _blueOceanProgress = 'Fotos werden sicher vorbereitet …';
+      _blueOceanProgress = 'Fotos werden lokal auf diesem Gerät analysiert …';
       _blueOceanError = null;
     });
     try {
+      final onDeviceAnalysis = await _onDeviceListingAnalysis.analyzeImagePaths(
+        _pickedImages.map((file) => file.path).toList(growable: false),
+      );
+      if (!await _listingActions.isCurrent(_listingMutationService, owner)) {
+        return;
+      }
+      if (mounted) {
+        setState(() => _blueOceanProgress =
+            'Lokale Bildanalyse abgeschlossen. Fotos werden sicher vorbereitet …');
+      }
       final photoUrls = <String>[];
       for (var index = 0; index < _pickedImages.length; index++) {
         if (mounted &&
@@ -838,6 +854,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
           'disclosureVersion': _blueOceanDisclosureVersion,
           'disclosureText': _blueOceanDisclosureText,
         },
+        onDeviceAnalysis: onDeviceAnalysis,
       );
       if (!mounted) return;
       if (!await _listingActions.isCurrent(_listingMutationService, owner)) {
@@ -869,6 +886,18 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         unawaited(_persistBlueOceanRecoverySnapshot());
       }
       if (_blueOceanError != null) _focusBlueOceanMessage();
+    } on OnDeviceListingAnalysisException catch (failure) {
+      if (!mounted ||
+          !await _listingActions.isCurrent(_listingMutationService, owner)) {
+        return;
+      }
+      setState(() {
+        _blueOceanError =
+            'Die lokale Bildanalyse ist nicht verfügbar (${failure.code}). '
+            'Fotos und Eingaben bleiben erhalten; arbeite manuell weiter.';
+        _blueOceanProgress = 'Manueller Fallback aktiv.';
+      });
+      _focusBlueOceanMessage();
     } on ListingMutationFailure catch (failure) {
       if (failure.kind == ListingMutationFailureKind.principalChanged ||
           !mounted ||

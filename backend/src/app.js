@@ -861,12 +861,15 @@ function assertBlueOceanListingTechnicalAccess() {
   const mockAllowed = config.listingAi.provider === 'mock'
     && config.listingAi.budgetCents === 0
     && config.listingAi.externalProviderExecutionAllowed === false;
+  const onDeviceAllowed = config.listingAi.provider === 'on_device'
+    && config.listingAi.budgetCents === 0
+    && config.listingAi.externalProviderExecutionAllowed === false;
   const openAiAllowed = config.listingAi.provider === 'openai'
     && config.listingAi.budgetCents > 0
     && config.listingAi.externalProviderExecutionAllowed === true;
   if (config.listingAi.enabled !== true
       || config.listingAi.providerExecutionAllowed !== true
-      || (!mockAllowed && !openAiAllowed)
+      || (!mockAllowed && !onDeviceAllowed && !openAiAllowed)
       || config.listingAi.providerPublicationAllowed !== false) {
     throw new HttpError(503, 'blue_ocean_listing_assistant_not_enabled');
   }
@@ -3201,6 +3204,7 @@ export function createApp({
       generationKey: req.body?.generationKey,
       images,
       consent: req.body?.consent,
+      onDeviceAnalysis: req.body?.onDeviceAnalysis,
     });
     if (result.status !== 'draft_ready') {
       return res.json({ assistant: result });

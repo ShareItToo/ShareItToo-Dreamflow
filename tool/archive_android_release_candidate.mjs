@@ -92,6 +92,18 @@ export function archiveAndroidReleaseCandidate({
       manifest.apiBaseUrl !== 'https://staging.shareittoo.com/api/v1' ||
       manifest.clientBuild !== `${expectedVersionName}+${expectedBuildNumber}` ||
       typeof manifest.blueOceanListingAssistantEnabled !== 'boolean' ||
+      typeof manifest.listingAiExecutionLocation !== 'string' ||
+      typeof manifest.listingAiModel !== 'string' ||
+      manifest.listingAiExternalImageProviderEnabled !== false ||
+      (manifest.blueOceanListingAssistantEnabled === true && (
+        manifest.listingAiExecutionLocation !== 'android_on_device' ||
+        manifest.listingAiModel !==
+          'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1'
+      )) ||
+      (manifest.blueOceanListingAssistantEnabled === false && (
+        manifest.listingAiExecutionLocation !== 'disabled' ||
+        manifest.listingAiModel !== ''
+      )) ||
       typeof manifest.stageANonBindingPilotEnabled !== 'boolean' ||
       typeof manifest.closedPilotEnvelopeEnabled !== 'boolean' ||
       typeof manifest.stageAPilotId !== 'string' ||
@@ -173,6 +185,10 @@ export function archiveAndroidReleaseCandidate({
       commit: expectedCommit,
       clientBuild: manifest.clientBuild,
       blueOceanListingAssistantEnabled: manifest.blueOceanListingAssistantEnabled,
+      listingAiExecutionLocation: manifest.listingAiExecutionLocation,
+      listingAiModel: manifest.listingAiModel,
+      listingAiExternalImageProviderEnabled:
+        manifest.listingAiExternalImageProviderEnabled,
       stageANonBindingPilotEnabled: manifest.stageANonBindingPilotEnabled,
       closedPilotEnvelopeEnabled: manifest.closedPilotEnvelopeEnabled,
       stageAPilotId: manifest.stageAPilotId,

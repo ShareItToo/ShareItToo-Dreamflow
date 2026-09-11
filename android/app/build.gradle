@@ -159,3 +159,10 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Bundled, immediately available on-device models. Listing photos and
+    // recognized text are not sent to an external inference endpoint.
+    implementation "com.google.mlkit:image-labeling:17.0.9"
+    implementation "com.google.mlkit:text-recognition:16.0.1"
+}

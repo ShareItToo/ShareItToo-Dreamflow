@@ -10,6 +10,10 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private var pendingPushActionLink: String? = null
     private lateinit var pushActionLinkChannel: MethodChannel
+    private lateinit var onDeviceListingChannel: MethodChannel
+    private lateinit var onDeviceListingAnalyzer: OnDeviceListingAnalyzer
+    private var onDeviceListingAnalysisRunning = false
+    private var onDeviceListingEngineActive = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         pendingPushActionLink = safePushActionLink(intent)
@@ -44,6 +48,64 @@ class MainActivity : FlutterActivity() {
             pendingPushActionLink = null
             result.success(pending)
         }
+        onDeviceListingAnalyzer = OnDeviceListingAnalyzer(applicationContext)
+        onDeviceListingEngineActive = true
+        onDeviceListingChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            onDeviceListingChannelName,
+        )
+        onDeviceListingChannel.setMethodCallHandler { call, result ->
+            if (call.method != "analyzeImages") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val imagePaths = call.argument<List<String>>("imagePaths")
+            if (imagePaths == null) {
+                result.error(
+                    "on_device_listing_input_invalid",
+                    "Bildauswahl fehlt.",
+                    null,
+                )
+                return@setMethodCallHandler
+            }
+            if (onDeviceListingAnalysisRunning) {
+                result.error(
+                    "on_device_listing_analysis_busy",
+                    "Eine Bildanalyse läuft bereits.",
+                    null,
+                )
+                return@setMethodCallHandler
+            }
+            onDeviceListingAnalysisRunning = true
+            onDeviceListingAnalyzer.analyze(imagePaths) { outcome ->
+                runOnUiThread {
+                    if (!onDeviceListingEngineActive) return@runOnUiThread
+                    onDeviceListingAnalysisRunning = false
+                    outcome.fold(
+                        onSuccess = { observations -> result.success(observations) },
+                        onFailure = {
+                            result.error(
+                                "on_device_listing_analysis_failed",
+                                "Die lokale Bildanalyse konnte nicht abgeschlossen werden.",
+                                null,
+                            )
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        onDeviceListingEngineActive = false
+        onDeviceListingAnalysisRunning = false
+        if (::onDeviceListingChannel.isInitialized) {
+            onDeviceListingChannel.setMethodCallHandler(null)
+        }
+        if (::onDeviceListingAnalyzer.isInitialized) {
+            onDeviceListingAnalyzer.close()
+        }
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 
     private fun deliverPushActionLink(actionLink: String) {
@@ -102,6 +164,8 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val pushActionLinkChannelName =
             "com.shareittoo.app/push_action_links"
+        private const val onDeviceListingChannelName =
+            "com.shareittoo.app/on_device_listing_ai"
         private val allowedWebHosts = setOf(
             "shareittoo.com",
             "www.shareittoo.com",

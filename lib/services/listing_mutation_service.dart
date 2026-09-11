@@ -354,6 +354,7 @@ class ListingMutationService {
     required String generationKey,
     required List<String> photoUrls,
     required Map<String, dynamic> consent,
+    List<Map<String, dynamic>>? onDeviceAnalysis,
   }) =>
       _runOwnedDraftAction(
         context: context,
@@ -363,6 +364,7 @@ class ListingMutationService {
           generationKey: generationKey,
           photoUrls: photoUrls,
           consent: consent,
+          onDeviceAnalysis: onDeviceAnalysis,
         ),
       );
 
