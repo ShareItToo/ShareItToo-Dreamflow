@@ -112,7 +112,7 @@ export function validateWp110PixelRenterOwnerJourney({
     'accountIsolation', 'protectedOwnerRestored',
   ]) exact(pixel.primaryTwoRoleJourney[key], true, `primary journey ${key}`);
   exact(pixel.primaryTwoRoleJourney.statusIconManualVisualReview,
-    'pending-private-owner-review', 'FCM visual review truth');
+    'passed-private-capture-brand-icon-clear', 'FCM visual review truth');
   exact(pixel.listingLifecycle?.status, 'passed-pixel-listing-lifecycle',
     'listing lifecycle');
   exact(pixel.searchAndSaved?.status, 'passed-pixel-search-saved-lifecycle',
@@ -162,7 +162,15 @@ export function validateWp110PixelRenterOwnerJourney({
   for (const [key, result] of Object.entries(value.boundaries ?? {})) {
     exact(result, false, `boundary ${key}`);
   }
-  if (!Array.isArray(value.remaining) || value.remaining.length !== 5) {
+  const expectedRemaining = [
+    'professional-v52-legal-snapshots-and-owner-approval',
+    'binding-booking-pickup-return-damage-needs-review-review-replay',
+    'official-stripe-sandbox-payment-refund-and-simulated-payout',
+    'separate-oneplus-exact-candidate-two-device-replay',
+  ];
+  if (!Array.isArray(value.remaining)
+      || JSON.stringify([...value.remaining].sort())
+        !== JSON.stringify([...expectedRemaining].sort())) {
     fail('WP110 remaining gate inventory is incomplete.');
   }
   const serialized = JSON.stringify(value);

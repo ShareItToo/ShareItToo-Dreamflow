@@ -1,4 +1,18 @@
-# Current Work Package: WP110 Current-Candidate Pixel Renter/Owner Journey — COMPLETE
+# Current Work Package: WP111 Pixel FCM Icon Visual Review — COMPLETE
+
+WP111 closes the final private FCM icon review from WP110 for the exact signed
+`1.0.0+2026091109` Pixel candidate. The hash-bound owner-only capture shows two
+clear, correctly branded ShareItToo notification cards. The repository records
+only its SHA-256 and sanitized visual observations; the capture remains private.
+The Android manifest and all five transparent density resources independently
+prove the declared Firebase small-icon wiring without attributing an unrelated
+glyph in the aggregate notification row.
+
+No push, notification clear, device setting, rebuild, reinstall, Store,
+Production, provider/payment, OnePlus, VPS/DNS or PR change occurred. See
+`docs/operations/WP111_PIXEL_FCM_ICON_VISUAL_REVIEW_2026-09-11.md`.
+
+# Previous Work Package: WP110 Current-Candidate Pixel Renter/Owner Journey — COMPLETE
 
 WP110 closes the complete currently executable non-binding renter/owner journey
 on the exact signed `1.0.0+2026091109` Pixel candidate. Publication/discovery,
@@ -12,9 +26,8 @@ public baseline was preserved. See
 Technical head `cbe62931b79964465f2d3956afd3f698dd4c6dea` passes the full local
 regression, exact-head GitHub Regression `34595796885`, CodeQL `34595796884`
 and image-publication run `34597332701`; Staging serves that exact immutable
-image with healthy API/database and zero restarts. V5.2 binding, Stripe sandbox,
-the private FCM icon review and a separate OnePlus replay remain open. PR #7
-stays draft, open and unmerged.
+image with healthy API/database and zero restarts. V5.2 binding, Stripe sandbox
+and a separate OnePlus replay remain open. PR #7 stays draft, open and unmerged.
 
 # Previous Work Package: WP107 Current-Candidate Extended Pixel Two-Role — COMPLETE
 

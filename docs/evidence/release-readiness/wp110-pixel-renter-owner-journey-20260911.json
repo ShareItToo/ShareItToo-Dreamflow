@@ -62,7 +62,7 @@
       "accountIsolation": true,
       "protectedOwnerRestored": true,
       "statusIconCaptureSha256": "736561d7d8c01bc0e4c19b0ec8fb547a6c1c3cf24e28e700a8cc1784a04ca89f",
-      "statusIconManualVisualReview": "pending-private-owner-review"
+      "statusIconManualVisualReview": "passed-private-capture-brand-icon-clear"
     },
     "listingLifecycle": {
       "status": "passed-pixel-listing-lifecycle",
@@ -168,7 +168,6 @@
     "professional-v52-legal-snapshots-and-owner-approval",
     "binding-booking-pickup-return-damage-needs-review-review-replay",
     "official-stripe-sandbox-payment-refund-and-simulated-payout",
-    "private-fcm-status-icon-manual-visual-review",
     "separate-oneplus-exact-candidate-two-device-replay"
   ]
 }

@@ -25,8 +25,11 @@ Production or Google Play, and does not transfer Pixel evidence to OnePlus.
 - A non-binding request simulation reached the owner, was accepted in the
   permitted simulation boundary, and produced renter-visible chat without a
   contract, reservation, payment endpoint or money movement.
-- FCM passed in foreground, background and terminated-process states. A private
-  status-icon capture is hash-bound, but its manual visual review remains open.
+- FCM passed in foreground, background and terminated-process states. The
+  hash-bound private notification-shade capture has now passed visual review:
+  both ShareItToo notification cards show the correct, clear brand mark without
+  clipping, substitution or a blank/placeholder icon. See the separate WP111
+  review closure for the privacy-preserving visual and resource evidence.
 - Listing edit, publish, pause, stable public hide, reactivation and terminal
   end passed with strictly advancing server revisions.
 - Exact search, coarse-category search, detail, save/remove, restart
@@ -76,7 +79,6 @@ Machine-readable evidence:
   binding booking, pickup/return, damage/needsReview and review journey.
 - Official Stripe sandbox readiness before test payment, refund and simulated
   payout evidence.
-- Manual private review of the hash-bound FCM status-icon capture.
 - Separate exact-candidate OnePlus/two-device replay when explicitly resumed.
 - Google Play upload/activation, Production, public registration and PR merge
   remain unchanged and unclaimed.

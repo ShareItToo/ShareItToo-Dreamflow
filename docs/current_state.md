@@ -1,5 +1,17 @@
 # ShareItToo Current State
 
+## WP111 Pixel FCM icon visual review — complete
+
+The exact owner-only WP110 notification-shade capture matches its committed
+SHA-256 and passes visual review for signed Internal/Staging candidate
+`1.0.0+2026091109`. Both visible ShareItToo notification cards show the
+correct, clear brand mark without clipping, substitution or a blank icon. The
+aggregate small-icon row is not used for unsupported attribution; the Android
+manifest and all five transparent, centered density resources independently
+prove the declared Firebase small-icon binding. No new push, notification
+clear, device change, rebuild or reinstall occurred. See
+`docs/operations/WP111_PIXEL_FCM_ICON_VISUAL_REVIEW_2026-09-11.md`.
+
 ## WP110 current-candidate Pixel renter/owner journey — complete
 
 The exact signed Internal/Staging `1.0.0+2026091109` candidate passes the full
@@ -19,10 +31,11 @@ alerts and image-publication run `34597332701`. Staging serves that exact head
 with healthy API/database and zero restarts. See
 `docs/operations/WP110_PIXEL_RENTER_OWNER_JOURNEY_2026-09-11.md`.
 
-This is not binding-contract or payment proof. Professional V5.2 snapshots,
-Stripe sandbox, private FCM icon review and separate OnePlus replay remain open;
-Production, Google Play, tester lists, public registration and PR #7 are
-unchanged.
+This is not binding-contract or payment proof. WP111 now closes the private FCM
+notification-card icon review against the exact hash-bound WP110 capture and
+the declared Android small-icon resources. Professional V5.2 snapshots, Stripe
+sandbox and the separate OnePlus replay remain open; Production, Google Play,
+tester lists, public registration and PR #7 are unchanged.
 
 ## WP107 extended current-candidate Pixel two-role test — complete locally and on GitHub
 
