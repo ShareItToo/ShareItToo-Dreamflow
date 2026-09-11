@@ -211,6 +211,7 @@ if (!databaseUrl) {
         '071_stripe_connect_accounts_v2.up.sql',
         '072_dispute_transfer_recovery.up.sql',
         '073_listing_ai_on_device_provider.up.sql',
+        '074_listing_ai_on_device_disclosure.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);
@@ -256,6 +257,61 @@ if (!databaseUrl) {
           [draftId],
         );
         assert.equal(draft.rows[0].current_revision, 1);
+
+        const onDeviceDraftId =
+          'listing_ai_draft_22345678-1234-4123-8123-123456789abc';
+        await n2Client.query(
+          `INSERT INTO listing_ai_drafts (
+             id, domain_version, schema_version, prompt_version, owner_id,
+             disclosure_version, disclosure_accepted_at, image_preflight_status
+           ) VALUES ($1, 'N2-2026-08-23.1', 'listing-ai-draft-v1',
+                     'listing-ai-prompt-v1', 'n2-owner-test',
+                     'listing-ai-on-device-disclosure-v1', now(), 'consumed')`,
+          [onDeviceDraftId],
+        );
+        const onDeviceConsent = await n2Client.query(
+          `SELECT disclosure_version, disclosure_accepted_at IS NOT NULL AS accepted
+             FROM listing_ai_drafts WHERE id = $1`,
+          [onDeviceDraftId],
+        );
+        assert.deepEqual(onDeviceConsent.rows[0], {
+          disclosure_version: 'listing-ai-on-device-disclosure-v1',
+          accepted: true,
+        });
+
+        const onDeviceDisclosureDown = await fs.readFile(
+          path.resolve(
+            currentDir,
+            '../sql/migrations/074_listing_ai_on_device_disclosure.down.sql',
+          ),
+          'utf8',
+        );
+        await n2Client.query('SAVEPOINT n2_on_device_disclosure_rollback');
+        await assert.rejects(
+          n2Client.query(onDeviceDisclosureDown),
+          (error) => error.code === 'P0001'
+            && error.message
+              === 'On-device listing AI disclosure rollback blocked: durable consent history exists',
+        );
+        await n2Client.query(
+          'ROLLBACK TO SAVEPOINT n2_on_device_disclosure_rollback',
+        );
+
+        await n2Client.query('SAVEPOINT n2_unknown_disclosure');
+        await assert.rejects(
+          n2Client.query(
+            `INSERT INTO listing_ai_drafts (
+               id, domain_version, schema_version, prompt_version, owner_id,
+               disclosure_version, disclosure_accepted_at, image_preflight_status
+             ) VALUES ('listing_ai_draft_32345678-1234-4123-8123-123456789abc',
+                       'N2-2026-08-23.1', 'listing-ai-draft-v1',
+                       'listing-ai-prompt-v1', 'n2-owner-test',
+                       'unreviewed-disclosure', now(), 'consumed')`,
+          ),
+          (error) => error.code === '23514'
+            && error.constraint === 'listing_ai_drafts_consent_state_check',
+        );
+        await n2Client.query('ROLLBACK TO SAVEPOINT n2_unknown_disclosure');
 
         await n2Client.query(
           `INSERT INTO listing_ai_cost_ledger (
