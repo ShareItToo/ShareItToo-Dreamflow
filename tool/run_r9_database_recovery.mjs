@@ -28,7 +28,7 @@ const requireFromBackend = createRequire(
   new URL('../backend/package.json', import.meta.url),
 );
 
-export const r9RequiredMigrationCount = 73;
+export const r9RequiredMigrationCount = 74;
 export const r9SyntheticAccountCount = 12;
 export const r9SyntheticListingCount = 6;
 export const r9ResultClassification = 'LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF';
@@ -58,6 +58,10 @@ const rollbackGuardExpectations = Object.freeze([
   Object.freeze({
     filename: '071_stripe_connect_accounts_v2.down.sql',
     message: 'Stripe Accounts v2 rollback blocked: v2 connected accounts exist',
+  }),
+  Object.freeze({
+    filename: '074_listing_ai_on_device_disclosure.down.sql',
+    message: 'On-device listing AI disclosure rollback blocked: durable consent history exists',
   }),
 ]);
 
@@ -138,7 +142,7 @@ async function readMigrationPlan(root) {
   }
   if (plan.length !== r9RequiredMigrationCount
       || plan[0]?.filename !== '001_b3_foundation.up.sql'
-      || plan.at(-1)?.filename !== '073_listing_ai_on_device_provider.up.sql') {
+      || plan.at(-1)?.filename !== '074_listing_ai_on_device_disclosure.up.sql') {
     fail('r9_migration_inventory_unexpected');
   }
   return Object.freeze(plan);
@@ -342,10 +346,12 @@ async function insertSyntheticDataset(pool) {
   const draftId = 'listing_ai_draft_90000000-0000-4000-8000-000000000001';
   await pool.query(
     `INSERT INTO listing_ai_drafts (
-       id, domain_version, schema_version, prompt_version, owner_id
+       id, domain_version, schema_version, prompt_version, owner_id,
+       disclosure_version, disclosure_accepted_at
      ) VALUES (
        $1, 'N2-2026-08-23.1', 'listing-ai-draft-v1',
-       'listing-ai-prompt-v1', 'r9-user-001'
+       'listing-ai-prompt-v1', 'r9-user-001',
+       'listing-ai-on-device-disclosure-v1', '2026-09-11T00:00:00Z'
      )`,
     [draftId],
   );
@@ -652,7 +658,7 @@ async function closePools(pools) {
 
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
-  requiredLastMigration = '073_listing_ai_on_device_provider.up.sql',
+  requiredLastMigration = '074_listing_ai_on_device_disclosure.up.sql',
 } = {}) {
   if (value?.schemaVersion !== 1
       || value.kind !== 'sit-r9-database-recovery-observation'
