@@ -1,7 +1,7 @@
 name: lendify
 description: "ShareItToo is a vibrant peer-to-peer marketplace for renting anything, from power tools to party gear, offering an intuitive, Airbnb-inspired experience with robust localization and a powerful Flutter foundation."
 publish_to: "none"
-version: 1.0.0+2026091108
+version: 1.0.0+2026091109
 
 environment:
   sdk: ^3.6.0
