@@ -247,6 +247,19 @@ export function renterBookingChatSurfaceClassification(hierarchy, exactListingTi
   ].join('_');
 }
 
+export function renterAcceptedCardSurfaceClassification(hierarchy, exactListingTitle) {
+  const count = (label) => currentHeadAndroidNamedNodes(hierarchy, label).length;
+  return [
+    `title-${count(exactListingTitle)}`,
+    `simulation-${count('Pilot-Simulation')}`,
+    `empty-upcoming-${count('Du hast keine kommenden Buchungen')}`,
+    `empty-pending-${count('Du hast keine ausstehenden Buchungen')}`,
+    `upcoming-tab-${count('Kommend')}`,
+    `pending-tab-${count('Ausstehend')}`,
+    `requests-load-error-${count('Buchungen konnten nicht geladen werden')}`,
+  ].join('_');
+}
+
 export async function openMainDestination({
   commandRunner,
   adbPath,
@@ -574,14 +587,22 @@ async function verifyRenterProductSurfaces({
     predicate: (value) => containsAllLabels(value, ['Meine Buchungen', 'Kommend']),
   });
   tapLabel(commandRunner, adbPath, device, hierarchy, 'Kommend');
-  hierarchy = await waitForHierarchy({
-    commandRunner,
-    adbPath,
-    device,
-    wait,
-    label: 'renter accepted simulation card',
-    predicate: (value) => containsAllLabels(value, [title, 'Pilot-Simulation']),
-  });
+  try {
+    hierarchy = await waitForHierarchy({
+      commandRunner,
+      adbPath,
+      device,
+      wait,
+      label: 'renter accepted simulation card',
+      predicate: (value) => containsAllLabels(value, [title, 'Pilot-Simulation']),
+    });
+  } catch {
+    const observed = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+    fail(
+      'The sanitized renter accepted simulation card failed with surface classification '
+      + `${renterAcceptedCardSurfaceClassification(observed, title)}.`,
+    );
+  }
   tapLabel(commandRunner, adbPath, device, hierarchy, title);
   await waitForHierarchy({
     commandRunner,

@@ -55,13 +55,42 @@ export const selectedIntentRemoteSettle = Object.freeze({
   intervalMs: 650,
 });
 
-// AppPopup.toast is intentionally visible for only two seconds. Start the
-// first UIAutomator snapshot promptly so a cold hierarchy dump cannot consume
-// the complete acknowledgement window before the assertion observes it.
+// Historical WP67 evidence binds this probe. New physical acceptance must not
+// depend on observing a two-second transient through a comparatively slow
+// UIAutomator hierarchy dump; it uses the exact server receipt below instead.
 export const cartAcknowledgementProbe = Object.freeze({
   attempts: 24,
   intervalMs: 75,
 });
+
+export const cartServerReceiptProbe = Object.freeze({
+  attempts: 40,
+  intervalMs: 650,
+});
+
+export async function waitForExactCartServerReceipt({
+  inspect,
+  wait,
+  attempts = cartServerReceiptProbe.attempts,
+  intervalMs = cartServerReceiptProbe.intervalMs,
+}) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const receipt = await inspect();
+      if (receipt?.status === 'isolated-rental-cart-single-intent-server-confirmed'
+          && receipt.exactIntentCount === 1
+          && receipt.reservationCreated === false
+          && receipt.fixtureRentalRequests === 0) {
+        return receipt;
+      }
+    } catch {
+      // The physical tap starts an asynchronous client request. Retry only the
+      // read-only exact-state observation; never repeat the mutation here.
+    }
+    if (attempt + 1 < attempts) await wait(intervalMs);
+  }
+  fail('The exact non-reserving cart server receipt did not settle.');
+}
 
 function sanitizedFailure(error) {
   const detail = typeof error?.message === 'string' ? error.message.trim() : '';
@@ -186,6 +215,7 @@ async function waitForListingDetail({
 
 async function addExactIntentTwiceOnPixel({
   vaultFile,
+  inspectIntent,
   commandRunner,
   adbPath,
   device,
@@ -280,25 +310,7 @@ async function addExactIntentTwiceOnPixel({
   }
   for (let attempt = 0; attempt < 2; attempt += 1) {
     tapLabel(commandRunner, adbPath, device, hierarchy, 'In den Mietkorb');
-    await waitForHierarchy({
-      commandRunner,
-      adbPath,
-      device,
-      wait,
-      attempts: cartAcknowledgementProbe.attempts,
-      intervalMs: cartAcknowledgementProbe.intervalMs,
-      label: 'non-reserving cart acknowledgement',
-      predicate: (value) => (
-        currentHeadAndroidNamedNodes(
-          value,
-          'Im Mietkorb – noch nicht reserviert',
-        ).length > 0
-          && currentHeadAndroidNamedNodes(
-            value,
-            'Speichern im Mietkorb konnte nicht bestätigt werden',
-          ).length === 0
-      ),
-    });
+    await waitForExactCartServerReceipt({ inspect: inspectIntent, wait });
     hierarchy = await waitForHierarchy({
       commandRunner,
       adbPath,
@@ -770,7 +782,10 @@ export async function runAndroidRentalCartProjectLifecycle({
     },
     device: deviceSummary,
     tests: {
-      exactIntentSubmittedTwice: 'passed-two-physical-acknowledgements',
+      exactIntentSubmittedTwice:
+        'passed-two-physical-submissions-two-exact-server-confirmations',
+      transientAcknowledgementContract:
+        'passed-widget-regression-device-proof-independent-of-toast-timing',
       exactServerIntentCount: 1,
       stableIdempotentIntent: 'passed-stable-sha256-client-id',
       nonReservingTruth: 'passed-cart-false-request-count-zero',
@@ -840,7 +855,14 @@ async function main() {
       vaultFile,
     }),
     addTwice: ({ vaultFile }) => addExactIntentTwiceOnPixel({
-      vaultFile, commandRunner, adbPath, device, wait,
+      vaultFile,
+      inspectIntent: () => inspectStagingEmailVerifiedRentalCartLifecycle({
+        vaultFile,
+      }),
+      commandRunner,
+      adbPath,
+      device,
+      wait,
     }),
     inspectSingleIntent: ({ vaultFile }) => inspectStagingEmailVerifiedRentalCartLifecycle({
       vaultFile,

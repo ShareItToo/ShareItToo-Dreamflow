@@ -22,6 +22,16 @@ claimed until every item below has reproducible evidence and is closed.
   cannot become a release prerequisite. This is a recurrence observation under
   `TD-RR-012` and `TD-RR-021`; both deterministic guards remain unchanged.
 
+- 11.09.2026, WP109: a physical rental-cart run exposed that a two-second
+  acknowledgement could finish while Android's hierarchy dumper was taking its
+  first snapshot. The application request itself returned `200` and cleanup
+  passed, so the failure was in the timing-dependent measurement. The physical
+  runner now performs each user tap once, waits only on a read-only exact server
+  receipt for that tap, then requires the stable post-dialog detail and durable
+  cart surface. The existing Flutter widget regression still proves the exact
+  success and failure wording. No mutation retry, delay-to-pass, longer product
+  timeout or transient UI dependency is accepted as release evidence.
+
 | ID | Current observation / temporary accommodation | Required deterministic exit evidence |
 | --- | --- | --- |
 | `TD-RR-001` | **CLOSED 23.08.2026.** S4P installed repository-bound normal-shell Node 22 plus exact Corepack pnpm 11.16.0. Exact CI run `32609567488` used the pinned package contract, frozen install and normal commands at `891ecdc`; Backend, syntax, audit, secret scan and PostgreSQL passed without a copied runtime or Codex fallback. | Closed by exact-package CI. Permanently retain the pinned repository/package/workflow contract and normal-shell path. |

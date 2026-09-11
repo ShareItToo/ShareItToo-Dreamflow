@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  renterAcceptedCardSurfaceClassification,
   ownerNonBindingDetailVisible,
   renterBookingChatSurfaceClassification,
   renterBookingChatVisible,
@@ -106,6 +107,18 @@ test('classifies a missing renter booking chat without exposing its title', () =
   assert.equal(
     classification,
     'settings-1_title-1_confirmed-0_chat-1_completed-0_load-failed-0_empty-0_active-tab-1_archived-tab-1',
+  );
+  assert.equal(classification.includes(title), false);
+});
+
+test('classifies a missing accepted renter card without exposing its title', () => {
+  const title = 'SIT Rollenprüfung n22-private-fixture';
+  const hierarchy = `<hierarchy>${node('Kommend')}`
+    + `${node('Ausstehend')}${node('Du hast keine kommenden Buchungen')}</hierarchy>`;
+  const classification = renterAcceptedCardSurfaceClassification(hierarchy, title);
+  assert.equal(
+    classification,
+    'title-0_simulation-0_empty-upcoming-1_empty-pending-0_upcoming-tab-1_pending-tab-1_requests-load-error-0',
   );
   assert.equal(classification.includes(title), false);
 });

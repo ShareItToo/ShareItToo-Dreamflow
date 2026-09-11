@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   calendarMonthLabel,
   cartAcknowledgementProbe,
+  cartServerReceiptProbe,
   firstServerEligibleRentalDate,
   nextCalendarMonthActionNode,
   rentalCartItemActionVisible,
@@ -14,6 +15,7 @@ import {
   selectedIntentSurfaceState,
   selectedIntentRemoteSettle,
   selectableCalendarDayNode,
+  waitForExactCartServerReceipt,
 } from '../../tool/diagnose_android_rental_cart_project_lifecycle.mjs';
 
 const candidate = Object.freeze({
@@ -124,6 +126,46 @@ test('starts the short-lived cart acknowledgement probe before a cold dump can m
   assert.equal(cartAcknowledgementProbe.intervalMs, 75);
   assert.equal(cartAcknowledgementProbe.attempts, 24);
   assert.ok(cartAcknowledgementProbe.intervalMs < 200);
+});
+
+test('physical cart acceptance settles on exact server truth without retrying the mutation', async () => {
+  let inspections = 0;
+  const waits = [];
+  const receipt = await waitForExactCartServerReceipt({
+    inspect: async () => {
+      inspections += 1;
+      if (inspections === 1) throw new Error('not settled');
+      return {
+        status: 'isolated-rental-cart-single-intent-server-confirmed',
+        exactIntentCount: 1,
+        reservationCreated: false,
+        fixtureRentalRequests: 0,
+      };
+    },
+    wait: async (milliseconds) => waits.push(milliseconds),
+  });
+  assert.equal(receipt.exactIntentCount, 1);
+  assert.equal(inspections, 2);
+  assert.deepEqual(waits, [cartServerReceiptProbe.intervalMs]);
+  assert.ok(
+    cartServerReceiptProbe.intervalMs * cartServerReceiptProbe.attempts >= 26000,
+  );
+});
+
+test('physical cart acceptance rejects a structurally incomplete server receipt', async () => {
+  await assert.rejects(
+    () => waitForExactCartServerReceipt({
+      inspect: async () => ({
+        status: 'isolated-rental-cart-single-intent-server-confirmed',
+        exactIntentCount: 1,
+        reservationCreated: true,
+        fixtureRentalRequests: 0,
+      }),
+      wait: async () => {},
+      attempts: 1,
+    }),
+    /exact non-reserving cart server receipt did not settle/u,
+  );
 });
 
 test('classifies selected-intent failure states without private values', () => {
@@ -242,6 +284,14 @@ test('closes duplicate intent, project, persistence, isolation, and cleanup', as
     capturedAt: '2026-09-05T22:00:00.000Z',
   });
   assert.equal(result.status, 'passed-pixel-rental-cart-project-lifecycle');
+  assert.equal(
+    result.tests.exactIntentSubmittedTwice,
+    'passed-two-physical-submissions-two-exact-server-confirmations',
+  );
+  assert.equal(
+    result.tests.transientAcknowledgementContract,
+    'passed-widget-regression-device-proof-independent-of-toast-timing',
+  );
   assert.equal(result.tests.exactServerIntentCount, 1);
   assert.equal(result.tests.unrelatedCartBaselineRestored, true);
   assert.equal(result.boundaries.rentalRequestCreated, false);
