@@ -58,6 +58,18 @@ claimed until every item below has reproducible evidence and is closed.
 
 ## Observation log
 
+- 11.09.2026, WP112: the physical on-device Listing-AI app journey passed, but
+  two pre-closure automation attempts failed safely. The first measurement
+  incorrectly required every suggestion chip in one scroll viewport; the
+  retained runner accumulates a bounded set of read-only UI sections. The
+  second used the forward scroll direction while locating the exact controlled
+  thumbnail for cleanup; the retained runner uses the explicit reverse
+  direction and requires both local-recovery and exact-media removal before
+  PASS. Neither correction repeats an app mutation, changes a product timeout,
+  reads private media, weakens a gate or becomes a release prerequisite. The
+  exact committed runner then passed end to end with a single generated draft,
+  zero cost, no publication and protected-owner restoration.
+
 - 10.09.2026, WP102: an owner reported absent normal Staging verification
   messages, including the expected mailbox's spam view. Read-only application
   checks established SMTP readiness but not recipient delivery; the affected

@@ -1,5 +1,23 @@
 # ShareItToo Current State
 
+## WP112 physical Pixel on-device Listing-AI acceptance — complete
+
+The exact signed Internal/Staging `1.0.0+2026091109` candidate passes real
+on-device image analysis on the physical Pixel. A controlled synthetic drill
+photo produced editable title, category, subcategory, description, project-tag
+and use-case suggestions after explicit disclosure consent. Read-only Staging
+evidence proves provider `on_device`, the exact bundled ML Kit/rules model,
+zero units/cost, all owner confirmations still false, one generation audit and
+no publication receipt. Temporary phone media and local recovery were removed,
+and the protected owner session was restored. No personal gallery item was
+read or retained. See
+`docs/operations/WP112_PIXEL_ON_DEVICE_LISTING_AI_ACCEPTANCE_2026-09-11.md`.
+
+This extends but does not replace WP110: the complete currently executable
+payment-free owner/renter journey remains green. Binding V5.2, Stripe sandbox
+and the separate current-candidate OnePlus/two-device replay remain open and
+unclaimed.
+
 ## WP111 Pixel FCM icon visual review — complete
 
 The exact owner-only WP110 notification-shade capture matches its committed

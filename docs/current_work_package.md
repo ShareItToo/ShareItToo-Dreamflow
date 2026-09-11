@@ -1,4 +1,20 @@
-# Current Work Package: WP111 Pixel FCM Icon Visual Review — COMPLETE
+# Current Work Package: WP112 Pixel On-Device Listing-AI Acceptance — COMPLETE
+
+The exact signed Internal/Staging `1.0.0+2026091109` candidate passes a real
+physical Pixel ML Kit image-analysis journey. The exact committed runner uses a
+hash-bound synthetic drill photo, requires explicit user disclosure consent,
+proves meaningful editable suggestions, and independently reads back the one
+new Staging draft. Provider/model, zero units/cost, all owner confirmations
+false, generation audit and no publication receipt are exact. Device media and
+local recovery are removed and the protected owner is restored. See
+`docs/operations/WP112_PIXEL_ON_DEVICE_LISTING_AI_ACCEPTANCE_2026-09-11.md`.
+
+No listing, payment, Store, Production, Firebase or OnePlus change occurred.
+WP110's complete currently executable owner/renter result remains valid;
+binding V5.2, Stripe sandbox and the separate OnePlus/two-device replay remain
+open.
+
+# Previous Work Package: WP111 Pixel FCM Icon Visual Review — COMPLETE
 
 WP111 closes the final private FCM icon review from WP110 for the exact signed
 `1.0.0+2026091109` Pixel candidate. The hash-bound owner-only capture shows two
