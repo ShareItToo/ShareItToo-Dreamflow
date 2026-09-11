@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repositoryRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const evidencePath = resolve(repositoryRoot, 'docs/evidence/release-readiness/wp106-authenticated-logout-two-device-closure-20260911.json');
-const candidatePath = resolve(repositoryRoot, 'store/google-play/current-rollover-candidate.json');
+const candidatePath = resolve(repositoryRoot, 'store/google-play/rollover-candidate-2026091101.json');
 
 function fail(message) { throw new Error(message); }
 function same(actual, expected, label) { if (actual !== expected) fail(`${label} is not exact.`); }

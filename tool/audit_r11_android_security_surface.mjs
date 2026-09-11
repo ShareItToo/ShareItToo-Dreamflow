@@ -19,7 +19,7 @@ const expectedComponentCounts = Object.freeze({
   provider: 8,
 });
 const expectedComponentInventorySha256 =
-  'dbed9b89f1d6cbedfa6f199a9bba232cb4447b63dde38352474cd6fa63cc8d40';
+  '0841da008ecf62aa2584dbd14ee551497f127671f63abd8bafe24c89bdc35e3f';
 const expectedIntentInventorySha256 =
   '996ec536b88d2495e6557ea822c0942aa90cf925ea486c47a9d8e5e0b2407650';
 const expectedExportedComponents = Object.freeze([
@@ -193,7 +193,7 @@ function sha256Json(value) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-function componentInventory(values) {
+export function componentInventory(values) {
   return values.map((component) => ({
     type: component.type,
     name: component.name,
@@ -202,7 +202,11 @@ function componentInventory(values) {
     permission: component.permission,
     authority: component.authority,
     grantUriPermissions: component.grantUriPermissions,
-  }));
+  })).sort((left, right) => {
+    const leftKey = JSON.stringify(left);
+    const rightKey = JSON.stringify(right);
+    return leftKey < rightKey ? -1 : (leftKey > rightKey ? 1 : 0);
+  });
 }
 
 function intentInventory(values) {

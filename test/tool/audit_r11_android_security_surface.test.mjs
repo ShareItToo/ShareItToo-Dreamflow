@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { parseAaptXmlTree } from '../../tool/audit_r11_android_security_surface.mjs';
+import {
+  componentInventory,
+  parseAaptXmlTree,
+} from '../../tool/audit_r11_android_security_surface.mjs';
 
 const manifestSource = readFileSync(
   new URL('../../android/app/src/main/AndroidManifest.xml', import.meta.url),
@@ -41,6 +44,26 @@ test('parses typed, raw and resource-valued aapt XML attributes', () => {
   assert.equal(
     application.children[0].children[0].attributes['android:resource'],
     '@0x7f120001',
+  );
+});
+
+test('component inventory ignores merge order but not component changes', () => {
+  const first = {
+    type: 'service', name: 'b.Service', exported: false, enabled: true,
+    permission: null, authority: null, grantUriPermissions: false,
+  };
+  const second = {
+    type: 'provider', name: 'a.Provider', exported: false, enabled: true,
+    permission: null, authority: 'com.shareittoo.app.provider',
+    grantUriPermissions: false,
+  };
+  assert.deepEqual(
+    componentInventory([first, second]),
+    componentInventory([second, first]),
+  );
+  assert.notDeepEqual(
+    componentInventory([first, second]),
+    componentInventory([first, { ...second, exported: true }]),
   );
 });
 

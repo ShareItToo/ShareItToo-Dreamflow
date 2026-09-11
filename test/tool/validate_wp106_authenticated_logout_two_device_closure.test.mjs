@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { validateWp106AuthenticatedLogoutTwoDeviceClosure } from '../../tool/validate_wp106_authenticated_logout_two_device_closure.mjs';
 
 const evidence = JSON.parse(readFileSync(resolve('docs/evidence/release-readiness/wp106-authenticated-logout-two-device-closure-20260911.json'), 'utf8'));
-const candidate = JSON.parse(readFileSync(resolve('store/google-play/current-rollover-candidate.json'), 'utf8'));
+const candidate = JSON.parse(readFileSync(resolve('store/google-play/rollover-candidate-2026091101.json'), 'utf8'));
 
 test('WP106 accepts the Pixel closure while keeping the OnePlus blocker explicit', () => {
   assert.deepEqual(validateWp106AuthenticatedLogoutTwoDeviceClosure(evidence, candidate), {
