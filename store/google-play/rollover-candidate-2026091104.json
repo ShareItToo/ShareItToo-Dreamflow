@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "kind": "android-current-rollover-candidate",
   "status": "build-ready-play-internal-upload-pending",
-  "generatedAt": "2026-09-11T06:06:06Z",
+  "generatedAt": "2026-09-11T05:18:42Z",
   "candidate": {
     "applicationId": "com.shareittoo.app",
     "versionName": "1.0.0",
-    "versionCode": "2026091105",
-    "artifactSourceHead": "478345607273c9ad308bfdef5e89ffe2572974e5",
+    "versionCode": "2026091104",
+    "artifactSourceHead": "51297d07243190eaa565734bd7474d31f7008bf1",
     "releaseChannel": "internal",
     "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
     "compileSdkVersion": 36,
@@ -27,14 +27,14 @@
     "g5ListingSetsTechnicalUiEnabled": true
   },
   "artifact": {
-    "archiveDirectoryName": "2026091105-478345607273c9ad308bfdef5e89ffe2572974e5",
-    "aabFileName": "shareittoo-1.0.0-2026091105-478345607273c9ad308bfdef5e89ffe2572974e5.aab",
-    "aabBytes": 138700882,
-    "aabSha256": "ff1794a4afde0d2920621d45d5bf9535258e57966a5c3f8649d1b76c8c8ba793",
-    "apkFileName": "shareittoo-1.0.0-2026091105-478345607273c9ad308bfdef5e89ffe2572974e5.apk",
+    "archiveDirectoryName": "2026091104-51297d07243190eaa565734bd7474d31f7008bf1",
+    "aabFileName": "shareittoo-1.0.0-2026091104-51297d07243190eaa565734bd7474d31f7008bf1.aab",
+    "aabBytes": 138700855,
+    "aabSha256": "2cc639fad96486f06aec81934ab04ccb1eb93a71db48ca33cc6305e608be4074",
+    "apkFileName": "shareittoo-1.0.0-2026091104-51297d07243190eaa565734bd7474d31f7008bf1.apk",
     "apkBytes": 199608581,
-    "apkSha256": "235f441b32e84125e7cbbd6dbc2e703af92fe285b6fe87582f788c5f9a247a03",
-    "privacyReportSha256": "2adbe3b038d9837441f260e9aa4302cd8dd3e5be002cddcc9e190fde1a4f434d",
+    "apkSha256": "5a490bf1b69abc96a1e38fb97e25d8ebf8637d5dc86e7186e8b9827f7d7bb993",
+    "privacyReportSha256": "8461baa110d5211155b827b0d44e3e187328113a3c9a4c7d0133fca6ebb2d336",
     "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
     "signatureVerified": true,
     "zipStructureValidation": "passed",
@@ -47,17 +47,17 @@
   "sourceVerification": {
     "closedPilotFocusedTests": "passed-release-preflight",
     "privacyAndPackageRatchets": "passed",
-    "fullToolInventory": "pending-exact-candidate-run",
-    "backendSuite": "passed-869-two-documented-skips",
+    "fullToolInventory": "passed-2677",
+    "backendSuite": "passed-868-two-documented-skips",
     "flutterAnalyzer": "passed-zero-issues",
-    "fullTechnicalRegression": "pending-exact-candidate-run",
-    "cleanCheckoutReproducibility": "pending-github-regression",
-    "githubVerifiedHead": null,
-    "githubRegressionRunId": null,
-    "githubRegressionConclusion": "pending",
-    "githubCodeqlRunId": null,
-    "githubCodeqlConclusion": "pending",
-    "openCodeScanningAlertsPrHead": null
+    "fullTechnicalRegression": "passed",
+    "cleanCheckoutReproducibility": "passed-github-regression",
+    "githubVerifiedHead": "17e48bc81dd69f0a4aa1455c318b2b0b41c24529",
+    "githubRegressionRunId": 34566032318,
+    "githubRegressionConclusion": "success",
+    "githubCodeqlRunId": 34566015029,
+    "githubCodeqlConclusion": "success",
+    "openCodeScanningAlertsPrHead": 0
   },
   "stagingStateAtReadback": {
     "sourceHead": "17e48bc81dd69f0a4aa1455c318b2b0b41c24529",
@@ -68,7 +68,7 @@
     "paymentLivemode": false,
     "listingAiProvider": "on_device",
     "externalListingAiEnabled": false,
-    "currentCandidateDeployment": "pending"
+    "currentCandidateDeployment": "passed-before-on-device-disclosure-defect-found"
   },
   "playStateAtReadback": {
     "activeInternalVersionCode": "2026090711",
@@ -101,10 +101,10 @@
     "handoffRef": "store/google-play/on-device-listing-ai-data-safety-handoff.json"
   },
   "deviceVerification": {
-    "preferredDeviceExactApkInstalled": false,
-    "preferredDeviceDataPreserved": false,
-    "onDeviceListingAiPhysicalInference": "pending-pixel-install-and-test",
-    "authenticatedPilotMatrix": "pending-current-candidate",
+    "preferredDeviceExactApkInstalled": true,
+    "preferredDeviceDataPreserved": true,
+    "onDeviceListingAiPhysicalInference": "failed-database-disclosure-constraint-fixed-in-successor",
+    "authenticatedPilotMatrix": "not-promoted-after-defect",
     "secondaryDevice": "not-required-for-current-pixel-first-run"
   },
   "privateDriveHandoff": {
