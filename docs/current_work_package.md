@@ -1,4 +1,16 @@
-# Current Work Package: WP105 Current-Candidate OnePlus Installation — COMPLETE
+# Current Work Package: WP106 Authenticated Logout and Two-Device Closure — PARTIAL
+
+WP106 fixes the physical OnePlus logout hang without a timeout workaround and
+freezes the exact signed Internal/Staging successor `1.0.0+2026091101` at
+`67c4e2ebe4ceead7529c4f02ca1209d71c66fe25`. Local full regression, exact-head
+GitHub Regression/clean checkout and CodeQL pass. The Pixel's complete
+owner/renter journey passes on the new binary with cleanup and owner-session
+restoration. The same candidate reached the MacBook and its bytes, package,
+privacy result and APK/AAB signatures pass, but the mandatory OnePlus preflight
+currently exposes zero ADB devices. No OnePlus install or journey was performed.
+See `docs/operations/WP106_AUTHENTICATED_LOGOUT_TWO_DEVICE_CLOSURE_2026-09-11.md`.
+
+# Previous Work Package: WP105 Current-Candidate OnePlus Installation — COMPLETE
 
 WP105 proves the exact private `1.0.0+2026091002` candidate on the physically
 attached OnePlus CPH2581. The existing Play-signed `2026090711` installation

@@ -1,5 +1,23 @@
 # ShareItToo Current State
 
+## WP106 authenticated logout and two-device closure — partial
+
+The successor Internal/Staging candidate `1.0.0+2026091101`, bound to exact
+source `67c4e2ebe4ceead7529c4f02ca1209d71c66fe25`, removes the OnePlus logout
+blocker at source: exact local session removal no longer waits for native FCM
+token teardown, and a synchronous generation-guarded push boundary rejects late
+results. No timing workaround was added. Full local and exact-head GitHub
+Regression/clean-checkout plus CodeQL pass; current code-scanning alerts are
+zero.
+
+The Pixel is data-preservingly updated and its complete owner/renter journey
+passes publication, discovery, payment-free request/acceptance, chat, all three
+FCM states, principal isolation, cleanup and protected-session restoration. The
+same candidate is independently transferred and verified on the MacBook. The
+OnePlus itself is currently absent from ADB, so its update and exact journey are
+not claimed. See
+`docs/operations/WP106_AUTHENTICATED_LOGOUT_TWO_DEVICE_CLOSURE_2026-09-11.md`.
+
 ## WP105 current-candidate OnePlus installation — complete
 
 The physical OnePlus CPH2581 now contains the exact private
