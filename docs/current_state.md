@@ -13,6 +13,11 @@ and the protected owner session was restored. No personal gallery item was
 read or retained. See
 `docs/operations/WP112_PIXEL_ON_DEVICE_LISTING_AI_ACCEPTANCE_2026-09-11.md`.
 
+Evidence head `5e973d80dd1c9968a8eb42356328c1acb1997ae5` passes the full local
+regression, exact-head GitHub Regression `34616551148` with independent clean
+checkout, CodeQL `34616551118` and a zero-open-alert code-scanning readback.
+PR #7 remains draft, open, mergeable and unmerged.
+
 This extends but does not replace WP110: the complete currently executable
 payment-free owner/renter journey remains green. Binding V5.2, Stripe sandbox
 and the separate current-candidate OnePlus/two-device replay remain open and

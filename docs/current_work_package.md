@@ -9,6 +9,11 @@ false, generation audit and no publication receipt are exact. Device media and
 local recovery are removed and the protected owner is restored. See
 `docs/operations/WP112_PIXEL_ON_DEVICE_LISTING_AI_ACCEPTANCE_2026-09-11.md`.
 
+Evidence head `5e973d80dd1c9968a8eb42356328c1acb1997ae5` passes the full local
+regression, exact-head GitHub Regression `34616551148` including independent
+clean checkout, CodeQL `34616551118` and the zero-open-alert code-scanning
+readback. PR #7 remains draft, open, mergeable and unmerged.
+
 No listing, payment, Store, Production, Firebase or OnePlus change occurred.
 WP110's complete currently executable owner/renter result remains valid;
 binding V5.2, Stripe sandbox and the separate OnePlus/two-device replay remain

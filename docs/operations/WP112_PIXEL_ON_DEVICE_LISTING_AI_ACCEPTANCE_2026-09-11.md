@@ -68,8 +68,13 @@ product timeout or creates a permanent timing prerequisite.
   `docs/evidence/release-readiness/wp112-pixel-on-device-listing-ai-20260911.json`.
 - The WP112 evidence validator binds the evidence to the exact runner, focused
   test and controlled image hashes.
-- Full local regression and exact-head GitHub Regression/CodeQL are recorded in
-  the final closure update after the evidence commit.
+- Evidence head `5e973d80dd1c9968a8eb42356328c1acb1997ae5` passes the full
+  supported local regression, including analyzer, Web/Wasm, loopback smoke and
+  the Android debug build. Exact-head GitHub Regression `34616551148`, including
+  the independent clean-checkout reproducibility job, and CodeQL `34616551118`
+  pass; the final code-scanning readback reports zero open alerts.
+- PR #7 remains draft, open, mergeable and unmerged. No publish-image job ran
+  because this package changes no deployable backend source.
 
 ## Remaining scope
 
