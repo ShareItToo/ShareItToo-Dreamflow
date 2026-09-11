@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   privacyExportSinkJava,
   privacyExportSinkManifest,
+  privacyExportVaultEligible,
   privacyExportPasswordField,
   privacyExportPasswordDialogVisible,
   privacyExportChooserOwned,
@@ -14,6 +15,55 @@ import {
   validatePrivacyExportPayload,
   validatePrivacyExportSinkSources,
 } from '../../tool/diagnose_android_privacy_export_payload.mjs';
+
+test('privacy export accepts only ready or exact non-binding active two-role state', () => {
+  const base = {
+    apiBaseUrl: 'https://staging.shareittoo.com/api/v1',
+    stripeLivemode: false,
+  };
+  assert.equal(privacyExportVaultEligible({
+    ...base,
+    status: 'email-link-verified-ready-for-login',
+  }), true);
+  const active = {
+    ...base,
+    status: 'non-binding-simulation-active',
+    realTwoRoleJourney: {
+      status: 'accepted-chat-ready-for-pixel-role-review',
+      listingStatus: 'active',
+      simulationOnly: true,
+      paymentEndpointCalled: false,
+      stripeLivemode: false,
+      listingId: 'listing-fixture',
+    },
+    nonBindingSimulation: {
+      status: 'accepted-chat-ready',
+      listingId: 'listing-fixture',
+      bookingId: 'booking-fixture',
+      threadId: 'thread-fixture',
+      paymentEndpointCalled: false,
+      stripeLivemode: false,
+      availabilityUnaffected: true,
+      paymentReadRejected: true,
+    },
+  };
+  assert.equal(privacyExportVaultEligible(active), true);
+  assert.equal(privacyExportVaultEligible({
+    ...active,
+    nonBindingSimulation: {
+      ...active.nonBindingSimulation,
+      paymentEndpointCalled: true,
+    },
+  }), false);
+  assert.equal(privacyExportVaultEligible({
+    ...active,
+    realTwoRoleJourney: {
+      ...active.realTwoRoleJourney,
+      listingId: 'different-listing',
+    },
+  }), false);
+  assert.equal(privacyExportVaultEligible({ ...base, status: 'retired' }), false);
+});
 
 function payload(overrides = {}) {
   return Buffer.from(JSON.stringify({

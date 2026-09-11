@@ -31,6 +31,17 @@ function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
 
+export function sanitizedOfflineChildFailure(error) {
+  const raw = String(error?.stderr ?? '').trim();
+  const detail = /^ERROR: (.{1,300})$/mu.exec(raw)?.[1]?.trim() ?? '';
+  if (!/^(?:The|Android|Installed|ADB) [A-Za-z0-9_ .,:;()'-]+$/u.test(detail)
+      || /(?:@|https?:|\/|\\|password|passcode|secret|token|credential|private.?key|api.?key|otp|pin)/iu
+        .test(detail)) {
+    return null;
+  }
+  return detail;
+}
+
 async function run() {
   const args = process.argv.slice(2);
   const sourceVaultFile = resolve(
@@ -79,8 +90,13 @@ async function run() {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     evidence = JSON.parse(output);
-  } catch {
-    primaryFailure = new Error('The isolated non-binding offline/realtime diagnostic failed safely.');
+  } catch (error) {
+    const detail = sanitizedOfflineChildFailure(error);
+    primaryFailure = new Error(
+      detail === null
+        ? 'The isolated non-binding offline/realtime diagnostic failed safely.'
+        : `The isolated non-binding offline/realtime diagnostic failed safely: ${detail}`,
+    );
   } finally {
     if (prepared !== null) {
       try {

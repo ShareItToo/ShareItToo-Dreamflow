@@ -132,6 +132,36 @@ function identityAppears(serialized, identity) {
   return serialized.toLowerCase().includes(identity.toLowerCase());
 }
 
+export function privacyExportVaultEligible(vault) {
+  if (vault?.apiBaseUrl !== stagingApiBaseUrl || vault?.stripeLivemode !== false) {
+    return false;
+  }
+  if (['fixture-verified-ready-for-login', 'email-link-verified-ready-for-login']
+    .includes(vault.status)) {
+    return true;
+  }
+  if (vault.status !== 'non-binding-simulation-active') return false;
+  const journey = vault.realTwoRoleJourney;
+  const simulation = vault.nonBindingSimulation;
+  return journey?.status === 'accepted-chat-ready-for-pixel-role-review'
+    && journey.listingStatus === 'active'
+    && journey.simulationOnly === true
+    && journey.paymentEndpointCalled === false
+    && journey.stripeLivemode === false
+    && typeof journey.listingId === 'string'
+    && journey.listingId.length > 0
+    && simulation?.status === 'accepted-chat-ready'
+    && simulation.listingId === journey.listingId
+    && typeof simulation.bookingId === 'string'
+    && simulation.bookingId.length > 0
+    && typeof simulation.threadId === 'string'
+    && simulation.threadId.length > 0
+    && simulation.paymentEndpointCalled === false
+    && simulation.stripeLivemode === false
+    && simulation.availabilityUnaffected === true
+    && simulation.paymentReadRejected === true;
+}
+
 export function validatePrivacyExportPayload({
   bytes,
   ownerUserId,
@@ -882,9 +912,7 @@ export async function runAndroidPrivacyExportPayload({
   const sourceVaultBytes = readFileSync(vaultFile);
   const sourceVaultSha256 = sha256(sourceVaultBytes);
   const { vault } = readEmailVerifiedJourneyVault(vaultFile);
-  if (vault.apiBaseUrl !== stagingApiBaseUrl || vault.stripeLivemode !== false
-      || !['fixture-verified-ready-for-login', 'email-link-verified-ready-for-login']
-        .includes(vault.status)) {
+  if (!privacyExportVaultEligible(vault)) {
     fail('The protected two-role vault is not eligible for the privacy export diagnostic.');
   }
   const owner = vault.accounts.find((entry) => entry.role === 'owner');

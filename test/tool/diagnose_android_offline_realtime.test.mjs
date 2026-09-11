@@ -8,6 +8,23 @@ import {
   telephonyDataDisconnected,
   visibleMessageOccurrenceCount,
 } from '../../tool/diagnose_android_offline_realtime.mjs';
+import {
+  sanitizedOfflineChildFailure,
+} from '../../tool/diagnose_android_offline_realtime_isolated.mjs';
+
+test('isolated runner preserves only a bounded non-sensitive child failure', () => {
+  assert.equal(sanitizedOfflineChildFailure({
+    stderr: 'ERROR: The expected offline message did not remain absent.\n',
+  }), 'The expected offline message did not remain absent.');
+  for (const unsafe of [
+    'ERROR: The vault /Users/owner/private.json failed.\n',
+    'ERROR: The user owner@example.invalid failed.\n',
+    'ERROR: token abc123\n',
+    'unstructured child failure',
+  ]) {
+    assert.equal(sanitizedOfflineChildFailure({ stderr: unsafe }), null);
+  }
+});
 
 test('requires Android to release the active default network before offline send', () => {
   assert.equal(activeDefaultNetworkAbsent('Active default network: none\n'), true);
