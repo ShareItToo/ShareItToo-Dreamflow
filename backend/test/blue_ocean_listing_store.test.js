@@ -5,7 +5,10 @@ import test from 'node:test';
 import {
   reviewBlueOceanListingDraft,
 } from '../src/blue_ocean_listing_workflow.js';
-import { persistBlueOceanReview } from '../src/blue_ocean_listing_store.js';
+import {
+  persistBlueOceanGeneratedDraft,
+  persistBlueOceanReview,
+} from '../src/blue_ocean_listing_store.js';
 import {
   createListingAiDraftRevision,
   listingAiDraftSchemaVersion,
@@ -194,5 +197,156 @@ test('an exact supported catalog pair still persists its regional recommendation
   assert.equal(
     client.calls.some(({ text }) => text.includes('INSERT INTO regional_price_engine_snapshots')),
     true,
+  );
+});
+
+function generatedOnDeviceResult() {
+  const revision = createListingAiDraftRevision({
+    draftId,
+    ownerId,
+    imageReferences: ['listing_image_12345678'],
+    fields: previousRevision().fields,
+    ownerConfirmations: {},
+    generationMode: 'provider',
+    generatedAt: new Date('2026-09-11T07:00:00.000Z'),
+  });
+  return {
+    status: 'draft_ready',
+    revision,
+    disclosureVersion: 'listing-ai-on-device-disclosure-v1',
+    imageReview: { temporaryDerivativeBytesPurged: true },
+    providerCallCount: 1,
+    paidCallPerformed: false,
+    estimatedCostCents: 0,
+    billedCostCents: 0,
+  };
+}
+
+function generatedDraftClient({ replay = false, ledgerRow = null } = {}) {
+  const calls = [];
+  const result = generatedOnDeviceResult();
+  const exactLedger = ledgerRow ?? {
+    draft_id: draftId,
+    generation_key: generationKey('on-device-generated'),
+    provider: 'on_device',
+    model: 'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1',
+    input_units: 0,
+    output_units: 0,
+    estimated_cost_cents: 0,
+    billed_cost_cents: 0,
+    outcome: 'succeeded',
+  };
+  return {
+    calls,
+    result,
+    async query(sql, params = []) {
+      const text = String(sql);
+      calls.push({ text, params });
+      if (text.includes('INSERT INTO listing_ai_drafts')) return { rowCount: 1, rows: [] };
+      if (text.includes('SELECT owner_id, status, current_revision')) {
+        return { rowCount: 1, rows: [{ owner_id: ownerId, status: 'editing', current_revision: 0 }] };
+      }
+      if (text.includes('WHERE draft_id = $1 AND generation_key = $2')) {
+        return replay
+          ? { rowCount: 1, rows: [{ id: '11111111-1111-4111-8111-111111111111', payload_sha256: result.revision.payloadSha256 }] }
+          : { rowCount: 0, rows: [] };
+      }
+      if (text.includes('INSERT INTO listing_ai_draft_versions')) {
+        return { rowCount: 1, rows: [{ id: '22222222-2222-4222-8222-222222222222' }] };
+      }
+      if (text.includes('INSERT INTO listing_ai_cost_ledger')) {
+        return ledgerRow === null
+          ? { rowCount: 1, rows: [exactLedger] }
+          : { rowCount: 0, rows: [] };
+      }
+      if (text.includes('FROM listing_ai_cost_ledger')) {
+        return { rowCount: 1, rows: [exactLedger] };
+      }
+      throw new Error(`unexpected_generated_store_query:${text}`);
+    },
+  };
+}
+
+test('on-device generation persists an exact zero-cost ledger in the draft transaction', async () => {
+  const client = generatedDraftClient();
+  const key = generationKey('on-device-generated');
+  const persisted = await persistBlueOceanGeneratedDraft(client, {
+    ownerId,
+    generationKey: key,
+    provider: 'on_device',
+    model: 'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1',
+    result: client.result,
+  });
+  assert.equal(persisted.replayed, false);
+  const ledger = client.calls.find(({ text }) => text.includes('INSERT INTO listing_ai_cost_ledger'));
+  assert.deepEqual(ledger.params, [
+    draftId,
+    key,
+    'on_device',
+    'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1',
+    'succeeded',
+  ]);
+});
+
+test('replayed generation repairs a missing ledger but rejects conflicting cost truth', async () => {
+  const key = generationKey('on-device-generated');
+  const repair = generatedDraftClient({ replay: true });
+  const persisted = await persistBlueOceanGeneratedDraft(repair, {
+    ownerId,
+    generationKey: key,
+    provider: 'on_device',
+    model: 'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1',
+    result: repair.result,
+  });
+  assert.equal(persisted.replayed, true);
+  assert.equal(
+    repair.calls.some(({ text }) => text.includes('INSERT INTO listing_ai_cost_ledger')),
+    true,
+  );
+
+  const conflict = generatedDraftClient({
+    replay: true,
+    ledgerRow: {
+      draft_id: draftId,
+      generation_key: key,
+      provider: 'on_device',
+      model: 'wrong-model',
+      input_units: 0,
+      output_units: 0,
+      estimated_cost_cents: 0,
+      billed_cost_cents: 0,
+      outcome: 'succeeded',
+    },
+  });
+  await assert.rejects(
+    persistBlueOceanGeneratedDraft(conflict, {
+      ownerId,
+      generationKey: key,
+      provider: 'on_device',
+      model: 'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1',
+      result: conflict.result,
+    }),
+    /blue_ocean_zero_cost_ledger_conflict/u,
+  );
+});
+
+test('paid-provider billing truth is not flattened to zero before reconciliation', async () => {
+  const client = generatedDraftClient();
+  const result = {
+    ...client.result,
+    paidCallPerformed: true,
+    estimatedCostCents: 2,
+    billedCostCents: null,
+  };
+  await persistBlueOceanGeneratedDraft(client, {
+    ownerId,
+    generationKey: generationKey('on-device-generated'),
+    provider: 'openai',
+    model: 'gpt-5.4-mini',
+    result,
+  });
+  assert.equal(
+    client.calls.some(({ text }) => text.includes('INSERT INTO listing_ai_cost_ledger')),
+    false,
   );
 });

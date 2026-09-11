@@ -4972,6 +4972,23 @@ if (!databaseUrl) {
         blueOceanAnalyze.assistant.revision.fields.category.value,
         'cat8',
       );
+      const blueOceanCostLedger = await setupPool.query(
+        `SELECT provider, model, input_units, output_units,
+                estimated_cost_cents, billed_cost_cents, outcome
+           FROM listing_ai_cost_ledger
+          WHERE draft_id = $1 AND generation_key = $2`,
+        [blueOceanDraftId, 'e'.repeat(64)],
+      );
+      assert.equal(blueOceanCostLedger.rowCount, 1);
+      assert.deepEqual(blueOceanCostLedger.rows[0], {
+        provider: 'mock',
+        model: 'listing-ai-mock-v1',
+        input_units: 0,
+        output_units: 0,
+        estimated_cost_cents: 0,
+        billed_cost_cents: 0,
+        outcome: 'mocked',
+      });
       const blueOceanReviewConfirmations = Object.fromEntries([
         'ownership', 'item_identity', 'allowed_category', 'functionality',
         'condition', 'accessories', 'owner_price', 'duration_discounts',

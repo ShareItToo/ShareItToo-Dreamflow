@@ -3213,6 +3213,8 @@ export function createApp({
       const record = await persistBlueOceanGeneratedDraft(client, {
         ownerId: req.auth.userId,
         generationKey: req.body.generationKey,
+        provider: config.listingAi.provider,
+        model: config.listingAi.model,
         result,
       });
       await writeAudit(client, {

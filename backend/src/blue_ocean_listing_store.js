@@ -24,6 +24,74 @@ function parseJson(value, fallback) {
   return value;
 }
 
+function exactZeroCostProvider(value) {
+  if (!['mock', 'on_device'].includes(value)) {
+    fail(500, 'blue_ocean_zero_cost_provider_invalid');
+  }
+  return value;
+}
+
+async function persistZeroCostGenerationLedger(client, {
+  draftId,
+  generationKey,
+  provider,
+  model,
+  result,
+}) {
+  // The paid adapter deliberately reports billedCostCents as unknown until
+  // provider reconciliation. The current NOT NULL ledger must not turn that
+  // unknown value into a fabricated zero; its separate activation remains a
+  // later provider gate. Mock and on-device results are exact zero-cost truth.
+  if (provider === 'openai') return;
+  const exactProvider = exactZeroCostProvider(provider);
+  if (result?.paidCallPerformed !== false
+      || result?.estimatedCostCents !== 0
+      || result?.billedCostCents !== 0) {
+    fail(500, 'blue_ocean_zero_cost_ledger_mismatch');
+  }
+  const outcome = exactProvider === 'mock' ? 'mocked' : 'succeeded';
+  const exactModel = typeof model === 'string' && model.length > 0 && model.length <= 200
+    ? model
+    : null;
+  if (exactProvider === 'on_device' && exactModel === null) {
+    fail(500, 'blue_ocean_zero_cost_model_invalid');
+  }
+  const inserted = await client.query(
+    `INSERT INTO listing_ai_cost_ledger (
+       draft_id, generation_key, provider, model,
+       input_units, output_units, estimated_cost_cents,
+       billed_cost_cents, outcome
+     ) VALUES ($1, $2, $3, $4, 0, 0, 0, 0, $5)
+     ON CONFLICT (provider, generation_key) DO NOTHING
+     RETURNING draft_id, generation_key, provider, model,
+               input_units, output_units, estimated_cost_cents,
+               billed_cost_cents, outcome`,
+    [draftId, generationKey, exactProvider, exactModel, outcome],
+  );
+  const row = inserted.rowCount === 1
+    ? inserted.rows[0]
+    : (await client.query(
+      `SELECT draft_id, generation_key, provider, model,
+              input_units, output_units, estimated_cost_cents,
+              billed_cost_cents, outcome
+         FROM listing_ai_cost_ledger
+        WHERE provider = $1 AND generation_key = $2`,
+      [exactProvider, generationKey],
+    )).rows[0];
+  if (!row
+      || row.draft_id !== draftId
+      || row.generation_key !== generationKey
+      || row.provider !== exactProvider
+      || (row.model ?? null) !== exactModel
+      || Number(row.input_units) !== 0
+      || Number(row.output_units) !== 0
+      || Number(row.estimated_cost_cents) !== 0
+      || Number(row.billed_cost_cents) !== 0
+      || row.outcome !== outcome) {
+    fail(409, 'blue_ocean_zero_cost_ledger_conflict');
+  }
+}
+
 function revisionFromRow(row) {
   if (!row) fail(404, 'blue_ocean_draft_not_found');
   return createListingAiDraftRevision({
@@ -76,6 +144,8 @@ export async function loadBlueOceanDraft(client, { draftId, ownerId, lock = fals
 export async function persistBlueOceanGeneratedDraft(client, {
   ownerId,
   generationKey,
+  provider,
+  model,
   result,
 }) {
   if (result?.status !== 'draft_ready') fail(409, 'blue_ocean_generated_draft_required');
@@ -112,6 +182,13 @@ export async function persistBlueOceanGeneratedDraft(client, {
     if (existing.rows[0].payload_sha256 !== revision.payloadSha256) {
       fail(409, 'blue_ocean_generation_idempotency_conflict');
     }
+    await persistZeroCostGenerationLedger(client, {
+      draftId: revision.draftId,
+      generationKey,
+      provider,
+      model,
+      result,
+    });
     return Object.freeze({ draftVersionId: existing.rows[0].id, replayed: true });
   }
   if (draft.rows[0].status !== 'editing' || draft.rows[0].current_revision !== 0) {
@@ -147,6 +224,13 @@ export async function persistBlueOceanGeneratedDraft(client, {
       revision.generatedAt,
     ],
   );
+  await persistZeroCostGenerationLedger(client, {
+    draftId: revision.draftId,
+    generationKey,
+    provider,
+    model,
+    result,
+  });
   return Object.freeze({ draftVersionId: inserted.rows[0].id, replayed: false });
 }
 
