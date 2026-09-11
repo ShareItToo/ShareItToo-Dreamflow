@@ -9,6 +9,12 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath =
   'docs/evidence/release-readiness/wp114-current-candidate-complete-pixel-renter-owner-20260911.json';
 const rolloverPath = 'store/google-play/rollover-candidate-2026091110.json';
+const handoverPath =
+  'docs/operations/WP114_CURRENT_CANDIDATE_COMPLETE_PIXEL_RENTER_OWNER_2026-09-11.md';
+const directSuccessorEvidencePath =
+  'docs/evidence/release-readiness/wp115-current-candidate-pixel-on-device-listing-ai-20260911.json';
+const directSuccessorHandoverPath =
+  'docs/operations/WP115_CURRENT_CANDIDATE_PIXEL_ON_DEVICE_LISTING_AI_REPLAY_2026-09-11.md';
 const artifactSourceHead = 'c8e2a49e14f5cae0026fa5f2bc327859fe0ff17b';
 const backendRuntimeHead = 'df39a14b7a19afe467842461a28f1e77fec8445e';
 const implementationHead = '1d053ff28122aefb3e3b0dd618e356c870ebfb7f';
@@ -87,10 +93,18 @@ export function validateWp114CurrentCandidateCompletePixelRenterOwner({
   exact(current?.candidate?.versionCode, candidate.versionCode, 'rollover version');
   exact(current?.artifact?.apkSha256, candidate.apkSha256, 'rollover APK');
   exact(current?.artifact?.aabSha256, candidate.aabSha256, 'rollover AAB');
-  exact(current?.evidenceRef, evidencePath, 'rollover evidence reference');
-  exact(current?.handoverRef,
-    'docs/operations/WP114_CURRENT_CANDIDATE_COMPLETE_PIXEL_RENTER_OWNER_2026-09-11.md',
-    'rollover handover reference');
+  const rolloverReferencePair = `${current?.evidenceRef ?? ''}|${current?.handoverRef ?? ''}`;
+  const allowedRolloverReferencePairs = new Set([
+    `${evidencePath}|${handoverPath}`,
+    `${directSuccessorEvidencePath}|${directSuccessorHandoverPath}`,
+  ]);
+  if (!allowedRolloverReferencePairs.has(rolloverReferencePair)) {
+    fail('WP114 rollover evidence reference is invalid.');
+  }
+  if (current?.evidenceRef === directSuccessorEvidencePath) {
+    exact(current?.deviceVerification?.onDeviceListingAiPhysicalInference,
+      'passed-physical-pixel-current-candidate', 'direct successor physical inference');
+  }
   exact(current?.deviceVerification?.preferredDeviceExactApkInstalled, true,
     'rollover Pixel installation');
 

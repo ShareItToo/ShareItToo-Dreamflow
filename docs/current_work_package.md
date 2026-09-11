@@ -1,4 +1,20 @@
-# Current Work Package: WP114 Current-Candidate Complete Pixel Renter/Owner — COMPLETE
+# Current Work Package: WP115 Current-Candidate Pixel Listing-AI Replay — COMPLETE
+
+The exact installed signed Internal/Staging `1.0.0+2026091110` candidate passes
+a fresh physical Pixel on-device image-analysis replay. A hash-bound synthetic
+image produced meaningful editable listing suggestions under explicit consent;
+Staging proves provider/model, zero units/cost, unconfirmed owner-controlled
+fields, generation audit and no publication. Personal media was not read, all
+temporary device state was removed and the protected owner was restored. See
+`docs/operations/WP115_CURRENT_CANDIDATE_PIXEL_ON_DEVICE_LISTING_AI_REPLAY_2026-09-11.md`.
+
+The remaining primary gaps are professional V5.2 snapshots/owner approval,
+binding booking through pickup/return/damage/review, Stripe sandbox
+payment/refund/simulated payout and the separate OnePlus exact-candidate
+two-device replay. All Production, public Store, Firebase, tester-list, public
+registration and PR-merge boundaries remain closed.
+
+# Previous Work Package: WP114 Current-Candidate Complete Pixel Renter/Owner — COMPLETE
 
 The exact signed Internal/Staging `1.0.0+2026091110` candidate passes the full
 currently executable non-binding renter/owner Pixel matrix against immutable
@@ -10,8 +26,9 @@ offline/realtime runs all pass. Every fixture is retired and the protected
 owner is restored. See
 `docs/operations/WP114_CURRENT_CANDIDATE_COMPLETE_PIXEL_RENTER_OWNER_2026-09-11.md`.
 
-Binding V5.2, Stripe sandbox, exact-current-candidate Listing-AI replay and the
-separate OnePlus/two-device replay remain open. Production, Google Play, tester
+Binding V5.2, Stripe sandbox and the separate OnePlus/two-device replay remain
+open; the exact-current-candidate Listing-AI replay is closed by WP115.
+Production, Google Play, tester
 lists, public registration and PR #7 remain unchanged.
 
 # Previous Work Package: WP113 Current-Candidate Staging and Pixel Privacy — COMPLETE

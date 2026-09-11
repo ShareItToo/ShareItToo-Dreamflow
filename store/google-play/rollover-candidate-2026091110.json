@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "kind": "android-current-rollover-candidate",
   "status": "build-ready-play-internal-upload-pending",
-  "generatedAt": "2026-09-11T19:02:40Z",
+  "generatedAt": "2026-09-11T19:49:14Z",
   "candidate": {
     "applicationId": "com.shareittoo.app",
     "versionName": "1.0.0",
@@ -47,15 +47,15 @@
   "sourceVerification": {
     "closedPilotFocusedTests": "passed-release-preflight",
     "privacyAndPackageRatchets": "passed",
-    "fullToolInventory": "passed-exact-candidate-and-diagnostic-implementation",
+    "fullToolInventory": "passed-final-wp114-evidence-head",
     "backendSuite": "passed-focused-873-tests-2-documented-skips",
     "flutterAnalyzer": "passed-zero-issues",
-    "fullTechnicalRegression": "passed-diagnostic-implementation-head",
+    "fullTechnicalRegression": "passed-final-wp114-evidence-head",
     "cleanCheckoutReproducibility": "passed-github-regression",
-    "githubVerifiedHead": "1d053ff28122aefb3e3b0dd618e356c870ebfb7f",
-    "githubRegressionRunId": 34636449790,
+    "githubVerifiedHead": "4ae7837a22abdb5fc8a27d9a7f3df4b73a7d365e",
+    "githubRegressionRunId": 34638823164,
     "githubRegressionConclusion": "success",
-    "githubCodeqlRunId": 34636449862,
+    "githubCodeqlRunId": 34638823139,
     "githubCodeqlConclusion": "success",
     "githubApiImagePublishRunId": 34627911500,
     "githubApiImagePublishConclusion": "success-df39a14b7a19afe467842461a28f1e77fec8445e",
@@ -107,17 +107,17 @@
   "deviceVerification": {
     "preferredDeviceExactApkInstalled": true,
     "preferredDeviceDataPreserved": true,
-    "onDeviceListingAiPhysicalInference": "not-replayed-on-2026091110",
+    "onDeviceListingAiPhysicalInference": "passed-physical-pixel-current-candidate",
     "authenticatedPilotMatrix": "passed-complete-nonbinding-pixel-renter-owner-matrix",
-    "secondaryDevice": "not-required-for-current-pixel-first-run"
+    "secondaryDevice": "pending-separate-oneplus-two-device-replay"
   },
   "privateDriveHandoff": {
     "status": "not-required-for-current-mac-mini-session",
     "shared": false
   },
-  "evidenceRef": "docs/evidence/release-readiness/wp114-current-candidate-complete-pixel-renter-owner-20260911.json",
+  "evidenceRef": "docs/evidence/release-readiness/wp115-current-candidate-pixel-on-device-listing-ai-20260911.json",
   "playCompletionEvidenceRef": null,
-  "handoverRef": "docs/operations/WP114_CURRENT_CANDIDATE_COMPLETE_PIXEL_RENTER_OWNER_2026-09-11.md",
+  "handoverRef": "docs/operations/WP115_CURRENT_CANDIDATE_PIXEL_ON_DEVICE_LISTING_AI_REPLAY_2026-09-11.md",
   "releaseNotesRef": "store/google-play/de-DE/internal_release_notes.txt",
   "containsSecrets": false,
   "containsTesterIdentity": false,

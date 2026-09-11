@@ -1,6 +1,23 @@
 # ShareItToo Current State
 
-## WP114 current-candidate complete Pixel renter/owner matrix — complete
+## WP115 exact-current-candidate Pixel Listing-AI replay — complete
+
+The exact installed signed Internal/Staging `1.0.0+2026091110` candidate now
+passes a fresh physical Pixel on-device image-analysis replay. The controlled
+synthetic drill image produced editable title, category, subcategory,
+description, project-tag and use-case suggestions after explicit disclosure
+consent. Read-only Staging evidence proves the exact on-device provider/model,
+zero units/cost, all owner confirmations false, one generation audit and no
+publication receipt. No personal photo was read; device media and local
+recovery were removed, and the protected owner was restored. See
+`docs/operations/WP115_CURRENT_CANDIDATE_PIXEL_ON_DEVICE_LISTING_AI_REPLAY_2026-09-11.md`.
+
+WP114's complete non-binding Pixel renter/owner matrix remains green.
+Professional V5.2 binding, Stripe sandbox and the separate OnePlus/two-device
+replay remain open. Production, Google Play, tester lists, Firebase, public
+registration and PR #7 are unchanged.
+
+## Previous: WP114 current-candidate complete Pixel renter/owner matrix — complete
 
 The exact signed Internal/Staging `1.0.0+2026091110` candidate now passes the
 complete currently executable non-binding renter/owner matrix on the physical
@@ -17,8 +34,9 @@ Staging serves immutable Backend head
 `df39a14b7a19afe467842461a28f1e77fec8445e` with healthy API/database and zero
 restarts. FCM and SMTP remain enabled, payment remains memory-only, Stripe live
 mode is false and Listing AI remains on-device with external execution false.
-Professional V5.2 binding, Stripe sandbox, exact-current-candidate Listing-AI
-replay and the separate OnePlus/two-device journey remain open. Production,
+Professional V5.2 binding, Stripe sandbox and the separate OnePlus/two-device
+journey remain open. The exact-current-candidate Listing-AI replay is closed by
+WP115. Production,
 Google Play, tester lists, public registration and PR #7 are unchanged.
 
 ## WP113 current-candidate Staging and Pixel privacy — complete
