@@ -70,3 +70,12 @@ open until the remote MacBook device connection returns.
 
 Machine-readable evidence:
 `docs/evidence/release-readiness/wp107-current-candidate-extended-pixel-two-role-20260911.json`.
+
+## Closure verification
+
+Implementation and evidence commit
+`79f7985f85ce6826c89f10dc7bab5cf905118913` passes the full local technical
+regression and exact-head GitHub Regression `34555758947`, including the R10
+clean-checkout reproduction, Flutter, backend and PostgreSQL jobs. Exact-head
+CodeQL `34555758981` passes and the current branch has zero open code-scanning
+alerts. PR #7 remains draft, open, mergeable and unmerged.

@@ -35,3 +35,20 @@ test('rejects location, binding or cleanup overclaims', () => {
     }));
   }
 });
+
+test('rejects mismatched exact-head GitHub closure evidence', () => {
+  for (const mutate of [
+    (value) => { value.repository.implementationHead = value.repository.artifactSourceHead; },
+    (value) => { value.verification.githubRegression.cleanCheckoutJob = 'pending'; },
+    (value) => { value.verification.githubCodeql.head = value.repository.artifactSourceHead; },
+    (value) => { value.verification.openCodeScanningAlerts = 1; },
+    (value) => { value.verification.pullRequest7 = 'merged'; },
+  ]) {
+    const invalid = structuredClone(evidence);
+    mutate(invalid);
+    assert.throws(() => validateWp107CurrentCandidateExtendedPixelTwoRole({
+      evidence: invalid,
+      checkGitState: false,
+    }));
+  }
+});

@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "workPackage": "WP107_CURRENT_CANDIDATE_EXTENDED_PIXEL_TWO_ROLE",
-  "status": "pixel-payment-free-two-role-complete-binding-legal-hold-local-complete-github-pending",
+  "status": "pixel-payment-free-two-role-complete-binding-legal-hold-local-github-complete",
   "recordedAt": "2026-09-11T02:35:00Z",
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "packageBaseHead": "5b2c59d9eb85750a1fe5e33f8d2548d6342f0775",
     "artifactSourceHead": "67c4e2ebe4ceead7529c4f02ca1209d71c66fe25",
-    "implementationHead": null,
+    "implementationHead": "79f7985f85ce6826c89f10dc7bab5cf905118913",
     "runtimePathsChangedAfterArtifactSource": []
   },
   "candidate": {
@@ -115,9 +115,18 @@
   "verification": {
     "focusedRoleTests": "passed-88",
     "fullLocalTechnicalRegression": "passed-isolated-scoped-android-profile",
-    "githubRegression": "pending",
-    "githubCodeql": "pending",
-    "openCodeScanningAlerts": null,
+    "githubRegression": {
+      "runId": 34555758947,
+      "head": "79f7985f85ce6826c89f10dc7bab5cf905118913",
+      "conclusion": "success",
+      "cleanCheckoutJob": "success"
+    },
+    "githubCodeql": {
+      "runId": 34555758981,
+      "head": "79f7985f85ce6826c89f10dc7bab5cf905118913",
+      "conclusion": "success"
+    },
+    "openCodeScanningAlerts": 0,
     "pullRequest7": "draft-open-mergeable-unmerged"
   },
   "boundaries": {

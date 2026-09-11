@@ -44,6 +44,7 @@ export function validateWp107CurrentCandidateExtendedPixelTwoRole({
   const value = evidence ?? JSON.parse(
     readFileSync(resolve(repositoryRoot, evidencePath), 'utf8'),
   );
+  const implementationHead = '79f7985f85ce6826c89f10dc7bab5cf905118913';
   if (value?.schemaVersion !== 1
       || value.workPackage !== 'WP107_CURRENT_CANDIDATE_EXTENDED_PIXEL_TWO_ROLE'
       || ![
@@ -116,6 +117,20 @@ export function validateWp107CurrentCandidateExtendedPixelTwoRole({
   }
   if (!Array.isArray(value.remaining) || value.remaining.length !== 4) {
     fail('WP107 remaining gate inventory is incomplete.');
+  }
+  if (value.status === 'pixel-payment-free-two-role-complete-binding-legal-hold-local-github-complete') {
+    if (value.repository?.implementationHead !== implementationHead
+        || value.verification?.githubRegression?.runId !== 34555758947
+        || value.verification.githubRegression.head !== implementationHead
+        || value.verification.githubRegression.conclusion !== 'success'
+        || value.verification.githubRegression.cleanCheckoutJob !== 'success'
+        || value.verification?.githubCodeql?.runId !== 34555758981
+        || value.verification.githubCodeql.head !== implementationHead
+        || value.verification.githubCodeql.conclusion !== 'success'
+        || value.verification.openCodeScanningAlerts !== 0
+        || value.verification.pullRequest7 !== 'draft-open-mergeable-unmerged') {
+      fail('WP107 GitHub closure evidence is incomplete or mismatched.');
+    }
   }
   if (checkGitState) {
     assertAncestor(repositoryRoot, value.repository.packageBaseHead);

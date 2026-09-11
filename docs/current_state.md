@@ -1,6 +1,6 @@
 # ShareItToo Current State
 
-## WP107 extended current-candidate Pixel two-role test — local complete / GitHub pending
+## WP107 extended current-candidate Pixel two-role test — complete locally and on GitHub
 
 The exact signed Internal/Staging `1.0.0+2026091101` candidate passes every
 currently executable payment-free owner/renter path exercised in WP107:
@@ -14,8 +14,11 @@ Binding acceptance still returns the intended
 damage/needsReview, review and Stripe sandbox outcomes are not claimed. The
 OnePlus current-candidate replay also remains open. See
 `docs/operations/WP107_CURRENT_CANDIDATE_EXTENDED_PIXEL_TWO_ROLE_2026-09-11.md`.
-The complete scoped local technical regression passes; exact-head GitHub
-Regression and CodeQL are pending.
+The complete scoped local technical regression passes. Exact implementation
+commit `79f7985f85ce6826c89f10dc7bab5cf905118913` passes GitHub Regression
+`34555758947`, including R10 clean-checkout reproduction, and CodeQL
+`34555758981`; current-branch code-scanning alerts are zero. PR #7 remains
+draft, open, mergeable and unmerged.
 
 ## WP106 authenticated logout and two-device closure — partial
 

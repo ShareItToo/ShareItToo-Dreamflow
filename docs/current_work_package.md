@@ -1,4 +1,4 @@
-# Current Work Package: WP107 Current-Candidate Extended Pixel Two-Role — LOCAL COMPLETE / GITHUB PENDING
+# Current Work Package: WP107 Current-Candidate Extended Pixel Two-Role — COMPLETE
 
 WP107 completes the full currently executable payment-free owner/renter scope
 on the exact signed `1.0.0+2026091101` Pixel candidate: listing lifecycle,
@@ -8,8 +8,11 @@ restored the protected owner and left the public Staging catalog empty. Binding
 acceptance correctly stops at `409 v52_contract_documents_unavailable`; return,
 damage, review and Stripe sandbox paths remain separate closed gates. See
 `docs/operations/WP107_CURRENT_CANDIDATE_EXTENDED_PIXEL_TWO_ROLE_2026-09-11.md`.
-The complete scoped local regression passes; exact-head GitHub Regression and
-CodeQL are pending.
+The complete scoped local regression passes. Exact implementation commit
+`79f7985f85ce6826c89f10dc7bab5cf905118913` passes GitHub Regression
+`34555758947`, including R10 clean-checkout reproduction, and CodeQL
+`34555758981`; current-branch code-scanning alerts are zero. PR #7 remains
+draft, open, mergeable and unmerged.
 
 # Previous Work Package: WP106 Authenticated Logout and Two-Device Closure — PARTIAL
 
