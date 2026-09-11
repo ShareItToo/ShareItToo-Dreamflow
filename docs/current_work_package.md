@@ -1,4 +1,28 @@
-# Current Work Package: WP112 Pixel On-Device Listing-AI Acceptance — COMPLETE
+# Current Work Package: WP114 Current-Candidate Complete Pixel Renter/Owner — COMPLETE
+
+The exact signed Internal/Staging `1.0.0+2026091110` candidate passes the full
+currently executable non-binding renter/owner Pixel matrix against immutable
+Staging Backend head `df39a14b7a19afe467842461a28f1e77fec8445e`.
+Publication/discovery, non-binding request/acceptance, chat, all three FCM
+states, full listing lifecycle, search/saved, cart/projects, media, two-party
+times, fail-closed early location, privacy export and two consecutive fresh
+offline/realtime runs all pass. Every fixture is retired and the protected
+owner is restored. See
+`docs/operations/WP114_CURRENT_CANDIDATE_COMPLETE_PIXEL_RENTER_OWNER_2026-09-11.md`.
+
+Binding V5.2, Stripe sandbox, exact-current-candidate Listing-AI replay and the
+separate OnePlus/two-device replay remain open. Production, Google Play, tester
+lists, public registration and PR #7 remain unchanged.
+
+# Previous Work Package: WP113 Current-Candidate Staging and Pixel Privacy — COMPLETE
+
+Candidate `1.0.0+2026091110` is installed data-preservingly on the Pixel and its
+real active-conversation privacy export passes exact-principal, foreign-identity
+and credential checks. Staging runs the matching Backend runtime with FCM/SMTP,
+memory payment and on-device Listing AI; external AI and Stripe remain off. See
+`docs/operations/WP113_CURRENT_CANDIDATE_STAGING_PIXEL_PRIVACY_2026-09-11.md`.
+
+# Previous Work Package: WP112 Pixel On-Device Listing-AI Acceptance — COMPLETE
 
 The exact signed Internal/Staging `1.0.0+2026091109` candidate passes a real
 physical Pixel ML Kit image-analysis journey. The exact committed runner uses a

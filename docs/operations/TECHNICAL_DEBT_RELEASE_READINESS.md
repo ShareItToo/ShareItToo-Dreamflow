@@ -58,6 +58,18 @@ claimed until every item below has reproducible evidence and is closed.
 
 ## Observation log
 
+- 11.09.2026, WP114: the first fresh isolated offline/realtime attempt stopped
+  safely but the wrapper reduced the child reason to a generic failure. Its
+  `finally` path retired the exact booking/listing; separate readback confirmed
+  zero active temporary journeys and restored Wi-Fi/default network. The
+  wrapper now retains only a bounded non-sensitive child reason and rejects
+  path, identity, credential and token-shaped detail. Without changing product
+  timing, retrying an app mutation, weakening an assertion or adding a network
+  workaround, two subsequent fresh isolated runs passed the same 15-second
+  offline window, same-process recovery, zero-fatal-entry and exact network
+  restoration contract. The negative attempt remains observation evidence and
+  is not used as acceptance evidence.
+
 - 11.09.2026, WP112: the physical on-device Listing-AI app journey passed, but
   two pre-closure automation attempts failed safely. The first measurement
   incorrectly required every suggestion chip in one scroll viewport; the

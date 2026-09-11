@@ -1,6 +1,37 @@
 # ShareItToo Current State
 
-## WP112 physical Pixel on-device Listing-AI acceptance — complete
+## WP114 current-candidate complete Pixel renter/owner matrix — complete
+
+The exact signed Internal/Staging `1.0.0+2026091110` candidate now passes the
+complete currently executable non-binding renter/owner matrix on the physical
+Pixel. This includes data-preserving installation; owner publication and renter
+discovery; non-binding request/acceptance and chat; foreground, background and
+terminated-process FCM; listing lifecycle; search/saved isolation; cart and
+projects; media and two-party times; fail-closed early location; a real
+principal-bound privacy export; and two consecutive fresh offline/realtime
+runs. Every exact fixture is retired, the protected owner is restored and the
+fresh public catalog contains no synthetic journey listing. See
+`docs/operations/WP114_CURRENT_CANDIDATE_COMPLETE_PIXEL_RENTER_OWNER_2026-09-11.md`.
+
+Staging serves immutable Backend head
+`df39a14b7a19afe467842461a28f1e77fec8445e` with healthy API/database and zero
+restarts. FCM and SMTP remain enabled, payment remains memory-only, Stripe live
+mode is false and Listing AI remains on-device with external execution false.
+Professional V5.2 binding, Stripe sandbox, exact-current-candidate Listing-AI
+replay and the separate OnePlus/two-device journey remain open. Production,
+Google Play, tester lists, public registration and PR #7 are unchanged.
+
+## WP113 current-candidate Staging and Pixel privacy — complete
+
+Candidate `1.0.0+2026091110` is installed on the Pixel with exact APK/signature
+and preserved application data. The real password-confirmed export of an active
+non-binding two-role conversation contains the exact owner, no foreign identity
+outside shared operational records and no credential-shaped field. The raw
+export and temporary no-network receiver were removed and the owner restored.
+See
+`docs/operations/WP113_CURRENT_CANDIDATE_STAGING_PIXEL_PRIVACY_2026-09-11.md`.
+
+## Previous: WP112 physical Pixel on-device Listing-AI acceptance — complete
 
 The exact signed Internal/Staging `1.0.0+2026091109` candidate passes real
 on-device image analysis on the physical Pixel. A controlled synthetic drill
