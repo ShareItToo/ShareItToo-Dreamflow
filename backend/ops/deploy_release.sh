@@ -58,7 +58,7 @@ prepare_runtime_override_dir() {
 
 create_runtime_override() {
   local task_override_kind="$1"
-  mktemp "$task_runtime_override_dir/${task_environment}-${task_commit:0:12}-${task_override_kind}-XXXXXX.yml"
+  mktemp "$task_runtime_override_dir/${task_environment}-${task_commit:0:12}-${task_override_kind}-XXXXXX"
 }
 
 rollback_failed_deployment() {
@@ -361,7 +361,7 @@ docker compose --project-name "$task_project_name" \
 task_version_payload="$(curl --fail --silent --show-error --max-time 20 "$task_health_url/version")"
 if ! grep -q "\"commit\":\"$task_commit\"" <<<"$task_version_payload"; then
   echo "Deployment health endpoint does not expose the requested commit." >&2
-  exit 1
+  false
 fi
 if [[ "$task_environment" == staging ]]; then
   task_ready_payload_file="$(mktemp)"
@@ -381,7 +381,7 @@ if [[ "$task_staging_external_listing_ai_enabled" == true ]] &&
    ! printf '%s' "$task_ready_payload" | "$task_node_binary" -e '
      const { readFileSync } = require("node:fs");
      const payload = JSON.parse(readFileSync(0, "utf8"));
-     const boundary = payload?.listingAi;
+     const boundary = payload?.checks?.listingAi;
      const valid = boundary?.status === "enabled"
        && boundary.provider === "openai"
        && boundary.model === "gpt-4o-mini-2024-07-18"
@@ -393,14 +393,14 @@ if [[ "$task_staging_external_listing_ai_enabled" == true ]] &&
      process.exitCode = valid ? 0 : 1;
    '; then
   echo "Staging listing-AI health does not confirm the exact enabled provider boundary." >&2
-  exit 1
+  false
 fi
 if [[ "$task_staging_listing_ai_enabled" == true
       && "$task_staging_external_listing_ai_enabled" != true ]] &&
    ! printf '%s' "$task_ready_payload" | "$task_node_binary" -e '
      const { readFileSync } = require("node:fs");
      const payload = JSON.parse(readFileSync(0, "utf8"));
-     const boundary = payload?.listingAi;
+     const boundary = payload?.checks?.listingAi;
      const valid = boundary?.status === "enabled"
        && boundary.provider === "on_device"
        && boundary.model === "mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1"
@@ -412,7 +412,7 @@ if [[ "$task_staging_listing_ai_enabled" == true
      process.exitCode = valid ? 0 : 1;
    '; then
   echo "Staging listing-AI health does not confirm the exact on-device provider boundary." >&2
-  exit 1
+  false
 fi
 if [[ "$task_staging_stripe_enabled" == true ]] &&
    ! printf '%s' "$task_ready_payload" | "$task_node_binary" -e '
@@ -429,7 +429,7 @@ if [[ "$task_staging_stripe_enabled" == true ]] &&
      process.exitCode = valid ? 0 : 1;
    '; then
   echo "Staging Stripe health does not confirm the exact test-only provider boundary." >&2
-  exit 1
+  false
 fi
 
 install -d -m 700 "$task_release_dir"

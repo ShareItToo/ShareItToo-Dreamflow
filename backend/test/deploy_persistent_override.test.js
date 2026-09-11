@@ -15,7 +15,7 @@ test('deployment image overrides remain persistent, owner-restricted and nonsyml
   assert.match(source, /chmod 700 "\$task_runtime_override_dir"/u);
   assert.match(
     source,
-    /mktemp "\$task_runtime_override_dir\/\$\{task_environment\}-\$\{task_commit:0:12\}-\$\{task_override_kind\}-XXXXXX\.yml"/u,
+    /mktemp "\$task_runtime_override_dir\/\$\{task_environment\}-\$\{task_commit:0:12\}-\$\{task_override_kind\}-XXXXXX"/u,
   );
   assert.equal((source.match(/chmod 600 "\$task_(?:deployment|rollback)_override"/gu) ?? []).length, 2);
   assert.match(source, /task_deployment_override_retained=true/u);
