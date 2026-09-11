@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath =
   'docs/evidence/release-readiness/wp110-pixel-renter-owner-journey-20260911.json';
-const rolloverPath = 'store/google-play/current-rollover-candidate.json';
+const rolloverPath = 'store/google-play/rollover-candidate-2026091109.json';
 
 function fail(message) {
   throw new Error(message);
@@ -29,9 +29,9 @@ function assertAncestor(repositoryRoot, commit) {
   }
 }
 
-function assertNoRuntimeDrift(repositoryRoot, sourceHead) {
+function assertNoRuntimeDrift(repositoryRoot, sourceHead, technicalHead) {
   const changed = execFileSync('git', [
-    'diff', '--name-only', `${sourceHead}..HEAD`, '--',
+    'diff', '--name-only', `${sourceHead}..${technicalHead}`, '--',
     'lib', 'android', 'pubspec.yaml', 'pubspec.lock', 'backend/src', 'backend/sql',
   ], {
     cwd: repositoryRoot,
@@ -181,7 +181,7 @@ export function validateWp110PixelRenterOwnerJourney({
     assertAncestor(repositoryRoot, value.repository.bookingHistoryFixHead);
     assertAncestor(repositoryRoot, sourceHead);
     assertAncestor(repositoryRoot, technicalHead);
-    assertNoRuntimeDrift(repositoryRoot, sourceHead);
+    assertNoRuntimeDrift(repositoryRoot, sourceHead, technicalHead);
   }
   return Object.freeze({
     status: value.status,
