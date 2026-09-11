@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP110_PIXEL_RENTER_OWNER_JOURNEY",
+  "status": "pixel-current-candidate-nonbinding-renter-owner-complete",
+  "recordedAt": "2026-09-11T13:29:27Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "bookingHistoryFixHead": "12cac3fbe469030dd9a887b5eb9edf69252c2e7b",
+    "artifactSourceHead": "5d8b89c82926a9f0a28627a7f36d26a88a9574fe",
+    "technicalHead": "cbe62931b79964465f2d3956afd3f698dd4c6dea",
+    "runtimePathsChangedAfterArtifactSource": []
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091109",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkBytes": 199608581,
+    "apkSha256": "381cbb6766772c2fba4f093913bf366e6bfe1deb0af7b7ae5efe2ae694cd21cf",
+    "aabBytes": 138721754,
+    "aabSha256": "b5f8531744035daa1801d7821d4c42feb5bafd217ffb54ec3c128a369777c9c7",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "firebaseAndroidConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "listingAiExecutionLocation": "android_on_device",
+    "externalListingAiEnabled": false
+  },
+  "staging": {
+    "sourceHead": "cbe62931b79964465f2d3956afd3f698dd4c6dea",
+    "publicApiVersion": "0.1.0-cbe62931b799",
+    "imageDigest": "sha256:ac550be1b11d50323e75bd7d0967e2003ed92d5e0f30a05491a7c2123d783fb9",
+    "releaseEvidenceBasename": "staging-20260911T123151Z-cbe62931b799.json",
+    "apiHealthy": true,
+    "databaseHealthy": true,
+    "containerRestartCount": 0,
+    "readiness": "degraded-only-known-noncritical-support-followups",
+    "paymentProvider": "memory",
+    "realPaymentsEnabled": false,
+    "externalListingAiEnabled": false
+  },
+  "pixel": {
+    "physical": true,
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "exactInstalledCandidateMatched": true,
+    "dataPreservingUpdate": true,
+    "primaryTwoRoleJourney": {
+      "status": "passed-pixel-email-verified-two-role-product-journey",
+      "distinctEmailVerifiedPrincipals": true,
+      "ownerDraftPublishServerConfirmed": true,
+      "renterPublicDiscovery": true,
+      "nonBindingRequestAcceptanceSimulation": true,
+      "renterVisibleChat": true,
+      "fcmForeground": true,
+      "fcmBackground": true,
+      "fcmTerminated": true,
+      "accountIsolation": true,
+      "protectedOwnerRestored": true,
+      "statusIconCaptureSha256": "736561d7d8c01bc0e4c19b0ec8fb547a6c1c3cf24e28e700a8cc1784a04ca89f",
+      "statusIconManualVisualReview": "pending-private-owner-review"
+    },
+    "listingLifecycle": {
+      "status": "passed-pixel-listing-lifecycle",
+      "draftEdit": true,
+      "publish": true,
+      "renterVisibility": true,
+      "pauseAndStablePublicHide": true,
+      "reactivate": true,
+      "endAndStablePublicHide": true,
+      "serverRevisionStrictlyAdvanced": true
+    },
+    "searchAndSaved": {
+      "status": "passed-pixel-search-saved-lifecycle",
+      "exactSearchAndCategoryFilter": true,
+      "listingDetail": true,
+      "savedStateRestartPersistence": true,
+      "accountIsolation": true,
+      "savedStateRemovalAndStableAbsence": true
+    },
+    "rentalCartAndProjects": {
+      "status": "passed-pixel-rental-cart-project-lifecycle",
+      "duplicateIntentCollapsedExactlyOnce": true,
+      "stableClientIdempotency": true,
+      "nonReserving": true,
+      "projectCreateAndAssign": true,
+      "restartPersistence": true,
+      "accountIsolation": true,
+      "baselineRestored": true
+    },
+    "messagingMediaTimesAndLocation": {
+      "status": "pixel-attachment-and-two-party-times-passed-location-gate-closed",
+      "syntheticImageAttachmentExactlyOnce": true,
+      "counterpartyAttachmentVisible": true,
+      "handoverTimeTwoPartyConfirmed": true,
+      "returnTimeTwoPartyConfirmed": true,
+      "terminatedProcessPersistence": true,
+      "locationBeforeRevealWindowBlockedByServer": true,
+      "locationMessageCreatedBeforeRevealWindow": false
+    },
+    "offlineRealtime": {
+      "status": "passed-bounded-offline-realtime-diagnostic",
+      "offlineWindowSeconds": 15,
+      "messageAbsentDuringOfflineWindow": true,
+      "sameProcessRealtimeRecovery": true,
+      "processSurvived": true,
+      "fatalEntries": 0,
+      "originalNetworkRestored": true
+    }
+  },
+  "cleanup": {
+    "allExactFixtureListingsEndedAndPubliclyAbsent": true,
+    "temporaryBookingsCancelled": true,
+    "temporaryDeviceMediaRemoved": true,
+    "protectedOwnerSessionRestored": true,
+    "publicCatalogCountBefore": 1,
+    "publicCatalogCountAfter": 1,
+    "remainingPublicListingAttributedToWp110": false,
+    "unrelatedPublicListingInspectedOrChanged": false
+  },
+  "verification": {
+    "fullLocalTechnicalRegression": "passed-isolated-scoped-android-profile",
+    "localTechnicalHead": "cbe62931b79964465f2d3956afd3f698dd4c6dea",
+    "githubRegression": {
+      "runId": 34595796885,
+      "head": "cbe62931b79964465f2d3956afd3f698dd4c6dea",
+      "conclusion": "success",
+      "cleanCheckoutJob": "success"
+    },
+    "githubCodeql": {
+      "runId": 34595796884,
+      "head": "cbe62931b79964465f2d3956afd3f698dd4c6dea",
+      "conclusion": "success"
+    },
+    "githubApiImagePublish": {
+      "runId": 34597332701,
+      "head": "cbe62931b79964465f2d3956afd3f698dd4c6dea",
+      "conclusion": "success",
+      "publishJob": "success"
+    },
+    "openCodeScanningAlerts": 0,
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "boundaries": {
+    "bindingContractCreated": false,
+    "reservationCreated": false,
+    "paymentEndpointCalled": false,
+    "realMoneyUsed": false,
+    "stripeSandboxTested": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "firebaseProjectChanged": false,
+    "publicRegistrationChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false,
+    "containsAccountIdentity": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPath": false,
+    "containsFixtureIdentifiers": false
+  },
+  "remaining": [
+    "professional-v52-legal-snapshots-and-owner-approval",
+    "binding-booking-pickup-return-damage-needs-review-review-replay",
+    "official-stripe-sandbox-payment-refund-and-simulated-payout",
+    "private-fcm-status-icon-manual-visual-review",
+    "separate-oneplus-exact-candidate-two-device-replay"
+  ]
+}

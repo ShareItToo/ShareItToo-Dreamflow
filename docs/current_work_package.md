@@ -1,4 +1,22 @@
-# Current Work Package: WP107 Current-Candidate Extended Pixel Two-Role — COMPLETE
+# Current Work Package: WP110 Current-Candidate Pixel Renter/Owner Journey — COMPLETE
+
+WP110 closes the complete currently executable non-binding renter/owner journey
+on the exact signed `1.0.0+2026091109` Pixel candidate. Publication/discovery,
+non-binding request/acceptance, chat, foreground/background/terminated FCM,
+listing lifecycle, search/saved state, cart/projects, media and two-party times,
+fail-closed early location, Account-A/B isolation and offline realtime recovery
+all pass. Every exact test fixture was retired and the unrelated one-listing
+public baseline was preserved. See
+`docs/operations/WP110_PIXEL_RENTER_OWNER_JOURNEY_2026-09-11.md`.
+
+Technical head `cbe62931b79964465f2d3956afd3f698dd4c6dea` passes the full local
+regression, exact-head GitHub Regression `34595796885`, CodeQL `34595796884`
+and image-publication run `34597332701`; Staging serves that exact immutable
+image with healthy API/database and zero restarts. V5.2 binding, Stripe sandbox,
+the private FCM icon review and a separate OnePlus replay remain open. PR #7
+stays draft, open and unmerged.
+
+# Previous Work Package: WP107 Current-Candidate Extended Pixel Two-Role — COMPLETE
 
 WP107 completes the full currently executable payment-free owner/renter scope
 on the exact signed `1.0.0+2026091101` Pixel candidate: listing lifecycle,

@@ -47,28 +47,32 @@
   "sourceVerification": {
     "closedPilotFocusedTests": "passed-release-preflight",
     "privacyAndPackageRatchets": "passed",
-    "fullToolInventory": "pending-exact-candidate-run",
+    "fullToolInventory": "passed-2677-tests",
     "backendSuite": "passed-focused-873-tests-2-documented-skips",
     "flutterAnalyzer": "passed-zero-issues",
-    "fullTechnicalRegression": "pending-exact-candidate-run",
-    "cleanCheckoutReproducibility": "pending-github-regression",
-    "githubVerifiedHead": null,
-    "githubRegressionRunId": null,
-    "githubRegressionConclusion": "pending",
-    "githubCodeqlRunId": null,
-    "githubCodeqlConclusion": "pending",
-    "openCodeScanningAlertsPrHead": null
+    "fullTechnicalRegression": "passed-isolated-scoped-android-profile",
+    "cleanCheckoutReproducibility": "passed-github-r10",
+    "githubVerifiedHead": "cbe62931b79964465f2d3956afd3f698dd4c6dea",
+    "githubRegressionRunId": 34595796885,
+    "githubRegressionConclusion": "success",
+    "githubCodeqlRunId": 34595796884,
+    "githubCodeqlConclusion": "success",
+    "githubApiImagePublishRunId": 34597332701,
+    "githubApiImagePublishConclusion": "success",
+    "openCodeScanningAlertsPrHead": 0
   },
   "stagingStateAtReadback": {
-    "sourceHead": "39faedf12dc0342df35b09fe6c06b5565f3c850c",
-    "clientBuild": "1.0.0+2026091106",
-    "health": "passed",
-    "readiness": "degraded-only-two-noncritical-support-followups-overdue",
+    "sourceHead": "cbe62931b79964465f2d3956afd3f698dd4c6dea",
+    "clientBuild": "1.0.0+2026091109",
+    "health": "passed-api-and-database-healthy-restart-zero",
+    "readiness": "degraded-only-known-noncritical-support-followups",
     "paymentTransport": "memory",
     "paymentLivemode": false,
     "listingAiProvider": "on_device",
     "externalListingAiEnabled": false,
-    "currentCandidateDeployment": "pending"
+    "currentCandidateDeployment": "passed-exact-published-image",
+    "imageDigest": "sha256:ac550be1b11d50323e75bd7d0967e2003ed92d5e0f30a05491a7c2123d783fb9",
+    "releaseEvidenceBasename": "staging-20260911T123151Z-cbe62931b799.json"
   },
   "playStateAtReadback": {
     "activeInternalVersionCode": "2026090711",
@@ -101,10 +105,10 @@
     "handoffRef": "store/google-play/on-device-listing-ai-data-safety-handoff.json"
   },
   "deviceVerification": {
-    "preferredDeviceExactApkInstalled": false,
-    "preferredDeviceDataPreserved": false,
-    "onDeviceListingAiPhysicalInference": "pending-pixel-install-and-test",
-    "authenticatedPilotMatrix": "pending-current-candidate",
+    "preferredDeviceExactApkInstalled": true,
+    "preferredDeviceDataPreserved": true,
+    "onDeviceListingAiPhysicalInference": "not-replayed-on-2026091109",
+    "authenticatedPilotMatrix": "passed-current-candidate-nonbinding-renter-owner-pixel",
     "secondaryDevice": "not-required-for-current-pixel-first-run"
   },
   "privateDriveHandoff": {

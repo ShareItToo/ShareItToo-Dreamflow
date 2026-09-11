@@ -1,5 +1,29 @@
 # ShareItToo Current State
 
+## WP110 current-candidate Pixel renter/owner journey — complete
+
+The exact signed Internal/Staging `1.0.0+2026091109` candidate passes the full
+currently executable non-binding renter/owner journey on the Pixel. This
+includes exact listing publication/discovery and lifecycle, non-binding
+request/acceptance, chat and all three FCM states, search/saved isolation,
+cart/projects, image attachment, handover/return times, fail-closed early
+location, Account-A/B isolation and same-process offline recovery.
+
+Every exact WP110 listing is ended and publicly absent, every temporary booking
+is cancelled, temporary device media is removed and the protected owner is
+restored. The one unrelated public listing that existed before the run remains
+one afterward and was neither inspected nor changed. Technical head
+`cbe62931b79964465f2d3956afd3f698dd4c6dea` passes the full local regression,
+GitHub Regression `34595796885`, CodeQL `34595796884`, zero open code-scanning
+alerts and image-publication run `34597332701`. Staging serves that exact head
+with healthy API/database and zero restarts. See
+`docs/operations/WP110_PIXEL_RENTER_OWNER_JOURNEY_2026-09-11.md`.
+
+This is not binding-contract or payment proof. Professional V5.2 snapshots,
+Stripe sandbox, private FCM icon review and separate OnePlus replay remain open;
+Production, Google Play, tester lists, public registration and PR #7 are
+unchanged.
+
 ## WP107 extended current-candidate Pixel two-role test — complete locally and on GitHub
 
 The exact signed Internal/Staging `1.0.0+2026091101` candidate passes every
