@@ -9430,6 +9430,10 @@ class DataService {
         await _writePreferenceString(prefs, _rentalRequestsKey, raw);
       } catch (error) {
         debugPrint('[DataService] remote request load failed: $error');
+        // In a backend-enabled runtime the server is authoritative. A cached
+        // document must never make an unavailable or malformed server look
+        // like current empty or successful booking truth.
+        rethrow;
       }
     }
     raw ??= prefs.getString(_rentalRequestsKey);

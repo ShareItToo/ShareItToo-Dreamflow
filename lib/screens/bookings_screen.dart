@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:lendify/screens/booking_detail_screen.dart';
 import 'package:lendify/services/data_service.dart';
+import 'package:lendify/services/local_principal_scope.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/models/item.dart';
@@ -14,6 +15,7 @@ import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/box_chat_icon.dart';
 import 'package:lendify/widgets/review_prompt_sheet.dart';
 import 'package:lendify/widgets/item_details_overlay.dart';
+import 'package:lendify/widgets/local_state_error_panel.dart';
 import 'package:lendify/utils/booking_status_copy.dart';
 
 class BookingsScreen extends StatefulWidget {
@@ -42,6 +44,10 @@ class _BookingsScreenState extends State<BookingsScreen>
   StreamSubscription<String>? _sharedPersistenceSub;
   final SharedPersistenceRefreshCoordinator _sharedPersistenceRefresh =
       SharedPersistenceRefreshCoordinator();
+  int _loadRevision = 0;
+  bool _loading = true;
+  bool _hasLoadedSnapshot = false;
+  String? _loadError;
 
   @override
   void initState() {
@@ -56,7 +62,24 @@ class _BookingsScreenState extends State<BookingsScreen>
     _highlightRequestId = widget.highlightRequestId;
     _load();
     _sharedPersistenceSub = SharedPersistenceSync.changes.listen((key) {
-      if (!mounted || !SharedPersistenceSync.affectsBookingSync(key)) return;
+      if (!mounted) return;
+      if (key == SharedPersistenceSync.accountSecurityStateKey) {
+        _loadRevision += 1;
+        setState(() {
+          _allBookings = const [];
+          _currentUserId = null;
+          _unreadCounts.clear();
+          _loading = true;
+          _hasLoadedSnapshot = false;
+          _loadError = null;
+        });
+        unawaited(_sharedPersistenceRefresh.schedule(() async {
+          await SharedPersistenceSync.reloadPreferences();
+          if (mounted) await _load();
+        }));
+        return;
+      }
+      if (!SharedPersistenceSync.affectsBookingSync(key)) return;
       unawaited(_sharedPersistenceRefresh.schedule(() async {
         await SharedPersistenceSync.reloadPreferences();
         if (mounted) await _load();
@@ -163,77 +186,134 @@ class _BookingsScreenState extends State<BookingsScreen>
   }
 
   Future<void> _load() async {
-    final user = await DataService.getCurrentUser();
-    if (user == null) {
-      if (!mounted) return;
-      _unreadCounts.clear();
+    final revision = ++_loadRevision;
+    LocalPrincipalActionOwner? actionOwner;
+    if (mounted) {
       setState(() {
         _allBookings = const [];
         _currentUserId = null;
+        _unreadCounts.clear();
+        _loading = true;
+        _hasLoadedSnapshot = false;
+        _loadError = null;
       });
-      return;
     }
-    _currentUserId = user.id;
-    final requests = await DataService.getRentalRequestsForRenter(user.id);
-    if (requests.isEmpty) {
-      if (!mounted) return;
-      _unreadCounts.clear();
-      setState(() => _allBookings = const []);
-      return;
-    }
-    // Load items and listers referenced by requests
-    final Map<String, Item?> itemById = {};
-    final Map<String, model.User?> userById = {};
-    for (final r in requests) {
-      itemById[r.itemId] =
-          itemById[r.itemId] ?? await DataService.getItemById(r.itemId);
-    }
-    for (final it in itemById.values) {
-      if (it != null) {
-        userById[it.ownerId] =
-            userById[it.ownerId] ?? await DataService.getUserById(it.ownerId);
+    try {
+      actionOwner = await LocalPrincipalActionOwner.capture();
+      final user = await DataService.readCurrentUserForSessionTransition();
+      await actionOwner.assertCurrent();
+      if (!mounted || revision != _loadRevision) return;
+      final expectedUserId = actionOwner.sessionOwner?.userId?.trim() ?? '';
+      if (user == null ||
+          expectedUserId.isEmpty ||
+          user.id.trim() != expectedUserId) {
+        throw StateError(
+            'Für deine Buchungen ist eine Anmeldung erforderlich.');
       }
-    }
-    List<Map<String, dynamic>> maps = [];
-    for (final r in requests) {
-      final it = itemById[r.itemId];
-      if (it == null) continue; // skip dangling
-      final owner = userById[it.ownerId];
-      maps.add(
-        await _toBookingMap(r, it, owner, reviewerId: user.id),
-      );
-    }
 
-    // Calculate unread counts for each category
-    final categorized = {
-      'ongoing': <RentalRequest>[],
-      'upcoming': <RentalRequest>[],
-      'pending': <RentalRequest>[],
-      'completed': <RentalRequest>[],
-    };
-    for (final r in requests) {
-      final it = itemById[r.itemId];
-      if (it == null) continue;
-      final bookingMap = maps.firstWhere(
-        (m) => m['requestId'] == r.id,
-        orElse: () => <String, dynamic>{},
-      );
-      final (start, end) = _parseDateRange(bookingMap['dates'] ?? '');
-      final cat = _effectiveCategoryFor(bookingMap, start, end);
-      categorized[cat]?.add(r);
-    }
+      final requests = await DataService.getRentalRequestsForRenter(user.id);
+      await actionOwner.assertCurrent();
+      if (!mounted || revision != _loadRevision) return;
+      if (requests.isEmpty) {
+        setState(() {
+          _currentUserId = user.id;
+          _loading = false;
+          _hasLoadedSnapshot = true;
+        });
+        return;
+      }
 
-    for (final cat in categorized.keys) {
-      final unreadCount = await DataService.getUnreadCountForCategory(
-        userId: user.id,
-        category: cat,
-        requests: categorized[cat]!,
-      );
-      _unreadCounts[cat] = unreadCount;
-    }
+      // A request is authoritative. If its referenced listing cannot be
+      // hydrated, fail the complete snapshot closed instead of turning the
+      // missing card into a false server-confirmed empty state.
+      final Map<String, Item> itemById = {};
+      final Map<String, model.User?> userById = {};
+      for (final request in requests) {
+        if (itemById.containsKey(request.itemId)) continue;
+        final item = await DataService.getItemById(request.itemId);
+        await actionOwner.assertCurrent();
+        if (!mounted || revision != _loadRevision) return;
+        if (item == null) {
+          throw StateError('Eine gebuchte Anzeige ist nicht verfügbar.');
+        }
+        itemById[request.itemId] = item;
+      }
+      for (final item in itemById.values) {
+        if (userById.containsKey(item.ownerId)) continue;
+        userById[item.ownerId] = await DataService.getUserById(item.ownerId);
+        await actionOwner.assertCurrent();
+        if (!mounted || revision != _loadRevision) return;
+      }
 
-    if (!mounted) return;
-    setState(() => _allBookings = maps);
+      final maps = <Map<String, dynamic>>[];
+      for (final request in requests) {
+        final item = itemById[request.itemId]!;
+        maps.add(
+          await _toBookingMap(
+            request,
+            item,
+            userById[item.ownerId],
+            reviewerId: user.id,
+          ),
+        );
+        await actionOwner.assertCurrent();
+        if (!mounted || revision != _loadRevision) return;
+      }
+
+      final categorized = {
+        'ongoing': <RentalRequest>[],
+        'upcoming': <RentalRequest>[],
+        'pending': <RentalRequest>[],
+        'completed': <RentalRequest>[],
+      };
+      for (final request in requests) {
+        final bookingMap = maps.firstWhere(
+          (map) => map['requestId'] == request.id,
+        );
+        final (start, end) = _parseDateRange(bookingMap['dates'] ?? '');
+        final category = _effectiveCategoryFor(bookingMap, start, end);
+        categorized[category]?.add(request);
+      }
+
+      final unreadCounts = <String, int>{};
+      for (final category in categorized.keys) {
+        unreadCounts[category] = await DataService.getUnreadCountForCategory(
+          userId: user.id,
+          category: category,
+          requests: categorized[category]!,
+        );
+        await actionOwner.assertCurrent();
+        if (!mounted || revision != _loadRevision) return;
+      }
+
+      await actionOwner.assertCurrent();
+      if (!mounted || revision != _loadRevision) return;
+      setState(() {
+        _allBookings = maps;
+        _currentUserId = user.id;
+        _unreadCounts
+          ..clear()
+          ..addAll(unreadCounts);
+        _loading = false;
+        _hasLoadedSnapshot = true;
+      });
+    } catch (error) {
+      debugPrint('[Bookings] load failed (${error.runtimeType})');
+      if (!mounted || revision != _loadRevision) return;
+      if (actionOwner != null && !await actionOwner.isCurrent()) {
+        if (!mounted || revision != _loadRevision) return;
+        unawaited(_sharedPersistenceRefresh.schedule(_load));
+        return;
+      }
+      setState(() {
+        _allBookings = const [];
+        _currentUserId = null;
+        _unreadCounts.clear();
+        _loading = false;
+        _hasLoadedSnapshot = false;
+        _loadError = 'Deine Buchungen konnten nicht sicher geladen werden.';
+      });
+    }
   }
 
   Future<Map<String, dynamic>> _toBookingMap(
@@ -465,15 +545,42 @@ class _BookingsScreenState extends State<BookingsScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildBookingsList('ongoing'),
-          _buildBookingsList('upcoming'),
-          _buildBookingsList('pending'),
-          _buildBookingsList('completed'),
-        ],
-      ),
+      body: _buildAuthoritativeBody(),
+    );
+  }
+
+  Widget _buildAuthoritativeBody() {
+    if (_loading && !_hasLoadedSnapshot) {
+      return Center(
+        child: Semantics(
+          label: 'Buchungen werden geladen',
+          child: const CircularProgressIndicator(),
+        ),
+      );
+    }
+    if (_loadError != null && !_hasLoadedSnapshot) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: LocalStateErrorPanel(
+            title: 'Buchungen konnten nicht geladen werden',
+            message: _loadError!,
+            semanticLabel:
+                'Buchungen konnten nicht sicher geladen werden. Erneut laden.',
+            onRetry: () => unawaited(_sharedPersistenceRefresh.schedule(_load)),
+            retrying: _loading,
+          ),
+        ),
+      );
+    }
+    return TabBarView(
+      controller: _tabController,
+      children: [
+        _buildBookingsList('ongoing'),
+        _buildBookingsList('upcoming'),
+        _buildBookingsList('pending'),
+        _buildBookingsList('completed'),
+      ],
     );
   }
 

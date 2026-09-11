@@ -1447,7 +1447,13 @@ class BackendRepository {
       method: 'GET',
       path: '/rental-requests',
     );
-    return _maps(response['requests']);
+    final requests = response['requests'];
+    if (requests is! List || requests.any((entry) => entry is! Map)) {
+      throw const BackendException(200, 'invalid_server_response');
+    }
+    return requests
+        .map((entry) => Map<String, dynamic>.from(entry as Map))
+        .toList(growable: false);
   }
 
   static Future<List<Map<String, dynamic>>> syncRentalRequests(
