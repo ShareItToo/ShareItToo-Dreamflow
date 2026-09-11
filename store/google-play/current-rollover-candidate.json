@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "kind": "android-current-rollover-candidate",
   "status": "build-ready-play-internal-upload-pending",
-  "generatedAt": "2026-09-11T06:06:06Z",
+  "generatedAt": "2026-09-11T06:25:08Z",
   "candidate": {
     "applicationId": "com.shareittoo.app",
     "versionName": "1.0.0",
@@ -47,10 +47,10 @@
   "sourceVerification": {
     "closedPilotFocusedTests": "passed-release-preflight",
     "privacyAndPackageRatchets": "passed",
-    "fullToolInventory": "pending-exact-candidate-run",
+    "fullToolInventory": "passed-2677",
     "backendSuite": "passed-869-two-documented-skips",
     "flutterAnalyzer": "passed-zero-issues",
-    "fullTechnicalRegression": "pending-exact-candidate-run",
+    "fullTechnicalRegression": "passed",
     "cleanCheckoutReproducibility": "pending-github-regression",
     "githubVerifiedHead": null,
     "githubRegressionRunId": null,

@@ -9,6 +9,19 @@ product or release prerequisites. None of the entries changes production,
 Payment, Store, Cloud/VPS/DNS or pilot state. Release readiness must not be
 claimed until every item below has reproducible evidence and is closed.
 
+- 11.09.2026, WP109: the first complete candidate-regression attempt passed
+  the functional suites through Web/Wasm and then stopped at the single direct
+  Android packaging step with `No space left on device`. Only regenerable
+  checkout output plus Gradle, browser and package-manager caches were removed;
+  no test, limit, parallelism, candidate artifact or product data changed. The
+  identical isolated-cache command then passed 2,677/2,677 tool tests, Backend,
+  Flutter, analyzer, Web/Wasm, loopback smoke and its one direct Android build.
+  Its retained capacity result began with 10,261,176 KiB free, generated
+  3,465,252 KiB and ended with 6,791,432 KiB free, inside the existing fixed
+  bounds. The failed attempt and manual cleanup are incident evidence only and
+  cannot become a release prerequisite. This is a recurrence observation under
+  `TD-RR-012` and `TD-RR-021`; both deterministic guards remain unchanged.
+
 | ID | Current observation / temporary accommodation | Required deterministic exit evidence |
 | --- | --- | --- |
 | `TD-RR-001` | **CLOSED 23.08.2026.** S4P installed repository-bound normal-shell Node 22 plus exact Corepack pnpm 11.16.0. Exact CI run `32609567488` used the pinned package contract, frozen install and normal commands at `891ecdc`; Backend, syntax, audit, secret scan and PostgreSQL passed without a copied runtime or Codex fallback. | Closed by exact-package CI. Permanently retain the pinned repository/package/workflow contract and normal-shell path. |
