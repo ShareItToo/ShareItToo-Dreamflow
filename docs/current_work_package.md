@@ -1,4 +1,23 @@
-# Current Work Package: WP126 Exact Successor Pixel Push Closure — COMPLETE
+# Current Work Package: WP127 Current-Candidate Portfolio Convergence — COMPLETE
+
+The exact signed Internal/Staging `1.0.0+2026091201` candidate is reconciled
+against the full 32-area goal with a hash-bound and symbol-reviewed delta from
+predecessor `2026091110`. The result is **12 PASS, 12 PARTIAL and 8 OPEN**.
+Only password/session/Account-A-to-B isolation is promoted from WP119 because
+WP120 physically closes it and the successor changes no auth/session action.
+
+Candidate/signature/Pixel installation, source/CI and FCM are fresh
+`2026091201` proof. Earlier PASS evidence transfers only across demonstrably
+unaffected behavior. Every uncertain exact-candidate replay or external gate
+remains PARTIAL/OPEN. The next executable priority is the exact-current Pixel
+theme/background/200-percent-text and Android permission lifecycle. The
+OnePlus is disconnected and must not be contacted. See
+`docs/operations/WP127_CURRENT_CANDIDATE_PORTFOLIO_CONVERGENCE_2026-09-12.md`.
+
+No app runtime, backend, Production, Store, Firebase, payment, real money,
+VPS/DNS, public registration, device or PR state changed.
+
+# Previous Work Package: WP126 Exact Successor Pixel Push Closure — COMPLETE
 
 Exact signed Internal/Staging candidate `1.0.0+2026091201` is installed
 data-preservingly on the physical Pixel 7 Pro. Package, version, APK hash and

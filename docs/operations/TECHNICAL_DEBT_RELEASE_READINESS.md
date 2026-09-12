@@ -9,6 +9,28 @@ product or release prerequisites. None of the entries changes production,
 Payment, Store, Cloud/VPS/DNS or pilot state. Release readiness must not be
 claimed until every item below has reproducible evidence and is closed.
 
+- 12.09.2026, WP127: the first complete local invocation omitted the
+  repository's declared `SIT_ALLOW_CANDIDATE_ROLLOVER=1` mode even though
+  `pubspec.yaml` already carries reserved successor `2026091201` while the
+  legacy Store handoff intentionally remains bound to the older active
+  Internal release. The ordinary Store mode correctly stopped at its
+  fail-closed handoff ratchet after the tool inventory passed. No assertion,
+  metadata or candidate was changed. The exact CI-equivalent command with the
+  repository-owned rollover mode then passed the entire Regression on its
+  first invocation. This is an invocation error, not product or test failure,
+  and neither result is accepted as a retry accommodation; CI permanently sets
+  the same explicit mode.
+
+- 12.09.2026, WP127: before the complete local gate, the unchanged fixed
+  capacity check had only about 3.8 GiB available. Five superseded private
+  `2026091105` through `2026091109` candidate archives were moved recoverably
+  to the connected Crucial X9 cold-storage directory. Current `2026091201`,
+  direct predecessor `2026091110`, source and user data remained in place.
+  The unchanged gate began with 5,668,564 KiB free, generated 3,623,788 KiB,
+  ended with 2,017,128 KiB free and passed its fixed limits. This manual move
+  is incident recovery only; independent clean-checkout CI must pass without
+  it. `TD-RR-012` and `TD-RR-021` remain unchanged and closed.
+
 - 12.09.2026, WP126: a standalone `node --test test/tool/*.test.mjs`
   diagnostic was invoked immediately after `flutter clean` without the
   repository's declared dependency-bootstrap step. The MobileScanner and

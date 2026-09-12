@@ -1,5 +1,27 @@
 # ShareItToo Current State
 
+## WP127 exact-current-candidate portfolio convergence — complete
+
+The full 32-area Android Staging objective is now reconciled against exact
+signed candidate `1.0.0+2026091201` and its reviewed predecessor delta. The
+conservative result is **12 PASS, 12 PARTIAL and 8 OPEN**. WP120 plus exact
+symbol-level delta review promotes only password/session/Account-A-to-B
+isolation from PARTIAL to PASS. Candidate provenance, source/CI and physical
+FCM are fresh `2026091201` proof; unaffected earlier PASS evidence is
+transferred only across the hash-bound nine-path push/version delta.
+
+Theme/large-text, support, E-mail registration/recovery, Google, decline,
+location, privacy deletion and the Android permission lifecycle remain
+PARTIAL. Facebook, Apple, Stripe sandbox, professional V5.2 binding, human
+TalkBack, private-registry pull, historical support recovery and the
+disconnected OnePlus remain OPEN. No uncertain or external-gate result is
+promoted. See
+`docs/operations/WP127_CURRENT_CANDIDATE_PORTFOLIO_CONVERGENCE_2026-09-12.md`.
+
+No app runtime, backend, Production, Google Play, tester list, Firebase,
+payment, real money, VPS/DNS, public registration, Pixel, OnePlus or PR state
+changed.
+
 ## WP126 exact successor Pixel push closure — complete
 
 Signed Internal/Staging candidate `1.0.0+2026091201`, built from
