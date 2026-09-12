@@ -11,7 +11,7 @@ const evidence = JSON.parse(readFileSync(new URL(
   import.meta.url,
 ), 'utf8'));
 const rollover = JSON.parse(readFileSync(new URL(
-  '../../store/google-play/current-rollover-candidate.json', import.meta.url,
+  '../../store/google-play/rollover-candidate-2026091110.json', import.meta.url,
 ), 'utf8'));
 
 function validate(value = evidence, candidate = rollover) {

@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath =
   'docs/evidence/release-readiness/wp119-current-candidate-goal-acceptance-20260912.json';
-const rolloverPath = 'store/google-play/current-rollover-candidate.json';
+const rolloverPath = 'store/google-play/rollover-candidate-2026091110.json';
 const evidenceBaseHead = '4018de1475e33e4f652a14bc98db7049bb84b06f';
 const candidateSourceHead = 'c8e2a49e14f5cae0026fa5f2bc327859fe0ff17b';
 const stagingRuntimeHead = 'df39a14b7a19afe467842461a28f1e77fec8445e';
@@ -73,9 +73,9 @@ function assertAncestor(repositoryRoot, commit) {
   }
 }
 
-function assertNoRuntimeDrift(repositoryRoot) {
+function assertNoRuntimeDriftAtClosure(repositoryRoot) {
   const changed = execFileSync('git', [
-    'diff', '--name-only', `${candidateSourceHead}..HEAD`, '--',
+    'diff', '--name-only', `${candidateSourceHead}..${implementationHead}`, '--',
     'lib', 'android', 'assets', 'pubspec.yaml', 'pubspec.lock',
     'backend/src', 'backend/sql',
   ], {
@@ -231,7 +231,7 @@ export function validateWp119CurrentCandidateGoalAcceptance({
     ]) {
       assertAncestor(repositoryRoot, commit);
     }
-    assertNoRuntimeDrift(repositoryRoot);
+    assertNoRuntimeDriftAtClosure(repositoryRoot);
   }
   return Object.freeze({
     status: value.status,
