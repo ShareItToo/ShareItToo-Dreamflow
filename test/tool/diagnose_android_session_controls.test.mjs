@@ -23,6 +23,8 @@ import {
   prepareSessionControlsJournal,
   sanitizeSessionControlsFailure,
   selectRemoteSessionSignOutNode,
+  summarizeTwoSessionInventory,
+  waitForExactTwoSessionInventory,
 } from '../../tool/diagnose_android_session_controls.mjs';
 
 const candidate = Object.freeze({
@@ -132,6 +134,48 @@ test('two-session truth requires exact distinct Linux current and Android remote
       'session-inventory-ambiguous',
     );
   }
+});
+
+test('session inventory polling waits only for server-confirmed exact two-session truth', async () => {
+  const linuxId = '11111111-1111-4111-8111-111111111111';
+  const androidId = '22222222-2222-4222-8222-222222222222';
+  const snapshots = [
+    [{ id: linuxId, name: 'Linux', isThisDevice: true }],
+    [
+      { id: linuxId, name: 'Linux', isThisDevice: true },
+      { id: androidId, name: 'Android', isThisDevice: false },
+    ],
+  ];
+  const waits = [];
+  assert.equal(await waitForExactTwoSessionInventory({
+    fetchImpl: async () => {},
+    session: { sessionId: linuxId },
+    wait: async (milliseconds) => waits.push(milliseconds),
+    readInventory: async () => snapshots.shift(),
+  }), true);
+  assert.deepEqual(waits, [250]);
+});
+
+test('session inventory polling fails closed after bounded confirmed ambiguity', async () => {
+  const linuxId = '11111111-1111-4111-8111-111111111111';
+  const waits = [];
+  assert.equal(await waitForExactTwoSessionInventory({
+    fetchImpl: async () => {},
+    session: { sessionId: linuxId },
+    wait: async (milliseconds) => waits.push(milliseconds),
+    attempts: 3,
+    intervalMs: 125,
+    readInventory: async () => [{ id: linuxId, name: 'Linux', isThisDevice: true }],
+  }), false);
+  assert.deepEqual(waits, [125, 125]);
+});
+
+test('session inventory summary exposes only bounded structural counts', () => {
+  const linuxId = '11111111-1111-4111-8111-111111111111';
+  assert.equal(summarizeTwoSessionInventory([
+    { id: linuxId, name: 'Linux', isThisDevice: true },
+    { id: 'private-id', name: 'Private workstation label', isThisDevice: false },
+  ], linuxId), 'total=2,current=1,remote=1,linux=1,android=0,other=1,currentMatch=true');
 });
 
 test('revocation truth accepts only the exact structured revoked-session response', () => {

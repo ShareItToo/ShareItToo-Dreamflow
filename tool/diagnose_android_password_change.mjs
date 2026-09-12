@@ -27,6 +27,7 @@ import {
   readEmailVerifiedJourneyVault,
 } from './run_staging_email_verified_two_role_journey.mjs';
 import {
+  dismissAndroidSoftwareKeyboard,
   ensureAndroidGuestSession,
   restoreSyntheticSession,
 } from './diagnose_android_logout_lifecycle.mjs';
@@ -951,6 +952,28 @@ export async function findPasswordAction({
     + `final classification: ${classifyPasswordChangeSurface(finalHierarchy)}.`);
 }
 
+export async function dismissPasswordKeyboardBeforeSubmit({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+  attempts = 12,
+  intervalMs = 250,
+  readInputMethodState,
+  pressBack,
+}) {
+  return dismissAndroidSoftwareKeyboard({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+    attempts,
+    intervalMs,
+    ...(readInputMethodState === undefined ? {} : { readInputMethodState }),
+    ...(pressBack === undefined ? {} : { pressBack }),
+  });
+}
+
 async function openPasswordChangeSurface({ commandRunner, adbPath, device, wait }) {
   launchCurrentHeadAndroidCandidate(commandRunner, adbPath, device);
   const main = await waitForCurrentHeadAndroidMainNavigation({
@@ -1005,6 +1028,21 @@ async function openPasswordChangeSurface({ commandRunner, adbPath, device, wait 
   });
 }
 
+export async function confirmColdStableGuestSession({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+  ensureGuest = ensureAndroidGuestSession,
+} = {}) {
+  const firstGuestState = await ensureGuest({ commandRunner, adbPath, device, wait });
+  if (firstGuestState !== true) return false;
+  // ensureAndroidGuestSession opens the profile from a fresh app launch. A
+  // second confirmed guest state therefore proves that sign-out survives a
+  // process restart before a different principal's credentials are entered.
+  return await ensureGuest({ commandRunner, adbPath, device, wait }) === true;
+}
+
 export async function preflightPixelPasswordChange({
   journalFile,
   candidate,
@@ -1050,7 +1088,13 @@ export async function preflightPixelPasswordChange({
   try {
     let guestReady;
     try {
-      guestReady = await ensureGuest({ commandRunner, adbPath, device, wait });
+      guestReady = await confirmColdStableGuestSession({
+        commandRunner,
+        adbPath,
+        device,
+        wait,
+        ensureGuest,
+      });
     } catch {
       fail('The sanitized password-change preflight guest transition failed.');
     }
@@ -1138,7 +1182,12 @@ async function performPixelPasswordChangeUi({
 }) {
   let guestReady;
   try {
-    guestReady = await ensureAndroidGuestSession({ commandRunner, adbPath, device, wait });
+    guestReady = await confirmColdStableGuestSession({
+      commandRunner,
+      adbPath,
+      device,
+      wait,
+    });
   } catch {
     fail('The sanitized password-change guest transition failed.');
   }
@@ -1188,6 +1237,14 @@ async function performPixelPasswordChangeUi({
     'Neues Passwort bestätigen',
     replacement,
   );
+  if (!await dismissPasswordKeyboardBeforeSubmit({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+  })) {
+    fail('The sanitized password-change keyboard did not close before submission.');
+  }
   hierarchy = await findPasswordAction({
     commandRunner,
     adbPath,

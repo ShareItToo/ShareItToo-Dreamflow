@@ -308,6 +308,39 @@ export function isAndroidSoftwareKeyboardShown(inputMethodState) {
     && /\bmIsInputViewShown=true\b/u.test(value);
 }
 
+export async function dismissAndroidSoftwareKeyboard({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+  attempts = 12,
+  intervalMs = 250,
+  readInputMethodState = (runner, path, target) => adb(
+    runner,
+    path,
+    target,
+    ['shell', 'dumpsys', 'input_method'],
+  ),
+  pressBack = (runner, path, target) => adb(
+    runner,
+    path,
+    target,
+    ['shell', 'input', 'keyevent', '4'],
+  ),
+}) {
+  if (!isAndroidSoftwareKeyboardShown(readInputMethodState(commandRunner, adbPath, device))) {
+    return true;
+  }
+  pressBack(commandRunner, adbPath, device);
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (!isAndroidSoftwareKeyboardShown(readInputMethodState(commandRunner, adbPath, device))) {
+      return true;
+    }
+    if (attempt + 1 < attempts) await wait(intervalMs);
+  }
+  return false;
+}
+
 async function openProfile({ commandRunner, adbPath, device, wait }) {
   launchCandidate(commandRunner, adbPath, device);
   const main = await waitForHierarchy({

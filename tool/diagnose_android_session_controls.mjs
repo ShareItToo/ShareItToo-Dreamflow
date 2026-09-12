@@ -24,6 +24,7 @@ import { basename, dirname, isAbsolute, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
+  dismissAndroidSoftwareKeyboard,
   ensureAndroidGuestSession,
 } from './diagnose_android_logout_lifecycle.mjs';
 import {
@@ -394,6 +395,42 @@ export function classifyTwoSessionInventory(sessions, expectedCurrentSessionId) 
   return 'exact-linux-current-and-android-remote';
 }
 
+export function summarizeTwoSessionInventory(sessions, expectedCurrentSessionId) {
+  const values = Array.isArray(sessions) ? sessions : [];
+  const current = values.filter((entry) => entry?.isThisDevice === true);
+  const remote = values.filter((entry) => entry?.isThisDevice === false);
+  return [
+    `total=${values.length}`,
+    `current=${current.length}`,
+    `remote=${remote.length}`,
+    `linux=${values.filter((entry) => entry?.name === 'Linux').length}`,
+    `android=${values.filter((entry) => entry?.name === 'Android').length}`,
+    `other=${values.filter((entry) => !['Linux', 'Android'].includes(entry?.name)).length}`,
+    `currentMatch=${current.some((entry) => entry?.id === expectedCurrentSessionId)}`,
+  ].join(',');
+}
+
+export async function waitForExactTwoSessionInventory({
+  fetchImpl,
+  session,
+  wait,
+  attempts = 12,
+  intervalMs = 250,
+  readInventory = readSessions,
+  onObserved = () => {},
+}) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const sessions = await readInventory(fetchImpl, session);
+    onObserved(sessions);
+    if (classifyTwoSessionInventory(sessions, session.sessionId)
+        === 'exact-linux-current-and-android-remote') {
+      return true;
+    }
+    if (attempt + 1 < attempts) await wait(intervalMs);
+  }
+  return false;
+}
+
 export function classifyRevokedSessionProbe(result) {
   if (result?.status === 401 && result?.value?.error === 'account_not_active') {
     return 'session-definitely-revoked';
@@ -576,6 +613,14 @@ async function restoreExactAccount({ commandRunner, adbPath, device, wait, accou
   replaceLoginInput(commandRunner, adbPath, device, hierarchy, 'E-Mail', account.email);
   hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
   replaceLoginInput(commandRunner, adbPath, device, hierarchy, 'Passwort', account.password);
+  if (!await dismissAndroidSoftwareKeyboard({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+  })) {
+    fail('The sanitized session-control keyboard did not close before login.');
+  }
   hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
   tapNamedNode(commandRunner, adbPath, device, hierarchy, 'Anmelden', { chooseLast: true });
   await waitForCurrentHeadAndroidMainNavigation({ commandRunner, adbPath, device, wait });
@@ -851,21 +896,33 @@ export async function executePixelSessionControls({
   try {
     await restoreExactAccount({ commandRunner, adbPath, device, wait, account });
     const remote = await loginSession(fetchImpl, account);
-    if (classifyTwoSessionInventory(
-      await readSessions(fetchImpl, remote),
-      remote.sessionId,
-    ) !== 'exact-linux-current-and-android-remote') {
-      fail('The initial two-session Staging inventory is ambiguous.');
+    let initialSessions = [];
+    if (!await waitForExactTwoSessionInventory({
+      fetchImpl,
+      session: remote,
+      wait,
+      onObserved: (sessions) => {
+        initialSessions = sessions;
+      },
+    })) {
+      fail(`The initial two-session Staging inventory is ambiguous (`
+        + `${summarizeTwoSessionInventory(initialSessions, remote.sessionId)}).`);
     }
     await revokeRemoteSessionThroughPixel({ commandRunner, adbPath, device, wait });
     await assertSessionRevoked(fetchImpl, remote);
 
     const verifier = await loginSession(fetchImpl, account);
-    if (classifyTwoSessionInventory(
-      await readSessions(fetchImpl, verifier),
-      verifier.sessionId,
-    ) !== 'exact-linux-current-and-android-remote') {
-      fail('The post-revocation Staging inventory did not preserve only the Pixel session.');
+    let postRevocationSessions = [];
+    if (!await waitForExactTwoSessionInventory({
+      fetchImpl,
+      session: verifier,
+      wait,
+      onObserved: (sessions) => {
+        postRevocationSessions = sessions;
+      },
+    })) {
+      fail(`The post-revocation Staging inventory did not preserve only the Pixel session (`
+        + `${summarizeTwoSessionInventory(postRevocationSessions, verifier.sessionId)}).`);
     }
     await logoutAllThroughPixel({ commandRunner, adbPath, device, wait });
     await assertSessionRevoked(fetchImpl, verifier);
@@ -993,10 +1050,7 @@ export async function inspectPixelSessionControls({
   });
   await restoreExactAccount({ commandRunner, adbPath, device, wait, account });
   const remote = await loginSession(fetchImpl, account);
-  if (classifyTwoSessionInventory(
-    await readSessions(fetchImpl, remote),
-    remote.sessionId,
-  ) !== 'exact-linux-current-and-android-remote') {
+  if (!await waitForExactTwoSessionInventory({ fetchImpl, session: remote, wait })) {
     fail('The inspection two-session Staging inventory is ambiguous.');
   }
   const hierarchy = await openSessionControls({ commandRunner, adbPath, device, wait });

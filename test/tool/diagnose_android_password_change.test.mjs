@@ -20,6 +20,8 @@ import {
   classifyPasswordCredentialState,
   classifyPasswordChangeSurface,
   completePixelPasswordChange,
+  confirmColdStableGuestSession,
+  dismissPasswordKeyboardBeforeSubmit,
   executePixelPasswordChange,
   findPasswordAction,
   isPasswordChangeLoginSurface,
@@ -166,6 +168,106 @@ test('password mutation readiness requires one current device and the loaded ses
     node('Other (Dieses Gerät)'),
     node('Alle Geräte abmelden'),
   ].join('')), false);
+});
+
+test('credential entry requires guest truth to survive a cold relaunch', async () => {
+  const calls = [];
+  assert.equal(await confirmColdStableGuestSession({
+    commandRunner: () => '',
+    adbPath: 'adb',
+    device: { serial: 'synthetic-device' },
+    wait: async () => {},
+    ensureGuest: async () => {
+      calls.push('guest');
+      return true;
+    },
+  }), true);
+  assert.deepEqual(calls, ['guest', 'guest']);
+
+  let unstableCalls = 0;
+  assert.equal(await confirmColdStableGuestSession({
+    commandRunner: () => '',
+    adbPath: 'adb',
+    device: { serial: 'synthetic-device' },
+    wait: async () => {},
+    ensureGuest: async () => ++unstableCalls === 1,
+  }), false);
+  assert.equal(unstableCalls, 2);
+});
+
+test('failed initial guest transition never attempts the cold confirmation', async () => {
+  let calls = 0;
+  assert.equal(await confirmColdStableGuestSession({
+    commandRunner: () => '',
+    adbPath: 'adb',
+    device: { serial: 'synthetic-device' },
+    wait: async () => {},
+    ensureGuest: async () => {
+      calls += 1;
+      return false;
+    },
+  }), false);
+  assert.equal(calls, 1);
+});
+
+test('password submit leaves an already hidden software keyboard untouched', async () => {
+  let backPresses = 0;
+  let waits = 0;
+  assert.equal(await dismissPasswordKeyboardBeforeSubmit({
+    commandRunner: () => '',
+    adbPath: 'adb',
+    device: { serial: 'synthetic-device' },
+    wait: async () => {
+      waits += 1;
+    },
+    readInputMethodState: () => 'mInputShown=false mIsInputViewShown=false',
+    pressBack: () => {
+      backPresses += 1;
+    },
+  }), true);
+  assert.equal(backPresses, 0);
+  assert.equal(waits, 0);
+});
+
+test('password submit dismisses a shown keyboard and proves the hidden state', async () => {
+  const states = [
+    'mInputShown=true mIsInputViewShown=true',
+    'mInputShown=true mIsInputViewShown=true',
+    'mInputShown=false mIsInputViewShown=false',
+  ];
+  let backPresses = 0;
+  const waits = [];
+  assert.equal(await dismissPasswordKeyboardBeforeSubmit({
+    commandRunner: () => '',
+    adbPath: 'adb',
+    device: { serial: 'synthetic-device' },
+    wait: async (milliseconds) => waits.push(milliseconds),
+    readInputMethodState: () => states.shift(),
+    pressBack: () => {
+      backPresses += 1;
+    },
+  }), true);
+  assert.equal(backPresses, 1);
+  assert.deepEqual(waits, [250]);
+});
+
+test('password submit fails closed while the software keyboard remains shown', async () => {
+  let backPresses = 0;
+  const waits = [];
+  assert.equal(await dismissPasswordKeyboardBeforeSubmit({
+    commandRunner: () => '',
+    adbPath: 'adb',
+    device: { serial: 'synthetic-device' },
+    wait: async (milliseconds) => waits.push(milliseconds),
+    attempts: 3,
+    intervalMs: 125,
+    readInputMethodState: () => 'mInputShown=true mIsInputViewShown=true',
+    pressBack: () => {
+      backPresses += 1;
+    },
+  }), false);
+  assert.equal(backPresses, 1);
+  assert.deepEqual(waits, [125, 125]);
 });
 
 test('password navigation selects the final same-label action when semantics are merged', () => {
