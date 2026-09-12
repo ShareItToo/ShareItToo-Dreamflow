@@ -18,6 +18,9 @@ import {
 import {
   validatePrivateAndroidReleaseArchive,
 } from './validate_current_head_android_release_archive.mjs';
+import {
+  inspectCurrentCandidateAndroidDeviceServiceState,
+} from './diagnose_current_candidate_android_device_services_opt_in.mjs';
 
 const repositoryRoot = realpathSync(resolve(fileURLToPath(new URL('..', import.meta.url))));
 const productJourneyScript = resolve(
@@ -285,6 +288,18 @@ export function validateWp117JourneyResult(value) {
   return true;
 }
 
+export function assertWp117PushOptInReady(value) {
+  if (value?.independentSwitchCount !== 2
+      || value.pushEnabled !== true
+      || typeof value.crashDiagnosticsEnabled !== 'boolean'
+      || value.exactSecondObservationUnchanged !== true
+      || value.consentDialogOpened !== false
+      || value.exploreSurfaceRestored !== true) {
+    fail('WP117 requires the visible ShareItToo app-level push opt-in before product mutation.');
+  }
+  return true;
+}
+
 function runProductJourney({
   sourceVaultFile,
   candidateDirectory,
@@ -368,6 +383,12 @@ async function main() {
     device,
     candidate,
   });
+  const deviceServices = await inspectCurrentCandidateAndroidDeviceServiceState({
+    commandRunner,
+    adbPath: args.adbPath,
+    device,
+  });
+  assertWp117PushOptInReady(deviceServices);
   const journey = runProductJourney({
     sourceVaultFile,
     candidateDirectory,
@@ -393,6 +414,13 @@ async function main() {
       containsRawDeviceIdentifier: false,
     },
     installation: plan,
+    deviceServices: {
+      pushEnabled: true,
+      crashDiagnosticsEnabled: deviceServices.crashDiagnosticsEnabled,
+      exactSecondObservationUnchanged: true,
+      consentDialogOpened: false,
+      exploreSurfaceRestored: true,
+    },
     journey,
     boundaries: {
       onlyShareItTooPackageMayHaveBeenReset: true,

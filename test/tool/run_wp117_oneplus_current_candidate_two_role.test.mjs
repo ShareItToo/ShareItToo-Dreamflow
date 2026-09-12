@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 import {
+  assertWp117PushOptInReady,
   assertWp117ExactCandidate,
   classifyWp117Installation,
   parseWp117Arguments,
@@ -104,6 +105,31 @@ test('preserves an exact installation and gates only a non-exact package reset',
     installRequired: true,
     localAppDataReset: false,
   });
+});
+
+test('requires the stable visible ShareItToo push opt-in before product mutation', () => {
+  const ready = {
+    independentSwitchCount: 2,
+    pushEnabled: true,
+    crashDiagnosticsEnabled: false,
+    exactSecondObservationUnchanged: true,
+    consentDialogOpened: false,
+    exploreSurfaceRestored: true,
+  };
+  assert.equal(assertWp117PushOptInReady(ready), true);
+  for (const mutate of [
+    (value) => { value.pushEnabled = false; },
+    (value) => { value.exactSecondObservationUnchanged = false; },
+    (value) => { value.consentDialogOpened = true; },
+    (value) => { value.exploreSurfaceRestored = false; },
+  ]) {
+    const value = { ...ready };
+    mutate(value);
+    assert.throws(
+      () => assertWp117PushOptInReady(value),
+      /app-level push opt-in before product mutation/u,
+    );
+  }
 });
 
 test('requires private execution inputs and exact scoped-reset wording', () => {

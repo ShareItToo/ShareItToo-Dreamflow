@@ -192,7 +192,7 @@ function containsBounds(outer, inner) {
     && inner.y2 <= outer.y2;
 }
 
-export function inspectDeviceServiceControls(hierarchy) {
+export function readDeviceServiceControls(hierarchy) {
   const pushNodes = new Set(currentHeadAndroidNamedNodes(hierarchy, pushLabel));
   const sectionNodes = currentHeadAndroidNamedNodes(hierarchy, crashLabel)
     .filter((node) => pushNodes.has(node));
@@ -213,18 +213,27 @@ export function inspectDeviceServiceControls(hierarchy) {
     .sort((left, right) => left.bounds.y1 - right.bounds.y1);
   if (switches.length !== 2
       || switches.some((control) => control.checkable !== 'true'
+        || !['true', 'false'].includes(control.checked)
         || control.clickable !== 'true'
         || control.enabled !== 'true')) {
     fail('The two independent Firebase device-service switches are not available.');
   }
-  if (switches.some((control) => control.checked !== 'false')) {
-    fail('The Firebase device-service preflight requires both user choices to remain off.');
-  }
   return Object.freeze({
     independentSwitchCount: 2,
-    push: Object.freeze({ controlPresent: true, enabled: false }),
-    crashDiagnostics: Object.freeze({ controlPresent: true, enabled: false }),
+    push: Object.freeze({ controlPresent: true, enabled: switches[0].checked === 'true' }),
+    crashDiagnostics: Object.freeze({
+      controlPresent: true,
+      enabled: switches[1].checked === 'true',
+    }),
   });
+}
+
+export function inspectDeviceServiceControls(hierarchy) {
+  const controls = readDeviceServiceControls(hierarchy);
+  if (controls.push.enabled || controls.crashDiagnostics.enabled) {
+    fail('The Firebase device-service preflight requires both user choices to remain off.');
+  }
+  return controls;
 }
 
 async function revealDeviceServiceControls({
@@ -243,7 +252,7 @@ async function revealDeviceServiceControls({
   let current = hierarchy;
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
-      return Object.freeze({ hierarchy: current, controls: inspectDeviceServiceControls(current) });
+      return Object.freeze({ hierarchy: current, controls: readDeviceServiceControls(current) });
     } catch (error) {
       if (attempt === 3) throw error;
       currentHeadAndroidAdb(commandRunner, adbPath, device, [
@@ -305,6 +314,54 @@ async function restoreExplore({ commandRunner, adbPath, device, wait }) {
   return true;
 }
 
+export async function inspectCurrentCandidateAndroidDeviceServiceState({
+  commandRunner = defaultCurrentHeadAndroidCommandRunner,
+  adbPath = 'adb',
+  device,
+  wait = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds)),
+}) {
+  let first;
+  let second;
+  let exploreRestored = false;
+  try {
+    launchCurrentHeadAndroidCandidate(commandRunner, adbPath, device);
+    const settings = await openNotificationSettings({
+      commandRunner,
+      adbPath,
+      device,
+      wait,
+    });
+    const revealed = await revealDeviceServiceControls({
+      commandRunner,
+      adbPath,
+      device,
+      wait,
+      hierarchy: settings,
+    });
+    first = revealed.controls;
+    await wait(600);
+    const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+    second = readDeviceServiceControls(hierarchy);
+    if (!exact(first, second)) {
+      fail('The Firebase device-service choices changed during the read-only preflight.');
+    }
+    if (namedNodePresent(hierarchy, 'Push-Mitteilungen aktivieren?')
+        || namedNodePresent(hierarchy, 'Freiwillige Crashdiagnose aktivieren?')) {
+      fail('A Firebase device-service consent dialog opened unexpectedly.');
+    }
+  } finally {
+    exploreRestored = await restoreExplore({ commandRunner, adbPath, device, wait });
+  }
+  return Object.freeze({
+    independentSwitchCount: first.independentSwitchCount,
+    pushEnabled: first.push.enabled,
+    crashDiagnosticsEnabled: first.crashDiagnostics.enabled,
+    exactSecondObservationUnchanged: exact(first, second),
+    consentDialogOpened: false,
+    exploreSurfaceRestored: exploreRestored,
+  });
+}
+
 export async function diagnoseCurrentCandidateAndroidDeviceServicesOptIn({
   commandRunner = defaultCurrentHeadAndroidCommandRunner,
   adbPath = 'adb',
@@ -343,7 +400,7 @@ export async function diagnoseCurrentCandidateAndroidDeviceServicesOptIn({
       wait,
       hierarchy: settings,
     });
-    first = revealed.controls;
+    first = inspectDeviceServiceControls(revealed.hierarchy);
     await wait(600);
     second = inspectDeviceServiceControls(
       dumpCurrentHeadAndroidUi(commandRunner, adbPath, device),

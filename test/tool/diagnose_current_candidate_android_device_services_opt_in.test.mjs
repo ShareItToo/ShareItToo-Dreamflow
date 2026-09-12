@@ -4,8 +4,10 @@ import test from 'node:test';
 
 import {
   diagnoseCurrentCandidateAndroidDeviceServicesOptIn,
+  inspectCurrentCandidateAndroidDeviceServiceState,
   inspectDeviceServiceControls,
   parseDeviceServicesOptInArguments,
+  readDeviceServiceControls,
 } from '../../tool/diagnose_current_candidate_android_device_services_opt_in.mjs';
 
 const installedApk = Buffer.from('exact-current-candidate-apk');
@@ -200,6 +202,35 @@ test('observes both independent exact-candidate controls off without consent or 
   assert.deepEqual(runner.serviceTaps, []);
   assert.equal(runner.screen(), 'explore');
   assert.equal(JSON.stringify(evidence).includes('PRIVATE-SERIAL'), false);
+});
+
+test('reads an enabled push opt-in without requiring crash diagnostics or changing either choice', async () => {
+  const runner = fakeRunner({ pushEnabled: true });
+  const state = await inspectCurrentCandidateAndroidDeviceServiceState({
+    commandRunner: runner,
+    adbPath: 'adb',
+    device,
+    wait: async () => {},
+  });
+  assert.deepEqual(state, {
+    independentSwitchCount: 2,
+    pushEnabled: true,
+    crashDiagnosticsEnabled: false,
+    exactSecondObservationUnchanged: true,
+    consentDialogOpened: false,
+    exploreSurfaceRestored: true,
+  });
+  assert.deepEqual(runner.serviceTaps, []);
+  assert.equal(runner.screen(), 'explore');
+});
+
+test('fails closed instead of treating an unknown switch state as disabled', () => {
+  const unknown = hierarchy('settings', { pushEnabled: false })
+    .replace('checked="false"', 'checked="mixed"');
+  assert.throws(
+    () => readDeviceServiceControls(unknown),
+    /switches are not available/u,
+  );
 });
 
 test('refuses a locked phone and candidate drift before opening the app', async () => {
