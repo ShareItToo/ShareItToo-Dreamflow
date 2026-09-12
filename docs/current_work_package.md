@@ -1,4 +1,24 @@
-# Current Work Package: WP119 Current-Candidate Goal Acceptance — COMPLETE; EXTERNAL GATES OPEN
+# Current Work Package: WP120 Current-Candidate Auth/Session Closure — PIXEL COMPLETE; ONEPLUS PARTIAL
+
+WP120 re-proves the exact `1.0.0+2026091110` candidate's password-change and
+session-control lifecycles on the physical Pixel. Definite credential truth,
+cold-start login, targeted remote revoke, logout-all, server-confirmed empty
+truth, Account-A-to-B isolation, original-credential restoration, diagnostic
+session cleanup and protected-owner restoration all pass.
+
+The OnePlus CPH2581 now runs the same exact candidate data-preservingly and has
+the app-specific notification permission enabled. Its two-role replay stopped
+before owner publication and cleaned up without booking, contract, reservation
+or payment. The next bounded package is the OnePlus owner-publication UI root
+cause and exact-owner restoration; it must run serially because the physical
+diagnostics share isolated synthetic principals. See
+`docs/operations/WP120_CURRENT_CANDIDATE_AUTH_SESSION_CLOSURE_2026-09-12.md`.
+
+Runner implementation HEAD `380b312dbad593bb87db0eaf16f2e2f3240e2583`
+contains only state-based synchronization and 47 passing focused tests. No app
+candidate, Production, Store, Firebase, payment, VPS/DNS or PR state changed.
+
+# Previous Work Package: WP119 Current-Candidate Goal Acceptance — COMPLETE; EXTERNAL GATES OPEN
 
 WP119 reconciles the full active Android Staging goal against exact candidate
 `1.0.0+2026091110` and current immutable Staging truth. The fail-closed result

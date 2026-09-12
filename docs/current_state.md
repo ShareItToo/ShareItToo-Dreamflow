@@ -1,6 +1,25 @@
 # ShareItToo Current State
 
-## WP119 exact-current-candidate goal checkpoint — complete; external gates remain
+## WP120 exact-current-candidate auth/session closure — Pixel complete; OnePlus partial
+
+Signed Internal/Staging candidate `1.0.0+2026091110` now passes a fresh physical
+Pixel password-change and complete session-control replay with exact credential,
+server-session, cold-start, Account-A/B, cleanup and protected-owner truth. The
+runner corrections at `380b312dbad593bb87db0eaf16f2e2f3240e2583` are
+state-based: cold guest confirmation, proven keyboard dismissal, bounded exact
+session inventory and serialized shared-principal device runs.
+
+The same candidate is installed data-preservingly on OnePlus CPH2581 with the
+correct signature, Staging binding and notification permission. Its fresh
+two-role rerun stopped before owner publication, created no booking, contract,
+reservation or payment, and removed its diagnostic listing. Exact OnePlus owner
+session truth and the owner-publication UI remain open. See
+`docs/operations/WP120_CURRENT_CANDIDATE_AUTH_SESSION_CLOSURE_2026-09-12.md`.
+
+No app build, Production, Google Play, Firebase, VPS/DNS, payment or PR state
+changed.
+
+## Previous: WP119 exact-current-candidate goal checkpoint — complete; external gates remain
 
 The active Android Staging goal is now reconciled against exact signed
 candidate `1.0.0+2026091110`, immutable Staging Backend
