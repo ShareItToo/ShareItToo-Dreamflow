@@ -27,6 +27,7 @@ import {
   preflightAuthenticatedPermissionLifecycle,
   profileMenuScrollArguments,
   readWp46PermissionJournal,
+  settleAndroidPackageManagerPermissionChanges,
 } from '../../tool/diagnose_current_candidate_android_permission_lifecycle.mjs';
 
 const names = [
@@ -161,6 +162,7 @@ function fakeOperations({ failOn = null } = {}) {
         calls.push('restore');
         current = structuredClone(snapshot);
       },
+      settlePermissionManager: async () => calls.push('settle-permission-manager'),
     },
   };
 }
@@ -178,6 +180,15 @@ test('exercises deny and allow with authenticated restarts, then restores exactl
   assert.ok(restoreIndex > 0);
   assert.equal(fake.calls[restoreIndex - 1], 'checkpoint:lifecycle:before-restore');
   assert.equal(fake.calls[restoreIndex + 1], 'checkpoint:lifecycle:after-restore');
+  assert.equal(
+    fake.calls[restoreIndex + 2],
+    'checkpoint:lifecycle:before-permission-manager-settle',
+  );
+  assert.equal(fake.calls[restoreIndex + 3], 'settle-permission-manager');
+  assert.equal(
+    fake.calls[restoreIndex + 4],
+    'checkpoint:lifecycle:after-permission-manager-settle',
+  );
   assert.equal(fake.calls.includes('checkpoint:camera:before-denied-restart'), true);
   assert.equal(fake.calls.includes('checkpoint:lifecycle:before-final-restart'), true);
 });
@@ -381,6 +392,28 @@ test('accepts only fixed non-private lifecycle checkpoints', () => {
   assert.throws(
     () => normalizeWp46LifecycleCheckpoint({ group: 'camera', phase: 'private-ui-text' }),
     /checkpoint is not safe/u,
+  );
+});
+
+test('waits for both Android PackageManager handlers before a restored restart', () => {
+  const calls = [];
+  settleAndroidPackageManagerPermissionChanges((_file, args) => {
+    calls.push(args.slice(2).join(' '));
+    return args.slice(2).join(' ') ===
+            'shell timeout 10 am wait-for-broadcast-barrier'
+        ? 'Waiting for queues\nTest barrier passed'
+        : 'Success';
+  }, 'adb', { serial: 'PRIVATE-SERIAL' });
+  assert.deepEqual(calls, [
+    'shell cmd package wait-for-handler --timeout 10000',
+    'shell cmd package wait-for-background-handler --timeout 10000',
+    'shell timeout 10 am wait-for-broadcast-barrier',
+  ]);
+  assert.throws(
+    () => settleAndroidPackageManagerPermissionChanges(() => 'Timed out', 'adb', {
+      serial: 'PRIVATE-SERIAL',
+    }),
+    /did not confirm permission-change settlement/u,
   );
 });
 

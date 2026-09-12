@@ -23,7 +23,7 @@ import {
   currentHeadAndroidNodeAttribute,
   defaultCurrentHeadAndroidCommandRunner,
   dumpCurrentHeadAndroidUi,
-  launchCurrentHeadAndroidCandidate,
+  launchCurrentHeadAndroidCandidateExplicitly,
   observeCurrentHeadAndroidForegroundOwner,
   restoreCurrentHeadAndroidExplore,
   verifyCurrentHeadAndroidInstalledCandidate,
@@ -218,7 +218,8 @@ export function normalizeWp46LifecycleCheckpoint(checkpoint) {
         'before-deny', 'denied-state-verified', 'before-denied-restart',
         'denied-restart-verified', 'before-allow', 'allowed-state-verified',
         'before-allowed-restart', 'allowed-restart-verified', 'before-settings',
-        'before-restore', 'after-restore', 'before-final-restart',
+        'before-restore', 'after-restore', 'before-permission-manager-settle',
+        'after-permission-manager-settle', 'before-final-restart',
       ].includes(phase)) {
     fail('The WP46 lifecycle checkpoint is not safe.');
   }
@@ -270,6 +271,13 @@ export async function exercisePermissionGroups({ operations }) {
     await recordLifecycleCheckpoint(operations, { group: 'lifecycle', phase: 'before-restore' });
     await operations.restoreState(before);
     await recordLifecycleCheckpoint(operations, { group: 'lifecycle', phase: 'after-restore' });
+    await recordLifecycleCheckpoint(operations, {
+      group: 'lifecycle', phase: 'before-permission-manager-settle',
+    });
+    await operations.settlePermissionManager();
+    await recordLifecycleCheckpoint(operations, {
+      group: 'lifecycle', phase: 'after-permission-manager-settle',
+    });
   }
   const after = await operations.readState();
   if (!exact(after, before)) {
@@ -555,7 +563,7 @@ function restorePhysicalPermissionState(commandRunner, adbPath, device, snapshot
 }
 
 async function restartAuthenticated(commandRunner, adbPath, device) {
-  launchCurrentHeadAndroidCandidate(commandRunner, adbPath, device);
+  launchCurrentHeadAndroidCandidateExplicitly(commandRunner, adbPath, device);
   try {
     let main;
     try {
@@ -606,6 +614,32 @@ async function openReadOnlyPermissionSettings(commandRunner, adbPath, device) {
     'read-only app permission settings',
   );
   currentHeadAndroidAdb(commandRunner, adbPath, device, ['shell', 'input', 'keyevent', '4']);
+}
+
+export function settleAndroidPackageManagerPermissionChanges(
+  commandRunner,
+  adbPath,
+  device,
+) {
+  // Runtime-permission writes return before Android has necessarily drained
+  // the PackageManager callbacks that terminate the affected process. A
+  // final launch before that drain can be killed by a delayed callback and be
+  // misclassified as an application startup failure. These platform-owned
+  // barriers are completion signals, not elapsed-time retries.
+  for (const handler of ['wait-for-handler', 'wait-for-background-handler']) {
+    const result = currentHeadAndroidAdb(commandRunner, adbPath, device, [
+      'shell', 'cmd', 'package', handler, '--timeout', '10000',
+    ]);
+    if (result !== 'Success') {
+      fail('Android PackageManager did not confirm permission-change settlement.');
+    }
+  }
+  const broadcastBarrier = currentHeadAndroidAdb(commandRunner, adbPath, device, [
+    'shell', 'timeout', '10', 'am', 'wait-for-broadcast-barrier',
+  ]);
+  if (!broadcastBarrier.split(/\r?\n/u).includes('Test barrier passed')) {
+    fail('Android did not confirm the permission-change broadcast barrier.');
+  }
 }
 
 const maxPermissionJournalBytes = 16 * 1024;
@@ -910,6 +944,11 @@ async function run() {
           args.adbPath,
           device,
           state,
+        ),
+        settlePermissionManager: async () => settleAndroidPackageManagerPermissionChanges(
+          defaultCurrentHeadAndroidCommandRunner,
+          args.adbPath,
+          device,
         ),
       },
     });

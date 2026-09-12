@@ -732,6 +732,18 @@ claimed until every item below has reproducible evidence and is closed.
   exact-commit CI is required. `TD-RR-010` remains open for ten item-overlay
   context findings.
 
+- 12.09.2026, WP128: the exact-current Pixel permission matrix proves all
+  camera/location/notification deny-allow authenticated restarts and exact
+  restoration, but Android permission-revocation callbacks can outlive the
+  synchronous restore commands and kill a newly launched process. Generic
+  launcher-event injection was replaced by an explicit package activity;
+  current foreground classification and PackageManager/broadcast completion
+  barriers now fail closed. The active Android 17 runtime did not confirm the
+  final broadcast barrier, so the lifecycle remains PARTIAL and no further
+  blind replay is allowed. Close only with a deterministic platform settlement
+  signal and one exact-candidate final-restart pass; elapsed-time waits or
+  automatic retries are not closure.
+
 ## Closure rule
 
 Each item closes only through a separate bounded implementation with committed

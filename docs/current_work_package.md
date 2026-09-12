@@ -1,4 +1,23 @@
-# Current Work Package: WP127 Current-Candidate Portfolio Convergence — COMPLETE
+# Current Work Package: WP128 Current-Candidate Pixel Visual/Permission — VISUAL COMPLETE; PERMISSION PARTIAL
+
+Exact signed Internal/Staging `1.0.0+2026091201` passes both Android system
+modes, all five app background choices, all five main destinations at
+200-percent text and three bounded cold starts on the physical Pixel. Every
+mutable setting was restored exactly and private captures remain outside Git.
+The portfolio is now **13 PASS / 11 PARTIAL / 8 OPEN**.
+
+Camera, location and notification deny/allow authenticated restart matrices
+and exact permission restoration pass. The full lifecycle remains PARTIAL:
+Android's delayed permission-revocation callbacks can terminate the final
+newly launched process, and its broadcast settlement barrier was not confirmed
+during the last run. The diagnostic fails closed, journals are owner-only and
+fully restored, and no further blind physical replay is permitted. See
+`docs/operations/WP128_CURRENT_CANDIDATE_PIXEL_VISUAL_PERMISSION_2026-09-12.md`.
+
+No app runtime, Backend, Production, Store, Firebase, payment, real money,
+account/business data, OnePlus or PR state changed.
+
+# Previous Work Package: WP127 Current-Candidate Portfolio Convergence — COMPLETE
 
 The exact signed Internal/Staging `1.0.0+2026091201` candidate is reconciled
 against the full 32-area goal with a hash-bound and symbol-reviewed delta from

@@ -1,5 +1,29 @@
 # ShareItToo Current State
 
+## WP128 exact-current Pixel visual closure — complete; permission partial
+
+The signed Internal/Staging `1.0.0+2026091201` candidate now passes a fresh
+physical Pixel replay of both Android system modes, all five app background
+choices, all five main destinations at 200-percent text and three bounded cold
+starts. Every mutable system/app setting was restored exactly and all private
+captures remain outside Git. This promotes only the portfolio's
+theme/background/large-text/restart requirement: the current total is
+**13 PASS, 11 PARTIAL and 8 OPEN**.
+
+The three Android permission groups each passed deny/allow authenticated
+restarts and exact four-permission restoration. The complete lifecycle remains
+PARTIAL because Android permission-revocation callbacks outlived the synchronous
+restore commands and terminated the newly launched process. Hardened tooling
+now requires explicit activity launch and platform settlement barriers; the
+last run stopped when the broadcast barrier was not confirmed. Every journal
+is restored, owner-only and reports no recovery requirement. No further blind
+replay is allowed. See
+`docs/operations/WP128_CURRENT_CANDIDATE_PIXEL_VISUAL_PERMISSION_2026-09-12.md`.
+
+The OnePlus is disconnected and was not contacted. No app runtime, Backend,
+Production, Store, Firebase, account, business, payment or PR-merge state
+changed.
+
 ## WP127 exact-current-candidate portfolio convergence — complete
 
 The full 32-area Android Staging objective is now reconciled against exact

@@ -91,7 +91,7 @@ export function observeCurrentHeadAndroidForegroundOwner(commandRunner, adbPath,
     commandRunner,
     adbPath,
     device,
-    ['shell', 'dumpsys', 'window', 'windows'],
+    ['shell', 'dumpsys', 'window'],
   ));
 }
 
@@ -181,6 +181,33 @@ export function launchCurrentHeadAndroidCandidate(commandRunner, adbPath, device
   ]);
   if (!/Events injected:\s*1/u.test(result)) {
     fail('The current-head ShareItToo candidate did not launch.');
+  }
+}
+
+// Permission-state transitions can leave Android's Settings activity in a
+// foreground hand-off while a launcher-event injection is dispatched.  Use an
+// explicit, package-bound activity start for diagnostics that must prove the
+// immediately following restart boundary; an injected Monkey event is not
+// sufficient evidence that ShareItToo itself was selected as the launch
+// target.
+export function launchCurrentHeadAndroidCandidateExplicitly(commandRunner, adbPath, device) {
+  currentHeadAndroidAdb(
+    commandRunner,
+    adbPath,
+    device,
+    ['shell', 'am', 'force-stop', applicationId],
+  );
+  const result = currentHeadAndroidAdb(commandRunner, adbPath, device, [
+    'shell',
+    'am',
+    'start',
+    '-W',
+    '-n',
+    `${applicationId}/.MainActivity`,
+  ]);
+  if (!/^Status:\s*ok\s*$/mu.test(result)
+      || !new RegExp(`(?:Activity:\\s*${applicationId.replaceAll('.', '\\.')}/\\.MainActivity|cmp=${applicationId.replaceAll('.', '\\.')}/\\.MainActivity)`, 'u').test(result)) {
+    fail('The explicit current-head ShareItToo activity did not launch.');
   }
 }
 

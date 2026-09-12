@@ -7,6 +7,7 @@ import {
   classifyCurrentHeadAndroidForegroundOwner,
   diagnoseCurrentHeadAndroidColdStartStability,
   diagnoseCurrentHeadAndroidMainNavigation,
+  launchCurrentHeadAndroidCandidateExplicitly,
   parseMainNavigationArguments,
   waitForCurrentHeadAndroidMainNavigation,
 } from '../../tool/diagnose_current_head_android_main_navigation.mjs';
@@ -131,6 +132,39 @@ test('proves five authenticated read-only destinations and returns sanitized evi
   assert.equal(evidence.boundaries.bookingFlowPassed, false);
   assert.equal(evidence.boundaries.accountMutationPerformed, false);
   assert.equal(JSON.stringify(evidence).includes('PRIVATE-SERIAL'), false);
+});
+
+test('explicit activity launcher binds the restart to ShareItToo instead of an injected event', () => {
+  const calls = [];
+  launchCurrentHeadAndroidCandidateExplicitly((_file, args) => {
+    const command = args.slice(2);
+    calls.push(command.join(' '));
+    if (command.join(' ') === 'shell am force-stop com.shareittoo.app') return '';
+    if (command.join(' ') === 'shell am start -W -n com.shareittoo.app/.MainActivity') {
+      return [
+        'Starting: Intent { cmp=com.shareittoo.app/.MainActivity }',
+        'Status: ok',
+        'LaunchState: COLD',
+        'Activity: com.shareittoo.app/.MainActivity',
+      ].join('\n');
+    }
+    throw new Error('unexpected command');
+  }, 'adb', { serial: 'PRIVATE-SERIAL' });
+  assert.deepEqual(calls, [
+    'shell am force-stop com.shareittoo.app',
+    'shell am start -W -n com.shareittoo.app/.MainActivity',
+  ]);
+});
+
+test('explicit activity launcher rejects a successful status for a foreign activity', () => {
+  assert.throws(
+    () => launchCurrentHeadAndroidCandidateExplicitly((_file, args) => (
+      args.slice(2).join(' ') === 'shell am force-stop com.shareittoo.app'
+        ? ''
+        : 'Status: ok\nActivity: com.android.settings/.Settings'
+    ), 'adb', { serial: 'PRIVATE-SERIAL' }),
+    /explicit current-head ShareItToo activity did not launch/u,
+  );
 });
 
 test('accepts a valid physical-device navigation surface after bounded slow cold start', async () => {
