@@ -1,5 +1,26 @@
 # ShareItToo Current State
 
+## WP125 push registration recovery — source complete; physical replay pending
+
+The OnePlus push probe exposed a proven client correctness class: visible
+opt-in could be accepted while backend registration was unconfirmed, and
+registration/cleanup recovery lacked exact principal, epoch and route
+ownership. Implementation head `a695306350bd868eda64fb9af8b388ed61923578`
+now serializes every push mutation, binds remote work to the exact session,
+installs token recovery before the first request, retries after app/realtime
+recovery and suppresses stale Account-A results without touching Account-B UI.
+
+The physical OnePlus failure itself is not attributed: its one foreground
+probe showed no banner, available backend inventory could not bind a row to
+that activation, and the device is now disconnected. The installed immutable
+`1.0.0+2026091110` candidate does not contain WP125. A strictly higher signed
+Internal/Staging successor must be replayed on the Pixel before delivery success
+is claimed. See
+`docs/operations/WP125_PUSH_REGISTRATION_RECOVERY_2026-09-12.md`.
+
+No Production, Google Play, Firebase, backend deployment, payment, real-money
+or PR-merge state changed.
+
 ## WP120 exact-current-candidate auth/session closure — Pixel complete; OnePlus partial
 
 Signed Internal/Staging candidate `1.0.0+2026091110` now passes a fresh physical

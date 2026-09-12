@@ -1,4 +1,22 @@
-# Current Work Package: WP120 Current-Candidate Auth/Session Closure — PIXEL COMPLETE; ONEPLUS PARTIAL
+# Current Work Package: WP125 Push Registration Recovery — SOURCE COMPLETE; PHYSICAL REPLAY PENDING
+
+WP125 closes the proven source defects that allowed a visible push opt-in to
+coexist with unconfirmed backend registration. Exact session/epoch ownership,
+serialized mutations, early token-refresh recovery, authenticated realtime and
+resume retries, opaque owner-bound cleanup, and exact route-owned UI outcomes
+are implemented at `a695306350bd868eda64fb9af8b388ed61923578`.
+
+The OnePlus is disconnected and no physical success is claimed. Its immutable
+installed `1.0.0+2026091110` candidate predates the fix. The next bounded
+package is a strictly higher signed Internal/Staging successor and a controlled
+Pixel replay of activation, recovery and Account-A-to-B isolation. No OnePlus
+is required for that package. See
+`docs/operations/WP125_PUSH_REGISTRATION_RECOVERY_2026-09-12.md`.
+
+No Production, Google Play, Firebase, backend deployment, payment, real-money
+or PR-merge state changed.
+
+# Previous Work Package: WP120 Current-Candidate Auth/Session Closure — PIXEL COMPLETE; ONEPLUS PARTIAL
 
 WP120 re-proves the exact `1.0.0+2026091110` candidate's password-change and
 session-control lifecycles on the physical Pixel. Definite credential truth,
