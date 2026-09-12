@@ -1,4 +1,20 @@
-# Current Work Package: WP128 Current-Candidate Pixel Visual/Permission — VISUAL COMPLETE; PERMISSION PARTIAL
+# Current Work Package: WP129 Exact-Current E-Mail Registration/Recovery — COMPLETE
+
+Exact signed Internal/Staging `1.0.0+2026091201` now passes fresh physical
+Pixel registration with four consents, exact one-message delivery, single-use
+verification, login, password recovery, old-password rejection, replacement-
+password login and cold-start persistence. The reset submission is definite;
+the separate replay probe was rate limited and is not overclaimed.
+
+The protected synthetic owner is restored. The disposable account remains in
+an owner-only local vault for the separately bounded deletion package and has
+no business fixture. The portfolio is **14 PASS / 10 PARTIAL / 8 OPEN**. See
+`docs/operations/WP129_CURRENT_CANDIDATE_EMAIL_REGISTRATION_RECOVERY_2026-09-12.md`.
+
+No app/Backend runtime, Production, Store, Firebase, support, payment, real
+money, public registration, OnePlus or PR-merge state changed.
+
+# Previous Work Package: WP128 Current-Candidate Pixel Visual/Permission — VISUAL COMPLETE; PERMISSION PARTIAL
 
 Exact signed Internal/Staging `1.0.0+2026091201` passes both Android system
 modes, all five app background choices, all five main destinations at

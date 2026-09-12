@@ -1,5 +1,25 @@
 # ShareItToo Current State
 
+## WP129 exact-current E-mail registration and recovery — complete
+
+The signed Internal/Staging `1.0.0+2026091201` candidate now passes a fresh
+physical Pixel E-mail registration, exact single-use verification, login,
+password recovery and recovered-session cold start. The recovery action itself
+returned definite success; its immediate replay check was rate limited, so no
+consumed-reset-link claim is made. Exact structured rejection of the old
+password and successful Pixel login with the replacement independently close
+the recovery result.
+
+The original protected synthetic owner was restored. The new private
+disposable account is retained without a business fixture for the separate
+exact-candidate deletion package. No identity, credential, link, token,
+private path or raw device identifier is committed. The portfolio is now
+**14 PASS, 10 PARTIAL and 8 OPEN**. See
+`docs/operations/WP129_CURRENT_CANDIDATE_EMAIL_REGISTRATION_RECOVERY_2026-09-12.md`.
+
+No app/Backend runtime, Production, Store, Firebase, support, payment, real
+money, public registration, OnePlus or PR-merge state changed.
+
 ## WP128 exact-current Pixel visual closure — complete; permission partial
 
 The signed Internal/Staging `1.0.0+2026091201` candidate now passes a fresh
