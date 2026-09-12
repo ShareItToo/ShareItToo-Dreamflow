@@ -1,5 +1,25 @@
 # ShareItToo Current State
 
+## WP119 exact-current-candidate goal checkpoint — local closure in progress
+
+The active Android Staging goal is now reconciled against exact signed
+candidate `1.0.0+2026091110`, immutable Staging Backend
+`df39a14b7a19afe467842461a28f1e77fec8445e` and evidence base
+`4018de1475e33e4f652a14bc98db7049bb84b06f`. The conservative 32-area result is
+11 PASS, 13 PARTIAL and 8 OPEN. Exact Pixel core, FCM, non-binding two-role
+marketplace flow, listing lifecycle, search/saved state, cart/projects,
+privacy export, offline recovery and on-device Listing AI are passed. Older
+physical auth, support, theme and permission results remain partial where later
+relevant mobile paths changed.
+
+Current external truth is explicit: the official Stripe connector requires
+reauthentication and the last proven test platform still needs truthful owner
+profile facts plus personal terms acceptance; WP117 has no current authorized
+OnePlus ADB proof; professional V5.2 snapshots and a manual TalkBack traversal
+remain open. No provider, money, device, Store, Firebase, Production, VPS/DNS
+or PR state changed. See
+`docs/operations/WP119_CURRENT_CANDIDATE_GOAL_ACCEPTANCE_CHECKPOINT_2026-09-12.md`.
+
 ## WP118 fresh current-candidate Pixel renter/owner confirmation — complete
 
 The exact signed Internal/Staging `1.0.0+2026091110` candidate passed a fresh

@@ -1,4 +1,21 @@
-# Current Work Package: WP118 Fresh Pixel Two-Role Confirmation — COMPLETE; ONEPLUS PENDING
+# Current Work Package: WP119 Current-Candidate Goal Acceptance — LOCAL CLOSURE IN PROGRESS
+
+WP119 reconciles the full active Android Staging goal against exact candidate
+`1.0.0+2026091110` and current immutable Staging truth. The fail-closed result
+is 11 PASS, 13 PARTIAL and 8 OPEN across 32 requirements. It newly promotes
+real on-device listing-image analysis to PASS, but does not inherit older
+physical auth, support, theme or permission results across relevant later
+mobile changes.
+
+The next executable order is OnePlus WP117 once ADB is authorized, Stripe
+test-mode reauthentication plus the owner's truthful platform profile and
+personal terms, and exact-candidate replay of independent PARTIAL areas.
+Binding V5.2 and manual TalkBack stay separate external/human gates. No live,
+provider, device, Store, Firebase, Production, VPS/DNS or PR mutation is part
+of the checkpoint. See
+`docs/operations/WP119_CURRENT_CANDIDATE_GOAL_ACCEPTANCE_CHECKPOINT_2026-09-12.md`.
+
+# Previous Work Package: WP118 Fresh Pixel Two-Role Confirmation — COMPLETE; ONEPLUS PENDING
 
 The exact signed Internal/Staging `1.0.0+2026091110` candidate passes a fresh
 physical Pixel renter/owner core journey with owner publication, independent
