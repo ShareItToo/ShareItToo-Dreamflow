@@ -1,0 +1,14 @@
+gradle.projectsEvaluated { currentGradle ->
+    def app = currentGradle.rootProject.findProject(':app')
+    def task = app?.tasks?.findByName('uploadCrashlyticsMappingFileRelease')
+    if (task == null) return
+    def exactMapping = System.getenv('SIT_EXACT_CRASHLYTICS_MAPPING_FILE')
+    def exactMappingId = System.getenv('SIT_EXACT_CRASHLYTICS_MAPPING_ID_FILE')
+    if (!exactMapping || !exactMappingId) {
+        throw new GradleException('Exact Crashlytics mapping inputs are missing.')
+    }
+    task.mergedMappingFile.set(app.file(exactMapping))
+    task.mappingFileIdFile.set(app.file(exactMappingId))
+    task.setDependsOn([])
+    task.setMustRunAfter([])
+}

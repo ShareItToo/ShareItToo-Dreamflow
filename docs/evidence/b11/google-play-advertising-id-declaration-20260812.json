@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-advertising-id-declaration-observation",
+  "capturedAt": "2026-08-13T01:31:57Z",
+  "status": "console-declaration-saved-answer-no",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081302",
+    "commit": "530ed17e46dbd82916eef0d59f1b07e448c737f8",
+    "targetSdkVersion": 35
+  },
+  "consoleQuestion": "Does your app use advertising ID?",
+  "preparedAnswer": false,
+  "basis": {
+    "googleAdvertisingIdPermissionDeclared": false,
+    "androidAdServicesIdPermissionDeclared": false,
+    "advertisingSdkPresent": false,
+    "analyticsSdkPresent": false,
+    "attributionSdkPresent": false,
+    "facebookAdvertiserIdCollectionEnabled": false
+  },
+  "evidenceRefs": [
+    "docs/evidence/b11/android-release-permissions-2026081302.json",
+    "docs/evidence/b11/android-binary-privacy-release-check-2026081302.json",
+    "docs/evidence/b11/android-candidate-2026081302.json"
+  ],
+  "boundaries": {
+    "consoleAnswerChanged": true,
+    "draftSaved": true,
+    "formSubmitted": false,
+    "releaseRolledOut": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false
+  }
+}

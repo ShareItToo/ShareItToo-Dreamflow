@@ -5,7 +5,6 @@ import 'package:lendify/models/invoice.dart';
 import 'package:lendify/screens/create_listing_screen.dart';
 import 'package:lendify/screens/invoice_detail_screen.dart';
 import 'package:lendify/services/invoices_service.dart';
-import 'package:lendify/theme.dart';
 import 'package:provider/provider.dart';
 
 class InvoicesScreen extends StatefulWidget {
@@ -15,7 +14,8 @@ class InvoicesScreen extends StatefulWidget {
   State<InvoicesScreen> createState() => _InvoicesScreenState();
 }
 
-class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProviderStateMixin {
+class _InvoicesScreenState extends State<InvoicesScreen>
+    with SingleTickerProviderStateMixin {
   bool _loading = true;
   List<Invoice> _all = const [];
   InvoiceFilter _filter = InvoiceFilter.all;
@@ -47,7 +47,11 @@ class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProvid
       final years = InvoicesService.availableYears(list);
       setState(() {
         _all = list;
-        _year = years.isEmpty ? null : (years.contains(DateTime.now().year) ? DateTime.now().year : years.first);
+        _year = years.isEmpty
+            ? null
+            : (years.contains(DateTime.now().year)
+                ? DateTime.now().year
+                : years.first);
       });
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -60,11 +64,15 @@ class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProvid
     final cs = theme.colorScheme;
 
     final isRenterTab = _tabController.index == 0;
-    final base = _all.where((e) => isRenterTab ? _isRenterDoc(e) : _isOwnerDoc(e)).toList();
+    final base = _all
+        .where((e) => isRenterTab ? _isRenterDoc(e) : _isOwnerDoc(e))
+        .toList();
 
     final years = InvoicesService.availableYears(base);
-    final effectiveYear = _year ?? (years.isNotEmpty ? years.first : DateTime.now().year);
-    final filtered = InvoicesService.filter(invoices: base, filter: _filter, year: _year);
+    final effectiveYear =
+        _year ?? (years.isNotEmpty ? years.first : DateTime.now().year);
+    final filtered =
+        InvoicesService.filter(invoices: base, filter: _filter, year: _year);
     final yearTotal = InvoicesService.sumAmountForYear(base, effectiveYear);
 
     final cardRadius = 18.0;
@@ -88,7 +96,10 @@ class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProvid
           surfaceTintColor: Colors.transparent,
           centerTitle: true,
           title: const Text('Rechnungen & Belege'),
-          leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => Navigator.of(context).maybePop()),
+          leading: IconButton(
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () => Navigator.of(context).maybePop()),
         ),
         body: RefreshIndicator(
           color: cs.primary,
@@ -101,14 +112,16 @@ class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProvid
                 isRenterTab
                     ? 'Alle Rechnungen und Belege zu deinen Anmietungen.'
                     : 'Auszahlungen, Gebühren und Belege zu deinen Vermietungen.',
-                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white.withValues(alpha: 0.82)),
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: Colors.white.withValues(alpha: 0.82)),
               ),
               const SizedBox(height: 12),
               Container(
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.08)),
                 ),
                 child: TabBar(
                   controller: _tabController,
@@ -117,12 +130,15 @@ class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProvid
                   indicator: BoxDecoration(
                     color: cs.primary.withValues(alpha: 0.20),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: cs.primary.withValues(alpha: 0.28)),
+                    border:
+                        Border.all(color: cs.primary.withValues(alpha: 0.28)),
                   ),
                   labelColor: Colors.white,
                   unselectedLabelColor: Colors.white.withValues(alpha: 0.75),
-                  labelStyle: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w800),
-                  unselectedLabelStyle: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
+                  labelStyle: theme.textTheme.labelSmall
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                  unselectedLabelStyle: theme.textTheme.labelSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
                   tabs: const [
                     Tab(text: 'Mieter'),
                     Tab(text: 'Vermieter'),
@@ -138,7 +154,12 @@ class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProvid
                   color: cardColor,
                   borderRadius: BorderRadius.circular(cardRadius),
                   border: Border.all(color: borderColor),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 18, offset: const Offset(0, 10))],
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        blurRadius: 18,
+                        offset: const Offset(0, 10))
+                  ],
                 ),
                 child: Row(children: [
                   Container(
@@ -147,25 +168,38 @@ class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProvid
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(14),
                       color: cs.primary.withValues(alpha: 0.20),
-                      border: Border.all(color: cs.primary.withValues(alpha: 0.30)),
+                      border:
+                          Border.all(color: cs.primary.withValues(alpha: 0.30)),
                     ),
                     child: Icon(Icons.insights_rounded, color: cs.primary),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('Dieses Jahr', style: theme.textTheme.labelSmall?.copyWith(color: Colors.white.withValues(alpha: 0.80))),
-                      const SizedBox(height: 2),
-                      Text('${_formatEuro(yearTotal)} Gesamtvolumen', style: theme.textTheme.titleMedium),
-                    ]),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Dieses Jahr',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.80))),
+                          const SizedBox(height: 2),
+                          Text('${_formatEuro(yearTotal)} Gesamtvolumen',
+                              style: theme.textTheme.titleMedium),
+                        ]),
                   ),
-                  if (years.isNotEmpty) _YearSelector(value: _year, years: years, onChanged: (v) => setState(() => _year = v)),
+                  if (years.isNotEmpty)
+                    _YearSelector(
+                        value: _year,
+                        years: years,
+                        onChanged: (v) => setState(() => _year = v)),
                 ]),
               ),
               const SizedBox(height: 12),
 
               // Filters
-              _FilterChips(renter: isRenterTab, value: _filter, onChanged: (v) => setState(() => _filter = v)),
+              _FilterChips(
+                  renter: isRenterTab,
+                  value: _filter,
+                  onChanged: (v) => setState(() => _filter = v)),
               const SizedBox(height: 10),
 
               if (_loading)
@@ -178,7 +212,8 @@ class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProvid
                           context.read<MainNavController>().setIndex(0);
                           Navigator.of(context).popUntil((r) => r.isFirst);
                         }
-                      : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CreateListingScreen())),
+                      : () => Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => const CreateListingScreen())),
                 )
               else
                 AnimatedSwitcher(
@@ -186,7 +221,8 @@ class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProvid
                   switchInCurve: Curves.easeOutCubic,
                   switchOutCurve: Curves.easeInCubic,
                   child: Column(
-                    key: ValueKey('${isRenterTab ? 'r' : 'o'}_${_filter.name}_${_year ?? 'all'}_${filtered.length}'),
+                    key: ValueKey(
+                        '${isRenterTab ? 'r' : 'o'}_${_filter.name}_${_year ?? 'all'}_${filtered.length}'),
                     children: [
                       for (final inv in filtered) ...[
                         _InvoiceCard(invoice: inv),
@@ -207,7 +243,8 @@ class _YearSelector extends StatelessWidget {
   final int? value;
   final List<int> years;
   final ValueChanged<int?> onChanged;
-  const _YearSelector({required this.value, required this.years, required this.onChanged});
+  const _YearSelector(
+      {required this.value, required this.years, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -246,7 +283,8 @@ class _FilterChips extends StatelessWidget {
   final bool renter;
   final InvoiceFilter value;
   final ValueChanged<InvoiceFilter> onChanged;
-  const _FilterChips({required this.renter, required this.value, required this.onChanged});
+  const _FilterChips(
+      {required this.renter, required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -260,10 +298,17 @@ class _FilterChips extends StatelessWidget {
         child: ChoiceChip(
           selected: selected,
           showCheckmark: false,
-          label: Text(label, style: theme.textTheme.labelSmall?.copyWith(color: selected ? cs.onPrimary : Colors.white.withValues(alpha: 0.90))),
+          label: Text(label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                  color: selected
+                      ? cs.onPrimary
+                      : Colors.white.withValues(alpha: 0.90))),
           selectedColor: cs.primary,
           backgroundColor: Colors.black.withValues(alpha: 0.22),
-          side: BorderSide(color: selected ? Colors.transparent : Colors.white.withValues(alpha: 0.12)),
+          side: BorderSide(
+              color: selected
+                  ? Colors.transparent
+                  : Colors.white.withValues(alpha: 0.12)),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           onSelected: (_) => onChanged(v),
         ),
@@ -275,7 +320,7 @@ class _FilterChips extends StatelessWidget {
       child: Row(children: [
         chip('Alle', InvoiceFilter.all),
         if (renter) ...[
-          chip('Rechnungen', InvoiceFilter.bookings),
+          chip('Zahlungen', InvoiceFilter.bookings),
           chip('Rückerstattungen', InvoiceFilter.refunds),
         ] else ...[
           chip('Auszahlungen', InvoiceFilter.rentals),
@@ -292,27 +337,27 @@ class _InvoiceCard extends StatelessWidget {
 
   IconData get _icon {
     switch (invoice.type) {
-      case InvoiceType.invoice:
+      case InvoiceType.bookingPaymentReceipt:
         return Icons.receipt_long_rounded;
-      case InvoiceType.payment:
+      case InvoiceType.ownerPayoutStatement:
         return Icons.payments_rounded;
-      case InvoiceType.refund:
+      case InvoiceType.refundReceipt:
         return Icons.replay_rounded;
-      case InvoiceType.fee:
+      case InvoiceType.sitFeeReceipt:
         return Icons.percent_rounded;
     }
   }
 
   String get _typeLabel {
     switch (invoice.type) {
-      case InvoiceType.invoice:
-        return 'Rechnung';
-      case InvoiceType.payment:
-        return 'Zahlung';
-      case InvoiceType.refund:
-        return 'Rückerstattung';
-      case InvoiceType.fee:
-        return 'Gebühr';
+      case InvoiceType.bookingPaymentReceipt:
+        return 'Zahlungsübersicht';
+      case InvoiceType.ownerPayoutStatement:
+        return 'Auszahlungsnachweis';
+      case InvoiceType.refundReceipt:
+        return 'Erstattungsbeleg';
+      case InvoiceType.sitFeeReceipt:
+        return 'SIT-Gebührenbeleg';
     }
   }
 
@@ -326,7 +371,8 @@ class _InvoiceCard extends StatelessWidget {
     final borderColor = Colors.white.withValues(alpha: 0.07);
 
     return InkWell(
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => InvoiceDetailScreen(invoice: invoice))),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => InvoiceDetailScreen(invoice: invoice))),
       borderRadius: BorderRadius.circular(cardRadius),
       child: Container(
         padding: const EdgeInsets.all(14),
@@ -334,7 +380,12 @@ class _InvoiceCard extends StatelessWidget {
           color: cardColor,
           borderRadius: BorderRadius.circular(cardRadius),
           border: Border.all(color: borderColor),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.30), blurRadius: 16, offset: const Offset(0, 10))],
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.30),
+                blurRadius: 16,
+                offset: const Offset(0, 10))
+          ],
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(
@@ -349,28 +400,40 @@ class _InvoiceCard extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${invoice.booking.itemTitle} – ${_typeLabel}', style: theme.textTheme.titleMedium),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${invoice.booking.itemTitle} – $_typeLabel',
+                  style: theme.textTheme.titleMedium),
               const SizedBox(height: 4),
               Text(
                 '${_formatDate(invoice.date)}\nBuchung: ${invoice.bookingId}',
-                style: theme.textTheme.bodySmall?.copyWith(color: Colors.white.withValues(alpha: 0.78), height: 1.35),
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.78), height: 1.35),
               ),
             ]),
           ),
           const SizedBox(width: 10),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(_formatEuro(invoice.amount), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+            Text(_formatEuro(invoice.amount),
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => InvoiceDetailScreen(invoice: invoice, autoStartDownload: true))),
-              icon: Icon(Icons.picture_as_pdf_rounded, size: 18, color: cs.primary),
-              label: Text('PDF herunterladen', style: theme.textTheme.labelSmall?.copyWith(color: Colors.white)),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => InvoiceDetailScreen(
+                      invoice: invoice, autoStartDownload: true))),
+              icon: Icon(Icons.picture_as_pdf_rounded,
+                  size: 18, color: cs.primary),
+              label: Text('PDF herunterladen',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: Colors.white)),
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
                 backgroundColor: Colors.black.withValues(alpha: 0.18),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
               ),
             ),
           ]),
@@ -406,17 +469,21 @@ class _InvoicesLoadingSkeleton extends StatelessWidget {
             Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14)),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                box(h: 14, w: 200),
-                const SizedBox(height: 8),
-                box(h: 11, w: 150),
-                const SizedBox(height: 6),
-                box(h: 11, w: 120),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    box(h: 14, w: 200),
+                    const SizedBox(height: 8),
+                    box(h: 11, w: 150),
+                    const SizedBox(height: 6),
+                    box(h: 11, w: 120),
+                  ]),
             ),
             const SizedBox(width: 10),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -455,18 +522,27 @@ class _EmptyInvoicesState extends StatelessWidget {
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(14), border: Border.all(color: cs.primary.withValues(alpha: 0.25))),
+            decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: cs.primary.withValues(alpha: 0.25))),
             child: Icon(Icons.receipt_long_rounded, color: cs.primary),
           ),
           const SizedBox(width: 12),
-          Expanded(child: Text(renter ? 'Noch keine Belege als Mieter' : 'Noch keine Belege als Vermieter', style: theme.textTheme.titleMedium)),
+          Expanded(
+              child: Text(
+                  renter
+                      ? 'Noch keine Belege als Mieter'
+                      : 'Noch keine Belege als Vermieter',
+                  style: theme.textTheme.titleMedium)),
         ]),
         const SizedBox(height: 10),
         Text(
           renter
-              ? 'Nach deiner ersten Buchung erscheinen hier Rechnungen und Zahlungsbelege.'
-              : 'Nach deiner ersten Vermietung erscheinen hier Auszahlungen und Gebührenbelege.',
-          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white.withValues(alpha: 0.82)),
+              ? 'Nach einer tatsächlich erfassten Zahlung erscheinen hier Zahlungs-, Gebühren- und Erstattungsbelege.'
+              : 'Nach einer tatsächlich ausgeführten Auszahlung erscheint hier dein Auszahlungsnachweis.',
+          style: theme.textTheme.bodyMedium
+              ?.copyWith(color: Colors.white.withValues(alpha: 0.82)),
         ),
         const SizedBox(height: 14),
         SizedBox(
@@ -474,11 +550,14 @@ class _EmptyInvoicesState extends StatelessWidget {
           child: FilledButton.icon(
             onPressed: onAction,
             icon: Icon(actionIcon, color: cs.onPrimary),
-            label: Text(actionLabel, style: theme.textTheme.bodyMedium?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.w700)),
+            label: Text(actionLabel,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onPrimary, fontWeight: FontWeight.w700)),
             style: FilledButton.styleFrom(
               backgroundColor: cs.primary,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
             ),
           ),
         ),
@@ -487,9 +566,12 @@ class _EmptyInvoicesState extends StatelessWidget {
   }
 }
 
-bool _isRenterDoc(Invoice i) => i.type == InvoiceType.invoice || i.type == InvoiceType.refund;
+bool _isRenterDoc(Invoice i) =>
+    i.type == InvoiceType.bookingPaymentReceipt ||
+    i.type == InvoiceType.sitFeeReceipt ||
+    i.type == InvoiceType.refundReceipt;
 
-bool _isOwnerDoc(Invoice i) => i.type == InvoiceType.payment || i.type == InvoiceType.fee;
+bool _isOwnerDoc(Invoice i) => i.type == InvoiceType.ownerPayoutStatement;
 
 String _formatEuro(double v) {
   final s = v.toStringAsFixed(2).replaceAll('.', ',');

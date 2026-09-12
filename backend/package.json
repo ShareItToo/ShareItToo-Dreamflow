@@ -9,19 +9,26 @@
   },
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test",
-    "check": "node --check src/app.js && node --check src/server.js"
+    "test": "node --import ./test_setup.js --test",
+    "test:postgres:local": "node ../tool/run_local_postgres_integration.mjs",
+    "check": "for file in src/*.js ops/*.mjs; do node --check \"$file\"; done && for file in ops/*.sh; do bash -n \"$file\"; done",
+    "security:audit": "pnpm audit --prod --audit-level=moderate",
+    "security:secrets": "node ops/scan_git_secrets.mjs"
   },
   "dependencies": {
     "cors": "2.8.6",
+    "escape-html": "1.0.3",
     "express": "5.2.1",
     "express-rate-limit": "8.6.2",
     "file-type": "22.0.1",
+    "firebase-admin": "14.2.0",
     "helmet": "8.3.0",
     "jsonwebtoken": "9.0.3",
-    "multer": "2.2.0",
-    "nodemailer": "^9.0.5",
+    "multer": "2.3.0",
+    "nodemailer": "^9.1.1",
     "pg": "8.22.0",
+    "sharp": "0.35.4",
+    "stripe": "22.6.1",
     "ws": "8.21.3"
   }
 }

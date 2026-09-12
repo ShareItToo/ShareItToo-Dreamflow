@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp05-privacy-pixel-support-principal-finding",
+  "status": "bounded-export-passed-support-principal-red-full-acceptance-partial",
+  "observedOn": "2026-09-04",
+  "source": {
+    "inspectedHead": "9dd87440870ef915f29eff3de66c8539cd9d2601",
+    "candidateHead": "f6a9a41471058c9f80ffd01283c42b9d74a8845c",
+    "postCandidateMobileSourceChanged": false
+  },
+  "candidate": {
+    "package": "com.shareittoo.app",
+    "version": "1.0.0+2026090403",
+    "apkSha256": "3fa32413f2555047751b160bbe80bbf8f4a8cde127500abc5291872e79caba16",
+    "exactInstalledHashVerified": true
+  },
+  "runtime": {
+    "observedAt": "2026-09-04T10:39:58.341Z",
+    "environment": "staging",
+    "commit": "5d88295fa7fe313b83936783a0582a505b2ba486",
+    "paymentTransport": "memory",
+    "livemode": false
+  },
+  "principal": {
+    "kind": "existing-email-verified-synthetic-owner",
+    "exactContactEmailMatchedPrivately": true,
+    "displayNameAloneAccepted": false,
+    "fixtureDigestUnchanged": true,
+    "loginOrLogoutPerformed": false,
+    "preflightSha256": "63ecf905d5693745527ad2a918b206a42a1f1563b098fc10c2ab7f5548a5e9c9"
+  },
+  "pixel": {
+    "passwordPromptCancellation": "passed-no-export-or-false-success",
+    "passwordPromptEvidenceSha256": "a773b1c55562f3ed9f693b5947ba0e1772ea4a25391d9f6ad7c417b4300bdd70",
+    "actualExportPrepared": true,
+    "passwordConfirmedExportAttempts": 1,
+    "nativeSystemChooserVerified": true,
+    "chooserLaunchFromSitVerified": true,
+    "chooserEvidenceSha256": "7ff0fc81566c4e077da1adbbe85d9f7507e03621e996510c3afb32f5ad1309f5",
+    "nativeShareCancelled": true,
+    "truthfulCancellationVisible": true,
+    "cancellationObservedAt": "2026-09-04T10:43:40.634Z",
+    "cancellationEvidenceSha256": "35a930f54b2bd2cc40828918ace4f982f09969b6d9f218cea73341520d0ac4cc",
+    "externalTargetSelected": false,
+    "exportRequestRepeated": false,
+    "payloadContentIndependentlyInspected": false,
+    "physicalInFlightAccountSwitchTested": false
+  },
+  "diagnosticCorrections": {
+    "initialFailuresPreserved": true,
+    "exactEmailInsteadOfAmbiguousDisplayName": true,
+    "semanticParentAndClickableChildDistinguished": true,
+    "passwordFieldExactHintSupported": true,
+    "observedSystemChooserLauncherVerifiedBeforeAllowing": true,
+    "deterministicChecksPassed": 24,
+    "deterministicLogSha256": "adac92ad7eb44b08745529093e11d25664d6006a9bd9f9509d0b7b9bf5e8e773",
+    "productOrReleaseAssertionsWeakened": false
+  },
+  "supportFinding": {
+    "classification": "P1-late-A-receipt-visible-after-B-session-switch",
+    "environment": "local-widget-test-with-synthetic-values-only",
+    "stableSameSessionControl": "passed",
+    "lateResponseAfterSessionSwitch": "failed-reproduced",
+    "redLogSha256": "bd276fff80636486a66ace2b05bbfa155e545ce0274b9ce067ed4372baa6ed79",
+    "realSupportSubmitted": false,
+    "wrongPrincipalRemoteDispatchProven": false,
+    "fixImplemented": false,
+    "next": "bounded-support-intake-principal-epoch-transport-and-owned-route-correction"
+  },
+  "boundaries": {
+    "github": "deferred-not-waived",
+    "fullPixelAcceptance": false,
+    "fullGoalComplete": false,
+    "accountDeleted": false,
+    "rawAccountDeviceCredentialsOrExportDataRecorded": false,
+    "onePlusAccessed": false,
+    "freshSmsRequested": false,
+    "providerPaymentFirebaseActivated": false,
+    "productionStoreOrPrMergeChanged": false
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-stage-a-blue-ocean-n0-baseline",
+  "status": "verified-ready-for-n1",
+  "capturedAt": "2026-08-23T20:24:00Z",
+  "repository": {
+    "identity": "ShareItToo-Dreamflow",
+    "branch": "codex/master-workflow-20260808",
+    "upstream": "origin/codex/master-workflow-20260808",
+    "baselineHead": "763aecc12122d34e332bc2a561d3fb55fff544c3",
+    "ahead": 0,
+    "behind": 0,
+    "workingTreeCleanAtCapture": true,
+    "pullRequest": {
+      "number": 7,
+      "state": "OPEN",
+      "draft": true,
+      "mergeable": "MERGEABLE",
+      "mergeStateStatus": "CLEAN",
+      "merged": false
+    },
+    "exactCi": {
+      "regressionRunId": 32659802836,
+      "regressionConclusion": "success",
+      "codeqlRunId": 32659802896,
+      "codeqlConclusion": "success",
+      "headSha": "763aecc12122d34e332bc2a561d3fb55fff544c3"
+    }
+  },
+  "driveInstruction": {
+    "title": "00_NEXT_GOAL_STAGE_A_BLUE_OCEAN_AI_LISTING_PILOT_V1.md",
+    "selectedFileId": "1sftFS7vGUPFuXwFIQad_fC204VGIGxK-",
+    "selectedModifiedAt": "2026-08-23T20:17:19.601Z",
+    "selectedSizeBytes": 30609,
+    "sameTitleFileCount": 2,
+    "selectionRule": "newest-modified-file-wins",
+    "newerInstructionPresent": false,
+    "previousGoalReopened": false
+  },
+  "ownerDecisions": {
+    "professionalReview": [
+      "PROFESSIONAL_REVIEW_DEFERRED_BY_OWNER",
+      "UNREVIEWED_RISK_ACCEPTED"
+    ],
+    "stageAPilotNature": [
+      "CLOSED",
+      "INVITED",
+      "NON-BINDING",
+      "ANDROID-FIRST",
+      "NO-REAL-MONEY",
+      "PRODUCT-AND-PROCESS PILOT"
+    ],
+    "pilotId": "heilbronn_wave0",
+    "listingAiException": "AI-ASSISTED LISTING DRAFT CREATION",
+    "iosStatus": "DEFERRED_NOT_REQUIRED_FOR_STAGE_A"
+  },
+  "externalGateState": {
+    "requiredGateCount": 11,
+    "technicallyPreparedGateCount": 11,
+    "externallyReadyGateCount": 0,
+    "issuedReleaseTokenCount": 0,
+    "releaseDecision": "hold-no-go"
+  },
+  "featureFlagBaseline": {
+    "privatePilotEnabled": true,
+    "broadAiFeaturesEnabled": false,
+    "realPaymentsEnabled": false,
+    "bookingGroupsBackendEnabled": false,
+    "bookingGroupsUiDefaultEnabled": false,
+    "plannerUiDefaultEnabled": false,
+    "supplyEnrichmentUiDefaultEnabled": false,
+    "listingSetsUiDefaultEnabled": false,
+    "g3ToG5ReleaseExposureAllowed": false,
+    "pushTransport": "memory",
+    "firebaseAuthEnabled": false,
+    "firebasePhoneVerificationEnabled": false,
+    "privatePilotAllowedRegionsConfigured": false
+  },
+  "implementationIntake": {
+    "nextPackage": "N1",
+    "dedicatedListingAiPathPresentAtBaseline": false,
+    "regionalPriceEngineV2PresentAtBaseline": false,
+    "manualListingFlowMustRemain": true,
+    "historicalDataMustRemain": true
+  },
+  "boundaries": {
+    "paidAiCallPerformed": false,
+    "billingActivated": false,
+    "realTesterEnrolled": false,
+    "personalPilotDataUsed": false,
+    "playConsoleChanged": false,
+    "firebaseOwnerChanged": false,
+    "appleAccountChanged": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "realMoneyEnabled": false,
+    "publicRegistrationEnabled": false,
+    "storePublished": false,
+    "listingAutoPublishEnabled": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false
+  }
+}

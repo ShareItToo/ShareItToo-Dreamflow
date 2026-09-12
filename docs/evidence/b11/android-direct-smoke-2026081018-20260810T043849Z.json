@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-direct-device-smoke",
+  "status": "installed-launched-pending-manual-matrix",
+  "auditStatus": "bounded-accessibility-node-audit-passed-manual-matrix-pending",
+  "capturedAt": "2026-08-10T04:38:49.970Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081018",
+    "commit": "555946e64e583e5b6ee3321de2c1f74f35fbf238",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "apkSha256": "51121b9866dac109eaa42c78950d90d33b3d4ef9f9ec7301ddfe62fbe6120619",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "privacyScan": "passed"
+  },
+  "installation": {
+    "method": "direct-apk-diagnostic",
+    "installed": true,
+    "installedVersionVerified": true,
+    "installedBuildVerified": true,
+    "firstLaunchEvent": "passed",
+    "foregroundActivityVerified": true,
+    "storeInstallationGateSatisfied": false
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "checks": {
+    "explore": {
+      "status": "passed",
+      "unnamedActionMarkers": 0
+    },
+    "profileAndGuestGates": {
+      "status": "passed",
+      "profileHeaderUnnamedActionMarkers": 0,
+      "notificationGateUnnamedActionMarkers": 0,
+      "listingCreationGateUnnamedActionMarkers": 0,
+      "rentalRequestsGateUnnamedActionMarkers": 0,
+      "profileSearchUnnamedActionMarkers": 0,
+      "profileSearchHints": [
+        "Profil durchsuchen",
+        "Nach Kontoeinstellungen, Hilfe oder Rechtlichem suchen"
+      ],
+      "namedActionsVerified": [
+        "Back",
+        "Suchen",
+        "Suche schließen",
+        "Benachrichtigungen",
+        "Anmelden",
+        "Konto erstellen"
+      ]
+    },
+    "login": {
+      "status": "passed-with-legacy-empty-field-naf-markers",
+      "legacyEmptyFieldNafMarkers": 2,
+      "fieldHints": [
+        "E-Mail",
+        "Passwort"
+      ],
+      "fieldHintsUnique": true,
+      "fieldsFocusableAndClickable": true,
+      "namedActionsVerified": [
+        "Back",
+        "Passwort anzeigen",
+        "Passwort vergessen?",
+        "Anmelden",
+        "Konto erstellen",
+        "Erst mal umschauen"
+      ]
+    },
+    "registration": {
+      "status": "passed-with-legacy-empty-field-naf-markers",
+      "legacyEmptyFieldNafMarkers": 4,
+      "fieldHints": [
+        "Name",
+        "E-Mail",
+        "Passwort",
+        "Passwort wiederholen"
+      ],
+      "fieldHintsUnique": true,
+      "fieldsFocusableAndClickable": true,
+      "namedActionsVerified": [
+        "Back",
+        "Passwort anzeigen",
+        "Passwortbestätigung anzeigen",
+        "Altersbestätigung",
+        "Kostenlos registrieren",
+        "AGB",
+        "Datenschutzbestimmungen",
+        "Anmelden"
+      ]
+    },
+    "passwordReset": {
+      "status": "passed-with-legacy-empty-field-naf-marker",
+      "legacyEmptyFieldNafMarkers": 1,
+      "fieldHint": "E-Mail für Passwortzurücksetzung",
+      "fieldFocusableAndClickable": true,
+      "namedActionsVerified": [
+        "Link senden"
+      ]
+    },
+    "helpCenter": {
+      "status": "passed-with-legacy-empty-field-naf-markers",
+      "searchFieldHint": "Hilfe durchsuchen, Wie können wir dir helfen?",
+      "supportFieldHint": "Support-Anliegen, Beschreibe dein Anliegen",
+      "fieldHintsUnique": true,
+      "backActionNamed": true
+    },
+    "legal": {
+      "status": "passed",
+      "overviewUnnamedActionMarkers": 0,
+      "detailUnnamedActionMarkers": 0,
+      "overviewBackActionNamed": true,
+      "detailBackActionNamed": true
+    }
+  },
+  "interpretation": {
+    "legacyNafMarker": "The Android UI Automator NAF heuristic still marks an empty Flutter EditText even when the Android accessibility hint is populated. Field hints, focusability, clickability, password state, and separate actions were therefore recorded explicitly.",
+    "flutterSemanticsRegression": "passed",
+    "manualTalkBackTraversal": "pending",
+    "claim": "Accessibility node naming passed for the bounded guest and authentication surfaces; this is not a completed TalkBack or release-device matrix."
+  },
+  "boundaries": {
+    "manualFunctionalMatrixPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "playInternalInstallPassed": false,
+    "realPushPassed": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  },
+  "nextRequired": [
+    "personal staging sign-in on the physical Android device",
+    "manual Android Wi-Fi owner matrix",
+    "manual Android hotspot renter matrix",
+    "manual TalkBack traversal",
+    "controlled FCM foreground/background/terminated delivery",
+    "Google Play Internal installation of the same unchanged build"
+  ]
+}

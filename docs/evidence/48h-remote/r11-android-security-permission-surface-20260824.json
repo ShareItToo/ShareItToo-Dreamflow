@@ -1,0 +1,347 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r11-android-security-permission-surface",
+  "status": "verified-merged-debug-artifact-regression-and-codeql-passed",
+  "observedOn": "2026-08-24",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationHead": "9ec9c62c7ca806e16ab5beb354e4872b3f513e13"
+  },
+  "artifact": {
+    "buildType": "debug",
+    "bytes": 230801526,
+    "sha256": "105d4a2b14d9ccbd542b7be0983849a440de841b1d5c5af918f099e029df8827",
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026082302",
+    "compileSdk": 35,
+    "minSdk": 24,
+    "targetSdk": 35
+  },
+  "permissions": [
+    {
+      "name": "android.permission.ACCESS_COARSE_LOCATION",
+      "maxSdkVersion": null
+    },
+    {
+      "name": "android.permission.ACCESS_FINE_LOCATION",
+      "maxSdkVersion": null
+    },
+    {
+      "name": "android.permission.ACCESS_NETWORK_STATE",
+      "maxSdkVersion": null
+    },
+    {
+      "name": "android.permission.CAMERA",
+      "maxSdkVersion": null
+    },
+    {
+      "name": "android.permission.INTERNET",
+      "maxSdkVersion": null
+    },
+    {
+      "name": "android.permission.POST_NOTIFICATIONS",
+      "maxSdkVersion": null
+    },
+    {
+      "name": "android.permission.READ_EXTERNAL_STORAGE",
+      "maxSdkVersion": 32
+    },
+    {
+      "name": "android.permission.USE_BIOMETRIC",
+      "maxSdkVersion": null
+    },
+    {
+      "name": "android.permission.USE_FINGERPRINT",
+      "maxSdkVersion": null
+    },
+    {
+      "name": "android.permission.WAKE_LOCK",
+      "maxSdkVersion": null
+    },
+    {
+      "name": "android.permission.WRITE_EXTERNAL_STORAGE",
+      "maxSdkVersion": 28
+    },
+    {
+      "name": "com.google.android.c2dm.permission.RECEIVE",
+      "maxSdkVersion": null
+    },
+    {
+      "name": "com.google.android.providers.gsf.permission.READ_GSERVICES",
+      "maxSdkVersion": null
+    },
+    {
+      "name": "com.shareittoo.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+      "maxSdkVersion": null
+    }
+  ],
+  "components": {
+    "counts": {
+      "activity": 12,
+      "service": 13,
+      "receiver": 7,
+      "provider": 8
+    },
+    "inventorySha256": "dbed9b89f1d6cbedfa6f199a9bba232cb4447b63dde38352474cd6fa63cc8d40",
+    "exported": [
+      {
+        "type": "activity",
+        "name": "com.shareittoo.app.MainActivity",
+        "permission": null
+      },
+      {
+        "type": "receiver",
+        "name": "io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingReceiver",
+        "permission": "com.google.android.c2dm.permission.SEND"
+      },
+      {
+        "type": "activity",
+        "name": "com.google.firebase.auth.internal.GenericIdpActivity",
+        "permission": null
+      },
+      {
+        "type": "activity",
+        "name": "com.google.firebase.auth.internal.RecaptchaActivity",
+        "permission": null
+      },
+      {
+        "type": "service",
+        "name": "com.google.android.gms.auth.api.signin.RevocationBoundService",
+        "permission": "com.google.android.gms.auth.api.signin.permission.REVOCATION_NOTIFICATION"
+      },
+      {
+        "type": "activity",
+        "name": "com.facebook.CustomTabActivity",
+        "permission": null
+      },
+      {
+        "type": "receiver",
+        "name": "com.google.firebase.iid.FirebaseInstanceIdReceiver",
+        "permission": "com.google.android.c2dm.permission.SEND"
+      },
+      {
+        "type": "receiver",
+        "name": "androidx.profileinstaller.ProfileInstallReceiver",
+        "permission": "android.permission.DUMP"
+      }
+    ],
+    "allProvidersNonExported": true
+  },
+  "intentSurface": {
+    "notificationAction": "com.shareittoo.app.SIT_NOTIFICATION_CLICK",
+    "inventorySha256": "996ec536b88d2495e6557ea822c0942aa90cf925ea486c47a9d8e5e0b2407650",
+    "browsableRoutes": [
+      {
+        "component": "com.shareittoo.app.MainActivity",
+        "autoVerify": true,
+        "scheme": "https",
+        "host": "shareittoo.com",
+        "path": null,
+        "pathPrefix": "/api/v1/open/"
+      },
+      {
+        "component": "com.shareittoo.app.MainActivity",
+        "autoVerify": true,
+        "scheme": "https",
+        "host": "www.shareittoo.com",
+        "path": null,
+        "pathPrefix": "/api/v1/open/"
+      },
+      {
+        "component": "com.shareittoo.app.MainActivity",
+        "autoVerify": true,
+        "scheme": "https",
+        "host": "staging.shareittoo.com",
+        "path": null,
+        "pathPrefix": "/api/v1/open/"
+      },
+      {
+        "component": "com.shareittoo.app.MainActivity",
+        "autoVerify": false,
+        "scheme": "shareittoo",
+        "host": null,
+        "path": null,
+        "pathPrefix": null
+      },
+      {
+        "component": "com.google.firebase.auth.internal.GenericIdpActivity",
+        "autoVerify": false,
+        "scheme": "genericidp",
+        "host": "firebase.auth",
+        "path": "/",
+        "pathPrefix": null
+      },
+      {
+        "component": "com.google.firebase.auth.internal.RecaptchaActivity",
+        "autoVerify": false,
+        "scheme": "recaptcha",
+        "host": "firebase.auth",
+        "path": "/",
+        "pathPrefix": null
+      },
+      {
+        "component": "com.facebook.CustomTabActivity",
+        "autoVerify": false,
+        "scheme": "fbconnect",
+        "host": "cct.com.shareittoo.app",
+        "path": null,
+        "pathPrefix": null
+      }
+    ]
+  },
+  "fileProviders": [
+    {
+      "name": "dev.fluttercommunity.plus.share.ShareFileProvider",
+      "authority": "com.shareittoo.app.flutter.share_provider",
+      "pathsResource": "flutter_share_file_paths",
+      "exported": false,
+      "grantUriPermissions": true
+    },
+    {
+      "name": "io.flutter.plugins.imagepicker.ImagePickerFileProvider",
+      "authority": "com.shareittoo.app.flutter.image_provider",
+      "pathsResource": "flutter_image_picker_file_paths",
+      "exported": false,
+      "grantUriPermissions": true
+    },
+    {
+      "name": "net.nfet.flutter.printing.PrintFileProvider",
+      "authority": "com.shareittoo.app.flutter.printing",
+      "pathsResource": "flutter_printing_file_paths",
+      "exported": false,
+      "grantUriPermissions": true
+    }
+  ],
+  "packageVisibility": {
+    "intents": [
+      {
+        "actions": [
+          "android.intent.action.PROCESS_TEXT"
+        ],
+        "mimeTypes": [
+          "text/plain"
+        ]
+      },
+      {
+        "actions": [
+          "android.intent.action.GET_CONTENT"
+        ],
+        "mimeTypes": [
+          "*/*"
+        ]
+      }
+    ],
+    "packages": [
+      "com.facebook.katana"
+    ]
+  },
+  "policies": {
+    "debuggableTestArtifact": true,
+    "backupDisabled": true,
+    "completeBackupExclusionsPresent": true,
+    "cleartextTrafficDisabled": true,
+    "networkSecurityConfig": "absent-platform-default-plus-cleartext-disabled",
+    "legacyExternalStorageDisabled": true
+  },
+  "access": {
+    "camera": "declared-runtime-permission",
+    "location": "coarse-and-fine-runtime-permissions-no-background-location",
+    "notifications": "post-notifications-runtime-permission",
+    "media": "system-photo-picker-plus-legacy-read-max32-write-max28"
+  },
+  "firebase": {
+    "messagingSdkPresent": true,
+    "authenticationSdkPresent": true,
+    "crashlyticsSdkPresent": true,
+    "messagingAutoInitDisabled": true,
+    "analyticsSdkPresent": false,
+    "analyticsCollectionDisabled": true,
+    "crashlyticsCollectionDisabled": true
+  },
+  "stageA": {
+    "backendEnabledInDebugByDefault": false,
+    "productionBackendOriginCompiledButInactive": true,
+    "productionEndpointEnabled": false,
+    "externalAiEnabled": false,
+    "realPaymentEnabled": false,
+    "publicG3Enabled": false,
+    "publicG4Enabled": false,
+    "publicG5Enabled": false,
+    "supportEvidenceIntakeEnabledByDefault": false,
+    "supportEvidenceScannerTransport": "none",
+    "supportEvidenceScannerUploadEnabled": false
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "vpsChanged": false,
+    "cloudChanged": false,
+    "firebaseProjectChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "credentialsReadOrExtracted": false,
+    "artifactInstalled": false,
+    "artifactPublished": false,
+    "pullRequestMerged": false
+  },
+  "ciAndCodeql": {
+    "exactGithubVerification": "passed",
+    "localCodeqlClaimed": false
+  },
+  "githubVerification": {
+    "implementationHead": "9ec9c62c7ca806e16ab5beb354e4872b3f513e13",
+    "verifiedHead": "edf6a0a4ebcdcdfb2af8dae12cbdf0d24e82586f",
+    "pullRequest": {
+      "number": 7,
+      "draft": true,
+      "state": "OPEN",
+      "merged": false
+    },
+    "regression": {
+      "runId": 32770744048,
+      "conclusion": "success",
+      "jobs": {
+        "postgresRunnerProof": {
+          "jobId": 97570288015,
+          "conclusion": "success"
+        },
+        "backendRegression": {
+          "jobId": 97570287853,
+          "conclusion": "success"
+        },
+        "flutterRegression": {
+          "jobId": 97570287894,
+          "conclusion": "success",
+          "parallelStressStep": "skipped",
+          "signedCandidateStep": "skipped"
+        },
+        "r10CleanReproducibility": {
+          "jobId": 97570287713,
+          "conclusion": "success"
+        },
+        "publishApiImage": {
+          "jobId": 97572282995,
+          "conclusion": "skipped"
+        }
+      }
+    },
+    "codeql": {
+      "workflowRunId": 32770744022,
+      "workflowConclusion": "success",
+      "advancedSecurityCheckId": 97570928981,
+      "advancedSecurityConclusion": "success",
+      "newAlerts": 0
+    },
+    "preExistingExternalHistoryCheck": {
+      "provider": "GitGuardian",
+      "documentedBaseCommit": "e64defd0df62fb047c6fbc90733e4caf318ac7c4",
+      "documentedBaseCheckId": 97395091283,
+      "currentCheckId": 97570272993,
+      "currentConclusion": "failure",
+      "reportedPullRequestCommitScope": 250,
+      "credentialDetailsInspected": false,
+      "classifiedAsR11Regression": false
+    }
+  },
+  "nextPackage": "R12"
+}

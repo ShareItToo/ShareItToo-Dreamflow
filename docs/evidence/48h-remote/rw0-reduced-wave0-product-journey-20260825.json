@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-rw0-reduced-wave0-product-journey",
+  "status": "verified-regression-and-codeql-passed",
+  "implementationBaseHead": "4937a88ff07dd6378e1c52ca4f264e564a669ef4",
+  "architecture": "docs/architecture/rw0-reduced-wave0-automated-product-journey-2026-08-25.md",
+  "report": "docs/operations/RW0_REDUCED_WAVE0_AUTOMATED_PRODUCT_JOURNEY_2026-08-25.md",
+  "predecessor": {
+    "package": "R17",
+    "evidence": "docs/evidence/48h-remote/r17-two-day-priority-queue-20260825.json",
+    "closureHead": "4937a88ff07dd6378e1c52ca4f264e564a669ef4"
+  },
+  "scope": {
+    "allowed": [
+      "listing-draft-and-explicit-local-publication",
+      "search",
+      "project-and-saved",
+      "non-reserving-cart",
+      "structured-feedback",
+      "restart-and-failure-recovery"
+    ],
+    "excluded": [
+      "rental-request-and-contract",
+      "accept-or-reject",
+      "payment-refund-payout",
+      "handover-return-damage-needs-review",
+      "g3-g4-g5-release-surfaces"
+    ],
+    "syntheticOnly": true,
+    "localDeviceOnly": true
+  },
+  "findings": [
+    {
+      "id": "RW0-P1-CATALOG-BOOTSTRAP-001",
+      "state": "resolved-and-tested",
+      "resolution": "missing-reference-cache-cannot-rewrite-account-or-listing-stores"
+    },
+    {
+      "id": "RW0-P1-DEMO-RESEED-002",
+      "state": "resolved-and-tested",
+      "resolution": "missing-empty-or-malformed-runtime-catalog-fails-nondestructively"
+    },
+    {
+      "id": "RW0-P1-CART-ATOMICITY-003",
+      "state": "resolved-and-tested",
+      "resolution": "complete-canonical-snapshot-recovers-and-torn-legacy-state-fails-closed"
+    },
+    {
+      "id": "RW0-P1-DIALOG-LIFECYCLE-004",
+      "state": "resolved-and-tested",
+      "resolution": "controller-owned-until-dialog-widget-disposal"
+    },
+    {
+      "id": "RW0-P2-SEARCH-A11Y-005",
+      "state": "resolved-and-tested",
+      "resolution": "named-toggled-48dp-save-action"
+    },
+    {
+      "id": "RW0-P1-SECRET-SCAN-FIXTURE-006",
+      "state": "resolved-and-tested",
+      "resolution": "runtime-generated-current-fixture-and-exact-immutable-history-review"
+    }
+  ],
+  "verification": {
+    "flutterAnalyze": "passed-zero-issues",
+    "defaultFlutterSuite": "passed-400-two-documented-profile-skips",
+    "exactReducedWave0Profile": "passed-1",
+    "catalogIntegrityTests": "passed-5",
+    "cartFocusedTests": "passed-7",
+    "rw0WiringTests": "passed-7",
+    "privacyRetentionTests": "passed-70",
+    "privacyValidator": "passed-draft-not-approval",
+    "retentionValidator": "passed-draft-execution-blocked",
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "githubVerification": {
+    "head": "ce37ecc89af1a5176d4afaa608ddd1f3552d2512",
+    "regressionRunId": 32790896732,
+    "codeqlRunId": 32790896756,
+    "regressionConclusion": "success",
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "sourceInventory": [
+    {
+      "path": "backend/ops/secret_scan_history_baseline.json",
+      "sha256": "e02ef86f3b5bf7c0456aff6e1021a23db42341b446e049d49775c03487964551"
+    },
+    {
+      "path": "lib/services/data_service.dart",
+      "sha256": "f23002e697a484a16e392e8fcf5dd9de527ecc55eb791dde7fab98386e37375f"
+    },
+    {
+      "path": "lib/screens/search_results_screen.dart",
+      "sha256": "d306979eed46661fe5d94d18bd58ea3500eaf6c624478f5b68529b0ea7d325ab"
+    },
+    {
+      "path": "lib/screens/wishlists_screen.dart",
+      "sha256": "cb64ca5670af401b7259e3d226cdde54047891c842abcf5287522528590f4bba"
+    },
+    {
+      "path": "scripts/technical_regression_check.sh",
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
+    },
+    {
+      "path": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+      "sha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d"
+    },
+    {
+      "path": "test/data_service_non_destructive_catalog_bootstrap_test.dart",
+      "sha256": "6eee73929ee524849172e70fda46f112f1bf1e919a983410a07d1ed6bb0b6aca"
+    },
+    {
+      "path": "test/g2a_rental_cart_screen_test.dart",
+      "sha256": "7075e0a0fa60d4aaa829ee2d94cf2ecd6203781cf760fdbe7643927dc80ad20a"
+    },
+    {
+      "path": "test/g2b_rental_cart_persistence_test.dart",
+      "sha256": "baca3b3b7186e621eadb45b5bfec7a5b76e1725a144154eef65b7ab8ba5c2fea"
+    },
+    {
+      "path": "test/reduced_wave0_product_journey_test.dart",
+      "sha256": "2abc7e40595deeee9b486e41928ad8d868e8db0b4cd3c020a457fccda959505e"
+    },
+    {
+      "path": "test/public_profile_screen_logic_test.dart",
+      "sha256": "950fae5b5c45a0d0fe4cb3632a05e4c69f6138a953b047a2ae341cbfef4559e5"
+    },
+    {
+      "path": "test/review_metrics_service_test.dart",
+      "sha256": "0d572831cbebdfac15b6f3daca371037429d2eadd3652728354102202d2599c7"
+    },
+    {
+      "path": "test/tool/rw0_reduced_wave0_journey_wiring.test.mjs",
+      "sha256": "012ef9d7c67bbe2bb9fbe5122ca4b602bff0643954866f9f88f7aa9578a865d7"
+    },
+    {
+      "path": "store/privacy-disclosures.json",
+      "sha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449"
+    },
+    {
+      "path": "store/retention-deletion-readiness.json",
+      "sha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8"
+    },
+    {
+      "path": "tool/validate_active_infrastructure_mail_provider_readiness.mjs",
+      "sha256": "6618e79f9148634ddd6ef7ccf2b96d54b5ed4b8fd081ad9e20db1110646e8ec6"
+    }
+  ],
+  "gates": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "credentialValueReadOrCopied": false,
+    "candidateBuiltOrUploaded": false,
+    "pixelChanged": false,
+    "testerContacted": false,
+    "humanPilotActivated": false,
+    "providerCalled": false,
+    "apiBillingCreated": false,
+    "paymentChanged": false,
+    "firebaseOrPlayChanged": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false
+  }
+}

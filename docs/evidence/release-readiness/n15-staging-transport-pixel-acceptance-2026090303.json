@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-n15-staging-transport-pixel-acceptance",
+  "status": "transport-passed-email-owner-verification-pending",
+  "observedAt": "2026-09-03",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090303",
+    "artifactSourceCommit": "5d88295fa7fe313b83936783a0582a505b2ba486",
+    "channel": "internal",
+    "environment": "staging",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "minSdk": 24,
+    "targetSdk": 36,
+    "firebaseConfigured": true,
+    "apkSha256": "ef98f6ebac6588bf84038bd74fdcb6a54a290860e55e048fe29abb6f9b0e7560",
+    "aabSha256": "a60ad4d7567865b2ee5ffc5c08520fa142b9f788a606268317472f6e91e266b4",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "binaryPrivacyScan": "passed"
+  },
+  "qa": {
+    "diagnosticToolsCommit": "24a8fa3509df428b6a1aef2f7d0cd91c3d41d5f3",
+    "fullLocalRegression": "passed",
+    "repositoryToolTestsPassed": 2035,
+    "webWasm": "passed",
+    "loopbackSmoke": "passed",
+    "androidDebugBuild": "passed"
+  },
+  "staging": {
+    "deployedBackendCommit": "5d88295fa7fe313b83936783a0582a505b2ba486",
+    "health": "passed",
+    "database": "postgres-healthy",
+    "mailTransport": "smtp",
+    "mailProvider": "google-workspace-smtp-relay",
+    "pushTransport": "fcm",
+    "paymentTransport": "memory",
+    "stripeLivemode": false,
+    "listingAiProvider": "mock",
+    "listingAiBudgetCents": 0
+  },
+  "emailVerification": {
+    "rolesRegistered": 2,
+    "registrationAccepted": 2,
+    "smtpMessagesAccepted": 2,
+    "inboxArrivalsVisuallyObserved": 1,
+    "verificationLinksFollowed": 0,
+    "status": "pending-owner-link-action",
+    "containsEmailAddress": false
+  },
+  "pixel": {
+    "model": "Pixel 7 Pro",
+    "physical": true,
+    "androidVersion": "17",
+    "apiLevel": 37,
+    "installedDelivery": "direct-apk",
+    "installedApkHashMatchesArchive": true,
+    "authenticatedSessionAfterDeploy": "passed-including-cold-start",
+    "controlledFcm": {
+      "capturedAt": "2026-09-03T00:59:07.094Z",
+      "status": "passed-bounded-full-fcm-diagnostic",
+      "foregroundPushDelivery": "passed-popup-visible",
+      "backgroundNotificationCount": "0-to-1",
+      "terminatedProcessNotificationCount": "1-to-2",
+      "notificationIconVisual": "passed",
+      "notificationIconResult": "brand-glyph-centered-and-fully-contained-within-system-circle-with-even-visible-safety-margin",
+      "privateScreenshotSha256": "bd4d9915245b1cd8f12f924d4dd33d0d737ef40a60b8aa25e323e06bdf0e3a54",
+      "privateScreenshotCommitted": false
+    },
+    "offlineRealtime": {
+      "capturedAt": "2026-09-03T00:49:20.543Z",
+      "status": "passed-bounded-offline-realtime-diagnostic",
+      "chatPreloaded": true,
+      "controlledMessageAbsentWhileOfflineSeconds": 15,
+      "sameProcessRealtimeRecovery": true,
+      "networkRestored": true,
+      "fatalCrashEntries": 0
+    },
+    "logoutLifecycle": {
+      "capturedAt": "2026-09-03T00:50:47.378Z",
+      "status": "passed-bounded-logout-lifecycle-diagnostic",
+      "localSessionCleared": true,
+      "guestStatePersistedAfterColdStart": true,
+      "protectedChatHidden": true,
+      "postLogoutServerMessageAccepted": true,
+      "notificationCountBefore": 0,
+      "notificationCountAfter35Seconds": 0,
+      "diagnosticSessionRestoredAfterProbe": true
+    }
+  },
+  "isolation": {
+    "mode": "existing-protected-non-binding-simulation",
+    "protectedReviewFixturePreserved": true,
+    "diagnosticMessagesOnly": true,
+    "temporaryVaultRemovedAfterProbe": true,
+    "listingCreatedDuringProbe": false,
+    "reservationCreatedDuringProbe": false,
+    "contractCreatedDuringProbe": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "containsReviewCredentials": false
+  },
+  "legalHold": {
+    "v52Status": "draft-blocked",
+    "bindingBookingAttempt": "rejected-before-fixture-creation",
+    "errorCode": "v52_contract_documents_unavailable",
+    "bindingPilotClaimed": false
+  },
+  "boundaries": {
+    "onePlusContacted": false,
+    "googlePlayChanged": false,
+    "productionChanged": false,
+    "publicRegistrationActivated": false,
+    "realMoneyUsed": false,
+    "externalAiCalled": false,
+    "testerListChanged": false,
+    "prMerged": false,
+    "containsSecrets": false,
+    "containsAccountIdentity": false,
+    "containsDeviceSerial": false,
+    "containsNetworkIdentifier": false
+  }
+}

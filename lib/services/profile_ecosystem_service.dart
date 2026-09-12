@@ -85,7 +85,7 @@ class ProfileEcosystemService {
     if (isOwnItemForUser(item: item, userId: currentUserId)) {
       return const ActionGuardResult.blocked(
         reason:
-            'Deine eigene Anzeige kann nicht neu über Wunschlisten verwaltet werden.',
+            'Deine eigene Anzeige kann nicht unter Gemerkt verwaltet werden.',
         actionLabel: 'Verwalte die Anzeige über „Meine Anzeigen“',
       );
     }
@@ -106,7 +106,7 @@ class ProfileEcosystemService {
       return const ActionGuardResult.blocked(
         reason:
             'Dieses Profil ist blockiert und deshalb nicht mehr öffentlich erreichbar.',
-        actionLabel: 'Zu Erkunden',
+        actionLabel: 'Zu Entdecken',
       );
     }
     return const ActionGuardResult.allowed();
@@ -164,7 +164,7 @@ class ProfileEcosystemService {
     if (blockedUserIds.contains(item.ownerId)) {
       return const ActionGuardResult.blocked(
         reason:
-            'Dieser Nutzer ist blockiert. Neue Anfragen und Wunschlisten-Aktionen sind deshalb deaktiviert.',
+            'Dieser Nutzer ist blockiert. Neue Anfragen und Merken-Aktionen sind deshalb deaktiviert.',
         actionLabel: 'Nutzer zuerst entblockieren',
       );
     }

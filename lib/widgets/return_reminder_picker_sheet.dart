@@ -71,8 +71,6 @@ class _ReminderOffsetContentState extends State<_ReminderOffsetContent> {
     final height = MediaQuery.of(context).size.height * 0.52;
     final theme = Theme.of(context);
     const wheelText = TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700);
-    final chipStyle = const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600);
-
     return Material(
       color: Colors.transparent,
       child: Align(

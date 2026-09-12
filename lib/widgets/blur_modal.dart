@@ -23,19 +23,12 @@ Future<T?> showBlurBottomSheet<T>(
     context: context,
     useRootNavigator: useRootNavigator,
     isScrollControlled: true,
+    isDismissible: dismissOnOutsideTap,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: barrierOpacity),
     builder: (_) {
       final effectiveSigma = blurSigma < 0 ? 0.0 : blurSigma;
       return Stack(children: [
-        if (dismissOnOutsideTap)
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => Navigator.of(_, rootNavigator: useRootNavigator).maybePop(),
-              child: const SizedBox(),
-            ),
-          ),
         if (effectiveSigma > 0.01)
           Positioned.fill(
             child: BackdropFilter(filter: ImageFilter.blur(sigmaX: effectiveSigma, sigmaY: effectiveSigma), child: const SizedBox()),
@@ -86,14 +79,6 @@ Future<T?> showBlurDialog<T>(
     pageBuilder: (ctx, __, ___) {
       return SafeArea(
         child: Stack(children: [
-          if (dismissOnOutsideTap)
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.of(ctx, rootNavigator: useRootNavigator).maybePop(),
-                child: const SizedBox(),
-              ),
-            ),
           if (effectiveSigma > 0.01)
             Positioned.fill(
               child: BackdropFilter(filter: ImageFilter.blur(sigmaX: effectiveSigma, sigmaY: effectiveSigma), child: const SizedBox()),

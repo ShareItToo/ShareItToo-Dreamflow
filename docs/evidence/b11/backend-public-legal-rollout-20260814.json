@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "kind": "backend-public-legal-rollout",
+  "capturedAt": "2026-08-14T06:35:00Z",
+  "status": "staging-and-production-verified",
+  "release": {
+    "version": "1.0.0-2026081403",
+    "commit": "09c9211e41da75969b9ee59e9954ac7465250e80",
+    "containerImageRevisionVerified": true
+  },
+  "staging": {
+    "deploymentVerified": true,
+    "databaseReady": true,
+    "mailReady": true,
+    "firebaseAuthEnabled": true,
+    "firebasePhoneVerificationEnabled": true,
+    "firebaseProject": "shareittoo-staging"
+  },
+  "production": {
+    "backupCompletedBeforeDeployment": true,
+    "deploymentVerified": true,
+    "databaseReady": true,
+    "mailReady": true,
+    "caddyCandidateValidatedBeforeActivation": true,
+    "caddyBackupCreated": true,
+    "privacyHttpStatus": 200,
+    "imprintHttpStatus": 200,
+    "supportHttpStatus": 200,
+    "accountDeletionHttpStatus": 200,
+    "publicProviderIdentityObserved": true,
+    "publicContactObserved": true
+  },
+  "verification": {
+    "toolRegressionTestsPassed": 436,
+    "toolRegressionTestsFailed": 0,
+    "rollbackAvailable": true
+  },
+  "boundaries": {
+    "productionFirebasePhoneEnabled": false,
+    "productionPaymentsChanged": false,
+    "dnsChanged": false,
+    "mailRoutingChanged": false,
+    "containsSecrets": false,
+    "containsPhoneNumbers": false,
+    "containsAccountIdentifiers": false
+  }
+}

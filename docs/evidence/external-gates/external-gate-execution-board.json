@@ -1,0 +1,474 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-external-gate-execution-board",
+  "assessedOn": "2026-08-27",
+  "state": "pilot-freeze-external-evidence-required",
+  "releaseDecision": "hold-no-go",
+  "tierMatrixRef": "docs/evidence/external-gates/pilot-launch-tier-matrix.json",
+  "canonicalGateManifestRef": "docs/evidence/external-gates/technical-setup-manifest.json",
+  "classificationMeaning": {
+    "BLOCKIERT STUFE A": "The gate must be closed before the recommended Stage A activation decision.",
+    "BLOCKIERT NUR STUFE B": "Stage A may remain synthetic; this gate first blocks Stage B and is inherited by Stage C.",
+    "BLOCKIERT NUR STUFE C": "The gate does not block the bounded closed pilots but blocks public regional launch.",
+    "KANN FÜR STUFE A ZURÜCKGESTELLT WERDEN": "Stage A may proceed only while the named capability remains disabled or excluded.",
+    "TECHNISCH BEREIT, EXTERNE EVIDENZ FEHLT": "Gate mechanics and runbooks are prepared; the external outcome is not ready or approved."
+  },
+  "gates": [
+    {
+      "ordinal": 1,
+      "id": "legal_and_operator_approval",
+      "goal": "Professionally approve the V5.2 Stage A legal scope and authenticate operator and active-provider facts.",
+      "tierClassification": "BLOCKIERT STUFE A",
+      "readinessClassification": "TECHNISCH BEREIT, EXTERNE EVIDENZ FEHLT",
+      "blocksTiers": ["stage_a", "stage_b", "stage_c"],
+      "currentStatus": "prepared-external-review-required",
+      "technicalEvidenceRefs": [
+        "assets/legal/de/legal_review_intake_p0b_20260821.json",
+        "assets/legal/de/legal_manifest_v52.json",
+        "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+        "docs/evidence/support/support-test-matrix-v1-traceability.json"
+      ],
+      "technicalEvidenceSummary": "The source-bound 18-decision V5.2/G3 review intake, legal manifests, provider inventory and Support traceability are prepared.",
+      "missingExternalEvidence": [
+        "independent professional V5.2 Stage A review",
+        "authentic registered-operator and imprint facts",
+        "approved active-provider contract, DPA, region, transfer, retention and exit facts",
+        "approved public legal hashes and URLs"
+      ],
+      "requiredResponsibleRole": "Walid plus an independent qualified German marketplace and consumer-law reviewer",
+      "cost": {
+        "state": "unknown-professional-quote-required",
+        "estimatedAmountEur": null,
+        "approvalRequiredBeforeCost": true
+      },
+      "contractRequirement": "yes-or-existing-contract-evidence-required",
+      "walidPresenceRequired": true,
+      "exactNextAction": "Send the prepared 18-decision intake to an independently selected qualified reviewer only after Walid approves any quoted cost; return sanitized findings and authentic operator/provider evidence references.",
+      "dependencies": [],
+      "stopCondition": "Stop this lane before paid reviewer engagement, contract acceptance, operator publication or any approval claim not backed by authentic evidence.",
+      "releaseToken": "PILOT_STAGE_A_LEGAL_OPERATOR_EVIDENCE_ACCEPTED",
+      "releaseTokenState": "not-issued",
+      "codexCanContinueIndependentLane": true
+    },
+    {
+      "ordinal": 2,
+      "id": "operations_roles_and_absence",
+      "goal": "Assign the required Operations roles and distinct delegates and prove real access and absence coverage.",
+      "tierClassification": "BLOCKIERT STUFE A",
+      "readinessClassification": "TECHNISCH BEREIT, EXTERNE EVIDENZ FEHLT",
+      "blocksTiers": ["stage_a", "stage_b", "stage_c"],
+      "currentStatus": "prepared-external-assignments-required",
+      "technicalEvidenceRefs": [
+        "docs/operations/p0b-ops-role-delegate-absence-gate.json",
+        "docs/operations/P0B_OPS_ASSIGNMENT_AND_ABSENCE_RUNBOOK.md"
+      ],
+      "technicalEvidenceSummary": "Six roles, six distinct delegates and four absence-test procedures are defined; all four technical rehearsals pass.",
+      "missingExternalEvidence": [
+        "authentic role and distinct-delegate assignments in the authoritative company system",
+        "RBAC and MFA evidence for the assigned people",
+        "four real 72-hour absence tests",
+        "approved escalation and handover ownership"
+      ],
+      "requiredResponsibleRole": "Walid and the authentic Stage A Operations owner",
+      "cost": {
+        "state": "unknown-internal-time-and-staffing-input-required",
+        "estimatedAmountEur": null,
+        "approvalRequiredBeforeCost": true
+      },
+      "contractRequirement": "conditional-on-employment-or-delegation-model",
+      "walidPresenceRequired": true,
+      "exactNextAction": "Select the authoritative company system, assign the six real primary roles and six distinct delegates outside Git, verify RBAC/MFA, then execute the four documented absence tests and return sanitized evidence references.",
+      "dependencies": ["legal_and_operator_approval"],
+      "stopCondition": "Stop this lane before naming real people in Git/chat, changing account permissions or claiming an absence pass without authentic execution evidence.",
+      "releaseToken": "PILOT_STAGE_A_OPERATIONS_EVIDENCE_ACCEPTED",
+      "releaseTokenState": "not-issued",
+      "codexCanContinueIndependentLane": true
+    },
+    {
+      "ordinal": 3,
+      "id": "ios_apple_signing_and_device",
+      "goal": "Prepare a signed iOS/TestFlight candidate and physical iPhone evidence when iOS enters scope.",
+      "tierClassification": "KANN FÜR STUFE A ZURÜCKGESTELLT WERDEN",
+      "readinessClassification": "TECHNISCH BEREIT, EXTERNE EVIDENZ FEHLT",
+      "blocksTiers": [],
+      "blocksCapabilities": ["ios-testflight", "ios-public-distribution"],
+      "stageADeferralCondition": "Stage A remains Android-only and no iOS/TestFlight claim or distribution is made.",
+      "currentStatus": "android-ready-ios-external-setup-required",
+      "technicalEvidenceRefs": [
+        "docs/evidence/p0b-next/signed-device-evidence.json",
+        "store/platform-account-readiness.json",
+        "docs/operations/B11_APPLE_DEVELOPER_AND_TESTFLIGHT_WORKSHEET_2026-08-12.md"
+      ],
+      "technicalEvidenceSummary": "The iOS worksheet and fail-closed handoff exist; Android evidence is recorded separately, while iOS signing and device cells remain false.",
+      "missingExternalEvidence": [
+        "current Apple membership and agreement acceptance",
+        "full Xcode selection and CocoaPods on a capable release host",
+        "Apple signing team and app record",
+        "exact signed candidate and physical iPhone/TestFlight matrix"
+      ],
+      "requiredResponsibleRole": "Walid as Apple account owner plus the future iOS release operator",
+      "cost": {
+        "state": "unknown-current-apple-membership-price-must-be-confirmed",
+        "estimatedAmountEur": null,
+        "approvalRequiredBeforeCost": true
+      },
+      "contractRequirement": "yes-apple-membership-and-platform-agreements",
+      "walidPresenceRequired": true,
+      "exactNextAction": "Keep iOS deferred for Stage A; only after a separate cost decision confirm the current Apple terms, provide a capable release host, install/select full Xcode and CocoaPods, and execute the worksheet without exposing account data.",
+      "dependencies": [],
+      "stopCondition": "Stop this lane before membership purchase, agreement acceptance, 2FA, signing, app-record creation or physical installation.",
+      "releaseToken": "IOS_PLATFORM_GATE_DECISION",
+      "releaseTokenState": "not-issued",
+      "codexCanContinueIndependentLane": true
+    },
+    {
+      "ordinal": 4,
+      "id": "firebase_owner_terms_and_controls",
+      "goal": "Confirm the Firebase owner terms and the exact Stage A Auth, FCM, deletion, retention and Maps controls.",
+      "tierClassification": "BLOCKIERT STUFE A",
+      "readinessClassification": "TECHNISCH BEREIT, EXTERNE EVIDENZ FEHLT",
+      "blocksTiers": ["stage_a", "stage_b", "stage_c"],
+      "currentStatus": "owner-console-confirmation-required",
+      "technicalEvidenceRefs": [
+        "store/platform-account-readiness.json",
+        "store/privacy-disclosures.json",
+        "store/phone-verification-readiness.json",
+        "store/google-play/rw20-current-internal-candidate-manifest.json",
+        "store/google-play/rw20d-play-draft-truth-reconciliation.json"
+      ],
+      "historicalPhysicalEvidenceRefs": [
+        "docs/evidence/external-gates/current-candidate-firebase-device-services-opt-in-2026082302.json"
+      ],
+      "technicalEvidenceSummary": "Runtime collection is fail-closed and Store/Privacy/phone-readiness artifacts identify the required controls. The last direct physical default-off observation belongs only to historical Pixel candidate 2026082302: separate Push and voluntary Crash-diagnostics switches were both off, opened no consent dialog and requested no opt-in-dependent registration or report. Current Play draft 2026082601 is source-bound but has no transferred device-control pass. Owner terms and console controls remain unconfirmed.",
+      "missingExternalEvidence": [
+        "current owner terms confirmation",
+        "required Android FCM and any in-scope APNs configuration evidence",
+        "service-specific deletion and retention confirmation",
+        "Google Maps Android key restriction confirmation"
+      ],
+      "requiredResponsibleRole": "Walid as Firebase and Google Cloud owner",
+      "cost": {
+        "state": "unknown-current-plan-and-usage-facts-required",
+        "estimatedAmountEur": null,
+        "approvalRequiredBeforeCost": true
+      },
+      "contractRequirement": "yes-current-provider-terms-and-dpa-evidence",
+      "walidPresenceRequired": true,
+      "exactNextAction": "While Walid is present in the owner console, review the prepared control checklist and record only sanitized yes/no evidence for current terms, FCM, deletion/retention and Maps-key restrictions; make no billing or production change.",
+      "dependencies": ["legal_and_operator_approval", "privacy_retention_and_legal_hold"],
+      "stopCondition": "Stop this lane at login, 2FA, terms acceptance, secret/key handling, billing change or any control that would alter production/provider state.",
+      "releaseToken": "PILOT_STAGE_A_FIREBASE_OWNER_CONTROLS_CONFIRMED",
+      "releaseTokenState": "not-issued",
+      "codexCanContinueIndependentLane": true
+    },
+    {
+      "ordinal": 5,
+      "id": "support_evidence_scanner_and_upload_policy",
+      "goal": "Approve a malware-scanning and upload-policy boundary before arbitrary Support evidence intake is enabled.",
+      "tierClassification": "KANN FÜR STUFE A ZURÜCKGESTELLT WERDEN",
+      "readinessClassification": "TECHNISCH BEREIT, EXTERNE EVIDENZ FEHLT",
+      "blocksTiers": ["stage_b", "stage_c"],
+      "stageADeferralCondition": "Arbitrary Support evidence upload remains disabled; Stage A Support uses text and already-controlled booking evidence only.",
+      "currentStatus": "intake-disabled-external-scanner-and-policy-required",
+      "technicalEvidenceRefs": [
+        "docs/evidence/external-gates/support-evidence-scanner-readiness.json",
+        "docs/architecture/s4a-private-support-evidence-security-2026-08-22.md",
+        "docs/operations/SUPPORT_EVIDENCE_SCANNER_AND_UPLOAD_POLICY_RUNBOOK.md"
+      ],
+      "technicalEvidenceSummary": "The intake is disabled, scanner transport is none and eight fail-closed external decisions are machine tracked.",
+      "missingExternalEvidence": [
+        "managed or self-hosted scanner deployment decision",
+        "scanner security and processor/transfer review",
+        "approved file-size and MIME policy",
+        "retention, Legal Hold and operator-procedure approval",
+        "exact candidate and environment binding"
+      ],
+      "requiredResponsibleRole": "Walid plus qualified Security and Privacy reviewers",
+      "cost": {
+        "state": "unknown-provider-or-self-hosting-choice-required",
+        "estimatedAmountEur": null,
+        "approvalRequiredBeforeCost": true
+      },
+      "contractRequirement": "conditional-managed-provider-contract-or-reviewed-self-hosting",
+      "walidPresenceRequired": true,
+      "exactNextAction": "For Stage A keep arbitrary evidence intake disabled; later compare reviewed managed and self-hosted scanner options, obtain cost approval, close all eight decisions and test only synthetic files before enabling intake.",
+      "dependencies": ["privacy_retention_and_legal_hold", "operations_roles_and_absence"],
+      "stopCondition": "Stop this lane before provider selection, paid service, contract, external upload, intake activation or use of real user evidence.",
+      "releaseToken": "SUPPORT_EVIDENCE_SCANNER_POLICY_ACCEPTED",
+      "releaseTokenState": "not-issued",
+      "codexCanContinueIndependentLane": true
+    },
+    {
+      "ordinal": 6,
+      "id": "psp_contract_and_sandbox_e2e",
+      "goal": "Select and contract a licensed Marketplace PSP and prove the complete sandbox money lifecycle.",
+      "tierClassification": "BLOCKIERT NUR STUFE B",
+      "readinessClassification": "TECHNISCH BEREIT, EXTERNE EVIDENZ FEHLT",
+      "blocksTiers": ["stage_b", "stage_c"],
+      "currentStatus": "provider-contract-and-sandbox-required",
+      "technicalEvidenceRefs": [
+        "docs/evidence/p0b-next/psp-sandbox-e2e-evidence.json",
+        "docs/evidence/support/support-test-matrix-v1-traceability.json",
+        "docs/operations/P0B_PSP_SANDBOX_E2E_RUNBOOK.md"
+      ],
+      "technicalEvidenceSummary": "Eight sandbox scenarios and fail-closed payment boundaries are prepared; provider facts, environment and authentic passes remain absent.",
+      "missingExternalEvidence": [
+        "selected licensed Marketplace PSP product and contract",
+        "authentic KYC and onboarding facts",
+        "DPA, processing-region, transfer and professional contract review",
+        "sandbox account and secret-store configuration",
+        "eight authentic authorization, capture, payout, refund, chargeback and ledger scenarios"
+      ],
+      "requiredResponsibleRole": "Walid plus qualified Payments, Legal, Tax and Accounting reviewers",
+      "cost": {
+        "state": "unknown-provider-quote-and-transaction-fees-required",
+        "estimatedAmountEur": null,
+        "approvalRequiredBeforeCost": true
+      },
+      "contractRequirement": "yes-marketplace-psp-contract-and-dpa",
+      "walidPresenceRequired": true,
+      "exactNextAction": "Keep Stage A synthetic; for Stage B obtain comparable Marketplace PSP offers and professional review, then after explicit cost/contract approval configure sandbox secrets outside Git and execute the eight prepared scenarios.",
+      "dependencies": ["legal_and_operator_approval", "privacy_retention_and_legal_hold", "operations_roles_and_absence"],
+      "stopCondition": "Stop this lane before provider contact that commits SIT, KYC, contract/DPA acceptance, secret handling, paid activation or any real-money transaction.",
+      "releaseToken": "PILOT_STAGE_B_PSP_CONTRACT_SANDBOX_ACCEPTED",
+      "releaseTokenState": "not-issued",
+      "codexCanContinueIndependentLane": true
+    },
+    {
+      "ordinal": 7,
+      "id": "privacy_retention_and_legal_hold",
+      "goal": "Professionally close the Stage A Privacy, processor, retention, deletion and Legal Hold decisions.",
+      "tierClassification": "BLOCKIERT STUFE A",
+      "readinessClassification": "TECHNISCH BEREIT, EXTERNE EVIDENZ FEHLT",
+      "blocksTiers": ["stage_a", "stage_b", "stage_c"],
+      "currentStatus": "prepared-owner-and-legal-decisions-required",
+      "technicalEvidenceRefs": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+        "docs/compliance/retention-deletion-decision-matrix.md"
+      ],
+      "technicalEvidenceSummary": "Privacy and Retention inventories, fail-closed validators, active-provider bindings and Support traceability are prepared.",
+      "missingExternalEvidence": [
+        "six owner/professional Privacy decisions",
+        "ten retention, deletion and Legal Hold period decisions",
+        "active hosting and mail processor contract, region, transfer, retention and deletion facts",
+        "approved Store disclosure answers bound to the exact candidate"
+      ],
+      "requiredResponsibleRole": "Walid plus an independent qualified Privacy and data-retention reviewer",
+      "cost": {
+        "state": "unknown-professional-quote-required",
+        "estimatedAmountEur": null,
+        "approvalRequiredBeforeCost": true
+      },
+      "contractRequirement": "yes-provider-dpa-evidence-and-professional-review-required",
+      "walidPresenceRequired": true,
+      "exactNextAction": "Provide the prepared Privacy/Retention matrices and authentic provider contracts to the qualified reviewer, approve any cost first, then record only sanitized decisions and source references before rebinding candidate disclosures.",
+      "dependencies": ["legal_and_operator_approval"],
+      "stopCondition": "Stop this lane before legal-period selection, DPA/contract acceptance, provider changes, publication or any invented retention/deletion approval.",
+      "releaseToken": "PILOT_STAGE_A_PRIVACY_RETENTION_EVIDENCE_ACCEPTED",
+      "releaseTokenState": "not-issued",
+      "codexCanContinueIndependentLane": true
+    },
+    {
+      "ordinal": 8,
+      "id": "store_submission_and_closed_testing",
+      "goal": "Prove the exact private Android distribution candidate and later obtain public Store approvals without conflating the two.",
+      "tierClassification": "BLOCKIERT STUFE A",
+      "readinessClassification": "TECHNISCH BEREIT, EXTERNE EVIDENZ FEHLT",
+      "blocksTiers": ["stage_a", "stage_b", "stage_c"],
+      "currentStatus": "exact-internal-draft-uploaded-release-and-device-evidence-open",
+      "technicalEvidenceRefs": [
+        "store/submission.json",
+        "store/platform-account-readiness.json",
+        "store/google-play/closed-testing-readiness.json",
+        "store/review-access.json",
+        "store/device-validation.json",
+        "store/google-play/rw20-current-internal-candidate-manifest.json",
+        "store/google-play/rw20-current-internal-upload-handoff.json",
+        "store/google-play/rw20b-oneplus-remote-test-plan.json",
+        "store/google-play/rw20c-oneplus-owner-smoke-readiness.json",
+        "store/google-play/rw20d-play-draft-truth-reconciliation.json"
+      ],
+      "historicalPhysicalEvidenceRefs": [
+        "docs/evidence/external-gates/current-head-android-touch-target-remediation-2026082302.json",
+        "docs/evidence/external-gates/current-candidate-read-only-regression-2026082302.json",
+        "docs/evidence/external-gates/current-candidate-authenticated-safe-links-2026082302.json",
+        "docs/evidence/external-gates/current-candidate-talkback-preflight-2026082302.json",
+        "docs/evidence/external-gates/current-candidate-talkback-settings-preflight-2026082302.json"
+      ],
+      "currentCandidateTruth": {
+        "versionCode": "2026082601",
+        "playState": "uploaded-inactive-internal-draft",
+        "activeInternalVersionCode": "2026081509",
+        "candidateExpectedInstalledOnOnePlus": false,
+        "candidateDeviceResults": "NOT_RUN",
+        "nextRequiredGate": "GOOGLE_PLAY_INTERNAL_RELEASE_GO"
+      },
+      "historicalPhysicalCandidateBoundary": {
+        "versionCode": "2026082302",
+        "evidenceTransfersToCurrentCandidate": false
+      },
+      "technicalEvidenceSummary": "The Google Play account and checklists exist. Exact candidate 2026082601 is built, signed, hash-bound and owner-reported as uploaded, processed and saved only as an inactive Internal draft; active Internal version 2026081509 remains unchanged and every 2026082601 device result is NOT_RUN. Historical direct Pixel evidence for 2026082302 covers privacy, data-preserving update, touch targets, restart, two authenticated cold starts, offline recovery, navigation, legal routes, large text and authenticated safe-link checks. Both the TalkBack keyboard shortcut and user-visible Settings route were tried on that historical candidate; the Android runtime did not enable touch exploration and restored every setting exactly. None of those physical passes transfers to 2026082601. Release activation, Play update, current-candidate OnePlus preflight/smoke, protected review access, manual visual review and manual TalkBack evidence remain open.",
+      "missingExternalEvidence": [
+        "GOOGLE_PLAY_INTERNAL_RELEASE_GO for exact inactive draft 2026082601",
+        "Play-delivered update from active 2026081509 to candidate 2026082601",
+        "current-candidate OnePlus read-only identity preflight and bounded owner-window smoke",
+        "Google Play closed-testing requirement and sanitized observation evidence",
+        "protected review-account plus manual visual-review and TalkBack evidence on the distributed candidate",
+        "public Store approval for Stage C",
+        "Apple Store evidence only if iOS later enters scope"
+      ],
+      "requiredResponsibleRole": "Walid as Store account owner plus the authorized release operator",
+      "cost": {
+        "state": "google-registration-already-paid-new-external-cost-unknown",
+        "estimatedAmountEur": null,
+        "approvalRequiredBeforeCost": true
+      },
+      "contractRequirement": "yes-current-platform-agreements",
+      "walidPresenceRequired": true,
+      "exactNextAction": "With Walid present, re-open the exact inactive Internal draft 2026082601, verify it remains unreviewed and inactive, and decide only the separate GOOGLE_PLAY_INTERNAL_RELEASE_GO gate. After an authorized Internal activation, update the OnePlus through Google Play and run the separately gated current-candidate preflight and bounded smoke; do not submit publicly or publish.",
+      "dependencies": ["legal_and_operator_approval", "firebase_owner_terms_and_controls", "privacy_retention_and_legal_hold"],
+      "stopCondition": "Stop this lane before Internal activation without GOOGLE_PLAY_INTERNAL_RELEASE_GO, device access without ONEPLUS_PERSONAL_DEVICE_NONDESTRUCTIVE_TEST_GO, replacement signing, physical installation with data risk, review credentials, 2FA, Store submission, agreement acceptance or public publication.",
+      "releaseToken": "PILOT_STAGE_A_ANDROID_DISTRIBUTION_EVIDENCE_ACCEPTED",
+      "releaseTokenState": "not-issued",
+      "codexCanContinueIndependentLane": true
+    },
+    {
+      "ordinal": 9,
+      "id": "economics_and_cost_inputs",
+      "goal": "Replace planning assumptions with authentic cost, effort, attribution and profitability evidence before public launch.",
+      "tierClassification": "BLOCKIERT NUR STUFE C",
+      "readinessClassification": "TECHNISCH BEREIT, EXTERNE EVIDENZ FEHLT",
+      "blocksTiers": ["stage_c"],
+      "currentStatus": "external-cost-inputs-required",
+      "technicalEvidenceRefs": [
+        "docs/evidence/p0b/pilot-go-no-go-dossier.json",
+        "docs/compliance/u0-pilot-cockpit-unit-economics-2026-08-20.md"
+      ],
+      "technicalEvidenceSummary": "The read-only cockpit and planning targets are present; profitability correctly remains undetermined.",
+      "missingExternalEvidence": [
+        "authentic provider fees and VAT component",
+        "authentic Cloud and operating costs",
+        "founder hours and replacement rate",
+        "cart-to-booking attribution and actual pilot-period observations",
+        "reviewed profitability conclusion"
+      ],
+      "requiredResponsibleRole": "Walid plus qualified Accounting and Tax owners",
+      "cost": {
+        "state": "unknown-until-authentic-invoices-contracts-and-effort-exist",
+        "estimatedAmountEur": null,
+        "approvalRequiredBeforeCost": true
+      },
+      "contractRequirement": "no-new-contract-required-for-evidence-entry",
+      "walidPresenceRequired": true,
+      "exactNextAction": "After an authorized pilot period exists, enter authentic invoices, contract fees, VAT treatment, founder effort and attribution evidence into the prepared cockpit; keep every unavailable value unknown rather than zero.",
+      "dependencies": ["psp_contract_and_sandbox_e2e", "pilot_region_roster_and_scope"],
+      "stopCondition": "Stop this lane before inventing costs, treating targets as results, asserting profitability or accepting any new paid service.",
+      "releaseToken": "PILOT_STAGE_C_ECONOMICS_EVIDENCE_ACCEPTED",
+      "releaseTokenState": "not-issued",
+      "codexCanContinueIndependentLane": true
+    },
+    {
+      "ordinal": 10,
+      "id": "pilot_region_roster_and_scope",
+      "goal": "Bind the exact Stage A region, invited-adult roster, Cat8 catalog and synthetic-payment envelope.",
+      "tierClassification": "BLOCKIERT STUFE A",
+      "readinessClassification": "TECHNISCH BEREIT, EXTERNE EVIDENZ FEHLT",
+      "blocksTiers": ["stage_a", "stage_b", "stage_c"],
+      "currentStatus": "prepared-prerequisites-open",
+      "technicalEvidenceRefs": [
+        "docs/evidence/p0b-next/invited-synthetic-pilot-spiegelberg-cat8-readiness.json",
+        "docs/operations/P0B_INVITED_SYNTHETIC_PILOT_SPIEGELBERG_CAT8_RUNBOOK.md",
+        "docs/evidence/external-gates/pilot-launch-tier-matrix.json"
+      ],
+      "technicalEvidenceSummary": "The exact Spiegelberg/Cat8/no-real-money envelope and four prerequisites are machine defined; none is externally passed and no roster is stored.",
+      "missingExternalEvidence": [
+        "approved Spiegelberg Stage A region and catalog binding",
+        "maximum-30 invited adult roster held outside Git",
+        "participant information and consent process",
+        "30-to-50-flow measurement/evidence procedure",
+        "all Stage A prerequisite gate evidence"
+      ],
+      "requiredResponsibleRole": "Walid plus the authentic Stage A Pilot and Privacy owners",
+      "cost": {
+        "state": "unknown-pilot-operations-and-participant-costs-required",
+        "estimatedAmountEur": null,
+        "approvalRequiredBeforeCost": true
+      },
+      "contractRequirement": "conditional-reviewed-participant-terms-and-consents-required",
+      "walidPresenceRequired": true,
+      "exactNextAction": "After the prerequisite gates are externally accepted, prepare the real private roster outside Git, confirm adult invitation and consent handling, bind Spiegelberg and the three Cat8 paths to the exact candidate, and keep payment synthetic.",
+      "dependencies": ["legal_and_operator_approval", "operations_roles_and_absence", "firebase_owner_terms_and_controls", "privacy_retention_and_legal_hold", "store_submission_and_closed_testing"],
+      "stopCondition": "Stop this lane before storing personal roster data in Git/chat, configuring a live region/catalog, creating accounts, inviting participants or starting pilot activity.",
+      "releaseToken": "PILOT_STAGE_A_ENVELOPE_EVIDENCE_ACCEPTED",
+      "releaseTokenState": "not-issued",
+      "codexCanContinueIndependentLane": true
+    },
+    {
+      "ordinal": 11,
+      "id": "explicit_activation_decision",
+      "goal": "Make a separate, evidence-bound activation decision for the exact Stage A candidate after every Stage A blocker is closed.",
+      "tierClassification": "BLOCKIERT STUFE A",
+      "readinessClassification": "TECHNISCH BEREIT, EXTERNE EVIDENZ FEHLT",
+      "blocksTiers": ["stage_a", "stage_b", "stage_c"],
+      "currentStatus": "hold-explicit-decision-required",
+      "technicalEvidenceRefs": [
+        "docs/evidence/p0b/pilot-go-no-go-dossier.json",
+        "docs/evidence/support/support-test-matrix-v1-traceability.json",
+        "docs/operations/PILOT_FREEZE_BASELINE.md",
+        "docs/evidence/external-gates/pilot-launch-tier-matrix.json"
+      ],
+      "technicalEvidenceSummary": "The decision boundaries, evidence levels, pilot envelope and fail-closed activation checks are documented and machine validated.",
+      "missingExternalEvidence": [
+        "all Stage A blocker acceptance evidence",
+        "exact signed candidate and CI/device binding",
+        "Walid's separate final Stage A decision",
+        "confirmed zero-real-money, private-invitation and rollback boundaries"
+      ],
+      "requiredResponsibleRole": "Walid as final Stage A decision owner",
+      "cost": {
+        "state": "no-direct-decision-fee-prerequisite-costs-remain-unknown",
+        "estimatedAmountEur": null,
+        "approvalRequiredBeforeCost": true
+      },
+      "contractRequirement": "no-new-contract-for-the-decision-itself",
+      "walidPresenceRequired": true,
+      "exactNextAction": "After PF0-PF5 and every Stage A blocking gate have authentic accepted evidence, present one bounded GO/NO-GO packet to Walid and wait for the exact decision token; do not activate automatically.",
+      "dependencies": ["legal_and_operator_approval", "operations_roles_and_absence", "firebase_owner_terms_and_controls", "privacy_retention_and_legal_hold", "store_submission_and_closed_testing", "pilot_region_roster_and_scope"],
+      "stopCondition": "Stop completely at PILOT_STAGE_A_DECISION; never infer activation from technical readiness, login, credentials, CI, device evidence or earlier tokens.",
+      "releaseToken": "PILOT_STAGE_A_DECISION",
+      "releaseTokenState": "not-issued",
+      "codexCanContinueIndependentLane": true
+    }
+  ],
+  "summary": {
+    "requiredGateCount": 11,
+    "technicallyPreparedGateCount": 11,
+    "externallyReadyGateCount": 0,
+    "stageABlockerCount": 7,
+    "stageBOnlyBlockerCount": 1,
+    "stageCOnlyBlockerCount": 1,
+    "stageADeferredCount": 2,
+    "issuedReleaseTokenCount": 0,
+    "releaseDecision": "hold-no-go"
+  },
+  "boundaries": {
+    "containsPersonalData": false,
+    "containsAccountIdentifiers": false,
+    "containsCredentials": false,
+    "containsSecrets": false,
+    "paidServiceStarted": false,
+    "contractAccepted": false,
+    "accountPermissionChanged": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "providerChanged": false,
+    "paymentChanged": false,
+    "storeChanged": false,
+    "pilotChanged": false,
+    "realMoneyUsed": false,
+    "publicActivationChanged": false,
+    "prMerged": false
+  }
+}

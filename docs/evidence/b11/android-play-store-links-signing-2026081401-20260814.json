@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "kind": "release-check",
+  "status": "passed",
+  "capturedAt": "2026-08-14T01:40:00Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081401",
+    "commit": "5518040d63b72c08d8cd2f72d76d802023b7b055",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "releaseCheck": {
+    "id": "storeWarningsLinksAndSigning",
+    "status": "passed",
+    "verifications": [
+      {
+        "id": "google-play-internal-upload",
+        "status": "passed",
+        "checkedAt": "2026-08-14T01:12:00Z",
+        "summary": "Google Play accepted the exact bound AAB with ReTrace mapping and native debug symbols and activated it for internal testers."
+      },
+      {
+        "id": "google-play-installed-candidate-identity",
+        "status": "passed",
+        "checkedAt": "2026-08-14T01:31:42Z",
+        "summary": "A physical Pixel installed version 1.0.0 build 2026081401 as four Google Play split APKs through com.android.vending."
+      },
+      {
+        "id": "play-app-signing-certificate",
+        "status": "passed",
+        "checkedAt": "2026-08-14T01:34:00Z",
+        "summary": "The installed base APK verified with Android signature schemes v2 and v3 and the bound Google Play App Signing SHA-256 certificate."
+      },
+      {
+        "id": "public-android-asset-links",
+        "status": "passed",
+        "checkedAt": "2026-08-14T01:40:00Z",
+        "summary": "Production, www, and staging assetlinks.json return HTTP 200 application/json with both upload and Google Play App Signing certificates."
+      },
+      {
+        "id": "store-installed-app-link-routing",
+        "status": "passed",
+        "checkedAt": "2026-08-14T01:39:00Z",
+        "summary": "Android verified all three ShareItToo domains and routed a matching HTTPS link into the Store-installed ShareItToo MainActivity."
+      },
+      {
+        "id": "cold-launch-and-staging-feed",
+        "status": "passed",
+        "checkedAt": "2026-08-14T01:34:00Z",
+        "summary": "The exact Store build completed a crash-free cold launch and loaded the public staging feed on the physical Pixel."
+      }
+    ]
+  },
+  "artifacts": {
+    "aabSha256": "d98c87426f1452c0af67fd56ee72210eb8142f900298c512f7455962d1cca35e",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "playAppSigningCertificateSha256": "36488abf86c51da07ab2258f31b00e2f1ba8a36d076107b9f006376ade80b956",
+    "assetLinksSha256": "f2067fe785d96cc9b7c177d005eeb6a0654b8763bb4ca9ddfcb64557062666a7"
+  },
+  "boundaries": {
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true,
+    "productionBackendChanged": false,
+    "stagingBackendChanged": false,
+    "appBinaryChanged": false,
+    "paymentsChanged": false,
+    "dnsChanged": false,
+    "mailChanged": false,
+    "publicSupportPrivacyRoutesApproved": false
+  }
+}

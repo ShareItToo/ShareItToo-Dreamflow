@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-analysis-sharing-and-text-scaling",
+  "capturedAt": "2026-08-16T09:08:32Z",
+  "status": "passed-sharing-and-text-scaling-migration",
+  "baseline": {
+    "totalDiagnostics": 324,
+    "errors": 0,
+    "deprecatedMemberUse": 55
+  },
+  "result": {
+    "totalDiagnostics": 316,
+    "errors": 0,
+    "diagnosticsRemovedThisBatch": 8,
+    "diagnosticsRemovedFromOriginal611": 295,
+    "deprecatedMemberUse": 47,
+    "runtimeSourceFilesChanged": 5,
+    "sourceLinesRemoved": 15,
+    "sourceLinesAdded": 17,
+    "ciAnalyzerBaseline": 316
+  },
+  "migrationScope": {
+    "sharePlusDiagnosticsRemoved": 4,
+    "textScaleFactorDiagnosticsRemoved": 4,
+    "newAnalyzerDiagnosticsIntroduced": 0,
+    "privacyBoundSourceFilesChanged": 0,
+    "sharePayloadChanged": false,
+    "persistedDataChanged": false,
+    "nonlinearTextScalingSupported": true
+  },
+  "migratedRegions": [
+    "gallery native share fallback",
+    "listing options native share action",
+    "explore listing card height calculation",
+    "wishlist mosaic and detail card height calculations",
+    "generic item card height calculation"
+  ],
+  "remainingDiagnostics": {
+    "unused_element": 101,
+    "use_build_context_synchronously": 107,
+    "deprecated_member_use": 47,
+    "unused_element_parameter": 44,
+    "unused_field": 16,
+    "avoid_web_libraries_in_flutter": 1
+  },
+  "verification": {
+    "flutterAnalyze": "passed-with-zero-errors-and-316-non-error-diagnostics",
+    "analyzerBaselineWiringTests": "passed-2",
+    "flutterTests": "passed-268-one-skipped",
+    "technicalRegression": "passed-with-bounded-internal-candidate-rollover",
+    "webBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "boundaries": {
+    "newAppCandidateBuilt": false,
+    "existingAppCandidateChanged": false,
+    "productionChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "testAccountsMutated": false,
+    "realMoneyUsed": false
+  }
+}

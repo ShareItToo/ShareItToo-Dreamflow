@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-crash-controlled-event-gate-diagnostic",
+  "status": "blocked-by-current-candidate-opt-in-surface",
+  "capturedAt": "2026-08-17T06:19:00Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "commit": "3fa045b98897f9551f91da932136c2b100b2d700",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "model": "Pixel 7 Pro",
+    "osVersion": "Android 16",
+    "storeInstall": "play-internal",
+    "containsRawDeviceIdentifier": false
+  },
+  "observations": {
+    "notificationSettingsOpened": true,
+    "currentCandidateShowsFeedControls": true,
+    "currentCandidateShowsIndependentDeviceServiceControls": false,
+    "pushSettingChanged": false,
+    "crashDiagnosticsSettingChanged": false,
+    "exactRunIdRequested": "b11-android-2026081509",
+    "coldDiagnosticLinkOpened": true,
+    "diagnosticUiResult": "Diagnose gesperrt",
+    "controlledEventGenerated": false,
+    "sourceFixAlreadyContainsIndependentOptInUi": true,
+    "newCandidateRequired": true
+  },
+  "nextCandidateRequirements": [
+    "keep Firebase Cloud Messaging and Firebase Crashlytics as separate voluntary default-off choices",
+    "compile exactly one sanitized internal Staging diagnostic run id",
+    "enable Crashlytics only through the explicit Crash diagnostics consent",
+    "send the one-time controlled nonfatal diagnostic without account, message, address, or payment data",
+    "disable diagnostics again after the bounded test",
+    "verify exact version assignment in Firebase Console"
+  ],
+  "boundaries": {
+    "crashReleaseCheckPassed": false,
+    "controlledStagingEventGenerated": false,
+    "productionCrashGenerated": false,
+    "pushConfigurationChanged": false,
+    "crashConfigurationChanged": false,
+    "storeChanged": false,
+    "productionChanged": false,
+    "paymentEndpointCalled": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

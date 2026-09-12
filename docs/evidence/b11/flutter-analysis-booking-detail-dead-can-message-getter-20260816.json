@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-analysis-booking-detail-dead-can-message-getter-cleanup",
+  "capturedAt": "2026-08-16T16:00:39Z",
+  "status": "passed-dead-booking-message-gate-reduction",
+  "baseline": {
+    "totalDiagnostics": 230,
+    "errors": 0,
+    "unusedElements": 62,
+    "asyncContextDiagnostics": 102,
+    "deprecatedMemberUse": 36,
+    "unusedElementParameters": 24,
+    "unusedFields": 6
+  },
+  "result": {
+    "totalDiagnostics": 229,
+    "errors": 0,
+    "diagnosticsRemovedThisBatch": 1,
+    "diagnosticsRemovedFromOriginal611": 382,
+    "unusedElements": 61,
+    "asyncContextDiagnostics": 102,
+    "deprecatedMemberUse": 36,
+    "unusedElementParameters": 24,
+    "unusedFields": 6,
+    "runtimeSourceFilesChanged": 1,
+    "runtimeSourceLinesRemoved": 4,
+    "runtimeSourceLinesAdded": 0,
+    "ciAnalyzerBaseline": 229
+  },
+  "safeRemovalScope": {
+    "removedUnusedElementDiagnostics": 1,
+    "newAnalyzerDiagnosticsIntroduced": 0,
+    "reachableMessagingBranchesRemoved": 0,
+    "activeChatOrSupportFlowChanged": false,
+    "privacyBoundSourceFilesChanged": 0,
+    "displayedUiChanged": false,
+    "persistedDataChanged": false
+  },
+  "removedRegions": [
+    "obsolete booking-detail message-eligibility getter"
+  ],
+  "preservedReachableFlows": [
+    "ongoing booking counterparty chat with pending, review, and completed gates",
+    "default booking counterparty chat with pending, review, and completed gates",
+    "support issue flow and support thread",
+    "confirmed-time guards for pickup and return",
+    "renter-bound upcoming cancellation",
+    "renter-to-owner completed-booking review"
+  ],
+  "remainingDiagnostics": {
+    "unused_element": 61,
+    "use_build_context_synchronously": 102,
+    "deprecated_member_use": 36,
+    "unused_element_parameter": 24,
+    "unused_field": 6
+  },
+  "verification": {
+    "flutterAnalyze": "passed-with-zero-errors-and-229-non-error-diagnostics",
+    "targetedFlutterTests": "passed-114",
+    "newCriticalWiringTests": "passed-8",
+    "flutterTests": "passed-268-one-skipped",
+    "googleOnlyProfileTest": "passed-1",
+    "technicalRegression": "passed-with-bounded-internal-candidate-rollover",
+    "webBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed",
+    "independentScopeReview": "passed-after-chat-and-review-wiring-hardening"
+  },
+  "boundaries": {
+    "newAppCandidateBuilt": false,
+    "existingAppCandidateChanged": false,
+    "productionChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "testAccountsMutated": false,
+    "realMoneyUsed": false
+  }
+}

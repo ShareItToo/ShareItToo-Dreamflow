@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-logout-push-lifecycle-diagnostic",
+  "status": "passed-bounded-logout-push-lifecycle-and-controlled-fcm-diagnostic",
+  "capturedAt": "2026-08-10T12:57:32Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081024",
+    "commit": "7f24cb4649637c2dc36e2d2f0a70144da597a511",
+    "apkSha256": "13712679b60fb1926eb26a45a3a24154fc6b2e93734760566e391b6bcb49544c",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "stripeLivemode": false
+  },
+  "staging": {
+    "serverCommit": "ec570acfddc218cec6d2bfba43d4feb33bda4cfc",
+    "environment": "staging",
+    "productionChanged": false
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "authenticatedUiBeforeLogout": {
+      "status": "passed",
+      "result": "authenticated-session-restored"
+    },
+    "foregroundPushDelivery": {
+      "status": "passed",
+      "result": "in-app-new-message-action-visible"
+    },
+    "backgroundPushDelivery": {
+      "status": "passed",
+      "result": "android-system-notification-visible"
+    },
+    "terminatedProcessPushDelivery": {
+      "status": "passed",
+      "result": "android-system-notification-visible-with-process-absent"
+    },
+    "dedicatedNotificationIcon": {
+      "status": "passed",
+      "result": "shareittoo-glyph-visible-in-system-controlled-icon-container"
+    },
+    "logoutColdRestartGate": {
+      "status": "passed",
+      "result": "authentication-required-after-force-stop-and-chat-link"
+    },
+    "postLogoutBookingPushSuppression": {
+      "status": "passed",
+      "result": "notification-state-unchanged-after-request-and-accept"
+    },
+    "postLogoutMessagePushSuppression": {
+      "status": "passed",
+      "result": "notification-state-unchanged-after-server-accepted-message"
+    },
+    "relevantRuntimeErrors": {
+      "status": "passed",
+      "result": "zero"
+    }
+  },
+  "boundaries": {
+    "directDiagnosticOnly": true,
+    "storeInstallationGateSatisfied": false,
+    "controlledFcmDeliveryPassed": true,
+    "productionPushSent": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "syntheticAccountsOnly": true,
+    "lockCodeUsed": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  }
+}

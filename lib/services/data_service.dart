@@ -1,27 +1,331 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:collection';
 import 'dart:math';
+import 'dart:typed_data';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/material.dart' show DateTimeRange;
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:flutter/foundation.dart'
+    show debugPrint, kDebugMode, listEquals, visibleForTesting;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/backend_config.dart';
+import 'package:lendify/services/backend_http.dart';
 import 'package:lendify/services/backend_repository.dart';
+import 'package:lendify/services/address_privacy.dart';
+import 'package:lendify/services/handover_code.dart';
 import 'package:lendify/services/developer_preview_service.dart';
 import 'package:lendify/services/blocked_users_service.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
+import 'package:lendify/services/private_pilot_pricing.dart';
+import 'package:lendify/services/private_pilot_cancellation_policy.dart';
+import 'package:lendify/services/private_pilot_return_policy.dart';
+import 'package:lendify/services/local_principal_scope.dart';
+import 'package:lendify/config/private_pilot_config.dart';
 import 'package:lendify/models/category.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/models/rental_request.dart';
+import 'package:lendify/models/rental_cart.dart';
 import 'package:lendify/models/review.dart';
 import 'package:lendify/models/multi_criteria_review.dart';
 import 'package:lendify/services/review_metrics_service.dart';
 import 'package:lendify/models/message.dart';
-import 'package:lendify/models/security.dart';
 import 'package:lendify/utils/booking_flow_policy.dart';
 import 'package:lendify/utils/total_subtitle.dart';
+
+class _QueuedLocalMutation {
+  final Future<Object?> Function() operation;
+  final void Function(Object? value) complete;
+  final void Function(Object error, StackTrace stackTrace) completeError;
+
+  const _QueuedLocalMutation({
+    required this.operation,
+    required this.complete,
+    required this.completeError,
+  });
+}
+
+class _LocalMutationQueue {
+  final Queue<_QueuedLocalMutation> _pending = Queue<_QueuedLocalMutation>();
+  bool _running = false;
+
+  Future<T> run<T>(Future<T> Function() operation) {
+    final result = Completer<T>();
+    _pending.add(_QueuedLocalMutation(
+      operation: () async => operation(),
+      complete: (value) => result.complete(value as T),
+      completeError: result.completeError,
+    ));
+    _startIfIdle();
+    return result.future;
+  }
+
+  void _startIfIdle() {
+    if (_running) return;
+    _running = true;
+    unawaited(_drain());
+  }
+
+  Future<void> _drain() async {
+    while (_pending.isNotEmpty) {
+      final queued = _pending.removeFirst();
+      Object? value;
+      Object? failure;
+      StackTrace? failureStack;
+      try {
+        value = await queued.operation();
+      } catch (error, stackTrace) {
+        failure = error;
+        failureStack = stackTrace;
+      }
+      final becameIdle = _pending.isEmpty;
+      if (becameIdle) _running = false;
+      if (failure != null) {
+        queued.completeError(failure, failureStack!);
+      } else {
+        queued.complete(value);
+      }
+      if (becameIdle) {
+        if (_pending.isNotEmpty) _startIfIdle();
+        return;
+      }
+    }
+    _running = false;
+  }
+}
+
+/// Mutable fields of the device-local profile fallback.
+///
+/// Identity, authorization, verification, moderation, payout and reputation
+/// fields are intentionally absent. A `null` map value is an explicit clear.
+enum CurrentUserProfileField {
+  displayName,
+  phone,
+  photoURL,
+  bio,
+  city,
+  country,
+  preferredLanguage,
+  languages,
+  interests,
+  workTitle,
+  hobbies,
+  homeLocation,
+  favoriteSong,
+  showWork,
+  showHobbies,
+  showHomeLocation,
+  showBioPublic,
+  showLanguagesPublic,
+  showInterestsPublic,
+  showFavoriteSong,
+  homeLat,
+  homeLng,
+  birthDate,
+  socialX,
+  socialFacebook,
+  socialInstagram,
+  socialTiktok,
+  socialSnapchat,
+  addressStreet,
+  addressHouseNumber,
+  addressPostalCode,
+  addressCity,
+  addressCountry,
+  addressExtra,
+}
+
+enum AccountProfileMutationFailureKind {
+  rejected,
+  localUnavailable,
+  outcomeUnknown,
+  principalChanged,
+}
+
+class AccountProfileMutationFailure implements Exception {
+  final AccountProfileMutationFailureKind kind;
+  final String? code;
+  final bool remoteAccepted;
+
+  const AccountProfileMutationFailure._(
+    this.kind, {
+    this.code,
+    this.remoteAccepted = false,
+  });
+
+  const AccountProfileMutationFailure.rejected(String code)
+      : this._(AccountProfileMutationFailureKind.rejected, code: code);
+
+  const AccountProfileMutationFailure.localUnavailable(
+    String? code, {
+    bool remoteAccepted = false,
+  }) : this._(
+          AccountProfileMutationFailureKind.localUnavailable,
+          code: code,
+          remoteAccepted: remoteAccepted,
+        );
+
+  const AccountProfileMutationFailure.outcomeUnknown([String? code])
+      : this._(AccountProfileMutationFailureKind.outcomeUnknown, code: code);
+
+  const AccountProfileMutationFailure.principalChanged({
+    bool remoteAccepted = false,
+  }) : this._(
+          AccountProfileMutationFailureKind.principalChanged,
+          remoteAccepted: remoteAccepted,
+        );
+}
+
+class AccountProfileMutationResult {
+  final User user;
+  final bool remoteAccepted;
+
+  const AccountProfileMutationResult({
+    required this.user,
+    required this.remoteAccepted,
+  });
+}
+
+enum AccountListingMutationFailureKind {
+  rejected,
+  localUnavailable,
+  outcomeUnknown,
+  principalChanged,
+}
+
+class AccountListingMutationFailure implements Exception {
+  final AccountListingMutationFailureKind kind;
+  final String? code;
+  final bool remoteAccepted;
+
+  const AccountListingMutationFailure._(
+    this.kind, {
+    this.code,
+    this.remoteAccepted = false,
+  });
+
+  const AccountListingMutationFailure.rejected(String code)
+      : this._(AccountListingMutationFailureKind.rejected, code: code);
+
+  const AccountListingMutationFailure.localUnavailable(
+    String? code, {
+    bool remoteAccepted = false,
+  }) : this._(
+          AccountListingMutationFailureKind.localUnavailable,
+          code: code,
+          remoteAccepted: remoteAccepted,
+        );
+
+  const AccountListingMutationFailure.outcomeUnknown([String? code])
+      : this._(AccountListingMutationFailureKind.outcomeUnknown, code: code);
+
+  const AccountListingMutationFailure.principalChanged({
+    bool remoteAccepted = false,
+  }) : this._(
+          AccountListingMutationFailureKind.principalChanged,
+          remoteAccepted: remoteAccepted,
+        );
+}
+
+class AccountListingMutationResult {
+  final Item? item;
+  final bool remoteAccepted;
+
+  const AccountListingMutationResult({
+    required this.item,
+    required this.remoteAccepted,
+  });
+}
+
+class _OwnedListingCreateEvent {
+  final AuthSessionOwner owner;
+  final Item item;
+  final bool draft;
+
+  const _OwnedListingCreateEvent({
+    required this.owner,
+    required this.item,
+    required this.draft,
+  });
+}
+
+class _AccountListingMutationAttempt {
+  bool remoteAccepted = false;
+}
+
+class _LocalWishlistState {
+  final int revision;
+  final List<Map<String, dynamic>> lists;
+  final Map<String, String> assignments;
+  final Set<String> savedItemIds;
+
+  const _LocalWishlistState({
+    required this.revision,
+    required this.lists,
+    required this.assignments,
+    this.savedItemIds = const <String>{},
+  });
+}
+
+class _LocalWishlistRegistry {
+  final int revision;
+  final Map<String, _LocalWishlistState> principals;
+  final Map<String, dynamic> quarantinedPrincipals;
+  final bool legacyGuestQuarantined;
+
+  _LocalWishlistRegistry({
+    required this.revision,
+    required this.principals,
+    Map<String, dynamic> quarantinedPrincipals = const <String, dynamic>{},
+    this.legacyGuestQuarantined = false,
+  }) : quarantinedPrincipals = Map<String, dynamic>.from(
+          quarantinedPrincipals,
+        );
+}
+
+class _LocalRentalCartBucket {
+  final RentalCart cart;
+  final String? syncOwnerToken;
+
+  const _LocalRentalCartBucket({
+    required this.cart,
+    this.syncOwnerToken,
+  });
+}
+
+class _LocalRentalCartRegistry {
+  final int revision;
+  final Map<String, _LocalRentalCartBucket> principals;
+  final Map<String, dynamic> quarantinedPrincipals;
+  final bool legacyGuestQuarantined;
+
+  _LocalRentalCartRegistry({
+    required this.revision,
+    required this.principals,
+    Map<String, dynamic> quarantinedPrincipals = const <String, dynamic>{},
+    this.legacyGuestQuarantined = false,
+  }) : quarantinedPrincipals = Map<String, dynamic>.from(
+          quarantinedPrincipals,
+        );
+}
+
+class _LocalBookingSelectionRegistry {
+  final int revision;
+  final Map<String, Map<String, dynamic>> principals;
+  final Map<String, dynamic> quarantinedPrincipals;
+  final bool legacyGuestQuarantined;
+
+  _LocalBookingSelectionRegistry({
+    required this.revision,
+    required this.principals,
+    Map<String, dynamic> quarantinedPrincipals = const <String, dynamic>{},
+    this.legacyGuestQuarantined = false,
+  }) : quarantinedPrincipals = Map<String, dynamic>.from(
+          quarantinedPrincipals,
+        );
+}
 
 class RentalRequestTransitionResult {
   final bool success;
@@ -46,12 +350,15 @@ class RentalRequestTransitionResult {
 
 class DataService {
   static const bool _allowDemoSeedDataInRuntime = false;
+  static const int _maxLocalStageAPrincipals = 12;
   static const String _categoriesKey = 'categories';
   static const String _itemsKey = 'items';
   static const String _usersKey = 'users';
   static const String _currentUserKey = 'currentUser';
   static const String _accountDeletedKey = 'account_deleted_v1';
   static const String _bookingSelectionsKey = 'booking_selections';
+  static const String _bookingSelectionPrincipalStateKey =
+      'booking_selections_v2';
   static const String _rentalRequestsKey = 'rental_requests';
   static const String _timelineEventsKey = 'timeline_events';
   static const String _notificationsKey = 'notifications';
@@ -66,39 +373,534 @@ class DataService {
       'read_requests_v1'; // userId -> Set<requestId>
   static const String _handoverFailCountsKey = 'handover_fail_counts';
   static const String _handoverBannersKey = 'handover_banners';
-  static const String _rideCompKey = 'ride_compensation_v1';
   // Wishlists
   static const String _wishlistsMetaKey = 'wishlists_meta_v1';
   static const String _wishlistAssignKey = 'wishlist_assign_v1';
+  static const String _wishlistStateKey = 'wishlist_state_v2';
+  static const String _wishlistPrincipalStateKey = 'wishlist_state_v3';
+  static const String _rentalCartKey = 'rental_cart_v1';
+  static const String _projectCartKey = 'project_cart_v1';
+  static const String _rentalCartSyncOwnerKey = 'rental_cart_sync_owner_v1';
+  static const String _rentalCartPrincipalStateKey = 'rental_cart_v2';
   static const String _messageThreadsKey = 'message_threads_v1';
-  static const String _demoNotifSeedFlagPrefix = 'demo_notif_seeded_for_';
+  static const int _maxLocalMessageThreads = 1000;
+  static const int _maxMessagesPerThread = 5000;
+  static const int _maxLocalNotifications = 5000;
+  static const int _maxLocalTimelineEvents = 5000;
+  static const int _maxLocalRentalRequests = 1000;
+  static const int _maxLocalListings = 1000;
+  static const int _maxLocalListingDocumentBytes = 32 * 1024 * 1024;
+  static const int _maxLocalReviews = 1000;
+  static const int _maxLocalReviewDocumentBytes = 8 * 1024 * 1024;
+  static const int _maxLocalReviewNoteLength = 2000;
+  static const int _maxLocalUsers = 1000;
+  static const int _maxLocalUserDocumentBytes = 16 * 1024 * 1024;
+  static const int _maxLocalProfileStringLength = 10000;
+  static const int _maxLocalProfilePhotoUrlLength = 8 * 1024 * 1024;
+  static const int _maxLocalProfileListEntries = 100;
   static const String _qaMessagesAndNotifsSeedFlagPrefix =
       'qa_messages_notifs_seeded_v3_for_';
   static final Set<String> _qaSeedUsersInProgress = <String>{};
+  static final _LocalMutationQueue _wishlistMutationQueue =
+      _LocalMutationQueue();
+  static final _LocalMutationQueue _rentalCartMutationQueue =
+      _LocalMutationQueue();
+  static final _LocalMutationQueue _bookingSelectionMutationQueue =
+      _LocalMutationQueue();
+  static final _LocalMutationQueue _operationalMutationQueue =
+      _LocalMutationQueue();
+  static final _LocalMutationQueue _rentalRequestMutationQueue =
+      _LocalMutationQueue();
+  static final _LocalMutationQueue _handoverMutationQueue =
+      _LocalMutationQueue();
+  static final _LocalMutationQueue _listingMutationQueue =
+      _LocalMutationQueue();
+  static final _LocalMutationQueue _reviewMutationQueue = _LocalMutationQueue();
+  static final _LocalMutationQueue _accountProfileMutationQueue =
+      _LocalMutationQueue();
+  static bool _failNextListingPersistenceForTesting = false;
+  static bool _clearSessionDuringNextListingPersistenceForTesting = false;
+  static bool _failNextReviewPersistenceForTesting = false;
+  static bool _failNextAccountProfilePersistenceForTesting = false;
+  static bool _clearSessionDuringNextAccountProfilePersistenceForTesting =
+      false;
+
+  @visibleForTesting
+  static int get maxLocalReviewsForTesting => _maxLocalReviews;
+
+  @visibleForTesting
+  static int get maxLocalUsersForTesting => _maxLocalUsers;
+
+  static Future<T> _runWishlistForCurrentPrincipal<T>(
+    Future<T> Function(LocalPrincipalIdentity principal) operation, {
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    if (expectedOwner != null) {
+      await expectedOwner.assertCurrent();
+      return _wishlistMutationQueue.run(() async {
+        await expectedOwner.assertCurrent();
+        final result = await operation(expectedOwner.principal);
+        await expectedOwner.assertCurrent();
+        return result;
+      });
+    }
+    final principal = await _currentLocalPrincipal();
+    return _wishlistMutationQueue.run(() => operation(principal));
+  }
+
+  static Future<LocalPrincipalIdentity> _currentLocalPrincipal() =>
+      LocalPrincipalScope.current();
+
+  static Future<User> _requireCurrentOperationalUser({
+    String? requestedUserId,
+  }) async {
+    final current = await getCurrentUser();
+    if (current == null || current.id.trim().isEmpty) {
+      throw StateError(
+          'Für lokale Kontodaten ist eine Anmeldung erforderlich.');
+    }
+    if (current.isDeactivated) {
+      throw StateError('Das lokale Konto ist deaktiviert.');
+    }
+    if (!QaRuntimeService.isEnabled) {
+      final session = await AuthService.readSession();
+      if (!_sessionMatchesOperationalUser(
+        session,
+        userId: current.id,
+        email: current.email,
+      )) {
+        throw StateError(
+          'Das lokale Profil gehört nicht zur aktuellen Kontositzung.',
+        );
+      }
+    }
+    final requested = requestedUserId?.trim();
+    if (requested != null &&
+        requested.isNotEmpty &&
+        requested != current.id.trim()) {
+      throw StateError('Lokale Kontodaten gehören zu einem anderen Konto.');
+    }
+    return current;
+  }
+
+  static bool _sessionMatchesOperationalUser(
+    AuthSession? session, {
+    required String userId,
+    required String email,
+  }) {
+    if (session == null) return false;
+    final sessionUserId = (session.userId ?? '').trim();
+    if (sessionUserId.isNotEmpty) return sessionUserId == userId.trim();
+    if (BackendConfig.enabled) return false;
+    final normalizedEmail = email.trim().toLowerCase();
+    return normalizedEmail.isNotEmpty &&
+        session.email.trim().toLowerCase() == normalizedEmail;
+  }
+
+  /// Side-effect-free session recheck for queued or remote work. Unlike
+  /// [getCurrentUser], this never initializes QA fixtures while another local
+  /// mutation queue is already held.
+  static Future<void> _assertCurrentOperationalUserId(
+    String expectedUserId, {
+    String? expectedEmail,
+  }) async {
+    final expected = expectedUserId.trim();
+    if (expected.isEmpty) {
+      throw StateError(
+          'Für lokale Kontodaten ist eine Anmeldung erforderlich.');
+    }
+    if (QaRuntimeService.isEnabled) {
+      final runtimeUser = QaRuntimeService.runtimeUserJson;
+      if (runtimeUser == null ||
+          (runtimeUser['id'] ?? '').toString().trim() != expected) {
+        throw StateError('Die lokale Kontositzung hat sich geändert.');
+      }
+      return;
+    }
+    final session = await AuthService.readSession();
+    final sessionUserId = (session?.userId ?? '').trim();
+    var normalizedEmail = expectedEmail?.trim().toLowerCase() ?? '';
+    User? localCurrent;
+    if (sessionUserId.isEmpty && !BackendConfig.enabled) {
+      // Local debug accounts historically bind the authenticated principal by
+      // normalized email. Recheck the exact cached profile without triggering
+      // fixture initialization while the caller's mutation queue is held.
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_currentUserKey);
+      if (raw == null || raw.isEmpty) {
+        throw StateError('Die lokale Kontositzung hat sich geändert.');
+      }
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is! Map) {
+          throw const FormatException('Invalid current user');
+        }
+        localCurrent = User.fromJson(Map<String, dynamic>.from(decoded));
+        final currentEmail = localCurrent.email.trim().toLowerCase();
+        if (localCurrent.id.trim() != expected ||
+            currentEmail.isEmpty ||
+            (normalizedEmail.isNotEmpty && currentEmail != normalizedEmail)) {
+          throw StateError('Die lokale Kontositzung hat sich geändert.');
+        }
+        normalizedEmail = currentEmail;
+      } catch (error) {
+        if (error is StateError) rethrow;
+        throw StateError('Die lokale Kontositzung hat sich geändert.');
+      }
+    }
+    if (!_sessionMatchesOperationalUser(
+      session,
+      userId: expected,
+      email: normalizedEmail,
+    )) {
+      throw StateError('Die lokale Kontositzung hat sich geändert.');
+    }
+    if (sessionUserId.isNotEmpty) return;
+    if (localCurrent == null) {
+      throw StateError('Die lokale Kontositzung hat sich geändert.');
+    }
+  }
+
+  static Future<User> _assertSessionOwnerOperationalUser(
+    AuthSessionOwner owner,
+    String expectedUserId,
+  ) async {
+    final normalizedUserId = expectedUserId.trim();
+    if (normalizedUserId.isEmpty ||
+        !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw StateError('Die lokale Kontositzung hat sich geändert.');
+    }
+    final current = await readCurrentUserForSessionTransition();
+    final ownerUserId = (owner.userId ?? '').trim();
+    final ownerEmail = owner.email.trim().toLowerCase();
+    if (current == null ||
+        current.isDeactivated ||
+        current.id.trim() != normalizedUserId ||
+        ownerUserId.isNotEmpty && ownerUserId != normalizedUserId ||
+        ownerEmail.isEmpty ||
+        current.email.trim().toLowerCase() != ownerEmail ||
+        !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw StateError('Die lokale Kontositzung hat sich geändert.');
+    }
+    return current;
+  }
+
+  static RentalRequest _requireCachedRequestParticipant(
+    List<RentalRequest> requests, {
+    required String requestId,
+    required String userId,
+  }) {
+    for (final request in requests) {
+      if (request.id == requestId) {
+        if (!_isRequestParticipant(request, userId)) {
+          throw StateError('Die lokale Buchung gehört zu einem anderen Konto.');
+        }
+        return request;
+      }
+    }
+    throw StateError('Die lokale Buchung wurde nicht gefunden.');
+  }
+
+  static bool _isRequestParticipant(RentalRequest request, String userId) =>
+      request.ownerId == userId || request.renterId == userId;
+
+  static bool _isThreadParticipant(MessageThread thread, String userId) =>
+      thread.user1Id == userId || thread.user2Id == userId;
+
+  static Future<(User, RentalRequest)> _requireCurrentRequestParticipant(
+    String requestId,
+  ) async {
+    final current = await _requireCurrentOperationalUser();
+    final requests = await _getAllRentalRequests();
+    RentalRequest? request;
+    for (final candidate in requests) {
+      if (candidate.id == requestId) {
+        request = candidate;
+        break;
+      }
+    }
+    if (request == null) {
+      throw StateError('Die lokale Buchung wurde nicht gefunden.');
+    }
+    if (!_isRequestParticipant(request, current.id)) {
+      throw StateError('Die lokale Buchung gehört zu einem anderen Konto.');
+    }
+    return (current, request);
+  }
+
+  static Future<T> _runHandoverForParticipant<T>(
+    (User, RentalRequest) participant,
+    Future<T> Function() operation,
+  ) =>
+      _handoverMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(participant.$1.id);
+        return operation();
+      });
+
+  @visibleForTesting
+  static String localPrincipalTokenForSession(AuthSession? session) =>
+      LocalPrincipalScope.tokenForSession(session);
+
+  static Future<void> _writePreferenceString(
+    SharedPreferences prefs,
+    String key,
+    String value,
+  ) async {
+    final accepted = await prefs.setString(key, value);
+    if (!accepted || prefs.getString(key) != value) {
+      throw StateError('Local persistence failed for $key.');
+    }
+  }
+
+  static Future<void> _removePreferenceKey(
+    SharedPreferences prefs,
+    String key,
+  ) async {
+    final accepted = await prefs.remove(key);
+    if (!accepted || prefs.containsKey(key)) {
+      throw StateError('Local persistence removal failed for $key.');
+    }
+  }
+
+  static List<Item> _decodeListingsStrict(String raw) {
+    if (utf8.encode(raw).length > _maxLocalListingDocumentBytes) {
+      throw const FormatException('Invalid local listings document');
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List || decoded.length > _maxLocalListings) {
+        throw const FormatException('Invalid local listings document');
+      }
+      final ids = <String>{};
+      final items = <Item>[];
+      for (final entry in decoded) {
+        if (entry is! Map) {
+          throw const FormatException('Invalid local listing entry');
+        }
+        final map = Map<String, dynamic>.from(entry);
+        final tags = map['tags'];
+        final photos = map['photos'];
+        final discounts = map['longRentalDiscounts'];
+        if (tags != null &&
+            (tags is! List ||
+                tags.length > 50 ||
+                tags.any((value) => value is! String || value.length > 200))) {
+          throw const FormatException('Invalid local listing tags');
+        }
+        if (photos != null &&
+            (photos is! List ||
+                photos.length > 20 ||
+                photos.any((value) => value is! String))) {
+          throw const FormatException('Invalid local listing photos');
+        }
+        if (discounts != null) {
+          if (discounts is! List || discounts.length > 20) {
+            throw const FormatException('Invalid local listing discounts');
+          }
+          for (final value in discounts) {
+            if (value is! Map ||
+                value['days'] is! num ||
+                value['discountPercent'] is! num) {
+              throw const FormatException('Invalid local listing discount');
+            }
+            final days = (value['days'] as num).toInt();
+            final percent = (value['discountPercent'] as num).toDouble();
+            if (days <= 0 ||
+                !percent.isFinite ||
+                percent < 0 ||
+                percent > 100) {
+              throw const FormatException('Invalid local listing discount');
+            }
+          }
+        }
+        final item = Item.fromJson(map);
+        if (item.id.trim().isEmpty ||
+            item.id.length > 256 ||
+            !ids.add(item.id) ||
+            item.ownerId.trim().isEmpty ||
+            item.ownerId.length > 256 ||
+            item.title.trim().isEmpty ||
+            item.title.length > 300 ||
+            item.description.length > 20000 ||
+            item.categoryId.trim().isEmpty ||
+            item.categoryId.length > 256 ||
+            item.subcategory.length > 256 ||
+            item.locationText.length > 1000 ||
+            item.city.length > 256 ||
+            item.country.length > 32 ||
+            !item.pricePerDay.isFinite ||
+            item.pricePerDay < 0 ||
+            !item.priceRaw.isFinite ||
+            item.priceRaw < 0 ||
+            !item.lat.isFinite ||
+            !item.lng.isFinite ||
+            item.catalogRevision < 1 ||
+            !const <String>{'active', 'paused', 'ended', 'draft'}
+                .contains(item.status)) {
+          throw const FormatException('Invalid local listing entry');
+        }
+        items.add(item);
+      }
+      return items;
+    } catch (error) {
+      if (error is FormatException) rethrow;
+      throw const FormatException('Invalid local listings document');
+    }
+  }
+
+  static Future<void> _persistListings(
+    SharedPreferences prefs,
+    List<Item> items, {
+    Future<void> Function()? verifyAuthorization,
+  }) async {
+    if (items.length > _maxLocalListings) {
+      throw StateError('Der lokale Anzeigenkatalog ist voll.');
+    }
+    final encoded = jsonEncode(items.map((item) => item.toJson()).toList());
+    _decodeListingsStrict(encoded);
+    final previous = prefs.getString(_itemsKey);
+    try {
+      await verifyAuthorization?.call();
+      if (_failNextListingPersistenceForTesting) {
+        _failNextListingPersistenceForTesting = false;
+        throw StateError('Synthetic local listing persistence failure.');
+      }
+      await _writePreferenceString(prefs, _itemsKey, encoded);
+      if (_clearSessionDuringNextListingPersistenceForTesting) {
+        _clearSessionDuringNextListingPersistenceForTesting = false;
+        await AuthService.clearSession();
+      }
+      await verifyAuthorization?.call();
+    } catch (_) {
+      final current = prefs.getString(_itemsKey);
+      if (current != previous) {
+        final restored = previous == null
+            ? await prefs.remove(_itemsKey)
+            : await prefs.setString(_itemsKey, previous);
+        if (!restored || prefs.getString(_itemsKey) != previous) {
+          throw StateError(
+            'Lokale Anzeigen konnten nicht gespeichert oder wiederhergestellt werden.',
+          );
+        }
+      }
+      rethrow;
+    }
+  }
+
+  static List<Item> _readListingsStrict(SharedPreferences prefs) {
+    final raw = prefs.getString(_itemsKey);
+    return raw == null ? <Item>[] : _decodeListingsStrict(raw);
+  }
+
+  @visibleForTesting
+  static void failNextListingPersistenceForTesting() {
+    _failNextListingPersistenceForTesting = true;
+  }
+
+  @visibleForTesting
+  static void clearSessionDuringNextListingPersistenceForTesting() {
+    _clearSessionDuringNextListingPersistenceForTesting = true;
+  }
+
+  /// Read-only backend refreshes update the local cache but must not announce
+  /// another logical data change. Announcing those cache writes makes every
+  /// listening screen fetch again, which can create a refresh feedback loop.
+  @visibleForTesting
+  static bool shouldAnnounceMessageThreadCacheWrite({
+    required bool readOnlyRemoteRefresh,
+  }) =>
+      !readOnlyRemoteRefresh;
+
+  @visibleForTesting
+  static bool canExposeCachedCurrentUser({
+    required bool backendEnabled,
+    required bool hasSession,
+  }) =>
+      !backendEnabled || hasSession;
+
+  @visibleForTesting
+  static User? cachedCurrentUserForSession({
+    required String? encodedUser,
+    required AuthSession? session,
+  }) {
+    if (session == null || encodedUser == null || encodedUser.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(encodedUser);
+      if (decoded is! Map) return null;
+      final user = User.fromJson(Map<String, dynamic>.from(decoded));
+      final sessionUserId = (session.userId ?? '').trim();
+      if (sessionUserId.isEmpty || user.id.trim() != sessionUserId) return null;
+      final sessionEmail = session.email.trim().toLowerCase();
+      if (sessionEmail.isEmpty ||
+          user.email.trim().toLowerCase() != sessionEmail) {
+        return null;
+      }
+      return user;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<User?> getCachedCurrentUserForSession(
+      AuthSession? session) async {
+    if (session == null) return null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return cachedCurrentUserForSession(
+        encodedUser: prefs.getString(_currentUserKey),
+        session: session,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 
   static Future<void> _persistMessageThreads(
     SharedPreferences prefs,
-    List<dynamic> threads,
-  ) async {
-    var payload = threads
-        .whereType<Map>()
-        .map((entry) => Map<String, dynamic>.from(entry))
-        .toList();
-    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-      payload = await BackendRepository.syncMessageThreads(payload);
+    List<dynamic> threads, {
+    bool announceChange = true,
+  }) async {
+    if (threads.length > _maxLocalMessageThreads ||
+        threads.any((entry) => entry is! Map)) {
+      throw const FormatException('Ungültiger lokaler Nachrichtenverlauf.');
     }
-    await prefs.setString(_messageThreadsKey, jsonEncode(payload));
-    SharedPersistenceSync.notify(SharedPersistenceSync.messageThreadsKey);
+    final payload = threads
+        .map((entry) => Map<String, dynamic>.from(entry as Map))
+        .toList(growable: false);
+    final parsed = payload.map(_parseMessageThreadStrict).toList();
+    if (parsed.map((entry) => entry.id).toSet().length != parsed.length) {
+      throw const FormatException('Ungültiger lokaler Nachrichtenverlauf.');
+    }
+    await _writePreferenceString(
+      prefs,
+      _messageThreadsKey,
+      jsonEncode(payload),
+    );
+    if (announceChange) {
+      SharedPersistenceSync.notify(SharedPersistenceSync.messageThreadsKey);
+    }
   }
 
   static Future<String?> _readMessageThreads(
-    SharedPreferences prefs,
-  ) async {
+    SharedPreferences prefs, {
+    Duration remoteTimeout = const Duration(seconds: 20),
+  }) async {
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
       try {
-        final remote = await BackendRepository.getMessageThreads();
+        final remote = await BackendRepository.getMessageThreads(
+          timeout: remoteTimeout,
+        );
         final encoded = jsonEncode(remote);
-        await prefs.setString(_messageThreadsKey, encoded);
+        _decodeMessageThreadsStrict(encoded);
+        await _persistMessageThreads(
+          prefs,
+          remote,
+          announceChange: shouldAnnounceMessageThreadCacheWrite(
+            readOnlyRemoteRefresh: true,
+          ),
+        );
         return encoded;
       } catch (error) {
         debugPrint('[DataService] remote message load failed: $error');
@@ -107,101 +909,127 @@ class DataService {
     return prefs.getString(_messageThreadsKey);
   }
 
-  // Security
-  static const String _securitySettingsKey = 'security_settings_v1';
-  static const String _signedInDevicesKey = 'signed_in_devices_v1';
-
-  static Future<SecuritySettings> getSecuritySettings() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_securitySettingsKey);
-      if (raw == null || raw.isEmpty) {
-        return const SecuritySettings(enabled: false, method: 'sms');
-      }
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      return SecuritySettings.fromJson(map);
-    } catch (e) {
-      debugPrint('[DataService] getSecuritySettings failed: ' + e.toString());
-      return const SecuritySettings(enabled: false, method: 'sms');
+  static List<MessageThread> _decodeMessageThreadsStrict(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is! List || decoded.length > _maxLocalMessageThreads) {
+      throw const FormatException('Ungültiger lokaler Nachrichtenverlauf.');
     }
-  }
-
-  static Future<void> setSecuritySettings(SecuritySettings settings) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _securitySettingsKey,
-        jsonEncode(settings.toJson()),
-      );
-    } catch (e) {
-      debugPrint('[DataService] setSecuritySettings failed: ' + e.toString());
-    }
-  }
-
-  static Future<List<SecurityDevice>> getSignedInDevices() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_signedInDevicesKey);
-      if (raw == null || raw.isEmpty) {
-        final seeded = _seedSignedInDevices();
-        await prefs.setString(
-          _signedInDevicesKey,
-          jsonEncode(seeded.map((e) => e.toJson()).toList()),
-        );
-        return seeded;
-      }
-      final list = jsonDecode(raw);
-      if (list is! List) return const [];
-      final parsed = <SecurityDevice>[];
-      for (final e in list) {
-        if (e is Map) {
-          parsed.add(
-            SecurityDevice.fromJson(e.map((k, v) => MapEntry(k.toString(), v))),
-          );
-        }
+      final parsed = decoded
+          .map(
+            (entry) => _parseMessageThreadStrict(
+              Map<String, dynamic>.from(entry as Map),
+            ),
+          )
+          .toList();
+      if (parsed.map((entry) => entry.id).toSet().length != parsed.length) {
+        throw const FormatException('Ungültiger lokaler Nachrichtenverlauf.');
       }
       return parsed;
-    } catch (e) {
-      debugPrint('[DataService] getSignedInDevices failed: ' + e.toString());
-      return const [];
-    }
-  }
-
-  static Future<void> setSignedInDevices(List<SecurityDevice> devices) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _signedInDevicesKey,
-        jsonEncode(devices.map((e) => e.toJson()).toList()),
+    } catch (error) {
+      if (error is FormatException) rethrow;
+      throw FormatException(
+        'Ungültiger lokaler Nachrichtenverlauf.',
+        error,
       );
-    } catch (e) {
-      debugPrint('[DataService] setSignedInDevices failed: ' + e.toString());
     }
   }
 
-  static List<SecurityDevice> _seedSignedInDevices() {
-    final now = DateTime.now();
-    return [
-      SecurityDevice(
-        id: 'this',
-        name: 'Dieses Gerät',
-        location: 'Aktuell',
-        lastActive: now,
-        isThisDevice: true,
-      ),
-      SecurityDevice(
-        id: 'dev_2',
-        name: 'Chrome Browser',
-        location: 'Stuttgart',
-        lastActive: now.subtract(const Duration(days: 1, hours: 3)),
-      ),
-      SecurityDevice(
-        id: 'dev_3',
-        name: 'iPhone',
-        location: 'Berlin',
-        lastActive: now.subtract(const Duration(hours: 6)),
-      ),
-    ];
+  static MessageThread _parseMessageThreadStrict(
+    Map<String, dynamic> raw,
+  ) {
+    const requiredStringKeys = <String>{
+      'id',
+      'requestId',
+      'itemId',
+      'itemTitle',
+      'user1Id',
+      'user2Id',
+      'createdAt',
+    };
+    if (requiredStringKeys.any((key) => raw[key] is! String)) {
+      throw const FormatException('Ungültiger lokaler Nachrichtenverlauf.');
+    }
+    final id = (raw['id'] as String).trim();
+    final user1Id = (raw['user1Id'] as String).trim();
+    final user2Id = (raw['user2Id'] as String).trim();
+    final threadType = (raw['threadType'] as String?)?.trim().toLowerCase();
+    final isSupport = threadType == 'support';
+    if (id.isEmpty ||
+        id.length > 256 ||
+        user1Id.isEmpty ||
+        user2Id.isEmpty ||
+        user1Id == user2Id ||
+        (raw['itemTitle'] as String).length > 500 ||
+        (!isSupport &&
+            ((raw['requestId'] as String).trim().isEmpty ||
+                (raw['itemId'] as String).trim().isEmpty))) {
+      throw const FormatException('Ungültiger lokaler Nachrichtenverlauf.');
+    }
+    if (DateTime.tryParse(raw['createdAt'] as String) == null ||
+        (raw['lastMessageAt'] != null &&
+            DateTime.tryParse(raw['lastMessageAt'].toString()) == null) ||
+        (raw['handoverAt'] != null &&
+            DateTime.tryParse(raw['handoverAt'].toString()) == null) ||
+        (raw['returnAt'] != null &&
+            DateTime.tryParse(raw['returnAt'].toString()) == null) ||
+        (raw['otherUserLastActive'] != null &&
+            DateTime.tryParse(raw['otherUserLastActive'].toString()) == null)) {
+      throw const FormatException('Ungültiger lokaler Nachrichtenverlauf.');
+    }
+    final messages = raw['messages'];
+    final archived = raw['archivedForUserIds'];
+    final deleted = raw['deletedForUserIds'];
+    if (messages is! List ||
+        messages.length > _maxMessagesPerThread ||
+        messages.any((entry) => entry is! Map) ||
+        (archived != null &&
+            (archived is! List || archived.any((entry) => entry is! String))) ||
+        (deleted != null &&
+            (deleted is! List || deleted.any((entry) => entry is! String)))) {
+      throw const FormatException('Ungültiger lokaler Nachrichtenverlauf.');
+    }
+    final participants = <String>{user1Id, user2Id};
+    final archivedIds = (archived as List? ?? const <dynamic>[])
+        .map((entry) => (entry as String).trim())
+        .toList(growable: false);
+    final deletedIds = (deleted as List? ?? const <dynamic>[])
+        .map((entry) => (entry as String).trim())
+        .toList(growable: false);
+    if (archivedIds.toSet().length != archivedIds.length ||
+        deletedIds.toSet().length != deletedIds.length ||
+        archivedIds.any((entry) => !participants.contains(entry)) ||
+        deletedIds.any((entry) => !participants.contains(entry))) {
+      throw const FormatException('Ungültiger lokaler Nachrichtenverlauf.');
+    }
+    final messageIds = <String>{};
+    for (final entry in messages) {
+      final message = Map<String, dynamic>.from(entry as Map);
+      if (message['id'] is! String ||
+          message['senderId'] is! String ||
+          message['text'] is! String ||
+          message['timestamp'] is! String ||
+          message['isRead'] != null && message['isRead'] is! bool) {
+        throw const FormatException('Ungültiger lokaler Nachrichtenverlauf.');
+      }
+      final messageId = (message['id'] as String).trim();
+      final senderId = (message['senderId'] as String).trim();
+      final attachments = message['attachments'];
+      if (messageId.isEmpty ||
+          messageId.length > 256 ||
+          !messageIds.add(messageId) ||
+          senderId.isEmpty ||
+          senderId.length > 256 ||
+          (message['text'] as String).length > 20000 ||
+          DateTime.tryParse(message['timestamp'] as String) == null ||
+          (attachments != null &&
+              (attachments is! List ||
+                  attachments.length > 16 ||
+                  attachments.any((attachment) => attachment is! Map)))) {
+        throw const FormatException('Ungültiger lokaler Nachrichtenverlauf.');
+      }
+    }
+    return MessageThread.fromJson(raw);
   }
 
   // Runtime timers for express confirmation deadlines (not persisted). We also
@@ -211,49 +1039,92 @@ class DataService {
   // Transient event to communicate that a listing was created or saved as draft.
   // Consumed by ExploreScreen to show a confirmation popup after navigation.
   static (Item item, bool draft)? _lastCreateEvent;
+  static _OwnedListingCreateEvent? _lastOwnedCreateEvent;
   static void setLastCreateEvent(Item item, {required bool draft}) {
     _lastCreateEvent = (item, draft);
   }
 
-  /// Owner-side pickup/handover confirmation failure counter
-  /// We persist how many times the Vermieter failed to confirm pickup (e.g. QR scan mismatch or
-  /// wrong manual code) keyed by bookingId so the Mieter can be offered a manual confirm after 3 tries.
-  static Future<int> getPickupFailCountForBooking(String bookingId) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_handoverFailCountsKey);
-      if (raw == null || raw.isEmpty) return 0;
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      final v = map[bookingId];
-      if (v is int) return v;
-      if (v is num) return v.toInt();
-      return 0;
-    } catch (_) {
-      return 0;
-    }
+  static bool _sameAuthSessionOwner(
+    AuthSessionOwner left,
+    AuthSessionOwner right,
+  ) =>
+      left.userId == right.userId &&
+      left.sessionId == right.sessionId &&
+      left.email.trim().toLowerCase() == right.email.trim().toLowerCase() &&
+      left.createdAt == right.createdAt &&
+      left.epoch == right.epoch;
+
+  static void setLastCreateEventForOwner(
+    AuthSessionOwner owner,
+    Item item, {
+    required bool draft,
+  }) {
+    _lastCreateEvent = null;
+    _lastOwnedCreateEvent = _OwnedListingCreateEvent(
+      owner: owner,
+      item: item,
+      draft: draft,
+    );
   }
 
-  static Future<int> incrementPickupFailForBooking(String bookingId) async {
-    try {
+  static Map<String, dynamic> _decodeHandoverFailCountsStrict(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map || decoded.length > 1000) {
+      throw const FormatException('Ungültige lokale Übergabe-Fehlversuche.');
+    }
+    final map = Map<String, dynamic>.from(decoded);
+    for (final entry in map.entries) {
+      if (entry.key.trim().isEmpty ||
+          entry.key.length > 256 ||
+          entry.value is! int ||
+          (entry.value as int) < 0 ||
+          (entry.value as int) > 100) {
+        throw const FormatException('Ungültige lokale Übergabe-Fehlversuche.');
+      }
+    }
+    return map;
+  }
+
+  /// Participant-scoped pickup/handover confirmation failure counter.
+  static Future<int> getPickupFailCountForBooking(String requestId) async {
+    final id = requestId.trim();
+    if (id.isEmpty) return 0;
+    final participant = await _requireCurrentRequestParticipant(id);
+    return _runHandoverForParticipant(participant, () async {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_handoverFailCountsKey);
-      Map<String, dynamic> map = {};
-      if (raw != null && raw.isNotEmpty) {
-        try {
-          map = jsonDecode(raw) as Map<String, dynamic>;
-        } catch (_) {
-          map = {};
-        }
+      if (raw == null) return 0;
+      final map = _decodeHandoverFailCountsStrict(raw);
+      return map[id] as int? ?? 0;
+    });
+  }
+
+  static Future<int> incrementPickupFailForBooking(String requestId) async {
+    final id = requestId.trim();
+    if (id.isEmpty) return 0;
+    final participant = await _requireCurrentRequestParticipant(id);
+    return _runHandoverForParticipant(participant, () async {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_handoverFailCountsKey);
+      final map = raw == null
+          ? <String, dynamic>{}
+          : _decodeHandoverFailCountsStrict(raw);
+      if (!map.containsKey(id) && map.length >= 1000) {
+        throw StateError('Die lokalen Übergabe-Fehlversuche sind voll.');
       }
-      final current =
-          (map[bookingId] is num) ? (map[bookingId] as num).toInt() : 0;
+      final current = map[id] as int? ?? 0;
+      if (current >= 100) {
+        throw StateError('Zu viele lokale Übergabe-Fehlversuche.');
+      }
       final next = current + 1;
-      map[bookingId] = next;
-      await prefs.setString(_handoverFailCountsKey, jsonEncode(map));
+      map[id] = next;
+      await _writePreferenceString(
+        prefs,
+        _handoverFailCountsKey,
+        jsonEncode(map),
+      );
       return next;
-    } catch (_) {
-      return 0;
-    }
+    });
   }
 
   static (Item, bool)? takeLastCreateEvent() {
@@ -262,78 +1133,361 @@ class DataService {
     return e;
   }
 
-  /// Set a one-time banner text for a booking to be shown on next open.
-  /// Stored under a lightweight map keyed by bookingId.
+  static (Item, bool)? takeLastCreateEventForOwner(AuthSessionOwner owner) {
+    final event = _lastOwnedCreateEvent;
+    _lastOwnedCreateEvent = null;
+    if (event == null || !_sameAuthSessionOwner(event.owner, owner)) {
+      return null;
+    }
+    return (event.item, event.draft);
+  }
+
+  static Map<String, dynamic> _decodeHandoverBannersStrict(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map || decoded.length > 1000) {
+      throw const FormatException('Ungültige lokale Übergabehinweise.');
+    }
+    final map = Map<String, dynamic>.from(decoded);
+    for (final entry in map.entries) {
+      final value = entry.value;
+      if (entry.key.trim().isEmpty ||
+          entry.key.length > 256 ||
+          value is! Map ||
+          value['msg'] is! String ||
+          (value['msg'] as String).trim().isEmpty ||
+          (value['msg'] as String).length > 2000 ||
+          value['ts'] is! String ||
+          DateTime.tryParse(value['ts'] as String) == null) {
+        throw const FormatException('Ungültige lokale Übergabehinweise.');
+      }
+    }
+    return map;
+  }
+
+  /// Sets a participant-scoped one-time banner for the shared request.
   static Future<void> setHandoverBanner({
-    required String bookingId,
+    required String requestId,
     required String message,
   }) async {
-    try {
+    final id = requestId.trim();
+    final normalizedMessage = message.trim();
+    if (id.isEmpty ||
+        id.length > 256 ||
+        normalizedMessage.isEmpty ||
+        normalizedMessage.length > 2000) {
+      throw ArgumentError('Ungültiger lokaler Übergabehinweis.');
+    }
+    final participant = await _requireCurrentRequestParticipant(id);
+    await _runHandoverForParticipant(participant, () async {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_handoverBannersKey);
-      Map<String, dynamic> map = {};
-      if (raw != null && raw.isNotEmpty) {
-        try {
-          map = jsonDecode(raw) as Map<String, dynamic>;
-        } catch (_) {
-          map = {};
-        }
+      final map =
+          raw == null ? <String, dynamic>{} : _decodeHandoverBannersStrict(raw);
+      if (!map.containsKey(id) && map.length >= 1000) {
+        throw StateError('Die lokalen Übergabehinweise sind voll.');
       }
-      map[bookingId] = {'msg': message, 'ts': DateTime.now().toIso8601String()};
-      await prefs.setString(_handoverBannersKey, jsonEncode(map));
-    } catch (e) {
-      // ignore but log for debug
-      debugPrint('[DataService] setHandoverBanner failed: ' + e.toString());
-    }
+      map[id] = <String, dynamic>{
+        'msg': normalizedMessage,
+        'ts': DateTime.now().toIso8601String(),
+      };
+      await _writePreferenceString(prefs, _handoverBannersKey, jsonEncode(map));
+    });
   }
 
   /// Returns and removes the banner text for a booking if present.
-  static Future<String?> takeHandoverBanner(String bookingId) async {
-    try {
+  static Future<String?> takeHandoverBanner(String requestId) async {
+    final id = requestId.trim();
+    if (id.isEmpty) return null;
+    final participant = await _requireCurrentRequestParticipant(id);
+    return _runHandoverForParticipant(participant, () async {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_handoverBannersKey);
-      if (raw == null || raw.isEmpty) return null;
-      Map<String, dynamic> map;
-      try {
-        map = jsonDecode(raw) as Map<String, dynamic>;
-      } catch (_) {
-        return null;
-      }
-      final entry = map[bookingId];
+      if (raw == null) return null;
+      final map = _decodeHandoverBannersStrict(raw);
+      final entry = map[id];
       if (entry is Map) {
-        final msg = (entry['msg'] as String?) ?? '';
-        map.remove(bookingId);
-        await prefs.setString(_handoverBannersKey, jsonEncode(map));
-        return msg.isNotEmpty ? msg : null;
+        final msg = entry['msg'] as String;
+        map.remove(id);
+        await _writePreferenceString(
+          prefs,
+          _handoverBannersKey,
+          jsonEncode(map),
+        );
+        return msg;
       }
       return null;
-    } catch (e) {
-      // ignore but log for debug
-      debugPrint('[DataService] takeHandoverBanner failed: ' + e.toString());
-      return null;
-    }
+    });
   }
 
-  // Persisted availability selection per item
-  static Future<(DateTime? start, DateTime? end)> getSavedDateRange(
-    String itemId,
-  ) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_bookingSelectionsKey);
-    if (raw == null || raw.isEmpty) return (null, null);
-    try {
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      final entry = map[itemId];
-      if (entry is Map) {
-        final s = entry['start'] as String?;
-        final e = entry['end'] as String?;
-        return (
-          s != null ? DateTime.tryParse(s) : null,
-          e != null ? DateTime.tryParse(e) : null,
+  static bool _isValidBookingSelectionToken(Object? value) =>
+      value is String &&
+      (value == LocalPrincipalIdentity.guest.token ||
+          RegExp(r'^p_[a-f0-9]{64}$').hasMatch(value));
+
+  static Map<String, dynamic> _decodeBookingSelectionBucket(Object? raw) {
+    if (raw is! Map || raw.length > 1000) {
+      throw const FormatException('Invalid local booking selections');
+    }
+    final bucket = <String, dynamic>{};
+    for (final entry in raw.entries) {
+      final itemId = entry.key;
+      final value = entry.value;
+      if (itemId is! String ||
+          itemId.trim().isEmpty ||
+          itemId.length > 256 ||
+          value is! Map ||
+          value.keys.any((key) =>
+              key is! String ||
+              !const {'start', 'end', 'delivery'}.contains(key))) {
+        throw const FormatException('Invalid local booking selection entry');
+      }
+      final selection = Map<String, dynamic>.from(value);
+      for (final key in const <String>['start', 'end']) {
+        final field = selection[key];
+        if (field != null &&
+            (field is! String ||
+                field.length > 64 ||
+                DateTime.tryParse(field) == null)) {
+          throw const FormatException('Invalid local booking selection date');
+        }
+      }
+      final delivery = selection['delivery'];
+      if (delivery != null) {
+        if (delivery is! Map || delivery.length > 20) {
+          throw const FormatException(
+            'Invalid local booking delivery selection',
+          );
+        }
+        const booleanKeys = <String>{'hinweg', 'rueckweg', 'express'};
+        const stringKeys = <String>{
+          'city',
+          'addressLine',
+          'deliveryAddressLine',
+          'deliveryCity',
+          'returnAddressLine',
+          'returnCity',
+        };
+        const coordinateKeys = <String>{
+          'lat',
+          'lng',
+          'deliveryLat',
+          'deliveryLng',
+          'returnLat',
+          'returnLng',
+        };
+        for (final field in delivery.entries) {
+          final key = field.key;
+          final fieldValue = field.value;
+          if (key is! String ||
+              (!booleanKeys.contains(key) &&
+                  !stringKeys.contains(key) &&
+                  !coordinateKeys.contains(key))) {
+            throw const FormatException(
+              'Invalid local booking delivery selection',
+            );
+          }
+          if (booleanKeys.contains(key) && fieldValue is! bool) {
+            throw const FormatException(
+              'Invalid local booking delivery selection',
+            );
+          }
+          if (stringKeys.contains(key) &&
+              (fieldValue is! String || fieldValue.length > 500)) {
+            throw const FormatException(
+              'Invalid local booking delivery selection',
+            );
+          }
+          if (coordinateKeys.contains(key) &&
+              fieldValue != null &&
+              (fieldValue is! num || !fieldValue.isFinite)) {
+            throw const FormatException(
+              'Invalid local booking delivery selection',
+            );
+          }
+        }
+        selection['delivery'] = Map<String, dynamic>.from(delivery);
+      }
+      bucket[itemId] = selection;
+    }
+    return bucket;
+  }
+
+  static _LocalBookingSelectionRegistry _readBookingSelectionRegistry(
+    SharedPreferences prefs,
+  ) {
+    final raw = prefs.getString(_bookingSelectionPrincipalStateKey);
+    if (raw == null) {
+      final legacyRaw = prefs.getString(_bookingSelectionsKey);
+      if (legacyRaw == null) {
+        return _LocalBookingSelectionRegistry(
+          revision: 0,
+          principals: <String, Map<String, dynamic>>{},
         );
       }
-    } catch (_) {}
-    return (null, null);
+      try {
+        final legacy = _decodeBookingSelectionBucket(jsonDecode(legacyRaw));
+        return _LocalBookingSelectionRegistry(
+          revision: 0,
+          principals: <String, Map<String, dynamic>>{
+            LocalPrincipalIdentity.guest.token: legacy,
+          },
+        );
+      } catch (_) {
+        return _LocalBookingSelectionRegistry(
+          revision: 0,
+          principals: <String, Map<String, dynamic>>{},
+          legacyGuestQuarantined: true,
+        );
+      }
+    }
+    if (raw.isEmpty) {
+      throw const FormatException('Invalid booking selection registry');
+    }
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } catch (_) {
+      throw const FormatException('Invalid booking selection registry');
+    }
+    if (decoded is! Map ||
+        decoded['schemaVersion'] != 1 ||
+        decoded['revision'] is! int ||
+        (decoded['revision'] as int) < 1 ||
+        decoded['legacyGuestQuarantined'] is! bool ||
+        decoded['principals'] is! Map ||
+        decoded['quarantinedPrincipals'] is! Map) {
+      throw const FormatException('Invalid booking selection registry');
+    }
+    final principals = <String, Map<String, dynamic>>{};
+    final quarantined = <String, dynamic>{};
+    for (final entry in (decoded['principals'] as Map).entries) {
+      if (!_isValidBookingSelectionToken(entry.key)) {
+        throw const FormatException('Invalid booking selection principal');
+      }
+      try {
+        principals[entry.key as String] =
+            _decodeBookingSelectionBucket(entry.value);
+      } catch (_) {
+        quarantined[entry.key as String] = entry.value;
+      }
+    }
+    for (final entry in (decoded['quarantinedPrincipals'] as Map).entries) {
+      if (!_isValidBookingSelectionToken(entry.key) ||
+          principals.containsKey(entry.key)) {
+        throw const FormatException('Invalid booking selection quarantine');
+      }
+      quarantined[entry.key as String] = entry.value;
+    }
+    if (principals.length + quarantined.length > _maxLocalStageAPrincipals) {
+      throw const FormatException('Invalid booking selection registry');
+    }
+    return _LocalBookingSelectionRegistry(
+      revision: decoded['revision'] as int,
+      principals: principals,
+      quarantinedPrincipals: quarantined,
+      legacyGuestQuarantined: decoded['legacyGuestQuarantined'] as bool,
+    );
+  }
+
+  static Map<String, dynamic> _bookingSelectionBucketForPrincipal(
+    _LocalBookingSelectionRegistry registry,
+    LocalPrincipalIdentity principal,
+  ) {
+    if (!principal.authenticated && registry.legacyGuestQuarantined) {
+      throw const FormatException(
+        'Unattributed legacy booking selections are quarantined',
+      );
+    }
+    if (registry.quarantinedPrincipals.containsKey(principal.token)) {
+      throw const FormatException(
+        'Principal booking selections are quarantined',
+      );
+    }
+    return Map<String, dynamic>.from(
+      registry.principals[principal.token] ?? const <String, dynamic>{},
+    );
+  }
+
+  static Future<void> _writeBookingSelectionBucket(
+    SharedPreferences prefs,
+    _LocalBookingSelectionRegistry registry,
+    LocalPrincipalIdentity principal,
+    Map<String, dynamic> bucket,
+  ) async {
+    if (registry.quarantinedPrincipals.containsKey(principal.token) ||
+        (!principal.authenticated && registry.legacyGuestQuarantined)) {
+      throw const FormatException(
+        'Principal booking selections are quarantined',
+      );
+    }
+    if (!registry.principals.containsKey(principal.token) &&
+        registry.principals.length + registry.quarantinedPrincipals.length >=
+            _maxLocalStageAPrincipals) {
+      throw StateError('Local principal capacity reached.');
+    }
+    final validated = _decodeBookingSelectionBucket(bucket);
+    if (validated.isEmpty) {
+      registry.principals.remove(principal.token);
+    } else {
+      registry.principals[principal.token] = validated;
+    }
+    final encoded = jsonEncode(<String, dynamic>{
+      'schemaVersion': 1,
+      'revision': max(1, registry.revision + 1),
+      'legacyGuestQuarantined': registry.legacyGuestQuarantined,
+      'principals': registry.principals,
+      'quarantinedPrincipals': registry.quarantinedPrincipals,
+    });
+    await _writePreferenceString(
+      prefs,
+      _bookingSelectionPrincipalStateKey,
+      encoded,
+    );
+  }
+
+  static Future<T> _withCurrentBookingSelectionBucket<T>(
+    Future<T> Function(
+      SharedPreferences prefs,
+      _LocalBookingSelectionRegistry registry,
+      LocalPrincipalIdentity principal,
+      Map<String, dynamic> bucket,
+    ) operation, {
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    final principal =
+        expectedOwner?.principal ?? await _currentLocalPrincipal();
+    await expectedOwner?.assertCurrent();
+    return _bookingSelectionMutationQueue.run(() async {
+      await expectedOwner?.assertCurrent();
+      await LocalPrincipalScope.assertCurrent(principal);
+      final prefs = await SharedPreferences.getInstance();
+      final registry = _readBookingSelectionRegistry(prefs);
+      final bucket = _bookingSelectionBucketForPrincipal(registry, principal);
+      await expectedOwner?.assertCurrent();
+      final result = await operation(prefs, registry, principal, bucket);
+      await expectedOwner?.assertCurrent();
+      await LocalPrincipalScope.assertCurrent(principal);
+      return result;
+    });
+  }
+
+  // Persisted availability selection, isolated by the current local principal.
+  static Future<(DateTime? start, DateTime? end)> getSavedDateRange(
+    String itemId, {
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    final id = itemId.trim();
+    if (id.isEmpty) return (null, null);
+    return _withCurrentBookingSelectionBucket((_, __, ___, bucket) async {
+      final entry = bucket[id];
+      if (entry is! Map) return (null, null);
+      final start = entry['start'] as String?;
+      final end = entry['end'] as String?;
+      return (
+        start == null ? null : DateTime.parse(start),
+        end == null ? null : DateTime.parse(end),
+      );
+    }, expectedOwner: expectedOwner);
   }
 
   static Future<void> setSavedDateRange(
@@ -341,61 +1495,84 @@ class DataService {
     required DateTime start,
     required DateTime end,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_bookingSelectionsKey);
-    Map<String, dynamic> map = {};
-    if (raw != null && raw.isNotEmpty) {
-      try {
-        map = jsonDecode(raw) as Map<String, dynamic>;
-      } catch (_) {
-        map = {};
-      }
+    final id = itemId.trim();
+    if (id.isEmpty || id.length > 256 || end.isBefore(start)) {
+      throw ArgumentError('Invalid local booking date selection.');
     }
-    // Merge into existing per-item object instead of overwriting it so we
-    // don't drop previously saved delivery selections.
-    final existing =
-        (map[itemId] as Map?)?.map((k, v) => MapEntry(k.toString(), v)) ??
-            <String, dynamic>{};
-    existing['start'] = start.toIso8601String();
-    existing['end'] = end.toIso8601String();
-    map[itemId] = existing;
-    await prefs.setString(_bookingSelectionsKey, jsonEncode(map));
+    await _withCurrentBookingSelectionBucket(
+      (prefs, registry, principal, bucket) async {
+        final existing = bucket[id] is Map
+            ? Map<String, dynamic>.from(bucket[id] as Map)
+            : <String, dynamic>{};
+        existing['start'] = start.toIso8601String();
+        existing['end'] = end.toIso8601String();
+        bucket[id] = existing;
+        await _writeBookingSelectionBucket(
+          prefs,
+          registry,
+          principal,
+          bucket,
+        );
+      },
+    );
   }
 
-  static Future<void> clearSavedDateRange(String itemId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_bookingSelectionsKey);
-    if (raw == null || raw.isEmpty) return;
-    try {
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      if (map.containsKey(itemId)) {
-        map.remove(itemId);
-        await prefs.setString(_bookingSelectionsKey, jsonEncode(map));
-      }
-    } catch (_) {}
-  }
-
-  /// Clears only the saved delivery selection for a given item without touching other items.
-  static Future<void> clearSavedDeliverySelection(String itemId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_bookingSelectionsKey);
-    if (raw == null || raw.isEmpty) return;
-    try {
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      final entry = map[itemId];
-      if (entry is Map) {
-        final existing = Map<String, dynamic>.from(entry);
-        if (existing.containsKey('delivery')) {
-          existing.remove('delivery');
-          if (existing.isEmpty) {
-            map.remove(itemId);
-          } else {
-            map[itemId] = existing;
-          }
-          await prefs.setString(_bookingSelectionsKey, jsonEncode(map));
+  static Future<void> clearSavedDateRange(
+    String itemId, {
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    final id = itemId.trim();
+    if (id.isEmpty) return;
+    await _withCurrentBookingSelectionBucket(
+      (prefs, registry, principal, bucket) async {
+        final raw = bucket[id];
+        if (raw is! Map) return;
+        final existing = Map<String, dynamic>.from(raw)
+          ..remove('start')
+          ..remove('end');
+        if (existing.isEmpty) {
+          bucket.remove(id);
+        } else {
+          bucket[id] = existing;
         }
-      }
-    } catch (_) {}
+        await _writeBookingSelectionBucket(
+          prefs,
+          registry,
+          principal,
+          bucket,
+        );
+      },
+      expectedOwner: expectedOwner,
+    );
+  }
+
+  /// Clears only the saved delivery selection for a given item without
+  /// touching another item or local principal.
+  static Future<void> clearSavedDeliverySelection(
+    String itemId, {
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    final id = itemId.trim();
+    if (id.isEmpty) return;
+    await _withCurrentBookingSelectionBucket(
+      (prefs, registry, principal, bucket) async {
+        final raw = bucket[id];
+        if (raw is! Map || !raw.containsKey('delivery')) return;
+        final existing = Map<String, dynamic>.from(raw)..remove('delivery');
+        if (existing.isEmpty) {
+          bucket.remove(id);
+        } else {
+          bucket[id] = existing;
+        }
+        await _writeBookingSelectionBucket(
+          prefs,
+          registry,
+          principal,
+          bucket,
+        );
+      },
+      expectedOwner: expectedOwner,
+    );
   }
 
   /// Computes long-term discount for a given item and rental length.
@@ -409,40 +1586,25 @@ class DataService {
     double appliedPercent,
     double discountAmount,
   ) computeTotalWithDiscounts({required Item item, required int days}) {
-    final d = days.clamp(1, 3650);
-    final base = (item.pricePerDay * d);
-    if (!item.autoApplyDiscounts || item.longRentalDiscounts.isEmpty) {
-      return (base, base, 0.0, 0.0);
-    }
-    // Pick the highest threshold <= days
-    double pct = 0.0;
-    for (final tier in item.longRentalDiscounts) {
-      if (tier.days <= d && tier.discountPercent > pct) {
-        pct = tier.discountPercent;
-      }
-    }
-    final discountAmount = (base * (pct / 100)).clamp(0.0, base);
-    final total = (base - discountAmount).clamp(0.0, base);
-    return (total, base, pct, discountAmount);
+    final quote = PrivatePilotPricing.quoteForItem(item: item, days: days);
+    return (
+      PrivatePilotPricing.minorToEuros(quote.rentalSubtotalMinor),
+      PrivatePilotPricing.minorToEuros(quote.baseRentalMinor),
+      quote.discountBasisPoints / 100,
+      PrivatePilotPricing.minorToEuros(quote.discountMinor),
+    );
   }
 
   /// Platform contribution ("Plattformbeitrag").
   /// Input: rentalSubtotal (after any rental discounts), excluding delivery/express.
-  /// Rule update:
-  ///  - Bis 10,00 € Mietbetrag: 1,00 €
-  ///  - Ab 10,01 € Mietbetrag: 10 % des Mietbetrags
-  /// Edge case: For a 0 € subtotal, the fee is 0 €.
-  /// UI never shows percentages, only the absolute fee.
+  /// The private-pilot contribution is always exactly 10% of the discounted
+  /// rental subtotal. It is calculated in integer cents with one documented
+  /// half-up rounding step and has no minimum fee.
   static double platformContributionForRental(double rentalSubtotal) {
-    final v = (rentalSubtotal.isNaN ||
-            rentalSubtotal.isInfinite ||
-            rentalSubtotal < 0)
-        ? 0.0
-        : rentalSubtotal;
-    if (v <= 0.0) return 0.0;
-    if (v <= 10.0) return 1.0; // ≤ 10 € => 1 € flat
-    final fee = v * 0.10; // ≥ 10.01 € => 10%
-    return double.parse(fee.toStringAsFixed(2));
+    final rentalMinor = PrivatePilotPricing.eurosToMinor(rentalSubtotal);
+    return PrivatePilotPricing.minorToEuros(
+      PrivatePilotPricing.platformFeeMinor(rentalMinor),
+    );
   }
 
   /// Unified pricing breakdown for an existing rental request.
@@ -559,8 +1721,12 @@ class DataService {
 
     double dropoffFee = 0.0;
     double returnFee = 0.0;
-    if (ownerDelivers) dropoffFee = deliveryFeeForDistanceKm(dropoffKm);
-    if (ownerPicksUp) returnFee = deliveryFeeForDistanceKm(returnKm);
+    if (PrivatePilotConfig.deliveryEnabled && ownerDelivers) {
+      dropoffFee = deliveryFeeForDistanceKm(dropoffKm);
+    }
+    if (PrivatePilotConfig.deliveryEnabled && ownerPicksUp) {
+      returnFee = deliveryFeeForDistanceKm(returnKm);
+    }
 
     // Express: renter sees the surcharge as soon as it is selected/requested.
     // We consider three sources:
@@ -573,7 +1739,9 @@ class DataService {
     final bool expressRequestedOrSelected =
         expressSelectedTransient || req.expressRequested || expressAccepted;
     final double expressApplied =
-        expressRequestedOrSelected ? (req.expressFee) : 0.0; // renter-facing
+        PrivatePilotConfig.deliveryEnabled && expressRequestedOrSelected
+            ? req.expressFee
+            : 0.0;
     // New rule: add 10% of the Express surcharge to the renter total
     final double expressPlatformPart = expressApplied > 0
         ? double.parse((expressApplied * 0.10).toStringAsFixed(2))
@@ -593,7 +1761,9 @@ class DataService {
       (rentalSubtotal +
               dropoffFee +
               returnFee +
-              (expressAccepted ? req.expressFee : 0.0))
+              (PrivatePilotConfig.deliveryEnabled && expressAccepted
+                  ? req.expressFee
+                  : 0.0))
           .toStringAsFixed(2),
     );
 
@@ -612,158 +1782,342 @@ class DataService {
     );
   }
 
-  // Add or update an item in local storage
-  static Future<Item> addItem(Item item) async {
-    final prefs = await SharedPreferences.getInstance();
-    final itemsJson = prefs.getString(_itemsKey);
-    final List<dynamic> list = itemsJson == null ? [] : jsonDecode(itemsJson);
-    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-      final remote = await BackendRepository.createListing(item.toJson());
-      final saved = Item.fromJson(remote);
-      list.removeWhere(
-        (entry) =>
-            entry is Map && entry['id']?.toString() == saved.id.toString(),
-      );
-      list.add(saved.toJson());
-      await prefs.setString(_itemsKey, jsonEncode(list));
-      return saved;
+  static Future<AccountListingMutationResult> _runListingMutationForOwner({
+    required AuthSessionOwner owner,
+    required String expectedOwnerId,
+    required Future<Item?> Function(
+      User captured,
+      Future<void> Function() verifyOwner,
+      _AccountListingMutationAttempt attempt,
+    ) operation,
+  }) async {
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const AccountListingMutationFailure.principalChanged();
     }
-    // Compute next numeric id
-    int maxId = 0;
-    for (final e in list) {
-      final idStr = (e as Map)['id']?.toString() ?? '0';
-      final id = int.tryParse(idStr) ?? 0;
-      if (id > maxId) maxId = id;
-    }
-    final nextId = (maxId + 1).toString();
-    final toStore = Item(
-      id: nextId,
-      ownerId: item.ownerId,
-      title: item.title,
-      description: item.description,
-      categoryId: item.categoryId,
-      subcategory: item.subcategory,
-      tags: item.tags,
-      pricePerDay: item.pricePerDay,
-      currency: item.currency,
-      priceUnit: item.priceUnit,
-      priceRaw: item.priceRaw,
-      deposit: item.deposit,
-      autoApplyDiscounts: item.autoApplyDiscounts,
-      longRentalDiscounts: item.longRentalDiscounts,
-      photos: item.photos,
-      locationText: item.locationText,
-      lat: item.lat,
-      lng: item.lng,
-      geohash: item.geohash,
-      condition: item.condition,
-      minDays: item.minDays,
-      maxDays: item.maxDays,
-      createdAt: item.createdAt,
-      isActive: item.isActive,
-      verificationStatus: item.verificationStatus,
-      city: item.city,
-      country: item.country,
-      status: item.status,
-      endedAt: item.endedAt,
-      timesLent: item.timesLent,
-      offersDeliveryAtDropoff: item.offersDeliveryAtDropoff,
-      offersPickupAtReturn: item.offersPickupAtReturn,
-      offersExpressAtDropoff: item.offersExpressAtDropoff,
-      maxDeliveryKmAtDropoff: item.maxDeliveryKmAtDropoff,
-      maxPickupKmAtReturn: item.maxPickupKmAtReturn,
-      cancellationPolicy: item.cancellationPolicy,
-    );
-    list.add(toStore.toJson());
-
-    Future<void> _persist(List<dynamic> payload) async {
-      await prefs.setString(_itemsKey, jsonEncode(payload));
-    }
-
-    // Try to persist, falling back to photo sanitation when web storage quota is exceeded.
+    User captured;
     try {
-      await _persist(list);
-    } catch (e) {
-      debugPrint(
-        '[DataService] addItem persist failed, attempting to shrink payload: ' +
-            e.toString(),
+      captured = await _requireCurrentOperationalUser(
+        requestedUserId: expectedOwnerId,
       );
-      // 1) Replace base64 data URLs with lightweight placeholders and limit to max 3 photos per item
-      List<dynamic> shrunk = list.map((raw) {
-        try {
-          final m = Map<String, dynamic>.from(raw as Map);
-          final photos = (m['photos'] as List?)
-                  ?.map((p) => p?.toString() ?? '')
-                  .where((s) => s.isNotEmpty)
-                  .toList() ??
-              <String>[];
-          final limited = <String>[];
-          int idx = 0;
-          for (final p in photos) {
-            if (idx >= 3) break;
-            if (p.startsWith('data:')) {
-              // Deterministic placeholder per item id and index to keep UI varied
-              limited.add(
-                'https://picsum.photos/seed/${m['id'] ?? 'x'}_${idx}/800/800',
-              );
-            } else {
-              limited.add(p);
-            }
-            idx++;
-          }
-          if (limited.isEmpty) {
-            limited.add('https://picsum.photos/seed/${m['id'] ?? 'x'}/800/800');
-          }
-          m['photos'] = limited;
-          return m;
-        } catch (_) {
-          return raw;
-        }
-      }).toList();
-      try {
-        await _persist(shrunk);
-      } catch (e2) {
-        debugPrint(
-          '[DataService] addItem persist still failing after shrink: ' +
-              e2.toString(),
-        );
-        // 2) Last resort: strip photos entirely to guarantee saving
-        final stripped = shrunk.map((raw) {
-          try {
-            final m = Map<String, dynamic>.from(raw as Map);
-            m['photos'] = <String>[];
-            return m;
-          } catch (_) {
-            return raw;
-          }
-        }).toList();
-        await _persist(stripped);
-      }
+    } catch (_) {
+      throw const AccountListingMutationFailure.principalChanged();
     }
-    return toStore;
+    if (!_sessionMatchesOperationalUser(
+          AuthSession(
+            userId: owner.userId,
+            sessionId: owner.sessionId,
+            email: owner.email,
+            createdAt: owner.createdAt,
+          ),
+          userId: captured.id,
+          email: captured.email,
+        ) ||
+        !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const AccountListingMutationFailure.principalChanged();
+    }
+
+    return _listingMutationQueue.run(() async {
+      final attempt = _AccountListingMutationAttempt();
+
+      Future<void> verifyOwner() async {
+        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          throw AccountListingMutationFailure.principalChanged(
+            remoteAccepted: attempt.remoteAccepted,
+          );
+        }
+        try {
+          await _assertCurrentOperationalUserId(
+            captured.id,
+            expectedEmail: captured.email,
+          );
+        } catch (_) {
+          throw AccountListingMutationFailure.principalChanged(
+            remoteAccepted: attempt.remoteAccepted,
+          );
+        }
+      }
+
+      try {
+        await verifyOwner();
+        final item = await operation(captured, verifyOwner, attempt);
+        await verifyOwner();
+        return AccountListingMutationResult(
+          item: item,
+          remoteAccepted: attempt.remoteAccepted,
+        );
+      } on AccountListingMutationFailure {
+        rethrow;
+      } on BackendException catch (error) {
+        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          throw AccountListingMutationFailure.principalChanged(
+            remoteAccepted: attempt.remoteAccepted,
+          );
+        }
+        throw _accountListingBackendFailure(error);
+      } catch (_) {
+        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          throw AccountListingMutationFailure.principalChanged(
+            remoteAccepted: attempt.remoteAccepted,
+          );
+        }
+        throw AccountListingMutationFailure.localUnavailable(
+          'local_listing_persistence_failed',
+          remoteAccepted: attempt.remoteAccepted,
+        );
+      }
+    });
   }
+
+  static AccountListingMutationFailure _accountListingBackendFailure(
+    BackendException error,
+  ) {
+    const rejected = <int, Set<String>>{
+      400: <String>{
+        'invalid_listing',
+        'listing_title_required',
+        'listing_description_too_short',
+        'listing_category_required',
+        'invalid_listing_condition',
+        'invalid_listing_price',
+        'listing_location_required',
+        'invalid_listing_coordinates',
+        'invalid_listing_duration',
+        'invalid_handover_radius',
+        'listing_photo_required',
+        'listing_photo_must_be_uploaded',
+        'listing_photo_not_found',
+        'listing_photo_not_approved',
+        'invalid_listing_status',
+        'listing_revision_required',
+        'private_pilot_listing_declaration_required',
+        'private_pilot_category_not_allowed',
+        'private_pilot_subcategory_not_allowed',
+        'private_pilot_country_not_allowed',
+        'private_pilot_region_not_allowed',
+      },
+      401: <String>{
+        'authentication_required',
+        'invalid_or_expired_session',
+        'account_not_active',
+      },
+      403: <String>{
+        'listing_forbidden',
+        'listing_photo_forbidden',
+        'action_blocked_by_moderation',
+      },
+      404: <String>{'listing_not_found', 'user_not_found'},
+      409: <String>{
+        'listing_revision_conflict',
+        'listing_locked_by_moderation',
+        'listing_photo_already_used',
+        'private_pilot_account_declaration_required',
+        'private_pilot_commercial_review_blocked',
+        'private_pilot_listing_declaration_required',
+        'private_pilot_category_not_allowed',
+        'private_pilot_subcategory_not_allowed',
+        'private_pilot_country_not_allowed',
+        'private_pilot_region_not_allowed',
+        'private_pilot_listing_region_unbound',
+      },
+      429: <String>{'rate_limit_exceeded'},
+    };
+    if (rejected[error.statusCode]?.contains(error.code) == true) {
+      return AccountListingMutationFailure.rejected(error.code);
+    }
+    return AccountListingMutationFailure.outcomeUnknown(error.code);
+  }
+
+  // Add or update an item in local storage
+  static Future<Item> addItem(
+    Item item, {
+    Map<String, dynamic>? supplyEnrichmentLink,
+    String? blueOceanDraftId,
+    Map<String, dynamic>? blueOceanReview,
+  }) async {
+    final current = await _requireCurrentOperationalUser(
+      requestedUserId: item.ownerId,
+    );
+    return _listingMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final items = _readListingsStrict(prefs);
+      if (items.length >= _maxLocalListings) {
+        throw StateError('Der lokale Anzeigenkatalog ist voll.');
+      }
+
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final remote = blueOceanDraftId != null && blueOceanReview != null
+            ? await BackendRepository.publishBlueOceanListing(
+                draftId: blueOceanDraftId,
+                review: blueOceanReview,
+                listing: item.toJson(),
+                supplyEnrichmentLink: supplyEnrichmentLink,
+              )
+            : await BackendRepository.createListing(
+                item.toJson(),
+                supplyEnrichmentLink: supplyEnrichmentLink,
+              );
+        await _assertCurrentOperationalUserId(
+          current.id,
+          expectedEmail: current.email,
+        );
+        final saved = Item.fromJson(remote);
+        if (saved.ownerId != current.id) {
+          throw StateError(
+              'Die gespeicherte Anzeige gehört zu einem anderen Konto.');
+        }
+        items.removeWhere((entry) => entry.id == saved.id);
+        items.add(saved);
+        await _persistListings(prefs, items);
+        SharedPersistenceSync.notify(SharedPersistenceSync.listingCatalogKey);
+        return saved;
+      }
+
+      var maxId = 0;
+      for (final entry in items) {
+        final id = int.tryParse(entry.id) ?? 0;
+        if (id > maxId) maxId = id;
+      }
+      final toStore = Item.fromJson(<String, dynamic>{
+        ...item.toJson(),
+        'id': (maxId + 1).toString(),
+        'ownerId': current.id,
+        'catalogRevision': 1,
+      });
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
+      );
+      items.add(toStore);
+      await _persistListings(prefs, items);
+      SharedPersistenceSync.notify(SharedPersistenceSync.listingCatalogKey);
+      return toStore;
+    });
+  }
+
+  static Future<AccountListingMutationResult> addItemForOwner({
+    required AuthSessionOwner owner,
+    required Item item,
+    Map<String, dynamic>? supplyEnrichmentLink,
+    String? blueOceanDraftId,
+    Map<String, dynamic>? blueOceanReview,
+  }) =>
+      _runListingMutationForOwner(
+        owner: owner,
+        expectedOwnerId: item.ownerId,
+        operation: (captured, verifyOwner, attempt) async {
+          final prefs = await SharedPreferences.getInstance();
+          final items = _readListingsStrict(prefs);
+          if (items.length >= _maxLocalListings) {
+            throw StateError('Der lokale Anzeigenkatalog ist voll.');
+          }
+          Item saved;
+          if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+            await verifyOwner();
+            final remote = blueOceanDraftId != null && blueOceanReview != null
+                ? await BackendRepository.publishBlueOceanListingForOwner(
+                    owner: owner,
+                    draftId: blueOceanDraftId,
+                    review: blueOceanReview,
+                    listing: item.toJson(),
+                    supplyEnrichmentLink: supplyEnrichmentLink,
+                  )
+                : await BackendRepository.createListingForOwner(
+                    owner: owner,
+                    listing: item.toJson(),
+                    supplyEnrichmentLink: supplyEnrichmentLink,
+                  );
+            attempt.remoteAccepted = true;
+            await verifyOwner();
+            saved = Item.fromJson(remote);
+            if (saved.ownerId != captured.id) {
+              throw StateError(
+                'Die gespeicherte Anzeige gehört zu einem anderen Konto.',
+              );
+            }
+          } else {
+            var maxId = 0;
+            for (final entry in items) {
+              final id = int.tryParse(entry.id) ?? 0;
+              if (id > maxId) maxId = id;
+            }
+            saved = Item.fromJson(<String, dynamic>{
+              ...item.toJson(),
+              'id': (maxId + 1).toString(),
+              'ownerId': captured.id,
+              'catalogRevision': 1,
+            });
+          }
+          items.removeWhere((entry) => entry.id == saved.id);
+          items.add(saved);
+          await verifyOwner();
+          await _persistListings(
+            prefs,
+            items,
+            verifyAuthorization: verifyOwner,
+          );
+          SharedPersistenceSync.notify(
+            SharedPersistenceSync.listingCatalogKey,
+          );
+          return saved;
+        },
+      );
 
   static Future<List<Category>> getCategories() async {
     final prefs = await SharedPreferences.getInstance();
     final categoriesJson = prefs.getString(_categoriesKey);
-    if (categoriesJson == null) {
-      await _initializeSampleData();
-      return getCategories();
+    final categories = <Category>[];
+    var mutated = categoriesJson == null;
+    if (categoriesJson != null) {
+      try {
+        final decoded = jsonDecode(categoriesJson);
+        if (decoded is! List) {
+          throw const FormatException('Invalid category reference document');
+        }
+        for (final entry in decoded) {
+          if (entry is! Map) {
+            throw const FormatException('Invalid category reference entry');
+          }
+          categories.add(Category.fromJson(Map<String, dynamic>.from(entry)));
+        }
+      } catch (error) {
+        // Categories are reconstructible application reference data. A corrupt
+        // cache may be replaced, but no user/account/listing store is touched.
+        debugPrint(
+          '[DataService] rebuilding invalid category cache '
+          '(${error.runtimeType})',
+        );
+        categories.clear();
+        mutated = true;
+      }
     }
-    final List<dynamic> categoriesList = jsonDecode(categoriesJson);
-    final List<Category> categories =
-        categoriesList.map((json) => Category.fromJson(json)).toList();
+
+    // Categories are application reference data. Recreate only that cache:
+    // the historical all-demo initializer also rewrote users, listings,
+    // reviews and currentUser, so a missing category key could destroy an
+    // otherwise intact migrated/local account state.
 
     // Ensure newly added demo categories are present for all users (no lazy backfill).
     final seeds = _buildDemoCategories();
     final orderById = {for (int i = 0; i < seeds.length; i++) seeds[i].id: i};
 
-    bool mutated = false;
     for (final seed in seeds) {
-      final exists = categories.any((c) => c.id == seed.id);
-      if (!exists) {
+      final index = categories.indexWhere((category) => category.id == seed.id);
+      if (index < 0) {
         categories.add(seed);
         mutated = true;
+      } else {
+        final current = categories[index];
+        if (current.name != seed.name ||
+            current.slug != seed.slug ||
+            current.iconName != seed.iconName ||
+            !listEquals(current.subcategories, seed.subcategories)) {
+          categories[index] = seed;
+          mutated = true;
+        }
       }
     }
 
@@ -775,12 +2129,18 @@ class DataService {
     });
 
     if (mutated) {
-      await prefs.setString(
+      await _writePreferenceString(
+        prefs,
         _categoriesKey,
         jsonEncode(categories.map((c) => c.toJson()).toList()),
       );
     }
 
+    if (PrivatePilotConfig.enabled) {
+      return categories
+          .where((category) => PrivatePilotConfig.categoryAllowed(category.id))
+          .toList(growable: false);
+    }
     return categories;
   }
 
@@ -789,41 +2149,36 @@ class DataService {
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
       try {
         final remote = await BackendRepository.getListings();
-        final items = <Item>[];
-        for (final entry in remote) {
-          try {
-            items.add(Item.fromJson(entry));
-          } catch (error) {
-            debugPrint('[DataService] skipped invalid remote listing: $error');
-          }
-        }
+        final items = _decodeListingsStrict(jsonEncode(remote));
         items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        await prefs.setString(
-          _itemsKey,
-          jsonEncode(items.map((item) => item.toJson()).toList()),
-        );
+        await _persistListings(prefs, items);
         return items;
       } catch (error) {
         debugPrint('[DataService] remote listings load failed: $error');
+        rethrow;
       }
     }
     final itemsJson = prefs.getString(_itemsKey);
     if (itemsJson == null) {
+      if (!_allowDemoSeedDataInRuntime) return const <Item>[];
       await _initializeSampleData();
       return getItems();
     }
-    List<dynamic> itemsList;
+    List<Item> items;
     try {
-      itemsList = jsonDecode(itemsJson);
-    } catch (e) {
-      // If decoding fails entirely, reset with fresh demo data
+      items = _decodeListingsStrict(itemsJson);
+    } catch (error) {
+      if (!_allowDemoSeedDataInRuntime) {
+        throw const FormatException('Invalid local listings document');
+      }
       await _initializeSampleData();
       return getItems();
     }
 
-    // If storage exists but is empty (e.g., after a one-time purge), reseed demo listings
-    // so the app doesn't appear broken on Explore/My Listings.
-    if (itemsList.isEmpty) {
+    if (items.isEmpty) {
+      // An empty catalog is a valid migrated, first-run or intentionally
+      // purged state. Never turn it into demo data in a real runtime.
+      if (!_allowDemoSeedDataInRuntime) return const <Item>[];
       try {
         await resetItemsAndSeedFive(force: true);
       } catch (e) {
@@ -833,50 +2188,6 @@ class DataService {
       return getItems();
     }
 
-    // Parse defensively: skip corrupted entries instead of failing the whole load
-    final List<Item> parsed = [];
-    bool mutated = false;
-    for (final raw in itemsList) {
-      try {
-        final map = Map<String, dynamic>.from(raw as Map);
-        parsed.add(Item.fromJson(map));
-      } catch (e) {
-        // Skip bad entry and mark mutated so we can sanitize storage
-        mutated = true;
-        debugPrint(
-          '[DataService] Skipped corrupted item entry: ' + e.toString(),
-        );
-      }
-    }
-    if (mutated) {
-      await prefs.setString(
-        _itemsKey,
-        jsonEncode(parsed.map((e) => e.toJson()).toList()),
-      );
-    }
-    List<Item> items = parsed;
-
-    // Auto-clean: delete "ended" items older than 60 days
-    final now = DateTime.now();
-    final filtered = <Item>[];
-    bool mutatedAging = false;
-    for (final it in items) {
-      if (it.status == 'ended' && it.endedAt != null) {
-        final diff = now.difference(it.endedAt!).inDays;
-        if (diff >= 60) {
-          mutatedAging = true;
-          continue;
-        }
-      }
-      filtered.add(it);
-    }
-    if (mutatedAging) {
-      await prefs.setString(
-        _itemsKey,
-        jsonEncode(filtered.map((e) => e.toJson()).toList()),
-      );
-      items = filtered;
-    }
     items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return items;
   }
@@ -885,6 +2196,12 @@ class DataService {
   /// current user. Used to switch the app into a mode where only user-created
   /// listings are present and tested.
   static Future<void> ensureOnlyUserItemsOnce() async {
+    if (!_allowDemoSeedDataInRuntime) {
+      debugPrint(
+        '[DataService] ensureOnlyUserItemsOnce skipped (demo seed disabled)',
+      );
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     final done = prefs.getBool(_purgedToOwnedFlagKey) ?? false;
     if (done) return;
@@ -895,6 +2212,7 @@ class DataService {
     // Clear related stores so UI/state doesn't reference removed items.
     await prefs.remove(_rentalRequestsKey);
     await prefs.remove(_bookingSelectionsKey);
+    await prefs.remove(_bookingSelectionPrincipalStateKey);
     await prefs.remove(_timelineEventsKey);
     await prefs.remove(_savedItemsKey);
 
@@ -958,11 +2276,11 @@ class DataService {
     }
 
     // Load needed references
-    final categories = await getCategories();
+    await getCategories();
     final users = await getUsers();
 
     // Build five curated items
-    final five = _buildFiveShowcaseItems(users, categories);
+    final five = _buildFiveShowcaseItems(users);
 
     await prefs.setString(
       _itemsKey,
@@ -971,63 +2289,244 @@ class DataService {
     // Clear related volatile demo stores so UI reflects new dataset
     await prefs.remove(_rentalRequestsKey);
     await prefs.remove(_bookingSelectionsKey);
+    await prefs.remove(_bookingSelectionPrincipalStateKey);
     await prefs.remove(_timelineEventsKey);
     await prefs.remove(_savedItemsKey);
 
     await prefs.setBool(_seedFiveFlagKey, true);
   }
 
+  static User _decodeLocalUserStrict(
+    Object? raw, {
+    required String context,
+  }) {
+    if (raw is! Map) {
+      throw FormatException('$context enthält keinen Profildatensatz.');
+    }
+    final map = Map<String, dynamic>.from(raw);
+    String requiredString(String key) {
+      final value = map[key];
+      if (value is! String ||
+          value.trim().isEmpty ||
+          value.length > _maxLocalProfileStringLength) {
+        throw FormatException('$context enthält ein ungültiges Feld: $key.');
+      }
+      return value;
+    }
+
+    requiredString('id');
+    requiredString('displayName');
+    requiredString('email');
+    requiredString('preferredLanguage');
+    requiredString('role');
+    final createdAt = map['createdAt'];
+    if (createdAt is! String || DateTime.tryParse(createdAt) == null) {
+      throw FormatException('$context enthält keinen gültigen Zeitstempel.');
+    }
+    for (final key in const <String>[
+      'emailVerified',
+      'phoneVerified',
+      'isVerified',
+      'isBanned',
+      'isDeactivated',
+      'showWork',
+      'showHobbies',
+      'showHomeLocation',
+      'showBioPublic',
+      'showLanguagesPublic',
+      'showInterestsPublic',
+      'showFavoriteSong',
+    ]) {
+      if (map.containsKey(key) && map[key] is! bool) {
+        throw FormatException('$context enthält ein ungültiges Feld: $key.');
+      }
+    }
+    final rating = map['avgRating'];
+    if (rating is! num || !rating.toDouble().isFinite) {
+      throw FormatException('$context enthält eine ungültige Bewertung.');
+    }
+    final reviewCount = map['reviewCount'];
+    if (reviewCount is! num ||
+        reviewCount.toInt() != reviewCount ||
+        reviewCount.toInt() < 0) {
+      throw FormatException('$context enthält eine ungültige Bewertungszahl.');
+    }
+    for (final key in const <String>['homeLat', 'homeLng']) {
+      final value = map[key];
+      if (value != null && (value is! num || !value.toDouble().isFinite)) {
+        throw FormatException('$context enthält ein ungültiges Feld: $key.');
+      }
+    }
+    for (final key in const <String>['birthDate', 'deactivatedAt']) {
+      final value = map[key];
+      if (value != null &&
+          (value is! String || DateTime.tryParse(value) == null)) {
+        throw FormatException('$context enthält ein ungültiges Feld: $key.');
+      }
+    }
+    for (final key in const <String>['languages', 'interests']) {
+      final value = map[key];
+      if (value is! List || value.length > _maxLocalProfileListEntries) {
+        throw FormatException('$context enthält eine ungültige Liste: $key.');
+      }
+      for (final entry in value) {
+        if (entry is! String || entry.length > _maxLocalProfileStringLength) {
+          throw FormatException('$context enthält eine ungültige Liste: $key.');
+        }
+      }
+    }
+    for (final entry in map.entries) {
+      if (entry.value is String &&
+          (entry.value as String).length > _maxLocalProfileStringLength &&
+          entry.key != 'photoURL') {
+        throw FormatException(
+          '$context enthält ein zu langes Feld: ${entry.key}.',
+        );
+      }
+    }
+    return User.fromJson(map);
+  }
+
+  static List<User> _decodeLocalUsersStrict(String raw) {
+    if (utf8.encode(raw).length > _maxLocalUserDocumentBytes) {
+      throw const FormatException('Der lokale Profilbestand ist zu groß.');
+    }
+    final decoded = jsonDecode(raw);
+    if (decoded is! List || decoded.length > _maxLocalUsers) {
+      throw const FormatException('Der lokale Profilbestand ist ungültig.');
+    }
+    final users = <User>[];
+    final ids = <String>{};
+    final emails = <String>{};
+    for (var index = 0; index < decoded.length; index++) {
+      final user = _decodeLocalUserStrict(
+        decoded[index],
+        context: 'Lokales Profil ${index + 1}',
+      );
+      final id = user.id.trim();
+      final email = user.email.trim().toLowerCase();
+      if (!ids.add(id) || !emails.add(email)) {
+        throw const FormatException(
+          'Der lokale Profilbestand enthält mehrdeutige Konten.',
+        );
+      }
+      users.add(user);
+    }
+    return users;
+  }
+
+  static User _decodeCurrentUserStrict(String raw) {
+    if (utf8.encode(raw).length > _maxLocalUserDocumentBytes) {
+      throw const FormatException('Das lokale Kontoprofil ist zu groß.');
+    }
+    return _decodeLocalUserStrict(
+      jsonDecode(raw),
+      context: 'Lokales Kontoprofil',
+    );
+  }
+
+  static bool _sameLocalUserDocument(User left, User right) =>
+      jsonEncode(left.toJson()) == jsonEncode(right.toJson());
+
+  static Future<bool> _restorePreferenceString(
+    SharedPreferences prefs,
+    String key,
+    String? value,
+  ) =>
+      value == null ? prefs.remove(key) : prefs.setString(key, value);
+
+  static Future<void> _persistAccountProfileDocumentsVerified({
+    required SharedPreferences prefs,
+    required User current,
+    required List<User> users,
+    Future<void> Function()? verifyAuthorization,
+  }) async {
+    final previousCurrent = prefs.getString(_currentUserKey);
+    final previousUsers = prefs.getString(_usersKey);
+    final hadDeletedMarker = prefs.containsKey(_accountDeletedKey);
+    final previousDeletedMarker = prefs.getBool(_accountDeletedKey);
+    final nextCurrent = jsonEncode(current.toJson());
+    final nextUsers = jsonEncode(users.map((entry) => entry.toJson()).toList());
+    _decodeCurrentUserStrict(nextCurrent);
+    final validatedUsers = _decodeLocalUsersStrict(nextUsers);
+    if (!validatedUsers.any((entry) => entry.id == current.id)) {
+      throw StateError('Das aktuelle Profil fehlt im lokalen Profilbestand.');
+    }
+    try {
+      await verifyAuthorization?.call();
+      final usersWritten = await prefs.setString(_usersKey, nextUsers);
+      if (!usersWritten || prefs.getString(_usersKey) != nextUsers) {
+        throw StateError('Der lokale Profilbestand wurde nicht gespeichert.');
+      }
+      if (_clearSessionDuringNextAccountProfilePersistenceForTesting) {
+        _clearSessionDuringNextAccountProfilePersistenceForTesting = false;
+        await AuthService.clearSession();
+      }
+      if (_failNextAccountProfilePersistenceForTesting) {
+        _failNextAccountProfilePersistenceForTesting = false;
+        throw StateError(
+            'Synthetic local account profile persistence failure.');
+      }
+      final currentWritten =
+          await prefs.setString(_currentUserKey, nextCurrent);
+      if (!currentWritten || prefs.getString(_currentUserKey) != nextCurrent) {
+        throw StateError('Das lokale Kontoprofil wurde nicht gespeichert.');
+      }
+      if (!await prefs.remove(_accountDeletedKey) ||
+          prefs.containsKey(_accountDeletedKey)) {
+        throw StateError(
+          'Der kontogebundene Löschstatus konnte nicht zurückgesetzt werden.',
+        );
+      }
+      _decodeLocalUsersStrict(prefs.getString(_usersKey)!);
+      final persistedCurrent =
+          _decodeCurrentUserStrict(prefs.getString(_currentUserKey)!);
+      if (persistedCurrent.id != current.id) {
+        throw StateError('Das lokale Kontoprofil ist nicht konsistent.');
+      }
+      await verifyAuthorization?.call();
+    } catch (error) {
+      final usersRestored = await _restorePreferenceString(
+        prefs,
+        _usersKey,
+        previousUsers,
+      );
+      final currentRestored = await _restorePreferenceString(
+        prefs,
+        _currentUserKey,
+        previousCurrent,
+      );
+      final deletedMarkerRestored = hadDeletedMarker
+          ? await prefs.setBool(_accountDeletedKey, previousDeletedMarker!)
+          : await prefs.remove(_accountDeletedKey);
+      if (!usersRestored ||
+          !currentRestored ||
+          !deletedMarkerRestored ||
+          prefs.getString(_usersKey) != previousUsers ||
+          prefs.getString(_currentUserKey) != previousCurrent ||
+          (hadDeletedMarker
+              ? prefs.getBool(_accountDeletedKey) != previousDeletedMarker
+              : prefs.containsKey(_accountDeletedKey))) {
+        throw StateError(
+          'Profil-Speicherfehler; der vorherige Stand konnte nicht vollständig wiederhergestellt werden.',
+        );
+      }
+      rethrow;
+    }
+  }
+
   static Future<List<User>> getUsers() async {
     final prefs = await SharedPreferences.getInstance();
     final usersJson = prefs.getString(_usersKey);
     if (usersJson == null) {
+      if (!_allowDemoSeedDataInRuntime) return const <User>[];
       await _initializeSampleData();
       return getUsers();
     }
-    final List<dynamic> usersList = jsonDecode(usersJson);
-    bool mutated = false;
-    final fixed = usersList.map((e) {
-      final map = Map<String, dynamic>.from(e as Map);
-      if (!map.containsKey('createdAt') ||
-          map['createdAt'] == null ||
-          (map['createdAt'] as String).isEmpty) {
-        map['createdAt'] = DateTime.now().toIso8601String();
-        mutated = true;
-      }
-      if (!map.containsKey('avgRating') || map['avgRating'] == null) {
-        map['avgRating'] = 0.0;
-        mutated = true;
-      }
-      if (!map.containsKey('reviewCount') || map['reviewCount'] == null) {
-        map['reviewCount'] = 0;
-        mutated = true;
-      }
-      final isDeactivated = map['isDeactivated'] == true;
-      final id = map['id']?.toString();
-      if (!isDeactivated && id != null) {
-        final override = _seedForId(id);
-        if (override != null) {
-          if (map['displayName'] != override.$1) {
-            map['displayName'] = override.$1;
-            mutated = true;
-          }
-          if (map['photoURL'] != override.$2) {
-            map['photoURL'] = override.$2;
-            mutated = true;
-          }
-        }
-      }
-      return map;
-    }).toList();
-
-    var users = fixed.map((json) => User.fromJson(json)).toList();
-    users = await _applyCentralReviewStatsToUsers(users);
-
-    final correctedJson = users.map((user) => user.toJson()).toList();
-    if (mutated || jsonEncode(fixed) != jsonEncode(correctedJson)) {
-      await prefs.setString(_usersKey, jsonEncode(correctedJson));
-    }
-    return users;
+    final users = _decodeLocalUsersStrict(usersJson);
+    // Reputation is derived for presentation only. Reads never rewrite the
+    // account document or normalize malformed user-owned state.
+    return _applyCentralReviewStatsToUsers(users);
   }
 
   static Future<User?> getCurrentUser() async {
@@ -1066,35 +2565,37 @@ class DataService {
     }
 
     Future<String?> safeReadCurrentUser() async {
-      try {
-        return prefs.getString(_currentUserKey);
-      } catch (e) {
-        debugPrint(
-          '[DataService] currentUser malformed; clearing persisted value: $e',
-        );
-        try {
-          await prefs.remove(_currentUserKey);
-        } catch (_) {}
-        return null;
-      }
+      return prefs.getString(_currentUserKey);
     }
 
     String? userJson = await safeReadCurrentUser();
+    AuthSession? backendSession;
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
       final session = await AuthService.readSession();
+      backendSession = session;
+      if (!canExposeCachedCurrentUser(
+        backendEnabled: true,
+        hasSession: session != null,
+      )) {
+        if (userJson != null && userJson.isNotEmpty) {
+          await prefs.remove(_currentUserKey);
+        }
+        return null;
+      }
+      if (session == null) return null;
       var localUserId = '';
       if (userJson != null && userJson.isNotEmpty) {
         try {
           localUserId = (jsonDecode(userJson) as Map)['id']?.toString() ?? '';
         } catch (_) {}
       }
-      if (session != null && localUserId != session.userId) {
+      if (localUserId != session.userId) {
         await syncCurrentUserForSessionEmail(session.email);
         userJson = await safeReadCurrentUser();
       }
     }
     if (userJson == null || userJson.isEmpty) {
-      final session = await AuthService.readSession();
+      final session = backendSession ?? await AuthService.readSession();
       if (session != null) {
         await syncCurrentUserForSessionEmail(session.email);
         userJson = await safeReadCurrentUser();
@@ -1114,39 +2615,10 @@ class DataService {
       }
       final again = await safeReadCurrentUser();
       if (again == null || again.isEmpty) return null;
-      return User.fromJson(jsonDecode(again) as Map<String, dynamic>);
+      return _decodeCurrentUserStrict(again);
     }
 
-    final Map<String, dynamic> map =
-        jsonDecode(userJson) as Map<String, dynamic>;
-    bool mutated = false;
-    if (!map.containsKey('createdAt') ||
-        (map['createdAt'] == null || (map['createdAt'] as String).isEmpty)) {
-      map['createdAt'] = DateTime.now().toIso8601String();
-      mutated = true;
-    }
-    if (!map.containsKey('avgRating') || map['avgRating'] == null) {
-      map['avgRating'] = 0.0;
-      mutated = true;
-    }
-    if (!map.containsKey('reviewCount') || map['reviewCount'] == null) {
-      map['reviewCount'] = 0;
-      mutated = true;
-    }
-
-    final isDeactivated = map['isDeactivated'] == true;
-    if (!isDeactivated) {
-      final id = map['id']?.toString();
-      if (id != null) {
-        final override = _seedForId(id);
-        if (override != null && map['photoURL'] != override.$2) {
-          map['photoURL'] = override.$2;
-          mutated = true;
-        }
-      }
-    }
-
-    var user = User.fromJson(map);
+    var user = _decodeCurrentUserStrict(userJson);
 
     try {
       final users = await getUsers();
@@ -1161,7 +2633,6 @@ class DataService {
           avgRating: corrected.avgRating,
           reviewCount: corrected.reviewCount,
         );
-        mutated = true;
       }
     } catch (_) {}
 
@@ -1175,16 +2646,11 @@ class DataService {
           emailVerified: true,
           phoneVerified: true,
         );
-        mutated = true;
       }
       if (preview == DeveloperUserState.loggedIn && user.isVerified == true) {
         user = user.copyWith(isVerified: false);
-        mutated = true;
       }
     } catch (_) {}
-    if (mutated) {
-      await prefs.setString(_currentUserKey, jsonEncode(user.toJson()));
-    }
     await _ensureQaMessagesAndNotificationsForUserOnce(user.id);
     return user;
   }
@@ -1195,100 +2661,6 @@ class DataService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('$_qaMessagesAndNotifsSeedFlagPrefix${me.id}');
     await _ensureQaMessagesAndNotificationsForUserOnce(me.id);
-  }
-
-  static Future<void> _ensureDemoNotificationsForUserOnce(String userId) async {
-    if (userId.isEmpty) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final key = '$_demoNotifSeedFlagPrefix$userId';
-      final done = prefs.getBool(key) ?? false;
-      if (done) return;
-
-      final now = DateTime.now();
-      // A small, realistic starter feed covering the MVP categories.
-      await addStructuredNotification(
-        userId: userId,
-        category: 'platform',
-        priority: 5,
-        title: 'Willkommen bei ShareItToo',
-        body:
-            'Hier findest du alle Updates zu Buchungen, Chats, Bewertungen und Zahlungen.',
-        entityType: 'system',
-        entityId: 'welcome_${now.microsecondsSinceEpoch}',
-        ctaLabel: '',
-        critical: false,
-        timestamp: now,
-      );
-      await addStructuredNotification(
-        userId: userId,
-        category: 'security',
-        priority: 1,
-        title: 'Sicherheits‑Check',
-        body:
-            'Aktiviere bei Gelegenheit deine Verifizierung, um mehr Vertrauen zu schaffen.',
-        entityType: 'system',
-        entityId: 'security_tip_${now.microsecondsSinceEpoch}',
-        ctaLabel: '',
-        critical: false,
-        timestamp: now.subtract(const Duration(hours: 3)),
-      );
-      await addStructuredNotification(
-        userId: userId,
-        category: 'payments',
-        priority: 2,
-        title: 'Zahlungsmethode hinzufügen',
-        body:
-            'Hinterlege eine Zahlungsmethode, damit Buchungen später schneller gehen.',
-        entityType: 'payment',
-        entityId: 'payment_methods',
-        ctaLabel: 'Öffnen',
-        timestamp: now.subtract(const Duration(days: 1, hours: 1)),
-      );
-      await addStructuredNotification(
-        userId: userId,
-        category: 'reviews',
-        priority: 4,
-        title: 'Bewertungen sammeln',
-        body:
-            'Nach jeder abgeschlossenen Miete kannst du eine Bewertung abgeben.',
-        entityType: 'system',
-        entityId: 'review_tip_${now.microsecondsSinceEpoch}',
-        ctaLabel: '',
-        timestamp: now.subtract(const Duration(days: 3, hours: 2)),
-      );
-      await addStructuredNotification(
-        userId: userId,
-        category: 'messages',
-        priority: 3,
-        title: 'Tipp: Schnelle Abstimmung',
-        body: 'Nutze Chats, um Übergabe und Rückgabe effizient zu planen.',
-        entityType: 'system',
-        entityId: 'chat_tip_${now.microsecondsSinceEpoch}',
-        ctaLabel: '',
-        timestamp: now.subtract(const Duration(days: 12, hours: 5)),
-      );
-
-      await addStructuredNotification(
-        userId: userId,
-        category: 'messages',
-        priority: 3,
-        title: 'Neue Nachricht',
-        body: 'Du hast eine neue Nachricht – antworte direkt aus dem Feed.',
-        entityType: 'system',
-        entityId: 'demo_message_${now.microsecondsSinceEpoch}',
-        actions: const [
-          {'id': 'reply', 'label': 'Antworten'},
-        ],
-        timestamp: now.subtract(const Duration(minutes: 18)),
-      );
-
-      await prefs.setBool(key, true);
-    } catch (e) {
-      debugPrint(
-        '[DataService] _ensureDemoNotificationsForUserOnce failed: $e',
-      );
-    }
   }
 
   static const bool _launchQaSeedingEnabled = true;
@@ -1353,6 +2725,12 @@ class DataService {
       final acceptedItem = firstOwnedByWithPhoto(ownerA.id) ?? items.first;
       final runningItem = firstOwnedByWithPhoto(ownerB.id) ?? acceptedItem;
       final completedItem = firstOwnedBy(ownerC.id) ?? runningItem;
+      if (acceptedItem.ownerId == userId ||
+          runningItem.ownerId == userId ||
+          completedItem.ownerId == userId) {
+        // Sparse unit-test/demo catalogs cannot form valid two-party fixtures.
+        return;
+      }
       final ownerTemplate =
           firstOwnedByWithPhoto(me.id) ?? firstOwnedBy(me.id) ?? items.first;
       final now = DateTime.now();
@@ -1375,7 +2753,6 @@ class DataService {
           currency: ownerTemplate.currency,
           priceUnit: ownerTemplate.priceUnit,
           priceRaw: ownerTemplate.priceRaw,
-          deposit: ownerTemplate.deposit,
           autoApplyDiscounts: ownerTemplate.autoApplyDiscounts,
           longRentalDiscounts: ownerTemplate.longRentalDiscounts,
           photos: ownerTemplate.photos,
@@ -1456,7 +2833,6 @@ class DataService {
               currency: (sharedOwnerTemplate ?? acceptedItem).currency,
               priceUnit: (sharedOwnerTemplate ?? acceptedItem).priceUnit,
               priceRaw: (sharedOwnerTemplate ?? acceptedItem).priceRaw,
-              deposit: (sharedOwnerTemplate ?? acceptedItem).deposit,
               autoApplyDiscounts:
                   (sharedOwnerTemplate ?? acceptedItem).autoApplyDiscounts,
               longRentalDiscounts:
@@ -1525,7 +2901,7 @@ class DataService {
           'method': 'manual',
         },
         quotedTotalRenter: 126.0,
-        quotedSubtitle: 'inkl. Schutz & Service',
+        quotedSubtitle: 'inkl. SIT-Servicegebühr',
       );
       final completedRequest = RentalRequest(
         id: 'qa_req_completed_$userId',
@@ -1545,6 +2921,9 @@ class DataService {
         },
         quotedTotalRenter: 74.0,
         quotedSubtitle: 'historischer Testfall',
+        quotedRentalSubtotalMinor: 6727,
+        quotedPlatformFeeMinor: 673,
+        quotedTotalMinor: 7400,
       );
       final needsReviewRequest = RentalRequest(
         id: 'qa_req_review_$userId',
@@ -1563,6 +2942,9 @@ class DataService {
         reviewRequestedAt: now.subtract(const Duration(days: 4, hours: 2)),
         quotedTotalRenter: 61.0,
         quotedSubtitle: 'mit Review-Hold Testfall',
+        quotedRentalSubtotalMinor: 5545,
+        quotedPlatformFeeMinor: 555,
+        quotedTotalMinor: 6100,
       );
       final pendingRequest = RentalRequest(
         id: 'qa_req_pending_$userId',
@@ -1658,6 +3040,9 @@ class DataService {
         needsReview: false,
         quotedTotalRenter: 73.0,
         quotedSubtitle: 'abgeschlossen / clean',
+        quotedRentalSubtotalMinor: 6636,
+        quotedPlatformFeeMinor: 664,
+        quotedTotalMinor: 7300,
       );
       final ownerCompletedProblemRequest = RentalRequest(
         id: 'qa_owner_completed_problem_$userId',
@@ -1680,6 +3065,9 @@ class DataService {
         reviewRequestedAt: now.subtract(const Duration(days: 3, hours: 4)),
         quotedTotalRenter: 96.0,
         quotedSubtitle: 'abgeschlossen / prüfung',
+        quotedRentalSubtotalMinor: 8727,
+        quotedPlatformFeeMinor: 873,
+        quotedTotalMinor: 9600,
       );
 
       final sharedOwnerRenterRequest =
@@ -1703,7 +3091,7 @@ class DataService {
 
       final itemJson = prefs.getString(_itemsKey);
       final List<dynamic> itemList = itemJson != null && itemJson.isNotEmpty
-          ? (jsonDecode(itemJson) as List)
+          ? List<dynamic>.from(jsonDecode(itemJson) as List)
           : <dynamic>[];
       itemList.removeWhere((e) {
         if (e is! Map) return false;
@@ -1726,34 +3114,36 @@ class DataService {
       ]);
       await prefs.setString(_itemsKey, jsonEncode(itemList));
 
-      final requests = await _getAllRentalRequests();
-      requests.removeWhere((r) {
-        final isRenterOrOwnerQa = r.id.startsWith('qa_req_') &&
-            (r.renterId == userId || r.ownerId == userId);
-        final isOwnerQa = r.id.startsWith('qa_owner_') && r.ownerId == userId;
-        return isRenterOrOwnerQa || isOwnerQa;
+      await _rentalRequestMutationQueue.run(() async {
+        final requests = await _getAllRentalRequests();
+        requests.removeWhere((r) {
+          final isRenterOrOwnerQa = r.id.startsWith('qa_req_') &&
+              (r.renterId == userId || r.ownerId == userId);
+          final isOwnerQa = r.id.startsWith('qa_owner_') && r.ownerId == userId;
+          return isRenterOrOwnerQa || isOwnerQa;
+        });
+        requests.removeWhere((r) => r.id == 'qa_shared_request_u1_u2');
+        requests.addAll([
+          acceptedRequest,
+          runningRequest,
+          completedRequest,
+          needsReviewRequest,
+          pendingRequest,
+          ownerPendingRequest,
+          ownerUpcomingPickupRequest,
+          ownerUpcomingDeliveryRequest,
+          ownerRunningRequest,
+          ownerCompletedCleanRequest,
+          ownerCompletedProblemRequest,
+          if (sharedOwnerRenterRequest != null) sharedOwnerRenterRequest,
+        ]);
+        await _saveAllRentalRequests(requests);
       });
-      requests.removeWhere((r) => r.id == 'qa_shared_request_u1_u2');
-      requests.addAll([
-        acceptedRequest,
-        runningRequest,
-        completedRequest,
-        needsReviewRequest,
-        pendingRequest,
-        ownerPendingRequest,
-        ownerUpcomingPickupRequest,
-        ownerUpcomingDeliveryRequest,
-        ownerRunningRequest,
-        ownerCompletedCleanRequest,
-        ownerCompletedProblemRequest,
-        if (sharedOwnerRenterRequest != null) sharedOwnerRenterRequest,
-      ]);
-      await _saveAllRentalRequests(requests);
 
       final rawThreads = await _readMessageThreads(prefs);
       final List<dynamic> threadList =
           rawThreads != null && rawThreads.isNotEmpty
-              ? (jsonDecode(rawThreads) as List)
+              ? List<dynamic>.from(jsonDecode(rawThreads) as List)
               : <dynamic>[];
       threadList.removeWhere((e) {
         if (e is! Map) return false;
@@ -2073,7 +3463,7 @@ class DataService {
 
       final rawNotifs = prefs.getString(_notificationsKey);
       final List<dynamic> notifList = rawNotifs != null && rawNotifs.isNotEmpty
-          ? (jsonDecode(rawNotifs) as List)
+          ? List<dynamic>.from(jsonDecode(rawNotifs) as List)
           : <dynamic>[];
       notifList.removeWhere((e) {
         if (e is! Map) return false;
@@ -2241,7 +3631,12 @@ class DataService {
         ),
       ]);
 
-      await prefs.setString(_notificationsKey, jsonEncode(notifList));
+      await _persistNotifications(
+        prefs,
+        notifList
+            .map((entry) => Map<String, dynamic>.from(entry as Map))
+            .toList(),
+      );
       await prefs.setBool(key, true);
     } catch (e) {
       debugPrint(
@@ -2252,12 +3647,16 @@ class DataService {
     }
   }
 
-  static Future<void> setCurrentUser(User user) async {
+  static Future<void> setCurrentUser(
+    User user, {
+    bool recoverCorruptBackendProfileCache = false,
+  }) async {
+    // Trusted authentication/registration hydration path. User-facing profile
+    // edits must use updateCurrentUserProfile so protected fields stay closed.
     if (QaRuntimeService.isEnabled) {
       QaRuntimeService.setRuntimeUserJson(user.toJson());
       return;
     }
-    final prefs = await SharedPreferences.getInstance();
     var effectiveUser = user;
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
       final remote = await BackendRepository.updateCurrentProfile(
@@ -2265,11 +3664,414 @@ class DataService {
       );
       effectiveUser = User.fromJson(remote);
     }
-    await prefs.setString(
-      _currentUserKey,
-      jsonEncode(effectiveUser.toJson()),
+    await _accountProfileMutationQueue.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_usersKey);
+      late final List<User> users;
+      try {
+        users = raw == null
+            ? <User>[]
+            : List<User>.from(_decodeLocalUsersStrict(raw));
+      } on FormatException catch (error) {
+        if (!recoverCorruptBackendProfileCache) rethrow;
+        // This opt-in is limited to authentication hydration after the
+        // backend has returned the authoritative current profile. The local
+        // users document is only a cache in that path; keeping malformed
+        // entries active would leave a valid server session trapped behind a
+        // failed login screen. Other reads and local mutations remain strict.
+        debugPrint(
+          '[DataService] replacing corrupt profile cache during '
+          'authoritative authentication hydration (${error.runtimeType})',
+        );
+        users = <User>[];
+      }
+      final index = users.indexWhere((entry) => entry.id == effectiveUser.id);
+      if (index >= 0) {
+        users[index] = effectiveUser;
+      } else {
+        if (users.length >= _maxLocalUsers) {
+          throw StateError('Der lokale Profilbestand ist voll.');
+        }
+        users.add(effectiveUser);
+      }
+      await _persistAccountProfileDocumentsVerified(
+        prefs: prefs,
+        current: effectiveUser,
+        users: users,
+      );
+    });
+  }
+
+  static Object? _validatedProfileFieldValue(
+    CurrentUserProfileField field,
+    Object? value,
+  ) {
+    const nullableStrings = <CurrentUserProfileField>{
+      CurrentUserProfileField.phone,
+      CurrentUserProfileField.bio,
+      CurrentUserProfileField.city,
+      CurrentUserProfileField.country,
+      CurrentUserProfileField.workTitle,
+      CurrentUserProfileField.hobbies,
+      CurrentUserProfileField.homeLocation,
+      CurrentUserProfileField.favoriteSong,
+      CurrentUserProfileField.socialX,
+      CurrentUserProfileField.socialFacebook,
+      CurrentUserProfileField.socialInstagram,
+      CurrentUserProfileField.socialTiktok,
+      CurrentUserProfileField.socialSnapchat,
+      CurrentUserProfileField.addressStreet,
+      CurrentUserProfileField.addressHouseNumber,
+      CurrentUserProfileField.addressPostalCode,
+      CurrentUserProfileField.addressCity,
+      CurrentUserProfileField.addressCountry,
+      CurrentUserProfileField.addressExtra,
+    };
+    const requiredStrings = <CurrentUserProfileField>{
+      CurrentUserProfileField.displayName,
+      CurrentUserProfileField.preferredLanguage,
+    };
+    const booleanFields = <CurrentUserProfileField>{
+      CurrentUserProfileField.showWork,
+      CurrentUserProfileField.showHobbies,
+      CurrentUserProfileField.showHomeLocation,
+      CurrentUserProfileField.showBioPublic,
+      CurrentUserProfileField.showLanguagesPublic,
+      CurrentUserProfileField.showInterestsPublic,
+      CurrentUserProfileField.showFavoriteSong,
+    };
+    if (nullableStrings.contains(field)) {
+      if (value != null &&
+          (value is! String || value.length > _maxLocalProfileStringLength)) {
+        throw ArgumentError('Ungültiger Profilwert für ${field.name}.');
+      }
+      return value;
+    }
+    if (field == CurrentUserProfileField.photoURL) {
+      if (value != null &&
+          (value is! String || value.length > _maxLocalProfilePhotoUrlLength)) {
+        throw ArgumentError('Ungültiger Profilwert für ${field.name}.');
+      }
+      return value;
+    }
+    if (requiredStrings.contains(field)) {
+      if (value is! String ||
+          value.trim().isEmpty ||
+          value.length > _maxLocalProfileStringLength) {
+        throw ArgumentError('Ungültiger Profilwert für ${field.name}.');
+      }
+      return value.trim();
+    }
+    if (booleanFields.contains(field)) {
+      if (value is! bool) {
+        throw ArgumentError('Ungültiger Profilwert für ${field.name}.');
+      }
+      return value;
+    }
+    if (field == CurrentUserProfileField.languages ||
+        field == CurrentUserProfileField.interests) {
+      if (value is! List<String> ||
+          value.length > _maxLocalProfileListEntries ||
+          value.any((entry) => entry.length > _maxLocalProfileStringLength)) {
+        throw ArgumentError('Ungültiger Profilwert für ${field.name}.');
+      }
+      return List<String>.unmodifiable(value);
+    }
+    if (field == CurrentUserProfileField.homeLat ||
+        field == CurrentUserProfileField.homeLng) {
+      if (value != null && (value is! num || !value.toDouble().isFinite)) {
+        throw ArgumentError('Ungültiger Profilwert für ${field.name}.');
+      }
+      return value == null ? null : (value as num).toDouble();
+    }
+    if (field == CurrentUserProfileField.birthDate) {
+      if (value != null && value is! DateTime) {
+        throw ArgumentError('Ungültiger Profilwert für ${field.name}.');
+      }
+      return (value as DateTime?)?.toIso8601String();
+    }
+    throw ArgumentError('Nicht unterstütztes Profilfeld: ${field.name}.');
+  }
+
+  static Future<User> updateCurrentUserProfile({
+    required String expectedUserId,
+    required Map<CurrentUserProfileField, Object?> updates,
+  }) async {
+    final captured =
+        await _requireCurrentOperationalUser(requestedUserId: expectedUserId);
+    AuthSessionOwner? owner;
+    if (!QaRuntimeService.isEnabled) {
+      final session = await AuthService.readSession();
+      if (session == null ||
+          !_sessionMatchesOperationalUser(
+            session,
+            userId: captured.id,
+            email: captured.email,
+          )) {
+        throw StateError('Die lokale Kontositzung hat sich geändert.');
+      }
+      owner = AuthService.captureSessionOwner(session);
+      if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+        throw StateError('Die lokale Kontositzung hat sich geändert.');
+      }
+    }
+    final result = await _updateCurrentUserProfileOwned(
+      captured: captured,
+      owner: owner,
+      updates: updates,
+      typedFailures: false,
     );
-    await _upsertCachedUser(prefs, effectiveUser);
+    return result.user;
+  }
+
+  static Future<AccountProfileMutationResult> updateCurrentUserProfileForOwner({
+    required AuthSessionOwner owner,
+    required String expectedUserId,
+    required Map<CurrentUserProfileField, Object?> updates,
+  }) async {
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const AccountProfileMutationFailure.principalChanged();
+    }
+    final captured =
+        await _requireCurrentOperationalUser(requestedUserId: expectedUserId);
+    if (!_sessionMatchesOperationalUser(
+          AuthSession(
+            userId: owner.userId,
+            sessionId: owner.sessionId,
+            email: owner.email,
+            createdAt: owner.createdAt,
+          ),
+          userId: captured.id,
+          email: captured.email,
+        ) ||
+        !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const AccountProfileMutationFailure.principalChanged();
+    }
+    return _updateCurrentUserProfileOwned(
+      captured: captured,
+      owner: owner,
+      updates: updates,
+      typedFailures: true,
+    );
+  }
+
+  static Future<AccountProfileMutationResult> _updateCurrentUserProfileOwned({
+    required User captured,
+    required AuthSessionOwner? owner,
+    required Map<CurrentUserProfileField, Object?> updates,
+    required bool typedFailures,
+  }) async {
+    if (updates.isEmpty) {
+      return AccountProfileMutationResult(
+        user: captured,
+        remoteAccepted: false,
+      );
+    }
+    final validatedUpdates = <String, Object?>{};
+    for (final entry in updates.entries) {
+      validatedUpdates[entry.key.name] =
+          _validatedProfileFieldValue(entry.key, entry.value);
+    }
+    return _accountProfileMutationQueue.run(() async {
+      var remoteAccepted = false;
+
+      Future<void> verifyOwner() async {
+        if (owner != null &&
+            !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          if (typedFailures) {
+            throw AccountProfileMutationFailure.principalChanged(
+              remoteAccepted: remoteAccepted,
+            );
+          }
+          throw StateError('Die lokale Kontositzung hat sich geändert.');
+        }
+        await _assertCurrentOperationalUserId(
+          captured.id,
+          expectedEmail: captured.email,
+        );
+      }
+
+      try {
+        await verifyOwner();
+        final prefs = await SharedPreferences.getInstance();
+        final currentRaw = prefs.getString(_currentUserKey);
+        final usersRaw = prefs.getString(_usersKey);
+        if (currentRaw == null || usersRaw == null) {
+          throw StateError('Der lokale Profilstand ist unvollständig.');
+        }
+        final current = _decodeCurrentUserStrict(currentRaw);
+        if (current.id != captured.id ||
+            current.email.trim().toLowerCase() !=
+                captured.email.trim().toLowerCase()) {
+          throw const AccountProfileMutationFailure.principalChanged();
+        }
+        final users = List<User>.from(_decodeLocalUsersStrict(usersRaw));
+        final index = users.indexWhere((entry) => entry.id == current.id);
+        if (index < 0 || !_sameLocalUserDocument(users[index], current)) {
+          throw StateError(
+            'Das aktuelle Profil fehlt oder weicht vom Profilbestand ab.',
+          );
+        }
+        final nextJson = Map<String, dynamic>.from(current.toJson())
+          ..addAll(validatedUpdates);
+        if (validatedUpdates.containsKey(CurrentUserProfileField.phone.name) &&
+            nextJson['phone'] != current.phone) {
+          nextJson['phoneVerified'] = false;
+        }
+        var next = _decodeLocalUserStrict(
+          nextJson,
+          context: 'Aktualisiertes lokales Kontoprofil',
+        );
+        if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+          if (owner == null) {
+            throw const AccountProfileMutationFailure.principalChanged();
+          }
+          await verifyOwner();
+          final remote = await BackendRepository.updateCurrentProfileForOwner(
+            owner,
+            next.toJson(),
+          );
+          remoteAccepted = true;
+          await verifyOwner();
+          next = _decodeLocalUserStrict(
+            remote,
+            context: 'Aktualisiertes Backend-Kontoprofil',
+          );
+        }
+        if (next.id != current.id ||
+            next.email != current.email ||
+            next.role != current.role ||
+            next.isVerified != current.isVerified ||
+            next.isBanned != current.isBanned ||
+            next.payoutAccountId != current.payoutAccountId ||
+            next.avgRating != current.avgRating ||
+            next.reviewCount != current.reviewCount ||
+            next.createdAt != current.createdAt ||
+            next.isDeactivated != current.isDeactivated ||
+            next.deactivatedAt != current.deactivatedAt ||
+            next.emailVerified != current.emailVerified) {
+          throw StateError(
+              'Geschützte Kontofelder dürfen nicht geändert werden.');
+        }
+        users[index] = next;
+        await verifyOwner();
+        await _persistAccountProfileDocumentsVerified(
+          prefs: prefs,
+          current: next,
+          users: users,
+          verifyAuthorization: verifyOwner,
+        );
+        return AccountProfileMutationResult(
+          user: next,
+          remoteAccepted: remoteAccepted,
+        );
+      } on AccountProfileMutationFailure catch (failure) {
+        if (typedFailures) rethrow;
+        throw StateError(
+          failure.kind == AccountProfileMutationFailureKind.principalChanged
+              ? 'Die lokale Kontositzung hat sich geändert.'
+              : 'Die Profiländerung konnte nicht abgeschlossen werden.',
+        );
+      } on BackendException catch (error) {
+        if (owner != null &&
+            !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          if (typedFailures) {
+            throw AccountProfileMutationFailure.principalChanged(
+              remoteAccepted: remoteAccepted,
+            );
+          }
+          throw StateError('Die lokale Kontositzung hat sich geändert.');
+        }
+        if (typedFailures) throw _accountProfileBackendFailure(error);
+        rethrow;
+      } catch (error, stackTrace) {
+        if (owner != null &&
+            !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          if (typedFailures) {
+            throw AccountProfileMutationFailure.principalChanged(
+              remoteAccepted: remoteAccepted,
+            );
+          }
+          throw StateError('Die lokale Kontositzung hat sich geändert.');
+        }
+        if (typedFailures) {
+          throw AccountProfileMutationFailure.localUnavailable(
+            'local_profile_persistence_failed',
+            remoteAccepted: remoteAccepted,
+          );
+        }
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+    });
+  }
+
+  static AccountProfileMutationFailure _accountProfileBackendFailure(
+    BackendException error,
+  ) {
+    const rejected = <int, Set<String>>{
+      400: <String>{'minimum_age_required', 'invalid_phone'},
+      401: <String>{
+        'authentication_required',
+        'invalid_or_expired_session',
+        'account_not_active',
+      },
+      404: <String>{'user_not_found'},
+    };
+    if (rejected[error.statusCode]?.contains(error.code) == true) {
+      return AccountProfileMutationFailure.rejected(error.code);
+    }
+    return AccountProfileMutationFailure.outcomeUnknown(error.code);
+  }
+
+  /// Device-local account/profile data for an owner-requested privacy export.
+  /// Other cached public profiles and authentication-session material are
+  /// intentionally excluded.
+  static Future<Map<String, dynamic>>
+      exportCurrentAccountProfileForPrivacy() async {
+    final captured = await _requireCurrentOperationalUser();
+    return _accountProfileMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(
+        captured.id,
+        expectedEmail: captured.email,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final currentRaw = prefs.getString(_currentUserKey);
+      final usersRaw = prefs.getString(_usersKey);
+      if (currentRaw == null || usersRaw == null) {
+        throw StateError('Der lokale Profilstand ist unvollständig.');
+      }
+      final current = _decodeCurrentUserStrict(currentRaw);
+      final users = _decodeLocalUsersStrict(usersRaw);
+      final cached = users.where((entry) => entry.id == current.id).toList();
+      if (current.id != captured.id ||
+          current.email != captured.email ||
+          cached.length != 1 ||
+          !_sameLocalUserDocument(cached.single, current)) {
+        throw StateError('Der lokale Profilstand ist nicht konsistent.');
+      }
+      await _assertCurrentOperationalUserId(
+        captured.id,
+        expectedEmail: captured.email,
+      );
+      return <String, dynamic>{
+        'scope': 'current-authenticated-account',
+        'accountId': current.id,
+        'profile': current.toJson(),
+        'otherCachedProfilesExcluded': true,
+        'authenticationSessionExcluded': true,
+        'sharedPublicReputationRetainedSeparately': true,
+      };
+    });
+  }
+
+  @visibleForTesting
+  static void failNextAccountProfilePersistenceForTesting() {
+    _failNextAccountProfilePersistenceForTesting = true;
+  }
+
+  @visibleForTesting
+  static void clearSessionDuringNextAccountProfilePersistenceForTesting() {
+    _clearSessionDuringNextAccountProfilePersistenceForTesting = true;
   }
 
   static Future<void> clearCurrentUser() async {
@@ -2277,8 +4079,154 @@ class DataService {
       QaRuntimeService.clearRuntimeUser();
       return;
     }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_currentUserKey);
+    await _accountProfileMutationQueue.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      if (!await prefs.remove(_currentUserKey) ||
+          prefs.containsKey(_currentUserKey)) {
+        throw StateError('Das lokale Kontoprofil wurde nicht entfernt.');
+      }
+    });
+  }
+
+  /// Removes the device-local current profile only when it still belongs to
+  /// the captured principal. A missing profile is already clean; malformed or
+  /// successor-principal state fails closed and is preserved.
+  static Future<bool> clearCurrentUserIfMatches({
+    required String userId,
+    required String email,
+  }) async {
+    final expectedId = userId.trim();
+    final expectedEmail = email.trim().toLowerCase();
+    if (expectedId.isEmpty || expectedEmail.isEmpty) return false;
+    if (QaRuntimeService.isEnabled) {
+      final raw = QaRuntimeService.runtimeUserJson;
+      if (raw == null) return true;
+      try {
+        final current = User.fromJson(raw);
+        if (current.id.trim() != expectedId ||
+            current.email.trim().toLowerCase() != expectedEmail) {
+          return false;
+        }
+        QaRuntimeService.clearRuntimeUser();
+        return QaRuntimeService.runtimeUserJson == null;
+      } catch (_) {
+        return false;
+      }
+    }
+    return _accountProfileMutationQueue.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_currentUserKey);
+      if (raw == null) return true;
+      User current;
+      try {
+        current = _decodeCurrentUserStrict(raw);
+      } catch (_) {
+        return false;
+      }
+      if (current.id.trim() != expectedId ||
+          current.email.trim().toLowerCase() != expectedEmail) {
+        return false;
+      }
+      final removed = await prefs.remove(_currentUserKey);
+      return removed && !prefs.containsKey(_currentUserKey);
+    });
+  }
+
+  /// Read-only current-profile snapshot for an already epoch-bound session
+  /// transition. Unlike getCurrentUser this never seeds, hydrates or removes
+  /// data based on a changing auth session.
+  static Future<User?> readCurrentUserForSessionTransition() async {
+    if (QaRuntimeService.isEnabled) {
+      final raw = QaRuntimeService.runtimeUserJson;
+      if (raw == null) return null;
+      try {
+        return User.fromJson(raw);
+      } catch (_) {
+        return null;
+      }
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_currentUserKey);
+      if (raw == null || raw.isEmpty) return null;
+      return _decodeCurrentUserStrict(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Hydrates the current profile only while the exact captured session owner
+  /// remains current. Remote reads never call the profile update endpoint, and
+  /// the final local persistence repeats authorization inside the profile
+  /// mutation queue.
+  static Future<User?> syncCurrentUserForSessionOwner(
+    AuthSessionOwner owner,
+  ) async {
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) return null;
+
+    User? match;
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final remote = await BackendRepository.getCurrentProfileForOwner(owner);
+      match = User.fromJson(remote);
+    } else {
+      final users = await getUsers();
+      final normalized = owner.email.trim().toLowerCase();
+      for (final user in users) {
+        if (user.email.trim().toLowerCase() == normalized) {
+          match = user;
+          break;
+        }
+      }
+      match ??= normalized == 'demo@shareittoo.app' && users.isNotEmpty
+          ? users.first
+          : null;
+    }
+    if (match == null ||
+        match.email.trim().toLowerCase() != owner.email.trim().toLowerCase() ||
+        ((owner.userId ?? '').trim().isNotEmpty &&
+            match.id.trim() != owner.userId!.trim()) ||
+        !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      return null;
+    }
+
+    if (QaRuntimeService.isEnabled) {
+      QaRuntimeService.setRuntimeUserJson(match.toJson());
+      return await AuthService.isSessionOwnerDefinitelyCurrent(owner)
+          ? match
+          : null;
+    }
+    final resolved = match;
+
+    return _accountProfileMutationQueue.run(() async {
+      Future<void> verifyOwner() async {
+        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          throw StateError('Die Kontositzung hat sich geändert.');
+        }
+      }
+
+      await verifyOwner();
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_usersKey);
+      final users = raw == null
+          ? <User>[]
+          : List<User>.from(_decodeLocalUsersStrict(raw));
+      final index = users.indexWhere((entry) => entry.id == resolved.id);
+      if (index >= 0) {
+        users[index] = resolved;
+      } else {
+        if (users.length >= _maxLocalUsers) {
+          throw StateError('Der lokale Profilbestand ist voll.');
+        }
+        users.add(resolved);
+      }
+      await _persistAccountProfileDocumentsVerified(
+        prefs: prefs,
+        current: resolved,
+        users: users,
+        verifyAuthorization: verifyOwner,
+      );
+      return resolved;
+    });
   }
 
   static Future<void> syncCurrentUserForSessionEmail(String email) async {
@@ -2288,9 +4236,10 @@ class DataService {
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
       final remote = await BackendRepository.getCurrentProfile();
       final user = User.fromJson(remote);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_currentUserKey, jsonEncode(user.toJson()));
-      await _upsertCachedUser(prefs, user);
+      await setCurrentUser(
+        user,
+        recoverCorruptBackendProfileCache: true,
+      );
       return;
     }
 
@@ -2312,179 +4261,291 @@ class DataService {
     }
   }
 
-  static Future<void> _upsertCachedUser(
-    SharedPreferences prefs,
-    User user,
-  ) async {
-    List<dynamic> users = <dynamic>[];
-    final raw = prefs.getString(_usersKey);
-    if (raw != null && raw.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(raw);
-        if (decoded is List) users = decoded;
-      } catch (_) {}
-    }
-    final index = users.indexWhere(
-      (entry) => entry is Map && entry['id']?.toString() == user.id,
-    );
-    if (index >= 0) {
-      users[index] = user.toJson();
-    } else {
-      users.add(user.toJson());
-    }
-    await prefs.setString(_usersKey, jsonEncode(users));
-  }
-
   static Future<void> clearCurrentUserAndMarkDeleted() async {
-    try {
+    await _accountProfileMutationQueue.run(() async {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_accountDeletedKey, true);
-      await prefs.remove(_currentUserKey);
+      final previousCurrent = prefs.getString(_currentUserKey);
+      final hadDeletedMarker = prefs.containsKey(_accountDeletedKey);
+      final previousDeletedMarker = prefs.getBool(_accountDeletedKey);
+      try {
+        if (!await prefs.setBool(_accountDeletedKey, true) ||
+            prefs.getBool(_accountDeletedKey) != true ||
+            !await prefs.remove(_currentUserKey) ||
+            prefs.containsKey(_currentUserKey)) {
+          throw StateError('Das lokale Kontoprofil wurde nicht entfernt.');
+        }
+      } catch (error) {
+        await _restorePreferenceString(
+          prefs,
+          _currentUserKey,
+          previousCurrent,
+        );
+        if (hadDeletedMarker) {
+          await prefs.setBool(_accountDeletedKey, previousDeletedMarker!);
+        } else {
+          await prefs.remove(_accountDeletedKey);
+        }
+        rethrow;
+      }
       debugPrint(
         '[DataService] Account marked deleted and current user cleared',
       );
-    } catch (e) {
-      debugPrint('[DataService] clearCurrentUserAndMarkDeleted failed: $e');
+    });
+  }
+
+  static User _anonymizedDeletedUser(User current) {
+    final now = DateTime.now();
+    return _decodeLocalUserStrict(
+      <String, dynamic>{
+        ...current.toJson(),
+        'displayName': 'Gelöschter Nutzer',
+        'email': 'deleted+${current.id}@shareittoo.invalid',
+        'phone': null,
+        'emailVerified': false,
+        'phoneVerified': false,
+        'photoURL': null,
+        'bio': null,
+        'city': null,
+        'country': null,
+        'isVerified': false,
+        'payoutAccountId': null,
+        'languages': const <String>[],
+        'interests': const <String>[],
+        'workTitle': null,
+        'hobbies': null,
+        'homeLocation': null,
+        'favoriteSong': null,
+        'showWork': false,
+        'showHobbies': false,
+        'showHomeLocation': false,
+        'showBioPublic': false,
+        'showLanguagesPublic': false,
+        'showInterestsPublic': false,
+        'showFavoriteSong': false,
+        'homeLat': null,
+        'homeLng': null,
+        'birthDate': null,
+        'socialX': null,
+        'socialFacebook': null,
+        'socialInstagram': null,
+        'socialTiktok': null,
+        'socialSnapchat': null,
+        'addressStreet': null,
+        'addressHouseNumber': null,
+        'addressPostalCode': null,
+        'addressCity': null,
+        'addressCountry': null,
+        'addressExtra': null,
+        'isDeactivated': true,
+        'deactivatedAt': now.toIso8601String(),
+      },
+      context: 'Anonymisiertes lokales Kontoprofil',
+    );
+  }
+
+  /// Applies a server-confirmed account deletion to the exact cached profile.
+  /// The deleted A profile is anonymized in the shared cache. The current
+  /// profile and global deleted marker are changed only when they still belong
+  /// to A, so a successor Account B remains fully usable.
+  static Future<void> finalizeProfileForConfirmedAccountDeletion({
+    required String userId,
+    required String email,
+  }) async {
+    final expectedId = userId.trim();
+    final expectedEmail = email.trim().toLowerCase();
+    if (expectedId.isEmpty || expectedEmail.isEmpty) {
+      throw ArgumentError('A confirmed deletion requires an exact profile.');
     }
+    if (QaRuntimeService.isEnabled) {
+      final raw = QaRuntimeService.runtimeUserJson;
+      if (raw == null) return;
+      final current = User.fromJson(raw);
+      if (current.id.trim() == expectedId &&
+          current.email.trim().toLowerCase() == expectedEmail) {
+        QaRuntimeService.clearRuntimeUser();
+      }
+      return;
+    }
+
+    await _accountProfileMutationQueue.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final previousUsers = prefs.getString(_usersKey);
+      final previousCurrent = prefs.getString(_currentUserKey);
+      final hadDeletedMarker = prefs.containsKey(_accountDeletedKey);
+      final previousDeletedMarker = prefs.getBool(_accountDeletedKey);
+      if (previousUsers == null) {
+        throw StateError('Der lokale Profilbestand fehlt.');
+      }
+      final users = List<User>.from(_decodeLocalUsersStrict(previousUsers));
+      final index = users.indexWhere((entry) =>
+          entry.id.trim() == expectedId &&
+          entry.email.trim().toLowerCase() == expectedEmail);
+      if (index < 0) {
+        throw StateError('Das bestätigte Löschprofil fehlt lokal.');
+      }
+      users[index] = _anonymizedDeletedUser(users[index]);
+
+      var currentMatchesDeleted = false;
+      if (previousCurrent != null) {
+        final current = _decodeCurrentUserStrict(previousCurrent);
+        currentMatchesDeleted = current.id.trim() == expectedId &&
+            current.email.trim().toLowerCase() == expectedEmail;
+      }
+      final encodedUsers =
+          jsonEncode(users.map((entry) => entry.toJson()).toList());
+      _decodeLocalUsersStrict(encodedUsers);
+      try {
+        if (!await prefs.setString(_usersKey, encodedUsers) ||
+            prefs.getString(_usersKey) != encodedUsers) {
+          throw StateError('Das gelöschte Profil wurde nicht anonymisiert.');
+        }
+        if (currentMatchesDeleted) {
+          if (!await prefs.setBool(_accountDeletedKey, true) ||
+              prefs.getBool(_accountDeletedKey) != true ||
+              !await prefs.remove(_currentUserKey) ||
+              prefs.containsKey(_currentUserKey)) {
+            throw StateError(
+              'Das bestätigte Löschprofil wurde nicht finalisiert.',
+            );
+          }
+        }
+        _decodeLocalUsersStrict(prefs.getString(_usersKey)!);
+        if (!currentMatchesDeleted &&
+            prefs.getString(_currentUserKey) != previousCurrent) {
+          throw StateError('Ein Nachfolgerprofil wurde verändert.');
+        }
+      } catch (error) {
+        final usersRestored =
+            await _restorePreferenceString(prefs, _usersKey, previousUsers);
+        final currentRestored = await _restorePreferenceString(
+          prefs,
+          _currentUserKey,
+          previousCurrent,
+        );
+        final markerRestored = hadDeletedMarker
+            ? await prefs.setBool(_accountDeletedKey, previousDeletedMarker!)
+            : await prefs.remove(_accountDeletedKey);
+        if (!usersRestored || !currentRestored || !markerRestored) {
+          throw StateError(
+            'Profil-Löschfehler; der vorherige Stand konnte nicht vollständig wiederhergestellt werden.',
+          );
+        }
+        rethrow;
+      }
+    });
   }
 
   static Future<void> anonymizeAndDeactivateUser({
     required String userId,
   }) async {
-    try {
+    final captured =
+        await _requireCurrentOperationalUser(requestedUserId: userId);
+    await _accountProfileMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(
+        captured.id,
+        expectedEmail: captured.email,
+      );
       final prefs = await SharedPreferences.getInstance();
       final usersJson = prefs.getString(_usersKey);
-      if (usersJson == null || usersJson.isEmpty) return;
-      final decoded = jsonDecode(usersJson);
-      if (decoded is! List) return;
-
-      final now = DateTime.now();
-      bool mutated = false;
-      for (int i = 0; i < decoded.length; i++) {
-        if (decoded[i] is! Map) continue;
-        final map = Map<String, dynamic>.from(decoded[i] as Map);
-        if (map['id']?.toString() != userId) continue;
-
-        map['displayName'] = 'Gelöschter Nutzer';
-        map['photoURL'] = null;
-        map['bio'] = null;
-        map['interests'] = const <String>[];
-        map['languages'] = const <String>[];
-        map['email'] = 'deleted+$userId@shareittoo.invalid';
-        map['phone'] = null;
-        map['emailVerified'] = false;
-        map['phoneVerified'] = false;
-        map['isVerified'] = false;
-        map['workTitle'] = null;
-        map['hobbies'] = null;
-        map['homeLocation'] = null;
-        map['favoriteSong'] = null;
-        map['showWork'] = false;
-        map['showHobbies'] = false;
-        map['showHomeLocation'] = false;
-        map['showBioPublic'] = false;
-        map['showFavoriteSong'] = false;
-        map['homeLat'] = null;
-        map['homeLng'] = null;
-        map['birthDate'] = null;
-        map['socialX'] = null;
-        map['socialFacebook'] = null;
-        map['socialInstagram'] = null;
-        map['socialTiktok'] = null;
-        map['socialSnapchat'] = null;
-
-        map['addressStreet'] = null;
-        map['addressHouseNumber'] = null;
-        map['addressPostalCode'] = null;
-        map['addressCity'] = null;
-        map['addressCountry'] = null;
-        map['addressExtra'] = null;
-
-        map['isDeactivated'] = true;
-        map['deactivatedAt'] = now.toIso8601String();
-
-        decoded[i] = map;
-        mutated = true;
-        break;
+      final currentJson = prefs.getString(_currentUserKey);
+      if (usersJson == null || currentJson == null) {
+        throw StateError('Der lokale Profilstand ist unvollständig.');
       }
-
-      if (mutated) {
-        await prefs.setString(_usersKey, jsonEncode(decoded));
-        debugPrint('[DataService] User $userId anonymized/deactivated');
+      final current = _decodeCurrentUserStrict(currentJson);
+      if (current.id != captured.id || current.email != captured.email) {
+        throw StateError('Die lokale Kontositzung hat sich geändert.');
       }
-    } catch (e) {
-      debugPrint('[DataService] anonymizeAndDeactivateUser failed: $e');
-    }
+      final users = List<User>.from(_decodeLocalUsersStrict(usersJson));
+      final index = users.indexWhere((entry) => entry.id == captured.id);
+      if (index < 0 || !_sameLocalUserDocument(users[index], current)) {
+        throw StateError(
+          'Das aktuelle Profil fehlt oder weicht vom Profilbestand ab.',
+        );
+      }
+      final anonymized = _anonymizedDeletedUser(current);
+      users[index] = anonymized;
+      await _persistAccountProfileDocumentsVerified(
+        prefs: prefs,
+        current: anonymized,
+        users: users,
+      );
+      debugPrint('[DataService] User $userId anonymized/deactivated');
+    });
   }
 
   static Future<void> deactivateAllListingsForUser(String userId) async {
-    try {
+    final current =
+        await _requireCurrentOperationalUser(requestedUserId: userId);
+    await _listingMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(
+        userId,
+        expectedEmail: current.email,
+      );
       final prefs = await SharedPreferences.getInstance();
-      final itemsJson = prefs.getString(_itemsKey);
-      if (itemsJson == null || itemsJson.isEmpty) return;
-      final decoded = jsonDecode(itemsJson);
-      if (decoded is! List) return;
-
-      bool mutated = false;
-      for (int i = 0; i < decoded.length; i++) {
-        if (decoded[i] is! Map) continue;
-        final map = Map<String, dynamic>.from(decoded[i] as Map);
-        if (map['ownerId']?.toString() != userId) continue;
-
-        if ((map['status']?.toString() ?? 'active') == 'ended') continue;
-        map['status'] = 'ended';
-        map['isActive'] = false;
-        map['endedAt'] = DateTime.now().toIso8601String();
-        decoded[i] = map;
+      final items = _readListingsStrict(prefs);
+      var mutated = false;
+      final endedAt = DateTime.now().toIso8601String();
+      for (var index = 0; index < items.length; index++) {
+        final item = items[index];
+        if (item.ownerId != userId || item.status == 'ended') continue;
+        items[index] = Item.fromJson(<String, dynamic>{
+          ...item.toJson(),
+          'status': 'ended',
+          'isActive': false,
+          'endedAt': endedAt,
+          'catalogRevision': item.catalogRevision + 1,
+        });
         mutated = true;
       }
-
       if (mutated) {
-        await prefs.setString(_itemsKey, jsonEncode(decoded));
+        await _assertCurrentOperationalUserId(
+          userId,
+          expectedEmail: current.email,
+        );
+        await _persistListings(prefs, items);
+        SharedPersistenceSync.notify(SharedPersistenceSync.listingCatalogKey);
         debugPrint('[DataService] Deactivated all listings for user $userId');
       }
-    } catch (e) {
-      debugPrint('[DataService] deactivateAllListingsForUser failed: $e');
-    }
+    });
   }
 
   static Future<void> archiveAllMessageThreadsForUser(String userId) async {
-    try {
+    await _requireCurrentOperationalUser(requestedUserId: userId);
+    await _operationalMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(userId);
       final prefs = await SharedPreferences.getInstance();
-      final raw = await _readMessageThreads(prefs);
-      if (raw == null || raw.isEmpty) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return;
+      final raw = BackendConfig.enabled && !QaRuntimeService.isEnabled
+          ? prefs.getString(_messageThreadsKey)
+          : await _readMessageThreads(prefs);
+      if (raw == null) return;
+      final threads = _decodeMessageThreadsStrict(raw);
 
-      bool mutated = false;
-      for (int i = 0; i < decoded.length; i++) {
-        if (decoded[i] is! Map) continue;
-        final map = Map<String, dynamic>.from(decoded[i] as Map);
-        final u1 = map['user1Id']?.toString();
-        final u2 = map['user2Id']?.toString();
-        if (u1 != userId && u2 != userId) continue;
-
-        final archived = (map['archivedForUserIds'] as List?)
-                ?.map((e) => e.toString())
-                .toList() ??
-            <String>[];
-        if (!archived.contains(userId)) {
-          archived.add(userId);
-          map['archivedForUserIds'] = archived;
-          decoded[i] = map;
+      var mutated = false;
+      for (var index = 0; index < threads.length; index++) {
+        final thread = threads[index];
+        if (!_isThreadParticipant(thread, userId)) continue;
+        final archived = <String>{...thread.archivedForUserIds, userId};
+        final deleted = <String>{...thread.deletedForUserIds, userId};
+        if (archived.length != thread.archivedForUserIds.length ||
+            deleted.length != thread.deletedForUserIds.length) {
+          threads[index] = thread.copyWith(
+            archivedForUserIds: archived.toList()..sort(),
+            deletedForUserIds: deleted.toList()..sort(),
+          );
           mutated = true;
         }
       }
 
       if (mutated) {
-        await _persistMessageThreads(prefs, decoded);
+        await _persistMessageThreads(
+          prefs,
+          threads.map((entry) => entry.toJson()).toList(),
+        );
         debugPrint(
           '[DataService] Archived all message threads for user $userId',
         );
       }
-    } catch (e) {
-      debugPrint('[DataService] archiveAllMessageThreadsForUser failed: $e');
-    }
+    });
   }
 
   static const String _savedItemsKey = 'saved_item_ids';
@@ -2493,142 +4554,385 @@ class DataService {
     required String itemId,
     required String status,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    Map<String, dynamic>? remoteListing;
-    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-      remoteListing = await BackendRepository.updateListingStatus(
-        id: itemId,
-        status: status,
+    if (!const <String>{'active', 'paused', 'ended', 'draft'}
+        .contains(status)) {
+      throw StateError('Ungültiger Anzeigenstatus.');
+    }
+    final current = await _requireCurrentOperationalUser();
+    await _listingMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
       );
-    }
-    final itemsJson = prefs.getString(_itemsKey);
-    final List<dynamic> list = itemsJson == null ? [] : jsonDecode(itemsJson);
-    bool mutated = false;
-    for (int i = 0; i < list.length; i++) {
-      final map = Map<String, dynamic>.from(list[i] as Map);
-      if (map['id'].toString() == itemId.toString()) {
-        final isActive = status == 'active';
-        map['status'] = status;
-        map['isActive'] = isActive;
-        if (status == 'ended') {
-          map['endedAt'] = DateTime.now().toIso8601String();
-        }
-        mutated = true;
-        list[i] = map;
-        break;
+      final prefs = await SharedPreferences.getInstance();
+      final items = _readListingsStrict(prefs);
+      final index = items.indexWhere((item) => item.id == itemId);
+      if (index < 0 && (!BackendConfig.enabled || QaRuntimeService.isEnabled)) {
+        throw StateError('Die lokale Anzeige wurde nicht gefunden.');
       }
-    }
-    if (!mutated && remoteListing != null) {
-      list.add(remoteListing);
-      mutated = true;
-    }
-    if (mutated) {
-      await prefs.setString(_itemsKey, jsonEncode(list));
-    }
+      if (index >= 0 && items[index].ownerId != current.id) {
+        throw StateError('Die lokale Anzeige gehört zu einem anderen Konto.');
+      }
+
+      Item effective;
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final remote = await BackendRepository.updateListingStatus(
+          id: itemId,
+          status: status,
+        );
+        await _assertCurrentOperationalUserId(
+          current.id,
+          expectedEmail: current.email,
+        );
+        effective = Item.fromJson(remote);
+        if (effective.ownerId != current.id) {
+          throw StateError(
+              'Die gespeicherte Anzeige gehört zu einem anderen Konto.');
+        }
+      } else {
+        final existing = items[index];
+        effective = Item.fromJson(<String, dynamic>{
+          ...existing.toJson(),
+          'status': status,
+          'isActive': status == 'active',
+          'endedAt':
+              status == 'ended' ? DateTime.now().toIso8601String() : null,
+          'catalogRevision': existing.catalogRevision + 1,
+        });
+      }
+      if (index < 0) {
+        if (items.length >= _maxLocalListings) {
+          throw StateError('Der lokale Anzeigenkatalog ist voll.');
+        }
+        items.add(effective);
+      } else {
+        items[index] = effective;
+      }
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
+      );
+      await _persistListings(prefs, items);
+      SharedPersistenceSync.notify(SharedPersistenceSync.listingCatalogKey);
+    });
   }
 
-  static Future<void> updateItem(Item updated) async {
-    final prefs = await SharedPreferences.getInstance();
-    var effectiveUpdated = updated;
-    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-      final remote = await BackendRepository.updateListing(updated.toJson());
-      effectiveUpdated = Item.fromJson(remote);
-    }
-    final itemsJson = prefs.getString(_itemsKey);
-    final List<dynamic> list = itemsJson == null ? [] : jsonDecode(itemsJson);
-    bool mutated = false;
-    for (int i = 0; i < list.length; i++) {
-      final map = Map<String, dynamic>.from(list[i] as Map);
-      if (map['id'].toString() == effectiveUpdated.id.toString()) {
-        list[i] = effectiveUpdated.toJson();
-        mutated = true;
-        break;
-      }
-    }
-    if (!mutated) list.add(effectiveUpdated.toJson());
-    Future<void> _persist(List<dynamic> payload) async {
-      await prefs.setString(_itemsKey, jsonEncode(payload));
-    }
-
-    try {
-      await _persist(list);
-    } catch (e) {
-      debugPrint(
-        '[DataService] updateItem persist failed, attempting to shrink payload: ' +
-            e.toString(),
+  static Future<Item> updateItem(Item updated) async {
+    final current = await _requireCurrentOperationalUser(
+      requestedUserId: updated.ownerId,
+    );
+    return _listingMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
       );
-      // Shrink photos across all items (limit to 3, replace base64 with placeholders)
-      List<dynamic> shrunk = list.map((raw) {
-        try {
-          final m = Map<String, dynamic>.from(raw as Map);
-          final photos = (m['photos'] as List?)
-                  ?.map((p) => p?.toString() ?? '')
-                  .where((s) => s.isNotEmpty)
-                  .toList() ??
-              <String>[];
-          final limited = <String>[];
-          int idx = 0;
-          for (final p in photos) {
-            if (idx >= 3) break;
-            if (p.startsWith('data:')) {
-              limited.add(
-                'https://picsum.photos/seed/${m['id'] ?? 'x'}_${idx}/800/800',
-              );
-            } else {
-              limited.add(p);
-            }
-            idx++;
-          }
-          if (limited.isEmpty) {
-            limited.add('https://picsum.photos/seed/${m['id'] ?? 'x'}/800/800');
-          }
-          m['photos'] = limited;
-          return m;
-        } catch (_) {
-          return raw;
-        }
-      }).toList();
-      try {
-        await _persist(shrunk);
-      } catch (e2) {
-        debugPrint(
-          '[DataService] updateItem persist still failing after shrink: ' +
-              e2.toString(),
-        );
-        final stripped = shrunk.map((raw) {
-          try {
-            final m = Map<String, dynamic>.from(raw as Map);
-            m['photos'] = <String>[];
-            return m;
-          } catch (_) {
-            return raw;
-          }
-        }).toList();
-        await _persist(stripped);
+      final prefs = await SharedPreferences.getInstance();
+      final items = _readListingsStrict(prefs);
+      final index = items.indexWhere((item) => item.id == updated.id);
+      if (index < 0 && (!BackendConfig.enabled || QaRuntimeService.isEnabled)) {
+        throw StateError('Die lokale Anzeige wurde nicht gefunden.');
       }
-    }
+      if (index >= 0 && items[index].ownerId != current.id) {
+        throw StateError('Die lokale Anzeige gehört zu einem anderen Konto.');
+      }
+
+      Item effectiveUpdated;
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final remote = await BackendRepository.updateListing(updated.toJson());
+        await _assertCurrentOperationalUserId(
+          current.id,
+          expectedEmail: current.email,
+        );
+        effectiveUpdated = Item.fromJson(remote);
+        if (effectiveUpdated.ownerId != current.id) {
+          throw StateError(
+              'Die gespeicherte Anzeige gehört zu einem anderen Konto.');
+        }
+      } else {
+        final existing = items[index];
+        if (updated.catalogRevision != existing.catalogRevision) {
+          throw StateError(
+            'Die Anzeige wurde zwischenzeitlich geändert. Bitte neu laden.',
+          );
+        }
+        effectiveUpdated = Item.fromJson(<String, dynamic>{
+          ...updated.toJson(),
+          'ownerId': existing.ownerId,
+          'catalogRevision': existing.catalogRevision + 1,
+        });
+      }
+
+      if (index < 0) {
+        if (items.length >= _maxLocalListings) {
+          throw StateError('Der lokale Anzeigenkatalog ist voll.');
+        }
+        items.add(effectiveUpdated);
+      } else {
+        items[index] = effectiveUpdated;
+      }
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
+      );
+      await _persistListings(prefs, items);
+      SharedPersistenceSync.notify(SharedPersistenceSync.listingCatalogKey);
+      return effectiveUpdated;
+    });
   }
 
   static Future<void> deleteItemById(String itemId) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-      await BackendRepository.deleteListing(itemId);
-    }
-    final itemsJson = prefs.getString(_itemsKey);
-    if (itemsJson == null) return;
-    final List<dynamic> list = jsonDecode(itemsJson);
-    final before = list.length;
-    list.removeWhere((e) => (e as Map)['id'].toString() == itemId.toString());
-    if (list.length != before) {
-      await prefs.setString(_itemsKey, jsonEncode(list));
-    }
+    final current = await _requireCurrentOperationalUser();
+    await _listingMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final items = _readListingsStrict(prefs);
+      final index = items.indexWhere((item) => item.id == itemId);
+      if (index < 0) {
+        throw StateError('Die lokale Anzeige wurde nicht gefunden.');
+      }
+      if (items[index].ownerId != current.id) {
+        throw StateError('Die lokale Anzeige gehört zu einem anderen Konto.');
+      }
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        await BackendRepository.deleteListing(itemId);
+        await _assertCurrentOperationalUserId(
+          current.id,
+          expectedEmail: current.email,
+        );
+      }
+      items.removeAt(index);
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
+      );
+      await _persistListings(prefs, items);
+      SharedPersistenceSync.notify(SharedPersistenceSync.listingCatalogKey);
+    });
   }
+
+  static Future<AccountListingMutationResult> updateItemForOwner({
+    required AuthSessionOwner owner,
+    required Item updated,
+  }) =>
+      _runListingMutationForOwner(
+        owner: owner,
+        expectedOwnerId: updated.ownerId,
+        operation: (captured, verifyOwner, attempt) async {
+          final prefs = await SharedPreferences.getInstance();
+          final items = _readListingsStrict(prefs);
+          final index = items.indexWhere((item) => item.id == updated.id);
+          if (index < 0 &&
+              (!BackendConfig.enabled || QaRuntimeService.isEnabled)) {
+            throw StateError('Die lokale Anzeige wurde nicht gefunden.');
+          }
+          if (index >= 0 && items[index].ownerId != captured.id) {
+            throw const AccountListingMutationFailure.principalChanged();
+          }
+
+          Item effective;
+          if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+            await verifyOwner();
+            final remote = await BackendRepository.updateListingForOwner(
+              owner: owner,
+              listing: updated.toJson(),
+            );
+            attempt.remoteAccepted = true;
+            await verifyOwner();
+            effective = Item.fromJson(remote);
+            if (effective.ownerId != captured.id) {
+              throw StateError(
+                'Die gespeicherte Anzeige gehört zu einem anderen Konto.',
+              );
+            }
+          } else {
+            final existing = items[index];
+            if (updated.catalogRevision != existing.catalogRevision) {
+              throw StateError(
+                'Die Anzeige wurde zwischenzeitlich geändert. Bitte neu laden.',
+              );
+            }
+            effective = Item.fromJson(<String, dynamic>{
+              ...updated.toJson(),
+              'ownerId': existing.ownerId,
+              'catalogRevision': existing.catalogRevision + 1,
+            });
+          }
+          if (index < 0) {
+            if (items.length >= _maxLocalListings) {
+              throw StateError('Der lokale Anzeigenkatalog ist voll.');
+            }
+            items.add(effective);
+          } else {
+            items[index] = effective;
+          }
+          await verifyOwner();
+          await _persistListings(
+            prefs,
+            items,
+            verifyAuthorization: verifyOwner,
+          );
+          SharedPersistenceSync.notify(
+            SharedPersistenceSync.listingCatalogKey,
+          );
+          return effective;
+        },
+      );
+
+  static Future<AccountListingMutationResult> updateItemStatusForOwner({
+    required AuthSessionOwner owner,
+    required String expectedOwnerId,
+    required String itemId,
+    required String status,
+  }) async {
+    if (!const <String>{'active', 'paused', 'ended', 'draft'}
+        .contains(status)) {
+      throw const AccountListingMutationFailure.rejected(
+        'invalid_listing_status',
+      );
+    }
+    return _runListingMutationForOwner(
+      owner: owner,
+      expectedOwnerId: expectedOwnerId,
+      operation: (captured, verifyOwner, attempt) async {
+        final prefs = await SharedPreferences.getInstance();
+        final items = _readListingsStrict(prefs);
+        final index = items.indexWhere((item) => item.id == itemId);
+        if (index < 0 &&
+            (!BackendConfig.enabled || QaRuntimeService.isEnabled)) {
+          throw StateError('Die lokale Anzeige wurde nicht gefunden.');
+        }
+        if (index >= 0 && items[index].ownerId != captured.id) {
+          throw const AccountListingMutationFailure.principalChanged();
+        }
+
+        Item effective;
+        if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+          await verifyOwner();
+          final remote = await BackendRepository.updateListingStatusForOwner(
+            owner: owner,
+            id: itemId,
+            status: status,
+          );
+          attempt.remoteAccepted = true;
+          await verifyOwner();
+          effective = Item.fromJson(remote);
+          if (effective.ownerId != captured.id) {
+            throw StateError(
+              'Die gespeicherte Anzeige gehört zu einem anderen Konto.',
+            );
+          }
+        } else {
+          final existing = items[index];
+          effective = Item.fromJson(<String, dynamic>{
+            ...existing.toJson(),
+            'status': status,
+            'isActive': status == 'active',
+            'endedAt':
+                status == 'ended' ? DateTime.now().toIso8601String() : null,
+            'catalogRevision': existing.catalogRevision + 1,
+          });
+        }
+        if (index < 0) {
+          if (items.length >= _maxLocalListings) {
+            throw StateError('Der lokale Anzeigenkatalog ist voll.');
+          }
+          items.add(effective);
+        } else {
+          items[index] = effective;
+        }
+        await verifyOwner();
+        await _persistListings(
+          prefs,
+          items,
+          verifyAuthorization: verifyOwner,
+        );
+        SharedPersistenceSync.notify(
+          SharedPersistenceSync.listingCatalogKey,
+        );
+        return effective;
+      },
+    );
+  }
+
+  static Future<AccountListingMutationResult> deleteItemByIdForOwner({
+    required AuthSessionOwner owner,
+    required String expectedOwnerId,
+    required String itemId,
+  }) =>
+      _runListingMutationForOwner(
+        owner: owner,
+        expectedOwnerId: expectedOwnerId,
+        operation: (captured, verifyOwner, attempt) async {
+          final prefs = await SharedPreferences.getInstance();
+          final items = _readListingsStrict(prefs);
+          final index = items.indexWhere((item) => item.id == itemId);
+          if (index < 0 &&
+              (!BackendConfig.enabled || QaRuntimeService.isEnabled)) {
+            throw StateError('Die lokale Anzeige wurde nicht gefunden.');
+          }
+          if (index >= 0 && items[index].ownerId != captured.id) {
+            throw const AccountListingMutationFailure.principalChanged();
+          }
+          if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+            await verifyOwner();
+            await BackendRepository.deleteListingForOwner(
+              owner: owner,
+              id: itemId,
+            );
+            attempt.remoteAccepted = true;
+            await verifyOwner();
+          }
+          if (index >= 0) items.removeAt(index);
+          await verifyOwner();
+          await _persistListings(
+            prefs,
+            items,
+            verifyAuthorization: verifyOwner,
+          );
+          SharedPersistenceSync.notify(
+            SharedPersistenceSync.listingCatalogKey,
+          );
+          return null;
+        },
+      );
 
   static bool isPublicCatalogItem(Item item) =>
       item.status == 'active' && item.isActive == true;
 
+  @visibleForTesting
+  static bool shouldUseDedicatedPublicRemoteCatalog({
+    required bool backendEnabled,
+    required bool qaRuntimeEnabled,
+  }) =>
+      backendEnabled && !qaRuntimeEnabled;
+
   static Future<List<Item>> getPublicItems() async {
-    final items = await getItems();
+    final items = <Item>[];
+    if (shouldUseDedicatedPublicRemoteCatalog(
+      backendEnabled: BackendConfig.enabled,
+      qaRuntimeEnabled: QaRuntimeService.isEnabled,
+    )) {
+      // Explore is a public-catalog surface. Do not route it through
+      // getItems(), whose authenticated backend path deliberately merges
+      // /listings/mine for owner-management screens. A slow account-scoped
+      // owner request must never hold the public catalog spinner open.
+      final remote = await BackendRepository.searchListings(
+        sort: 'newest',
+        limit: 100,
+      );
+      for (final entry in remote) {
+        try {
+          items.add(Item.fromJson(entry));
+        } catch (error) {
+          debugPrint('[DataService] skipped invalid public listing: $error');
+        }
+      }
+    } else {
+      items.addAll(await getItems());
+    }
     final blockedUserIds =
         (await BlockedUsersService.getBlockedUserIds()).toSet();
     final filtered = items
@@ -2639,32 +4943,1475 @@ class DataService {
     return filtered;
   }
 
-  static Future<Set<String>> getSavedItemIds() async {
+  static Future<List<Item>> searchPublicItems({
+    String? query,
+    List<String> categoryIds = const <String>[],
+    List<String> conditions = const <String>[],
+    double? minPrice,
+    double? maxPrice,
+    double? latitude,
+    double? longitude,
+    double? radiusKm,
+    String sort = 'newest',
+    int limit = 100,
+  }) async {
+    List<Item> items;
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final remote = await BackendRepository.searchListings(
+        query: query,
+        categoryIds: categoryIds,
+        conditions: conditions,
+        minPrice: minPrice,
+        maxPrice: maxPrice,
+        latitude: latitude,
+        longitude: longitude,
+        radiusKm: radiusKm,
+        sort: sort,
+        limit: limit,
+      );
+      items = <Item>[];
+      for (final entry in remote) {
+        try {
+          items.add(Item.fromJson(entry));
+        } catch (error) {
+          debugPrint('[DataService] skipped invalid search result: $error');
+        }
+      }
+    } else {
+      final normalizedQuery = query?.trim().toLowerCase() ?? '';
+      final boundedLimit = limit.clamp(1, 100).toInt();
+      items = (await getPublicItems()).where((item) {
+        if (normalizedQuery.isNotEmpty &&
+            !item.title.toLowerCase().contains(normalizedQuery) &&
+            !item.description.toLowerCase().contains(normalizedQuery) &&
+            !item.tags
+                .any((tag) => tag.toLowerCase().contains(normalizedQuery))) {
+          return false;
+        }
+        if (categoryIds.isNotEmpty && !categoryIds.contains(item.categoryId)) {
+          return false;
+        }
+        if (conditions.isNotEmpty && !conditions.contains(item.condition)) {
+          return false;
+        }
+        if (minPrice != null && item.pricePerDay < minPrice) return false;
+        if (maxPrice != null && item.pricePerDay > maxPrice) return false;
+        if (latitude != null && longitude != null && radiusKm != null) {
+          final distance =
+              estimateDistanceKm(item.lat, item.lng, latitude, longitude);
+          if (distance > radiusKm) return false;
+        }
+        return true;
+      }).toList();
+      if (sort == 'price_asc') {
+        items.sort(
+            (left, right) => left.pricePerDay.compareTo(right.pricePerDay));
+      } else if (sort == 'price_desc') {
+        items.sort(
+            (left, right) => right.pricePerDay.compareTo(left.pricePerDay));
+      } else if (sort == 'distance' && latitude != null && longitude != null) {
+        items.sort((left, right) => estimateDistanceKm(
+                left.lat, left.lng, latitude, longitude)
+            .compareTo(
+                estimateDistanceKm(right.lat, right.lng, latitude, longitude)));
+      } else {
+        items.sort((left, right) => right.createdAt.compareTo(left.createdAt));
+      }
+      items = items.take(boundedLimit).toList();
+    }
+    final blockedUserIds =
+        (await BlockedUsersService.getBlockedUserIds()).toSet();
+    return items
+        .where((item) => !blockedUserIds.contains(item.ownerId))
+        .toList();
+  }
+
+  static Future<RentalCart> _readLegacyLocalRentalCartUnlocked() async {
     final prefs = await SharedPreferences.getInstance();
-    final legacy = prefs.getStringList(_savedItemsKey) ?? <String>[];
-    final assignRaw = prefs.getString(_wishlistAssignKey);
-    final wishlistIds = <String>{};
-    if (assignRaw != null && assignRaw.isNotEmpty) {
+    final itemsRaw = prefs.getString(_rentalCartKey);
+    final projectsRaw = prefs.getString(_projectCartKey);
+    final itemDocument = itemsRaw == null || itemsRaw.isEmpty
+        ? <String, dynamic>{}
+        : jsonDecode(itemsRaw);
+    final projectDocument = projectsRaw == null || projectsRaw.isEmpty
+        ? <String, dynamic>{}
+        : jsonDecode(projectsRaw);
+    if (itemDocument is! Map || projectDocument is! Map) {
+      throw const FormatException('Invalid local rental cart document');
+    }
+    final items = itemDocument['items'];
+    final canonicalProjects = itemDocument['projects'];
+    final legacyProjects = projectDocument['projects'];
+    if (items != null && items is! List) {
+      throw const FormatException('Invalid local rental cart items');
+    }
+    if (canonicalProjects != null && canonicalProjects is! List) {
+      throw const FormatException('Invalid local rental cart projects');
+    }
+    if (legacyProjects != null && legacyProjects is! List) {
+      throw const FormatException('Invalid local rental cart projects');
+    }
+
+    // New writes keep the complete cart in the rental-cart document, which is
+    // one atomic SharedPreferences value. The project document remains a
+    // compatibility mirror only. This makes a process stop between the two
+    // writes recoverable without combining different revisions.
+    if (canonicalProjects is List) {
+      return RentalCart.fromJson(<String, dynamic>{
+        'schemaVersion': 1,
+        'revision': (itemDocument['revision'] as num?)?.toInt() ?? 0,
+        'reservationCreated': false,
+        'projects': canonicalProjects,
+        'items': items ?? const <dynamic>[],
+      }, localDeviceOnly: true);
+    }
+
+    final itemRevision = (itemDocument['revision'] as num?)?.toInt();
+    final projectRevision = (projectDocument['revision'] as num?)?.toInt();
+    if (itemsRaw != null &&
+        itemsRaw.isNotEmpty &&
+        projectsRaw != null &&
+        projectsRaw.isNotEmpty &&
+        itemRevision != null &&
+        projectRevision != null &&
+        itemRevision != projectRevision) {
+      throw const FormatException(
+        'Mismatched legacy local rental cart revisions',
+      );
+    }
+    return RentalCart.fromJson(<String, dynamic>{
+      'schemaVersion': 1,
+      'revision': max(
+        itemRevision ?? 0,
+        projectRevision ?? 0,
+      ),
+      'reservationCreated': false,
+      'projects': legacyProjects ?? const <dynamic>[],
+      'items': items ?? const <dynamic>[],
+    }, localDeviceOnly: true);
+  }
+
+  static Future<_LocalRentalCartRegistry> _readLocalRentalCartRegistry(
+    SharedPreferences prefs,
+  ) async {
+    final raw = prefs.getString(_rentalCartPrincipalStateKey);
+    if (raw == null) {
       try {
-        final Map<String, dynamic> map = jsonDecode(assignRaw);
-        wishlistIds.addAll(map.keys.map((e) => e.toString()));
-      } catch (_) {
-        // ignore
+        final legacyCart = await _readLegacyLocalRentalCartUnlocked();
+        final pendingRaw = prefs.getString(_rentalCartSyncOwnerKey)?.trim();
+        final pendingToken = pendingRaw == null || pendingRaw.isEmpty
+            ? null
+            : (RegExp(r'^p_[a-f0-9]{64}$').hasMatch(pendingRaw)
+                ? pendingRaw
+                : LocalPrincipalScope.tokenForUserId(pendingRaw));
+        return _LocalRentalCartRegistry(
+          revision: 0,
+          principals: <String, _LocalRentalCartBucket>{
+            LocalPrincipalIdentity.guest.token: _LocalRentalCartBucket(
+              cart: legacyCart,
+              syncOwnerToken: pendingToken,
+            ),
+          },
+        );
+      } on FormatException {
+        return _LocalRentalCartRegistry(
+          revision: 0,
+          principals: <String, _LocalRentalCartBucket>{},
+          legacyGuestQuarantined: true,
+        );
       }
     }
-    final out = <String>{...legacy, ...wishlistIds};
-    return out;
+    if (raw.isEmpty) {
+      throw const FormatException('Invalid principal rental-cart registry');
+    }
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } catch (_) {
+      throw const FormatException('Invalid principal rental-cart registry');
+    }
+    if (decoded is! Map ||
+        decoded['schemaVersion'] != 1 ||
+        decoded['revision'] is! int ||
+        (decoded['revision'] as int) < 1 ||
+        decoded['principals'] is! Map ||
+        decoded['legacyGuestQuarantined'] is! bool) {
+      throw const FormatException('Invalid principal rental-cart registry');
+    }
+    final principals = <String, _LocalRentalCartBucket>{};
+    final quarantinedPrincipals = <String, dynamic>{};
+    for (final entry in (decoded['principals'] as Map).entries) {
+      final token = entry.key;
+      final bucket = entry.value;
+      if (token is! String ||
+          (token != LocalPrincipalIdentity.guest.token &&
+              !RegExp(r'^p_[a-f0-9]{64}$').hasMatch(token))) {
+        throw const FormatException('Invalid principal rental-cart bucket');
+      }
+      try {
+        if (bucket is! Map || bucket['cart'] is! Map) {
+          throw const FormatException('Invalid principal rental-cart bucket');
+        }
+        final syncOwner = bucket['syncOwnerToken'];
+        if (syncOwner != null &&
+            (syncOwner is! String ||
+                !RegExp(r'^p_[a-f0-9]{64}$').hasMatch(syncOwner))) {
+          throw const FormatException('Invalid rental-cart sync owner');
+        }
+        principals[token] = _LocalRentalCartBucket(
+          cart: _decodePrincipalRentalCart(
+            Map<String, dynamic>.from(bucket['cart'] as Map),
+          ),
+          syncOwnerToken: syncOwner as String?,
+        );
+      } catch (_) {
+        quarantinedPrincipals[token] = bucket;
+      }
+    }
+    return _LocalRentalCartRegistry(
+      revision: decoded['revision'] as int,
+      principals: principals,
+      quarantinedPrincipals: quarantinedPrincipals,
+      legacyGuestQuarantined: decoded['legacyGuestQuarantined'] as bool,
+    );
+  }
+
+  static RentalCart _decodePrincipalRentalCart(Map<String, dynamic> value) {
+    final projects = value['projects'];
+    final items = value['items'];
+    if (value['schemaVersion'] != 1 ||
+        value['revision'] is! int ||
+        (value['revision'] as int) < 0 ||
+        value['reservationCreated'] == true ||
+        projects is! List ||
+        items is! List ||
+        projects.length > 20 ||
+        items.length > 100) {
+      throw const FormatException('Invalid principal rental cart');
+    }
+    final projectIds = <String>{};
+    for (final entry in projects) {
+      if (entry is! Map ||
+          entry['id'] is! String ||
+          (entry['id'] as String).trim().isEmpty ||
+          !projectIds.add(entry['id'] as String) ||
+          entry['title'] is! String ||
+          (entry['title'] as String).trim().isEmpty ||
+          (entry['answers'] != null && entry['answers'] is! Map)) {
+        throw const FormatException('Invalid principal rental-cart project');
+      }
+    }
+    final itemIds = <String>{};
+    for (final entry in items) {
+      if (entry is! Map ||
+          entry['id'] is! String ||
+          (entry['id'] as String).trim().isEmpty ||
+          !itemIds.add(entry['id'] as String) ||
+          entry['listingId'] is! String ||
+          (entry['listingId'] as String).trim().isEmpty) {
+        throw const FormatException('Invalid principal rental-cart item');
+      }
+      final projectId = entry['projectId']?.toString().trim() ?? '';
+      if (projectId.isNotEmpty && !projectIds.contains(projectId)) {
+        throw const FormatException('Unknown principal rental-cart project');
+      }
+      RentalCartItem.fromJson(Map<String, dynamic>.from(entry));
+    }
+    return RentalCart.fromJson(value, localDeviceOnly: true);
+  }
+
+  static Future<_LocalRentalCartBucket> _readLocalRentalCartBucketUnlocked(
+    LocalPrincipalIdentity principal,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final registry = await _readLocalRentalCartRegistry(prefs);
+    if (!principal.authenticated && registry.legacyGuestQuarantined) {
+      throw const FormatException(
+        'Unattributed legacy rental cart is quarantined',
+      );
+    }
+    if (registry.quarantinedPrincipals.containsKey(principal.token)) {
+      throw const FormatException('Principal rental cart is quarantined');
+    }
+    if (!registry.principals.containsKey(principal.token) &&
+        registry.principals.length + registry.quarantinedPrincipals.length >=
+            _maxLocalStageAPrincipals) {
+      throw StateError('Local principal capacity reached.');
+    }
+    return registry.principals[principal.token] ??
+        const _LocalRentalCartBucket(
+          cart: RentalCart(
+            reservationCreated: false,
+            localDeviceOnly: true,
+          ),
+        );
+  }
+
+  static Future<RentalCart> _readLocalRentalCart(
+    LocalPrincipalIdentity principal,
+  ) =>
+      _rentalCartMutationQueue.run(
+        () async => (await _readLocalRentalCartBucketUnlocked(principal)).cart,
+      );
+
+  static Future<void> _writeLocalRentalCart(
+    LocalPrincipalIdentity principal,
+    RentalCart cart, {
+    String? syncOwnerToken,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final revision = max(1, cart.revision);
+    final registry = await _readLocalRentalCartRegistry(prefs);
+    if (!principal.authenticated && registry.legacyGuestQuarantined) {
+      throw const FormatException(
+        'Unattributed legacy rental cart is quarantined',
+      );
+    }
+    if (registry.quarantinedPrincipals.containsKey(principal.token)) {
+      throw const FormatException('Principal rental cart is quarantined');
+    }
+    if (!registry.principals.containsKey(principal.token) &&
+        registry.principals.length + registry.quarantinedPrincipals.length >=
+            _maxLocalStageAPrincipals) {
+      throw StateError('Local principal capacity reached.');
+    }
+    final normalizedCart = RentalCart(
+      schemaVersion: cart.schemaVersion,
+      revision: revision,
+      reservationCreated: false,
+      localDeviceOnly: true,
+      syncPending: syncOwnerToken != null,
+      projects: cart.projects,
+      items: cart.items,
+    );
+    registry.principals[principal.token] = _LocalRentalCartBucket(
+      cart: normalizedCart,
+      syncOwnerToken: syncOwnerToken,
+    );
+    await _writePreferenceString(
+      prefs,
+      _rentalCartPrincipalStateKey,
+      jsonEncode(<String, dynamic>{
+        'schemaVersion': 1,
+        'revision': max(1, registry.revision + 1),
+        'legacyGuestQuarantined': registry.legacyGuestQuarantined,
+        'principals': <String, dynamic>{
+          for (final entry in registry.principals.entries)
+            entry.key: <String, dynamic>{
+              'cart': entry.value.cart.toJson(),
+              'syncOwnerToken': entry.value.syncOwnerToken,
+            },
+          for (final entry in registry.quarantinedPrincipals.entries)
+            entry.key: entry.value,
+        },
+      }),
+    );
+    if (principal.authenticated) {
+      SharedPersistenceSync.notify(SharedPersistenceSync.rentalCartKey);
+      return;
+    }
+    await _writePreferenceString(
+      prefs,
+      _rentalCartKey,
+      jsonEncode(<String, dynamic>{
+        'schemaVersion': 1,
+        'revision': revision,
+        'reservationCreated': false,
+        'projects': cart.projects.map((project) => project.toJson()).toList(),
+        'items': cart.items.map((item) => item.toJson()).toList(),
+      }),
+    );
+    if (cart.items.isEmpty && cart.projects.isEmpty) {
+      await prefs.remove(_rentalCartSyncOwnerKey);
+    } else if (syncOwnerToken != null) {
+      await prefs.setString(_rentalCartSyncOwnerKey, syncOwnerToken);
+    }
+    await _writePreferenceString(
+      prefs,
+      _projectCartKey,
+      jsonEncode(<String, dynamic>{
+        'schemaVersion': 1,
+        'revision': revision,
+        'projects': cart.projects.map((project) => project.toJson()).toList(),
+      }),
+    );
+    SharedPersistenceSync.notify(SharedPersistenceSync.rentalCartKey);
+  }
+
+  static String _rentalCartClientId(String prefix) {
+    final micros = DateTime.now().microsecondsSinceEpoch;
+    final entropy = Random.secure().nextInt(0x7fffffff).toRadixString(16);
+    return '${prefix}_${micros}_$entropy';
+  }
+
+  static String _rentalCartIntentClientId({
+    required String listingId,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) {
+    final canonical = jsonEncode(<String>[
+      listingId,
+      _rentalDate(startDate),
+      _rentalDate(endDate),
+    ]);
+    final digest = crypto.sha256.convert(utf8.encode(canonical));
+    return 'cartitem_$digest';
+  }
+
+  static bool _sameRentalCartIntent(
+    RentalCartItem entry, {
+    required String listingId,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) =>
+      entry.listingId == listingId &&
+      _rentalDate(entry.startDate) == _rentalDate(startDate) &&
+      _rentalDate(entry.endDate) == _rentalDate(endDate);
+
+  static RentalCart? _existingExactRentalCartIntent(
+    RentalCart cart, {
+    required String listingId,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) {
+    final matches = cart.items
+        .where((entry) => _sameRentalCartIntent(
+              entry,
+              listingId: listingId,
+              startDate: startDate,
+              endDate: endDate,
+            ))
+        .toList(growable: false);
+    if (matches.length > 1) {
+      throw StateError(
+          'Der Mietkorb enthält mehrere identische Mietabsichten und muss vor einer Wiederholung geprüft werden.');
+    }
+    return matches.length == 1 ? cart : null;
+  }
+
+  static Future<bool> _hasBackendSession() async {
+    if (!BackendConfig.enabled || QaRuntimeService.isEnabled) return false;
+    return await AuthService.readSession() != null;
+  }
+
+  @visibleForTesting
+  static bool canSyncGuestCartToAccount({
+    required String? pendingAccountId,
+    required String currentAccountId,
+  }) {
+    final pending = pendingAccountId?.trim() ?? '';
+    final current = currentAccountId.trim();
+    return current.isNotEmpty && (pending.isEmpty || pending == current);
+  }
+
+  @visibleForTesting
+  static bool canReadLocalRentalCart({
+    required String? pendingAccountId,
+    required String? currentAccountId,
+  }) {
+    final pending = pendingAccountId?.trim() ?? '';
+    final current = currentAccountId?.trim() ?? '';
+    return pending.isEmpty || (current.isNotEmpty && pending == current);
+  }
+
+  static Future<_LocalRentalCartBucket> _assertReadableLocalRentalCart(
+    LocalPrincipalIdentity principal,
+  ) async {
+    final bucket = await _readLocalRentalCartBucketUnlocked(principal);
+    final pending = bucket.syncOwnerToken;
+    if (pending != null && pending != principal.token) {
+      throw StateError(
+        'Ein ausstehender Kontosync muss zuerst mit dem zugeordneten Konto abgeschlossen werden.',
+      );
+    }
+    return bucket;
+  }
+
+  static Future<void> _assertCurrentLocalPrincipal(
+    LocalPrincipalIdentity expected,
+  ) async {
+    final current = await _currentLocalPrincipal();
+    if (current.token != expected.token ||
+        current.authenticated != expected.authenticated) {
+      throw StateError(
+        'Der Kontowechsel hat den laufenden Mietkorb-Abgleich gestoppt.',
+      );
+    }
+  }
+
+  /// Copies guest intent into the authenticated account. Local guest data is
+  /// removed only after every idempotent server upsert has completed.
+  static Future<bool> syncGuestRentalCartAfterAuthentication({
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    final owner = expectedOwner ?? await LocalPrincipalActionOwner.capture();
+    await owner.assertCurrent();
+    return _rentalCartMutationQueue.run(
+      () => _syncGuestRentalCartAfterAuthenticationUnlocked(owner),
+    );
+  }
+
+  static Future<bool> _syncGuestRentalCartAfterAuthenticationUnlocked(
+    LocalPrincipalActionOwner owner,
+  ) async {
+    if (!BackendConfig.enabled || QaRuntimeService.isEnabled) return false;
+    final accountPrincipal = owner.principal;
+    if (!accountPrincipal.authenticated) return false;
+    await owner.assertCurrent();
+    await _assertCurrentLocalPrincipal(accountPrincipal);
+    final guest = LocalPrincipalIdentity.guest;
+    final guestBucket = await _readLocalRentalCartBucketUnlocked(guest);
+    final local = guestBucket.cart;
+    if (local.projects.isEmpty && local.items.isEmpty) {
+      if (guestBucket.syncOwnerToken != null) {
+        await _writeLocalRentalCart(guest, local);
+      }
+      return true;
+    }
+    if (!canSyncGuestCartToAccount(
+      pendingAccountId: guestBucket.syncOwnerToken,
+      currentAccountId: accountPrincipal.token,
+    )) {
+      throw StateError(
+        'Der lokale Mietkorb ist bereits einem anderen Kontosync zugeordnet.',
+      );
+    }
+    await _writeLocalRentalCart(
+      guest,
+      local,
+      syncOwnerToken: accountPrincipal.token,
+    );
+    for (final project in [...local.projects]
+      ..sort((left, right) => left.sortOrder.compareTo(right.sortOrder))) {
+      await owner.assertCurrent();
+      await _assertCurrentLocalPrincipal(accountPrincipal);
+      await BackendRepository.putRentalCartProjectForOwner(
+        owner: owner.sessionOwner!,
+        id: project.id,
+        title: project.title,
+        answers: project.answers,
+        sortOrder: project.sortOrder,
+      );
+      await owner.assertCurrent();
+      await _assertCurrentLocalPrincipal(accountPrincipal);
+    }
+    for (final item in [...local.items]
+      ..sort((left, right) => left.sortOrder.compareTo(right.sortOrder))) {
+      await owner.assertCurrent();
+      await _assertCurrentLocalPrincipal(accountPrincipal);
+      await BackendRepository.putRentalCartItemForOwner(
+        owner: owner.sessionOwner!,
+        id: item.id,
+        listingId: item.listingId,
+        startDate: _rentalDate(item.startDate),
+        endDate: _rentalDate(item.endDate),
+        projectId: item.projectId,
+        sortOrder: item.sortOrder,
+      );
+      await owner.assertCurrent();
+      await _assertCurrentLocalPrincipal(accountPrincipal);
+    }
+    await owner.assertCurrent();
+    await _assertCurrentLocalPrincipal(accountPrincipal);
+    await _writeLocalRentalCart(
+      guest,
+      const RentalCart(
+        reservationCreated: false,
+        localDeviceOnly: true,
+      ),
+    );
+    return true;
+  }
+
+  static Future<RentalCart> getRentalCart({
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    final owner = expectedOwner ?? await LocalPrincipalActionOwner.capture();
+    await owner.assertCurrent();
+    final principal = owner.principal;
+    final hasBackendSession = await _hasBackendSession();
+    await owner.assertCurrent();
+    if (!hasBackendSession) {
+      final bucket = await _readLocalRentalCartBucketUnlocked(principal);
+      await owner.assertCurrent();
+      if (bucket.syncOwnerToken != null &&
+          bucket.syncOwnerToken != principal.token) {
+        return const RentalCart(
+          reservationCreated: false,
+          localDeviceOnly: true,
+          syncPending: true,
+        );
+      }
+      return bucket.cart;
+    }
+    final guestBucket = await _readLocalRentalCart(
+      LocalPrincipalIdentity.guest,
+    );
+    final registry = await _readLocalRentalCartRegistry(
+      await SharedPreferences.getInstance(),
+    );
+    final pending =
+        registry.principals[LocalPrincipalIdentity.guest.token]?.syncOwnerToken;
+    await owner.assertCurrent();
+    if (pending != null && pending != principal.token) {
+      return _getBackendRentalCartForOwner(owner);
+    }
+    if (guestBucket.projects.isNotEmpty || guestBucket.items.isNotEmpty) {
+      try {
+        await syncGuestRentalCartAfterAuthentication(expectedOwner: owner);
+      } catch (error) {
+        // A stale action cannot expose the old guest copy in a new session.
+        await owner.assertCurrent();
+        debugPrint('[DataService] guest rental cart sync pending: $error');
+        return RentalCart(
+          schemaVersion: guestBucket.schemaVersion,
+          revision: guestBucket.revision,
+          reservationCreated: false,
+          localDeviceOnly: true,
+          syncPending: true,
+          projects: guestBucket.projects,
+          items: guestBucket.items,
+        );
+      }
+    }
+    return _getBackendRentalCartForOwner(owner);
+  }
+
+  static Future<RentalCart> _getBackendRentalCartForOwner(
+    LocalPrincipalActionOwner owner,
+  ) async {
+    await owner.assertCurrent();
+    final session = owner.sessionOwner;
+    if (session == null) {
+      throw StateError('Für diesen Mietkorb ist eine Anmeldung erforderlich.');
+    }
+    final cart = RentalCart.fromJson(
+      await BackendRepository.getRentalCartForOwner(session),
+    );
+    await owner.assertCurrent();
+    return cart;
+  }
+
+  static Future<RentalCart> addRentalCartItem({
+    required Item item,
+    required DateTimeRange range,
+    String? projectId,
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    final owner = expectedOwner ?? await LocalPrincipalActionOwner.capture();
+    await owner.assertCurrent();
+    final principal = owner.principal;
+    if (BackendConfig.enabled &&
+        !QaRuntimeService.isEnabled &&
+        owner.sessionOwner != null) {
+      return _rentalCartMutationQueue.run(() async {
+        await owner.assertCurrent();
+        await _syncGuestRentalCartAfterAuthenticationUnlocked(owner);
+        await owner.assertCurrent();
+        final current = await _getBackendRentalCartForOwner(owner);
+        final existing = _existingExactRentalCartIntent(
+          current,
+          listingId: item.id,
+          startDate: range.start,
+          endDate: range.end,
+        );
+        if (existing != null) return existing;
+        final id = _rentalCartIntentClientId(
+          listingId: item.id,
+          startDate: range.start,
+          endDate: range.end,
+        );
+        final next = RentalCart.fromJson(
+          await BackendRepository.putRentalCartItemForOwner(
+            owner: owner.sessionOwner!,
+            id: id,
+            listingId: item.id,
+            startDate: _rentalDate(range.start),
+            endDate: _rentalDate(range.end),
+            projectId: projectId,
+          ),
+        );
+        await owner.assertCurrent();
+        final matches = next.items
+            .where((entry) => _sameRentalCartIntent(
+                  entry,
+                  listingId: item.id,
+                  startDate: range.start,
+                  endDate: range.end,
+                ))
+            .toList(growable: false);
+        if (matches.length != 1 ||
+            matches.single.id != id ||
+            matches.single.projectId != projectId) {
+          throw StateError(
+              'Speichern des Mietkorb-Artikels konnte nicht bestätigt werden.');
+        }
+        return next;
+      });
+    }
+    return _rentalCartMutationQueue.run(() async {
+      await owner.assertCurrent();
+      final cart = (await _assertReadableLocalRentalCart(principal)).cart;
+      final existing = _existingExactRentalCartIntent(
+        cart,
+        listingId: item.id,
+        startDate: range.start,
+        endDate: range.end,
+      );
+      if (existing != null) return existing;
+      if (cart.items.length >= 100) {
+        throw StateError('Der Mietkorb kann höchstens 100 Artikel enthalten.');
+      }
+      final id = _rentalCartIntentClientId(
+        listingId: item.id,
+        startDate: range.start,
+        endDate: range.end,
+      );
+      final next = RentalCart(
+        revision: cart.revision + 1,
+        reservationCreated: false,
+        localDeviceOnly: true,
+        projects: cart.projects,
+        items: <RentalCartItem>[
+          ...cart.items,
+          RentalCartItem(
+            id: id,
+            listingId: item.id,
+            projectId: projectId,
+            startDate: range.start,
+            endDate: range.end,
+            sortOrder: cart.items.length,
+            quoteStatus: 'needs_recheck',
+            listing: item.toJson(),
+          ),
+        ],
+      );
+      await owner.assertCurrent();
+      await _writeLocalRentalCart(principal, next);
+      await owner.assertCurrent();
+      return next;
+    });
+  }
+
+  static Future<RentalCart> removeRentalCartItem(
+    String id, {
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    final owner = expectedOwner ?? await LocalPrincipalActionOwner.capture();
+    await owner.assertCurrent();
+    final principal = owner.principal;
+    if (BackendConfig.enabled &&
+        !QaRuntimeService.isEnabled &&
+        owner.sessionOwner != null) {
+      final next = RentalCart.fromJson(
+        await BackendRepository.deleteRentalCartItemForOwner(
+            owner: owner.sessionOwner!, id: id),
+      );
+      await owner.assertCurrent();
+      return next;
+    }
+    return _rentalCartMutationQueue.run(() async {
+      await owner.assertCurrent();
+      final cart = (await _assertReadableLocalRentalCart(principal)).cart;
+      final next = RentalCart(
+        revision: cart.revision + 1,
+        reservationCreated: false,
+        localDeviceOnly: true,
+        projects: cart.projects,
+        items: cart.items.where((item) => item.id != id).toList(),
+      );
+      await owner.assertCurrent();
+      await _writeLocalRentalCart(principal, next);
+      await owner.assertCurrent();
+      return next;
+    });
+  }
+
+  static Future<RentalCart> assignRentalCartItemToProject({
+    required String itemId,
+    String? projectId,
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    final owner = expectedOwner ?? await LocalPrincipalActionOwner.capture();
+    await owner.assertCurrent();
+    final principal = owner.principal;
+    final hasBackendSession = await _hasBackendSession();
+    await owner.assertCurrent();
+    if (hasBackendSession) {
+      final cart = await getRentalCart(expectedOwner: owner);
+      final item = cart.items.firstWhere(
+        (entry) => entry.id == itemId,
+        orElse: () => throw StateError('Mietkorb-Artikel nicht gefunden.'),
+      );
+      if (projectId != null &&
+          !cart.projects.any((project) => project.id == projectId)) {
+        throw StateError('Mietkorb-Projekt nicht gefunden.');
+      }
+      await owner.assertCurrent();
+      final next =
+          RentalCart.fromJson(await BackendRepository.putRentalCartItemForOwner(
+        owner: owner.sessionOwner!,
+        id: item.id,
+        listingId: item.listingId,
+        startDate: _rentalDate(item.startDate),
+        endDate: _rentalDate(item.endDate),
+        projectId: projectId,
+        sortOrder: item.sortOrder,
+      ));
+      await owner.assertCurrent();
+      return next;
+    }
+    return _rentalCartMutationQueue.run(() async {
+      await owner.assertCurrent();
+      final cart = (await _assertReadableLocalRentalCart(principal)).cart;
+      await owner.assertCurrent();
+      cart.items.firstWhere(
+        (entry) => entry.id == itemId,
+        orElse: () => throw StateError('Mietkorb-Artikel nicht gefunden.'),
+      );
+      if (projectId != null &&
+          !cart.projects.any((project) => project.id == projectId)) {
+        throw StateError('Mietkorb-Projekt nicht gefunden.');
+      }
+      final next = RentalCart(
+        revision: cart.revision + 1,
+        reservationCreated: false,
+        localDeviceOnly: true,
+        projects: cart.projects,
+        items: cart.items
+            .map((entry) => entry.id == itemId
+                ? RentalCartItem(
+                    id: entry.id,
+                    listingId: entry.listingId,
+                    projectId: projectId,
+                    startDate: entry.startDate,
+                    endDate: entry.endDate,
+                    sortOrder: entry.sortOrder,
+                    quoteStatus: entry.quoteStatus,
+                    quoteErrorCode: entry.quoteErrorCode,
+                    quoteRecheckedAt: entry.quoteRecheckedAt,
+                    quote: entry.quote,
+                    listing: entry.listing,
+                  )
+                : entry)
+            .toList(),
+      );
+      await owner.assertCurrent();
+      await _writeLocalRentalCart(principal, next);
+      await owner.assertCurrent();
+      return next;
+    });
+  }
+
+  static Future<RentalCartProject> addRentalCartProject({
+    required String title,
+    Map<String, dynamic> answers = const <String, dynamic>{},
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    final normalized = title.trim();
+    if (normalized.isEmpty || normalized.length > 120) {
+      throw ArgumentError.value(title, 'title', 'Ungültiger Projektname');
+    }
+    final owner = expectedOwner ?? await LocalPrincipalActionOwner.capture();
+    await owner.assertCurrent();
+    final principal = owner.principal;
+    final project = RentalCartProject(
+      id: _rentalCartClientId('project'),
+      title: normalized,
+      answers: answers,
+    );
+    if (BackendConfig.enabled &&
+        !QaRuntimeService.isEnabled &&
+        owner.sessionOwner != null) {
+      await syncGuestRentalCartAfterAuthentication(expectedOwner: owner);
+      await owner.assertCurrent();
+      final cart = RentalCart.fromJson(
+        await BackendRepository.putRentalCartProjectForOwner(
+          owner: owner.sessionOwner!,
+          id: project.id,
+          title: project.title,
+          answers: project.answers,
+        ),
+      );
+      await owner.assertCurrent();
+      return cart.projects.firstWhere((entry) => entry.id == project.id);
+    }
+    return _rentalCartMutationQueue.run(() async {
+      await owner.assertCurrent();
+      final cart = (await _assertReadableLocalRentalCart(principal)).cart;
+      if (cart.projects.length >= 20) {
+        throw StateError('Der Mietkorb kann höchstens 20 Projekte enthalten.');
+      }
+      final nextProject = RentalCartProject(
+        id: project.id,
+        title: project.title,
+        answers: project.answers,
+        sortOrder: cart.projects.length,
+      );
+      await owner.assertCurrent();
+      await _writeLocalRentalCart(
+          principal,
+          RentalCart(
+            revision: cart.revision + 1,
+            reservationCreated: false,
+            localDeviceOnly: true,
+            projects: <RentalCartProject>[...cart.projects, nextProject],
+            items: cart.items,
+          ));
+      await owner.assertCurrent();
+      return nextProject;
+    });
+  }
+
+  static Future<RentalCart> removeRentalCartProject(
+    String id, {
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    final owner = expectedOwner ?? await LocalPrincipalActionOwner.capture();
+    await owner.assertCurrent();
+    final principal = owner.principal;
+    if (BackendConfig.enabled &&
+        !QaRuntimeService.isEnabled &&
+        owner.sessionOwner != null) {
+      final next = RentalCart.fromJson(
+        await BackendRepository.deleteRentalCartProjectForOwner(
+            owner: owner.sessionOwner!, id: id),
+      );
+      await owner.assertCurrent();
+      return next;
+    }
+    return _rentalCartMutationQueue.run(() async {
+      await owner.assertCurrent();
+      final cart = (await _assertReadableLocalRentalCart(principal)).cart;
+      final next = RentalCart(
+        revision: cart.revision + 1,
+        reservationCreated: false,
+        localDeviceOnly: true,
+        projects: cart.projects.where((project) => project.id != id).toList(),
+        items: cart.items
+            .map((item) => item.projectId == id
+                ? RentalCartItem(
+                    id: item.id,
+                    listingId: item.listingId,
+                    startDate: item.startDate,
+                    endDate: item.endDate,
+                    sortOrder: item.sortOrder,
+                    quoteStatus: item.quoteStatus,
+                    quoteErrorCode: item.quoteErrorCode,
+                    quoteRecheckedAt: item.quoteRecheckedAt,
+                    quote: item.quote,
+                    listing: item.listing,
+                  )
+                : item)
+            .toList(),
+      );
+      await owner.assertCurrent();
+      await _writeLocalRentalCart(principal, next);
+      await owner.assertCurrent();
+      return next;
+    });
+  }
+
+  static Future<RentalCart> recheckRentalCart({
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    final owner = expectedOwner ?? await LocalPrincipalActionOwner.capture();
+    await owner.assertCurrent();
+    final principal = owner.principal;
+    if (BackendConfig.enabled &&
+        !QaRuntimeService.isEnabled &&
+        owner.sessionOwner != null) {
+      await syncGuestRentalCartAfterAuthentication(expectedOwner: owner);
+      await owner.assertCurrent();
+      final next = RentalCart.fromJson(
+          await BackendRepository.recheckRentalCartForOwner(
+              owner.sessionOwner!));
+      await owner.assertCurrent();
+      return next;
+    }
+    return _rentalCartMutationQueue.run(() async {
+      await owner.assertCurrent();
+      final cart = (await _assertReadableLocalRentalCart(principal)).cart;
+      final checked = <RentalCartItem>[];
+      for (final item in cart.items) {
+        await owner.assertCurrent();
+        final available = await checkAvailability(
+          itemId: item.listingId,
+          start: item.startDate,
+          end: item.endDate,
+        );
+        await owner.assertCurrent();
+        checked.add(RentalCartItem(
+          id: item.id,
+          listingId: item.listingId,
+          projectId: item.projectId,
+          startDate: item.startDate,
+          endDate: item.endDate,
+          sortOrder: item.sortOrder,
+          quoteStatus: available ? 'needs_recheck' : 'unavailable',
+          quoteErrorCode: available ? null : 'booking_period_unavailable',
+          quoteRecheckedAt: DateTime.now(),
+          listing: item.listing,
+        ));
+      }
+      final next = RentalCart(
+        revision: cart.revision + 1,
+        reservationCreated: false,
+        localDeviceOnly: true,
+        projects: cart.projects,
+        items: checked,
+      );
+      await owner.assertCurrent();
+      await _writeLocalRentalCart(principal, next);
+      await owner.assertCurrent();
+      return next;
+    });
+  }
+
+  /// Returns only the local saved-item state that belongs in a user-requested
+  /// privacy export. Server-side cart data is part of the backend account
+  /// export; this section also covers any not-yet-synced guest cart.
+  static Future<Map<String, dynamic>> exportSavedItemsForPrivacy() async {
+    final principal = await _currentLocalPrincipal();
+    final prefs = await SharedPreferences.getInstance();
+    final wishlistSnapshot = await _wishlistMutationQueue.run(() async {
+      final state = _readWishlistState(prefs, principal);
+      return _LocalWishlistState(
+        revision: state.revision,
+        lists: state.lists
+            .map((entry) => Map<String, dynamic>.from(entry))
+            .toList(),
+        assignments: Map<String, String>.from(state.assignments),
+        savedItemIds: Set<String>.from(state.savedItemIds),
+      );
+    });
+    final wishlistState = wishlistSnapshot;
+    final savedItemIds = wishlistState.savedItemIds.toList()..sort();
+    final cartBucket = await _rentalCartMutationQueue.run(
+      () => _readLocalRentalCartBucketUnlocked(principal),
+    );
+    final localCartVisible = cartBucket.syncOwnerToken == null ||
+        cartBucket.syncOwnerToken == principal.token;
+    return <String, dynamic>{
+      'schemaVersion': 1,
+      'scope': 'local-principal',
+      'principalScope':
+          principal.authenticated ? 'authenticated-account' : 'guest-device',
+      'terminology': 'Gemerkt',
+      'binding': 'non-binding-no-reservation',
+      'storageKeys': const <String>[
+        _wishlistPrincipalStateKey,
+        _rentalCartPrincipalStateKey,
+        _savedItemsKey,
+        _wishlistStateKey,
+        _wishlistsMetaKey,
+        _wishlistAssignKey,
+        _rentalCartKey,
+        _projectCartKey,
+        _rentalCartSyncOwnerKey,
+      ],
+      'legacySavedItemIds': savedItemIds,
+      'lists': wishlistState.lists,
+      'itemAssignments': wishlistState.assignments,
+      'persistentRentalCart': true,
+      'persistentProjectCart': true,
+      'rentalCart': localCartVisible
+          ? cartBucket.cart.toJson()
+          : const RentalCart(
+              reservationCreated: false,
+              localDeviceOnly: true,
+              syncPending: true,
+            ).toJson(),
+      'syncPending': cartBucket.syncOwnerToken != null,
+    };
+  }
+
+  /// Device-local listing cache entries owned by the current authenticated
+  /// account. Public listings owned by other accounts remain on-device but are
+  /// excluded from this account-scoped export.
+  static Future<Map<String, dynamic>> exportOwnedListingsForPrivacy() async {
+    final current = await _requireCurrentOperationalUser();
+    return _listingMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final owned = _readListingsStrict(prefs)
+          .where((item) => item.ownerId == current.id)
+          .map((item) => item.toJson())
+          .toList();
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
+      );
+      return <String, dynamic>{
+        'schemaVersion': 1,
+        'scope': 'current-authenticated-account',
+        'accountId': current.id,
+        'storageKey': _itemsKey,
+        'listings': owned,
+        'otherAccountsPublicCacheExcluded': true,
+      };
+    });
+  }
+
+  /// Local operational records attributable to the current signed-in account.
+  /// Shared booking, timeline and handover records are exported only when the
+  /// current account is a participant; unattributed legacy notifications are
+  /// preserved on-device but cannot be assigned to an account export.
+  static Future<Map<String, dynamic>>
+      exportOperationalRecordsForPrivacy() async {
+    final current = await _requireCurrentOperationalUser();
+    final prefs = await SharedPreferences.getInstance();
+    final bookingSelections = await _withCurrentBookingSelectionBucket(
+      (_, __, ___, bucket) async => Map<String, dynamic>.from(bucket),
+    );
+
+    final rentalRequests = await _rentalRequestMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(current.id);
+      final raw = prefs.getString(_rentalRequestsKey);
+      return raw == null ? <RentalRequest>[] : _decodeRentalRequestsStrict(raw);
+    });
+    final participantRequests = rentalRequests
+        .where((request) => _isRequestParticipant(request, current.id))
+        .toList();
+    final requestIds = participantRequests.map((request) => request.id).toSet();
+
+    final operational = await _operationalMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(current.id);
+      final messageRaw = prefs.getString(_messageThreadsKey);
+      final notificationRaw = prefs.getString(_notificationsKey);
+      final timelineRaw = prefs.getString(_timelineEventsKey);
+      final readRaw = prefs.getString(_readRequestsKey);
+      final lastSeenRaw = prefs.getString(_requestsLastSeenKey);
+      final threads = messageRaw == null
+          ? <MessageThread>[]
+          : _decodeMessageThreadsStrict(messageRaw);
+      final notifications = notificationRaw == null
+          ? <Map<String, dynamic>>[]
+          : _decodeNotificationsStrict(notificationRaw);
+      final timeline = timelineRaw == null
+          ? <Map<String, dynamic>>[]
+          : _decodeTimelineStrict(timelineRaw);
+      final readMarkers = readRaw == null
+          ? <String, dynamic>{}
+          : _decodeReadRequestsStrict(readRaw);
+      final lastSeen = lastSeenRaw == null
+          ? <String, dynamic>{}
+          : _decodeRequestsLastSeenStrict(lastSeenRaw);
+      return <String, dynamic>{
+        'messageThreads': threads
+            .where((thread) => _isThreadParticipant(thread, current.id))
+            .map((thread) => thread.toJson())
+            .toList(),
+        'notifications': notifications
+            .where(
+              (notification) =>
+                  (notification['userId'] ?? '').toString().trim() ==
+                  current.id,
+            )
+            .toList(),
+        'timeline': timeline
+            .where((event) => requestIds.contains(event['requestId']))
+            .toList(),
+        'readRequestIds': List<String>.from(
+          readMarkers[current.id] as List? ?? const <String>[],
+        ),
+        'ownerRequestsLastSeenAt': lastSeen[current.id],
+      };
+    });
+
+    final handover = await _handoverMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(current.id);
+      final all = await _getHandoverReturnStateMap();
+      final failRaw = prefs.getString(_handoverFailCountsKey);
+      final bannerRaw = prefs.getString(_handoverBannersKey);
+      final failCounts = failRaw == null
+          ? <String, dynamic>{}
+          : _decodeHandoverFailCountsStrict(failRaw);
+      final banners = bannerRaw == null
+          ? <String, dynamic>{}
+          : _decodeHandoverBannersStrict(bannerRaw);
+      return <String, dynamic>{
+        'handoverReturnState': <String, dynamic>{
+          for (final entry in all.entries)
+            if (requestIds.contains(entry.key)) entry.key: entry.value,
+        },
+        'pickupFailCounts': <String, dynamic>{
+          for (final entry in failCounts.entries)
+            if (requestIds.contains(entry.key)) entry.key: entry.value,
+        },
+        'handoverBanners': <String, dynamic>{
+          for (final entry in banners.entries)
+            if (requestIds.contains(entry.key)) entry.key: entry.value,
+        },
+      };
+    });
+
+    await _assertCurrentOperationalUserId(current.id);
+    return <String, dynamic>{
+      'schemaVersion': 1,
+      'scope': 'current-authenticated-account',
+      'accountId': current.id,
+      'rentalRequests':
+          participantRequests.map((request) => request.toJson()).toList(),
+      'bookingSelections': bookingSelections,
+      ...operational,
+      ...handover,
+      'unattributedLegacyNotificationsExcluded': true,
+    };
+  }
+
+  /// Removes account-scoped device convenience data after an account-deletion
+  /// decision. Shared booking/timeline/handover records remain retained for
+  /// counterparty and legal/audit continuity; threads receive a per-user
+  /// deletion tombstone instead of being erased for both participants.
+  static Future<void> clearOperationalRecordsForAccountDeletion(
+    String userId,
+  ) async {
+    await _requireCurrentOperationalUser(requestedUserId: userId);
+    await _clearOperationalRecordsForAccountDeletion(
+      userId,
+      requireCurrentAccount: true,
+    );
+  }
+
+  /// Applies a server-confirmed deletion receipt to Account A records by
+  /// explicit user/principal identity. It is safe after Account B has become
+  /// current and never selects B through a device-global "current" lookup.
+  static Future<void> clearOperationalRecordsForConfirmedAccountDeletion(
+    String userId,
+  ) async {
+    final normalized = userId.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(userId, 'userId');
+    }
+    await _clearOperationalRecordsForAccountDeletion(
+      normalized,
+      requireCurrentAccount: false,
+    );
+  }
+
+  static Future<void> _clearOperationalRecordsForAccountDeletion(
+    String userId, {
+    required bool requireCurrentAccount,
+  }) async {
+    await _operationalMutationQueue.run(() async {
+      if (requireCurrentAccount) {
+        await _assertCurrentOperationalUserId(userId);
+      }
+      final prefs = await SharedPreferences.getInstance();
+
+      final messageRaw = prefs.getString(_messageThreadsKey);
+      if (messageRaw != null) {
+        final threads = _decodeMessageThreadsStrict(messageRaw);
+        var mutated = false;
+        for (var index = 0; index < threads.length; index++) {
+          final thread = threads[index];
+          if (!_isThreadParticipant(thread, userId)) continue;
+          final archived = <String>{...thread.archivedForUserIds, userId};
+          final deleted = <String>{...thread.deletedForUserIds, userId};
+          if (archived.length != thread.archivedForUserIds.length ||
+              deleted.length != thread.deletedForUserIds.length) {
+            threads[index] = thread.copyWith(
+              archivedForUserIds: archived.toList()..sort(),
+              deletedForUserIds: deleted.toList()..sort(),
+            );
+            mutated = true;
+          }
+        }
+        if (mutated) {
+          await _persistMessageThreads(
+            prefs,
+            threads.map((thread) => thread.toJson()).toList(),
+          );
+        }
+      }
+
+      final notificationRaw = prefs.getString(_notificationsKey);
+      if (notificationRaw != null) {
+        final notifications = _decodeNotificationsStrict(notificationRaw)
+          ..removeWhere(
+            (notification) =>
+                (notification['userId'] ?? '').toString().trim() == userId,
+          );
+        await _persistNotifications(prefs, notifications);
+      }
+
+      final readRaw = prefs.getString(_readRequestsKey);
+      if (readRaw != null) {
+        final markers = _decodeReadRequestsStrict(readRaw)..remove(userId);
+        await _writePreferenceString(
+          prefs,
+          _readRequestsKey,
+          jsonEncode(markers),
+        );
+      }
+
+      final lastSeenRaw = prefs.getString(_requestsLastSeenKey);
+      if (lastSeenRaw != null) {
+        final markers = _decodeRequestsLastSeenStrict(lastSeenRaw)
+          ..remove(userId);
+        await _writePreferenceString(
+          prefs,
+          _requestsLastSeenKey,
+          jsonEncode(markers),
+        );
+      }
+    });
+    final principal = LocalPrincipalIdentity(
+      token: LocalPrincipalScope.tokenForUserId(userId),
+      authenticated: true,
+    );
+    await _bookingSelectionMutationQueue.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final registry = _readBookingSelectionRegistry(prefs);
+      final removed = registry.principals.remove(principal.token) != null;
+      final quarantineRemoved =
+          registry.quarantinedPrincipals.remove(principal.token) != null;
+      if (!removed && !quarantineRemoved) return;
+      final encoded = jsonEncode(<String, dynamic>{
+        'schemaVersion': 1,
+        'revision': max(1, registry.revision + 1),
+        'legacyGuestQuarantined': registry.legacyGuestQuarantined,
+        'principals': registry.principals,
+        'quarantinedPrincipals': registry.quarantinedPrincipals,
+      });
+      await _writePreferenceString(
+        prefs,
+        _bookingSelectionPrincipalStateKey,
+        encoded,
+      );
+    });
+  }
+
+  /// Removes only local Gemerkt data after account deletion has already been
+  /// confirmed. Unrelated device preferences remain untouched.
+  static Future<void> clearSavedItemsForAccountDeletion() async {
+    final principal = await _currentLocalPrincipal();
+    await _clearSavedItemsForAccountDeletionPrincipal(principal);
+  }
+
+  /// Removes only the opaque Account A bucket named by a server-confirmed
+  /// deletion. A successor Account B may be current without being selected.
+  static Future<void> clearSavedItemsForConfirmedAccountDeletion(
+    String userId,
+  ) async {
+    final normalized = userId.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(userId, 'userId');
+    }
+    await _clearSavedItemsForAccountDeletionPrincipal(
+      LocalPrincipalIdentity(
+        token: LocalPrincipalScope.tokenForUserId(normalized),
+        authenticated: true,
+      ),
+    );
+  }
+
+  static Future<void> _clearSavedItemsForAccountDeletionPrincipal(
+    LocalPrincipalIdentity principal,
+  ) async {
+    await _wishlistMutationQueue.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final registry = _readWishlistRegistry(prefs);
+      registry.principals.remove(principal.token);
+      registry.quarantinedPrincipals.remove(principal.token);
+      await _writePreferenceString(
+        prefs,
+        _wishlistPrincipalStateKey,
+        jsonEncode(<String, dynamic>{
+          'schemaVersion': 1,
+          'revision': max(1, registry.revision + 1),
+          'legacyGuestQuarantined': registry.legacyGuestQuarantined,
+          'principals': <String, dynamic>{
+            for (final entry in registry.principals.entries)
+              entry.key: <String, dynamic>{
+                'revision': entry.value.revision,
+                'lists': entry.value.lists,
+                'assignments': entry.value.assignments,
+                'savedItemIds': entry.value.savedItemIds.toList()..sort(),
+              },
+            for (final entry in registry.quarantinedPrincipals.entries)
+              entry.key: entry.value,
+          },
+        }),
+      );
+      if (!principal.authenticated) {
+        await prefs.remove(_savedItemsKey);
+        await prefs.remove(_wishlistStateKey);
+        await prefs.remove(_wishlistsMetaKey);
+        await prefs.remove(_wishlistAssignKey);
+      }
+      SharedPersistenceSync.notify(SharedPersistenceSync.wishlistStateKey);
+      SharedPersistenceSync.notify(SharedPersistenceSync.savedItemsKey);
+    });
+    await _rentalCartMutationQueue.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final registry = await _readLocalRentalCartRegistry(prefs);
+      registry.principals.remove(principal.token);
+      registry.quarantinedPrincipals.remove(principal.token);
+      final guest = registry.principals[LocalPrincipalIdentity.guest.token];
+      if (principal.authenticated && guest?.syncOwnerToken == principal.token) {
+        registry.principals.remove(LocalPrincipalIdentity.guest.token);
+        await prefs.remove(_rentalCartKey);
+        await prefs.remove(_projectCartKey);
+        await prefs.remove(_rentalCartSyncOwnerKey);
+      } else if (!principal.authenticated) {
+        await prefs.remove(_rentalCartKey);
+        await prefs.remove(_projectCartKey);
+        await prefs.remove(_rentalCartSyncOwnerKey);
+      }
+      await _writePreferenceString(
+        prefs,
+        _rentalCartPrincipalStateKey,
+        jsonEncode(<String, dynamic>{
+          'schemaVersion': 1,
+          'revision': max(1, registry.revision + 1),
+          'legacyGuestQuarantined': registry.legacyGuestQuarantined,
+          'principals': <String, dynamic>{
+            for (final entry in registry.principals.entries)
+              entry.key: <String, dynamic>{
+                'cart': entry.value.cart.toJson(),
+                'syncOwnerToken': entry.value.syncOwnerToken,
+              },
+            for (final entry in registry.quarantinedPrincipals.entries)
+              entry.key: entry.value,
+          },
+        }),
+      );
+      SharedPersistenceSync.notify(SharedPersistenceSync.rentalCartKey);
+    });
+  }
+
+  static Future<Set<String>> getSavedItemIds() async {
+    return _runWishlistForCurrentPrincipal((principal) async {
+      final prefs = await SharedPreferences.getInstance();
+      final state = await _readWishlistStateWithDefaults(prefs, principal);
+      return <String>{...state.savedItemIds, ...state.assignments.keys};
+    });
   }
 
   static Future<void> toggleSavedItem(String itemId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final current = prefs.getStringList(_savedItemsKey) ?? <String>[];
-    if (current.contains(itemId)) {
-      current.remove(itemId);
-    } else {
-      current.add(itemId);
-    }
-    await prefs.setStringList(_savedItemsKey, current);
+    await _runWishlistForCurrentPrincipal((principal) async {
+      final prefs = await SharedPreferences.getInstance();
+      final state = _readWishlistState(prefs, principal);
+      final current = Set<String>.from(state.savedItemIds);
+      if (!current.add(itemId)) {
+        current.remove(itemId);
+      }
+      await _writeWishlistState(
+        prefs,
+        principal,
+        _LocalWishlistState(
+          revision: state.revision + 1,
+          lists: state.lists,
+          assignments: state.assignments,
+          savedItemIds: current,
+        ),
+      );
+    });
   }
 
   // ===== Wishlists (manual selection) =====
@@ -2673,67 +6420,417 @@ class DataService {
   static const String wlLaterId = 'wl_later'; // Für später
   static const String wlAgainId = 'wl_again'; // Wieder mieten
 
-  /// Ensure the three default wishlists exist. Non-destructive if already present.
-  static Future<void> _ensureDefaultWishlists() async {
+  static List<Map<String, dynamic>> _decodeWishlistMetadata(String? raw) {
+    if (raw == null) return <Map<String, dynamic>>[];
+    if (raw.isEmpty) {
+      throw const FormatException('Invalid saved-list metadata');
+    }
+    final dynamic decoded;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      String? raw = prefs.getString(_wishlistsMetaKey);
-      List<dynamic> list = [];
-      if (raw != null && raw.isNotEmpty) {
-        try {
-          list = jsonDecode(raw);
-        } catch (_) {
-          list = [];
-        }
+      decoded = jsonDecode(raw);
+    } catch (_) {
+      throw const FormatException('Invalid saved-list metadata');
+    }
+    if (decoded is! List) {
+      throw const FormatException('Invalid saved-list metadata');
+    }
+    final out = <Map<String, dynamic>>[];
+    final ids = <String>{};
+    for (final entry in decoded) {
+      if (entry is! Map) {
+        throw const FormatException('Invalid saved-list entry');
       }
-      bool hasSoon = false, hasLater = false, hasAgain = false;
-      for (final e in list) {
-        try {
-          final m = Map<String, dynamic>.from(e as Map);
-          final id = (m['id'] ?? '').toString();
-          if (id == wlSoonId) hasSoon = true;
-          if (id == wlLaterId) hasLater = true;
-          if (id == wlAgainId) hasAgain = true;
-        } catch (_) {}
+      final map = Map<String, dynamic>.from(entry);
+      final id = map['id'];
+      final name = map['name'];
+      final system = map['system'];
+      if (id is! String ||
+          id.trim().isEmpty ||
+          name is! String ||
+          name.trim().isEmpty ||
+          system is! bool ||
+          !ids.add(id)) {
+        throw const FormatException('Invalid saved-list entry');
       }
-      if (!hasSoon) {
-        list.add({
-          'id': wlSoonId,
-          'name': 'Demnächst benötigt',
-          'system': true,
-        });
+      out.add(map);
+    }
+    return out;
+  }
+
+  static Map<String, String> _decodeWishlistAssignments(String? raw) {
+    if (raw == null) return <String, String>{};
+    if (raw.isEmpty) {
+      throw const FormatException('Invalid saved-item assignments');
+    }
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } catch (_) {
+      throw const FormatException('Invalid saved-item assignments');
+    }
+    if (decoded is! Map) {
+      throw const FormatException('Invalid saved-item assignments');
+    }
+    final out = <String, String>{};
+    for (final entry in decoded.entries) {
+      if (entry.key is! String ||
+          (entry.key as String).trim().isEmpty ||
+          entry.value is! String ||
+          (entry.value as String).trim().isEmpty) {
+        throw const FormatException('Invalid saved-item assignment');
       }
-      if (!hasLater) {
-        list.add({'id': wlLaterId, 'name': 'Für später', 'system': true});
-      }
-      if (!hasAgain) {
-        list.add({'id': wlAgainId, 'name': 'Wieder mieten', 'system': true});
-      }
-      await prefs.setString(_wishlistsMetaKey, jsonEncode(list));
-    } catch (e) {
-      debugPrint(
-        '[DataService] _ensureDefaultWishlists error: ' + e.toString(),
-      );
+      out[entry.key as String] = entry.value as String;
+    }
+    return out;
+  }
+
+  static void _validateWishlistAssignmentTargets(
+    Map<String, String> assignments,
+    List<Map<String, dynamic>> lists,
+  ) {
+    final listIds = lists.map((entry) => entry['id'] as String).toSet();
+    if (assignments.values.any((listId) => !listIds.contains(listId))) {
+      throw const FormatException('Unknown saved-list assignment target');
     }
   }
 
-  /// Returns all wishlists, with system lists first in the canonical order.
-  static Future<List<Map<String, dynamic>>> getWishlists() async {
-    final prefs = await SharedPreferences.getInstance();
-    await _ensureDefaultWishlists();
-    final raw = prefs.getString(_wishlistsMetaKey);
-    List<Map<String, dynamic>> out = [];
-    if (raw != null && raw.isNotEmpty) {
-      try {
-        final List list = jsonDecode(raw);
-        out = [
-          for (final e in list)
-            if (e is Map) Map<String, dynamic>.from(e),
-        ];
-      } catch (e) {
-        debugPrint('[DataService] getWishlists decode failed: ' + e.toString());
+  static _LocalWishlistState _readLegacyWishlistState(
+    SharedPreferences prefs,
+  ) {
+    final canonicalRaw = prefs.getString(_wishlistStateKey);
+    if (canonicalRaw == null) {
+      return _LocalWishlistState(
+        revision: 0,
+        lists: _decodeWishlistMetadata(prefs.getString(_wishlistsMetaKey)),
+        assignments: _decodeWishlistAssignments(
+          prefs.getString(_wishlistAssignKey),
+        ),
+      );
+    }
+    if (canonicalRaw.isEmpty) {
+      throw const FormatException('Invalid saved-state document');
+    }
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(canonicalRaw);
+    } catch (_) {
+      throw const FormatException('Invalid saved-state document');
+    }
+    if (decoded is! Map ||
+        decoded['schemaVersion'] != 1 ||
+        decoded['revision'] is! int ||
+        (decoded['revision'] as int) < 1 ||
+        decoded['lists'] is! List ||
+        decoded['assignments'] is! Map) {
+      throw const FormatException('Invalid saved-state document');
+    }
+    final state = _LocalWishlistState(
+      revision: decoded['revision'] as int,
+      lists: _decodeWishlistMetadata(jsonEncode(decoded['lists'])),
+      assignments: _decodeWishlistAssignments(
+        jsonEncode(decoded['assignments']),
+      ),
+      savedItemIds:
+          (prefs.getStringList(_savedItemsKey) ?? const <String>[]).toSet(),
+    );
+    _validateWishlistAssignmentTargets(state.assignments, state.lists);
+    return state;
+  }
+
+  static Set<String> _decodeSavedItemIds(dynamic raw) {
+    if (raw == null) return <String>{};
+    if (raw is! List) {
+      throw const FormatException('Invalid saved-item ID list');
+    }
+    final ids = <String>{};
+    for (final value in raw) {
+      if (value is! String || value.trim().isEmpty || !ids.add(value)) {
+        throw const FormatException('Invalid saved-item ID');
       }
     }
+    return ids;
+  }
+
+  static _LocalWishlistRegistry _readWishlistRegistry(
+    SharedPreferences prefs,
+  ) {
+    final raw = prefs.getString(_wishlistPrincipalStateKey);
+    if (raw == null) {
+      try {
+        final legacy = _readLegacyWishlistState(prefs);
+        return _LocalWishlistRegistry(
+          revision: 0,
+          principals: <String, _LocalWishlistState>{
+            LocalPrincipalIdentity.guest.token: _LocalWishlistState(
+              revision: legacy.revision,
+              lists: legacy.lists,
+              assignments: legacy.assignments,
+              savedItemIds:
+                  (prefs.getStringList(_savedItemsKey) ?? const <String>[])
+                      .toSet(),
+            ),
+          },
+        );
+      } on FormatException {
+        return _LocalWishlistRegistry(
+          revision: 0,
+          principals: <String, _LocalWishlistState>{},
+          legacyGuestQuarantined: true,
+        );
+      }
+    }
+    if (raw.isEmpty) {
+      throw const FormatException('Invalid principal saved-state registry');
+    }
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } catch (_) {
+      throw const FormatException('Invalid principal saved-state registry');
+    }
+    if (decoded is! Map ||
+        decoded['schemaVersion'] != 1 ||
+        decoded['revision'] is! int ||
+        (decoded['revision'] as int) < 1 ||
+        decoded['principals'] is! Map ||
+        decoded['legacyGuestQuarantined'] is! bool) {
+      throw const FormatException('Invalid principal saved-state registry');
+    }
+    final principals = <String, _LocalWishlistState>{};
+    final quarantinedPrincipals = <String, dynamic>{};
+    for (final entry in (decoded['principals'] as Map).entries) {
+      final token = entry.key;
+      final bucket = entry.value;
+      if (token is! String ||
+          (token != LocalPrincipalIdentity.guest.token &&
+              !RegExp(r'^p_[a-f0-9]{64}$').hasMatch(token))) {
+        throw const FormatException('Invalid principal saved-state bucket');
+      }
+      try {
+        if (bucket is! Map ||
+            bucket['revision'] is! int ||
+            (bucket['revision'] as int) < 0 ||
+            bucket['lists'] is! List ||
+            bucket['assignments'] is! Map) {
+          throw const FormatException('Invalid principal saved-state bucket');
+        }
+        final state = _LocalWishlistState(
+          revision: bucket['revision'] as int,
+          lists: _decodeWishlistMetadata(jsonEncode(bucket['lists'])),
+          assignments: _decodeWishlistAssignments(
+            jsonEncode(bucket['assignments']),
+          ),
+          savedItemIds: _decodeSavedItemIds(bucket['savedItemIds']),
+        );
+        _validateWishlistAssignmentTargets(state.assignments, state.lists);
+        principals[token] = state;
+      } catch (_) {
+        quarantinedPrincipals[token] = bucket;
+      }
+    }
+    return _LocalWishlistRegistry(
+      revision: decoded['revision'] as int,
+      principals: principals,
+      quarantinedPrincipals: quarantinedPrincipals,
+      legacyGuestQuarantined: decoded['legacyGuestQuarantined'] as bool,
+    );
+  }
+
+  static _LocalWishlistState _readWishlistState(
+    SharedPreferences prefs,
+    LocalPrincipalIdentity principal,
+  ) {
+    final registry = _readWishlistRegistry(prefs);
+    if (!principal.authenticated && registry.legacyGuestQuarantined) {
+      throw const FormatException(
+        'Unattributed legacy saved state is quarantined',
+      );
+    }
+    if (registry.quarantinedPrincipals.containsKey(principal.token)) {
+      throw const FormatException('Principal saved state is quarantined');
+    }
+    if (!registry.principals.containsKey(principal.token) &&
+        registry.principals.length + registry.quarantinedPrincipals.length >=
+            _maxLocalStageAPrincipals) {
+      throw StateError('Local principal capacity reached.');
+    }
+    final state = registry.principals[principal.token];
+    if (state == null) {
+      return _LocalWishlistState(
+        revision: 0,
+        lists: <Map<String, dynamic>>[],
+        assignments: <String, String>{},
+        savedItemIds: <String>{},
+      );
+    }
+    return _LocalWishlistState(
+      revision: state.revision,
+      lists:
+          state.lists.map((entry) => Map<String, dynamic>.from(entry)).toList(),
+      assignments: Map<String, String>.from(state.assignments),
+      savedItemIds: Set<String>.from(state.savedItemIds),
+    );
+  }
+
+  static bool _addDefaultWishlists(List<Map<String, dynamic>> list) {
+    final ids = list.map((entry) => entry['id'] as String).toSet();
+    var mutated = false;
+    if (!ids.contains(wlSoonId)) {
+      list.add({
+        'id': wlSoonId,
+        'name': 'Demnächst benötigt',
+        'system': true,
+      });
+      mutated = true;
+    }
+    if (!ids.contains(wlLaterId)) {
+      list.add({'id': wlLaterId, 'name': 'Für später', 'system': true});
+      mutated = true;
+    }
+    if (!ids.contains(wlAgainId)) {
+      list.add({'id': wlAgainId, 'name': 'Wieder mieten', 'system': true});
+      mutated = true;
+    }
+    return mutated;
+  }
+
+  static Future<_LocalWishlistState> _writeWishlistState(
+    SharedPreferences prefs,
+    LocalPrincipalIdentity principal,
+    _LocalWishlistState state, {
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    if (expectedOwner != null) await expectedOwner.assertCurrent();
+    _validateWishlistAssignmentTargets(state.assignments, state.lists);
+    final revision = max(1, state.revision);
+    final registry = _readWishlistRegistry(prefs);
+    if (!principal.authenticated && registry.legacyGuestQuarantined) {
+      throw const FormatException(
+        'Unattributed legacy saved state is quarantined',
+      );
+    }
+    if (registry.quarantinedPrincipals.containsKey(principal.token)) {
+      throw const FormatException('Principal saved state is quarantined');
+    }
+    if (!registry.principals.containsKey(principal.token) &&
+        registry.principals.length + registry.quarantinedPrincipals.length >=
+            _maxLocalStageAPrincipals) {
+      throw StateError('Local principal capacity reached.');
+    }
+    registry.principals[principal.token] = _LocalWishlistState(
+      revision: revision,
+      lists: state.lists,
+      assignments: state.assignments,
+      savedItemIds: state.savedItemIds,
+    );
+    final principalDocument = jsonEncode(<String, dynamic>{
+      'schemaVersion': 1,
+      'revision': max(1, registry.revision + 1),
+      'legacyGuestQuarantined': registry.legacyGuestQuarantined,
+      'principals': <String, dynamic>{
+        for (final entry in registry.principals.entries)
+          entry.key: <String, dynamic>{
+            'revision': entry.value.revision,
+            'lists': entry.value.lists,
+            'assignments': entry.value.assignments,
+            'savedItemIds': entry.value.savedItemIds.toList()..sort(),
+          },
+        for (final entry in registry.quarantinedPrincipals.entries)
+          entry.key: entry.value,
+      },
+    });
+    await _writePreferenceString(
+      prefs,
+      _wishlistPrincipalStateKey,
+      principalDocument,
+    );
+
+    // Unscoped V1/V2 compatibility keys mirror the guest bucket only. An
+    // authenticated account is never copied into a device-global key.
+    if (principal.authenticated) {
+      SharedPersistenceSync.notify(SharedPersistenceSync.wishlistStateKey);
+      return _LocalWishlistState(
+        revision: revision,
+        lists: state.lists,
+        assignments: state.assignments,
+        savedItemIds: state.savedItemIds,
+      );
+    }
+    final canonical = jsonEncode(<String, dynamic>{
+      'schemaVersion': 1,
+      'revision': revision,
+      'lists': state.lists,
+      'assignments': state.assignments,
+    });
+    await _writePreferenceString(prefs, _wishlistStateKey, canonical);
+    final savedIds = state.savedItemIds.toList()..sort();
+    final savedIdsMirrored =
+        await prefs.setStringList(_savedItemsKey, savedIds);
+
+    // These two keys remain rollback-compatible mirrors. The canonical value
+    // above is the sole read source once present, so an interruption here
+    // cannot create a torn visible state or turn a successful commit into a
+    // reported failure.
+    final metadataMirrored = await prefs.setString(
+      _wishlistsMetaKey,
+      jsonEncode(state.lists),
+    );
+    final assignmentsMirrored = await prefs.setString(
+      _wishlistAssignKey,
+      jsonEncode(state.assignments),
+    );
+    if (!metadataMirrored || !assignmentsMirrored || !savedIdsMirrored) {
+      debugPrint(
+        '[DataService] saved-state compatibility mirror remains stale; '
+        'canonical revision $revision is authoritative',
+      );
+    }
+    SharedPersistenceSync.notify(SharedPersistenceSync.wishlistStateKey);
+    return _LocalWishlistState(
+      revision: revision,
+      lists: state.lists,
+      assignments: state.assignments,
+      savedItemIds: state.savedItemIds,
+    );
+  }
+
+  static Future<_LocalWishlistState> _readWishlistStateWithDefaults(
+    SharedPreferences prefs,
+    LocalPrincipalIdentity principal, {
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    if (expectedOwner != null) await expectedOwner.assertCurrent();
+    var state = _readWishlistState(prefs, principal);
+    final addedDefaults = _addDefaultWishlists(state.lists);
+    _validateWishlistAssignmentTargets(state.assignments, state.lists);
+    if (addedDefaults) {
+      state = await _writeWishlistState(
+        prefs,
+        principal,
+        _LocalWishlistState(
+          revision: state.revision + 1,
+          lists: state.lists,
+          assignments: state.assignments,
+          savedItemIds: state.savedItemIds,
+        ),
+        expectedOwner: expectedOwner,
+      );
+    }
+    return state;
+  }
+
+  /// Returns all wishlists, with system lists first in the canonical order.
+  static Future<List<Map<String, dynamic>>> getWishlists({
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    final out = await _runWishlistForCurrentPrincipal((principal) async {
+      final prefs = await SharedPreferences.getInstance();
+      final state = await _readWishlistStateWithDefaults(prefs, principal,
+          expectedOwner: expectedOwner);
+      return state.lists
+          .map((entry) => Map<String, dynamic>.from(entry))
+          .toList();
+    }, expectedOwner: expectedOwner);
     // Sort: system first in order soon, later, again; then custom by name
     out.sort((a, b) {
       final as = a['system'] == true;
@@ -2756,163 +6853,204 @@ class DataService {
   }
 
   /// Adds a new custom wishlist with the provided [name]. Returns the new id.
-  static Future<String> addCustomWishlist(String name) async {
-    final prefs = await SharedPreferences.getInstance();
-    await _ensureDefaultWishlists();
-    String id = 'wl_${DateTime.now().microsecondsSinceEpoch}';
-    try {
-      final raw = prefs.getString(_wishlistsMetaKey);
-      List<dynamic> list = raw != null && raw.isNotEmpty ? jsonDecode(raw) : [];
-      list.add({'id': id, 'name': name.trim(), 'system': false});
-      await prefs.setString(_wishlistsMetaKey, jsonEncode(list));
-    } catch (e) {
-      debugPrint('[DataService] addCustomWishlist failed: ' + e.toString());
+  static Future<String> addCustomWishlist(
+    String name, {
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    final normalized = name.trim();
+    if (normalized.isEmpty || normalized.length > 120) {
+      throw ArgumentError.value(name, 'name', 'Ungültiger Merklistenname');
     }
-    return id;
+    return _runWishlistForCurrentPrincipal((principal) async {
+      final prefs = await SharedPreferences.getInstance();
+      final state = _readWishlistState(prefs, principal);
+      _addDefaultWishlists(state.lists);
+      _validateWishlistAssignmentTargets(state.assignments, state.lists);
+      final id = _rentalCartClientId('wl');
+      state.lists.add({'id': id, 'name': normalized, 'system': false});
+      await _writeWishlistState(
+        prefs,
+        principal,
+        _LocalWishlistState(
+          revision: state.revision + 1,
+          lists: state.lists,
+          assignments: state.assignments,
+          savedItemIds: state.savedItemIds,
+        ),
+        expectedOwner: expectedOwner,
+      );
+      return id;
+    }, expectedOwner: expectedOwner);
   }
 
   /// Deletes a custom wishlist by id (no-op for system lists). Also clears its assignments.
-  static Future<void> deleteCustomWishlist(String id) async {
+  static Future<void> deleteCustomWishlist(
+    String id, {
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
     if (id == wlSoonId || id == wlLaterId || id == wlAgainId) {
       return; // cannot delete system
     }
-    try {
+    await _runWishlistForCurrentPrincipal((principal) async {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_wishlistsMetaKey);
-      List<dynamic> list = raw != null && raw.isNotEmpty ? jsonDecode(raw) : [];
-      list.removeWhere((e) => (e is Map) && ((e['id'] ?? '').toString() == id));
-      await prefs.setString(_wishlistsMetaKey, jsonEncode(list));
-      // Clear assignments pointing to this list
-      final aRaw = prefs.getString(_wishlistAssignKey);
-      if (aRaw != null && aRaw.isNotEmpty) {
-        try {
-          final Map<String, dynamic> map = jsonDecode(aRaw);
-          final keys = List<String>.from(map.keys);
-          for (final k in keys) {
-            if ((map[k] ?? '').toString() == id) map.remove(k);
-          }
-          await prefs.setString(_wishlistAssignKey, jsonEncode(map));
-        } catch (_) {}
-      }
-    } catch (e) {
-      debugPrint('[DataService] deleteCustomWishlist failed: ' + e.toString());
-    }
+      final state = _readWishlistState(prefs, principal);
+      _addDefaultWishlists(state.lists);
+      _validateWishlistAssignmentTargets(state.assignments, state.lists);
+      final originalLength = state.lists.length;
+      state.lists.removeWhere((entry) => entry['id'] == id);
+      if (state.lists.length == originalLength) return;
+      state.assignments.removeWhere((_, listId) => listId == id);
+      await _writeWishlistState(
+        prefs,
+        principal,
+        _LocalWishlistState(
+          revision: state.revision + 1,
+          lists: state.lists,
+          assignments: state.assignments,
+          savedItemIds: state.savedItemIds,
+        ),
+        expectedOwner: expectedOwner,
+      );
+    }, expectedOwner: expectedOwner);
   }
 
   /// Renames a custom wishlist. No-op for system lists.
   static Future<void> renameCustomWishlist({
     required String id,
     required String newName,
+    LocalPrincipalActionOwner? expectedOwner,
   }) async {
     if (id == wlSoonId || id == wlLaterId || id == wlAgainId) {
       return; // cannot rename system
     }
-    try {
+    final normalized = newName.trim();
+    if (normalized.isEmpty || normalized.length > 120) {
+      throw ArgumentError.value(
+        newName,
+        'newName',
+        'Ungültiger Merklistenname',
+      );
+    }
+    await _runWishlistForCurrentPrincipal((principal) async {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_wishlistsMetaKey);
-      if (raw == null || raw.isEmpty) return;
-      final List list = jsonDecode(raw);
-      bool mutated = false;
-      for (int i = 0; i < list.length; i++) {
-        try {
-          final m = Map<String, dynamic>.from(list[i] as Map);
-          if ((m['id'] ?? '').toString() == id) {
-            // Only allow rename when not a system list
-            final isSystem = m['system'] == true;
-            if (!isSystem) {
-              m['name'] = newName.trim();
-              list[i] = m;
-              mutated = true;
-            }
-            break;
+      final state = _readWishlistState(prefs, principal);
+      _addDefaultWishlists(state.lists);
+      _validateWishlistAssignmentTargets(state.assignments, state.lists);
+      var mutated = false;
+      for (final entry in state.lists) {
+        if (entry['id'] == id) {
+          if (entry['system'] != true) {
+            entry['name'] = normalized;
+            mutated = true;
           }
-        } catch (_) {
-          /* ignore malformed entry */
+          break;
         }
       }
       if (mutated) {
-        await prefs.setString(_wishlistsMetaKey, jsonEncode(list));
+        await _writeWishlistState(
+          prefs,
+          principal,
+          _LocalWishlistState(
+            revision: state.revision + 1,
+            lists: state.lists,
+            assignments: state.assignments,
+            savedItemIds: state.savedItemIds,
+          ),
+          expectedOwner: expectedOwner,
+        );
       }
-    } catch (e) {
-      debugPrint('[DataService] renameCustomWishlist failed: ' + e.toString());
-    }
+    }, expectedOwner: expectedOwner);
   }
 
   /// Returns the wishlist id the item currently belongs to, or null.
-  static Future<String?> getWishlistForItem(String itemId) async {
-    try {
+  static Future<String?> getWishlistForItem(
+    String itemId, {
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    return _runWishlistForCurrentPrincipal((principal) async {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_wishlistAssignKey);
-      if (raw == null || raw.isEmpty) return null;
-      final Map<String, dynamic> map = jsonDecode(raw);
-      final v = map[itemId];
-      return v == null ? null : v.toString();
-    } catch (e) {
-      debugPrint('[DataService] getWishlistForItem failed: ' + e.toString());
-      return null;
-    }
+      final state = await _readWishlistStateWithDefaults(prefs, principal,
+          expectedOwner: expectedOwner);
+      return state.assignments[itemId];
+    }, expectedOwner: expectedOwner);
   }
 
   /// Assigns an item to a wishlist (one list at a time).
-  static Future<void> setItemWishlist(String itemId, String listId) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_wishlistAssignKey);
-      Map<String, dynamic> map = {};
-      if (raw != null && raw.isNotEmpty) {
-        try {
-          map = jsonDecode(raw) as Map<String, dynamic>;
-        } catch (_) {
-          map = {};
-        }
-      }
-      map[itemId] = listId;
-      await prefs.setString(_wishlistAssignKey, jsonEncode(map));
-    } catch (e) {
-      debugPrint('[DataService] setItemWishlist failed: ' + e.toString());
+  static Future<void> setItemWishlist(
+    String itemId,
+    String listId, {
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    if (itemId.trim().isEmpty || listId.trim().isEmpty) {
+      throw ArgumentError('Item and saved-list IDs must not be empty.');
     }
+    await _runWishlistForCurrentPrincipal((principal) async {
+      final prefs = await SharedPreferences.getInstance();
+      final state = _readWishlistState(prefs, principal);
+      _addDefaultWishlists(state.lists);
+      _validateWishlistAssignmentTargets(state.assignments, state.lists);
+      if (!state.lists.any((entry) => entry['id'] == listId)) {
+        throw StateError('Saved-list target does not exist.');
+      }
+      state.assignments[itemId] = listId;
+      await _writeWishlistState(
+        prefs,
+        principal,
+        _LocalWishlistState(
+          revision: state.revision + 1,
+          lists: state.lists,
+          assignments: state.assignments,
+          savedItemIds: state.savedItemIds,
+        ),
+        expectedOwner: expectedOwner,
+      );
+    }, expectedOwner: expectedOwner);
   }
 
   /// Removes an item from any wishlist.
-  static Future<void> removeItemFromWishlist(String itemId) async {
-    try {
+  static Future<void> removeItemFromWishlist(
+    String itemId, {
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
+    await _runWishlistForCurrentPrincipal((principal) async {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_wishlistAssignKey);
-      if (raw == null || raw.isEmpty) return;
-      final Map<String, dynamic> map = jsonDecode(raw);
-      if (map.containsKey(itemId)) {
-        map.remove(itemId);
-        await prefs.setString(_wishlistAssignKey, jsonEncode(map));
+      final state = _readWishlistState(prefs, principal);
+      _addDefaultWishlists(state.lists);
+      _validateWishlistAssignmentTargets(state.assignments, state.lists);
+      if (state.assignments.remove(itemId) != null) {
+        await _writeWishlistState(
+          prefs,
+          principal,
+          _LocalWishlistState(
+            revision: state.revision + 1,
+            lists: state.lists,
+            assignments: state.assignments,
+            savedItemIds: state.savedItemIds,
+          ),
+          expectedOwner: expectedOwner,
+        );
       }
-    } catch (e) {
-      debugPrint(
-        '[DataService] removeItemFromWishlist failed: ' + e.toString(),
-      );
-    }
+    }, expectedOwner: expectedOwner);
   }
 
   /// Returns items grouped by wishlist id.
-  static Future<Map<String, List<Item>>> getItemsByWishlist() async {
+  static Future<Map<String, List<Item>>> getItemsByWishlist({
+    LocalPrincipalActionOwner? expectedOwner,
+  }) async {
     final Map<String, List<Item>> out = {};
-    try {
-      final items = await getItems();
+    final items = expectedOwner == null
+        ? await getItems()
+        : await _getSavedCartItemsForOwner(expectedOwner);
+    final map = await _runWishlistForCurrentPrincipal((principal) async {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_wishlistAssignKey);
-      Map<String, dynamic> map = {};
-      if (raw != null && raw.isNotEmpty) {
-        try {
-          map = jsonDecode(raw) as Map<String, dynamic>;
-        } catch (_) {
-          map = {};
-        }
-      }
-      for (final it in items) {
-        final id = (map[it.id]?.toString() ?? '');
-        if (id.isEmpty) continue;
-        out.putIfAbsent(id, () => []).add(it);
-      }
-    } catch (e) {
-      debugPrint('[DataService] getItemsByWishlist failed: ' + e.toString());
+      final state = await _readWishlistStateWithDefaults(prefs, principal,
+          expectedOwner: expectedOwner);
+      return Map<String, String>.from(state.assignments);
+    }, expectedOwner: expectedOwner);
+    for (final it in items) {
+      final id = map[it.id] ?? '';
+      if (id.isEmpty) continue;
+      out.putIfAbsent(id, () => []).add(it);
     }
     return out;
   }
@@ -2963,10 +7101,10 @@ class DataService {
     await prefs.remove(_currentUserKey);
     // Ensure wishlists are initialized once demo data is set up.
     try {
-      await _ensureDefaultWishlists();
+      await getWishlists();
     } catch (e) {
       debugPrint(
-        '[DataService] ensureDefaultWishlists failed: ' + e.toString(),
+        '[DataService] ensureDefaultWishlists failed: $e',
       );
     }
   }
@@ -3100,7 +7238,7 @@ class DataService {
     'Sonstiges',
   ];
 
-  /// Maps a fine-grained category name (e.g., "Elektronik", "Kameras & Drohnen")
+  /// Maps a fine-grained category name (e.g., "Elektronik", "Kameras & Foto")
   /// to a coarse, simplified group used for display. Defaults to "Sonstiges".
   static String coarseCategoryFor(String name) {
     final n = name.toLowerCase();
@@ -3211,36 +7349,36 @@ class DataService {
   static Future<Map<String, dynamic>?> getSavedDeliverySelection(
     String itemId,
   ) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_bookingSelectionsKey);
-    if (raw == null || raw.isEmpty) return null;
-    try {
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      final entry = map[itemId];
-      if (entry is Map && entry['delivery'] is Map) {
-        final map = Map<String, dynamic>.from(entry['delivery'] as Map);
-        // Backfill: ensure new fields exist
-        if (!map.containsKey('addressLine')) map['addressLine'] = '';
-        if (!map.containsKey('city')) map['city'] = '';
-        if (!map.containsKey('lat')) map['lat'] = null;
-        if (!map.containsKey('lng')) map['lng'] = null;
-        if (!map.containsKey('express')) map['express'] = false;
-        if (!map.containsKey('deliveryAddressLine'))
-          map['deliveryAddressLine'] = map['addressLine'] ?? '';
-        if (!map.containsKey('deliveryCity'))
-          map['deliveryCity'] = map['city'] ?? '';
-        if (!map.containsKey('deliveryLat')) map['deliveryLat'] = map['lat'];
-        if (!map.containsKey('deliveryLng')) map['deliveryLng'] = map['lng'];
-        if (!map.containsKey('returnAddressLine'))
-          map['returnAddressLine'] = map['addressLine'] ?? '';
-        if (!map.containsKey('returnCity'))
-          map['returnCity'] = map['city'] ?? '';
-        if (!map.containsKey('returnLat')) map['returnLat'] = map['lat'];
-        if (!map.containsKey('returnLng')) map['returnLng'] = map['lng'];
-        return map;
-      }
-    } catch (_) {}
-    return null;
+    final id = itemId.trim();
+    if (id.isEmpty) return null;
+    return _withCurrentBookingSelectionBucket((_, __, ___, bucket) async {
+      final entry = bucket[id];
+      if (entry is! Map || entry['delivery'] is! Map) return null;
+      final selection =
+          Map<String, dynamic>.from(entry['delivery'] as Map<dynamic, dynamic>);
+      // Compatibility defaults are a read-only view and never rewrite raw
+      // storage or silently claim a legacy field for another principal.
+      selection.putIfAbsent('addressLine', () => '');
+      selection.putIfAbsent('city', () => '');
+      selection.putIfAbsent('lat', () => null);
+      selection.putIfAbsent('lng', () => null);
+      selection.putIfAbsent('express', () => false);
+      selection.putIfAbsent(
+        'deliveryAddressLine',
+        () => selection['addressLine'] ?? '',
+      );
+      selection.putIfAbsent('deliveryCity', () => selection['city'] ?? '');
+      selection.putIfAbsent('deliveryLat', () => selection['lat']);
+      selection.putIfAbsent('deliveryLng', () => selection['lng']);
+      selection.putIfAbsent(
+        'returnAddressLine',
+        () => selection['addressLine'] ?? '',
+      );
+      selection.putIfAbsent('returnCity', () => selection['city'] ?? '');
+      selection.putIfAbsent('returnLat', () => selection['lat']);
+      selection.putIfAbsent('returnLng', () => selection['lng']);
+      return selection;
+    });
   }
 
   static Future<void> setSavedDeliverySelection(
@@ -3261,38 +7399,41 @@ class DataService {
     double? returnLat,
     double? returnLng,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_bookingSelectionsKey);
-    Map<String, dynamic> map = {};
-    if (raw != null && raw.isNotEmpty) {
-      try {
-        map = jsonDecode(raw) as Map<String, dynamic>;
-      } catch (_) {
-        map = {};
-      }
+    final id = itemId.trim();
+    if (id.isEmpty || id.length > 256) {
+      throw ArgumentError('Invalid local booking delivery selection.');
     }
-    final existing =
-        (map[itemId] as Map?)?.map((k, v) => MapEntry(k.toString(), v)) ??
-            <String, dynamic>{};
-    existing['delivery'] = {
-      'hinweg': hinweg,
-      'rueckweg': rueckweg,
-      'city': addressCity ?? '',
-      'addressLine': addressLine,
-      'express': express,
-      'lat': lat,
-      'lng': lng,
-      'deliveryAddressLine': deliveryAddressLine ?? addressLine,
-      'deliveryCity': deliveryCity ?? addressCity ?? '',
-      'deliveryLat': deliveryLat ?? lat,
-      'deliveryLng': deliveryLng ?? lng,
-      'returnAddressLine': returnAddressLine ?? addressLine,
-      'returnCity': returnCity ?? addressCity ?? '',
-      'returnLat': returnLat ?? lat,
-      'returnLng': returnLng ?? lng,
-    };
-    map[itemId] = existing;
-    await prefs.setString(_bookingSelectionsKey, jsonEncode(map));
+    await _withCurrentBookingSelectionBucket(
+      (prefs, registry, principal, bucket) async {
+        final existing = bucket[id] is Map
+            ? Map<String, dynamic>.from(bucket[id] as Map)
+            : <String, dynamic>{};
+        existing['delivery'] = <String, dynamic>{
+          'hinweg': hinweg,
+          'rueckweg': rueckweg,
+          'city': addressCity ?? '',
+          'addressLine': addressLine,
+          'express': express,
+          'lat': lat,
+          'lng': lng,
+          'deliveryAddressLine': deliveryAddressLine ?? addressLine,
+          'deliveryCity': deliveryCity ?? addressCity ?? '',
+          'deliveryLat': deliveryLat ?? lat,
+          'deliveryLng': deliveryLng ?? lng,
+          'returnAddressLine': returnAddressLine ?? addressLine,
+          'returnCity': returnCity ?? addressCity ?? '',
+          'returnLat': returnLat ?? lat,
+          'returnLng': returnLng ?? lng,
+        };
+        bucket[id] = existing;
+        await _writeBookingSelectionBucket(
+          prefs,
+          registry,
+          principal,
+          bucket,
+        );
+      },
+    );
   }
 
   // Extract a known city from a freeform address string, or return empty if not found
@@ -3320,12 +7461,25 @@ class DataService {
     return 0.0;
   }
 
-  // Simple availability check stub – returns true. Replace with real inventory logic when backend is connected.
+  static String _rentalDate(DateTime value) {
+    final local = value.toLocal();
+    return '${local.year.toString().padLeft(4, '0')}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+  }
+
+  // The backend is authoritative in normal operation. The local lane remains
+  // only for explicit QA fixtures where no backend is connected.
   static Future<bool> checkAvailability({
     required String itemId,
     required DateTime start,
     required DateTime end,
   }) async {
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      return BackendRepository.checkListingAvailability(
+        listingId: itemId,
+        startDate: _rentalDate(start),
+        endDate: _rentalDate(end),
+      );
+    }
     // Quick delay to emulate IO
     await Future<void>.delayed(const Duration(milliseconds: 120));
     // Load all requests and block overlaps with accepted or running bookings
@@ -3346,6 +7500,22 @@ class DataService {
   static Future<List<DateTimeRange>> getUnavailableRangesForItem(
     String itemId,
   ) async {
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final now = DateTime.now();
+      final through = DateTime(now.year + 1, now.month, now.day + 1);
+      final availability = await BackendRepository.getListingAvailability(
+        listingId: itemId,
+        fromDate: _rentalDate(now),
+        toDate: _rentalDate(through),
+      );
+      final entries = availability['unavailable'];
+      if (entries is! List) return <DateTimeRange>[];
+      return entries.whereType<Map>().map((entry) {
+        final start = DateTime.parse(entry['start'].toString()).toLocal();
+        final end = DateTime.parse(entry['end'].toString()).toLocal();
+        return DateTimeRange(start: start, end: end);
+      }).toList();
+    }
     final all = await _getAllRentalRequests();
     final ranges = <DateTimeRange>[];
     for (final r in all) {
@@ -3382,10 +7552,10 @@ class DataService {
       ),
       (
         'cat3',
-        'Kameras & Drohnen',
-        'kameras-drohnen',
+        'Kameras & Foto',
+        'kameras-foto',
         'camera_alt',
-        ['Kameras', 'Objektive', 'Drohnen', 'Stative', 'Licht'],
+        ['Kameras', 'Objektive', 'Stative', 'Licht'],
       ),
       (
         'cat4',
@@ -3668,13 +7838,6 @@ class DataService {
     ),
   ];
 
-  static (String name, String photo)? _seedForId(String id) {
-    for (final seed in _userSeeds) {
-      if (seed.$1 == id) return (seed.$2, seed.$3);
-    }
-    return null;
-  }
-
   static List<User> _buildDemoUsers() {
     final now = DateTime.now();
     final cities = _cities.keys.toList();
@@ -3729,7 +7892,7 @@ class DataService {
       'cat3': [
         'Canon EOS R5',
         'Sony A7 IV',
-        'DJI Mini 3 Pro',
+        'Canon RF 70-200mm',
         'Fujifilm X-T5',
         'Nikon Z6 II',
       ],
@@ -3887,7 +8050,7 @@ class DataService {
           'https://images.unsplash.com/photo-1484788984921-03950022c9ef?w=800&h=800&fit=crop',
         ],
         'cat3': [
-          // Kameras & Drohnen
+          // Kameras & Foto
           'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=800&h=800&fit=crop',
           'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=800&h=800&fit=crop',
           'https://images.unsplash.com/photo-1473496169904-658ba7c44d8a?w=800&h=800&fit=crop',
@@ -3981,7 +8144,7 @@ class DataService {
       final basePrice = switch (cat.id) {
         'cat1' => 12 + rnd.nextInt(30), // Elektronik
         'cat2' => 8 + rnd.nextInt(25), // Computer & IT
-        'cat3' => 35 + rnd.nextInt(100), // Kameras & Drohnen
+        'cat3' => 35 + rnd.nextInt(100), // Kameras & Foto
         'cat4' => 10 + rnd.nextInt(35), // Gaming & VR
         'cat5' => 10 + rnd.nextInt(35), // Haushaltsgeräte
         'cat6' => 10 + rnd.nextInt(30), // Möbel & Wohnen
@@ -4036,7 +8199,6 @@ class DataService {
         currency: 'EUR',
         priceUnit: 'day',
         priceRaw: basePrice.toDouble(),
-        deposit: null,
         photos: photosFor(cat.slug, i, cat.id),
         locationText: '${city.$1}-${[
           'Mitte',
@@ -4079,7 +8241,6 @@ class DataService {
 
   static List<Item> _buildFiveShowcaseItems(
     List<User> users,
-    List<Category> categories,
   ) {
     final now = DateTime.now();
     // Pick a stable owner and cities
@@ -4102,12 +8263,7 @@ class DataService {
             languages: const ['Deutsch'],
           );
     final berlin = _cities['Berlin'] ?? (52.52, 13.405);
-    Category cat(String id) => categories.firstWhere(
-          (c) => c.id == id,
-          orElse: () => categories.first,
-        );
-
-    String gh(int i) => 'u${i}3${i}h${i}';
+    String gh(int i) => 'u${i}3${i}h$i';
 
     List<Item> items = [
       // 1) E-Bike with delivery at dropoff up to 10km
@@ -4123,7 +8279,6 @@ class DataService {
         currency: 'EUR',
         priceUnit: 'day',
         priceRaw: 19.0,
-        deposit: null,
         photos: const [
           'https://images.unsplash.com/photo-1571068316344-75bc76f77890?w=800&h=800&fit=crop',
         ],
@@ -4159,7 +8314,6 @@ class DataService {
         currency: 'EUR',
         priceUnit: 'day',
         priceRaw: 45.0,
-        deposit: null,
         photos: const [
           'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=800&h=800&fit=crop',
         ],
@@ -4195,7 +8349,6 @@ class DataService {
         currency: 'EUR',
         priceUnit: 'day',
         priceRaw: 18.0,
-        deposit: null,
         photos: const [
           'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&h=800&fit=crop',
         ],
@@ -4227,7 +8380,6 @@ class DataService {
         currency: 'EUR',
         priceUnit: 'day',
         priceRaw: 12.0,
-        deposit: null,
         photos: const [
           'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=800&h=800&fit=crop',
         ],
@@ -4264,7 +8416,6 @@ class DataService {
         currency: 'EUR',
         priceUnit: 'day',
         priceRaw: 10.0,
-        deposit: null,
         photos: const [
           'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800&h=800&fit=crop',
         ],
@@ -4458,70 +8609,231 @@ class DataService {
 
   static Future<List<Review>> _getAllReviews() async {
     final prefs = await SharedPreferences.getInstance();
-    String? raw = prefs.getString(_reviewsKey);
-    if (raw == null) {
-      List<User> seedUsers = const <User>[];
-      try {
-        final usersJson = prefs.getString(_usersKey);
-        if (usersJson != null && usersJson.isNotEmpty) {
-          final List<dynamic> usersList = jsonDecode(usersJson);
-          seedUsers = usersList
-              .map((e) => User.fromJson(Map<String, dynamic>.from(e as Map)))
-              .toList();
-        }
-      } catch (_) {}
-      final seed = _buildDemoReviews(seedUsers);
-      await prefs.setString(
-        _reviewsKey,
-        jsonEncode(seed.map((e) => e.toJson()).toList()),
-      );
-      raw = prefs.getString(_reviewsKey);
+    final raw = prefs.getString(_reviewsKey);
+    if (raw == null) return const <Review>[];
+    return _decodeClassicReviewsStrict(raw);
+  }
+
+  static String _requiredReviewString(
+    Map<String, dynamic> entry,
+    String key, {
+    int maxLength = 256,
+  }) {
+    final value = entry[key];
+    if (value is! String || value.trim().isEmpty || value.length > maxLength) {
+      throw const FormatException('Invalid local review document');
     }
-    if (raw == null) return [];
+    return value;
+  }
+
+  static DateTime _requiredReviewDate(Map<String, dynamic> entry) {
+    final raw = _requiredReviewString(entry, 'createdAt', maxLength: 64);
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) {
+      throw const FormatException('Invalid local review document');
+    }
+    return parsed;
+  }
+
+  static List<Review> _decodeClassicReviewsStrict(String raw) {
+    if (utf8.encode(raw).length > _maxLocalReviewDocumentBytes) {
+      throw const FormatException('Invalid local review document');
+    }
     try {
-      final List<dynamic> list = jsonDecode(raw);
-      return list
-          .map((e) => Review.fromJson(Map<String, dynamic>.from(e as Map)))
-          .toList();
-    } catch (_) {
-      return [];
+      final decoded = jsonDecode(raw);
+      if (decoded is! List || decoded.length > _maxLocalReviews) {
+        throw const FormatException('Invalid local review document');
+      }
+      final ids = <String>{};
+      final reviews = <Review>[];
+      for (final value in decoded) {
+        if (value is! Map) {
+          throw const FormatException('Invalid local review document');
+        }
+        final entry = Map<String, dynamic>.from(value);
+        final id = _requiredReviewString(entry, 'id');
+        final reviewerId = _requiredReviewString(entry, 'reviewerId');
+        final reviewedUserId = _requiredReviewString(entry, 'reviewedUserId');
+        final rating = entry['rating'];
+        final comment = entry['comment'];
+        final createdAt = _requiredReviewDate(entry);
+        if (!ids.add(id) ||
+            reviewerId == reviewedUserId ||
+            rating is! num ||
+            !rating.toDouble().isFinite ||
+            rating.toDouble() < 1 ||
+            rating.toDouble() > 5 ||
+            comment is! String ||
+            comment.length > 20000) {
+          throw const FormatException('Invalid local review document');
+        }
+        reviews.add(Review(
+          id: id,
+          reviewerId: reviewerId,
+          reviewedUserId: reviewedUserId,
+          rating: rating.toDouble(),
+          comment: comment,
+          createdAt: createdAt,
+        ));
+      }
+      return reviews;
+    } catch (error) {
+      if (error is FormatException) rethrow;
+      throw const FormatException('Invalid local review document');
     }
   }
 
   // ===== Multi-criteria reviews (immutable, local storage) =====
   static Future<List<MultiCriteriaReview>> _getAllMultiReviews() async {
     final prefs = await SharedPreferences.getInstance();
-    String? raw = prefs.getString(_multiReviewsKey);
-    if (raw == null) return [];
+    final raw = prefs.getString(_multiReviewsKey);
+    if (raw == null) return const <MultiCriteriaReview>[];
+    return _decodeMultiReviewsStrict(raw);
+  }
+
+  static List<MultiCriteriaReview> _decodeMultiReviewsStrict(String raw) {
+    if (utf8.encode(raw).length > _maxLocalReviewDocumentBytes) {
+      throw const FormatException('Invalid local multi-review document');
+    }
     try {
-      final List<dynamic> list = jsonDecode(raw);
-      return [
-        for (final e in list)
-          MultiCriteriaReview.fromJson(Map<String, dynamic>.from(e as Map)),
-      ];
-    } catch (_) {
-      return [];
+      final decoded = jsonDecode(raw);
+      if (decoded is! List || decoded.length > _maxLocalReviews) {
+        throw const FormatException('Invalid local multi-review document');
+      }
+      final ids = <String>{};
+      final contexts = <String>{};
+      final reviews = <MultiCriteriaReview>[];
+      for (final value in decoded) {
+        if (value is! Map) {
+          throw const FormatException('Invalid local multi-review document');
+        }
+        final entry = Map<String, dynamic>.from(value);
+        final id = _requiredReviewString(entry, 'id');
+        final requestId = _requiredReviewString(entry, 'requestId');
+        final itemId = _requiredReviewString(entry, 'itemId');
+        final reviewerId = _requiredReviewString(entry, 'reviewerId');
+        final reviewedUserId = _requiredReviewString(entry, 'reviewedUserId');
+        final direction = _requiredReviewString(entry, 'direction');
+        final createdAt = _requiredReviewDate(entry);
+        final rawCriteria = entry['criteria'];
+        if (!ids.add(id) ||
+            !contexts.add('$requestId\u0000$reviewerId') ||
+            reviewerId == reviewedUserId ||
+            !const <String>{
+              ReviewMetricsService.renterToOwner,
+              ReviewMetricsService.ownerToRenter,
+            }.contains(direction) ||
+            rawCriteria is! List ||
+            rawCriteria.length != 4) {
+          throw const FormatException('Invalid local multi-review document');
+        }
+        final criteria = <ReviewCriterion>[];
+        final criterionKeys = <String>{};
+        for (final rawCriterion in rawCriteria) {
+          if (rawCriterion is! Map) {
+            throw const FormatException('Invalid local multi-review document');
+          }
+          final criterion = Map<String, dynamic>.from(rawCriterion);
+          final key = _requiredReviewString(criterion, 'key', maxLength: 64);
+          final stars = criterion['stars'];
+          final note = criterion['note'];
+          if (!criterionKeys.add(key) ||
+              stars is! int ||
+              stars < 1 ||
+              stars > 5 ||
+              (note != null &&
+                  (note is! String ||
+                      note.length > _maxLocalReviewNoteLength))) {
+            throw const FormatException('Invalid local multi-review document');
+          }
+          criteria.add(ReviewCriterion(
+            key: key,
+            stars: stars,
+            note: note as String?,
+          ));
+        }
+        final review = MultiCriteriaReview(
+          id: id,
+          requestId: requestId,
+          itemId: itemId,
+          reviewerId: reviewerId,
+          reviewedUserId: reviewedUserId,
+          direction: direction,
+          criteria: criteria,
+          createdAt: createdAt,
+        );
+        if (!ReviewMetricsService.isRegularCompleteReview(review)) {
+          throw const FormatException('Invalid local multi-review document');
+        }
+        reviews.add(review);
+      }
+      return reviews;
+    } catch (error) {
+      if (error is FormatException) rethrow;
+      throw const FormatException('Invalid local multi-review document');
     }
   }
 
-  static Future<void> _saveAllMultiReviews(
+  static Future<void> _persistMultiReviews(
+    SharedPreferences prefs,
     List<MultiCriteriaReview> list,
   ) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _multiReviewsKey,
-      jsonEncode(list.map((e) => e.toJson()).toList()),
-    );
+    if (list.length > _maxLocalReviews) {
+      throw StateError('Der lokale Bewertungsspeicher ist voll.');
+    }
+    final encoded = jsonEncode(list.map((entry) => entry.toJson()).toList());
+    _decodeMultiReviewsStrict(encoded);
+    final previous = prefs.getString(_multiReviewsKey);
+    try {
+      if (_failNextReviewPersistenceForTesting) {
+        _failNextReviewPersistenceForTesting = false;
+        throw StateError('Synthetic local review persistence failure.');
+      }
+      await _writePreferenceString(prefs, _multiReviewsKey, encoded);
+    } catch (_) {
+      final current = prefs.getString(_multiReviewsKey);
+      if (current != previous) {
+        final restored = previous == null
+            ? await prefs.remove(_multiReviewsKey)
+            : await prefs.setString(_multiReviewsKey, previous);
+        if (!restored || prefs.getString(_multiReviewsKey) != previous) {
+          throw StateError(
+            'Lokale Bewertungen konnten nicht gespeichert oder wiederhergestellt werden.',
+          );
+        }
+      }
+      rethrow;
+    }
+    SharedPersistenceSync.notify(SharedPersistenceSync.reviewReputationKey);
+  }
+
+  @visibleForTesting
+  static void failNextReviewPersistenceForTesting() {
+    _failNextReviewPersistenceForTesting = true;
   }
 
   static Future<bool> hasSubmittedReview({
     required String requestId,
     required String reviewerId,
   }) async {
-    final all = await _getAllMultiReviews();
-    return all.any(
-      (r) => r.requestId == requestId && r.reviewerId == reviewerId,
+    final current = await _requireCurrentOperationalUser(
+      requestedUserId: reviewerId,
     );
+    return _reviewMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_multiReviewsKey);
+      final all = raw == null
+          ? const <MultiCriteriaReview>[]
+          : _decodeMultiReviewsStrict(raw);
+      return all.any(
+        (review) =>
+            review.requestId == requestId && review.reviewerId == current.id,
+      );
+    });
   }
 
   static Future<MultiCriteriaReview> addMultiReview({
@@ -4532,73 +8844,173 @@ class DataService {
     required String direction,
     required List<ReviewCriterion> criteria,
   }) async {
-    final all = await _getAllMultiReviews();
-    final requests = await _getAllRentalRequests();
-    final request = requests.cast<RentalRequest?>().firstWhere(
-          (entry) => entry?.id == requestId,
-          orElse: () => null,
+    final current = await _requireCurrentOperationalUser(
+      requestedUserId: reviewerId,
+    );
+    return _rentalRequestMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final requestRaw = prefs.getString(_rentalRequestsKey);
+      final requests = requestRaw == null
+          ? const <RentalRequest>[]
+          : _decodeRentalRequestsStrict(requestRaw);
+      RentalRequest? request;
+      for (final candidate in requests) {
+        if (candidate.id == requestId) {
+          request = candidate;
+          break;
+        }
+      }
+      if (request == null || request.status != 'completed') {
+        throw StateError('Reviews require a completed booking.');
+      }
+      if (request.needsReview) {
+        throw StateError(
+            'Reviews are blocked while this booking is under review.');
+      }
+      final reviewerMatchesDirection =
+          (direction == ReviewMetricsService.renterToOwner &&
+                  request.renterId == current.id &&
+                  request.ownerId == reviewedUserId) ||
+              (direction == ReviewMetricsService.ownerToRenter &&
+                  request.ownerId == current.id &&
+                  request.renterId == reviewedUserId);
+      if (!reviewerMatchesDirection || request.itemId != itemId) {
+        throw StateError(
+            'Review context does not match the completed booking.');
+      }
+
+      return _reviewMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(
+          current.id,
+          expectedEmail: current.email,
         );
-    if (request == null || request.status != 'completed') {
-      throw StateError('Reviews require a completed booking.');
-    }
-    if (request.needsReview) {
-      throw StateError(
-          'Reviews are blocked while this booking is under review.');
-    }
-
-    final reviewerMatchesDirection =
-        (direction == ReviewMetricsService.renterToOwner &&
-                request.renterId == reviewerId &&
-                request.ownerId == reviewedUserId) ||
-            (direction == ReviewMetricsService.ownerToRenter &&
-                request.ownerId == reviewerId &&
-                request.renterId == reviewedUserId);
-    if (!reviewerMatchesDirection || request.itemId != itemId) {
-      throw StateError('Review context does not match the completed booking.');
-    }
-
-    final nextId = (all.fold<int>(
+        final raw = prefs.getString(_multiReviewsKey);
+        final all = raw == null
+            ? <MultiCriteriaReview>[]
+            : _decodeMultiReviewsStrict(raw);
+        if (all.length >= _maxLocalReviews) {
+          throw StateError('Der lokale Bewertungsspeicher ist voll.');
+        }
+        if (all.any(
+          (entry) =>
+              entry.requestId == requestId && entry.reviewerId == current.id,
+        )) {
+          throw StateError('Review already exists for this booking context.');
+        }
+        final ids = all.map((entry) => entry.id).toSet();
+        var nextNumericId = all.fold<int>(
               0,
-              (p, e) =>
-                  (int.tryParse(e.id) ?? 0) > p ? (int.tryParse(e.id) ?? 0) : p,
+              (previous, entry) => max(previous, int.tryParse(entry.id) ?? 0),
             ) +
-            1)
-        .toString();
-    final normalizedCriteria = ReviewMetricsService.normalizeCriteria(
-      criteria,
-      direction: direction,
-    );
-    final review = MultiCriteriaReview(
-      id: nextId,
-      requestId: requestId,
-      itemId: itemId,
-      reviewerId: reviewerId,
-      reviewedUserId: reviewedUserId,
-      direction: direction,
-      criteria: normalizedCriteria,
-      createdAt: DateTime.now(),
-    );
+            1;
+        while (ids.contains('$nextNumericId')) {
+          nextNumericId++;
+        }
+        final normalizedCriteria = ReviewMetricsService.normalizeCriteria(
+          criteria,
+          direction: direction,
+        );
+        final review = MultiCriteriaReview(
+          id: '$nextNumericId',
+          requestId: requestId,
+          itemId: itemId,
+          reviewerId: current.id,
+          reviewedUserId: reviewedUserId,
+          direction: direction,
+          criteria: normalizedCriteria,
+          createdAt: DateTime.now().toUtc(),
+        );
+        if (!ReviewMetricsService.isRegularCompleteReview(review) ||
+            review.criteria.any(
+              (criterion) =>
+                  (criterion.note?.length ?? 0) > _maxLocalReviewNoteLength,
+            )) {
+          throw ArgumentError('Review is incomplete or invalid.');
+        }
 
-    if (!ReviewMetricsService.isRegularCompleteReview(review)) {
-      throw ArgumentError('Review is incomplete or invalid.');
-    }
-    if (all.any((entry) => entry.id == review.id)) {
-      throw StateError('Duplicate review id.');
-    }
-    if (all.any(
-      (entry) => entry.requestId == requestId && entry.reviewerId == reviewerId,
-    )) {
-      throw StateError('Review already exists for this booking context.');
-    }
+        final latestRequestRaw = prefs.getString(_rentalRequestsKey);
+        if (latestRequestRaw != requestRaw) {
+          throw StateError('Review context changed before persistence.');
+        }
+        await _assertCurrentOperationalUserId(
+          current.id,
+          expectedEmail: current.email,
+        );
+        await _persistMultiReviews(
+          prefs,
+          <MultiCriteriaReview>[...all, review],
+        );
+        return review;
+      });
+    });
+  }
 
-    all.add(review);
-    await _saveAllMultiReviews(all);
-    return review;
+  /// Account-scoped local review data for a user-requested privacy export.
+  /// Public reviews are shared counterparty records and remain retained after
+  /// local account deletion; unrelated public cache entries are excluded.
+  static Future<Map<String, dynamic>> exportReviewRecordsForPrivacy() async {
+    final current = await _requireCurrentOperationalUser();
+    return _reviewMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final classicRaw = prefs.getString(_reviewsKey);
+      final multiRaw = prefs.getString(_multiReviewsKey);
+      final classic = classicRaw == null
+          ? const <Review>[]
+          : _decodeClassicReviewsStrict(classicRaw);
+      final multi = multiRaw == null
+          ? const <MultiCriteriaReview>[]
+          : _decodeMultiReviewsStrict(multiRaw);
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
+      );
+      return <String, dynamic>{
+        'schemaVersion': 1,
+        'scope': 'current-authenticated-account',
+        'accountId': current.id,
+        'storageKeys': const <String>[_reviewsKey, _multiReviewsKey],
+        'authoredClassicReviews': classic
+            .where((entry) => entry.reviewerId == current.id)
+            .map((entry) => entry.toJson())
+            .toList(),
+        'receivedClassicReviews': classic
+            .where((entry) => entry.reviewedUserId == current.id)
+            .map((entry) => entry.toJson())
+            .toList(),
+        'authoredMultiReviews': multi
+            .where((entry) => entry.reviewerId == current.id)
+            .map((entry) => entry.toJson())
+            .toList(),
+        'receivedMultiReviews': multi
+            .where((entry) => entry.reviewedUserId == current.id)
+            .map((entry) => entry.toJson())
+            .toList(),
+        'otherAccountsPublicReviewsExcluded': true,
+        'sharedPublicReviewsRetainedAfterDeletion': true,
+      };
+    });
   }
 
   static Future<List<MultiCriteriaReview>> getMultiReviewsForUser(
     String userId,
   ) async {
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final remote = await BackendRepository.getUserReviews(userId);
+      return remote
+          .map((entry) => MultiCriteriaReview.fromJson({
+                ...entry,
+                'requestId': entry['bookingId'],
+              }))
+          .toList();
+    }
     final all = await _getAllMultiReviews();
     final filtered = all.where((e) => e.reviewedUserId == userId).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -4609,6 +9021,10 @@ class DataService {
     String userId,
     String itemId,
   ) async {
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final all = await getMultiReviewsForUser(userId);
+      return all.where((entry) => entry.itemId == itemId).toList();
+    }
     final all = await _getAllMultiReviews();
     final filtered = all
         .where((e) => e.reviewedUserId == userId && e.itemId == itemId)
@@ -4618,6 +9034,25 @@ class DataService {
   }
 
   static Future<List<Review>> getReviewsForUser(String userId) async {
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final remote = await BackendRepository.getUserReviews(userId);
+      return remote.map((entry) {
+        final notes = (entry['criteria'] as List? ?? const [])
+            .whereType<Map>()
+            .map((criterion) => criterion['note']?.toString() ?? '')
+            .where((note) => note.isNotEmpty)
+            .join('\n');
+        return Review(
+          id: entry['id']?.toString() ?? '',
+          reviewerId: entry['reviewerId']?.toString() ?? '',
+          reviewedUserId: entry['reviewedUserId']?.toString() ?? userId,
+          rating: (entry['rating'] as num?)?.toDouble() ?? 0,
+          comment: notes,
+          createdAt: DateTime.tryParse(entry['createdAt']?.toString() ?? '') ??
+              DateTime.now(),
+        );
+      }).toList();
+    }
     final all = await _getAllReviews();
     final filtered = all
         .where((review) => review.reviewedUserId == userId)
@@ -4911,26 +9346,31 @@ class DataService {
     return '';
   }
 
-  static String _criterionLabel(String key) {
-    switch (key) {
-      case 'communication':
-        return 'Kommunikation';
-      case 'reliability':
-        return 'Zuverlässigkeit';
-      case 'article_as_described':
-      case 'description_accuracy':
-        return 'Artikel wie beschrieben';
-      case 'handover_return':
-      case 'condition_dropoff':
-      case 'condition_return':
-      case 'process':
-        return 'Übergabe & Rückgabe';
-      default:
-        return key;
-    }
+  // Quick helpers
+  /// The saved-cart flow must not write an A-specific catalog read to the
+  /// device-global catalog cache or continue its prerequisite read as B.
+  static Future<List<Item>> _getSavedCartItemsForOwner(
+    LocalPrincipalActionOwner owner,
+  ) async {
+    await owner.assertCurrent();
+    final items = BackendConfig.enabled && !QaRuntimeService.isEnabled
+        ? _decodeListingsStrict(
+            jsonEncode(await BackendRepository.getListingsForSavedCart(owner)))
+        : await getItems();
+    await owner.assertCurrent();
+    return items;
   }
 
-  // Quick helpers
+  static Future<Item?> getItemByIdForSavedCart(String id,
+      {required LocalPrincipalActionOwner expectedOwner}) async {
+    final items = await _getSavedCartItemsForOwner(expectedOwner);
+    await expectedOwner.assertCurrent();
+    for (final item in items) {
+      if (item.id == id) return item;
+    }
+    return null;
+  }
+
   static Future<Item?> getItemById(String id) async {
     final items = await getItems();
     try {
@@ -4941,25 +9381,32 @@ class DataService {
   }
 
   static Future<User?> getUserById(String id) async {
-    final users = await getUsers();
     try {
+      final users = await getUsers();
       return users.firstWhere((e) => e.id.toString() == id.toString());
-    } catch (_) {
-      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-        try {
-          final remote = await BackendRepository.getPublicProfile(id);
-          if (remote != null) {
-            final user = User.fromJson(remote);
-            final prefs = await SharedPreferences.getInstance();
-            await _upsertCachedUser(prefs, user);
-            return user;
-          }
-        } catch (error) {
-          debugPrint('[DataService] public profile load failed: $error');
-        }
-      }
-      return null;
+    } on FormatException catch (error) {
+      // A corrupt legacy cache must remain byte-for-byte untouched for account
+      // and privacy operations, but it must not prevent an independent public
+      // profile read from using the server as its source of truth.
+      debugPrint(
+        '[DataService] local public profile cache unavailable '
+        '(${error.runtimeType})',
+      );
+    } on StateError {
+      // No matching local public profile. The remote lookup below remains the
+      // authoritative path when the backend is enabled.
     }
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      try {
+        final remote = await BackendRepository.getPublicProfile(id);
+        if (remote != null) {
+          return User.fromJson(remote);
+        }
+      } catch (error) {
+        debugPrint('[DataService] public profile load failed: $error');
+      }
+    }
+    return null;
   }
 
   // Rental requests storage (demo, persisted locally)
@@ -4971,7 +9418,7 @@ class DataService {
       debugPrint(
         '[DataService] _getAllRentalRequests: SharedPreferences unavailable: $e',
       );
-      return [];
+      rethrow;
     }
 
     String? raw;
@@ -4979,165 +9426,79 @@ class DataService {
       try {
         final remote = await BackendRepository.getRentalRequests();
         raw = jsonEncode(remote);
-        await prefs.setString(_rentalRequestsKey, raw);
+        _decodeRentalRequestsStrict(raw);
+        await _writePreferenceString(prefs, _rentalRequestsKey, raw);
       } catch (error) {
         debugPrint('[DataService] remote request load failed: $error');
+        // In a backend-enabled runtime the server is authoritative. A cached
+        // document must never make an unavailable or malformed server look
+        // like current empty or successful booking truth.
+        rethrow;
       }
     }
     raw ??= prefs.getString(_rentalRequestsKey);
     if (raw == null) {
-      // Do not seed demo requests anymore. Persist an empty list by default.
-      try {
-        await prefs.setString(
-          _rentalRequestsKey,
-          jsonEncode(<Map<String, dynamic>>[]),
-        );
-        raw = prefs.getString(_rentalRequestsKey);
-      } catch (e) {
-        debugPrint(
-          '[DataService] _getAllRentalRequests: failed to initialize empty list: $e',
-        );
-        return [];
-      }
+      return const <RentalRequest>[];
     }
-    if (raw == null || raw.isEmpty) return [];
-
+    if (raw.trim().isEmpty) {
+      throw const FormatException('Ungültiger lokaler Buchungsverlauf.');
+    }
     try {
-      final List<dynamic> list = jsonDecode(raw);
-      final parsed = <RentalRequest>[];
-      for (final e in list) {
-        try {
-          parsed.add(
-            RentalRequest.fromJson(Map<String, dynamic>.from(e as Map)),
-          );
-        } catch (inner) {
-          debugPrint(
-            '[DataService] _getAllRentalRequests: skipping corrupted entry: $inner',
-          );
-        }
-      }
-
-      // Auto-sanitize storage so future loads don't keep failing.
-      if (parsed.length != list.length) {
-        try {
-          await prefs.setString(
-            _rentalRequestsKey,
-            jsonEncode(parsed.map((e) => e.toJson()).toList()),
-          );
-        } catch (e) {
-          debugPrint(
-            '[DataService] _getAllRentalRequests: failed to sanitize storage: $e',
-          );
-        }
-      }
-      return parsed;
+      return _decodeRentalRequestsStrict(raw);
     } catch (e) {
       debugPrint(
         '[DataService] _getAllRentalRequests: failed to decode JSON: $e',
       );
-      // Reset to a clean state.
-      try {
-        await prefs.setString(
-          _rentalRequestsKey,
-          jsonEncode(<Map<String, dynamic>>[]),
-        );
-      } catch (e2) {
-        debugPrint(
-          '[DataService] _getAllRentalRequests: failed to reset corrupted JSON: $e2',
-        );
-      }
-      return [];
+      if (e is FormatException) rethrow;
+      throw FormatException('Ungültiger lokaler Buchungsverlauf.', e);
     }
   }
 
+  static List<RentalRequest> _decodeRentalRequestsStrict(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is! List || decoded.length > _maxLocalRentalRequests) {
+      throw const FormatException('Ungültiger lokaler Buchungsverlauf.');
+    }
+    final parsed = decoded
+        .map(
+          (entry) => RentalRequest.fromJson(
+            Map<String, dynamic>.from(entry as Map),
+          ),
+        )
+        .toList();
+    final ids = parsed.map((entry) => entry.id).toSet();
+    if (ids.length != parsed.length ||
+        ids.any((id) => id.trim().isEmpty || id.length > 256)) {
+      throw const FormatException('Ungültiger lokaler Buchungsverlauf.');
+    }
+    return parsed;
+  }
+
   static Future<void> _saveAllRentalRequests(List<RentalRequest> list) async {
-    Future<void> persist(List<RentalRequest> payload) async {
-      final prefs = await SharedPreferences.getInstance();
-      var maps = payload.map((entry) => entry.toJson()).toList();
-      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-        maps = await BackendRepository.syncRentalRequests(maps);
-      }
-      await prefs.setString(
-        _rentalRequestsKey,
-        jsonEncode(maps),
-      );
-      SharedPersistenceSync.notify(SharedPersistenceSync.rentalRequestsKey);
+    if (list.length > _maxLocalRentalRequests ||
+        list.map((entry) => entry.id).toSet().length != list.length) {
+      throw StateError('Der lokale Buchungsverlauf ist ungültig oder voll.');
     }
-
-    bool isQuotaError(Object e) {
-      final s = e.toString();
-      return s.contains('QuotaExceededError') ||
-          s.contains('exceeded the quota') ||
-          s.contains('QuotaExceeded');
+    final prefs = await SharedPreferences.getInstance();
+    var maps = list.map((entry) => entry.toJson()).toList();
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      maps = await BackendRepository.syncRentalRequests(maps);
     }
-
-    List<RentalRequest> prune(
-      List<RentalRequest> input, {
-      required int hardCapNewest,
-    }) {
-      if (input.isEmpty) return input;
-      // Newest first for keeping.
-      final newestFirst = [...input]
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      // Prefer dropping old terminal states first.
-      final terminal = <String>{'completed', 'declined', 'cancelled'};
-      final kept = <RentalRequest>[];
-      final droppedTerminal = <RentalRequest>[];
-      for (final r in newestFirst) {
-        if (terminal.contains(r.status)) {
-          droppedTerminal.add(r);
-        } else {
-          kept.add(r);
-        }
-      }
-      final merged = [...kept, ...droppedTerminal];
-      // Apply cap.
-      return merged.take(hardCapNewest).toList();
-    }
-
-    try {
-      await persist(list);
-      return;
-    } catch (e) {
-      debugPrint('[DataService] _saveAllRentalRequests: failed: $e');
-      if (!isQuotaError(e)) rethrow;
-    }
-
-    // Web/local storage quota exceeded: prune older requests and retry.
-    try {
-      final pruned250 = prune(list, hardCapNewest: 250);
-      debugPrint(
-        '[DataService] _saveAllRentalRequests: quota exceeded, pruning from ${list.length} -> ${pruned250.length} and retrying',
-      );
-      await persist(pruned250);
-      return;
-    } catch (e) {
-      debugPrint(
-        '[DataService] _saveAllRentalRequests: retry after prune(250) failed: $e',
-      );
-      if (!isQuotaError(e)) rethrow;
-    }
-
-    // Last resort: keep only the newest 80.
-    try {
-      final pruned80 = prune(list, hardCapNewest: 80);
-      debugPrint(
-        '[DataService] _saveAllRentalRequests: quota still exceeded, pruning to newest ${pruned80.length} and retrying',
-      );
-      await persist(pruned80);
-      return;
-    } catch (e) {
-      debugPrint(
-        '[DataService] _saveAllRentalRequests: retry after prune(80) failed: $e',
-      );
-      rethrow;
-    }
+    final encoded = jsonEncode(maps);
+    _decodeRentalRequestsStrict(encoded);
+    await _writePreferenceString(
+      prefs,
+      _rentalRequestsKey,
+      encoded,
+    );
+    SharedPersistenceSync.notify(SharedPersistenceSync.rentalRequestsKey);
   }
 
   static Future<List<RentalRequest>> getRentalRequestsForOwner(
     String ownerId, {
     String? status,
   }) async {
+    await _requireCurrentOperationalUser(requestedUserId: ownerId);
     await _sweepExpressTimeouts();
     final all = await _getAllRentalRequests();
     final filtered = all
@@ -5145,25 +9506,67 @@ class DataService {
           (r) => r.ownerId == ownerId && (status == null || r.status == status),
         )
         .toList();
+    await _requireCurrentOperationalUser(requestedUserId: ownerId);
     // Sort newest first
     filtered.sort((a, b) => b.start.compareTo(a.start));
     return filtered;
+  }
+
+  static Map<String, dynamic> _decodeRequestsLastSeenStrict(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map || decoded.length > 1000) {
+      throw const FormatException('Ungültige lokale Anfragemarker.');
+    }
+    final map = Map<String, dynamic>.from(decoded);
+    for (final entry in map.entries) {
+      if (entry.key.trim().isEmpty ||
+          entry.key.length > 256 ||
+          entry.value is! String ||
+          DateTime.tryParse(entry.value as String) == null) {
+        throw const FormatException('Ungültige lokale Anfragemarker.');
+      }
+    }
+    return map;
+  }
+
+  static Map<String, dynamic> _decodeReadRequestsStrict(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map || decoded.length > 1000) {
+      throw const FormatException('Ungültige lokale Lesemarker.');
+    }
+    final map = Map<String, dynamic>.from(decoded);
+    for (final entry in map.entries) {
+      if (entry.key.trim().isEmpty ||
+          entry.key.length > 256 ||
+          entry.value is! List ||
+          (entry.value as List).length > 1000 ||
+          (entry.value as List).any(
+            (value) =>
+                value is! String || value.trim().isEmpty || value.length > 256,
+          )) {
+        throw const FormatException('Ungültige lokale Lesemarker.');
+      }
+      final values = (entry.value as List).cast<String>();
+      if (values.toSet().length != values.length) {
+        throw const FormatException('Ungültige lokale Lesemarker.');
+      }
+    }
+    return map;
   }
 
   /// Returns true if there exists at least one PENDING request that is newer
   /// than the last time the owner viewed the Anfragen tab.
   static Future<bool> hasNewOwnerRequests(String ownerId) async {
     if (ownerId.isEmpty) return false;
+    await _requireCurrentOperationalUser(requestedUserId: ownerId);
     final prefs = await SharedPreferences.getInstance();
     DateTime? lastSeen;
-    try {
-      final raw = prefs.getString(_requestsLastSeenKey);
-      if (raw != null && raw.isNotEmpty) {
-        final map = jsonDecode(raw) as Map<String, dynamic>;
-        final s = map[ownerId]?.toString();
-        if (s != null && s.isNotEmpty) lastSeen = DateTime.tryParse(s);
-      }
-    } catch (_) {}
+    final raw = prefs.getString(_requestsLastSeenKey);
+    if (raw != null) {
+      final map = _decodeRequestsLastSeenStrict(raw);
+      final value = map[ownerId];
+      if (value is String) lastSeen = DateTime.parse(value);
+    }
 
     final pending = await getRentalRequestsForOwner(ownerId, status: 'pending');
     if (pending.isEmpty) return false;
@@ -5179,6 +9582,7 @@ class DataService {
   /// created after that will be considered "new".
   static Future<void> markOwnerRequestsSeen(String ownerId) async {
     if (ownerId.isEmpty) return;
+    await _requireCurrentOperationalUser(requestedUserId: ownerId);
     final pending = await getRentalRequestsForOwner(
       ownerId,
     ); // include all statuses
@@ -5190,22 +9594,23 @@ class DataService {
       pending.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       nowMarker = pending.first.createdAt;
     }
-    final prefs = await SharedPreferences.getInstance();
-    try {
+    await _operationalMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(ownerId);
+      final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_requestsLastSeenKey);
-      Map<String, dynamic> map = {};
-      if (raw != null && raw.isNotEmpty) {
-        map = jsonDecode(raw) as Map<String, dynamic>;
+      final map = raw == null
+          ? <String, dynamic>{}
+          : _decodeRequestsLastSeenStrict(raw);
+      if (!map.containsKey(ownerId) && map.length >= 1000) {
+        throw StateError('Die lokalen Anfragemarker sind voll.');
       }
       map[ownerId] = nowMarker.toIso8601String();
-      await prefs.setString(_requestsLastSeenKey, jsonEncode(map));
-    } catch (_) {
-      // Fallback: write fresh map
-      await prefs.setString(
+      await _writePreferenceString(
+        prefs,
         _requestsLastSeenKey,
-        jsonEncode({ownerId: nowMarker.toIso8601String()}),
+        jsonEncode(map),
       );
-    }
+    });
   }
 
   /// Marks a specific rental request as read by a user (owner or renter).
@@ -5215,24 +9620,44 @@ class DataService {
     required String requestId,
   }) async {
     if (userId.isEmpty || requestId.isEmpty) return;
-    final prefs = await SharedPreferences.getInstance();
+    final current =
+        await _requireCurrentOperationalUser(requestedUserId: userId);
+    final participant = await _requireCurrentRequestParticipant(requestId);
+    if (participant.$1.id != current.id) {
+      throw StateError('Die lokale Buchung gehört zu einem anderen Konto.');
+    }
     try {
-      final raw = prefs.getString(_readRequestsKey);
-      Map<String, dynamic> map = {};
-      if (raw != null && raw.isNotEmpty) {
-        map = jsonDecode(raw) as Map<String, dynamic>;
-      }
-      // Get the user's read set
-      List<dynamic> readList = (map[userId] as List<dynamic>?) ?? [];
-      Set<String> readSet = readList.map((e) => e.toString()).toSet();
-
-      if (!readSet.contains(requestId)) {
-        readSet.add(requestId);
-        map[userId] = readSet.toList();
-        await prefs.setString(_readRequestsKey, jsonEncode(map));
-      }
+      await _operationalMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(current.id);
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString(_readRequestsKey);
+        final map =
+            raw == null ? <String, dynamic>{} : _decodeReadRequestsStrict(raw);
+        if (!map.containsKey(userId) && map.length >= 1000) {
+          throw StateError('Die lokalen Lesemarker sind voll.');
+        }
+        final readRaw = map[userId];
+        if (readRaw != null && readRaw is! List) {
+          throw const FormatException('Ungültige lokale Lesemarker.');
+        }
+        final readSet = (readRaw as List? ?? const <dynamic>[])
+            .map((entry) => entry.toString())
+            .toSet();
+        if (!readSet.contains(requestId) && readSet.length >= 1000) {
+          throw StateError('Die lokalen Lesemarker sind voll.');
+        }
+        if (readSet.add(requestId)) {
+          map[userId] = readSet.toList()..sort();
+          await _writePreferenceString(
+            prefs,
+            _readRequestsKey,
+            jsonEncode(map),
+          );
+        }
+      });
     } catch (e) {
       debugPrint('[DataService] markRequestAsRead error: $e');
+      rethrow;
     }
   }
 
@@ -5242,19 +9667,25 @@ class DataService {
     required String requestId,
   }) async {
     if (userId.isEmpty || requestId.isEmpty) return false;
+    await _requireCurrentOperationalUser(requestedUserId: userId);
+    await _requireCurrentRequestParticipant(requestId);
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_readRequestsKey);
-      if (raw == null || raw.isEmpty) return false;
+      if (raw == null) return false;
 
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      final readList = (map[userId] as List<dynamic>?) ?? [];
+      final map = _decodeReadRequestsStrict(raw);
+      final readRaw = map[userId];
+      if (readRaw != null && readRaw is! List) {
+        throw const FormatException('Ungültige lokale Lesemarker.');
+      }
+      final readList = (readRaw as List<dynamic>?) ?? [];
       final readSet = readList.map((e) => e.toString()).toSet();
 
       return readSet.contains(requestId);
     } catch (e) {
       debugPrint('[DataService] isRequestRead error: $e');
-      return false;
+      rethrow;
     }
   }
 
@@ -5266,6 +9697,7 @@ class DataService {
     required List<RentalRequest> requests,
   }) async {
     if (userId.isEmpty) return 0;
+    await _requireCurrentOperationalUser(requestedUserId: userId);
     try {
       int unreadCount = 0;
       for (final req in requests) {
@@ -5275,21 +9707,47 @@ class DataService {
       return unreadCount;
     } catch (e) {
       debugPrint('[DataService] getUnreadCountForCategory error: $e');
-      return 0;
+      rethrow;
     }
   }
 
   static Future<RentalRequest?> getRentalRequestById(String id) async {
+    final current = await _requireCurrentOperationalUser();
     await _sweepExpressTimeouts();
     final all = await _getAllRentalRequests();
-    try {
-      return all.firstWhere((e) => e.id == id);
-    } catch (_) {
-      return null;
+    await _requireCurrentOperationalUser(requestedUserId: current.id);
+    RentalRequest? request;
+    for (final candidate in all) {
+      if (candidate.id == id) {
+        request = candidate;
+        break;
+      }
     }
+    if (request == null) return null;
+    if (!_isRequestParticipant(request, current.id)) {
+      throw StateError('Die lokale Buchung gehört zu einem anderen Konto.');
+    }
+    return request;
   }
 
-  static Future<RentalRequest> addRentalRequest(RentalRequest req) async {
+  static Future<RentalRequest> addRentalRequest(
+    RentalRequest req, {
+    Map<String, dynamic>? checkoutQuote,
+  }) async {
+    await _requireCurrentOperationalUser(requestedUserId: req.renterId);
+    return _rentalRequestMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(req.renterId);
+      return _addRentalRequestUnlocked(
+        req,
+        checkoutQuote: checkoutQuote,
+      );
+    });
+  }
+
+  static Future<RentalRequest> _addRentalRequestUnlocked(
+    RentalRequest req, {
+    Map<String, dynamic>? checkoutQuote,
+  }) async {
     final all = await _getAllRentalRequests();
     final nextId = BackendConfig.enabled && !QaRuntimeService.isEnabled
         ? 'request_${DateTime.now().microsecondsSinceEpoch}'
@@ -5336,11 +9794,10 @@ class DataService {
       }
     } catch (e) {
       debugPrint(
-        '[DataService] addRentalRequest: failed to compute quoted total: ' +
-            e.toString(),
+        '[DataService] addRentalRequest: failed to compute quoted total: $e',
       );
     }
-    final toStore = RentalRequest(
+    var toStore = RentalRequest(
       id: nextId,
       itemId: req.itemId,
       ownerId: req.ownerId,
@@ -5352,50 +9809,129 @@ class DataService {
       expressRequested: req.expressRequested,
       expressStatus: req.expressStatus,
       expressFee: req.expressFee,
-      ownerDeliversAtDropoffChosen: ownerDelivers,
-      ownerPicksUpAtReturnChosen: ownerPicksUp,
-      deliveryAddressLine: (deliverySel?['deliveryAddressLine'] as String?) ??
-          (deliverySel?['addressLine'] as String?),
-      deliveryCity: (deliverySel?['deliveryCity'] as String?) ??
-          (deliverySel?['city'] as String?),
-      deliveryLat: (deliverySel?['deliveryLat'] as num?)?.toDouble() ??
-          (deliverySel?['lat'] as num?)?.toDouble(),
-      deliveryLng: (deliverySel?['deliveryLng'] as num?)?.toDouble() ??
-          (deliverySel?['lng'] as num?)?.toDouble(),
-      returnAddressLine: (deliverySel?['returnAddressLine'] as String?),
-      returnCity: (deliverySel?['returnCity'] as String?),
-      returnLat: (deliverySel?['returnLat'] as num?)?.toDouble(),
-      returnLng: (deliverySel?['returnLng'] as num?)?.toDouble(),
+      ownerDeliversAtDropoffChosen: req.simulationOnly ? false : ownerDelivers,
+      ownerPicksUpAtReturnChosen: req.simulationOnly ? false : ownerPicksUp,
+      deliveryAddressLine: req.simulationOnly
+          ? null
+          : (deliverySel?['deliveryAddressLine'] as String?) ??
+              (deliverySel?['addressLine'] as String?),
+      deliveryCity: req.simulationOnly
+          ? null
+          : (deliverySel?['deliveryCity'] as String?) ??
+              (deliverySel?['city'] as String?),
+      deliveryLat: req.simulationOnly
+          ? null
+          : (deliverySel?['deliveryLat'] as num?)?.toDouble() ??
+              (deliverySel?['lat'] as num?)?.toDouble(),
+      deliveryLng: req.simulationOnly
+          ? null
+          : (deliverySel?['deliveryLng'] as num?)?.toDouble() ??
+              (deliverySel?['lng'] as num?)?.toDouble(),
+      returnAddressLine: req.simulationOnly
+          ? null
+          : (deliverySel?['returnAddressLine'] as String?),
+      returnCity:
+          req.simulationOnly ? null : (deliverySel?['returnCity'] as String?),
+      returnLat: req.simulationOnly
+          ? null
+          : (deliverySel?['returnLat'] as num?)?.toDouble(),
+      returnLng: req.simulationOnly
+          ? null
+          : (deliverySel?['returnLng'] as num?)?.toDouble(),
       createdAt: now,
+      bindingExpiresAt: req.bindingExpiresAt,
       expressRequestedAt: req.expressRequested ? now : null,
       expressConfirmedAt: null,
       quotedTotalRenter: quotedTotal,
       quotedSubtitle: quotedSub,
+      privateStatusConfirmed: req.privateStatusConfirmed,
+      simulationOnly: req.simulationOnly,
+      quotedQuoteVersion: req.quotedQuoteVersion,
+      quotedDays: req.quotedDays,
+      quotedPricePerDayMinor: req.quotedPricePerDayMinor,
+      quotedBaseRentalMinor: req.quotedBaseRentalMinor,
+      quotedDiscountPercent: req.quotedDiscountPercent,
+      quotedDiscountId: req.quotedDiscountId,
+      quotedDiscountLabel: req.quotedDiscountLabel,
+      quotedDiscountFundingSource: req.quotedDiscountFundingSource,
+      quotedDiscountThresholdDays: req.quotedDiscountThresholdDays,
+      quotedDiscountMinor: req.quotedDiscountMinor,
+      quotedRentalSubtotalMinor: req.quotedRentalSubtotalMinor,
+      quotedPlatformFeeMinor: req.quotedPlatformFeeMinor,
+      quotedTotalMinor: req.quotedTotalMinor,
+      quotedOwnerPayoutMinor: req.quotedOwnerPayoutMinor,
+      quotedCurrency: req.quotedCurrency,
+      legalDeclarations: req.legalDeclarations,
+      platformContract: req.platformContract,
+      returnState: req.returnState,
+      returnT0: req.returnT0,
+      returnReportDeadline: req.returnReportDeadline,
+      returnClarificationDeadline: req.returnClarificationDeadline,
+      returnCaseOpenedAt: req.returnCaseOpenedAt,
+      returnCaseClosedAt: req.returnCaseClosedAt,
+      reviewEvidenceReferences: req.reviewEvidenceReferences,
+      contestedAuthorizedMinor: req.contestedAuthorizedMinor,
+      allegedDamageMinorRecordedOnly: req.allegedDamageMinorRecordedOnly,
     );
-    all.add(toStore);
-    await _saveAllRentalRequests(all);
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final createPayload = toStore.toJson();
+      createPayload['clientBuild'] = PrivatePilotConfig.v52ClientBuild;
+      if (toStore.simulationOnly) {
+        createPayload['simulationAcknowledged'] = true;
+      } else {
+        final freshQuote = checkoutQuote == null
+            ? await BackendRepository.quoteBooking(createPayload)
+            : Map<String, dynamic>.from(checkoutQuote);
+        final quoteId = freshQuote['quoteId'] as String?;
+        final quoteHash = freshQuote['quoteHash'] as String?;
+        final expiresAt = DateTime.tryParse(
+          freshQuote['expiresAt']?.toString() ?? '',
+        );
+        if (quoteId == null ||
+            quoteHash == null ||
+            expiresAt == null ||
+            !expiresAt.isAfter(DateTime.now().toUtc())) {
+          throw StateError('Der Server hat kein bindendes Angebot geliefert.');
+        }
+        createPayload['quoteId'] = quoteId;
+        createPayload['quoteHash'] = quoteHash;
+      }
+      final remote = await BackendRepository.createBooking(
+        createPayload,
+        idempotencyKey: 'create_$nextId',
+      );
+      toStore = RentalRequest.fromJson(remote);
+      all.removeWhere((entry) => entry.id == toStore.id);
+      all.add(toStore);
+      final prefs = await SharedPreferences.getInstance();
+      await _writePreferenceString(
+        prefs,
+        _rentalRequestsKey,
+        jsonEncode(all.map((entry) => entry.toJson()).toList()),
+      );
+      SharedPersistenceSync.notify(SharedPersistenceSync.rentalRequestsKey);
+    } else {
+      all.add(toStore);
+      await _saveAllRentalRequests(all);
+    }
     debugPrint(
-      '[DataService] addRentalRequest stored id=' +
-          nextId +
-          ' ownerDeliversAtDropoffChosen=' +
-          ownerDelivers.toString() +
-          ' ownerPicksUpAtReturnChosen=' +
-          ownerPicksUp.toString() +
-          ' expressRequested=' +
-          toStore.expressRequested.toString(),
+      '[DataService] addRentalRequest stored id=$nextId ownerDeliversAtDropoffChosen=$ownerDelivers ownerPicksUpAtReturnChosen=$ownerPicksUp expressRequested=${toStore.expressRequested}',
     );
 
     try {
       final item = await getItemById(toStore.itemId);
       final renter = await getUserById(toStore.renterId);
       if (item != null) {
-        await addStructuredNotification(
+        await _addStructuredNotification(
           userId: toStore.ownerId,
           category: 'bookings',
           priority: 2,
-          title: 'Neue Mietanfrage eingegangen',
-          body:
-              '${renter?.displayName ?? 'Ein Mieter'} möchte „${item.title}“ vom ${toStore.start.day.toString().padLeft(2, '0')}.${toStore.start.month.toString().padLeft(2, '0')}.${toStore.start.year} bis ${toStore.end.day.toString().padLeft(2, '0')}.${toStore.end.month.toString().padLeft(2, '0')}.${toStore.end.year} mieten.',
+          title: toStore.simulationOnly
+              ? 'Neue Test-Mietanfrage'
+              : 'Neue Mietanfrage eingegangen',
+          body: toStore.simulationOnly
+              ? '${renter?.displayName ?? 'Ein Tester'} möchte den unverbindlichen Pilotablauf für „${item.title}“ testen. Es entstehen kein Vertrag, keine Reservierung und keine Zahlung.'
+              : '${renter?.displayName ?? 'Ein Mieter'} möchte „${item.title}“ vom ${toStore.start.day.toString().padLeft(2, '0')}.${toStore.start.month.toString().padLeft(2, '0')}.${toStore.start.year} bis ${toStore.end.day.toString().padLeft(2, '0')}.${toStore.end.month.toString().padLeft(2, '0')}.${toStore.end.year} mieten.',
           entityType: 'booking',
           entityId: toStore.id,
           ctaLabel: 'Anfrage prüfen',
@@ -5405,6 +9941,7 @@ class DataService {
             'counterpartyUserId': toStore.renterId,
             'counterpartyName': renter?.displayName ?? '',
             'role': 'owner',
+            'simulationOnly': toStore.simulationOnly,
           },
         );
       }
@@ -5420,20 +9957,71 @@ class DataService {
   static Future<void> updateRentalRequestStatus({
     required String requestId,
     required String status,
+    List<Map<String, dynamic>>? legalDeclarations,
+  }) async {
+    final participant = await _requireCurrentRequestParticipant(requestId);
+    return _rentalRequestMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(participant.$1.id);
+      return _updateRentalRequestStatusUnlocked(
+        requestId: requestId,
+        status: status,
+        legalDeclarations: legalDeclarations,
+      );
+    });
+  }
+
+  static Future<void> _updateRentalRequestStatusUnlocked({
+    required String requestId,
+    required String status,
+    List<Map<String, dynamic>>? legalDeclarations,
   }) async {
     final all = await _getAllRentalRequests();
     bool mutated = false;
     RentalRequest? updatedRequest;
-    for (int i = 0; i < all.length; i++) {
-      if (all[i].id == requestId) {
-        all[i] = all[i].copyWith(status: status);
-        updatedRequest = all[i];
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final index = all.indexWhere((entry) => entry.id == requestId);
+      if (index >= 0) {
+        final current = all[index];
+        final remote = await BackendRepository.transitionBooking(
+          bookingId: requestId,
+          status: status,
+          idempotencyKey: 'transition_${requestId}_${current.status}_$status',
+          legalDeclarations: legalDeclarations,
+        );
+        updatedRequest = RentalRequest.fromJson(remote);
+        all[index] = updatedRequest;
         mutated = true;
-        break;
+      }
+    } else {
+      for (int i = 0; i < all.length; i++) {
+        if (all[i].id == requestId) {
+          all[i] = all[i].copyWith(
+            status: status,
+            legalDeclarations: legalDeclarations == null
+                ? all[i].legalDeclarations
+                : [...all[i].legalDeclarations, ...legalDeclarations],
+          );
+          if (status == 'accepted' && all[i].acceptedAt == null) {
+            all[i] = all[i].copyWith(acceptedAt: DateTime.now());
+          }
+          updatedRequest = all[i];
+          mutated = true;
+          break;
+        }
       }
     }
     if (mutated) {
-      await _saveAllRentalRequests(all);
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final prefs = await SharedPreferences.getInstance();
+        await _writePreferenceString(
+          prefs,
+          _rentalRequestsKey,
+          jsonEncode(all.map((entry) => entry.toJson()).toList()),
+        );
+        SharedPersistenceSync.notify(SharedPersistenceSync.rentalRequestsKey);
+      } else {
+        await _saveAllRentalRequests(all);
+      }
 
       // Wenn die Anfrage angenommen wurde, erstelle einen Message Thread
       if (status == 'accepted' && updatedRequest != null) {
@@ -5445,13 +10033,16 @@ class DataService {
             final item = await getItemById(updatedRequest.itemId);
             if (item != null) {
               // For renter
-              await addStructuredNotification(
+              await _addStructuredNotification(
                 userId: updatedRequest.renterId,
                 category: 'bookings',
                 priority: 2,
-                title: 'Mietanfrage angenommen',
-                body:
-                    'Deine Anfrage für „${item.title}“ wurde angenommen. Öffne die Buchung für Details.',
+                title: updatedRequest.simulationOnly
+                    ? 'Test-Mietanfrage angenommen'
+                    : 'Mietanfrage angenommen',
+                body: updatedRequest.simulationOnly
+                    ? 'Deine Pilot-Simulation für „${item.title}“ wurde angenommen. Es entstehen kein Vertrag, keine Reservierung und keine Zahlung.'
+                    : 'Deine Anfrage für „${item.title}“ wurde angenommen. Öffne die Buchung für Details.',
                 entityType: 'booking',
                 entityId: updatedRequest.id,
                 ctaLabel: 'Zur Buchung',
@@ -5460,16 +10051,20 @@ class DataService {
                   'listingId': updatedRequest.itemId,
                   'counterpartyUserId': updatedRequest.ownerId,
                   'role': 'renter',
+                  'simulationOnly': updatedRequest.simulationOnly,
                 },
               );
               // For owner
-              await addStructuredNotification(
+              await _addStructuredNotification(
                 userId: updatedRequest.ownerId,
                 category: 'bookings',
                 priority: 2,
-                title: 'Buchung bestätigt',
-                body:
-                    'Du hast die Anfrage für „${item.title}“ angenommen. Öffne die Vermietung für Übergabe & Rückgabe.',
+                title: updatedRequest.simulationOnly
+                    ? 'Pilot-Simulation bestätigt'
+                    : 'Buchung bestätigt',
+                body: updatedRequest.simulationOnly
+                    ? 'Du hast den unverbindlichen Test für „${item.title}“ angenommen. Öffne ihn, um den weiteren Ablauf und den Chat zu testen.'
+                    : 'Du hast die Anfrage für „${item.title}“ angenommen. Öffne die Vermietung für Übergabe & Rückgabe.',
                 entityType: 'booking',
                 entityId: updatedRequest.id,
                 ctaLabel: 'Zur Vermietung',
@@ -5478,6 +10073,7 @@ class DataService {
                   'listingId': updatedRequest.itemId,
                   'counterpartyUserId': updatedRequest.renterId,
                   'role': 'owner',
+                  'simulationOnly': updatedRequest.simulationOnly,
                 },
               );
             }
@@ -5498,15 +10094,104 @@ class DataService {
     required String status,
     String? cancelledBy,
   }) async {
+    final participant = await _requireCurrentRequestParticipant(requestId);
+    final expectedActor =
+        participant.$1.id == participant.$2.ownerId ? 'owner' : 'renter';
+    if (cancelledBy != null && cancelledBy != expectedActor) {
+      throw StateError('Die Storno-Rolle passt nicht zum aktuellen Konto.');
+    }
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      await updateRentalRequestStatus(requestId: requestId, status: status);
+      return;
+    }
+    return _rentalRequestMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(participant.$1.id);
+      return _updateRentalRequestStatusWithActorUnlocked(
+        requestId: requestId,
+        status: status,
+        cancelledBy: cancelledBy ?? expectedActor,
+      );
+    });
+  }
+
+  static Future<void> _updateRentalRequestStatusWithActorUnlocked({
+    required String requestId,
+    required String status,
+    String? cancelledBy,
+  }) async {
     final all = await _getAllRentalRequests();
     bool mutated = false;
     for (int i = 0; i < all.length; i++) {
       if (all[i].id == requestId) {
+        Map<String, dynamic>? cancellationOutcome;
+        if (status == 'cancelled') {
+          final current = all[i];
+          final actor = cancelledBy == 'owner'
+              ? PrivatePilotCancellationActor.owner
+              : PrivatePilotCancellationActor.renter;
+          final outcome = PrivatePilotCancellationPolicy.evaluate(
+            rentalStartAt: current.start,
+            cancelAt: DateTime.now(),
+            actor: actor,
+            contractConfirmedAt: current.acceptedAt,
+          );
+          final rentalSubtotalMinor = current.quotedRentalSubtotalMinor ?? 0;
+          final platformFeeMinor = current.quotedPlatformFeeMinor ?? 0;
+          final basisPoints = outcome.refundBasisPoints;
+          final rentRefundMinor = basisPoints == null
+              ? null
+              : ((rentalSubtotalMinor * basisPoints) + 5000) ~/ 10000;
+          final rentRetainedMinor = rentRefundMinor == null
+              ? null
+              : rentalSubtotalMinor - rentRefundMinor;
+          final sitFeeRetainedMinor = rentRetainedMinor == null
+              ? null
+              : (((rentRetainedMinor * 1000) + 5000) ~/ 10000)
+                  .clamp(0, platformFeeMinor);
+          final sitFeeRefundMinor = sitFeeRetainedMinor == null
+              ? null
+              : platformFeeMinor - sitFeeRetainedMinor;
+          cancellationOutcome = {
+            'calculationStatus': outcome.calculationStatus,
+            'refundBasisPoints': basisPoints,
+            'requiresActualLossAssessment':
+                outcome.requiresActualLossAssessment,
+            'rentRefund': {
+              'type': 'rent_refund',
+              'debtorRole': 'owner',
+              'status': basisPoints == null
+                  ? 'pending_actual_loss_assessment'
+                  : 'required',
+              'amountMinor': rentRefundMinor,
+              'maximumMinor': rentalSubtotalMinor,
+            },
+            'sitFeeRefund': {
+              'type': 'sit_fee_refund',
+              'debtorRole': 'sit',
+              'status': basisPoints == null
+                  ? 'pending_actual_loss_assessment'
+                  : 'required',
+              'amountMinor': sitFeeRefundMinor,
+              'maximumMinor': platformFeeMinor,
+            },
+            if (rentRefundMinor != null && sitFeeRefundMinor != null)
+              'refundMinor': rentRefundMinor + sitFeeRefundMinor,
+            if (rentRetainedMinor != null && sitFeeRetainedMinor != null)
+              'retainedMinor': rentRetainedMinor + sitFeeRetainedMinor,
+            'reasonCode': outcome.reasonCode,
+            'freeCancellationUntil':
+                outcome.freeCancellationUntil?.toIso8601String(),
+            'calculatedAt': DateTime.now().toIso8601String(),
+            'modelVersion': PrivatePilotConfig.documentVersion,
+          };
+        }
         all[i] = all[i].copyWith(
           status: status,
           cancelledBy: (status == 'cancelled')
               ? (cancelledBy ?? all[i].cancelledBy)
               : all[i].cancelledBy,
+          cancellationOutcome:
+              cancellationOutcome ?? all[i].cancellationOutcome,
         );
         mutated = true;
         break;
@@ -5521,6 +10206,42 @@ class DataService {
     required String method,
     required String confirmedByRole,
     required String confirmedByUserId,
+    bool counterpartyConfirmed = false,
+  }) async {
+    final current = await _requireCurrentOperationalUser(
+      requestedUserId: confirmedByUserId,
+    );
+    final participant = await _requireCurrentRequestParticipant(requestId);
+    if (participant.$1.id != current.id) {
+      throw StateError('Die lokale Buchung gehört zu einem anderen Konto.');
+    }
+    final expectedRole = participant.$2.ownerId == current.id
+        ? HandoverCodeService.presenterOwner
+        : HandoverCodeService.presenterRenter;
+    if (confirmedByRole != expectedRole) {
+      throw StateError(
+          'Die Bestätigungsrolle passt nicht zum aktuellen Konto.');
+    }
+    return _rentalRequestMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(current.id);
+      return _recordRentalRequestConfirmationUnlocked(
+        requestId: requestId,
+        isReturn: isReturn,
+        method: method,
+        confirmedByRole: confirmedByRole,
+        confirmedByUserId: confirmedByUserId,
+        counterpartyConfirmed: counterpartyConfirmed,
+      );
+    });
+  }
+
+  static Future<void> _recordRentalRequestConfirmationUnlocked({
+    required String requestId,
+    required bool isReturn,
+    required String method,
+    required String confirmedByRole,
+    required String confirmedByUserId,
+    bool counterpartyConfirmed = false,
   }) async {
     final id = requestId.trim();
     final userId = confirmedByUserId.trim();
@@ -5535,6 +10256,24 @@ class DataService {
     };
     for (int i = 0; i < all.length; i++) {
       if (all[i].id == id) {
+        if (isReturn) {
+          final existing = all[i].returnConfirmation == null
+              ? <String, dynamic>{}
+              : Map<String, dynamic>.from(all[i].returnConfirmation!);
+          final confirmedAt = payload['confirmedAt'];
+          if (confirmedByRole == 'owner') {
+            existing['ownerConfirmedAt'] = confirmedAt;
+            if (counterpartyConfirmed) {
+              existing['renterConfirmedAt'] = confirmedAt;
+            }
+          } else if (confirmedByRole == 'renter') {
+            existing['renterConfirmedAt'] = confirmedAt;
+            if (counterpartyConfirmed) {
+              existing['ownerConfirmedAt'] = confirmedAt;
+            }
+          }
+          payload.addAll(existing);
+        }
         all[i] = all[i].copyWith(
           handoverConfirmation:
               isReturn ? all[i].handoverConfirmation : payload,
@@ -5544,7 +10283,328 @@ class DataService {
         break;
       }
     }
-    if (mutated) await _saveAllRentalRequests(all);
+    if (mutated) {
+      await _saveAllRentalRequests(all);
+      if (isReturn) {
+        await _refreshPrivatePilotReturnStateUnlocked(
+          requestId,
+          actualReturnAt: DateTime.now(),
+        );
+      }
+    }
+  }
+
+  static Future<Map<String, dynamic>?> issueBookingConfirmationChallenge({
+    required String requestId,
+    required String segment,
+  }) async {
+    final id = requestId.trim();
+    if (id.isEmpty ||
+        !const <String>{
+          HandoverCodeService.segmentPickup,
+          HandoverCodeService.segmentReturn,
+        }.contains(segment)) {
+      return null;
+    }
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      return BackendRepository.issueBookingConfirmationChallenge(
+        bookingId: id,
+        segment: segment,
+      );
+    }
+    RentalRequest? request;
+    try {
+      request = await getRentalRequestById(id);
+    } on StateError {
+      return null;
+    }
+    final current = await getCurrentUser();
+    final item = request == null ? null : await getItemById(request.itemId);
+    if (request == null || current == null || item == null) return null;
+    final presenterRole = current.id == request.ownerId
+        ? HandoverCodeService.presenterOwner
+        : current.id == request.renterId
+            ? HandoverCodeService.presenterRenter
+            : null;
+    if (presenterRole == null) return null;
+    final expectedPresenterRole = segment == HandoverCodeService.segmentPickup
+        ? HandoverCodeService.presenterOwner
+        : HandoverCodeService.presenterRenter;
+    if (presenterRole != expectedPresenterRole) return null;
+    final code = HandoverCodeService.codeForTitleAndStart(
+      title: item.title,
+      start: request.start,
+      bookingId: request.id,
+      segment: segment,
+      presenterRole: presenterRole,
+    );
+    return <String, dynamic>{
+      'id': 'local-${request.id}-$segment-$presenterRole',
+      'bookingId': request.id,
+      'segment': segment,
+      'presenterRole': presenterRole,
+      'code': code,
+      'qrPayload': HandoverCodeService.qrPayload(
+        segment: segment,
+        presenterRole: presenterRole,
+        code: code,
+        bookingId: request.id,
+      ),
+      'issuedAt': DateTime.now().toIso8601String(),
+      'expiresAt':
+          DateTime.now().add(const Duration(minutes: 10)).toIso8601String(),
+    };
+  }
+
+  static Future<bool> verifyBookingConfirmationChallenge({
+    required String requestId,
+    required String segment,
+    required String presenterRole,
+    String? qrPayload,
+    String? code,
+    String? challengeId,
+  }) async {
+    final id = requestId.trim();
+    if (id.isEmpty) return false;
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final response =
+          await BackendRepository.verifyBookingConfirmationChallenge(
+        bookingId: id,
+        qrPayload: qrPayload,
+        challengeId: challengeId,
+        code: code,
+        segment: segment,
+        presenterRole: presenterRole,
+      );
+      return response['confirmation'] is Map || response['replayed'] == true;
+    }
+    RentalRequest? request;
+    try {
+      request = await getRentalRequestById(id);
+    } on StateError {
+      return false;
+    }
+    final current = await getCurrentUser();
+    final item = request == null ? null : await getItemById(request.itemId);
+    if (request == null || current == null || item == null) return false;
+    final expectedPresenterRole = segment == HandoverCodeService.segmentPickup
+        ? HandoverCodeService.presenterOwner
+        : segment == HandoverCodeService.segmentReturn
+            ? HandoverCodeService.presenterRenter
+            : null;
+    if (presenterRole != expectedPresenterRole) return false;
+    final expectedVerifierId =
+        presenterRole == HandoverCodeService.presenterOwner
+            ? request.renterId
+            : request.ownerId;
+    if (current.id != expectedVerifierId) return false;
+    final expected = HandoverCodeService.codeForTitleAndStart(
+      title: item.title,
+      start: request.start,
+      bookingId: request.id,
+      segment: segment,
+      presenterRole: presenterRole,
+    );
+    if (qrPayload != null && qrPayload.trim().isNotEmpty) {
+      return HandoverCodeService.isExpectedQrPayload(
+        qrPayload,
+        segment: segment,
+        presenterRole: presenterRole,
+        code: expected,
+        bookingId: request.id,
+      );
+    }
+    return code?.trim() == expected;
+  }
+
+  static Future<RentalRequest?> refreshPrivatePilotReturnState(
+    String requestId, {
+    DateTime? actualReturnAt,
+    DateTime? now,
+  }) async {
+    final participant = await _requireCurrentRequestParticipant(requestId);
+    return _rentalRequestMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(participant.$1.id);
+      return _refreshPrivatePilotReturnStateUnlocked(
+        requestId,
+        actualReturnAt: actualReturnAt,
+        now: now,
+      );
+    });
+  }
+
+  static Future<RentalRequest?> _refreshPrivatePilotReturnStateUnlocked(
+    String requestId, {
+    DateTime? actualReturnAt,
+    DateTime? now,
+  }) async {
+    final all = await _getAllRentalRequests();
+    final index = all.indexWhere((entry) => entry.id == requestId.trim());
+    if (index < 0) return null;
+    final current = all[index];
+    final confirmation = current.returnConfirmation ?? const {};
+    final ownerConfirmed = confirmation['ownerConfirmedAt'] != null;
+    final renterConfirmed = confirmation['renterConfirmedAt'] != null;
+    final timeline = PrivatePilotReturnPolicy.evaluate(
+      scheduledReturnAt: current.end,
+      mutuallyConfirmedActualReturnAt: actualReturnAt ?? current.returnT0,
+      ownerConfirmed: ownerConfirmed,
+      renterConfirmed: renterConfirmed,
+      substantiatedCaseOpenedAt: current.returnCaseOpenedAt,
+      now: now,
+    );
+    final updated = current.copyWith(
+      returnState: timeline.state.storageValue,
+      returnT0: timeline.t0,
+      returnReportDeadline: timeline.reportDeadline,
+      returnClarificationDeadline: timeline.clarificationDeadline,
+      needsReview: timeline.state == PrivatePilotReturnState.needsReview,
+    );
+    all[index] = updated;
+    await _saveAllRentalRequests(all);
+    return updated;
+  }
+
+  static Future<Map<String, dynamic>?> recordPlatformWithdrawal({
+    String? requestId,
+    required String userId,
+    required String scope,
+  }) async {
+    final current =
+        await _requireCurrentOperationalUser(requestedUserId: userId);
+    if (scope == 'booking_contract') {
+      final participant = await _requireCurrentRequestParticipant(
+        requestId?.trim() ?? '',
+      );
+      if (participant.$1.id != current.id ||
+          participant.$2.renterId != current.id) {
+        return null;
+      }
+    }
+    return _rentalRequestMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(current.id);
+      return _recordPlatformWithdrawalUnlocked(
+        requestId: requestId,
+        userId: userId,
+        scope: scope,
+      );
+    });
+  }
+
+  static Future<Map<String, dynamic>?> _recordPlatformWithdrawalUnlocked({
+    String? requestId,
+    required String userId,
+    required String scope,
+  }) async {
+    final normalizedRequestId = requestId?.trim() ?? '';
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty ||
+        !{'account_contract', 'booking_contract'}.contains(scope) ||
+        (scope == 'booking_contract' && normalizedRequestId.isEmpty)) {
+      return null;
+    }
+    final all = await _getAllRentalRequests();
+    final index = scope == 'booking_contract'
+        ? all.indexWhere((entry) => entry.id == normalizedRequestId)
+        : -1;
+    if (scope == 'booking_contract' &&
+        (index < 0 || all[index].renterId != normalizedUserId)) {
+      return null;
+    }
+    final receivedAt = DateTime.now();
+    Map<String, dynamic> result;
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      result = await BackendRepository.recordPlatformWithdrawal(
+        bookingId: scope == 'booking_contract' ? normalizedRequestId : null,
+        scope: scope,
+        idempotencyKey:
+            'withdrawal_${scope}_${normalizedRequestId.isEmpty ? normalizedUserId : normalizedRequestId}_${receivedAt.microsecondsSinceEpoch}',
+      );
+    } else {
+      final withdrawalId = 'withdrawal_${receivedAt.microsecondsSinceEpoch}';
+      RentalRequest? updated;
+      Map<String, dynamic>? rentRefund;
+      Map<String, dynamic>? sitFeeRefund;
+      var effectPhase = 'account_only';
+      if (scope == 'booking_contract') {
+        final current = all[index];
+        final beforeHandover =
+            !{'running', 'completed'}.contains(current.status);
+        effectPhase = beforeHandover ? 'before_handover' : 'after_handover';
+        final rentalMinor = current.quotedRentalSubtotalMinor ?? 0;
+        final feeMinor = current.quotedPlatformFeeMinor ?? 0;
+        rentRefund = <String, dynamic>{
+          'type': 'rent_refund',
+          'debtorRole': 'owner',
+          'status': beforeHandover ? 'required' : 'calculation_pending',
+          'amountDueMinor': beforeHandover ? rentalMinor : null,
+          'maximumMinor': rentalMinor,
+        };
+        sitFeeRefund = <String, dynamic>{
+          'type': 'sit_fee_refund',
+          'debtorRole': 'sit',
+          'status': 'required',
+          'amountDueMinor': feeMinor,
+          'maximumMinor': feeMinor,
+        };
+        final withdrawalSnapshot = <String, dynamic>{
+          'id': withdrawalId,
+          'receivedAt': receivedAt.toIso8601String(),
+          'phase': effectPhase,
+          'returnRequired': !beforeHandover,
+          'rentRefund': rentRefund,
+          'sitFeeRefund': sitFeeRefund,
+        };
+        updated = current.copyWith(
+          status: beforeHandover ? 'cancelled' : current.status,
+          cancelledBy: beforeHandover ? 'renter' : current.cancelledBy,
+          workflowStatus:
+              beforeHandover ? 'cancelled' : 'withdrawalReturnRequired',
+          platformWithdrawal: withdrawalSnapshot,
+        );
+        all[index] = updated;
+        await _saveAllRentalRequests(all);
+      }
+      result = <String, dynamic>{
+        'withdrawal': <String, dynamic>{
+          'id': withdrawalId,
+          'scope': scope,
+          'bookingId': scope == 'booking_contract' ? normalizedRequestId : null,
+          'actorName': (await getCurrentUser())?.displayName ?? 'SIT-Nutzer',
+          'electronicChannel': 'in_app_download',
+          'effectPhase': effectPhase,
+          'submittedAt': receivedAt.toIso8601String(),
+          'receipt': null,
+        },
+        if (updated != null) 'booking': updated.toJson(),
+        'rentRefund': rentRefund,
+        'sitFeeRefund': sitFeeRefund,
+        'replayed': false,
+      };
+    }
+    if (scope == 'account_contract') return result;
+    await addTimelineEvent(
+      requestId: normalizedRequestId,
+      type: 'platform_withdrawal_received',
+      note: 'Widerruf des SIT-Plattformvertrags eingegangen.',
+    );
+    if (!BackendConfig.enabled || QaRuntimeService.isEnabled) {
+      final updated = all[index];
+      await _addStructuredNotification(
+        userId: updated.ownerId,
+        category: 'bookings',
+        priority: 3,
+        title: 'Vertragswiderruf eingegangen',
+        body: updated.status == 'cancelled'
+            ? 'Die Buchung wurde kostenfrei beendet.'
+            : 'Die dokumentierte Rückgabe ist jetzt erforderlich.',
+        entityType: 'booking',
+        entityId: normalizedRequestId,
+        ctaLabel: 'Buchung öffnen',
+        payload: {'requestId': normalizedRequestId, 'role': 'owner'},
+      );
+    }
+    return result;
   }
 
   static Future<RentalRequestTransitionResult> confirmPickupTransition({
@@ -5561,10 +10621,23 @@ class DataService {
         'Übergabe-Bestätigung konnte nicht verarbeitet werden.',
       );
     }
-    final request = await getRentalRequestById(id);
+    RentalRequest? request;
+    try {
+      request = await getRentalRequestById(id);
+    } on StateError {
+      return const RentalRequestTransitionResult.failure(
+        'Bitte melde dich mit dem bestätigenden Konto an.',
+      );
+    }
     if (request == null) {
       return const RentalRequestTransitionResult.failure(
         'Übergabe-Daten fehlen.',
+      );
+    }
+    final currentUser = await getCurrentUser();
+    if (currentUser == null || currentUser.id != userId) {
+      return const RentalRequestTransitionResult.failure(
+        'Bitte melde dich mit dem bestätigenden Konto an.',
       );
     }
     if (request.renterId != userId) {
@@ -5588,13 +10661,24 @@ class DataService {
         'Bitte starte die Übergabe zuerst im Chat.',
       );
     }
-    final handoverPhotos = await getHandoverPhotoCount(id);
+    final evidence = await getConditionEvidenceSummary(
+      requestId: id,
+      segment: 'pickup',
+    );
+    final handoverPhotos = (evidence['presenterPhotos'] as num?)?.toInt() ?? 0;
     if (handoverPhotos < minimumRequiredPhotos) {
       return const RentalRequestTransitionResult.failure(
-        'Bitte dokumentiere die Übergabe zuerst mit mindestens 4 Fotos.',
+        'Der Vermieter muss die Übergabe zuerst mit mindestens 4 Fotos dokumentieren.',
       );
     }
-    final galleryUsed = await wasHandoverGalleryUsed(id);
+    final confirmation = evidence['counterpartyConfirmation'];
+    if (confirmation is! Map ||
+        confirmation['verifierUserId']?.toString() != userId) {
+      return const RentalRequestTransitionResult.failure(
+        'Bitte bestätige zuerst den geschützten Fotosatz oder dokumentiere eine Abweichung.',
+      );
+    }
+    final galleryUsed = evidence['presenterNonCameraUsed'] == true;
     if (galleryUsed && !galleryAcknowledged) {
       return const RentalRequestTransitionResult.failure(
         'Bitte bestätige bewusst die Galerie-Dokumentation, bevor du fortfährst.',
@@ -5628,10 +10712,24 @@ class DataService {
         'Rückgabe-Bestätigung konnte nicht verarbeitet werden.',
       );
     }
-    final request = await getRentalRequestById(id);
+    RentalRequest? request;
+    try {
+      request = await getRentalRequestById(id);
+    } on StateError {
+      return const RentalRequestTransitionResult.failure(
+        'Bitte melde dich mit dem bestätigenden Konto an.',
+      );
+    }
     if (request == null) {
       return const RentalRequestTransitionResult.failure(
         'Rückgabe-Daten fehlen.',
+      );
+    }
+    final requestSnapshot = request;
+    final currentUser = await getCurrentUser();
+    if (currentUser == null || currentUser.id != userId) {
+      return const RentalRequestTransitionResult.failure(
+        'Bitte melde dich mit dem bestätigenden Konto an.',
       );
     }
     if (request.ownerId != userId) {
@@ -5655,13 +10753,24 @@ class DataService {
         'Bitte starte die Rückgabe zuerst im Chat.',
       );
     }
-    final returnPhotos = await getReturnPhotoCount(id);
+    final evidence = await getConditionEvidenceSummary(
+      requestId: id,
+      segment: 'return',
+    );
+    final returnPhotos = (evidence['presenterPhotos'] as num?)?.toInt() ?? 0;
     if (returnPhotos < minimumRequiredPhotos) {
       return const RentalRequestTransitionResult.failure(
-        'Bitte dokumentiere die Rückgabe zuerst mit mindestens 4 Fotos.',
+        'Der Mieter muss die Rückgabe zuerst mit mindestens 4 Fotos dokumentieren.',
       );
     }
-    final galleryUsed = await wasReturnGalleryUsed(id);
+    final confirmation = evidence['counterpartyConfirmation'];
+    if (confirmation is! Map ||
+        confirmation['verifierUserId']?.toString() != userId) {
+      return const RentalRequestTransitionResult.failure(
+        'Bitte bestätige zuerst den geschützten Fotosatz oder dokumentiere eine Abweichung.',
+      );
+    }
+    final galleryUsed = evidence['presenterNonCameraUsed'] == true;
     if (galleryUsed && !galleryAcknowledged) {
       return const RentalRequestTransitionResult.failure(
         'Bitte bestätige bewusst die Galerie-Dokumentation, bevor du fortfährst.',
@@ -5684,7 +10793,56 @@ class DataService {
       method: method,
       confirmedByRole: 'owner',
       confirmedByUserId: userId,
+      counterpartyConfirmed: true,
     );
+    if ((!BackendConfig.enabled || QaRuntimeService.isEnabled) &&
+        request.workflowStatus == 'withdrawalReturnRequired') {
+      await _rentalRequestMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(userId);
+        final all = await _getAllRentalRequests();
+        final index = all.indexWhere((entry) => entry.id == id);
+        if (index < 0) return;
+        final current = all[index];
+        final confirmedReturnAt = DateTime.now();
+        final startMs = requestSnapshot.start.millisecondsSinceEpoch;
+        final endMs = requestSnapshot.end.millisecondsSinceEpoch;
+        final effectiveReturnMs =
+            confirmedReturnAt.millisecondsSinceEpoch.clamp(startMs, endMs);
+        final rentalMinor = requestSnapshot.quotedRentalSubtotalMinor ?? 0;
+        final durationMs = (endMs - startMs).clamp(1, 1 << 62);
+        final usedMs = effectiveReturnMs - startMs;
+        final usedRentMinor =
+            ((rentalMinor * usedMs) + durationMs - 1) ~/ durationMs;
+        final rentRefund = <String, dynamic>{
+          'type': 'rent_refund',
+          'debtorRole': 'owner',
+          'status': 'required',
+          'amountDueMinor': rentalMinor - usedRentMinor,
+          'maximumMinor': rentalMinor,
+          'calculationBasis': <String, dynamic>{
+            'confirmedReturnAt': confirmedReturnAt.toIso8601String(),
+            'usedRentMinor': usedRentMinor,
+            'source': 'verified_return_transition',
+          },
+        };
+        final withdrawal = <String, dynamic>{
+          ...?current.platformWithdrawal,
+          'returnRequired': false,
+          'rentRefund': rentRefund,
+        };
+        all[index] = current.copyWith(
+          workflowStatus: 'completed',
+          platformWithdrawal: withdrawal,
+        );
+        await _saveAllRentalRequests(all);
+      });
+    }
+    final refreshed = await getRentalRequestById(id);
+    if (refreshed?.needsReview == true) {
+      return const RentalRequestTransitionResult.paused(
+        'Zu dieser Buchung liegt ein belegter Fall vor. Der Abschluss bleibt für die Prüfung markiert; unstrittige Beträge bleiben davon getrennt.',
+      );
+    }
     await clearReturnActive(id);
     await addTimelineEvent(
       requestId: id,
@@ -5703,7 +10861,58 @@ class DataService {
     required DateTime end,
     bool? expressRequested,
   }) async {
+    final participant = await _requireCurrentRequestParticipant(requestId);
+    return _rentalRequestMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(participant.$1.id);
+      return _updateRentalRequestTimesUnlocked(
+        requestId: requestId,
+        start: start,
+        end: end,
+        expressRequested: expressRequested,
+      );
+    });
+  }
+
+  static Future<void> _updateRentalRequestTimesUnlocked({
+    required String requestId,
+    required DateTime start,
+    required DateTime end,
+    bool? expressRequested,
+  }) async {
     final all = await _getAllRentalRequests();
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final index = all.indexWhere((entry) => entry.id == requestId);
+      if (index < 0) return;
+      final current = all[index];
+      // Pickup/return appointment times are stored in their dedicated flow
+      // metadata. The authoritative rental occupancy may only be amended while
+      // the request is still pending.
+      if (current.status != 'pending') return;
+      final exp = expressRequested ?? current.expressRequested;
+      final amended = current.copyWith(
+        start: start,
+        end: end,
+        expressRequested: exp,
+        expressStatus: exp ? 'pending' : null,
+        expressRequestedAt: exp ? DateTime.now() : null,
+        expressConfirmedAt: null,
+      );
+      final remote = await BackendRepository.amendBooking(
+        amended.toJson(),
+        bookingId: requestId,
+        idempotencyKey:
+            'amend_${requestId}_${_rentalDate(start)}_${_rentalDate(end)}',
+      );
+      all[index] = RentalRequest.fromJson(remote);
+      final prefs = await SharedPreferences.getInstance();
+      await _writePreferenceString(
+        prefs,
+        _rentalRequestsKey,
+        jsonEncode(all.map((entry) => entry.toJson()).toList()),
+      );
+      SharedPersistenceSync.notify(SharedPersistenceSync.rentalRequestsKey);
+      return;
+    }
     bool mutated = false;
     for (int i = 0; i < all.length; i++) {
       if (all[i].id == requestId) {
@@ -5735,6 +10944,20 @@ class DataService {
 
   // Update express confirmation status for a request
   static Future<void> updateRentalRequestExpress({
+    required String requestId,
+    required bool accept,
+  }) async {
+    final participant = await _requireCurrentRequestParticipant(requestId);
+    return _rentalRequestMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(participant.$1.id);
+      return _updateRentalRequestExpressUnlocked(
+        requestId: requestId,
+        accept: accept,
+      );
+    });
+  }
+
+  static Future<void> _updateRentalRequestExpressUnlocked({
     required String requestId,
     required bool accept,
   }) async {
@@ -5796,29 +11019,214 @@ class DataService {
     }
   }
 
-  static Future<void> markRentalRequestNeedsReview(
+  static Future<bool> markRentalRequestNeedsReview(
     String requestId, {
     required String reason,
     required String source,
+    required String reasonCode,
+    List<String> evidenceUploadIds = const [],
+    List<String> localEvidenceReferences = const [],
+    int contestedAuthorizedMinor = 0,
   }) async {
+    final participant = await _requireCurrentRequestParticipant(requestId);
+    return _rentalRequestMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(participant.$1.id);
+      return _markRentalRequestNeedsReviewUnlocked(
+        requestId,
+        reason: reason,
+        source: source,
+        reasonCode: reasonCode,
+        evidenceUploadIds: evidenceUploadIds,
+        localEvidenceReferences: localEvidenceReferences,
+        contestedAuthorizedMinor: contestedAuthorizedMinor,
+      );
+    });
+  }
+
+  /// Local/QA return-case mutation bound to the exact authenticated session
+  /// captured by the caller. The Staging backend path must use the dedicated
+  /// owner-bound server endpoint instead of this cache mutation.
+  static Future<bool> markRentalRequestNeedsReviewForOwner(
+    String requestId, {
+    required AuthSessionOwner owner,
+    required String expectedUserId,
+    required String reason,
+    required String source,
+    required String reasonCode,
+    List<String> localEvidenceReferences = const [],
+    int contestedAuthorizedMinor = 0,
+  }) async {
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      throw StateError('Der Server-Prüffall benötigt den autorisierten Pfad.');
+    }
+    final normalizedReason = reason.trim();
+    if (normalizedReason.length < 10 || contestedAuthorizedMinor <= 0) {
+      return false;
+    }
+    if (localEvidenceReferences.isEmpty) return false;
+
+    final opened = await _rentalRequestMutationQueue.run(() async {
+      await _assertSessionOwnerOperationalUser(owner, expectedUserId);
+      final prefs = await SharedPreferences.getInstance();
+      await _assertSessionOwnerOperationalUser(owner, expectedUserId);
+      final raw = prefs.getString(_rentalRequestsKey);
+      if (raw == null || raw.trim().isEmpty) {
+        throw StateError('Die lokale Buchung wurde nicht gefunden.');
+      }
+      final all = _decodeRentalRequestsStrict(raw);
+      final request = _requireCachedRequestParticipant(
+        all,
+        requestId: requestId,
+        userId: expectedUserId,
+      );
+      final authorizedBookingMinor = request.quotedTotalMinor ?? 0;
+      if (authorizedBookingMinor <= 0 ||
+          contestedAuthorizedMinor > authorizedBookingMinor) {
+        return false;
+      }
+      final requestedAt = DateTime.now();
+      final returnT0 = request.returnT0 ?? request.end;
+      final reportDeadline = returnT0.add(
+        const Duration(hours: PrivatePilotConfig.returnReportWindowHours),
+      );
+      if (requestedAt.isBefore(returnT0) ||
+          requestedAt.isAfter(reportDeadline)) {
+        return false;
+      }
+      final split = PrivatePilotReturnPolicy.splitAuthorizedAmount(
+        authorizedBookingMinor: authorizedBookingMinor,
+        contestedAuthorizedMinor: contestedAuthorizedMinor,
+        allegedDamageMinor: 0,
+      );
+      final index = all.indexWhere((candidate) => candidate.id == requestId);
+      all[index] = request.copyWith(
+        needsReview: true,
+        reviewReason: normalizedReason,
+        reviewSource: source,
+        reviewRequestedAt: requestedAt,
+        reviewEvidenceReferences: localEvidenceReferences,
+        returnState: PrivatePilotReturnState.needsReview.storageValue,
+        returnCaseOpenedAt: requestedAt,
+        returnT0: returnT0,
+        returnReportDeadline: reportDeadline,
+        returnClarificationDeadline: returnT0.add(
+          const Duration(
+            days: PrivatePilotConfig.missingReturnConfirmationDays,
+          ),
+        ),
+        contestedAuthorizedMinor: split.contestedAuthorizedMinor,
+        allegedDamageMinorRecordedOnly: split.allegedDamageMinorRecordedOnly,
+      );
+      final encoded = jsonEncode(all.map((entry) => entry.toJson()).toList());
+      _decodeRentalRequestsStrict(encoded);
+      await _assertSessionOwnerOperationalUser(owner, expectedUserId);
+      await _writePreferenceString(prefs, _rentalRequestsKey, encoded);
+      SharedPersistenceSync.notify(SharedPersistenceSync.rentalRequestsKey);
+      return true;
+    });
+    if (!opened) return false;
+
+    try {
+      await addTimelineEventForOwner(
+        owner: owner,
+        expectedUserId: expectedUserId,
+        requestId: requestId,
+        type: 'review_required',
+        note: 'Manuelle Prüfung markiert ($source): $reason',
+      );
+    } catch (error) {
+      debugPrint(
+        '[DataService] owner-bound review timeline failed: $error',
+      );
+    }
+    try {
+      await addNotificationForOwner(
+        owner: owner,
+        expectedUserId: expectedUserId,
+        title: 'Prüfung erforderlich',
+        body: 'Eine Buchung wurde zur manuellen Prüfung markiert.',
+      );
+    } catch (error) {
+      debugPrint(
+        '[DataService] owner-bound review notification failed: $error',
+      );
+    }
+    return true;
+  }
+
+  static Future<bool> _markRentalRequestNeedsReviewUnlocked(
+    String requestId, {
+    required String reason,
+    required String source,
+    required String reasonCode,
+    List<String> evidenceUploadIds = const [],
+    List<String> localEvidenceReferences = const [],
+    int contestedAuthorizedMinor = 0,
+  }) async {
+    final normalizedReason = reason.trim();
+    if (normalizedReason.length < 10 || contestedAuthorizedMinor <= 0) {
+      return false;
+    }
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      if (evidenceUploadIds.isEmpty) return false;
+      await BackendRepository.openV52ReturnCase(
+        bookingId: requestId,
+        reasonCode: reasonCode,
+        details: normalizedReason,
+        evidenceUploadIds: evidenceUploadIds,
+        contestedAuthorizedMinor: contestedAuthorizedMinor,
+        idempotencyKey:
+            'v52_return_case_${requestId}_${evidenceUploadIds.first}',
+      );
+      await _getAllRentalRequests();
+      return true;
+    }
+    if (localEvidenceReferences.isEmpty) return false;
     final all = await _getAllRentalRequests();
     bool mutated = false;
     RentalRequest? updatedRequest;
     final requestedAt = DateTime.now();
     for (int i = 0; i < all.length; i++) {
       if (all[i].id == requestId) {
+        final request = all[i];
+        final authorizedBookingMinor = request.quotedTotalMinor ?? 0;
+        if (authorizedBookingMinor <= 0 ||
+            contestedAuthorizedMinor > authorizedBookingMinor) {
+          return false;
+        }
+        final reportDeadline = (request.returnT0 ?? request.end).add(
+          const Duration(hours: PrivatePilotConfig.returnReportWindowHours),
+        );
+        if (requestedAt.isAfter(reportDeadline)) return false;
+        final split = PrivatePilotReturnPolicy.splitAuthorizedAmount(
+          authorizedBookingMinor: authorizedBookingMinor,
+          contestedAuthorizedMinor: contestedAuthorizedMinor,
+          allegedDamageMinor: 0,
+        );
         all[i] = all[i].copyWith(
           needsReview: true,
-          reviewReason: reason,
+          reviewReason: normalizedReason,
           reviewSource: source,
           reviewRequestedAt: requestedAt,
+          reviewEvidenceReferences: localEvidenceReferences,
+          returnState: PrivatePilotReturnState.needsReview.storageValue,
+          returnCaseOpenedAt: requestedAt,
+          returnT0: request.returnT0 ?? request.end,
+          returnReportDeadline: reportDeadline,
+          returnClarificationDeadline: (request.returnT0 ?? request.end).add(
+            const Duration(
+              days: PrivatePilotConfig.missingReturnConfirmationDays,
+            ),
+          ),
+          contestedAuthorizedMinor: split.contestedAuthorizedMinor,
+          allegedDamageMinorRecordedOnly: split.allegedDamageMinorRecordedOnly,
         );
         updatedRequest = all[i];
         mutated = true;
         break;
       }
     }
-    if (!mutated || updatedRequest == null) return;
+    if (!mutated || updatedRequest == null) return false;
 
     await _saveAllRentalRequests(all);
     try {
@@ -5842,6 +11250,7 @@ class DataService {
         '[DataService] markRentalRequestNeedsReview notification failed: $e',
       );
     }
+    return true;
   }
 
   // Schedules a 30-minute timer for express confirmation. If the app is closed,
@@ -5867,55 +11276,57 @@ class DataService {
   /// to Standard if not confirmed within 30 minutes. Also logs a timeline event.
   static Future<void> _sweepExpressTimeouts() async {
     try {
-      final all = await _getAllRentalRequests();
-      bool mutated = false;
-      final now = DateTime.now();
-      for (int i = 0; i < all.length; i++) {
-        final r = all[i];
-        if (!r.expressRequested) continue;
-        if (r.expressStatus == 'accepted') continue;
-        final started = r.expressRequestedAt ?? r.createdAt;
-        final deadline = started.add(const Duration(minutes: 30));
-        if (now.isAfter(deadline)) {
-          all[i] = r.copyWith(
-            expressRequested: false,
-            expressStatus: null,
-            expressRequestedAt: null,
-            expressConfirmedAt: null,
-          );
-          mutated = true;
-          debugPrint(
-            '[DataService] Express timeout -> auto-switch to Standard for request ${r.id}',
-          );
-          try {
-            await addTimelineEvent(
-              requestId: r.id,
-              type: 'express_timeout_refund',
-              note: 'Priorität abgelaufen; auf Standard umgestellt',
-            );
-          } catch (_) {}
-          // Cancel any pending timer for safety
-          try {
-            _expressTimers[r.id]?.cancel();
-            _expressTimers.remove(r.id);
-          } catch (_) {}
-        } else {
-          // Still pending; ensure a timer is scheduled for runtime
-          _scheduleExpressTimerIfNeeded(r);
-        }
-      }
-      if (mutated) await _saveAllRentalRequests(all);
+      final current = await _requireCurrentOperationalUser();
+      await _rentalRequestMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(current.id);
+        await _sweepExpressTimeoutsUnlocked(current.id);
+      });
     } catch (e) {
-      debugPrint('[DataService] sweepExpressTimeouts failed: ' + e.toString());
+      debugPrint('[DataService] sweepExpressTimeouts failed: $e');
     }
   }
 
-  static Future<void> _ensureDemoRentalRequests() async {
-    // Deprecated: keep for backward compatibility; now we intentionally do not seed demos.
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.getString(_rentalRequestsKey) == null) {
-      await prefs.setString(_rentalRequestsKey, jsonEncode([]));
+  static Future<void> _sweepExpressTimeoutsUnlocked(
+      String currentUserId) async {
+    final all = await _getAllRentalRequests();
+    bool mutated = false;
+    final now = DateTime.now();
+    for (int i = 0; i < all.length; i++) {
+      final r = all[i];
+      if (!_isRequestParticipant(r, currentUserId)) continue;
+      if (!r.expressRequested) continue;
+      if (r.expressStatus == 'accepted') continue;
+      final started = r.expressRequestedAt ?? r.createdAt;
+      final deadline = started.add(const Duration(minutes: 30));
+      if (now.isAfter(deadline)) {
+        all[i] = r.copyWith(
+          expressRequested: false,
+          expressStatus: null,
+          expressRequestedAt: null,
+          expressConfirmedAt: null,
+        );
+        mutated = true;
+        debugPrint(
+          '[DataService] Express timeout -> auto-switch to Standard for request ${r.id}',
+        );
+        try {
+          await addTimelineEvent(
+            requestId: r.id,
+            type: 'express_timeout_refund',
+            note: 'Priorität abgelaufen; auf Standard umgestellt',
+          );
+        } catch (_) {}
+        // Cancel any pending timer for safety
+        try {
+          _expressTimers[r.id]?.cancel();
+          _expressTimers.remove(r.id);
+        } catch (_) {}
+      } else {
+        // Still pending; ensure a timer is scheduled for runtime
+        _scheduleExpressTimerIfNeeded(r);
+      }
     }
+    if (mutated) await _saveAllRentalRequests(all);
   }
 
   // New: requests where the current viewer is the renter
@@ -5923,6 +11334,7 @@ class DataService {
     String renterId, {
     String? status,
   }) async {
+    await _requireCurrentOperationalUser(requestedUserId: renterId);
     await _sweepExpressTimeouts();
     final all = await _getAllRentalRequests();
     final filtered = all
@@ -5931,6 +11343,7 @@ class DataService {
               r.renterId == renterId && (status == null || r.status == status),
         )
         .toList();
+    await _requireCurrentOperationalUser(requestedUserId: renterId);
     filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return filtered;
   }
@@ -5941,35 +11354,136 @@ class DataService {
     required String type,
     String? note,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_timelineEventsKey);
-    List<dynamic> list =
-        raw != null && raw.isNotEmpty ? (jsonDecode(raw) as List) : [];
-    list.add({
-      'requestId': requestId,
-      'type': type,
-      'note': note ?? '',
-      'ts': DateTime.now().toIso8601String(),
+    final participant = await _requireCurrentRequestParticipant(requestId);
+    final normalizedType = type.trim();
+    final normalizedNote = note?.trim() ?? '';
+    if (normalizedType.isEmpty ||
+        normalizedType.length > 128 ||
+        normalizedNote.length > 5000) {
+      throw ArgumentError('Ungültiger lokaler Timeline-Eintrag.');
+    }
+    await _operationalMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(participant.$1.id);
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_timelineEventsKey);
+      final list =
+          raw == null ? <Map<String, dynamic>>[] : _decodeTimelineStrict(raw);
+      if (list.length >= _maxLocalTimelineEvents) {
+        throw StateError('Der lokale Buchungsverlauf ist voll.');
+      }
+      list.add({
+        'requestId': requestId,
+        'type': normalizedType,
+        'note': normalizedNote,
+        'ts': DateTime.now().toIso8601String(),
+      });
+      await _writePreferenceString(
+        prefs,
+        _timelineEventsKey,
+        jsonEncode(list),
+      );
     });
-    await prefs.setString(_timelineEventsKey, jsonEncode(list));
+  }
+
+  static Future<void> addTimelineEventForOwner({
+    required AuthSessionOwner owner,
+    required String expectedUserId,
+    required String requestId,
+    required String type,
+    String? note,
+  }) async {
+    final normalizedType = type.trim();
+    final normalizedNote = note?.trim() ?? '';
+    if (normalizedType.isEmpty ||
+        normalizedType.length > 128 ||
+        normalizedNote.length > 5000) {
+      throw ArgumentError('Ungültiger lokaler Timeline-Eintrag.');
+    }
+    await _operationalMutationQueue.run(() async {
+      await _assertSessionOwnerOperationalUser(owner, expectedUserId);
+      final prefs = await SharedPreferences.getInstance();
+      await _assertSessionOwnerOperationalUser(owner, expectedUserId);
+      final requestsRaw = prefs.getString(_rentalRequestsKey);
+      if (requestsRaw == null || requestsRaw.trim().isEmpty) {
+        throw StateError('Die lokale Buchung wurde nicht gefunden.');
+      }
+      _requireCachedRequestParticipant(
+        _decodeRentalRequestsStrict(requestsRaw),
+        requestId: requestId,
+        userId: expectedUserId,
+      );
+      final raw = prefs.getString(_timelineEventsKey);
+      final list =
+          raw == null ? <Map<String, dynamic>>[] : _decodeTimelineStrict(raw);
+      if (list.length >= _maxLocalTimelineEvents) {
+        throw StateError('Der lokale Buchungsverlauf ist voll.');
+      }
+      list.add({
+        'requestId': requestId,
+        'type': normalizedType,
+        'note': normalizedNote,
+        'ts': DateTime.now().toIso8601String(),
+      });
+      await _assertSessionOwnerOperationalUser(owner, expectedUserId);
+      await _writePreferenceString(
+        prefs,
+        _timelineEventsKey,
+        jsonEncode(list),
+      );
+    });
   }
 
   static Future<List<Map<String, dynamic>>> getTimelineForRequest(
     String requestId,
   ) async {
+    final participant = await _requireCurrentRequestParticipant(requestId);
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_timelineEventsKey);
-    if (raw == null || raw.isEmpty) return [];
+    if (raw == null) return [];
     try {
-      final List list = jsonDecode(raw);
-      return list
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
+      final timeline = _decodeTimelineStrict(raw)
           .where((e) => e['requestId'] == requestId)
           .toList();
-    } catch (_) {
-      return [];
+      await _requireCurrentOperationalUser(
+        requestedUserId: participant.$1.id,
+      );
+      await _requireCurrentRequestParticipant(requestId);
+      return timeline;
+    } catch (e) {
+      debugPrint('[DataService] getTimelineForRequest error: $e');
+      rethrow;
     }
+  }
+
+  static List<Map<String, dynamic>> _decodeTimelineStrict(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is! List ||
+        decoded.length > _maxLocalTimelineEvents ||
+        decoded.any((entry) => entry is! Map)) {
+      throw const FormatException('Ungültiger lokaler Buchungsverlauf.');
+    }
+    final entries = decoded
+        .map((entry) => Map<String, dynamic>.from(entry as Map))
+        .toList();
+    for (final entry in entries) {
+      final requestId = entry['requestId'];
+      final type = entry['type'];
+      final note = entry['note'];
+      final ts = entry['ts'];
+      if (requestId is! String ||
+          requestId.trim().isEmpty ||
+          requestId.length > 256 ||
+          type is! String ||
+          type.trim().isEmpty ||
+          type.length > 128 ||
+          note is! String ||
+          note.length > 5000 ||
+          ts is! String ||
+          DateTime.tryParse(ts) == null) {
+        throw const FormatException('Ungültiger lokaler Buchungsverlauf.');
+      }
+    }
+    return entries;
   }
 
   // Notifications (demo)
@@ -5977,25 +11491,40 @@ class DataService {
     required String title,
     required String body,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_notificationsKey);
-    List<dynamic> list =
-        raw != null && raw.isNotEmpty ? (jsonDecode(raw) as List) : [];
-    list.add({
-      'id': DateTime.now().millisecondsSinceEpoch.toString(),
-      'title': title,
-      'body': body,
-      'ts': DateTime.now().toIso8601String(),
-      'read': false,
-    });
-    await prefs.setString(_notificationsKey, jsonEncode(list));
+    final current = await _requireCurrentOperationalUser();
+    await _addStructuredNotification(
+      userId: current.id,
+      expectedCurrentUserId: current.id,
+      category: 'platform',
+      priority: 5,
+      title: title,
+      body: body,
+    );
   }
+
+  static Future<void> addNotificationForOwner({
+    required AuthSessionOwner owner,
+    required String expectedUserId,
+    required String title,
+    required String body,
+  }) =>
+      _addStructuredNotification(
+        userId: expectedUserId,
+        expectedCurrentUserId: expectedUserId,
+        expectedSessionOwner: owner,
+        category: 'platform',
+        priority: 5,
+        title: title,
+        body: body,
+      );
 
   // ===== Notifications (structured feed, local) =====
   // NOTE: Stored as a list of map entries under [_notificationsKey]. We keep
   // legacy entries compatible by backfilling missing fields at read time.
-  static Future<void> addStructuredNotification({
+  static Future<void> _addStructuredNotification({
     required String userId,
+    String? expectedCurrentUserId,
+    AuthSessionOwner? expectedSessionOwner,
     required String
         category, // important | bookings | messages | reviews | platform
     required String title,
@@ -6010,47 +11539,136 @@ class DataService {
     DateTime? timestamp,
     bool critical = false,
   }) async {
-    try {
+    final normalizedUserId = userId.trim();
+    final normalizedCategory = category.trim();
+    final normalizedTitle = title.trim();
+    final normalizedBody = body.trim();
+    if (normalizedUserId.isEmpty ||
+        normalizedUserId.length > 256 ||
+        normalizedCategory.isEmpty ||
+        normalizedCategory.length > 64 ||
+        normalizedTitle.isEmpty ||
+        normalizedTitle.length > 500 ||
+        normalizedBody.length > 5000 ||
+        priority < 1 ||
+        priority > 5) {
+      throw ArgumentError('Ungültige lokale Benachrichtigung.');
+    }
+    await _operationalMutationQueue.run(() async {
+      if (expectedSessionOwner != null && expectedCurrentUserId != null) {
+        await _assertSessionOwnerOperationalUser(
+          expectedSessionOwner,
+          expectedCurrentUserId,
+        );
+      } else if (expectedCurrentUserId != null) {
+        await _assertCurrentOperationalUserId(expectedCurrentUserId);
+      }
       final prefs = await SharedPreferences.getInstance();
+      if (expectedSessionOwner != null && expectedCurrentUserId != null) {
+        await _assertSessionOwnerOperationalUser(
+          expectedSessionOwner,
+          expectedCurrentUserId,
+        );
+      }
       final raw = prefs.getString(_notificationsKey);
-      List<dynamic> list =
-          raw != null && raw.isNotEmpty ? (jsonDecode(raw) as List) : [];
+      final list = raw == null
+          ? <Map<String, dynamic>>[]
+          : _decodeNotificationsStrict(raw);
+      if (list.length >= _maxLocalNotifications) {
+        throw StateError('Der lokale Benachrichtigungsverlauf ist voll.');
+      }
       final now = timestamp ?? DateTime.now();
-      list.add({
-        'id': 'n_${now.microsecondsSinceEpoch}',
-        'userId': userId,
-        'category': category,
+      final existingIds =
+          list.map((entry) => (entry['id'] ?? '').toString()).toSet();
+      final baseId = 'n_${now.microsecondsSinceEpoch}';
+      var notificationId = baseId;
+      var suffix = 1;
+      while (existingIds.contains(notificationId)) {
+        notificationId = '${baseId}_$suffix';
+        suffix++;
+      }
+      final entry = <String, dynamic>{
+        ...?payload,
+        'id': notificationId,
+        'userId': normalizedUserId,
+        'category': normalizedCategory,
         'priority': priority,
-        'title': title,
-        'body': body,
+        'title': normalizedTitle,
+        'body': normalizedBody,
         'entityType': entityType,
         'entityId': entityId,
         'ctaLabel': ctaLabel,
-        ...?payload,
         'actions': actions,
         'critical': critical,
         'archived': false,
         'ts': now.toIso8601String(),
         'read': false,
-      });
-      await prefs.setString(_notificationsKey, jsonEncode(list));
-    } catch (e) {
-      debugPrint(
-        '[DataService] addStructuredNotification failed: ' + e.toString(),
-      );
+      };
+      list.add(entry);
+      if (expectedSessionOwner != null && expectedCurrentUserId != null) {
+        await _assertSessionOwnerOperationalUser(
+          expectedSessionOwner,
+          expectedCurrentUserId,
+        );
+      }
+      await _persistNotifications(prefs, list);
+    });
+  }
+
+  static List<Map<String, dynamic>> _decodeNotificationsStrict(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is! List ||
+        decoded.length > _maxLocalNotifications ||
+        decoded.any((entry) => entry is! Map)) {
+      throw const FormatException(
+          'Ungültiger lokaler Benachrichtigungsverlauf.');
     }
+    final list = decoded
+        .map((entry) => Map<String, dynamic>.from(entry as Map))
+        .toList();
+    final ids = <String>{};
+    for (final entry in list) {
+      final id = (entry['id'] ?? '').toString().trim();
+      final userId = (entry['userId'] ?? '').toString().trim();
+      final ts = (entry['ts'] ?? entry['createdAt'] ?? '').toString().trim();
+      if (id.isEmpty ||
+          id.length > 256 ||
+          !ids.add(id) ||
+          userId.length > 256 ||
+          DateTime.tryParse(ts) == null ||
+          entry['title'] is! String ||
+          entry['body'] is! String ||
+          (entry['title'] as String).length > 500 ||
+          (entry['body'] as String).length > 5000) {
+        throw const FormatException(
+            'Ungültiger lokaler Benachrichtigungsverlauf.');
+      }
+    }
+    return list;
+  }
+
+  static Future<void> _persistNotifications(
+    SharedPreferences prefs,
+    List<Map<String, dynamic>> notifications,
+  ) async {
+    final encoded = jsonEncode(notifications);
+    _decodeNotificationsStrict(encoded);
+    await _writePreferenceString(prefs, _notificationsKey, encoded);
   }
 
   static Map<String, dynamic> _normalizeNotification(
     Map<String, dynamic> raw, {
     required String userId,
   }) {
-    // Backfill legacy fields to the structured format.
     final out = Map<String, dynamic>.from(raw);
-    out['id'] = (out['id'] ?? '').toString().isNotEmpty
-        ? out['id'].toString()
-        : 'n_${DateTime.now().microsecondsSinceEpoch}';
-    out['userId'] = (out['userId'] ?? userId).toString();
+    final id = (out['id'] ?? '').toString().trim();
+    final ownerId = (out['userId'] ?? '').toString().trim();
+    if (id.isEmpty || ownerId != userId) {
+      throw const FormatException(
+          'Ungültiger lokaler Benachrichtigungsverlauf.');
+    }
+    out['id'] = id;
+    out['userId'] = ownerId;
     final String cat = (out['category'] ?? '').toString();
     if (cat.isEmpty) {
       // Legacy entries: assume platform unless title suggests something else.
@@ -6093,9 +11711,12 @@ class DataService {
     out['critical'] = (out['critical'] == true);
     out['archived'] = (out['archived'] == true);
     out['read'] = (out['read'] == true);
-    // Support both 'ts' and 'createdAt'
     final tsStr = (out['ts'] ?? out['createdAt'] ?? '').toString();
-    out['ts'] = tsStr.isNotEmpty ? tsStr : DateTime.now().toIso8601String();
+    if (DateTime.tryParse(tsStr) == null) {
+      throw const FormatException(
+          'Ungültiger lokaler Benachrichtigungsverlauf.');
+    }
+    out['ts'] = tsStr;
     return out;
   }
 
@@ -6158,30 +11779,38 @@ class DataService {
     String userId, {
     bool includeArchived = false,
   }) async {
+    final current =
+        await _requireCurrentOperationalUser(requestedUserId: userId);
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final remote = await BackendRepository.getNotifications();
+        final scopedRemote = remote
+            .map(
+              (entry) => <String, dynamic>{
+                ...entry,
+                'userId':
+                    (entry['userId']?.toString().trim().isNotEmpty ?? false)
+                        ? entry['userId']
+                        : current.id,
+              },
+            )
+            .toList();
+        await _persistNotifications(prefs, scopedRemote);
+      }
+      await _requireCurrentOperationalUser(requestedUserId: current.id);
       final raw = prefs.getString(_notificationsKey);
-      if (raw == null || raw.isEmpty) return [];
-      final List list = jsonDecode(raw);
+      if (raw == null) return [];
+      final list = _decodeNotificationsStrict(raw);
       final out = <Map<String, dynamic>>[];
-      bool mutated = false;
       for (final e in list) {
-        if (e is! Map) continue;
         final m = Map<String, dynamic>.from(e);
-        final uid = (m['userId'] ?? userId).toString();
+        final uid = (m['userId'] ?? '').toString().trim();
         if (uid != userId) continue;
         final norm = _normalizeNotification(m, userId: userId);
         if (_isVisibleDemoNotification(norm)) continue;
         if (norm['archived'] == true && !includeArchived) continue;
         out.add(norm);
-        // Sanitize storage by ensuring normalized entries exist
-        if (m['category'] == null ||
-            m['priority'] == null ||
-            m['userId'] == null ||
-            m['archived'] == null ||
-            m['critical'] == null) {
-          mutated = true;
-        }
       }
       out.sort((a, b) {
         final at = DateTime.tryParse((a['ts'] ?? '').toString()) ??
@@ -6190,27 +11819,13 @@ class DataService {
             DateTime.fromMillisecondsSinceEpoch(0);
         return bt.compareTo(at);
       });
-      if (mutated) {
-        // Merge back normalized values for this user only; keep other users' entries.
-        final merged = <dynamic>[];
-        for (final e in list) {
-          if (e is! Map) continue;
-          final m = Map<String, dynamic>.from(e);
-          final uid = (m['userId'] ?? userId).toString();
-          if (uid == userId) {
-            merged.add(_normalizeNotification(m, userId: userId));
-          } else {
-            merged.add(m);
-          }
-        }
-        await prefs.setString(_notificationsKey, jsonEncode(merged));
-      }
+      await _requireCurrentOperationalUser(requestedUserId: current.id);
       return out;
     } catch (e) {
       debugPrint(
-        '[DataService] getNotificationFeedForUser failed: ' + e.toString(),
+        '[DataService] getNotificationFeedForUser failed: $e',
       );
-      return [];
+      rethrow;
     }
   }
 
@@ -6218,55 +11833,78 @@ class DataService {
     required String userId,
     required String notificationId,
   }) async {
+    final current =
+        await _requireCurrentOperationalUser(requestedUserId: userId);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_notificationsKey);
-      if (raw == null || raw.isEmpty) return;
-      final List list = jsonDecode(raw);
-      bool mutated = false;
-      for (int i = 0; i < list.length; i++) {
-        if (list[i] is! Map) continue;
-        final m = Map<String, dynamic>.from(list[i] as Map);
-        final uid = (m['userId'] ?? userId).toString();
-        if (uid != userId) continue;
-        if ((m['id'] ?? '').toString() == notificationId) {
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        await BackendRepository.updateNotification(
+          id: notificationId,
+          read: true,
+        );
+      }
+      await _operationalMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(current.id);
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString(_notificationsKey);
+        if (raw == null) return;
+        final list = _decodeNotificationsStrict(raw);
+        bool mutated = false;
+        for (int i = 0; i < list.length; i++) {
+          final m = Map<String, dynamic>.from(list[i] as Map);
+          final uid = (m['userId'] ?? '').toString().trim();
+          if (uid != userId) continue;
+          if ((m['id'] ?? '').toString() == notificationId) {
+            if (m['read'] != true) {
+              m['read'] = true;
+              list[i] = m;
+              mutated = true;
+            }
+            break;
+          }
+        }
+        if (mutated) {
+          await _persistNotifications(prefs, list);
+        }
+      });
+    } catch (e) {
+      debugPrint('[DataService] markNotificationRead failed: $e');
+      rethrow;
+    }
+  }
+
+  static Future<void> markAllNotificationsRead(String userId) async {
+    final current =
+        await _requireCurrentOperationalUser(requestedUserId: userId);
+    try {
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        await BackendRepository.markAllNotificationsRead();
+      }
+      await _operationalMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(current.id);
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString(_notificationsKey);
+        if (raw == null) return;
+        final list = _decodeNotificationsStrict(raw);
+        bool mutated = false;
+        for (int i = 0; i < list.length; i++) {
+          final m = Map<String, dynamic>.from(list[i] as Map);
+          final uid = (m['userId'] ?? '').toString().trim();
+          if (uid != userId) continue;
           if (m['read'] != true) {
             m['read'] = true;
             list[i] = m;
             mutated = true;
           }
-          break;
         }
-      }
-      if (mutated) await prefs.setString(_notificationsKey, jsonEncode(list));
-    } catch (e) {
-      debugPrint('[DataService] markNotificationRead failed: ' + e.toString());
-    }
-  }
-
-  static Future<void> markAllNotificationsRead(String userId) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_notificationsKey);
-      if (raw == null || raw.isEmpty) return;
-      final List list = jsonDecode(raw);
-      bool mutated = false;
-      for (int i = 0; i < list.length; i++) {
-        if (list[i] is! Map) continue;
-        final m = Map<String, dynamic>.from(list[i] as Map);
-        final uid = (m['userId'] ?? userId).toString();
-        if (uid != userId) continue;
-        if (m['read'] != true) {
-          m['read'] = true;
-          list[i] = m;
-          mutated = true;
+        if (mutated) {
+          await _persistNotifications(prefs, list);
         }
-      }
-      if (mutated) await prefs.setString(_notificationsKey, jsonEncode(list));
+      });
     } catch (e) {
       debugPrint(
-        '[DataService] markAllNotificationsRead failed: ' + e.toString(),
+        '[DataService] markAllNotificationsRead failed: $e',
       );
+      rethrow;
     }
   }
 
@@ -6274,105 +11912,43 @@ class DataService {
     required String userId,
     required String notificationId,
   }) async {
+    final current =
+        await _requireCurrentOperationalUser(requestedUserId: userId);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_notificationsKey);
-      if (raw == null || raw.isEmpty) return;
-      final List list = jsonDecode(raw);
-      bool mutated = false;
-      for (int i = 0; i < list.length; i++) {
-        if (list[i] is! Map) continue;
-        final m = Map<String, dynamic>.from(list[i] as Map);
-        final uid = (m['userId'] ?? userId).toString();
-        if (uid != userId) continue;
-        if ((m['id'] ?? '').toString() == notificationId) {
-          final critical = (m['critical'] == true);
-          if (!critical && m['archived'] != true) {
-            m['archived'] = true;
-            list[i] = m;
-            mutated = true;
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        await BackendRepository.updateNotification(
+          id: notificationId,
+          archived: true,
+        );
+      }
+      await _operationalMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(current.id);
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString(_notificationsKey);
+        if (raw == null) return;
+        final list = _decodeNotificationsStrict(raw);
+        bool mutated = false;
+        for (int i = 0; i < list.length; i++) {
+          final m = Map<String, dynamic>.from(list[i] as Map);
+          final uid = (m['userId'] ?? '').toString().trim();
+          if (uid != userId) continue;
+          if ((m['id'] ?? '').toString() == notificationId) {
+            final critical = (m['critical'] == true);
+            if (!critical && m['archived'] != true) {
+              m['archived'] = true;
+              list[i] = m;
+              mutated = true;
+            }
+            break;
           }
-          break;
         }
-      }
-      if (mutated) await prefs.setString(_notificationsKey, jsonEncode(list));
-    } catch (e) {
-      debugPrint('[DataService] archiveNotification failed: ' + e.toString());
-    }
-  }
-
-  // ===== Ride compensation lightweight state =====
-  /// Persist a decision for ride compensation per request and segment ('dropoff' | 'return').
-  static Future<void> setRideCompensationDecision({
-    required String requestId,
-    required String segment,
-    required bool grant,
-    String? reason,
-  }) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_rideCompKey);
-      Map<String, dynamic> map = {};
-      if (raw != null && raw.isNotEmpty) {
-        try {
-          map = jsonDecode(raw) as Map<String, dynamic>;
-        } catch (_) {
-          map = {};
+        if (mutated) {
+          await _persistNotifications(prefs, list);
         }
-      }
-      final entry = Map<String, dynamic>.from(map[requestId] as Map? ?? {});
-      entry[segment] = {
-        'grant': grant,
-        'reason': reason ?? '',
-        'ts': DateTime.now().toIso8601String(),
-      };
-      map[requestId] = entry;
-      await prefs.setString(_rideCompKey, jsonEncode(map));
+      });
     } catch (e) {
-      debugPrint(
-        '[DataService] setRideCompensationDecision failed: ' + e.toString(),
-      );
-    }
-  }
-
-  /// Returns the decision if present. If [consume] is true, removes it after reading.
-  static Future<bool?> getRideCompensationDecision({
-    required String requestId,
-    required String segment,
-    bool consume = false,
-  }) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_rideCompKey);
-      if (raw == null || raw.isEmpty) return null;
-      Map<String, dynamic> map;
-      try {
-        map = jsonDecode(raw) as Map<String, dynamic>;
-      } catch (_) {
-        return null;
-      }
-      final entry = map[requestId];
-      if (entry is Map) {
-        final seg = (entry[segment] as Map?);
-        final grant = (seg?['grant'] as bool?);
-        if (consume) {
-          final e2 = Map<String, dynamic>.from(entry);
-          e2.remove(segment);
-          if (e2.isEmpty) {
-            map.remove(requestId);
-          } else {
-            map[requestId] = e2;
-          }
-          await prefs.setString(_rideCompKey, jsonEncode(map));
-        }
-        return grant;
-      }
-      return null;
-    } catch (e) {
-      debugPrint(
-        '[DataService] getRideCompensationDecision failed: ' + e.toString(),
-      );
-      return null;
+      debugPrint('[DataService] archiveNotification failed: $e');
+      rethrow;
     }
   }
 
@@ -6412,7 +11988,7 @@ class DataService {
       await prefs.setString(_reviewRemindersKey, jsonEncode(list));
     } catch (e) {
       debugPrint(
-        '[DataService] scheduleReviewReminder failed: ' + e.toString(),
+        '[DataService] scheduleReviewReminder failed: $e',
       );
     }
   }
@@ -6461,7 +12037,7 @@ class DataService {
       }
       return null;
     } catch (e) {
-      debugPrint('[DataService] takeDueReviewReminder failed: ' + e.toString());
+      debugPrint('[DataService] takeDueReviewReminder failed: $e');
       return null;
     }
   }
@@ -6500,24 +12076,17 @@ class DataService {
       await prefs.setString(_reviewRemindersKey, jsonEncode(list));
     } catch (e) {
       debugPrint(
-        '[DataService] postponeReviewReminder failed: ' + e.toString(),
+        '[DataService] postponeReviewReminder failed: $e',
       );
     }
   }
 
   static Future<List<Map<String, dynamic>>> getNotifications() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_notificationsKey);
-    if (raw == null || raw.isEmpty) return [];
-    try {
-      final List list = jsonDecode(raw);
-      return list
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-    } catch (_) {
-      return [];
-    }
+    final current = await _requireCurrentOperationalUser();
+    return getNotificationFeedForUser(
+      current.id,
+      includeArchived: true,
+    );
   }
 
   // Feedback (stored locally; when backend is connected, migrate to server)
@@ -6578,77 +12147,86 @@ class DataService {
 
   // ===== Cancellation policy helpers (Unified) =====
   /// Human-readable policy title (DE) – unified across the app
-  static String policyName([String? _ignored]) =>
-      'Einheitliche Stornobedingung';
+  static String policyName([String? ignored]) => 'Einheitliche Stornobedingung';
 
-  /// Returns the calendar-date-only representation of a DateTime.
-  static DateTime _dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
-
-  /// Compute the deadline date until which cancellation is fully free (100%) under the
-  /// unified policy. We operate on calendar days only (no times).
-  /// Rule interpretation (unified):
-  /// - 100%: Bis mindestens 2 Kalendertage vor Mietbeginn.
-  /// - 50%: Am Kalendertag vor Mietbeginn.
-  /// - 0%: Ab Mietbeginn oder bei Nicht‑Erscheinen.
+  /// Exact V5.1 deadline. For a normal booking the free deadline is 24 hours
+  /// before start. A short-notice booking receives the centrally configured
+  /// grace period from contract confirmation, capped at rental start.
   static DateTime? freeCancellationUntil({
     required String policy,
     required DateTime start,
     required DateTime createdAt,
   }) {
-    // Unified: Free until the end of the day two days before the start date.
-    final s = _dateOnly(start);
-    final freeUntil = s.subtract(const Duration(days: 2));
-    return freeUntil;
+    final grace = PrivatePilotCancellationPolicy.shortNoticeGraceDeadline(
+      contractConfirmedAt: createdAt,
+      rentalStartAt: start,
+    );
+    return grace ?? start.subtract(const Duration(hours: 24));
   }
 
-  /// Returns the refund ratio (0.0..1.0) applied to the RENTAL PRICE under the unified policy,
-  /// based solely on calendar days between [cancelAt] and [start].
-  /// Master rule is applied by callers to all other fees using the same ratio.
-  static double refundRatio({
+  /// V5.1 refund ratio for renter cancellation before start. After start or
+  /// no-show, the outcome remains pending for an actual-loss assessment.
+  static double? refundRatio({
     required String policy,
     required DateTime start,
     required DateTime cancelAt,
     DateTime? createdAt,
   }) {
-    final startD = _dateOnly(start);
-    final cancelD = _dateOnly(cancelAt);
-    final daysBefore = startD.difference(cancelD).inDays;
-    if (daysBefore >= 2) return 1.0; // Early: ≥ 2 days before start
-    if (daysBefore == 1) return 0.5; // Late: on the day before start
-    return 0.0; // Start day or after: no refund
+    final outcome = PrivatePilotCancellationPolicy.evaluate(
+      rentalStartAt: start,
+      cancelAt: cancelAt,
+      actor: PrivatePilotCancellationActor.renter,
+      contractConfirmedAt: createdAt,
+    );
+    final basisPoints = outcome.refundBasisPoints;
+    return basisPoints == null ? null : basisPoints / 10000;
   }
 
-  /// Deletes ALL locally stored rentals and bookings (rental requests), including
-  /// related timelines, reminders, last-seen markers and transient handover caches.
-  /// Also clears saved availability/delivery selections to avoid stale UI state.
+  /// Developer-QA-only destructive reset. Release/account deletion must use the
+  /// account-scoped retention path instead of deleting shared counterparty data.
   static Future<void> clearAllRentalsAndBookings() async {
-    try {
-      // Stop any express timers running in this session
-      try {
-        for (final t in _expressTimers.values) {
-          t.cancel();
-        }
-        _expressTimers.clear();
-      } catch (_) {
-        /* ignore */
-      }
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_rentalRequestsKey);
-      await prefs.remove(_timelineEventsKey);
-      await prefs.remove(_reviewRemindersKey);
-      await prefs.remove(_requestsLastSeenKey);
-      await prefs.remove(_handoverFailCountsKey);
-      await prefs.remove(_handoverBannersKey);
-      await prefs.remove(_bookingSelectionsKey);
-      debugPrint(
-        '[DataService] Cleared rentals/bookings and related local caches',
-      );
-    } catch (e) {
-      debugPrint(
-        '[DataService] clearAllRentalsAndBookings failed: ' + e.toString(),
+    if (!QaRuntimeService.isEnabled) {
+      throw StateError(
+        'Der globale Buchungsreset ist ausschließlich im lokalen QA-Modus erlaubt.',
       );
     }
+    final current = await _requireCurrentOperationalUser();
+    for (final timer in _expressTimers.values) {
+      timer.cancel();
+    }
+    _expressTimers.clear();
+
+    await _rentalRequestMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(current.id);
+      final prefs = await SharedPreferences.getInstance();
+      await _removePreferenceKey(prefs, _rentalRequestsKey);
+      await _removePreferenceKey(prefs, _reviewRemindersKey);
+    });
+    await _operationalMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(current.id);
+      final prefs = await SharedPreferences.getInstance();
+      await _removePreferenceKey(prefs, _timelineEventsKey);
+      await _removePreferenceKey(prefs, _requestsLastSeenKey);
+      await _removePreferenceKey(prefs, _readRequestsKey);
+    });
+    await _handoverMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(current.id);
+      final prefs = await SharedPreferences.getInstance();
+      await _removePreferenceKey(prefs, _handoverReturnStateKey);
+      await _removePreferenceKey(prefs, _handoverFailCountsKey);
+      await _removePreferenceKey(prefs, _handoverBannersKey);
+    });
+    await _bookingSelectionMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(current.id);
+      final prefs = await SharedPreferences.getInstance();
+      await _removePreferenceKey(prefs, _bookingSelectionsKey);
+      await _removePreferenceKey(prefs, _bookingSelectionPrincipalStateKey);
+    });
+    SharedPersistenceSync.notify(SharedPersistenceSync.rentalRequestsKey);
+    SharedPersistenceSync.notify(SharedPersistenceSync.handoverReturnStateKey);
+    debugPrint(
+      '[DataService] Cleared local QA rentals/bookings and related caches',
+    );
   }
 
   // ===== Message Threads =====
@@ -6669,15 +12247,6 @@ class DataService {
         request.renterId == currentUser.id;
   }
 
-  static Future<bool> _isCurrentUserParticipantForThread(
-    MessageThread thread,
-  ) async {
-    final currentUser = await getCurrentUser();
-    if (currentUser == null) return false;
-
-    return thread.user1Id == currentUser.id || thread.user2Id == currentUser.id;
-  }
-
   /// Returns the message thread linked to a rental request, if any.
   static Future<MessageThread?> getMessageThreadByRequestId(
     String requestId,
@@ -6686,27 +12255,30 @@ class DataService {
     if (normalizedRequestId.isEmpty) return null;
 
     try {
-      final isParticipant = await _isCurrentUserParticipantForRequestId(
-        normalizedRequestId,
-      );
-      if (!isParticipant) return null;
+      final participant =
+          await _requireCurrentRequestParticipant(normalizedRequestId);
 
       final prefs = await SharedPreferences.getInstance();
       final raw = await _readMessageThreads(prefs);
-      if (raw == null || raw.isEmpty) return null;
-      final List<dynamic> list = jsonDecode(raw);
-      for (final e in list) {
-        try {
-          final thread = MessageThread.fromJson(
-            Map<String, dynamic>.from(e as Map),
-          );
-          if (thread.requestId == normalizedRequestId) return thread;
-        } catch (_) {}
+      await _requireCurrentOperationalUser(
+        requestedUserId: participant.$1.id,
+      );
+      await _requireCurrentRequestParticipant(normalizedRequestId);
+      if (raw == null) return null;
+      for (final thread in _decodeMessageThreadsStrict(raw)) {
+        if (thread.requestId == normalizedRequestId &&
+            _isThreadParticipant(thread, participant.$1.id) &&
+            !thread.deletedForUserIds.contains(participant.$1.id)) {
+          return thread;
+        }
       }
+      return null;
+    } on StateError catch (e) {
+      debugPrint('[DataService] getMessageThreadByRequestId denied: $e');
       return null;
     } catch (e) {
       debugPrint('[DataService] getMessageThreadByRequestId error: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -6734,9 +12306,12 @@ class DataService {
       // Mirror the internal creation used on accept.
       await _createMessageThreadForRequest(req);
       return await getMessageThreadByRequestId(normalizedRequestId);
+    } on StateError catch (e) {
+      debugPrint('[DataService] createOrGetThreadForRequest denied: $e');
+      return null;
     } catch (e) {
       debugPrint('[DataService] createOrGetThreadForRequest failed: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -6749,24 +12324,30 @@ class DataService {
     required String status,
   }) async {
     if (threadId.trim().isEmpty) return;
+    final current = await _requireCurrentOperationalUser();
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = await _readMessageThreads(prefs);
-      if (raw == null || raw.isEmpty) return;
-      final List<dynamic> list = jsonDecode(raw);
-      bool mutated = false;
-      for (int i = 0; i < list.length; i++) {
-        if (list[i] is! Map) continue;
-        final map = Map<String, dynamic>.from(list[i] as Map);
-        if ((map['id'] ?? '').toString() != threadId) continue;
-        final thread = MessageThread.fromJson(map);
-        list[i] = thread.copyWith(bookingStatus: status).toJson();
-        mutated = true;
-        break;
-      }
-      if (mutated) await _persistMessageThreads(prefs, list);
+      await _operationalMutationQueue.run(() async {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = await _readMessageThreads(prefs);
+        if (raw == null) return;
+        final threads = _decodeMessageThreadsStrict(raw);
+        final index = threads.indexWhere((entry) => entry.id == threadId);
+        if (index < 0) return;
+        final thread = threads[index];
+        if (!_isThreadParticipant(thread, current.id) ||
+            thread.deletedForUserIds.contains(current.id)) {
+          throw StateError(
+              'Der Nachrichtenverlauf gehört zu einem anderen Konto.');
+        }
+        threads[index] = thread.copyWith(bookingStatus: status);
+        await _persistMessageThreads(
+          prefs,
+          threads.map((entry) => entry.toJson()).toList(),
+        );
+      });
     } catch (e) {
       debugPrint('[DataService] updateMessageThreadBookingStatus error: $e');
+      rethrow;
     }
   }
 
@@ -6778,11 +12359,7 @@ class DataService {
     if (threadId.trim().isEmpty) return;
     final t = text.trim();
     if (t.isEmpty) return;
-    try {
-      await addMessageToThread(threadId: threadId, senderId: 'system', text: t);
-    } catch (e) {
-      debugPrint('[DataService] addSystemMessageToThread error: $e');
-    }
+    await addMessageToThread(threadId: threadId, senderId: 'system', text: t);
   }
 
   // ===== Handover/Return lightweight state (local) =====
@@ -6790,42 +12367,142 @@ class DataService {
   static const String _handoverReturnStateKey = 'handover_return_state_v1';
 
   static Future<Map<String, dynamic>> _getHandoverReturnStateMap() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_handoverReturnStateKey);
-      if (raw == null || raw.isEmpty) return <String, dynamic>{};
-      final decoded = jsonDecode(raw);
-      if (decoded is Map) {
-        return decoded.map((k, v) => MapEntry(k.toString(), v));
-      }
-      return <String, dynamic>{};
-    } catch (e) {
-      debugPrint('[DataService] _getHandoverReturnStateMap failed: $e');
-      return <String, dynamic>{};
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_handoverReturnStateKey);
+    if (raw == null) return <String, dynamic>{};
+    if (raw.trim().isEmpty) {
+      throw const FormatException('Ungültige lokale Übergabedaten.');
     }
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map || decoded.length > 1000) {
+      throw const FormatException('Ungültige lokale Übergabedaten.');
+    }
+    final map = decoded.map((key, value) => MapEntry(key.toString(), value));
+    if (map.keys.any((key) => key.trim().isEmpty || key.length > 256) ||
+        map.values.any((value) => value is! Map)) {
+      throw const FormatException('Ungültige lokale Übergabedaten.');
+    }
+    return map;
   }
 
   static Future<void> _setHandoverReturnStateMap(
-    Map<String, dynamic> map,
-  ) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_handoverReturnStateKey, jsonEncode(map));
+    Map<String, dynamic> map, {
+    bool announce = true,
+  }) async {
+    if (map.length > 1000 ||
+        map.keys.any((key) => key.trim().isEmpty || key.length > 256) ||
+        map.values.any((value) => value is! Map)) {
+      throw const FormatException('Ungültige lokale Übergabedaten.');
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await _writePreferenceString(
+      prefs,
+      _handoverReturnStateKey,
+      jsonEncode(map),
+    );
+    if (announce) {
       SharedPersistenceSync.notify(
         SharedPersistenceSync.handoverReturnStateKey,
       );
-    } catch (e) {
-      debugPrint('[DataService] _setHandoverReturnStateMap failed: $e');
     }
   }
+
+  static Map<String, dynamic> _emptyHandoverReturnState() => <String, dynamic>{
+        'handoverActive': false,
+        'returnActive': false,
+        'handoverPhotos': 0,
+        'returnPhotos': 0,
+        'pickupPresenterPhotos': 0,
+        'pickupDeviationPhotos': 0,
+        'pickupPresenterNonCameraUsed': false,
+        'pickupCounterpartyConfirmation': null,
+        'returnPresenterPhotos': 0,
+        'returnDeviationPhotos': 0,
+        'returnPresenterNonCameraUsed': false,
+        'returnCounterpartyConfirmation': null,
+        'handoverTimeRequested': '',
+        'returnTimeRequested': '',
+        'handoverTimeIso': '',
+        'returnTimeIso': '',
+        'handoverTimeRequestedByUserId': '',
+        'returnTimeRequestedByUserId': '',
+        'handoverTimeConfirmed': false,
+        'returnTimeConfirmed': false,
+        'handoverTimeConfirmedByUserId': '',
+        'returnTimeConfirmedByUserId': '',
+        'handoverTimeConfirmedAt': '',
+        'returnTimeConfirmedAt': '',
+        'handoverLocationLat': '',
+        'handoverLocationLng': '',
+        'handoverLocationLabel': '',
+        'handoverLocationMapsUrl': '',
+        'handoverLocationSharedByUserId': '',
+        'handoverLocationSharedByName': '',
+        'handoverLocationSharedByRole': '',
+        'handoverLocationAcceptedAs': 'handoverLocation',
+        'returnLocationLat': '',
+        'returnLocationLng': '',
+        'returnLocationLabel': '',
+        'returnLocationMapsUrl': '',
+        'returnLocationSharedByUserId': '',
+        'returnLocationSharedByName': '',
+        'returnLocationSharedByRole': '',
+        'returnLocationAcceptedAs': 'returnLocation',
+        'returnLocationReusePromptDismissed': false,
+      };
 
   /// Returns state for a request: {handoverActive, returnActive, handoverPhotos, returnPhotos}
   static Future<Map<String, dynamic>> getHandoverReturnState(
     String requestId,
   ) async {
     final id = requestId.trim();
-    if (id.isEmpty) return const {};
-    final map = await _getHandoverReturnStateMap();
+    if (id.isEmpty) return _emptyHandoverReturnState();
+    String currentUserId;
+    try {
+      currentUserId = (await _requireCurrentRequestParticipant(id)).$1.id;
+    } on StateError {
+      return _emptyHandoverReturnState();
+    }
+    Map<String, dynamic> map;
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      try {
+        final remote = await BackendRepository.getBookingFlowTime(id);
+        await _requireCurrentOperationalUser(
+          requestedUserId: currentUserId,
+        );
+        await _requireCurrentRequestParticipant(id);
+        map = await _handoverMutationQueue.run(() async {
+          await _assertCurrentOperationalUserId(currentUserId);
+          final latest = await _getHandoverReturnStateMap();
+          final existing = (latest[id] is Map)
+              ? Map<String, dynamic>.from(latest[id] as Map)
+              : <String, dynamic>{};
+          existing.addAll(remote);
+          latest[id] = existing;
+          await _setHandoverReturnStateMap(latest, announce: false);
+          return latest;
+        });
+      } catch (error) {
+        debugPrint('[DataService] remote flow-time load failed: $error');
+        try {
+          await _requireCurrentOperationalUser(
+            requestedUserId: currentUserId,
+          );
+          await _requireCurrentRequestParticipant(id);
+        } on StateError {
+          return _emptyHandoverReturnState();
+        }
+        map = await _handoverMutationQueue.run(() async {
+          await _assertCurrentOperationalUserId(currentUserId);
+          return _getHandoverReturnStateMap();
+        });
+      }
+    } else {
+      map = await _handoverMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(currentUserId);
+        return _getHandoverReturnStateMap();
+      });
+    }
     final entry = map[id];
     if (entry is Map) {
       final e = entry.map((k, v) => MapEntry(k.toString(), v));
@@ -6837,6 +12514,20 @@ class DataService {
             : 0,
         'returnPhotos':
             (e['returnPhotos'] is num) ? (e['returnPhotos'] as num).toInt() : 0,
+        'pickupPresenterPhotos':
+            (e['pickupPresenterPhotos'] as num?)?.toInt() ?? 0,
+        'pickupDeviationPhotos':
+            (e['pickupDeviationPhotos'] as num?)?.toInt() ?? 0,
+        'pickupPresenterNonCameraUsed':
+            e['pickupPresenterNonCameraUsed'] == true,
+        'pickupCounterpartyConfirmation': e['pickupCounterpartyConfirmation'],
+        'returnPresenterPhotos':
+            (e['returnPresenterPhotos'] as num?)?.toInt() ?? 0,
+        'returnDeviationPhotos':
+            (e['returnDeviationPhotos'] as num?)?.toInt() ?? 0,
+        'returnPresenterNonCameraUsed':
+            e['returnPresenterNonCameraUsed'] == true,
+        'returnCounterpartyConfirmation': e['returnCounterpartyConfirmation'],
         'handoverTimeRequested': (e['handoverTimeRequested'] as String?) ?? '',
         'returnTimeRequested': (e['returnTimeRequested'] as String?) ?? '',
         'handoverTimeIso': (e['handoverTimeIso'] as String?) ?? '',
@@ -6847,6 +12538,13 @@ class DataService {
             (e['returnTimeRequestedByUserId'] as String?) ?? '',
         'handoverTimeConfirmed': e['handoverTimeConfirmed'] == true,
         'returnTimeConfirmed': e['returnTimeConfirmed'] == true,
+        'handoverTimeConfirmedByUserId':
+            (e['handoverTimeConfirmedByUserId'] as String?) ?? '',
+        'returnTimeConfirmedByUserId':
+            (e['returnTimeConfirmedByUserId'] as String?) ?? '',
+        'handoverTimeConfirmedAt':
+            (e['handoverTimeConfirmedAt'] as String?) ?? '',
+        'returnTimeConfirmedAt': (e['returnTimeConfirmedAt'] as String?) ?? '',
         'handoverLocationLat': (e['handoverLocationLat'] as String?) ?? '',
         'handoverLocationLng': (e['handoverLocationLng'] as String?) ?? '',
         'handoverLocationLabel': (e['handoverLocationLabel'] as String?) ?? '',
@@ -6876,36 +12574,96 @@ class DataService {
             e['returnLocationReusePromptDismissed'] == true,
       };
     }
+    return _emptyHandoverReturnState();
+  }
+
+  /// Server-authoritative exact-address visibility. A configured backend
+  /// fails closed; the local branch exists only for demo/QA runtimes.
+  static Future<Map<String, dynamic>> getBookingAddressReveal({
+    required RentalRequest request,
+    required String localExactAddress,
+    String segment = 'pickup',
+    DateTime? now,
+  }) async {
+    (User, RentalRequest) participant;
+    try {
+      participant = await _requireCurrentRequestParticipant(request.id);
+    } on StateError {
+      return {
+        'version': 'v52_booking_address_reveal_v1',
+        'segment': segment,
+        'result': 'hidden',
+        'reason': 'current_participant_required',
+        'exactAddressReturned': false,
+      };
+    }
+    final authorizedRequest = participant.$2;
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      try {
+        return await BackendRepository.getBookingAddressReveal(
+          bookingId: authorizedRequest.id,
+          segment: segment,
+        );
+      } catch (error) {
+        debugPrint(
+            '[DataService] booking address reveal failed closed: $error');
+        return {
+          'version': 'v52_booking_address_reveal_v1',
+          'segment': segment,
+          'result': 'hidden',
+          'reason': 'server_authority_unavailable',
+          'exactAddressReturned': false,
+        };
+      }
+    }
+
+    final state = await getHandoverReturnState(authorizedRequest.id);
+    final prefix = segment == 'return' ? 'return' : 'handover';
+    final appointment = DateTime.tryParse(
+      (state['${prefix}TimeIso'] as String?) ?? '',
+    );
+    final requestedBy =
+        ((state['${prefix}TimeRequestedByUserId'] as String?) ?? '').trim();
+    final confirmedBy =
+        ((state['${prefix}TimeConfirmedByUserId'] as String?) ?? '').trim();
+    final participants = {
+      authorizedRequest.ownerId,
+      authorizedRequest.renterId,
+    };
+    final counterpartyConfirmed = state['${prefix}TimeConfirmed'] == true &&
+        participants.contains(requestedBy) &&
+        participants.contains(confirmedBy) &&
+        requestedBy != confirmedBy;
+    final expectedDate = segment == 'return'
+        ? authorizedRequest.endDate
+        : authorizedRequest.startDate;
+    final appointmentMatches = appointment != null &&
+        _rentalDate(appointment.toLocal()) == expectedDate;
+    final eligible = const {
+      'accepted',
+      'payment_pending',
+      'confirmed',
+      'active',
+      'running',
+      'returned',
+    }.contains(authorizedRequest.workflowStatus ?? authorizedRequest.status);
+    final reveal = counterpartyConfirmed &&
+        appointmentMatches &&
+        eligible &&
+        AddressPrivacy.shouldRevealExactAddressForLocalDemoOrQa(
+          handoverAt: appointment,
+          now: now,
+        );
     return {
-      'handoverActive': false,
-      'returnActive': false,
-      'handoverPhotos': 0,
-      'returnPhotos': 0,
-      'handoverTimeRequested': '',
-      'returnTimeRequested': '',
-      'handoverTimeIso': '',
-      'returnTimeIso': '',
-      'handoverTimeRequestedByUserId': '',
-      'returnTimeRequestedByUserId': '',
-      'handoverTimeConfirmed': false,
-      'returnTimeConfirmed': false,
-      'handoverLocationLat': '',
-      'handoverLocationLng': '',
-      'handoverLocationLabel': '',
-      'handoverLocationMapsUrl': '',
-      'handoverLocationSharedByUserId': '',
-      'handoverLocationSharedByName': '',
-      'handoverLocationSharedByRole': '',
-      'handoverLocationAcceptedAs': 'handoverLocation',
-      'returnLocationLat': '',
-      'returnLocationLng': '',
-      'returnLocationLabel': '',
-      'returnLocationMapsUrl': '',
-      'returnLocationSharedByUserId': '',
-      'returnLocationSharedByName': '',
-      'returnLocationSharedByRole': '',
-      'returnLocationAcceptedAs': 'returnLocation',
-      'returnLocationReusePromptDismissed': false,
+      'version': 'v52_booking_address_reveal_v1',
+      'segment': segment,
+      'result': reveal ? 'revealed' : 'hidden',
+      'reason': reveal
+          ? 'local_qa_counterparty_confirmed_window_open'
+          : 'local_qa_fail_closed',
+      'exactAddressReturned': reveal,
+      if (reveal) 'exactAddress': localExactAddress.trim(),
+      'source': 'local_demo_or_qa_only',
     };
   }
 
@@ -6915,14 +12673,34 @@ class DataService {
   }) async {
     final id = requestId.trim();
     if (id.isEmpty) return false;
+    (User, RentalRequest) participant;
+    try {
+      participant = await _requireCurrentRequestParticipant(id);
+    } on StateError {
+      return false;
+    }
+    return _runHandoverForParticipant(
+      participant,
+      () => _setHandoverActiveUnlocked(
+        id,
+        active: active,
+        currentUser: participant.$1,
+        request: participant.$2,
+      ),
+    );
+  }
+
+  static Future<bool> _setHandoverActiveUnlocked(
+    String id, {
+    required bool active,
+    required User currentUser,
+    required RentalRequest request,
+  }) async {
     final map = await _getHandoverReturnStateMap();
     final existing = (map[id] is Map)
         ? Map<String, dynamic>.from(map[id] as Map)
         : <String, dynamic>{};
     if (active) {
-      final request = await getRentalRequestById(id);
-      final currentUser = await getCurrentUser();
-      if (request == null || currentUser == null) return false;
       if (currentUser.id != request.ownerId) return false;
       if (!canStartHandover(
         requestStatus: request.status,
@@ -6953,14 +12731,34 @@ class DataService {
   }) async {
     final id = requestId.trim();
     if (id.isEmpty) return false;
+    (User, RentalRequest) participant;
+    try {
+      participant = await _requireCurrentRequestParticipant(id);
+    } on StateError {
+      return false;
+    }
+    return _runHandoverForParticipant(
+      participant,
+      () => _setReturnActiveUnlocked(
+        id,
+        active: active,
+        currentUser: participant.$1,
+        request: participant.$2,
+      ),
+    );
+  }
+
+  static Future<bool> _setReturnActiveUnlocked(
+    String id, {
+    required bool active,
+    required User currentUser,
+    required RentalRequest request,
+  }) async {
     final map = await _getHandoverReturnStateMap();
     final existing = (map[id] is Map)
         ? Map<String, dynamic>.from(map[id] as Map)
         : <String, dynamic>{};
     if (active) {
-      final request = await getRentalRequestById(id);
-      final currentUser = await getCurrentUser();
-      if (request == null || currentUser == null) return false;
       if (currentUser.id != request.renterId) return false;
       if (!canStartReturn(
         requestStatus: request.status,
@@ -6998,16 +12796,19 @@ class DataService {
   }) async {
     final id = requestId.trim();
     if (id.isEmpty) return;
-    final map = await _getHandoverReturnStateMap();
-    final existing = (map[id] is Map)
-        ? Map<String, dynamic>.from(map[id] as Map)
-        : <String, dynamic>{};
-    final cur = (existing['handoverPhotos'] is num)
-        ? (existing['handoverPhotos'] as num).toInt()
-        : 0;
-    existing['handoverPhotos'] = (cur + 1).clamp(0, max);
-    map[id] = existing;
-    await _setHandoverReturnStateMap(map);
+    final participant = await _requireCurrentRequestParticipant(id);
+    await _runHandoverForParticipant(participant, () async {
+      final map = await _getHandoverReturnStateMap();
+      final existing = (map[id] is Map)
+          ? Map<String, dynamic>.from(map[id] as Map)
+          : <String, dynamic>{};
+      final cur = (existing['handoverPhotos'] is num)
+          ? (existing['handoverPhotos'] as num).toInt()
+          : 0;
+      existing['handoverPhotos'] = (cur + 1).clamp(0, max);
+      map[id] = existing;
+      await _setHandoverReturnStateMap(map);
+    });
   }
 
   static Future<void> incrementReturnPhotos(
@@ -7016,16 +12817,229 @@ class DataService {
   }) async {
     final id = requestId.trim();
     if (id.isEmpty) return;
-    final map = await _getHandoverReturnStateMap();
-    final existing = (map[id] is Map)
-        ? Map<String, dynamic>.from(map[id] as Map)
-        : <String, dynamic>{};
-    final cur = (existing['returnPhotos'] is num)
-        ? (existing['returnPhotos'] as num).toInt()
-        : 0;
-    existing['returnPhotos'] = (cur + 1).clamp(0, max);
-    map[id] = existing;
-    await _setHandoverReturnStateMap(map);
+    final participant = await _requireCurrentRequestParticipant(id);
+    await _runHandoverForParticipant(participant, () async {
+      final map = await _getHandoverReturnStateMap();
+      final existing = (map[id] is Map)
+          ? Map<String, dynamic>.from(map[id] as Map)
+          : <String, dynamic>{};
+      final cur = (existing['returnPhotos'] is num)
+          ? (existing['returnPhotos'] as num).toInt()
+          : 0;
+      existing['returnPhotos'] = (cur + 1).clamp(0, max);
+      map[id] = existing;
+      await _setHandoverReturnStateMap(map);
+    });
+  }
+
+  static Future<Map<String, dynamic>> getConditionEvidenceSummary({
+    required String requestId,
+    required String segment,
+  }) async {
+    final id = requestId.trim();
+    final normalizedSegment = segment == 'return' ? 'return' : 'pickup';
+    if (id.isEmpty) {
+      return <String, dynamic>{
+        'segment': normalizedSegment,
+        'presenterPhotos': 0,
+        'deviationPhotos': 0,
+        'presenterNonCameraUsed': false,
+        'counterpartyConfirmation': null,
+      };
+    }
+    try {
+      await _requireCurrentRequestParticipant(id);
+    } on StateError {
+      return <String, dynamic>{
+        'segment': normalizedSegment,
+        'presenterPhotos': 0,
+        'deviationPhotos': 0,
+        'presenterNonCameraUsed': false,
+        'counterpartyConfirmation': null,
+      };
+    }
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      return BackendRepository.getConditionEvidenceSummary(
+        bookingId: id,
+        segment: normalizedSegment,
+      );
+    }
+    final state = await getHandoverReturnState(id);
+    final prefix = normalizedSegment == 'return' ? 'return' : 'pickup';
+    return <String, dynamic>{
+      'segment': normalizedSegment,
+      'presenterPhotos':
+          (state['${prefix}PresenterPhotos'] as num?)?.toInt() ?? 0,
+      'deviationPhotos':
+          (state['${prefix}DeviationPhotos'] as num?)?.toInt() ?? 0,
+      'presenterNonCameraUsed':
+          state['${prefix}PresenterNonCameraUsed'] == true,
+      'counterpartyConfirmation': state['${prefix}CounterpartyConfirmation'],
+    };
+  }
+
+  static Future<void> addConditionEvidencePhoto({
+    required String requestId,
+    required Uint8List bytes,
+    required String filename,
+    required String segment,
+    required String kind,
+    required String source,
+    required String semanticSlot,
+  }) async {
+    final id = requestId.trim();
+    final normalizedSegment = segment == 'return' ? 'return' : 'pickup';
+    final normalizedKind = kind.trim();
+    final normalizedSource = source.trim();
+    if (id.isEmpty || bytes.isEmpty) {
+      throw StateError('condition_evidence_photo_missing');
+    }
+    if (!const {'camera', 'gallery', 'browser_picker'}
+        .contains(normalizedSource)) {
+      throw StateError('invalid_condition_evidence_source');
+    }
+    final request = await getRentalRequestById(id);
+    final currentUser = await getCurrentUser();
+    if (request == null || currentUser == null) {
+      throw StateError('condition_evidence_booking_missing');
+    }
+    final presenterId =
+        normalizedSegment == 'pickup' ? request.ownerId : request.renterId;
+    final verifierId =
+        normalizedSegment == 'pickup' ? request.renterId : request.ownerId;
+    final expectedKind = currentUser.id == presenterId
+        ? 'presenter_photo'
+        : currentUser.id == verifierId
+            ? 'counterparty_deviation'
+            : '';
+    if (normalizedKind != expectedKind) {
+      throw StateError('condition_evidence_role_mismatch');
+    }
+    final flowState = await getHandoverReturnState(id);
+    if (normalizedSegment == 'pickup' &&
+        (request.status != 'accepted' || flowState['handoverActive'] != true)) {
+      throw StateError('condition_evidence_wrong_booking_state');
+    }
+    if (normalizedSegment == 'return' &&
+        (request.status != 'running' || flowState['returnActive'] != true)) {
+      throw StateError('condition_evidence_wrong_booking_state');
+    }
+
+    final thread = await createOrGetThreadForRequest(id);
+    if (thread == null) throw StateError('condition_evidence_thread_missing');
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final upload = await BackendRepository.uploadMessageAttachment(
+        bytes: bytes,
+        filename: filename,
+        threadId: thread.id,
+        purpose: normalizedSegment == 'pickup'
+            ? 'handover_evidence'
+            : 'return_evidence',
+      );
+      await BackendRepository.sendThreadMessage(
+        threadId: thread.id,
+        text: normalizedKind == 'presenter_photo'
+            ? '${normalizedSegment == 'pickup' ? 'Übergabe' : 'Rückgabe'}-Zustandsfoto'
+            : 'Abweichungsfoto der Gegenpartei',
+        idempotencyKey:
+            'condition_${thread.id}_${DateTime.now().microsecondsSinceEpoch}',
+        attachmentIds: [upload['id'].toString()],
+        conditionEvidence: <String, dynamic>{
+          'segment': normalizedSegment,
+          'kind': normalizedKind,
+          'source': normalizedSource,
+          'semanticSlot': semanticSlot,
+        },
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final remote = await BackendRepository.getMessageThreads();
+      await _persistMessageThreads(prefs, remote);
+      return;
+    }
+
+    await addMessageToThread(
+      threadId: thread.id,
+      senderId: currentUser.id,
+      text: normalizedKind == 'presenter_photo'
+          ? '${normalizedSegment == 'pickup' ? 'Übergabe' : 'Rückgabe'}-Zustandsfoto (geschützt)'
+          : 'Abweichungsfoto der Gegenpartei (geschützt)',
+    );
+    await _handoverMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(currentUser.id);
+      final map = await _getHandoverReturnStateMap();
+      final existing = map[id] is Map
+          ? Map<String, dynamic>.from(map[id] as Map)
+          : <String, dynamic>{};
+      final prefix = normalizedSegment == 'return' ? 'return' : 'pickup';
+      final key = normalizedKind == 'presenter_photo'
+          ? '${prefix}PresenterPhotos'
+          : '${prefix}DeviationPhotos';
+      existing[key] = ((existing[key] as num?)?.toInt() ?? 0) + 1;
+      if (normalizedKind == 'presenter_photo' && normalizedSource != 'camera') {
+        existing['${prefix}PresenterNonCameraUsed'] = true;
+      }
+      map[id] = existing;
+      await _setHandoverReturnStateMap(map);
+    });
+  }
+
+  static Future<void> recordConditionConfirmation({
+    required String requestId,
+    required String segment,
+    required String decision,
+  }) async {
+    final id = requestId.trim();
+    final normalizedSegment = segment == 'return' ? 'return' : 'pickup';
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      await BackendRepository.recordConditionConfirmation(
+        bookingId: id,
+        segment: normalizedSegment,
+        decision: decision,
+      );
+      return;
+    }
+    final request = await getRentalRequestById(id);
+    final currentUser = await getCurrentUser();
+    if (request == null || currentUser == null) {
+      throw StateError('condition_confirmation_booking_missing');
+    }
+    final verifierId =
+        normalizedSegment == 'pickup' ? request.renterId : request.ownerId;
+    if (currentUser.id != verifierId) {
+      throw StateError('condition_confirmation_counterparty_required');
+    }
+    final summary = await getConditionEvidenceSummary(
+      requestId: id,
+      segment: normalizedSegment,
+    );
+    final presenterPhotos = (summary['presenterPhotos'] as num?)?.toInt() ?? 0;
+    final deviationPhotos = (summary['deviationPhotos'] as num?)?.toInt() ?? 0;
+    if (presenterPhotos < minimumRequiredPhotos) {
+      throw StateError('presenter_photo_set_incomplete');
+    }
+    if (decision == 'deviation_recorded' && deviationPhotos < 1) {
+      throw StateError('deviation_photo_required');
+    }
+    if (decision == 'confirmed' && deviationPhotos > 0) {
+      throw StateError('deviation_decision_required');
+    }
+    await _handoverMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(currentUser.id);
+      final map = await _getHandoverReturnStateMap();
+      final existing = map[id] is Map
+          ? Map<String, dynamic>.from(map[id] as Map)
+          : <String, dynamic>{};
+      final prefix = normalizedSegment == 'return' ? 'return' : 'pickup';
+      existing['${prefix}CounterpartyConfirmation'] = <String, dynamic>{
+        'decision': decision,
+        'verifierUserId': currentUser.id,
+        'presenterPhotoCount': presenterPhotos,
+        'deviationPhotoCount': deviationPhotos,
+        'createdAt': DateTime.now().toIso8601String(),
+      };
+      map[id] = existing;
+      await _setHandoverReturnStateMap(map);
+    });
   }
 
   static const int minimumRequiredPhotos = 4;
@@ -7047,25 +13061,31 @@ class DataService {
   static Future<void> markHandoverGalleryUsed(String requestId) async {
     final id = requestId.trim();
     if (id.isEmpty) return;
-    final map = await _getHandoverReturnStateMap();
-    final existing = (map[id] is Map)
-        ? Map<String, dynamic>.from(map[id] as Map)
-        : <String, dynamic>{};
-    existing['handoverGalleryUsed'] = true;
-    map[id] = existing;
-    await _setHandoverReturnStateMap(map);
+    final participant = await _requireCurrentRequestParticipant(id);
+    await _runHandoverForParticipant(participant, () async {
+      final map = await _getHandoverReturnStateMap();
+      final existing = (map[id] is Map)
+          ? Map<String, dynamic>.from(map[id] as Map)
+          : <String, dynamic>{};
+      existing['handoverGalleryUsed'] = true;
+      map[id] = existing;
+      await _setHandoverReturnStateMap(map);
+    });
   }
 
   static Future<void> markReturnGalleryUsed(String requestId) async {
     final id = requestId.trim();
     if (id.isEmpty) return;
-    final map = await _getHandoverReturnStateMap();
-    final existing = (map[id] is Map)
-        ? Map<String, dynamic>.from(map[id] as Map)
-        : <String, dynamic>{};
-    existing['returnGalleryUsed'] = true;
-    map[id] = existing;
-    await _setHandoverReturnStateMap(map);
+    final participant = await _requireCurrentRequestParticipant(id);
+    await _runHandoverForParticipant(participant, () async {
+      final map = await _getHandoverReturnStateMap();
+      final existing = (map[id] is Map)
+          ? Map<String, dynamic>.from(map[id] as Map)
+          : <String, dynamic>{};
+      existing['returnGalleryUsed'] = true;
+      map[id] = existing;
+      await _setHandoverReturnStateMap(map);
+    });
   }
 
   static Future<bool> wasHandoverGalleryUsed(String requestId) async {
@@ -7087,17 +13107,48 @@ class DataService {
   }) async {
     final id = requestId.trim();
     if (id.isEmpty) return;
-    final map = await _getHandoverReturnStateMap();
-    final existing = (map[id] is Map)
-        ? Map<String, dynamic>.from(map[id] as Map)
-        : <String, dynamic>{};
-    final prefix = isReturn ? 'return' : 'handover';
-    existing['${prefix}TimeRequested'] = label;
-    existing['${prefix}TimeIso'] = time.toIso8601String();
-    existing['${prefix}TimeRequestedByUserId'] = requestedByUserId;
-    existing['${prefix}TimeConfirmed'] = false;
-    map[id] = existing;
-    await _setHandoverReturnStateMap(map);
+    await _requireCurrentOperationalUser(requestedUserId: requestedByUserId);
+    final participant = await _requireCurrentRequestParticipant(id);
+    await _runHandoverForParticipant(participant, () async {
+      final canonicalTime = participant.$2.flowTimeAt(
+        isReturn: isReturn,
+        hour: time.hour,
+        minute: time.minute,
+      );
+      final localDate = participant.$2.flowTimeDate(isReturn: isReturn);
+      final localTime =
+          '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+      const weekdays = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+      final canonicalLabel =
+          '${weekdays[canonicalTime.weekday - 1]}, $localTime';
+      final map = await _getHandoverReturnStateMap();
+      final existing = (map[id] is Map)
+          ? Map<String, dynamic>.from(map[id] as Map)
+          : <String, dynamic>{};
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final remote = await BackendRepository.updateBookingFlowTime(
+          bookingId: id,
+          action: 'propose',
+          segment: isReturn ? 'return' : 'pickup',
+          label: label == canonicalLabel ? label : canonicalLabel,
+          time: canonicalTime,
+          localDate: localDate,
+          localTime: localTime,
+        );
+        existing.addAll(remote);
+        map[id] = existing;
+        await _setHandoverReturnStateMap(map);
+        return;
+      }
+      final prefix = isReturn ? 'return' : 'handover';
+      existing['${prefix}TimeRequested'] =
+          label == canonicalLabel ? label : canonicalLabel;
+      existing['${prefix}TimeIso'] = canonicalTime.toIso8601String();
+      existing['${prefix}TimeRequestedByUserId'] = requestedByUserId;
+      existing['${prefix}TimeConfirmed'] = false;
+      map[id] = existing;
+      await _setHandoverReturnStateMap(map);
+    });
   }
 
   static Future<void> setFlowLocation({
@@ -7113,25 +13164,29 @@ class DataService {
   }) async {
     final id = requestId.trim();
     if (id.isEmpty) return;
-    final map = await _getHandoverReturnStateMap();
-    final existing = (map[id] is Map)
-        ? Map<String, dynamic>.from(map[id] as Map)
-        : <String, dynamic>{};
-    final prefix = isReturn ? 'return' : 'handover';
-    existing['${prefix}LocationLat'] = latitude.trim();
-    existing['${prefix}LocationLng'] = longitude.trim();
-    existing['${prefix}LocationLabel'] = label.trim();
-    existing['${prefix}LocationMapsUrl'] = mapsUrl.trim();
-    existing['${prefix}LocationSharedByUserId'] = sharedByUserId.trim();
-    existing['${prefix}LocationSharedByName'] = sharedByName.trim();
-    existing['${prefix}LocationSharedByRole'] = sharedByRole.trim();
-    existing['${prefix}LocationAcceptedAs'] =
-        isReturn ? 'returnLocation' : 'handoverLocation';
-    if (isReturn) {
-      existing['returnLocationReusePromptDismissed'] = false;
-    }
-    map[id] = existing;
-    await _setHandoverReturnStateMap(map);
+    await _requireCurrentOperationalUser(requestedUserId: sharedByUserId);
+    final participant = await _requireCurrentRequestParticipant(id);
+    await _runHandoverForParticipant(participant, () async {
+      final map = await _getHandoverReturnStateMap();
+      final existing = (map[id] is Map)
+          ? Map<String, dynamic>.from(map[id] as Map)
+          : <String, dynamic>{};
+      final prefix = isReturn ? 'return' : 'handover';
+      existing['${prefix}LocationLat'] = latitude.trim();
+      existing['${prefix}LocationLng'] = longitude.trim();
+      existing['${prefix}LocationLabel'] = label.trim();
+      existing['${prefix}LocationMapsUrl'] = mapsUrl.trim();
+      existing['${prefix}LocationSharedByUserId'] = sharedByUserId.trim();
+      existing['${prefix}LocationSharedByName'] = sharedByName.trim();
+      existing['${prefix}LocationSharedByRole'] = sharedByRole.trim();
+      existing['${prefix}LocationAcceptedAs'] =
+          isReturn ? 'returnLocation' : 'handoverLocation';
+      if (isReturn) {
+        existing['returnLocationReusePromptDismissed'] = false;
+      }
+      map[id] = existing;
+      await _setHandoverReturnStateMap(map);
+    });
   }
 
   static Future<void> copyHandoverLocationToReturn({
@@ -7139,28 +13194,31 @@ class DataService {
   }) async {
     final id = requestId.trim();
     if (id.isEmpty) return;
-    final map = await _getHandoverReturnStateMap();
-    final existing = (map[id] is Map)
-        ? Map<String, dynamic>.from(map[id] as Map)
-        : <String, dynamic>{};
-    existing['returnLocationLat'] =
-        (existing['handoverLocationLat'] as String?) ?? '';
-    existing['returnLocationLng'] =
-        (existing['handoverLocationLng'] as String?) ?? '';
-    existing['returnLocationLabel'] =
-        (existing['handoverLocationLabel'] as String?) ?? '';
-    existing['returnLocationMapsUrl'] =
-        (existing['handoverLocationMapsUrl'] as String?) ?? '';
-    existing['returnLocationSharedByUserId'] =
-        (existing['handoverLocationSharedByUserId'] as String?) ?? '';
-    existing['returnLocationSharedByName'] =
-        (existing['handoverLocationSharedByName'] as String?) ?? '';
-    existing['returnLocationSharedByRole'] =
-        (existing['handoverLocationSharedByRole'] as String?) ?? '';
-    existing['returnLocationAcceptedAs'] = 'returnLocation';
-    existing['returnLocationReusePromptDismissed'] = false;
-    map[id] = existing;
-    await _setHandoverReturnStateMap(map);
+    final participant = await _requireCurrentRequestParticipant(id);
+    await _runHandoverForParticipant(participant, () async {
+      final map = await _getHandoverReturnStateMap();
+      final existing = (map[id] is Map)
+          ? Map<String, dynamic>.from(map[id] as Map)
+          : <String, dynamic>{};
+      existing['returnLocationLat'] =
+          (existing['handoverLocationLat'] as String?) ?? '';
+      existing['returnLocationLng'] =
+          (existing['handoverLocationLng'] as String?) ?? '';
+      existing['returnLocationLabel'] =
+          (existing['handoverLocationLabel'] as String?) ?? '';
+      existing['returnLocationMapsUrl'] =
+          (existing['handoverLocationMapsUrl'] as String?) ?? '';
+      existing['returnLocationSharedByUserId'] =
+          (existing['handoverLocationSharedByUserId'] as String?) ?? '';
+      existing['returnLocationSharedByName'] =
+          (existing['handoverLocationSharedByName'] as String?) ?? '';
+      existing['returnLocationSharedByRole'] =
+          (existing['handoverLocationSharedByRole'] as String?) ?? '';
+      existing['returnLocationAcceptedAs'] = 'returnLocation';
+      existing['returnLocationReusePromptDismissed'] = false;
+      map[id] = existing;
+      await _setHandoverReturnStateMap(map);
+    });
   }
 
   static Future<void> dismissReturnLocationReusePrompt({
@@ -7168,13 +13226,16 @@ class DataService {
   }) async {
     final id = requestId.trim();
     if (id.isEmpty) return;
-    final map = await _getHandoverReturnStateMap();
-    final existing = (map[id] is Map)
-        ? Map<String, dynamic>.from(map[id] as Map)
-        : <String, dynamic>{};
-    existing['returnLocationReusePromptDismissed'] = true;
-    map[id] = existing;
-    await _setHandoverReturnStateMap(map);
+    final participant = await _requireCurrentRequestParticipant(id);
+    await _runHandoverForParticipant(participant, () async {
+      final map = await _getHandoverReturnStateMap();
+      final existing = (map[id] is Map)
+          ? Map<String, dynamic>.from(map[id] as Map)
+          : <String, dynamic>{};
+      existing['returnLocationReusePromptDismissed'] = true;
+      map[id] = existing;
+      await _setHandoverReturnStateMap(map);
+    });
   }
 
   static Future<void> confirmFlowTime({
@@ -7184,20 +13245,38 @@ class DataService {
   }) async {
     final id = requestId.trim();
     if (id.isEmpty) return;
-    final map = await _getHandoverReturnStateMap();
-    final existing = (map[id] is Map)
-        ? Map<String, dynamic>.from(map[id] as Map)
-        : <String, dynamic>{};
-    final prefix = isReturn ? 'return' : 'handover';
-    final iso = (existing['${prefix}TimeIso'] as String?) ?? '';
-    final parsed = iso.isNotEmpty ? DateTime.tryParse(iso) : null;
-    existing['${prefix}TimeConfirmed'] = true;
-    existing['${prefix}TimeConfirmedByUserId'] = confirmedByUserId;
-    existing['${prefix}TimeConfirmedAt'] = DateTime.now().toIso8601String();
-    map[id] = existing;
-    await _setHandoverReturnStateMap(map);
+    await _requireCurrentOperationalUser(requestedUserId: confirmedByUserId);
+    final participant = await _requireCurrentRequestParticipant(id);
+    DateTime? parsed;
+    await _runHandoverForParticipant(participant, () async {
+      final map = await _getHandoverReturnStateMap();
+      final existing = (map[id] is Map)
+          ? Map<String, dynamic>.from(map[id] as Map)
+          : <String, dynamic>{};
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final remote = await BackendRepository.updateBookingFlowTime(
+          bookingId: id,
+          action: 'confirm',
+          segment: isReturn ? 'return' : 'pickup',
+        );
+        existing.addAll(remote);
+        map[id] = existing;
+        await _setHandoverReturnStateMap(map);
+        return;
+      }
+      final prefix = isReturn ? 'return' : 'handover';
+      final iso = (existing['${prefix}TimeIso'] as String?) ?? '';
+      parsed = iso.isNotEmpty ? DateTime.tryParse(iso) : null;
+      existing['${prefix}TimeConfirmed'] = true;
+      existing['${prefix}TimeConfirmedByUserId'] = confirmedByUserId;
+      existing['${prefix}TimeConfirmedAt'] = DateTime.now().toIso8601String();
+      map[id] = existing;
+      await _setHandoverReturnStateMap(map);
+    });
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) return;
 
-    if (parsed != null) {
+    final confirmedTime = parsed;
+    if (confirmedTime != null) {
       final req = await getRentalRequestById(id);
       if (req != null) {
         if (isReturn) {
@@ -7208,8 +13287,8 @@ class DataService {
               req.end.year,
               req.end.month,
               req.end.day,
-              parsed.hour,
-              parsed.minute,
+              confirmedTime.hour,
+              confirmedTime.minute,
             ),
             expressRequested: req.expressRequested,
           );
@@ -7220,8 +13299,8 @@ class DataService {
               req.start.year,
               req.start.month,
               req.start.day,
-              parsed.hour,
-              parsed.minute,
+              confirmedTime.hour,
+              confirmedTime.minute,
             ),
             end: req.end,
             expressRequested: req.expressRequested,
@@ -7236,6 +13315,32 @@ class DataService {
     RentalRequest request,
   ) async {
     try {
+      final participant = await _requireCurrentRequestParticipant(request.id);
+      final expectedCurrentUserId = participant.$1.id;
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final remote = await BackendRepository.createOrGetBookingThread(
+          request.id,
+        );
+        await _operationalMutationQueue.run(() async {
+          await _assertCurrentOperationalUserId(expectedCurrentUserId);
+          final prefs = await SharedPreferences.getInstance();
+          final currentRaw = prefs.getString(_messageThreadsKey);
+          final current = currentRaw == null
+              ? <dynamic>[]
+              : _decodeMessageThreadsStrict(currentRaw)
+                  .map((entry) => entry.toJson())
+                  .toList();
+          current.removeWhere(
+            (entry) =>
+                entry is Map &&
+                ((entry['id']?.toString() == remote['id']?.toString()) ||
+                    (entry['requestId']?.toString() == request.id)),
+          );
+          current.add(remote);
+          await _persistMessageThreads(prefs, current);
+        });
+        return;
+      }
       final item = await getItemById(request.itemId);
       if (item == null) return;
 
@@ -7243,65 +13348,60 @@ class DataService {
       final owner = await getUserById(request.ownerId);
       if (renter == null || owner == null) return;
 
-      final prefs = await SharedPreferences.getInstance();
-      final raw = await _readMessageThreads(prefs);
-      List<dynamic> list = [];
-      if (raw != null && raw.isNotEmpty) {
-        try {
-          list = jsonDecode(raw);
-        } catch (_) {
-          list = [];
-        }
-      }
-
-      // Prüfe ob bereits ein Thread für diese Anfrage existiert
-      final exists = list.any((e) {
-        try {
-          final map = Map<String, dynamic>.from(e as Map);
-          return (map['requestId']?.toString() ?? '') == request.id;
-        } catch (_) {
+      var threadId = '';
+      final created = await _operationalMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(expectedCurrentUserId);
+        final prefs = await SharedPreferences.getInstance();
+        final raw = await _readMessageThreads(prefs);
+        final threads =
+            raw == null ? <MessageThread>[] : _decodeMessageThreadsStrict(raw);
+        if (threads.any((thread) => thread.requestId == request.id)) {
           return false;
         }
+        if (threads.length >= _maxLocalMessageThreads) {
+          throw StateError('Der lokale Nachrichtenverlauf ist voll.');
+        }
+
+        final now = DateTime.now();
+        threadId = 'thread_${now.microsecondsSinceEpoch}';
+        final initialMessage = Message(
+          id: 'msg_${now.microsecondsSinceEpoch}',
+          senderId: 'system',
+          text:
+              'Starte einen Chat mit ${owner.displayName}, um eine Uhrzeit für Übergabe und Rückgabe zu vereinbaren.',
+          timestamp: now,
+          isRead: false,
+        );
+        threads.add(
+          MessageThread(
+            id: threadId,
+            requestId: request.id,
+            itemId: request.itemId,
+            itemTitle: item.title,
+            user1Id: request.renterId,
+            user2Id: request.ownerId,
+            archivedForUserIds: const <String>[],
+            messages: [initialMessage],
+            createdAt: now,
+            lastMessageAt: now,
+          ),
+        );
+        await _persistMessageThreads(
+          prefs,
+          threads.map((entry) => entry.toJson()).toList(),
+        );
+        return true;
       });
-
-      if (exists) return; // Thread existiert bereits
-
-      // Erstelle neuen Thread mit initialer Nachricht
-      final threadId = 'thread_${DateTime.now().microsecondsSinceEpoch}';
-      final now = DateTime.now();
-
-      final initialMessage = Message(
-        id: 'msg_${now.microsecondsSinceEpoch}',
-        senderId: 'system',
-        text:
-            'Starte einen Chat mit ${owner.displayName}, um eine Uhrzeit für Übergabe und Rückgabe zu vereinbaren.',
-        timestamp: now,
-        isRead: false,
-      );
-
-      final thread = MessageThread(
-        id: threadId,
-        requestId: request.id,
-        itemId: request.itemId,
-        itemTitle: item.title,
-        user1Id: request.renterId,
-        user2Id: request.ownerId,
-        archivedForUserIds: const <String>[],
-        messages: [initialMessage],
-        createdAt: now,
-        lastMessageAt: now,
-      );
-
-      list.add(thread.toJson());
-      await _persistMessageThreads(prefs, list);
+      if (!created) return;
       debugPrint(
         '[DataService] Created message thread for request ${request.id}',
       );
 
       // Create message notifications for both parties pointing directly into the thread.
       try {
-        await addStructuredNotification(
+        await _addStructuredNotification(
           userId: request.renterId,
+          expectedCurrentUserId: expectedCurrentUserId,
           category: 'messages',
           priority: 3,
           title: 'Neuer Chat',
@@ -7311,8 +13411,9 @@ class DataService {
           entityId: threadId,
           ctaLabel: 'Chat öffnen',
         );
-        await addStructuredNotification(
+        await _addStructuredNotification(
           userId: request.ownerId,
+          expectedCurrentUserId: expectedCurrentUserId,
           category: 'messages',
           priority: 3,
           title: 'Neuer Chat',
@@ -7334,36 +13435,25 @@ class DataService {
   static Future<List<MessageThread>> getMessageThreadsForUser(
     String userId,
   ) async {
+    await _requireCurrentOperationalUser(requestedUserId: userId);
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = await _readMessageThreads(prefs);
+      await _requireCurrentOperationalUser(requestedUserId: userId);
       if (raw == null || raw.isEmpty) {
         debugPrint(
           '[DataService] message thread seed skipped (demo seed disabled)',
         );
         return [];
       }
-
-      final effectiveRaw = await _readMessageThreads(prefs);
-      if (effectiveRaw == null || effectiveRaw.isEmpty) return [];
-
-      final List<dynamic> list = jsonDecode(effectiveRaw);
-      final threads = <MessageThread>[];
-
-      for (final e in list) {
-        try {
-          final thread = MessageThread.fromJson(
-            Map<String, dynamic>.from(e as Map),
-          );
-          // Nur Threads zeigen, die den User betreffen
-          if ((thread.user1Id == userId || thread.user2Id == userId) &&
-              !thread.archivedForUserIds.contains(userId)) {
-            threads.add(thread);
-          }
-        } catch (err) {
-          debugPrint('[DataService] Skipped corrupted thread: $err');
-        }
-      }
+      final threads = _decodeMessageThreadsStrict(raw)
+          .where(
+            (thread) =>
+                _isThreadParticipant(thread, userId) &&
+                !thread.archivedForUserIds.contains(userId) &&
+                !thread.deletedForUserIds.contains(userId),
+          )
+          .toList();
 
       // Sortiere nach letzter Nachricht (neueste zuerst)
       threads.sort((a, b) {
@@ -7375,32 +13465,26 @@ class DataService {
       return threads;
     } catch (e) {
       debugPrint('[DataService] getMessageThreadsForUser error: $e');
-      return [];
+      rethrow;
     }
   }
 
   /// Ensures at least one openable thread exists for the given user.
   ///
-  /// Rationale: In Dreamflow preview/dev builds, demo seeding can be disabled.
+  /// Rationale: In preview/developer builds, demo seeding can be disabled.
   /// That can leave the Messages tab empty, making it impossible to QA the chat
   /// detail UI. This method seeds a minimal *support* thread **only when the
   /// store is empty**. It does not touch booking/payment/QR/review logic.
   static Future<bool> ensureSeededMessageThreadsForUser(String userId) async {
-    try {
+    if (!QaRuntimeService.isEnabled) return false;
+    await _requireCurrentOperationalUser(requestedUserId: userId);
+    return _operationalMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(userId);
       final prefs = await SharedPreferences.getInstance();
       final raw = await _readMessageThreads(prefs);
-
-      List<dynamic> list = <dynamic>[];
-      if (raw != null && raw.trim().isNotEmpty) {
-        try {
-          final decoded = jsonDecode(raw);
-          if (decoded is List) list = decoded;
-        } catch (_) {
-          list = <dynamic>[];
-        }
-      }
-
-      if (list.isNotEmpty) return false;
+      final threads =
+          raw == null ? <MessageThread>[] : _decodeMessageThreadsStrict(raw);
+      if (threads.isNotEmpty) return false;
 
       final now = DateTime.now();
       final threadId = 'seed_support_${now.microsecondsSinceEpoch}';
@@ -7445,40 +13529,44 @@ class DataService {
         archivedForUserIds: const <String>[],
       );
 
-      await _persistMessageThreads(prefs, [thread.toJson()]);
-      debugPrint(
-        '[DataService] Seeded minimal support thread for user=$userId',
-      );
+      await _persistMessageThreads(prefs, <dynamic>[thread.toJson()]);
+      debugPrint('[DataService] Seeded minimal local QA support thread');
       return true;
-    } catch (e) {
-      debugPrint('[DataService] ensureSeededMessageThreadsForUser failed: $e');
-      return false;
-    }
+    });
   }
 
   /// Returns threads that were archived by the user.
   static Future<List<MessageThread>> getArchivedMessageThreadsForUser(
     String userId,
   ) async {
+    await _requireCurrentOperationalUser(requestedUserId: userId);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = await _readMessageThreads(prefs);
-      if (raw == null || raw.isEmpty) return [];
-      final List<dynamic> list = jsonDecode(raw);
-      final threads = <MessageThread>[];
-      for (final e in list) {
-        try {
-          final thread = MessageThread.fromJson(
-            Map<String, dynamic>.from(e as Map),
-          );
-          if ((thread.user1Id == userId || thread.user2Id == userId) &&
-              thread.archivedForUserIds.contains(userId)) {
-            threads.add(thread);
-          }
-        } catch (err) {
-          debugPrint('[DataService] Skipped corrupted archived thread: $err');
-        }
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final remote = await BackendRepository.getMessageThreads(
+          includeArchived: true,
+        );
+        await _persistMessageThreads(
+          prefs,
+          remote,
+          announceChange: shouldAnnounceMessageThreadCacheWrite(
+            readOnlyRemoteRefresh: true,
+          ),
+        );
       }
+      await _requireCurrentOperationalUser(requestedUserId: userId);
+      final raw = BackendConfig.enabled && !QaRuntimeService.isEnabled
+          ? prefs.getString(_messageThreadsKey)
+          : await _readMessageThreads(prefs);
+      if (raw == null || raw.isEmpty) return [];
+      final threads = _decodeMessageThreadsStrict(raw)
+          .where(
+            (thread) =>
+                _isThreadParticipant(thread, userId) &&
+                thread.archivedForUserIds.contains(userId) &&
+                !thread.deletedForUserIds.contains(userId),
+          )
+          .toList();
       threads.sort((a, b) {
         final aTime = a.lastMessageAt ?? a.createdAt;
         final bTime = b.lastMessageAt ?? b.createdAt;
@@ -7487,381 +13575,296 @@ class DataService {
       return threads;
     } catch (e) {
       debugPrint('[DataService] getArchivedMessageThreadsForUser error: $e');
-      return [];
+      rethrow;
     }
   }
 
   static Future<void> archiveMessageThreadForUser({
     required String threadId,
     required String userId,
+    AuthSessionOwner? sessionOwner,
   }) async {
     if (threadId.isEmpty || userId.isEmpty) return;
+    final current =
+        await _requireCurrentOperationalUser(requestedUserId: userId);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = await _readMessageThreads(prefs);
-      if (raw == null || raw.isEmpty) return;
-      final List<dynamic> list = jsonDecode(raw);
-      bool mutated = false;
-      for (int i = 0; i < list.length; i++) {
-        if (list[i] is! Map) continue;
-        final map = Map<String, dynamic>.from(list[i] as Map);
-        if ((map['id'] ?? '').toString() != threadId) continue;
-        final thread = MessageThread.fromJson(map);
-        final archived = [...thread.archivedForUserIds];
-        if (!archived.contains(userId)) {
-          archived.add(userId);
-          list[i] = thread.copyWith(archivedForUserIds: archived).toJson();
-          mutated = true;
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final owner = sessionOwner;
+        if (owner == null) {
+          throw StateError('Die Kontositzung der Aktion fehlt.');
         }
-        break;
+        await BackendRepository.setThreadArchivedForOwner(
+          owner: owner,
+          threadId: threadId,
+          archived: true,
+        );
+        final prefs = await SharedPreferences.getInstance();
+        final remote = await BackendRepository.getMessageThreadsForOwner(owner);
+        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          throw StateError(
+              'Die Kontositzung hat während der Aktion gewechselt.');
+        }
+        await _assertCurrentOperationalUserId(current.id);
+        await _persistMessageThreads(prefs, remote);
+        return;
       }
-      if (mutated) await _persistMessageThreads(prefs, list);
+      await _operationalMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(current.id);
+        final prefs = await SharedPreferences.getInstance();
+        final raw = await _readMessageThreads(prefs);
+        if (raw == null || raw.isEmpty) return;
+        final threads = _decodeMessageThreadsStrict(raw);
+        final index = threads.indexWhere((thread) => thread.id == threadId);
+        if (index < 0) return;
+        final thread = threads[index];
+        if (!_isThreadParticipant(thread, current.id)) {
+          throw StateError(
+              'Der Nachrichtenverlauf gehört zu einem anderen Konto.');
+        }
+        final archived =
+            <String>{...thread.archivedForUserIds, current.id}.toList()..sort();
+        threads[index] = thread.copyWith(archivedForUserIds: archived);
+        await _persistMessageThreads(
+          prefs,
+          threads.map((entry) => entry.toJson()).toList(growable: false),
+        );
+      });
     } catch (e) {
       debugPrint('[DataService] archiveMessageThreadForUser error: $e');
+      rethrow;
     }
   }
 
   static Future<void> unarchiveMessageThreadForUser({
     required String threadId,
     required String userId,
+    AuthSessionOwner? sessionOwner,
   }) async {
     if (threadId.isEmpty || userId.isEmpty) return;
+    final current =
+        await _requireCurrentOperationalUser(requestedUserId: userId);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = await _readMessageThreads(prefs);
-      if (raw == null || raw.isEmpty) return;
-      final List<dynamic> list = jsonDecode(raw);
-      bool mutated = false;
-      for (int i = 0; i < list.length; i++) {
-        if (list[i] is! Map) continue;
-        final map = Map<String, dynamic>.from(list[i] as Map);
-        if ((map['id'] ?? '').toString() != threadId) continue;
-        final thread = MessageThread.fromJson(map);
-        final archived = [...thread.archivedForUserIds];
-        if (archived.remove(userId)) {
-          list[i] = thread.copyWith(archivedForUserIds: archived).toJson();
-          mutated = true;
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final owner = sessionOwner;
+        if (owner == null) {
+          throw StateError('Die Kontositzung der Aktion fehlt.');
         }
-        break;
+        await BackendRepository.setThreadArchivedForOwner(
+          owner: owner,
+          threadId: threadId,
+          archived: false,
+        );
+        final prefs = await SharedPreferences.getInstance();
+        final remote = await BackendRepository.getMessageThreadsForOwner(owner);
+        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          throw StateError(
+              'Die Kontositzung hat während der Aktion gewechselt.');
+        }
+        await _assertCurrentOperationalUserId(current.id);
+        await _persistMessageThreads(prefs, remote);
+        return;
       }
-      if (mutated) await _persistMessageThreads(prefs, list);
+      await _operationalMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(current.id);
+        final prefs = await SharedPreferences.getInstance();
+        final raw = await _readMessageThreads(prefs);
+        if (raw == null || raw.isEmpty) return;
+        final threads = _decodeMessageThreadsStrict(raw);
+        final index = threads.indexWhere((thread) => thread.id == threadId);
+        if (index < 0) return;
+        final thread = threads[index];
+        if (!_isThreadParticipant(thread, current.id)) {
+          throw StateError(
+              'Der Nachrichtenverlauf gehört zu einem anderen Konto.');
+        }
+        final archived = <String>{...thread.archivedForUserIds}
+          ..remove(current.id);
+        threads[index] = thread.copyWith(
+          archivedForUserIds: archived.toList()..sort(),
+        );
+        await _persistMessageThreads(
+          prefs,
+          threads.map((entry) => entry.toJson()).toList(growable: false),
+        );
+      });
     } catch (e) {
       debugPrint('[DataService] unarchiveMessageThreadForUser error: $e');
+      rethrow;
     }
   }
 
-  /// Deletes a thread entirely from local storage.
-  ///
-  /// This is destructive and affects both participants (demo/local only).
-  static Future<void> deleteMessageThread({required String threadId}) async {
-    if (threadId.isEmpty) return;
+  /// Hides a local thread only for the explicitly captured participant.
+  static Future<void> deleteMessageThreadForUser({
+    required String threadId,
+    required String userId,
+    AuthSessionOwner? sessionOwner,
+  }) async {
+    if (threadId.isEmpty || userId.isEmpty) return;
+    final current =
+        await _requireCurrentOperationalUser(requestedUserId: userId);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = await _readMessageThreads(prefs);
-      if (raw == null || raw.isEmpty) return;
-      final List<dynamic> list = jsonDecode(raw);
-      final before = list.length;
-      list.removeWhere(
-        (e) => (e is Map) && ((e['id'] ?? '').toString() == threadId),
-      );
-      if (list.length != before) {
-        await _persistMessageThreads(prefs, list);
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final owner = sessionOwner;
+        if (owner == null) {
+          throw StateError('Die Kontositzung der Aktion fehlt.');
+        }
+        await BackendRepository.setThreadArchivedForOwner(
+          owner: owner,
+          threadId: threadId,
+          archived: true,
+        );
+        final prefs = await SharedPreferences.getInstance();
+        final remote = await BackendRepository.getMessageThreadsForOwner(owner);
+        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          throw StateError(
+              'Die Kontositzung hat während der Aktion gewechselt.');
+        }
+        await _assertCurrentOperationalUserId(current.id);
+        await _persistMessageThreads(prefs, remote);
+        return;
       }
+      await _operationalMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(current.id);
+        final prefs = await SharedPreferences.getInstance();
+        final raw = await _readMessageThreads(prefs);
+        if (raw == null || raw.isEmpty) return;
+        final threads = _decodeMessageThreadsStrict(raw);
+        final index = threads.indexWhere((thread) => thread.id == threadId);
+        if (index < 0) return;
+        final thread = threads[index];
+        if (!_isThreadParticipant(thread, current.id)) {
+          throw StateError(
+              'Der Nachrichtenverlauf gehört zu einem anderen Konto.');
+        }
+        final deleted =
+            <String>{...thread.deletedForUserIds, current.id}.toList()..sort();
+        threads[index] = thread.copyWith(deletedForUserIds: deleted);
+        await _persistMessageThreads(
+          prefs,
+          threads.map((entry) => entry.toJson()).toList(growable: false),
+        );
+      });
     } catch (e) {
-      debugPrint('[DataService] deleteMessageThread error: $e');
+      debugPrint('[DataService] deleteMessageThreadForUser error: $e');
+      rethrow;
     }
   }
 
   static Future<int> getUnreadThreadCountForUser(String userId) async {
-    try {
-      final threads = await getMessageThreadsForUser(userId);
-      int count = 0;
-      for (final t in threads) {
-        final hasUnread = t.messages.any(
-          (m) => m.senderId != userId && !m.isRead,
-        );
-        if (hasUnread) count++;
-      }
-      return count;
-    } catch (e) {
-      debugPrint('[DataService] getUnreadThreadCountForUser error: $e');
-      return 0;
+    final threads = await getMessageThreadsForUser(userId);
+    int count = 0;
+    for (final t in threads) {
+      final hasUnread = t.messages.any(
+        (m) => m.senderId != userId && !m.isRead,
+      );
+      if (hasUnread) count++;
     }
+    return count;
   }
 
-  static List<MessageThread> _buildDemoMessageThreadsForUser(String userId) {
-    final now = DateTime.now();
-    final otherUsers = <String>['u2', 'u3', 'u6', 'u10', 'u14']..remove(userId);
-    final picks = otherUsers.take(3).toList();
-    if (picks.isEmpty) picks.add('u2');
-
-    Message msg({
-      required String senderId,
-      required String text,
-      required DateTime at,
-      bool isRead = true,
-    }) =>
-        Message(
-          id: 'msg_${at.microsecondsSinceEpoch}_${senderId == userId ? 'me' : 'them'}',
-          senderId: senderId,
-          text: text,
-          timestamp: at,
-          isRead: isRead,
-        );
-
-    MessageThread thread({
-      required String threadId,
-      required String otherUserId,
-      required String itemTitle,
-      String? bookingStatus,
-      DateTime? handoverAt,
-      DateTime? returnAt,
-      String? threadType,
-      required List<Message> messages,
-      required DateTime createdAt,
-      DateTime? lastAt,
-    }) =>
-        MessageThread(
-          id: threadId,
-          requestId: 'demo_req_$threadId',
-          itemId: 'demo_item_$threadId',
-          itemTitle: itemTitle,
-          user1Id: userId,
-          user2Id: otherUserId,
-          threadType: threadType,
-          bookingStatus: bookingStatus,
-          handoverAt: handoverAt,
-          returnAt: returnAt,
-          otherUserOnline: threadType == 'support' ? true : null,
-          otherUserLastActive: now.subtract(const Duration(minutes: 6)),
-          archivedForUserIds: const <String>[],
-          messages: messages,
-          createdAt: createdAt,
-          lastMessageAt: lastAt,
-        );
-
-    final t1Time = now.subtract(const Duration(hours: 2, minutes: 12));
-    final t2Time = now.subtract(const Duration(days: 1, hours: 3));
-    final t3Time = now.subtract(const Duration(days: 5, hours: 1));
-
-    final th1 = thread(
-      threadId: 'thread_demo_1',
-      otherUserId: picks[0],
-      itemTitle: 'Canon EOS R5 – Kamera',
-      createdAt: t1Time.subtract(const Duration(minutes: 20)),
-      lastAt: t1Time,
-      bookingStatus: 'accepted',
-      handoverAt: DateTime(now.year, now.month, now.day, 18, 0),
-      messages: [
-        msg(
-          senderId: 'system',
-          text: 'Starte einen Chat, um Übergabe und Rückgabe zu koordinieren.',
-          at: t1Time.subtract(const Duration(minutes: 20)),
-          isRead: true,
-        ),
-        msg(
-          senderId: picks[0],
-          text: 'Hi! Passt dir heute 18:30 für die Übergabe?',
-          at: t1Time.subtract(const Duration(minutes: 7)),
-          isRead: false,
-        ),
-        msg(
-          senderId: userId,
-          text: 'Ja, 18:30 ist perfekt. Ich bin pünktlich da.',
-          at: t1Time.subtract(const Duration(minutes: 4)),
-          isRead: true,
-        ),
-        msg(
-          senderId: picks[0],
-          text: 'Super — ich schicke dir gleich die genaue Adresse.',
-          at: t1Time,
-          isRead: false,
-        ),
-      ],
-    );
-
-    final th2 = thread(
-      threadId: 'thread_demo_2',
-      otherUserId: picks.length > 1 ? picks[1] : picks[0],
-      itemTitle: 'Bosch Bohrmaschine',
-      createdAt: t2Time.subtract(const Duration(hours: 1)),
-      lastAt: t2Time,
-      bookingStatus: 'pending',
-      messages: [
-        msg(
-          senderId: 'system',
-          text: 'Starte einen Chat, um Übergabe und Rückgabe zu koordinieren.',
-          at: t2Time.subtract(const Duration(hours: 1)),
-          isRead: true,
-        ),
-        msg(
-          senderId: userId,
-          text:
-              'Hey! Ist die Bohrmaschine auch mit 10mm Steinbohrer verfügbar?',
-          at: t2Time.subtract(const Duration(minutes: 18)),
-          isRead: true,
-        ),
-        msg(
-          senderId: picks.length > 1 ? picks[1] : picks[0],
-          text: 'Ja, ist dabei. Akku ist voll geladen 👍',
-          at: t2Time,
-          isRead: true,
-        ),
-      ],
-    );
-
-    final th3 = thread(
-      threadId: 'thread_demo_3',
-      otherUserId: picks.length > 2 ? picks[2] : picks[0],
-      itemTitle: 'E‑Scooter (City)',
-      createdAt: t3Time.subtract(const Duration(hours: 2)),
-      lastAt: t3Time,
-      bookingStatus: 'completed',
-      returnAt: DateTime(now.year, now.month, now.day + 1, 12, 0),
-      messages: [
-        msg(
-          senderId: 'system',
-          text: 'Starte einen Chat, um Übergabe und Rückgabe zu koordinieren.',
-          at: t3Time.subtract(const Duration(hours: 2)),
-          isRead: true,
-        ),
-        msg(
-          senderId: picks.length > 2 ? picks[2] : picks[0],
-          text: 'Wenn du willst, kann ich dir noch ein Schloss mitgeben.',
-          at: t3Time.subtract(const Duration(minutes: 35)),
-          isRead: true,
-        ),
-        msg(
-          senderId: userId,
-          text: 'Mega, danke! Dann fühle ich mich sicherer.',
-          at: t3Time,
-          isRead: true,
-        ),
-      ],
-    );
-
-    final supportTime = now.subtract(const Duration(minutes: 40));
-    final support = thread(
-      threadId: 'thread_support_1',
-      otherUserId: 'support',
-      threadType: 'support',
-      itemTitle: 'SIT Support',
-      bookingStatus: null,
-      createdAt: supportTime.subtract(const Duration(minutes: 2)),
-      lastAt: supportTime,
-      messages: [
-        msg(
-          senderId: 'support',
-          text: 'Hallo! Wie können wir helfen?',
-          at: supportTime.subtract(const Duration(minutes: 2)),
-          isRead: false,
-        ),
-        msg(
-          senderId: userId,
-          text: 'Kurze Frage zur Rückgabe: kann ich auch früher abgeben?',
-          at: supportTime,
-          isRead: true,
-        ),
-      ],
-    );
-
-    return [th1, th2, support, th3];
-  }
-
-  /// Erstellt einen neuen Support-Thread für einen User oder verwendet den bestehenden erneut.
+  /// Opens the local, read-only presentation for a server-confirmed case.
+  /// A local support thread must never be created as a fallback for a failed
+  /// or unconfirmed canonical intake.
   static Future<MessageThread?> createSupportThread({
     required String userId,
+    required String canonicalCaseNumber,
   }) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = await _readMessageThreads(prefs);
-      final List<dynamic> list =
-          raw != null && raw.isNotEmpty ? jsonDecode(raw) : [];
-
-      for (final entry in list) {
-        if (entry is! Map) continue;
-        final thread = MessageThread.fromJson(Map<String, dynamic>.from(entry));
-        final isSupport = (thread.threadType ?? '').toLowerCase() == 'support';
-        final belongsToUser =
-            (thread.user1Id == userId && thread.user2Id == 'support') ||
-                (thread.user2Id == userId && thread.user1Id == 'support');
-        if (isSupport && belongsToUser) {
-          debugPrint('[DataService] createSupportThread: reusing ${thread.id}');
-          return thread;
-        }
+      final current =
+          await _requireCurrentOperationalUser(requestedUserId: userId);
+      if (!RegExp(r'^SIT-[A-HJ-NP-Z2-9]{12}$')
+          .hasMatch(canonicalCaseNumber.trim())) {
+        debugPrint(
+          '[DataService] createSupportThread: canonical receipt required',
+        );
+        return null;
       }
+      return _operationalMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(current.id);
+        final prefs = await SharedPreferences.getInstance();
+        final raw = await _readMessageThreads(prefs);
+        final threads =
+            raw == null ? <MessageThread>[] : _decodeMessageThreadsStrict(raw);
 
-      final now = DateTime.now();
-      final threadId = 'thread_support_${now.microsecondsSinceEpoch}';
+        for (final thread in threads) {
+          final isSupport =
+              (thread.threadType ?? '').toLowerCase() == 'support';
+          final belongsToUser =
+              (thread.user1Id == current.id && thread.user2Id == 'support') ||
+                  (thread.user2Id == current.id && thread.user1Id == 'support');
+          if (isSupport &&
+              belongsToUser &&
+              !thread.deletedForUserIds.contains(current.id)) {
+            debugPrint(
+                '[DataService] createSupportThread: reusing local thread');
+            return thread;
+          }
+        }
+        if (threads.length >= _maxLocalMessageThreads) {
+          throw StateError('Der lokale Nachrichtenverlauf ist voll.');
+        }
 
-      final supportThread = MessageThread(
-        id: threadId,
-        requestId: '',
-        itemId: '',
-        itemTitle: 'SIT Support',
-        user1Id: userId,
-        user2Id: 'support',
-        threadType: 'support',
-        bookingStatus: null,
-        handoverAt: null,
-        returnAt: null,
-        otherUserOnline: true,
-        otherUserLastActive: now,
-        archivedForUserIds: const <String>[],
-        messages: [
-          Message(
-            id: 'msg_${now.microsecondsSinceEpoch}_welcome',
-            senderId: 'support',
-            text: 'Hallo! Wie können wir dir helfen?',
-            timestamp: now,
-            isRead: false,
-          ),
-        ],
-        createdAt: now,
-        lastMessageAt: now,
-      );
+        final now = DateTime.now();
+        final supportThread = MessageThread(
+          id: 'thread_support_${now.microsecondsSinceEpoch}',
+          requestId: '',
+          itemId: '',
+          itemTitle: 'SIT Support',
+          user1Id: current.id,
+          user2Id: 'support',
+          threadType: 'support',
+          archivedForUserIds: const <String>[],
+          messages: const <Message>[],
+          createdAt: now,
+        );
 
-      list.add(supportThread.toJson());
-      await _persistMessageThreads(prefs, list);
-
-      debugPrint('[DataService] createSupportThread: created $threadId');
-      return supportThread;
+        threads.add(supportThread);
+        await _persistMessageThreads(
+          prefs,
+          threads.map((entry) => entry.toJson()).toList(),
+        );
+        debugPrint('[DataService] createSupportThread: created local thread');
+        return supportThread;
+      });
     } catch (e) {
       debugPrint('[DataService] createSupportThread error: $e');
-      return null;
+      rethrow;
     }
   }
 
   /// Findet einen Thread anhand der Thread-ID
-  static Future<MessageThread?> getMessageThreadById(String threadId) async {
+  static Future<MessageThread?> getMessageThreadById(
+    String threadId, {
+    Duration remoteTimeout = const Duration(seconds: 20),
+  }) async {
     final normalizedThreadId = threadId.trim();
     if (normalizedThreadId.isEmpty) return null;
 
     try {
+      final current = await _requireCurrentOperationalUser();
       final prefs = await SharedPreferences.getInstance();
-      final raw = await _readMessageThreads(prefs);
-      if (raw == null || raw.isEmpty) return null;
+      final raw = await _readMessageThreads(
+        prefs,
+        remoteTimeout: remoteTimeout,
+      );
+      await _requireCurrentOperationalUser(requestedUserId: current.id);
+      if (raw == null) return null;
 
-      final List<dynamic> list = jsonDecode(raw);
-      for (final e in list) {
-        try {
-          final thread = MessageThread.fromJson(
-            Map<String, dynamic>.from(e as Map),
-          );
-          if (thread.id != normalizedThreadId) continue;
-
-          final isParticipant = await _isCurrentUserParticipantForThread(
-            thread,
-          );
-          if (!isParticipant) return null;
-
-          return thread;
-        } catch (_) {}
+      for (final thread in _decodeMessageThreadsStrict(raw)) {
+        if (thread.id != normalizedThreadId) continue;
+        if (!_isThreadParticipant(thread, current.id) ||
+            thread.deletedForUserIds.contains(current.id)) {
+          return null;
+        }
+        return thread;
       }
+      return null;
+    } on StateError catch (e) {
+      debugPrint('[DataService] getMessageThreadById denied: $e');
       return null;
     } catch (e) {
       debugPrint('[DataService] getMessageThreadById error: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -7871,108 +13874,185 @@ class DataService {
     required String senderId,
     required String text,
   }) async {
-    try {
-      final normalizedThreadId = threadId.trim();
-      final normalizedSenderId = senderId.trim();
-      final normalizedText = text.trim();
-      if (normalizedThreadId.isEmpty ||
-          normalizedSenderId.isEmpty ||
-          normalizedText.isEmpty) {
+    final normalizedThreadId = threadId.trim();
+    final normalizedSenderId = senderId.trim();
+    final normalizedText = text.trim();
+    if (normalizedThreadId.isEmpty ||
+        normalizedSenderId.isEmpty ||
+        normalizedText.isEmpty) {
+      return;
+    }
+    if (normalizedText.length > 20000) {
+      throw ArgumentError('Die Nachricht ist zu lang.');
+    }
+
+    final currentUser = await _requireCurrentOperationalUser();
+
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      if (normalizedSenderId == 'system' ||
+          normalizedSenderId != currentUser.id) {
         return;
       }
+      await BackendRepository.sendThreadMessage(
+        threadId: normalizedThreadId,
+        text: normalizedText,
+        idempotencyKey:
+            'message_${normalizedThreadId}_${DateTime.now().microsecondsSinceEpoch}',
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final remote = await BackendRepository.getMessageThreads();
+      await _assertCurrentOperationalUserId(currentUser.id);
+      await _persistMessageThreads(prefs, remote);
+      return;
+    }
 
-      final currentUser = await getCurrentUser();
-      if (currentUser == null) return;
-
+    await _operationalMutationQueue.run(() async {
+      await _assertCurrentOperationalUserId(currentUser.id);
       final prefs = await SharedPreferences.getInstance();
       final raw = await _readMessageThreads(prefs);
-      if (raw == null || raw.isEmpty) return;
-
-      final List<dynamic> list = jsonDecode(raw);
-      bool mutated = false;
-
-      for (int i = 0; i < list.length; i++) {
-        try {
-          final map = Map<String, dynamic>.from(list[i] as Map);
-          if ((map['id']?.toString() ?? '') == normalizedThreadId) {
-            final thread = MessageThread.fromJson(map);
-            final isParticipant = thread.user1Id == currentUser.id ||
-                thread.user2Id == currentUser.id;
-            final senderIsAllowed = normalizedSenderId == 'system' ||
-                normalizedSenderId == currentUser.id;
-            if (!isParticipant || !senderIsAllowed) return;
-
-            final now = DateTime.now();
-            final newMessage = Message(
-              id: 'msg_${now.microsecondsSinceEpoch}',
-              senderId: normalizedSenderId,
-              text: normalizedText,
-              timestamp: now,
-              isRead: false,
-            );
-
-            final updatedThread = thread.copyWith(
-              messages: [...thread.messages, newMessage],
-              lastMessageAt: now,
-            );
-
-            list[i] = updatedThread.toJson();
-            mutated = true;
-            break;
-          }
-        } catch (_) {}
+      if (raw == null) return;
+      final threads = _decodeMessageThreadsStrict(raw);
+      final index =
+          threads.indexWhere((thread) => thread.id == normalizedThreadId);
+      if (index < 0) return;
+      final thread = threads[index];
+      final isParticipant = _isThreadParticipant(thread, currentUser.id);
+      final senderIsAllowed = normalizedSenderId == 'system' ||
+          normalizedSenderId == currentUser.id;
+      if (!isParticipant ||
+          !senderIsAllowed ||
+          thread.deletedForUserIds.contains(currentUser.id)) {
+        return;
       }
-
-      if (mutated) {
-        await _persistMessageThreads(prefs, list);
+      if (thread.messages.length >= _maxMessagesPerThread) {
+        throw StateError('Der lokale Nachrichtenverlauf ist voll.');
       }
-    } catch (e) {
-      debugPrint('[DataService] addMessageToThread error: $e');
+      final now = DateTime.now();
+      final existingIds = thread.messages.map((message) => message.id).toSet();
+      final baseId = 'msg_${now.microsecondsSinceEpoch}';
+      var messageId = baseId;
+      var suffix = 1;
+      while (existingIds.contains(messageId)) {
+        messageId = '${baseId}_$suffix';
+        suffix++;
+      }
+      final newMessage = Message(
+        id: messageId,
+        senderId: normalizedSenderId,
+        text: normalizedText,
+        timestamp: now,
+        isRead: false,
+      );
+      threads[index] = thread.copyWith(
+        messages: [...thread.messages, newMessage],
+        lastMessageAt: now,
+      );
+      await _persistMessageThreads(
+        prefs,
+        threads.map((entry) => entry.toJson()).toList(),
+      );
+    });
+  }
+
+  static Future<void> addMessageAttachmentToThread({
+    required String threadId,
+    required Uint8List bytes,
+    required String filename,
+    String text = 'Foto hinzugefügt',
+  }) async {
+    if (!BackendConfig.enabled || QaRuntimeService.isEnabled) {
+      await addMessageToThread(
+        threadId: threadId,
+        senderId: 'system',
+        text: text,
+      );
+      return;
     }
+    final current = await _requireCurrentOperationalUser();
+    final thread = await getMessageThreadById(threadId);
+    if (thread == null || !_isThreadParticipant(thread, current.id)) {
+      throw StateError(
+        'Der Nachrichtenverlauf gehört zu einem anderen Konto.',
+      );
+    }
+    final upload = await BackendRepository.uploadMessageAttachment(
+      bytes: bytes,
+      filename: filename,
+      threadId: threadId,
+    );
+    await BackendRepository.sendThreadMessage(
+      threadId: threadId,
+      text: text,
+      idempotencyKey:
+          'attachment_${threadId}_${DateTime.now().microsecondsSinceEpoch}',
+      attachmentIds: [upload['id'].toString()],
+    );
+    final prefs = await SharedPreferences.getInstance();
+    final remote = await BackendRepository.getMessageThreads();
+    await _assertCurrentOperationalUserId(current.id);
+    await _persistMessageThreads(prefs, remote);
   }
 
   /// Markiert alle Nachrichten in einem Thread als gelesen für einen User
   static Future<void> markThreadMessagesAsRead({
     required String threadId,
     required String userId,
+    AuthSessionOwner? sessionOwner,
   }) async {
+    final current =
+        await _requireCurrentOperationalUser(requestedUserId: userId);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = await _readMessageThreads(prefs);
-      if (raw == null || raw.isEmpty) return;
-
-      final List<dynamic> list = jsonDecode(raw);
-      bool mutated = false;
-
-      for (int i = 0; i < list.length; i++) {
-        try {
-          final map = Map<String, dynamic>.from(list[i] as Map);
-          if ((map['id']?.toString() ?? '') == threadId) {
-            final thread = MessageThread.fromJson(map);
-            var threadMutated = false;
-            final updatedMessages = thread.messages.map((msg) {
-              if (msg.senderId != userId && !msg.isRead) {
-                threadMutated = true;
-                return msg.copyWith(isRead: true);
-              }
-              return msg;
-            }).toList();
-
-            if (threadMutated) {
-              final updatedThread = thread.copyWith(messages: updatedMessages);
-              list[i] = updatedThread.toJson();
-              mutated = true;
-            }
-            break;
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final owner = sessionOwner;
+        if (owner == null) {
+          throw StateError('Die Kontositzung der Aktion fehlt.');
+        }
+        await BackendRepository.markThreadReadForOwner(
+          owner: owner,
+          threadId: threadId,
+        );
+        final prefs = await SharedPreferences.getInstance();
+        final remote = await BackendRepository.getMessageThreadsForOwner(owner);
+        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          throw StateError(
+              'Die Kontositzung hat während der Aktion gewechselt.');
+        }
+        await _assertCurrentOperationalUserId(current.id);
+        await _persistMessageThreads(prefs, remote);
+        return;
+      }
+      await _operationalMutationQueue.run(() async {
+        await _assertCurrentOperationalUserId(current.id);
+        final prefs = await SharedPreferences.getInstance();
+        final raw = await _readMessageThreads(prefs);
+        if (raw == null) return;
+        final threads = _decodeMessageThreadsStrict(raw);
+        final index = threads.indexWhere((thread) => thread.id == threadId);
+        if (index < 0) return;
+        final thread = threads[index];
+        if (!_isThreadParticipant(thread, current.id) ||
+            thread.deletedForUserIds.contains(current.id)) {
+          throw StateError(
+              'Der Nachrichtenverlauf gehört zu einem anderen Konto.');
+        }
+        var mutated = false;
+        final updatedMessages = thread.messages.map((message) {
+          if (message.senderId != current.id && !message.isRead) {
+            mutated = true;
+            return message.copyWith(isRead: true);
           }
-        } catch (_) {}
-      }
-
-      if (mutated) {
-        await _persistMessageThreads(prefs, list);
-      }
+          return message;
+        }).toList();
+        if (!mutated) return;
+        threads[index] = thread.copyWith(messages: updatedMessages);
+        await _persistMessageThreads(
+          prefs,
+          threads.map((entry) => entry.toJson()).toList(),
+        );
+      });
     } catch (e) {
       debugPrint('[DataService] markThreadMessagesAsRead error: $e');
+      rethrow;
     }
   }
 }

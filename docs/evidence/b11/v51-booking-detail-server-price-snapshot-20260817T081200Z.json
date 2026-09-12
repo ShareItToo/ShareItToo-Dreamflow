@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-booking-detail-server-price-snapshot",
+  "status": "passed-source-and-regression",
+  "capturedAt": "2026-08-17T08:12:00Z",
+  "sourceCommit": "523929dd5c259ad0beb0f4d207a473498d7f1a06",
+  "checks": {
+    "completeServerQuoteParsed": true,
+    "completeServerQuoteSerialized": true,
+    "checkoutBindsCompleteSnapshot": true,
+    "bookingListForwardsSnapshot": true,
+    "notificationsForwardSnapshot": true,
+    "chatForwardsSnapshot": true,
+    "appLinksForwardSnapshot": true,
+    "bookingDetailValidatesIntegerSnapshot": true,
+    "bookingDetailRequiresRentPlusFeeEqualsTotal": true,
+    "bookingDetailRequiresOwnerPayoutEqualsRent": true,
+    "bookingDetailRejectsLegacyExtraAmounts": true,
+    "renterStatesUseSnapshot": true,
+    "ownerStatesUseSnapshot": true,
+    "legacyAndQaFallbackPreserved": true
+  },
+  "verification": {
+    "sourceWiringTestsPassed": 5,
+    "selectedRangeAndSnapshotWiringTestsPassed": 9,
+    "targetedFlutterTestsPassed": 58,
+    "privacyAndRetentionTestsPassed": 39,
+    "fullFlutterTestsPassed": 269,
+    "intentionalFlutterTestsSkipped": 1,
+    "analyzerFindings": 229,
+    "analyzerErrors": 0,
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "technicalRegression": "passed"
+  },
+  "privacy": {
+    "dataCollectionChanged": false,
+    "dataStorageChanged": false,
+    "dataTransportChanged": false,
+    "providerChanged": false,
+    "permissionChanged": false,
+    "sourceInventoryHashesUpdated": true
+  },
+  "boundaries": {
+    "backendDeployed": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "storeSubmissionPerformed": false,
+    "realPaymentPerformed": false,
+    "candidateBuiltOrRelabeled": false,
+    "pushRetainedDefaultOff": true,
+    "crashRetainedDefaultOff": true,
+    "pushEnablesCrash": false,
+    "crashDataTransferred": false
+  },
+  "conclusion": {
+    "bookingPriceTruth": "immutable-complete-server-quote-snapshot",
+    "bindingInvariant": "rental-subtotal-plus-platform-fee-equals-total",
+    "legacyExtraAmounts": "not-added-to-bound-launch-price",
+    "legacyAndQaBehavior": "explicit-fallback-preserved",
+    "officialPlayInternalCandidate": "1.0.0+2026081509",
+    "localSignedCandidate": "1.0.0+2026081510-built-local-not-uploaded"
+  }
+}

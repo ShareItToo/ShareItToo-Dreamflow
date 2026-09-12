@@ -1,0 +1,16 @@
+[Unit]
+Description=ShareItToo isolated backup restore verification
+Requires=docker.service
+After=docker.service shareittoo-backup.service
+OnFailure=shareittoo-alert@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/docker/shareittoo/backend/ops/verify_restore.sh
+User=root
+Group=root
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true

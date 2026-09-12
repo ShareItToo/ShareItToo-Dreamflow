@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "kind": "firebase-phone-console-activation",
+  "observedAt": "2026-08-14T06:19:45Z",
+  "projectId": "shareittoo-staging",
+  "authentication": {
+    "phoneProviderEnabled": true,
+    "dailySmsQuotaNotice": 10,
+    "canonicalAndroidSigningFingerprintsRegistered": true
+  },
+  "smsRegionPolicy": {
+    "mode": "allow",
+    "regions": ["DE"],
+    "saved": true
+  },
+  "authorization": {
+    "ownerConfirmed": true,
+    "providerTermsAccepted": true
+  },
+  "boundaries": {
+    "containsPhoneNumbers": false,
+    "containsSmsCodes": false,
+    "containsFirebaseTokens": false,
+    "containsCredentials": false,
+    "containsSecrets": false,
+    "realSmsSent": false,
+    "productionChanged": false,
+    "storeSubmissionChanged": false
+  }
+}

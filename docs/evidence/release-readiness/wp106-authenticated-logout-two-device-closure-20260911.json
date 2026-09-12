@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP106_AUTHENTICATED_LOGOUT_TWO_DEVICE_CLOSURE",
+  "status": "pixel-complete-oneplus-exact-candidate-blocked-device-unavailable",
+  "recordedAt": "2026-09-11T00:40:00Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "logoutCorrectionHead": "28bda354835dbeebe5d689c1a721e0f0d6ef411e",
+    "artifactSourceHead": "67c4e2ebe4ceead7529c4f02ca1209d71c66fe25",
+    "predecessorVersionCode": "2026091002",
+    "predecessorManifest": "store/google-play/rollover-candidate-2026091002.json"
+  },
+  "causeAndCorrection": {
+    "physicalSymptom": "oneplus-confirmed-logout-remained-authenticated",
+    "sourceCause": "local-session-removal-waited-for-native-fcm-token-teardown",
+    "localSessionRemovalNowProviderIndependent": true,
+    "foregroundPushBoundaryClosesSynchronously": true,
+    "latePushRegistrationCannotReopenClosedGeneration": true,
+    "fcmInstallationTokenDeletedOnLogout": false,
+    "backendExactSessionLogoutRemainsBestEffort": true,
+    "timingWorkaroundAdded": false
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091101",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseAndroidConfigured": true,
+    "paymentTransport": "memory",
+    "stripeLivemode": false,
+    "externalListingAiEnabled": false
+  },
+  "artifacts": {
+    "aabBytes": 109454240,
+    "aabSha256": "9aab79539a54601ad309bde057d0f938dbf54aa30ff8353796574aad5dbd9a91",
+    "apkBytes": 136389066,
+    "apkSha256": "6382cc593ce995abce93c51fc117ba649f9d8c2194a421875923686ed657a9c7",
+    "privacyReportSha256": "b40755c3c7684f549fa2cda131fea29713f7e7de6fff58a97acd4bcaf076a968",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "zipStructureValidation": "passed",
+    "binaryPrivacyScan": "passed",
+    "privateNonOverwritingArchive": true
+  },
+  "verification": {
+    "focusedNodeTests": {
+      "passed": 6,
+      "failed": 0
+    },
+    "focusedFlutterTests": {
+      "passed": 27,
+      "failed": 0
+    },
+    "privacyAndRetentionTests": {
+      "passed": 68,
+      "failed": 0
+    },
+    "fullLocalTechnicalRegression": "passed-isolated-scoped-android-profile",
+    "githubRegression": {
+      "runId": 34545202654,
+      "head": "67c4e2ebe4ceead7529c4f02ca1209d71c66fe25",
+      "conclusion": "success",
+      "cleanCheckoutJob": "success"
+    },
+    "githubCodeql": {
+      "runId": 34545202568,
+      "head": "67c4e2ebe4ceead7529c4f02ca1209d71c66fe25",
+      "conclusion": "success"
+    },
+    "openCodeScanningAlertsCurrentBranch": 0,
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "pixel": {
+    "physical": true,
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "dataPreservingUpdate": "passed-2026091002-to-2026091101",
+    "installedApkHashMatched": true,
+    "sessionDataPreserved": true,
+    "journeyStatus": "passed-pixel-email-verified-two-role-product-journey",
+    "distinctVerifiedPrincipals": true,
+    "ownerPublishUiAndServerConfirmation": true,
+    "renterPublicDiscovery": true,
+    "nonBindingRequestAcceptance": true,
+    "renterChatVisible": true,
+    "fcmForegroundBackgroundTerminated": true,
+    "principalSwitchIsolation": true,
+    "cleanupBookingCancelledListingEnded": true,
+    "protectedOwnerSessionRestored": true,
+    "notificationIconVisualReview": "private-review-pending"
+  },
+  "stagingReadbackAfterJourney": {
+    "coreOwnerRenterJourneyOperational": true,
+    "readinessHttpStatus": 503,
+    "readinessClassification": "degraded-overdue-support-followups",
+    "readinessClaimedHealthy": false
+  },
+  "onePlus": {
+    "expectedModel": "CPH2581",
+    "candidateTransfer": "passed-byte-exact-tailnet-private",
+    "candidatePackageVersionPrivacyAndSignature": "passed",
+    "adbAuthorizedPhysicalDeviceCountAtFinalPreflight": 0,
+    "installationPerformed": false,
+    "journeyPerformed": false,
+    "blocker": "ADB_DEVICE_UNAVAILABLE",
+    "priorInstalledVersionLastVerified": "1.0.0+2026091002"
+  },
+  "cleanup": {
+    "publicStagingListingCountAfterPixelJourney": 0,
+    "testListingLeftActive": false,
+    "testBookingLeftActive": false,
+    "macMiniPrivateTransferEndpointStopped": true,
+    "macBookPrivateTransferCopyRemoved": true
+  },
+  "boundaries": {
+    "contractCreated": false,
+    "reservationCreated": false,
+    "paymentEndpointCalled": false,
+    "realMoneyUsed": false,
+    "googlePlayChanged": false,
+    "productionChanged": false,
+    "firebaseProjectChanged": false,
+    "cloudVpsDnsChanged": false,
+    "publicRegistrationChanged": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false,
+    "containsAccountIdentity": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPath": false
+  },
+  "remaining": [
+    "reconnect-and-authorize-oneplus-cph2581-to-macbook-adb",
+    "data-preserving-oneplus-update-to-2026091101",
+    "repeat-exact-two-role-journey-on-oneplus",
+    "private-notification-icon-visual-review"
+  ]
+}

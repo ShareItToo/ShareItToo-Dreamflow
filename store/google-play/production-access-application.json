@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "state": "draft-before-closed-test",
+  "applicationId": "com.shareittoo.app",
+  "sourceLocale": "de-DE",
+  "sections": {
+    "closedTest": {
+      "testerRecruitmentDifficulty": "pending-console-selection",
+      "engagementSummary": null,
+      "feedbackSummary": null,
+      "feedbackChannels": []
+    },
+    "app": {
+      "intendedAudience": "Erwachsene ab 18 Jahren, die selten benötigte physische Gegenstände in ihrer Nähe zeitweise mieten oder eigene Gegenstände zur Vermietung anbieten möchten.",
+      "userValue": "ShareItToo bündelt lokale Suche, Inserate, Verfügbarkeit, Buchungsanfragen, Chat sowie geführte Übergabe und Rückgabe in einem Ablauf, damit physische Gegenstände gemeinsam genutzt statt für gelegentlichen Bedarf neu gekauft werden können.",
+      "expectedFirstYearInstalls": "pending-owner-estimate"
+    },
+    "productionReadiness": {
+      "changesBasedOnTesting": null,
+      "readinessDecision": null
+    }
+  },
+  "evidence": {
+    "closedTestingReadiness": "store/google-play/closed-testing-readiness.json",
+    "feedbackSummary": null,
+    "releaseCandidate": "docs/operations/B11_RELEASE_CANDIDATE_2026-08-09.md"
+  },
+  "boundaries": {
+    "containsTesterPersonalData": false,
+    "containsAccountIdentifiers": false,
+    "containsSecrets": false,
+    "containsInventedTestResults": false,
+    "applicationSubmitted": false,
+    "storeSubmissionChanged": false
+  }
+}

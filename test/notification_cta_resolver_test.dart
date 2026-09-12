@@ -5,6 +5,8 @@ import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/services/notification_cta_resolver.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/test_builders.dart';
+
 RentalRequest buildRequest({
   required String id,
   required String ownerId,
@@ -64,6 +66,30 @@ Future<void> seedRequests(List<RentalRequest> requests) async {
   });
 }
 
+Future<NotificationCtaResolution> resolveWithSession({
+  required Map<String, dynamic> notification,
+  required String currentUserId,
+}) async {
+  final prefs = await SharedPreferences.getInstance();
+  final currentUser = buildTestUser(currentUserId, name: currentUserId);
+  await prefs.setString(
+    'currentUser',
+    jsonEncode(currentUser.toJson()),
+  );
+  await prefs.setString(
+    'auth_session_v1',
+    jsonEncode(<String, Object>{
+      'userId': currentUser.id,
+      'email': currentUser.email,
+      'createdAt': '2026-08-25T04:00:00.000Z',
+    }),
+  );
+  return NotificationCtaResolver.resolve(
+    notification: notification,
+    currentUserId: currentUserId,
+  );
+}
+
 void expectNone(
   NotificationCtaResolution result, {
   required String sitCategory,
@@ -93,7 +119,7 @@ void main() {
       required String ctaLabel,
     }) async {
       await seedRequests([request]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: bookingNotification(
           requestId: request.id,
           entityId: request.id,
@@ -116,7 +142,7 @@ void main() {
         status: 'pending',
       );
       await seedRequests([request]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: ownerRequestNotification(
           requestId: request.id,
           entityId: request.id,
@@ -137,7 +163,7 @@ void main() {
         status: 'pending',
       );
       await seedRequests([request]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: ownerRequestNotification(
           requestId: request.id,
           entityId: request.id,
@@ -323,7 +349,7 @@ void main() {
       'missing request with owner-request heuristic -> ownerRequestsOverview',
       () async {
         await seedRequests([]);
-        final result = await NotificationCtaResolver.resolve(
+        final result = await resolveWithSession(
           notification: ownerRequestNotification(),
           currentUserId: ownerId,
         );
@@ -336,7 +362,7 @@ void main() {
 
     test('missing request without heuristic -> none', () async {
       await seedRequests([]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: bookingNotification(
           entityType: 'booking',
           ctaLabel: 'Zur Buchung',
@@ -355,7 +381,7 @@ void main() {
         status: 'accepted',
       );
       await seedRequests([request]);
-      final ownerResult = await NotificationCtaResolver.resolve(
+      final ownerResult = await resolveWithSession(
         notification: bookingNotification(
           requestId: '',
           entityId: request.id,
@@ -368,7 +394,7 @@ void main() {
       expect(ownerResult.requestId, request.id);
       expect(ownerResult.sitCategory, 'rentals');
 
-      final renterResult = await NotificationCtaResolver.resolve(
+      final renterResult = await resolveWithSession(
         notification: bookingNotification(
           requestId: '',
           entityId: request.id,
@@ -396,7 +422,7 @@ void main() {
         status: 'cancelled',
       );
       await seedRequests([preferred, other]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: bookingNotification(
           requestId: preferred.id,
           entityId: other.id,
@@ -420,7 +446,7 @@ void main() {
         status: 'archived',
       );
       await seedRequests([request]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: bookingNotification(
           requestId: request.id,
           entityId: request.id,
@@ -441,7 +467,7 @@ void main() {
         status: 'archived',
       );
       await seedRequests([request]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: bookingNotification(
           requestId: request.id,
           entityId: request.id,
@@ -454,7 +480,7 @@ void main() {
 
     test('invalid id -> none', () async {
       await seedRequests([]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: bookingNotification(
           requestId: 'missing-id',
           entityId: 'missing-id',
@@ -472,7 +498,7 @@ void main() {
         status: 'accepted',
       );
       await seedRequests([request]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: bookingNotification(
           requestId: request.id,
           entityId: request.id,
@@ -493,7 +519,7 @@ void main() {
           status: 'accepted',
         ),
       ]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: bookingNotification(
           requestId: 'req-handover',
           entityId: 'req-handover',
@@ -515,7 +541,7 @@ void main() {
           status: 'running',
         ),
       ]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: bookingNotification(
           requestId: 'req-return',
           entityId: 'req-return',
@@ -530,7 +556,7 @@ void main() {
 
     test('support -> none', () async {
       await seedRequests([]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: {
           'category': 'support',
           'title': 'Support-Status aktualisiert',
@@ -546,7 +572,7 @@ void main() {
 
     test('payment -> none', () async {
       await seedRequests([]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: {
           'category': 'payments',
           'title': 'Zahlungsmethode hinzufügen',
@@ -562,7 +588,7 @@ void main() {
 
     test('invoice -> none', () async {
       await seedRequests([]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: {
           'category': 'bookings',
           'title': 'Rechnung verfügbar',
@@ -578,7 +604,7 @@ void main() {
 
     test('thread or message -> none', () async {
       await seedRequests([]);
-      final result = await NotificationCtaResolver.resolve(
+      final result = await resolveWithSession(
         notification: {
           'category': 'messages',
           'title': 'Neue Nachricht erhalten',
@@ -594,7 +620,7 @@ void main() {
 
     test('review or system hint -> none', () async {
       await seedRequests([]);
-      final reviewResult = await NotificationCtaResolver.resolve(
+      final reviewResult = await resolveWithSession(
         notification: {
           'category': 'reviews',
           'title': 'Bewertungen sammeln',
@@ -608,7 +634,7 @@ void main() {
       );
       expectNone(reviewResult, sitCategory: 'reviews');
 
-      final systemResult = await NotificationCtaResolver.resolve(
+      final systemResult = await resolveWithSession(
         notification: {
           'category': 'system',
           'title': 'Hinweis',

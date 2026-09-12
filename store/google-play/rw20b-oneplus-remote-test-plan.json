@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 1,
+  "kind": "rw20b-oneplus-play-internal-remote-test-plan",
+  "status": "prepared-not-run-release-and-device-gated",
+  "recordedOn": "2026-08-27",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026082601",
+    "artifactSourceHead": "a1aa3f2528f1923c092a1fb15bdd3dc083673890",
+    "aabSha256": "8cf36552f39fe9558411809518b374c437125cbd6ef123258ad9df7061acd873",
+    "minSdk": 24,
+    "targetSdk": 35
+  },
+  "currentTruth": {
+    "draftUploaded": true,
+    "releaseGate": "not-granted",
+    "releaseActivated": false,
+    "expectedCurrentOnePlusVersionCode": "2026081509",
+    "candidateInstalledOnOnePlus": false,
+    "candidatePreflightPerformed": false,
+    "functionalMatrixPerformed": false
+  },
+  "remoteExecution": {
+    "hostClass": "owner-macbook",
+    "transport": "wireless-adb-manual-pairing",
+    "preflightCommand": "node tool/preflight_oneplus_play_internal_candidate.mjs --confirm-release-go GOOGLE_PLAY_INTERNAL_RELEASE_GO",
+    "automaticExecutionStarted": false,
+    "macMiniDirectDeviceAccess": false,
+    "credentialsAutomated": false,
+    "privatePhoneControlWithoutOwner": false
+  },
+  "pixelParityInventory": [
+    {
+      "id": "R1_INSTALL_IDENTITY",
+      "transfer": "PREPARED_AFTER_RELEASE",
+      "result": "NOT_RUN",
+      "deviceMutation": false,
+      "blockers": [
+        "release-gate",
+        "play-update",
+        "wireless-pairing"
+      ],
+      "excluded": []
+    },
+    {
+      "id": "R4_LIFECYCLE_CORE",
+      "transfer": "PARTIAL_OWNER_WINDOW",
+      "result": "NOT_RUN",
+      "deviceMutation": true,
+      "blockers": [
+        "identity-preflight",
+        "owner-present"
+      ],
+      "excluded": [
+        "global-orientation-change",
+        "private-deep-link"
+      ]
+    },
+    {
+      "id": "R5_REPEATED_STABILITY",
+      "transfer": "PARTIAL_OWNER_WINDOW",
+      "result": "NOT_RUN",
+      "deviceMutation": true,
+      "blockers": [
+        "identity-preflight",
+        "owner-present",
+        "battery-window"
+      ],
+      "excluded": [
+        "raw-logcat",
+        "unbounded-cycles"
+      ]
+    },
+    {
+      "id": "AUTHENTICATED_NAVIGATION",
+      "transfer": "BLOCKED_TEST_SESSION",
+      "result": "NOT_RUN",
+      "deviceMutation": true,
+      "blockers": [
+        "synthetic-test-account",
+        "owner-login",
+        "account-isolation-preflight"
+      ],
+      "excluded": [
+        "credential-automation"
+      ]
+    },
+    {
+      "id": "LARGE_TEXT_ACCESSIBILITY",
+      "transfer": "MANUAL_PERSONAL_DEVICE",
+      "result": "NOT_RUN",
+      "deviceMutation": true,
+      "blockers": [
+        "owner-present",
+        "settings-restore-proof"
+      ],
+      "excluded": [
+        "unattended-global-setting-change"
+      ]
+    },
+    {
+      "id": "NETWORK_TRANSITIONS",
+      "transfer": "MANUAL_ONLY",
+      "result": "NOT_RUN",
+      "deviceMutation": true,
+      "blockers": [
+        "wireless-adb-disconnects",
+        "owner-present"
+      ],
+      "excluded": [
+        "remote-wlan-disable"
+      ]
+    },
+    {
+      "id": "CLEAN_INSTALL",
+      "transfer": "NOT_AUTHORIZED_PERSONAL_DEVICE",
+      "result": "NOT_RUN",
+      "deviceMutation": true,
+      "blockers": [
+        "data-loss-gate"
+      ],
+      "excluded": [
+        "uninstall",
+        "pm-clear",
+        "sideload"
+      ]
+    }
+  ],
+  "executionOrder": [
+    "OWNER_RELEASE_GATE",
+    "PLAY_UPDATE",
+    "READ_ONLY_PREFLIGHT",
+    "NONDESTRUCTIVE_OWNER_MATRIX",
+    "SYNTHETIC_AUTH_MATRIX",
+    "MANUAL_NETWORK_MATRIX"
+  ],
+  "boundaries": {
+    "releaseActivated": false,
+    "playUpdateTriggered": false,
+    "wirelessPairingPerformed": false,
+    "deviceAccessed": false,
+    "appLaunched": false,
+    "processStopped": false,
+    "appUninstalled": false,
+    "appDataReset": false,
+    "networkChanged": false,
+    "globalSettingChanged": false,
+    "accountUsed": false,
+    "screenshotCaptured": false,
+    "logcatCaptured": false,
+    "testerListChanged": false,
+    "storeChanged": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "providerChanged": false,
+    "firebaseChanged": false,
+    "cloudVpsDnsChanged": false,
+    "pullRequestMerged": false
+  },
+  "verification": {
+    "implementationHead": "fd874bb9584ee3445047c0c7a300754905cb7c3a",
+    "rw20bFocusedTestsPassed": 8,
+    "combinedPredecessorAndRw20bTestsPassed": 17,
+    "localTechnicalRegression": "passed-standard-parallelism-no-workaround",
+    "githubRegression": {
+      "runId": 33026839775,
+      "headSha": "fd874bb9584ee3445047c0c7a300754905cb7c3a",
+      "conclusion": "success",
+      "publishApiImage": "skipped"
+    },
+    "githubCodeql": {
+      "runId": 33026839780,
+      "headSha": "fd874bb9584ee3445047c0c7a300754905cb7c3a",
+      "conclusion": "success"
+    },
+    "openCodeScanningAlerts": 0,
+    "workaroundIntroduced": false
+  },
+  "candidateManifestRef": "store/google-play/rw20-current-internal-candidate-manifest.json",
+  "predecessorHandoffRef": "store/google-play/rw20a-internal-draft-oneplus-handoff.json",
+  "testMatrixRef": "docs/templates/RW20_CURRENT_PLAY_INTERNAL_SECOND_ANDROID_TEST_MATRIX.md",
+  "operationRef": "docs/operations/RW20B_ONEPLUS_REMOTE_TEST_PARITY_PLAN_2026-08-27.md",
+  "containsSecrets": false,
+  "containsTesterIdentity": false,
+  "containsOptInUrl": false,
+  "containsRawDeviceIdentifier": false,
+  "containsNetworkAddress": false
+}

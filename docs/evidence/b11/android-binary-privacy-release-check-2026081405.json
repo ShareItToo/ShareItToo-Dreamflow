@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "kind": "release-check",
+  "status": "passed",
+  "capturedAt": "2026-08-14T13:47:04.907Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081405",
+    "commit": "a00606f979315930ea6c28c0ce7495ef4ec56368",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "releaseCheck": {
+    "id": "binaryPrivacyAndNetwork",
+    "status": "passed",
+    "verifications": [
+      {
+        "id": "signed-apk-and-aab-scan",
+        "status": "passed",
+        "checkedAt": "2026-08-14T13:47:04.907Z",
+        "summary": "Exact signed APK and AAB passed the extended privacy, permission, SDK and runtime-origin scan with no findings."
+      },
+      {
+        "id": "root-navigator-foreground-push-regression",
+        "status": "passed",
+        "checkedAt": "2026-08-14T13:47:04.907Z",
+        "summary": "The production MaterialApp layout now presents foreground push through the root navigator as a centered SIT popup."
+      },
+      {
+        "id": "controlled-crash-one-attempt-boundary",
+        "status": "passed",
+        "checkedAt": "2026-08-14T13:47:04.907Z",
+        "summary": "The exact internal staging candidate keeps the bounded diagnostic behind its local one-attempt guard."
+      }
+    ]
+  },
+  "boundaries": {
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

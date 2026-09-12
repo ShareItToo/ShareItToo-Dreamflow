@@ -1,6 +1,6 @@
+import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lendify/screens/booking_detail_screen.dart';
 import 'package:lendify/screens/help_center_screen.dart';
@@ -10,17 +10,20 @@ import 'package:lendify/screens/message_thread_screen.dart';
 import 'package:lendify/screens/notification_detail_screen.dart';
 import 'package:lendify/screens/notification_settings_screen.dart';
 import 'package:lendify/screens/payment_methods_screen.dart';
-import 'package:lendify/screens/verification_intro_screen.dart';
+import 'package:lendify/screens/support_cases_screen.dart';
 import 'package:lendify/models/item.dart';
-import 'package:lendify/models/message.dart';
 import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/notification_cta_resolver.dart';
 import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/services/notification_preferences_service.dart';
+import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/theme.dart';
 import 'package:provider/provider.dart';
+import 'package:lendify/widgets/identity_verification_unavailable.dart';
+import 'package:lendify/widgets/app_popup.dart';
+import 'package:lendify/widgets/support_principal_controller.dart';
 
 class NotificationsScreen extends StatefulWidget {
   /// Optional: open the notifications screen already filtered to one category.
@@ -28,7 +31,11 @@ class NotificationsScreen extends StatefulWidget {
   /// When [initialCategory] is provided and [lockToInitialCategory] is true, the
   /// screen behaves like a "category details" page (no filter chips, no
   /// grouping headers – just the list for that category).
-  const NotificationsScreen({super.key, this.initialCategory, this.lockToInitialCategory = false, this.titleOverride});
+  const NotificationsScreen(
+      {super.key,
+      this.initialCategory,
+      this.lockToInitialCategory = false,
+      this.titleOverride});
 
   /// Category key, e.g. 'important', 'bookings', 'messages', 'reviews',
   /// 'payments', 'security', 'platform'.
@@ -49,20 +56,33 @@ class NotificationsScreen extends StatefulWidget {
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
-enum _NotifFilter { all, important, bookings, rentals, handover, messages, support, payments, reviews, system }
+enum _NotifFilter {
+  all,
+  important,
+  bookings,
+  rentals,
+  handover,
+  messages,
+  support,
+  payments,
+  reviews,
+  system
+}
 
 enum _DateBucket { today, yesterday, week, older }
 
 enum _MenuAction { settings, markAllRead, unreadOnly, contactSupport, help }
 
 String _deriveSitCategory(Map<String, dynamic> notification) {
-  String lower(Object? value) => value == null ? '' : value.toString().toLowerCase();
+  String lower(Object? value) =>
+      value == null ? '' : value.toString().toLowerCase();
   final raw = lower(notification['category']);
   final title = lower(notification['title']);
   final body = lower(notification['body']);
   final entityType = lower(notification['entityType']);
 
-  bool matchesAny(Iterable<String> needles) => needles.any((needle) => title.contains(needle) || body.contains(needle));
+  bool matchesAny(Iterable<String> needles) =>
+      needles.any((needle) => title.contains(needle) || body.contains(needle));
 
   if (raw == 'important' || raw == 'security') return 'important';
   if (raw == 'payments') return 'payments';
@@ -71,15 +91,31 @@ String _deriveSitCategory(Map<String, dynamic> notification) {
   if (raw == 'system' || raw == 'platform') return 'system';
 
   if (raw == 'bookings') {
-    if (matchesAny(const ['übergabe', 'rückgabe', 'handover', 'qr-code', 'qr code'])) return 'handover';
-    if (matchesAny(const ['mietanfrage', 'vermietung', 'deiner anzeige']) || lower(notification['ctaLabel']) == 'anfrage prüfen') return 'rentals';
+    if (matchesAny(
+        const ['übergabe', 'rückgabe', 'handover', 'qr-code', 'qr code'])) {
+      return 'handover';
+    }
+    if (matchesAny(const ['mietanfrage', 'vermietung', 'deiner anzeige']) ||
+        lower(notification['ctaLabel']) == 'anfrage prüfen') {
+      return 'rentals';
+    }
     return 'bookings';
   }
 
   if (raw == 'messages') {
-    final bool looksLikeSupport = entityType == 'support' || matchesAny(const ['support-fall', 'supportfall', 'support', 'ticket', 'hilfe']);
+    final bool looksLikeSupport = entityType == 'support' ||
+        matchesAny(const [
+          'support-fall',
+          'supportfall',
+          'support',
+          'ticket',
+          'hilfe'
+        ]);
     if (looksLikeSupport) return 'support';
-    if (title.startsWith('tipp') || matchesAny(const ['tipp', 'schnelle abstimmung', 'hinweis'])) return 'system';
+    if (title.startsWith('tipp') ||
+        matchesAny(const ['tipp', 'schnelle abstimmung', 'hinweis'])) {
+      return 'system';
+    }
     return 'messages';
   }
 
@@ -95,16 +131,24 @@ String _deriveSitCategory(Map<String, dynamic> notification) {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  final _supportPrincipal = SupportPrincipalController();
   _NotifFilter _filter = _NotifFilter.all;
   bool _loading = true;
+  bool _loadFailed = false;
   String? _currentUserId;
   List<Map<String, dynamic>> _feed = [];
   NotificationPreferences _prefs = NotificationPreferences.defaults();
   bool _showUnreadOnly = false;
   final ScrollController _scrollController = ScrollController();
+  StreamSubscription<String>? _persistenceSubscription;
+  final SharedPersistenceRefreshCoordinator _refreshCoordinator =
+      SharedPersistenceRefreshCoordinator();
 
   @override
   void dispose() {
+    _supportPrincipal.dispose();
+    _persistenceSubscription?.cancel();
+    _refreshCoordinator.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -117,10 +161,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _filter = _filterForCategory(initial);
     }
     Future.microtask(_load);
+    _persistenceSubscription = SharedPersistenceSync.changes.listen((key) {
+      if (!mounted || key != SharedPersistenceSync.localSafetyPrivacyStateKey) {
+        return;
+      }
+      unawaited(_refreshCoordinator.schedule(() async {
+        await SharedPersistenceSync.reloadPreferences();
+        if (mounted) await _load();
+      }));
+    });
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _loadFailed = false;
+      _currentUserId = null;
+      _feed = [];
+      _prefs = NotificationPreferences.defaults();
+    });
     try {
       final prefs = await NotificationPreferencesService.get();
       final user = await DataService.getCurrentUser();
@@ -134,7 +193,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return;
       }
       final feed = await DataService.getNotificationFeedForUser(userId);
+      final currentAfterLoad = await DataService.getCurrentUser();
       if (!mounted) return;
+      if (currentAfterLoad?.id.trim() != userId.trim()) {
+        setState(() {
+          _currentUserId = null;
+          _feed = [];
+          _prefs = prefs;
+        });
+        return;
+      }
       setState(() {
         _currentUserId = userId;
         _feed = [...feed]..sort(_compareNotifications);
@@ -142,6 +210,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       });
     } catch (e) {
       debugPrint('[NotificationsScreen] load failed: $e');
+      if (mounted) setState(() => _loadFailed = true);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -157,39 +226,46 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void _handleMenuSelection(_MenuAction action, int unreadCount) async {
     switch (action) {
       case _MenuAction.settings:
-        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationSettingsScreen()));
+        await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => const NotificationSettingsScreen()));
         if (mounted) await _load();
         break;
       case _MenuAction.markAllRead:
         if (unreadCount == 0) {
-          _showSnack('Alles ist bereits gelesen.');
+          _showNotice('Alles ist bereits gelesen.');
           return;
         }
         await _markAllRead();
         break;
       case _MenuAction.unreadOnly:
         setState(() => _showUnreadOnly = !_showUnreadOnly);
-        _showSnack(_showUnreadOnly ? 'Zeige nur ungelesene Benachrichtigungen.' : 'Zeige wieder alle Benachrichtigungen.');
+        _showNotice(_showUnreadOnly
+            ? 'Zeige nur ungelesene Benachrichtigungen.'
+            : 'Zeige wieder alle Benachrichtigungen.');
         break;
       case _MenuAction.contactSupport:
-        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HelpCenterScreen()));
+        await Navigator.of(context)
+            .push(MaterialPageRoute(builder: (_) => const HelpCenterScreen()));
         break;
       case _MenuAction.help:
-        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HelpCenterScreen()));
+        await Navigator.of(context)
+            .push(MaterialPageRoute(builder: (_) => const HelpCenterScreen()));
         break;
     }
   }
 
-  void _showSnack(String message) {
+  void _showNotice(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 2)),
+    AppPopup.info(
+      context,
+      title: 'Benachrichtigungen',
+      message: message,
     );
   }
 
   List<Map<String, dynamic>> get _filtered {
-    final String? filterKey = _filter == _NotifFilter.all ? null : _categoryKeyForFilter(_filter);
+    final String? filterKey =
+        _filter == _NotifFilter.all ? null : _categoryKeyForFilter(_filter);
 
     bool allowedByPrefs(Map<String, dynamic> entry) {
       final cat = _deriveSitCategory(entry);
@@ -279,6 +355,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _handleNotificationCta(Map<String, dynamic> n) async {
+    final supportOwner = _supportPrincipal.capture();
     final uid = _currentUserId;
     if (uid == null || !mounted) return;
 
@@ -326,8 +403,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           final item = await DataService.getItemById(req.itemId);
           if (item == null) return;
           final owner = await DataService.getUserById(req.ownerId);
-          final deliverySel = await DataService.getSavedDeliverySelection(req.itemId);
-          final booking = _toBookingMap(req, item, owner, deliverySel);
+          final booking = _toBookingMap(req, item, owner);
           if (!mounted) return;
           await Navigator.of(context).push(
             MaterialPageRoute(
@@ -348,23 +424,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final sitCategory = _deriveSitCategory(n);
 
     try {
-      if (entityType == 'booking' && entityId.isNotEmpty && !entityId.startsWith('mock')) {
+      if (entityType == 'booking' &&
+          entityId.isNotEmpty &&
+          !entityId.startsWith('mock')) {
         final req = await DataService.getRentalRequestById(entityId);
         if (req == null) return;
         final item = await DataService.getItemById(req.itemId);
         if (item == null) return;
         final owner = await DataService.getUserById(req.ownerId);
-        final deliverySel = await DataService.getSavedDeliverySelection(req.itemId);
-        final booking = _toBookingMap(req, item, owner, deliverySel);
+        final booking = _toBookingMap(req, item, owner);
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => BookingDetailScreen(booking: booking, viewerIsOwner: uid == req.ownerId)));
+        await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => BookingDetailScreen(
+                booking: booking, viewerIsOwner: uid == req.ownerId)));
         return;
       }
 
-      if (entityType == 'thread' && entityId.isNotEmpty && !entityId.startsWith('mock')) {
+      if (entityType == 'thread' &&
+          entityId.isNotEmpty &&
+          !entityId.startsWith('mock')) {
         final thread = await DataService.getMessageThreadById(entityId);
         if (thread == null) return;
-        final otherId = (thread.user1Id == uid) ? thread.user2Id : thread.user1Id;
+        final otherId =
+            (thread.user1Id == uid) ? thread.user2Id : thread.user1Id;
         final other = await DataService.getUserById(otherId);
         if (!mounted) return;
         await Navigator.of(context).push(
@@ -382,37 +464,47 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
       if (entityType == 'payment' || sitCategory == 'payments') {
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PaymentMethodsScreen()));
+        await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const PaymentMethodsScreen()));
         return;
       }
 
-      if (entityType == 'verification' || category == 'security' || sitCategory == 'important') {
+      if (entityType == 'verification' ||
+          category == 'security' ||
+          sitCategory == 'important') {
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const VerificationIntroScreen()));
+        await showIdentityVerificationUnavailable(context);
         return;
       }
 
       if (sitCategory == 'support') {
-        final threads = await DataService.getMessageThreadsForUser(uid);
-        MessageThread? supportThread = threads.cast<MessageThread?>().firstWhere(
-          (t) => t != null && ((t.threadType ?? '').toLowerCase() == 'support' || t.user1Id == 'support' || t.user2Id == 'support'),
-          orElse: () => null,
-        );
-        supportThread ??= await DataService.createSupportThread(userId: uid);
-        if (supportThread != null && mounted) {
-          await Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => MessageThreadScreen(
-                threadId: supportThread!.id,
-                participantName: 'SIT Support',
-                itemTitle: 'Support',
+        if (supportOwner == null ||
+            uid != supportOwner.userId ||
+            !await _supportPrincipal.isCurrent(supportOwner) ||
+            !mounted) {
+          return;
+        }
+        if (entityType == 'support' &&
+            entityId.isNotEmpty &&
+            !entityId.startsWith('mock')) {
+          await _supportPrincipal.pushOwnedRoute<void>(
+            context: context,
+            owner: supportOwner,
+            route: MaterialPageRoute(
+              builder: (_) => SupportCaseNotificationDestinationScreen(
+                owner: supportOwner,
+                caseId: entityId,
               ),
             ),
           );
           return;
         }
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HelpCenterScreen()));
+        await _supportPrincipal.pushOwnedRoute<void>(
+            context: context,
+            owner: supportOwner,
+            route: MaterialPageRoute(
+                builder: (_) => SupportCasesScreen(owner: supportOwner)));
         return;
       }
 
@@ -421,7 +513,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return;
       }
 
-      _showSnack('Alles klar.');
+      _showNotice('Alles klar.');
     } catch (e) {
       debugPrint('[NotificationsScreen] CTA handling failed: $e');
     }
@@ -441,7 +533,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (_filter == f) return;
     setState(() => _filter = f);
     if (_scrollController.hasClients) {
-      _scrollController.animateTo(0, duration: const Duration(milliseconds: 260), curve: Curves.easeOutCubic);
+      _scrollController.animateTo(0,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic);
     }
   }
 
@@ -505,7 +599,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  Map<_DateBucket, List<Map<String, dynamic>>> _groupByDate(List<Map<String, dynamic>> list) {
+  Map<_DateBucket, List<Map<String, dynamic>>> _groupByDate(
+      List<Map<String, dynamic>> list) {
     final out = <_DateBucket, List<Map<String, dynamic>>>{
       _DateBucket.today: [],
       _DateBucket.yesterday: [],
@@ -547,12 +642,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (ar != br) return ar ? 1 : -1;
     }
 
-    final at = DateTime.tryParse((a['ts'] ?? '').toString()) ?? DateTime.fromMillisecondsSinceEpoch(0);
-    final bt = DateTime.tryParse((b['ts'] ?? '').toString()) ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final at = DateTime.tryParse((a['ts'] ?? '').toString()) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    final bt = DateTime.tryParse((b['ts'] ?? '').toString()) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
     return bt.compareTo(at);
   }
 
-  Map<String, List<Map<String, dynamic>>> _groupBySitCategory(List<Map<String, dynamic>> list) {
+  Map<String, List<Map<String, dynamic>>> _groupBySitCategory(
+      List<Map<String, dynamic>> list) {
     final out = <String, List<Map<String, dynamic>>>{
       'important': [],
       'bookings': [],
@@ -587,56 +685,103 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     Widget body;
     if (_loading) {
       body = const Center(child: CircularProgressIndicator());
+    } else if (_loadFailed) {
+      body = Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.gpp_maybe_outlined, size: 42),
+              const SizedBox(height: 12),
+              const Text(
+                'Benachrichtigungen konnten nicht sicher geladen werden.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Es werden keine Daten eines vorherigen Kontos angezeigt.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 48,
+                child: FilledButton.icon(
+                  onPressed: _load,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Erneut versuchen'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     } else if (_currentUserId == null) {
       body = _EmptyState(
         icon: Icons.notifications_off,
         title: 'Nicht verfügbar',
-        subtitle: 'Bitte erst ein Profil erstellen, um deinen persönlichen Benachrichtigungs‑Feed zu sehen. Einstellungen kannst du aber schon festlegen.',
+        subtitle:
+            'Bitte erst ein Profil erstellen, um deinen persönlichen Benachrichtigungs‑Feed zu sehen. Einstellungen kannst du aber schon festlegen.',
       );
     } else if (visible.isEmpty) {
-      final bool categoryMode = widget.isCategoryLocked && widget.initialCategory != null && widget.initialCategory!.isNotEmpty;
+      final bool categoryMode = widget.isCategoryLocked &&
+          widget.initialCategory != null &&
+          widget.initialCategory!.isNotEmpty;
       final bool isFiltered = _filter != _NotifFilter.all;
       if (categoryMode || isFiltered) {
-        final String catKey = categoryMode ? widget.initialCategory! : _categoryKeyForFilter(_filter);
+        final String catKey = categoryMode
+            ? widget.initialCategory!
+            : _categoryKeyForFilter(_filter);
         if (catKey == 'rentals') {
           body = _EmptyState(
             icon: Icons.inventory_2_outlined,
             title: 'Keine Benachrichtigungen zu Vermietungen',
-            subtitle: 'Sobald jemand eine deiner Anzeigen anfragt, wirst du hier benachrichtigt.',
+            subtitle:
+                'Sobald jemand eine deiner Anzeigen anfragt, wirst du hier benachrichtigt.',
           );
         } else {
           final String label = _labelForCategory(catKey);
           body = _EmptyState(
             icon: Icons.notifications_none,
             title: 'Keine Benachrichtigungen in „$label“',
-            subtitle: 'Sobald es neue Updates in dieser Kategorie gibt, erscheinen sie hier.',
+            subtitle:
+                'Sobald es neue Updates in dieser Kategorie gibt, erscheinen sie hier.',
           );
         }
       } else {
         body = _EmptyState(
           icon: Icons.notifications_none,
           title: 'Hier siehst du künftig deine Benachrichtigungen.',
-          subtitle: 'Sobald es Neuigkeiten zu deinen Buchungen oder Nachrichten gibt, erscheinen sie hier.',
+          subtitle:
+              'Sobald es Neuigkeiten zu deinen Buchungen oder Nachrichten gibt, erscheinen sie hier.',
         );
       }
     } else {
-      final bool categoryMode = widget.isCategoryLocked && widget.initialCategory != null && widget.initialCategory!.isNotEmpty;
+      final bool categoryMode = widget.isCategoryLocked &&
+          widget.initialCategory != null &&
+          widget.initialCategory!.isNotEmpty;
 
       body = CustomScrollView(
         controller: _scrollController,
-        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+        physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics()),
         slivers: [
           if (!categoryMode)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, kToolbarHeight + 12, 16, 10),
+                padding:
+                    const EdgeInsets.fromLTRB(16, kToolbarHeight + 12, 16, 10),
                 child: _FilterBar(filter: _filter, onChanged: _setFilter),
               ),
             )
           else
-            const SliverToBoxAdapter(child: SizedBox(height: kToolbarHeight + 12)),
+            const SliverToBoxAdapter(
+                child: SizedBox(height: kToolbarHeight + 12)),
           if (categoryMode)
-            SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 12), sliver: _notifSliverList(theme, ([...visible]..sort(_compareNotifications))))
+            SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                sliver: _notifSliverList(
+                    theme, ([...visible]..sort(_compareNotifications))))
           else if (_prefs.groupByCategory)
             ..._buildCategoryGroupedSlivers(theme, visible)
           else
@@ -664,10 +809,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             surfaceTintColor: Colors.transparent,
             title: SizedBox(
               width: double.infinity,
-              child: Text(widget.titleOverride ?? l10n.t('account.item.notifications'), textAlign: TextAlign.center),
+              child: Text(
+                  widget.titleOverride ?? l10n.t('account.item.notifications'),
+                  textAlign: TextAlign.center),
             ),
             centerTitle: true,
-            leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context).maybePop()),
+            leading: IconButton(
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 4),
@@ -676,12 +827,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   // Match the exact overflow menu styling used in MessageThreadScreen.
                   color: Colors.grey.shade900,
                   elevation: 4,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
                   offset: const Offset(0, 8),
                   icon: Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      Icon(Icons.more_vert, color: Colors.white.withValues(alpha: 0.85), size: 22),
+                      Icon(Icons.more_vert,
+                          color: Colors.white.withValues(alpha: 0.85),
+                          size: 22),
                       if (unreadCount > 0)
                         Positioned(
                           right: -2,
@@ -689,29 +843,38 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           child: Container(
                             width: 8,
                             height: 8,
-                            decoration: BoxDecoration(color: theme.colorScheme.primary, shape: BoxShape.circle),
+                            decoration: BoxDecoration(
+                                color: theme.colorScheme.primary,
+                                shape: BoxShape.circle),
                           ),
                         ),
                     ],
                   ),
-                  onSelected: (action) => _handleMenuSelection(action, unreadCount),
+                  onSelected: (action) =>
+                      _handleMenuSelection(action, unreadCount),
                   itemBuilder: (context) => [
                     PopupMenuItem(
                       value: _MenuAction.settings,
                       height: 42,
                       child: Row(children: [
-                        Icon(Icons.tune_rounded, size: 18, color: Colors.white.withValues(alpha: 0.85)),
+                        Icon(Icons.tune_rounded,
+                            size: 18,
+                            color: Colors.white.withValues(alpha: 0.85)),
                         const SizedBox(width: 10),
-                        const Text('Benachrichtigungseinstellungen', style: TextStyle(fontSize: 13)),
+                        const Text('Benachrichtigungseinstellungen',
+                            style: TextStyle(fontSize: 13)),
                       ]),
                     ),
                     PopupMenuItem(
                       value: _MenuAction.markAllRead,
                       height: 42,
                       child: Row(children: [
-                        Icon(Icons.done_all_rounded, size: 18, color: Colors.white.withValues(alpha: 0.85)),
+                        Icon(Icons.done_all_rounded,
+                            size: 18,
+                            color: Colors.white.withValues(alpha: 0.85)),
                         const SizedBox(width: 10),
-                        const Text('Alle als gelesen markieren', style: TextStyle(fontSize: 13)),
+                        const Text('Alle als gelesen markieren',
+                            style: TextStyle(fontSize: 13)),
                       ]),
                     ),
                     const PopupMenuDivider(height: 8),
@@ -720,9 +883,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       checked: _showUnreadOnly,
                       height: 42,
                       child: Row(children: [
-                        Icon(Icons.mark_email_unread_outlined, size: 18, color: Colors.white.withValues(alpha: 0.85)),
+                        Icon(Icons.mark_email_unread_outlined,
+                            size: 18,
+                            color: Colors.white.withValues(alpha: 0.85)),
                         const SizedBox(width: 10),
-                        const Text('Nur ungelesene anzeigen', style: TextStyle(fontSize: 13)),
+                        const Text('Nur ungelesene anzeigen',
+                            style: TextStyle(fontSize: 13)),
                       ]),
                     ),
                     const PopupMenuDivider(height: 8),
@@ -736,20 +902,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             width: 18,
                             height: 18,
                             fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => Icon(Icons.support_agent_rounded, size: 18, color: theme.colorScheme.primary),
+                            errorBuilder: (_, __, ___) => Icon(
+                                Icons.support_agent_rounded,
+                                size: 18,
+                                color: theme.colorScheme.primary),
                           ),
                         ),
                         const SizedBox(width: 10),
-                        Text('Support kontaktieren', style: TextStyle(color: theme.colorScheme.primary, fontSize: 13)),
+                        Text('Support kontaktieren',
+                            style: TextStyle(
+                                color: theme.colorScheme.primary,
+                                fontSize: 13)),
                       ]),
                     ),
                     PopupMenuItem(
                       value: _MenuAction.help,
                       height: 42,
                       child: Row(children: [
-                        Icon(Icons.help_outline_rounded, size: 18, color: Colors.white.withValues(alpha: 0.85)),
+                        Icon(Icons.help_outline_rounded,
+                            size: 18,
+                            color: Colors.white.withValues(alpha: 0.85)),
                         const SizedBox(width: 10),
-                        const Text('Hilfe zu Benachrichtigungen', style: TextStyle(fontSize: 13)),
+                        const Text('Hilfe zu Benachrichtigungen',
+                            style: TextStyle(fontSize: 13)),
                       ]),
                     ),
                   ],
@@ -767,9 +942,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  List<Widget> _buildDateGroupedSlivers(ThemeData theme, List<Map<String, dynamic>> visible) {
+  List<Widget> _buildDateGroupedSlivers(
+      ThemeData theme, List<Map<String, dynamic>> visible) {
     final grouped = _groupByDate(visible);
-    const order = [_DateBucket.today, _DateBucket.yesterday, _DateBucket.week, _DateBucket.older];
+    const order = [
+      _DateBucket.today,
+      _DateBucket.yesterday,
+      _DateBucket.week,
+      _DateBucket.older
+    ];
     return [
       for (final b in order)
         if (grouped[b] != null && grouped[b]!.isNotEmpty) ...[
@@ -779,37 +960,56 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               child: _DateHeader(bucket: b),
             ),
           ),
-          SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 12), sliver: _notifSliverList(theme, grouped[b]!)),
+          SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              sliver: _notifSliverList(theme, grouped[b]!)),
         ],
     ];
   }
 
-  List<Widget> _buildCategoryGroupedSlivers(ThemeData theme, List<Map<String, dynamic>> visible) {
+  List<Widget> _buildCategoryGroupedSlivers(
+      ThemeData theme, List<Map<String, dynamic>> visible) {
     final grouped = _groupBySitCategory(visible);
-    const order = ['important', 'bookings', 'rentals', 'handover', 'messages', 'support', 'payments', 'reviews', 'system'];
+    const order = [
+      'important',
+      'bookings',
+      'rentals',
+      'handover',
+      'messages',
+      'support',
+      'payments',
+      'reviews',
+      'system'
+    ];
     return [
       for (final key in order)
         if (grouped[key] != null && grouped[key]!.isNotEmpty) ...[
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-              child: _CategoryHeader(label: _labelForCategory(key), icon: _iconForCategory(key)),
+              child: _CategoryHeader(
+                  label: _labelForCategory(key), icon: _iconForCategory(key)),
             ),
           ),
-          SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 12), sliver: _notifSliverList(theme, grouped[key]!)),
+          SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              sliver: _notifSliverList(theme, grouped[key]!)),
         ],
     ];
   }
 
-  SliverList _notifSliverList(ThemeData theme, List<Map<String, dynamic>> list) {
+  SliverList _notifSliverList(
+      ThemeData theme, List<Map<String, dynamic>> list) {
     return SliverList.separated(
       itemCount: list.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final n = list[index];
         final critical = n['critical'] == true;
-        final archivable = !critical && (n['category']?.toString() == 'platform');
-        final card = _NotificationCard(notification: n, onTap: () => _openNotification(n));
+        final archivable =
+            !critical && (n['category']?.toString() == 'platform');
+        final card = _NotificationCard(
+            notification: n, onTap: () => _openNotification(n));
         if (!archivable) return card;
         return Dismissible(
           key: ValueKey('notif_${n['id']}'),
@@ -817,8 +1017,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           background: Container(
             alignment: Alignment.centerRight,
             padding: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(18)),
-            child: Icon(Icons.archive_outlined, color: AppTheme.textPrimary(context)),
+            decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(18)),
+            child: Icon(Icons.archive_outlined,
+                color: AppTheme.textPrimary(context)),
           ),
           confirmDismiss: (_) async {
             await _archive(n);
@@ -855,17 +1058,34 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  Map<String, dynamic> _toBookingMap(RentalRequest req, Item it, User? owner, Map<String, dynamic>? deliverySel) {
+  Map<String, dynamic> _toBookingMap(
+    RentalRequest req,
+    Item it,
+    User? owner,
+  ) {
     // We intentionally keep this minimal-but-compatible with BookingDetailScreen.
     // (BookingDetailScreen reads keys defensively; missing optional fields are okay.)
     String fmt(DateTime d) {
-      const months = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mär',
+        'Apr',
+        'Mai',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Okt',
+        'Nov',
+        'Dez'
+      ];
       final mm = months[d.month - 1];
       final dd = d.day.toString().padLeft(2, '0');
       return '$dd. $mm';
     }
 
-    final breakdown = DataService.priceBreakdownForRequest(item: it, req: req, deliverySel: deliverySel);
+    final breakdown = DataService.priceBreakdownForRequest(item: it, req: req);
     final total = (req.quotedTotalRenter ?? breakdown.totalRenter);
     return {
       'requestId': req.id,
@@ -883,23 +1103,41 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       'listerAvatar': owner?.photoURL,
       'pricePaid': '${total.round()} €',
       'quotedTotalRenter': total,
+      if (req.quotedSubtitle != null) 'quotedSubtitle': req.quotedSubtitle,
+      if (req.quotedQuoteVersion != null)
+        'quotedQuoteVersion': req.quotedQuoteVersion,
+      if (req.quotedDays != null) 'quotedDays': req.quotedDays,
+      if (req.quotedPricePerDayMinor != null)
+        'quotedPricePerDayMinor': req.quotedPricePerDayMinor,
+      if (req.quotedBaseRentalMinor != null)
+        'quotedBaseRentalMinor': req.quotedBaseRentalMinor,
+      if (req.quotedDiscountPercent != null)
+        'quotedDiscountPercent': req.quotedDiscountPercent,
+      if (req.quotedDiscountId != null)
+        'quotedDiscountId': req.quotedDiscountId,
+      if (req.quotedDiscountLabel != null)
+        'quotedDiscountLabel': req.quotedDiscountLabel,
+      if (req.quotedDiscountFundingSource != null)
+        'quotedDiscountFundingSource': req.quotedDiscountFundingSource,
+      if (req.quotedDiscountThresholdDays != null)
+        'quotedDiscountThresholdDays': req.quotedDiscountThresholdDays,
+      if (req.quotedDiscountMinor != null)
+        'quotedDiscountMinor': req.quotedDiscountMinor,
+      if (req.quotedRentalSubtotalMinor != null)
+        'quotedRentalSubtotalMinor': req.quotedRentalSubtotalMinor,
+      if (req.quotedPlatformFeeMinor != null)
+        'quotedPlatformFeeMinor': req.quotedPlatformFeeMinor,
+      if (req.quotedTotalMinor != null)
+        'quotedTotalMinor': req.quotedTotalMinor,
+      if (req.quotedOwnerPayoutMinor != null)
+        'quotedOwnerPayoutMinor': req.quotedOwnerPayoutMinor,
+      if (req.quotedCurrency != null) 'quotedCurrency': req.quotedCurrency,
       'days': breakdown.days,
       'basePerDay': it.pricePerDay,
-      'expressRequested': req.expressRequested,
-      'expressStatus': req.expressStatus,
-      'expressRequestedAt': req.expressRequestedAt?.toIso8601String(),
       'startIso': req.start.toIso8601String(),
       'endIso': req.end.toIso8601String(),
       'policy': it.cancellationPolicy,
       'requestCreatedAtIso': req.createdAt.toIso8601String(),
-      'offersDeliveryAtDropoff': it.offersDeliveryAtDropoff,
-      'offersPickupAtReturn': it.offersPickupAtReturn,
-      'ownerDeliversAtDropoffChosen': req.ownerDeliversAtDropoffChosen,
-      'ownerPicksUpAtReturnChosen': req.ownerPicksUpAtReturnChosen,
-      'deliveryAddressLine': req.deliveryAddressLine ?? (deliverySel?['addressLine'] as String?) ?? '',
-      'deliveryCity': req.deliveryCity ?? (deliverySel?['city'] as String?) ?? '',
-      'deliveryLat': req.deliveryLat ?? (deliverySel?['lat'] as num?)?.toDouble(),
-      'deliveryLng': req.deliveryLng ?? (deliverySel?['lng'] as num?)?.toDouble(),
     };
   }
 }
@@ -916,23 +1154,50 @@ class _FilterBar extends StatelessWidget {
       physics: const BouncingScrollPhysics(),
       child: Row(
         children: [
-          _FilterPill(label: 'Alle', selected: filter == _NotifFilter.all, onTap: () => onChanged(_NotifFilter.all)),
+          _FilterPill(
+              label: 'Alle',
+              selected: filter == _NotifFilter.all,
+              onTap: () => onChanged(_NotifFilter.all)),
           const SizedBox(width: 8),
-          _FilterPill(label: 'Wichtig', selected: filter == _NotifFilter.important, onTap: () => onChanged(_NotifFilter.important)),
+          _FilterPill(
+              label: 'Wichtig',
+              selected: filter == _NotifFilter.important,
+              onTap: () => onChanged(_NotifFilter.important)),
           const SizedBox(width: 8),
-          _FilterPill(label: 'Buchungen', selected: filter == _NotifFilter.bookings, onTap: () => onChanged(_NotifFilter.bookings)),
+          _FilterPill(
+              label: 'Buchungen',
+              selected: filter == _NotifFilter.bookings,
+              onTap: () => onChanged(_NotifFilter.bookings)),
           const SizedBox(width: 8),
-          _FilterPill(label: 'Übergabe', selected: filter == _NotifFilter.handover, onTap: () => onChanged(_NotifFilter.handover)),
+          _FilterPill(
+              label: 'Übergabe',
+              selected: filter == _NotifFilter.handover,
+              onTap: () => onChanged(_NotifFilter.handover)),
           const SizedBox(width: 8),
-          _FilterPill(label: 'Nachrichten', selected: filter == _NotifFilter.messages, onTap: () => onChanged(_NotifFilter.messages)),
+          _FilterPill(
+              label: 'Nachrichten',
+              selected: filter == _NotifFilter.messages,
+              onTap: () => onChanged(_NotifFilter.messages)),
           const SizedBox(width: 8),
-          _FilterPill(label: 'Support', selected: filter == _NotifFilter.support, onTap: () => onChanged(_NotifFilter.support)),
+          _FilterPill(
+              label: 'Support',
+              selected: filter == _NotifFilter.support,
+              onTap: () => onChanged(_NotifFilter.support)),
           const SizedBox(width: 8),
-          _FilterPill(label: 'Zahlungen', selected: filter == _NotifFilter.payments, onTap: () => onChanged(_NotifFilter.payments)),
+          _FilterPill(
+              label: 'Zahlungen',
+              selected: filter == _NotifFilter.payments,
+              onTap: () => onChanged(_NotifFilter.payments)),
           const SizedBox(width: 8),
-          _FilterPill(label: 'Bewertungen', selected: filter == _NotifFilter.reviews, onTap: () => onChanged(_NotifFilter.reviews)),
+          _FilterPill(
+              label: 'Bewertungen',
+              selected: filter == _NotifFilter.reviews,
+              onTap: () => onChanged(_NotifFilter.reviews)),
           const SizedBox(width: 8),
-          _FilterPill(label: 'System', selected: filter == _NotifFilter.system, onTap: () => onChanged(_NotifFilter.system)),
+          _FilterPill(
+              label: 'System',
+              selected: filter == _NotifFilter.system,
+              onTap: () => onChanged(_NotifFilter.system)),
         ],
       ),
     );
@@ -943,7 +1208,8 @@ class _FilterPill extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _FilterPill({required this.label, required this.selected, required this.onTap});
+  const _FilterPill(
+      {required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -954,9 +1220,14 @@ class _FilterPill extends StatelessWidget {
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
-        color: selected ? accent.withValues(alpha: 0.18) : AppTheme.surfaceMuted(context),
+        color: selected
+            ? accent.withValues(alpha: 0.18)
+            : AppTheme.surfaceMuted(context),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: selected ? accent.withValues(alpha: 0.28) : AppTheme.glassStroke(context)),
+        border: Border.all(
+            color: selected
+                ? accent.withValues(alpha: 0.28)
+                : AppTheme.glassStroke(context)),
       ),
       child: Material(
         color: Colors.transparent,
@@ -967,7 +1238,9 @@ class _FilterPill extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Text(
               label,
-              style: theme.textTheme.labelSmall?.copyWith(color: selected ? accent : AppTheme.textSecondary(context), fontWeight: selected ? FontWeight.w800 : FontWeight.w700),
+              style: theme.textTheme.labelSmall?.copyWith(
+                  color: selected ? accent : AppTheme.textSecondary(context),
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w700),
             ),
           ),
         ),
@@ -991,16 +1264,25 @@ class _CategoryHeader extends StatelessWidget {
           width: 28,
           height: 28,
           decoration: BoxDecoration(
-            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [accent.withValues(alpha: 0.42), accent.withValues(alpha: 0.14)]),
+            gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  accent.withValues(alpha: 0.42),
+                  accent.withValues(alpha: 0.14)
+                ]),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: AppTheme.glassStroke(context)),
           ),
           child: Icon(icon, size: 16, color: AppTheme.textPrimary(context)),
         ),
         const SizedBox(width: 10),
-        Text(label, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+        Text(label,
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w900)),
         const SizedBox(width: 10),
-        Expanded(child: Container(height: 1, color: AppTheme.glassStroke(context))),
+        Expanded(
+            child: Container(height: 1, color: AppTheme.glassStroke(context))),
       ],
     );
   }
@@ -1022,9 +1304,12 @@ class _DateHeader extends StatelessWidget {
 
     return Row(
       children: [
-        Text(label, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+        Text(label,
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w900)),
         const SizedBox(width: 10),
-        Expanded(child: Container(height: 1, color: AppTheme.glassStroke(context))),
+        Expanded(
+            child: Container(height: 1, color: AppTheme.glassStroke(context))),
       ],
     );
   }
@@ -1045,7 +1330,8 @@ class _NotificationCard extends StatelessWidget {
     final ts = DateTime.tryParse(tsStr);
     final timeLabel = ts == null ? '' : _relativeTime(ts);
     final read = notification['read'] == true;
-    final bool showChevron = body.trim().isNotEmpty || (notification['entityType']?.toString().isNotEmpty ?? false);
+    final bool showChevron = body.trim().isNotEmpty ||
+        (notification['entityType']?.toString().isNotEmpty ?? false);
 
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 180),
@@ -1058,9 +1344,14 @@ class _NotificationCard extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: read ? AppTheme.surfacePrimary(context) : AppTheme.surfaceSecondary(context),
+              color: read
+                  ? AppTheme.surfacePrimary(context)
+                  : AppTheme.surfaceSecondary(context),
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: read ? AppTheme.glassStroke(context) : accent.withValues(alpha: 0.18)),
+              border: Border.all(
+                  color: read
+                      ? AppTheme.glassStroke(context)
+                      : accent.withValues(alpha: 0.18)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1077,7 +1368,9 @@ class _NotificationCard extends StatelessWidget {
                               title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleMedium?.copyWith(fontWeight: read ? FontWeight.w700 : FontWeight.w900),
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight:
+                                      read ? FontWeight.w700 : FontWeight.w900),
                             ),
                           ),
                           if (!read)
@@ -1085,7 +1378,9 @@ class _NotificationCard extends StatelessWidget {
                               width: 7.5,
                               height: 7.5,
                               margin: const EdgeInsets.only(left: 8),
-                              decoration: BoxDecoration(color: accent.withValues(alpha: 0.9), shape: BoxShape.circle),
+                              decoration: BoxDecoration(
+                                  color: accent.withValues(alpha: 0.9),
+                                  shape: BoxShape.circle),
                             ),
                         ],
                       ),
@@ -1095,14 +1390,17 @@ class _NotificationCard extends StatelessWidget {
                           body,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(color: AppTheme.textBody(context)),
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(color: AppTheme.textBody(context)),
                         ),
                       ],
                       if (timeLabel.isNotEmpty) ...[
                         const SizedBox(height: 10),
                         Text(
                           timeLabel,
-                          style: theme.textTheme.labelSmall?.copyWith(color: AppTheme.textDisabled(context), fontSize: 11),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              color: AppTheme.textDisabled(context),
+                              fontSize: 11),
                         ),
                       ],
                     ],
@@ -1110,7 +1408,8 @@ class _NotificationCard extends StatelessWidget {
                 ),
                 if (showChevron) ...[
                   const SizedBox(width: 10),
-                  Icon(Icons.chevron_right, color: AppTheme.textDisabled(context)),
+                  Icon(Icons.chevron_right,
+                      color: AppTheme.textDisabled(context)),
                 ],
               ],
             ),
@@ -1128,9 +1427,9 @@ class _NotificationCard extends StatelessWidget {
     if (diff.inHours < 24) return 'vor ${diff.inHours} Std.';
     if (diff.inDays < 7) return 'vor ${diff.inDays} Tg.';
     final weeks = (diff.inDays / 7).floor();
-    if (weeks < 5) return 'vor ${weeks} W.';
+    if (weeks < 5) return 'vor $weeks W.';
     final months = (diff.inDays / 30).floor();
-    return 'vor ${months} Mon.';
+    return 'vor $months Mon.';
   }
 }
 
@@ -1138,7 +1437,8 @@ class _EmptyState extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  const _EmptyState({required this.icon, required this.title, required this.subtitle});
+  const _EmptyState(
+      {required this.icon, required this.title, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -1152,19 +1452,28 @@ class _EmptyState extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [BrandColors.logoGradientStart, BrandColors.logoGradientEnd]),
+                gradient: const LinearGradient(colors: [
+                  BrandColors.logoGradientStart,
+                  BrandColors.logoGradientEnd
+                ]),
                 borderRadius: BorderRadius.circular(22),
               ),
               child: Icon(icon, color: AppTheme.textPrimary(context), size: 34),
             ),
             const SizedBox(height: 14),
-            Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleMedium),
+            Text(title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
-            Text(subtitle, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary(context))),
+            Text(subtitle,
+                textAlign: TextAlign.center,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: AppTheme.textSecondary(context))),
           ],
         ),
       ),
     );
   }
 }
-

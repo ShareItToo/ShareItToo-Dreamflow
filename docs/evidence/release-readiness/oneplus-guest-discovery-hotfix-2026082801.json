@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "kind": "oneplus-guest-discovery-hotfix-build-ready-evidence",
+  "status": "build-ready-play-internal-upload-pending",
+  "recordedOn": "2026-08-28",
+  "provenance": {
+    "worktreeClassification": "owner-local-canonical-sit-worktree",
+    "branch": "codex/master-workflow-20260808",
+    "artifactSourceHead": "135fa726aaa7192bd57b729a5e3becbdeeeb9bee",
+    "sourceCleanAtBuild": true,
+    "sourceRemoteAheadAtBuild": 0,
+    "sourceRemoteBehindAtBuild": 0
+  },
+  "incident": {
+    "deviceClass": "owner-provided-OnePlus-internal-test-install",
+    "symptom": "guest-discovery-public-listings-could-not-load",
+    "rootCause": "guest-public-listing-load-waited-for-authenticated-user-blocks-endpoint",
+    "backendObservations": {
+      "publicListingsEndpoint": "http-200",
+      "guestUserBlocksEndpoint": "http-401"
+    },
+    "correction": "guest-or-unauthenticated-discovery-uses-principal-scoped-local-block-list-while-authenticated-sessions-retain-remote-block-list",
+    "accountIsolationPreserved": true
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026082801",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "minSdkVersion": 24,
+    "targetSdkVersion": 35,
+    "firebaseAndroidConfigured": true,
+    "providerHold": true
+  },
+  "artifact": {
+    "archiveDirectoryName": "2026082801-135fa726aaa7192bd57b729a5e3becbdeeeb9bee",
+    "aabFileName": "shareittoo-1.0.0-2026082801-135fa726aaa7192bd57b729a5e3becbdeeeb9bee.aab",
+    "aabBytes": 108626931,
+    "aabSha256": "56f17ee5a788db69c6099cab4a9d648b28e2eeca7dd9c6e162d7247bce0067da",
+    "apkSha256": "d08922f59e7d9931c2ddbb7fc7b73fbfa1aeb30e41f4a55ce2ac493e6484fb89",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "jarSignature": "passed",
+    "zipIntegrity": "passed",
+    "bundletoolValidate": "passed-1.18.1",
+    "binaryPrivacyScan": "passed",
+    "ownerOnlyArchivePermissions": "passed-mode-0600"
+  },
+  "verification": {
+    "focusedGuestAndPrincipalIsolationTests": "passed-14-of-14",
+    "changedDartAnalyzer": "passed-zero-issues",
+    "affectedRwRatchetTests": "passed-33-of-33",
+    "completeLocalCiProfileRegression": "passed",
+    "completeLocalArtifactAwareRegression": "passed",
+    "github": {
+      "headSha": "135fa726aaa7192bd57b729a5e3becbdeeeb9bee",
+      "regressionRunId": 33208564193,
+      "regressionConclusion": "success",
+      "cleanReproducibility": "success",
+      "codeqlRunId": 33208564198,
+      "codeqlConclusion": "success",
+      "openCodeScanningAlerts": 0,
+      "pullRequestNumber": 7,
+      "pullRequestDraft": true,
+      "pullRequestMerged": false
+    }
+  },
+  "playInternalGate": {
+    "authorizedScope": "exact-build-2026082801-internal-testing-only",
+    "uploadPerformed": false,
+    "activationPerformed": false,
+    "activeInternalVersionCodeBeforeUpload": "2026082601",
+    "testerListChangeAllowed": false,
+    "otherTrackChangeAllowed": false
+  },
+  "remainingDeviceProof": [
+    "Google-Play-delivered update to versionCode 2026082801",
+    "guest Discover loads server-confirmed public listings on the OnePlus",
+    "authenticated Discover retains account-scoped remote block filtering",
+    "offline and recovery behavior on the exact Play-delivered build"
+  ],
+  "containsSecrets": false,
+  "containsTesterIdentity": false,
+  "containsOptInUrl": false
+}

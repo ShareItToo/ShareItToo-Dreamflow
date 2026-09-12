@@ -1,8 +1,27 @@
 plugins {
     id "com.android.application"
     id "kotlin-android"
+    id "com.google.gms.google-services" apply false
+    id "com.google.firebase.crashlytics" apply false
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id "dev.flutter.flutter-gradle-plugin"
+}
+
+def remoteQaRequested = System.getenv('SIT_REMOTE_QA_BUILD') == '1'
+def firebaseAndroidPluginsDisabled =
+        System.getenv('SIT_DISABLE_FIREBASE_ANDROID_PLUGINS') == '1'
+if (remoteQaRequested != firebaseAndroidPluginsDisabled) {
+    throw new GradleException(
+            'Remote QA builds must explicitly disable the production Firebase Android plugins, and only Remote QA builds may disable them.'
+    )
+}
+
+// Firebase release plugins require the console-generated Android project file.
+// Keep non-Firebase developer and CI builds functional, while applying the full
+// official pipeline as soon as the real project configuration is present.
+if (file("google-services.json").exists() && !firebaseAndroidPluginsDisabled) {
+    pluginManager.apply("com.google.gms.google-services")
+    pluginManager.apply("com.google.firebase.crashlytics")
 }
 
 
@@ -12,9 +31,64 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+def releaseRequested = gradle.startParameter.taskNames.any {
+    it.toLowerCase().contains('release')
+}
+def localInternalQaRequested =
+        System.getenv('SIT_LOCAL_INTERNAL_QA_SIGNING') == '1'
+if (localInternalQaRequested &&
+        System.getenv('SIT_CONFIRM_LOCAL_INTERNAL_QA') != '1') {
+    throw new GradleException(
+            'Local Internal QA signing requires SIT_CONFIRM_LOCAL_INTERNAL_QA=1.'
+    )
+}
+if (localInternalQaRequested && !gradle.startParameter.taskNames.any {
+    it.toLowerCase().contains('debug')
+}) {
+    throw new GradleException(
+            'Local Internal QA signing is permitted only for an explicit debug task.'
+    )
+}
+releaseRequested = releaseRequested || localInternalQaRequested
+def requiredSigningProperties = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
+def crashlyticsNativeSymbolUploadRequested =
+        System.getenv('SIT_CRASHLYTICS_NATIVE_SYMBOL_UPLOAD') == '1'
+def crashlyticsUnstrippedNativeLibsDir =
+        System.getenv('SIT_CRASHLYTICS_UNSTRIPPED_NATIVE_LIBS_DIR')?.trim()
+def facebookAppId = System.getenv('SIT_FACEBOOK_APP_ID')?.trim() ?: '0'
+def facebookClientToken =
+        System.getenv('SIT_FACEBOOK_CLIENT_TOKEN')?.trim() ?: 'not-configured'
+if (releaseRequested) {
+    if (!keystorePropertiesFile.exists()) {
+        throw new GradleException('Release signing is not configured: android/key.properties is missing.')
+    }
+    def missingSigningProperties = requiredSigningProperties.findAll {
+        !keystoreProperties[it]?.trim()
+    }
+    if (!missingSigningProperties.isEmpty()) {
+        throw new GradleException("Release signing is incomplete: missing ${missingSigningProperties.join(', ')} in android/key.properties.")
+    }
+    if (!file(keystoreProperties['storeFile']).exists()) {
+        throw new GradleException('Release signing is invalid: the configured upload keystore does not exist.')
+    }
+    if (crashlyticsNativeSymbolUploadRequested) {
+        if (!crashlyticsUnstrippedNativeLibsDir) {
+            throw new GradleException(
+                    'Crashlytics native-symbol upload requires '
+                            + 'SIT_CRASHLYTICS_UNSTRIPPED_NATIVE_LIBS_DIR.'
+            )
+        }
+        if (!file(crashlyticsUnstrippedNativeLibsDir).isDirectory()) {
+            throw new GradleException(
+                    'Crashlytics native-symbol upload directory does not exist.'
+            )
+        }
+    }
+}
+
 android {
-    namespace = "com.mycompany.CounterApp"
-    compileSdk = 35
+    namespace = "com.shareittoo.app"
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -27,34 +101,68 @@ android {
     }
 
     signingConfigs {
-       release {
-           keyAlias keystoreProperties['keyAlias']
-           keyPassword keystoreProperties['keyPassword']
-           storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
-           storePassword keystoreProperties['storePassword']
-       }
+        release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword keystoreProperties['storePassword']
+        }
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.mycompany.CounterApp"
+        // The owner-only Remote QA app is deliberately a separate Android app
+        // so it can coexist with Google Play's differently signed package.
+        // It is selected only through the paired environment gates above.
+        applicationId = "com.shareittoo.app"
+        if (remoteQaRequested) {
+            applicationId = "com.shareittoo.app.qa"
+        }
+        // Meta requires both values to be Android string resources. Direct
+        // numeric manifest values are decoded as integers and prevent the
+        // Facebook SDK (and therefore later Flutter plugins) from registering.
+        resValue "string", "facebook_app_id", facebookAppId
+        resValue "string", "facebook_client_token", facebookClientToken
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = 35
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders.sitUsesCleartextTraffic = "false"
+        manifestPlaceholders.sitAppLabel = remoteQaRequested ? "ShareItToo QA" : "ShareItToo"
+        manifestPlaceholders.sitAppLinksAutoVerify = remoteQaRequested ? "false" : "true"
     }
 
     buildTypes {
+        debug {
+            if (localInternalQaRequested) {
+                // R2 local-device QA only: preserve the canonical installed
+                // app signature while retaining non-release-only G3/G4/G5
+                // technical surfaces. Ordinary debug builds stay unchanged.
+                signingConfig = signingConfigs.getByName("release")
+                manifestPlaceholders.sitUsesCleartextTraffic = "true"
+            }
+        }
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.release
+            signingConfig = signingConfigs.getByName("release")
+            if (crashlyticsNativeSymbolUploadRequested) {
+                firebaseCrashlytics {
+                    nativeSymbolUploadEnabled true
+                    unstrippedNativeLibsDir file(crashlyticsUnstrippedNativeLibsDir)
+                    symbolGeneratorType "csym"
+                }
+            }
         }
     }
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Bundled, immediately available on-device models. Listing photos and
+    // recognized text are not sent to an external inference endpoint.
+    implementation "com.google.mlkit:image-labeling:17.0.9"
+    implementation "com.google.mlkit:text-recognition:16.0.1"
 }

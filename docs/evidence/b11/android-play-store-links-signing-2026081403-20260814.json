@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "kind": "release-check",
+  "status": "passed",
+  "capturedAt": "2026-08-14T11:16:41Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081403",
+    "commit": "09c9211e41da75969b9ee59e9954ac7465250e80",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "releaseCheck": {
+    "id": "storeWarningsLinksAndSigning",
+    "status": "passed",
+    "verifications": [
+      {
+        "id": "google-play-internal-upload",
+        "status": "passed",
+        "checkedAt": "2026-08-14T06:55:00Z",
+        "summary": "Google Play accepted and activated the exact bound AAB with zero release errors for internal testers."
+      },
+      {
+        "id": "google-play-installed-candidate-identity",
+        "status": "passed",
+        "checkedAt": "2026-08-14T10:44:56Z",
+        "summary": "A physical Pixel runs version 1.0.0 build 2026081403 as four Google Play split APKs delivered by com.android.vending."
+      },
+      {
+        "id": "play-app-signing-certificate",
+        "status": "passed",
+        "checkedAt": "2026-08-14T11:16:41Z",
+        "summary": "Android Package Manager reports the exact bound Google Play App Signing SHA-256 certificate for the installed split package."
+      },
+      {
+        "id": "public-android-asset-links",
+        "status": "passed",
+        "checkedAt": "2026-08-14T11:16:41Z",
+        "summary": "Production, www and staging assetlinks.json return HTTP 200 application/json with both the upload and Google Play App Signing certificates."
+      },
+      {
+        "id": "store-installed-app-link-routing",
+        "status": "passed",
+        "checkedAt": "2026-08-14T11:08:17Z",
+        "summary": "Android verifies all three ShareItToo domains, and the Store-installed app opened the protected listing, completed booking and booking chat links."
+      },
+      {
+        "id": "cold-launch-and-staging-feed",
+        "status": "passed",
+        "checkedAt": "2026-08-14T06:55:00Z",
+        "summary": "The exact Store build completed a crash-free cold launch, preserved the Staging session and loaded the public Staging feed."
+      }
+    ]
+  },
+  "artifacts": {
+    "aabSha256": "c933d642cc02417e655d8e7f60960508a0a6ff271e7a684429c14492286b7f0c",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "playAppSigningCertificateSha256": "36488abf86c51da07ab2258f31b00e2f1ba8a36d076107b9f006376ade80b956",
+    "assetLinksSha256": "f2067fe785d96cc9b7c177d005eeb6a0654b8763bb4ca9ddfcb64557062666a7"
+  },
+  "boundaries": {
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true,
+    "productionBackendChanged": false,
+    "stagingBackendChanged": false,
+    "appBinaryChanged": false,
+    "paymentsChanged": false,
+    "dnsChanged": false,
+    "mailChanged": false,
+    "legalReviewComplete": false
+  }
+}

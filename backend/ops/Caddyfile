@@ -1,0 +1,110 @@
+(shareittoo_app) {
+	root * /app/current
+	encode zstd gzip
+	try_files {path} /index.html
+	file_server
+
+	header {
+		Cache-Control "no-cache"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(self), microphone=(self), geolocation=(self)"
+	}
+}
+
+(shareittoo_android_assetlinks) {
+	header Content-Type "application/json"
+	header Cache-Control "public, max-age=3600"
+	respond "[{\"relation\":[\"delegate_permission/common.handle_all_urls\"],\"target\":{\"namespace\":\"android_app\",\"package_name\":\"com.shareittoo.app\",\"sha256_cert_fingerprints\":[\"09:8F:48:5E:57:16:15:58:E9:11:FC:3C:74:28:45:92:55:84:DB:31:C4:74:CD:BA:08:DD:A0:2F:EB:01:29:A4\",\"36:48:8A:BF:86:C5:1D:A0:7A:B2:25:8F:31:B0:0E:2F:1B:A8:A3:6D:07:61:07:B9:F0:06:37:6A:DE:80:B9:56\"]}}]" 200
+}
+
+shareittoo.com, srv1580960.hstgr.cloud {
+	@android_assetlinks path /.well-known/assetlinks.json
+	handle @android_assetlinks {
+		import shareittoo_android_assetlinks
+	}
+
+	handle_path /api/* {
+		reverse_proxy shareittoo-api:8080
+	}
+
+	@public_support path /support
+	handle @public_support {
+		rewrite * /v1/public/support
+		reverse_proxy shareittoo-api:8080
+	}
+
+	@public_privacy path /privacy
+	handle @public_privacy {
+		rewrite * /v1/public/privacy
+		reverse_proxy shareittoo-api:8080
+	}
+
+	@public_imprint path /imprint
+	handle @public_imprint {
+		rewrite * /v1/public/imprint
+		reverse_proxy shareittoo-api:8080
+	}
+
+	@public_account_deletion path /account-deletion
+	handle @public_account_deletion {
+		rewrite * /v1/account-deletion
+		reverse_proxy shareittoo-api:8080
+	}
+
+	handle {
+		import shareittoo_app
+	}
+}
+
+www.shareittoo.com {
+	@android_assetlinks path /.well-known/assetlinks.json
+	handle @android_assetlinks {
+		import shareittoo_android_assetlinks
+	}
+
+	handle {
+		redir https://shareittoo.com{uri} permanent
+	}
+}
+
+staging.shareittoo.com {
+	@android_assetlinks path /.well-known/assetlinks.json
+	handle @android_assetlinks {
+		import shareittoo_android_assetlinks
+	}
+
+	handle_path /api/* {
+		reverse_proxy shareittoo-staging-api:8080
+	}
+
+	@staging_public_support path /support
+	handle @staging_public_support {
+		rewrite * /v1/public/support
+		reverse_proxy shareittoo-staging-api:8080
+	}
+
+	@staging_public_privacy path /privacy
+	handle @staging_public_privacy {
+		rewrite * /v1/public/privacy
+		reverse_proxy shareittoo-staging-api:8080
+	}
+
+	@staging_public_imprint path /imprint
+	handle @staging_public_imprint {
+		rewrite * /v1/public/imprint
+		reverse_proxy shareittoo-staging-api:8080
+	}
+
+	@staging_public_account_deletion path /account-deletion
+	handle @staging_public_account_deletion {
+		rewrite * /v1/account-deletion
+		reverse_proxy shareittoo-staging-api:8080
+	}
+
+	handle {
+		header Cache-Control "no-store"
+		respond "ShareItToo staging gateway" 200
+	}
+}

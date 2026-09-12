@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp05-support-case-read-local-verification",
+  "observedOn": "2026-09-04",
+  "implementationHead": "e8d53d776401fd3b880f8d505dd0cacd7f4c11d1",
+  "branch": "codex/master-workflow-20260808",
+  "status": "local-normal-pass-final-cold-ci-device-open",
+  "focused": {
+    "httpRedSameOwnerControlsPassed": 4,
+    "httpRedFailureCases": 15,
+    "httpGreenTests": 25,
+    "uiGreenTests": 58,
+    "newReadFollowUpUiTests": 23,
+    "combinedBindingAndWiringTests": 207,
+    "finalSignatureAndOwnerWiringTests": 16,
+    "analyzerIssues": 0,
+    "secretScan": "passed-unchanged-reviewed-historical-baseline"
+  },
+  "normalRegression": {
+    "status": "passed",
+    "toolTests": 2185,
+    "defaultFlutterTests": 724,
+    "explicitDefaultProfileSkips": 33,
+    "allMandatoryProfilesPassed": true,
+    "analyzerIssues": 0,
+    "webBuild": "passed",
+    "wasmDryRun": "passed",
+    "standaloneWasmRuntimeClaimed": false,
+    "loopbackSmoke": "passed",
+    "androidDebugBuild": "passed",
+    "androidBuildSeconds": 20,
+    "minSdk": 24,
+    "permissions": 14,
+    "exportedComponents": 8,
+    "capacityAndFootprintGuards": "passed",
+    "firstRun": "failed-three-outdated-source-signature-assertions",
+    "assertionsRemovedOrWaived": false
+  },
+  "proofLogSha256": {
+    "transportRed": "6dcd33d7ea947bbdcf9dae7e546a5c61774fa0415efcc31c0739581006828ec0",
+    "transportGreen": "e659cf5a2a01240eb53222fbdd22b2eafbc23ba9727000a91d54f31b31a18f0a",
+    "lateReadErrorRed": "c82b451c08a91773e1d6969a5b6102b7e3d3801fa15435dbad01efe35d431c62",
+    "uiGreen": "932dba0913002ce8da385f58ac6b1a28fb49c2c21b71ac72f2421814cfedd30f",
+    "analyzer": "e93cc7238c54148dfc9507b75846b054eba70e7125e511bdfbcd2959cc77a9a3",
+    "normalFirstFailure": "afdd2430146068bd73710d9df87b4fb13355bd7c4480a3c2023ea6628d390cd0",
+    "normalPassed": "e296124769b8c4ca05635e0bc8f37d6ba8e5d36485064b73b7f1de76637ad232",
+    "finalWiring": "c8d18b539d85299dd5a2ecb516cc634ace40e9fb9e98f62e8eb10edea9398371"
+  },
+  "sourceBindings": {
+    "refreshedAgainstBase": "a67a002d325d34b67a679c16d1224ce2a0adfe48",
+    "sourcePathsRemoved": 0,
+    "nonHashClaimsChanged": false,
+    "historicalCandidateOrCiStatesPromoted": false
+  },
+  "openVerification": {
+    "coldReproducibility": "required-on-final-frozen-successor-after-scoped-sdk-entrypoint",
+    "priorColdAuditFailure": "npm-advisory-503-and-transport-timeouts-on-813f0580",
+    "auditWaived": false,
+    "scopedSdkEntrypointDebt": "partial-next-bounded-prerequisite",
+    "github": "explicitly-owner-deferred-not-waived",
+    "signedSuccessorAndDeviceAcceptance": "pending"
+  },
+  "boundaries": {
+    "frozenInstalledPixelBuild": "2026090403",
+    "frozenInstalledPixelSource": "f6a9a41471058c9f80ffd01283c42b9d74a8845c",
+    "installedArtifactContainsThisFix": false,
+    "deviceOrOnePlusAction": false,
+    "realSupportRequests": 0,
+    "backendDeployment": false,
+    "githubAuthPushOrQuery": false,
+    "providerStoreOrProductionChange": false,
+    "newSms": false,
+    "completeGoalClaimed": false
+  }
+}

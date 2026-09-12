@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp07-listing-ai-price-catalog-contract",
+  "status": "private-pilot-price-contract-passed-external-runtime-disabled",
+  "verifiedAt": "2026-09-05",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationHead": "3cbe5a3a3065f07a01ee4b463bb7f017ba248b72",
+    "remoteImplementationHeadMatched": true,
+    "implementationWorkingTreeClean": true
+  },
+  "reproducedFindings": {
+    "cameraAcceptedButPriceReviewRejected": true,
+    "presentationMappedToUnrelatedLaddersRule": true,
+    "unverifiedMarketRulesInvented": false
+  },
+  "contract": {
+    "priceReviewVersion": "WP07-2026-09-05.1",
+    "allowedPrivatePilotCatalogPairs": 79,
+    "exactRegionalRecommendationPairs": 19,
+    "truthfulManualOwnerPricePairs": 60,
+    "outsidePilotPairsRejected": true,
+    "manualPathRecommendation": null,
+    "manualPathRequiresPositiveOwnerPrice": true,
+    "manualPathRequiresOwnerPriceConfirmation": true,
+    "manualPathCreatesRegionalSnapshot": false,
+    "explicitFinalPublicationStillRequired": true,
+    "automaticPublicationAllowed": false,
+    "priceEvidenceBindsExactCatalogPairAndMode": true
+  },
+  "verification": {
+    "focusedWorkflowStoreAndWiringTests": "passed-30",
+    "transientRealPostgresqlIntegration": "passed",
+    "maintainedToolSuite": "passed-2245",
+    "fullTechnicalRegression": "passed",
+    "analyzer": "passed-zero",
+    "webWasm": "passed",
+    "loopbackSmoke": "passed",
+    "androidMinSdk24Build": "passed",
+    "cleanCheckoutReproducibility": "passed-exact-head-byte-identical-apks",
+    "r10FullRegressionSeconds": 689,
+    "r10SecondAndroidBuildSeconds": 44,
+    "r10ApkBytes": 231332383,
+    "r10ApkSha256": "d9bd9e1590110875b99708dd16d06ab7e73a309909b337b28907dcd814d851ba",
+    "r10ApkEntries": 794,
+    "r10ExecutionReportSha256": "dee6d3fed7fbb1f9ed077c6954f1a0985c1489e13ccaca79fd1105630367f77c"
+  },
+  "ratchets": {
+    "cause": "intentional-create-listing-review-copy-source-drift",
+    "currentSourceInventoriesRefreshed": true,
+    "directPrivacyRetentionProviderHashChainRefreshed": true,
+    "historicClosureHeadsPreserved": true,
+    "historicExactBoundaryRatchetsPreserved": true,
+    "liveGatesPreserved": true,
+    "bypassAdded": false,
+    "dedicatedValidators": "passed",
+    "completeRegressionAfterRefresh": "passed"
+  },
+  "github": {
+    "verificationHead": "3cbe5a3a3065f07a01ee4b463bb7f017ba248b72",
+    "regressionRun": 33943848415,
+    "regressionUrl": "https://github.com/walidwalidchraibi-dot/ShareItToo-Dreamflow/actions/runs/33943848415",
+    "regression": "passed-including-clean-reproducibility",
+    "codeqlRun": 33943848391,
+    "codeqlUrl": "https://github.com/walidwalidchraibi-dot/ShareItToo-Dreamflow/actions/runs/33943848391",
+    "codeql": "passed",
+    "openCodeScanningAlerts": 0,
+    "prNumber": 7,
+    "prDraft": true,
+    "prOpen": true,
+    "prMergeable": true,
+    "prMerged": false
+  },
+  "remaining": {
+    "marketAccuracyForManualPairs": "not-claimed",
+    "externalStagingListingAi": "disabled",
+    "localCodexAdapter": "developer-only",
+    "googleSignInAcceptance": "separate-package",
+    "stripeSandboxTestMoney": "separate-package",
+    "v52Binding": "draft-blocked",
+    "frozenPixelCandidateContainsWp07": false
+  },
+  "boundaries": {
+    "stagingChanged": false,
+    "providerActivated": false,
+    "listingPublished": false,
+    "deviceChanged": false,
+    "googlePlayChanged": false,
+    "productionChanged": false,
+    "realMoneyUsed": false,
+    "stripeUsed": false,
+    "firebaseChanged": false,
+    "cloudVpsDnsChanged": false,
+    "prMerged": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsEmailAddress": false,
+    "containsPrivateFilesystemPath": false
+  }
+}

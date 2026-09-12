@@ -1,0 +1,972 @@
+{
+  "schema_version": "1.0.0",
+  "packet_version": "SIT_SUPPORT_PACKET_V1_2026-08-20",
+  "locale": "de-DE",
+  "rules": {
+    "unresolved_placeholders_block_send": true,
+    "store_rendered_text_and_template_version": true,
+    "no_sensitive_content_in_push": true,
+    "red_templates_never_auto_send": true
+  },
+  "templates": [
+    {
+      "id": "T-001",
+      "category": "Eingang",
+      "title": "Fall eingegangen",
+      "approval_level": "GREEN",
+      "body_de": "Hallo {{first_name}},\n\nwir haben deinen Fall erhalten. Deine Case ID lautet {{case_id}}.\n\nDas koennen wir bereits bestaetigen: {{confirmed_fact}}.\n\n{{user_action_or_no_action}}\n\nDu erhaeltst spaetestens am {{next_update_date}} um {{next_update_time}} Uhr ein weiteres Update. Ein finales Ergebnis ist noch nicht entschieden.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "confirmed_fact",
+        "first_name",
+        "next_update_date",
+        "next_update_time",
+        "user_action_or_no_action"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-002",
+      "category": "Eingang",
+      "title": "Aktiver Uebergabe- oder Rueckgabefall",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nwir sehen, dass das Problem waehrend einer laufenden {{active_stage}} aufgetreten ist.\n\nBitte tue jetzt Folgendes: {{safe_next_step}}.\n\nBestaetigt ist bisher: {{confirmed_fact}}. Wir pruefen noch: {{open_check}}.\n\nDeine Case ID ist {{case_id}}. Das naechste Update erhaeltst du spaetestens am {{next_update_date}} um {{next_update_time}} Uhr.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "active_stage",
+        "case_id",
+        "confirmed_fact",
+        "first_name",
+        "next_update_date",
+        "next_update_time",
+        "open_check",
+        "safe_next_step"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-003",
+      "category": "Sicherheit",
+      "title": "Unmittelbare Gefahr",
+      "approval_level": "GREEN",
+      "body_de": "Beende die Begegnung und begib dich an einen sicheren Ort. Uebergib oder uebernimm den Gegenstand vorerst nicht.\n\nBei unmittelbarer Gefahr rufe 110 oder 112. SIT ist kein Notfalldienst.\n\nDokumentiere den Vorgang nur, wenn das gefahrlos moeglich ist. Teile keine Live-Standorte, Passwoerter oder Zahlungsdaten im Supportchat.\n\nDeine Meldung wird als dringender Sicherheitsfall unter {{case_id}} behandelt.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-004",
+      "category": "Status",
+      "title": "Review laeuft",
+      "approval_level": "GREEN",
+      "body_de": "Hallo {{first_name}},\n\ndein Fall {{case_id}} wird aktuell geprueft.\n\nBestaetigt ist: {{confirmed_fact}}.\n\nOffen ist noch: {{open_check}}.\n\n{{user_action_or_no_action}}\n\nDu erhaeltst spaetestens am {{next_update_date}} um {{next_update_time}} Uhr ein weiteres Update. {{open_outcome_statement}}",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "confirmed_fact",
+        "first_name",
+        "next_update_date",
+        "next_update_time",
+        "open_check",
+        "open_outcome_statement",
+        "user_action_or_no_action"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-005",
+      "category": "Nachweise",
+      "title": "Konkrete Informationen benoetigt",
+      "approval_level": "GREEN",
+      "body_de": "Hallo {{first_name}},\n\ndamit wir deinen Fall {{case_id}} weiterpruefen koennen, benoetigen wir bis {{evidence_deadline_date}} um {{evidence_deadline_time}} Uhr:\n\n{{evidence_request_list}}\n\nBitte nutze dafuer den sicheren Upload im Fall. Schwaerze Daten unbeteiligter Personen, soweit sie fuer die Pruefung nicht notwendig sind.\n\nSende keine Passwoerter, PINs, vollstaendigen Karten- oder Kontozugangsdaten. Wenn bis zur Frist nichts eingeht, entscheiden wir auf Grundlage der dann verfuegbaren Informationen.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "evidence_deadline_date",
+        "evidence_deadline_time",
+        "evidence_request_list",
+        "first_name"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-006",
+      "category": "Status",
+      "title": "Warten auf Gegenpartei",
+      "approval_level": "GREEN",
+      "body_de": "Hallo {{first_name}},\n\nwir haben deine Angaben zu Fall {{case_id}} aufgenommen. Aktuell warten wir noch auf die angeforderte Stellungnahme der anderen Partei.\n\nDu musst im Moment nichts weiter tun. Die ausstehende Stellungnahme ist bis {{other_party_deadline_date}} um {{other_party_deadline_time}} Uhr moeglich.\n\nWir geben dir spaetestens am {{next_update_date}} um {{next_update_time}} Uhr ein Update - auch dann, wenn noch keine Antwort eingegangen ist.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "first_name",
+        "next_update_date",
+        "next_update_time",
+        "other_party_deadline_date",
+        "other_party_deadline_time"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-007",
+      "category": "Nachweise",
+      "title": "Fristerinnerung",
+      "approval_level": "GREEN",
+      "body_de": "Hallo {{first_name}},\n\nfuer Fall {{case_id}} fehlen weiterhin folgende Angaben:\n\n{{evidence_request_list}}\n\nDie Frist endet am {{evidence_deadline_date}} um {{evidence_deadline_time}} Uhr. Wenn nichts eingeht, wird der Fall anhand der vorhandenen Informationen weiterbearbeitet.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "evidence_deadline_date",
+        "evidence_deadline_time",
+        "evidence_request_list",
+        "first_name"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-008",
+      "category": "Status",
+      "title": "Update ohne finales Ergebnis",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nhier ist das vereinbarte Update zu Fall {{case_id}}.\n\nSeit dem letzten Update: {{progress_since_last_update}}.\n\nWeiter offen ist: {{open_check}}.\n\n{{user_action_or_no_action}}\n\nEin finales Ergebnis ist noch nicht entschieden. Das naechste Update erhaeltst du spaetestens am {{next_update_date}} um {{next_update_time}} Uhr.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "first_name",
+        "next_update_date",
+        "next_update_time",
+        "open_check",
+        "progress_since_last_update",
+        "user_action_or_no_action"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-009",
+      "category": "Eskalation",
+      "title": "An Fachteam uebergeben",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nwir haben Fall {{case_id}} an das zustaendige Team fuer {{specialist_area}} weitergegeben, weil {{user_facing_escalation_reason}}.\n\nBestaetigt ist bisher: {{confirmed_fact}}. Noch nicht entschieden ist: {{open_outcome_statement}}.\n\n{{user_action_or_no_action}}\n\nDein naechstes Update erhaeltst du spaetestens am {{next_update_date}} um {{next_update_time}} Uhr.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "confirmed_fact",
+        "first_name",
+        "next_update_date",
+        "next_update_time",
+        "open_outcome_statement",
+        "specialist_area",
+        "user_action_or_no_action",
+        "user_facing_escalation_reason"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-010",
+      "category": "Status",
+      "title": "Verspaetetes Update",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nunser angekuendigtes Update zu Fall {{case_id}} war faellig und kam nicht rechtzeitig. Das tut uns leid.\n\nAktueller Stand: {{current_status_plain}}.\n\nWeiter offen ist: {{open_check}}.\n\nDu erhaeltst das naechste Update spaetestens am {{next_update_date}} um {{next_update_time}} Uhr. Wir versprechen damit keinen bestimmten Ausgang, aber eine erneute Rueckmeldung bis zu diesem Zeitpunkt.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "current_status_plain",
+        "first_name",
+        "next_update_date",
+        "next_update_time",
+        "open_check"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-011",
+      "category": "Buchung",
+      "title": "Adresse noch nicht sichtbar",
+      "approval_level": "GREEN",
+      "body_de": "Hallo {{first_name}},\n\ndie genaue Adresse wird bei SIT grundsaetzlich erst sechs Stunden vor dem beidseitig bestaetigten Termin angezeigt. Wird der Termin spaeter bestaetigt, erscheint sie nach der wirksamen Bestaetigung.\n\nFuer deine Buchung ist aktuell folgender Termin gespeichert: {{appointment_datetime}}.\n\n{{address_visibility_result}}\n\nTeile oder erfrage die genaue Adresse nicht ausserhalb des vorgesehenen SIT-Ablaufs. Case ID: {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "address_visibility_result",
+        "appointment_datetime",
+        "case_id",
+        "first_name"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-012",
+      "category": "Uebergabe",
+      "title": "Uebergabecode funktioniert nicht",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nbehandle die Uebergabe vorerst nicht als abgeschlossen.\n\nBitte prueft zuerst den QR-Code erneut. Falls das nicht funktioniert, nutzt den in der App vorgesehenen sechsstelligen Fallback-Code. Eine einzelne Partei darf die Uebergabe nicht selbst bestaetigen.\n\nDie vier Pflichtfotos und die Gegenbestaetigung bleiben erforderlich. Wir pruefen unter {{case_id}} den technischen Status und melden uns spaetestens um {{next_update_time}} Uhr.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "first_name",
+        "next_update_time"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-013",
+      "category": "Uebergabe",
+      "title": "Andere Person erscheint nicht",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nbleib an einem sicheren Ort und fuehre keine Konfrontation herbei.\n\nDer bestaetigte Termin ist {{appointment_datetime}}. Bitte sende ueber den Buchungs-Chat eine kurze Nachricht, dass du vor Ort bist, und dokumentiere den Zeitpunkt in der App.\n\nEine finale Aussage zu Storno, No-Show oder Geldfolge ist noch nicht getroffen. Fall {{case_id}} wird jetzt anhand der Zeitstempel und des Buchungsstatus geprueft. Naechstes Update: {{next_update_datetime}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "appointment_datetime",
+        "case_id",
+        "first_name",
+        "next_update_datetime"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-014",
+      "category": "Uebergabe",
+      "title": "Gegenstand weicht ab",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nwenn der Gegenstand wesentlich vom Inserat, dem vereinbarten Zubehoer oder dem beschriebenen Zustand abweicht, uebergib bzw. uebernimm ihn vorerst nicht.\n\nBitte lade sicher hoch:\n\n- eine Gesamtansicht;\n- ein Detail der Abweichung;\n- das vorhandene Zubehoer;\n- die kritische Stelle.\n\nWir pruefen Inseratsversion, Uebergabefotos und Buchungsstatus unter {{case_id}}. Noch nicht entschieden sind Verantwortlichkeit und Geldfolge.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "first_name"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-015",
+      "category": "Uebergabe",
+      "title": "Unsichere Situation",
+      "approval_level": "GREEN",
+      "body_de": "Beende die Uebergabe und entferne dich aus der Situation, wenn du dich unsicher fuehlst. Bei unmittelbarer Gefahr rufe 110 oder 112.\n\nUebergib oder uebernimm den Gegenstand nicht. Dokumentiere nur, wenn das gefahrlos moeglich ist.\n\nSIT prueft den Vorgang unter {{case_id}} als Sicherheitsfall. Eine vorlaeufige Sicherheitsmassnahme ist keine Feststellung von Schuld.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-016",
+      "category": "Uebergabe",
+      "title": "Kaution oder Sicherheitszahlung verlangt",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nSIT sieht fuer diesen Pilot keine Bargeldkaution, Sicherheitsueberweisung oder sonstige Sicherheit vor.\n\nLeiste die verlangte Sicherheit nicht. Wenn die Forderung bestehen bleibt, brich die Uebergabe ab und melde den Vorgang in der App.\n\nWir pruefen Chat, Inserat und Ablauf unter {{case_id}}. Noch nicht entschieden ist, ob eine Account- oder Inseratsmassnahme erforderlich ist.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "first_name"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-017",
+      "category": "Buchung",
+      "title": "Buchungs-Chat geschlossen",
+      "approval_level": "GREEN",
+      "body_de": "Hallo {{first_name}},\n\nder direkte Buchungs-Chat ist fuer diesen Buchungsstatus nicht mehr offen. Dein Anliegen geht dadurch nicht verloren.\n\nWir haben dafuer den separaten Supportfall {{case_id}} angelegt. Bitte reiche weitere Informationen nur dort ein, damit Fallakte, Fristen und Nachweise zusammenbleiben.\n\n{{user_action_or_no_action}}",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "first_name",
+        "user_action_or_no_action"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-018",
+      "category": "Rueckgabe",
+      "title": "Rueckgabecode funktioniert nicht",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nbehandle die Rueckgabe vorerst nicht als vollstaendig bestaetigt.\n\nVersucht den QR-Code erneut und danach den vorgesehenen sechsstelligen Fallback-Code. Eine Selbstbestaetigung durch nur eine Partei ist nicht zulaessig.\n\nDas Rueckgabe-Fotoset bleibt erforderlich. Wir pruefen den technischen Status unter {{case_id}} und geben dir spaetestens am {{next_update_date}} um {{next_update_time}} Uhr ein Update.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "first_name",
+        "next_update_date",
+        "next_update_time"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-019",
+      "category": "Rueckgabe",
+      "title": "Andere Person erscheint nicht zur Rueckgabe",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nbleib an einem sicheren Ort und hinterlasse den Gegenstand nicht unbeaufsichtigt oder bei einer unbeteiligten Person.\n\nDer bestaetigte Rueckgabetermin ist {{appointment_datetime}}. Bitte sende eine kurze Nachricht im Buchungs-Chat und dokumentiere deine Anwesenheit sowie den Zustand des Gegenstands in der App.\n\nWir pruefen unter {{case_id}} die naechsten sicheren Rueckgabeschritte. Verantwortlichkeit und Geldfolge sind noch nicht entschieden.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "appointment_datetime",
+        "case_id",
+        "first_name"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-020",
+      "category": "Rueckgabe",
+      "title": "Rueckgabebestaetigung fehlt",
+      "approval_level": "GREEN",
+      "body_de": "Hallo {{first_name}},\n\ndie Rueckgabe ist dokumentiert, aber die Bestaetigung von {{missing_party_role}} fehlt noch.\n\nDie Buchung befindet sich deshalb im Status \"Rueckgabebestaetigung ausstehend\". Das ist nicht automatisch ein Schadens- oder Streitfall.\n\nWir haben die fehlende Partei erinnert. Du musst aktuell {{user_action_or_no_action_lower}}. Naechstes Update: {{next_update_datetime}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "first_name",
+        "missing_party_role",
+        "next_update_datetime",
+        "user_action_or_no_action_lower"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-021",
+      "category": "Rueckgabe",
+      "title": "Substantiierter Rueckgabefall eroeffnet",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nwir haben Fall {{case_id}} als konkreten Rueckgabe-/Zustandsfall aufgenommen.\n\nGeprueft wird: {{review_scope}}.\n\nVon dem bereits autorisierten Buchungsbetrag sind derzeit {{affected_amount}} betroffen. {{undisputed_amount_statement}}\n\nDas bedeutet noch keine Feststellung von Schuld oder eines privaten Schadensersatzanspruchs. Bitte reiche bis {{statement_deadline_datetime}} die angeforderten Angaben ein. Naechstes Update: {{next_update_datetime}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "affected_amount",
+        "case_id",
+        "first_name",
+        "next_update_datetime",
+        "review_scope",
+        "statement_deadline_datetime",
+        "undisputed_amount_statement"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-022",
+      "category": "Rueckgabe",
+      "title": "Stellungnahme an meldende Partei",
+      "approval_level": "GREEN",
+      "body_de": "Hallo {{first_name}},\n\nbitte ergaenze fuer Fall {{case_id}} bis {{statement_deadline_datetime}}:\n\n{{evidence_request_list}}\n\nBeschreibe nur, was du selbst wahrgenommen hast, und trenne Vermutung von Beobachtung. Bitte lade Originaldateien ueber den sicheren Fall-Upload hoch.\n\nOhne ausreichende Ergaenzung wird anhand der vorhandenen Informationen entschieden. Eine neue Schadensbelastung entsteht durch die Meldung nicht automatisch.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "evidence_request_list",
+        "first_name",
+        "statement_deadline_datetime"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-023",
+      "category": "Rueckgabe",
+      "title": "Stellungnahme an Gegenpartei",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nzu Buchung {{booking_reference}} wurde folgender konkrete Punkt gemeldet: {{neutral_allegation_summary}}.\n\nDu kannst bis {{statement_deadline_datetime}} Stellung nehmen und passende Originalnachweise hochladen.\n\nDie Meldung ist noch keine Feststellung von Verantwortlichkeit. SIT prueft Plattformstatus und zulaessige Buchungsbetraege; private Schadensersatzansprueche werden dadurch nicht rechtsverbindlich entschieden. Case ID: {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "booking_reference",
+        "case_id",
+        "first_name",
+        "neutral_allegation_summary",
+        "statement_deadline_datetime"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-024",
+      "category": "Rueckgabe",
+      "title": "Meldung noch nicht ausreichend",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\ndie bisherige Meldung in Fall {{case_id}} reicht noch nicht aus, um den behaupteten Umfang abschliessend zu pruefen.\n\nEs fehlen: {{missing_evidence_list}}.\n\nEine unvollstaendige Schadensmeldung verlaengert eine Auszahlung nicht automatisch und erlaubt keine neue Belastung. Reiche die Angaben bitte bis {{evidence_deadline_datetime}} ein.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "evidence_deadline_datetime",
+        "first_name",
+        "missing_evidence_list"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-025",
+      "category": "Rueckgabe",
+      "title": "Begruendetes Sieben-Tage-Update",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nhier ist das faellige Update zu Fall {{case_id}}.\n\nSeit der Eroeffnung wurden {{reviewed_material_summary}} geprueft.\n\nBestaetigt ist: {{confirmed_fact}}.\n\nWeiter offen ist: {{open_check}}.\n\nBetroffen sind weiterhin {{affected_amount}}; {{undisputed_amount_statement}}. Das naechste begruendete Update erhaeltst du spaetestens am {{next_update_date}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "affected_amount",
+        "case_id",
+        "confirmed_fact",
+        "first_name",
+        "next_update_date",
+        "open_check",
+        "reviewed_material_summary",
+        "undisputed_amount_statement"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-026",
+      "category": "Zahlung",
+      "title": "Zahlung fehlgeschlagen",
+      "approval_level": "GREEN",
+      "body_de": "Hallo {{first_name}},\n\ndie Zahlung fuer {{booking_reference}} wurde nicht erfolgreich bestaetigt.\n\nAktueller technischer Status: {{payment_status_plain}}. Es liegt keine bestaetigte erfolgreiche Belastung ueber {{total_amount}} vor.\n\nBitte {{payment_next_step}}. Teile keine vollstaendigen Karten- oder Kontodaten im Supportchat. Case ID: {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "booking_reference",
+        "case_id",
+        "first_name",
+        "payment_next_step",
+        "payment_status_plain",
+        "total_amount"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-027",
+      "category": "Zahlung",
+      "title": "Moegliche Doppelbelastung",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nwir pruefen die von dir gemeldete moegliche Doppelbelastung zu {{booking_reference}}.\n\nBestaetigt sehen wir aktuell: {{confirmed_payment_events}}.\n\nNoch zu klaeren ist: {{open_payment_check}}.\n\nBitte sende keinen vollstaendigen Kontoauszug. Nutze nur den sicheren Upload und schwaerze andere Buchungen sowie Kontodaten. Naechstes Update: {{next_update_datetime}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "booking_reference",
+        "confirmed_payment_events",
+        "first_name",
+        "next_update_datetime",
+        "open_payment_check"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-028",
+      "category": "Erstattung",
+      "title": "Erstattung an Zahlungsdienst uebermittelt",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\ndie Erstattung wurde am {{provider_submitted_datetime}} an den Zahlungsdienst uebermittelt.\n\nMietpreis-Erstattung: {{rent_refund_amount}}.\nSIT-Gebuehren-Erstattung: {{sit_fee_refund_amount}}.\nGesamt: {{total_refund_amount}}.\n\nDer Zahlungsdienst hat die Gutschrift noch nicht als abgeschlossen bestaetigt. Je nach Bank kann die Anzeige spaeter erfolgen. Referenz: {{provider_reference}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "first_name",
+        "provider_reference",
+        "provider_submitted_datetime",
+        "rent_refund_amount",
+        "sit_fee_refund_amount",
+        "total_refund_amount"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-029",
+      "category": "Erstattung",
+      "title": "Erstattung bestaetigt",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nder Zahlungsdienst hat die Erstattung zu {{booking_reference}} bestaetigt.\n\nMietpreis-Erstattung: {{rent_refund_amount}}.\nSIT-Gebuehren-Erstattung: {{sit_fee_refund_amount}}.\nGesamt: {{total_refund_amount}}.\nBestaetigt am: {{provider_confirmed_datetime}}.\n\nDamit ist die Erstattungsaktion in Fall {{case_id}} abgeschlossen.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "booking_reference",
+        "case_id",
+        "first_name",
+        "provider_confirmed_datetime",
+        "rent_refund_amount",
+        "sit_fee_refund_amount",
+        "total_refund_amount"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-030",
+      "category": "Auszahlung",
+      "title": "Auszahlung teilweise im Review",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nzu deiner vorgesehenen Auszahlung fuer {{booking_reference}} laeuft ein begrenzter Review.\n\nGesamte vorgesehene Auszahlung: {{payout_total}}.\nDavon aktuell betroffen: {{affected_amount}}.\nNicht betroffen: {{undisputed_amount}}.\n\nGeprueft wird ausschliesslich: {{review_scope}}. Das ist noch keine Feststellung von Verantwortlichkeit. Naechstes Update: {{next_update_datetime}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "affected_amount",
+        "booking_reference",
+        "first_name",
+        "next_update_datetime",
+        "payout_total",
+        "review_scope",
+        "undisputed_amount"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-031",
+      "category": "Auszahlung",
+      "title": "Auszahlung freigegeben",
+      "approval_level": "RED",
+      "body_de": "Hallo {{first_name}},\n\nwir haben die Auszahlung in Hoehe von {{payout_amount}} fuer {{booking_reference}} freigegeben.\n\n{{provider_status_statement}}\n\nDie Freigabe entscheidet keinen privaten Schadensersatzanspruch zwischen den Parteien. Case ID: {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "booking_reference",
+        "case_id",
+        "first_name",
+        "payout_amount",
+        "provider_status_statement"
+      ],
+      "send_rule": "Ausdrueckliche fachliche Entscheidung und Freigabe vor Versand."
+    },
+    {
+      "id": "T-032",
+      "category": "Geld",
+      "title": "Unstreitiger Teilbetrag",
+      "approval_level": "RED",
+      "body_de": "Hallo {{first_name}},\n\nwir haben den geprueften Betrag aufgeteilt:\n\n- von der Pruefung betroffen: {{affected_amount}};\n- nicht betroffen: {{undisputed_amount}};\n- bereits freigegeben/erstattet: {{released_or_refunded_amount}}.\n\nDie weitere Pruefung betrifft nur {{review_scope}}. Andere Betraege werden nicht pauschal wegen des Falls blockiert.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "affected_amount",
+        "first_name",
+        "released_or_refunded_amount",
+        "review_scope",
+        "undisputed_amount"
+      ],
+      "send_rule": "Ausdrueckliche fachliche Entscheidung und Freigabe vor Versand."
+    },
+    {
+      "id": "T-033",
+      "category": "Storno",
+      "title": "Stornoberechnung",
+      "approval_level": "RED",
+      "body_de": "Hallo {{first_name}},\n\nfuer die Stornierung von {{booking_reference}} wurde folgende serverseitige Berechnung gespeichert:\n\n{{cancellation_breakdown}}\n\nAngewandte Regelversion: {{legal_rule_version}}.\nMassgeblicher Zeitpunkt: {{cancellation_effective_datetime}}.\n\n{{calculation_finality_statement}}\n\nPrivate Schadens- oder Ersatzansprueche werden damit nicht abschliessend entschieden. Case ID: {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "booking_reference",
+        "calculation_finality_statement",
+        "cancellation_breakdown",
+        "cancellation_effective_datetime",
+        "case_id",
+        "first_name",
+        "legal_rule_version"
+      ],
+      "send_rule": "Ausdrueckliche fachliche Entscheidung und Freigabe vor Versand."
+    },
+    {
+      "id": "T-034",
+      "category": "Pilot",
+      "title": "Keine echte Zahlung im Pilot",
+      "approval_level": "GREEN",
+      "body_de": "Hallo {{first_name}},\n\ndieser SIT-Pilot arbeitet fuer diesen Testfall ohne echte Geldbewegung.\n\nAngezeigte Zahlungs-, Erstattungs- oder Auszahlungsdaten sind Testdaten und loesen keine reale Belastung oder Gutschrift aus.\n\nCase ID: {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "first_name"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-035",
+      "category": "Account-Sicherheit",
+      "title": "Konto-Sicherheitspruefung",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nwir pruefen eine Sicherheitsmeldung zu deinem Konto.\n\nVorlaeufige Auswirkung: {{temporary_account_effect}}.\n\nDiese Sicherheitsmassnahme ist noch keine Feststellung eines Verstosses. Bitte nutze fuer die Wiederherstellung nur {{secure_recovery_channel}} und teile keine Codes im Supportchat.\n\nNaechstes Update: {{next_update_datetime}}. Case ID: {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "first_name",
+        "next_update_datetime",
+        "secure_recovery_channel",
+        "temporary_account_effect"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-036",
+      "category": "Trust & Safety",
+      "title": "Belaestigung oder Drohung",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nes tut uns leid, dass du diese Situation erlebst.\n\nBei unmittelbarer Gefahr beende den Kontakt, begib dich an einen sicheren Ort und rufe 110 oder 112. SIT ist kein Notfalldienst.\n\nWir pruefen unter {{case_id}} die gemeldeten Inhalte und den Buchungsablauf. {{temporary_safety_effect}}\n\nEine finale Account- oder Verantwortungsentscheidung ist noch nicht getroffen.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "first_name",
+        "temporary_safety_effect"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-037",
+      "category": "Trust & Safety",
+      "title": "Betrugsverdacht wird geprueft",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nwir pruefen deine Meldung zu einem moeglichen Betrugsversuch.\n\nLeiste keine Zahlung, Kaution oder Sicherheitsueberweisung ausserhalb des freigegebenen SIT-Ablaufs. Teile keine Zugangsdaten oder Wiederherstellungscodes.\n\nBestaetigt ist: {{confirmed_fact}}. Noch offen ist: {{open_check}}.\n\nFall {{case_id}} ist noch nicht final entschieden. Naechstes Update: {{next_update_datetime}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "confirmed_fact",
+        "first_name",
+        "next_update_datetime",
+        "open_check"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-038",
+      "category": "Inserat",
+      "title": "Inserat vorlaeufig eingeschraenkt",
+      "approval_level": "RED",
+      "body_de": "Hallo {{first_name}},\n\ndas Inserat {{listing_reference}} ist waehrend der Pruefung vorlaeufig {{listing_temporary_effect}}.\n\nGrund fuer die Pruefung: {{neutral_review_reason}}.\n\nDie vorlaeufige Einschraenkung ist noch keine finale Feststellung eines Verstosses. Betroffene bestehende Buchungen: {{existing_booking_effect}}.\n\nDu erhaeltst spaetestens am {{next_update_date}} ein weiteres Update. Case ID: {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "existing_booking_effect",
+        "first_name",
+        "listing_reference",
+        "listing_temporary_effect",
+        "neutral_review_reason",
+        "next_update_date"
+      ],
+      "send_rule": "Ausdrueckliche fachliche Entscheidung und Freigabe vor Versand."
+    },
+    {
+      "id": "T-039",
+      "category": "Inserat",
+      "title": "Klarstellung erforderlich",
+      "approval_level": "GREEN",
+      "body_de": "Hallo {{first_name}},\n\nbevor dein Inserat {{listing_reference}} weitergeprueft werden kann, benoetigen wir folgende Klarstellung:\n\n{{clarification_request}}\n\nEine finale Inseratsmassnahme ist noch nicht entschieden. Bitte aktualisiere oder bestaetige die Angaben bis {{evidence_deadline_datetime}}. Case ID: {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "clarification_request",
+        "evidence_deadline_datetime",
+        "first_name",
+        "listing_reference"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-040",
+      "category": "Moderation",
+      "title": "Finale Inhaltseinschraenkung",
+      "approval_level": "RED",
+      "body_de": "Hallo {{first_name}},\n\nwir haben entschieden, {{restricted_object}} wie folgt einzuschraenken: {{restriction_scope_and_duration}}.\n\nGrund: {{specific_reason}}.\nBeruecksichtigt wurden: {{considered_information}}.\nRegelgrundlage: {{policy_or_legal_basis}}.\nAutomatisierte Mittel: {{automation_disclosure}}.\n\nDie Entscheidung betrifft {{decision_scope}}. Du kannst bis {{appeal_deadline}} ueber {{appeal_channel}} eine erneute Pruefung beantragen. Case ID: {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "appeal_channel",
+        "appeal_deadline",
+        "automation_disclosure",
+        "case_id",
+        "considered_information",
+        "decision_scope",
+        "first_name",
+        "policy_or_legal_basis",
+        "restricted_object",
+        "restriction_scope_and_duration",
+        "specific_reason"
+      ],
+      "send_rule": "Ausdrueckliche fachliche Entscheidung und Freigabe vor Versand."
+    },
+    {
+      "id": "T-041",
+      "category": "Moderation",
+      "title": "Einschraenkung aufgehoben",
+      "approval_level": "RED",
+      "body_de": "Hallo {{first_name}},\n\nwir haben die Pruefung abgeschlossen und die bisherige Einschraenkung von {{restricted_object}} aufgehoben.\n\nGrund: {{specific_reason}}.\nUmgesetzt am: {{implemented_datetime}}.\nWiederhergestellte Funktionen: {{restored_scope}}.\n\nDie Korrektur ist im Fall {{case_id}} dokumentiert.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "first_name",
+        "implemented_datetime",
+        "restored_scope",
+        "restricted_object",
+        "specific_reason"
+      ],
+      "send_rule": "Ausdrueckliche fachliche Entscheidung und Freigabe vor Versand."
+    },
+    {
+      "id": "T-042",
+      "category": "Ueberpruefung",
+      "title": "Ueberpruefungsantrag eingegangen",
+      "approval_level": "GREEN",
+      "body_de": "Hallo {{first_name}},\n\ndein Antrag auf erneute Pruefung der Entscheidung in Fall {{original_case_id}} ist eingegangen. Der neue Pruefvorgang lautet {{case_id}}.\n\nWir beruecksichtigen: {{appeal_material_summary}}.\n\nDie urspruengliche Entscheidung bleibt bis zur neuen Entscheidung {{interim_effect}}. Naechstes Update: {{next_update_datetime}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "appeal_material_summary",
+        "case_id",
+        "first_name",
+        "interim_effect",
+        "next_update_datetime",
+        "original_case_id"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-043",
+      "category": "Ueberpruefung",
+      "title": "Finale Ueberpruefungsentscheidung",
+      "approval_level": "RED",
+      "body_de": "Hallo {{first_name}},\n\ndie erneute Pruefung der Entscheidung zu {{original_case_id}} ist abgeschlossen.\n\nErgebnis: {{appeal_decision}}.\nKonkrete Auswirkung: {{decision_effect}}.\nBeruecksichtigt wurden: {{considered_information}}.\nBegruendung: {{specific_reason}}.\nUmsetzung: {{implementation_status}}.\n\nWeitere verfuegbare Moeglichkeiten: {{further_redress_options}}. Case ID: {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "appeal_decision",
+        "case_id",
+        "considered_information",
+        "decision_effect",
+        "first_name",
+        "further_redress_options",
+        "implementation_status",
+        "original_case_id",
+        "specific_reason"
+      ],
+      "send_rule": "Ausdrueckliche fachliche Entscheidung und Freigabe vor Versand."
+    },
+    {
+      "id": "T-044",
+      "category": "Datenschutz",
+      "title": "Datenschutzanfrage eingegangen",
+      "approval_level": "GREEN",
+      "body_de": "Hallo {{first_name}},\n\nwir haben deine Datenschutzanfrage vom {{request_received_date}} erhalten. Case ID: {{case_id}}.\n\nArt der Anfrage: {{privacy_request_type}}.\n\n{{identity_verification_statement}}\n\nWir informieren dich spaetestens bis {{privacy_response_deadline}} ueber die Bearbeitung oder - falls rechtlich zulaessig und erforderlich - ueber eine begruendete Fristverlaengerung.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "first_name",
+        "identity_verification_statement",
+        "privacy_request_type",
+        "privacy_response_deadline",
+        "request_received_date"
+      ],
+      "send_rule": "Automatisiert nur bei serverbestaetigtem Status und erfolgreicher Platzhaltervalidierung."
+    },
+    {
+      "id": "T-045",
+      "category": "Datenschutz",
+      "title": "Sichere Identitaetspruefung",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nbevor wir personenbezogene Daten herausgeben oder loeschen, muessen wir sicherstellen, dass die Anfrage von der berechtigten Person stammt.\n\nBitte nutze den sicheren Verifikationsschritt: {{secure_identity_step}}.\n\nSende keine Passwoerter, PINs oder vollstaendigen Ausweiskopien im normalen Supportchat. Die Bearbeitungsfrist und die Verifikationsanfrage werden im Fall {{case_id}} dokumentiert.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "first_name",
+        "secure_identity_step"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-046",
+      "category": "Datenschutz",
+      "title": "Moegliche Datenoffenlegung",
+      "approval_level": "RED",
+      "body_de": "Hallo {{first_name}},\n\nwir pruefen einen moeglichen Datenschutzvorfall, der {{data_scope_plain}} betreffen koennte.\n\nSofortmassnahme: {{containment_action}}.\nWas wir bestaetigen koennen: {{confirmed_fact}}.\nWas noch geprueft wird: {{open_check}}.\n\nBitte {{user_action_or_no_action_lower}}. Wir informieren dich spaetestens am {{next_update_datetime}} erneut. Case ID: {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "confirmed_fact",
+        "containment_action",
+        "data_scope_plain",
+        "first_name",
+        "next_update_datetime",
+        "open_check",
+        "user_action_or_no_action_lower"
+      ],
+      "send_rule": "Ausdrueckliche fachliche Entscheidung und Freigabe vor Versand."
+    },
+    {
+      "id": "T-047",
+      "category": "Datenschutz",
+      "title": "Loeschung abgeschlossen oder teilweise begrenzt",
+      "approval_level": "RED",
+      "body_de": "Hallo {{first_name}},\n\ndeine Loeschanfrage in Fall {{case_id}} wurde bearbeitet.\n\nGeloescht oder anonymisiert: {{deleted_data_scope}}.\nWeiter gespeichert: {{retained_data_scope}}.\nGrund und voraussichtliche Dauer der weiteren Speicherung: {{retention_reason_and_period}}.\n\nKonto-Deaktivierung und Datenloeschung wurden getrennt dokumentiert. Weitere Rechte oder Beschwerdemoeglichkeiten: {{privacy_redress_options}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "deleted_data_scope",
+        "first_name",
+        "privacy_redress_options",
+        "retained_data_scope",
+        "retention_reason_and_period"
+      ],
+      "send_rule": "Ausdrueckliche fachliche Entscheidung und Freigabe vor Versand."
+    },
+    {
+      "id": "T-048",
+      "category": "Finale Entscheidung",
+      "title": "Finale Refundentscheidung",
+      "approval_level": "RED",
+      "body_de": "Hallo {{first_name}},\n\nwir haben die Pruefung in Fall {{case_id}} abgeschlossen.\n\nEntscheidung:\n- Mietpreis-Erstattung: {{rent_refund_amount}};\n- SIT-Gebuehren-Erstattung: {{sit_fee_refund_amount}};\n- Gesamt: {{total_refund_amount}}.\n\nBegruendung: {{specific_reason}}.\nBeruecksichtigt wurden: {{considered_information}}.\nRegelversion: {{legal_rule_version}}.\nUmsetzung: {{implementation_status}}.\n\nDiese Entscheidung legt keinen privaten Schadensersatzanspruch zwischen Mieter und Vermieter rechtsverbindlich fest. Eine erneute Pruefung kannst du bis {{appeal_deadline}} beantragen.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "appeal_deadline",
+        "case_id",
+        "considered_information",
+        "first_name",
+        "implementation_status",
+        "legal_rule_version",
+        "rent_refund_amount",
+        "sit_fee_refund_amount",
+        "specific_reason",
+        "total_refund_amount"
+      ],
+      "send_rule": "Ausdrueckliche fachliche Entscheidung und Freigabe vor Versand."
+    },
+    {
+      "id": "T-049",
+      "category": "Finale Entscheidung",
+      "title": "Finale Payoutentscheidung",
+      "approval_level": "RED",
+      "body_de": "Hallo {{first_name}},\n\nwir haben die auszahlungsbezogene Pruefung in Fall {{case_id}} abgeschlossen.\n\nFreigegebener Betrag: {{released_payout_amount}}.\nNicht freigegebener Betrag: {{not_released_amount}}.\nProviderstatus: {{provider_status_statement}}.\n\nBegruendung: {{specific_reason}}.\nRegelversion: {{legal_rule_version}}.\n\nSIT entscheidet damit nur ueber den Plattform- und Buchungsbetragspfad. Private Schadensersatzansprueche werden nicht rechtsverbindlich entschieden. Ueberpruefung bis: {{appeal_deadline}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "appeal_deadline",
+        "case_id",
+        "first_name",
+        "legal_rule_version",
+        "not_released_amount",
+        "provider_status_statement",
+        "released_payout_amount",
+        "specific_reason"
+      ],
+      "send_rule": "Ausdrueckliche fachliche Entscheidung und Freigabe vor Versand."
+    },
+    {
+      "id": "T-050",
+      "category": "Abschluss",
+      "title": "Fall geschlossen",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nFall {{case_id}} ist abgeschlossen.\n\nErgebnis: {{final_result}}.\nUmgesetzt am: {{implemented_datetime}}.\nWarum der Fall geschlossen wird: {{closure_reason_plain}}.\n\n{{appeal_or_reopen_statement}}\n\nAktuell laeuft in diesem Fall kein weiterer Bearbeitungsschritt.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "appeal_or_reopen_statement",
+        "case_id",
+        "closure_reason_plain",
+        "final_result",
+        "first_name",
+        "implemented_datetime"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-051",
+      "category": "Abschluss",
+      "title": "Entscheidung nach fehlenden Informationen",
+      "approval_level": "RED",
+      "body_de": "Hallo {{first_name}},\n\ndie Frist fuer die angeforderten Informationen in Fall {{case_id}} ist am {{evidence_deadline_datetime}} abgelaufen.\n\nWir haben anhand der vorhandenen Informationen entschieden: {{final_decision}}.\n\nBegruendung: {{specific_reason}}.\nNicht bewertet werden konnte: {{unverifiable_scope}}.\n\nDu kannst bis {{appeal_deadline}} eine erneute Pruefung beantragen und die fehlenden Informationen nachreichen.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "appeal_deadline",
+        "case_id",
+        "evidence_deadline_datetime",
+        "final_decision",
+        "first_name",
+        "specific_reason",
+        "unverifiable_scope"
+      ],
+      "send_rule": "Ausdrueckliche fachliche Entscheidung und Freigabe vor Versand."
+    },
+    {
+      "id": "T-052",
+      "category": "Status",
+      "title": "Fall wieder geoeffnet",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nwir haben Fall {{case_id}} wieder geoeffnet.\n\nGrund: {{reopen_reason}}.\nNeue Information oder Korrektur: {{new_information_summary}}.\nAktueller Status: {{current_status_plain}}.\n\n{{user_action_or_no_action}}\n\nNaechstes Update: {{next_update_datetime}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "current_status_plain",
+        "first_name",
+        "new_information_summary",
+        "next_update_datetime",
+        "reopen_reason",
+        "user_action_or_no_action"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-053",
+      "category": "Streitbeilegung",
+      "title": "Nicht beigelegte Streitigkeit mit SIT",
+      "approval_level": "RED",
+      "body_de": "Hallo {{first_name}},\n\nwir konnten die Streitigkeit zu {{dispute_subject}} im internen Support- und Ueberpruefungsweg nicht beilegen.\n\nZustaendige Verbraucherschlichtungsstelle: {{conciliation_body_name}}, {{conciliation_body_address}}, {{conciliation_body_website}}.\n\nSIT ist zur Teilnahme {{participation_status_plain}}.\n\nDieser Hinweis betrifft eine Streitigkeit ueber den Vertrag mit SIT und wird in Textform erteilt. Die fruehere EU-OS-Plattform ist nicht mehr in Betrieb. Case ID: {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "conciliation_body_address",
+        "conciliation_body_name",
+        "conciliation_body_website",
+        "dispute_subject",
+        "first_name",
+        "participation_status_plain"
+      ],
+      "send_rule": "Ausdrueckliche fachliche Entscheidung und Freigabe vor Versand."
+    },
+    {
+      "id": "T-054",
+      "category": "Produktsicherheit",
+      "title": "Moeglicherweise gefaehrlicher Gegenstand",
+      "approval_level": "YELLOW",
+      "body_de": "Hallo {{first_name}},\n\nnutze den Gegenstand nicht weiter und gib ihn nicht an eine andere Person weiter.\n\nBei Verletzung oder akuter Gefahr rufe 112. SIT kann keine technische Sicherheitsgarantie oder Ferndiagnose geben.\n\nBitte sichere - nur wenn gefahrlos moeglich - Produktname, Hersteller/Modell, Inserat, Art der Gefahr, Datum, Ort und vorhandene Fotos. Wir pruefen weitere Sicherheitsmassnahmen unter {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "case_id",
+        "first_name"
+      ],
+      "send_rule": "Menschliche Pruefung vor Versand."
+    },
+    {
+      "id": "T-055",
+      "category": "Behoerde",
+      "title": "Behoerdenanfrage bestaetigt",
+      "approval_level": "RED",
+      "body_de": "Der Eingang der Anfrage mit Referenz {{authority_reference}} wurde am {{received_datetime}} bestaetigt.\n\nDie weitere Bearbeitung erfolgt ausschliesslich ueber den autorisierten Behoerden- und Rechtsweg. Aus dem normalen Support werden keine fallbezogenen Daten oder internen Informationen offengelegt.\n\nInterne Case ID: {{case_id}}.",
+      "locale": "de-DE",
+      "version": "1.0.0",
+      "required_placeholders": [
+        "authority_reference",
+        "case_id",
+        "received_datetime"
+      ],
+      "send_rule": "Ausdrueckliche fachliche Entscheidung und Freigabe vor Versand."
+    }
+  ]
+}

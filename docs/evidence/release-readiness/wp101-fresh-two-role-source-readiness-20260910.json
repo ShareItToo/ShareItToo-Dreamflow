@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp101-fresh-two-role-source-readiness",
+  "status": "two-registrations-accepted-awaiting-owner-email-verification",
+  "capturedOn": "2026-09-10",
+  "workPackage": "WP101",
+  "journeyVaultAudit": {
+    "recognizedVaultCount": 96,
+    "activeSourceVaultCount": 0,
+    "retiredJourneyVaultCount": 96,
+    "otherRecognizedVaultCount": 0,
+    "invalidRecognizedVaultCount": 0,
+    "unsafeEntryCount": 0,
+    "freshSourceProvenanceAvailable": true,
+    "safeForFreshSourceProvisioning": true
+  },
+  "verification": {
+    "focusedAuditTestsPassed": 3,
+    "privatePathEmitted": false,
+    "credentialMaterialEmitted": false
+  },
+  "boundaries": {
+    "existingPixelSessionReused": false,
+    "historicalJourneyReused": false,
+    "freshRegistrationSubmitted": true,
+    "registrationRunReference": "20260910t134020z-44a5c983",
+    "acceptedRoles": [
+      "owner",
+      "renter"
+    ],
+    "verificationEmailRequested": true,
+    "emailDeliveryConfirmed": false,
+    "emailLinkConfirmed": false,
+    "serverVerificationBeforeVaultPromotionRequired": true,
+    "serverVerificationExecuted": false,
+    "verificationSessionsCleaned": false,
+    "freshSourceVaultCreated": true,
+    "pixelChanged": false,
+    "stagingChanged": true,
+    "providerChanged": false,
+    "storeChanged": false,
+    "onePlusTouched": false,
+    "productionChanged": false,
+    "containsPrivatePath": false,
+    "containsCredentialMaterial": false
+  },
+  "nextRequirement": "owner-controlled-confirmation-of-both-normal-staging-verification-links-before-any-pixel-login"
+}

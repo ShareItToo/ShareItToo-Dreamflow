@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-internal-release-completion",
+  "status": "google-play-internal-release-complete-device-verification-pending",
+  "recordedAt": "2026-09-02T07:18:00+02:00",
+  "source": {
+    "classification": "direct-authenticated-google-play-console-readback",
+    "consoleReadOnlyGateCompleted": true,
+    "postReleaseReadbackCompleted": true,
+    "ownerAuthenticationInteractionRequired": false
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090204",
+    "artifactSourceHead": "30cc73cee8f10915ad4447da4a2fa7ae928f7410",
+    "compileSdkVersion": 36,
+    "minSdkVersion": 24,
+    "targetSdkVersion": 36,
+    "aabBytes": 109008702,
+    "aabSha256": "5d77d2526e66fee814aa45ad776b37b07ab21d33e91f1d38588c98fde14e01d9",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "candidateEvidenceRef": "docs/evidence/release-readiness/full-pilot-candidate-2026090204.json"
+  },
+  "artifactVerification": {
+    "localSha256ConfirmedImmediatelyBeforeUpload": true,
+    "zipStructureValid": true,
+    "bundletoolValidationPassed": true,
+    "uploadCertificateConfirmed": true,
+    "packageNameConfirmed": true,
+    "playProcessedVersionCode": "2026090204",
+    "playProcessedVersionName": "1.0.0",
+    "playProcessedMinSdkVersion": 24,
+    "playProcessedTargetSdkVersion": 36,
+    "validationErrorCount": 0
+  },
+  "release": {
+    "track": "internal-testing",
+    "releaseName": "1.0.0-internal-2026090204",
+    "releaseNotesLanguage": "de-DE",
+    "releaseNotesBoundToRepositorySource": true,
+    "statusObserved": "available-to-internal-testers",
+    "activeInternalVersionCode": "2026090204",
+    "reviewed": false,
+    "sentForReview": false,
+    "releasedAtConsoleLocal": "2026-09-02 07:18"
+  },
+  "postReleaseReadback": {
+    "testerListName": "SIT interner Test",
+    "testerCount": 2,
+    "testerListUnchanged": true,
+    "testerIdentityStored": false,
+    "productionUnavailable": true,
+    "openTestingUnavailable": true,
+    "closedTestingTrackChanged": false,
+    "knownClosedTestingVersionCode": "2026081506",
+    "otherTracksUnchanged": true,
+    "competingNewerReleaseObserved": false
+  },
+  "boundaries": {
+    "exactInternalReleaseActivated": true,
+    "newExactBundleUploaded": true,
+    "testerListChanged": false,
+    "productionChanged": false,
+    "openTestingChanged": false,
+    "closedTestingChanged": false,
+    "publicReleasePerformed": false,
+    "reviewSubmissionPerformed": false,
+    "firebaseChanged": false,
+    "paymentChanged": false,
+    "providerChanged": false,
+    "cloudVpsDnsChanged": false,
+    "deviceAccessed": false,
+    "pullRequestMerged": false
+  },
+  "remainingGates": {
+    "physicalDevice": "DEVICE_TEST_DEFERRED_PHYSICAL_ACCESS",
+    "legal": "independent-professional-v5.2-approval-and-approved-snapshot-provisioning",
+    "pilotReady": "PARTIAL"
+  },
+  "handoverRef": "docs/operations/SIT_FULL_PILOT_READY_HANDOVER.md",
+  "containsSecrets": false,
+  "containsTesterIdentity": false,
+  "containsOptInUrl": false,
+  "containsPrivateFilesystemPath": false
+}

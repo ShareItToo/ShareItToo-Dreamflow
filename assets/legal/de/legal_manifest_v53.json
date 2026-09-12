@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 3,
+  "version": "V5.3-2026-09-09",
+  "status": "draft-blocked",
+  "activationAllowed": false,
+  "publiclyPublished": false,
+  "effectiveDate": null,
+  "operator": {
+    "businessDesignation": "ShareItToo – Inhaber Walid Chraibi",
+    "ownerName": "Walid Chraibi",
+    "legalForm": "sole-proprietor",
+    "serviceAddress": "Bernhaldenweg 47, 71579 Spiegelberg, Deutschland",
+    "contactEmail": "contact@shareittoo.com",
+    "businessRegistration": "required-at-actual-start-not-yet-recorded",
+    "taxNumber": "applied-for-not-issued-not-recorded",
+    "vatId": "not-recorded",
+    "economicIdentificationNumber": "not-recorded",
+    "registerEntry": "not-recorded",
+    "managingDirector": "not-applicable"
+  },
+  "derivation": {
+    "historicalV5AndV52RemainUnchanged": true,
+    "historicalV52ManifestPath": "assets/legal/de/legal_manifest_v52.json",
+    "historicalV52ManifestSha256": "757289c45dfe50c9f3f3ec9c96953f06b62f15b282bb1d6cdedc6e8e07d2e69b",
+    "purpose": "new-draft-only-operator-aligned-derivation-not-a-retroactive-rewrite"
+  },
+  "officialSources": {
+    "ddgSection5": "https://www.gesetze-im-internet.de/ddg/__5.html",
+    "businessRegistration": "https://verwaltung.bund.de/leistungsverzeichnis/de/leistung/99050012104000",
+    "ustgSection19": "https://www.gesetze-im-internet.de/ustg_1980/__19.html",
+    "vsbgSection36": "https://www.gesetze-im-internet.de/vsbg/__36.html",
+    "vsbgSection37": "https://www.gesetze-im-internet.de/vsbg/__37.html",
+    "dsa": "https://eur-lex.europa.eu/eli/reg/2022/2065/oj/eng"
+  },
+  "taxAndConsumerBoundaries": {
+    "taxTreatmentAssumed": false,
+    "invoiceOrTaxLogicEnabled": false,
+    "paymentOrPayoutEnabled": false,
+    "euOdrLinkIncluded": false,
+    "vsbgSection36Status": "employment-count-and-participation-review-open",
+    "vsbgSection37Status": "case-specific-unresolved-dispute-process-open",
+    "withdrawalFlowEnabled": false
+  },
+  "dsaBoundaries": {
+    "classificationProfessionalReviewOpen": true,
+    "authorityContactPointOperational": false,
+    "recipientContactPointOperational": false,
+    "termsTransparencyImplementationComplete": false,
+    "noticeAndActionImplementationComplete": false,
+    "microSmallEnterpriseStatusIsNotGeneralExemptionClaim": true
+  },
+  "documents": [
+    {"part":"A","type":"platform_terms","path":"assets/legal/de/v53/part_a_platform_terms.html","title":"Teil A – Plattform-Nutzungsbedingungen","sha256":"2b9a43578b4eb4b5709d2611c19395588d4f10825dffd6b526a5f92e2ce9ff90"},
+    {"part":"B","type":"private_rental_terms","path":"assets/legal/de/v53/part_b_private_rental_terms.html","title":"Teil B – Private Mietbedingungen","sha256":"8e54311170a2dfbac6d428f31f62bbd8c8c858299c29c8f79f69ec32fe7e0842"},
+    {"part":"C","type":"cancellation_refund","path":"assets/legal/de/v53/part_c_cancellation_refund.html","title":"Teil C – Storno und Erstattung","sha256":"bb744937a7d5a3b09faaf06588cfbc2907aee11f873b610c66be1a244bb73cbb"},
+    {"part":"D","type":"handover_return_damage","path":"assets/legal/de/v53/part_d_handover_return_damage.html","title":"Teil D – Übergabe, Rückgabe und Schäden","sha256":"ff7eb0a209156dd46268606eb4b7533d4ae5d804f8a92b576bb62ba1d8b89305"},
+    {"part":"E","type":"payment_payout","path":"assets/legal/de/v53/part_e_payment_payout.html","title":"Teil E – Zahlung und Auszahlung","sha256":"6cfd52d2da184c568a823e92de456a8a697c7a3b05623579809a803f415295d4"},
+    {"part":"F","type":"community_safety","path":"assets/legal/de/v53/part_f_community_safety.html","title":"Teil F – Community und Sicherheit","sha256":"f5d8bd1c63b511d27a260b8f037a6adf6f45f7a9c8df1c75901c9c4651f7eb34"},
+    {"part":"G","type":"reporting_moderation_review","path":"assets/legal/de/v53/part_g_reporting_moderation_review.html","title":"Teil G – Meldung, Moderation und Review","sha256":"38c709e553677fd946418c195403ea84ecbd9158983986a104d2f719fcb16bda"},
+    {"part":"H","type":"privacy","path":"assets/legal/de/v53/part_h_privacy.html","title":"Teil H – Datenschutz","sha256":"c016e1c2c34d434b49736fea6a9497fcc5dac41456095db31f01db111ba94197"},
+    {"part":"I","type":"imprint_withdrawal_shorttexts","path":"assets/legal/de/v53/part_i_imprint_withdrawal_shorttexts.html","title":"Teil I – Impressum, Widerruf und Kurztexte","sha256":"35ff17951f339a6a9b75e1f62e035a1ad827ed3a8ad0a2a09793830c49d0a671"}
+  ],
+  "openProfessionalReviewGates": [
+    "operator-and-imprint-completeness",
+    "business-registration-at-actual-start",
+    "tax-treatment-and-invoice-logic",
+    "consumer-and-marketplace-classification",
+    "contract-acceptance-cancellation-and-withdrawal",
+    "payment-service-provider-and-refund-flow",
+    "privacy-retention-deletion-and-supervisory-authority",
+    "processor-dpa-region-and-transfer-evidence",
+    "dsa-classification-contact-points-terms-and-notice-action",
+    "public-route-and-download-delivery"
+  ],
+  "externalBoundaries": {
+    "publicCommercialOperation": false,
+    "publicRegistration": false,
+    "realInvitations": false,
+    "bindingContractAcceptance": false,
+    "realMoney": false,
+    "paymentProviderActivation": false,
+    "storeActivation": false,
+    "productionRelease": false,
+    "mapsConfigurationChanged": false,
+    "mapsArchitecture": "server-side-key-only; later-restrict-to-confirmed-vps-egress-ip-and-required-places-api"
+  }
+}

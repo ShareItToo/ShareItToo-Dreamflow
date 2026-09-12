@@ -1,322 +1,236 @@
-import 'dart:math';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:lendify/models/invoice.dart';
-import 'package:lendify/models/item.dart';
 import 'package:lendify/models/rental_request.dart';
-import 'package:lendify/models/user.dart';
+import 'package:lendify/services/backend_config.dart';
+import 'package:lendify/services/backend_repository.dart';
 import 'package:lendify/services/data_service.dart';
+import 'package:lendify/services/qa_runtime_service.dart';
 
-/// Generates invoice/receipt documents dynamically from real booking data.
-///
-/// IMPORTANT: The UI may show example values, but this service must never
-/// reuse a single fixed invoice. Documents are generated from persisted
-/// [RentalRequest]s.
+/// Financial documents are server-issued from immutable payment/refund/payout
+/// snapshots. The only local generator is an explicitly marked QA simulation;
+/// release code never recomputes a receipt from an item price.
 class InvoicesService {
-  static const double vatRateDefault = 0.19;
-  static const double platformFeeRate = 0.10; // 10% AFTER taxes
-
   static Future<List<Invoice>> getInvoicesForCurrentUser() async {
     try {
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final rows = await BackendRepository.getFinancialDocuments();
+        return _sorted(rows.map(Invoice.fromJson));
+      }
+      if (!QaRuntimeService.isEnabled) return const [];
       final current = await DataService.getCurrentUser();
       if (current == null) return const [];
       return getInvoicesForUser(current.id);
-    } catch (e) {
-      debugPrint('[InvoicesService] getInvoicesForCurrentUser failed: $e');
+    } catch (error) {
+      debugPrint('[InvoicesService] getInvoicesForCurrentUser failed: $error');
       return const [];
     }
   }
 
   static Future<List<Invoice>> getInvoicesForUser(String userId) async {
     try {
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final current = await DataService.getCurrentUser();
+        if (current?.id != userId) return const [];
+        final rows = await BackendRepository.getFinancialDocuments();
+        return _sorted(rows.map(Invoice.fromJson));
+      }
+      if (!QaRuntimeService.isEnabled) return const [];
+
       final asRenter = await DataService.getRentalRequestsForRenter(userId);
       final asOwner = await DataService.getRentalRequestsForOwner(userId);
-
-      final invoices = <Invoice>[];
-      for (final r in asRenter) {
-        final docs = await _documentsForRequest(r, perspectiveUserId: userId);
-        invoices.addAll(docs);
+      final documents = <Invoice>[];
+      for (final request in [...asRenter, ...asOwner]) {
+        documents.addAll(await _qaDocumentsForCompletedRequest(
+          request,
+          perspectiveUserId: userId,
+        ));
       }
-      for (final r in asOwner) {
-        final docs = await _documentsForRequest(r, perspectiveUserId: userId);
-        invoices.addAll(docs);
-      }
-
-      // Ensure unique + stable order (newest first)
-      final byId = <String, Invoice>{};
-      for (final inv in invoices) {
-        byId[inv.id] = inv;
-      }
-      final out = byId.values.toList()
-        ..sort((a, b) => b.date.compareTo(a.date));
-      return out;
-    } catch (e) {
-      debugPrint('[InvoicesService] getInvoicesForUser failed: $e');
+      return _sorted({for (final entry in documents) entry.id: entry}.values);
+    } catch (error) {
+      debugPrint('[InvoicesService] getInvoicesForUser failed: $error');
       return const [];
     }
   }
 
   static Future<Invoice?> findInvoiceForCurrentUser(String invoiceId) async {
-    try {
-      final list = await getInvoicesForCurrentUser();
-      for (final inv in list) {
-        if (inv.id == invoiceId) return inv;
-      }
-      return null;
-    } catch (e) {
-      debugPrint('[InvoicesService] findInvoiceForCurrentUser failed: $e');
-      return null;
+    final documents = await getInvoicesForCurrentUser();
+    for (final document in documents) {
+      if (document.id == invoiceId) return document;
+    }
+    return null;
+  }
+
+  /// Release downloads are authorized and hash-checked by the backend before
+  /// the app renders the immutable snapshot as a PDF view. QA simulations are
+  /// deliberately local and carry no server artifact.
+  static Future<void> verifyDownloadArtifact(Invoice invoice) async {
+    if (QaRuntimeService.isEnabled) return;
+    if (!BackendConfig.enabled) {
+      throw StateError('financial_document_backend_required');
+    }
+    final response =
+        await BackendRepository.downloadFinancialDocument(invoice.id);
+    final observed =
+        response.headers['x-sit-artifact-sha256']?.trim().toLowerCase() ?? '';
+    if (observed.isEmpty || observed != invoice.artifactSha256.toLowerCase()) {
+      throw StateError('financial_document_artifact_hash_mismatch');
     }
   }
 
-  static Future<List<Invoice>> _documentsForRequest(
-    RentalRequest req, {
+  static Future<List<Invoice>> _qaDocumentsForCompletedRequest(
+    RentalRequest request, {
     required String perspectiveUserId,
   }) async {
-    final item = await DataService.getItemById(req.itemId);
-    final renter = await DataService.getUserById(req.renterId);
-    final owner = await DataService.getUserById(req.ownerId);
+    if (request.status.toLowerCase() != 'completed') return const [];
+    final rentMinor = request.quotedRentalSubtotalMinor;
+    final feeMinor = request.quotedPlatformFeeMinor;
+    final totalMinor = request.quotedTotalMinor;
+    if (rentMinor == null || feeMinor == null || totalMinor == null) {
+      return const [];
+    }
+    if (rentMinor < 0 || feeMinor < 0 || totalMinor != rentMinor + feeMinor) {
+      return const [];
+    }
+    final item = await DataService.getItemById(request.itemId);
+    final renter = await DataService.getUserById(request.renterId);
+    final owner = await DataService.getUserById(request.ownerId);
     if (item == null || renter == null || owner == null) return const [];
 
-    // Choose a booking date: prefer completion, else createdAt.
-    final date = _bookingDateFor(req);
-    final bookingId = _bookingIdFor(req);
-
-    final breakdown = _pricingForRequest(item: item, req: req);
-
-    final bookingDetails = InvoiceBookingDetails(
+    final issuedAt = request.end.toUtc();
+    final booking = InvoiceBookingDetails(
       itemTitle: item.title,
       renterName: renter.displayName,
       ownerName: owner.displayName,
-      rentalDays: _rentalDays(req),
+      startsAt: request.start.toUtc(),
+      endsAt: request.end.toUtc(),
+      quoteId: 'qa-quote-${request.id}',
+      quoteHash: null,
+      contractVersion: 'QA-SIMULATION',
     );
-
-    final docs = <Invoice>[];
-    final isHeldForReview = req.needsReview;
-    if (isHeldForReview) {
-      return docs;
-    }
-
-    // Renter docs
-    if (perspectiveUserId == renter.id) {
-      docs.add(
-        _buildInvoice(
-          baseId: 'inv_${req.id}',
-          type: InvoiceType.invoice,
-          bookingId: bookingId,
-          requestId: req.id,
-          date: date,
-          title: '${item.title} – Buchung',
-          amount: breakdown.totalAfterTax,
-          booking: bookingDetails,
-          pricing: breakdown,
+    if (perspectiveUserId == request.renterId) {
+      return [
+        _qaDocument(
+          request: request,
+          type: InvoiceType.bookingPaymentReceipt,
+          issuedAt: issuedAt,
+          amountMinor: totalMinor,
+          privateRentMinor: rentMinor,
+          sitFeeMinor: feeMinor,
+          supplierRole: 'private_owner',
+          debtorRole: 'renter',
+          booking: booking,
         ),
-      );
-
-      if (_isRefund(req)) {
-        final refundAmount = _refundAmount(
-          totalAfterTax: breakdown.totalAfterTax,
-          req: req,
-        );
-        docs.add(
-          _buildInvoice(
-            baseId: 'refund_${req.id}',
-            type: InvoiceType.refund,
-            bookingId: bookingId,
-            requestId: req.id,
-            date: date,
-            title: '${item.title} – Rückerstattung',
-            amount: refundAmount,
-            booking: bookingDetails,
-            pricing: breakdown,
+        if (feeMinor > 0)
+          _qaDocument(
+            request: request,
+            type: InvoiceType.sitFeeReceipt,
+            issuedAt: issuedAt,
+            amountMinor: feeMinor,
+            sitFeeMinor: feeMinor,
+            supplierRole: 'sit',
+            debtorRole: 'renter',
+            booking: booking,
           ),
-        );
-      }
+      ];
     }
-
-    // Owner docs
-    if (perspectiveUserId == owner.id && !isHeldForReview) {
-      docs.add(
-        _buildInvoice(
-          baseId: 'payout_${req.id}',
-          type: InvoiceType.payment,
-          bookingId: bookingId,
-          requestId: req.id,
-          date: date,
-          title: '${item.title} – Auszahlung',
-          amount: breakdown.payoutToOwner,
-          booking: bookingDetails,
-          pricing: breakdown,
+    if (perspectiveUserId == request.ownerId) {
+      return [
+        _qaDocument(
+          request: request,
+          type: InvoiceType.ownerPayoutStatement,
+          issuedAt: issuedAt,
+          amountMinor: rentMinor,
+          ownerPayoutMinor: rentMinor,
+          supplierRole: 'private_owner',
+          debtorRole: 'payment_provider',
+          booking: booking,
         ),
-      );
-      docs.add(
-        _buildInvoice(
-          baseId: 'fee_${req.id}',
-          type: InvoiceType.fee,
-          bookingId: bookingId,
-          requestId: req.id,
-          date: date,
-          title: '${item.title} – Plattformgebühr',
-          amount: breakdown.platformFee,
-          booking: bookingDetails,
-          pricing: breakdown,
-        ),
-      );
+      ];
     }
-
-    return docs;
+    return const [];
   }
 
-  static bool _isRefund(RentalRequest req) {
-    final s = req.status.toLowerCase();
-    return s == 'cancelled' || s == 'declined';
-  }
-
-  static double _refundAmount({
-    required double totalAfterTax,
-    required RentalRequest req,
-  }) {
-    // Demo policy: mirror the app's unified policy when renter cancels;
-    // owner cancellation is treated as 100% refund.
-    try {
-      if ((req.cancelledBy ?? '') == 'owner') {
-        return _round2(totalAfterTax);
-      }
-      final ratio = DataService.refundRatio(
-        policy: 'unified',
-        start: req.start,
-        cancelAt: DateTime.now(),
-      );
-      return _round2(totalAfterTax * ratio);
-    } catch (_) {
-      return 0.0;
-    }
-  }
-
-  static DateTime _bookingDateFor(RentalRequest req) {
-    // We want dates to feel meaningful:
-    // - completed/running => end date (receipt issued after rental)
-    // - otherwise => createdAt
-    final s = req.status.toLowerCase();
-    if (s == 'completed' || s == 'running') return req.end;
-    return req.createdAt;
-  }
-
-  static int _rentalDays(RentalRequest req) {
-    final days = (req.end.difference(req.start).inHours / 24).ceil().clamp(
-      1,
-      365,
-    );
-    return days;
-  }
-
-  static String _bookingIdFor(RentalRequest req) {
-    // Stable, human-friendly booking number based on the request id.
-    // We keep it deterministic so the same booking always maps to the same number.
-    final seed = req.id.hashCode.abs();
-    final n = 100000 + (seed % 900000);
-    return 'SIT-$n';
-  }
-
-  static InvoicePriceBreakdown _pricingForRequest({
-    required Item item,
-    required RentalRequest req,
-  }) {
-    // Determine total AFTER taxes (this is what the renter effectively paid).
-    // Prefer a persisted quote to stay stable across UI changes.
-    final fallbackTotal = () {
-      try {
-        final b = DataService.priceBreakdownForRequest(item: item, req: req);
-        return b.totalRenter;
-      } catch (_) {
-        return item.pricePerDay; // last resort
-      }
-    };
-
-    final totalAfterTax = _round2(req.quotedTotalRenter ?? fallbackTotal());
-    final vatRate = vatRateDefault;
-
-    // If the amount already includes VAT, extract the tax part.
-    final taxAmount = _round2(totalAfterTax * (vatRate / (1 + vatRate)));
-    final netAmount = _round2(totalAfterTax - taxAmount);
-
-    // IMPORTANT RULE: platform fee must be 10% of total AFTER taxes.
-    final platformFee = _round2(totalAfterTax * platformFeeRate);
-    final payout = _round2(totalAfterTax - platformFee);
-
-    return InvoicePriceBreakdown(
-      vatRate: vatRate,
-      netAmount: netAmount,
-      taxAmount: taxAmount,
-      totalAfterTax: totalAfterTax,
-      platformFee: platformFee,
-      payoutToOwner: payout,
-    );
-  }
-
-  static Invoice _buildInvoice({
-    required String baseId,
+  static Invoice _qaDocument({
+    required RentalRequest request,
     required InvoiceType type,
-    required String bookingId,
-    required String requestId,
-    required DateTime date,
-    required String title,
-    required double amount,
+    required DateTime issuedAt,
+    required int amountMinor,
+    required String supplierRole,
+    required String debtorRole,
     required InvoiceBookingDetails booking,
-    required InvoicePriceBreakdown pricing,
+    int privateRentMinor = 0,
+    int sitFeeMinor = 0,
+    int ownerPayoutMinor = 0,
   }) {
-    // Avoid a single static invoice: IDs and invoice numbers are derived from
-    // booking + type + time buckets for uniqueness.
-    final now = DateTime.now();
-    final id = '${baseId}_${type.name}';
-    final invoiceNumber = _invoiceNumberFor(id: id, date: date);
+    final typeName = switch (type) {
+      InvoiceType.bookingPaymentReceipt => 'booking_payment_receipt',
+      InvoiceType.sitFeeReceipt => 'sit_fee_receipt',
+      InvoiceType.ownerPayoutStatement => 'owner_payout_statement',
+      InvoiceType.refundReceipt => 'refund_receipt',
+    };
+    final suffix = _stableDigits('${request.id}:$typeName');
     return Invoice(
-      id: id,
-      invoiceNumber: invoiceNumber,
-      bookingId: bookingId,
-      requestId: requestId,
+      id: 'qa-${request.id}-$typeName',
+      documentNumber: 'SIT-QA-${issuedAt.year}-$suffix',
+      bookingId: request.id,
       type: type,
-      date: date,
-      title: title,
-      amount: _round2(amount),
+      title: switch (type) {
+        InvoiceType.bookingPaymentReceipt => 'Buchungs- und Zahlungsübersicht',
+        InvoiceType.sitFeeReceipt => 'Beleg über die SIT-Plattformgebühr',
+        InvoiceType.ownerPayoutStatement =>
+          'Auszahlungsnachweis für den Vermieter',
+        InvoiceType.refundReceipt => 'Erstattungsbeleg',
+      },
+      sourceKind: 'qa_simulation',
+      sourceId: request.id,
+      currency: 'EUR',
+      amountMinor: amountMinor,
+      privateRentMinor: privateRentMinor,
+      sitFeeMinor: sitFeeMinor,
+      ownerPayoutMinor: ownerPayoutMinor,
+      rentRefundMinor: 0,
+      sitFeeRefundMinor: 0,
+      supplierRole: supplierRole,
+      debtorRole: debtorRole,
+      taxTreatment: type == InvoiceType.bookingPaymentReceipt
+          ? 'private_rent_no_sit_vat'
+          : 'not_applicable',
+      testMode: true,
+      issuedAt: issuedAt,
+      artifactSha256: '',
+      downloadPath: '',
       booking: booking,
-      pricing: pricing,
-      createdAt: now,
-      updatedAt: now,
+      sitFeeTaxLabel: 'QA-Testbeleg – keine steuerliche Rechnung',
     );
   }
 
-  static String _invoiceNumberFor({
-    required String id,
-    required DateTime date,
-  }) {
-    // e.g. SIT-INV-2026-03-483920
-    final y = date.year;
-    final m = date.month.toString().padLeft(2, '0');
-    final suffix = 100000 + (id.hashCode.abs() % 900000);
-    return 'SIT-INV-$y-$m-$suffix';
+  static List<Invoice> _sorted(Iterable<Invoice> documents) {
+    final result = documents.toList()
+      ..sort((left, right) => right.issuedAt.compareTo(left.issuedAt));
+    return result;
   }
 
-  static double _round2(double v) {
-    if (v.isNaN || v.isInfinite) return 0.0;
-    return double.parse(v.toStringAsFixed(2));
-  }
-
-  /// Utility: totals for a given year.
-  static double sumAmountForYear(List<Invoice> invoices, int year) {
-    double total = 0.0;
-    for (final i in invoices) {
-      if (i.date.year == year) total += i.amount;
+  static String _stableDigits(String value) {
+    var hash = 2166136261;
+    for (final codeUnit in value.codeUnits) {
+      hash ^= codeUnit;
+      hash = (hash * 16777619) & 0x7fffffff;
     }
-    return _round2(total);
+    return (100000 + hash % 900000).toString();
+  }
+
+  static double sumAmountForYear(List<Invoice> invoices, int year) {
+    var minor = 0;
+    for (final invoice in invoices) {
+      if (invoice.issuedAt.year == year) minor += invoice.amountMinor;
+    }
+    return minor / 100;
   }
 
   static List<int> availableYears(List<Invoice> invoices) {
-    final years = <int>{};
-    for (final i in invoices) {
-      years.add(i.date.year);
-    }
-    final out = years.toList()..sort((a, b) => b.compareTo(a));
-    return out;
+    final years = invoices.map((entry) => entry.issuedAt.year).toSet().toList()
+      ..sort((left, right) => right.compareTo(left));
+    return years;
   }
 
   static List<Invoice> filter({
@@ -324,27 +238,22 @@ class InvoicesService {
     required InvoiceFilter filter,
     int? year,
   }) {
-    Iterable<Invoice> it = invoices;
-    if (year != null) it = it.where((e) => e.date.year == year);
-
-    switch (filter) {
-      case InvoiceFilter.all:
-        break;
-      case InvoiceFilter.bookings:
-        it = it.where((e) => e.type == InvoiceType.invoice);
-        break;
-      case InvoiceFilter.rentals:
-        it = it.where((e) => e.type == InvoiceType.payment);
-        break;
-      case InvoiceFilter.refunds:
-        it = it.where((e) => e.type == InvoiceType.refund);
-        break;
-      case InvoiceFilter.fees:
-        it = it.where((e) => e.type == InvoiceType.fee);
-        break;
+    Iterable<Invoice> result = invoices;
+    if (year != null) {
+      result = result.where((entry) => entry.issuedAt.year == year);
     }
-    final out = it.toList()..sort((a, b) => b.date.compareTo(a.date));
-    return out;
+    result = switch (filter) {
+      InvoiceFilter.all => result,
+      InvoiceFilter.bookings => result
+          .where((entry) => entry.type == InvoiceType.bookingPaymentReceipt),
+      InvoiceFilter.rentals =>
+        result.where((entry) => entry.type == InvoiceType.ownerPayoutStatement),
+      InvoiceFilter.refunds =>
+        result.where((entry) => entry.type == InvoiceType.refundReceipt),
+      InvoiceFilter.fees =>
+        result.where((entry) => entry.type == InvoiceType.sitFeeReceipt),
+    };
+    return _sorted(result);
   }
 }
 

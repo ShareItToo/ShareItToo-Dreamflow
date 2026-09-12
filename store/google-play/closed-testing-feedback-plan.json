@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "state": "planned",
+  "applicationId": "com.shareittoo.app",
+  "candidate": {
+    "versionName": "1.0.0",
+    "buildNumber": "2026082301",
+    "commit": null,
+    "bindingState": "reserved-final-candidate"
+  },
+  "testerOnboarding": {
+    "guidePath": "docs/operations/B11_GOOGLE_PLAY_CLOSED_TESTER_ONBOARDING_2026-08-14.md",
+    "privateOptInLinkInjectedAtSendTime": true,
+    "privateFeedbackChannelInjectedAtSendTime": true,
+    "containsTesterPersonalData": false,
+    "containsLiveOptInLink": false
+  },
+  "rules": {
+    "minimumContinuousTesterCount": 12,
+    "minimumConsecutiveDays": 14,
+    "syntheticContentOnly": true,
+    "realPaymentForbidden": true,
+    "testerRosterStoredInRepository": false,
+    "individualFeedbackStoredInRepository": false
+  },
+  "checkpoints": [
+    "qualifying-start",
+    "early-usage",
+    "midpoint",
+    "late-usage",
+    "eligibility-observation"
+  ],
+  "scenarios": [
+    "install-onboarding-session",
+    "feed-search-listing-detail",
+    "create-edit-listing",
+    "booking-owner-renter",
+    "chat-push-deep-link",
+    "offline-network-recovery",
+    "handover-return-cancellation",
+    "report-block-review",
+    "accessibility-export-deletion"
+  ],
+  "feedbackRecordFields": [
+    "capturedAt",
+    "scenario",
+    "platform",
+    "appVersion",
+    "result",
+    "severity",
+    "expected",
+    "actual",
+    "sanitizedEvidenceRef"
+  ],
+  "allowedResults": [
+    "passed",
+    "issue",
+    "blocked"
+  ],
+  "allowedSeverities": [
+    "none",
+    "p0",
+    "p1",
+    "p2",
+    "p3"
+  ],
+  "aggregate": {
+    "observedTesterCount": 0,
+    "completedScenarioRuns": 0,
+    "feedbackItemCount": 0,
+    "issueCounts": {
+      "p0": 0,
+      "p1": 0,
+      "p2": 0,
+      "p3": 0
+    },
+    "feedbackThemes": [],
+    "changesMade": [],
+    "summaryEvidenceRef": null
+  },
+  "boundaries": {
+    "containsTesterPersonalData": false,
+    "containsAccountIdentifiers": false,
+    "containsSecrets": false,
+    "containsIndividualFeedback": false,
+    "containsInventedResults": false,
+    "storeSubmissionChanged": false
+  }
+}

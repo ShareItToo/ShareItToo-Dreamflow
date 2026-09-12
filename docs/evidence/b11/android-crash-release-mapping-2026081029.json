@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-crash-release-mapping",
+  "status": "passed-exact-release-assignment",
+  "capturedAt": "2026-08-10T17:20:47Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081029",
+    "commit": "fc57adbfdf676e6abf9b7df63ec7e657e6a92a89",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "artifacts": {
+    "aabSha256": "58baa13fab35f233a80e4d7240db2db5df999511b3b1d001ec16b893ba6ee382",
+    "apkSha256": "99f69b05943bb8d4a18ec63e6a6c9425e81d1cf72b1815265067d5774cbbfc4e",
+    "embeddedProguardMappingSha256": "9d90d7792aa1c5ce9f80c05f223f854607128ae41df740534dc6cad625d1149a",
+    "embeddedMappingIdSha256": "ebcf7ebdf0b85db37fb54752b38cbe1815cc21f3cd07889e20c7496f8a49d89f",
+    "nativeDebugSymbolsZipSha256": "b5964d753ff1193a77f3c9de4bf56c832c72cc5807d25e25478b411cb90f5c51",
+    "nativeSymbolMembers": [
+      {"abi": "armeabi-v7a", "sha256": "27bf0edea5454c1a63e8c2caa9cda43ad335ed4e663626dfbb32bcd602e6f29f"},
+      {"abi": "arm64-v8a", "sha256": "1dad644b879e1ddd6e8134d7892a2dc8127e08bee3490d565a89ea39cc4508c2"},
+      {"abi": "x86_64", "sha256": "ef827b186c04aacd96893ce551de8f6f17a6fc37e126099f5433c1a3d55c02f2"}
+    ]
+  },
+  "verifications": {
+    "aabIdentity": "passed",
+    "embeddedMappingPresent": "passed",
+    "mappingIdPresentAndHashed": "passed",
+    "nativeSymbolsPresentForAllBundledAbis": "passed",
+    "nativeSymbolsMatchStandaloneArchive": "passed",
+    "originalAabMappingUploadedToCrashlytics": "passed",
+    "uploadBuildResult": "successful",
+    "controlledSanitizedCrashEvent": "passed",
+    "deviceDiagnosticUi": "passed",
+    "consoleReleaseAssignment": "passed",
+    "consoleObservedVersion": "1.0.0 (2026081029)",
+    "consoleObservedIssueEventCount": 2,
+    "consoleCustomKeysBoundToCandidate": "passed"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "productionCrashGenerated": false,
+    "controlledStagingEventGenerated": true,
+    "eventContainsAccountData": false,
+    "eventContainsMessageOrAddressData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

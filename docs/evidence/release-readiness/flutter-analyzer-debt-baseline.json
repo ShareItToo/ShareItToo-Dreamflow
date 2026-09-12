@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-analyzer-debt-baseline",
+  "flutterVersion": "3.41.7",
+  "dartVersion": "3.11.5",
+  "total": 0,
+  "fingerprintSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+  "byCode": {},
+  "byPathCode": {}
+}

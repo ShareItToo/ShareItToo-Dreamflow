@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "built-and-scanned-awaiting-device-validation",
+  "generatedAt": "2026-08-14T02:44:46Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081402",
+    "commit": "74702bf3b2d1e2637392d5b5bd6963815df50bb8",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "pending",
+    "aabSha256": "a379fb068e5d747108fa53495229638d1d224ebe2529b5c9ec2ea9d5e8b1f832",
+    "apkSha256": "715a119296044df143d3b5b75d280904a7861bc513889607a5e448d54546d2fd",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true,
+    "privateArchivePermissionsVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "40331238a894a8161ce1aa1962a927485370f30b0b97ad624bd1ecdcc53b4e0a",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "permissionInventoryStatus": "passed",
+    "permissionInventoryEvidenceRef": "docs/evidence/b11/android-release-permissions-2026081402.json",
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics",
+      "Firebase Authentication",
+      "Facebook Login",
+      "Google Maps Platform"
+    ],
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "directInstallAndLaunch": "pending",
+    "searchOverlayAsyncLifecycle": "passed-source-regression",
+    "listingSignalTruthfulness": "pending",
+    "guestAppLinks": "pending",
+    "authenticatedSessionRestore": "pending",
+    "syntheticRoleBooking": "pending",
+    "authenticatedDeepLinks": "pending",
+    "foregroundFcm": "pending",
+    "backgroundFcm": "pending",
+    "terminatedProcessFcm": "pending",
+    "notificationIconVisualFit": "pending",
+    "logoutColdStartGuestPersistence": "pending",
+    "postLogoutPushSuppression": "pending",
+    "offlineRealtimeRecovery": "pending"
+  },
+  "staging": {
+    "serverCommit": "32a2dfb9a570fd7a64128bc6ce0ae0faf4f73f88",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "googleCredentialValidation": "passed-existing-staging-deployment-gate",
+    "productionInvariant": "passed",
+    "productionDockerHealth": "healthy",
+    "productionLiveHttpStatus": 200,
+    "productionReadyHttpStatus": 404,
+    "productionReadyRouteAvailable": false,
+    "productionReadyRouteNote": "The unchanged older production image does not expose the newer readiness route; the live route remained healthy."
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "installedOnPhysicalDevice": false,
+    "controlledFcmSentToSyntheticAccount": false,
+    "controlledCrashDiagnosticSent": false,
+    "productionPushSent": false,
+    "productionCrashGenerated": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

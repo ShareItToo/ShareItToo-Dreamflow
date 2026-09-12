@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "kind": "private-play-internal-transfer-handoff",
+  "status": "private-transfer-ready-store-upload-pending",
+  "recordedOn": "2026-08-30",
+  "provenance": {
+    "worktreeClassification": "owner-local-canonical-sit-worktree",
+    "branch": "codex/master-workflow-20260808",
+    "repositoryEvidenceHead": "dedc98f8537433751d3eaa0390b4f0f68e71f269",
+    "worktreeCleanBeforeEvidence": true,
+    "remoteAheadBeforeEvidence": 0,
+    "remoteBehindBeforeEvidence": 0
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026082801",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "artifactSourceHead": "135fa726aaa7192bd57b729a5e3becbdeeeb9bee",
+    "aabFileName": "shareittoo-1.0.0-2026082801-135fa726aaa7192bd57b729a5e3becbdeeeb9bee.aab",
+    "aabBytes": 108626931,
+    "aabSha256": "56f17ee5a788db69c6099cab4a9d648b28e2eeca7dd9c6e162d7247bce0067da",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4"
+  },
+  "privateTransfer": {
+    "folderName": "PRIVATE_PLAY_UPLOAD_2026082801",
+    "parentClassification": "private-owner-sit-folder",
+    "createdOn": "2026-08-29",
+    "readBackOn": "2026-08-30",
+    "shared": false,
+    "fileCount": 7,
+    "files": [
+      {
+        "name": "shareittoo-1.0.0-2026082801-135fa726aaa7192bd57b729a5e3becbdeeeb9bee.aab.part-00",
+        "bytes": 60000000,
+        "sha256BeforeUpload": "78f8d3cb8882ee915decfc591ce54ac4eb7ea7c1086f2b58beaed1e65427e9c7"
+      },
+      {
+        "name": "shareittoo-1.0.0-2026082801-135fa726aaa7192bd57b729a5e3becbdeeeb9bee.aab.part-01",
+        "bytes": 48626931,
+        "sha256BeforeUpload": "b6c74dbff15f64f23774c491d7d72edee5c252b38a3cd78ad9a1af4d98e97137"
+      },
+      {
+        "name": "README_REASSEMBLE_AND_VERIFY.txt",
+        "bytes": 1866
+      },
+      {
+        "name": "current-rollover-candidate.json",
+        "bytes": 2956
+      },
+      {
+        "name": "oneplus-guest-discovery-hotfix-2026082801.json",
+        "bytes": 3469
+      },
+      {
+        "name": "ONEPLUS_GUEST_DISCOVERY_HOTFIX_2026082801_HANDOVER.md",
+        "bytes": 3105
+      },
+      {
+        "name": "internal_release_notes_2026082801.txt",
+        "bytes": 215
+      }
+    ],
+    "directWholeAabUpload": "rejected-before-drive-action-by-100-mib-connector-limit",
+    "splitTransportRequired": true,
+    "driveReadback": "all-seven-expected-files-present-not-shared-and-downloadable",
+    "consumerReassemblyAndFullHash": "pending-on-macbook-before-store-upload"
+  },
+  "verification": {
+    "artifactSourceGithubRegressionRunId": 33208564193,
+    "artifactSourceGithubCodeqlRunId": 33208564198,
+    "repositoryEvidenceGithubHead": "dedc98f8537433751d3eaa0390b4f0f68e71f269",
+    "repositoryEvidenceGithubRegressionRunId": 33211188454,
+    "repositoryEvidenceGithubRegressionConclusion": "success",
+    "repositoryEvidenceCleanReproducibility": "success",
+    "repositoryEvidenceGithubCodeqlRunId": 33211188457,
+    "repositoryEvidenceGithubCodeqlConclusion": "success",
+    "openCodeScanningAlerts": 0,
+    "pullRequestNumber": 7,
+    "pullRequestDraft": true,
+    "pullRequestMerged": false,
+    "pullRequestMergeState": "CLEAN"
+  },
+  "playState": {
+    "lastDirectConsoleObservationOn": "2026-08-28",
+    "activeInternalVersionCodeAtLastObservation": "2026082601",
+    "candidateVersionCode": "2026082801",
+    "candidateUploadPerformed": false,
+    "candidateActivationPerformed": false,
+    "emptyInternalDraftMayExist": true,
+    "currentConsoleReverificationOnRecordedDate": false
+  },
+  "nextGate": {
+    "ownerAction": "macbook-download-reassemble-full-hash-and-read-only-play-gate",
+    "authorizedStoreScope": "exact-build-2026082801-internal-testing-only",
+    "deviceProofAfterPlayDelivery": "pending"
+  },
+  "boundaries": {
+    "driveSharingChanged": false,
+    "testerListChanged": false,
+    "otherTrackChanged": false,
+    "storeMetadataChanged": false,
+    "reviewSubmissionPerformed": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "providerChanged": false,
+    "firebaseChanged": false,
+    "cloudVpsDnsChanged": false,
+    "pullRequestMerged": false,
+    "deviceAccessed": false
+  },
+  "containsSecrets": false,
+  "containsAccountIdentity": false,
+  "containsTesterIdentity": false,
+  "containsDriveFileIdOrUrl": false,
+  "containsOptInUrl": false,
+  "containsRawDeviceIdentifier": false
+}

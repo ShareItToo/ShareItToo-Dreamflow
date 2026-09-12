@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:lendify/models/multi_criteria_review.dart';
+import 'package:lendify/services/backend_config.dart';
+import 'package:lendify/services/backend_repository.dart';
 import 'package:lendify/services/data_service.dart';
+import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/services/review_metrics_service.dart';
 import 'package:lendify/theme.dart';
 import 'package:lendify/widgets/blur_modal.dart';
+import 'package:lendify/widgets/app_popup.dart';
 
 class ReviewFormCriterionDefinition {
   final String key;
@@ -22,31 +26,31 @@ bool areAllReviewCriteriaRated(Iterable<int> starValues) =>
     starValues.every((stars) => stars >= 1);
 
 List<ReviewFormCriterionDefinition> buildReviewFormCriteria() => const [
-  ReviewFormCriterionDefinition(
-    key: ReviewMetricsService.communication,
-    label: 'Kommunikation',
-    helpText:
-        'Bewerte Erreichbarkeit, Verständlichkeit, rechtzeitige Rückmeldungen und hilfreiche Abstimmung.',
-  ),
-  ReviewFormCriterionDefinition(
-    key: ReviewMetricsService.reliability,
-    label: 'Zuverlässigkeit',
-    helpText:
-        'Bewerte Einhaltung von Vereinbarungen, Pünktlichkeit, Verbindlichkeit und Durchführung wie vereinbart.',
-  ),
-  ReviewFormCriterionDefinition(
-    key: ReviewMetricsService.articleAsDescribed,
-    label: 'Artikel wie beschrieben',
-    helpText:
-        'Bewerte, ob Zustand, Ausstattung, Funktion und bekannte Gebrauchsspuren der Anzeige entsprachen – nicht, ob der Artikel neu oder hochwertig war.',
-  ),
-  ReviewFormCriterionDefinition(
-    key: ReviewMetricsService.handoverReturn,
-    label: 'Übergabe & Rückgabe',
-    helpText:
-        'Bewerte den gesamten Ablauf einschließlich Pünktlichkeit, Sauberkeit, Funktionsfähigkeit, Zubehör und Rückgabe.',
-  ),
-];
+      ReviewFormCriterionDefinition(
+        key: ReviewMetricsService.communication,
+        label: 'Kommunikation',
+        helpText:
+            'Bewerte Erreichbarkeit, Verständlichkeit, rechtzeitige Rückmeldungen und hilfreiche Abstimmung.',
+      ),
+      ReviewFormCriterionDefinition(
+        key: ReviewMetricsService.reliability,
+        label: 'Zuverlässigkeit',
+        helpText:
+            'Bewerte Einhaltung von Vereinbarungen, Pünktlichkeit, Verbindlichkeit und Durchführung wie vereinbart.',
+      ),
+      ReviewFormCriterionDefinition(
+        key: ReviewMetricsService.articleAsDescribed,
+        label: 'Artikel wie beschrieben',
+        helpText:
+            'Bewerte, ob Zustand, Ausstattung, Funktion und bekannte Gebrauchsspuren der Anzeige entsprachen – nicht, ob der Artikel neu oder hochwertig war.',
+      ),
+      ReviewFormCriterionDefinition(
+        key: ReviewMetricsService.handoverReturn,
+        label: 'Übergabe & Rückgabe',
+        helpText:
+            'Bewerte den gesamten Ablauf einschließlich Pünktlichkeit, Sauberkeit, Funktionsfähigkeit, Zubehör und Rückgabe.',
+      ),
+    ];
 
 class ReviewPromptSheet extends StatefulWidget {
   final String requestId;
@@ -73,24 +77,38 @@ class ReviewPromptSheet extends StatefulWidget {
     required String direction,
   }) async {
     final isDark = AppTheme.isDark(context);
-    final already = await DataService.hasSubmittedReview(
-      requestId: requestId,
-      reviewerId: reviewerId,
-    );
-    if (already) return false;
+    if (!BackendConfig.enabled || QaRuntimeService.isEnabled) {
+      try {
+        final already = await DataService.hasSubmittedReview(
+          requestId: requestId,
+          reviewerId: reviewerId,
+        );
+        if (already) return false;
+      } catch (_) {
+        if (context.mounted) {
+          AppPopup.error(
+            context,
+            title: 'Bewertung nicht verfügbar',
+            message:
+                'Bitte prüfe deine Anmeldung und öffne die Bewertung erneut.',
+          );
+        }
+        return false;
+      }
+    }
     final request = await DataService.getRentalRequestById(requestId);
     if (request?.needsReview == true) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
+        AppPopup.info(
+          context,
+          title: 'Bewertung vorübergehend gesperrt',
+          message:
               'Bewertungen sind blockiert, solange dieser Fall geprüft wird.',
-            ),
-          ),
         );
       }
       return false;
     }
+    if (!context.mounted) return false;
     return showBlurBottomSheet<bool>(
       context,
       barrierOpacity: isDark ? 0.30 : 0.16,
@@ -114,6 +132,7 @@ class _ReviewPromptSheetState extends State<ReviewPromptSheet> {
   late List<_CriterionState> _criteria;
   bool _submitting = false;
   String? _reviewedName;
+  String? _submitError;
 
   @override
   void initState() {
@@ -139,15 +158,28 @@ class _ReviewPromptSheetState extends State<ReviewPromptSheet> {
   bool get _allCriteriaRated =>
       areAllReviewCriteriaRated(_criteria.map((criterion) => criterion.stars));
 
+  @override
+  void dispose() {
+    for (final criterion in _criteria) {
+      criterion.note.dispose();
+    }
+    super.dispose();
+  }
+
   Future<void> _submit() async {
     if (_submitting) return;
     if (!_allCriteriaRated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bitte bewerte alle vier Kriterien.')),
+      AppPopup.info(
+        context,
+        title: 'Bewertung noch unvollständig',
+        message: 'Bitte bewerte alle vier Kriterien.',
       );
       return;
     }
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _submitError = null;
+    });
     try {
       final list = _criteria
           .map(
@@ -158,20 +190,31 @@ class _ReviewPromptSheetState extends State<ReviewPromptSheet> {
             ),
           )
           .toList();
-      await DataService.addMultiReview(
-        requestId: widget.requestId,
-        itemId: widget.itemId,
-        reviewerId: widget.reviewerId,
-        reviewedUserId: widget.reviewedUserId,
-        direction: widget.direction,
-        criteria: list,
-      );
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        await BackendRepository.createBookingReview(
+          bookingId: widget.requestId,
+          direction: widget.direction,
+          criteria: list.map((criterion) => criterion.toJson()).toList(),
+        );
+      } else {
+        await DataService.addMultiReview(
+          requestId: widget.requestId,
+          itemId: widget.itemId,
+          reviewerId: widget.reviewerId,
+          reviewedUserId: widget.reviewedUserId,
+          direction: widget.direction,
+          criteria: list,
+        );
+      }
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
       debugPrint('[reviews] submit failed: $e');
       if (!mounted) return;
-      Navigator.of(context).pop(false);
+      setState(() {
+        _submitError =
+            'Die Bewertung wurde nicht gespeichert. Deine Eingaben bleiben erhalten – bitte versuche es erneut.';
+      });
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -181,9 +224,8 @@ class _ReviewPromptSheetState extends State<ReviewPromptSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = AppTheme.isDark(context);
-    final baseRole = widget.direction == 'renter_to_owner'
-        ? 'Vermieter'
-        : 'Mieter';
+    final baseRole =
+        widget.direction == 'renter_to_owner' ? 'Vermieter' : 'Mieter';
     final name = _reviewedName;
     final title =
         '${(name != null && name.isNotEmpty) ? name : baseRole} bewerten';
@@ -233,13 +275,40 @@ class _ReviewPromptSheetState extends State<ReviewPromptSheet> {
                 ),
               ),
             ),
-            bottomBar: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: (_submitting || !_allCriteriaRated) ? null : _submit,
-                icon: const Icon(Icons.send_rounded),
-                label: Text(_submitting ? 'Sende…' : 'Bewertung senden'),
-              ),
+            bottomBar: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_submitError != null) ...[
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      _submitError!,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    key: const ValueKey('review_submit_button'),
+                    onPressed:
+                        (_submitting || !_allCriteriaRated) ? null : _submit,
+                    icon: const Icon(Icons.send_rounded),
+                    label: Text(
+                      _submitting
+                          ? 'Sende…'
+                          : _submitError == null
+                              ? 'Bewertung senden'
+                              : 'Erneut versuchen',
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -252,14 +321,13 @@ class _CriterionState {
   final String key;
   final String label;
   final String helpText;
-  int stars;
+  int stars = 0;
   final TextEditingController note;
 
   _CriterionState({
     required this.key,
     required this.label,
     required this.helpText,
-    this.stars = 0,
   }) : note = TextEditingController();
 }
 
@@ -304,6 +372,7 @@ class _CriterionTile extends StatelessWidget {
             children: [
               for (int i = 1; i <= 5; i++)
                 IconButton(
+                  key: ValueKey('review_${d.key}_stars_$i'),
                   padding: const EdgeInsets.all(6),
                   constraints: const BoxConstraints(),
                   splashRadius: 20,
@@ -317,7 +386,9 @@ class _CriterionTile extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           TextField(
+            key: ValueKey('review_${d.key}_note'),
             controller: d.note,
+            maxLength: 2000,
             maxLines: 2,
             decoration: InputDecoration(
               hintText: 'Kommentar (optional)',

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-checkout-reconfirmation-after-requote",
+  "status": "passed-source-and-regression",
+  "capturedAt": "2026-08-17T09:33:51Z",
+  "sourceCommit": "29fe360ad67ba7f68ddb9564d025e64e0c3d58e2",
+  "checks": {
+    "quoteReloadClearsPrivateTermsConfirmation": true,
+    "quoteReloadClearsEarlyPerformanceConfirmation": true,
+    "timerExpiryClearsPrivateTermsConfirmation": true,
+    "timerExpiryClearsEarlyPerformanceConfirmation": true,
+    "submitRequiresBothConfirmations": true,
+    "submitRequiresFreshQuote": true,
+    "automaticRequoteRequiresReconfirmation": true
+  },
+  "verification": {
+    "checkoutErrorWiringTestsPassed": 5,
+    "targetedNodeTestsPassed": 9,
+    "targetedFlutterTestsPassed": 8,
+    "targetedAnalyzerFindings": 0,
+    "fullFlutterTestsPassed": 282,
+    "intentionalFlutterTestsSkipped": 1,
+    "fullAnalyzerFindings": 229,
+    "fullAnalyzerErrors": 0,
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "technicalRegression": "passed"
+  },
+  "privacy": {
+    "dataCollectionChanged": false,
+    "dataStorageChanged": false,
+    "dataTransportChanged": false,
+    "providerChanged": false,
+    "permissionChanged": false,
+    "privacyInventoryChangeRequired": false
+  },
+  "boundaries": {
+    "backendDeployed": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "storeSubmissionPerformed": false,
+    "realPaymentPerformed": false,
+    "candidateBuiltOrRelabeled": false,
+    "pushRetainedDefaultOff": true,
+    "crashRetainedDefaultOff": true,
+    "pushEnablesCrash": false,
+    "crashDataTransferred": false
+  },
+  "conclusion": {
+    "changedOrRenewedQuote": "both-declarations-reset",
+    "resubmission": "fresh-explicit-confirmation-required",
+    "officialPlayInternalCandidate": "1.0.0+2026081509",
+    "localSignedCandidate": "1.0.0+2026081510-built-local-not-uploaded"
+  }
+}

@@ -1,33 +1,32 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
-import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/message.dart';
 import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/services/data_service.dart';
+import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/services/messages_settings_service.dart';
+import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/services/local_artifact_storage_service.dart';
+import 'package:lendify/services/safety_action_service.dart';
 import 'package:lendify/theme.dart';
 import 'package:lendify/widgets/app_image.dart';
 import 'package:lendify/widgets/app_popup.dart';
-import 'package:lendify/widgets/brand_logo_icon.dart';
-import 'package:lendify/widgets/sanitized_svg_icon.dart';
-import 'package:lendify/widgets/modern_datetime_stepper_sheet.dart';
+import 'package:lendify/widgets/private_pilot_owner_acceptance_dialog.dart';
 import 'package:lendify/widgets/return_handover_stepper_sheet.dart';
 import 'package:lendify/widgets/sit_glass_time_picker.dart';
 import 'package:lendify/widgets/user_avatar.dart';
@@ -35,13 +34,13 @@ import 'package:lendify/widgets/translation_language_dialog.dart';
 import 'package:lendify/screens/booking_detail_screen.dart';
 import 'package:lendify/screens/ongoing_owner_detail_screen.dart';
 import 'package:lendify/screens/public_profile_screen.dart';
-import 'package:lendify/services/blocked_users_service.dart';
+import 'package:lendify/services/local_safety_privacy_service.dart';
 import 'package:lendify/screens/support_flow_screen.dart';
+import 'package:lendify/widgets/support_principal_controller.dart';
+import 'package:lendify/widgets/safety_action_interaction.dart';
 import 'package:lendify/utils/booking_flow_policy.dart';
 
 const String _translationDemoThreadId = 'demo_translation_thread';
-const String _mutedThreadsKey = 'muted_message_threads_v1';
-
 bool didConfirmReturnHandover(ReturnHandoverStepResult? result) =>
     result?.confirmed == true;
 
@@ -61,6 +60,7 @@ class MessageThreadScreen extends StatefulWidget {
   final String? participantName;
   final String? avatarUrl;
   final String? itemTitle;
+  final SafetyActionService? safetyActionService;
 
   const MessageThreadScreen({
     super.key,
@@ -69,6 +69,7 @@ class MessageThreadScreen extends StatefulWidget {
     this.participantName,
     this.avatarUrl,
     this.itemTitle,
+    this.safetyActionService,
   });
 
   @override
@@ -120,6 +121,36 @@ bool canStartPrimaryBookingAction({
 bool shouldSendStartSystemMessage({required bool activationSucceeded}) =>
     activationSucceeded;
 
+/// A read receipt must only be sent when the thread actually contains an
+/// unread message from the other participant. Sending the receipt for an
+/// already-read thread refreshes the shared thread cache again and can create
+/// a self-sustaining load -> read -> reload loop in the chat screen.
+bool shouldMarkThreadMessagesAsRead({
+  required Iterable<Message> messages,
+  required String userId,
+}) {
+  final viewerId = userId.trim();
+  if (viewerId.isEmpty) return false;
+  return messages.any(
+    (message) =>
+        message.senderId != viewerId &&
+        message.senderId != 'system' &&
+        !message.isRead,
+  );
+}
+
+/// A load reads and refreshes several shared booking caches. Those cache
+/// writes can emit the same persistence events that normally tell this screen
+/// about external changes. Reloading while the current load is still running
+/// would therefore turn one remote fetch into an endless fetch -> event ->
+/// fetch loop. The current load already observes the newest cache state, so
+/// events emitted during that load are safely ignored.
+bool shouldReloadMessageThreadForPersistenceChange({
+  required String key,
+  required bool loadInProgress,
+}) =>
+    !loadInProgress && SharedPersistenceSync.affectsCommunicationSync(key);
+
 enum _ChatState {
   requestOpen,
   confirmed,
@@ -140,19 +171,47 @@ bool _isChatActiveForState(_ChatState st) {
     case _ChatState.returnPlanned:
       return true;
     case _ChatState.support:
-      return true; // Support immer aktiv
+      return false; // Legacy support history is read-only.
     case _ChatState.requestOpen: // pending
     case _ChatState.completed: // completed/declined/cancelled
       return false;
   }
 }
 
+/// V5.1 keeps the booking chat available through the relevant return/report
+/// window and, for a substantiated case, until that case is explicitly closed.
+bool isPrivatePilotBookingChatOpen({
+  required String bookingStatus,
+  required String returnState,
+  DateTime? reportDeadline,
+  DateTime? clarificationDeadline,
+  DateTime? caseClosedAt,
+  DateTime? now,
+}) {
+  final status = bookingStatus.trim().toLowerCase();
+  if (status == 'accepted' || status == 'running') return true;
+  if (status != 'completed') return false;
+
+  final state = returnState.trim();
+  if (state == 'needsReview') return caseClosedAt == null;
+  final current = now ?? DateTime.now();
+  if (state == 'awaitingReturnConfirmation' || state == 'reportWindowOpen') {
+    return reportDeadline != null && !current.isAfter(reportDeadline);
+  }
+  return false;
+}
+
 class _MessageThreadScreenState extends State<MessageThreadScreen> {
+  final _supportPrincipal = SupportPrincipalController();
+  late final SafetyActionService _safetyService;
+  final SafetyActionInteractionController _safetyActions =
+      SafetyActionInteractionController();
   final TextEditingController _controller = TextEditingController();
   final FocusNode _inputFocus = FocusNode();
   final ScrollController _listController = ScrollController();
 
   bool _isLoading = true;
+  bool _loadFailed = false;
   User? _currentUser;
   MessageThread? _thread;
   User? _otherUser;
@@ -169,8 +228,13 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
   bool _showJumpToBottom = false;
   double _lastViewInsetBottom = 0;
   StreamSubscription<String>? _sharedPersistenceSub;
+  Timer? _fallbackRefreshTimer;
+  bool _loadInProgress = false;
   final SharedPersistenceRefreshCoordinator _sharedPersistenceRefresh =
       SharedPersistenceRefreshCoordinator();
+
+  @visibleForTesting
+  static const Duration fallbackRefreshInterval = Duration(seconds: 5);
 
   // Keep these sizes centralized to make the composer compact without breaking touch targets.
   static const double _composerIconSize = 20;
@@ -182,13 +246,31 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
   @override
   void initState() {
     super.initState();
+    _safetyService = widget.safetyActionService ?? const SafetyActionService();
     _load();
     _sharedPersistenceSub = SharedPersistenceSync.changes.listen((key) {
-      if (!mounted || !SharedPersistenceSync.affectsBookingSync(key)) return;
+      if (!mounted) return;
+      if (key == SharedPersistenceSync.accountSecurityStateKey) {
+        _safetyActions.invalidate();
+        _clearSensitiveThreadState();
+        return;
+      }
+      if (!shouldReloadMessageThreadForPersistenceChange(
+        key: key,
+        loadInProgress: _loadInProgress,
+      )) {
+        return;
+      }
       unawaited(_sharedPersistenceRefresh.schedule(() async {
         await SharedPersistenceSync.reloadPreferences();
-        if (mounted) await _load();
+        if (mounted) await _refreshThreadMessagesInBackground();
       }));
+    });
+    _fallbackRefreshTimer = Timer.periodic(fallbackRefreshInterval, (_) {
+      if (!mounted) return;
+      unawaited(
+        _sharedPersistenceRefresh.schedule(_refreshThreadMessagesInBackground),
+      );
     });
     _listController.addListener(_onScroll);
     _inputFocus.addListener(_onInputFocusChange);
@@ -205,6 +287,9 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
 
   @override
   void dispose() {
+    _supportPrincipal.dispose();
+    _safetyActions.dispose();
+    _fallbackRefreshTimer?.cancel();
     _sharedPersistenceSub?.cancel();
     _sharedPersistenceRefresh.dispose();
     _inputFocus.removeListener(_onInputFocusChange);
@@ -214,13 +299,89 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     super.dispose();
   }
 
+  Future<void> _refreshThreadMessagesInBackground() async {
+    final threadId = (_thread?.id ?? widget.threadId ?? '').trim();
+    final actionContext = _safetyActions.context;
+    if (!mounted || threadId.isEmpty || actionContext == null) return;
+    try {
+      final expectedUserId = (_currentUser?.id ?? '').trim();
+      final currentUser = await DataService.getCurrentUser();
+      if (!mounted) return;
+      if (!await _safetyService.isContextCurrent(actionContext)) {
+        if (mounted) _clearSensitiveThreadState();
+        return;
+      }
+      if (expectedUserId.isEmpty || currentUser?.id.trim() != expectedUserId) {
+        _clearSensitiveThreadState();
+        return;
+      }
+      final refreshed = await DataService.getMessageThreadById(
+        threadId,
+        remoteTimeout: const Duration(seconds: 3),
+      );
+      if (!mounted) return;
+      if (refreshed == null) {
+        _clearSensitiveThreadState();
+        return;
+      }
+
+      final current = _thread;
+      final unchanged = current != null &&
+          jsonEncode(current.toJson()) == jsonEncode(refreshed.toJson());
+      if (unchanged) return;
+
+      setState(() => _thread = refreshed);
+      final userId = _currentUser?.id;
+      if (userId != null &&
+          shouldMarkThreadMessagesAsRead(
+            messages: refreshed.messages,
+            userId: userId,
+          )) {
+        await DataService.markThreadMessagesAsRead(
+          threadId: refreshed.id,
+          userId: userId,
+          sessionOwner: actionContext.owner.authOwner,
+        );
+      }
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      }
+    } catch (error) {
+      debugPrint('[MessageThreadScreen] background refresh failed: $error');
+      if (!mounted) return;
+      setState(() {
+        _loadFailed = true;
+        _isLoading = false;
+        _currentUser = null;
+        _thread = null;
+        _otherUser = null;
+        _item = null;
+        _request = null;
+        _handoverReturnState = const {};
+      });
+    }
+  }
+
   Future<void> _load() async {
-    setState(() => _isLoading = true);
+    if (_loadInProgress) return;
+    _loadInProgress = true;
+    _safetyActions.invalidate();
+    setState(() {
+      _isLoading = true;
+      _loadFailed = false;
+      _currentUser = null;
+      _thread = null;
+      _otherUser = null;
+      _item = null;
+      _request = null;
+      _handoverReturnState = const {};
+    });
     try {
       final requestedThreadId = (widget.threadId ?? '').trim();
-      final me = await DataService.getCurrentUser();
 
-      if (requestedThreadId == _translationDemoThreadId) {
+      if (requestedThreadId == _translationDemoThreadId &&
+          QaRuntimeService.isEnabled) {
+        final me = await DataService.getCurrentUser();
         final demo = _buildTranslationDemoState(me);
         final rawSettings = await MessagesSettingsService.get();
         final normalizedSettings = _normalizeTranslationDefaults(rawSettings);
@@ -242,7 +403,8 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
         return;
       }
 
-      if (me == null) {
+      final actionContext = await _safetyService.loadCurrentContext();
+      if (actionContext == null) {
         if (!mounted) return;
         setState(() {
           _currentUser = null;
@@ -250,6 +412,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
         });
         return;
       }
+      final me = actionContext.user;
 
       MessageThread? thread;
       if (requestedThreadId.isNotEmpty) {
@@ -282,7 +445,8 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
 
       final isThreadArchived =
           thread != null && thread.archivedForUserIds.contains(me.id);
-      final blockedUserIds = await BlockedUsersService.getBlockedUserIds();
+      final blockedUserIds =
+          await _safetyService.loadBlockedUsers(actionContext);
       final isOtherUserBlocked =
           otherId.isNotEmpty && blockedUserIds.contains(otherId);
       final isThreadMuted = thread != null
@@ -303,6 +467,11 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       }
 
       if (!mounted) return;
+      if (!await _safetyService.isContextCurrent(actionContext)) {
+        _clearSensitiveThreadState();
+        return;
+      }
+      _safetyActions.replaceContext(actionContext);
       setState(() {
         _currentUser = me;
         _thread = thread;
@@ -319,18 +488,56 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       });
 
       // Mark as read + initial scroll.
-      if (thread != null) {
+      if (thread != null &&
+          shouldMarkThreadMessagesAsRead(
+            messages: thread.messages,
+            userId: me.id,
+          ) &&
+          await _safetyService.isContextCurrent(actionContext)) {
         await DataService.markThreadMessagesAsRead(
           threadId: thread.id,
           userId: me.id,
+          sessionOwner: actionContext.owner.authOwner,
         );
+        if (!await _safetyService.isContextCurrent(actionContext)) return;
+      }
+      if (thread != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
       }
     } catch (e) {
       debugPrint('[MessageThreadScreen] _load failed: $e');
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _loadFailed = true;
+        _currentUser = null;
+        _thread = null;
+        _otherUser = null;
+        _item = null;
+        _request = null;
+        _handoverReturnState = const {};
+      });
+    } finally {
+      _loadInProgress = false;
     }
+  }
+
+  void _clearSensitiveThreadState() {
+    _safetyActions.invalidate();
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      _loadFailed = false;
+      _currentUser = null;
+      _thread = null;
+      _otherUser = null;
+      _item = null;
+      _request = null;
+      _handoverReturnState = const {};
+      _isThreadArchived = false;
+      _isOtherUserBlocked = false;
+      _isThreadMuted = false;
+    });
   }
 
   bool _canBlockCurrentThread() {
@@ -376,48 +583,15 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     return value;
   }
 
-  static Future<List<String>> _getMutedThreadKeys() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_mutedThreadsKey);
-      if (raw == null || raw.isEmpty) return const [];
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return const [];
-      return decoded
-          .map((e) => e.toString())
-          .where((e) => e.trim().isNotEmpty)
-          .toList(growable: false);
-    } catch (e) {
-      debugPrint('[MessageThreadScreen] _getMutedThreadKeys failed: $e');
-      return const [];
-    }
-  }
-
-  static Future<void> _setMutedThreadKeys(List<String> keys) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final cleaned = keys
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort();
-      await prefs.setString(_mutedThreadsKey, jsonEncode(cleaned));
-    } catch (e) {
-      debugPrint('[MessageThreadScreen] _setMutedThreadKeys failed: $e');
-    }
-  }
-
-  static String _muteKey({required String threadId, required String userId}) =>
-      '$userId::$threadId';
-
   static Future<bool> _isThreadMutedForUser({
     required String threadId,
     required String userId,
   }) async {
     if (threadId.isEmpty || userId.isEmpty) return false;
-    final keys = await _getMutedThreadKeys();
-    return keys.contains(_muteKey(threadId: threadId, userId: userId));
+    final threadIds = await LocalSafetyPrivacyService.getMutedThreadIds(
+      legacyUserId: userId,
+    );
+    return threadIds.contains(threadId);
   }
 
   static Future<void> _setThreadMutedForUser({
@@ -426,11 +600,11 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     required bool muted,
   }) async {
     if (threadId.isEmpty || userId.isEmpty) return;
-    final key = _muteKey(threadId: threadId, userId: userId);
-    final keys = await _getMutedThreadKeys();
-    final next = [...keys.where((e) => e != key)];
-    if (muted) next.add(key);
-    await _setMutedThreadKeys(next);
+    await LocalSafetyPrivacyService.setThreadMuted(
+      threadId: threadId,
+      muted: muted,
+      legacyUserId: userId,
+    );
   }
 
   String _appLanguageCode() {
@@ -490,11 +664,11 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     final item = Item(
       id: 'demo_translation_item',
       ownerId: other.id,
-      title: 'DJI Mini 4 Pro Drohne',
+      title: 'Sony Alpha 7 IV Kamera',
       description: 'Demo-Artikel für Übersetzungs-Tests',
-      categoryId: 'electronics',
-      subcategory: 'drones',
-      tags: const ['drohne', 'camera'],
+      categoryId: 'cat3',
+      subcategory: 'Kameras',
+      tags: const ['kamera', 'foto'],
       pricePerDay: 39,
       currency: 'EUR',
       photos: const [],
@@ -842,29 +1016,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     });
   }
 
-  Future<String?> _pickTranslationLanguageFromChat() async {
-    final current = _effectiveTranslationLanguageCode();
-    return showDialog<String>(
-      context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.black.withValues(alpha: 0.4),
-      builder: (_) => TranslationLanguageDialog(
-        title: 'Übersetzungssprache',
-        initialCode: current,
-        options: translationLanguageOptions,
-      ),
-    );
-  }
-
-  Future<void> _ensureTranslationEnabledFromChat() async {
-    var next = _messageSettings.copyWith(autoTranslateChat: true);
-    final lang = await _pickTranslationLanguageFromChat();
-    if (lang != null && lang.trim().isNotEmpty) {
-      next = next.copyWith(preferredLanguageCode: lang.trim());
-    }
-    await _updateTranslationSettings(next);
-  }
-
   Future<void> _showTranslationMenu(
     Message message, {
     required bool isMe,
@@ -1135,10 +1286,18 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
             );
           } else {
             if (!_viewerIsOwner()) return;
-            await DataService.updateRentalRequestStatus(
-              requestId: r.id,
-              status: 'accepted',
+            final declarations = await showPrivatePilotOwnerAcceptanceDialog(
+              context,
+              request: r,
             );
+            if (declarations == null) return;
+            if (!mounted) return;
+            final accepted = await commitPrivatePilotOwnerAcceptance(
+              context,
+              request: r,
+              legalDeclarations: declarations,
+            );
+            if (!accepted) return;
             await DataService.updateMessageThreadBookingStatus(
               threadId: t.id,
               status: 'accepted',
@@ -1335,6 +1494,18 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     final t = _thread;
     final text = _controller.text.trim();
     if (me == null || t == null || text.isEmpty) return;
+    if (_deriveChatState() == _ChatState.support) {
+      if (mounted) {
+        await AppPopup.toast(
+          context,
+          icon: Icons.lock_outline,
+          title: 'Historischer Supportverlauf',
+          message:
+              'Neue Anliegen und Ergänzungen werden als eigener Support-Fall erfasst.',
+        );
+      }
+      return;
+    }
     _controller.clear();
     if (t.id == _translationDemoThreadId) {
       final msg = Message(
@@ -1436,16 +1607,16 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       final picker = ImagePicker();
       final file = await picker.pickImage(source: source, imageQuality: 82);
       if (file == null) return;
-      await DataService.addSystemMessageToThread(
+      await DataService.addMessageAttachmentToThread(
         threadId: t.id,
+        bytes: await file.readAsBytes(),
+        filename: file.name.isNotEmpty ? file.name : 'chat-photo.jpg',
         text: 'Foto hinzugefügt',
       );
       final reqId = _request?.id;
       if (reqId != null && reqId.isNotEmpty) {
         final handoverActive = _handoverReturnState['handoverActive'] == true;
         final returnActive = _handoverReturnState['returnActive'] == true;
-        if (handoverActive) await DataService.incrementHandoverPhotos(reqId);
-        if (returnActive) await DataService.incrementReturnPhotos(reqId);
         if (source == ImageSource.camera && (handoverActive || returnActive)) {
           final saveResult =
               await LocalArtifactStorageService.maybeSaveEvidencePhoto(
@@ -1481,7 +1652,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     }
   }
 
-  Future<void> _pickFile() async {
+  Future<void> _pickGalleryPhoto() async {
     final t = _thread;
     if (t == null) return;
     if (t.id == _translationDemoThreadId) {
@@ -1496,22 +1667,32 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       return;
     }
     try {
-      final result = await FilePicker.platform.pickFiles(withData: false);
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp'],
+        withData: true,
+      );
       if (result == null || result.files.isEmpty) return;
-      final name = result.files.first.name;
-      await DataService.addSystemMessageToThread(
+      final selected = result.files.first;
+      final bytes = selected.bytes;
+      if (bytes == null) {
+        throw StateError('attachment_bytes_unavailable');
+      }
+      await DataService.addMessageAttachmentToThread(
         threadId: t.id,
-        text: 'Anhang hinzugefügt: $name',
+        bytes: bytes,
+        filename: selected.name,
+        text: 'Foto hinzugefügt',
       );
       await _load();
       _scrollToBottom(animate: true);
     } catch (e) {
-      debugPrint('[MessageThreadScreen] _pickFile failed: $e');
+      debugPrint('[MessageThreadScreen] _pickGalleryPhoto failed: $e');
       if (mounted) {
         AppPopup.toast(
           context,
           icon: Icons.error_outline,
-          title: 'Anhang nicht verfügbar',
+          title: 'Foto nicht verfügbar',
         );
       }
     }
@@ -1530,7 +1711,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
         final mode = (_handoverReturnState['handoverActive'] == true)
             ? ReturnFlowMode.pickupFlow
             : ReturnFlowMode.returnFlow;
-        final ok = await ReturnHandoverStepperSheet.push(
+        await ReturnHandoverStepperSheet.push(
           context,
           item: item,
           request: r,
@@ -1540,19 +1721,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
           viewerIsOwner: _viewerIsOwner(),
           mode: mode,
         );
-        if (didConfirmReturnHandover(ok)) {
-          // Treat as completing 4/4 photos in the active segment.
-          if (_handoverReturnState['handoverActive'] == true) {
-            for (int i = 0; i < 4; i++) {
-              await DataService.incrementHandoverPhotos(r.id);
-            }
-          }
-          if (_handoverReturnState['returnActive'] == true) {
-            for (int i = 0; i < 4; i++) {
-              await DataService.incrementReturnPhotos(r.id);
-            }
-          }
-        }
       }
     } catch (e) {
       debugPrint('[MessageThreadScreen] ReturnHandoverStepperSheet failed: $e');
@@ -1585,17 +1753,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     return '';
   }
 
-  String _roleLabel(String roleKey) {
-    switch (roleKey) {
-      case 'owner':
-        return 'Vermieter';
-      case 'renter':
-        return 'Mieter';
-      default:
-        return '';
-    }
-  }
-
   _LocationIntent _locationIntentForCurrentContext() {
     final req = _request;
     if (req == null || req.needsReview) return _LocationIntent.unknown;
@@ -1624,12 +1781,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
             .isNotEmpty);
   }
 
-  String _savedLocationText(bool isReturn) {
-    return isReturn
-        ? 'Als Rückgabeort gespeichert'
-        : 'Als Übergabeort gespeichert';
-  }
-
   bool _savedLocationMatches(
     _LocationShareData data, {
     required bool isReturn,
@@ -1643,9 +1794,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
             .trim();
     final savedUrl =
         ((_handoverReturnState['${prefix}LocationMapsUrl'] as String?) ?? '')
-            .trim();
-    final savedLabel =
-        ((_handoverReturnState['${prefix}LocationLabel'] as String?) ?? '')
             .trim();
     final sameCoords = savedLat == data.latitude.trim() &&
         savedLng == data.longitude.trim() &&
@@ -1701,7 +1849,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       return;
     }
     final hadSavedLocation = _hasSavedLocation(isReturn);
-    final noun = data.isAddressShare ? 'Adresse' : 'Standort';
     final accusativeNoun = data.isAddressShare ? 'die Adresse' : 'den Standort';
     final replacementNoun =
         data.isAddressShare ? 'diese Adresse' : 'diesen Standort';
@@ -1902,13 +2049,56 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       debugPrint('[KEYBOARD_DEBUG] screen.height: $screenHeight');
       debugPrint('[KEYBOARD_DEBUG] viewPadding.bottom: $viewPadding');
       debugPrint('[KEYBOARD_DEBUG] inputFocused: ${_inputFocus.hasFocus}');
-      debugPrint('[KEYBOARD_DEBUG] isWeb: ${kIsWeb}');
+      debugPrint('[KEYBOARD_DEBUG] isWeb: $kIsWeb');
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final opened = insets > 0 && _lastViewInsetBottom == 0;
         _lastViewInsetBottom = insets;
         if (opened && _isAtBottom) _scrollToBottom(animate: true);
       });
+    }
+
+    if (!_isLoading && _thread == null) {
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          leading: IconButton(
+            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.arrow_back),
+          ),
+          title: const Text('Nachrichten'),
+        ),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _loadFailed ? Icons.error_outline : Icons.lock_outline,
+                    size: 42,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _loadFailed
+                        ? 'Nachrichten konnten nicht sicher geladen werden.'
+                        : 'Dieser Nachrichtenverlauf ist für das aktuelle Konto nicht verfügbar.',
+                    key: const ValueKey('message-thread-unavailable'),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Bitte prüfe die Anmeldung oder öffne den Chat erneut über deine Nachrichten.',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
     }
 
     final st = _deriveChatState();
@@ -1919,8 +2109,17 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     final showActions = _shouldShowActions(st);
     final showAddressHint = _showAddressHint();
 
-    // Chat-Gating: Nur accepted/running erlaubt
-    final isChatActive = _isChatActiveForState(st);
+    final request = _request;
+    final isChatActive = st != _ChatState.support &&
+        (request == null
+            ? _isChatActiveForState(st)
+            : isPrivatePilotBookingChatOpen(
+                bookingStatus: request.status,
+                returnState: request.returnState,
+                reportDeadline: request.returnReportDeadline,
+                clarificationDeadline: request.returnClarificationDeadline,
+                caseClosedAt: request.returnCaseClosedAt,
+              ));
 
     final handoverActive = _handoverReturnState['handoverActive'] == true;
     final returnActive = _handoverReturnState['returnActive'] == true;
@@ -2005,7 +2204,9 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
                                       return true;
                                     }).toList()
                                   : messages;
-                              final showDemo = filteredMessages.isEmpty;
+                              final showDemo = QaRuntimeService.isEnabled &&
+                                  _thread?.id == _translationDemoThreadId &&
+                                  filteredMessages.isEmpty;
                               final displayMessages = showDemo
                                   ? _demoTranslationMessages()
                                   : _dedupeSupportCases(filteredMessages);
@@ -2209,6 +2410,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
                                                 )
                                               : _ChatBubble(
                                                   text: translation.original,
+                                                  attachments: m.attachments,
                                                   translatedText:
                                                       translation.translated,
                                                   translationLabel:
@@ -2326,7 +2528,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
                     explanationText: _actionExplanation(st),
                     onShareLocation: _shareLocation,
                     onSendPhoto: _pickCamera,
-                    onPickFile: _pickFile,
+                    onPickFile: _pickGalleryPhoto,
                     onChangeTime: _changeTime,
                     onProposeHandoverTime: _proposeHandoverTime,
                     onProposeReturnTime: _proposeReturnTime,
@@ -2383,7 +2585,9 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       case _ChatState.requestOpen:
         return 'Der Chat ist erst nach Annahme der Anfrage verfügbar.';
       case _ChatState.completed:
-        return 'Diese Buchung ist abgeschlossen.\nFür Fragen nutze den Support.';
+        return 'Das Rückgabe- oder Fallfenster ist geschlossen.\nFür weitere Fragen nutze den Support.';
+      case _ChatState.support:
+        return 'Historischer Supportverlauf – neue Anliegen und Ergänzungen werden als eigener Support-Fall erfasst.';
       default:
         return 'Der Chat ist derzeit nicht verfügbar.';
     }
@@ -2530,73 +2734,17 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     }
   }
 
-  String _deriveResponseTimeLabel({
-    required List<Message> messages,
-    required String? otherUserId,
-  }) {
-    try {
-      if (otherUserId == null || messages.isEmpty) return 'Antwortzeit: < 1h';
-      final others = messages.where((m) => m.senderId == otherUserId).toList();
-      if (others.isEmpty) return 'Antwortzeit: < 1h';
-      others.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-      final last = others.last.timestamp;
-      final mins = DateTime.now().difference(last).inMinutes;
-      if (mins < 10) return 'Antwortzeit: aktiv';
-      if (mins < 60) return 'Antwortzeit: ~${mins} min';
-      final h = (mins / 60).round();
-      return 'Antwortzeit: ~${h} h';
-    } catch (_) {
-      return 'Antwortzeit: < 1h';
-    }
-  }
-
   String _mapsSearchUrlForAddress(String address) {
     return 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address.trim())}';
   }
 
-  Future<_LocationShareData> _resolveAddressPreviewData(String address) async {
+  _LocationShareData _resolveAddressPreviewData(String address) {
     final me = _currentUser;
     final sharerName = (me?.displayName ?? 'Jemand').trim();
     final label = sharerName.isNotEmpty
         ? '$sharerName hat eine Adresse geteilt'
         : 'Adresse geteilt';
     final mapsUrl = _mapsSearchUrlForAddress(address);
-    try {
-      final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
-        'q': address.trim(),
-        'format': 'jsonv2',
-        'limit': '1',
-      });
-      final response = await http.get(
-        uri,
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'ShareItToo-Dreamflow/1.0 (address-share-preview)',
-          'Referer': 'http://127.0.0.1:8123/',
-        },
-      );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is List && decoded.isNotEmpty && decoded.first is Map) {
-          final first = Map<String, dynamic>.from(decoded.first as Map);
-          final lat = (first['lat']?.toString() ?? '').trim();
-          final lon = (first['lon']?.toString() ?? '').trim();
-          if (double.tryParse(lat) != null && double.tryParse(lon) != null) {
-            return _LocationShareData(
-              label: label,
-              latitude: lat,
-              longitude: lon,
-              mapsUrl: mapsUrl,
-              shareKind: 'address',
-              addressText: address.trim(),
-              sharedByName: sharerName,
-            );
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('[MessageThreadScreen] address geocoding failed: $e');
-    }
     return _LocationShareData(
       label: label,
       latitude: '',
@@ -2628,7 +2776,25 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     VoidCallback? onBackToPreview,
   }) async {
     final me = _currentUser;
-    if (me == null) return;
+    final req = _request;
+    final item = _item;
+    if (me == null || req == null || item == null) return;
+    final intent = setAs ?? _locationIntentForCurrentContext();
+    final visibility = await DataService.getBookingAddressReveal(
+      request: req,
+      localExactAddress: item.locationText,
+      segment: intent == _LocationIntent.returnTrip ? 'return' : 'pickup',
+    );
+    if (visibility['result'] != 'revealed') {
+      if (!mounted) return;
+      await AppPopup.info(
+        context,
+        title: 'Standortfreigabe noch gesperrt',
+        message:
+            'Ein genauer Ort kann erst im serverseitig freigegebenen Zeitfenster nach beidseitiger Terminbestätigung geteilt werden.',
+      );
+      return;
+    }
     await _sendLocationShareData(data);
     if (setAs == null) return;
     await _acceptSharedLocation(
@@ -2667,7 +2833,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     final closedContext =
         phaseIntent == _LocationIntent.unknown || _request?.needsReview == true;
     if (!mounted) return;
-    await _showLocationFlowSheet(
+    final selection = await _showLocationFlowSheet<String>(
       title:
           title ?? (data.isAddressShare ? 'Adresse teilen' : 'Standort teilen'),
       onBack: onBack,
@@ -2700,22 +2866,8 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
                         backgroundColor: BrandColors.primary,
                         foregroundColor: Colors.white,
                       ),
-                      onPressed: () async {
-                        Navigator.of(sheetContext).pop();
-                        await _sharePreparedLocation(
-                          data,
-                          setAs: _LocationIntent.handover,
-                          onBackToPreview: () =>
-                              _showPreparedLocationShareSheet(
-                            data,
-                            title: title ??
-                                (data.isAddressShare
-                                    ? 'Adresse teilen'
-                                    : 'Standort teilen'),
-                            onBack: onBack,
-                          ),
-                        );
-                      },
+                      onPressed: () =>
+                          Navigator.of(sheetContext).pop('handover'),
                       child: const Text('Als Übergabeort teilen'),
                     ),
                   if (canSetReturn)
@@ -2724,22 +2876,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
                         backgroundColor: BrandColors.primary,
                         foregroundColor: Colors.white,
                       ),
-                      onPressed: () async {
-                        Navigator.of(sheetContext).pop();
-                        await _sharePreparedLocation(
-                          data,
-                          setAs: _LocationIntent.returnTrip,
-                          onBackToPreview: () =>
-                              _showPreparedLocationShareSheet(
-                            data,
-                            title: title ??
-                                (data.isAddressShare
-                                    ? 'Adresse teilen'
-                                    : 'Standort teilen'),
-                            onBack: onBack,
-                          ),
-                        );
-                      },
+                      onPressed: () => Navigator.of(sheetContext).pop('return'),
                       child: const Text('Als Rückgabeort teilen'),
                     ),
                   FilledButton(
@@ -2747,10 +2884,8 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
                       backgroundColor: BrandColors.primary,
                       foregroundColor: Colors.white,
                     ),
-                    onPressed: () async {
-                      Navigator.of(sheetContext).pop();
-                      await _sharePreparedLocation(data);
-                    },
+                    onPressed: () =>
+                        Navigator.of(sheetContext).pop('share-only'),
                     child: const Text('Nur teilen'),
                   ),
                 ],
@@ -2760,6 +2895,28 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
         );
       },
     );
+    if (!mounted || selection == null) return;
+    void reopenPreview() => _showPreparedLocationShareSheet(
+          data,
+          title: title ??
+              (data.isAddressShare ? 'Adresse teilen' : 'Standort teilen'),
+          onBack: onBack,
+        );
+    if (selection == 'handover') {
+      await _sharePreparedLocation(
+        data,
+        setAs: _LocationIntent.handover,
+        onBackToPreview: reopenPreview,
+      );
+    } else if (selection == 'return') {
+      await _sharePreparedLocation(
+        data,
+        setAs: _LocationIntent.returnTrip,
+        onBackToPreview: reopenPreview,
+      );
+    } else if (selection == 'share-only') {
+      await _sharePreparedLocation(data);
+    }
   }
 
   Future<void> _showAddressEntrySheet({String initialAddress = ''}) async {
@@ -2775,10 +2932,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             final address = controller.text.trim();
-            final hasAddress = address.isNotEmpty;
-            final phaseIntent = _locationIntentForCurrentContext();
-            final canSetHandover = phaseIntent == _LocationIntent.handover;
-            final canSetReturn = phaseIntent == _LocationIntent.returnTrip;
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2832,7 +2985,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
                         onPressed: _isPlausibleSharedAddress(address)
                             ? () async {
                                 Navigator.of(sheetContext).pop();
-                                final data = await _resolveAddressPreviewData(
+                                final data = _resolveAddressPreviewData(
                                   address,
                                 );
                                 if (!mounted) return;
@@ -2896,7 +3049,8 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       }
 
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.medium),
       );
       final lat = pos.latitude.toStringAsFixed(6);
       final lng = pos.longitude.toStringAsFixed(6);
@@ -3090,8 +3244,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     final t = _thread;
     if (t == null) return;
 
-    final cs = Theme.of(context).colorScheme;
-
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -3193,6 +3345,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
 
       final owner =
           req != null ? await DataService.getUserById(req.ownerId) : null;
+      if (!mounted) return;
       final viewerIsOwner = _isViewerOwnerFor(req, thread, me);
 
       final resolvedReq = req;
@@ -3220,6 +3373,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       final deliverySel = item != null
           ? await DataService.getSavedDeliverySelection(item.id)
           : null;
+      if (!mounted) return;
       final booking = _buildBookingMapForRenter(
         req: resolvedReq,
         item: item,
@@ -3341,6 +3495,35 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       'listerAvatar': owner?.photoURL,
       'pricePaid': total > 0 ? '${total.round()} €' : null,
       'quotedTotalRenter': total,
+      if (req.quotedSubtitle != null) 'quotedSubtitle': req.quotedSubtitle,
+      if (req.quotedQuoteVersion != null)
+        'quotedQuoteVersion': req.quotedQuoteVersion,
+      if (req.quotedDays != null) 'quotedDays': req.quotedDays,
+      if (req.quotedPricePerDayMinor != null)
+        'quotedPricePerDayMinor': req.quotedPricePerDayMinor,
+      if (req.quotedBaseRentalMinor != null)
+        'quotedBaseRentalMinor': req.quotedBaseRentalMinor,
+      if (req.quotedDiscountPercent != null)
+        'quotedDiscountPercent': req.quotedDiscountPercent,
+      if (req.quotedDiscountId != null)
+        'quotedDiscountId': req.quotedDiscountId,
+      if (req.quotedDiscountLabel != null)
+        'quotedDiscountLabel': req.quotedDiscountLabel,
+      if (req.quotedDiscountFundingSource != null)
+        'quotedDiscountFundingSource': req.quotedDiscountFundingSource,
+      if (req.quotedDiscountThresholdDays != null)
+        'quotedDiscountThresholdDays': req.quotedDiscountThresholdDays,
+      if (req.quotedDiscountMinor != null)
+        'quotedDiscountMinor': req.quotedDiscountMinor,
+      if (req.quotedRentalSubtotalMinor != null)
+        'quotedRentalSubtotalMinor': req.quotedRentalSubtotalMinor,
+      if (req.quotedPlatformFeeMinor != null)
+        'quotedPlatformFeeMinor': req.quotedPlatformFeeMinor,
+      if (req.quotedTotalMinor != null)
+        'quotedTotalMinor': req.quotedTotalMinor,
+      if (req.quotedOwnerPayoutMinor != null)
+        'quotedOwnerPayoutMinor': req.quotedOwnerPayoutMinor,
+      if (req.quotedCurrency != null) 'quotedCurrency': req.quotedCurrency,
       'days': breakdown?.days,
       'basePerDay': item?.pricePerDay,
       'expressRequested': req.expressRequested,
@@ -3367,29 +3550,26 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
   }
 
   Future<void> _toggleBlockUser() async {
+    final owner = _safetyActions.capture();
     final t = _thread;
     final me = _currentUser;
-    if (t == null || me == null) {
-      AppPopup.toast(
-        context,
-        icon: Icons.info_outline,
-        title: 'Blockieren nicht möglich',
-      );
+    if (owner == null ||
+        t == null ||
+        me == null ||
+        owner.context.user.id.trim() != me.id.trim()) {
       return;
     }
     if (!_canBlockCurrentThread()) {
-      AppPopup.toast(
-        context,
-        icon: Icons.info_outline,
+      await _showSafetyNotice(
+        owner,
         title: 'Blockieren erst nach abgeschlossener Buchung möglich',
       );
       return;
     }
 
     if (t.id == _translationDemoThreadId) {
-      AppPopup.toast(
-        context,
-        icon: Icons.visibility_outlined,
+      await _showSafetyNotice(
+        owner,
         title: 'Demo-Chat',
         message: 'Blockieren ist in der Demo deaktiviert.',
       );
@@ -3401,9 +3581,8 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
         (t.user1Id == 'support') ||
         (t.user2Id == 'support');
     if (isSupport) {
-      AppPopup.toast(
-        context,
-        icon: Icons.info_outline,
+      await _showSafetyNotice(
+        owner,
         title: 'Support kann nicht blockiert werden',
       );
       return;
@@ -3415,58 +3594,89 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       debugPrint(
         '[MessageThreadScreen] Cannot determine other user id for blocking',
       );
-      AppPopup.toast(
-        context,
-        icon: Icons.error_outline,
+      await _showSafetyNotice(
+        owner,
         title: 'Blockieren fehlgeschlagen',
       );
       return;
     }
 
     try {
+      if (!await _safetyActions.isCurrent(_safetyService, owner)) return;
       final nextBlocked = !_isOtherUserBlocked;
       if (nextBlocked) {
-        await BlockedUsersService.blockUser(otherUserId);
-        await DataService.archiveMessageThreadForUser(
-          threadId: t.id,
-          userId: me.id,
-        );
+        await _safetyService.blockUser(owner.context, otherUserId);
       } else {
-        await BlockedUsersService.unblockUser(otherUserId);
+        await _safetyService.unblockUser(owner.context, otherUserId);
       }
-      await _load();
-      if (mounted) {
-        setState(() {
-          _isOtherUserBlocked = nextBlocked;
-          if (nextBlocked) _isThreadArchived = true;
-        });
-        AppPopup.toast(
-          context,
-          icon: nextBlocked ? Icons.block : Icons.lock_open_outlined,
-          title: nextBlocked ? 'Nutzer blockiert' : 'Blockierung aufgehoben',
-        );
+      if (!mounted || !await _safetyActions.isCurrent(_safetyService, owner)) {
+        return;
       }
+      setState(() => _isOtherUserBlocked = nextBlocked);
+      await _showSafetyNotice(
+        owner,
+        title: nextBlocked ? 'Nutzer blockiert' : 'Blockierung aufgehoben',
+      );
+    } on SafetyActionFailure catch (failure) {
+      debugPrint(
+        '[MessageThreadScreen] _toggleBlockUser failed: ${failure.kind}',
+      );
+      if (failure.kind == SafetyActionFailureKind.principalChanged) return;
+      final (title, message) = switch (failure.kind) {
+        SafetyActionFailureKind.rejected => (
+            'Aktion abgelehnt',
+            'Der Server hat die Aktion eindeutig abgelehnt.',
+          ),
+        SafetyActionFailureKind.localUnavailable
+            when failure.remoteAcceptedOrConfirmed =>
+          (
+            'Serverseitig verarbeitet',
+            'Die lokale Aktualisierung ist fehlgeschlagen. Öffne den Chat neu, um den Status zu prüfen.',
+          ),
+        SafetyActionFailureKind.localUnavailable => (
+            'Aktion nicht gespeichert',
+            'Der lokale Sicherheitsstatus konnte nicht aktualisiert werden.',
+          ),
+        SafetyActionFailureKind.outcomeUnknown => (
+            'Aktionsstatus unklar',
+            'Die Anfrage könnte verarbeitet worden sein. Öffne den Chat neu, bevor du es erneut versuchst.',
+          ),
+        SafetyActionFailureKind.principalChanged => ('', ''),
+      };
+      await _showSafetyNotice(owner, title: title, message: message);
     } catch (e) {
       debugPrint('[MessageThreadScreen] _toggleBlockUser failed: $e');
-      if (mounted) {
-        AppPopup.toast(
-          context,
-          icon: Icons.error_outline,
-          title: _isOtherUserBlocked
-              ? 'Entblocken fehlgeschlagen'
-              : 'Blockieren fehlgeschlagen',
-        );
-      }
+      await _showSafetyNotice(
+        owner,
+        title: 'Aktion nicht verarbeitet',
+        message: 'Öffne den Chat neu und prüfe den aktuellen Status.',
+      );
     }
   }
 
-  String _formatDate(DateTime dt) {
-    final d = dt.day.toString().padLeft(2, '0');
-    final m = dt.month.toString().padLeft(2, '0');
-    final y = dt.year;
-    final hh = dt.hour.toString().padLeft(2, '0');
-    final mm = dt.minute.toString().padLeft(2, '0');
-    return '$d.$m.$y $hh:$mm';
+  Future<void> _showSafetyNotice(
+    SafetyActionOwner owner, {
+    required String title,
+    String? message,
+  }) async {
+    if (!mounted || !await _safetyActions.isCurrent(_safetyService, owner)) {
+      return;
+    }
+    if (!mounted || !_safetyActions.isSynchronouslyCurrent(owner)) return;
+    await _safetyActions.showOwnedDialog<void>(
+      context: context,
+      owner: owner,
+      builder: (_, dismiss) => AlertDialog(
+        title: Text(title),
+        content: message == null ? null : Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => dismiss(null),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<String?> _showTimeRequestActionDialog({
@@ -3507,9 +3717,9 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     final me = _currentUser;
     if (t == null || req == null || me == null) return;
 
-    final now = DateTime.now();
-    final initialTime = isReturn ? (req.end) : (req.start);
+    final initialTime = (isReturn ? req.end : req.start).toLocal();
     final state = await DataService.getHandoverReturnState(req.id);
+    if (!mounted) return;
     final requestedLabel =
         ((state[isReturn ? 'returnTimeRequested' : 'handoverTimeRequested']
                     as String?) ??
@@ -3556,12 +3766,10 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
 
     if (picked == null || !mounted) return;
 
-    final proposedTime = DateTime(
-      initialTime.year,
-      initialTime.month,
-      initialTime.day,
-      picked.hour,
-      picked.minute,
+    final proposedTime = req.flowTimeAt(
+      isReturn: isReturn,
+      hour: picked.hour,
+      minute: picked.minute,
     );
 
     final dayName = _weekdayName(proposedTime.weekday);
@@ -3632,6 +3840,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
 
   Future<void> _viewProfile() async {
     final otherId = await _resolveOtherPartyUserId();
+    if (!mounted) return;
     if (otherId == null) {
       AppPopup.toast(
         context,
@@ -3641,7 +3850,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       return;
     }
 
-    if (!mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => PublicProfileScreen(userId: otherId)),
     );
@@ -3680,9 +3888,13 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
   }
 
   Future<void> _toggleArchiveChat() async {
+    final owner = _safetyActions.capture();
     final t = _thread;
     final me = _currentUser;
-    if (t == null || me == null) {
+    if (owner == null ||
+        t == null ||
+        me == null ||
+        me.id.trim() != owner.context.user.id.trim()) {
       AppPopup.toast(
         context,
         icon: Icons.info_outline,
@@ -3708,15 +3920,17 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
         await DataService.unarchiveMessageThreadForUser(
           threadId: t.id,
           userId: me.id,
+          sessionOwner: owner.context.owner.authOwner,
         );
       } else {
         await DataService.archiveMessageThreadForUser(
           threadId: t.id,
           userId: me.id,
+          sessionOwner: owner.context.owner.authOwner,
         );
       }
-      await _load();
-      if (mounted) {
+      if (!await _safetyActions.isCurrent(_safetyService, owner)) return;
+      if (mounted && _safetyActions.isSynchronouslyCurrent(owner)) {
         setState(() => _isThreadArchived = nextArchived);
         AppPopup.toast(
           context,
@@ -3725,21 +3939,25 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
           title: nextArchived ? 'Chat archiviert' : 'Aus Archiv geholt',
         );
       }
+      await _load();
     } catch (e) {
       debugPrint('[MessageThreadScreen] _toggleArchiveChat failed: $e');
-      if (mounted) {
-        AppPopup.toast(
-          context,
-          icon: Icons.error_outline,
-          title: _isThreadArchived
-              ? 'Wiederherstellen fehlgeschlagen'
-              : 'Archivieren fehlgeschlagen',
-        );
-      }
+      if (!mounted) return;
+      if (!await _safetyActions.isCurrent(_safetyService, owner)) return;
+      if (!mounted || !_safetyActions.isSynchronouslyCurrent(owner)) return;
+      AppPopup.toast(
+        context,
+        icon: Icons.error_outline,
+        title: _isThreadArchived
+            ? 'Wiederherstellen fehlgeschlagen'
+            : 'Archivieren fehlgeschlagen',
+      );
     }
   }
 
   Future<void> _contactSupport() async {
+    final owner = _supportPrincipal.capture();
+    if (owner == null || _currentUser?.id != owner.userId) return;
     final flowContext = SupportFlowContext.fromChat(
       itemTitle: _itemTitle(),
       itemId: _item?.id ?? '',
@@ -3753,40 +3971,27 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       otherUserImageUrl: _otherUser?.photoURL,
     );
 
-    final result = await Navigator.of(context).push<SupportFlowResult?>(
-      MaterialPageRoute(
-        builder: (_) => SupportFlowScreen(context: flowContext),
+    if (!await _supportPrincipal.isCurrent(owner) || !mounted) return;
+    final result = await _supportPrincipal.pushOwnedRoute<SupportFlowResult?>(
+      context: context,
+      owner: owner,
+      route: MaterialPageRoute(
+        builder: (_) => SupportFlowScreen(context: flowContext, owner: owner),
       ),
     );
 
-    if (result == null || !mounted) return;
+    if (result == null ||
+        !await _supportPrincipal.isCurrent(owner) ||
+        !mounted) {
+      return;
+    }
 
-    final mainCategory = result.mainCategory;
     final subCategory = result.subCategory;
     final userDescription = result.userDescription;
 
-    final supportContext = <String, dynamic>{
-      'mainCategory': mainCategory,
-      'subCategory': subCategory,
-      'userDescription': userDescription,
-      'itemTitle': _itemTitle(),
-      'itemId': _item?.id ?? '',
-      'requestId': _request?.id ?? '',
-      'threadId': _thread?.id ?? '',
-      'bookingStatus': _request?.status ?? _thread?.bookingStatus ?? '',
-      'otherUserName': _displayName(),
-      'currentUserRole': _viewerIsOwner() ? 'owner' : 'renter',
-      'source': 'booking_chat',
-      'createdAt': DateTime.now().toIso8601String(),
-    };
-
-    debugPrint(
-      '[MessageThreadScreen] Support context prepared: $supportContext',
-    );
-
     try {
       final me = _currentUser;
-      if (me == null) {
+      if (me == null || me.id != owner.userId) {
         AppPopup.toast(
           context,
           icon: Icons.error_outline,
@@ -3796,6 +4001,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       }
 
       final threads = await DataService.getMessageThreadsForUser(me.id);
+      if (!await _supportPrincipal.isCurrent(owner) || !mounted) return;
       MessageThread? supportThread = threads.cast<MessageThread?>().firstWhere(
             (t) =>
                 t != null &&
@@ -3805,31 +4011,32 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
             orElse: () => null,
           );
 
-      supportThread ??= await DataService.createSupportThread(userId: me.id);
+      supportThread ??= await DataService.createSupportThread(
+        userId: me.id,
+        canonicalCaseNumber: result.canonicalCaseNumber,
+      );
+
+      if (!await _supportPrincipal.isCurrent(owner) || !mounted) return;
 
       if (supportThread == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text(
-                'Support-Fall vorbereitet. Support-Route fehlt noch.',
-              ),
-              backgroundColor: BrandColors.primary,
-              behavior: SnackBarBehavior.floating,
-            ),
+          await _supportPrincipal.showNotice(
+            context: context,
+            owner: owner,
+            title: 'Fall ${result.canonicalCaseNumber} ist eingegangen',
+            message: 'Der lokale Support-Chat konnte nicht geöffnet werden.',
           );
         }
         return;
       }
 
-      final mainLabel = _supportMainCategoryLabel(mainCategory);
       final descText = userDescription.isNotEmpty
           ? '\n\nBeschreibung:\n$userDescription'
           : '';
       final contextMessage =
-          '''Support-Fall eröffnet: $mainLabel · ${_itemTitle().isNotEmpty ? _itemTitle() : 'Buchung'}\n📋 Support-Anfrage zu: ${_itemTitle().isNotEmpty ? _itemTitle() : 'Buchung'}
+          '''${result.canonicalReceiptMessage}\n\n📋 Support-Anfrage zu: ${_itemTitle().isNotEmpty ? _itemTitle() : 'Buchung'}
 Buchung: ${_request?.id ?? 'N/A'}
-Kategorie: $mainLabel
+Kategorie: ${result.mainCategoryLabel}
 Unterkategorie: $subCategory$descText''';
 
       await DataService.addSystemMessageToThread(
@@ -3837,9 +4044,11 @@ Unterkategorie: $subCategory$descText''';
         text: contextMessage,
       );
 
-      if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
+      if (await _supportPrincipal.isCurrent(owner) && mounted) {
+        _supportPrincipal.pushOwnedRoute<void>(
+          context: context,
+          owner: owner,
+          route: MaterialPageRoute(
             builder: (_) => MessageThreadScreen(
               threadId: supportThread!.id,
               participantName: 'SIT Support',
@@ -3849,35 +4058,15 @@ Unterkategorie: $subCategory$descText''';
         );
       }
     } catch (e) {
-      debugPrint('[MessageThreadScreen] _contactSupport failed: $e');
-      if (mounted) {
-        AppPopup.toast(
-          context,
-          icon: Icons.error_outline,
-          title: 'Support nicht verfügbar',
+      debugPrint(
+          '[MessageThreadScreen] _contactSupport failed: ${e.runtimeType}');
+      if (await _supportPrincipal.isCurrent(owner) && mounted) {
+        await _supportPrincipal.showNotice(
+          context: context,
+          owner: owner,
+          title: 'Fall ${result.canonicalCaseNumber} ist eingegangen',
         );
       }
-    }
-  }
-
-  String _supportMainCategoryLabel(String category) {
-    switch (category) {
-      case 'handover':
-        return 'Problem mit Übergabe';
-      case 'return':
-        return 'Problem mit Rückgabe';
-      case 'item_condition':
-        return 'Problem mit Artikel/Zustand';
-      case 'payment':
-        return 'Problem mit Zahlung';
-      case 'person':
-        return 'Problem mit anderer Person';
-      case 'technical':
-        return 'Technisches Problem';
-      case 'other':
-        return 'Sonstiges';
-      default:
-        return category;
     }
   }
 }
@@ -3930,6 +4119,7 @@ class _ThreadHeader extends StatelessWidget implements PreferredSizeWidget {
       backgroundColor: Colors.transparent,
       elevation: 0,
       leading: IconButton(
+        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
         onPressed: () => Navigator.of(context).pop(true),
         icon: Icon(Icons.arrow_back, color: AppTheme.textPrimary(context)),
       ),
@@ -4319,39 +4509,6 @@ class _HeaderAvatar extends StatelessWidget {
   }
 }
 
-class _MetaPill extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _MetaPill({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceMuted(context),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppTheme.glassStroke(context)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: AppTheme.textSecondary(context), size: 14),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: TextStyle(
-              color: AppTheme.textBody(context),
-              fontWeight: FontWeight.w500,
-              fontSize: 11,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Kompakte Buchungskarte oben im Chat - nur Bild, Name, Status, Details-Link
 class _CompactBookingCard extends StatelessWidget {
   final String itemTitle;
@@ -4494,70 +4651,6 @@ class _CompactBookingCard extends StatelessWidget {
       );
 }
 
-class _InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _InfoRow({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, color: AppTheme.textSecondary(context), size: 16),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(
-              color: AppTheme.textBody(context),
-              fontWeight: FontWeight.w700,
-              height: 1.35,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TrustBanner extends StatelessWidget {
-  const _TrustBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppTheme.surfacePrimary(context),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.glassStroke(context)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.verified_user_outlined,
-            color: AppTheme.textDisabled(context),
-            size: 12,
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              'Adresse geschützt · Zahlung nach SIT-Regeln · Übergabe mit Fotos & Code',
-              style: TextStyle(
-                color: AppTheme.textSecondary(context),
-                fontWeight: FontWeight.w500,
-                fontSize: 10,
-                height: 1.3,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _StatusBadge extends StatelessWidget {
   final String label;
   final Color bg;
@@ -4580,116 +4673,6 @@ class _StatusBadge extends StatelessWidget {
           fontWeight: FontWeight.w700,
           fontSize: 10,
         ),
-      ),
-    );
-  }
-}
-
-class _ActionBar extends StatelessWidget {
-  final String primaryLabel;
-  final String? secondaryLabel;
-  final VoidCallback? onPrimary;
-  final VoidCallback? onSecondary;
-  const _ActionBar({
-    required this.primaryLabel,
-    required this.secondaryLabel,
-    required this.onPrimary,
-    required this.onSecondary,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppTheme.surfacePrimary(context),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppTheme.glassStroke(context)),
-          ),
-          child: Row(
-            children: [
-              if (secondaryLabel != null) ...[
-                Expanded(
-                  child: _PressScale(
-                    onTap: onSecondary,
-                    child: _SITButton.secondary(
-                      label: secondaryLabel!,
-                      icon: Icons.close_rounded,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                flex: secondaryLabel != null ? 2 : 1,
-                child: _PressScale(
-                  onTap: onPrimary,
-                  child: _SITButton.primary(
-                    label: primaryLabel,
-                    icon: Icons.bolt_rounded,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SITButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool primary;
-  const _SITButton._({
-    required this.label,
-    required this.icon,
-    required this.primary,
-  });
-
-  factory _SITButton.primary({required String label, required IconData icon}) =>
-      _SITButton._(label: label, icon: icon, primary: true);
-  factory _SITButton.secondary({
-    required String label,
-    required IconData icon,
-  }) =>
-      _SITButton._(label: label, icon: icon, primary: false);
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final bg = primary ? cs.primary : AppTheme.surfaceSecondary(context);
-    final border = primary
-        ? cs.primary.withValues(alpha: 0.6)
-        : AppTheme.glassStroke(context);
-    final fg = primary ? Colors.white : AppTheme.textPrimary(context);
-    return Container(
-      height: 46,
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: border),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: fg, size: 18),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: fg, fontWeight: FontWeight.w800),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -4762,8 +4745,101 @@ class _AnimatedMessageEntry extends StatelessWidget {
   }
 }
 
+class _PrivateChatImage extends StatelessWidget {
+  final Map<String, dynamic> attachment;
+  final bool me;
+  final double maxWidth;
+
+  const _PrivateChatImage({
+    required this.attachment,
+    required this.me,
+    required this.maxWidth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final storageName = attachment['storageName']?.toString();
+    final thumbnailStorageName = attachment['thumbnailStorageName']?.toString();
+    final fullUrl = BackendConfig.managedMessageImageUrl(storageName);
+    final thumbnailUrl = BackendConfig.managedMessageImageUrl(
+          thumbnailStorageName,
+        ) ??
+        fullUrl;
+    if (fullUrl == null || thumbnailUrl == null) {
+      return const SizedBox.shrink();
+    }
+
+    final width = (attachment['width'] as num?)?.toDouble() ?? 4;
+    final height = (attachment['height'] as num?)?.toDouble() ?? 3;
+    final aspectRatio = width > 0 && height > 0
+        ? (width / height).clamp(0.7, 1.8).toDouble()
+        : 4 / 3;
+    final previewHeight = (maxWidth / aspectRatio).clamp(120.0, 240.0);
+
+    return Semantics(
+      button: true,
+      label: 'Geschütztes Chatfoto öffnen',
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 7),
+        child: Material(
+          color: me
+              ? Colors.white.withValues(alpha: 0.13)
+              : Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: ValueKey('private-chat-image-$storageName'),
+            onTap: () => _openFullImage(context, fullUrl),
+            child: AppImage(
+              url: thumbnailUrl,
+              width: maxWidth,
+              height: previewHeight,
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFullImage(BuildContext context, String fullUrl) {
+    return showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.88),
+      builder: (dialogContext) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(
+                  minScale: 0.8,
+                  maxScale: 5,
+                  child: Center(
+                    child: AppImage(url: fullUrl, fit: BoxFit.contain),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton.filled(
+                  tooltip: 'Schließen',
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ChatBubble extends StatelessWidget {
   final String text;
+  final List<Map<String, dynamic>> attachments;
   final String? translatedText;
   final String? translationLabel;
   final bool translationPlaceholder;
@@ -4772,6 +4848,7 @@ class _ChatBubble extends StatelessWidget {
   final String time;
   const _ChatBubble({
     required this.text,
+    this.attachments = const <Map<String, dynamic>>[],
     this.translatedText,
     this.translationLabel,
     this.translationPlaceholder = false,
@@ -4794,6 +4871,14 @@ class _ChatBubble extends StatelessWidget {
         translatedText != null && translatedText!.trim().isNotEmpty;
     final showPlaceholderLabel =
         !hasTranslation && translationPlaceholder && translationLabel != null;
+    final imageAttachments = attachments
+        .where((attachment) =>
+            (attachment['mimeType']?.toString() ?? '').startsWith('image/') &&
+            BackendConfig.managedMessageImageUrl(
+                  attachment['storageName']?.toString(),
+                ) !=
+                null)
+        .toList(growable: false);
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 3),
       padding: const EdgeInsets.fromLTRB(12, 9, 10, 7),
@@ -4813,6 +4898,12 @@ class _ChatBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          for (final attachment in imageAttachments)
+            _PrivateChatImage(
+              attachment: attachment,
+              me: me,
+              maxWidth: maxWidth - 24,
+            ),
           if (hasTranslation) ...[
             if (translationLabel != null)
               Padding(
@@ -5095,8 +5186,8 @@ class _SupportCaseMessageState extends State<_SupportCaseMessage> {
       subCategory: widget.data.subCategory ?? 'Nicht angegeben',
       description: widget.data.description ?? 'Keine Beschreibung vorhanden.',
       counterpart:
-          widget.fallbackCounterparty?.displayName?.trim().isNotEmpty == true
-              ? widget.fallbackCounterparty!.displayName!.trim()
+          widget.fallbackCounterparty?.displayName.trim().isNotEmpty == true
+              ? widget.fallbackCounterparty!.displayName.trim()
               : 'Unbekannt',
       period: 'Nicht angegeben',
       imageUrl: widget.fallbackItem?.photos.isNotEmpty == true
@@ -5441,7 +5532,6 @@ class _SystemMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final locationShare = _parseLocationShareMessage(text);
     if (locationShare != null) {
       return Padding(
@@ -5832,179 +5922,6 @@ class _FlowProgressCard extends StatelessWidget {
   }
 }
 
-class _InputBar extends StatelessWidget {
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final VoidCallback onSend;
-  final VoidCallback onShareLocation;
-  final VoidCallback onSendPhoto;
-  final VoidCallback onChangeTime;
-  final double iconSize;
-  final double buttonSize;
-  final double sendButtonSize;
-  final double cornerRadius;
-  final double fieldRadius;
-
-  const _InputBar({
-    required this.controller,
-    required this.focusNode,
-    required this.onSend,
-    required this.onShareLocation,
-    required this.onSendPhoto,
-    required this.onChangeTime,
-    required this.iconSize,
-    required this.buttonSize,
-    required this.sendButtonSize,
-    required this.cornerRadius,
-    required this.fieldRadius,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-        decoration: BoxDecoration(
-          color: AppTheme.surfacePrimary(context),
-          border: Border(top: BorderSide(color: AppTheme.glassStroke(context))),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    focusNode: focusNode,
-                    minLines: 1,
-                    maxLines: 2,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => onSend(),
-                    style: TextStyle(
-                      color: AppTheme.textPrimary(context),
-                      height: 1.25,
-                      fontSize: 14,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'Nachricht…',
-                      hintStyle: TextStyle(
-                        color: AppTheme.textSecondary(context),
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
-                      ),
-                      filled: true,
-                      fillColor: AppTheme.surfaceSecondary(context),
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(fieldRadius),
-                        borderSide: BorderSide(
-                          color: AppTheme.glassStroke(context),
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(fieldRadius),
-                        borderSide: BorderSide(
-                          color: AppTheme.glassStroke(context),
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(fieldRadius),
-                        borderSide: BorderSide(
-                          color: cs.primary.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _PressScale(
-                  onTap: onSend,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: cs.primary,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: _SitSendIcon(size: 22, color: Colors.white),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                _ComposerIconButton(
-                  icon: Icons.my_location_rounded,
-                  label: 'Standort',
-                  onTap: onShareLocation,
-                ),
-                const SizedBox(width: 6),
-                _ComposerIconButton(
-                  icon: Icons.photo_camera_outlined,
-                  label: 'Foto',
-                  onTap: onSendPhoto,
-                ),
-                const SizedBox(width: 6),
-                _ComposerIconButton(
-                  icon: Icons.schedule_rounded,
-                  label: 'Zeit',
-                  onTap: onChangeTime,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ComposerIconButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _ComposerIconButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _PressScale(
-      onTap: onTap,
-      child: Semantics(
-        label: label,
-        button: true,
-        child: Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: AppTheme.surfaceMuted(context),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppTheme.glassStroke(context)),
-          ),
-          child: Center(
-            child: Icon(icon, color: AppTheme.textSecondary(context), size: 15),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Banner für blockierten Chat
 class _ChatBlockedBanner extends StatelessWidget {
   final String reason;
@@ -6139,6 +6056,17 @@ class _TransactionComposerState extends State<_TransactionComposer> {
     final focused = widget.focusNode.hasFocus;
     if (focused != _inputFocused) {
       setState(() => _inputFocused = focused);
+      if (focused) {
+        // Re-assert the keyboard after the focus-driven composer rebuild so
+        // Android keeps the active text-input connection visible.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          widget.focusNode.requestFocus();
+          unawaited(
+            SystemChannels.textInput.invokeMethod<void>('TextInput.show'),
+          );
+        });
+      }
     }
   }
 
@@ -6163,37 +6091,19 @@ class _TransactionComposerState extends State<_TransactionComposer> {
         final showTimeButtons = showHandoverTimeButton || showReturnTimeButton;
         final showActions = !isComposing && widget.showActions;
 
-        // Web-Fallback: Auf Flutter Web bleibt viewInsets.bottom oft bei 0
-        // In dem Fall nutzen wir viewPadding.bottom für SafeArea-Padding
-        final viewInsets = MediaQuery.of(context).viewInsets.bottom;
+        // Keep the composer above browser and device safe areas without
+        // replacing the mounted input while focus changes.
         final viewPadding = MediaQuery.of(context).viewPadding.bottom;
-        final isWebKeyboardWorkaround =
-            kIsWeb && viewInsets == 0 && _inputFocused;
-
-        // Beim Schreiben: Minimale UI ohne äußere Card
-        // Sonst: Normale Composer-UI mit Glass-Effekt
-
-        if (isComposing) {
-          // Minimaler Composer: nur Textfeld + Icons + Send-Button, keine äußere Card
-          return Padding(
-            padding: EdgeInsets.fromLTRB(14, 8, 14, 8 + viewPadding),
-            child: _GlassInputBar(
-              controller: widget.controller,
-              focusNode: widget.focusNode,
-              onSend: widget.onSend,
-              onShareLocation: widget.onShareLocation,
-              onSendPhoto: widget.onSendPhoto,
-              onPickFile: widget.onPickFile,
-              onChangeTime: widget.onChangeTime,
-              isComposing: isComposing,
-              chatState: widget.chatState,
-            ),
-          );
-        }
-
-        // Kein äußerer Wrapper mehr - nur Padding + Column
+        // Keep the same input widget mounted while focus changes. Replacing
+        // the TextField here used to tear down Android's input connection just
+        // after the tap, leaving a focused composer without a keyboard.
         return Padding(
-          padding: EdgeInsets.fromLTRB(14, 12, 14, 10 + viewPadding),
+          padding: EdgeInsets.fromLTRB(
+            14,
+            isComposing ? 8 : 12,
+            14,
+            (isComposing ? 8 : 10) + viewPadding,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -6210,13 +6120,11 @@ class _TransactionComposerState extends State<_TransactionComposer> {
                           showHandoverTimeButton: showHandoverTimeButton &&
                               !widget.handoverConfirmed,
                           showReturnTimeButton: showReturnTimeButton,
-                          showPrimaryAction: showActions &&
-                              !((widget.chatState == _ChatState.confirmed &&
-                                      widget.handoverConfirmed) ||
-                                  ((widget.chatState == _ChatState.running ||
-                                          widget.chatState ==
-                                              _ChatState.returnPlanned) &&
-                                      widget.returnConfirmed)),
+                          // `showActions` already contains the complete role,
+                          // booking-state and confirmed-time gate. Hiding the
+                          // button again once the time was confirmed made the
+                          // enabled start action unreachable.
+                          showPrimaryAction: showActions,
                           handoverTimeRequested: widget.handoverTimeRequested,
                           returnTimeRequested: widget.returnTimeRequested,
                           handoverConfirmed: widget.handoverConfirmed,
@@ -6238,17 +6146,24 @@ class _TransactionComposerState extends State<_TransactionComposer> {
                       )
                     : const SizedBox.shrink(),
               ),
-              // Countdown anzeigen wenn Übergabezeit bestätigt
-              if (widget.handoverConfirmed &&
-                  widget.confirmedHandoverTime != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _HandoverCountdown(
-                    confirmedTime: widget.confirmedHandoverTime!,
-                    onStartNow: widget.onPrimary,
-                  ),
-                ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: !isComposing &&
+                        widget.handoverConfirmed &&
+                        widget.confirmedHandoverTime != null
+                    ? Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _HandoverCountdown(
+                          confirmedTime: widget.confirmedHandoverTime!,
+                          onStartNow: widget.onPrimary,
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
               _GlassInputBar(
+                key: const ValueKey('message-composer-input'),
                 controller: widget.controller,
                 focusNode: widget.focusNode,
                 onSend: widget.onSend,
@@ -6256,7 +6171,6 @@ class _TransactionComposerState extends State<_TransactionComposer> {
                 onSendPhoto: widget.onSendPhoto,
                 onPickFile: widget.onPickFile,
                 onChangeTime: widget.onChangeTime,
-                isComposing: isComposing,
                 chatState: widget.chatState,
               ),
             ],
@@ -6613,236 +6527,6 @@ class _CombinedActionRow extends StatelessWidget {
   }
 }
 
-/// Zeitabstimmungs-Buttons für Übergabe/Rückgabe - einzeln steuerbar
-/// Mit "wartet auf Bestätigung"-Status wenn Zeit angefragt
-class _TimeAgreementButtons extends StatelessWidget {
-  final VoidCallback onProposeHandover;
-  final VoidCallback onProposeReturn;
-  final bool showHandoverButton;
-  final bool showReturnButton;
-  final String? handoverTimeRequested; // z.B. "Mo, 14:00"
-  final String? returnTimeRequested; // z.B. "Fr, 16:00"
-  final bool handoverConfirmed;
-  final bool returnConfirmed;
-
-  const _TimeAgreementButtons({
-    required this.onProposeHandover,
-    required this.onProposeReturn,
-    this.showHandoverButton = true,
-    this.showReturnButton = true,
-    this.handoverTimeRequested,
-    this.returnTimeRequested,
-    this.handoverConfirmed = false,
-    this.returnConfirmed = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Wenn beide unsichtbar, nichts anzeigen
-    if (!showHandoverButton && !showReturnButton) {
-      return const SizedBox.shrink();
-    }
-
-    // Wenn nur einer sichtbar, zentriert anzeigen
-    if (!showHandoverButton) {
-      return _buildReturnButton(context);
-    }
-    if (!showReturnButton) {
-      return _buildHandoverButton(context);
-    }
-
-    // Beide sichtbar
-    return Row(
-      children: [
-        Expanded(child: _buildHandoverButton(context)),
-        const SizedBox(width: 8),
-        Expanded(child: _buildReturnButton(context)),
-      ],
-    );
-  }
-
-  Widget _buildHandoverButton(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final hasRequested =
-        handoverTimeRequested != null && handoverTimeRequested!.isNotEmpty;
-    final isPending = hasRequested && !handoverConfirmed;
-
-    // Braune Karton-Farbe wie in der Nachrichtenübersicht
-    const cardboardBrown = Color(0xFFB8956C);
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Status OBERHALB des Buttons
-        if (isPending) ...[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.hourglass_empty_rounded,
-                color: Colors.orange.withValues(alpha: 0.8),
-                size: 10,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'wartet auf Bestätigung',
-                style: TextStyle(
-                  color: Colors.orange.withValues(alpha: 0.8),
-                  fontWeight: FontWeight.w500,
-                  fontSize: 9,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-        ],
-        _PressScale(
-          onTap: onProposeHandover,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: isPending
-                  ? cs.primary.withValues(alpha: 0.12)
-                  : Colors.white.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isPending
-                    ? cs.primary.withValues(alpha: 0.3)
-                    : Colors.white.withValues(alpha: 0.08),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.inventory_2_rounded,
-                  color: cardboardBrown,
-                  size: 14,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Übergabezeit',
-                  style: TextStyle(
-                    color: isPending
-                        ? cs.primary
-                        : Colors.white.withValues(alpha: 0.8),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildReturnButton(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final hasRequested =
-        returnTimeRequested != null && returnTimeRequested!.isNotEmpty;
-    final isPending = hasRequested && !returnConfirmed;
-
-    // Braune Karton-Farbe wie in der Nachrichtenübersicht
-    const cardboardBrown = Color(0xFFB8956C);
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Status OBERHALB des Buttons
-        if (isPending) ...[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.hourglass_empty_rounded,
-                color: Colors.orange.withValues(alpha: 0.8),
-                size: 10,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'wartet auf Bestätigung',
-                style: TextStyle(
-                  color: Colors.orange.withValues(alpha: 0.8),
-                  fontWeight: FontWeight.w500,
-                  fontSize: 9,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-        ],
-        _PressScale(
-          onTap: onProposeReturn,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: isPending
-                  ? cs.primary.withValues(alpha: 0.12)
-                  : Colors.white.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isPending
-                    ? cs.primary.withValues(alpha: 0.3)
-                    : Colors.white.withValues(alpha: 0.08),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Braunes Box-Icon mit SIT-blauem Return-Akzent
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Icon(
-                      Icons.inventory_2_rounded,
-                      color: cardboardBrown,
-                      size: 14,
-                    ),
-                    Positioned(
-                      right: -4,
-                      bottom: -2,
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: cs.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.undo_rounded,
-                          color: Colors.white,
-                          size: 6,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  'Rückgabezeit',
-                  style: TextStyle(
-                    color: isPending
-                        ? cs.primary
-                        : Colors.white.withValues(alpha: 0.8),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 /// Countdown-Widget für bestätigte Übergabezeit
 class _HandoverCountdown extends StatefulWidget {
   final DateTime confirmedTime;
@@ -6957,143 +6641,6 @@ class _HandoverCountdownState extends State<_HandoverCountdown> {
   }
 }
 
-/// Kompakter CTA-Bereich im Glass-Card-Stil
-class _CompactTransactionCTA extends StatelessWidget {
-  final String primaryLabel;
-  final String? secondaryLabel;
-  final VoidCallback? onPrimary;
-  final VoidCallback? onSecondary;
-  final String explanationText;
-  final bool primaryEnabled;
-  final String? counterpartyName;
-
-  const _CompactTransactionCTA({
-    required this.primaryLabel,
-    required this.secondaryLabel,
-    required this.onPrimary,
-    required this.onSecondary,
-    required this.explanationText,
-    this.primaryEnabled = true,
-    this.counterpartyName,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    // Leeren Button nicht anzeigen
-    if (primaryLabel.isEmpty) return const SizedBox.shrink();
-
-    // Button-Farben basierend auf Aktivierung
-    final isActive = primaryEnabled && onPrimary != null;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final buttonColors = isActive
-        ? [cs.primary, cs.primary.withValues(alpha: 0.85)]
-        : [Colors.grey.shade600, Colors.grey.shade700];
-    final iconColor =
-        isActive ? Colors.white : Colors.white.withValues(alpha: 0.5);
-    final textColor =
-        isActive ? Colors.white : Colors.white.withValues(alpha: 0.5);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _PressScale(
-                onTap: isActive ? onPrimary : null,
-                child: Container(
-                  height: 42,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: buttonColors),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.bolt_rounded, color: iconColor, size: 16),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          primaryLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: textColor,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            if (secondaryLabel != null) ...[
-              const SizedBox(width: 8),
-              _PressScale(
-                onTap: onSecondary,
-                child: Container(
-                  height: 42,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      secondaryLabel!,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-        // Subline: Erklärung wenn Button inaktiv
-        if (!primaryEnabled) ...[
-          const SizedBox(height: 6),
-          Text(
-            counterpartyName != null && counterpartyName!.isNotEmpty
-                ? 'Erst möglich, wenn $counterpartyName deine Übergabezeit bestätigt.'
-                : 'Erst möglich, wenn die Übergabezeit bestätigt ist.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.45),
-              fontWeight: FontWeight.w500,
-              height: 1.3,
-              fontSize: 10,
-            ),
-          ),
-        ] else if (explanationText.trim().isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(
-            explanationText,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.4),
-              fontWeight: FontWeight.w500,
-              height: 1.3,
-              fontSize: 10,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
 /// Glass-Input-Bar im Onboarding-Stil
 /// Icons links neben dem Textfeld (idle) oder im Textfeld (composing)
 /// Bei mehrzeiligem Text: Icons bleiben oben, Text fließt darunter
@@ -7105,10 +6652,10 @@ class _GlassInputBar extends StatefulWidget {
   final VoidCallback onSendPhoto;
   final VoidCallback onPickFile;
   final VoidCallback onChangeTime;
-  final bool isComposing;
   final _ChatState chatState;
 
   const _GlassInputBar({
+    super.key,
     required this.controller,
     required this.focusNode,
     required this.onSend,
@@ -7117,23 +6664,17 @@ class _GlassInputBar extends StatefulWidget {
     required this.onPickFile,
     required this.onChangeTime,
     required this.chatState,
-    this.isComposing = false,
   });
 
   @override
   State<_GlassInputBar> createState() => _GlassInputBarState();
 }
 
-class _GlassInputBarState extends State<_GlassInputBar>
-    with SingleTickerProviderStateMixin {
+class _GlassInputBarState extends State<_GlassInputBar> {
   static const double _iconSize = 18.0;
-  static const Duration _animDuration = Duration(milliseconds: 220);
   static const Duration _focusAnimDuration = Duration(milliseconds: 140);
   static const double _fieldMinHeight = 40.0;
   static const double _fieldFontSize = 15.0;
-  late AnimationController _animController;
-  late Animation<double> _fadeOuterIcons;
-  late Animation<double> _fadeInnerIcons;
 
   void _focusInput() {
     // Ensure a single tap both expands the field and puts the cursor inside.
@@ -7141,11 +6682,13 @@ class _GlassInputBarState extends State<_GlassInputBar>
       FocusScope.of(context).requestFocus(widget.focusNode);
     }
     widget.focusNode.requestFocus();
+    unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.show'));
     final textLength = widget.controller.text.length;
     widget.controller.selection = TextSelection.collapsed(offset: textLength);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       widget.focusNode.requestFocus();
+      unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.show'));
       final len = widget.controller.text.length;
       widget.controller.selection = TextSelection.collapsed(offset: len);
     });
@@ -7164,20 +6707,6 @@ class _GlassInputBarState extends State<_GlassInputBar>
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(vsync: this, duration: _animDuration);
-    _fadeOuterIcons = Tween<double>(
-      begin: 1.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
-    _fadeInnerIcons = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animController,
-        curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
-      ),
-    );
-
-    if (widget.isComposing) _animController.value = 1.0;
-
     widget.focusNode.addListener(_onFocusChanged);
     widget.controller.addListener(_onTextChanged);
   }
@@ -7185,14 +6714,6 @@ class _GlassInputBarState extends State<_GlassInputBar>
   @override
   void didUpdateWidget(covariant _GlassInputBar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isComposing != oldWidget.isComposing) {
-      if (widget.isComposing) {
-        _animController.forward();
-      } else {
-        _animController.reverse();
-      }
-    }
-
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_onTextChanged);
       widget.controller.addListener(_onTextChanged);
@@ -7208,7 +6729,6 @@ class _GlassInputBarState extends State<_GlassInputBar>
   void dispose() {
     widget.focusNode.removeListener(_onFocusChanged);
     widget.controller.removeListener(_onTextChanged);
-    _animController.dispose();
     super.dispose();
   }
 
@@ -7272,7 +6792,7 @@ class _GlassInputBarState extends State<_GlassInputBar>
                       ),
                       const SizedBox(width: 8),
                       _GlassIconButton(
-                        icon: Icons.attach_file_rounded,
+                        icon: Icons.photo_library_outlined,
                         onTap: widget.onPickFile,
                         iconSize: _iconSize,
                       ),
@@ -7385,7 +6905,7 @@ class _GlassInputBarState extends State<_GlassInputBar>
                             ),
                             const SizedBox(width: 6),
                             _InlineFocusedIcon(
-                              icon: Icons.attach_file_rounded,
+                              icon: Icons.photo_library_outlined,
                               onTap: () {
                                 _focusInput();
                                 widget.onPickFile();
@@ -7461,45 +6981,6 @@ class _InlineFocusedIcon extends StatelessWidget {
                   ? Colors.white.withValues(alpha: 0.7)
                   : const Color(0xFF1E293B),
               size: 18,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Inline-Icon im Textfeld (ohne Rahmen/Hintergrund)
-/// Funktioniert auch wenn Feld leer aber fokussiert ist
-class _InlineIconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _InlineIconButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        splashColor: Theme.of(context).brightness == Brightness.dark
-            ? Colors.white.withValues(alpha: 0.15)
-            : const Color(0xFF94A3B8).withValues(alpha: 0.35),
-        highlightColor: Theme.of(context).brightness == Brightness.dark
-            ? Colors.white.withValues(alpha: 0.08)
-            : const Color(0xFF94A3B8).withValues(alpha: 0.22),
-        child: SizedBox(
-          width: 28,
-          height: 28,
-          child: Center(
-            child: Icon(
-              icon,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white.withValues(alpha: 0.5)
-                  : const Color(0xFF475569),
-              size: 20,
             ),
           ),
         ),
@@ -7637,122 +7118,6 @@ class _TimeOptionTile extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// Legacy - für Kompatibilität behalten
-class _StickyTransactionCTA extends StatelessWidget {
-  final String primaryLabel;
-  final String? secondaryLabel;
-  final VoidCallback? onPrimary;
-  final VoidCallback? onSecondary;
-  final String explanationText;
-
-  const _StickyTransactionCTA({
-    required this.primaryLabel,
-    required this.secondaryLabel,
-    required this.onPrimary,
-    required this.onSecondary,
-    required this.explanationText,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _PressScale(
-                  onTap: onPrimary,
-                  child: Container(
-                    height: 44,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [cs.primary, cs.primary.withValues(alpha: 0.8)],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.bolt_rounded,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            primaryLabel,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (secondaryLabel != null) ...[
-                const SizedBox(width: 8),
-                _PressScale(
-                  onTap: onSecondary,
-                  child: Container(
-                    height: 44,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        secondaryLabel!,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.85),
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          if (explanationText.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              explanationText,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.52),
-                fontWeight: FontWeight.w400,
-                height: 1.3,
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }
@@ -7935,36 +7300,6 @@ class _LocationShareData {
 
   double? get latitudeValue => double.tryParse(latitude);
   double? get longitudeValue => double.tryParse(longitude);
-
-  int get mapZoom => 15;
-
-  int? get tileX {
-    final lat = latitudeValue;
-    final lng = longitudeValue;
-    if (lat == null || lng == null) return null;
-    final n = 1 << mapZoom;
-    return ((lng + 180.0) / 360.0 * n).floor();
-  }
-
-  int? get tileY {
-    final lat = latitudeValue;
-    final lng = longitudeValue;
-    if (lat == null || lng == null) return null;
-    final n = 1 << mapZoom;
-    final latRad = lat * math.pi / 180.0;
-    final y =
-        (1.0 - math.log(math.tan(latRad) + 1 / math.cos(latRad)) / math.pi) /
-            2.0 *
-            n;
-    return y.floor();
-  }
-
-  String get tilePreviewUrl {
-    final x = tileX;
-    final y = tileY;
-    if (x == null || y == null) return '';
-    return 'https://tile.openstreetmap.org/$mapZoom/$x/$y.png';
-  }
 }
 
 _LocationShareData? _parseLocationShareMessage(String raw) {
@@ -8009,8 +7344,7 @@ _LocationShareData? _parseLocationShareMessage(String raw) {
 }
 
 class _LocationMapFallback extends StatelessWidget {
-  final bool loading;
-  const _LocationMapFallback({this.loading = false});
+  const _LocationMapFallback();
 
   @override
   Widget build(BuildContext context) {
@@ -8029,17 +7363,6 @@ class _LocationMapFallback extends StatelessWidget {
             opacity: 0.16,
             child: CustomPaint(painter: _LocationGridPainter()),
           ),
-          if (loading)
-            const Center(
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -8297,17 +7620,8 @@ class _LocationShareMessage extends StatelessWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        if (data.tilePreviewUrl.isNotEmpty) ...[
-                          Image.network(
-                            data.tilePreviewUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                const _LocationMapFallback(),
-                            loadingBuilder: (context, child, progress) {
-                              if (progress == null) return child;
-                              return const _LocationMapFallback(loading: true);
-                            },
-                          ),
+                        if (data.hasCoordinates) ...[
+                          const _LocationMapFallback(),
                           const Center(
                             child: IgnorePointer(child: _LocationPreviewPin()),
                           ),

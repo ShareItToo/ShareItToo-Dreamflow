@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp70-current-candidate-auth-safety-hold",
+  "status": "complete-local-github",
+  "capturedOn": "2026-09-09",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "packageBaseHead": "18f10097d6872f012360d648764614cc314fe809",
+    "wp69PackageHead": "1f09df3e000047d03198163d34c10d077926e559",
+    "wp69ClosureHead": "18f10097d6872f012360d648764614cc314fe809",
+    "wp69ClosureGithubRegressionRun": 34335475902,
+    "wp69ClosureGithubCodeqlRun": 34335475943,
+    "wp69ClosureOpenPrMergeAlerts": 0,
+    "candidateSourceHead": "12b88cf97f91973d6dfd59fe3f4dcb9c915dc7d0",
+    "stagingRuntimeHead": "78c663248aec089b08d19fd0fb40a9a63f19408b",
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090904",
+    "environment": "staging",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkSha256": "8c5e02d309f39d808d900c5d8d59a862efbf9d1928a6baacf7fc2d7e2b62b8e4",
+    "aabSha256": "fcc6c36055a978ffb3c70761f2630d942c8e65ac30c9600f3963be48b7d56696",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "pixelInstalledAndMatched": true,
+    "mobileOrBackendRuntimePathsChangedAfterCandidate": []
+  },
+  "sourceInventory": [
+    {
+      "path": "docs/evidence/release-readiness/wp69-current-goal-acceptance-audit-20260909.json",
+      "sha256": "1c15b6a5898d70e4c22320774466e58f4554e42fadd1d5034c2955f0bcadfdba"
+    },
+    {
+      "path": "tool/diagnose_n28_current_candidate_android_account_support_surfaces.mjs",
+      "sha256": "bd0bff1ffc7019f730d8e03f34ce07a337d05199e69ff5a01646767324ec16b2"
+    },
+    {
+      "path": "tool/diagnose_android_password_change.mjs",
+      "sha256": "f6671011af8e9fba092ceb65b6dd89bde854feec9fb05f5f65dce5736bc4189a"
+    },
+    {
+      "path": "tool/diagnose_android_session_controls.mjs",
+      "sha256": "2ddb1bd930ac9b3c34b1f3d88682846d32336f43219a9eff784a3860069d9275"
+    },
+    {
+      "path": "tool/diagnose_android_password_reset.mjs",
+      "sha256": "f1d33937f5dfca8b1c061e8f8c7b6a2d685fb016a43b3bfa757d051b68f1f947"
+    },
+    {
+      "path": "tool/diagnose_store_review_safety_actions.mjs",
+      "sha256": "6fccb76aa013e7458b68e7009f08221dae750581981c012e491cf85dca47407f"
+    },
+    {
+      "path": "tool/run_staging_non_binding_simulation.mjs",
+      "sha256": "3ef28b307826ac1e591e8164894209c0ea92ad1b16c9e1e8fb7074188e0839fb"
+    }
+  ],
+  "pixelProof": {
+    "accountAndSupportSurfaces": {
+      "status": "passed-account-support-read-only-provider-holds-confirmed",
+      "authenticatedSurfaceCount": 9,
+      "helpCenterReachable": true,
+      "supportEntryReachableWithoutSubmission": true,
+      "paymentProviderHoldVisible": true,
+      "payoutProviderHoldVisible": true,
+      "paymentEndpointCalled": false,
+      "payoutOnboardingOpened": false
+    },
+    "passwordChange": {
+      "preflight": "passed-original-credential-active-empty-form-owner-restored",
+      "definiteSuccess": true,
+      "oldCredentialRejected": true,
+      "replacementCredentialAccepted": true,
+      "localSessionCleared": true,
+      "coldLoginPassed": true,
+      "accountAToBIsolationPassed": true,
+      "originalCredentialRestored": true,
+      "diagnosticSessionsRevoked": true
+    },
+    "sessionControls": {
+      "recoveryPathPassed": true,
+      "initialSessionCount": 2,
+      "remoteSessionRevoked": true,
+      "revokedTokenRejected": true,
+      "invokingPixelPreservedBeforeLogoutAll": true,
+      "logoutAllPassed": true,
+      "serverConfirmedEmptyBeforeIndependentRelogin": true,
+      "coldStartPassed": true,
+      "accountAToBIsolationPassed": true,
+      "diagnosticSessionsRevoked": true
+    },
+    "freshEmailAuthRecovery": {
+      "registrationAcceptedPendingEmail": true,
+      "consentControlCount": 4,
+      "verificationEmailDelivered": true,
+      "verificationConfirmedWithoutTokenDisclosure": true,
+      "verificationSingleUseReplayStructuredError": "invalid_or_expired_verification_link",
+      "backendEmailVerified": true,
+      "pixelLoginPassed": true,
+      "registrationColdStartPassed": true,
+      "passwordResetRequestAcceptedWithoutExistenceDisclosure": true,
+      "passwordResetEmailDelivered": true,
+      "passwordResetConfirmedWithoutTokenDisclosure": true,
+      "oldPasswordStructuredRejection": "401:invalid_credentials",
+      "passwordResetSingleUseReplayStructuredError": "invalid_or_expired_reset_link",
+      "newPasswordPixelLoginPassed": true,
+      "passwordResetColdStartPassed": true,
+      "diagnosticSessionsRevoked": true
+    },
+    "finalState": {
+      "protectedOwnerSessionRestored": true,
+      "publicDiagnosticListingCount": 0,
+      "temporaryBlocksRemaining": 0,
+      "contractCreated": false,
+      "reservationCreated": false,
+      "paymentCreated": false,
+      "realMoneyUsed": false,
+      "freshSyntheticAccountRetainedForFutureDeletionTest": true
+    }
+  },
+  "stagingSafetyProof": {
+    "transport": "authenticated-direct-api-diagnostic",
+    "isolatedSyntheticListingActivated": true,
+    "nonBindingRequestAcceptedAndChatCreated": true,
+    "paymentRejectedBeforeContractReservationOrMoney": true,
+    "listingReportCreatedAndReadBack": true,
+    "privateNoStoreExportPassed": true,
+    "temporaryBlockPassed": true,
+    "temporaryUnblockPassed": true,
+    "chatRestoredAfterUnblock": true,
+    "bookingCancelled": true,
+    "listingRetiredFromPublicCatalog": true,
+    "diagnosticSessionsRevoked": true,
+    "syntheticModerationReportRetainedForAudit": true,
+    "pixelUiReportBlockReplay": "not-proven"
+  },
+  "closedWp69Requirements": [
+    {
+      "id": "email-registration-verification-login-recovery",
+      "state": "PASS",
+      "basis": "Fresh registration, delivery, single-use verification, login, reset, old-password rejection, single-use reset and cold-start persistence passed on the exact candidate."
+    },
+    {
+      "id": "logout-password-session-account-switch-isolation",
+      "state": "PASS",
+      "basis": "Password change with rollback, remote-session revocation, logout-all server-empty truth, cold start and A-to-B isolation passed with cleanup."
+    }
+  ],
+  "remainingRelatedRequirements": [
+    {
+      "id": "support-report-block",
+      "state": "PARTIAL",
+      "remaining": "Authenticated Staging report, block, unblock and chat restoration passed with cleanup; the exact-candidate Pixel UI submission path was not physically proven."
+    },
+    {
+      "id": "privacy-export-and-account-deletion",
+      "state": "PARTIAL",
+      "remaining": "Private no-store export passed on the exact candidate; account deletion remains a separately destructive synthetic-account lifecycle."
+    },
+    {
+      "id": "stripe-sandbox-payment-refund-simulated-payout",
+      "state": "OPEN",
+      "remaining": "The visible payment and payout holds are correct; official Stripe test-platform owner setup is still required before any provider traffic."
+    }
+  ],
+  "packageVerification": {
+    "implementationHead": "523f1693e701371654888e5a3ce22598acdc8858",
+    "focusedTests": "passed-48",
+    "fullLocalRegression": "passed",
+    "localToolTestsPassed": 2511,
+    "githubRegressionRun": 34345166849,
+    "githubCodeqlRun": 34345166833,
+    "openPrMergeAlerts": 0,
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "technicalDebt": [
+    "One first inspection used the current-head archive validator instead of the immutable candidate validator and stopped before mutation; the exact candidate validator then passed.",
+    "One initial direct cleanup command failed locally during command formatting before network access; the corrected bounded cleanup and independent token rejection passed.",
+    "The retained fresh synthetic account must be consumed by the later account-deletion package or explicitly decommissioned.",
+    "Android input injection did not produce reliable long-press evidence for the Pixel listing-options report path; both temporary listings and all diagnostic sessions were retired, and no physical UI claim is made."
+  ],
+  "boundaries": {
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "firebaseConfigurationChanged": false,
+    "externalIdentityProviderCalled": false,
+    "paymentProviderCalled": false,
+    "payoutProviderCalled": false,
+    "realMoneyUsed": false,
+    "bindingContractCreated": false,
+    "legalApprovalChanged": false,
+    "cloudOrVpsChanged": false,
+    "dnsChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "credentialPrintedOrCommitted": false,
+    "emailActionTokenPrintedOrCommitted": false,
+    "personalAccountIdentifierCommitted": false
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-internal-release-active",
+  "capturedAt": "2026-08-14T18:12:00Z",
+  "status": "available-and-store-install-verified",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081407",
+    "commit": "de2d1e727ac46f9c7d8957fd5ac7afcf1b46e9b2",
+    "aabSha256": "61de53bd6f8eb0449a0b4a6238fa10e7280669e5078fb6f7f514a596d36d0189",
+    "apkSha256": "3cb4b34cfe1ef125b8f7de6b5dc2bc8b2f7fe36352d94122ef106d87c1c05944",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "release": {
+    "track": "internal",
+    "name": "1.0.0-internal-2026081407",
+    "versionCodeObserved": "2026081407",
+    "versionNameObserved": "1.0.0",
+    "minimumApiObserved": 24,
+    "targetSdkObserved": 35,
+    "newInstallSizeMbObserved": 59.2,
+    "statusObserved": "available-to-internal-testers",
+    "reviewStatusObserved": "not-reviewed"
+  },
+  "validation": {
+    "uploadAcceptedByGooglePlay": true,
+    "retraceMappingAttached": true,
+    "nativeDebugSymbolsAttached": true,
+    "readyToRelease": true,
+    "errorCount": 0,
+    "supportedPhonesObserved": 12427,
+    "devicesLostComparedWithPreviousRelease": 0
+  },
+  "testers": {
+    "emailListCreated": true,
+    "emailListSelected": true,
+    "selectedListCount": 1,
+    "selectedUserCount": 1,
+    "joinLinkAvailable": true,
+    "containsTesterAddress": false
+  },
+  "postReleaseChecks": {
+    "playStoreUpdateCompleted": true,
+    "playStoreInstallCompleted": true,
+    "installedVersionVerified": true,
+    "installedVersionName": "1.0.0",
+    "installedBuildNumber": "2026081407",
+    "installerPackage": "com.android.vending",
+    "coldLaunchCompleted": true,
+    "coldLaunchCrashObserved": false,
+    "stagingSessionPreserved": true,
+    "stagingFeedLoaded": true
+  },
+  "exactCandidateDiagnostics": {
+    "centeredSitFeedback": "passed-source-and-widget-regression",
+    "foregroundPushCenteredSitPopup": "open",
+    "backgroundAndTerminatedPush": "open",
+    "notificationIconVisualFit": "inherited-unchanged-assets",
+    "controlledCrashDiagnostic": "sent-once-console-assignment-pending",
+    "offlineRealtimeRecovery": "pending-exact-build"
+  },
+  "boundaries": {
+    "internalReleaseActivated": true,
+    "closedTestingStarted": false,
+    "openTestingStarted": false,
+    "productionChanged": false,
+    "productionStoreReleaseChanged": false,
+    "publicRolloutStarted": false,
+    "sentForProductionReview": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-crash-release-mapping",
+  "status": "mapping-and-native-symbols-uploaded-controlled-event-pending",
+  "capturedAt": "2026-08-12T00:56:59Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081116",
+    "commit": "03a76e23b0db656b48fc1729b3cd20e6260f2133",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "artifacts": {
+    "aabSha256": "4da9336aeabc86c28bb5fe49fb96ba5bdb5329fb5af60ecfa0b73e513f0db204",
+    "apkSha256": "25e9d37dcd79976970f164b8c0531513ea07091bde5492ce8f11009f67cd4869",
+    "embeddedProguardMappingSha256": "ae038a0a0a5b213bf4ea4687ce91a698653120e4b86e01da72a49814368fe98e",
+    "embeddedMappingIdSha256": "8074c675f9ff8bcba5b117ab914d3432f22d00a6a5bdc8913fa0a33f2e2bb28b",
+    "nativeDebugSymbolsZipSha256": "b5964d753ff1193a77f3c9de4bf56c832c72cc5807d25e25478b411cb90f5c51",
+    "nativeSymbolMembers": [
+      {
+        "abi": "armeabi-v7a",
+        "sha256": "27bf0edea5454c1a63e8c2caa9cda43ad335ed4e663626dfbb32bcd602e6f29f"
+      },
+      {
+        "abi": "arm64-v8a",
+        "sha256": "1dad644b879e1ddd6e8134d7892a2dc8127e08bee3490d565a89ea39cc4508c2"
+      },
+      {
+        "abi": "x86_64",
+        "sha256": "ef827b186c04aacd96893ce551de8f6f17a6fc37e126099f5433c1a3d55c02f2"
+      }
+    ]
+  },
+  "verifications": {
+    "aabIdentity": "passed",
+    "embeddedMappingPresent": "passed",
+    "mappingIdPresentAndHashed": "passed",
+    "nativeSymbolsPresentForAllBundledAbis": "passed",
+    "nativeSymbolsMatchStandaloneArchive": "passed",
+    "nativeSymbolsPackagedForAllBundledAbis": "passed",
+    "nativeSymbolGeneration": "passed",
+    "nativeSymbolUploadToCrashlytics": "passed",
+    "nativeSymbolUploadBuildResult": "successful",
+    "nativeSymbolCacheDrainedAfterUpload": "passed",
+    "originalAabMappingUploadedToCrashlytics": "passed",
+    "uploadBuildResult": "successful",
+    "controlledSanitizedCrashEvent": "pending",
+    "consoleReleaseAssignment": "pending"
+  },
+  "diagnosticGate": {
+    "exactCandidateEnabled": false,
+    "source": "exact-candidate-aot-inspection",
+    "reason": "The bounded staging crash diagnostic was not compiled into this release candidate, so no event was generated from a different binary under the same build identity."
+  },
+  "consoleObservation": {
+    "capturedAt": "2026-08-12T01:01:00Z",
+    "source": "firebase-console-read-only",
+    "observedLatestRelease": "1.0.0 (2026081104)",
+    "latestReleaseMatchesExactCandidate": false,
+    "issueCountsUsedAsCandidateProof": false,
+    "settingsChanged": false,
+    "eventGenerated": false
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "productionCrashGenerated": false,
+    "controlledStagingEventGenerated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-feed-screenshot-compatibility",
+  "status": "verified-compatible-no-visible-product-change",
+  "capturedAt": "2026-08-14T12:20:00Z",
+  "currentCandidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081403",
+    "commit": "09c9211e41da75969b9ee59e9954ac7465250e80",
+    "apkSha256": "29386ee981dd895bd2bfa70d4dd4564a1237141dce38a4f33e0f2994c975755b"
+  },
+  "sourceScreenshotEvidenceRef": "docs/evidence/b11/google-play-feed-screenshot-readiness-20260813.json",
+  "sourceCandidateEvidenceRef": "docs/evidence/b11/android-candidate-2026081303.json",
+  "compatibilityReview": {
+    "sourceSnapshotCommit": "95f3e2e3ca7363f729c6a6d9ecf4170ddda501df",
+    "currentCandidateEvidenceRef": "docs/evidence/b11/android-candidate-2026081403.json",
+    "baselineStoreInstallEvidenceRef": "docs/evidence/b11/google-play-internal-release-active-2026081401-20260814.json",
+    "baselineRoleBookingEvidenceRef": "docs/evidence/b11/android-store-synthetic-role-booking-2026081401-20260814T013715Z.json",
+    "changedAppSourceFilesSinceSourceSnapshot": [
+      "lib/config/legal_provider_config.dart",
+      "lib/screens/legal_cancellation_policy_screen.dart",
+      "lib/screens/legal_community_rules_screen.dart",
+      "lib/screens/legal_fees_payments_screen.dart",
+      "lib/screens/legal_imprint_screen.dart",
+      "lib/screens/legal_privacy_screen.dart",
+      "lib/screens/legal_terms_screen.dart",
+      "lib/screens/payment_checkout_screen.dart",
+      "lib/screens/privacy_info_screen.dart",
+      "lib/services/backend_realtime_service.dart",
+      "lib/services/data_service.dart"
+    ],
+    "changedVisibleScreenshotSourceFiles": [],
+    "visibleScreenSourceChanged": false,
+    "storeListingCoreFlowsChanged": false,
+    "screenshotsNeedRecapture": false
+  },
+  "boundaries": {
+    "screenshotUploadedDuringReview": false,
+    "storeListingChangedDuringReview": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

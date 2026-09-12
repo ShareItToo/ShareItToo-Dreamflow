@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-accessibility-source-diagnostic",
+  "status": "automated-large-text-and-semantics-passed-manual-talkback-pending",
+  "capturedAt": "2026-08-15T14:28:08Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "commit": "3fa045b98897f9551f91da932136c2b100b2d700",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "sourceBinding": {
+    "appSourceUnchangedSinceCandidateCommit": true,
+    "checkedPaths": [
+      "lib",
+      "pubspec.yaml",
+      "android",
+      "ios"
+    ]
+  },
+  "tests": {
+    "largeText200Percent": "passed",
+    "categoryHeaderNoClipping": "passed",
+    "privacyExportKeyboardFocus": "passed",
+    "exploreHeaderSemanticNames": "passed",
+    "loginFieldSemanticNames": "passed",
+    "socialLoginButtonSemanticActions": "passed",
+    "passwordVisibilitySeparateAction": "passed",
+    "foregroundPushDismissSemanticAction": "passed",
+    "testCount": 23
+  },
+  "remaining": {
+    "manualTalkBackTraversal": "pending",
+    "physicalLargeTextVisualPass": "pending",
+    "fullDeviceCell": "pending"
+  },
+  "boundaries": {
+    "fullCellPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "physicalLargeTextVisualPass": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "paymentEndpointCalled": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

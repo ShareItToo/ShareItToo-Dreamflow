@@ -1,21 +1,22 @@
 name: lendify
 description: "ShareItToo is a vibrant peer-to-peer marketplace for renting anything, from power tools to party gear, offering an intuitive, Airbnb-inspired experience with robust localization and a powerful Flutter foundation."
 publish_to: "none"
-version: 1.0.0
+version: 1.0.0+2026091201
 
 environment:
   sdk: ^3.6.0
 
 dependencies:
-  printing: ^5.0.0
-  pdf: ^3.0.0
+  crypto: ^3.0.6
+  printing: ^5.14.3
+  pdf: ^3.12.0
   share_plus: ^12.0.0
   flutter_svg: ^2.0.0
-  mobile_scanner: ^7.0.0
+  mobile_scanner: 7.1.4
   http: ^1.2.0
   qr_flutter: ^4.0.0
   url_launcher: ^6.0.0
-  file_picker: '>=8.1.2'
+  file_picker: ^11.0.3
   geolocator: 13.0.4
   image_picker: '>=1.1.2'
   video_player: '>=2.9.2'
@@ -23,13 +24,28 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  google_fonts: ^6.3.2
+  flutter_secure_storage: 10.3.1
   shared_preferences: ^2.0.0
   path_provider: ^2.1.5
   gal: ^2.3.1
+  connectivity_plus: ^6.1.5
   web_socket_channel: ^3.0.3
+  web: ^1.1.1
+  firebase_core: 4.13.0
+  firebase_auth: 6.5.7
+  firebase_messaging: 16.5.0
+  firebase_crashlytics: 5.2.7
+  firebase_app_installations: ^0.4.2+7
+  google_sign_in: 7.2.0
+  flutter_facebook_auth: 7.2.0
 
 dev_dependencies:
+  # Explicit mock interfaces; these exact versions already belong to the
+  # locked runtime graph. No runtime package upgrade is introduced here.
+  firebase_auth_platform_interface: 9.0.6
+  firebase_core_platform_interface: 8.1.0
+  flutter_facebook_auth_platform_interface: 6.1.2
+  google_sign_in_platform_interface: 3.1.0
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
@@ -39,3 +55,7 @@ flutter:
   assets:
     - assets/images/
     - assets/images/backgrounds/
+    - assets/fonts/
+    - assets/licenses/
+    - assets/legal/de/
+    - assets/legal/de/v52/

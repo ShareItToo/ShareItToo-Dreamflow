@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "kind": "staging-release-verification",
+  "status": "passed",
+  "capturedAt": "2026-08-14T00:49:51+02:00",
+  "environment": "staging",
+  "release": {
+    "commit": "32a2dfb9a570fd7a64128bc6ce0ae0faf4f73f88",
+    "immutableImageRevisionVerified": true,
+    "deploymentHarnessVerified": true,
+    "automaticRollbackAvailable": true,
+    "releaseEvidenceRecordedOnServer": true
+  },
+  "checks": {
+    "versionEndpointMatchesRelease": "passed",
+    "liveHealth": "passed",
+    "readyHealth": "passed",
+    "databaseHealth": "passed",
+    "fcmSecretGate": "passed",
+    "fcmTransportPreserved": "passed",
+    "supportDraftRoute": "passed-http-503-marked-draft",
+    "privacyDraftRoute": "passed-http-503-marked-draft",
+    "accountDeletionOperationalRoute": "passed-http-200",
+    "fiveConsecutiveAccountDeletionPageViews": "passed-all-http-200",
+    "productionApiContainerUnchanged": "passed",
+    "productionApiHealth": "passed"
+  },
+  "boundaries": {
+    "stagingOnly": true,
+    "productionChanged": false,
+    "productionPublicRoutesApproved": false,
+    "productionPublicRoutesChanged": false,
+    "dnsChanged": false,
+    "mailChanged": false,
+    "paymentsChanged": false,
+    "appBinaryChanged": false,
+    "databaseMigrationRequired": false,
+    "containsSecrets": false,
+    "containsRawContainerIdentifiers": false,
+    "containsReviewCredentials": false
+  }
+}

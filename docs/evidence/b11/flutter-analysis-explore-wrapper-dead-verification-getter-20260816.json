@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-analysis-explore-wrapper-dead-verification-getter-cleanup",
+  "capturedAt": "2026-08-16T14:41:58Z",
+  "status": "passed-dead-explore-wrapper-presentation-reduction",
+  "baseline": {
+    "totalDiagnostics": 234,
+    "errors": 0,
+    "unusedElements": 63,
+    "asyncContextDiagnostics": 102,
+    "deprecatedMemberUse": 36,
+    "unusedElementParameters": 24,
+    "unusedFields": 9
+  },
+  "result": {
+    "totalDiagnostics": 233,
+    "errors": 0,
+    "diagnosticsRemovedThisBatch": 1,
+    "diagnosticsRemovedFromOriginal611": 378,
+    "unusedElements": 62,
+    "asyncContextDiagnostics": 102,
+    "deprecatedMemberUse": 36,
+    "unusedElementParameters": 24,
+    "unusedFields": 9,
+    "runtimeSourceFilesChanged": 1,
+    "runtimeSourceLinesRemoved": 4,
+    "runtimeSourceLinesAdded": 0,
+    "ciAnalyzerBaseline": 233
+  },
+  "safeRemovalScope": {
+    "removedUnusedElementDiagnostics": 1,
+    "newAnalyzerDiagnosticsIntroduced": 0,
+    "reachableExploreBranchesRemoved": 0,
+    "activeVerificationBadgeChanged": false,
+    "privacyBoundSourceFilesChanged": 0,
+    "displayedUiChanged": false,
+    "persistedDataChanged": false
+  },
+  "removedRegions": [
+    "unreferenced verification getter in the Explore listing-card wrapper"
+  ],
+  "preservedReachableFlows": [
+    "Explore grid listing-card construction",
+    "wrapper text-scale clamp and complete content delegation",
+    "active verification getter and green or grey badge",
+    "real listing rating display",
+    "listing details long-press options and favorite action"
+  ],
+  "remainingDiagnostics": {
+    "unused_element": 62,
+    "use_build_context_synchronously": 102,
+    "deprecated_member_use": 36,
+    "unused_element_parameter": 24,
+    "unused_field": 9
+  },
+  "verification": {
+    "flutterAnalyze": "passed-with-zero-errors-and-233-non-error-diagnostics",
+    "targetedFlutterTests": "passed-33",
+    "newCriticalWiringTests": "passed-4",
+    "flutterTests": "passed-268-one-skipped",
+    "googleOnlyProfileTest": "passed-1",
+    "technicalRegression": "passed-with-bounded-internal-candidate-rollover",
+    "webBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed",
+    "independentReview": "passed-twice-with-no-findings"
+  },
+  "boundaries": {
+    "newAppCandidateBuilt": false,
+    "existingAppCandidateChanged": false,
+    "productionChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "testAccountsMutated": false,
+    "realMoneyUsed": false
+  }
+}

@@ -1,0 +1,228 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp73-stripe-sandbox-compatibility-inventory",
+  "status": "complete-local-github",
+  "capturedOn": "2026-09-09",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "packageBaseHead": "37800aeba9ae1dd0d0a7ca0c30bb2c6a2da52f48",
+    "pullRequest7": "draft-open-mergeable-unmerged",
+    "mobileRuntimeChanged": false,
+    "backendRuntimeChanged": false
+  },
+  "sourceInventory": [
+    {
+      "path": "backend/src/stripe_provider.js",
+      "sha256": "da0515456298f197c283742585a445470b822a73e0c159eed3e1d70be94a593a"
+    },
+    {
+      "path": "backend/src/stripe_secret_files.js",
+      "sha256": "f7c4f1474965ec9464fa3c57f8168c452de4daef220d1b07eae186cafb428843"
+    },
+    {
+      "path": "backend/src/payment_workflow.js",
+      "sha256": "7a58f65c83959c3277e1fc69f06ea386b238b0afbaa34d324acb89122edff2a7"
+    },
+    {
+      "path": "backend/src/config.js",
+      "sha256": "90922f999317f81e466f6d120a4655d775587552e52d2004372e36687ad73966"
+    },
+    {
+      "path": "backend/package.json",
+      "sha256": "232de848233204fe8be9c8c865b4e809d092db39948f6dbcdc56a1f154da4db1"
+    },
+    {
+      "path": "backend/compose.staging.stripe.yml",
+      "sha256": "e0cee3bd22174e9bb3e4fc87acb0e1b395f8c636e494b80db952764c787e978a"
+    },
+    {
+      "path": "backend/ops/validate_stripe_staging_secrets.mjs",
+      "sha256": "92c0e9fa08eb7fdbbf1732b9afb853d88a7df214d138f33a14940fb30fe328fc"
+    },
+    {
+      "path": "docs/operations/P0B_PSP_SANDBOX_E2E_RUNBOOK.md",
+      "sha256": "55ec008f8ad9b790ba2af6f708a01c13362a155991dc7eb6255d01918dcb3dde"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp66-payment-provider-integrity-and-candidate-20260909.json",
+      "sha256": "328ccc91237bf14e25a62ace2315fc02442c97ee1ae29b29e7d4c6aeac621cac"
+    }
+  ],
+  "providerObservation": {
+    "reportedSeparateSandboxExists": true,
+    "reportedInternalSandboxNameVerified": true,
+    "reportedUnderIntendedOperatorIdentity": true,
+    "independentlyVerifiedThisPackage": false,
+    "officialConnectorReadAttempted": true,
+    "officialConnectorState": "reauthentication-required",
+    "sanitizedConnectorFailure": "oauth_token_invalid_grant",
+    "stripeCliAvailable": false,
+    "actualStripeAccountReadPerformed": false,
+    "credentialReadOrExtracted": false,
+    "browserCookieRead": false,
+    "providerObjectCreatedOrChanged": false
+  },
+  "officialSources": [
+    {
+      "topic": "accounts-v2-configuration",
+      "url": "https://docs.stripe.com/connect/accounts-v2/connected-account-configuration"
+    },
+    {
+      "topic": "marketplace-connected-account",
+      "url": "https://docs.stripe.com/connect/marketplace/tasks/create"
+    },
+    {
+      "topic": "separate-charges-and-transfers",
+      "url": "https://docs.stripe.com/connect/separate-charges-and-transfers"
+    },
+    {
+      "topic": "connect-disputes",
+      "url": "https://docs.stripe.com/connect/disputes"
+    },
+    {
+      "topic": "event-destinations",
+      "url": "https://docs.stripe.com/event-destinations"
+    }
+  ],
+  "sdkCompatibility": {
+    "package": "stripe",
+    "installedVersion": "22.6.1",
+    "configuredApiVersion": "2026-08-26.dahlia",
+    "installedSdkDefaultApiVersion": "2026-08-26.dahlia",
+    "nodeMinimumInProject": "22",
+    "apiVersionInternallyCoherent": true
+  },
+  "compatibility": {
+    "overallVerdict": "compatible-after-required-dispute-recovery-correction-and-read-only-provider-verification",
+    "providerAbstraction": {
+      "verdict": "PASS",
+      "memoryDisabledAndStripeTransportsSeparated": true,
+      "providerFailuresNormalized": true,
+      "providerIdempotencyDurableAndOpaque": true,
+      "providerEventBindingFailClosed": true
+    },
+    "accountsV2": {
+      "verdict": "PASS-REPOSITORY-CONTRACT",
+      "configuration": "recipient",
+      "dashboard": "express",
+      "feesCollector": "application",
+      "lossesCollector": "application",
+      "requestedCapability": "stripe_balance.stripe_transfers",
+      "readinessRequiresTransfersActive": true,
+      "readinessRequiresPayoutsActive": true,
+      "legacyV1CannotPromoteReadiness": true,
+      "actualSandboxConfigurationVerified": false
+    },
+    "fundsFlow": {
+      "verdict": "PARTIAL-DISPUTE-RECOVERY-REQUIRED",
+      "chargePattern": "separate-charges-and-transfers",
+      "platformChargeViaCheckoutSession": true,
+      "transferUsesSourceTransaction": true,
+      "transferUsesTransferGroup": true,
+      "platformRetainsFeeByTransferAmount": true,
+      "destinationRefundFlagsUsed": false,
+      "refundReversesPaidOwnerTransferBeforeChargeRefund": true,
+      "payoutHeldUntilEligibleState": true
+    },
+    "testConfiguration": {
+      "verdict": "PASS-UNACTIVATED",
+      "stagingDefaultsToMemory": true,
+      "stripeRequiresExplicitDeployOptIn": true,
+      "stripeStagingRequiresLivemodeFalse": true,
+      "stripeStagingRejectsLiveCredentials": true,
+      "stripeStagingRequiresExactCommitConfirmation": true,
+      "productionStripeActivationAuthorized": false
+    },
+    "secretBoundary": {
+      "verdict": "PASS-UNPROVISIONED",
+      "stagingDirectEnvironmentSecretsRejected": true,
+      "externalAbsoluteRegularFilesRequired": true,
+      "symlinksRejected": true,
+      "boundedFilesRequired": true,
+      "safePermissionsRequired": true,
+      "threeDistinctInodesRequired": true,
+      "valuesPrintedOrCommitted": false
+    },
+    "webhooks": {
+      "verdict": "PASS-REPOSITORY-CONTRACT",
+      "rawBytesVerifiedBeforeProcessing": true,
+      "snapshotAndThinDestinationsSeparated": true,
+      "distinctSigningSecretsRequired": true,
+      "crossDestinationFallbackAllowed": false,
+      "livemodeMustMatchBeforeDatabaseMutation": true,
+      "duplicateEventPayloadHashChecked": true,
+      "thinAccountEventFetchesLatestRelatedAccount": true,
+      "actualDestinationsVerified": false
+    }
+  },
+  "blockingFinding": {
+    "id": "stripe-dispute-paid-transfer-recovery",
+    "severity": "P0-payment-integrity-before-provider-traffic",
+    "proven": true,
+    "basis": "The refund workflow reverses an existing owner transfer, but the charge.dispute event workflow only records the dispute and ledger impact and blocks future payout. It has no provider transfer reversal or durable recovery state for a transfer that was already paid before the dispute.",
+    "alreadyPaidTransferAutomaticallyRecoveredOnDispute": false,
+    "futurePayoutBlockedOnDispute": true,
+    "chargebackLedgerRecorded": true,
+    "retryableReversalRecoveryStatePresent": false,
+    "providerTrafficAllowedBeforeCorrection": false,
+    "requiredClosure": "Implement idempotent dispute-linked reversal of the recoverable paid owner share, explicit insufficient-balance and uncertain-result recovery, immutable ledger binding, needsReview escalation, and deterministic won/lost/funds-reinstated tests before any Stripe sandbox money scenario."
+  },
+  "ownerGate": {
+    "id": "WP73_STRIPE_READONLY_REAUTH_REQUIRED",
+    "required": true,
+    "exactAction": "Reauthenticate the official Stripe connector and select only the isolated ShareItToo sandbox in test mode. Do not enable live mode and do not create API keys, webhook destinations, products, prices, customers, connected accounts, payments, refunds or transfers.",
+    "afterActionReadOnlyChecks": [
+      "confirm exact sandbox context and test mode",
+      "confirm country and settlement currency",
+      "inspect platform business-profile and terms requirement names without retaining personal values",
+      "confirm charges, payouts and capability status",
+      "count existing connected accounts without creating one",
+      "count and classify existing event destinations without creating one",
+      "confirm no competing provider configuration"
+    ],
+    "doesNotAuthorizeCredentials": true,
+    "doesNotAuthorizeProviderTraffic": true,
+    "doesNotAuthorizeLiveMode": true,
+    "doesNotAuthorizeBillingOrMoney": true
+  },
+  "nextLocalPackage": {
+    "id": "WP74",
+    "name": "Stripe dispute transfer-recovery integrity",
+    "mayRunWithoutProviderAccess": true,
+    "scope": "Close the proven paid-transfer chargeback recovery gap locally with deterministic provider fakes, PostgreSQL integration coverage, explicit uncertain-state recovery and no external Stripe call."
+  },
+  "verification": {
+    "implementationHead": "441ad54d80d85aa9d84ea5c3c3f7219822649a77",
+    "focusedTests": "passed-63",
+    "fullLocalRegression": "passed",
+    "localToolTestsPassed": 2538,
+    "githubRegressionRun": 34371160170,
+    "githubCodeqlRun": 34371160266,
+    "openPrMergeAlerts": 0,
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "boundaries": {
+    "readOnlyPackage": true,
+    "stripeConnectorReauthenticated": false,
+    "stripeDashboardChanged": false,
+    "stripeApiCalled": false,
+    "credentialCreatedReadExtractedOrCommitted": false,
+    "paymentProductCreated": false,
+    "connectedAccountCreated": false,
+    "eventDestinationCreated": false,
+    "sandboxPaymentAttempted": false,
+    "realMoneyUsed": false,
+    "billingChanged": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "mobileRuntimeChanged": false,
+    "backendRuntimeChanged": false,
+    "googlePlayChanged": false,
+    "firebaseCloudVpsDnsChanged": false,
+    "deviceContacted": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false,
+    "containsPersonalIdentity": false,
+    "containsPrivateFilesystemPath": false
+  }
+}

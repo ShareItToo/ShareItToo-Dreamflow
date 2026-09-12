@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/invoices_service.dart';
+import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/test_builders.dart';
@@ -89,6 +91,15 @@ void main() {
     expect(me!.id, currentUserId);
   }
 
+  setUp(() {
+    QaRuntimeService.configureFromUri(
+      Uri.parse('https://example.test/?qa=1'),
+      debugMode: true,
+    );
+  });
+
+  tearDown(QaRuntimeService.reset);
+
   test(
     'qa renter lane seeds accepted/running/completed/needsReview smoke set',
     () async {
@@ -116,19 +127,19 @@ void main() {
         invoices.where(
           (d) =>
               d.requestId == 'qa_req_completed_${renterMain.id}' &&
-              d.type.name == 'invoice',
+              d.type.name == 'bookingPaymentReceipt',
         ),
         isNotEmpty,
       );
       expect(
         invoices.where((d) => d.requestId == 'qa_req_review_${renterMain.id}'),
-        isEmpty,
+        isNotEmpty,
       );
     },
   );
 
   test(
-    'qa owner lane supports handover pickup return completion and held-doc smoke',
+    'qa owner lane supports handover pickup return completion and review-doc smoke',
     () async {
       await seedQaBase(currentUserId: ownerMain.id);
       await triggerQaSeed(ownerMain.id);
@@ -145,6 +156,7 @@ void main() {
       expect(ownerIds, contains('qa_owner_completed_problem_${ownerMain.id}'));
 
       final pickupRequestId = 'qa_owner_upcoming_pickup_${ownerMain.id}';
+      await triggerQaSeed(ownerA.id);
       await DataService.requestFlowTime(
         requestId: pickupRequestId,
         isReturn: false,
@@ -152,6 +164,7 @@ void main() {
         time: DateTime.now().add(const Duration(days: 1)),
         requestedByUserId: ownerA.id,
       );
+      await triggerQaSeed(ownerMain.id);
       await DataService.confirmFlowTime(
         requestId: pickupRequestId,
         isReturn: false,
@@ -165,10 +178,28 @@ void main() {
         isTrue,
       );
       for (var i = 0; i < DataService.minimumRequiredPhotos; i++) {
-        await DataService.incrementHandoverPhotos(pickupRequestId);
+        await DataService.addConditionEvidencePhoto(
+          requestId: pickupRequestId,
+          bytes: Uint8List.fromList([1, 2, 3, i]),
+          filename: 'pickup-$i.jpg',
+          segment: 'pickup',
+          kind: 'presenter_photo',
+          source: 'camera',
+          semanticSlot: const [
+            'overview',
+            'detail',
+            'accessories',
+            'critical'
+          ][i],
+        );
       }
 
       await triggerQaSeed(ownerA.id);
+      await DataService.recordConditionConfirmation(
+        requestId: pickupRequestId,
+        segment: 'pickup',
+        decision: 'confirmed',
+      );
       final pickup = await DataService.confirmPickupTransition(
         requestId: pickupRequestId,
         confirmedByUserId: ownerA.id,
@@ -186,6 +217,7 @@ void main() {
       );
 
       final returnRequestId = 'qa_owner_running_${ownerMain.id}';
+      await triggerQaSeed(ownerMain.id);
       await DataService.requestFlowTime(
         requestId: returnRequestId,
         isReturn: true,
@@ -207,10 +239,28 @@ void main() {
         isTrue,
       );
       for (var i = 0; i < DataService.minimumRequiredPhotos; i++) {
-        await DataService.incrementReturnPhotos(returnRequestId);
+        await DataService.addConditionEvidencePhoto(
+          requestId: returnRequestId,
+          bytes: Uint8List.fromList([4, 5, 6, i]),
+          filename: 'return-$i.jpg',
+          segment: 'return',
+          kind: 'presenter_photo',
+          source: 'camera',
+          semanticSlot: const [
+            'overview',
+            'detail',
+            'accessories',
+            'critical'
+          ][i],
+        );
       }
 
       await triggerQaSeed(ownerMain.id);
+      await DataService.recordConditionConfirmation(
+        requestId: returnRequestId,
+        segment: 'return',
+        decision: 'confirmed',
+      );
       final completion = await DataService.confirmReturnTransition(
         requestId: returnRequestId,
         confirmedByUserId: ownerMain.id,
@@ -235,7 +285,7 @@ void main() {
         ownerInvoices.where(
           (d) =>
               d.requestId == 'qa_owner_completed_clean_${ownerMain.id}' &&
-              d.type.name == 'payment',
+              d.type.name == 'ownerPayoutStatement',
         ),
         isNotEmpty,
       );
@@ -243,7 +293,7 @@ void main() {
         ownerInvoices.where(
           (d) => d.requestId == 'qa_owner_completed_problem_${ownerMain.id}',
         ),
-        isEmpty,
+        isNotEmpty,
       );
     },
   );

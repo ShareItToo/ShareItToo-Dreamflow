@@ -1,0 +1,156 @@
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+    container_name: shareittoo-staging-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: shareittoo_staging
+      POSTGRES_USER: shareittoo_staging
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - shareittoo_staging_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shareittoo_staging -d shareittoo_staging"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - staging_backend
+
+  api:
+    image: shareittoo-api:${APP_COMMIT:-local}
+    # Firebase Auth and phone verification can remain enabled while push stays
+    # on the in-memory staging transport. The non-root API process therefore
+    # needs the dedicated read-only credential group in the base profile, not
+    # only in the optional FCM push overlay.
+    group_add:
+      - "65532"
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-development}
+        APP_COMMIT: ${APP_COMMIT:-unknown}
+        APP_BUILD_TIME: ${APP_BUILD_TIME:-unknown}
+    container_name: shareittoo-staging-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DEPLOYMENT_ENVIRONMENT: staging
+      APP_VERSION: ${APP_VERSION:-development}
+      APP_COMMIT: ${APP_COMMIT:-unknown}
+      APP_BUILD_TIME: ${APP_BUILD_TIME:-unknown}
+      PORT: 8080
+      DATABASE_URL: postgres://shareittoo_staging:${POSTGRES_PASSWORD}@postgres:5432/shareittoo_staging
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://staging.shareittoo.com}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://staging.shareittoo.com/api/v1}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-https://staging.shareittoo.com}
+      PUBLIC_COMPLIANCE_APPROVED: ${PUBLIC_COMPLIANCE_APPROVED:-false}
+      PUBLIC_SUPPORT_EMAIL: ${PUBLIC_SUPPORT_EMAIL:-}
+      PUBLIC_PRIVACY_EMAIL: ${PUBLIC_PRIVACY_EMAIL:-}
+      PUBLIC_LEGAL_PROVIDER_NAME: ${PUBLIC_LEGAL_PROVIDER_NAME:-}
+      PUBLIC_LEGAL_PROVIDER_ADDRESS: ${PUBLIC_LEGAL_PROVIDER_ADDRESS:-}
+      PUBLIC_LEGAL_REPRESENTATIVE: ${PUBLIC_LEGAL_REPRESENTATIVE:-}
+      PUBLIC_LEGAL_CONTENT_RESPONSIBLE: ${PUBLIC_LEGAL_CONTENT_RESPONSIBLE:-}
+      PUBLIC_LEGAL_REGISTER_COURT: ${PUBLIC_LEGAL_REGISTER_COURT:-}
+      PUBLIC_LEGAL_REGISTER_NUMBER: ${PUBLIC_LEGAL_REGISTER_NUMBER:-}
+      PUBLIC_LEGAL_COMPETENT_AUTHORITY: ${PUBLIC_LEGAL_COMPETENT_AUTHORITY:-}
+      PUBLIC_LEGAL_WITHDRAWAL_URL: ${PUBLIC_LEGAL_WITHDRAWAL_URL:-}
+      PUBLIC_PRIVACY_EFFECTIVE_DATE: ${PUBLIC_PRIVACY_EFFECTIVE_DATE:-}
+      SIT_CONSUMER_DISPUTE_APPROVED: ${SIT_CONSUMER_DISPUTE_APPROVED:-false}
+      SIT_CONSUMER_DISPUTE_CONFIGURATION_VERSION: ${SIT_CONSUMER_DISPUTE_CONFIGURATION_VERSION:-}
+      SIT_CONSUMER_DISPUTE_BODY_NAME: ${SIT_CONSUMER_DISPUTE_BODY_NAME:-}
+      SIT_CONSUMER_DISPUTE_BODY_ADDRESS: ${SIT_CONSUMER_DISPUTE_BODY_ADDRESS:-}
+      SIT_CONSUMER_DISPUTE_BODY_WEBSITE: ${SIT_CONSUMER_DISPUTE_BODY_WEBSITE:-}
+      SIT_CONSUMER_DISPUTE_PARTICIPATION_STATUS: ${SIT_CONSUMER_DISPUTE_PARTICIPATION_STATUS:-}
+      SIT_PRODUCT_SAFETY_APPROVED: ${SIT_PRODUCT_SAFETY_APPROVED:-false}
+      SIT_PRODUCT_SAFETY_CONFIGURATION_VERSION: ${SIT_PRODUCT_SAFETY_CONFIGURATION_VERSION:-}
+      SIT_PRODUCT_SAFETY_CONSUMER_CONTACT_EMAIL: ${SIT_PRODUCT_SAFETY_CONSUMER_CONTACT_EMAIL:-}
+      SIT_PRODUCT_SAFETY_AUTHORITY_CONTACT_REGISTERED: ${SIT_PRODUCT_SAFETY_AUTHORITY_CONTACT_REGISTERED:-false}
+      SIT_PRODUCT_SAFETY_SAFETY_GATE_REGISTERED: ${SIT_PRODUCT_SAFETY_SAFETY_GATE_REGISTERED:-false}
+      SIT_PRODUCT_SAFETY_INTERNAL_PROCESS_APPROVED: ${SIT_PRODUCT_SAFETY_INTERNAL_PROCESS_APPROVED:-false}
+      LEGAL_HOSTING_PROVIDER_NAME: ${LEGAL_HOSTING_PROVIDER_NAME:-}
+      LEGAL_HOSTING_PROCESSING_REGIONS: ${LEGAL_HOSTING_PROCESSING_REGIONS:-}
+      LEGAL_HOSTING_DPA_ACCEPTED_DATE: ${LEGAL_HOSTING_DPA_ACCEPTED_DATE:-}
+      LEGAL_SMTP_PROVIDER_NAME: ${LEGAL_SMTP_PROVIDER_NAME:-}
+      LEGAL_SMTP_PROCESSING_REGIONS: ${LEGAL_SMTP_PROCESSING_REGIONS:-}
+      LEGAL_SMTP_DPA_ACCEPTED_DATE: ${LEGAL_SMTP_DPA_ACCEPTED_DATE:-}
+      LEGAL_PSP_PROVIDER_NAME: ${LEGAL_PSP_PROVIDER_NAME:-}
+      LEGAL_PSP_PROCESSING_REGIONS: ${LEGAL_PSP_PROCESSING_REGIONS:-}
+      LEGAL_PSP_DPA_ACCEPTED_DATE: ${LEGAL_PSP_DPA_ACCEPTED_DATE:-}
+      LEGAL_PSP_TRANSFER_MECHANISM: ${LEGAL_PSP_TRANSFER_MECHANISM:-}
+      LEGAL_FIREBASE_CONTRACTING_ENTITY: ${LEGAL_FIREBASE_CONTRACTING_ENTITY:-}
+      LEGAL_FIREBASE_PROCESSING_REGIONS: ${LEGAL_FIREBASE_PROCESSING_REGIONS:-}
+      LEGAL_FIREBASE_DPA_ACCEPTED_DATE: ${LEGAL_FIREBASE_DPA_ACCEPTED_DATE:-}
+      LEGAL_FIREBASE_TRANSFER_MECHANISM: ${LEGAL_FIREBASE_TRANSFER_MECHANISM:-}
+      GOOGLE_MAPS_PROVIDER_NAME: ${GOOGLE_MAPS_PROVIDER_NAME:-}
+      GOOGLE_MAPS_PROCESSING_REGIONS: ${GOOGLE_MAPS_PROCESSING_REGIONS:-}
+      GOOGLE_MAPS_DPA_ACCEPTED_DATE: ${GOOGLE_MAPS_DPA_ACCEPTED_DATE:-}
+      GOOGLE_MAPS_TRANSFER_MECHANISM: ${GOOGLE_MAPS_TRANSFER_MECHANISM:-}
+      GOOGLE_MAPS_SERVER_API_KEY: ${GOOGLE_MAPS_SERVER_API_KEY:-}
+      UPLOAD_DIR: /data/uploads
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-memory}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: "${MAIL_FROM:-ShareItToo Staging <contact@shareittoo.com>}"
+      MAIL_REPLY_TO: "${MAIL_REPLY_TO:-contact@shareittoo.com}"
+      BOOKING_PILOT_MODE: ${BOOKING_PILOT_MODE:-pilot}
+      PRIVATE_PILOT_V4_ENABLED: ${PRIVATE_PILOT_V4_ENABLED:-false}
+      BOOKING_GROUPS_ENABLED: ${BOOKING_GROUPS_ENABLED:-false}
+      PLANNER_CORE_ENABLED: ${PLANNER_CORE_ENABLED:-false}
+      PLANNER_INVENTORY_ENABLED: ${PLANNER_INVENTORY_ENABLED:-false}
+      LISTING_SUPPLY_ENRICHMENT_ENABLED: ${LISTING_SUPPLY_ENRICHMENT_ENABLED:-false}
+      LISTING_SETS_ENABLED: ${LISTING_SETS_ENABLED:-false}
+      PRIVATE_PILOT_ALLOWED_REGIONS: ${PRIVATE_PILOT_ALLOWED_REGIONS:-}
+      PUSH_TRANSPORT: ${PUSH_TRANSPORT:-memory}
+      PUSH_WEBHOOK_URL: ${PUSH_WEBHOOK_URL:-}
+      PUSH_WEBHOOK_TOKEN: ${PUSH_WEBHOOK_TOKEN:-}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_AUTH_ENABLED: ${FIREBASE_AUTH_ENABLED:-false}
+      FIREBASE_PHONE_VERIFICATION_ENABLED: ${FIREBASE_PHONE_VERIFICATION_ENABLED:-false}
+      FIREBASE_SERVICE_ACCOUNT_FILE: /run/secrets/firebase-service-account.json
+      NOTIFICATION_WORKER_INTERVAL_MS: ${NOTIFICATION_WORKER_INTERVAL_MS:-1000}
+      NOTIFICATION_BATCH_SIZE: ${NOTIFICATION_BATCH_SIZE:-50}
+      NOTIFICATION_MAX_ATTEMPTS: ${NOTIFICATION_MAX_ATTEMPTS:-5}
+      PAYMENT_TRANSPORT: ${PAYMENT_TRANSPORT:-memory}
+      PAYMENT_CURRENCY: ${PAYMENT_CURRENCY:-EUR}
+      PAYMENT_PILOT_USER_IDS: ${PAYMENT_PILOT_USER_IDS:-}
+      PAYOUT_HOLD_HOURS: ${PAYOUT_HOLD_HOURS:-48}
+      STRIPE_CONNECT_COUNTRY: ${STRIPE_CONNECT_COUNTRY:-DE}
+      STRIPE_LIVEMODE: ${STRIPE_LIVEMODE:-false}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_CONNECT_WEBHOOK_SECRET: ${STRIPE_CONNECT_WEBHOOK_SECRET:-}
+      STRIPE_API_VERSION: ${STRIPE_API_VERSION:-}
+    ports:
+      - "127.0.0.1:${STAGING_API_PORT:-18080}:8080"
+    volumes:
+      - shareittoo_staging_uploads:/data/uploads
+      - ${FIREBASE_SERVICE_ACCOUNT_HOST_FILE:-/dev/null}:/run/secrets/firebase-service-account.json:ro
+    healthcheck:
+      # Container health is process liveness. The deployment script separately
+      # validates exact runtime readiness and keeps critical operational states
+      # fail-closed without turning a healthy process into a restart candidate.
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - staging_backend
+
+volumes:
+  shareittoo_staging_postgres_data:
+    name: shareittoo_staging_postgres_data
+  shareittoo_staging_uploads:
+    name: shareittoo_staging_uploads
+
+networks:
+  staging_backend:
+    name: shareittoo_staging_backend

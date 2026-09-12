@@ -10,7 +10,8 @@ User buildTestUser(
   required String name,
   String city = 'Berlin',
   String? email,
-}) => User(
+}) =>
+    User(
       id: id,
       displayName: name,
       email: email ?? '$id@example.com',
@@ -32,7 +33,8 @@ Item buildTestItem({
   double lat = 52.52,
   double lng = 13.405,
   String cancellationPolicy = 'unified',
-}) => Item(
+}) =>
+    Item(
       id: id,
       ownerId: ownerId,
       title: title,
@@ -44,7 +46,6 @@ Item buildTestItem({
       currency: 'EUR',
       priceUnit: 'day',
       priceRaw: pricePerDay,
-      deposit: 50,
       autoApplyDiscounts: false,
       longRentalDiscounts: const [],
       photos: const ['https://example.com/item.png'],
@@ -91,7 +92,11 @@ RentalRequest buildTestRequest({
   String? returnCity,
   double? returnLat,
   double? returnLng,
-}) => RentalRequest(
+  int? quotedRentalSubtotalMinor,
+  int? quotedPlatformFeeMinor,
+  int? quotedTotalMinor,
+}) =>
+    RentalRequest(
       id: id,
       itemId: itemId,
       ownerId: ownerId,
@@ -114,6 +119,9 @@ RentalRequest buildTestRequest({
       returnCity: returnCity,
       returnLat: returnLat,
       returnLng: returnLng,
+      quotedRentalSubtotalMinor: quotedRentalSubtotalMinor,
+      quotedPlatformFeeMinor: quotedPlatformFeeMinor,
+      quotedTotalMinor: quotedTotalMinor,
     );
 
 Future<void> seedCoreBookingState({
@@ -127,6 +135,8 @@ Future<void> seedCoreBookingState({
     'users': jsonEncode([owner.toJson(), renter.toJson()]),
     'items': jsonEncode([item.toJson()]),
     'rental_requests': jsonEncode(requests.map((e) => e.toJson()).toList()),
+    'qa_messages_notifs_seeded_v3_for_${owner.id}': true,
+    'qa_messages_notifs_seeded_v3_for_${renter.id}': true,
     if (currentUser != null) 'currentUser': jsonEncode(currentUser.toJson()),
   });
 }

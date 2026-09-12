@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "state": "draft",
+  "submissionAllowed": false,
+  "identity": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "minimumStoreBuildNumber": "2026080903",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "product": {
+    "primaryLocale": "de-DE",
+    "physicalGoodsRental": true,
+    "minimumUserAge": 18,
+    "designedForChildren": false,
+    "containsAds": false,
+    "advertisingTracking": false,
+    "firebaseAnalytics": false,
+    "googlePlayCategorySuggestion": "SHOPPING",
+    "applePrimaryCategorySuggestion": "SHOPPING",
+    "appleSecondaryCategorySuggestion": "LIFESTYLE"
+  },
+  "publicUrls": {
+    "marketing": {
+      "status": "verified",
+      "url": "https://shareittoo.com/"
+    },
+    "support": {
+      "status": "verified",
+      "url": "https://shareittoo.com/support"
+    },
+    "privacy": {
+      "status": "verified",
+      "url": "https://shareittoo.com/privacy"
+    },
+    "accountDeletion": {
+      "status": "verified",
+      "url": "https://shareittoo.com/account-deletion",
+      "stagingEvidenceUrl": "https://staging.shareittoo.com/api/v1/account-deletion"
+    }
+  },
+  "blockingGates": {
+    "legalProviderIdentity": "open",
+    "copyrightOwner": "open",
+    "termsAndUserContentRules": "open",
+    "firebaseTermsAcceptedByOwner": "open",
+    "firebaseFcmAndApns": "open",
+    "googlePlayAccountAndFee": "closed",
+    "googlePlayClosedTestingRequirement": "open",
+    "appleAccountXcodeAndSigning": "open",
+    "reviewAccounts": "open",
+    "realAndroidAndIosDevices": "open",
+    "finalBinaryPrivacyScan": "open",
+    "closedStoreAndAccessibilityMatrix": "open"
+  },
+  "metadataFiles": {
+    "googlePlay": {
+      "title": "store/google-play/de-DE/title.txt",
+      "shortDescription": "store/google-play/de-DE/short_description.txt",
+      "fullDescription": "store/google-play/de-DE/full_description.txt",
+      "internalReleaseNotes": "store/google-play/de-DE/internal_release_notes.txt",
+      "screenshotAltTexts": "store/google-play/de-DE/screenshot_alt_texts.json",
+      "consoleEntryWorksheet": "docs/operations/B11_GOOGLE_PLAY_CONSOLE_ENTRY_WORKSHEET_2026-08-12.md",
+      "internalUploadHandoff": "store/google-play/internal-upload-handoff.json",
+      "appContentHandoff": "store/google-play/app-content-handoff.json",
+      "closedTestingReadiness": "store/google-play/closed-testing-readiness.json",
+      "closedTestingFeedbackPlan": "store/google-play/closed-testing-feedback-plan.json",
+      "productionAccessApplication": "store/google-play/production-access-application.json"
+    },
+    "apple": {
+      "name": "store/apple/de-DE/name.txt",
+      "subtitle": "store/apple/de-DE/subtitle.txt",
+      "promotionalText": "store/apple/de-DE/promotional_text.txt",
+      "description": "store/apple/de-DE/description.txt",
+      "keywords": "store/apple/de-DE/keywords.txt",
+      "reviewNotesTemplate": "store/apple/review_notes_template_en.txt",
+      "testFlightHandoff": "store/apple/testflight-handoff.json",
+      "developerWorksheet": "docs/operations/B11_APPLE_DEVELOPER_AND_TESTFLIGHT_WORKSHEET_2026-08-12.md"
+    }
+  },
+  "assets": {
+    "googlePlay": {
+      "storeIcon": "store/assets/google-play/icon-512.png",
+      "featureGraphic": "store/assets/google-play/feature-graphic-1024x500.png",
+      "phoneScreenshots": [
+        "store/assets/google-play/phone-screenshots/01-feed.png",
+        "store/assets/google-play/phone-screenshots/02-camera-detail.png",
+        "store/assets/google-play/phone-screenshots/03-search.png",
+        "store/assets/google-play/phone-screenshots/04-create-listing.png"
+      ]
+    }
+  },
+  "sourceDocuments": [
+    "docs/operations/B11_STORE_SUBMISSION_PACKET_2026-08-09.md",
+    "docs/operations/B11_GOOGLE_PLAY_CONSOLE_ENTRY_WORKSHEET_2026-08-12.md",
+    "docs/operations/B11_APPLE_DEVELOPER_AND_TESTFLIGHT_WORKSHEET_2026-08-12.md",
+    "docs/operations/B11_STORE_PRIVACY_DISCLOSURE_MATRIX_2026-08-09.md",
+    "docs/operations/B11_STORE_SCREENSHOT_REVIEW_AND_TESTER_PLAN_2026-08-09.md",
+    "docs/operations/B11_CLOSED_STORE_AND_DEVICE_TEST_RUNBOOK_2026-08-09.md",
+    "docs/operations/B11_MACHINE_READABLE_DEVICE_EVIDENCE_2026-08-09.md"
+  ]
+}

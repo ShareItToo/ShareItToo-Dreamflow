@@ -5,36 +5,48 @@ import 'package:flutter/gestures.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/models/user.dart' as model;
+import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/data_service.dart';
+import 'package:lendify/services/local_principal_scope.dart';
 import 'package:lendify/widgets/app_image.dart';
 import 'package:lendify/widgets/app_popup.dart';
+import 'package:lendify/widgets/private_pilot_owner_acceptance_dialog.dart';
 import 'package:lendify/screens/ongoing_owner_detail_screen.dart';
 import 'package:lendify/widgets/box_chat_icon.dart';
 import 'package:lendify/widgets/review_prompt_sheet.dart';
 import 'package:lendify/widgets/item_details_overlay.dart';
+import 'package:lendify/services/qa_runtime_service.dart';
 
 /// Owner-side requests hub: Tabs for Laufend, Kommend, Anfragen, Abgeschlossen
 class OwnerRequestsScreen extends StatefulWidget {
-  final int? initialTabIndex; // 0: Laufend, 1: Kommend, 2: Anfragen, 3: Abgeschlossen
+  final int?
+      initialTabIndex; // 0: Laufend, 1: Kommend, 2: Anfragen, 3: Abgeschlossen
   const OwnerRequestsScreen({super.key, this.initialTabIndex});
 
   @override
   State<OwnerRequestsScreen> createState() => _OwnerRequestsScreenState();
 }
 
-class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTickerProviderStateMixin {
+class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String? _ownerId;
   List<_OwnerEntry> _entries = const [];
   Timer? _ticker;
-  final Map<String, Map<String, dynamic>?> _deliveryByItemId = {};
+  Timer? _acceptanceDeadlineTimer;
   // Track unread counts per category
   final Map<String, int> _unreadCounts = {};
+  int _loadRevision = 0;
+  bool _isLoading = true;
+  bool _loadFailed = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this, initialIndex: (widget.initialTabIndex ?? 2).clamp(0, 3));
+    _tabController = TabController(
+        length: 4,
+        vsync: this,
+        initialIndex: (widget.initialTabIndex ?? 2).clamp(0, 3));
     _tabController.addListener(() {
       if (mounted) setState(() {}); // refresh app bar title on tab change
     });
@@ -44,14 +56,38 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
       await _maybeShowReviewReminder();
       setState(() {});
     });
-    Future.delayed(const Duration(seconds: 2), () => _maybeShowReviewReminder());
+    Future.delayed(
+        const Duration(seconds: 2), () => _maybeShowReviewReminder());
   }
 
   @override
   void dispose() {
     _ticker?.cancel();
+    _acceptanceDeadlineTimer?.cancel();
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _scheduleAcceptanceDeadlineRefresh() {
+    _acceptanceDeadlineTimer?.cancel();
+    _acceptanceDeadlineTimer = null;
+    if (!BackendConfig.enabled || QaRuntimeService.isEnabled) return;
+    final now = DateTime.now();
+    DateTime? nextDeadline;
+    for (final entry in _entries) {
+      if (entry.r.status.toLowerCase().trim() != 'pending') continue;
+      final deadline = entry.r.bindingExpiresAt;
+      if (deadline == null || !deadline.isAfter(now)) continue;
+      if (nextDeadline == null || deadline.isBefore(nextDeadline)) {
+        nextDeadline = deadline;
+      }
+    }
+    if (nextDeadline == null) return;
+    _acceptanceDeadlineTimer = Timer(nextDeadline.difference(now), () {
+      if (!mounted) return;
+      setState(() {});
+      _scheduleAcceptanceDeadlineRefresh();
+    });
   }
 
   bool _showingReminder = false;
@@ -59,14 +95,17 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
     if (_showingReminder) return;
     final owner = await DataService.getCurrentUser();
     if (owner == null) return;
-    final reminder = await DataService.takeDueReviewReminder(reviewerId: owner.id);
+    final reminder =
+        await DataService.takeDueReviewReminder(reviewerId: owner.id);
     if (!mounted || reminder == null) return;
     _showingReminder = true;
     try {
       final String requestId = (reminder['requestId'] ?? '').toString();
       final String itemId = (reminder['itemId'] ?? '').toString();
-      final String reviewedUserId = (reminder['reviewedUserId'] ?? '').toString();
-      final String direction = (reminder['direction'] ?? 'owner_to_renter').toString();
+      final String reviewedUserId =
+          (reminder['reviewedUserId'] ?? '').toString();
+      final String direction =
+          (reminder['direction'] ?? 'owner_to_renter').toString();
       await AppPopup.show(
         context,
         icon: Icons.star_rate_outlined,
@@ -78,7 +117,8 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
           TextButton(
             onPressed: () async {
               Navigator.of(context, rootNavigator: true).maybePop();
-              await DataService.postponeReviewReminder(reminder: reminder, by: const Duration(minutes: 10));
+              await DataService.postponeReviewReminder(
+                  reminder: reminder, by: const Duration(minutes: 10));
               _showingReminder = false;
             },
             child: const Text('Später erinnern'),
@@ -95,7 +135,9 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
                 direction: direction,
               );
               if (ok == true && mounted) {
-                await AppPopup.toast(context, icon: Icons.star_rate_outlined, title: 'Danke für deine Bewertung!');
+                await AppPopup.toast(context,
+                    icon: Icons.star_rate_outlined,
+                    title: 'Danke für deine Bewertung!');
                 final item = await DataService.getItemById(itemId);
                 if (item != null && mounted) {
                   await ItemDetailsOverlay.showFullPage(context, item: item);
@@ -113,81 +155,203 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
   }
 
   Future<void> _load() async {
-    final owner = await DataService.getCurrentUser();
-    if (owner == null) {
-      final demo = await _buildDemoOwnerEntries();
-      if (!mounted) return;
-      _ownerId = demo.ownerId;
-      _deliveryByItemId
-        ..clear()
-        ..addAll(demo.deliverySelections);
-      _unreadCounts
-        ..clear()
-        ..addAll({'ongoing': 1, 'upcoming': 1, 'requests': 1, 'completed': 3});
-      setState(() => _entries = demo.entries);
-      return;
+    final revision = ++_loadRevision;
+    LocalPrincipalActionOwner? actionOwner;
+    var coreCommitted = false;
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _loadFailed = false;
+        _ownerId = null;
+        _entries = const [];
+        _unreadCounts.clear();
+      });
     }
-    _ownerId = owner.id;
-    final requests = await DataService.getRentalRequestsForOwner(owner.id);
-    if (requests.isEmpty) {
-      final demo = await _buildDemoOwnerEntries(ownerId: owner.id);
-      if (!mounted) return;
-      _deliveryByItemId
-        ..clear()
-        ..addAll(demo.deliverySelections);
-      _unreadCounts
-        ..clear()
-        ..addAll({'ongoing': 1, 'upcoming': 1, 'requests': 1, 'completed': 3});
-      setState(() => _entries = demo.entries);
-      return;
-    }
-    final items = await DataService.getItems();
-    final users = await DataService.getUsers();
-    final byItem = {for (final it in items) it.id: it};
-    final byUser = {for (final u in users) u.id: u};
-    // Load delivery selection per item (demo persistence)
-    for (final it in items) {
-      _deliveryByItemId[it.id] = await DataService.getSavedDeliverySelection(it.id);
-    }
-    final list = <_OwnerEntry>[];
-    for (final r in requests) {
-      final it = byItem[r.itemId];
-      final renter = byUser[r.renterId];
-      if (it == null || renter == null) continue;
-      final flowState = await DataService.getHandoverReturnState(r.id);
-      final reviewed = await DataService.hasSubmittedReview(requestId: r.id, reviewerId: owner.id);
-      list.add(_OwnerEntry(r: r, item: it, renter: renter, flowState: flowState, hasSubmittedReview: reviewed));
-    }
-    
-    // Calculate unread counts for each category
-    final categorized = {
-      'ongoing': <RentalRequest>[],
-      'upcoming': <RentalRequest>[],
-      'requests': <RentalRequest>[],
-      'completed': <RentalRequest>[],
-    };
-    for (final e in list) {
-      final cat = _effectiveCategory(e);
-      categorized[cat]?.add(e.r);
-    }
-    
-    for (final cat in categorized.keys) {
-      final unreadCount = await DataService.getUnreadCountForCategory(
-        userId: owner.id,
-        category: cat,
-        requests: categorized[cat]!,
+    try {
+      actionOwner = await LocalPrincipalActionOwner.capture();
+      final owner = await DataService.getCurrentUser();
+      await actionOwner.assertCurrent();
+      if (!mounted || revision != _loadRevision) return;
+      if (owner == null) {
+        if (QaRuntimeService.isEnabled) {
+          final demo = await _buildDemoOwnerEntries();
+          await actionOwner.assertCurrent();
+          if (!mounted || revision != _loadRevision) return;
+          _ownerId = demo.ownerId;
+          _unreadCounts
+            ..clear()
+            ..addAll(
+                {'ongoing': 1, 'upcoming': 1, 'requests': 1, 'completed': 3});
+          setState(() {
+            _entries = demo.entries;
+            _isLoading = false;
+          });
+          _scheduleAcceptanceDeadlineRefresh();
+          return;
+        }
+        _ownerId = null;
+        setState(() => _isLoading = false);
+        return;
+      }
+      _ownerId = owner.id;
+      final requests = await DataService.getRentalRequestsForOwner(owner.id);
+      await actionOwner.assertCurrent();
+      if (!mounted || revision != _loadRevision) return;
+      if (requests.isEmpty) {
+        if (QaRuntimeService.isEnabled) {
+          final demo = await _buildDemoOwnerEntries(ownerId: owner.id);
+          await actionOwner.assertCurrent();
+          if (!mounted || revision != _loadRevision) return;
+          _unreadCounts
+            ..clear()
+            ..addAll(
+                {'ongoing': 1, 'upcoming': 1, 'requests': 1, 'completed': 3});
+          setState(() {
+            _entries = demo.entries;
+            _isLoading = false;
+          });
+          _scheduleAcceptanceDeadlineRefresh();
+          return;
+        }
+        setState(() => _isLoading = false);
+        return;
+      }
+      // Load the catalog and local profile cache once. Calling getItemById for
+      // every booking would reload the complete remote catalog each time and can
+      // abort the screen before any request card is rendered. Only participants
+      // missing from the local cache need an individual public-profile lookup.
+      final items = await DataService.getItems();
+      final users = await DataService.getUsers();
+      await actionOwner.assertCurrent();
+      if (!mounted || revision != _loadRevision) return;
+      final byItem = <String, Item?>{
+        for (final item in items) item.id: item,
+      };
+      final byUser = <String, model.User?>{
+        for (final user in users) user.id: user,
+      };
+      for (final request in requests) {
+        if (!byUser.containsKey(request.renterId)) {
+          byUser[request.renterId] =
+              await DataService.getUserById(request.renterId);
+          await actionOwner.assertCurrent();
+          if (!mounted || revision != _loadRevision) return;
+        }
+      }
+      // Render authoritative request/listing/participant truth before optional
+      // per-booking enrichment. Historic terminal requests must never make a
+      // current accepted request wait behind an unbounded serial network tail.
+      final base = <_OwnerEntry>[];
+      for (final r in requests) {
+        final it = byItem[r.itemId];
+        final renter = byUser[r.renterId];
+        if (it == null || renter == null) continue;
+        final reviewMayBeAvailable = r.status == 'completed' && !r.needsReview;
+        base.add(_OwnerEntry(
+          r: r,
+          item: it,
+          renter: renter,
+          flowState: const {},
+          // Fail closed while review state is still unknown: never offer a
+          // duplicate review action during progressive hydration.
+          hasSubmittedReview: reviewMayBeAvailable,
+        ));
+      }
+
+      await actionOwner.assertCurrent();
+      if (!mounted || revision != _loadRevision) return;
+      setState(() {
+        _entries = base;
+        _isLoading = false;
+      });
+      _scheduleAcceptanceDeadlineRefresh();
+      coreCommitted = true;
+
+      // Calculate unread counts for each category
+      final categorized = {
+        'ongoing': <RentalRequest>[],
+        'upcoming': <RentalRequest>[],
+        'requests': <RentalRequest>[],
+        'completed': <RentalRequest>[],
+      };
+      for (final e in base) {
+        final cat = _effectiveCategory(e);
+        categorized[cat]?.add(e.r);
+      }
+
+      final unreadCounts = <String, int>{};
+      for (final cat in categorized.keys) {
+        final unreadCount = await DataService.getUnreadCountForCategory(
+          userId: owner.id,
+          category: cat,
+          requests: categorized[cat]!,
+        );
+        unreadCounts[cat] = unreadCount;
+      }
+
+      final enriched = <_OwnerEntry>[];
+      for (final entry in base) {
+        await actionOwner.assertCurrent();
+        if (!mounted || revision != _loadRevision) return;
+        final status = entry.r.status.toLowerCase().trim();
+        final flowState = status == 'accepted' || status == 'running'
+            ? await DataService.getHandoverReturnState(entry.r.id)
+            : const <String, dynamic>{};
+        final reviewed = status == 'completed' && !entry.r.needsReview
+            ? await DataService.hasSubmittedReview(
+                requestId: entry.r.id,
+                reviewerId: owner.id,
+              )
+            : false;
+        enriched.add(_OwnerEntry(
+          r: entry.r,
+          item: entry.item,
+          renter: entry.renter,
+          flowState: flowState,
+          hasSubmittedReview: reviewed,
+        ));
+      }
+      await actionOwner.assertCurrent();
+      if (!mounted || revision != _loadRevision) return;
+      setState(() {
+        _entries = enriched;
+        _unreadCounts
+          ..clear()
+          ..addAll(unreadCounts);
+      });
+      _scheduleAcceptanceDeadlineRefresh();
+    } catch (error) {
+      debugPrint(
+        '[OwnerRequests] load failed (${error.runtimeType})',
       );
-      _unreadCounts[cat] = unreadCount;
+      if (!mounted || revision != _loadRevision) return;
+      if (actionOwner != null && !await actionOwner.isCurrent()) {
+        if (!mounted || revision != _loadRevision) return;
+        unawaited(_load());
+        return;
+      }
+      if (coreCommitted) {
+        // The authoritative cards remain usable if optional flow/review
+        // presentation enrichment fails under the same principal.
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+        _loadFailed = true;
+        _entries = const [];
+        _unreadCounts.clear();
+      });
+      _scheduleAcceptanceDeadlineRefresh();
     }
-    
-    setState(() => _entries = list);
   }
 
-  Future<({String ownerId, List<_OwnerEntry> entries, Map<String, Map<String, dynamic>> deliverySelections})> _buildDemoOwnerEntries({String? ownerId}) async {
+  Future<({String ownerId, List<_OwnerEntry> entries})> _buildDemoOwnerEntries(
+      {String? ownerId}) async {
     final now = DateTime.now();
     final items = await DataService.getItems();
     final users = await DataService.getUsers();
-    final demoOwnerId = ownerId ?? (items.isNotEmpty ? items.first.ownerId : 'demo_owner');
+    final demoOwnerId =
+        ownerId ?? (items.isNotEmpty ? items.first.ownerId : 'demo_owner');
     final ownerUser = users.firstWhere(
       (u) => u.id == demoOwnerId,
       orElse: () => model.User(
@@ -201,7 +365,8 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
         avgRating: 4.9,
         reviewCount: 64,
         createdAt: now.subtract(const Duration(days: 200)),
-        photoURL: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&h=150&fit=crop&crop=face',
+        photoURL:
+            'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&h=150&fit=crop&crop=face',
       ),
     );
 
@@ -218,7 +383,8 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
           avgRating: 4.8,
           reviewCount: 31,
           createdAt: now.subtract(const Duration(days: 160)),
-          photoURL: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
+          photoURL:
+              'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
         ),
         model.User(
           id: 'demo_renter_b',
@@ -231,7 +397,8 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
           avgRating: 4.5,
           reviewCount: 9,
           createdAt: now.subtract(const Duration(days: 90)),
-          photoURL: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&h=150&fit=crop&crop=face',
+          photoURL:
+              'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&h=150&fit=crop&crop=face',
         ),
         model.User(
           id: 'demo_renter_c',
@@ -244,13 +411,21 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
           avgRating: 4.7,
           reviewCount: 22,
           createdAt: now.subtract(const Duration(days: 70)),
-          photoURL: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&h=150&fit=crop&crop=face',
+          photoURL:
+              'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&h=150&fit=crop&crop=face',
         ),
       ]);
 
     model.User pickRenter(int index) => renterPool[index % renterPool.length];
 
-    Item buildItem({required String id, required String title, required String photo, required String location, required double lat, required double lng, String condition = 'good'}) {
+    Item buildItem(
+        {required String id,
+        required String title,
+        required String photo,
+        required String location,
+        required double lat,
+        required double lng,
+        String condition = 'good'}) {
       return Item(
         id: id,
         ownerId: demoOwnerId,
@@ -285,15 +460,17 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
     final itemPending = buildItem(
       id: 'owner_demo_item_pending',
       title: 'Makita Akku-Bohrschrauber',
-      photo: 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=640',
+      photo:
+          'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=640',
       location: 'Berlin, Friedrichshain',
       lat: 52.51,
       lng: 13.45,
     );
     final itemUpcoming = buildItem(
       id: 'owner_demo_item_upcoming',
-      title: 'DJI Mini Drohne',
-      photo: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=640',
+      title: 'Sony Alpha Kamera',
+      photo:
+          'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=640',
       location: 'Berlin, Prenzlauer Berg',
       lat: 52.54,
       lng: 13.41,
@@ -302,7 +479,8 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
     final itemOngoing = buildItem(
       id: 'owner_demo_item_ongoing',
       title: 'Sony Alpha Kamera',
-      photo: 'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?w=640',
+      photo:
+          'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?w=640',
       location: 'Berlin, Kreuzberg',
       lat: 52.49,
       lng: 13.41,
@@ -310,7 +488,8 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
     final itemCompletedA = buildItem(
       id: 'owner_demo_item_completed_a',
       title: 'Weber Gasgrill',
-      photo: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=640',
+      photo:
+          'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=640',
       location: 'Berlin, Charlottenburg',
       lat: 52.51,
       lng: 13.30,
@@ -318,7 +497,8 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
     final itemCompletedB = buildItem(
       id: 'owner_demo_item_completed_b',
       title: 'Bosch Stichsäge',
-      photo: 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=640',
+      photo:
+          'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=640',
       location: 'Berlin, Mitte',
       lat: 52.52,
       lng: 13.40,
@@ -388,22 +568,49 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
       ),
     ];
 
-    final deliverySelections = <String, Map<String, dynamic>>{
-      itemPending.id: {'hinweg': true, 'rueckweg': false},
-      itemUpcoming.id: {'hinweg': true, 'rueckweg': true},
-      itemOngoing.id: {'hinweg': false, 'rueckweg': true},
-    };
-
     final entries = <_OwnerEntry>[
-      _OwnerEntry(r: requests[0], item: itemPending, renter: pickRenter(0), flowState: const {}, hasSubmittedReview: false),
-      _OwnerEntry(r: requests[1], item: itemUpcoming, renter: pickRenter(1), flowState: const {'handoverLocationLabel': 'Mauerpark'}, hasSubmittedReview: false),
-      _OwnerEntry(r: requests[2], item: itemOngoing, renter: pickRenter(2), flowState: const {'handoverLocationLabel': 'S Warschauer Brücke', 'returnLocationLabel': 'Tempelhofer Feld'}, hasSubmittedReview: false),
-      _OwnerEntry(r: requests[3], item: itemCompletedA, renter: pickRenter(0), flowState: const {}, hasSubmittedReview: false),
-      _OwnerEntry(r: requests[4], item: itemCompletedB, renter: pickRenter(1), flowState: const {}, hasSubmittedReview: false),
-      _OwnerEntry(r: requests[5], item: itemCompletedB, renter: pickRenter(2), flowState: const {}, hasSubmittedReview: true),
+      _OwnerEntry(
+          r: requests[0],
+          item: itemPending,
+          renter: pickRenter(0),
+          flowState: const {},
+          hasSubmittedReview: false),
+      _OwnerEntry(
+          r: requests[1],
+          item: itemUpcoming,
+          renter: pickRenter(1),
+          flowState: const {'handoverLocationLabel': 'Mauerpark'},
+          hasSubmittedReview: false),
+      _OwnerEntry(
+          r: requests[2],
+          item: itemOngoing,
+          renter: pickRenter(2),
+          flowState: const {
+            'handoverLocationLabel': 'S Warschauer Brücke',
+            'returnLocationLabel': 'Tempelhofer Feld'
+          },
+          hasSubmittedReview: false),
+      _OwnerEntry(
+          r: requests[3],
+          item: itemCompletedA,
+          renter: pickRenter(0),
+          flowState: const {},
+          hasSubmittedReview: false),
+      _OwnerEntry(
+          r: requests[4],
+          item: itemCompletedB,
+          renter: pickRenter(1),
+          flowState: const {},
+          hasSubmittedReview: false),
+      _OwnerEntry(
+          r: requests[5],
+          item: itemCompletedB,
+          renter: pickRenter(2),
+          flowState: const {},
+          hasSubmittedReview: true),
     ];
 
-    return (ownerId: ownerUser.id, entries: entries, deliverySelections: deliverySelections);
+    return (ownerId: ownerUser.id, entries: entries);
   }
 
   @override
@@ -424,17 +631,20 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
       default:
         title = 'Abgeschlossene Vermietungen';
     }
-    
+
     // Get unread counts for each tab
     final ongoingUnread = _unreadCounts['ongoing'] ?? 0;
     final upcomingUnread = _unreadCounts['upcoming'] ?? 0;
     final requestsUnread = _unreadCounts['requests'] ?? 0;
     final completedUnread = _unreadCounts['completed'] ?? 0;
-    
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        leading: IconButton(onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.arrow_back)),
+        leading: IconButton(
+            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.arrow_back)),
         title: Text(title),
         centerTitle: true,
         bottom: TabBar(
@@ -469,7 +679,7 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
       ),
     );
   }
-  
+
   Widget _buildTabWithBadge(String text, int unreadCount) {
     if (unreadCount == 0) {
       return Tab(text: text);
@@ -490,14 +700,49 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
           const SizedBox(width: 6),
           // In scrollable TabBars, we still want to be safe against edge cases
           // (very small widths / large text scale).
-          Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis)),
+          Flexible(
+              child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis)),
         ],
       ),
     );
   }
 
   Widget _buildList(String target) {
-    final maps = _entries.where((e) => _effectiveCategory(e) == target).toList();
+    if (_isLoading) {
+      return Center(
+        child: Semantics(
+          label: 'Mietanfragen werden geladen',
+          child: const CircularProgressIndicator(),
+        ),
+      );
+    }
+    if (_loadFailed) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.cloud_off_outlined, size: 56),
+              const SizedBox(height: 14),
+              Text(
+                'Mietanfragen konnten nicht geladen werden.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _load,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Erneut versuchen'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    final maps =
+        _entries.where((e) => _effectiveCategory(e) == target).toList();
     if (maps.isEmpty) {
       final (icon, title) = _emptyStateForCategory(target);
       final cs = Theme.of(context).colorScheme;
@@ -517,40 +762,47 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
                 title,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: cs.onSurfaceVariant.withValues(alpha: 0.85),
-                  fontWeight: FontWeight.w700,
-                  height: 1.2,
-                ),
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.85),
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
+                    ),
               ),
             ],
           ),
         ),
       );
     }
-    final bool _isRequestsTab = target == 'requests';
+    final bool isRequestsTab = target == 'requests';
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: maps.length,
       itemBuilder: (context, index) {
         final e = maps[index];
         final booking = _toCardMap(e);
-        final (start, end) = (_parseDateTime(e.r.start), _parseDateTime(e.r.end));
+        final (start, end) =
+            (_parseDateTime(e.r.start), _parseDateTime(e.r.end));
         final effective = _effectiveCategory(e);
         final titleForCategory = _titleForCategory(effective);
         final chip = _buildStatusChipForCard(effective, start, end, e);
-        final inlineAction = _isRequestsTab ? null : _buildInlineAction(effective, e);
+        final inlineAction =
+            isRequestsTab ? null : _buildInlineAction(effective, e);
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
             onTap: () async {
               // Mark request as read when user taps on it
               if (_ownerId != null) {
-                await DataService.markRequestAsRead(userId: _ownerId!, requestId: e.r.id);
+                await DataService.markRequestAsRead(
+                    userId: _ownerId!, requestId: e.r.id);
               }
-              await Navigator.of(context).push(MaterialPageRoute(builder: (_) => OngoingOwnerDetailScreen(requestId: e.r.id, titleOverride: titleForCategory)));
+              if (!context.mounted) return;
+              await Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => OngoingOwnerDetailScreen(
+                      requestId: e.r.id, titleOverride: titleForCategory)));
               if (!mounted) return;
               await _load();
             },
@@ -561,7 +813,10 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: SizedBox(width: 80, height: 80, child: _ThumbnailWithSkeleton(url: booking['image'] as String?)),
+                    child: SizedBox(
+                        width: 80,
+                        height: 80,
+                        child: _ThumbnailWithSkeleton(url: booking['image'])),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -580,18 +835,42 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text(booking['title'] ?? '-', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: Colors.white, height: 1.1)),
+                                    Text(booking['title'] ?? '-',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 18,
+                                            color: Colors.white,
+                                            height: 1.1)),
                                     const SizedBox(height: 1),
-                                    Text(booking['dates'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey.shade400, fontSize: 13, height: 1.1)),
+                                    Text(booking['dates'] ?? '',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                            color: Colors.grey.shade400,
+                                            fontSize: 13,
+                                            height: 1.1)),
                                     const SizedBox(height: 1),
-                                    Text(booking['renter'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey.shade400, fontSize: 13, height: 1.1)),
+                                    Text(booking['renter'] ?? '',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                            color: Colors.grey.shade400,
+                                            fontSize: 13,
+                                            height: 1.1)),
                                     const SizedBox(height: 2),
                                   ],
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              if (!_isRequestsTab)
-                                Text(booking['total'] ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16), textAlign: TextAlign.right),
+                              if (!isRequestsTab)
+                                Text(booking['total'] ?? '',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 16),
+                                    textAlign: TextAlign.right),
                             ],
                           ),
                           Row(children: [
@@ -601,7 +880,9 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
                               Expanded(
                                 child: SingleChildScrollView(
                                   scrollDirection: Axis.horizontal,
-                                  child: Align(alignment: Alignment.centerLeft, child: inlineAction),
+                                  child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: inlineAction),
                                 ),
                               ),
                             ],
@@ -621,21 +902,42 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
 
   Map<String, String> _toCardMap(_OwnerEntry e) {
     String fmt(DateTime d) {
-      const months = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mär',
+        'Apr',
+        'Mai',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Okt',
+        'Nov',
+        'Dez'
+      ];
       final mm = months[d.month - 1];
       final dd = d.day.toString().padLeft(2, '0');
       return '$dd. $mm';
     }
-    final r = e.r; final it = e.item; final renter = e.renter;
+
+    final r = e.r;
+    final it = e.item;
+    final renter = e.renter;
     final breakdown = DataService.priceBreakdownForRequest(item: it, req: r);
     final payout = breakdown.payoutOwner.clamp(0.0, double.infinity);
     final isOngoing = r.status == 'running';
     final prefix = isOngoing ? 'return' : 'handover';
-    final label = ((e.flowState['${prefix}LocationLabel'] as String?) ?? '').trim();
-    final sharedBy = ((e.flowState['${prefix}LocationSharedByName'] as String?) ?? '').trim();
+    final label =
+        ((e.flowState['${prefix}LocationLabel'] as String?) ?? '').trim();
+    final sharedBy =
+        ((e.flowState['${prefix}LocationSharedByName'] as String?) ?? '')
+            .trim();
     final placeLine = label.isNotEmpty
         ? '${isOngoing ? 'Rückgabeort' : 'Übergabeort'}: $label'
-        : (sharedBy.isNotEmpty ? '${isOngoing ? 'Rückgabeort' : 'Übergabeort'}: Standort von $sharedBy' : '');
+        : (sharedBy.isNotEmpty
+            ? '${isOngoing ? 'Rückgabeort' : 'Übergabeort'}: Standort von $sharedBy'
+            : '');
     return {
       'title': it.title,
       'dates': '${fmt(r.start)} – ${fmt(r.end)}',
@@ -658,7 +960,9 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
     if (s == 'pending') return 'requests';
     if (s == 'accepted') return 'upcoming';
     if (s == 'running') return 'ongoing';
-    if (s == 'completed' || s == 'cancelled' || s == 'declined') return 'completed';
+    if (s == 'completed' || s == 'cancelled' || s == 'declined') {
+      return 'completed';
+    }
     // Fallback to upcoming to avoid misrouting unknown states
     return 'upcoming';
   }
@@ -680,41 +984,37 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
   (IconData, String) _emptyStateForCategory(String category) {
     switch (category) {
       case 'ongoing':
-        return (Icons.timelapse_outlined, 'Du hast keine laufenden Vermietungen');
+        return (
+          Icons.timelapse_outlined,
+          'Du hast keine laufenden Vermietungen'
+        );
       case 'upcoming':
-        return (Icons.event_available_outlined, 'Du hast keine kommenden Vermietungen');
+        return (
+          Icons.event_available_outlined,
+          'Du hast keine kommenden Vermietungen'
+        );
       case 'requests':
         return (Icons.assignment_outlined, 'Du hast keine Mietanfragen');
       case 'completed':
       default:
-        return (Icons.task_alt_outlined, 'Du hast keine abgeschlossenen Vermietungen');
+        return (
+          Icons.task_alt_outlined,
+          'Du hast keine abgeschlossenen Vermietungen'
+        );
     }
   }
 
-  // Tiny privacy hint: only when the owner is the traveling party (delivers or picks up)
-  Widget _privacyHintForOwner(String itemId) {
-    final sel = _deliveryByItemId[itemId];
-    final bool ownerDelivers = (sel?['hinweg'] == true);
-    final bool ownerPicksUp = (sel?['rueckweg'] == true);
-    final bool ownerTravels = ownerDelivers || ownerPicksUp;
-    if (!ownerTravels) return const SizedBox.shrink();
-    return Row(children: const [
-      Icon(Icons.privacy_tip_outlined, size: 14, color: Colors.white70),
-      SizedBox(width: 4),
-      Expanded(child: Text('Adresse geschützt • Karte + Abhol-/Rückgabeort nur für dich sichtbar', style: TextStyle(color: Colors.white70, fontSize: 11, height: 1.05), maxLines: 1, overflow: TextOverflow.ellipsis)),
-    ]);
-  }
-
-  Future<void> _openItemOverlay(Item item) async {
-    if (!mounted) return;
-    await ItemDetailsOverlay.showFullPage(context, item: item);
-  }
-
-  Widget _buildStatusChipForCard(String category, DateTime start, DateTime end, _OwnerEntry e) {
-    String label; Color color;
+  Widget _buildStatusChipForCard(
+      String category, DateTime start, DateTime end, _OwnerEntry e) {
+    String label;
+    Color color;
+    if (e.r.simulationOnly) {
+      label = 'Pilot-Simulation';
+      color = const Color(0xFF0EA5E9);
+      return _buildStatusChip(label: label, color: color);
+    }
     switch (category) {
       case 'upcoming':
-        final diff = start.difference(DateTime.now());
         // Do not show a return countdown for upcoming; keep a neutral label
         label = 'Kommend';
         color = const Color(0xFF0EA5E9);
@@ -724,9 +1024,16 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
         color = const Color(0xFFFB923C);
         break;
       case 'requests':
-        // Owner shouldn't see a passive "waiting" state. Indicate action required.
-        label = 'Anfrage';
-        color = Colors.grey;
+        if (!_ownerAcceptanceDeadlineValid(e)) {
+          label = e.r.bindingExpiresAt == null
+              ? 'Annahme gesperrt'
+              : 'Annahmefrist abgelaufen';
+          color = const Color(0xFFF43F5E);
+        } else {
+          // Owner shouldn't see a passive "waiting" state. Indicate action required.
+          label = 'Anfrage';
+          color = Colors.grey;
+        }
         break;
       case 'completed':
         final s = e.r.status;
@@ -747,11 +1054,31 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
         label = '—';
         color = Colors.grey;
     }
+    return _buildStatusChip(label: label, color: color);
+  }
+
+  Widget _buildStatusChip({required String label, required Color color}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-      child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700, height: 1.05), maxLines: 1, overflow: TextOverflow.ellipsis),
+      decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8)),
+      child: Text(label,
+          style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              height: 1.05),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis),
     );
+  }
+
+  bool _ownerAcceptanceDeadlineValid(_OwnerEntry entry) {
+    if (entry.r.simulationOnly) return true;
+    if (!BackendConfig.enabled || QaRuntimeService.isEnabled) return true;
+    final deadline = entry.r.bindingExpiresAt;
+    return deadline != null && deadline.isAfter(DateTime.now());
   }
 
   Widget? _buildInlineAction(String category, _OwnerEntry e) {
@@ -759,50 +1086,67 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
       case 'requests':
         return Row(mainAxisSize: MainAxisSize.min, children: [
           // Swap order: Akzeptieren first. Same design as Ablehnen, only text in green.
-            _TinyTextButton(
-              icon: Icons.check_circle_outline,
-              label: 'Akzeptieren',
-              color: const Color(0xFF22C55E),
-              onPressed: () async {
-                await DataService.updateRentalRequestStatus(requestId: e.r.id, status: 'accepted');
-                if (!mounted) return;
-                await _load();
-                // Success popup (keeps overlay on top for 10 seconds, does not auto-navigate underlying page)
-                // ignore: unawaited_futures
-                AppPopup.show(
-                  context,
-                  icon: Icons.check_circle_outline,
-                  title: 'Du hast die Anfrage akzeptiert.',
-                  message: 'Du findest diese Anmietung jetzt unter „Kommende Vermietungen“.\n\nDu kannst jetzt mit ${e.renter.displayName} unter Nachrichten einen Chat starten.',
-                  barrierDismissible: false,
-                  showCloseIcon: false,
-                  plainCloseIcon: true,
-                  autoCloseAfter: const Duration(seconds: 10),
-                  actions: [
-                    FilledButton(
-                      onPressed: () {
-                        // Close the popup then open the specific upcoming rental detail
-                        Navigator.of(context, rootNavigator: true).maybePop();
-                        Future.delayed(const Duration(milliseconds: 120), () async {
-                          if (!mounted) return;
-                          await Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => OngoingOwnerDetailScreen(
-                                requestId: e.r.id,
-                                titleOverride: 'Kommende Vermietung',
-                              ),
+          _TinyTextButton(
+            icon: Icons.check_circle_outline,
+            label: 'Akzeptieren',
+            color: const Color(0xFF22C55E),
+            onPressed: () async {
+              final declarations = await showPrivatePilotOwnerAcceptanceDialog(
+                context,
+                request: e.r,
+              );
+              if (declarations == null) return;
+              if (!mounted) return;
+              final accepted = await commitPrivatePilotOwnerAcceptance(
+                context,
+                request: e.r,
+                legalDeclarations: declarations,
+              );
+              if (!accepted) return;
+              if (!mounted) return;
+              await _load();
+              if (!mounted) return;
+              // Success popup (keeps overlay on top for 10 seconds, does not auto-navigate underlying page)
+              // ignore: unawaited_futures
+              AppPopup.show(
+                context,
+                icon: Icons.check_circle_outline,
+                title: e.r.simulationOnly
+                    ? 'Du hast den Test angenommen.'
+                    : 'Du hast die Anfrage akzeptiert.',
+                message: e.r.simulationOnly
+                    ? 'Die unverbindliche Pilot-Simulation ist jetzt für beide Testkonten sichtbar. Du kannst mit ${e.renter.displayName} den Chat testen. Es bestehen kein Vertrag, keine Reservierung und keine Zahlung.'
+                    : 'Du findest diese Anmietung jetzt unter „Kommende Vermietungen“.\n\nDu kannst jetzt mit ${e.renter.displayName} unter Nachrichten einen Chat starten.',
+                barrierDismissible: false,
+                showCloseIcon: false,
+                plainCloseIcon: true,
+                autoCloseAfter: const Duration(seconds: 10),
+                actions: [
+                  FilledButton(
+                    onPressed: () {
+                      // Close the popup then open the specific upcoming rental detail
+                      Navigator.of(context, rootNavigator: true).maybePop();
+                      Future.delayed(const Duration(milliseconds: 120),
+                          () async {
+                        if (!mounted) return;
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => OngoingOwnerDetailScreen(
+                              requestId: e.r.id,
+                              titleOverride: 'Kommende Vermietung',
                             ),
-                          );
-                          if (!mounted) return;
-                          await _load();
-                        });
-                      },
-                      child: const Text('Zur kommenden Vermietung'),
-                    ),
-                  ],
-                );
-              },
-            ),
+                          ),
+                        );
+                        if (!mounted) return;
+                        await _load();
+                      });
+                    },
+                    child: const Text('Zur kommenden Vermietung'),
+                  ),
+                ],
+              );
+            },
+          ),
           const SizedBox(width: 6),
           _TinyTextButton(
             icon: Icons.cancel_outlined,
@@ -831,18 +1175,23 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
                 }),
                 actions: [
                   OutlinedButton(
-                    onPressed: () => Navigator.of(context, rootNavigator: true).maybePop(),
+                    onPressed: () =>
+                        Navigator.of(context, rootNavigator: true).maybePop(),
                     child: const Text('Abbrechen'),
                   ),
                   FilledButton(
                     onPressed: () async {
                       Navigator.of(context, rootNavigator: true).maybePop();
-                      await DataService.updateRentalRequestStatus(requestId: e.r.id, status: 'declined');
+                      await DataService.updateRentalRequestStatus(
+                          requestId: e.r.id, status: 'declined');
                       if (!mounted) return;
                       await _load();
+                      if (!mounted) return;
                       // Auto-close after 3 seconds
                       Future.delayed(const Duration(seconds: 3), () {
-                        if (mounted) Navigator.of(context, rootNavigator: true).maybePop();
+                        if (mounted) {
+                          Navigator.of(context, rootNavigator: true).maybePop();
+                        }
                       });
                       // Result popup
                       // ignore: unawaited_futures
@@ -850,22 +1199,27 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
                         context,
                         icon: Icons.cancel_outlined,
                         title: 'Du hast die Anfrage abgelehnt.',
-                        message: 'Du findest sie jetzt unter „Abgeschlossene Vermietungen“.',
+                        message:
+                            'Du findest sie jetzt unter „Abgeschlossene Vermietungen“.',
                         barrierDismissible: true,
                         showCloseIcon: false,
                         plainCloseIcon: true,
                         autoCloseAfter: const Duration(seconds: 15),
                         actions: [
                           TextButton(
-                            onPressed: () => Navigator.of(context, rootNavigator: true).maybePop(),
+                            onPressed: () =>
+                                Navigator.of(context, rootNavigator: true)
+                                    .maybePop(),
                             child: const Text('OK'),
                           ),
                           FilledButton(
                             onPressed: () {
-                              Navigator.of(context, rootNavigator: true).maybePop();
+                              Navigator.of(context, rootNavigator: true)
+                                  .maybePop();
                               _tabController.animateTo(3);
                             },
-                            child: const Text('Zu „Abgeschlossene Vermietungen“'),
+                            child:
+                                const Text('Zu „Abgeschlossene Vermietungen“'),
                           ),
                         ],
                       );
@@ -879,13 +1233,16 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
         ]);
       case 'completed':
         // Show a small inline "Bewerten" action for completed rentals (not for cancelled/declined)
-        if (e.r.status == 'completed' && !e.r.needsReview && !e.hasSubmittedReview) {
+        if (e.r.status == 'completed' &&
+            !e.r.needsReview &&
+            !e.hasSubmittedReview) {
           return _TinyTextButton(
             icon: Icons.star_rate_outlined,
             label: 'Bewerten',
             onPressed: () async {
               final owner = await DataService.getCurrentUser();
               if (owner == null) return;
+              if (!mounted) return;
               final ok = await ReviewPromptSheet.show(
                 context,
                 requestId: e.r.id,
@@ -895,13 +1252,17 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
                 direction: 'owner_to_renter',
               );
               if (ok == true && mounted) {
-                await AppPopup.toast(context, icon: Icons.star_rate_outlined, title: 'Danke für deine Bewertung!');
+                await AppPopup.toast(context,
+                    icon: Icons.star_rate_outlined,
+                    title: 'Danke für deine Bewertung!');
                 if (mounted) {
                   await ItemDetailsOverlay.showFullPage(context, item: e.item);
                 }
                 await _load();
               } else if (ok == false && mounted) {
-                await AppPopup.toast(context, icon: Icons.check_circle_outline, title: 'Bewertung abgegeben');
+                await AppPopup.toast(context,
+                    icon: Icons.check_circle_outline,
+                    title: 'Bewertung abgegeben');
                 await _load();
               }
             },
@@ -913,15 +1274,21 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> with SingleTi
     }
   }
 
-  String _formatTwoUnits(Duration d) {
-    final days = d.inDays;
-    if (days == 0) return '1 Tag';
-    if (days == 1) return '1 Tag';
-    return '$days Tage';
-  }
-
   String _formatGermanDateTime(DateTime d) {
-    const months = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mär',
+      'Apr',
+      'Mai',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Dez'
+    ];
     final mm = months[d.month - 1];
     final dd = d.day.toString().padLeft(2, '0');
     return '$dd. $mm';
@@ -936,12 +1303,24 @@ class _OwnerEntry {
   final model.User renter;
   final Map<String, dynamic> flowState;
   final bool hasSubmittedReview;
-  const _OwnerEntry({required this.r, required this.item, required this.renter, required this.flowState, required this.hasSubmittedReview});
+  const _OwnerEntry(
+      {required this.r,
+      required this.item,
+      required this.renter,
+      required this.flowState,
+      required this.hasSubmittedReview});
 }
 
 class _TinyTextButton extends StatelessWidget {
-  final IconData icon; final String label; final VoidCallback onPressed; final Color? color; final Color? iconColor;
-  const _TinyTextButton({required this.icon, required this.label, required this.onPressed, this.color, this.iconColor});
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final Color? color;
+  const _TinyTextButton(
+      {required this.icon,
+      required this.label,
+      required this.onPressed,
+      this.color});
   @override
   Widget build(BuildContext context) {
     final fg = color ?? Theme.of(context).colorScheme.primary;
@@ -954,29 +1333,40 @@ class _TinyTextButton extends StatelessWidget {
         visualDensity: const VisualDensity(horizontal: -3, vertical: -3),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 16, color: iconColor ?? fg),
+        Icon(icon, size: 16, color: fg),
         const SizedBox(width: 4),
-        Text(label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: fg)),
+        Text(label,
+            style: TextStyle(
+                fontWeight: FontWeight.w700, fontSize: 12, color: fg)),
       ]),
     );
   }
 }
 
 class _ThumbnailWithSkeleton extends StatefulWidget {
-  final String? url; const _ThumbnailWithSkeleton({required this.url});
+  final String? url;
+  const _ThumbnailWithSkeleton({required this.url});
   @override
   State<_ThumbnailWithSkeleton> createState() => _ThumbnailWithSkeletonState();
 }
 
-class _ThumbnailWithSkeletonState extends State<_ThumbnailWithSkeleton> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller; bool _done = false;
+class _ThumbnailWithSkeletonState extends State<_ThumbnailWithSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1200))
+      ..repeat();
   }
+
   @override
-  void dispose() { _controller.dispose(); super.dispose(); }
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final url = widget.url;
@@ -984,12 +1374,14 @@ class _ThumbnailWithSkeletonState extends State<_ThumbnailWithSkeleton> with Sin
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _showPreview(context, [url], 0),
-      child: Image.network(url, fit: BoxFit.cover, loadingBuilder: (c, child, progress) {
-        if (progress == null) { _done = true; return child; }
-        return _skeleton();
-      }, errorBuilder: (_, __, ___) => _skeleton()),
+      child: AppImage(
+        url: url,
+        fit: BoxFit.cover,
+        fallback: _skeleton(),
+      ),
     );
   }
+
   Widget _skeleton() {
     return AnimatedBuilder(
       animation: _controller,
@@ -1011,7 +1403,8 @@ class _ThumbnailWithSkeletonState extends State<_ThumbnailWithSkeleton> with Sin
     );
   }
 
-  Future<void> _showPreview(BuildContext context, List<String> urls, int initialIndex) async {
+  Future<void> _showPreview(
+      BuildContext context, List<String> urls, int initialIndex) async {
     if (urls.isEmpty) return;
     await showGeneralDialog(
       context: context,
@@ -1026,11 +1419,13 @@ class _ThumbnailWithSkeletonState extends State<_ThumbnailWithSkeleton> with Sin
         var page = startIndex;
         final size = MediaQuery.of(ctx).size;
 
-        Future<void> _shift(int delta) async {
+        Future<void> shift(int delta) async {
           final target = (page + delta).clamp(0, images.length - 1);
           if (target != page) {
             page = target;
-            await controller.animateToPage(target, duration: const Duration(milliseconds: 160), curve: Curves.easeOutCubic);
+            await controller.animateToPage(target,
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOutCubic);
           }
         }
 
@@ -1043,7 +1438,8 @@ class _ThumbnailWithSkeletonState extends State<_ThumbnailWithSkeleton> with Sin
                 child: ClipRect(
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 25.2, sigmaY: 25.2),
-                    child: Container(color: Colors.black.withValues(alpha: 0.05)),
+                    child:
+                        Container(color: Colors.black.withValues(alpha: 0.05)),
                   ),
                 ),
               ),
@@ -1053,7 +1449,9 @@ class _ThumbnailWithSkeletonState extends State<_ThumbnailWithSkeleton> with Sin
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: size.width * 0.85, maxHeight: size.height * 0.75),
+                    constraints: BoxConstraints(
+                        maxWidth: size.width * 0.85,
+                        maxHeight: size.height * 0.75),
                     child: Material(
                       color: Colors.transparent,
                       child: ClipRRect(
@@ -1061,26 +1459,32 @@ class _ThumbnailWithSkeletonState extends State<_ThumbnailWithSkeleton> with Sin
                         child: Listener(
                           onPointerSignal: (signal) {
                             if (signal is PointerScrollEvent) {
-                              if (signal.scrollDelta.dy > 0 || signal.scrollDelta.dx > 0) {
-                                _shift(1);
-                              } else if (signal.scrollDelta.dy < 0 || signal.scrollDelta.dx < 0) {
-                                _shift(-1);
+                              if (signal.scrollDelta.dy > 0 ||
+                                  signal.scrollDelta.dx > 0) {
+                                shift(1);
+                              } else if (signal.scrollDelta.dy < 0 ||
+                                  signal.scrollDelta.dx < 0) {
+                                shift(-1);
                               }
                             }
                           },
                           child: Stack(children: [
                             ScrollConfiguration(
-                              behavior: const ScrollBehavior().copyWith(scrollbars: false),
+                              behavior: const ScrollBehavior()
+                                  .copyWith(scrollbars: false),
                               child: PageView.builder(
                                 controller: controller,
                                 onPageChanged: (i) => setState(() => page = i),
                                 itemCount: images.length,
                                 itemBuilder: (_, i) => DecoratedBox(
-                                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.08)),
+                                  decoration: BoxDecoration(
+                                      color:
+                                          Colors.black.withValues(alpha: 0.08)),
                                   child: Center(
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(16),
-                                      child: AppImage(url: images[i], fit: BoxFit.contain),
+                                      child: AppImage(
+                                          url: images[i], fit: BoxFit.contain),
                                     ),
                                   ),
                                 ),
@@ -1096,13 +1500,17 @@ class _ThumbnailWithSkeletonState extends State<_ThumbnailWithSkeleton> with Sin
                                   children: [
                                     for (int i = 0; i < images.length; i++)
                                       AnimatedContainer(
-                                        duration: const Duration(milliseconds: 160),
-                                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                                        duration:
+                                            const Duration(milliseconds: 160),
+                                        margin: const EdgeInsets.symmetric(
+                                            horizontal: 4),
                                         width: i == page ? 10 : 8,
                                         height: i == page ? 10 : 8,
                                         decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: i == page ? 0.9 : 0.5),
-                                          borderRadius: BorderRadius.circular(999),
+                                          color: Colors.white.withValues(
+                                              alpha: i == page ? 0.9 : 0.5),
+                                          borderRadius:
+                                              BorderRadius.circular(999),
                                         ),
                                       ),
                                   ],
@@ -1120,7 +1528,8 @@ class _ThumbnailWithSkeletonState extends State<_ThumbnailWithSkeleton> with Sin
         });
       },
       transitionBuilder: (ctx, anim, secAnim, child) {
-        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        final curved =
+            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
         return FadeTransition(opacity: curved, child: child);
       },
       transitionDuration: const Duration(milliseconds: 160),

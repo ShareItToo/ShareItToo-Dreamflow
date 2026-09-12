@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-owner-detail-live-expiry",
+  "status": "passed-source-and-regression",
+  "capturedAt": "2026-08-17T10:23:41Z",
+  "sourceCommit": "e4397a6df46195b8b4e20aed483134e509fd4ddf",
+  "checks": {
+    "openOwnerDetailSchedulesDeadlineRefresh": true,
+    "remoteMissingDeadlineIsVisiblyBlocked": true,
+    "remoteExpiredDeadlineIsVisiblyExpired": true,
+    "acceptButtonDisablesAtDeadline": true,
+    "statusChipChangesAtDeadline": true,
+    "deadlineReasonIsVisible": true,
+    "deadlineTimerCancelsOnReload": true,
+    "deadlineTimerCancelsOnDispose": true,
+    "localQaDoesNotClaimRemoteDeadline": true,
+    "sharedDialogDeadlineGatePreserved": true,
+    "backendExpiryGatePreserved": true
+  },
+  "verification": {
+    "targetedNodeTestsPassed": 12,
+    "targetedFlutterTestsPassed": 53,
+    "targetedAnalyzerFindings": 26,
+    "targetedAnalyzerNewFindings": 0,
+    "fullFlutterTestsPassed": 282,
+    "intentionalFlutterTestsSkipped": 1,
+    "fullAnalyzerFindings": 229,
+    "fullAnalyzerErrors": 0,
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "technicalRegression": "passed-with-documented-candidate-rollover-boundary"
+  },
+  "privacy": {
+    "sourceInventoryHashUpdated": true,
+    "dataCollectionChanged": false,
+    "dataStorageChanged": false,
+    "dataTransportChanged": false,
+    "providerChanged": false,
+    "permissionChanged": false
+  },
+  "boundaries": {
+    "backendDeployed": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "storeSubmissionPerformed": false,
+    "realPaymentPerformed": false,
+    "candidateBuiltOrRelabeled": false,
+    "pushRetainedDefaultOff": true,
+    "crashRetainedDefaultOff": true,
+    "pushEnablesCrash": false,
+    "crashDataTransferred": false
+  },
+  "conclusion": {
+    "openOwnerDetailAtDeadline": "refreshes-disables-and-explains",
+    "missingRemoteDeadline": "visibly-blocked",
+    "serverAuthority": "booking_request_expired-preserved",
+    "officialPlayInternalCandidate": "1.0.0+2026081509",
+    "localSignedCandidate": "1.0.0+2026081510-built-local-not-uploaded"
+  }
+}

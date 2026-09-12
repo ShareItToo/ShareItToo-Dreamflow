@@ -18,7 +18,7 @@ class PlaceholderScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        leading: IconButton(onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.arrow_back)),
+        leading: IconButton(tooltip: MaterialLocalizations.of(context).backButtonTooltip, onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.arrow_back)),
         title: Text(title),
         actions: [
           Padding(
@@ -26,7 +26,7 @@ class PlaceholderScreen extends StatelessWidget {
             child: FilledButton.tonalIcon(
               onPressed: () => _backToExplore(context),
               icon: const Icon(Icons.explore_outlined, size: 18),
-              label: const Text('Erkunden'),
+              label: const Text('Entdecken'),
             ),
           ),
         ],
@@ -42,7 +42,7 @@ class PlaceholderScreen extends StatelessWidget {
             FilledButton.tonalIcon(
               onPressed: () => _backToExplore(context),
               icon: const Icon(Icons.explore_outlined),
-              label: const Text('Zurück zu Erkunden'),
+              label: const Text('Zurück zu Entdecken'),
             ),
           ]),
         ),

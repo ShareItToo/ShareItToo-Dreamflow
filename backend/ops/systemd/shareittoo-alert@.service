@@ -1,0 +1,16 @@
+[Unit]
+Description=Deliver ShareItToo critical alert for %i
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/docker/shareittoo/backend/ops/alert.sh %i
+User=root
+Group=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+StateDirectory=shareittoo-alerts
+StateDirectoryMode=0700

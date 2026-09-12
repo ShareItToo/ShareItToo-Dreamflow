@@ -1,0 +1,30 @@
+services:
+  api:
+    environment:
+      PAYMENT_TRANSPORT: stripe
+      STRIPE_LIVEMODE: "false"
+      STRIPE_SECRET_KEY: ""
+      STRIPE_WEBHOOK_SECRET: ""
+      STRIPE_CONNECT_WEBHOOK_SECRET: ""
+      STRIPE_SECRET_KEY_FILE: /run/secrets/stripe-secret-key
+      STRIPE_WEBHOOK_SECRET_FILE: /run/secrets/stripe-webhook-secret
+      STRIPE_CONNECT_WEBHOOK_SECRET_FILE: /run/secrets/stripe-connect-webhook-secret
+    volumes:
+      - type: bind
+        source: ${STRIPE_SECRET_KEY_HOST_FILE:?STRIPE_SECRET_KEY_HOST_FILE must be set for the Staging Stripe override}
+        target: /run/secrets/stripe-secret-key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${STRIPE_WEBHOOK_SECRET_HOST_FILE:?STRIPE_WEBHOOK_SECRET_HOST_FILE must be set for the Staging Stripe override}
+        target: /run/secrets/stripe-webhook-secret
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${STRIPE_CONNECT_WEBHOOK_SECRET_HOST_FILE:?STRIPE_CONNECT_WEBHOOK_SECRET_HOST_FILE must be set for the Staging Stripe override}
+        target: /run/secrets/stripe-connect-webhook-secret
+        read_only: true
+        bind:
+          create_host_path: false

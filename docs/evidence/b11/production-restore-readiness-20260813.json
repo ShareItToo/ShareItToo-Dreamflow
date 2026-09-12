@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-production-restore-readiness",
+  "capturedAt": "2026-08-13T03:34:31Z",
+  "status": "isolated-restore-verified",
+  "backup": {
+    "backupTimestamp": "20260813T022934Z",
+    "manifestIntegrity": "passed",
+    "databaseArchiveReadable": true,
+    "uploadsArchiveReadable": true
+  },
+  "restore": {
+    "previousScheduledResult": "failed-transient-initialization-readiness-race",
+    "rootCause": "socket-probe-observed-temporary-postgres-initialization-server",
+    "fix": "wait-for-final-postgres-tcp-server",
+    "candidateDryRun": "passed",
+    "officialSystemdRun": "passed",
+    "databaseTables": 8,
+    "uploadFiles": 0,
+    "temporaryContainersRemaining": 0,
+    "temporaryVolumesRemaining": 0
+  },
+  "automation": {
+    "dailyBackupTimerActive": true,
+    "weeklyRestoreTimerActive": true,
+    "healthTimerActive": true,
+    "rollbackCopyRetained": true
+  },
+  "source": {
+    "path": "backend/ops/verify_restore.sh",
+    "sha256": "b971055ffd9e28dbbc1e0706a23e7cbbafbe9b2618ccee9d3d7ec52f768ede49",
+    "tcpReadinessHost": "127.0.0.1"
+  },
+  "liveVerification": {
+    "productionApiHealthy": true,
+    "stagingApiHealthy": true,
+    "productionPublicHealthPassed": true,
+    "stagingPublicHealthPassed": true
+  },
+  "boundaries": {
+    "restoreWasIsolated": true,
+    "productionDatabaseRestoredOver": false,
+    "productionDataChanged": false,
+    "productionApplicationDeployed": false,
+    "publicRoutesChanged": false,
+    "paymentEndpointCalled": false,
+    "containsSecrets": false,
+    "containsAccountIdentifiers": false
+  }
+}

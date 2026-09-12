@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-store-listing-saved",
+  "capturedAt": "2026-08-15T05:29:36Z",
+  "status": "exact-candidate-screenshots-draft-saved",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081505",
+    "commit": "3908f5a3c300c1125c120c832f3050eea7a0a762",
+    "releaseChannel": "internal"
+  },
+  "observedConsoleState": {
+    "primaryLocale": "de-DE",
+    "phoneScreenshotCount": 4,
+    "newAssetsUploaded": 4,
+    "supersededAssetsRemoved": 4,
+    "draftSavedConfirmationObserved": true,
+    "sentForReview": false
+  },
+  "phoneScreenshots": [
+    {
+      "file": "store/assets/google-play/phone-screenshots/01-feed.png",
+      "width": 1080,
+      "height": 1920,
+      "sha256": "7c7f03eece8637028ff01aea2dcbfc946c59e65e2cdc45024b7410f7cc742102"
+    },
+    {
+      "file": "store/assets/google-play/phone-screenshots/02-camera-detail.png",
+      "width": 1080,
+      "height": 1920,
+      "sha256": "cc05532f4b559c6201cf508ea9bf27541903abdd09e62057a66c9fff70e68ce9"
+    },
+    {
+      "file": "store/assets/google-play/phone-screenshots/03-search.png",
+      "width": 1080,
+      "height": 1920,
+      "sha256": "de8d1f1f83ecbddaeb7c36b453737c666e9f1276b7fee8541ae9a25cc67f5f0d"
+    },
+    {
+      "file": "store/assets/google-play/phone-screenshots/04-create-listing.png",
+      "width": 1080,
+      "height": 1920,
+      "sha256": "f3a3a14c29e13478f1980aa1fdd54672bbe16f7dc50391d1db3aed4f380ff434"
+    }
+  ],
+  "boundaries": {
+    "listingDraftChanged": true,
+    "assetsUploaded": true,
+    "sentForReview": false,
+    "internalRolloutChanged": false,
+    "closedTestingStarted": false,
+    "productionChanged": false,
+    "paymentEndpointCalled": false,
+    "containsSecrets": false,
+    "containsAccountIdentifiers": false
+  }
+}

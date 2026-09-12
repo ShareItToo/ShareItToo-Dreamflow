@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp33-pixel-privacy-export-candidate-preparation",
+  "status": "prepared-for-source-freeze",
+  "capturedAt": "2026-09-06T22:06:21Z",
+  "workPackage": "WP33",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "preparationBase": "f48ed611e851a7ea208bc2b0b13f5cd2ee6225e5",
+    "candidateSourceHead": "pending-preparation-commit",
+    "preparationBaseTreeClean": true,
+    "preparationBaseRemoteDivergence": "0/0"
+  },
+  "candidate": {
+    "versionName": "1.0.0",
+    "versionCode": "2026090609",
+    "packageId": "com.shareittoo.app",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "highestVerifiedLocalArchiveBefore": "2026090608",
+    "installedPixelVersionBefore": "2026090608",
+    "versionPreviouslyReservedLocally": false,
+    "archiveCreated": false,
+    "installed": false
+  },
+  "finding": {
+    "previousCandidateContainsFix": false,
+    "controlledPrivateSource": true,
+    "controlledSourceRemovedAfterShare": true,
+    "exactColdStartAndResumeCleanup": true,
+    "unrelatedCachePreserved": true
+  },
+  "requiredEnvelope": {
+    "firebaseAndroidStagingRequired": true,
+    "canonicalSigningRequired": true,
+    "googleSignInEnabled": true,
+    "appleSignInEnabled": false,
+    "facebookSignInEnabled": false,
+    "closedPilotEnvelope": true,
+    "stageAPilotId": "heilbronn_wave0",
+    "providerState": "hold",
+    "realMoneyEnabled": false,
+    "publicRegistrationEnabled": false
+  },
+  "verification": {
+    "focusedFlutterTestsPassed": 4,
+    "toolTestsPassed": 2368,
+    "analyzerIssues": 0,
+    "completeRegressionPassed": false,
+    "cleanCheckoutPassed": false,
+    "physicalExportPassed": false
+  },
+  "boundaries": {
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "backendDeployed": false,
+    "firebaseConsoleChanged": false,
+    "providerChanged": false,
+    "paymentOrKycCalled": false,
+    "productionChanged": false,
+    "publicRegistrationChanged": false,
+    "cloudVpsDnsChanged": false,
+    "pixelChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsPrivateFilesystemPath": false,
+    "containsRawDeviceIdentifier": false,
+    "containsRawExport": false
+  }
+}

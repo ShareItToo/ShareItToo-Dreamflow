@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "observedOn": "2026-09-04",
+  "status": "LOCAL_GUARD_AND_NORMAL_REGRESSION_PASS",
+  "baseCommit": "87f4c1b2e15e6b15bc64de7753114aaf75a82932",
+  "implementationCommit": "c4923cf1db58dcaccc33597a8c4d534f7f7cbd3a",
+  "branch": "codex/master-workflow-20260808",
+  "implementationFiles": {
+    "tool/run_with_local_build_cache.mjs": "f374b8edb3e287447b2f15bb99818225812865c5f517e5bb8a2cb474dc97bbf3",
+    "test/tool/local_build_cache_guard.test.mjs": "7a4339ef7b441be4fa062703501843434f75bb8a18c9629770dc4bd62037f69a",
+    "test/tool/scoped_android_build_environment.test.mjs": "1db751ac6869fe43ad1f9f90705f3b3572f32ca3c9b3e8938d7b09e79a15129f"
+  },
+  "verification": {
+    "focusedGuardTests": 30,
+    "guardAndR10HelperTests": 45,
+    "allToolTestsFinalRerun": 2210,
+    "actualHostCompleteEnvironment": "PASS",
+    "actualHostWrongSdkPreventsChild": "PASS",
+    "actualHostChildExit17Preserved": "PASS",
+    "actualHostGlobalSettingsUnchanged": "PASS",
+    "fullNormalRegression": "PASS",
+    "defaultFlutterPasses": 724,
+    "defaultExplicitProfileSkips": 33,
+    "mandatoryAdditionalProfiles": "PASS",
+    "analyzerIssues": 0,
+    "webBuildAndWasmDryRun": "PASS_NOT_STANDALONE_WASM_RUNTIME",
+    "loopbackSmoke": "PASS",
+    "androidDebugBuildSeconds": 13,
+    "minSdk": 24,
+    "permissionCount": 14,
+    "exportedComponentCount": 8,
+    "capacityGuards": "PASS_UNCHANGED_LIMITS",
+    "beforeFreeKiB": 10449992,
+    "afterFreeKiB": 10430896,
+    "beforeGeneratedKiB": 3274336,
+    "afterGeneratedKiB": 3274340,
+    "workingTreeSecretScan": "PASS",
+    "finalTestAssertionChange": "Five negative cases gained explicit zero-probe counters; runtime unchanged; focused and complete tool inventory rerun passed."
+  },
+  "logs": {
+    "sit-wp05-scoped-sdk-red.log": "0b9f38719d152b2a58795c1aede14629ed6ce1f371bf97424296abfd8dd48883",
+    "sit-wp05-scoped-sdk-focused-final.log": "1c64f57d6e2957e4202fc1d147947115658b20dcc15daca9dedf2a8ac1797183",
+    "sit-wp05-scoped-sdk-host.log": "d9ad5e2dfb936e9e26a8699351dd4da4f98d6bbb3101a98c047407659936bae6",
+    "sit-wp05-scoped-sdk-host-negative.log": "cfe75cec79a1963212d1277f22d886e217f28f91854405bad3c363ca33db3926",
+    "sit-wp05-scoped-sdk-full-regression.log": "d7b64671f003d86b94f0f97552c2a437030b9987d3236ef57f0c768c9ddcbe2e",
+    "sit-wp05-scoped-sdk-and-r10.log": "fa25f0199bf4530a876938bee06badc1efdd6efceadeafcceda12011281f61d8",
+    "sit-wp05-scoped-sdk-all-tools-final.log": "b75e3b9f2b8783d4295db14236523ef222ee23311507a37034c6bac58c7fce28"
+  },
+  "boundaries": {
+    "github": "OWNER_DEFERRED_NOT_VERIFIED",
+    "exactColdProof": "OPEN_ON_FINAL_SUCCESSOR",
+    "matchedSignedLifecycle": "OPEN_ON_FINAL_SUCCESSOR",
+    "sdkInvocationDebt": "PARTIAL_PENDING_EXACT_COLD_CI_SIGNED_PROOF",
+    "broaderSdkKotlinDebt": "NOT_CLOSED_BY_THIS_PACKAGE",
+    "installed0403": "UNCHANGED_PRE_SUPPORT_FIXES",
+    "signedSuccessorCreated": false,
+    "pixelOrOnePlusAction": false,
+    "providerBackendStoreAccountAction": false,
+    "sourceInventoryOrApprovalChanges": false,
+    "priorColdNpmAdvisory503": "RETAINED_NOT_WAIVED"
+  }
+}

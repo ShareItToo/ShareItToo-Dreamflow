@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-store-backend-candidate-preflight",
+  "capturedAt": "2026-08-13T09:15:11Z",
+  "status": "passed-production-mode-isolated-awaiting-production-approval",
+  "candidate": {
+    "commit": "f952e2a6c3bdd7cf900eee385a6d3f1110fa39dc",
+    "image": "ghcr.io/walidwalidchraibi-dot/shareittoo-api:f952e2a6c3bdd7cf900eee385a6d3f1110fa39dc",
+    "imageId": "sha256:05a71da806804d1b283fae96a883f90fa49084877346139b63e34494d0b7c608",
+    "repositoryDigest": "ghcr.io/walidwalidchraibi-dot/shareittoo-api@sha256:05a71da806804d1b283fae96a883f90fa49084877346139b63e34494d0b7c608",
+    "version": "0.1.0-f952e2a6c3bd",
+    "deploymentEnvironment": "production"
+  },
+  "isolatedRuntime": {
+    "freshEphemeralPostgres": true,
+    "productionDataMounted": false,
+    "stagingDataMounted": false,
+    "schemaMigrationsApplied": 10,
+    "readiness": "passed",
+    "versionIdentity": "passed-exact-commit",
+    "routes": {
+      "support": "503-draft",
+      "privacy": "503-draft",
+      "accountDeletion": "200-operational"
+    },
+    "mailTransport": "memory",
+    "pushTransport": "disabled",
+    "paymentTransport": "disabled",
+    "stripeLivemode": false,
+    "temporaryResourcesRemoved": true
+  },
+  "liveStateAfterPreflight": {
+    "verifiedAt": "2026-08-13T09:15:11Z",
+    "productionApi": "healthy-unchanged",
+    "stagingApi": "healthy-unchanged",
+    "productionContainerImage": "backend-api",
+    "stagingContainerImage": "shareittoo-api:72dd8f13b5d3be0e82392a8b28c31292bdc23b53",
+    "temporaryContainersRemaining": 0,
+    "temporaryNetworksRemaining": 0,
+    "deployedCaddySha256": "4aea918ebb07f3bd52c17342172b24bb3a7df3c17dc4be0afe749de940f5d44d"
+  },
+  "gates": {
+    "compatibleProductionBackendCandidateReady": true,
+    "productionBackendDeploymentApproved": false,
+    "productionRouteActivationApproved": false,
+    "publicSupportUrlReady": false,
+    "publicPrivacyUrlReady": false,
+    "publicAccountDeletionUrlReady": false,
+    "legalContentApproved": false,
+    "storeSubmissionAllowed": false
+  },
+  "nextRequired": [
+    "obtain the separate exact-commit production backend deployment approval",
+    "create and verify a fresh production backup before deployment",
+    "deploy only the exact verified backend image and verify its release identity and health",
+    "obtain the separate canonical public-route activation approval",
+    "activate the validated Caddy routes and verify all three public URLs",
+    "keep support and privacy blocked until business and legal content is approved"
+  ],
+  "boundaries": {
+    "productionChanged": false,
+    "stagingChanged": false,
+    "caddyChanged": false,
+    "dnsChanged": false,
+    "mailChanged": false,
+    "cronChanged": false,
+    "paymentsChanged": false,
+    "containsSecrets": false,
+    "containsPersonalAccountData": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

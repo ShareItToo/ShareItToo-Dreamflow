@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-retention-decision-preparation",
+  "capturedAt": "2026-08-17T03:21:22Z",
+  "status": "passed-source-and-test-checkpoint",
+  "checkpoint": "16.127",
+  "sourceHeadAtImplementationStart": "6bb448c",
+  "result": {
+    "requiredDecisionCount": 9,
+    "preparedDecisionCount": 9,
+    "closedDecisionCount": 0,
+    "legalPeriodsInvented": false,
+    "categoryPurgeEnabled": false,
+    "expiredCredentialRuleTechnicallyReady": true,
+    "backupRotationRuleOperationallyReady": true,
+    "externalProcessorOwnerApprovalOpen": true,
+    "legalHoldProcessApprovalOpen": true,
+    "separatePushCrashBoundaryProtected": true
+  },
+  "verification": {
+    "targetedRetentionTests": {"passed": 23, "failed": 0},
+    "nodeToolTests": {"passed": 611, "skipped": 0, "failed": 0},
+    "retentionValidator": "passed-nine-decisions-prepared-and-open",
+    "privacyValidator": "passed-draft-fail-closed",
+    "v51LegalAssetValidator": "passed-draft-blocked",
+    "diffCheck": "passed"
+  },
+  "pushCrashBoundary": {
+    "firebaseCloudMessaging": "retained-independent-voluntary-opt-in-default-off",
+    "firebaseCrashlytics": "retained-independent-voluntary-opt-in-default-off",
+    "pushEnablesCrashlytics": false,
+    "analyticsEnabled": false,
+    "advertisingEnabled": false,
+    "externalGenerativeAiEnabled": false
+  },
+  "openGates": {
+    "retentionDeletionDecisions": 9,
+    "physicalDeviceMatrixPassed": 0,
+    "physicalDeviceMatrixRequired": 4,
+    "databaseMigrationAppliedToStaging": false,
+    "databaseMigrationAppliedToProduction": false,
+    "newSignedCandidateCreated": false,
+    "goNoGo": "HOLD"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "stagingChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "realMoneyUsed": false,
+    "publicLegalAssetsActivated": false,
+    "existingCandidateChanged": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "16.177",
+  "capturedAtUtc": "2026-08-17T18:49:03Z",
+  "sourceBaseCommit": "67a558d9e3ea286976821d20ab9fe253419c6aa1",
+  "status": "passed",
+  "durationSelectionBoundary": {
+    "transportChoiceStateRemoved": true,
+    "deliveryAndReturnAddressStateRemoved": true,
+    "savedTransportSelectionRead": false,
+    "staleSelectionCleared": true,
+    "distanceAndTransportFeeCalculationRemoved": true,
+    "personalPickupAndReturnOnly": true,
+    "localPreviewRentAndPlatformContributionOnly": true,
+    "bindingServerCheckoutPreserved": true,
+    "calendarAndAvailabilityPreserved": true,
+    "discountPreviewPreserved": true
+  },
+  "privacyBoundary": {
+    "collectionReduced": true,
+    "storageReduced": true,
+    "transmissionChanged": false,
+    "permissionsChanged": false,
+    "sourceInventoryChangeRequired": false
+  },
+  "verification": {
+    "targetedWiring": "9/9 passed",
+    "runtimeDiff": "20 insertions, 604 deletions",
+    "targetedAnalyzer": "0 findings, 0 errors",
+    "fullTechnicalRegression": "passed with exit code 0",
+    "fullFlutter": "292 passed, 1 intentional skip",
+    "backend": "213 passed, 1 intentional PostgreSQL skip",
+    "flutterAnalyzer": "224 findings, 0 errors",
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed"
+  },
+  "serviceBoundary": {
+    "pushRetained": true,
+    "crashlyticsRetained": true,
+    "separateVoluntaryDefaultOffChoices": true,
+    "pushEnablesCrashlytics": false,
+    "adsMarketingAnalyticsExternalGenAiEnabled": false
+  },
+  "externalActions": {
+    "deployment": false,
+    "upload": false,
+    "storeMutation": false,
+    "providerConsoleMutation": false,
+    "liveMoney": false,
+    "candidateBuiltOrRelabeled": false
+  },
+  "sourceHashesSha256": {
+    "lib/screens/select_rental_duration_screen.dart": "d8ef027473180f105a3d845b50cb8cfacf1caea98139174dc556857cb7f90a33",
+    "test/tool/v51_selected_range_price_truth_wiring.test.mjs": "1c84590647f504ec555fdffe4ee950fa391908c2287b62c35b558c5097a3c877"
+  }
+}

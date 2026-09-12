@@ -1,34 +1,38 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/widgets/app_popup.dart';
+import 'package:lendify/widgets/private_pilot_owner_acceptance_dialog.dart';
 import 'package:lendify/widgets/user_avatar.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/screens/message_thread_screen.dart';
 import 'package:lendify/screens/public_profile_screen.dart';
+import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/data_service.dart';
+import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/widgets/item_details_overlay.dart';
 import 'package:lendify/widgets/return_handover_stepper_sheet.dart';
 import 'package:lendify/widgets/review_prompt_sheet.dart';
 import 'package:lendify/screens/owner_requests_screen.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:lendify/widgets/app_image.dart';
 import 'package:lendify/screens/support_flow_screen.dart';
+import 'package:lendify/screens/report_issue_screen.dart';
+import 'package:lendify/services/return_case_entry_point_policy.dart';
+import 'package:lendify/widgets/support_principal_controller.dart';
 import 'package:lendify/widgets/sit_glass_time_picker.dart';
-import 'dart:convert';
 import 'dart:ui' show ImageFilter;
-import 'package:lendify/services/address_privacy.dart';
-import 'package:lendify/widgets/approx_location_map.dart';
 import 'package:lendify/widgets/sit_overflow_menu.dart';
 import 'package:lendify/services/handover_code.dart';
+import 'package:lendify/models/invoice.dart';
+import 'package:lendify/services/invoice_pdf_service.dart';
+import 'package:lendify/services/invoices_service.dart';
+import 'package:lendify/services/local_artifact_storage_service.dart';
+import 'package:printing/printing.dart';
 
 class OngoingOwnerDetailScreen extends StatefulWidget {
   final String requestId;
@@ -45,15 +49,15 @@ class OngoingOwnerDetailScreen extends StatefulWidget {
 }
 
 class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
+  final _supportPrincipal = SupportPrincipalController();
   RentalRequest? _req;
   Item? _item;
   User? _renter;
   User? _owner;
-  bool _showManualHandover = false;
   final TextEditingController _manualCodeCtrl = TextEditingController();
-  Map<String, dynamic>? _deliverySel;
   Map<String, dynamic> _flowState = const {};
-  bool _reviewAlreadySubmitted = false;
+  Map<String, dynamic> _addressVisibility = const {};
+  Timer? _acceptanceDeadlineTimer;
   StreamSubscription<String>? _sharedPersistenceSub;
   final SharedPersistenceRefreshCoordinator _sharedPersistenceRefresh =
       SharedPersistenceRefreshCoordinator();
@@ -77,30 +81,27 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     final item = await DataService.getItemById(req.itemId);
     final renter = await DataService.getUserById(req.renterId);
     final owner = await DataService.getUserById(req.ownerId);
-    final sel = item != null
-        ? await DataService.getSavedDeliverySelection(item.id)
-        : null;
     final flowState = await DataService.getHandoverReturnState(req.id);
-    final alreadyReviewed = owner != null
-        ? await DataService.hasSubmittedReview(
-            requestId: req.id,
-            reviewerId: owner.id,
-          )
-        : false;
+    final addressVisibility = item == null
+        ? const <String, dynamic>{}
+        : await DataService.getBookingAddressReveal(
+            request: req,
+            localExactAddress: item.locationText,
+            segment: 'return',
+          );
     if (!mounted) return;
     setState(() {
       _req = req;
       _item = item;
       _renter = renter;
       _owner = owner;
-      _deliverySel = sel;
       _flowState = flowState;
-      _reviewAlreadySubmitted = alreadyReviewed;
+      _addressVisibility = addressVisibility;
     });
+    _scheduleAcceptanceDeadlineRefresh(req);
     // Show one-time handover banner if present (e.g., renter confirmed)
     if (mounted && item != null) {
-      final bookingId = _computeBookingId(item, req);
-      final msg = await DataService.takeHandoverBanner(bookingId);
+      final msg = await DataService.takeHandoverBanner(req.id);
       if (msg != null && msg.isNotEmpty && mounted) {
         AppPopup.toast(context, icon: Icons.check_circle_outline, title: msg);
       }
@@ -109,10 +110,37 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
 
   @override
   void dispose() {
+    _supportPrincipal.dispose();
+    _acceptanceDeadlineTimer?.cancel();
     _sharedPersistenceSub?.cancel();
     _sharedPersistenceRefresh.dispose();
     _manualCodeCtrl.dispose();
     super.dispose();
+  }
+
+  void _scheduleAcceptanceDeadlineRefresh(RentalRequest request) {
+    _acceptanceDeadlineTimer?.cancel();
+    _acceptanceDeadlineTimer = null;
+    if (!BackendConfig.enabled ||
+        QaRuntimeService.isEnabled ||
+        request.status.toLowerCase().trim() != 'pending') {
+      return;
+    }
+    final deadline = request.bindingExpiresAt;
+    if (deadline == null) return;
+    final remaining = deadline.difference(DateTime.now());
+    if (remaining <= Duration.zero) return;
+    _acceptanceDeadlineTimer = Timer(remaining, () {
+      if (!mounted) return;
+      setState(() {});
+    });
+  }
+
+  bool _ownerAcceptanceDeadlineValid(RentalRequest request) {
+    if (request.simulationOnly) return true;
+    if (!BackendConfig.enabled || QaRuntimeService.isEnabled) return true;
+    final deadline = request.bindingExpiresAt;
+    return deadline != null && deadline.isAfter(DateTime.now());
   }
 
   List<String> get _photos => (_item?.photos ?? const <String>[]);
@@ -149,8 +177,19 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     required RentalRequest req,
     required Item item,
   }) async {
+    final owner = _supportPrincipal.capture();
+    if (owner == null ||
+        !await _supportPrincipal.isCurrent(owner) ||
+        !mounted) {
+      return;
+    }
     final current = await DataService.getCurrentUser();
-    if (!mounted || current == null) return;
+    if (current == null ||
+        current.id != owner.userId ||
+        !await _supportPrincipal.isCurrent(owner) ||
+        !mounted) {
+      return;
+    }
     final flowContext = SupportFlowContext.fromOwnerRequestDetail(
       itemTitle: item.title,
       itemId: item.id,
@@ -160,20 +199,28 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
       itemImageUrl: _photos.isNotEmpty ? _photos.first : null,
       otherUserImageUrl: _renter?.photoURL,
     );
-    final result = await Navigator.of(context).push<SupportFlowResult?>(
-      MaterialPageRoute(
-        builder: (_) => SupportFlowScreen(context: flowContext),
+    final result = await _supportPrincipal.pushOwnedRoute<SupportFlowResult?>(
+      context: context,
+      owner: owner,
+      route: MaterialPageRoute(
+        builder: (_) => SupportFlowScreen(context: flowContext, owner: owner),
       ),
     );
-    if (result == null || !mounted) return;
+    if (result == null ||
+        !await _supportPrincipal.isCurrent(owner) ||
+        !mounted) {
+      return;
+    }
     final supportThread = await DataService.createSupportThread(
       userId: current.id,
+      canonicalCaseNumber: result.canonicalCaseNumber,
     );
+    if (!await _supportPrincipal.isCurrent(owner) || !mounted) return;
     if (supportThread == null) {
-      AppPopup.toast(
-        context,
-        icon: Icons.error_outline,
-        title: 'Support nicht verfügbar',
+      await _supportPrincipal.showNotice(
+        context: context,
+        owner: owner,
+        title: 'Fall ${result.canonicalCaseNumber} ist eingegangen',
       );
       return;
     }
@@ -183,11 +230,13 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     await DataService.addSystemMessageToThread(
       threadId: supportThread.id,
       text:
-          "Support-Fall eröffnet: ${result.mainCategoryLabel} · ${item.title}\n📋 Support-Anfrage zu: ${item.title}\nBuchung: ${req.id}\nKategorie: ${result.mainCategoryLabel}\nUnterkategorie: ${result.subCategory}$descText",
+          "${result.canonicalReceiptMessage}\n\n📋 Support-Anfrage zu: ${item.title}\nBuchung: ${req.id}\nKategorie: ${result.mainCategoryLabel}\nUnterkategorie: ${result.subCategory}$descText",
     );
-    if (!mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
+    if (!await _supportPrincipal.isCurrent(owner) || !mounted) return;
+    _supportPrincipal.pushOwnedRoute<void>(
+      context: context,
+      owner: owner,
+      route: MaterialPageRoute(
         builder: (_) => MessageThreadScreen(
           threadId: supportThread.id,
           participantName: 'SIT Support',
@@ -195,6 +244,31 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _openReturnCase({
+    required RentalRequest req,
+    required Item item,
+  }) async {
+    final owner = _supportPrincipal.capture();
+    if (owner == null || !_returnCaseEntryPointEligible(req)) return;
+    if (!await _supportPrincipal.isCurrent(owner) || !mounted) return;
+    final result = await _supportPrincipal.pushOwnedRoute<bool?>(
+      context: context,
+      owner: owner,
+      route: MaterialPageRoute(
+        builder: (_) => ReportIssueScreen(
+          requestId: req.id,
+          itemTitle: item.title,
+        ),
+      ),
+    );
+    if (result != true ||
+        !await _supportPrincipal.isCurrent(owner) ||
+        !mounted) {
+      return;
+    }
+    await _load();
   }
 
   Future<void> _manageBookingTime({
@@ -206,6 +280,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     final thread = await DataService.createOrGetThreadForRequest(req.id);
     if (thread == null || !mounted) return;
     final state = await DataService.getHandoverReturnState(req.id);
+    if (!mounted) return;
     final key = isReturn ? 'return' : 'handover';
     final requestedLabel =
         ((state['${key}TimeRequested'] as String?) ?? '').trim();
@@ -256,6 +331,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
           text:
               '${isReturn ? '🔄' : '📦'} $flowLabel bestätigt: $requestedLabel Uhr',
         );
+        if (!mounted) return;
         AppPopup.toast(
           context,
           icon: Icons.check_circle_outline,
@@ -265,19 +341,17 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
         return;
       }
     }
-    final initial = isReturn ? req.end : req.start;
+    final initial = (isReturn ? req.end : req.start).toLocal();
     final picked = await SitGlassTimePicker.show(
       context,
       title: isReturn ? 'Rückgabezeit wählen' : 'Übergabezeit wählen',
       initialTime: TimeOfDay.fromDateTime(initial),
     );
     if (picked == null || !mounted) return;
-    final proposed = DateTime(
-      initial.year,
-      initial.month,
-      initial.day,
-      picked.hour,
-      picked.minute,
+    final proposed = req.flowTimeAt(
+      isReturn: isReturn,
+      hour: picked.hour,
+      minute: picked.minute,
     );
     const days = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
     final label =
@@ -294,6 +368,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
       text:
           '${isReturn ? '🔄' : '📦'} $flowLabel ${requestedLabel.isNotEmpty ? 'geändert' : 'angefragt'}: $label Uhr',
     );
+    if (!mounted) return;
     AppPopup.toast(context, icon: Icons.schedule, title: '$flowLabel gesendet');
     await _load();
   }
@@ -344,7 +419,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
         var page = startIndex;
         final size = MediaQuery.of(ctx).size;
 
-        Future<void> _shift(int delta) async {
+        Future<void> shift(int delta) async {
           final target = (page + delta).clamp(0, images.length - 1);
           if (target != page) {
             page = target;
@@ -393,10 +468,10 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
                                 if (signal is PointerScrollEvent) {
                                   if (signal.scrollDelta.dy > 0 ||
                                       signal.scrollDelta.dx > 0) {
-                                    _shift(1);
+                                    shift(1);
                                   } else if (signal.scrollDelta.dy < 0 ||
                                       signal.scrollDelta.dx < 0) {
-                                    _shift(-1);
+                                    shift(-1);
                                   }
                                 }
                               },
@@ -496,7 +571,11 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     final renter = _renter;
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.titleOverride ?? _titleFromReq()),
+        title: Text(
+          req?.simulationOnly == true
+              ? 'Pilot-Simulation · ${widget.titleOverride ?? _titleFromReq()}'
+              : widget.titleOverride ?? _titleFromReq(),
+        ),
         centerTitle: true,
         actions: [
           if (req != null && item != null)
@@ -523,8 +602,15 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
                       label: 'Problem melden',
                       value: 'issue',
                     ),
+                    if (_returnCaseEntryPointEligible(req))
+                      const SitMenuOption(
+                        icon: Icons.fact_check_outlined,
+                        label: 'Rückgabe-Prüffall eröffnen',
+                        value: 'return_case',
+                      ),
                   ],
                 );
+                if (!context.mounted) return;
                 switch (picked) {
                   case 'view':
                     ItemDetailsOverlay.showFullPage(context, item: item);
@@ -563,7 +649,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
                               type: 'cancelled',
                               note: 'Von Vermieter storniert',
                             );
-                            if (!mounted) return;
+                            if (!context.mounted) return;
                             AppPopup.toast(
                               context,
                               icon: Icons.cancel_outlined,
@@ -578,6 +664,9 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
                     break;
                   case 'issue':
                     await _openSupportFlow(req: req, item: item);
+                    break;
+                  case 'return_case':
+                    await _openReturnCase(req: req, item: item);
                     break;
                   default:
                 }
@@ -599,7 +688,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
           final isTrulyCompleted = (cat == 'completed') &&
               r.status != 'cancelled' &&
               r.status != 'declined';
-          if (!isTrulyCompleted || r.needsReview) {
+          if (!isTrulyCompleted || r.needsReview || r.simulationOnly) {
             return const SizedBox.shrink();
           }
           return SafeArea(
@@ -655,6 +744,17 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     return 'upcoming';
   }
 
+  bool _returnCaseEntryPointEligible(RentalRequest request) =>
+      ReturnCaseEntryPointPolicy.isEligible(
+        bookingStatus: request.status,
+        simulationOnly: request.simulationOnly,
+        needsReview: request.needsReview,
+        platformContract: request.platformContract,
+        returnT0: request.returnT0,
+        reportDeadline: request.returnReportDeadline,
+        returnCaseOpenedAt: request.returnCaseOpenedAt,
+      );
+
   Widget _buildOngoingBody(
     BuildContext context,
     RentalRequest req,
@@ -667,201 +767,18 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     final diff = due.difference(now);
     final isOverdue = now.isAfter(due) && req.status != 'completed';
     final category = _categoryFor(req);
+    final acceptanceDeadlineValid = _ownerAcceptanceDeadlineValid(req);
 
     final isCompleted = req.status == 'completed';
     final isHeldForReview = req.needsReview;
-    final title = item.title;
-    final location = item.locationText ?? (item.city ?? '');
-    // Derive responsibilities robustly from persisted request snapshot; fall back to
-    // transient selection and express/address hints for legacy data.
-    final bool inferredOwnerDeliversByTransient =
-        (_deliverySel?['hinweg'] == true);
-    final bool inferredOwnerDeliversByExpress =
-        req.expressRequested || (req.expressStatus != null);
-    final bool inferredOwnerDeliversByAddress =
-        ((req.deliveryAddressLine ?? '').toString().trim().isNotEmpty) ||
-            ((req.deliveryCity ?? '').toString().trim().isNotEmpty);
-    final bool ownerDelivers = req.ownerDeliversAtDropoffChosen ||
-        inferredOwnerDeliversByTransient ||
-        inferredOwnerDeliversByExpress ||
-        inferredOwnerDeliversByAddress;
-
-    final bool inferredOwnerPicksUpByTransient =
-        (_deliverySel?['rueckweg'] == true);
-    final bool ownerPicksUp =
-        req.ownerPicksUpAtReturnChosen || inferredOwnerPicksUpByTransient;
-
-    final String targetAddr = _composeTargetAddressFromReq(
-      req,
-      _deliverySel,
-      fallback: location,
-    );
-
-    final breakdown = DataService.priceBreakdownForRequest(
-      item: item,
-      req: req,
-      deliverySel: _deliverySel,
-    );
-    final days = breakdown.days;
-    final rentalSubtotalOnly = breakdown.rentalSubtotal;
-    final platformFee = breakdown.platformFee;
-    double totalPaid = breakdown.totalRenter;
-    final daily = days > 0 ? (rentalSubtotalOnly / days) : rentalSubtotalOnly;
-    final fee = platformFee;
-    final subtotal = rentalSubtotalOnly;
+    final breakdown =
+        DataService.priceBreakdownForRequest(item: item, req: req);
+    final totalPaid = breakdown.totalRenter;
+    final fee = breakdown.platformFee;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Priorität confirmation card (only when request pending confirmation and express was requested)
-        if (req.status == 'pending' &&
-            req.expressRequested &&
-            (req.expressStatus == null || req.expressStatus == 'pending')) ...[
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.20),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-            ),
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: const [
-                    Icon(Icons.flash_on_outlined, color: Colors.white70),
-                    SizedBox(width: 8),
-                    Text(
-                      'Prioritätslieferung angefragt',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Prioritätslieferung in den nächsten 2 Stunden möglich?',
-                  style: TextStyle(color: Colors.white),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  '(5,00 € Zusatzvergütung – wird automatisch gutgeschrieben)',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          await DataService.updateRentalRequestExpress(
-                            requestId: req.id,
-                            accept: true,
-                          );
-                          await DataService.addTimelineEvent(
-                            requestId: req.id,
-                            type: 'express_accepted',
-                            note: 'Prioritätslieferung bestätigt',
-                          );
-                          await DataService.addNotification(
-                            title: 'Priorität bestätigt',
-                            body:
-                                'Die Prioritätslieferung wurde bestätigt (+5,00 €).',
-                          );
-                          await _load();
-                        },
-                        icon: const Icon(Icons.check_circle_outline),
-                        label: const Text('Ja, bestätigen'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          await DataService.updateRentalRequestExpress(
-                            requestId: req.id,
-                            accept: false,
-                          );
-                          await DataService.addTimelineEvent(
-                            requestId: req.id,
-                            type: 'express_declined',
-                            note: 'Prioritätslieferung abgelehnt',
-                          );
-                          await DataService.addNotification(
-                            title: 'Priorität abgelehnt',
-                            body:
-                                'Die 5,00 € Prioritäts-Zahlung wird dem Mieter automatisch erstattet.',
-                          );
-                          await _load();
-                        },
-                        icon: const Icon(Icons.cancel_outlined),
-                        label: const Text('Ablehnen'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-        ] else if (req.expressRequested && req.expressStatus == 'accepted') ...[
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF22C55E).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: const Color(0xFF22C55E).withValues(alpha: 0.24),
-              ),
-            ),
-            child: Row(
-              children: const [
-                Icon(Icons.check_circle_outline, color: Color(0xFF22C55E)),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Prioritätslieferung bestätigt (+5,00 €)',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-        ] else if (req.expressRequested && req.expressStatus == 'declined') ...[
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF43F5E).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: const Color(0xFFF43F5E).withValues(alpha: 0.24),
-              ),
-            ),
-            child: Row(
-              children: const [
-                Icon(Icons.info_outline, color: Color(0xFFF43F5E)),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Prioritätslieferung abgelehnt – 5,00 € werden erstattet',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-
         // Hero image with overlays: status chip (bottom-left), optional countdown (bottom-right),
         // and for upcoming a cancel button (top-right)
         if (_photos.isNotEmpty)
@@ -930,7 +847,10 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
                           }
                           switch (category) {
                             case 'requests':
-                              return Colors.grey.withValues(alpha: 0.12);
+                              return (acceptanceDeadlineValid
+                                      ? Colors.grey
+                                      : const Color(0xFFF43F5E))
+                                  .withValues(alpha: 0.12);
                             case 'upcoming':
                               return const Color(
                                 0xFF0EA5E9,
@@ -959,6 +879,12 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
                             return 'Abgeschlossen';
                           }
                           if (isCompleted) return 'Abgeschlossen';
+                          if (category == 'requests' &&
+                              !acceptanceDeadlineValid) {
+                            return req.bindingExpiresAt == null
+                                ? 'Annahme gesperrt'
+                                : 'Annahmefrist abgelaufen';
+                          }
                           if (category == 'requests') return 'Anfrage';
                           if (category == 'upcoming') return 'Kommend';
                           return 'Laufend';
@@ -973,9 +899,12 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
                                   : const Color(0xFF22C55E);
                             }
                             if (isCompleted) return const Color(0xFF22C55E);
-                            return category == 'requests'
-                                ? Colors.grey
-                                : const Color(0xFF0EA5E9);
+                            if (category == 'requests') {
+                              return acceptanceDeadlineValid
+                                  ? Colors.grey
+                                  : const Color(0xFFF43F5E);
+                            }
+                            return const Color(0xFF0EA5E9);
                           }(),
                           fontWeight: FontWeight.w700,
                         ),
@@ -1169,9 +1098,10 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
                             );
                             if (!mounted) return;
                             await _load();
+                            if (!context.mounted) return;
                             // Auto-close after 3 seconds
                             Future.delayed(const Duration(seconds: 3), () {
-                              if (mounted) {
+                              if (context.mounted) {
                                 Navigator.of(
                                   context,
                                   rootNavigator: true,
@@ -1230,55 +1160,72 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () async {
-                    await DataService.updateRentalRequestStatus(
-                      requestId: req.id,
-                      status: 'accepted',
-                    );
-                    await DataService.addTimelineEvent(
-                      requestId: req.id,
-                      type: 'accepted',
-                      note: 'Anfrage akzeptiert',
-                    );
-                    if (!mounted) return;
-                    await _load();
-                    // Auto-close after 3 seconds
-                    Future.delayed(const Duration(seconds: 3), () {
-                      if (mounted) {
-                        Navigator.of(context, rootNavigator: true).maybePop();
-                      }
-                    });
-                    // Result popup
-                    // ignore: unawaited_futures
-                    AppPopup.show(
-                      context,
-                      icon: Icons.check_circle_outline,
-                      title: 'Du hast die Anfrage akzeptiert.',
-                      message:
-                          'Du findest diese Vermietung jetzt unter Kommende Vermietungen.',
-                      barrierDismissible: true,
-                      showCloseIcon: false,
-                      plainCloseIcon: true,
-                      autoCloseAfter: const Duration(seconds: 20),
-                      actions: [
-                        FilledButton(
-                          onPressed: () {
-                            Navigator.of(
-                              context,
-                              rootNavigator: true,
-                            ).maybePop();
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    OwnerRequestsScreen(initialTabIndex: 1),
+                  onPressed: acceptanceDeadlineValid
+                      ? () async {
+                          final declarations =
+                              await showPrivatePilotOwnerAcceptanceDialog(
+                            context,
+                            request: req,
+                          );
+                          if (declarations == null) return;
+                          if (!context.mounted) return;
+                          final accepted =
+                              await commitPrivatePilotOwnerAcceptance(
+                            context,
+                            request: req,
+                            legalDeclarations: declarations,
+                          );
+                          if (!accepted) return;
+                          await DataService.addTimelineEvent(
+                            requestId: req.id,
+                            type: 'accepted',
+                            note: 'Anfrage akzeptiert',
+                          );
+                          if (!mounted) return;
+                          await _load();
+                          if (!context.mounted) return;
+                          // Auto-close after 3 seconds
+                          Future.delayed(const Duration(seconds: 3), () {
+                            if (context.mounted) {
+                              Navigator.of(context, rootNavigator: true)
+                                  .maybePop();
+                            }
+                          });
+                          // Result popup
+                          // ignore: unawaited_futures
+                          AppPopup.show(
+                            context,
+                            icon: Icons.check_circle_outline,
+                            title: 'Du hast die Anfrage akzeptiert.',
+                            message:
+                                'Du findest diese Vermietung jetzt unter Kommende Vermietungen.',
+                            barrierDismissible: true,
+                            showCloseIcon: false,
+                            plainCloseIcon: true,
+                            autoCloseAfter: const Duration(seconds: 20),
+                            actions: [
+                              FilledButton(
+                                onPressed: () {
+                                  Navigator.of(
+                                    context,
+                                    rootNavigator: true,
+                                  ).maybePop();
+                                  Navigator.of(context).pushReplacement(
+                                    MaterialPageRoute(
+                                      builder: (_) => OwnerRequestsScreen(
+                                        initialTabIndex: 1,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: const Text(
+                                  'Zu Kommende Vermietungen',
+                                ),
                               ),
-                            );
-                          },
-                          child: const Text('Zu Kommende Vermietungen'),
-                        ),
-                      ],
-                    );
-                  },
+                            ],
+                          );
+                        }
+                      : null,
                   icon: const Icon(
                     Icons.check_circle_outline,
                     color: Color(0xFF22C55E),
@@ -1294,6 +1241,18 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
               ),
             ],
           ),
+          if (!acceptanceDeadlineValid) ...[
+            const SizedBox(height: 8),
+            Text(
+              req.bindingExpiresAt == null
+                  ? 'Die verbindliche Annahmefrist fehlt. Diese Anfrage kann nicht angenommen werden; bitte lade die Ansicht neu.'
+                  : 'Die 30-Minuten-Annahmefrist ist abgelaufen. Diese Anfrage kann nicht mehr angenommen werden.',
+              style: const TextStyle(
+                color: Color(0xFFF43F5E),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ],
 
         const SizedBox(height: 12),
@@ -1318,18 +1277,16 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Transport info sentence inline (no extra card)
+              // Private-pilot transport is self pickup and self return.
               Builder(
                 builder: (context) {
                   String? t;
-                  if (category == 'upcoming' || category == 'requests') {
-                    t = ownerDelivers
-                        ? 'Du lieferst den Artikel zum Mieter.'
-                        : 'Der Mieter holt den Artikel selbst ab.';
+                  if (req.simulationOnly) {
+                    t = 'Unverbindliche Pilot-Simulation: kein Vertrag, keine Reservierung und keine Zahlung.';
+                  } else if (category == 'upcoming' || category == 'requests') {
+                    t = 'Der Mieter holt den Artikel selbst ab.';
                   } else if (category == 'ongoing') {
-                    t = ownerPicksUp
-                        ? 'Du holst den Artikel wieder ab.'
-                        : 'Der Mieter bringt den Artikel selbst zurück.';
+                    t = 'Der Mieter bringt den Artikel selbst zurück.';
                   }
                   if (t == null) return const SizedBox.shrink();
                   return Padding(
@@ -1405,78 +1362,16 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
           ),
         ),
 
-        // Approximate pickup/return map directly under the card (only when der Vermieter liefert/abholt)
-        if (category == 'upcoming' && ownerDelivers) ...[
-          const SizedBox(height: 8),
-          ApproxLocationMap(
-            lat: item.lat,
-            lng: item.lng,
-            label: AddressPrivacy.nearbyShort(kindLabel: 'Abholung'),
-          ),
-          const SizedBox(height: 8),
-          Builder(
-            builder: (context) {
-              final reveal = AddressPrivacy.shouldRevealExactAddress(
-                isAccepted: true,
-                handoverAt: req.start,
-              );
-              final text = reveal
-                  ? 'Abholort: $targetAddr'
-                  : AddressPrivacy.privacyNoticePickup();
-              final icon = reveal ? Icons.place_outlined : Icons.lock_outline;
-              return _AddressInfoCardInline(icon: icon, text: text);
-            },
-          ),
-        ],
-        if (category == 'requests' && ownerDelivers) ...[
-          const SizedBox(height: 8),
-          ApproxLocationMap(
-            lat: item.lat,
-            lng: item.lng,
-            label: AddressPrivacy.nearbyShort(kindLabel: 'Abholung'),
-          ),
-          const SizedBox(height: 8),
-          Builder(
-            builder: (context) {
-              final reveal = AddressPrivacy.shouldRevealExactAddress(
-                isAccepted: req.status.toLowerCase().trim() == 'accepted',
-                handoverAt: req.start,
-              );
-              final text = reveal
-                  ? 'Abholort: $targetAddr'
-                  : AddressPrivacy.privacyNoticePickup();
-              final icon = reveal ? Icons.place_outlined : Icons.lock_outline;
-              return _AddressInfoCardInline(icon: icon, text: text);
-            },
-          ),
-        ],
-        if (category == 'ongoing' && ownerPicksUp) ...[
-          const SizedBox(height: 8),
-          ApproxLocationMap(
-            lat: item.lat,
-            lng: item.lng,
-            label: AddressPrivacy.nearbyShort(kindLabel: 'Rückgabe'),
-          ),
-          const SizedBox(height: 8),
-          Builder(
-            builder: (context) {
-              // For ongoing bookings, always show the exact address
-              return _AddressInfoCardInline(
-                icon: Icons.place_outlined,
-                text: 'Rückgabeort: $targetAddr',
-              );
-            },
-          ),
-        ],
-
-        if (_confirmedLocationText(false) != null) ...[
+        if (_addressVisibility['result'] == 'revealed' &&
+            _confirmedLocationText(false) != null) ...[
           const SizedBox(height: 12),
           _AddressInfoCardInline(
             icon: Icons.place_outlined,
             text: _confirmedLocationText(false)!,
           ),
         ],
-        if (_confirmedLocationMapsUrl(false).isNotEmpty) ...[
+        if (_addressVisibility['result'] == 'revealed' &&
+            _confirmedLocationMapsUrl(false).isNotEmpty) ...[
           const SizedBox(height: 4),
           Align(
             alignment: Alignment.centerLeft,
@@ -1506,87 +1401,84 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
 
         const SizedBox(height: 16),
         // Payment summary (owner view): only payout shown
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.20),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-          ),
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Zahlungsübersicht',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 10),
-              // If this rental was cancelled by the owner, there is no payout
-              if (req.status == 'cancelled' &&
-                  (req.cancelledBy == 'owner')) ...[
-                _AmountRow(label: 'Auszahlung', value: '0,00 €', strong: true),
-                const SizedBox(height: 2),
+        if (!req.simulationOnly)
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.20),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+            ),
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  'Keine Auszahlung, da vom Vermieter storniert.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.white70,
+                  'Zahlungsübersicht',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-              ] else if (isCompleted && isHeldForReview) ...[
-                _AmountRow(
-                  label: 'Wird geprüft',
-                  value: 'Wird nach Prüfung abgeschlossen',
-                  strong: true,
-                ),
-              ] else if (isCompleted) ...[
-                _AmountRow(
-                  label: 'Ausgezahlt (an Vermieter)',
-                  value: _formatEuro(totalPaid - fee),
-                  strong: true,
-                ),
-                Text(
-                  'Ausgezahlt am ${_formatPayoutDate(req.end)}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.white70,
-                  ),
-                ),
-              ] else ...[
-                _AmountRow(
-                  label: 'Vorauss. Auszahlung',
-                  value: _formatEuro(breakdown.payoutOwner),
-                  strong: true,
-                ),
-                Text(
-                  'Auszahlung am ${_formatPayoutDate(req.end)}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.white70,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 8),
-              if (!isHeldForReview &&
-                  (category == 'ongoing' || category == 'completed') &&
-                  !(req.status == 'cancelled' && (req.cancelledBy == 'owner')))
-                Align(
-                  alignment: Alignment.center,
-                  child: OutlinedButton.icon(
-                    onPressed: () => _downloadReceiptPdf(
-                      item,
-                      req,
-                      totalPaid,
-                      fee,
-                      subtotal,
+                const SizedBox(height: 10),
+                // If this rental was cancelled by the owner, there is no payout
+                if (req.status == 'cancelled' &&
+                    (req.cancelledBy == 'owner')) ...[
+                  _AmountRow(
+                      label: 'Auszahlung', value: '0,00 €', strong: true),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Keine Auszahlung, da vom Vermieter storniert.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white70,
                     ),
-                    icon: const Icon(Icons.picture_as_pdf),
-                    label: const Text('Beleg herunterladen (PDF)'),
                   ),
-                ),
-            ],
+                ] else if (isCompleted && isHeldForReview) ...[
+                  _AmountRow(
+                    label: 'Wird geprüft',
+                    value: 'Wird nach Prüfung abgeschlossen',
+                    strong: true,
+                  ),
+                ] else if (isCompleted) ...[
+                  _AmountRow(
+                    label: 'Ausgezahlt (an Vermieter)',
+                    value: _formatEuro(totalPaid - fee),
+                    strong: true,
+                  ),
+                  Text(
+                    'Ausgezahlt am ${_formatPayoutDate(req.end)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white70,
+                    ),
+                  ),
+                ] else ...[
+                  _AmountRow(
+                    label: 'Vorauss. Auszahlung',
+                    value: _formatEuro(breakdown.payoutOwner),
+                    strong: true,
+                  ),
+                  Text(
+                    'Auszahlung am ${_formatPayoutDate(req.end)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                if (!isHeldForReview &&
+                    (category == 'ongoing' || category == 'completed') &&
+                    !(req.status == 'cancelled' &&
+                        (req.cancelledBy == 'owner')))
+                  Align(
+                    alignment: Alignment.center,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _downloadReceiptPdf(req),
+                      icon: const Icon(Icons.picture_as_pdf),
+                      label: const Text('Beleg herunterladen (PDF)'),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
 
         // Completion summary (like renter view) – show for completed bucket including cancelled
         const SizedBox(height: 12),
@@ -1665,9 +1557,10 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
 
         // Bottom timeline removed in favor of compact status card
         const SizedBox(height: 12),
-        if (category == 'requests' ||
-            category == 'upcoming' ||
-            category == 'ongoing')
+        if (!req.simulationOnly &&
+            (category == 'requests' ||
+                category == 'upcoming' ||
+                category == 'ongoing'))
           Container(
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.20),
@@ -1756,7 +1649,8 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
         // Handover/Return block moved to the very bottom (above page padding)
         // Show only for upcoming or ongoing. Hide for completed (incl. cancelled/declined)
         // and for requests.
-        if (category == 'upcoming' || category == 'ongoing')
+        if (!req.simulationOnly &&
+            (category == 'upcoming' || category == 'ongoing'))
           Container(
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.20),
@@ -1793,6 +1687,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
                             )) {
                               return;
                             }
+                            if (!context.mounted) return;
                             await _startPickupFlowOwner(
                               context,
                               req,
@@ -1824,6 +1719,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
                             )) {
                               return;
                             }
+                            if (!context.mounted) return;
                             await _startReturnFlow(context, req, item, renter);
                           },
                           icon: const Icon(Icons.qr_code_scanner),
@@ -1845,75 +1741,47 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     );
   }
 
-  Future<void> _downloadReceiptPdf(
-    Item item,
-    RentalRequest req,
-    double totalPaid,
-    double fee,
-    double subtotal,
-  ) async {
-    if (req.needsReview) {
+  Future<void> _downloadReceiptPdf(RentalRequest req) async {
+    try {
+      final documents = await InvoicesService.getInvoicesForCurrentUser();
+      final matching = documents.where((document) =>
+          document.bookingId == req.id &&
+          document.type == InvoiceType.ownerPayoutStatement);
+      if (matching.isEmpty) {
+        if (mounted) {
+          await AppPopup.info(
+            context,
+            title: 'Noch kein Auszahlungsnachweis',
+            message:
+                'Der Beleg wird erst nach einer tatsächlich ausgeführten Auszahlung bereitgestellt.',
+          );
+        }
+        return;
+      }
+      final invoice = matching.first;
+      await InvoicesService.verifyDownloadArtifact(invoice);
+      final bytes = await InvoicePdfService.buildPdf(invoice);
+      final fileName =
+          'SIT_Auszahlungsbeleg_${invoice.bookingId}_${invoice.issuedAt.toIso8601String().split('T').first}.pdf';
+      final saveResult = await LocalArtifactStorageService.maybeSaveReceiptPdf(
+        bytes: bytes,
+        artifactKey:
+            'financial-document:${invoice.id}:${invoice.artifactSha256}',
+        filename: fileName,
+      );
+      if (!saveResult.handledPrimaryAction) {
+        await Printing.layoutPdf(name: fileName, onLayout: (_) async => bytes);
+      }
+    } catch (error) {
+      debugPrint('[OngoingOwnerDetail] payout document failed: $error');
       if (mounted) {
-        AppPopup.toast(
+        await AppPopup.error(
           context,
-          icon: Icons.hourglass_top_outlined,
-          title: 'Beleg gesperrt, solange dieser Fall geprüft wird.',
+          title: 'Auszahlungsnachweis konnte nicht geladen werden',
+          message: 'Bitte versuche es erneut.',
         );
       }
-      return;
     }
-    final bookingId = _computeBookingId(item, req);
-    final bool expressRefund = req.expressRequested &&
-        req.expressStatus == 'declined' &&
-        req.expressFee > 0;
-    final breakdown = DataService.priceBreakdownForRequest(
-      item: item,
-      req: req,
-      deliverySel: _deliverySel,
-    );
-    final html = '''
-<!doctype html>
-<html lang="de">
-<meta charset="utf-8">
-<title>Beleg $bookingId</title>
-<style>
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:24px;color:#0f172a}
-  h1{font-size:18px;margin:0 0 12px}
-  table{border-collapse:collapse;width:100%;max-width:560px}
-  td{padding:6px 0}
-  .right{text-align:right}
-  .muted{color:#475569}
-  .total{font-weight:800}
-  hr{border:none;border-top:1px solid #e2e8f0;margin:12px 0}
- </style>
- <h1>Beleg</h1>
- <div class="muted">Buchungs-ID $bookingId</div>
- <div style="margin:8px 0 16px 0">${item.title}</div>
- <div class="muted">Zeitraum: ${_formatRange(req.start, req.end)}</div>
- <hr>
-  <table>
-   <tr><td>Mietpreis (Tagespreis × Tage)</td><td class="right">${_formatEuro(breakdown.rentalSubtotal)}</td></tr>
-   ${breakdown.dropoffFee > 0 ? '<tr><td>Lieferung (Abgabe)</td><td class="right">${_formatEuro(breakdown.dropoffFee)}</td></tr>' : ''}
-   ${breakdown.returnFee > 0 ? '<tr><td>Abholung (Rückgabe)</td><td class="right">${_formatEuro(breakdown.returnFee)}</td></tr>' : ''}
-    ${breakdown.expressApplied > 0 ? '<tr><td>Prioritätszuschlag</td><td class="right">${_formatEuro(breakdown.expressApplied)}</td></tr>' : ''}
-    ${breakdown.expressApplied > 0 ? '<tr><td>Plattformbeitrag auf Priorität (10%)</td><td class="right">${_formatEuro(double.parse((breakdown.expressApplied * 0.10).toStringAsFixed(2)))}</td></tr>' : ''}
-   <tr><td>Plattformbeitrag</td><td class="right">${_formatEuro(breakdown.platformFee)}</td></tr>
-   <tr><td colspan="2"><hr></td></tr>
-   <tr><td class="total">Gesamt bezahlt (Mieter)</td><td class="right total">${_formatEuro(breakdown.totalRenter)}</td></tr>
-  ${expressRefund ? '<tr><td>Rückerstattung (Priorität)</td><td class="right">${_formatEuro(req.expressFee)}</td></tr>' : ''}
- </table>
-  <p class="muted">${expressRefund ? 'Prioritätszuschlag wird vollständig erstattet.' : ''}</p>
- <p class="muted">ShareItToo – Quittung ohne Gewähr.</p>
- </html>
-''';
-    final dataUri = Uri.dataFromString(
-      html,
-      mimeType: 'text/html',
-      encoding: const Utf8Codec(),
-    );
-    try {
-      await launchUrl(dataUri, mode: LaunchMode.platformDefault);
-    } catch (_) {}
   }
 
   String _formatRange(DateTime a, DateTime b) {
@@ -1959,46 +1827,11 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     return '$days Tage';
   }
 
-  Future<void> _openMaps(BuildContext context, String query) async {
-    final uri = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}',
-    );
-    try {
-      if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
-        _toast(context, 'Karte konnte nicht geöffnet werden');
-      }
-    } catch (_) {
-      _toast(context, 'Karte konnte nicht geöffnet werden');
-    }
-  }
-
   String _computeBookingId(Item item, RentalRequest req) {
     final seed =
         ((item.id.hashCode) ^ (req.id.hashCode) ^ (item.title.hashCode)).abs();
     final s = seed.toString().padLeft(8, '0');
     return 'BKG-${s.substring(0, 4)}-${s.substring(4, 8)}';
-  }
-
-  String _confirmationCode(
-    Item item,
-    RentalRequest req, {
-    required String segment,
-    required String presenterRole,
-  }) {
-    return HandoverCodeService.codeForTitleAndStart(
-      title: item.title,
-      start: req.start,
-      bookingId: _computeBookingId(item, req),
-      segment: segment,
-      presenterRole: presenterRole,
-    );
-  }
-
-  String _handoverCode(Item item, RentalRequest req) {
-    return HandoverCodeService.codeFromTitleAndStart(
-      title: item.title,
-      start: req.start,
-    );
   }
 
   String _formatEuro(double v) {
@@ -2028,47 +1861,9 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     return '$dd. $m';
   }
 
-  String _composeTargetAddressFromReq(
-    RentalRequest req,
-    Map<String, dynamic>? sel, {
-    required String fallback,
-  }) {
-    // Prefer persisted snapshot on the request; fall back to last-known transient selection.
-    final String line =
-        (req.deliveryAddressLine ?? (sel?['addressLine'] as String?) ?? '')
-            .trim();
-    final String city =
-        (req.deliveryCity ?? (sel?['city'] as String?) ?? '').trim();
-    if (line.isEmpty && city.isEmpty) return fallback;
-    if (line.isNotEmpty && city.isNotEmpty) return '$line, $city';
-    return line.isNotEmpty ? line : city;
-  }
-
-  void _toast(BuildContext context, String msg) {
-    AppPopup.toast(context, icon: Icons.info_outline, title: msg);
-  }
-
-  bool _canStartOwnerHandover(RentalRequest req) {
-    final status = req.status.toLowerCase().trim();
-    return status == 'accepted';
-  }
-
   bool _canCompleteOwnerReturn(RentalRequest req) {
     final status = req.status.toLowerCase().trim();
     return status == 'running';
-  }
-
-  Future<bool> _guardRequiredHandoverPhotos(String requestId) async {
-    final handoverPhotos = await DataService.getHandoverPhotoCount(requestId);
-    if (handoverPhotos >= DataService.minimumRequiredPhotos) return true;
-    if (mounted) {
-      AppPopup.toast(
-        context,
-        icon: Icons.photo_camera_back_outlined,
-        title: 'Bitte dokumentiere die Übergabe zuerst mit mindestens 4 Fotos.',
-      );
-    }
-    return false;
   }
 
   Future<bool> _guardRequiredReturnPhotos(String requestId) async {
@@ -2157,194 +1952,27 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     return current.id;
   }
 
-  Future<void> _confirmManualHandover(
-    BuildContext context,
-    RentalRequest req,
-    Item item,
-  ) async {
-    await AppPopup.toast(
-      context,
-      icon: Icons.info_outline,
-      title:
-          'Eine Übergabe kann nur durch QR-Code oder den 6-stelligen Code der Gegenpartei bestätigt werden.',
-    );
-  }
-
-  RentalRequest? _requestForId(String requestId) {
-    final req = _req;
-    if (req != null && req.id == requestId) return req;
-    return null;
-  }
-
-  Future<void> _startQrScan(
-    BuildContext context, {
-    required String expectedCode,
-    required String bookingId,
-    required String requestId,
-  }) async {
-    String? scanned;
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.black,
-      barrierColor: Colors.black.withValues(alpha: 0.8),
-      builder: (ctx) {
-        return SizedBox(
-          height: MediaQuery.of(ctx).size.height * 0.86,
-          child: Stack(
-            children: [
-              MobileScanner(
-                controller: MobileScannerController(
-                  detectionSpeed: DetectionSpeed.normal,
-                  facing: CameraFacing.back,
-                  torchEnabled: false,
-                ),
-                onDetect: (capture) {
-                  final barcodes = capture.barcodes;
-                  if (barcodes.isEmpty) return;
-                  final value = barcodes.first.rawValue ?? '';
-                  if (value.isEmpty) return;
-                  scanned = value;
-                  Navigator.of(ctx).maybePop();
-                },
-              ),
-              Positioned(
-                left: 8,
-                top: 8,
-                child: IconButton(
-                  onPressed: () => Navigator.of(ctx).maybePop(),
-                  icon: const Icon(Icons.close, color: Colors.white),
-                ),
-              ),
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'Scanne den QR-Code des Mieters',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (!mounted) return;
-    if (scanned == null || scanned!.isEmpty) {
-      AppPopup.toast(
-        context,
-        icon: Icons.qr_code_2,
-        title: 'Kein Code erkannt',
-      );
-      return;
-    }
-
-    try {
-      final raw = scanned!.trim();
-      final matches = HandoverCodeService.isExpectedQrPayload(
-        raw,
-        segment: HandoverCodeService.segmentPickup,
-        presenterRole: HandoverCodeService.presenterRenter,
-        code: expectedCode,
-        bookingId: bookingId,
-      );
-      if (!matches) {
-        AppPopup.toast(
-          context,
-          icon: Icons.error_outline,
-          title:
-              'Dieser Code passt nicht zu diesem Übergabeschritt. Bitte den aktuellen Code erneut anzeigen oder scannen.',
-        );
-        return;
-      }
-
-      final request = _requestForId(requestId);
-      if (request == null) {
-        AppPopup.toast(
-          context,
-          icon: Icons.info_outline,
-          title: 'Übergabe ist gerade nicht verfügbar',
-        );
-        return;
-      }
-      final ownerUserId = await _guardAuthenticatedOwner(request.ownerId);
-      if (!context.mounted) return;
-      if (ownerUserId == null) return;
-      if (!_canStartOwnerHandover(request)) {
-        AppPopup.toast(
-          context,
-          icon: Icons.info_outline,
-          title: 'Übergabe ist gerade nicht verfügbar',
-        );
-        return;
-      }
-      final isActive = await _guardActiveFlow(requestId, isReturn: false);
-      if (!isActive) return;
-      final hasRequiredPhotos = await _guardRequiredHandoverPhotos(requestId);
-      if (!hasRequiredPhotos) return;
-      final galleryAcknowledged = await _acknowledgeGalleryEvidenceIfNeeded(
-        requestId,
-        isReturn: false,
-      );
-      if (!galleryAcknowledged) return;
-      final result = await DataService.confirmPickupTransition(
-        requestId: requestId,
-        confirmedByUserId: ownerUserId,
-        method: 'qr',
-        confirmationContextVerified: true,
-        galleryAcknowledged: galleryAcknowledged,
-      );
-      if (!context.mounted) return;
-      if (!result.success) {
-        AppPopup.toast(
-          context,
-          icon: Icons.lock_outline,
-          title: result.errorMessage ?? 'Bestätigung fehlgeschlagen',
-        );
-        return;
-      }
-      AppPopup.toast(
-        context,
-        icon: Icons.check_circle_outline,
-        title: 'Übergabe per QR bestätigt',
-      );
-      await _load();
-    } catch (e) {
-      debugPrint('[handover] qr scan verification failed: $e');
-      if (!context.mounted) return;
-      AppPopup.toast(
-        context,
-        icon: Icons.error_outline,
-        title: 'Bestätigung fehlgeschlagen',
-      );
-    }
-  }
-
   Future<void> _startReturnFlow(
     BuildContext context,
     RentalRequest req,
     Item item,
     User renter,
   ) async {
-    final code = _confirmationCode(
-      item,
-      req,
-      segment: HandoverCodeService.segmentReturn,
-      presenterRole: HandoverCodeService.presenterRenter,
-    );
     final ok = await ReturnHandoverStepperSheet.push(
       context,
       item: item,
       request: req,
       renterName: renter.displayName,
       ownerName: _owner?.displayName ?? 'Vermieter',
-      handoverCode: code,
+      handoverCode: '',
+      confirmationVerifier: ({qrPayload, code}) =>
+          DataService.verifyBookingConfirmationChallenge(
+        requestId: req.id,
+        segment: HandoverCodeService.segmentReturn,
+        presenterRole: HandoverCodeService.presenterRenter,
+        qrPayload: qrPayload,
+        code: code,
+      ),
       viewerIsOwner: true,
       mode: ReturnFlowMode.returnFlow,
     );
@@ -2365,7 +1993,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
   }) async {
     // Set completed, add timeline + notification, send receipt
     final ownerUserId = await _guardAuthenticatedOwner(req.ownerId);
-    if (!context.mounted) return;
+    if (!mounted) return;
     if (ownerUserId == null) return;
     if (!_canCompleteOwnerReturn(req)) {
       AppPopup.toast(
@@ -2379,61 +2007,29 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     if (!isActive) return;
     final hasRequiredPhotos = await _guardRequiredReturnPhotos(req.id);
     if (!hasRequiredPhotos) return;
-    final pausedForReview =
-        await DataService.pauseReturnCompletionIfNeedsReview(
-      req.id,
-      source: 'ongoing_owner_detail_screen',
-    );
     final galleryAcknowledged = await _acknowledgeGalleryEvidenceIfNeeded(
       req.id,
       isReturn: true,
     );
     if (!galleryAcknowledged) return;
-    if (pausedForReview) {
+    final transition = await DataService.confirmReturnTransition(
+      requestId: req.id,
+      confirmedByUserId: ownerUserId,
+      method: 'stepper',
+      confirmationContextVerified: true,
+      galleryAcknowledged: galleryAcknowledged,
+      reviewPauseSource: 'ongoing_owner_detail_screen',
+    );
+    if (!transition.success) {
       if (!mounted) return;
       AppPopup.toast(
         context,
         icon: Icons.info_outline,
-        title:
-            'Diese Rückgabe ist zur Prüfung markiert. Der Abschluss wird pausiert, bis der Fall geprüft wurde.',
+        title: transition.errorMessage ?? 'Rückgabe nicht abgeschlossen',
       );
       await _load();
       return;
     }
-    await DataService.updateRentalRequestStatus(
-      requestId: req.id,
-      status: 'completed',
-    );
-    await DataService.recordRentalRequestConfirmation(
-      requestId: req.id,
-      isReturn: true,
-      method: 'stepper',
-      confirmedByRole: 'owner',
-      confirmedByUserId: ownerUserId,
-    );
-    await DataService.clearReturnActive(req.id);
-    await DataService.addTimelineEvent(
-      requestId: req.id,
-      type: 'completed',
-      note: 'Rückgabe abgeschlossen',
-    );
-    // Release/cancel ride compensation if present (return segment)
-    try {
-      final grant = await DataService.getRideCompensationDecision(
-        requestId: req.id,
-        segment: 'return',
-        consume: true,
-      );
-      if (grant != null) {
-        await DataService.addTimelineEvent(
-          requestId: req.id,
-          type: grant ? 'ride_comp_release_return' : 'ride_comp_cancel_return',
-          note: grant
-              ? 'Fahrtvergütung freigegeben (Rückgabe)'
-              : 'Fahrtvergütung nicht ausgezahlt (Rückgabe)',
-        );
-      }
-    } catch (_) {}
     await DataService.addNotification(
       title: 'Buchung abgeschlossen',
       body:
@@ -2465,86 +2061,30 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     Item item,
     User renter,
   ) async {
-    final code = _confirmationCode(
-      item,
-      req,
+    final challenge = await DataService.issueBookingConfirmationChallenge(
+      requestId: req.id,
       segment: HandoverCodeService.segmentPickup,
-      presenterRole: HandoverCodeService.presenterOwner,
     );
+    if (challenge == null) {
+      if (!context.mounted) return;
+      AppPopup.toast(
+        context,
+        icon: Icons.lock_outline,
+        title: 'Sicherer Übergabe-Code konnte nicht erstellt werden.',
+      );
+      return;
+    }
+    if (!context.mounted) return;
     await ReturnHandoverStepperSheet.push(
       context,
       item: item,
       request: req,
       renterName: renter.displayName,
       ownerName: _owner?.displayName ?? 'Vermieter',
-      handoverCode: code,
+      handoverCode: challenge['code']?.toString() ?? '',
+      qrPayload: challenge['qrPayload']?.toString(),
       viewerIsOwner: true,
       mode: ReturnFlowMode.pickupFlow,
-    );
-  }
-
-  void _showQrOverlay(BuildContext context, String data) {
-    showGeneralDialog(
-      context: context,
-      barrierLabel: 'QR',
-      barrierDismissible: true,
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 180),
-      pageBuilder: (context, anim, anim2) {
-        final theme = Theme.of(context);
-        return GestureDetector(
-          onTap: () => Navigator.of(context, rootNavigator: true).maybePop(),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                  child: Container(color: Colors.black.withValues(alpha: 0.25)),
-                ),
-              ),
-              Center(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.45,
-                          ),
-                          blurRadius: 28,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(16),
-                    child: QrImageView(
-                      data: data,
-                      version: QrVersions.auto,
-                      size: 300,
-                      backgroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-      transitionBuilder: (context, anim, anim2, child) {
-        final curved = CurvedAnimation(
-          parent: anim,
-          curve: Curves.easeOutCubic,
-        );
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.95, end: 1.0).animate(curved),
-            child: child,
-          ),
-        );
-      },
     );
   }
 
@@ -2562,14 +2102,12 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
       direction: 'owner_to_renter',
     );
     if (ok == true && context.mounted) {
-      setState(() => _reviewAlreadySubmitted = true);
       await AppPopup.toast(
         context,
         icon: Icons.star_rate_outlined,
         title: 'Danke für deine Bewertung!',
       );
     } else if (ok == false && context.mounted) {
-      setState(() => _reviewAlreadySubmitted = true);
       await AppPopup.toast(
         context,
         icon: Icons.check_circle_outline,
@@ -2617,179 +2155,6 @@ class _AddressInfoCardInline extends StatelessWidget {
   }
 }
 
-class _OwnerStatusCard extends StatelessWidget {
-  final String status;
-  final DateTime end;
-  final bool isOverdue;
-  final double totalPaid;
-  final double fee;
-  final bool expressAccepted;
-  const _OwnerStatusCard({
-    required this.status,
-    required this.end,
-    required this.isOverdue,
-    required this.totalPaid,
-    required this.fee,
-    required this.expressAccepted,
-  });
-
-  String _formatEuro(double v) {
-    String two = v.toStringAsFixed(2).replaceAll('.', ',');
-    return '$two €';
-  }
-
-  String _formatPayoutDate(DateTime end) {
-    final payout = end.add(const Duration(days: 1));
-    const months = [
-      'Jan',
-      'Feb',
-      'Mär',
-      'Apr',
-      'Mai',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Okt',
-      'Nov',
-      'Dez',
-    ];
-    final m = months[(payout.month - 1).clamp(0, 11)];
-    final dd = payout.day.toString().padLeft(2, '0');
-    return '$dd. $m';
-  }
-
-  String _countdownText(DateTime to) {
-    final now = DateTime.now();
-    final d = to.difference(now);
-    if (d.isNegative) {
-      final ad = d.abs();
-      final days = ad.inDays;
-      if (days == 0) return 'Überfällig seit Heute';
-      if (days == 1) return 'Überfällig seit 1 Tag';
-      return 'Überfällig seit $days Tagen';
-    }
-    final days = d.inDays;
-    if (days == 0) return 'Rückgabe Heute';
-    if (days == 1) return 'Rückgabe in 1 Tag';
-    return 'Rückgabe in $days Tagen';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final payout = (totalPaid - fee).clamp(0.0, totalPaid);
-    final colorOk = const Color(0xFF22C55E);
-    final colorWarn = const Color(0xFFF43F5E);
-    final colorInfo = const Color(0xFF0EA5E9);
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: 0.06),
-            Colors.white.withValues(alpha: 0.03),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                status == 'cancelled'
-                    ? Icons.cancel_outlined
-                    : Icons.verified_outlined,
-                color: status == 'cancelled' ? colorWarn : colorOk,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                status == 'cancelled' ? 'Storniert' : 'Bezahlt',
-                style: TextStyle(
-                  color: status == 'cancelled' ? colorWarn : colorOk,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const Spacer(),
-              if (status != 'cancelled')
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: colorInfo.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: colorInfo.withValues(alpha: 0.24),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isOverdue
-                            ? Icons.report_outlined
-                            : Icons.timer_outlined,
-                        size: 16,
-                        color: isOverdue ? colorWarn : Colors.white70,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        _countdownText(end),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          if (status != 'cancelled') ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Icon(
-                  Icons.payments_outlined,
-                  color: Colors.white70,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Vorauss. Auszahlung: ${_formatEuro(payout)}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                Text(
-                  _formatPayoutDate(end),
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ],
-            ),
-            if (expressAccepted) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Abholung vereinbart (Priorität)',
-                style: TextStyle(color: Colors.white),
-              ),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _Bullet extends StatelessWidget {
   final String text;
   const _Bullet({required this.text});
@@ -2817,12 +2182,10 @@ class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  final Widget? trailing;
   const _InfoRow({
     required this.icon,
     required this.label,
     required this.value,
-    this.trailing,
   });
   @override
   Widget build(BuildContext context) {
@@ -2855,26 +2218,7 @@ class _InfoRow extends StatelessWidget {
             ],
           ),
         ),
-        if (trailing != null) ...[const SizedBox(width: 8), trailing!],
       ],
-    );
-  }
-}
-
-class _MapLink extends StatelessWidget {
-  final VoidCallback onTap;
-  const _MapLink({required this.onTap});
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Text(
-        'Karte',
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.primary,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
     );
   }
 }
@@ -3027,156 +2371,6 @@ class _FactRow extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _PrimaryCTA extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-  const _PrimaryCTA({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 40,
-      child: FilledButton.icon(
-        style: FilledButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-        ),
-        onPressed: onPressed,
-        icon: Icon(icon, size: 18),
-        label: Text(label),
-      ),
-    );
-  }
-}
-
-class _SecondaryCTA extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _SecondaryCTA({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 36,
-      child: TextButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 18, color: Colors.white70),
-        label: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white70,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Timeline extends StatelessWidget {
-  final String current; // Laufend | Überfällig
-  const _Timeline({required this.current});
-
-  @override
-  Widget build(BuildContext context) {
-    final steps = [
-      'Requested',
-      'Accepted',
-      'Paid',
-      'Picked up',
-      'Laufend',
-      'Due',
-      'Completed',
-    ];
-    final isOverdue = current == 'Überfällig';
-    final currentIndex = isOverdue ? 5 : steps.indexOf(current);
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (int i = 0; i < steps.length; i++)
-          _StepChip(
-            label: steps[i],
-            state: i < currentIndex
-                ? _StepState.done
-                : (i == currentIndex
-                    ? (isOverdue ? _StepState.overdue : _StepState.current)
-                    : _StepState.todo),
-          ),
-        if (isOverdue)
-          const _StepChip(label: 'Überfällig', state: _StepState.overdue),
-      ],
-    );
-  }
-}
-
-enum _StepState { done, current, todo, overdue }
-
-class _StepChip extends StatelessWidget {
-  final String label;
-  final _StepState state;
-  const _StepChip({required this.label, required this.state});
-  @override
-  Widget build(BuildContext context) {
-    Color border;
-    Color fg;
-    Color bg;
-    IconData? icon;
-    switch (state) {
-      case _StepState.done:
-        border = Colors.white24;
-        fg = Colors.white;
-        bg = Colors.white.withValues(alpha: 0.08);
-        icon = Icons.check_circle_outline;
-        break;
-      case _StepState.current:
-        border = Theme.of(context).colorScheme.primary.withValues(alpha: 0.40);
-        fg = Theme.of(context).colorScheme.primary;
-        bg = Theme.of(context).colorScheme.primary.withValues(alpha: 0.12);
-        icon = Icons.radio_button_checked;
-        break;
-      case _StepState.overdue:
-        border = const Color(0xFFF43F5E).withValues(alpha: 0.40);
-        fg = const Color(0xFFF43F5E);
-        bg = const Color(0xFFF43F5E).withValues(alpha: 0.12);
-        icon = Icons.error_outline;
-        break;
-      case _StepState.todo:
-      default:
-        border = Colors.white12;
-        fg = Colors.white70;
-        bg = Colors.white.withValues(alpha: 0.05);
-        icon = Icons.radio_button_unchecked;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: fg),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(color: fg, fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
     );
   }
 }

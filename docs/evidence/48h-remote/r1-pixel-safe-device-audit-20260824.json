@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r1-pixel-safe-device-audit",
+  "status": "verified-read-only-audit-install-blocked",
+  "observedAt": "2026-08-24T09:34:59.303Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "head": "c451a3d6f8f5dbe501439ed678b66689b23cfecd",
+    "applicationId": "com.shareittoo.app",
+    "currentSourceVersionName": "1.0.0",
+    "currentSourceBuildNumber": "2026082302"
+  },
+  "device": {
+    "physical": true,
+    "authorized": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "androidVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "bootCompleted": true,
+    "batteryLevelPercent": 80,
+    "batteryStatus": "charging",
+    "batteryTemperatureC": 25.4,
+    "basicHealthPassed": true
+  },
+  "installedApplication": {
+    "present": true,
+    "versionName": "1.0.0",
+    "versionCode": "2026082302",
+    "minSdk": 24,
+    "targetSdk": 35,
+    "canonicalSigningRelationshipVerified": true,
+    "packagePathCount": 1,
+    "processRunning": true,
+    "processCount": 1
+  },
+  "storage": {
+    "totalKiB": 115249236,
+    "availableKiB": 24005732,
+    "usedPercent": 80
+  },
+  "currentWorktreeDebugArtifact": {
+    "versionName": "1.0.0",
+    "versionCode": "2026082302",
+    "packageIdentityMatches": true,
+    "strictlyNewerThanInstalled": false,
+    "signatureMatchesInstalled": false,
+    "safeInstallEligible": false
+  },
+  "installDecision": {
+    "marker": "PHYSICAL_ACTION_REQUIRED",
+    "scope": "existing same-version debug artifact only",
+    "reason": "debug signature mismatch and non-monotonic version",
+    "installAttempted": false,
+    "uninstallOrResetAllowed": false,
+    "dataPreservationVerifiedForDebugArtifact": false,
+    "r2CanonicalNewerCandidateMayRemovePhysicalAction": true
+  },
+  "verification": {
+    "auditToolSyntax": "passed",
+    "auditToolTests": "passed-2",
+    "liveReadOnlyAudit": "passed"
+  },
+  "boundaries": {
+    "deviceMutationPerformed": false,
+    "installPerformed": false,
+    "uninstallPerformed": false,
+    "dataResetPerformed": false,
+    "deviceUnlockedOrBypassed": false,
+    "privateMediaRead": false,
+    "accountChanged": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsCertificateDigests": false,
+    "containsPrivateFilesystemPaths": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "cloudChanged": false,
+    "paymentChanged": false
+  },
+  "rollback": "No rollback is required because R1 made no device or account mutation.",
+  "nextPackage": "R2_CURRENT_SOURCE_PIXEL_TEST_BUILD"
+}

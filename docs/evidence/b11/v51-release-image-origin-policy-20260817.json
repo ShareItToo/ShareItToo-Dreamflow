@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-release-image-origin-policy",
+  "capturedAt": "2026-08-17T05:28:44Z",
+  "status": "passed-source-and-test-checkpoint",
+  "checkpoint": "16.131",
+  "sourceHeadAtImplementationStart": "f6f275503bba65cbb5d4f95beaab5181a0c15710",
+  "result": {
+    "releaseExternalImageFetchAllowed": false,
+    "managedSitUploadFetchAllowed": true,
+    "managedSitUploadUsesAuthenticatedLoader": true,
+    "debugQaExternalImageCompatibilityRetained": true,
+    "unknownImageSchemesFailClosed": true,
+    "directFlutterNetworkImageBypassesOutsideAppImage": 0,
+    "privacySourceInventoryUpdated": true
+  },
+  "verification": {
+    "flutterTests": {
+      "passed": 277,
+      "intentionalSkipped": 1,
+      "failed": 0
+    },
+    "nodeToolTests": {
+      "passed": 618,
+      "skipped": 0,
+      "failed": 0
+    },
+    "flutterAnalyzer": {
+      "findings": 229,
+      "errors": 0,
+      "baselineChanged": false
+    },
+    "privacyValidator": "passed-draft-fail-closed",
+    "androidDebugBuild": "passed",
+    "webDebugBuild": "passed-existing-image-package-wasm-dry-run-warnings-only",
+    "diffCheck": "passed"
+  },
+  "pushCrashBoundary": {
+    "firebaseCloudMessaging": "retained-independent-voluntary-opt-in-default-off",
+    "firebaseCrashlytics": "retained-independent-voluntary-opt-in-default-off",
+    "pushEnablesCrashlytics": false,
+    "changedByThisCheckpoint": false
+  },
+  "openGates": {
+    "retentionDeletionDecisions": 9,
+    "physicalDeviceMatrixPassed": 0,
+    "physicalDeviceMatrixRequired": 4,
+    "controlledCrashEventForExactCandidate": "pending",
+    "newSignedCandidateCreated": false,
+    "goNoGo": "HOLD"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "stagingChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "realMoneyUsed": false,
+    "publicLegalAssetsActivated": false,
+    "existingCandidateChanged": false,
+    "containsSecrets": false,
+    "containsAccountData": false,
+    "containsRawExternalImageUrls": false
+  }
+}

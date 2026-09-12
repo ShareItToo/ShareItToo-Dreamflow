@@ -1,0 +1,1013 @@
+#!/usr/bin/env node
+
+import { execFileSync } from 'node:child_process';
+import {
+  chmodSync,
+  closeSync,
+  constants,
+  fstatSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import {
+  assertCurrentHeadAndroidDeviceAlreadyUnlocked,
+  currentHeadAndroidAdb,
+  currentHeadAndroidNamedNodes,
+  currentHeadAndroidNodeAttribute,
+  defaultCurrentHeadAndroidCommandRunner,
+  dumpCurrentHeadAndroidUi,
+  launchCurrentHeadAndroidCandidateExplicitly,
+  observeCurrentHeadAndroidForegroundOwner,
+  restoreCurrentHeadAndroidExplore,
+  verifyCurrentHeadAndroidInstalledCandidate,
+  waitForCurrentHeadAndroidMainNavigation,
+} from './diagnose_current_head_android_main_navigation.mjs';
+import { parseAndroidInstalledPackageSnapshot } from './install_current_head_android_candidate_update.mjs';
+import {
+  inspectPhysicalDevice,
+  parseAdbDevices,
+  selectSinglePhysicalDevice,
+} from './prepare_android_device_test.mjs';
+import {
+  assertCurrentCandidateNoPostCandidateMobileSourceDrift,
+  collectCurrentCandidateDriftPaths,
+  validateCurrentPrivateAndroidCandidate,
+} from './run_n28_current_candidate_pixel_surface_matrix.mjs';
+import { validatePrivateAndroidReleaseArchive } from './validate_current_head_android_release_archive.mjs';
+
+const applicationId = 'com.shareittoo.app';
+const mutablePermissionFlags = Object.freeze([
+  'review-required',
+  'revoked-compat',
+  'revoke-when-requested',
+  'user-fixed',
+  'user-set',
+]);
+const permissionGroups = Object.freeze([
+  Object.freeze({
+    id: 'camera',
+    permissions: Object.freeze(['android.permission.CAMERA']),
+  }),
+  Object.freeze({
+    id: 'location',
+    permissions: Object.freeze([
+      'android.permission.ACCESS_COARSE_LOCATION',
+      'android.permission.ACCESS_FINE_LOCATION',
+    ]),
+  }),
+  Object.freeze({
+    id: 'notifications',
+    permissions: Object.freeze(['android.permission.POST_NOTIFICATIONS']),
+  }),
+]);
+const runtimePermissions = Object.freeze(permissionGroups.flatMap((group) => group.permissions));
+const appOps = Object.freeze({
+  'android.permission.CAMERA': 'CAMERA',
+  'android.permission.ACCESS_COARSE_LOCATION': 'COARSE_LOCATION',
+  'android.permission.ACCESS_FINE_LOCATION': 'FINE_LOCATION',
+  'android.permission.POST_NOTIFICATIONS': 'POST_NOTIFICATION',
+});
+const exactDeclaredPermissions = Object.freeze([
+  Object.freeze({ name: 'android.permission.CAMERA', maxSdkVersion: null }),
+  Object.freeze({ name: 'android.permission.READ_EXTERNAL_STORAGE', maxSdkVersion: 32 }),
+  Object.freeze({ name: 'android.permission.WRITE_EXTERNAL_STORAGE', maxSdkVersion: 28 }),
+  Object.freeze({ name: 'android.permission.ACCESS_COARSE_LOCATION', maxSdkVersion: null }),
+  Object.freeze({ name: 'android.permission.ACCESS_FINE_LOCATION', maxSdkVersion: null }),
+  Object.freeze({ name: 'android.permission.POST_NOTIFICATIONS', maxSdkVersion: null }),
+  Object.freeze({ name: 'android.permission.INTERNET', maxSdkVersion: null }),
+  Object.freeze({ name: 'android.permission.WAKE_LOCK', maxSdkVersion: null }),
+  Object.freeze({ name: 'android.permission.ACCESS_NETWORK_STATE', maxSdkVersion: null }),
+  Object.freeze({ name: 'android.permission.USE_BIOMETRIC', maxSdkVersion: null }),
+  Object.freeze({ name: 'android.permission.USE_FINGERPRINT', maxSdkVersion: null }),
+  Object.freeze({ name: 'com.google.android.c2dm.permission.RECEIVE', maxSdkVersion: null }),
+  Object.freeze({ name: 'com.google.android.providers.gsf.permission.READ_GSERVICES', maxSdkVersion: null }),
+  Object.freeze({
+    name: 'com.shareittoo.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION',
+    maxSdkVersion: null,
+  }),
+]);
+
+function fail(message) {
+  throw new Error(message);
+}
+
+function exact(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function wait(milliseconds) {
+  return new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
+}
+
+export function parseDeclaredAndroidPermissions(output) {
+  const permissions = [];
+  for (const line of String(output).split(/\r?\n/u)) {
+    const match = /^uses-permission:\s+name='([^']+)'(?:\s+maxSdkVersion='(\d+)')?\s*$/u.exec(
+      line.trim(),
+    );
+    if (match === null) continue;
+    permissions.push({
+      name: match[1],
+      maxSdkVersion: match[2] === undefined ? null : Number(match[2]),
+    });
+  }
+  return permissions;
+}
+
+export function assertExactDeclaredAndroidPermissions(permissions) {
+  if (!exact(permissions, exactDeclaredPermissions)) {
+    fail('The exact candidate Android permission manifest changed.');
+  }
+  return Object.freeze({
+    declaredPermissionCount: permissions.length,
+    activeRuntimePermissionCount: runtimePermissions.length,
+    legacyStoragePermissionsInactiveAtApi37: true,
+    broadMediaPermissionDeclared: false,
+    microphonePermissionDeclared: false,
+    contactsPermissionDeclared: false,
+    smsPermissionDeclared: false,
+    backgroundLocationPermissionDeclared: false,
+    advertisingIdPermissionDeclared: false,
+  });
+}
+
+function parseFlags(value) {
+  return value.trim() === ''
+    ? []
+    : value.split('|').map((flag) => flag.trim()).filter(Boolean).toSorted();
+}
+
+export function parseAndroidRuntimePermissionSnapshot(output) {
+  const snapshot = {};
+  for (const permission of runtimePermissions) {
+    const escaped = permission.replaceAll('.', '\\.');
+    const match = new RegExp(
+      `^\\s*${escaped}:\\s+granted=(true|false),\\s+flags=\\[([^\\]]*)\\]`,
+      'mu',
+    ).exec(String(output));
+    if (match === null) fail(`Android did not expose ${permission} runtime state.`);
+    snapshot[permission] = {
+      granted: match[1] === 'true',
+      flags: parseFlags(match[2]),
+    };
+  }
+  return snapshot;
+}
+
+export function parseAndroidAppOpSnapshot(outputs) {
+  const snapshot = {};
+  for (const permission of runtimePermissions) {
+    const output = String(outputs?.[permission] ?? '').trim();
+    const defaultMatch = /Default mode:\s*(allow|ignore|deny|foreground|default)\b/iu.exec(output);
+    const explicitMatch = new RegExp(
+      `(?:Uid mode:\\s*)?${appOps[permission]}:\\s*(allow|ignore|deny|foreground|default)\\b`,
+      'iu',
+    ).exec(output);
+    const match = explicitMatch ?? defaultMatch;
+    if (match === null) fail(`Android did not expose ${permission} app-op state.`);
+    snapshot[permission] = {
+      mode: match[1].toLowerCase(),
+      source: explicitMatch === null ? 'default' : 'explicit',
+    };
+  }
+  return snapshot;
+}
+
+function combinePermissionState(permissionSnapshot, appOpSnapshot) {
+  return Object.fromEntries(runtimePermissions.map((permission) => [permission, {
+    ...permissionSnapshot[permission],
+    // AppOps can expose a permission-derived UID mode and an equivalent
+    // package/default line after a grant/revoke round trip. The durable truth
+    // is the effective mode, not which equivalent internal line Android chose
+    // to retain.
+    appOpMode: appOpSnapshot[permission].mode,
+  }]));
+}
+
+function normalizePermissionState(snapshot) {
+  return Object.fromEntries(runtimePermissions.map((permission) => {
+    const state = snapshot?.[permission];
+    if (state === undefined) fail(`The ${permission} recovery state is missing.`);
+    return [permission, {
+      granted: state.granted,
+      flags: [...state.flags].toSorted(),
+      appOpMode: state.appOpMode ?? state.appOp?.mode,
+    }];
+  }));
+}
+
+function assertGroupGranted(snapshot, group, granted) {
+  if (group.permissions.some((permission) => snapshot[permission]?.granted !== granted)) {
+    fail(`${group.id} did not reach the required ${granted ? 'allowed' : 'denied'} state.`);
+  }
+}
+
+export function normalizeWp46LifecycleCheckpoint(checkpoint) {
+  if (checkpoint === null || checkpoint === undefined) return null;
+  const group = checkpoint?.group;
+  const phase = checkpoint?.phase;
+  if (!['camera', 'location', 'notifications', 'lifecycle'].includes(group)
+      || ![
+        'before-deny', 'denied-state-verified', 'before-denied-restart',
+        'denied-restart-verified', 'before-allow', 'allowed-state-verified',
+        'before-allowed-restart', 'allowed-restart-verified', 'before-settings',
+        'before-restore', 'after-restore', 'before-permission-manager-settle',
+        'after-permission-manager-settle', 'before-final-restart',
+      ].includes(phase)) {
+    fail('The WP46 lifecycle checkpoint is not safe.');
+  }
+  return Object.freeze({ group, phase });
+}
+
+async function recordLifecycleCheckpoint(operations, checkpoint) {
+  if (typeof operations.checkpoint === 'function') {
+    await operations.checkpoint(normalizeWp46LifecycleCheckpoint(checkpoint));
+  }
+}
+
+export async function exercisePermissionGroups({ operations }) {
+  const before = await operations.readState();
+  const observations = {};
+  let primaryFailure = null;
+  try {
+    for (const group of permissionGroups) {
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'before-deny' });
+      await operations.setGroupGranted(group, false);
+      const denied = await operations.readState();
+      assertGroupGranted(denied, group, false);
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'denied-state-verified' });
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'before-denied-restart' });
+      await operations.restartAuthenticated();
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'denied-restart-verified' });
+
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'before-allow' });
+      await operations.setGroupGranted(group, true);
+      const allowed = await operations.readState();
+      assertGroupGranted(allowed, group, true);
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'allowed-state-verified' });
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'before-allowed-restart' });
+      await operations.restartAuthenticated();
+      await recordLifecycleCheckpoint(operations, { group: group.id, phase: 'allowed-restart-verified' });
+
+      observations[group.id] = {
+        denied: true,
+        allowed: true,
+        deniedRestartPassed: true,
+        allowedRestartPassed: true,
+      };
+    }
+    await recordLifecycleCheckpoint(operations, { group: 'lifecycle', phase: 'before-settings' });
+    await operations.openReadOnlySettings();
+  } catch (error) {
+    primaryFailure = error;
+  } finally {
+    await recordLifecycleCheckpoint(operations, { group: 'lifecycle', phase: 'before-restore' });
+    await operations.restoreState(before);
+    await recordLifecycleCheckpoint(operations, { group: 'lifecycle', phase: 'after-restore' });
+    await recordLifecycleCheckpoint(operations, {
+      group: 'lifecycle', phase: 'before-permission-manager-settle',
+    });
+    await operations.settlePermissionManager();
+    await recordLifecycleCheckpoint(operations, {
+      group: 'lifecycle', phase: 'after-permission-manager-settle',
+    });
+  }
+  const after = await operations.readState();
+  if (!exact(after, before)) {
+    fail('The exact Android permission and app-op snapshot was not restored.');
+  }
+  await recordLifecycleCheckpoint(operations, { group: 'lifecycle', phase: 'before-final-restart' });
+  await operations.restartAuthenticated();
+  if (primaryFailure !== null) throw primaryFailure;
+  return Object.freeze({ before, after, observations });
+}
+
+export function buildWp46PermissionEvidence({
+  candidate,
+  installedBefore,
+  installedAfter,
+  deviceSummary,
+  manifestAudit,
+  lifecycle,
+  sourceDrift,
+  capturedAt = new Date().toISOString(),
+}) {
+  if (candidate?.applicationId !== applicationId
+      || typeof candidate?.versionName !== 'string'
+      || !/^\d+\.\d+\.\d+$/u.test(candidate.versionName)
+      || typeof candidate?.buildNumber !== 'string'
+      || !/^\d{10}$/u.test(candidate.buildNumber)
+      || typeof candidate?.commit !== 'string'
+      || !/^[a-f0-9]{40}$/u.test(candidate.commit)
+      || candidate?.releaseChannel !== 'internal'
+      || candidate?.apiBaseUrl !== 'https://staging.shareittoo.com/api/v1'
+      || candidate?.firebaseConfigured !== true
+      || deviceSummary?.physical !== true
+      || deviceSummary?.model !== 'Pixel 7 Pro'
+      || deviceSummary?.containsRawDeviceIdentifier !== false
+      || sourceDrift?.mobileSourceChanged !== false) {
+    fail('WP46 candidate, device or source-drift evidence is invalid.');
+  }
+  if (manifestAudit?.declaredPermissionCount !== exactDeclaredPermissions.length
+      || manifestAudit?.activeRuntimePermissionCount !== runtimePermissions.length
+      || manifestAudit?.legacyStoragePermissionsInactiveAtApi37 !== true
+      || manifestAudit?.broadMediaPermissionDeclared !== false
+      || manifestAudit?.microphonePermissionDeclared !== false
+      || manifestAudit?.contactsPermissionDeclared !== false
+      || manifestAudit?.smsPermissionDeclared !== false
+      || manifestAudit?.backgroundLocationPermissionDeclared !== false
+      || manifestAudit?.advertisingIdPermissionDeclared !== false) {
+    fail('WP46 manifest evidence is incomplete.');
+  }
+  if (!exact(installedBefore, installedAfter)
+      || installedBefore?.versionName !== candidate.versionName
+      || installedBefore?.buildNumber !== candidate.buildNumber
+      || !exact(lifecycle?.before, lifecycle?.after)
+      || permissionGroups.some((group) => (
+        lifecycle?.observations?.[group.id]?.denied !== true
+        || lifecycle?.observations?.[group.id]?.allowed !== true
+        || lifecycle?.observations?.[group.id]?.deniedRestartPassed !== true
+        || lifecycle?.observations?.[group.id]?.allowedRestartPassed !== true
+      ))) {
+    fail('WP46 lifecycle or restoration evidence is incomplete.');
+  }
+  const result = {
+    schemaVersion: 1,
+    kind: 'sit-wp46-current-candidate-android-permission-lifecycle',
+    status: 'passed-exact-candidate-permission-lifecycle-and-restoration',
+    capturedAt,
+    candidate: {
+      applicationId: candidate.applicationId,
+      versionName: candidate.versionName,
+      buildNumber: candidate.buildNumber,
+      commit: candidate.commit,
+      releaseChannel: candidate.releaseChannel,
+      apiBaseUrl: candidate.apiBaseUrl,
+      firebaseConfigured: candidate.firebaseConfigured,
+      apkSha256: candidate.android.apkSha256,
+      signingCertificateSha256: candidate.android.signingCertificateSha256,
+      mobileSourceChangedAfterCandidate: sourceDrift.mobileSourceChanged,
+    },
+    device: deviceSummary,
+    manifest: manifestAudit,
+    tests: {
+      camera: { status: 'passed', result: 'deny-allow-restart-restored' },
+      location: { status: 'passed', result: 'coarse-and-fine-deny-allow-restart-restored' },
+      notifications: { status: 'passed', result: 'deny-allow-restart-restored' },
+      appPermissionSettings: { status: 'passed', result: 'read-only-system-surface' },
+      authenticatedSessionAfterEveryRestart: { status: 'passed' },
+      packageDataIdentityPreserved: { status: 'passed' },
+      exactPermissionAndAppOpSnapshotRestored: { status: 'passed' },
+    },
+    boundaries: {
+      exactInstalledCandidate: true,
+      permissionStateTemporarilyChanged: true,
+      permissionStateRestored: true,
+      appOpStateRestored: true,
+      profileChanged: false,
+      photoCapturedOrSelected: false,
+      locationReadOrPersisted: false,
+      notificationPreferenceChanged: false,
+      pushRegistrationChanged: false,
+      messageSent: false,
+      accountMutationPerformed: false,
+      appDataCleared: false,
+      packageReinstalled: false,
+      storeChanged: false,
+      productionChanged: false,
+      onePlusContacted: false,
+      screenshotsCaptured: false,
+      rawUiHierarchyRetained: false,
+      accountIdentityRecorded: false,
+      containsPersonalAccountData: false,
+      containsSecrets: false,
+      containsRawDeviceIdentifiers: false,
+      containsPrivateFilesystemPaths: false,
+    },
+  };
+  if (/(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|\/Users\/|\+49[0-9]|BEGIN PRIVATE|\b(?:sk|rk)_(?:test|live)_|\bwhsec_)/iu.test(JSON.stringify(result))) {
+    fail('WP46 evidence contains private or credential-shaped material.');
+  }
+  return result;
+}
+
+function center(node, label) {
+  const bounds = /^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$/u.exec(
+    currentHeadAndroidNodeAttribute(node, 'bounds') ?? '',
+  );
+  if (bounds === null) fail(`The sanitized ${label} action has invalid bounds.`);
+  return {
+    x: Math.floor((Number(bounds[1]) + Number(bounds[3])) / 2),
+    y: Math.floor((Number(bounds[2]) + Number(bounds[4])) / 2),
+  };
+}
+
+function tapNamed(commandRunner, adbPath, device, hierarchy, label) {
+  const nodes = currentHeadAndroidNamedNodes(hierarchy, label)
+    .filter((node) => currentHeadAndroidNodeAttribute(node, 'enabled') !== 'false');
+  const clickable = nodes.filter((node) => currentHeadAndroidNodeAttribute(node, 'clickable') === 'true');
+  const target = (clickable.length > 0 ? clickable : nodes)
+    .map((node) => ({ node, point: center(node, label) }))
+    .toSorted((left, right) => right.point.y - left.point.y)[0];
+  if (target === undefined) fail(`The sanitized ${label} action is unavailable.`);
+  currentHeadAndroidAdb(commandRunner, adbPath, device, [
+    'shell', 'input', 'tap', String(target.point.x), String(target.point.y),
+  ]);
+}
+
+export function parseAndroidDisplaySize(output) {
+  const matches = [...String(output).matchAll(/(?:Physical|Override) size:\s*(\d+)x(\d+)/gu)];
+  const match = matches.at(-1);
+  if (match === undefined) fail('Android did not expose a usable display size.');
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isSafeInteger(width)
+      || !Number.isSafeInteger(height)
+      || width < 320
+      || height < 480) {
+    fail('Android did not expose a usable display size.');
+  }
+  return Object.freeze({ width, height });
+}
+
+export function profileMenuScrollArguments(display) {
+  const { width, height } = display;
+  const x = Math.floor(width / 2);
+  const startY = Math.floor(height * 0.72);
+  const endY = Math.floor(height * 0.27);
+  if (!Number.isSafeInteger(x)
+      || !Number.isSafeInteger(startY)
+      || !Number.isSafeInteger(endY)
+      || startY <= endY) {
+    fail('Android profile scroll bounds are invalid.');
+  }
+  return Object.freeze([
+    'shell', 'input', 'swipe', String(x), String(startY), String(x), String(endY), '350',
+  ]);
+}
+
+export async function preflightAuthenticatedPermissionLifecycle({ assertAuthenticated }) {
+  if (typeof assertAuthenticated !== 'function') {
+    fail('The authenticated permission-lifecycle preflight is unavailable.');
+  }
+  await assertAuthenticated();
+  return Object.freeze({ authenticatedProfile: true });
+}
+
+function scrollProfileMenu(commandRunner, adbPath, device) {
+  const display = parseAndroidDisplaySize(currentHeadAndroidAdb(
+    commandRunner,
+    adbPath,
+    device,
+    ['shell', 'wm', 'size'],
+  ));
+  currentHeadAndroidAdb(
+    commandRunner,
+    adbPath,
+    device,
+    profileMenuScrollArguments(display),
+  );
+}
+
+async function waitForLabels(commandRunner, adbPath, device, labels, label, { onMissing = null } = {}) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await wait(500);
+    const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+    if (labels.every((value) => currentHeadAndroidNamedNodes(hierarchy, value).length > 0)) {
+      return hierarchy;
+    }
+    if (onMissing !== null && attempt >= 2 && attempt % 4 === 2) {
+      onMissing();
+    }
+  }
+  fail(`The sanitized ${label} surface did not appear.`);
+}
+
+function packageSnapshot(commandRunner, adbPath, device) {
+  const userId = currentHeadAndroidAdb(commandRunner, adbPath, device, [
+    'shell', 'am', 'get-current-user',
+  ]);
+  return parseAndroidInstalledPackageSnapshot(
+    currentHeadAndroidAdb(commandRunner, adbPath, device, [
+      'shell', 'dumpsys', 'package', applicationId,
+    ]),
+    userId,
+  );
+}
+
+function readPhysicalPermissionState(commandRunner, adbPath, device) {
+  const permissionSnapshot = parseAndroidRuntimePermissionSnapshot(
+    currentHeadAndroidAdb(commandRunner, adbPath, device, [
+      'shell', 'dumpsys', 'package', applicationId,
+    ]),
+  );
+  const outputs = Object.fromEntries(runtimePermissions.map((permission) => [
+    permission,
+    currentHeadAndroidAdb(commandRunner, adbPath, device, [
+      'shell', 'cmd', 'appops', 'get', applicationId, appOps[permission],
+    ]),
+  ]));
+  return combinePermissionState(permissionSnapshot, parseAndroidAppOpSnapshot(outputs));
+}
+
+function setPhysicalGroupGranted(commandRunner, adbPath, device, group, granted) {
+  const permissions = granted ? group.permissions : [...group.permissions].reverse();
+  for (const permission of permissions) {
+    currentHeadAndroidAdb(commandRunner, adbPath, device, [
+      'shell', 'pm', granted ? 'grant' : 'revoke', '--user', '0', applicationId, permission,
+    ]);
+  }
+}
+
+function mutableFlags(state) {
+  const map = new Map([
+    ['REVIEW_REQUIRED', 'review-required'],
+    ['REVOKED_COMPAT', 'revoked-compat'],
+    ['REVOKE_WHEN_REQUESTED', 'revoke-when-requested'],
+    ['USER_FIXED', 'user-fixed'],
+    ['USER_SET', 'user-set'],
+  ]);
+  return state.flags.map((flag) => map.get(flag)).filter(Boolean).toSorted();
+}
+
+function restorePhysicalPermissionState(commandRunner, adbPath, device, snapshot) {
+  const normalized = normalizePermissionState(snapshot);
+  for (const permission of runtimePermissions) {
+    const state = normalized[permission];
+    currentHeadAndroidAdb(commandRunner, adbPath, device, [
+      'shell', 'pm', state.granted ? 'grant' : 'revoke', '--user', '0', applicationId, permission,
+    ]);
+    currentHeadAndroidAdb(commandRunner, adbPath, device, [
+      'shell', 'pm', 'clear-permission-flags', '--user', '0', applicationId, permission,
+      ...mutablePermissionFlags,
+    ]);
+    const wantedFlags = mutableFlags(state);
+    if (wantedFlags.length > 0) {
+      currentHeadAndroidAdb(commandRunner, adbPath, device, [
+        'shell', 'pm', 'set-permission-flags', '--user', '0', applicationId, permission,
+        ...wantedFlags,
+      ]);
+    }
+    currentHeadAndroidAdb(commandRunner, adbPath, device, [
+      'shell', 'cmd', 'appops', 'set', applicationId, appOps[permission],
+      state.appOpMode,
+    ]);
+  }
+}
+
+async function restartAuthenticated(commandRunner, adbPath, device) {
+  launchCurrentHeadAndroidCandidateExplicitly(commandRunner, adbPath, device);
+  try {
+    let main;
+    try {
+      main = await waitForCurrentHeadAndroidMainNavigation({
+        commandRunner, adbPath, device, wait,
+      });
+    } catch (error) {
+      error.sitSafeForegroundOwner = observeCurrentHeadAndroidForegroundOwner(
+        commandRunner,
+        adbPath,
+        device,
+      );
+      throw error;
+    }
+    tapNamed(commandRunner, adbPath, device, main, 'Mein SIT');
+    await waitForLabels(
+      commandRunner,
+      adbPath,
+      device,
+      ['Meine Anzeigen', 'Mietanfragen', 'Abmelden'],
+      'authenticated profile',
+      {
+        // The profile menu begins below the header. This changes only its
+        // temporary viewport; navigation is restored before the diagnostic
+        // continues and no account or business action is invoked.
+        onMissing: () => scrollProfileMenu(commandRunner, adbPath, device),
+      },
+    );
+  } finally {
+    restoreCurrentHeadAndroidExplore(commandRunner, adbPath, device);
+  }
+}
+
+async function openReadOnlyPermissionSettings(commandRunner, adbPath, device) {
+  const result = currentHeadAndroidAdb(commandRunner, adbPath, device, [
+    'shell', 'am', 'start', '-W',
+    '-a', 'android.settings.APPLICATION_DETAILS_SETTINGS',
+    '-d', `package:${applicationId}`,
+  ]);
+  if (!/^Status:\s*ok\s*$/mu.test(result)) {
+    fail('Android app settings did not open deterministically.');
+  }
+  await waitForLabels(
+    commandRunner,
+    adbPath,
+    device,
+    ['ShareItToo', 'Berechtigungen'],
+    'read-only app permission settings',
+  );
+  currentHeadAndroidAdb(commandRunner, adbPath, device, ['shell', 'input', 'keyevent', '4']);
+}
+
+export function settleAndroidPackageManagerPermissionChanges(
+  commandRunner,
+  adbPath,
+  device,
+) {
+  // Runtime-permission writes return before Android has necessarily drained
+  // the PackageManager callbacks that terminate the affected process. A
+  // final launch before that drain can be killed by a delayed callback and be
+  // misclassified as an application startup failure. These platform-owned
+  // barriers are completion signals, not elapsed-time retries.
+  for (const handler of ['wait-for-handler', 'wait-for-background-handler']) {
+    const result = currentHeadAndroidAdb(commandRunner, adbPath, device, [
+      'shell', 'cmd', 'package', handler, '--timeout', '10000',
+    ]);
+    if (result !== 'Success') {
+      fail('Android PackageManager did not confirm permission-change settlement.');
+    }
+  }
+  const broadcastBarrier = currentHeadAndroidAdb(commandRunner, adbPath, device, [
+    'shell', 'timeout', '10', 'am', 'wait-for-broadcast-barrier',
+  ]);
+  if (!broadcastBarrier.split(/\r?\n/u).includes('Test barrier passed')) {
+    fail('Android did not confirm the permission-change broadcast barrier.');
+  }
+}
+
+const maxPermissionJournalBytes = 16 * 1024;
+
+function readStableBoundedUtf8(descriptor, stat) {
+  if (!stat.isFile()
+      || !Number.isSafeInteger(stat.size)
+      || stat.size < 2
+      || stat.size > maxPermissionJournalBytes
+      || (stat.mode & 0o077) !== 0) {
+    fail('WP46 journal is not owner-only.');
+  }
+  const bytes = Buffer.allocUnsafe(stat.size);
+  let offset = 0;
+  while (offset < bytes.length) {
+    const read = readSync(descriptor, bytes, offset, bytes.length - offset, offset);
+    if (read <= 0) fail('WP46 journal is not owner-only.');
+    offset += read;
+  }
+  if (readSync(descriptor, Buffer.alloc(1), 0, 1, stat.size) !== 0) {
+    fail('WP46 journal is not owner-only.');
+  }
+  const afterRead = fstatSync(descriptor);
+  if (afterRead.dev !== stat.dev
+      || afterRead.ino !== stat.ino
+      || afterRead.size !== stat.size
+      || afterRead.mtimeMs !== stat.mtimeMs
+      || afterRead.ctimeMs !== stat.ctimeMs) {
+    fail('WP46 journal is not owner-only.');
+  }
+  return bytes.toString('utf8');
+}
+
+function atomicJournal(path, value) {
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  chmodSync(dirname(path), 0o700);
+  const temporary = `${path}.tmp`;
+  writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  chmodSync(temporary, 0o600);
+  renameSync(temporary, path);
+  chmodSync(path, 0o600);
+}
+
+export function readWp46PermissionJournal(path) {
+  let descriptor;
+  try {
+    descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const stat = fstatSync(descriptor);
+    return JSON.parse(readStableBoundedUtf8(descriptor, stat));
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+}
+
+// A prior interrupted run is safe to leave behind only until its original
+// snapshot has been re-applied and verified. Persist that recovery before the
+// next authenticated-preflight: otherwise a harmless preflight failure would
+// keep the journal falsely marked as mutable work in progress forever.
+export function buildRecoveredWp46PermissionJournal(previous) {
+  if (previous?.status !== 'in-progress'
+      || previous?.candidate === undefined
+      || previous?.originalPermissionState === undefined) {
+    fail('The interrupted WP46 recovery journal is incomplete.');
+  }
+  const restoredPermissionState = normalizePermissionState(previous.originalPermissionState);
+  return Object.freeze({
+    schemaVersion: 1,
+    status: 'recovered-before-new-run',
+    candidate: previous.candidate,
+    originalPermissionState: restoredPermissionState,
+    restoredPermissionState,
+    recoveryRequired: false,
+    recoveredFromInterruptedRun: true,
+    containsCredentials: false,
+    containsAccountIdentity: false,
+    containsRawDeviceIdentifier: false,
+  });
+}
+
+export function buildWp46FailedAfterRestorationJournal({
+  candidate,
+  originalPermissionState,
+  failureClass = 'other-fail-closed-diagnostic-error',
+  foregroundOwner = 'unobserved',
+  lastLifecycleCheckpoint = null,
+}) {
+  if (candidate === undefined || originalPermissionState === undefined) {
+    fail('The failed WP46 restoration record is incomplete.');
+  }
+  if (!/^(?:navigation-(?:system-notification-overlay|unauthenticated-session|bottom-navigation-absent|bottom-navigation-incomplete|navigation-labels-present-surface-pending)|other-fail-closed-diagnostic-error)$/u.test(failureClass)) {
+    fail('The failed WP46 restoration class is not safe.');
+  }
+  if (!['shareittoo-app', 'android-permission-controller', 'android-system-ui', 'no-focused-window', 'other-or-unavailable', 'unobserved'].includes(foregroundOwner)) {
+    fail('The failed WP46 foreground owner is not safe.');
+  }
+  const restoredPermissionState = normalizePermissionState(originalPermissionState);
+  const normalizedCheckpoint = normalizeWp46LifecycleCheckpoint(lastLifecycleCheckpoint);
+  return Object.freeze({
+    schemaVersion: 1,
+    status: 'restored-after-failed-run',
+    candidate,
+    originalPermissionState: restoredPermissionState,
+    restoredPermissionState,
+    recoveryRequired: false,
+    lifecycleResult: 'unproven',
+    failureClass,
+    foregroundOwner,
+    lastLifecycleCheckpoint: normalizedCheckpoint,
+    containsCredentials: false,
+    containsAccountIdentity: false,
+    containsRawDeviceIdentifier: false,
+  });
+}
+
+export function classifyWp46FailClosedDiagnosticError(error) {
+  const safeNavigationClasses = new Set([
+    'system-notification-overlay',
+    'unauthenticated-session',
+    'bottom-navigation-absent',
+    'bottom-navigation-incomplete',
+    'navigation-labels-present-surface-pending',
+  ]);
+  const observed = /\(([^()]+)\)\.?$/u.exec(String(error?.message ?? ''))?.[1] ?? null;
+  return safeNavigationClasses.has(observed)
+    ? `navigation-${observed}`
+    : 'other-fail-closed-diagnostic-error';
+}
+
+export function parseWp46Arguments(values) {
+  const result = {
+    candidateDirectory: null,
+    candidateSourceRoot: null,
+    adbPath: 'adb',
+    aapt2Path: 'aapt2',
+    journalPath: resolve(
+      homedir(),
+      'Library',
+      'Application Support',
+      'ShareItToo',
+      'qa-private',
+      'wp46-permission-lifecycle.json',
+    ),
+  };
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (value === '--candidate-dir') result.candidateDirectory = values[++index] ?? fail('--candidate-dir requires a path.');
+    else if (value === '--candidate-source-root') result.candidateSourceRoot = values[++index] ?? fail('--candidate-source-root requires a path.');
+    else if (value === '--adb') result.adbPath = values[++index] ?? fail('--adb requires a path.');
+    else if (value === '--aapt2') result.aapt2Path = values[++index] ?? fail('--aapt2 requires a path.');
+    else if (value === '--journal') result.journalPath = values[++index] ?? fail('--journal requires a path.');
+    else fail(`Unknown argument: ${value}`);
+  }
+  if (result.candidateDirectory === null) fail('--candidate-dir is required.');
+  if (result.candidateSourceRoot === null) fail('--candidate-source-root is required.');
+  return result;
+}
+
+function assertCleanCandidateSourceRoot(root, candidateCommit) {
+  const candidateRoot = resolve(root);
+  const head = String(execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: candidateRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })).trim();
+  if (head !== candidateCommit) {
+    fail('Candidate source root does not resolve to the signed candidate commit.');
+  }
+  try {
+    execFileSync('git', ['diff', '--quiet'], { cwd: candidateRoot, stdio: 'ignore' });
+    execFileSync('git', ['diff', '--cached', '--quiet'], { cwd: candidateRoot, stdio: 'ignore' });
+  } catch {
+    fail('Candidate source root is not clean.');
+  }
+  return candidateRoot;
+}
+
+async function run() {
+  const root = fileURLToPath(new URL('../', import.meta.url));
+  const args = parseWp46Arguments(process.argv.slice(2));
+  const archive = await validatePrivateAndroidReleaseArchive({
+    root,
+    candidateDirectory: args.candidateDirectory,
+  });
+  const candidate = validateCurrentPrivateAndroidCandidate(archive);
+  const candidateSourceRoot = assertCleanCandidateSourceRoot(
+    args.candidateSourceRoot,
+    candidate.commit,
+  );
+  const sourceDrift = assertCurrentCandidateNoPostCandidateMobileSourceDrift(
+    collectCurrentCandidateDriftPaths({ root: candidateSourceRoot, candidateCommit: candidate.commit }),
+  );
+  const declared = parseDeclaredAndroidPermissions(String(execFileSync(
+    args.aapt2Path,
+    ['dump', 'permissions', archive.apkPath],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+  )));
+  const manifestAudit = assertExactDeclaredAndroidPermissions(declared);
+  const devices = parseAdbDevices(defaultCurrentHeadAndroidCommandRunner(
+    args.adbPath,
+    ['devices', '-l'],
+  ));
+  const device = selectSinglePhysicalDevice(devices);
+  const deviceSummary = inspectPhysicalDevice({ adbPath: args.adbPath, device });
+  assertCurrentHeadAndroidDeviceAlreadyUnlocked(
+    defaultCurrentHeadAndroidCommandRunner,
+    args.adbPath,
+    device,
+  );
+  verifyCurrentHeadAndroidInstalledCandidate(
+    defaultCurrentHeadAndroidCommandRunner,
+    args.adbPath,
+    device,
+    candidate,
+  );
+  const installedBefore = packageSnapshot(
+    defaultCurrentHeadAndroidCommandRunner,
+    args.adbPath,
+    device,
+  );
+
+  const previous = readWp46PermissionJournal(args.journalPath);
+  if (previous?.status === 'in-progress') {
+    restorePhysicalPermissionState(
+      defaultCurrentHeadAndroidCommandRunner,
+      args.adbPath,
+      device,
+      previous.originalPermissionState,
+    );
+    if (!exact(
+      readPhysicalPermissionState(defaultCurrentHeadAndroidCommandRunner, args.adbPath, device),
+      normalizePermissionState(previous.originalPermissionState),
+    )) fail('The previous WP46 permission snapshot could not be recovered.');
+    atomicJournal(args.journalPath, buildRecoveredWp46PermissionJournal(previous));
+  }
+  // Prove that the candidate still has an authenticated profile before the
+  // first new permission transition. A fresh e-mail-pending/guest state is a
+  // valid stop condition and must not cause a grant/revoke round trip.
+  await preflightAuthenticatedPermissionLifecycle({
+    assertAuthenticated: async () => restartAuthenticated(
+      defaultCurrentHeadAndroidCommandRunner,
+      args.adbPath,
+      device,
+    ),
+  });
+  const originalPermissionState = readPhysicalPermissionState(
+    defaultCurrentHeadAndroidCommandRunner,
+    args.adbPath,
+    device,
+  );
+  let lastLifecycleCheckpoint = null;
+  const persistInProgress = () => atomicJournal(args.journalPath, {
+    schemaVersion: 1,
+    status: 'in-progress',
+    candidate: {
+      applicationId: candidate.applicationId,
+      buildNumber: candidate.buildNumber,
+      commit: candidate.commit,
+    },
+    originalPermissionState,
+    lastLifecycleCheckpoint,
+    containsCredentials: false,
+    containsAccountIdentity: false,
+    containsRawDeviceIdentifier: false,
+  });
+  persistInProgress();
+
+  let lifecycle;
+  try {
+    lifecycle = await exercisePermissionGroups({
+      operations: {
+        checkpoint: async (checkpoint) => {
+          lastLifecycleCheckpoint = checkpoint;
+          persistInProgress();
+        },
+        readState: async () => readPhysicalPermissionState(
+          defaultCurrentHeadAndroidCommandRunner,
+          args.adbPath,
+          device,
+        ),
+        setGroupGranted: async (group, granted) => setPhysicalGroupGranted(
+          defaultCurrentHeadAndroidCommandRunner,
+          args.adbPath,
+          device,
+          group,
+          granted,
+        ),
+        restartAuthenticated: async () => restartAuthenticated(
+          defaultCurrentHeadAndroidCommandRunner,
+          args.adbPath,
+          device,
+        ),
+        openReadOnlySettings: async () => openReadOnlyPermissionSettings(
+          defaultCurrentHeadAndroidCommandRunner,
+          args.adbPath,
+          device,
+        ),
+        restoreState: async (state) => restorePhysicalPermissionState(
+          defaultCurrentHeadAndroidCommandRunner,
+          args.adbPath,
+          device,
+          state,
+        ),
+        settlePermissionManager: async () => settleAndroidPackageManagerPermissionChanges(
+          defaultCurrentHeadAndroidCommandRunner,
+          args.adbPath,
+          device,
+        ),
+      },
+    });
+  } catch (error) {
+    if (exact(
+      readPhysicalPermissionState(defaultCurrentHeadAndroidCommandRunner, args.adbPath, device),
+      normalizePermissionState(originalPermissionState),
+    )) {
+      atomicJournal(args.journalPath, buildWp46FailedAfterRestorationJournal({
+        candidate: {
+          applicationId: candidate.applicationId,
+          buildNumber: candidate.buildNumber,
+          commit: candidate.commit,
+        },
+        originalPermissionState,
+        failureClass: classifyWp46FailClosedDiagnosticError(error),
+        foregroundOwner: error?.sitSafeForegroundOwner ?? 'unobserved',
+        lastLifecycleCheckpoint,
+      }));
+    }
+    throw error;
+  }
+  const installedAfter = packageSnapshot(
+    defaultCurrentHeadAndroidCommandRunner,
+    args.adbPath,
+    device,
+  );
+  const evidence = buildWp46PermissionEvidence({
+    candidate,
+    installedBefore,
+    installedAfter,
+    deviceSummary,
+    manifestAudit,
+    lifecycle,
+    sourceDrift,
+  });
+  atomicJournal(args.journalPath, {
+    schemaVersion: 1,
+    status: 'completed-restored',
+    candidate: {
+      applicationId: candidate.applicationId,
+      buildNumber: candidate.buildNumber,
+      commit: candidate.commit,
+    },
+    originalPermissionState,
+    restoredPermissionState: lifecycle.after,
+    recoveryRequired: false,
+    containsCredentials: false,
+    containsAccountIdentity: false,
+    containsRawDeviceIdentifier: false,
+  });
+  process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  try {
+    await run();
+  } catch (error) {
+    process.stderr.write(`ERROR: ${error?.message ?? 'WP46 permission lifecycle failed.'}\n`);
+    process.exitCode = 1;
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-push-crash-successor-decision",
+  "status": "passed-source-and-regression",
+  "capturedAt": "2026-08-17T10:36:13Z",
+  "sourceCommit": "890ff75966ddfde7bca5ea68a7550e664d66c5b3",
+  "checks": {
+    "firebaseCloudMessagingRetained": true,
+    "firebaseCrashlyticsRetained": true,
+    "bothServicesDefaultOff": true,
+    "bothServicesRequireSeparateVoluntaryChoice": true,
+    "pushCannotEnableCrashlytics": true,
+    "sourcePage38PreservedForTraceability": true,
+    "datedSuccessorDecisionAdded": true,
+    "successorScopeLimitedToPushAndCrashStartStatements": true,
+    "adsMarketingAnalyticsAndExternalGenAiRemainDisabled": true,
+    "productDecisionDoesNotGrantActivation": true,
+    "providerAndStoreEvidenceRemainsOpen": true
+  },
+  "verification": {
+    "targetedNodeTestsPassed": 50,
+    "targetedFlutterTestsPassed": 18,
+    "fullFlutterTestsPassed": 282,
+    "intentionalFlutterTestsSkipped": 1,
+    "fullAnalyzerFindings": 229,
+    "fullAnalyzerErrors": 0,
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "technicalRegression": "passed-with-documented-candidate-rollover-boundary"
+  },
+  "privacy": {
+    "v51PrivacyAssetSha256": "5e4a5f241ce8049a23b7e8688d09a8a39ed543f095c3c267cba4228f54713041",
+    "v51LegalManifestSha256": "6cffec53a27f84b24a44aebad50afd6e7ce17a4c196c7946155fba743fdc161f",
+    "sourceInventoryHashesUpdated": true,
+    "dataCollectionChanged": false,
+    "dataStorageChanged": false,
+    "dataTransportChanged": false,
+    "providerChanged": false,
+    "permissionChanged": false,
+    "legalActivationAllowed": false
+  },
+  "boundaries": {
+    "controlledCrashEventGenerated": false,
+    "crashDataTransferred": false,
+    "backendDeployed": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "storeSubmissionPerformed": false,
+    "realPaymentPerformed": false,
+    "candidateBuiltOrRelabeled": false
+  },
+  "conclusion": {
+    "sourceContradiction": "traceably-superseded-by-dated-product-decision",
+    "runtimeDecision": "retained-independent-voluntary-default-off",
+    "activationState": "blocked-pending-provider-contract-transfer-retention-deletion-and-store-evidence",
+    "officialPlayInternalCandidate": "1.0.0+2026081509",
+    "localSignedCandidate": "1.0.0+2026081510-built-local-not-uploaded"
+  }
+}

@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp08-listing-ai-staging-acceptance",
+  "status": "staging-runtime-and-nonbinding-acceptance-passed-external-provider-owner-auth-pending",
+  "observedAt": "2026-09-05T07:33:38Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationCommit": "07030b27abeba68d40838e37bcd1d46600a9afa2",
+    "deployedRuntimeCommit": "b0d92af3c0fd3b855b797a573a3c99cd206e608b",
+    "deployedImageDigest": "sha256:75f51818d39284fded68a7f32ffb3749087f11173c5d69511122842a2971bcee",
+    "serverReleaseEvidence": "/docker/shareittoo/releases/staging-20260905T064045Z-b0d92af3c0fd.json"
+  },
+  "stagingReadback": {
+    "environment": "staging",
+    "ready": true,
+    "database": "ok",
+    "mail": "ok",
+    "notificationQueuePending": 0,
+    "notificationQueueDead": 0,
+    "paymentProvider": "memory",
+    "paymentLiveMode": false,
+    "listingAi": {
+      "enabled": true,
+      "provider": "mock",
+      "model": "listing-ai-mock-v1",
+      "promptVersion": "listing-ai-prompt-v1",
+      "schemaVersion": "listing-ai-draft-v1",
+      "budgetCents": 0,
+      "externalProviderExecutionAllowed": false,
+      "automaticPublicationAllowed": false
+    }
+  },
+  "externalProvider": {
+    "openAiPlatformWorkProfile": "authentication-required",
+    "dedicatedRuntimeCredentialPresentLocally": false,
+    "dedicatedRuntimeCredentialPresentInGithubSecrets": false,
+    "credentialReadOrExtracted": false,
+    "providerCallMade": false,
+    "apiBillingUsed": false,
+    "activationStatus": "owner-authentication-required"
+  },
+  "acceptance": {
+    "serverQuoteClockSkew": {
+      "reproduced": true,
+      "cause": "client-observed acceptance time preceded authoritative server quotedAt by four milliseconds",
+      "fix": "acceptance timestamp is clamped to the authoritative quote window and invalid or expired windows fail closed",
+      "focusedRegression": "passed"
+    },
+    "bindingAttempt": {
+      "declarationAcceptedAfterFix": true,
+      "terminalStatus": 409,
+      "terminalCode": "v52_contract_documents_unavailable",
+      "contractCreated": false,
+      "reservationCreated": false,
+      "paymentCreated": false
+    },
+    "nonbindingTwoRoleJourney": {
+      "passwordLogin": "passed",
+      "verifiedAndConsented": "passed",
+      "listingVisible": "passed",
+      "acceptedSimulationVisibleToBothPrincipals": "passed",
+      "sharedChat": "passed",
+      "clientBinding": "not-performed"
+    },
+    "safetyActions": {
+      "reportAndTemporaryBlock": "passed",
+      "dataExport": "passed",
+      "temporaryBlockRemoved": true,
+      "sharedChatRestored": true,
+      "accountDeletion": "pending-disposable-identity"
+    }
+  },
+  "pixel": {
+    "packageId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": 2026090503,
+    "candidateSourceCommit": "96b97b55983111d9e0ae8d8fcc91e9e241a2cb6f",
+    "apkSha256": "ff9f0527c73cc7ba7abf31c1fa478c061f292e7b7cd485500959dfe12205ef57",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "foregroundFcm": "passed",
+    "backgroundFcm": "passed",
+    "terminatedProcessFcm": "passed",
+    "privateScreenshotSha256": "8c82a08b56d33943b0b9fd50521e47a5d5657ec08ee3d4bec932e9bc595df99e",
+    "freshScreenshotVisualReview": "pending-privacy-safe-owner-review"
+  },
+  "verification": {
+    "focusedTests": {
+      "passed": 31,
+      "failed": 0
+    },
+    "privacyRetentionProviderRwValidators": {
+      "passed": 20,
+      "failed": 0
+    },
+    "fullLocalRegression": {
+      "status": "passed",
+      "mode": "ci-metadata-only-with-supported-candidate-rollover",
+      "commandEnvironment": [
+        "CI=true",
+        "SIT_ALLOW_CANDIDATE_ROLLOVER=1"
+      ]
+    },
+    "cleanCheckoutReport": "docs/evidence/release-readiness/staging-runtime-safety-clean-20260905.json",
+    "cleanCheckoutReportSha256": "d481a0f0a9a97ae7d0dadc69b46d7f7cd524d8b8df622f30131cad27c6f571d4",
+    "cleanCheckout": "passed-byte-identical",
+    "cleanCheckoutFullGateSeconds": 704,
+    "cleanCheckoutSecondAndroidBuildSeconds": 36,
+    "cleanCheckoutDebugApkSha256": "6746e5f88c42725f1976adb43b9d81ed759c646cb598f2b773ba08675858fc5b",
+    "githubCodeql": {
+      "run": 33952111490,
+      "status": "passed"
+    },
+    "githubRegression": {
+      "run": 33952111491,
+      "status": "passed"
+    },
+    "openCodeScanningAlerts": 0,
+    "pullRequest": {
+      "number": 7,
+      "draft": true,
+      "open": true,
+      "mergeable": true,
+      "merged": false
+    }
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "onePlusContacted": false,
+    "paymentProviderActivated": false,
+    "realMoneyUsed": false,
+    "externalListingAiActivated": false,
+    "automaticListingPublished": false,
+    "legalSnapshotsActivated": false,
+    "pullRequestMerged": false,
+    "containsCredentials": false,
+    "containsAccountIdentity": false
+  },
+  "remaining": [
+    "authenticate the dedicated OpenAI Platform provider account and configure an external Staging credential without extraction",
+    "obtain professional approval and activate immutable V5.2 legal snapshots before any binding acceptance",
+    "run destructive account deletion only with a disposable identity",
+    "perform privacy-safe visual review of the fresh notification capture",
+    "close Stripe sandbox and test-money acceptance as a separate package"
+  ]
+}

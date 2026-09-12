@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp98-pixel-current-candidate-update-preflight",
+  "status": "passed-no-device-write-performed",
+  "capturedAt": "2026-09-10T10:56:41.166Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091001",
+    "artifactSourceHead": "068c843a2660e2a4c44a1715f4f8e51a67b41d24",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "bindingRef": "store/google-play/rollover-candidate-2026091001.json"
+  },
+  "preflight": {
+    "installedVersion": "1.0.0+2026090905",
+    "candidateVersion": "1.0.0+2026091001",
+    "exactPackageIdentity": true,
+    "candidateSignatureMatchesArchiveAndInstalledApp": true,
+    "strictlyNewerBuild": true,
+    "replaceInstallOnly": true,
+    "uninstallOrResetRequired": false,
+    "deviceAlreadyUnlocked": true,
+    "postInstallDataIdentityVerificationRequired": true
+  },
+  "boundaries": {
+    "deviceWritePerformed": false,
+    "appInstalledOrUpdated": false,
+    "appLaunched": false,
+    "appDataReset": false,
+    "storeChanged": false,
+    "stagingChanged": false,
+    "accountMutationPerformed": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPaths": false,
+    "containsSigningDigests": false
+  }
+}

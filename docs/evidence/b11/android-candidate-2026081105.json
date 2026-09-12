@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "installed-launched-and-guest-app-links-passed-other-device-gates-pending",
+  "generatedAt": "2026-08-11T09:38:29Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081105",
+    "commit": "de8e668e09fbd7ba2a03c0a3dd29214e5c47c9b5",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "pending",
+    "aabSha256": "abfc1550d9075181e55a7d53f491126d6bd91abb1470c7f14ac1c5a00be83fad",
+    "apkSha256": "c91cade0a54879930acd1b8a6f166196f1e98f6939545103ef5a2e564da30c0f",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true,
+    "privateArchivePermissionsVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "380907bd6f15a68e198d1d61ad3b02e92b875011aade15a3001c34dc58461d67",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics",
+      "Google Maps Platform"
+    ],
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "directInstallAndLaunch": "passed",
+    "crashlyticsMappingAndNativeSymbols": "pending",
+    "crashlyticsReleaseAssignment": "pending",
+    "guestAppLinks": "passed",
+    "authenticatedSessionRestore": "pending",
+    "syntheticRoleBooking": "pending",
+    "authenticatedDeepLinks": "pending",
+    "foregroundFcm": "pending",
+    "backgroundFcm": "pending",
+    "terminatedProcessFcm": "pending",
+    "logoutColdStartGuestPersistence": "pending",
+    "postLogoutPushSuppression": "pending",
+    "offlineRealtimeRecovery": "pending"
+  },
+  "controlledFcm": {
+    "status": "pending",
+    "evidenceRef": null
+  },
+  "staging": {
+    "serverCommit": "46e56f489d1fba7decdb1e3f5942425b3c0f9f83",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "googleCredentialValidation": "passed",
+    "productionInvariant": "passed"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "installedOnPhysicalDevice": true,
+    "controlledFcmSentToSyntheticAccount": false,
+    "controlledCrashDiagnosticSent": false,
+    "productionPushSent": false,
+    "productionCrashGenerated": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "kind": "account-legal-hold-enforcement",
+  "capturedAt": "2026-08-15T16:56:42Z",
+  "status": "staging-runtime-verified",
+  "scope": {
+    "oneActiveHoldPerAccount": true,
+    "accountDeletionPreflightBlocked": true,
+    "appAndWebDeletionBlocked": true,
+    "adminStepUpRequired": true,
+    "supportRoleDenied": true,
+    "createAndReleaseIdempotent": true,
+    "createAndReleaseAudited": true,
+    "privateNoteExcludedFromResponseAndAudit": true
+  },
+  "verification": {
+    "syntaxCheck": "passed",
+    "unitTests": "passed",
+    "fullBackendSuite": "passed-132-one-postgres-integration-skipped-without-test-database",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "stagingRuntime": "passed"
+  },
+  "deployment": {
+    "status": "verified",
+    "commit": "d7c472f20e1b0a4d86c72e053ceb5d8bb3c74275",
+    "version": "0.1.0-d7c472f20e1b",
+    "evidenceRef": "/docker/shareittoo/releases/staging-20260815T165642Z-d7c472f20e1b.json",
+    "fcmEnabled": true,
+    "localVersionEndpoint": "passed",
+    "publicVersionEndpoint": "passed",
+    "healthReadyEndpoint": "passed"
+  },
+  "runtimeProof": {
+    "tablePresent": true,
+    "activeUniqueIndexPresent": true,
+    "activeLegalHolds": 0,
+    "existingAccountPlacedOnHold": false
+  },
+  "policyBoundary": {
+    "legalHoldProcessApproved": false,
+    "legalRetentionPeriodsInvented": false,
+    "automaticHoldCreationEnabled": false,
+    "existingAccountPlacedOnHold": false
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "storeSubmissionChanged": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp05-support-intake-local-checkpoint",
+  "observedOn": "2026-09-04",
+  "implementationHead": "813f0580268c8474d022d38c8d38d53ba974cb63",
+  "branch": "codex/master-workflow-20260808",
+  "normalRegression": {
+    "status": "passed",
+    "toolTests": 2180,
+    "defaultFlutterTests": 700,
+    "defaultProfileSkips": 33,
+    "allMandatoryProfilesPassed": true,
+    "analyzerIssues": 0,
+    "webBuild": "passed",
+    "wasmDryRun": "passed",
+    "standaloneWasmRuntimeClaimed": false,
+    "loopbackSmoke": "passed",
+    "androidDebugBuild": "passed",
+    "androidBuildSeconds": 38,
+    "minSdk": 24,
+    "permissions": 14,
+    "exportedComponents": 8,
+    "logSha256": "934cb53af5f38107870bce81d4df4c00ae8c30ea89cb3757a19ee67dc7485679"
+  },
+  "coldReproducibility": {
+    "status": "incomplete-external-audit-unavailable",
+    "sourceHead": "813f0580268c8474d022d38c8d38d53ba974cb63",
+    "exactDetachedCleanCheckout": "passed",
+    "freshLockedDependencyRestores": "passed",
+    "backendSuite": "passed",
+    "backendSyntax": "passed",
+    "dependencySecurityAudit": "failed-service-503-and-transport-timeout",
+    "auditWaived": false,
+    "retryOrTimeoutPolicyChanged": false,
+    "subsequentColdChecks": "not-run",
+    "executionJsonProduced": false,
+    "binaryReproductionClaimed": false,
+    "isolatedCheckoutAndPackageCachesRemoved": true,
+    "outerNodeCompileCacheRetained": true,
+    "logSha256": "2f6a036b375adf103653036d5863f5fe9e66401abf541e8adfc2fc5ab8bde718"
+  },
+  "readSideFollowUp": {
+    "status": "reproduced-not-fixed",
+    "testedHead": "813f0580268c8474d022d38c8d38d53ba974cb63",
+    "sameSessionControlsPassed": 4,
+    "accountSwitchTestsFailed": 4,
+    "affectedPaths": [
+      "populated-support-list",
+      "server-confirmed-empty-support-list",
+      "direct-support-detail",
+      "support-notification-destination"
+    ],
+    "newerBOwnedDialogPreserved": true,
+    "earlierIncompleteFixtureRunsExcluded": true,
+    "correctedProbeLogSha256": "de6fdc60bc01f4e282241956f67d6a7b914d72280ec6baffeb208c1ccd826cf0",
+    "appealAndDsaWriteRisk": "source-inspected-red-proof-pending"
+  },
+  "candidateSeparation": {
+    "frozenInstalledBuild": "2026090403",
+    "frozenInstalledSource": "f6a9a41471058c9f80ffd01283c42b9d74a8845c",
+    "containsThisCorrection": false,
+    "signedArchiveChanged": false,
+    "newDeviceAction": false
+  },
+  "boundaries": {
+    "github": "owner-deferred-not-waived",
+    "githubAuthenticationOrPushAttempted": false,
+    "newExactCiClaimed": false,
+    "realSupportRequests": 0,
+    "backendDeployment": false,
+    "onePlusTouched": false,
+    "storeChanged": false,
+    "providerActivated": false,
+    "newSmsSent": false,
+    "productionChanged": false,
+    "completeGoalClaimed": false
+  },
+  "nextPackage": "support-case-read-and-follow-up-principal-ownership"
+}

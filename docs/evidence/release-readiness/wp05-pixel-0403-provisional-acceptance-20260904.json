@@ -1,0 +1,318 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp05-pixel-candidate-provisional-acceptance",
+  "status": "local-build-verified-pixel-smoke-passed-github-deferred",
+  "observedOn": "2026-09-04",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationHead": "f6a9a41471058c9f80ffd01283c42b9d74a8845c"
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "build": "2026090403",
+    "source": "f6a9a41471058c9f80ffd01283c42b9d74a8845c",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "releaseChannel": "internal",
+    "firebaseConfigured": true,
+    "apkSha256": "3fa32413f2555047751b160bbe80bbf8f4a8cde127500abc5291872e79caba16",
+    "aabSha256": "2b043f20786d8bd38bf952b1f7fa4f61069dec78064617e071b18cc274a4148d",
+    "apkBytes": 136040789,
+    "aabBytes": 109300879,
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "minSdk": 24,
+    "targetSdk": 36,
+    "compileSdk": 36,
+    "socialAuth": {
+      "googleEnabled": true,
+      "appleEnabled": false,
+      "facebookEnabled": false
+    }
+  },
+  "verification": {
+    "normalFullRegression": {
+      "status": "passed",
+      "toolTests": 2174,
+      "defaultFlutterPassed": 687,
+      "defaultExplicitProfileSkips": 33,
+      "allMandatoryProfilesPassed": true,
+      "analyzerIssues": 0,
+      "webDebugAndWasmDryRun": "passed",
+      "loopback": "passed",
+      "androidDebug": "passed",
+      "logSha256": "d2a785e81bbaf7df3e576f8e87a7e714015a472be25edf038e60ba763034941e"
+    },
+    "cleanReproducibility": {
+      "status": "passed",
+      "evidence": "docs/evidence/release-readiness/wp05-pixel-0403-clean-reproducibility-20260904.json",
+      "evidenceSha256": "1a652e7dc0a4a47d3c4fd0e261530eefed9454313052ad6c9103170d3d0a435b",
+      "androidDebugPair": "byte-identical",
+      "signedByteReproducibilityClaimed": false
+    },
+    "signedArtifactInspection": {
+      "observedAt": "2026-09-04T10:08:54.400Z",
+      "bothSignaturesVerified": true,
+      "exactArchiveVerified": true,
+      "bundleStructureVerified": true,
+      "zipStructuresVerified": true,
+      "exactCleanReproducibilityVerified": true,
+      "nativeSymbolMetadataVerified": true,
+      "releaseSurfaceVerified": true,
+      "compiledBackupAndFileProviderXmlVerified": true,
+      "kotlinAndSdkDiagnosticsAbsent": true,
+      "permissions": 14,
+      "exportedComponents": 8,
+      "componentTreeSha256": "9177f1287ce73cdc047fb8f1caaa34058a0beb1cc9d54df801177ac86b9ccc8b",
+      "privacyScan": "passed",
+      "logSha256": "e2ee4e4500d2c4d525fae349589ba61145450a1d764343bfaed1b1eef31c89ea",
+      "evidenceSha256": "28202f0e2ac5158448bc5ca781572a438d9fbf0b587794c248f1ea4f5ec69eaa"
+    },
+    "pixelPreflight": {
+      "schemaVersion": 1,
+      "kind": "android-data-preserving-direct-update-preflight",
+      "status": "eligible-no-device-write-performed",
+      "capturedAt": "2026-09-04T10:09:42.381Z",
+      "applicationId": "com.shareittoo.app",
+      "installedVersion": "1.0.0+2026090402",
+      "candidateVersion": "1.0.0+2026090403",
+      "conditions": {
+        "exactPackageIdentity": true,
+        "candidateSignatureMatchesArchiveAndInstalledApp": true,
+        "strictlyNewerBuild": true,
+        "replaceInstallOnly": true,
+        "uninstallOrResetRequired": false,
+        "deviceAlreadyUnlocked": true,
+        "postInstallDataIdentityVerificationRequired": true
+      },
+      "boundaries": {
+        "deviceWritePerformed": false,
+        "containsRawDeviceIdentifiers": false,
+        "containsPrivateFilesystemPaths": false,
+        "containsSigningDigests": false
+      }
+    },
+    "pixelUpdate": {
+      "schemaVersion": 1,
+      "kind": "android-current-head-data-preserving-direct-update",
+      "status": "passed-data-preserving-direct-update",
+      "capturedAt": "2026-09-04T10:10:40.129Z",
+      "candidate": {
+        "applicationId": "com.shareittoo.app",
+        "versionName": "1.0.0",
+        "buildNumber": "2026090403",
+        "commit": "f6a9a41471058c9f80ffd01283c42b9d74a8845c",
+        "releaseChannel": "internal",
+        "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+        "firebaseConfigured": true,
+        "apkSha256": "3fa32413f2555047751b160bbe80bbf8f4a8cde127500abc5291872e79caba16",
+        "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+        "privacyScan": "passed"
+      },
+      "device": {
+        "platform": "android",
+        "physical": true,
+        "manufacturer": "Google",
+        "model": "Pixel 7 Pro",
+        "osVersion": "17",
+        "apiLevel": 37,
+        "securityPatch": "2026-07-05",
+        "containsRawDeviceIdentifier": false
+      },
+      "update": {
+        "installedVersionBefore": "1.0.0+2026090402",
+        "installedVersionAfter": "1.0.0+2026090403",
+        "strictlyNewerBuildInstalled": true,
+        "candidateSignatureMatchedInstalledApp": true,
+        "installedCandidateHashMatches": true,
+        "firstInstallTimePreserved": true,
+        "ceDataInodePreserved": true,
+        "foregroundActivityVerified": true,
+        "method": "adb-install-no-streaming-replace"
+      },
+      "boundaries": {
+        "directDiagnosticOnly": true,
+        "storeInstallationGateSatisfied": false,
+        "uninstallUsed": false,
+        "dataResetUsed": false,
+        "downgradeUsed": false,
+        "loginPerformed": false,
+        "accountMutationPerformed": false,
+        "containsPersonalAccountData": false,
+        "containsSecrets": false,
+        "containsRawDeviceIdentifiers": false,
+        "containsPrivateFilesystemPaths": false
+      }
+    },
+    "smoke": {
+      "authenticated-cold-start": {
+        "status": "passed-bounded-authenticated-session-diagnostic",
+        "capturedAt": "2026-09-04T10:12:03.595Z",
+        "tests": {
+          "authenticatedProfileAccess": {
+            "status": "passed",
+            "result": "authenticated-actions-present"
+          },
+          "coldStartSessionRestore": {
+            "status": "passed",
+            "result": "authenticated-profile-restored-after-force-stop"
+          }
+        },
+        "boundaries": {
+          "directDiagnosticOnly": true,
+          "storeInstallationGateSatisfied": false,
+          "syntheticRoleMatrixPassed": false,
+          "bookingFlowPassed": false,
+          "authenticatedDeepLinksPassed": false,
+          "realPushPassed": false,
+          "manualTalkBackTraversalPassed": false,
+          "lockCodeUsed": false,
+          "accountIdentityRecorded": false,
+          "containsPersonalAccountData": false,
+          "containsSecrets": false,
+          "containsRawDeviceIdentifiers": false,
+          "containsReviewCredentials": false
+        },
+        "evidenceSha256": "ba7ae4c87362ff71c832326fb8dfab2c229735e32835b704fbe5cc74da92d3b2"
+      },
+      "main-navigation": {
+        "status": "passed-bounded-authenticated-main-navigation-diagnostic",
+        "capturedAt": "2026-09-04T10:12:32.056Z",
+        "tests": {
+          "Entdecken": {
+            "status": "passed",
+            "result": "authenticated-read-only-surface"
+          },
+          "Mietkorb": {
+            "status": "passed",
+            "result": "authenticated-read-only-surface"
+          },
+          "Buchungen": {
+            "status": "passed",
+            "result": "authenticated-read-only-surface"
+          },
+          "Nachrichten": {
+            "status": "passed",
+            "result": "authenticated-read-only-surface"
+          },
+          "Mein SIT": {
+            "status": "passed",
+            "result": "authenticated-read-only-surface"
+          }
+        },
+        "boundaries": {
+          "directDiagnosticOnly": true,
+          "storeInstallationGateSatisfied": false,
+          "authenticatedMainNavigationPassed": true,
+          "bookingFlowPassed": false,
+          "messageSent": false,
+          "cartMutationPerformed": false,
+          "accountMutationPerformed": false,
+          "loginPerformed": false,
+          "logoutPerformed": false,
+          "realPushPassed": false,
+          "manualTalkBackTraversalPassed": false,
+          "accountIdentityRecorded": false,
+          "lockCodeUsed": false,
+          "containsPersonalAccountData": false,
+          "containsSecrets": false,
+          "containsRawDeviceIdentifiers": false,
+          "containsReviewCredentials": false
+        },
+        "evidenceSha256": "d9a3a22c0dac7b2a1a4fe92ad50d8a307bf63f298cadc009d2f6a8d28973a276"
+      },
+      "process-restart": {
+        "status": "passed-bounded-process-restart-diagnostic",
+        "capturedAt": "2026-09-04T10:13:16.433Z",
+        "tests": {
+          "exactInstalledCandidate": {
+            "status": "passed",
+            "result": "version-and-apk-hash-match"
+          },
+          "processAbsentAfterForceStop": {
+            "status": "passed",
+            "result": "no-running-process"
+          },
+          "launcherProcessRestarted": {
+            "status": "passed",
+            "result": "running-after-launcher-event"
+          },
+          "installIdentityPreserved": {
+            "status": "passed",
+            "result": "first-install-time-unchanged"
+          },
+          "dataContainerIdentityPreserved": {
+            "status": "passed",
+            "result": "ce-data-inode-unchanged"
+          }
+        },
+        "boundaries": {
+          "fullPilotScenarioA14Passed": false,
+          "authenticatedSessionClaimed": false,
+          "pendingSubmissionTested": false,
+          "serverReconciliationTested": false,
+          "storeInstallationGateSatisfied": false,
+          "screenshotsCaptured": false,
+          "uiHierarchyCaptured": false,
+          "accountContentInspected": false,
+          "userDataReset": false,
+          "appUninstalled": false,
+          "networkChanged": false,
+          "containsSecrets": false,
+          "containsRawDeviceIdentifiers": false,
+          "containsProcessIdentifiers": false,
+          "containsPersonalAccountData": false,
+          "realMoneyUsed": false,
+          "productionChanged": false,
+          "storeChanged": false
+        },
+        "evidenceSha256": "e628d183f078203941a2d190d00d246fa4a97ee73af6d91a7423508550317dff"
+      }
+    }
+  },
+  "runtimeReadback": {
+    "observedAt": "2026-09-04T10:10:28.093Z",
+    "environment": "staging",
+    "commit": "5d88295fa7fe313b83936783a0582a505b2ba486",
+    "paymentTransport": "memory",
+    "stripeLivemode": false,
+    "readOnly": true,
+    "providerDeliveryClaimed": false
+  },
+  "failedAttempts": [
+    {
+      "phase": "signed-appbundle",
+      "exitCode": 1,
+      "classification": "incompatible-sdk-xml-reader",
+      "cause": "documented-process-local-XDG_CONFIG_HOME-omitted",
+      "retainedCandidateArchiveCreated": false,
+      "logSha256": "e4d95fdbad9cb86fcb3308f18d7559ab554f6c0d1e607dc2dbf73558acf7af3a"
+    }
+  ],
+  "hostConfiguration": {
+    "sameScopedFlutterConfigurationForFinalFullGateAndSignedBuild": true,
+    "effectiveSdkSelectionGuardPassed": true,
+    "globalSettingsUnchangedSha256": "3f9a5de0ddf4a5ca7a8d85558cf1f2acff332a72e2119696e78dee4270c594c7",
+    "manualCachePurgeBetweenFinalCommands": false,
+    "technicalDebt": "TD-WP05-SCOPED-SDK-INVOCATION-PARTIAL"
+  },
+  "boundaries": {
+    "githubVerification": "deferred-not-waived",
+    "productionChanged": false,
+    "storeChanged": false,
+    "providerActivated": false,
+    "onePlusAccessed": false,
+    "freshSmsRequested": false,
+    "freshLoginRegistrationOrPrivacyExportClaimed": false,
+    "fullPixelOrGoalClosureClaimed": false,
+    "rawAccountOrDeviceValuesIncluded": false
+  },
+  "remaining": [
+    "current-candidate-privacy-export-and-support-mutations",
+    "fresh-authentication-and-two-role-full-functional-matrix",
+    "themes-network-permissions-accessibility-matrix",
+    "real-ai-provider-and-stripe-sandbox-acceptance",
+    "legal-and-owner-prerequisites",
+    "effective-release-sdk-selection-permanent-test-and-ci-closure",
+    "exact-GitHub-Regression-and-CodeQL"
+  ]
+}

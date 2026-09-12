@@ -2,7 +2,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:lendify/services/background_theme_service.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class BrandColors {
   static const logoGradientStart = Color(0xFF5868A9);
@@ -95,7 +94,10 @@ class AppTheme {
 class AppTypography {
   static TextTheme textTheme(BuildContext context, {required bool isDark}) {
     final primary = isDark ? Colors.white : const Color(0xFF111111);
-    final base = GoogleFonts.interTextTheme(Theme.of(context).textTheme)
+    // Keep release typography fully offline. Runtime web-font downloads can
+    // fail during startup and must never be able to crash the marketplace.
+    final base = Theme.of(context)
+        .textTheme
         .apply(bodyColor: primary, displayColor: primary);
     const h = 1.25;
     return base.copyWith(
@@ -151,7 +153,8 @@ ThemeData buildLightTheme(BuildContext context) {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: const Color(0xF5FFFFFF),
-      hintStyle: text.bodyMedium?.copyWith(color: AppTheme.textSecondary(context)),
+      hintStyle:
+          text.bodyMedium?.copyWith(color: AppTheme.textSecondary(context)),
       labelStyle: text.bodyMedium?.copyWith(color: AppTheme.textBody(context)),
       prefixIconColor: BrandColors.primary,
       suffixIconColor: AppTheme.textSecondary(context),
@@ -232,7 +235,10 @@ class AppGradientBackground extends StatelessWidget {
         Positioned.fill(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: choice.overlayOpacity),
+              color: (choice.family == Brightness.dark
+                      ? Colors.black
+                      : Colors.white)
+                  .withValues(alpha: choice.overlayOpacity),
             ),
           ),
         ),

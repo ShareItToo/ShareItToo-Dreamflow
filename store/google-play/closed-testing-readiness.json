@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "status": "not-started",
+  "productionAccessAllowed": false,
+  "applicationId": "com.shareittoo.app",
+  "accountType": "personal",
+  "track": "closed",
+  "requirements": {
+    "minimumContinuousTesterCount": 12,
+    "minimumConsecutiveDays": 14
+  },
+  "window": {
+    "startedAt": null,
+    "eligibleAt": null,
+    "observedAt": null
+  },
+  "testing": {
+    "continuousQualifiedTesterCount": 0,
+    "minimumRosterContinuouslyOptedIn": false,
+    "engagementEvidenceCollected": false
+  },
+  "productionAccess": {
+    "applicationSubmitted": false,
+    "applicationApproved": false,
+    "decisionObservedAt": null
+  },
+  "evidenceRef": null,
+  "boundaries": {
+    "containsTesterPersonalData": false,
+    "containsAccountIdentifiers": false,
+    "containsSecrets": false,
+    "storeSubmissionChanged": false
+  }
+}

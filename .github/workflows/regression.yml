@@ -3,22 +3,237 @@ name: regression
 on:
   push:
     branches:
-      - '**'
+      - main
+    paths-ignore:
+      - 'docs/**'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+  workflow_dispatch:
+    inputs:
+      build_release_candidate:
+        description: Build the explicitly requested signed internal candidate
+        required: true
+        default: false
+        type: boolean
+      run_flutter_parallel_stress:
+        description: Run five complete standard-parallel Flutter suites
+        required: true
+        default: false
+        type: boolean
+      publish_api_image:
+        description: Publish the exact verified API image for the closed staging pilot
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: regression-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  flutter-regression:
+  backend-regression:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+        env:
+          POSTGRES_DB: sit_test
+          POSTGRES_USER: sit_test
+          POSTGRES_PASSWORD: sit_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sit_test -d sit_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://sit_test:sit_test_password@127.0.0.1:5432/sit_test
+      TEST_DATABASE_URL: postgresql://sit_test:sit_test_password@127.0.0.1:5432/sit_test
+      JWT_SECRET: ci-test-secret-that-is-longer-than-thirty-two-characters
+      MAIL_TRANSPORT: memory
+      UPLOAD_DIR: /tmp/shareittoo-test-uploads
+    defaults:
+      run:
+        working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-      - uses: actions/setup-java@v4
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: backend/package.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      - name: Install locked backend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run backend tests and syntax checks
+        run: |
+          pnpm test
+          pnpm run check
+
+      - name: Audit dependencies and tracked Git history
+        run: |
+          pnpm run security:audit
+          pnpm run security:secrets
+
+      - name: Validate production and staging Compose plans
+        env:
+          POSTGRES_PASSWORD: ci-only-postgres-password
+          JWT_SECRET: ci-only-jwt-secret-that-is-longer-than-thirty-two-characters
+          APP_COMMIT: ${{ github.sha }}
+          FIREBASE_PROJECT_ID: shareittoo-staging
+          FIREBASE_SERVICE_ACCOUNT_HOST_FILE: /run/shareittoo-ci/firebase-service-account.json
+          SMTP_HOST: smtp-relay.gmail.com
+          SMTP_PORT: "587"
+          SMTP_SECURE: "false"
+          SMTP_REQUIRE_TLS: "true"
+          MAIL_FROM: "ShareItToo Staging <contact@shareittoo.com>"
+          MAIL_REPLY_TO: contact@shareittoo.com
+          OPENAI_API_KEY_HOST_FILE: /run/shareittoo-ci/openai-api-key
+          STRIPE_SECRET_KEY_HOST_FILE: /run/shareittoo-ci/stripe-secret-key
+          STRIPE_WEBHOOK_SECRET_HOST_FILE: /run/shareittoo-ci/stripe-webhook-secret
+          STRIPE_CONNECT_WEBHOOK_SECRET_HOST_FILE: /run/shareittoo-ci/stripe-connect-webhook-secret
+          SIT_LISTING_AI_MODEL: gpt-4o-mini-2024-07-18
+          SIT_LISTING_AI_BUDGET_CENTS: "5"
+          SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: "1"
+        run: |
+          docker compose -f compose.prod.yml config --quiet
+          docker compose -f compose.staging.yml config --quiet
+          docker compose \
+            -f compose.staging.yml \
+            -f compose.staging.fcm.yml \
+            config --quiet
+          docker compose \
+            -f compose.staging.yml \
+            -f compose.staging.pilot.yml \
+            config --quiet
+          docker compose \
+            -f compose.staging.yml \
+            -f compose.staging.pilot.yml \
+            -f compose.staging.smtp.yml \
+            config --quiet
+          docker compose \
+            -f compose.staging.yml \
+            -f compose.staging.pilot.yml \
+            -f compose.staging.listing-ai.yml \
+            config --quiet
+          docker compose \
+            -f compose.staging.yml \
+            -f compose.staging.pilot.yml \
+            -f compose.staging.stripe.yml \
+            config --quiet
+          docker run --rm \
+            --volume "$PWD/ops/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d \
+            caddy validate --config /etc/caddy/Caddyfile
+
+      - name: Build commit-labelled API image
+        env:
+          APP_COMMIT: ${{ github.sha }}
+        run: |
+          APP_VERSION="0.1.0-${APP_COMMIT::12}"
+          APP_BUILD_TIME="$(git show -s --format=%cI "$APP_COMMIT")"
+          APP_SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+          docker build \
+            --build-arg "APP_VERSION=$APP_VERSION" \
+            --build-arg "APP_COMMIT=$APP_COMMIT" \
+            --build-arg "APP_BUILD_TIME=$APP_BUILD_TIME" \
+            --build-arg "APP_SOURCE_URL=$APP_SOURCE_URL" \
+            --tag "shareittoo-api:$APP_COMMIT" \
+            .
+          test "$(docker image inspect "shareittoo-api:$APP_COMMIT" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$APP_COMMIT"
+
+  postgres-runner-proof:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: backend/package.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      - name: Install locked backend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run repository-owned PostgreSQL 16 fresh-cluster proof
+        run: pnpm run test:postgres:local
+
+      - name: Run repository-owned PostgreSQL 16 R9 recovery proof
+        run: node ../tool/run_r9_database_recovery.mjs
+
+  r10-clean-reproducibility:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: backend/package.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.41.7
+          cache: true
+
+      - name: Run exact clean-checkout reproducibility proof
+        run: |
+          node tool/run_r10_clean_reproducibility.mjs \
+            --source-branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" \
+            --output "$RUNNER_TEMP/r10-clean-reproducibility.json"
+          node tool/validate_r10_clean_reproducibility.mjs \
+            --input "$RUNNER_TEMP/r10-clean-reproducibility.json" \
+            --execution-only
+
+  flutter-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up verified Gradle cache
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+          cache-read-only: false
 
       - uses: subosito/flutter-action@v2
         with:
@@ -28,5 +243,79 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Verify the checksum-bound Gradle wrapper once
+        run: ./android/gradlew --version
+
       - name: Run regression script
+        env:
+          SIT_ALLOW_CANDIDATE_ROLLOVER: '1'
         run: bash scripts/technical_regression_check.sh
+
+      - name: Run explicit Flutter parallel stability proof
+        if: github.event_name == 'workflow_dispatch' && inputs.run_flutter_parallel_stress
+        run: bash scripts/test_flutter_parallel_stability.sh
+
+      - name: Build a signed, commit-bound Android release candidate
+        if: github.event_name == 'workflow_dispatch' && inputs.build_release_candidate
+        env:
+          SIT_API_BASE_URL: https://staging.shareittoo.com/api/v1
+          SIT_RELEASE_CHANNEL: internal
+          SIT_ALLOW_CANDIDATE_ROLLOVER: '1'
+        run: |
+          keytool -genkeypair -v \
+            -keystore "$RUNNER_TEMP/shareittoo-ci-upload.jks" \
+            -storetype JKS \
+            -storepass ci-only-store-password \
+            -keypass ci-only-key-password \
+            -alias shareittoo-ci \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 2 \
+            -dname "CN=ShareItToo CI, OU=CI, O=ShareItToo, L=Berlin, C=DE"
+          printf '%s\n' \
+            "storeFile=$RUNNER_TEMP/shareittoo-ci-upload.jks" \
+            "storePassword=ci-only-store-password" \
+            "keyAlias=shareittoo-ci" \
+            "keyPassword=ci-only-key-password" \
+            > android/key.properties
+          chmod 600 "$RUNNER_TEMP/shareittoo-ci-upload.jks" android/key.properties
+          bash scripts/build_android_release_candidate.sh
+          rm android/key.properties
+
+  publish-api-image:
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish_api_image)
+    needs:
+      - backend-regression
+      - postgres-runner-proof
+      - r10-clean-reproducibility
+      - flutter-regression
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build and publish the verified API image
+        working-directory: backend
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REGISTRY_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/shareittoo-api"
+          APP_VERSION="0.1.0-${GITHUB_SHA::12}"
+          APP_BUILD_TIME="$(git show -s --format=%cI "$GITHUB_SHA")"
+          APP_SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+          IMAGE_REF="$REGISTRY_IMAGE:$GITHUB_SHA"
+
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker build \
+            --build-arg "APP_VERSION=$APP_VERSION" \
+            --build-arg "APP_COMMIT=$GITHUB_SHA" \
+            --build-arg "APP_BUILD_TIME=$APP_BUILD_TIME" \
+            --build-arg "APP_SOURCE_URL=$APP_SOURCE_URL" \
+            --tag "$IMAGE_REF" \
+            .
+          test "$(docker image inspect "$IMAGE_REF" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$GITHUB_SHA"
+          docker push "$IMAGE_REF"

@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 1,
+  "kind": "p0b-invited-synthetic-pilot-readiness",
+  "version": "P0B-PILOT-2026-08-21.1",
+  "authorizationToken": "P0B_NEXT_INVITED_SYNTHETIC_PILOT_SPIEGELBERG_CAT8_30",
+  "orderedTokenAuthorized": true,
+  "preparedOn": "2026-08-21",
+  "state": "prepared-hold-prerequisite-gates-open",
+  "sourceBindings": {
+    "repository": [
+      {
+        "path": "docs/evidence/p0b/pilot-go-no-go-dossier.json",
+        "sha256": "3566a46c018b7685adfe0f9df296c2060294f811deb5b61dd79ec818c25f27dd"
+      },
+      {
+        "path": "assets/legal/de/legal_review_intake_p0b_20260821.json",
+        "sha256": "2ce69106a3ea06ad6fa08a365a22716bf1342c44b107fa03cdda5a399e165696"
+      },
+      {
+        "path": "docs/operations/p0b-ops-role-delegate-absence-gate.json",
+        "sha256": "eb5cd54c3894f74534d21d04c079c942b276aa553324cd581b0d6519ae8800ff"
+      },
+      {
+        "path": "docs/evidence/p0b-next/signed-device-evidence.json",
+        "sha256": "9c7ec43fe113177095220514a07b238d0a2ed4177aaecb623590447fecce23aa"
+      },
+      {
+        "path": "docs/evidence/p0b-next/psp-sandbox-e2e-evidence.json",
+        "sha256": "769650b9d4fb633c053ecfa7df9aaf05a324a239d59e4ca8bc729feb658c4097"
+      },
+      {
+        "path": "backend/src/config.js",
+        "sha256": "90922f999317f81e466f6d120a4655d775587552e52d2004372e36687ad73966"
+      },
+      {
+        "path": "backend/src/private_pilot_domain.js",
+        "sha256": "bcc1f29927c15a29f4027b0ad731349bedced0bc445e0ce19aeff808d6fcbeee"
+      },
+      {
+        "path": "backend/src/invited_synthetic_pilot_readiness_gate.js",
+        "sha256": "f8567c4293283a0e2b547a8d1fb758f8fc7b5bdf90df8ecffd7e0afc38991032"
+      },
+      {
+        "path": "backend/test/invited_synthetic_pilot_readiness_gate.test.js",
+        "sha256": "1690af0ff93075891ebf0ccb7b675fd7049f725f0162fea3d7660a935a3cd8d0"
+      },
+      {
+        "path": "docs/operations/P0B_INVITED_SYNTHETIC_PILOT_SPIEGELBERG_CAT8_RUNBOOK.md",
+        "sha256": "297df8cdb8fa649af3ef1450ed8c21bd47935593dde4bea29979a350c6e3f24b"
+      }
+    ],
+    "drive": [
+      {
+        "fileId": "1HQR2EWJg6FUcU41l5uwditfFzNoCe6Zx",
+        "title": "01_V5.2_CORE_SPECIFICATION.md",
+        "modifiedTime": "2026-08-18T17:51:27.257Z"
+      },
+      {
+        "fileId": "1kKuZl9OJ4nb9F02E8fepTxY8O-GZBkn2",
+        "title": "02_V5.2_RECHTSMAPPE_PRIVATLAUNCH.pdf",
+        "modifiedTime": "2026-08-18T17:51:36.056Z"
+      },
+      {
+        "fileId": "1z9GdNlilUrpq1P34lrXdqv6RmJHYSQfJ",
+        "title": "01_SIT_MASTER_V2_DEUTSCHLAND_ZU_GLOBAL.pdf",
+        "modifiedTime": "2026-08-18T17:52:13.985Z"
+      },
+      {
+        "fileId": "1R_JeRkFXTsFVusKlqeM5wS2-MZAV0fdx",
+        "title": "02_SIT_Growth_Product_Projektkorb_und_SIT_Planer.docx",
+        "modifiedTime": "2026-08-18T13:41:16.606Z"
+      },
+      {
+        "fileId": "1UdwK9GB79Zlt1jIKcWoG43J8LQezJDdE",
+        "title": "04_SIT_BUSINESS_PRODUKTSTRATEGIE_UND_WACHSTUMSGATE.pdf",
+        "modifiedTime": "2026-08-18T17:53:25.006Z"
+      }
+    ]
+  },
+  "prerequisites": [
+    {
+      "id": "professionalLegalApproval",
+      "passed": false,
+      "evidencePath": "assets/legal/de/legal_review_intake_p0b_20260821.json",
+      "observedState": "prepared-awaiting-independent-professional-review"
+    },
+    {
+      "id": "operationsReady",
+      "passed": false,
+      "evidencePath": "docs/operations/p0b-ops-role-delegate-absence-gate.json",
+      "observedState": "hold-external-assignments-and-human-absence-tests"
+    },
+    {
+      "id": "signedDeviceGateReady",
+      "passed": false,
+      "evidencePath": "docs/evidence/p0b-next/signed-device-evidence.json",
+      "observedState": "partial-android-passed-ios-blocked"
+    },
+    {
+      "id": "pspSandboxE2ePassed",
+      "passed": false,
+      "evidencePath": "docs/evidence/p0b-next/psp-sandbox-e2e-evidence.json",
+      "observedState": "hold-provider-contract-credentials-and-sandbox-e2e"
+    }
+  ],
+  "scope": {
+    "pilotType": "invited-private-synthetic-payment-flow-pilot",
+    "invitedAdultPrivateUsers": 30,
+    "minimumAge": 18,
+    "privateUseOnly": true,
+    "targetCompleteFlowRunsMinimum": 30,
+    "targetCompleteFlowRunsMaximum": 50,
+    "countryCode": "DE",
+    "regionLabel": "Spiegelberg, Rems-Murr-Kreis",
+    "allowedRegionCode": "spiegelberg",
+    "catalog": [
+      {
+        "categoryId": "cat8",
+        "subcategory": "Elektrowerkzeuge"
+      },
+      {
+        "categoryId": "cat8",
+        "subcategory": "Bohrmaschinen"
+      },
+      {
+        "categoryId": "cat8",
+        "subcategory": "Schleifer"
+      }
+    ],
+    "enabledProductScope": [
+      "v52-single-item-only",
+      "g2-navigation-cart-and-gemerkt-non-reserving"
+    ],
+    "disabledProductScope": [
+      "g3-booking-groups",
+      "g4-planner-inventory",
+      "g5-supply-enrichment",
+      "g5-listing-sets",
+      "sit-business",
+      "multi-provider-projects",
+      "external-ai",
+      "public-registration",
+      "real-money"
+    ],
+    "publicRegistration": false,
+    "realMoney": false,
+    "liveProviderTraffic": false
+  },
+  "targetMetrics": {
+    "status": "targets-not-observations",
+    "currency": "EUR",
+    "aovMinimumMinor": 4500,
+    "aovMaximumMinor": 5500,
+    "successfulHandoverRateGreaterThan": 0.95,
+    "severeDisputeRateLessThan": 0.02,
+    "ninetyDayRepeatRateAtLeast": 0.25,
+    "observedAovMinor": null,
+    "observedSuccessfulHandoverRate": null,
+    "observedSevereDisputeRate": null,
+    "observedNinetyDayRepeatRate": null
+  },
+  "execution": {
+    "regionConfigured": false,
+    "runtimePilotModeChanged": false,
+    "catalogMutationPerformed": false,
+    "cohortRosterCreated": false,
+    "personalDataCollected": false,
+    "testAccountsProvisioned": false,
+    "invitesSent": false,
+    "syntheticFlowRuns": 0,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "paymentProviderChanged": false,
+    "storeChanged": false,
+    "publicRegistrationEnabled": false,
+    "realMoneyUsed": false
+  },
+  "evaluation": {
+    "requiredPrerequisiteCount": 4,
+    "passedPrerequisiteCount": 0,
+    "missingPrerequisiteIds": [],
+    "duplicatePrerequisiteIds": false,
+    "prerequisiteGatesGreen": false,
+    "exactScopeValid": true,
+    "orderedTokenAuthorized": true,
+    "conditionalAuthorizationEffective": false,
+    "executionMutationClaimed": false,
+    "controlledPilotEligible": false,
+    "publicLaunchReady": false,
+    "realMoneyReady": false
+  },
+  "boundaries": {
+    "containsPersonalData": false,
+    "containsCredentials": false,
+    "containsPrivateFilesystemPaths": false,
+    "regionOrCatalogConfigured": false,
+    "participantOrAccountMutationPerformed": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "paymentProviderChanged": false,
+    "storeChanged": false,
+    "publicActivationChanged": false,
+    "realMoneyUsed": false
+  }
+}

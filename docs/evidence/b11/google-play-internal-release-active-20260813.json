@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-internal-release-active",
+  "capturedAt": "2026-08-13T21:35:00Z",
+  "status": "available-and-store-install-verified",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081303",
+    "commit": "4144d0c0a3a2e19e89b6523594607c14625b0119",
+    "aabSha256": "c900bbf4ad223d9d08f15f931a8fcaca62538c500a480749cb7396a454fddac6",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "release": {
+    "track": "internal",
+    "name": "1.0.0-internal-2026081303",
+    "versionCodeObserved": "2026081303",
+    "versionNameObserved": "1.0.0",
+    "minimumApiObserved": 24,
+    "targetSdkObserved": 35,
+    "newInstallSizeMbObserved": 59.2,
+    "statusObserved": "available-to-internal-testers",
+    "reviewStatusObserved": "not-reviewed",
+    "temporaryAppNameObserved": true
+  },
+  "validation": {
+    "uploadAcceptedByGooglePlay": true,
+    "retraceMappingAttached": true,
+    "nativeDebugSymbolsAttached": true,
+    "errorCount": 0,
+    "warningCountBeforeTesterSelection": 0,
+    "warningCause": "none-existing-tester-list-selected",
+    "readyToReleaseAfterTesterSelection": true
+  },
+  "testers": {
+    "emailListCreated": true,
+    "selectedListCount": 1,
+    "selectedUserCount": 1,
+    "joinLinkAvailable": true,
+    "containsTesterAddress": false
+  },
+  "postReleaseChecks": {
+    "playStoreOptInCompleted": true,
+    "playStoreInstallCompleted": true,
+    "installedVersionVerified": true,
+    "installedVersionName": "1.0.0",
+    "installedBuildNumber": "2026081303",
+    "installerPackage": "com.android.vending",
+    "coldLaunchCompleted": true,
+    "coldLaunchCrashObserved": false,
+    "stagingFeedLoaded": true,
+    "crashlyticsCandidateAssignmentVerified": false
+  },
+  "boundaries": {
+    "internalReleaseActivated": true,
+    "closedTestingStarted": false,
+    "openTestingStarted": false,
+    "productionChanged": false,
+    "publicRolloutStarted": false,
+    "sentForProductionReview": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false
+  }
+}

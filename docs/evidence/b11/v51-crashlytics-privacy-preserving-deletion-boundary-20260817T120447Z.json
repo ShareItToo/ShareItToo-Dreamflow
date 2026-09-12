@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-crashlytics-privacy-preserving-deletion-boundary",
+  "status": "passed-source-and-full-regression-retention-approval-open",
+  "capturedAt": "2026-08-17T12:04:47Z",
+  "sourceBaseCommit": "e08af9e301d3f006f0f4aa53eef51d8fb07f244c",
+  "productDecision": {
+    "firebaseCloudMessagingRetained": true,
+    "firebaseCrashlyticsRetained": true,
+    "bothServicesRequireSeparateVoluntaryChoice": true,
+    "nextCandidateDefaultOff": true,
+    "pushCannotEnableCrashlytics": true,
+    "adsMarketingAnalyticsAndExternalGenAiRemainDisabled": true
+  },
+  "privacyBoundary": {
+    "sitUserIdentifierSentToCrashlytics": false,
+    "advertisingIdentifierSentToCrashlytics": false,
+    "linkedCrashIdentityAdded": false,
+    "localUnsentReportsDeletedOnDisableOrAccountDeletion": true,
+    "firebaseInstallationDeletionRequestedOnAccountDeletion": true,
+    "alreadySentReportsAccountScopedEarlyDeletionAvailable": false,
+    "reason": "Without sending a SIT user identifier, already-sent Crashlytics reports cannot be correlated to a SIT account for an account-scoped early deletion request.",
+    "providerRetentionDisclosed": "90-days-before-provider-removal-process-starts",
+    "immediateProviderErasurePromised": false
+  },
+  "userFacingTruth": {
+    "optInDialogUpdated": true,
+    "publicPrivacyPageUpdated": true,
+    "localAndProviderDeletionDifferenceExplained": true,
+    "accountScopedProviderDeletionGapExplained": true,
+    "worldwideProcessingStillDisclosed": true
+  },
+  "sourceBindings": {
+    "backendPrivacySha256": "398a1f485cecbf839f5503d3b8cca7f3e31935043c23a589322ea119659eec12",
+    "notificationSettingsSha256": "d8f2baaf72da1b79db724142b959c098fdcc3d12e00fceb9ec24e619b6083597",
+    "privacyManifestSha256": "7b3d11e404c15d7a00954ce8c9154f4f1822ddc7d5e78cdf726ac187ecade25f",
+    "retentionManifestSha256": "6d02d68f9f6124e2eaa33a7eb2883bcfaf61d0315e2ff60aba582ca6c47273b5",
+    "wiringTestSha256": "ebde0a4760c0d941001abb1f87d91342edb03374d5452e66c51f07c2d3e80447"
+  },
+  "verification": {
+    "targetedNodeTests": "passed-58",
+    "backendAccountSecurityTests": "passed-10",
+    "targetedFlutterTests": "passed-19",
+    "fullFlutterTests": "passed-282-with-1-intentional-skip",
+    "flutterAnalyzer": "226-findings-0-errors-baseline-accepted",
+    "googleOnlySocialProfile": "passed",
+    "webDebugBuild": "passed-existing-wasm-dry-run-warnings-only",
+    "androidDebugBuild": "passed",
+    "privacyValidator": "passed-draft-fail-closed",
+    "retentionValidator": "passed-draft-nine-open-decisions",
+    "diffCheck": "passed"
+  },
+  "openGates": {
+    "firebaseContractAcceptance": true,
+    "processingLocationsAndInternationalTransferApproval": true,
+    "externalProcessorRetentionDecision": true,
+    "storeDisclosureApproval": true,
+    "replacementCandidateBuildAndPhysicalVerification": true
+  },
+  "boundaries": {
+    "crashEventGenerated": false,
+    "crashDataTransferred": false,
+    "backendDeployed": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "providerConsoleChanged": false,
+    "storeFormChanged": false,
+    "candidateBuiltOrRelabeled": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  },
+  "officialSources": [
+    "https://firebase.google.com/support/privacy/",
+    "https://firebase.google.com/docs/crashlytics/android/customize-crash-reports",
+    "https://firebase.google.com/docs/projects/manage-installations"
+  ]
+}

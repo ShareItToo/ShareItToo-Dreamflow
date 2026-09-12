@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-pf16-current-candidate-read-only-physical-regression",
+  "status": "passed-current-candidate-read-only-physical-regression",
+  "capturedAt": "2026-08-23T14:57:31.422Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026082302",
+    "commit": "1b3e86ef1bcfa5a88b1baf965fdad00e9d64f54b",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "privateArchiveVerified": true,
+    "exactInstalledApkVerified": true
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "checks": {
+    "processRestart": "passed-data-identity-preserved",
+    "authenticatedColdStart": "passed-two-cycles",
+    "offlineColdStartAndRecovery": "passed-online-offline-online",
+    "mainNavigation": {
+      "status": "passed",
+      "destinationCount": 5
+    },
+    "legalRoutes": {
+      "status": "passed-technical-reachability-only",
+      "documentCount": 7
+    },
+    "largeTextMainNavigation": {
+      "status": "passed-semantic-reachability-only",
+      "targetFontScale": 2,
+      "destinationCount": 5,
+      "previousFontScale": 0.85,
+      "restoredFontScale": 0.85,
+      "exactPreviousFontScaleRestored": true
+    }
+  },
+  "releaseGate": {
+    "directInternalCandidate": true,
+    "googlePlayDistribution": false,
+    "manualVisualReview": false,
+    "manualTalkBackTraversal": false,
+    "completeDeviceMatrix": false,
+    "storeSubmissionAllowed": false,
+    "publicActivationAllowed": false,
+    "realMoneyAllowed": false,
+    "stageAReady": false,
+    "decision": "hold-no-go"
+  },
+  "boundaries": {
+    "loginPerformed": false,
+    "logoutPerformed": false,
+    "accountMutationPerformed": false,
+    "cartMutationPerformed": false,
+    "bookingFlowPassed": false,
+    "messageSent": false,
+    "supportSubmitted": false,
+    "withdrawalOpened": false,
+    "paymentChanged": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "cloudChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "publicReleasePerformed": false,
+    "realPushPassed": false,
+    "talkBackSettingModified": false,
+    "manualVisualReviewClaimed": false,
+    "manualTalkBackClaimed": false,
+    "screenshotCaptured": false,
+    "rawHierarchyRetained": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPaths": false,
+    "containsNetworkIdentifiers": false
+  }
+}

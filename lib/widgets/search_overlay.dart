@@ -1,19 +1,19 @@
 import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lendify/models/category.dart' as app_category;
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/user.dart' as app_user;
 import 'package:lendify/services/data_service.dart';
+import 'package:lendify/services/search_category_inference.dart';
 import 'package:lendify/widgets/modern_range_picker_sheet.dart';
 import 'package:lendify/widgets/item_details_overlay.dart';
-import 'package:lendify/screens/see_all_screen.dart';
 import 'package:lendify/screens/search_results_screen.dart';
 import 'package:lendify/widgets/app_image.dart';
 import 'package:lendify/widgets/all_categories_overlay.dart';
 import 'package:lendify/openai/openai_config.dart';
+import 'package:lendify/widgets/app_popup.dart';
 
 class SearchOverlay {
   static Future<void> show(BuildContext context) async {
@@ -43,15 +43,6 @@ class SearchOverlay {
         );
       },
     );
-  }
-}
-
-class _BlurLayer extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(color: Colors.transparent));
   }
 }
 
@@ -101,6 +92,7 @@ class _SearchSheetState extends State<_SearchSheet> {
         unavailableRanges: const [],
       ),
     );
+    if (!mounted) return;
     if (picked != null) {
       setState(() {
         _pickup = picked.start;
@@ -111,18 +103,15 @@ class _SearchSheetState extends State<_SearchSheet> {
 
   List<String> _suggestions = [];
   List<String> _locSuggestions = [];
-  List<Item> _nearby = [];
   // Live-updated grid suggestions based on Was/Wo/Datum
   List<Item> _displayNearby = [];
   List<app_category.Category> _categories = [];
-  final Map<String, app_category.Category> _categoriesById = {};
 
   // Multiple possible categories inferred from "Was" or "KI-Suche".
   // NOTE: In Suche we only allow the 11 coarse categories (same as "Neue Anzeige").
   // We keep this list for internal/AI logic, but we intentionally do not render
   // live suggestion chips in the UI (per previous request).
   List<String> _categoryCandidates = [];
-  bool _categorySuggesting = false;
   Set<String> _verifiedOwnerIds = {};
   Map<String, app_user.User> _usersById = {};
   app_user.User? _currentUser;
@@ -152,24 +141,35 @@ class _SearchSheetState extends State<_SearchSheet> {
   }
 
   Future<void> _loadData() async {
-    final items = await DataService.getItems();
-    final users = await DataService.getUsers();
-    final me = await DataService.getCurrentUser();
-    final categories = await DataService.getCategories();
+    late final List<Item> items;
+    late final List<app_user.User> users;
+    late final app_user.User? me;
+    late final List<app_category.Category> categories;
+    try {
+      items = await DataService.getPublicItems();
+      if (!mounted) return;
+      users = await DataService.getUsers();
+      if (!mounted) return;
+      me = await DataService.getCurrentUser();
+      if (!mounted) return;
+      categories = await DataService.getCategories();
+      if (!mounted) return;
+    } catch (error) {
+      debugPrint('[_SearchSheet] initial load failed: $error');
+      if (!mounted) return;
+      setState(() => _loading = false);
+      return;
+    }
     final byId = {for (final u in users) u.id: u};
     final verifiedIds =
         users.where((u) => u.isVerified).map((u) => u.id).toSet();
     final itemTitles =
         items.map((e) => e.title).where((e) => e.trim().isNotEmpty).toList();
     setState(() {
-      _nearby = items;
       _usersById = byId;
       _verifiedOwnerIds = verifiedIds;
       _currentUser = me;
       _categories = categories;
-      _categoriesById
-        ..clear()
-        ..addAll({for (final c in categories) c.id: c});
       _suggestions = itemTitles.take(12).toList();
       _recent = itemTitles.take(12).toList();
       _loading = false;
@@ -204,8 +204,9 @@ class _SearchSheetState extends State<_SearchSheet> {
     if (!mounted) return;
     final q = text.trim();
     if (q.isEmpty || _categories.isEmpty) {
-      if (_categoryCandidates.isNotEmpty)
+      if (_categoryCandidates.isNotEmpty) {
         setState(() => _categoryCandidates = []);
+      }
       return;
     }
 
@@ -224,7 +225,6 @@ class _SearchSheetState extends State<_SearchSheet> {
     }
 
     // Then ask OpenAI for multiple plausible categories.
-    setState(() => _categorySuggesting = true);
     try {
       final suggestions = await OpenAIConfig.suggestCategories(
         userInput: q,
@@ -253,8 +253,6 @@ class _SearchSheetState extends State<_SearchSheet> {
       });
     } catch (e) {
       debugPrint('[_SearchSheet] suggestCategories failed: $e');
-    } finally {
-      if (mounted) setState(() => _categorySuggesting = false);
     }
   }
 
@@ -268,90 +266,17 @@ class _SearchSheetState extends State<_SearchSheet> {
   List<String> get _coarseCategoryOrder => DataService.coarseCategoryOrder;
 
   String? _normalizeCoarseCategory(String raw) {
-    final q = raw.trim().toLowerCase();
-    if (q.isEmpty) return null;
-
-    // 0) Exact coarse label match
-    for (final c in _coarseCategoryOrder) {
-      if (c.toLowerCase() == q) return c;
-    }
-
-    // Simple synonyms for common natural-language inputs.
-    final synonymHints = <String, String>{
-      'auto': 'Auto & Mobilität',
-      'wagen': 'Auto & Mobilität',
-      'pkw': 'Auto & Mobilität',
-      'mercedes': 'Auto & Mobilität',
-      'bmw': 'Auto & Mobilität',
-      'audi': 'Auto & Mobilität',
-      'transporter': 'Auto & Mobilität',
-      'wohnmobil': 'Auto & Mobilität',
-      'fahrrad': 'Auto & Mobilität',
-      'ebike': 'Auto & Mobilität',
-      'e-bike': 'Auto & Mobilität',
-      'e scooter': 'Auto & Mobilität',
-      'e-scooter': 'Auto & Mobilität',
-      'camping': 'Reisen & Camping',
-      'zelt': 'Reisen & Camping',
-      'reise': 'Reisen & Camping',
-      'urlaub': 'Reisen & Camping',
-      'party': 'Events & Feiern',
-      'feier': 'Events & Feiern',
-      'hochzeit': 'Events & Feiern',
-      'geburtstag': 'Events & Feiern',
-      'werkzeug': 'Werkzeuge & Kleingeräte',
-      'bohrer': 'Werkzeuge & Kleingeräte',
-      'säge': 'Werkzeuge & Kleingeräte',
-      'saege': 'Werkzeuge & Kleingeräte',
-      'kleidung': 'Kleidung & Anlässe',
-      'anzug': 'Kleidung & Anlässe',
-      'kleid': 'Kleidung & Anlässe',
-      'kostüm': 'Kleidung & Anlässe',
-      'kostuem': 'Kleidung & Anlässe',
-      'baby': 'Baby & Familie',
-      'familie': 'Baby & Familie',
-      'kinderwagen': 'Baby & Familie',
-      'garten': 'Garten & Outdoor',
-      'grill': 'Garten & Outdoor',
-      'büro': 'Büro & Lernen',
-      'buero': 'Büro & Lernen',
-      'office': 'Büro & Lernen',
-      'schule': 'Büro & Lernen',
-    };
-    for (final e in synonymHints.entries) {
-      if (q.contains(e.key)) return e.value;
-    }
-
-    // 1) Map fine category/subcategory back to coarse.
-    for (final c in _categories) {
-      final name = c.name.toLowerCase();
-      if (name == q || name.contains(q) || q.contains(name)) {
-        final coarse = DataService.coarseCategoryFor(c.name);
-        if (_coarseCategoryOrder.contains(coarse)) return coarse;
-      }
-      for (final s in c.subcategories) {
-        final ss = s.toLowerCase();
-        if (ss == q || ss.contains(q) || q.contains(ss)) {
-          final coarse = DataService.coarseCategoryFor(c.name);
-          if (_coarseCategoryOrder.contains(coarse)) return coarse;
-        }
-      }
-    }
-
-    // 2) Loose contains match against coarse labels.
-    for (final c in _coarseCategoryOrder) {
-      final lc = c.toLowerCase();
-      if (lc.contains(q) || q.contains(lc)) return c;
-    }
-
-    return null;
-  }
-
-  String _coarseForItem(Item it) {
-    final cat = _categoriesById[it.categoryId];
-    if (cat == null) return 'Sonstiges';
-    final coarse = DataService.coarseCategoryFor(cat.name);
-    return _coarseCategoryOrder.contains(coarse) ? coarse : 'Sonstiges';
+    return inferSearchCoarseCategory(
+      raw: raw,
+      coarseCategories: _coarseCategoryOrder,
+      vocabularies: _categories.map(
+        (category) => SearchCategoryVocabulary(
+          coarseCategory: DataService.coarseCategoryFor(category.name),
+          name: category.name,
+          subcategories: category.subcategories,
+        ),
+      ),
+    );
   }
 
   IconData _iconForCoarseGroup(String group) {
@@ -406,18 +331,19 @@ class _SearchSheetState extends State<_SearchSheet> {
     if (prompt.trim().isEmpty) return;
     if (!OpenAIConfig.isAvailable) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'KI-Hilfe ist vorübergehend deaktiviert. Bitte suche manuell weiter.'),
-          ),
+        AppPopup.info(
+          context,
+          title: 'KI-Hilfe vorübergehend nicht verfügbar',
+          message: 'Bitte suche in der Zwischenzeit manuell weiter.',
         );
       }
       return;
     }
 
-    // Use ChatGPT to intelligently parse the user's natural language input
+    // The compatibility helper is fail-closed and currently returns only an
+    // empty local parse result; no search text leaves the device.
     final result = await OpenAIConfig.parseSearchQuery(prompt);
+    if (!mounted) return;
 
     setState(() {
       // Update "Was" field
@@ -485,6 +411,7 @@ class _SearchSheetState extends State<_SearchSheet> {
 
   void _onQueryChangedWhat(String v) async {
     final items = await DataService.getItems();
+    if (!mounted) return;
     final q = v.toLowerCase();
     final titles =
         items.map((e) => e.title).where((t) => t.trim().isNotEmpty).toSet();
@@ -515,6 +442,7 @@ class _SearchSheetState extends State<_SearchSheet> {
     final q = v.toLowerCase();
     final cities = DataService.getCities().keys;
     final items = await DataService.getItems();
+    if (!mounted) return;
     final fromItems = <String>{
       ...items.map((e) => e.city),
       ...items.map((e) => e.country),
@@ -540,55 +468,15 @@ class _SearchSheetState extends State<_SearchSheet> {
     });
   }
 
-  bool _isReturnValid(DateTime from, DateTime to) => to.isAfter(from);
-
   String _fmt(DateTime? dt) => dt == null
       ? 'Zeitraum wählen'
       : '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year}';
-
-  List<Item> _filteredResults() {
-    final whatRaw = _whatCtrl.text.trim();
-    final inferredCatFromWhat = _normalizeCoarseCategory(whatRaw);
-    final effectiveCategory = _coarseCategory ?? inferredCatFromWhat;
-    // If the user only typed a category name into "Was", treat it as a category filter
-    // (so we show all items of that category), not a free-text query.
-    final q = (inferredCatFromWhat != null &&
-            inferredCatFromWhat == effectiveCategory)
-        ? ''
-        : whatRaw.toLowerCase();
-    final w = _whereCtrl.text.trim().toLowerCase();
-    return _nearby.where((it) {
-      final inTitleOrTags = it.title.toLowerCase().contains(q) ||
-          it.tags.any((t) => t.toLowerCase().contains(q));
-      final inPlace = w.isEmpty ||
-          it.city.toLowerCase().contains(w) ||
-          it.country.toLowerCase().contains(w) ||
-          it.locationText.toLowerCase().contains(w) ||
-          it.tags.any((t) => t.toLowerCase().contains(w));
-      final matchesWhat = q.isEmpty || inTitleOrTags;
-
-      // Price filters
-      final matchesPriceMin = _priceMin == null || it.pricePerDay >= _priceMin!;
-      final matchesPriceMax = _priceMax == null || it.pricePerDay <= _priceMax!;
-
-      // Category filter (STRICT: only the 11 coarse categories)
-      final matchesCategory =
-          effectiveCategory == null || _coarseForItem(it) == effectiveCategory;
-
-      return matchesWhat &&
-          inPlace &&
-          matchesPriceMin &&
-          matchesPriceMax &&
-          matchesCategory;
-    }).toList();
-  }
 
   // Live compute suggestions grid near user's city or typed "Wo"
   Future<void> _recomputeNearbySuggestions() async {
     if (!mounted) return;
     try {
       setState(() => _recomputing = true);
-      final pool = List<Item>.from(_nearby);
       final whatRaw = _whatCtrl.text.trim();
       final inferredCatFromWhat = _normalizeCoarseCategory(whatRaw);
       final what = (inferredCatFromWhat != null &&
@@ -627,42 +515,25 @@ class _SearchSheetState extends State<_SearchSheet> {
         }
       }
 
-      // Filter by what/price/category
-      List<Item> candidates = pool.where((it) {
-        final matchWhat = what.isEmpty ||
-            it.title.toLowerCase().contains(what) ||
-            it.tags.any((t) => t.toLowerCase().contains(what));
-        final matchesPriceMin =
-            _priceMin == null || it.pricePerDay >= _priceMin!;
-        final matchesPriceMax =
-            _priceMax == null || it.pricePerDay <= _priceMax!;
-        final matchesCategory =
-            _coarseCategory == null || _coarseForItem(it) == _coarseCategory;
-        return matchWhat &&
-            matchesPriceMin &&
-            matchesPriceMax &&
-            matchesCategory;
-      }).toList();
-
-      // Sort by distance to target or by recency
-      if (targetCoords != null) {
-        candidates.sort((a, b) {
-          final da = DataService.estimateDistanceKm(
-              a.lat, a.lng, targetCoords!.$1, targetCoords!.$2);
-          final db = DataService.estimateDistanceKm(
-              b.lat, b.lng, targetCoords!.$1, targetCoords!.$2);
-          return da.compareTo(db);
-        });
-        // Keep items within ~60km for "in der Nähe"
-        candidates = candidates
-            .where((it) =>
-                DataService.estimateDistanceKm(
-                    it.lat, it.lng, targetCoords!.$1, targetCoords!.$2) <=
-                60)
-            .toList();
-      } else {
-        candidates.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      }
+      final categoryIds = _coarseCategory == null
+          ? const <String>[]
+          : _categories
+              .where((category) =>
+                  DataService.coarseCategoryFor(category.name) ==
+                  _coarseCategory)
+              .map((category) => category.id)
+              .toList();
+      final candidates = await DataService.searchPublicItems(
+        query: what,
+        categoryIds: categoryIds,
+        minPrice: _priceMin,
+        maxPrice: _priceMax,
+        latitude: targetCoords?.$1,
+        longitude: targetCoords?.$2,
+        radiusKm: targetCoords == null ? null : 60,
+        sort: targetCoords == null ? 'newest' : 'distance',
+        limit: 80,
+      );
 
       // Optional availability filter when a date range is set
       List<Item> available = candidates;
@@ -679,32 +550,57 @@ class _SearchSheetState extends State<_SearchSheet> {
         ];
       }
 
+      if (!mounted) return;
       setState(() {
         _displayNearby = available.take(16).toList();
       });
     } catch (e) {
-      debugPrint(
-          '[_SearchSheet] recompute suggestions failed: ' + e.toString());
+      debugPrint('[_SearchSheet] recompute suggestions failed: $e');
     } finally {
       if (mounted) setState(() => _recomputing = false);
     }
   }
 
-  void _openResults() {
+  Future<void> _openResults() async {
     final whereRaw = _whereCtrl.text.trim();
     final origin = _resolveOriginCoords(whereRaw);
-
-    List<Item> items = _filteredResults();
-    // If user provided "Wo", show items starting from that location and further away.
-    // (i.e., sort ascending by distance instead of relying on the existing mixed order)
-    if (origin != null) {
-      items.sort((a, b) {
-        final da = DataService.estimateDistanceKm(
-            a.lat, a.lng, origin.lat, origin.lng);
-        final db = DataService.estimateDistanceKm(
-            b.lat, b.lng, origin.lat, origin.lng);
-        return da.compareTo(db);
-      });
+    final whatRaw = _whatCtrl.text.trim();
+    final inferredCatFromWhat = _normalizeCoarseCategory(whatRaw);
+    final what =
+        inferredCatFromWhat != null && inferredCatFromWhat == _coarseCategory
+            ? ''
+            : whatRaw;
+    final categoryIds = _coarseCategory == null
+        ? const <String>[]
+        : _categories
+            .where((category) =>
+                DataService.coarseCategoryFor(category.name) == _coarseCategory)
+            .map((category) => category.id)
+            .toList();
+    if (mounted) setState(() => _recomputing = true);
+    late final List<Item> items;
+    try {
+      items = await DataService.searchPublicItems(
+        query: what,
+        categoryIds: categoryIds,
+        minPrice: _priceMin,
+        maxPrice: _priceMax,
+        latitude: origin?.lat,
+        longitude: origin?.lng,
+        radiusKm: origin == null ? null : 60,
+        sort: origin == null ? 'newest' : 'distance',
+        limit: 100,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      AppPopup.error(
+        context,
+        title: 'Suche nicht erreichbar',
+        message: 'Bitte versuche es in einem Moment erneut.',
+      );
+      return;
+    } finally {
+      if (mounted) setState(() => _recomputing = false);
     }
 
     String buildQueryText() {
@@ -742,6 +638,7 @@ class _SearchSheetState extends State<_SearchSheet> {
     final query = buildQueryText();
     final date = buildDateText();
     // Push results as a full screen above the overlay so Back returns to KI-Suche
+    if (!mounted) return;
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         builder: (_) => SearchResultsScreen(
@@ -763,8 +660,9 @@ class _SearchSheetState extends State<_SearchSheet> {
     final cities = DataService.getCities();
 
     for (final e in cities.entries) {
-      if (e.key.toLowerCase() == targetCity.toLowerCase())
+      if (e.key.toLowerCase() == targetCity.toLowerCase()) {
         return (lat: e.value.$1, lng: e.value.$2);
+      }
     }
     for (final e in cities.entries) {
       if (targetCity.toLowerCase().contains(e.key.toLowerCase()) ||
@@ -793,14 +691,6 @@ class _SearchSheetState extends State<_SearchSheet> {
     _recomputeNearbySuggestions();
   }
 
-  Size? _sizeOf(GlobalKey key) {
-    final ctx = key.currentContext;
-    if (ctx == null) return null;
-    final render = ctx.findRenderObject();
-    if (render is RenderBox) return render.size;
-    return null;
-  }
-
   void _updateWhatOverlay() {
     if (!mounted) return;
     if (!_whatFocus.hasFocus ||
@@ -810,7 +700,6 @@ class _SearchSheetState extends State<_SearchSheet> {
       return;
     }
     final overlay = Overlay.of(context);
-    if (overlay == null) return;
     // We want the suggestions panel to span from the very left to the very right of the screen.
     // Therefore use the full screen width and horizontally shift the follower so its left aligns with the screen edge.
     final screenSize = MediaQuery.of(context).size;
@@ -882,7 +771,6 @@ class _SearchSheetState extends State<_SearchSheet> {
       return;
     }
     final overlay = Overlay.of(context);
-    if (overlay == null) return;
     // Full-width suggestions panel for the location field as well
     final screenSize = MediaQuery.of(context).size;
     final fullWidth = screenSize.width;
@@ -944,7 +832,7 @@ class _SearchSheetState extends State<_SearchSheet> {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
 
-    Widget _offsetOnSuggest({required Widget child, required bool active}) {
+    Widget offsetOnSuggest({required Widget child, required bool active}) {
       // 0.5 mm ~ ~2 logical px. Apply subtle upward shift when suggestions are visible.
       final dy = active ? -2.0 : 0.0;
       return AnimatedSlide(
@@ -1033,7 +921,8 @@ class _SearchSheetState extends State<_SearchSheet> {
                   hintText:
                       'Beschreibe einfach, was du brauchst.\n„Akkuschrauber in Leipzig für 2 Tage“',
                   hintStyle: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.35), fontSize: 12),
+                      color: Colors.white.withValues(alpha: 0.35),
+                      fontSize: 12),
                 ),
                 onChanged: (v) {
                   // Debounce to avoid firing an OpenAI request on every keystroke.
@@ -1070,13 +959,13 @@ class _SearchSheetState extends State<_SearchSheet> {
           ),
         ),
         const SizedBox(height: 10),
-        _offsetOnSuggest(
+        offsetOnSuggest(
           active: _whatOverlay != null,
           child: CompositedTransformTarget(
             link: _whatLink,
             child: _FieldShell(
               key: _whatFieldKey,
-               label: 'Was',
+              label: 'Was',
               trailingIcon: Icons.widgets_outlined,
               child: TextField(
                 controller: _whatCtrl,
@@ -1087,13 +976,13 @@ class _SearchSheetState extends State<_SearchSheet> {
                 textAlignVertical: TextAlignVertical.center,
                 maxLines: 1,
                 minLines: 1,
-                 decoration: const InputDecoration(
-                   isDense: true,
-                   contentPadding: EdgeInsets.zero,
-                   border: InputBorder.none,
-                   hintText: 'Was suchst du?',
-                   hintStyle: TextStyle(color: Colors.white70, fontSize: 13),
-                 ),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                  border: InputBorder.none,
+                  hintText: 'Was suchst du?',
+                  hintStyle: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
               ),
             ),
           ),
@@ -1135,7 +1024,7 @@ class _SearchSheetState extends State<_SearchSheet> {
           ),
         ),
         const SizedBox(height: 6),
-        _offsetOnSuggest(
+        offsetOnSuggest(
           active: _whereOverlay != null,
           child: CompositedTransformTarget(
             link: _whereLink,
@@ -1180,8 +1069,8 @@ class _SearchSheetState extends State<_SearchSheet> {
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                       (_pickup == null || _return == null)
-                           ? 'Zeitraum wählen'
+                      (_pickup == null || _return == null)
+                          ? 'Zeitraum wählen'
                           : '${_fmt(_pickup)} → ${_fmt(_return)}',
                       style:
                           const TextStyle(fontSize: 13, color: Colors.white70),
@@ -1258,7 +1147,8 @@ class _SearchSheetState extends State<_SearchSheet> {
                   onPressed: _clearAll,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.white70,
-                    side: BorderSide(color: Colors.white.withValues(alpha: 0.25)),
+                    side:
+                        BorderSide(color: Colors.white.withValues(alpha: 0.25)),
                   ),
                   child: const Text('Zurücksetzen'))),
           const SizedBox(width: 12),
@@ -1293,8 +1183,7 @@ class _FieldShell extends StatelessWidget {
   final Widget child;
   final IconData? trailingIcon;
   const _FieldShell(
-      {Key? key, required this.label, required this.child, this.trailingIcon})
-      : super(key: key);
+      {super.key, required this.label, required this.child, this.trailingIcon});
   static const double _labelWidth =
       82; // ensures first letters align vertically without truncating "Kategorie"
   static const double _iconSlotWidth = 28; // fixed slot for icon alignment
@@ -1350,59 +1239,6 @@ class _FieldShell extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _InnerFieldShell extends StatelessWidget {
-  final String label;
-  final Widget child;
-  const _InnerFieldShell({Key? key, required this.label, required this.child})
-      : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.10))),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label,
-            style: const TextStyle(
-                fontSize: 11,
-                color: Colors.white70,
-                fontWeight: FontWeight.w600)),
-        const SizedBox(height: 2),
-        child,
-      ]),
-    );
-  }
-}
-
-class _PickerButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  const _PickerButton(
-      {required this.label, required this.icon, required this.onTap});
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Row(children: [
-              Icon(icon, size: 18, color: Colors.white),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: Text(label,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white),
-                      overflow: TextOverflow.ellipsis)),
-            ])));
   }
 }
 
@@ -1491,226 +1327,6 @@ class _MiniItem extends StatelessWidget {
               ),
             ),
           ]),
-        ),
-      ),
-    );
-  }
-}
-
-class _NearbyCard extends StatelessWidget {
-  final Item item;
-  final bool verified;
-  final VoidCallback? onTap;
-  const _NearbyCard({required this.item, required this.verified, this.onTap});
-
-  String _shorten(String s, {int max = 26}) {
-    if (s.length <= max) return s;
-    // Try to cut on word boundary before max; else hard cut
-    final cut = s.substring(0, max);
-    final lastSpace = cut.lastIndexOf(' ');
-    final base = lastSpace > 12 ? cut.substring(0, lastSpace) : cut;
-    return '$base…';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final titleStyle = theme.textTheme.titleSmall?.copyWith(
-        color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12.5);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.03),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            // Image 4:3
-            AspectRatio(
-                aspectRatio: 4 / 3,
-                child: AppImage(
-                    url: item.photos.isNotEmpty ? item.photos.first : '',
-                    fit: BoxFit.cover)),
-            // Title row
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-              child: Row(children: [
-                Expanded(
-                    child: Text(_shorten(item.title),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: titleStyle)),
-                if (verified)
-                  Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.18),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                          color: theme.colorScheme.primary
-                              .withValues(alpha: 0.45)),
-                    ),
-                    child: const Center(
-                        child: Icon(Icons.verified,
-                            size: 10, color: Colors.white)),
-                  ),
-              ]),
-            ),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-class _MapResultsOverlay extends StatelessWidget {
-  final List<Item> items;
-  const _MapResultsOverlay({required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        title: const Text('Karte', style: TextStyle(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: LayoutBuilder(builder: (context, constraints) {
-        final minLat =
-            items.isEmpty ? 0.0 : items.map((e) => e.lat).reduce(min);
-        final maxLat =
-            items.isEmpty ? 1.0 : items.map((e) => e.lat).reduce(max);
-        final minLng =
-            items.isEmpty ? 0.0 : items.map((e) => e.lng).reduce(min);
-        final maxLng =
-            items.isEmpty ? 1.0 : items.map((e) => e.lng).reduce(max);
-        final pad = 24.0;
-        return Stack(children: [
-          // Simple decorative "map" background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF0B1223), Color(0xFF0F1A34)],
-              ),
-            ),
-          ),
-          CustomPaint(
-            painter: _GridPainter(color: Colors.white.withValues(alpha: 0.06)),
-            size: Size.infinite,
-          ),
-          ...List.generate(items.length, (i) {
-            final it = items[i];
-            final nx = (maxLng - minLng).abs() < 1e-6
-                ? 0.5
-                : (it.lng - minLng) / ((maxLng - minLng).abs());
-            final ny = (maxLat - minLat).abs() < 1e-6
-                ? 0.5
-                : 1 - (it.lat - minLat) / ((maxLat - minLat).abs());
-            final left = pad + nx * (constraints.maxWidth - 2 * pad);
-            final top = pad + ny * (constraints.maxHeight - 2 * pad);
-            final price = it.pricePerDay.toStringAsFixed(0);
-            final symbol = (it.currency == 'EUR')
-                ? '€'
-                : (it.currency == 'USD')
-                    ? r'$'
-                    : '€';
-            return Positioned(
-              left: left - 30,
-              top: top - 18,
-              child: _PriceMarker(text: '$price$symbol'),
-            );
-          }),
-        ]);
-      }),
-    );
-  }
-}
-
-class _GridPainter extends CustomPainter {
-  final Color color;
-  const _GridPainter({required this.color});
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1;
-    const step = 40.0;
-    for (double x = 0; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (double y = 0; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _GridPainter oldDelegate) => false;
-}
-
-class _PriceMarker extends StatelessWidget {
-  final String text;
-  const _PriceMarker({required this.text});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-          color: Colors.lightBlueAccent,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 4))
-          ]),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.place, size: 14, color: Colors.white),
-        const SizedBox(width: 4),
-        Text(text,
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700)),
-      ]),
-    );
-  }
-}
-
-class _SuggestionsPanel extends StatelessWidget {
-  final List<String> suggestions;
-  final void Function(String) onTap;
-  final IconData? icon;
-  const _SuggestionsPanel(
-      {required this.suggestions, required this.onTap, this.icon});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12))),
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: suggestions.length,
-        separatorBuilder: (_, __) =>
-            const Divider(height: 1, color: Colors.white12),
-        itemBuilder: (context, i) => ListTile(
-          dense: true,
-          visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-          leading: Icon(icon ?? Icons.search, color: Colors.white70, size: 18),
-          title: Text(suggestions[i],
-              style: const TextStyle(color: Colors.white, fontSize: 13)),
-          onTap: () => onTap(suggestions[i]),
         ),
       ),
     );
@@ -1811,14 +1427,16 @@ class _Highlighted extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final q = query.trim();
-    if (q.isEmpty)
+    if (q.isEmpty) {
       return Text(text,
           style: const TextStyle(color: Colors.white, fontSize: 13));
+    }
     final lower = text.toLowerCase();
     final idx = lower.indexOf(q.toLowerCase());
-    if (idx < 0)
+    if (idx < 0) {
       return Text(text,
           style: const TextStyle(color: Colors.white, fontSize: 13));
+    }
     final before = text.substring(0, idx);
     final match = text.substring(idx, idx + q.length);
     final after = text.substring(idx + q.length);

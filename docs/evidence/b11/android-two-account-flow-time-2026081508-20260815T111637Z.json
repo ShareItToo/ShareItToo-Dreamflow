@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-two-account-flow-time-diagnostic",
+  "status": "passed-authoritative-staging-two-account-flow-time",
+  "generatedAt": "2026-08-15T11:16:37Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081508",
+    "commit": "21645ba02bcfb8056bdeae2d4d97d7835723b30f",
+    "releaseChannel": "internal",
+    "delivery": "private-local-signed-candidate",
+    "apkSha256": "c7ce4e3b37bcc8d84b9ba15726d75317a0c2b23fe732a47d4d09f43a6ecc7b98",
+    "aabSha256": "a1471524b2f3a22487bb1d4a4acea32445b4fed0fdc99f67dec7dbfc10a2b340",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4"
+  },
+  "staging": {
+    "apiStatus": "ok",
+    "apiCommit": "36f9145e67be30fd01ffb61ad38e99361d391479",
+    "databaseStatus": "ok",
+    "mailStatus": "ok",
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "productionChanged": false
+  },
+  "diagnostic": {
+    "physicalDeviceModel": "Pixel 7 Pro",
+    "installedVersionCode": 2026081508,
+    "freshInstall": true,
+    "syntheticAccounts": 2,
+    "roles": [
+      "owner",
+      "renter"
+    ],
+    "bookingWorkflowStatus": "accepted",
+    "proposerRole": "owner",
+    "counterpartyRole": "renter",
+    "pickupTimeProposal": "22:00",
+    "proposalPersistedAfterAppDataClear": true,
+    "proposalVisibleToCounterparty": true,
+    "counterpartyConfirmationSucceeded": true,
+    "backendConfirmationPersisted": true,
+    "backendRevisionAfterConfirmation": 2,
+    "ownerPrimaryActionAfterFreshRestore": "Uebergabe starten",
+    "ownerPrimaryActionVisible": true,
+    "result": "passed"
+  },
+  "regression": {
+    "backendTestsPassed": 126,
+    "backendTestsSkipped": 1,
+    "targetedFlutterTestsPassed": 53,
+    "androidPhotoPickerPolicyTestsPassed": 2,
+    "binaryPrivacyScan": "passed"
+  },
+  "boundaries": {
+    "syntheticAccountsOnly": true,
+    "paymentEndpointCalled": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsTokens": false,
+    "containsRawDeviceIdentifiers": false,
+    "uploadedToGooglePlay": false,
+    "closedTestingStarted": false,
+    "reviewSubmitted": false,
+    "productionChanged": false
+  }
+}

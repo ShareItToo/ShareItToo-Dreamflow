@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-n17-staging-listing-ai-activation-readiness",
+  "status": "prepared-provider-owner-gate-pending",
+  "observedAt": "2026-09-03",
+  "preparedFromCommit": "96f688569e9e04da50aa8402550910f8b428b4e3",
+  "implementationCommit": "4c081a50d3d90e142a4c1bc427c12cefaaf370f4",
+  "currentRuntime": {
+    "environment": "staging",
+    "provider": "mock",
+    "budgetCents": 0,
+    "externalProviderExecutionAllowed": false,
+    "externalProviderCallMade": false,
+    "deploymentChanged": false
+  },
+  "activation": {
+    "enabledByDefault": false,
+    "allowedEnvironment": "staging",
+    "requiredPilotId": "heilbronn_wave0",
+    "exactCommitConfirmationRequired": true,
+    "reviewedModel": "gpt-4o-mini-2024-07-18",
+    "budgetMinimumCents": 2,
+    "budgetMaximumCents": 500,
+    "externalExecutionConfirmationRequired": true,
+    "healthReadbackRequired": true,
+    "rollbackForcesMockProvider": true,
+    "rollbackForcesZeroBudget": true,
+    "automaticPublicationAllowed": false
+  },
+  "credentialBoundary": {
+    "repositoryCredentialAllowed": false,
+    "directEnvironmentCredentialAllowedByOverlay": false,
+    "absolutePathRequired": true,
+    "regularFileRequired": true,
+    "symbolicLinkAllowed": false,
+    "readOnlyMount": true,
+    "createHostPath": false,
+    "ownerOnlyMode": "0600",
+    "runtimeGroupMode": "0640",
+    "runtimeGroupId": 65532,
+    "credentialPrinted": false,
+    "credentialCommitted": false,
+    "codexLocalDevCredentialReused": false
+  },
+  "ownerReview": {
+    "structuredDraftRequired": true,
+    "ownerApprovalRequiredBeforePublish": true,
+    "clearFieldEditingAllowed": true,
+    "automaticPublication": false
+  },
+  "officialProviderReview": {
+    "checkedAt": "2026-09-03",
+    "modelSnapshotListed": true,
+    "imageInputSupported": true,
+    "structuredOutputsSupported": true,
+    "deprecationEntryObserved": false,
+    "modelDocumentation": "https://developers.openai.com/api/docs/models/gpt-4o-mini",
+    "structuredOutputsDocumentation": "https://developers.openai.com/api/docs/guides/structured-outputs",
+    "visionDocumentation": "https://developers.openai.com/api/docs/guides/images-vision",
+    "deprecationsDocumentation": "https://developers.openai.com/api/docs/deprecations"
+  },
+  "sourceBindings": {
+    "backend/src/openai_listing_ai_provider.js": "95287eaf41efadf048e0b48bfb4c45c2b2d70552f67abed4f7f8a3f1f738e426",
+    "backend/src/app.js": "3a30a389612dddf4b5d636d9da2eaa35451596e7dac3add80c5f0a192badce55",
+    "backend/compose.staging.listing-ai.yml": "65a3f228a2e7e66fe518470369f554439dae8d078b11b0649a83acabb53c1be1",
+    "backend/ops/validate_openai_staging_secret.mjs": "c71dc3986145dee854fa87274afb28c3b154e8bec85662536196161e0705409a",
+    "backend/ops/deploy_release.sh": "7b0958cba5d2169da3283e214630ddd55bba882eefb726aa6895b917b94ee477",
+    ".github/workflows/regression.yml": "a7a67ea69180a854dc0fa98d82aee24f676613520e45e66b1e145e8e0a172b2a",
+    "tool/validate_support_launch_content.mjs": "9d6ed4cc88c0f7945bbf9441baa7934472b2e41b81718fcc75cae9a10eca9c10"
+  },
+  "sourceBindingMaintenance": {
+    "date": "2026-09-05",
+    "baseCommit": "a49a6cc56667f93a24357ccc3b61fe0697cd0688",
+    "reason": "WP03 response hardening plus WP08 exact model, schema, prompt and budget runtime readback",
+    "historicalVerificationAppliesToImplementationCommitOnly": true,
+    "followupEvidence": "docs/operations/WP08_LISTING_AI_STAGING_ACCEPTANCE_2026-09-05.md",
+    "providerActivationOrCandidateApprovalGranted": false
+  },
+  "verification": {
+    "focusedBackendTests": "passed",
+    "backendTestsPassed": 783,
+    "backendTestsSkipped": 2,
+    "backendCheck": "passed",
+    "composeConfigValidation": "passed-by-github-regression",
+    "fullLocalRegression": "passed",
+    "githubRegression": "passed",
+    "githubRegressionRun": 33710641470,
+    "githubRegressionAttempt": 2,
+    "cleanCheckoutReproducibility": "passed-by-github-regression",
+    "githubCodeql": "passed",
+    "githubCodeqlRun": 33710641236,
+    "openCodeScanningAlerts": 0,
+    "initialGithubRegressionAttempt": {
+      "attempt": 1,
+      "result": "failed-external-dependency-rate-limit",
+      "failure": "maven-central-http-429",
+      "codeChangedBeforePassingAttempt": false
+    },
+    "prNumber": 7,
+    "prDraft": true,
+    "prMerged": false
+  },
+  "remainingOwnerActions": {
+    "providerCredential": "pending-action-time-owner-approval",
+    "providerAccountOrBilling": "pending-action-time-owner-approval",
+    "firstRealStagingImageEvaluation": "pending-after-provider-activation"
+  },
+  "boundaries": {
+    "externalProviderCalled": false,
+    "providerCredentialRead": false,
+    "providerAccountMutated": false,
+    "providerBillingActivated": false,
+    "stagingDeploymentChanged": false,
+    "automaticListingPublished": false,
+    "pixelChanged": false,
+    "onePlusContacted": false,
+    "googlePlayChanged": false,
+    "productionChanged": false,
+    "publicRegistrationActivated": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "firebaseProjectChanged": false,
+    "cloudOrVpsChanged": false,
+    "dnsChanged": false,
+    "legalStatusChanged": false,
+    "testerListChanged": false,
+    "prMerged": false,
+    "containsSecrets": false,
+    "containsAccountIdentity": false,
+    "containsKycData": false
+  }
+}

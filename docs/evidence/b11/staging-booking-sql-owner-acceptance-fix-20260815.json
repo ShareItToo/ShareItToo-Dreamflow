@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "kind": "staging-private-pilot-booking-fix",
+  "status": "passed",
+  "capturedAt": "2026-08-15T00:16:10.442Z",
+  "rootCauses": [
+    {
+      "requestId": "cacd5a0f-f85f-4c92-9dc9-af2497186f6c",
+      "errorType": "DatabaseError",
+      "cause": "shared_creation_parameter_had_ambiguous_text_and_timestamptz_types",
+      "fixedByCommit": "904b1c2b9381c50d4d46d47f4452ee3ae55c89b0"
+    },
+    {
+      "requestId": "45a5fa8b-9afe-4103-bee4-235f4a3e8123",
+      "errorType": "PrivatePilotValidationError",
+      "cause": "synthetic_owner_acceptance_omitted_required_versioned_declaration",
+      "fixedByCommit": "25af918304abb13b9959d5f1e8cc35f186ecec56"
+    }
+  ],
+  "stagingRelease": {
+    "version": "1.0.0-2026081502-v4-owner-acceptance",
+    "commit": "25af918304abb13b9959d5f1e8cc35f186ecec56",
+    "releaseEvidence": "/docker/shareittoo/releases/staging-20260815T001511Z-25af918304ab.json",
+    "databaseAndUploadBackupManifest": "/docker/shareittoo/backups/staging/shareittoo-staging-20260815T001421Z.sha256",
+    "fcmSecretGatePassed": true,
+    "readyHealthPassed": true
+  },
+  "checks": {
+    "existingSyntheticListingReused": true,
+    "bookingRequested": true,
+    "ownerAcceptanceStored": true,
+    "acceptedBookingVisibleToBothRoles": true,
+    "sharedThreadVisibleToBothRoles": true,
+    "sharedThreadReadableByBothRoles": true,
+    "ownerMessageAccepted": true,
+    "renterMessageAccepted": true,
+    "backendTestsPassed": 122,
+    "backendTestsFailed": 0,
+    "backendTestsSkippedWithoutTestDatabaseUrl": 1
+  },
+  "boundaries": {
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "paymentEndpointCalled": false,
+    "newSyntheticAccountRegistrations": false,
+    "newSyntheticListingCreatedAfterFix": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsTokens": false,
+    "containsAccountIdentifiers": false,
+    "containsFixtureIdentifiers": false,
+    "publicStoreChanged": false,
+    "productionChanged": false
+  }
+}

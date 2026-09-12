@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp11-stripe-test-platform-readiness-gate",
+  "status": "partial-owner-profile-and-terms-required",
+  "observedAt": "2026-09-05T09:35:02Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "auditBaseCommit": "3d00b300f542d76fb61093e2c23c4549f57075b5"
+  },
+  "providerTruth": {
+    "provider": "stripe",
+    "mode": "test",
+    "onlyTestModeContextAvailable": true,
+    "countryMatchesDE": true,
+    "defaultCurrencyMatchesEUR": true,
+    "businessTypePresent": false,
+    "detailsSubmitted": false,
+    "chargesEnabled": false,
+    "payoutsEnabled": false,
+    "capabilityStatuses": {},
+    "requirements": {
+      "currentlyDueCount": 5,
+      "pastDueCount": 5,
+      "eventuallyDueCount": 5,
+      "pendingVerificationCount": 0,
+      "errorCount": 0,
+      "disabledReasonPresent": true,
+      "fieldNames": [
+        "business_profile.product_description",
+        "business_profile.support_phone",
+        "business_profile.url",
+        "tos_acceptance.date",
+        "tos_acceptance.ip"
+      ]
+    },
+    "connectedAccounts": 0,
+    "connectedAccountsHasMore": false,
+    "webhookEndpoints": 0,
+    "webhookEndpointsHasMore": false
+  },
+  "decision": {
+    "providerBootstrapAttempted": false,
+    "testRecipientCreated": false,
+    "webhookEndpointCreated": false,
+    "credentialReadOrExtracted": false,
+    "stagingDeploymentChanged": false,
+    "sandboxPaymentAttempted": false,
+    "reason": "Owner business profile facts and Stripe terms acceptance are incomplete; downstream creation and deployment must fail closed."
+  },
+  "ownerAction": {
+    "required": true,
+    "scope": "Complete the truthful Stripe test-platform business profile and personally accept Stripe terms in the official Stripe flow.",
+    "mayBeInventedOrDelegated": false,
+    "credentialOrIdentityStoredInEvidence": false
+  },
+  "independentContinuation": {
+    "nextPackage": "WP12 Google Sign-In Staging acceptance",
+    "stripeStateMustRemainUnchanged": true,
+    "productionOrLiveMoneyAllowed": false
+  },
+  "boundaries": {
+    "providerMutation": false,
+    "productionChanged": false,
+    "liveMoneyUsed": false,
+    "googlePlayChanged": false,
+    "deviceContacted": false,
+    "pullRequestMerged": false,
+    "containsCredentials": false,
+    "containsAccountIdentity": false,
+    "containsOwnerContactValues": false
+  }
+}

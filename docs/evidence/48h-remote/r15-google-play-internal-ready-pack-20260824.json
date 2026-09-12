@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r15-google-play-internal-ready-pack",
+  "status": "verified-regression-and-codeql-passed-ready-for-r16",
+  "implementationBaseHead": "843f8803248b276ff9b843bcb206657cea4295af",
+  "predecessor": {
+    "package": "R14",
+    "evidence": "docs/evidence/48h-remote/r14-heilbronn-wave0-operations-20260824.json",
+    "status": "verified-regression-and-codeql-passed-ready-for-r15",
+    "implementationCommit": "dd70f27f3681451db90124ba22287e07cd7b7dcf",
+    "closureHead": "843f8803248b276ff9b843bcb206657cea4295af"
+  },
+  "preparedArtifacts": {
+    "readyPack": "docs/operations/48H_R15_GOOGLE_PLAY_INTERNAL_READY_PACK_2026-08-24.md",
+    "featureFlagMatrix": "store/google-play/r15-stage-a-feature-flag-matrix.json",
+    "n10Handoff": "docs/operations/BLUE_OCEAN_GOOGLE_PLAY_INTERNAL_TESTING_HANDOFF.md",
+    "testerInstructions": "docs/templates/BLUE_OCEAN_INTERNAL_TESTER_INSTRUCTIONS.md",
+    "feedbackTemplate": "docs/templates/BLUE_OCEAN_INTERNAL_TESTING_FEEDBACK.md",
+    "releaseNotes": "store/google-play/de-DE/blue_ocean_internal_release_notes.txt",
+    "releaseBuilder": "scripts/build_android_release_candidate.sh",
+    "releasePreflight": "scripts/release_candidate_preflight.sh"
+  },
+  "candidatePlan": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "currentRepositoryBuildNumber": "2026082302",
+    "reservedNextBuildNumber": "2026082401",
+    "track": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "exactBuildSequenceSteps": 10,
+    "exactSourceCommitBound": false,
+    "exactAabHashBound": false,
+    "signedAabBuilt": false,
+    "privateArchiveVerified": false
+  },
+  "gateSeparation": {
+    "BUILD_READY": {
+      "state": "not-granted",
+      "mayAuthorize": "one-exact-local-internal-candidate-build",
+      "authorizesPlayUpload": false,
+      "authorizesHumanPilot": false
+    },
+    "PLAY_UPLOAD_APPROVED": {
+      "state": "not-granted",
+      "mayAuthorize": "one-exact-hash-bound-aab-upload-to-internal-track",
+      "authorizesReleaseActivation": false,
+      "authorizesHumanPilot": false
+    },
+    "HUMAN_PILOT_ACTIVATED": {
+      "state": "not-granted",
+      "mayAuthorize": "exact-three-adult-heilbronn-wave0-only",
+      "authorizesPublicRelease": false,
+      "authorizesRealMoney": false
+    }
+  },
+  "localPreflight": {
+    "observedHead": "dd70f27f3681451db90124ba22287e07cd7b7dcf",
+    "canonicalAndroidSigning": "passed-without-secret-output",
+    "androidFirebaseConfigured": true,
+    "firebaseAnalyticsConfigured": false,
+    "candidatePreflight": "passed-without-artifact-creation",
+    "r15ExactInternalControls": "passed-exact-implementation-head-without-artifacts",
+    "exactR15PreflightHead": "7992fe06260334a30e5fdb775b45fbc25af0e033"
+  },
+  "featureTruth": {
+    "blueOceanCoreBuildable": true,
+    "externalListingAi": "disabled-manual-fallback",
+    "fullN9G3G4G5EnvelopeBuildableAsSignedRelease": false,
+    "g3G4G5TasksMustRemainNotRun": true,
+    "fullN9EnvelopeBlocksHumanPilotActivation": true,
+    "realPayments": "off",
+    "firebaseAnalytics": "off",
+    "crashlyticsCollection": "off",
+    "fcmPush": "off",
+    "supportEvidenceUpload": "off",
+    "publicRegistration": "off",
+    "publicStoreRelease": "off"
+  },
+  "preparedProcesses": {
+    "signingPreflight": "complete",
+    "aabHashBinding": "complete",
+    "releaseNotes": "complete",
+    "internalTrackChecklist": "complete",
+    "testerOptIn": "complete",
+    "dataPreservationUpdate": "complete",
+    "rollback": "complete",
+    "stageAFeatureMatrix": "complete",
+    "privacyCopyChecklist": "complete",
+    "feedbackRoute": "complete",
+    "testerRemoval": "complete",
+    "pilotShutdown": "complete"
+  },
+  "focusedVerification": {
+    "androidSigningConfigTests": "passed-7",
+    "archiveCandidateTests": "passed-6",
+    "r15WiringTests": "passed-9",
+    "r15ArtifactValidatorTests": "passed-8",
+    "r15ArtifactValidator": "passed",
+    "fullTechnicalRegression": "passed-candidate-rollover-ci-metadata-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "githubVerification": {
+    "implementationCommit": "7992fe06260334a30e5fdb775b45fbc25af0e033",
+    "regressionRunId": 32780091768,
+    "regressionConclusion": "success",
+    "codeqlRunId": 32780091762,
+    "codeqlConclusion": "success",
+    "advancedSecurityCheckId": 97600547701,
+    "advancedSecurityConclusion": "success",
+    "newAlerts": 0
+  },
+  "boundaries": {
+    "aabBuilt": false,
+    "aabUploaded": false,
+    "playConsoleAccessed": false,
+    "playConsoleChanged": false,
+    "testerListChanged": false,
+    "optInLinkGeneratedOrShared": false,
+    "testerContacted": false,
+    "realPersonDataStored": false,
+    "humanPilotActivated": false,
+    "externalProviderCallPerformed": false,
+    "billingActivated": false,
+    "realMoneyEnabled": false,
+    "firebaseChanged": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false
+  },
+  "next48hPackage": "R16"
+}

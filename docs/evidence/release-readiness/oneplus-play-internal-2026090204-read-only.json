@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "kind": "oneplus-play-internal-candidate-read-only-evidence",
+  "status": "passed-bounded-read-only-account-isolation-with-open-fixture-drift",
+  "recordedAt": "2026-09-02T13:54:57.000Z",
+  "observation": {
+    "capturedAt": null,
+    "captureTimeStatus": "exact-time-not-recorded",
+    "observedFromHostClass": "MacBook Pro",
+    "directUsbDeviceConnection": true,
+    "executionAuthority": "owner-authorized-remote-codex-task"
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090204",
+    "artifactSourceHead": "30cc73cee8f10915ad4447da4a2fa7ae928f7410",
+    "aabSha256": "5d77d2526e66fee814aa45ad776b37b07ab21d33e91f1d38588c98fde14e01d9",
+    "releaseChannel": "internal",
+    "apiBaseUrlClass": "staging",
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "device": {
+    "manufacturer": "OnePlus",
+    "model": "CPH2581",
+    "androidVersion": "16",
+    "apiLevel": "36",
+    "packageName": "com.shareittoo.app",
+    "delivery": "google-play-split",
+    "splitCount": 4,
+    "installer": "com.android.vending",
+    "playAppSigningCertificateMatched": true
+  },
+  "checks": {
+    "guest": {
+      "exploreLoadedWithoutError": true,
+      "truthfulEmptyCatalogStateShown": true,
+      "forceStopFreshRestartPassed": true,
+      "crashOrAnrObserved": false
+    },
+    "owner": {
+      "syntheticSessionRestorePassed": true,
+      "principalBindingPassed": true,
+      "profilePassed": true,
+      "myListingsPassed": true,
+      "exactVaultListingVisible": true,
+      "forceStopFreshRestartPassed": true,
+      "sessionPersistencePassed": true
+    },
+    "roleTransition": {
+      "ownerToGuestPassed": true,
+      "guestToRenterPassed": true,
+      "renterPrincipalBindingPassed": true,
+      "ownerDataAbsentUnderRenter": true,
+      "staleOwnerUiAbsentUnderRenter": true,
+      "renterForceStopFreshRestartPassed": true,
+      "renterSessionPersistencePassed": true,
+      "finalGuestRestorePassed": true
+    }
+  },
+  "openFindings": {
+    "publicCatalogContainsFixture": false,
+    "catalogFilterCause": "not-proven-by-owner-or-public-api",
+    "catalogFilterUnknownFields": [
+      "catalog-version",
+      "moderation-status",
+      "owner-private-use-confirmation",
+      "owner-marketplace-review-status"
+    ],
+    "historicalBookingFixtureDrift": "OPEN",
+    "fullBindingBusinessJourney": "NOT_RUN_V52_LEGAL_GATE"
+  },
+  "tooling": {
+    "remoteSnapshotRequiredTransientLabelMapping": true,
+    "canonicalRepositorySupportsBothLabelGenerations": true,
+    "canonicalRepositoryChangeRequired": false,
+    "retainedWorkaround": false
+  },
+  "boundaries": {
+    "businessDataMutation": false,
+    "listingMutation": false,
+    "bookingMutation": false,
+    "chatMutation": false,
+    "paymentOrContractAction": false,
+    "productionChanged": false,
+    "playConsoleChanged": false,
+    "testerListChanged": false,
+    "firebaseCloudVpsDnsChanged": false,
+    "deviceAppDataDeleted": false,
+    "sideloadPerformed": false,
+    "repositoryChangedByDeviceRun": false
+  },
+  "containsSecrets": false,
+  "containsTesterIdentity": false,
+  "containsRawDeviceIdentifier": false,
+  "containsNetworkData": false
+}

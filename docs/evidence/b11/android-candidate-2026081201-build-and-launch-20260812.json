@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-replacement-candidate-build-and-launch",
+  "status": "signed-binary-scan-and-direct-launch-passed",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081201",
+    "commit": "c6ec80002cf664f513afc768c1b643ac0d1d19fb",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true
+  },
+  "android": {
+    "aabSha256": "d6626c5bff13bcca906f26e4cdcb15adaa704038c4eff31f46de9c71afc67e88",
+    "apkSha256": "dd0f9c05dfb17b16b7fc3a8189e0ff19b4e6eb36f8952cf3c8eeeaed98792667",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true,
+    "privateArchivePermissionsVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "c0700ee375803caafd91b49bfaa66eb5e0bd38ebba1b09877e89919b444171ee",
+    "findings": [],
+    "nominatimOriginAbsent": true,
+    "openStreetMapTileOriginAbsent": true
+  },
+  "directDeviceObservation": {
+    "status": "passed-bounded-observation",
+    "platform": "android",
+    "manufacturer": "Google",
+    "deviceModel": "Pixel 7 Pro",
+    "osVersion": "16",
+    "installMethod": "direct-apk-diagnostic",
+    "installedVersionName": "1.0.0",
+    "installedBuildNumber": "2026081201",
+    "coldLaunch": "passed",
+    "authenticatedFeed": "passed",
+    "messagesScreen": "passed-empty-state",
+    "applicationCrashObserved": false
+  },
+  "remainingCandidateSpecificChecks": [
+    "location-preview-with-existing-chat",
+    "synthetic-role-booking",
+    "foreground-background-terminated-fcm",
+    "logout-push-suppression",
+    "offline-realtime-recovery",
+    "store-install-and-manual-device-matrix"
+  ],
+  "boundaries": {
+    "uploadedToStore": false,
+    "submissionAllowed": false,
+    "rolloutStarted": false,
+    "productionChanged": false,
+    "paymentsChanged": false,
+    "testListingsDeleted": false,
+    "containsSecrets": false,
+    "containsAccountData": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

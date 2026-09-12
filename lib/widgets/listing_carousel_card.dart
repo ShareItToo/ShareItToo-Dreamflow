@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/widgets/app_image.dart';
 import 'package:lendify/theme.dart';
+import 'package:lendify/widgets/listing_display_truth.dart';
 import 'package:lendify/widgets/rating_badge.dart';
 
 class ListingCarouselCard extends StatelessWidget {
@@ -25,29 +26,27 @@ class ListingCarouselCard extends StatelessWidget {
     this.rentals,
   });
 
-  static double _deriveRating(Item item) {
-    // Deterministic and stable without backend.
-    final base = 4.4 + ((item.id.hashCode.abs() % 40) / 100); // 4.40 - 4.79
-    final boost = (item.timesLent.clamp(0, 30) / 300); // up to +0.10
-    return (base + boost).clamp(4.3, 5.0);
-  }
-
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final cs = theme.colorScheme;
     final l10n = context.watch<LocalizationController>();
-    final derivedRating = rating ?? _deriveRating(item);
+    final displayRating = listingRatingForDisplay(rating);
     final derivedRentals = rentals ?? item.timesLent;
     final highlight = badgeText;
-    final isVerified = item.verificationStatus == 'verified' || item.verificationStatus == 'approved';
+    final isVerified = item.verificationStatus == 'verified' ||
+        item.verificationStatus == 'approved';
     final titleColor = isDark ? Colors.white : AppTheme.textPrimary(context);
-    final metaColor = isDark ? Colors.white.withValues(alpha: 0.86) : AppTheme.textSecondary(context);
-    final metaIconColor = isDark ? Colors.white70 : AppTheme.textSecondary(context);
+    final metaColor = isDark
+        ? Colors.white.withValues(alpha: 0.86)
+        : AppTheme.textSecondary(context);
+    final metaIconColor =
+        isDark ? Colors.white70 : AppTheme.textSecondary(context);
     final priceColor = isDark ? Colors.white : AppTheme.textPrimary(context);
-    final priceSuffixColor = isDark ? Colors.white.withValues(alpha: 0.80) : AppTheme.textSecondary(context);
+    final priceSuffixColor = isDark
+        ? Colors.white.withValues(alpha: 0.80)
+        : AppTheme.textSecondary(context);
     // Keep in lockstep with RatingBadge + on-image highlight chips.
     final tagFontSize = ((theme.textTheme.labelSmall?.fontSize) ?? 11) * 0.78;
 
@@ -72,7 +71,7 @@ class ListingCarouselCard extends StatelessWidget {
           aspectRatio: 4 / 3,
           child: Stack(fit: StackFit.expand, children: [
             AppImage(
-              url: item.photos.isNotEmpty ? item.photos.first : 'https://images.unsplash.com/photo-1520975661595-6453be3f7070?w=1200&h=900&fit=crop',
+              url: item.photos.isNotEmpty ? item.photos.first : '',
               fit: BoxFit.cover,
             ),
             // Bottom scrim for readability
@@ -86,7 +85,10 @@ class ListingCarouselCard extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, BrandColors.imageScrim.withValues(alpha: 0.55)],
+                    colors: [
+                      Colors.transparent,
+                      BrandColors.imageScrim.withValues(alpha: 0.55)
+                    ],
                   ),
                 ),
               ),
@@ -95,22 +97,29 @@ class ListingCarouselCard extends StatelessWidget {
             Positioned(
               top: 10,
               left: 10,
-              child: Icon(Icons.verified, size: 18, color: isVerified ? BrandColors.success : Colors.grey),
+              child: Icon(Icons.verified,
+                  size: 18,
+                  color: isVerified ? BrandColors.success : Colors.grey),
             ),
             if (highlight != null)
               Positioned(
                 left: 10,
                 bottom: 10,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                   decoration: BoxDecoration(
                     color: cs.primary.withValues(alpha: 0.92),
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.12)),
                   ),
                   child: Text(
                     highlight,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w800, fontSize: tagFontSize),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: tagFontSize),
                   ),
                 ),
               ),
@@ -121,64 +130,77 @@ class ListingCarouselCard extends StatelessWidget {
                 onTap: onFavoriteToggle,
                 child: Container(
                   padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.92), shape: BoxShape.circle),
-                  child: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, size: 16, color: isFavorite ? BrandColors.danger : Colors.black54),
+                  decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      shape: BoxShape.circle),
+                  child: Icon(
+                      isFavorite ? Icons.favorite : Icons.favorite_border,
+                      size: 16,
+                      color: isFavorite ? BrandColors.danger : Colors.black54),
                 ),
               ),
             ),
 
             // Rating badge (bottom-right on image)
-            Positioned(
-              right: 10,
-              bottom: 10,
-              child: RatingBadge(rating: derivedRating),
-            ),
+            if (displayRating != null)
+              Positioned(
+                right: 10,
+                bottom: 10,
+                child: RatingBadge(rating: displayRating),
+              ),
           ]),
         ),
         Padding(
           // Keep this section ultra-compact so the card visually ends right under the price.
           padding: const EdgeInsets.fromLTRB(12, 7, 12, 5),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Text(
-              item.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 15.5,
-                color: titleColor,
-              ),
-            ),
-            const SizedBox(height: 4),
-            _TrustRow(
-              distanceKm: distanceKm,
-              rentals: derivedRentals,
-              textColor: metaColor,
-              iconColor: metaIconColor,
-            ),
-            const SizedBox(height: 6),
-            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text(
-                '${item.pricePerDay.toStringAsFixed(0)} €',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: priceColor,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 1),
-                child: Text(
-                  '/ ${l10n.t('Tag')}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: priceSuffixColor,
-                    fontWeight: FontWeight.w500,
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15.5,
+                    color: titleColor,
                   ),
                 ),
-              ),
-              const Spacer(),
-            ]),
-          ]),
+                const SizedBox(height: 4),
+                _TrustRow(
+                  distanceKm: distanceKm,
+                  listingCity: item.city,
+                  rentals: derivedRentals,
+                  textColor: metaColor,
+                  iconColor: metaIconColor,
+                ),
+                const SizedBox(height: 6),
+                Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Text(
+                    listingCustomerPriceText(
+                      item.pricePerDay,
+                      currency: item.currency,
+                    ),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: priceColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 1),
+                    child: Text(
+                      '/ ${l10n.t('Tag')}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: priceSuffixColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                ]),
+              ]),
         ),
       ]),
     );
@@ -187,11 +209,13 @@ class ListingCarouselCard extends StatelessWidget {
 
 class _TrustRow extends StatelessWidget {
   final double? distanceKm;
+  final String listingCity;
   final int rentals;
   final Color textColor;
   final Color iconColor;
   const _TrustRow({
     required this.distanceKm,
+    required this.listingCity,
     required this.rentals,
     required this.textColor,
     required this.iconColor,
@@ -204,7 +228,7 @@ class _TrustRow extends StatelessWidget {
     final style = baseStyle?.copyWith(
       color: textColor,
       fontWeight: FontWeight.w500,
-      fontSize: (baseStyle?.fontSize ?? 11) * 0.95,
+      fontSize: (baseStyle.fontSize ?? 11) * 0.95,
       letterSpacing: -0.05,
     );
     const iconSize = 12.0;
@@ -212,11 +236,18 @@ class _TrustRow extends StatelessWidget {
     final parts = <Widget>[
       Icon(Icons.place_outlined, size: iconSize, color: iconColor),
       const SizedBox(width: 3),
-      Text(distanceKm == null ? l10n.t('in deiner Nähe') : '${distanceKm!.toStringAsFixed(distanceKm! < 10 ? 1 : 0)} km', style: style),
+      Text(
+          listingLocationLabel(
+            distanceKm: distanceKm,
+            listingCity: listingCity,
+            unavailableLabel: l10n.t('Nicht verfügbar'),
+          ),
+          style: style),
       const SizedBox(width: 6),
       Icon(Icons.loop, size: iconSize, color: iconColor),
       const SizedBox(width: 3),
-      Text('${rentals.clamp(0, 999)}', style: style, maxLines: 1, overflow: TextOverflow.ellipsis),
+      Text('${rentals.clamp(0, 999)}',
+          style: style, maxLines: 1, overflow: TextOverflow.ellipsis),
     ];
 
     return SingleChildScrollView(

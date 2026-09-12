@@ -1,0 +1,19 @@
+services:
+  api:
+    environment:
+      SIT_LISTING_AI_PROVIDER: openai
+      SIT_LISTING_AI_MODEL: ${SIT_LISTING_AI_MODEL:?SIT_LISTING_AI_MODEL must be set for the Staging listing-AI override}
+      SIT_LISTING_AI_BUDGET_CENTS: ${SIT_LISTING_AI_BUDGET_CENTS:?SIT_LISTING_AI_BUDGET_CENTS must be set for the Staging listing-AI override}
+      SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: ${SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED:?SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED must be set for the Staging listing-AI override}
+      SIT_LISTING_AI_TIMEOUT_MS: ${SIT_LISTING_AI_TIMEOUT_MS:-10000}
+      SIT_LISTING_AI_RATE_WINDOW_MS: ${SIT_LISTING_AI_RATE_WINDOW_MS:-900000}
+      SIT_LISTING_AI_RATE_MAX_REQUESTS: ${SIT_LISTING_AI_RATE_MAX_REQUESTS:-5}
+      OPENAI_API_KEY: ""
+      OPENAI_API_KEY_FILE: /run/secrets/openai-api-key
+    volumes:
+      - type: bind
+        source: ${OPENAI_API_KEY_HOST_FILE:?OPENAI_API_KEY_HOST_FILE must be set for the Staging listing-AI override}
+        target: /run/secrets/openai-api-key
+        read_only: true
+        bind:
+          create_host_path: false

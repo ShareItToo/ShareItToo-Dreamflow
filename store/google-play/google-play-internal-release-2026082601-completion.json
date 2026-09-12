@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-internal-release-completion",
+  "status": "google-play-internal-release-complete",
+  "recordedOn": "2026-08-27",
+  "source": {
+    "classification": "direct-authenticated-google-play-console-readback",
+    "consoleReadOnlyGateCompleted": true,
+    "postReleaseReadbackCompleted": true
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026082601",
+    "artifactSourceHead": "a1aa3f2528f1923c092a1fb15bdd3dc083673890",
+    "aabBytes": 108538228,
+    "aabSha256": "8cf36552f39fe9558411809518b374c437125cbd6ef123258ad9df7061acd873",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "playAppSigningCertificateSha256": "36488abf86c51da07ab2258f31b00e2f1ba8a36d076107b9f006376ade80b956",
+    "candidateManifestRef": "store/google-play/rw20-current-internal-candidate-manifest.json",
+    "preReleaseHandoffRef": "store/google-play/rw20-current-internal-upload-handoff.json"
+  },
+  "artifactVerification": {
+    "originalBundleDownloadedReadOnly": true,
+    "byteCountConfirmed": true,
+    "sha256Confirmed": true,
+    "zipStructureValid": true,
+    "jarSignatureVerified": true,
+    "uploadCertificateConfirmed": true,
+    "packageNameConfirmed": true,
+    "minSdkVersion": 24,
+    "targetSdkVersion": 35
+  },
+  "release": {
+    "track": "internal-testing",
+    "releaseName": "1.0.0-internal-2026082601",
+    "releaseNotesLanguage": "de-DE",
+    "releaseNotesBoundToPreparedRepositorySource": true,
+    "status": "available-to-internal-testers",
+    "rollout": "full-rollout",
+    "activeInternalVersionCode": "2026082601",
+    "reviewed": false,
+    "sentForReview": false,
+    "releasedAtConsoleLocal": "2026-08-27 18:45"
+  },
+  "postReleaseReadback": {
+    "testerListName": "SIT interner Test",
+    "testerCount": 2,
+    "testerListUnchanged": true,
+    "testerIdentityStored": false,
+    "productionTrackChanged": false,
+    "openTestingTrackChanged": false,
+    "closedTestingTrackChanged": false,
+    "knownClosedTestingVersionCode": "2026081506",
+    "publishingOverviewPendingChangeCount": 13,
+    "publishingOverviewSubmitEnabled": false,
+    "otherTracksUnchanged": true,
+    "competingNewerReleaseObserved": false
+  },
+  "ownerGate": {
+    "gate": "GOOGLE_PLAY_INTERNAL_RELEASE_GO",
+    "state": "consumed-for-exact-candidate-internal-testing-only"
+  },
+  "boundaries": {
+    "exactInternalReleaseActivated": true,
+    "newBundleUploaded": false,
+    "testerListChanged": false,
+    "productionChanged": false,
+    "openTestingChanged": false,
+    "closedTestingChanged": false,
+    "publicReleasePerformed": false,
+    "reviewSubmissionPerformed": false,
+    "firebaseChanged": false,
+    "paymentChanged": false,
+    "providerChanged": false,
+    "cloudVpsDnsChanged": false,
+    "deviceAccessed": false,
+    "pullRequestMerged": false
+  },
+  "nextGate": {
+    "gate": "ONEPLUS_PERSONAL_DEVICE_NONDESTRUCTIVE_TEST_GO",
+    "state": "not-granted",
+    "candidateDeviceResults": "NOT_RUN"
+  },
+  "handoverRef": "docs/operations/GOOGLE_PLAY_INTERNAL_RELEASE_2026082601_HANDOVER.md",
+  "containsSecrets": false,
+  "containsTesterIdentity": false,
+  "containsOptInUrl": false,
+  "containsPrivateFilesystemPath": false
+}

@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-pre-upload-live-readiness",
+  "status": "ready-awaiting-explicit-internal-upload-approval",
+  "capturedAt": "2026-08-13T20:38:29Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081303",
+    "commit": "4144d0c0a3a2e19e89b6523594607c14625b0119",
+    "aabSha256": "c900bbf4ad223d9d08f15f931a8fcaca62538c500a480749cb7396a454fddac6",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "playAppSigningCertificateSha256": "36488abf86c51da07ab2258f31b00e2f1ba8a36d076107b9f006376ade80b956"
+  },
+  "googlePlayConsole": {
+    "appStatus": "draft",
+    "internalTesting": {
+      "status": "inactive-draft-release",
+      "draftReleaseShellPresent": true,
+      "completedTaskCount": 1,
+      "totalTaskCount": 3,
+      "maximumTesterCount": 100,
+      "emailListCreated": false,
+      "publishedJoinLinkAvailable": false,
+      "uploadedBundleCount": 0
+    },
+    "closedTesting": {
+      "status": "locked-app-setup-incomplete",
+      "minimumContinuousTesterCount": 12,
+      "minimumConsecutiveDays": 14,
+      "currentOptedInTesterCount": 0,
+      "productionAccessAllowed": false
+    },
+    "appContent": {
+      "completedTaskCount": 8,
+      "totalTaskCount": 11,
+      "openTasks": [
+        "privacy-policy",
+        "data-safety",
+        "store-listing"
+      ]
+    },
+    "privacyPolicy": {
+      "urlSaved": false,
+      "preparedUrl": "https://shareittoo.com/privacy",
+      "publicRouteReleaseReady": false
+    },
+    "dataSafety": {
+      "currentStep": 1,
+      "totalSteps": 5,
+      "draftSaved": false,
+      "preparedAnswerMatrixAvailable": true
+    },
+    "storeListing": {
+      "language": "de-DE",
+      "textFieldsPresent": true,
+      "shortDescriptionConsoleWarning": "en-dash-instead-of-em-dash",
+      "shortDescriptionLocalRemediationPrepared": true,
+      "appIconUploaded": false,
+      "featureGraphicUploaded": false,
+      "phoneScreenshotsUploaded": 0,
+      "validatedLocalPhoneScreenshots": 4,
+      "savedInThisObservation": false
+    },
+    "appSigning": {
+      "releasesSignedByPlay": true,
+      "playAppSigningFingerprintObserved": true,
+      "uploadCertificateFingerprintVisibleAfterFirstBundle": false,
+      "automaticProtectionActive": true,
+      "playIntegrityApiIntegrated": false,
+      "storeListingDeviceChecksEnabled": false
+    }
+  },
+  "localCrossChecks": {
+    "assetLinksWithUploadAndPlayFingerprints": "passed-local-not-deployed",
+    "connectedAndroidDevice": {
+      "manufacturer": "Google",
+      "model": "Pixel 7 Pro",
+      "osVersion": "16",
+      "installedVersionName": "1.0.0",
+      "installedBuildNumber": "2026081303",
+      "installMethod": "direct-apk-diagnostic",
+      "storeInstall": "pending"
+    }
+  },
+  "decisionGate": {
+    "explicitCurrentInternalUploadApprovalRequired": true,
+    "submissionAllowed": false,
+    "saveDraftAllowed": false,
+    "rolloutAllowed": false,
+    "testerInvitationsAllowed": false
+  },
+  "sources": {
+    "candidateEvidenceRef": "docs/evidence/b11/android-candidate-2026081303.json",
+    "signingReadinessEvidenceRef": "docs/evidence/b11/store-links-signing-readiness-2026081302.json",
+    "screenshotReadinessEvidenceRef": "docs/evidence/b11/google-play-feed-screenshot-readiness-20260813.json",
+    "closedTestingReadinessRef": "store/google-play/closed-testing-readiness.json",
+    "deviceValidationRef": "store/device-validation.json"
+  },
+  "boundaries": {
+    "browserReadOnly": true,
+    "uploadedToStore": false,
+    "releaseMetadataSaved": false,
+    "testerListChanged": false,
+    "testerInvitationSent": false,
+    "productionChanged": false,
+    "publicRoutesChanged": false,
+    "containsTesterPersonalData": false,
+    "containsAccountIdentifiers": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

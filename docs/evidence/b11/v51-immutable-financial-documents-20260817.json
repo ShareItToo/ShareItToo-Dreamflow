@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-immutable-financial-documents",
+  "capturedAt": "2026-08-17T02:38:48Z",
+  "status": "passed-source-and-test-checkpoint",
+  "checkpoint": "16.126",
+  "sourceHeadAtImplementationStart": "acda92f",
+  "result": {
+    "documentsAreAppendOnly": true,
+    "downloadEventsAreAppendOnly": true,
+    "unpaidOrUnauthorizedDocumentsCreated": false,
+    "clientSideReleaseRepricingRemoved": true,
+    "privateRentAndSitFeeSeparated": true,
+    "blanketPrivateRentVat19Removed": true,
+    "ownerSitFeeInvoiceCreated": false,
+    "ownerPayoutStatementRequiresPaidPayout": true,
+    "refundReceiptRequiresSucceededRefund": true,
+    "authenticatedArtifactDownload": true,
+    "serverArtifactHashVerifiedBeforePdfView": true,
+    "malformedClientSnapshotsFailClosed": true,
+    "qaDocumentsExplicitlyMarked": true
+  },
+  "verification": {
+    "backendTests": {"passed": 198, "skipped": 1, "failed": 0},
+    "flutterTests": {"passed": 275, "skipped": 1, "failed": 0},
+    "nodeToolTests": {"passed": 607, "skipped": 0, "failed": 0},
+    "financialDocumentBackendTests": {"passed": 7, "failed": 0},
+    "financialDocumentClientWiringTests": {"passed": 4, "failed": 0},
+    "analyzer": {"diagnostics": 229, "errors": 0, "baselineRaised": false},
+    "privacyValidator": "passed-draft-fail-closed",
+    "retentionValidator": "passed-nine-decisions-open",
+    "workingTreeSecretScan": "passed-zero-high-confidence-findings",
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed-tracked-and-untracked"
+  },
+  "pushCrashBoundary": {
+    "firebaseCloudMessaging": "retained-independent-voluntary-opt-in-default-off",
+    "firebaseCrashlytics": "retained-independent-voluntary-opt-in-default-off",
+    "pushEnablesCrashlytics": false,
+    "analyticsEnabled": false,
+    "advertisingEnabled": false,
+    "externalGenerativeAiEnabled": false
+  },
+  "openGates": {
+    "retentionDeletionDecisions": 9,
+    "physicalDeviceMatrixPassed": 0,
+    "physicalDeviceMatrixRequired": 4,
+    "liveFinancialDocumentIssuanceApproved": false,
+    "databaseMigrationAppliedToStaging": false,
+    "databaseMigrationAppliedToProduction": false,
+    "newSignedCandidateCreated": false,
+    "goNoGo": "HOLD"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "stagingChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "testAccountsMutated": false,
+    "realMoneyUsed": false,
+    "publicLegalAssetsActivated": false,
+    "existingCandidateChanged": false
+  }
+}

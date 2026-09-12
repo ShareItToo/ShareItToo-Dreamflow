@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "kind": "crashlytics-open-issues-recheck",
+  "status": "current-candidate-not-observed-retest-pending",
+  "capturedAt": "2026-08-11T00:35:17Z",
+  "scope": {
+    "project": "shareittoo-staging",
+    "applicationId": "com.shareittoo.app",
+    "eventType": "fatal-crash",
+    "issueState": "open",
+    "window": "7d"
+  },
+  "observations": [
+    {
+      "classification": "historical-realtime-connectivity-misclassified-fatal",
+      "eventCount": 342,
+      "affectedUserCount": 1,
+      "newestObservedBuild": "2026081026",
+      "currentCandidateBuildObserved": false
+    },
+    {
+      "classification": "historical-logout-provider-context",
+      "eventCount": 5,
+      "affectedUserCount": 1,
+      "newestObservedBuild": "2026081019",
+      "currentCandidateBuildObserved": false
+    }
+  ],
+  "currentCandidate": {
+    "versionName": "1.0.0",
+    "buildNumber": "2026081101",
+    "commit": "3f28e43a18b3733e617b695f9dbc794370f6e05b",
+    "installedOnPhysicalDevice": true,
+    "observedInOpenFatalGroups": false,
+    "offlineRealtimeRecovery": "passed",
+    "offlineRealtimeEvidenceRef": "docs/evidence/b11/android-offline-realtime-recovery-2026081101-20260810T224014Z.json",
+    "authenticatedLogoutRetest": "pending"
+  },
+  "decision": {
+    "firebaseIssueStateChanged": false,
+    "reason": "Keep both groups open until the exact current candidate completes the authenticated logout and cold-start retest; absence from an older group alone is not a closure proof."
+  },
+  "boundaries": {
+    "readOnlyConsoleInspection": true,
+    "productionChanged": false,
+    "storeSubmissionChanged": false,
+    "containsSecrets": false,
+    "containsAccountData": false,
+    "containsRawDeviceIdentifiers": false,
+    "syntheticAccountsOnly": true
+  }
+}

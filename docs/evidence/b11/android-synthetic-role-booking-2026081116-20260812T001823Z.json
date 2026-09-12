@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-synthetic-role-booking-diagnostic",
+  "status": "passed-bounded-synthetic-role-booking-diagnostic",
+  "capturedAt": "2026-08-12T00:18:23.279Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081116",
+    "commit": "03a76e23b0db656b48fc1729b3cd20e6260f2133",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "installed": {
+    "packageIdentityVerified": true,
+    "versionName": "1.0.0",
+    "buildNumber": "2026081116",
+    "apkSha256": "25e9d37dcd79976970f164b8c0531513ea07091bde5492ce8f11009f67cd4869"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "backendFixture": {
+    "accountCount": 2,
+    "roles": ["owner", "renter"],
+    "registration": "public-staging-accepted",
+    "verification": "isolated-staging-fixture",
+    "listingStatus": "active",
+    "workflow": ["requested", "accepted", "active", "completed"],
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "paymentEndpointCalled": false
+  },
+  "tests": {
+    "ownerRequestVisibility": {
+      "status": "passed",
+      "result": "requested-visible-to-owner"
+    },
+    "renterUpcomingVisibility": {
+      "status": "passed",
+      "result": "accepted-visible-to-renter"
+    },
+    "renterRunningVisibility": {
+      "status": "passed",
+      "result": "active-visible-to-renter"
+    },
+    "renterCompletedVisibility": {
+      "status": "passed",
+      "result": "completed-visible-to-renter"
+    }
+  },
+  "boundaries": {
+    "syntheticAccountsOnly": true,
+    "directDiagnosticOnly": true,
+    "storeInstallationGateSatisfied": false,
+    "fullDeviceMatrixPassed": false,
+    "wifiOnlyDiagnostic": true,
+    "hotspotPassed": false,
+    "authenticatedDeepLinksPassed": false,
+    "realPushPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "iosTestFlightPassed": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "lockCodeUsed": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  },
+  "isolation": {
+    "protectedReviewFixtureUnchanged": true,
+    "temporaryVaultRemovedAfterProbe": true,
+    "containsReviewCredentials": false
+  }
+}

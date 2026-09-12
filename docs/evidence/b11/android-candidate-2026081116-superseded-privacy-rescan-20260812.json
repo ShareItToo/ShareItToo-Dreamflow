@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-candidate-supersession",
+  "status": "superseded-privacy-rescan-failed",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081116",
+    "commit": "03a76e23b0db656b48fc1729b3cd20e6260f2133"
+  },
+  "extendedPrivacyRescan": {
+    "status": "failed",
+    "findingClass": "undeclared-external-runtime-origins",
+    "findings": [
+      "nominatim.openstreetmap.org",
+      "tile.openstreetmap.org"
+    ],
+    "scannerNowBlocksBothOrigins": true
+  },
+  "remediation": {
+    "addressGeocoderRemoved": true,
+    "automaticMapTileLoadingRemoved": true,
+    "replacementBuildNumber": "2026081201",
+    "replacementStatus": "pending-build-and-binary-rescan"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "submissionAllowed": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

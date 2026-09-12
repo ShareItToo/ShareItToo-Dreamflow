@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-feed-screenshot-readiness",
+  "status": "exact-candidate-local-screenshots-validated-not-uploaded",
+  "capturedAt": "2026-08-13T21:05:04.000Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081303",
+    "commit": "4144d0c0a3a2e19e89b6523594607c14625b0119",
+    "apkSha256": "19505969ca133bb773b59c3e0afd0d4e733b844bcde926fca742d6f3c91813b8",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "device": {
+    "platform": "android",
+    "modelClass": "Pixel 7 Pro",
+    "physicalResolution": "1440x3120",
+    "installedCandidateVerified": true,
+    "syntheticScreenshotSessionReady": true
+  },
+  "fixture": {
+    "status": "ready-reused",
+    "curatedListingCount": 4,
+    "createdDuringObservation": 0,
+    "containsPersonalData": false
+  },
+  "feedObservation": {
+    "curatedListingVisible": true,
+    "legacyTechnicalListingsVisible": false,
+    "placeholderImagesVisible": false,
+    "technicalFixtureCopyVisible": false,
+    "protectedActiveBookings": 6,
+    "protectedPublicListingsObserved": 6,
+    "storeScreenshotAccepted": true,
+    "validatedLocalCandidates": 4
+  },
+  "completedRemediation": {
+    "method": "pause-unreferenced-and-neutralize-protected-staging-listings",
+    "deletionPerformed": false,
+    "protectedBookingsPreserved": true,
+    "deletionAuthorized": false,
+    "productionChangeAuthorized": false
+  },
+  "candidateEvidenceRefs": [
+    "docs/evidence/b11/google-play-screenshot-candidate-feed-20260813.json",
+    "docs/evidence/b11/google-play-screenshot-candidate-listing-detail-20260813.json",
+    "docs/evidence/b11/google-play-screenshot-candidate-search-20260813.json",
+    "docs/evidence/b11/google-play-screenshot-candidate-create-listing-20260813.json"
+  ],
+  "boundaries": {
+    "screenshotUploaded": false,
+    "listingDeleted": false,
+    "listingPaused": true,
+    "productionChanged": false,
+    "paymentEndpointCalled": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

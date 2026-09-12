@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-controlled-fcm-foreground-popup-diagnostic",
+  "status": "failed-root-cause-confirmed-source-fix-tested",
+  "capturedAt": "2026-08-14T13:30:06Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081404",
+    "commit": "79f63e183767563424355407ca52b1c5a62b85ed",
+    "delivery": "google-play-internal"
+  },
+  "observations": {
+    "fcmProviderOutcome": "sent",
+    "targetedEnabledDeviceCount": 1,
+    "invalidDeviceCount": 0,
+    "failedDeviceCount": 0,
+    "androidBroadcastReceived": true,
+    "foregroundPopupVisible": false,
+    "failureClass": "root-navigator-context-unavailable",
+    "failureLocation": "ForegroundPushHost presenting AppPopup from MaterialApp.builder context"
+  },
+  "resolution": {
+    "status": "implemented-and-widget-regression-passed",
+    "summary": "ForegroundPushHost now presents through the root navigator overlay context.",
+    "productionLayoutCovered": true,
+    "nextCandidateRequired": true
+  },
+  "boundaries": {
+    "syntheticAccountsOnly": true,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "productionPushSent": false,
+    "containsSecrets": false,
+    "containsAccountIdentifiers": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsProviderMessageIdentifiers": false
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-store-staging-routes-active",
+  "capturedAt": "2026-08-13T22:15:48Z",
+  "status": "staging-routes-active-production-pending",
+  "origin": "https://staging.shareittoo.com",
+  "checks": [
+    {
+      "id": "support",
+      "path": "/support",
+      "httpStatus": 503,
+      "pageMarkerPresent": true,
+      "complianceStatus": "draft"
+    },
+    {
+      "id": "privacy",
+      "path": "/privacy",
+      "httpStatus": 503,
+      "pageMarkerPresent": true,
+      "complianceStatus": "draft"
+    },
+    {
+      "id": "account-deletion",
+      "path": "/account-deletion",
+      "httpStatus": 200,
+      "pageMarkerPresent": true,
+      "complianceStatus": "operational"
+    }
+  ],
+  "validation": {
+    "candidateConfigurationValidatedBeforeActivation": true,
+    "ownerOnlyBackupCreated": true,
+    "webProxyImageUnchanged": true,
+    "webProxyRollbackContainerPreserved": true,
+    "stagingApiHealthy": true,
+    "productionApiHealthy": true,
+    "productionSupportRouteStillAppShell": true,
+    "androidAssetLinksStillAvailable": true
+  },
+  "boundaries": {
+    "stagingRoutesChanged": true,
+    "productionRoutesChanged": false,
+    "apiContainersChanged": false,
+    "databaseChanged": false,
+    "dnsChanged": false,
+    "mailChanged": false,
+    "cronChanged": false,
+    "stripeChanged": false,
+    "legalContentApproved": false,
+    "containsSecrets": false,
+    "containsPersonalAccountData": false,
+    "containsRawInfrastructureIdentifiers": false
+  }
+}

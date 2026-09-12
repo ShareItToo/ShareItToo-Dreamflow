@@ -33,10 +33,40 @@ void main() {
     await DataService.setCurrentUser(viewer);
   });
 
-  test('Blockieren -> Liste -> Entblockieren entfernt Eintrag und stellt Sichtbarkeit wieder her', () async {
+  test('guest discovery never requires the authenticated block-list API', () {
+    expect(
+      BlockedUsersService.shouldUseRemoteStore(
+        backendEnabled: true,
+        qaRuntimeEnabled: false,
+        hasAuthenticatedSession: false,
+      ),
+      isFalse,
+    );
+    expect(
+      BlockedUsersService.shouldUseRemoteStore(
+        backendEnabled: true,
+        qaRuntimeEnabled: false,
+        hasAuthenticatedSession: true,
+      ),
+      isTrue,
+    );
+    expect(
+      BlockedUsersService.shouldUseRemoteStore(
+        backendEnabled: true,
+        qaRuntimeEnabled: true,
+        hasAuthenticatedSession: true,
+      ),
+      isFalse,
+    );
+  });
+
+  test(
+      'Blockieren -> Liste -> Entblockieren entfernt Eintrag und stellt Sichtbarkeit wieder her',
+      () async {
     expect(await BlockedUsersService.isBlocked('blocked-owner'), isTrue);
 
-    final blockedGuardBefore = await ProfileEcosystemService.canViewPublicProfile(
+    final blockedGuardBefore =
+        await ProfileEcosystemService.canViewPublicProfile(
       profileUserId: 'blocked-owner',
       currentUserId: 'viewer',
     );
@@ -52,7 +82,8 @@ void main() {
 
     expect(await BlockedUsersService.isBlocked('blocked-owner'), isFalse);
 
-    final blockedGuardAfter = await ProfileEcosystemService.canViewPublicProfile(
+    final blockedGuardAfter =
+        await ProfileEcosystemService.canViewPublicProfile(
       profileUserId: 'blocked-owner',
       currentUserId: 'viewer',
     );
@@ -104,7 +135,6 @@ Item _item({required String id, required String ownerId}) => Item.fromJson({
       'currency': 'EUR',
       'priceUnit': 'day',
       'priceRaw': 12,
-      'deposit': 0,
       'autoApplyDiscounts': false,
       'longRentalDiscounts': <Map<String, dynamic>>[],
       'photos': <String>[],

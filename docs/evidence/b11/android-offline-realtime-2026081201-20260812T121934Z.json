@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-offline-realtime-diagnostic",
+  "status": "passed-bounded-offline-realtime-diagnostic",
+  "capturedAt": "2026-08-12T12:19:34.940Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081201",
+    "commit": "c6ec80002cf664f513afc768c1b643ac0d1d19fb",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "installed": {
+    "packageIdentityVerified": true,
+    "versionName": "1.0.0",
+    "buildNumber": "2026081201",
+    "apkSha256": "dd0f9c05dfb17b16b7fc3a8189e0ff19b4e6eb36f8952cf3c8eeeaed98792667"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "authenticatedChatPreloaded": {"status": "passed", "result": "chat-visible-before-offline-window"},
+    "messageHiddenWhileOffline": {"status": "passed", "result": "new-message-absent-during-15-second-offline-window"},
+    "sameProcessRealtimeRecovery": {"status": "passed", "result": "new-message-visible-after-network-restoration"},
+    "originalNetworkRestored": {"status": "passed", "result": "wifi-and-mobile-data-restored-to-original-state"}
+  },
+  "diagnostic": {
+    "offlineWindowSeconds": 15,
+    "appProcessSurvived": true,
+    "processIdentityStable": true,
+    "appForegroundAfterRecovery": true,
+    "packageCrashBufferEntries": 0,
+    "networkRestored": true
+  },
+  "boundaries": {
+    "syntheticAccountsOnly": true,
+    "directDiagnosticOnly": true,
+    "storeInstallationGateSatisfied": false,
+    "fullDeviceMatrixPassed": false,
+    "wifiOnlyDiagnostic": true,
+    "hotspotPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "iosTestFlightPassed": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "messageSent": true,
+    "lockCodeUsed": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  },
+  "isolation": {
+    "protectedReviewFixtureUnchanged": true,
+    "temporaryVaultRemovedAfterProbe": true,
+    "temporaryBookingCompleted": true,
+    "temporaryListingPaused": true,
+    "listingDeleted": false,
+    "containsReviewCredentials": false
+  }
+}

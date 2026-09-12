@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp33-pixel-privacy-export-payload-closure",
+  "status": "complete-physical-local-and-github",
+  "capturedAt": "2026-09-06T23:40:42.580Z",
+  "workPackage": "WP33",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "candidateSourceHead": "dbcb8c79739ca9441a5e13b7b999346665a5dc96",
+    "technicalClosureHead": "a98786f7fd66ab40edabb2ae7ccd81fe48f70fec",
+    "remoteDivergenceBeforeClosure": "0/0",
+    "mobileSourceChangedAfterCandidate": false,
+    "postCandidateChangedPathCount": 14
+  },
+  "candidate": {
+    "versionName": "1.0.0",
+    "versionCode": "2026090609",
+    "applicationId": "com.shareittoo.app",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkSha256": "ded1a7fe375e8f8562a5ca48f9d0220369e8dad0207a93dbe67dde2c781a0e77",
+    "aabSha256": "076897462084a646bbc11625bcee0b3de1f484cf2e4bc46df179c570a93d5624",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "binaryPrivacyReportSha256": "98821c17d40f7dabbf5289a28a481acb57503115b73be3c04f21f6cf0414e7fe",
+    "binaryPrivacyScan": "passed",
+    "firebaseAndroidConfigured": true,
+    "googleSignInEnabled": true,
+    "appleSignInEnabled": false,
+    "facebookSignInEnabled": false,
+    "stageAPilotId": "heilbronn_wave0",
+    "providerState": "hold",
+    "realMoneyEnabled": false,
+    "publicRegistrationEnabled": false
+  },
+  "verification": {
+    "focusedPrivacyExportToolTestsPassed": 13,
+    "repositoryToolTestsPassed": 2369,
+    "repositoryToolTestsFailed": 0,
+    "defaultFlutterTestsPassed": 904,
+    "defaultFlutterExplicitProfileSkips": 33,
+    "analyzerIssues": 0,
+    "completeLocalCandidateRegression": "passed",
+    "localCandidateCleanCheckout": {
+      "status": "passed",
+      "commandsPassed": 9,
+      "androidBuildsByteIdentical": true,
+      "androidPayloadEntriesCompared": 794
+    },
+    "secretScan": {
+      "status": "passed",
+      "reviewedHistoricalFindings": 23,
+      "unexpectedFindings": 0
+    },
+    "github": {
+      "technicalHead": "a98786f7fd66ab40edabb2ae7ccd81fe48f70fec",
+      "regressionRun": 34065599328,
+      "regressionStatus": "passed-all-four-required-jobs",
+      "cleanCheckoutReproducibility": "passed-byte-identical",
+      "codeqlRun": 34065599331,
+      "codeqlStatus": "passed",
+      "openCodeScanningAlerts": 0,
+      "prNumber": 7,
+      "prDraft": true,
+      "prOpen": true,
+      "prMergeable": true,
+      "prMerged": false
+    }
+  },
+  "pixel": {
+    "platform": "android",
+    "physical": true,
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "containsRawDeviceIdentifier": false,
+    "updateFromVersionCode": "2026090608",
+    "installedVersionCode": "2026090609",
+    "installedApkAndCertificateMatchCandidate": true,
+    "firstInstallTimePreserved": true,
+    "applicationDataIdentityPreserved": true,
+    "uninstallPerformed": false,
+    "dataResetPerformed": false,
+    "downgradePerformed": false
+  },
+  "physicalExport": {
+    "status": "passed-exact-current-principal-export-and-complete-cleanup",
+    "wrongPasswordRejectedBeforeShare": true,
+    "correctPasswordAccepted": true,
+    "androidShareReceiverInvokedOnce": true,
+    "exactOwnerBound": true,
+    "ownerIdentityPresent": true,
+    "foreignEmailAbsent": true,
+    "foreignOpaqueIdentifierOutsideSharedRecordsAbsent": true,
+    "sharedCounterpartySections": [
+      "operationalRecords"
+    ],
+    "localSections": [
+      "accountProfile",
+      "operationalRecords",
+      "ownedListings",
+      "reviews",
+      "safetyPrivacy",
+      "savedItems"
+    ],
+    "forbiddenCredentialKeyCount": 0,
+    "exportBytes": 1552413,
+    "exportSha256": "4c329acfa7cec7b33abfef2c03ffa7d82b56715c587c3978d5d9a16aaff918f5",
+    "rawExportRetained": false,
+    "rawExportPrinted": false,
+    "accountIdentityRecorded": false,
+    "credentialsRecorded": false
+  },
+  "temporaryReceiver": {
+    "delivery": "chooser-selected",
+    "internetPermission": false,
+    "externalStoragePermission": false,
+    "backupEnabled": false,
+    "privateFileOnly": true,
+    "removed": true,
+    "dataRemoved": true,
+    "temporaryBuildRemoved": true
+  },
+  "cleanup": {
+    "temporaryProbeSessionsRevoked": true,
+    "protectedVaultUnchanged": true,
+    "exactOwnerRemainsSignedIn": true,
+    "rawPrivateEvidenceFileCount": 0
+  },
+  "corrections": {
+    "retainedShareCache": "fixed-with-exact-private-source-and-cold-start-resume-purge",
+    "unrelatedCachePreserved": true,
+    "androidBuildProfile": "maintained-version-2-profile-used-after-global-sdk-preflight-rejection",
+    "credentialValidator": "exact-data-account-password-changed-at-null-or-canonical-iso-timestamp-only",
+    "historicalSyntheticCredentialFixture": "reviewed-in-exact-secret-scan-baseline",
+    "evidenceHashRatchet": "updated-through-rw20-without-history-rewrite"
+  },
+  "stagingReadinessObservation": {
+    "capturedAt": "2026-09-06T23:45:02Z",
+    "httpStatus": 503,
+    "status": "degraded",
+    "deployedCommit": "68c97a437969dc98f17eb151da3e006259ffbafa",
+    "database": "ok",
+    "mail": "ok",
+    "supportDeadlineWatchdogStale": false,
+    "p0WithoutOwner": 0,
+    "nextUpdateOverdue": 1,
+    "criticalNextUpdateOverdue": 0,
+    "lastFailedAt": null,
+    "lastErrorCode": null,
+    "classification": "separate-operational-risk-not-a-wp33-export-failure"
+  },
+  "boundaries": {
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "backendDeployed": false,
+    "firebaseConsoleChanged": false,
+    "providerChanged": false,
+    "paymentOrKycCalled": false,
+    "productionChanged": false,
+    "publicRegistrationChanged": false,
+    "cloudVpsDnsChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "gitHistoryRewritten": false,
+    "moneySpent": false
+  },
+  "next": "Create an updated Pixel acceptance and operations checkpoint, prioritizing the degraded support-deadline state before another broad hardening package."
+}

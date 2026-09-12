@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r17-two-day-priority-queue",
+  "status": "verified-regression-and-codeql-passed-ready-for-final-decision",
+  "implementationBaseHead": "dda99ed03660c509d3e713799b7001e4e6680b79",
+  "predecessor": {
+    "package": "R16",
+    "evidence": "docs/evidence/48h-remote/r16-pr7-pilot-freeze-integration-review-20260824.json",
+    "status": "verified-regression-and-codeql-passed-ready-for-r17",
+    "implementationCommit": "7eac3d240b96e848addf3ee6df034bb742b0a9b9",
+    "closureHead": "dda99ed03660c509d3e713799b7001e4e6680b79"
+  },
+  "report": "docs/operations/48H_R17_TWO_DAY_PRIORITY_QUEUE_2026-08-25.md",
+  "ownerSecurityGate": "docs/operations/48H_R17_GITGUARDIAN_HISTORY_REVIEW_OWNER_GATE.md",
+  "reducedWave0Runbook": "docs/operations/48H_R17_REDUCED_NON_BINDING_WAVE0_2026-08-25.md",
+  "testerInstructions": "docs/templates/48H_R17_REDUCED_NON_BINDING_WAVE0_TESTER_INSTRUCTIONS_DE.md",
+  "featureMatrix": "store/google-play/r17-stage-a-feature-flag-matrix.json",
+  "findings": [
+    {
+      "id": "R16-P0-SEC-HISTORY-001",
+      "priority": "P0",
+      "state": "owner-action-required-final-gates-held",
+      "resolution": "sanitized-owner-gate-prepared",
+      "ownerToken": "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE",
+      "rawCredentialInspected": false,
+      "historyRewriteAllowed": false
+    },
+    {
+      "id": "R16-P1-STAGE-A-BINDING-001",
+      "priority": "P1",
+      "state": "resolved-code-and-tests",
+      "resolution": "blue-ocean-build-coupled-to-non-binding-checkout-fail-closed"
+    },
+    {
+      "id": "R16-P1-WAVE0-SURFACE-001",
+      "priority": "P1",
+      "state": "resolved-scope-correction",
+      "resolution": "release-locks-retained-human-wave0-reduced-to-buildable-surfaces"
+    }
+  ],
+  "stageANonBinding": {
+    "buildDefine": "SIT_STAGE_A_NON_BINDING_PILOT",
+    "requiredWhenBlueOcean": true,
+    "bindingCheckoutAvailable": false,
+    "remoteBindingQuoteLoaded": false,
+    "legalAcceptanceCheckboxesVisible": false,
+    "rentalRequestSubmissionPossible": false,
+    "ordinaryV52DevelopmentPathRetained": true,
+    "privateArchiveBound": true
+  },
+  "reducedHumanWave0": {
+    "allowedTaskFamilies": 5,
+    "forbiddenTaskFamilies": 5,
+    "g3G4G5ReleaseLocksRetained": true,
+    "fullR14N9ParticipantFlowSupersededForNextCandidate": true,
+    "activated": false
+  },
+  "gateSeparation": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "focusedVerification": {
+    "legacyCheckoutTests": "passed-1",
+    "stageANonBindingProfileTests": "passed-1",
+    "archiveCandidateTests": "passed-7",
+    "r17WiringTests": "passed-9",
+    "r17ArtifactValidatorTests": "passed-8",
+    "r17ArtifactValidator": "passed",
+    "r16SupersessionValidator": "passed",
+    "privacyInventoryValidator": "passed",
+    "fullTechnicalRegression": "passed-candidate-rollover-ci-metadata-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "githubVerification": {
+    "implementationCommit": "57a9616951510be353044a0d4d764e429e271d89",
+    "regressionRunId": 32784610782,
+    "regressionConclusion": "success",
+    "codeqlRunId": 32784610640,
+    "codeqlConclusion": "success",
+    "advancedSecurityCheckId": 97614261868,
+    "advancedSecurityConclusion": "success",
+    "newAlerts": 0
+  },
+  "boundaries": {
+    "credentialValueReadOrCopied": false,
+    "candidateBuiltOrUploaded": false,
+    "pixelChanged": false,
+    "testerContacted": false,
+    "humanPilotActivated": false,
+    "providerCalled": false,
+    "apiBillingCreated": false,
+    "paymentChanged": false,
+    "firebaseOrPlayChanged": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false
+  },
+  "next48hPackage": "48H_REMOTE_READINESS_DECISION"
+}

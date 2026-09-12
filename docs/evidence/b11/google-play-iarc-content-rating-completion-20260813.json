@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-iarc-content-rating-completion",
+  "capturedAt": "2026-08-13T08:30:00Z",
+  "status": "questionnaire-completed-owner-terms-accepted-ratings-saved",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081302",
+    "commit": "530ed17e46dbd82916eef0d59f1b07e448c737f8"
+  },
+  "observedConsoleState": {
+    "questionnaire": "completed",
+    "category": "all-other-app-types",
+    "protectedContactAddressEntered": true,
+    "ownerAcceptedIarcTerms": true,
+    "submittedAt": "2026-08-13T08:30:00Z",
+    "iarcCertificateIdAssigned": false,
+    "savedToPublishingOverview": true,
+    "sentForReview": false
+  },
+  "submittedTruth": {
+    "downloadedRatingsRelevantContent": false,
+    "nativeUserContentExchange": true,
+    "userGeneratedContentPrimary": true,
+    "publicNudityPermitted": false,
+    "publicGraphicViolencePermitted": false,
+    "userOrContentBlocking": true,
+    "userOrContentReporting": true,
+    "chatModeration": false,
+    "invitedFriendsOnly": false,
+    "onlineContent": true,
+    "catalogViolence": false,
+    "catalogSexualityOrNudity": false,
+    "catalogOffensiveLanguage": false,
+    "catalogControlledSubstances": false,
+    "ageRestrictedProductsOrActivities": false,
+    "preciseDeviceLocationSharedByUser": true,
+    "digitalGoodsPurchases": false,
+    "cashOrTransferableDigitalRewards": false,
+    "webBrowserOrSearchEngine": false,
+    "newsOrEducationalProduct": false
+  },
+  "calculatedRatings": {
+    "germany": "usk-12-plus",
+    "europe": "pegi-parental-guidance",
+    "northAmerica": "esrb-teen",
+    "brazil": "classind-12-plus",
+    "restOfWorld": "iarc-12-plus",
+    "interactiveElement": "users-interact",
+    "geoLocationDescriptor": true
+  },
+  "productEvidence": {
+    "moderationArchitecture": "docs/architecture/B9_TRUST_MODERATION_ADMIN_AND_REVIEWS_2026-08-09.md",
+    "messageLocationSource": "lib/screens/message_thread_screen.dart",
+    "storeWorksheet": "docs/operations/B11_GOOGLE_PLAY_CONSOLE_ENTRY_WORKSHEET_2026-08-12.md"
+  },
+  "officialGuidance": [
+    "https://support.google.com/googleplay/android-developer/answer/9898843",
+    "https://support.google.com/googleplay/android-developer/answer/9876937",
+    "https://support.google.com/googleplay/android-developer/answer/6161095"
+  ],
+  "boundaries": {
+    "questionnaireSubmitted": true,
+    "ownerTermsAcceptanceObserved": true,
+    "sentForReview": false,
+    "releaseCreated": false,
+    "artifactUploaded": false,
+    "internalRolloutStarted": false,
+    "closedTestingStarted": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false
+  }
+}

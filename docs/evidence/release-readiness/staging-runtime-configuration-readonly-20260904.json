@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "kind": "staging-read-only-runtime-configuration",
+  "inspectedLocalSource": "9f4f7e922023789b469a06d3e9a0556ad0ecf10d",
+  "method": "Existing owner-authenticated Hostinger web terminal; docker exec against exact shareittoo-staging-api; allowlisted non-secret environment fields and lstat metadata only",
+  "observation": {
+    "credentialVariablesDeclared": {
+      "OPENAI_API_KEY": false,
+      "STRIPE_CONNECT_WEBHOOK_SECRET": false,
+      "STRIPE_SECRET_KEY": true,
+      "STRIPE_WEBHOOK_SECRET": true
+    },
+    "files": {
+      "firebase": {
+        "exists": true,
+        "mode": "640",
+        "nonempty": true,
+        "regular": true,
+        "symlink": false
+      },
+      "openai": {
+        "error": "ENOENT",
+        "exists": false
+      }
+    },
+    "firebaseProjectMatchesStaging": true,
+    "observedAt": "2026-09-04T03:28:11.668Z",
+    "values": {
+      "APP_COMMIT": "5d88295fa7fe313b83936783a0582a505b2ba486",
+      "APP_VERSION": "0.1.0-5d88295fa7fe",
+      "DEPLOYMENT_ENVIRONMENT": "staging",
+      "FIREBASE_AUTH_ENABLED": "true",
+      "FIREBASE_PHONE_VERIFICATION_ENABLED": "true",
+      "MAIL_TRANSPORT": "smtp",
+      "PAYMENT_TRANSPORT": "memory",
+      "PUSH_TRANSPORT": "fcm",
+      "SIT_LISTING_AI_BUDGET_CENTS": "0",
+      "SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED": null,
+      "SIT_LISTING_AI_MODEL": "listing-ai-mock-v1",
+      "SIT_LISTING_AI_PROVIDER": "mock",
+      "STRIPE_LIVEMODE": "false"
+    }
+  },
+  "limitations": [
+    "Configuration observation, not provider request or device-delivery proof.",
+    "Credential-variable declaration does not establish nonempty content, validity, ownership or entitlement; values were not read.",
+    "Missing OpenAI file applies only to the documented mount in the running Staging container, not all host files or provider accounts.",
+    "No full environment dump, credential contents, remote source changes, deployment, provider calls or device actions."
+  ],
+  "mutations": {
+    "repositoryCode": false,
+    "remoteConfiguration": false,
+    "deployment": false,
+    "providerResources": false,
+    "device": false
+  }
+}

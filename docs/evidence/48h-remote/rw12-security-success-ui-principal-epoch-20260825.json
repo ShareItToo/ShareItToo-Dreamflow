@@ -1,0 +1,248 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-rw12-security-success-ui-principal-epoch",
+  "status": "verified-regression-and-codeql-passed",
+  "implementationBaseHead": "521f565a77faecd8de006f355c8fced4b363a8d6",
+  "implementationHead": "0a13df419f4abd5e30858503f4e93f23c9e9d9f1",
+  "architecture": "docs/architecture/rw12-security-success-ui-principal-epoch-2026-08-25.md",
+  "report": "docs/operations/RW12_SECURITY_SUCCESS_UI_PRINCIPAL_EPOCH_2026-08-25.md",
+  "predecessor": {
+    "package": "RW11",
+    "evidence": "docs/evidence/48h-remote/rw11-regression-completeness-stale-support-wiring-20260825.json",
+    "verifiedImplementationHead": "7768651bf63d266fb8d98f75f2883536e77adde0",
+    "closureCommit": "521f565a77faecd8de006f355c8fced4b363a8d6"
+  },
+  "scope": {
+    "allowed": [
+      "password-success-ui-post-service-principal-epoch-recheck",
+      "fail-closed-definite-local-session-absence",
+      "web-account-security-state-notification-binding",
+      "red-first-account-a-to-account-b-widget-regression",
+      "same-session-success-control",
+      "three-way-password-result-truth-and-exact-a-session-containment",
+      "mechanical-privacy-retention-provider-and-predecessor-hash-refresh",
+      "deterministic-local-and-ci-regression-evidence"
+    ],
+    "excluded": [
+      "backend-route-schema-and-auth-provider-change",
+      "logout-all-ui-epoch-expansion",
+      "timing-retry-parallelism-reduction-and-test-exclusion",
+      "production-vps-dns-cloud-firebase-store-and-play",
+      "payment-provider-ai-pilot-real-money-and-live-traffic",
+      "legal-owner-gitguardian-pr-merge-and-history-rewrite"
+    ],
+    "syntheticOnly": true,
+    "localOnly": true,
+    "timingWorkaroundAllowed": false,
+    "testParallelismReductionAllowed": false,
+    "liveAuthTrafficAllowed": false
+  },
+  "findings": [
+    {
+      "id": "RW12-P0-POST-SERVICE-STALE-SUCCESS-UI-001",
+      "state": "resolved-and-tested",
+      "resolution": "A red-first widget test proved that Account A could render password success after Account B became active; the screen now requires a stable post-service security epoch before popup creation and before login navigation."
+    },
+    {
+      "id": "RW12-P1-AMBIGUOUS-LOCAL-SESSION-ABSENCE-002",
+      "state": "resolved-and-tested",
+      "resolution": "Password success now uses a dedicated containsKey-based absence check, so active, successor, malformed, opaque or unreadable session state fails closed instead of becoming empty truth."
+    },
+    {
+      "id": "RW12-P1-WEB-SECURITY-EPOCH-NOTIFICATION-GAP-003",
+      "state": "resolved-and-tested",
+      "resolution": "The Web persistence watch set now includes account_security_state_v1, allowing supported security-state notifications to invalidate the same UI epoch rather than being filtered out."
+    },
+    {
+      "id": "RW12-P0-AMBIGUOUS-PASSWORD-RESULT-MESSAGING-004",
+      "state": "resolved-and-tested",
+      "resolution": "Explicit allowlisted 4xx rejection, server-confirmed local-finalization failure, and timeout/transport/5xx unknown outcome now have distinct typed results and UI wording; unknown outcomes conditionally remove only the exact invoking Account A marker and never successor Account B."
+    }
+  ],
+  "stateModel": {
+    "successEligible": "server-confirmed-and-session-key-definitely-absent-and-epoch-stable",
+    "notSuccessEligible": [
+      "session-key-present-valid-or-successor",
+      "session-key-present-malformed-or-opaque",
+      "session-storage-unreadable",
+      "backend-or-service-error",
+      "not-yet-loaded",
+      "epoch-or-widget-changed"
+    ],
+    "serverConfirmedEmptySessions": "distinct-from-load-error-and-not-yet-loaded"
+  },
+  "verification": {
+    "redFirstAccountSwitch": "failed-stale-success-visible-before-fix",
+    "focusedRw12Flutter": "passed-12",
+    "rw10Rw12B10Flutter": "passed-46",
+    "changedFileAnalyze": "passed-zero-issues",
+    "rw12WiringTests": "passed-10",
+    "completeToolInventory": "passed-1877",
+    "completeToolInventorySkipped": 0,
+    "privacyRetentionProvider": "passed",
+    "predecessorValidators": "passed",
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "inventoryAudit": {
+    "predecessorRepositoryOwnedFiles": 324,
+    "closureRepositoryOwnedFiles": 326,
+    "predecessorPassedTests": 1867,
+    "closurePassedTests": 1877,
+    "skippedTests": 0,
+    "executionPattern": "node --test test/tool/*.test.mjs",
+    "standardNodeParallelism": true
+  },
+  "localRegression": {
+    "head": "0a13df419f4abd5e30858503f4e93f23c9e9d9f1",
+    "standardParallelism": true,
+    "timingWorkaroundUsed": false,
+    "parallelismReductionUsed": false,
+    "completeToolInventoryPassed": 1877,
+    "completeToolInventorySkipped": 0,
+    "flutterPassed": 535,
+    "documentedProfileSkips": 3,
+    "analyzerIssues": 0,
+    "webDebugBuild": "passed-with-wasm-dry-run",
+    "loopbackSmoke": "passed",
+    "androidDebugTasks": 448,
+    "androidMinSdk": 24,
+    "privateReleaseArtifact": "unavailable-ci-metadata-validated",
+    "storeOrDeviceGateClaimed": false
+  },
+  "githubVerification": {
+    "head": "0a13df419f4abd5e30858503f4e93f23c9e9d9f1",
+    "regressionRunId": 32857019933,
+    "codeqlRunId": 32857019848,
+    "regressionConclusion": "success",
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "ratchetAudit": {
+    "cause": "AuthService gained a fail-closed definite-session-absence query, SecurityScreen gained post-service epoch guards, Web persistence sync gained the account-security key, and the supported regression gained RW12 package checks.",
+    "privacyDisclosureSemanticsChanged": false,
+    "retentionSemanticsChanged": false,
+    "providerDecisionChanged": false,
+    "providerGateChanged": false,
+    "rw11SemanticsChanged": false,
+    "mechanicalRefreshes": [
+      "Privacy and retention source inventories are refreshed for the reviewed AuthService implementation hash only; their declared data handling, purposes, deletion behavior and approval truth do not change.",
+      "Active provider evidence is refreshed only to bind the mechanically updated privacy and retention manifest hashes; prepared-hold and all ten owner decisions remain unchanged.",
+      "RW0 through RW11 source inventories are refreshed only for changed shared sources and the supported regression script; prior findings, implementation heads, verification results, gates and semantics remain unchanged."
+    ]
+  },
+  "ratchets": {
+    "privacyManifestSha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449",
+    "retentionManifestSha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8",
+    "activeProviderEvidenceSha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d",
+    "activeProviderState": "prepared-hold",
+    "completedOwnerDecisions": 0,
+    "requiredOwnerDecisions": 10,
+    "externalReadiness": false
+  },
+  "gates": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "backendRuntimeChanged": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "realAuthTrafficSent": false,
+    "realProviderTrafficSent": false,
+    "realSupportTrafficSent": false,
+    "externalAiRuntimeEnabled": false,
+    "realTesterEnrolled": false,
+    "candidateCreated": false,
+    "deviceGateClaimed": false,
+    "legalApprovalChanged": false,
+    "gitHistoryRewritten": false,
+    "prMerged": false
+  },
+  "residualRisks": [
+    "The existing backend password and session contracts were not exercised against a live environment in RW12.",
+    "A hard process or OS termination can interrupt non-transactional local session cleanup; no success is claimed in that path.",
+    "The analogous logout-all post-service navigation epoch window remains outside this password-specific package.",
+    "An already rendered success popup is not forcibly dismissed if a later account switch occurs while the popup animation is visible; navigation is suppressed, and a separate popup-lifecycle package would be required to change that shared UI contract."
+  ],
+  "sourceInventory": [
+    {
+      "path": "lib/screens/security_screen.dart",
+      "sha256": "86107d2852d5363cec8cf5554de0ca5eef70a6b69cb21e1a042441d9dcf1c629"
+    },
+    {
+      "path": "lib/services/account_security_service.dart",
+      "sha256": "774492379049744c40ac82c9a01b46439d5f5b9bcbde80c94684822b33787b0e"
+    },
+    {
+      "path": "lib/services/auth_service.dart",
+      "sha256": "1607dfd6d0b7907aa9040d7ec10f649fcaab12b6fef872accc66b4b4602b2687"
+    },
+    {
+      "path": "lib/services/shared_persistence_sync.dart",
+      "sha256": "b4294550220badf563c3a2fb0ea1929e15b0026483fb3dd3633370c6b486adb2"
+    },
+    {
+      "path": "lib/services/shared_persistence_sync_web.dart",
+      "sha256": "86a1dae947f0ff51e7163a687d9eb6cce07427596905950a59466c7a56534d41"
+    },
+    {
+      "path": "store/privacy-disclosures.json",
+      "sha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449"
+    },
+    {
+      "path": "store/retention-deletion-readiness.json",
+      "sha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8"
+    },
+    {
+      "path": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+      "sha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d"
+    },
+    {
+      "path": "docs/evidence/48h-remote/rw10-local-security-control-truthfulness-20260825.json",
+      "sha256": "70e2c8457b732473e14b38c97235b98a52b4c502faa8dbeb59e67b6d7dc3347c"
+    },
+    {
+      "path": "docs/evidence/48h-remote/rw11-regression-completeness-stale-support-wiring-20260825.json",
+      "sha256": "673f507fabe84b5005b967bbc02ad260d87969b12ab2adef6bff65bb2c78e277"
+    },
+    {
+      "path": "scripts/technical_regression_check.sh",
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
+    },
+    {
+      "path": "test/rw12_security_success_ui_principal_epoch_test.dart",
+      "sha256": "5d2cd09a48f25a4b9cf4677db9ad77f1c2e11b2a1bbf36263fa4c3b14fc9d646"
+    },
+    {
+      "path": "test/tool/rw12_security_success_ui_principal_epoch_wiring.test.mjs",
+      "sha256": "b93cea6db81c60279f4d727c2c8b13db4acae96709efd9a74b098cd485b1c069"
+    },
+    {
+      "path": "test/tool/validate_rw12_security_success_ui_principal_epoch.test.mjs",
+      "sha256": "0ecb0c36c00cef50e49047c9b55b798897428a5686c9d3d08419fafb7b1b0a86"
+    },
+    {
+      "path": "tool/validate_rw12_security_success_ui_principal_epoch.mjs",
+      "sha256": "7e6edb3e69f4c6465f205ff41155bc7ff7b9ead6178f04443ef73d3344b367b7"
+    },
+    {
+      "path": "docs/architecture/rw12-security-success-ui-principal-epoch-2026-08-25.md",
+      "sha256": "1e970efe83e0b3dd6e7c8dde43ad7f880ed8996851d7b01222796b977580751c"
+    },
+    {
+      "path": "docs/operations/RW12_SECURITY_SUCCESS_UI_PRINCIPAL_EPOCH_2026-08-25.md",
+      "sha256": "8854ef7db2eb5375bdcb7c34a082ed574122c06bb9a0e9e851f1931b77cdf2fc"
+    }
+  ]
+}

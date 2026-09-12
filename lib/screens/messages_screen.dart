@@ -1,25 +1,29 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lendify/models/message.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/screens/message_thread_screen.dart';
 import 'package:lendify/screens/messages_settings_screen.dart';
 import 'package:lendify/screens/blocked_users_screen.dart';
 import 'package:lendify/models/item.dart';
-import 'package:lendify/services/blocked_users_service.dart';
+import 'package:lendify/services/local_safety_privacy_service.dart';
 import 'package:lendify/services/data_service.dart';
+import 'package:lendify/services/safety_action_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/services/messages_settings_service.dart';
+import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/theme.dart';
 import 'package:lendify/widgets/app_popup.dart';
+import 'package:lendify/widgets/app_image.dart';
 import 'package:lendify/widgets/user_avatar.dart';
+import 'package:lendify/widgets/safety_action_interaction.dart';
 
 class MessagesScreen extends StatefulWidget {
-  const MessagesScreen({super.key});
+  final SafetyActionService? safetyActionService;
+
+  const MessagesScreen({super.key, this.safetyActionService});
 
   @override
   State<MessagesScreen> createState() => _MessagesScreenState();
@@ -28,7 +32,6 @@ class MessagesScreen extends StatefulWidget {
 enum _MessagesFilter { all, bookings, active, archived, blocked, support }
 
 const String _translationDemoThreadId = 'demo_translation_thread';
-const String _mutedThreadsKey = 'muted_message_threads_v1';
 
 class MessagesBlockedTabEmptyStateConfig {
   final String title;
@@ -56,6 +59,10 @@ Future<void> openBlockedUsersManagement(BuildContext context) {
 }
 
 class _MessagesScreenState extends State<MessagesScreen> {
+  late final SafetyActionService _safetyService;
+  final SafetyActionInteractionController _safetyActions =
+      SafetyActionInteractionController();
+  int _loadRevision = 0;
   _MessagesFilter _filter = _MessagesFilter.active;
   List<MessageThread> _activeThreads = [];
   List<MessageThread> _archivedThreads = [];
@@ -63,13 +70,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
   Map<String, User> _usersCache = {};
   Map<String, Item> _itemsCache = {};
   bool _isLoading = true;
+  bool _loadFailed = false;
   Set<String> _blockedUserIds = const {};
   Set<String> _mutedThreadKeys = const {};
   bool _searchVisible = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  MessagesSettings _messageSettings = MessagesSettings.defaults().normalizedForCurrentProductRules();
+  MessagesSettings _messageSettings =
+      MessagesSettings.defaults().normalizedForCurrentProductRules();
   StreamSubscription<String>? _sharedPersistenceSub;
   final SharedPersistenceRefreshCoordinator _sharedPersistenceRefresh =
       SharedPersistenceRefreshCoordinator();
@@ -77,9 +86,16 @@ class _MessagesScreenState extends State<MessagesScreen> {
   @override
   void initState() {
     super.initState();
+    _safetyService = widget.safetyActionService ?? const SafetyActionService();
     _loadData();
     _sharedPersistenceSub = SharedPersistenceSync.changes.listen((key) {
-      if (!mounted || !SharedPersistenceSync.affectsBookingSync(key)) return;
+      if (!mounted || !SharedPersistenceSync.affectsCommunicationSync(key)) {
+        return;
+      }
+      if (key == SharedPersistenceSync.accountSecurityStateKey) {
+        _safetyActions.invalidate();
+        _loadRevision += 1;
+      }
       unawaited(_sharedPersistenceRefresh.schedule(() async {
         await SharedPersistenceSync.reloadPreferences();
         if (mounted) await _loadData();
@@ -87,36 +103,22 @@ class _MessagesScreenState extends State<MessagesScreen> {
     });
   }
 
-
-  static String _muteKey({required String threadId, required String userId}) => '$userId::$threadId';
-
-  Future<Set<String>> _loadMutedThreadKeys() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_mutedThreadsKey);
-      if (raw == null || raw.isEmpty) return <String>{};
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return <String>{};
-      return decoded.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toSet();
-    } catch (e) {
-      debugPrint('MessagesScreen._loadMutedThreadKeys failed: $e');
-      return <String>{};
-    }
-  }
+  Future<Set<String>> _loadMutedThreadKeys(String userId) =>
+      LocalSafetyPrivacyService.getMutedThreadIds(legacyUserId: userId);
 
   bool _isThreadMuted(MessageThread thread) {
     final userId = _currentUser?.id;
     if (userId == null) return false;
-    return _mutedThreadKeys.contains(_muteKey(threadId: thread.id, userId: userId));
+    return _mutedThreadKeys.contains(thread.id);
   }
 
   bool _isOtherUserBlocked(MessageThread thread) {
     final me = _currentUser;
     if (me == null) return false;
-    final otherUserId = thread.user1Id == me.id ? thread.user2Id : thread.user1Id;
+    final otherUserId =
+        thread.user1Id == me.id ? thread.user2Id : thread.user1Id;
     return otherUserId.isNotEmpty && _blockedUserIds.contains(otherUserId);
   }
-
 
   _MessagesFilter _normalizedFilterForBlocked(Set<String> blockedUserIds) {
     if (_filter == _MessagesFilter.blocked && blockedUserIds.isEmpty) {
@@ -130,14 +132,16 @@ class _MessagesScreenState extends State<MessagesScreen> {
       case _MessagesFilter.active:
         return const _MessagesEmptyStateConfig(
           title: 'Keine aktiven Nachrichten',
-          body: 'Sobald eine laufende oder offene Unterhaltung entsteht, erscheint sie hier.',
+          body:
+              'Sobald eine laufende oder offene Unterhaltung entsteht, erscheint sie hier.',
           buttonLabel: 'Jetzt entdecken',
           buttonIcon: Icons.explore,
         );
       case _MessagesFilter.all:
         return const _MessagesEmptyStateConfig(
           title: 'Noch keine Nachrichten',
-          body: 'Deine Gespräche erscheinen hier, sobald du eine Anfrage stellst oder annimmst.',
+          body:
+              'Deine Gespräche erscheinen hier, sobald du eine Anfrage stellst oder annimmst.',
           buttonLabel: 'Jetzt entdecken',
           buttonIcon: Icons.explore,
         );
@@ -158,7 +162,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
       case _MessagesFilter.support:
         return const _MessagesEmptyStateConfig(
           title: 'Keine Support-Nachrichten',
-          body: 'Support-Unterhaltungen erscheinen hier, sobald du den Support kontaktierst.',
+          body:
+              'Support-Unterhaltungen erscheinen hier, sobald du den Support kontaktierst.',
           buttonLabel: 'Jetzt entdecken',
           buttonIcon: Icons.explore,
         );
@@ -176,27 +181,40 @@ class _MessagesScreenState extends State<MessagesScreen> {
   void dispose() {
     _sharedPersistenceSub?.cancel();
     _sharedPersistenceRefresh.dispose();
+    _safetyActions.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
   }
 
   Future<void> _loadData() async {
+    final revision = ++_loadRevision;
+    _safetyActions.invalidate();
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _loadFailed = false;
+        _currentUser = null;
+        _activeThreads = const [];
+        _archivedThreads = const [];
+        _usersCache = const {};
+        _itemsCache = const {};
+        _blockedUserIds = const {};
+        _mutedThreadKeys = const {};
+      });
+    }
     try {
-      final user = await DataService.getCurrentUser();
-      final users = await DataService.getUsers();
-      final items = await DataService.getItems();
+      final actionContext = await _safetyService.loadCurrentContext();
+      if (!mounted || revision != _loadRevision) return;
       final messageSettings = await MessagesSettingsService.get();
-
-      if (user == null) {
-        final demo = _buildDemoMessageState();
-        if (!mounted) return;
+      if (!mounted || revision != _loadRevision) return;
+      if (actionContext == null) {
         setState(() {
-          _currentUser = demo.user;
-          _activeThreads = demo.activeThreads;
-          _archivedThreads = demo.archivedThreads;
-          _usersCache = demo.users;
-          _itemsCache = demo.items;
+          _currentUser = null;
+          _activeThreads = const [];
+          _archivedThreads = const [];
+          _usersCache = const {};
+          _itemsCache = const {};
           _blockedUserIds = const {};
           _mutedThreadKeys = const {};
           _messageSettings = messageSettings;
@@ -206,25 +224,53 @@ class _MessagesScreenState extends State<MessagesScreen> {
         return;
       }
 
+      final user = actionContext.user;
+      final users = await DataService.getUsers();
+      final items = await DataService.getItems();
+      if (!mounted ||
+          revision != _loadRevision ||
+          !await _safetyService.isContextCurrent(actionContext)) {
+        return;
+      }
       final threads = await DataService.getMessageThreadsForUser(user.id);
-      final archived = await DataService.getArchivedMessageThreadsForUser(user.id);
-      final blockedUserIds = (await BlockedUsersService.getBlockedUserIds()).toSet();
-      final mutedThreadKeys = await _loadMutedThreadKeys();
+      final archived =
+          await DataService.getArchivedMessageThreadsForUser(user.id);
+      final blockedUserIds =
+          (await _safetyService.loadBlockedUsers(actionContext)).toSet();
+      final mutedThreadKeys = await _loadMutedThreadKeys(user.id);
       final usersById = {for (final u in users) u.id: u};
       final itemsById = {for (final i in items) i.id: i};
 
-      if (!mounted) return;
+      if (!mounted ||
+          revision != _loadRevision ||
+          !await _safetyService.isContextCurrent(actionContext)) {
+        return;
+      }
 
       // If seeding is disabled, the message threads store can be empty, which makes
       // it impossible to QA the chat detail UI. Seed a minimal local support thread
       // (only when empty) and reload once.
       if (threads.isEmpty && archived.isEmpty) {
-        await DataService.ensureSeededMessageThreadsForUser(user.id);
-        final seededThreads = await DataService.getMessageThreadsForUser(user.id);
-        final seededArchived = await DataService.getArchivedMessageThreadsForUser(user.id);
-        if (!mounted) return;
+        if (QaRuntimeService.isEnabled) {
+          if (!await _safetyService.isContextCurrent(actionContext)) return;
+          await DataService.ensureSeededMessageThreadsForUser(user.id);
+        }
+        final seededThreads =
+            await DataService.getMessageThreadsForUser(user.id);
+        final seededArchived =
+            await DataService.getArchivedMessageThreadsForUser(user.id);
+        if (!mounted ||
+            revision != _loadRevision ||
+            !await _safetyService.isContextCurrent(actionContext)) {
+          return;
+        }
         if (seededThreads.isNotEmpty || seededArchived.isNotEmpty) {
-          final injected = _withTranslationDemoThread(user: user, activeThreads: seededThreads, users: usersById, items: itemsById);
+          final injected = _withTranslationDemoThread(
+              user: user,
+              activeThreads: seededThreads,
+              users: usersById,
+              items: itemsById);
+          _safetyActions.replaceContext(actionContext);
           setState(() {
             _currentUser = user;
             _activeThreads = injected.activeThreads;
@@ -235,19 +281,18 @@ class _MessagesScreenState extends State<MessagesScreen> {
             _mutedThreadKeys = mutedThreadKeys;
             _messageSettings = messageSettings;
             _filter = _normalizedFilterForBlocked(blockedUserIds);
-          _isLoading = false;
+            _isLoading = false;
           });
           return;
         }
 
-        // As a last fallback, show a non-persistent demo UI state.
-        final demo = _buildDemoMessageState(baseUser: user, users: usersById, items: itemsById);
+        _safetyActions.replaceContext(actionContext);
         setState(() {
-          _currentUser = demo.user;
-          _activeThreads = demo.activeThreads;
-          _archivedThreads = demo.archivedThreads;
-          _usersCache = demo.users;
-          _itemsCache = demo.items;
+          _currentUser = user;
+          _activeThreads = const [];
+          _archivedThreads = const [];
+          _usersCache = usersById;
+          _itemsCache = itemsById;
           _blockedUserIds = blockedUserIds;
           _mutedThreadKeys = mutedThreadKeys;
           _messageSettings = messageSettings;
@@ -257,8 +302,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
         return;
       }
 
-      final injected = _withTranslationDemoThread(user: user, activeThreads: threads, users: usersById, items: itemsById);
+      final injected = _withTranslationDemoThread(
+          user: user,
+          activeThreads: threads,
+          users: usersById,
+          items: itemsById);
 
+      _safetyActions.replaceContext(actionContext);
       setState(() {
         _currentUser = user;
         _activeThreads = injected.activeThreads;
@@ -268,361 +318,21 @@ class _MessagesScreenState extends State<MessagesScreen> {
         _blockedUserIds = blockedUserIds;
         _mutedThreadKeys = mutedThreadKeys;
         _filter = _normalizedFilterForBlocked(blockedUserIds);
-          _isLoading = false;
+        _isLoading = false;
       });
     } catch (e) {
       debugPrint('MessagesScreen._loadData failed: $e');
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && revision == _loadRevision) {
+        setState(() {
+          _isLoading = false;
+          _loadFailed = true;
+        });
+      }
     }
   }
 
-  ({User user, List<MessageThread> activeThreads, List<MessageThread> archivedThreads, Map<String, User> users, Map<String, Item> items}) _buildDemoMessageState({
-    User? baseUser,
-    Map<String, User>? users,
-    Map<String, Item>? items,
-  }) {
-    final now = DateTime.now();
-    final me = baseUser ?? User(
-      id: 'demo_me',
-      displayName: 'Du',
-      email: 'demo@shareittoo.local',
-      preferredLanguage: 'de',
-      isVerified: true,
-      isBanned: false,
-      role: 'user',
-      avgRating: 0,
-      reviewCount: 0,
-      createdAt: now.subtract(const Duration(days: 90)),
-    );
-
-    final mila = User(
-      id: 'demo_owner',
-      displayName: 'Mila Berger',
-      email: 'mila@example.com',
-      city: 'Berlin',
-      preferredLanguage: 'de',
-      isVerified: true,
-      isBanned: false,
-      role: 'user',
-      avgRating: 4.9,
-      reviewCount: 18,
-      createdAt: now.subtract(const Duration(days: 220)),
-      photoURL: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&h=150&fit=crop&crop=face',
-    );
-
-    final jonas = User(
-      id: 'demo_upcoming_owner',
-      displayName: 'Jonas Keller',
-      email: 'jonas@example.com',
-      city: 'Hamburg',
-      preferredLanguage: 'de',
-      isVerified: true,
-      isBanned: false,
-      role: 'user',
-      avgRating: 4.7,
-      reviewCount: 26,
-      createdAt: now.subtract(const Duration(days: 150)),
-      photoURL: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
-    );
-
-    final lina = User(
-      id: 'demo_completed_owner',
-      displayName: 'Lina Thomsen',
-      email: 'lina@example.com',
-      city: 'Köln',
-      preferredLanguage: 'de',
-      isVerified: false,
-      isBanned: false,
-      role: 'user',
-      avgRating: 4.6,
-      reviewCount: 11,
-      createdAt: now.subtract(const Duration(days: 310)),
-      photoURL: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=150&h=150&fit=crop&crop=face',
-    );
-
-    final paula = User(
-      id: 'demo_pending_owner',
-      displayName: 'Paula Meier',
-      email: 'paula@example.com',
-      city: 'München',
-      preferredLanguage: 'de',
-      isVerified: true,
-      isBanned: false,
-      role: 'user',
-      avgRating: 4.8,
-      reviewCount: 34,
-      createdAt: now.subtract(const Duration(days: 190)),
-      photoURL: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&h=150&fit=crop&crop=face',
-    );
-
-    final camera = Item(
-      id: 'mock_item_camera',
-      ownerId: mila.id,
-      title: 'Sony Alpha 7 III',
-      description: 'Demoartikel für Nachrichtenvorschau',
-      categoryId: 'electronics',
-      subcategory: 'kameras',
-      tags: const ['kamera', 'foto'],
-      pricePerDay: 24,
-      currency: 'EUR',
-      photos: const ['https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=640'],
-      locationText: 'Berlin, Mitte',
-      lat: 52.52,
-      lng: 13.405,
-      geohash: 'u33dc0',
-      condition: 'good',
-      createdAt: now.subtract(const Duration(days: 12)),
-      isActive: true,
-      verificationStatus: 'verified',
-      city: 'Berlin',
-      country: 'Deutschland',
-    );
-
-    final cargoBike = Item(
-      id: 'demo_item_bike',
-      ownerId: jonas.id,
-      title: 'Urban Arrow Lastenrad',
-      description: 'Geräumiges E-Lastenrad für Wochenendausflüge.',
-      categoryId: 'fahrzeuge',
-      subcategory: 'fahrrad',
-      tags: const ['bike', 'cargo'],
-      pricePerDay: 29,
-      currency: 'EUR',
-      photos: const ['https://images.unsplash.com/photo-1502877828070-33b167ad6860?w=640'],
-      locationText: 'Hamburg, Sternschanze',
-      lat: 53.56,
-      lng: 9.97,
-      geohash: 'u1x0v9',
-      condition: 'excellent',
-      createdAt: now.subtract(const Duration(days: 6)),
-      isActive: true,
-      verificationStatus: 'verified',
-      city: 'Hamburg',
-      country: 'Deutschland',
-    );
-
-    final projector = Item(
-      id: 'demo_item_projector',
-      ownerId: paula.id,
-      title: '4K Beamer Epson',
-      description: 'Demo-Beamer für Wohnzimmerkino.',
-      categoryId: 'electronics',
-      subcategory: 'beamer',
-      tags: const ['beamer', '4k'],
-      pricePerDay: 18,
-      currency: 'EUR',
-      photos: const ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=640'],
-      locationText: 'München, Glockenbach',
-      lat: 48.13,
-      lng: 11.57,
-      geohash: 'u28bn0',
-      condition: 'like-new',
-      createdAt: now.subtract(const Duration(days: 20)),
-      isActive: true,
-      verificationStatus: 'verified',
-      city: 'München',
-      country: 'Deutschland',
-    );
-
-    final grill = Item(
-      id: 'demo_item_grill',
-      ownerId: lina.id,
-      title: 'Weber Gasgrill',
-      description: 'Demoartikel – Chat ist abgeschlossen.',
-      categoryId: 'outdoor',
-      subcategory: 'grillen',
-      tags: const ['grill', 'outdoor'],
-      pricePerDay: 22,
-      currency: 'EUR',
-      photos: const ['https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=640'],
-      locationText: 'Köln, Ehrenfeld',
-      lat: 50.95,
-      lng: 6.92,
-      geohash: 'u1hcy7',
-      condition: 'good',
-      createdAt: now.subtract(const Duration(days: 40)),
-      isActive: true,
-      verificationStatus: 'verified',
-      city: 'Köln',
-      country: 'Deutschland',
-    );
-
-    final bookingThread = MessageThread(
-      id: 'mock_thread_booking',
-      requestId: 'mock_request_booking',
-      itemId: camera.id,
-      itemTitle: camera.title,
-      user1Id: me.id,
-      user2Id: mila.id,
-      bookingStatus: 'running',
-      handoverAt: now.add(const Duration(hours: 3)),
-      returnAt: now.add(const Duration(days: 2, hours: 2)),
-      otherUserOnline: true,
-      messages: [
-        Message(
-          id: 'mock_msg_1',
-          senderId: mila.id,
-          text: 'Perfekt — bring bitte nur kurz deinen Ausweis zur Übergabe mit.',
-          timestamp: now.subtract(const Duration(minutes: 12)),
-          isRead: false,
-        ),
-      ],
-      createdAt: now.subtract(const Duration(days: 1)),
-      lastMessageAt: now.subtract(const Duration(minutes: 12)),
-    );
-
-    final upcomingThread = MessageThread(
-      id: 'mock_thread_upcoming',
-      requestId: 'mock_request_upcoming',
-      itemId: cargoBike.id,
-      itemTitle: cargoBike.title,
-      user1Id: me.id,
-      user2Id: jonas.id,
-      bookingStatus: 'accepted',
-      handoverAt: now.add(const Duration(days: 1, hours: 2)),
-      returnAt: now.add(const Duration(days: 4)),
-      otherUserOnline: false,
-      otherUserLastActive: now.subtract(const Duration(hours: 1)),
-      messages: [
-        Message(
-          id: 'mock_msg_u1',
-          senderId: jonas.id,
-          text: 'Alles klar, Übergabe morgen 10:00 am Schulterblatt passt?',
-          timestamp: now.subtract(const Duration(hours: 2, minutes: 10)),
-          isRead: true,
-        ),
-        Message(
-          id: 'mock_msg_u2',
-          senderId: me.id,
-          text: 'Ja, passt! Ich bringe Helm und Kaution mit.',
-          timestamp: now.subtract(const Duration(hours: 1, minutes: 55)),
-          isRead: true,
-        ),
-      ],
-      createdAt: now.subtract(const Duration(days: 1, hours: 5)),
-      lastMessageAt: now.subtract(const Duration(hours: 1, minutes: 55)),
-    );
-
-    final pendingThread = MessageThread(
-      id: 'mock_thread_pending',
-      requestId: 'mock_request_pending',
-      itemId: projector.id,
-      itemTitle: projector.title,
-      user1Id: me.id,
-      user2Id: paula.id,
-      bookingStatus: 'pending',
-      handoverAt: now.add(const Duration(days: 3, hours: 1)),
-      returnAt: now.add(const Duration(days: 5, hours: 1)),
-      otherUserOnline: false,
-      otherUserLastActive: now.subtract(const Duration(hours: 5)),
-      messages: [
-        Message(
-          id: 'mock_msg_p1',
-          senderId: me.id,
-          text: 'Hi Paula! Anfrage für das Wochenende ist raus – gib gerne kurz Bescheid.',
-          timestamp: now.subtract(const Duration(hours: 4, minutes: 10)),
-          isRead: true,
-        ),
-        Message(
-          id: 'mock_msg_p2',
-          senderId: paula.id,
-          text: 'Ich prüfe es heute Abend und sag dann Bescheid.',
-          timestamp: now.subtract(const Duration(hours: 3, minutes: 55)),
-          isRead: false,
-        ),
-      ],
-      createdAt: now.subtract(const Duration(hours: 8)),
-      lastMessageAt: now.subtract(const Duration(hours: 3, minutes: 55)),
-    );
-
-    final completedThread = MessageThread(
-      id: 'mock_thread_completed',
-      requestId: 'mock_request_completed',
-      itemId: grill.id,
-      itemTitle: grill.title,
-      user1Id: me.id,
-      user2Id: lina.id,
-      bookingStatus: 'completed',
-      handoverAt: now.subtract(const Duration(days: 6)),
-      returnAt: now.subtract(const Duration(days: 3)),
-      otherUserOnline: false,
-      otherUserLastActive: now.subtract(const Duration(days: 2)),
-      messages: [
-        Message(
-          id: 'mock_msg_c1',
-          senderId: lina.id,
-          text: 'Danke fürs Zurückbringen! Ich hoffe, das Grillen war top.',
-          timestamp: now.subtract(const Duration(days: 3, hours: 2)),
-          isRead: true,
-        ),
-        Message(
-          id: 'mock_msg_c2',
-          senderId: me.id,
-          text: 'War super, danke! Bewertung kommt gleich.',
-          timestamp: now.subtract(const Duration(days: 3, hours: 1, minutes: 50)),
-          isRead: true,
-        ),
-      ],
-      createdAt: now.subtract(const Duration(days: 9)),
-      lastMessageAt: now.subtract(const Duration(days: 3, hours: 1, minutes: 50)),
-    );
-
-    final supportThread = MessageThread(
-      id: 'mock_thread_support',
-      requestId: 'mock_request_support',
-      itemId: 'support',
-      itemTitle: 'Support',
-      user1Id: me.id,
-      user2Id: 'support',
-      threadType: 'support',
-      otherUserOnline: true,
-      messages: [
-        Message(
-          id: 'mock_msg_2',
-          senderId: 'support',
-          text: 'Wir haben deine letzte Frage gesehen und melden uns gleich.',
-          timestamp: now.subtract(const Duration(hours: 2)),
-          isRead: true,
-        ),
-      ],
-      createdAt: now.subtract(const Duration(days: 2)),
-      lastMessageAt: now.subtract(const Duration(hours: 2)),
-    );
-
-    final translationDemo = _buildTranslationDemoThread(me);
-
-    return (
-      user: me,
-      activeThreads: [
-        translationDemo.thread,
-        bookingThread,
-        upcomingThread,
-        pendingThread,
-        completedThread,
-        supportThread,
-      ],
-      archivedThreads: const [],
-      users: {
-        ...?users,
-        me.id: me,
-        mila.id: mila,
-        jonas.id: jonas,
-        lina.id: lina,
-        paula.id: paula,
-        translationDemo.other.id: translationDemo.other,
-      },
-      items: {
-        ...?items,
-        camera.id: camera,
-        cargoBike.id: cargoBike,
-        projector.id: projector,
-        grill.id: grill,
-        translationDemo.item.id: translationDemo.item,
-      },
-    );
-  }
-
-  ({MessageThread thread, User other, Item item}) _buildTranslationDemoThread(User me) {
+  ({MessageThread thread, User other, Item item}) _buildTranslationDemoThread(
+      User me) {
     final now = DateTime.now();
     final other = User(
       id: 'demo_translation_partner',
@@ -640,11 +350,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
     final item = Item(
       id: 'demo_translation_item',
       ownerId: other.id,
-      title: 'DJI Mini 4 Pro Drohne',
+      title: 'Sony Alpha 7 IV Kamera',
       description: 'Demo-Artikel für Übersetzungs-Tests',
-      categoryId: 'electronics',
-      subcategory: 'drones',
-      tags: const ['drohne', 'camera'],
+      categoryId: 'cat3',
+      subcategory: 'Kameras',
+      tags: const ['kamera', 'foto'],
       pricePerDay: 39,
       currency: 'EUR',
       photos: const [],
@@ -664,7 +374,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
       Message(
         id: 'demo_tr_1',
         senderId: other.id,
-        text: 'Hola! Ich schreibe kurz auf Spanisch, damit du die Übersetzung testen kannst.',
+        text:
+            'Hola! Ich schreibe kurz auf Spanisch, damit du die Übersetzung testen kannst.',
         timestamp: now.subtract(const Duration(minutes: 35)),
         isRead: false,
       ),
@@ -717,12 +428,19 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return (thread: thread, other: other, item: item);
   }
 
-  ({List<MessageThread> activeThreads, Map<String, User> users, Map<String, Item> items}) _withTranslationDemoThread({
+  ({
+    List<MessageThread> activeThreads,
+    Map<String, User> users,
+    Map<String, Item> items
+  }) _withTranslationDemoThread({
     required User user,
     required List<MessageThread> activeThreads,
     required Map<String, User> users,
     required Map<String, Item> items,
   }) {
+    if (!QaRuntimeService.isEnabled) {
+      return (activeThreads: activeThreads, users: users, items: items);
+    }
     final exists = activeThreads.any((t) => t.id == _translationDemoThreadId);
     if (exists || activeThreads.isNotEmpty) {
       return (activeThreads: activeThreads, users: users, items: items);
@@ -732,7 +450,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
     final updatedThreads = [demo.thread, ...activeThreads];
     final updatedUsers = {...users, demo.other.id: demo.other};
     final updatedItems = {...items, demo.item.id: demo.item};
-    return (activeThreads: updatedThreads, users: updatedUsers, items: updatedItems);
+    return (
+      activeThreads: updatedThreads,
+      users: updatedUsers,
+      items: updatedItems
+    );
   }
 
   bool get _hasUser => _currentUser != null;
@@ -744,12 +466,24 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        leading: IconButton(onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.arrow_back)),
+        leading: IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          onPressed: () => Navigator.of(context).maybePop(),
+          icon: const Icon(Icons.arrow_back),
+        ),
         centerTitle: true,
         title: const Text('Nachrichten'),
         actions: [
-          IconButton(onPressed: _toggleSearch, icon: Icon(_searchVisible ? Icons.close : Icons.search)),
-          IconButton(onPressed: _openMessageSettings, icon: const Icon(Icons.settings)),
+          IconButton(
+            tooltip: _searchVisible ? 'Suche schließen' : 'Suche öffnen',
+            onPressed: _toggleSearch,
+            icon: Icon(_searchVisible ? Icons.close : Icons.search),
+          ),
+          IconButton(
+            tooltip: 'Nachrichten-Einstellungen',
+            onPressed: _openMessageSettings,
+            icon: const Icon(Icons.settings),
+          ),
         ],
       ),
       body: SafeArea(
@@ -764,7 +498,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         controller: _searchController,
                         focusNode: _searchFocusNode,
                         hintText: 'Chats, Personen oder Artikel suchen',
-                        onChanged: (v) => setState(() => _searchQuery = v.trim()),
+                        onChanged: (v) =>
+                            setState(() => _searchQuery = v.trim()),
                         onClose: _hideSearch,
                       ),
                     )
@@ -781,88 +516,103 @@ class _MessagesScreenState extends State<MessagesScreen> {
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : (!_hasUser)
+                  : _loadFailed
                       ? _EmptyState(
                           config: const _MessagesEmptyStateConfig(
-                            title: 'Noch keine Nachrichten',
-                            body: 'Deine Gespräche erscheinen hier, sobald du eine Anfrage stellst oder annimmst.',
-                            buttonLabel: 'Jetzt entdecken',
-                            buttonIcon: Icons.explore,
+                            title:
+                                'Nachrichten konnten nicht sicher geladen werden.',
+                            body:
+                                'Deine lokalen Schutz- oder Kommunikationseinstellungen sind gerade nicht verlässlich verfügbar. Es werden keine alten Kontodaten angezeigt.',
+                            buttonLabel: 'Erneut versuchen',
+                            buttonIcon: Icons.refresh,
                           ),
-                          onCta: () => Navigator.of(context).maybePop(),
+                          onCta: _loadData,
                         )
-                      : threads.isEmpty
+                      : (!_hasUser)
                           ? _EmptyState(
-                              config: _emptyStateConfig(),
-                              onCta: _filter == _MessagesFilter.blocked
-                                  ? () => openBlockedUsersManagement(context)
-                                  : () => Navigator.of(context).maybePop(),
+                              config: const _MessagesEmptyStateConfig(
+                                title: 'Noch keine Nachrichten',
+                                body:
+                                    'Deine Gespräche erscheinen hier, sobald du eine Anfrage stellst oder annimmst.',
+                                buttonLabel: 'Jetzt entdecken',
+                                buttonIcon: Icons.explore,
+                              ),
+                              onCta: () => Navigator.of(context).maybePop(),
                             )
-                          : ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-                              itemCount: threads.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 12),
-                              itemBuilder: (context, index) {
-                                final thread = threads[index];
-                                final isDemoTranslation = thread.id == _translationDemoThreadId;
-                                final other = _otherUser(thread);
-                                final lastMsg = thread.messages.isNotEmpty ? thread.messages.last : null;
-                                final hasUnread = _hasUnread(thread);
-                                final status = _derivedStatus(thread);
-                                final highlight = status.rank <= 1; // running/accepted
-                                final isTerminal = status.isTerminal;
-                                final isSupport = (thread.threadType ?? '').toLowerCase() == 'support' || thread.user1Id == 'support' || thread.user2Id == 'support';
-                                final item = _itemsCache[thread.itemId];
-                                  return _ThreadDismissible(
-                                    enabled: !isDemoTranslation,
-                                    dismissKey: ValueKey('thread_${thread.id}_${_filter.name}'),
-                                    thread: thread,
-                                    onArchiveToggle: () async {
-                                      if (_currentUser == null) return;
-                                      if (isDemoTranslation) {
-                                        if (mounted) AppPopup.toast(context, icon: Icons.visibility_outlined, title: 'Demo-Chat', message: 'Archivieren ist für die Demo deaktiviert.');
-                                        return;
-                                      }
-                                      final isArchived = thread.archivedForUserIds.contains(_currentUser!.id);
-                                      if (isArchived) {
-                                        await DataService.unarchiveMessageThreadForUser(threadId: thread.id, userId: _currentUser!.id);
-                                      } else {
-                                        await DataService.archiveMessageThreadForUser(threadId: thread.id, userId: _currentUser!.id);
-                                      }
-                                      await _loadData();
-                                    },
-                                    onDelete: () async {
-                                      if (isDemoTranslation) {
-                                        if (mounted) AppPopup.toast(context, icon: Icons.visibility_outlined, title: 'Demo-Chat', message: 'Löschen ist für die Demo deaktiviert.');
-                                        return;
-                                      }
-                                      final ok = await _confirmDelete();
-                                      if (!ok) return;
-                                      await DataService.deleteMessageThread(threadId: thread.id);
-                                      await _loadData();
-                                    },
-                                    child: _ChatThreadTile(
-                                      name: isSupport ? 'SIT Support' : (other?.displayName ?? 'Unbekannt'),
-                                      itemTitle: isSupport ? '' : thread.itemTitle,
-                                      itemImageUrl: item?.photos.isNotEmpty == true ? item!.photos.first : null,
-                                      avatarUrl: isSupport ? null : other?.photoURL,
-                                      isSupport: isSupport,
-                                      isVerified: other?.isVerified ?? false,
-                                      hasUnread: hasUnread,
-                                      timeLabel: _formatTime(lastMsg?.timestamp ?? thread.lastMessageAt ?? thread.createdAt),
-                                      statusLabel: status.label,
-                                      statusTone: status.tone,
-                                      lastMessage: lastMsg?.text ?? '',
-                                      showPreview: _messageSettings.showChatPreview,
-                                      highlighted: highlight,
-                                      muted: _isThreadMuted(thread),
-                                      blocked: _isOtherUserBlocked(thread),
-                                      onTap: () => _openThread(thread, other),
-                                      onLongPress: () => _openThreadOptions(thread),
-                                    ),
-                                  );
-                              },
-                            ),
+                          : threads.isEmpty
+                              ? _EmptyState(
+                                  config: _emptyStateConfig(),
+                                  onCta: _filter == _MessagesFilter.blocked
+                                      ? () =>
+                                          openBlockedUsersManagement(context)
+                                      : () => Navigator.of(context).maybePop(),
+                                )
+                              : ListView.separated(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                                  itemCount: threads.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: 12),
+                                  itemBuilder: (context, index) {
+                                    final thread = threads[index];
+                                    final isDemoTranslation =
+                                        thread.id == _translationDemoThreadId;
+                                    final other = _otherUser(thread);
+                                    final lastMsg = thread.messages.isNotEmpty
+                                        ? thread.messages.last
+                                        : null;
+                                    final hasUnread = _hasUnread(thread);
+                                    final status = _derivedStatus(thread);
+                                    final highlight =
+                                        status.rank <= 1; // running/accepted
+                                    final isSupport = (thread.threadType ?? '')
+                                                .toLowerCase() ==
+                                            'support' ||
+                                        thread.user1Id == 'support' ||
+                                        thread.user2Id == 'support';
+                                    final item = _itemsCache[thread.itemId];
+                                    return _ThreadDismissible(
+                                      enabled: !isDemoTranslation,
+                                      dismissKey: ValueKey(
+                                          'thread_${thread.id}_${_filter.name}'),
+                                      thread: thread,
+                                      onSwipeActions: () =>
+                                          _openSwipeActions(thread),
+                                      child: _ChatThreadTile(
+                                        name: isSupport
+                                            ? 'SIT Support'
+                                            : (other?.displayName ??
+                                                'Unbekannt'),
+                                        itemTitle:
+                                            isSupport ? '' : thread.itemTitle,
+                                        itemImageUrl:
+                                            item?.photos.isNotEmpty == true
+                                                ? item!.photos.first
+                                                : null,
+                                        avatarUrl:
+                                            isSupport ? null : other?.photoURL,
+                                        isSupport: isSupport,
+                                        isVerified: other?.isVerified ?? false,
+                                        hasUnread: hasUnread,
+                                        timeLabel: _formatTime(
+                                            lastMsg?.timestamp ??
+                                                thread.lastMessageAt ??
+                                                thread.createdAt),
+                                        statusLabel: status.label,
+                                        statusTone: status.tone,
+                                        lastMessage: lastMsg?.text ?? '',
+                                        showPreview:
+                                            _messageSettings.showChatPreview,
+                                        highlighted: highlight,
+                                        muted: _isThreadMuted(thread),
+                                        blocked: _isOtherUserBlocked(thread),
+                                        onTap: () => _openThread(thread, other),
+                                        onLongPress: () =>
+                                            _openThreadOptions(thread),
+                                      ),
+                                    );
+                                  },
+                                ),
             ),
           ],
         ),
@@ -877,7 +627,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
     final all = [..._activeThreads, ..._archivedThreads];
     var filtered = all.where((t) {
       final type = (t.threadType ?? '').toLowerCase();
-      final isSupport = type == 'support' || t.user1Id == 'support' || t.user2Id == 'support';
+      final isSupport =
+          type == 'support' || t.user1Id == 'support' || t.user2Id == 'support';
       final status = _derivedStatus(t);
       final isArchived = t.archivedForUserIds.contains(userId);
       final isBlocked = _isOtherUserBlocked(t);
@@ -923,46 +674,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
     final other = _usersCache[otherId];
     final name = (other?.displayName ?? '').toLowerCase();
     final item = thread.itemTitle.toLowerCase();
-    final anyMsg = thread.messages.any((m) => m.text.toLowerCase().contains(query));
+    final anyMsg =
+        thread.messages.any((m) => m.text.toLowerCase().contains(query));
 
     return name.contains(query) || item.contains(query) || anyMsg;
-  }
-
-  Map<_MessagesFilter, int> _tabCounts() {
-    final userId = _currentUser?.id;
-    if (userId == null) return {for (final f in _MessagesFilter.values) f: 0};
-
-    int unreadFor(Iterable<MessageThread> threads) {
-      int sum = 0;
-      for (final t in threads) {
-        if (_hasUnread(t)) sum++;
-      }
-      return sum;
-    }
-
-    bool isSupport(MessageThread t) => (t.threadType ?? '').toLowerCase() == 'support' || t.user1Id == 'support' || t.user2Id == 'support';
-
-    final all = [..._activeThreads, ..._archivedThreads];
-    final support = all.where((t) => isSupport(t) && !_isOtherUserBlocked(t) && !t.archivedForUserIds.contains(userId));
-    final nonSupport = all.where((t) => !isSupport(t));
-    final visibleNonBlocked = nonSupport.where((t) => !_isOtherUserBlocked(t));
-    final blocked = nonSupport.where((t) => _isOtherUserBlocked(t));
-
-    final active = visibleNonBlocked.where((t) {
-      final st = _derivedStatus(t);
-      return !t.archivedForUserIds.contains(userId) && !st.isTerminal;
-    });
-    final archived = visibleNonBlocked.where((t) => t.archivedForUserIds.contains(userId));
-    final allVisible = all.where((t) => !_isOtherUserBlocked(t) && !t.archivedForUserIds.contains(userId));
-
-    return {
-      _MessagesFilter.all: unreadFor(allVisible),
-      _MessagesFilter.bookings: unreadFor(visibleNonBlocked.where((t) => !t.archivedForUserIds.contains(userId))),
-      _MessagesFilter.active: unreadFor(active),
-      _MessagesFilter.archived: unreadFor(archived),
-      _MessagesFilter.blocked: unreadFor(blocked),
-      _MessagesFilter.support: unreadFor(support),
-    };
   }
 
   bool _hasUnread(MessageThread thread) {
@@ -974,81 +689,89 @@ class _MessagesScreenState extends State<MessagesScreen> {
   User? _otherUser(MessageThread thread) {
     final me = _currentUser;
     if (me == null) return null;
-    final otherUserId = thread.user1Id == me.id ? thread.user2Id : thread.user1Id;
+    final otherUserId =
+        thread.user1Id == me.id ? thread.user2Id : thread.user1Id;
     return _usersCache[otherUserId];
   }
 
-
   bool _canBlockThread(MessageThread thread) {
     if (_isOtherUserBlocked(thread)) return true;
-    final isSupport = (thread.threadType ?? '').toLowerCase() == 'support' || thread.user1Id == 'support' || thread.user2Id == 'support';
+    final isSupport = (thread.threadType ?? '').toLowerCase() == 'support' ||
+        thread.user1Id == 'support' ||
+        thread.user2Id == 'support';
     if (isSupport) return false;
     return _derivedStatus(thread).isTerminal;
   }
 
-  ({String label, _StatusTone tone, int rank, bool isTerminal}) _derivedStatus(MessageThread thread) {
+  ({String label, _StatusTone tone, int rank, bool isTerminal}) _derivedStatus(
+      MessageThread thread) {
     // Prefer the thread snapshot, because demo threads do not necessarily have a RentalRequest.
     final raw = (thread.bookingStatus ?? '').toLowerCase().trim();
     switch (raw) {
       case 'running':
-        return (label: 'Laufend', tone: _StatusTone.success, rank: 0, isTerminal: false);
+        return (
+          label: 'Laufend',
+          tone: _StatusTone.success,
+          rank: 0,
+          isTerminal: false
+        );
       case 'accepted':
-        return (label: 'Bestätigt', tone: _StatusTone.info, rank: 1, isTerminal: false);
+        return (
+          label: 'Bestätigt',
+          tone: _StatusTone.info,
+          rank: 1,
+          isTerminal: false
+        );
       case 'pending':
-        return (label: 'Anfrage offen', tone: _StatusTone.warning, rank: 2, isTerminal: false);
+        return (
+          label: 'Anfrage offen',
+          tone: _StatusTone.warning,
+          rank: 2,
+          isTerminal: false
+        );
       case 'completed':
-        return (label: 'Abgeschlossen', tone: _StatusTone.neutral, rank: 3, isTerminal: true);
+        return (
+          label: 'Abgeschlossen',
+          tone: _StatusTone.neutral,
+          rank: 3,
+          isTerminal: true
+        );
       case 'cancelled':
       case 'declined':
-        return (label: 'Abgeschlossen', tone: _StatusTone.neutral, rank: 4, isTerminal: true);
+        return (
+          label: 'Abgeschlossen',
+          tone: _StatusTone.neutral,
+          rank: 4,
+          isTerminal: true
+        );
       default:
         // Support or generic chat
-        final isSupport = (thread.threadType ?? '').toLowerCase() == 'support' || thread.user1Id == 'support' || thread.user2Id == 'support';
-        if (isSupport) return (label: 'Support', tone: _StatusTone.info, rank: 0, isTerminal: false);
-        return (label: 'Chat', tone: _StatusTone.neutral, rank: 2, isTerminal: false);
+        final isSupport =
+            (thread.threadType ?? '').toLowerCase() == 'support' ||
+                thread.user1Id == 'support' ||
+                thread.user2Id == 'support';
+        if (isSupport) {
+          return (
+            label: 'Support',
+            tone: _StatusTone.info,
+            rank: 0,
+            isTerminal: false
+          );
+        }
+        return (
+          label: 'Chat',
+          tone: _StatusTone.neutral,
+          rank: 2,
+          isTerminal: false
+        );
     }
-  }
-
-  String? _presenceText(MessageThread thread, User? other) {
-    final isSupport = (thread.threadType ?? '').toLowerCase() == 'support' || thread.user1Id == 'support' || thread.user2Id == 'support';
-    if (isSupport) return 'Online';
-
-    if (thread.otherUserOnline == true) return 'Online';
-    final last = thread.otherUserLastActive;
-    if (last == null) return null;
-    final diff = DateTime.now().difference(last);
-    if (diff.inMinutes < 2) return 'Gerade aktiv';
-    if (diff.inMinutes < 60) return 'Vor ${diff.inMinutes} Min aktiv';
-    if (diff.inHours < 24) return 'Vor ${diff.inHours} Std aktiv';
-    return 'Kürzlich aktiv';
-  }
-
-  String? _uspLine(MessageThread thread) {
-    final now = DateTime.now();
-    DateTime? when;
-    String? label;
-
-    if (thread.handoverAt != null && thread.handoverAt!.isAfter(now.subtract(const Duration(hours: 12)))) {
-      when = thread.handoverAt;
-      label = 'Übergabe';
-    } else if (thread.returnAt != null && thread.returnAt!.isAfter(now.subtract(const Duration(days: 1)))) {
-      when = thread.returnAt;
-      label = 'Rückgabe';
-    }
-
-    if (when == null || label == null) return null;
-    final day = DateTime(when.year, when.month, when.day);
-    final today = DateTime(now.year, now.month, now.day);
-    final diffDays = day.difference(today).inDays;
-    final time = '${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')}';
-    final dayLabel = diffDays == 0 ? 'Heute' : (diffDays == 1 ? 'Morgen' : '${when.day}.${when.month}.');
-    return '$label: $dayLabel $time';
   }
 
   void _toggleSearch() {
     if (!_searchVisible) {
       setState(() => _searchVisible = true);
-      WidgetsBinding.instance.addPostFrameCallback((_) => _searchFocusNode.requestFocus());
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _searchFocusNode.requestFocus());
       return;
     }
     _hideSearch();
@@ -1079,9 +802,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
       MaterialPageRoute(
         builder: (_) => MessageThreadScreen(
           threadId: thread.id,
-          participantName: otherUser?.displayName ?? (thread.threadType == 'support' ? 'SIT Support' : 'Unbekannt'),
+          participantName: otherUser?.displayName ??
+              (thread.threadType == 'support' ? 'SIT Support' : 'Unbekannt'),
           avatarUrl: otherUser?.photoURL,
-          itemTitle: thread.threadType == 'support' ? 'Support' : thread.itemTitle,
+          itemTitle:
+              thread.threadType == 'support' ? 'Support' : thread.itemTitle,
         ),
       ),
     );
@@ -1094,88 +819,273 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Future<void> _openThreadOptions(MessageThread thread) async {
+    final owner = _safetyActions.capture();
     final userId = _currentUser?.id;
-    if (userId == null) return;
-    if (thread.id == _translationDemoThreadId || thread.id.startsWith('mock_')) {
+    if (owner == null ||
+        userId == null ||
+        userId.trim() != owner.context.user.id.trim()) {
+      return;
+    }
+    if (thread.id == _translationDemoThreadId ||
+        thread.id.startsWith('mock_')) {
       if (mounted) {
-        AppPopup.toast(context, icon: Icons.visibility_outlined, title: 'Demo-Chat', message: 'Verwalten ist für die Demo deaktiviert.');
+        AppPopup.toast(context,
+            icon: Icons.visibility_outlined,
+            title: 'Demo-Chat',
+            message: 'Verwalten ist für die Demo deaktiviert.');
       }
       return;
     }
 
-    final choice = await showModalBottomSheet<String>(
+    final choice = await _safetyActions.showOwnedSheet<String>(
       context: context,
+      owner: owner,
       useRootNavigator: true,
       isScrollControlled: true,
       barrierColor: Colors.black.withValues(alpha: 0.35),
       backgroundColor: Colors.transparent,
-      builder: (context) => _ThreadOptionsSheet(isArchived: thread.archivedForUserIds.contains(userId), hasUnread: _hasUnread(thread), canBlock: _canBlockThread(thread), isBlocked: _isOtherUserBlocked(thread)),
+      builder: (context, dismiss) => _ThreadOptionsSheet(
+          isArchived: thread.archivedForUserIds.contains(userId),
+          hasUnread: _hasUnread(thread),
+          canBlock: _canBlockThread(thread),
+          isBlocked: _isOtherUserBlocked(thread),
+          onChoice: dismiss),
     );
-    if (choice == null) return;
-
-    switch (choice) {
-      case 'read':
-        await DataService.markThreadMessagesAsRead(threadId: thread.id, userId: userId);
-        break;
-      case 'archive':
-        await DataService.archiveMessageThreadForUser(threadId: thread.id, userId: userId);
-        break;
-      case 'unarchive':
-        await DataService.unarchiveMessageThreadForUser(threadId: thread.id, userId: userId);
-        break;
-      case 'delete':
-        final ok = await _confirmDelete();
-        if (!ok) return;
-        await DataService.deleteMessageThread(threadId: thread.id);
-        break;
-      case 'block':
-        final otherUserId = thread.user1Id == userId ? thread.user2Id : thread.user1Id;
-        if (otherUserId.isEmpty || otherUserId == 'support') {
-          if (mounted) {
-            AppPopup.toast(context, icon: Icons.info_outline, title: 'Kann Support nicht blockieren');
-          }
-          return;
-        }
-        final isBlocked = _isOtherUserBlocked(thread);
-        if (!isBlocked && !_canBlockThread(thread)) {
-          if (mounted) {
-            AppPopup.toast(context, icon: Icons.info_outline, title: 'Blockieren erst nach abgeschlossener Buchung möglich');
-          }
-          return;
-        }
-        if (isBlocked) {
-          await BlockedUsersService.unblockUser(otherUserId);
-          if (mounted) {
-            AppPopup.toast(context, icon: Icons.lock_open_outlined, title: 'Blockierung aufgehoben');
-          }
-        } else {
-          await BlockedUsersService.blockUser(otherUserId);
-          await DataService.archiveMessageThreadForUser(threadId: thread.id, userId: userId);
-          debugPrint('[Messages] User $otherUserId blocked and thread ${thread.id} archived');
-          if (mounted) {
-            AppPopup.toast(context, icon: Icons.block, title: 'Nutzer blockiert', message: 'Du erhältst keine Nachrichten mehr von dieser Person.');
-          }
-        }
-        break;
+    if (choice == null ||
+        !mounted ||
+        !await _safetyActions.isCurrent(_safetyService, owner)) {
+      return;
     }
-    await _loadData();
+
+    try {
+      switch (choice) {
+        case 'read':
+          await DataService.markThreadMessagesAsRead(
+            threadId: thread.id,
+            userId: userId,
+            sessionOwner: owner.context.owner.authOwner,
+          );
+          break;
+        case 'archive':
+          await DataService.archiveMessageThreadForUser(
+            threadId: thread.id,
+            userId: userId,
+            sessionOwner: owner.context.owner.authOwner,
+          );
+          break;
+        case 'unarchive':
+          await DataService.unarchiveMessageThreadForUser(
+            threadId: thread.id,
+            userId: userId,
+            sessionOwner: owner.context.owner.authOwner,
+          );
+          break;
+        case 'delete':
+          final ok = await _confirmDelete(owner);
+          if (!ok || !await _safetyActions.isCurrent(_safetyService, owner)) {
+            return;
+          }
+          await DataService.deleteMessageThreadForUser(
+            threadId: thread.id,
+            userId: userId,
+            sessionOwner: owner.context.owner.authOwner,
+          );
+          break;
+        case 'block':
+          final otherUserId =
+              thread.user1Id == userId ? thread.user2Id : thread.user1Id;
+          if (otherUserId.isEmpty || otherUserId == 'support') {
+            await _showSafetyNotice(
+              owner,
+              title: 'Support kann nicht blockiert werden',
+            );
+            return;
+          }
+          final isBlocked = _isOtherUserBlocked(thread);
+          if (!isBlocked && !_canBlockThread(thread)) {
+            await _showSafetyNotice(
+              owner,
+              title: 'Blockieren noch nicht möglich',
+              message: 'Das ist erst nach abgeschlossener Buchung möglich.',
+            );
+            return;
+          }
+          if (isBlocked) {
+            await _safetyService.unblockUser(owner.context, otherUserId);
+          } else {
+            await _safetyService.blockUser(owner.context, otherUserId);
+          }
+          if (!mounted ||
+              !await _safetyActions.isCurrent(_safetyService, owner)) {
+            return;
+          }
+          setState(() {
+            final next = <String>{..._blockedUserIds};
+            if (isBlocked) {
+              next.remove(otherUserId);
+            } else {
+              next.add(otherUserId);
+            }
+            _blockedUserIds = next;
+            _filter = _normalizedFilterForBlocked(next);
+          });
+          await _showSafetyNotice(
+            owner,
+            title: isBlocked ? 'Blockierung aufgehoben' : 'Nutzer blockiert',
+            message: isBlocked
+                ? null
+                : 'Du erhältst keine Nachrichten mehr von dieser Person.',
+          );
+          break;
+      }
+    } on SafetyActionFailure catch (failure) {
+      if (failure.kind == SafetyActionFailureKind.principalChanged) return;
+      final (title, message) = switch (failure.kind) {
+        SafetyActionFailureKind.rejected => (
+            'Aktion abgelehnt',
+            'Der Server hat die Aktion eindeutig abgelehnt.',
+          ),
+        SafetyActionFailureKind.localUnavailable
+            when failure.remoteAcceptedOrConfirmed =>
+          (
+            'Serverseitig verarbeitet',
+            'Die lokale Aktualisierung ist fehlgeschlagen. Der Bereich wird neu geladen.',
+          ),
+        SafetyActionFailureKind.localUnavailable => (
+            'Aktion nicht gespeichert',
+            'Der lokale Sicherheitsstatus konnte nicht aktualisiert werden.',
+          ),
+        SafetyActionFailureKind.outcomeUnknown => (
+            'Aktionsstatus unklar',
+            'Die Anfrage könnte verarbeitet worden sein. Der Bereich wird neu geladen.',
+          ),
+        SafetyActionFailureKind.principalChanged => ('', ''),
+      };
+      await _showSafetyNotice(owner, title: title, message: message);
+    } catch (error) {
+      debugPrint('[Messages] thread action failed: $error');
+      if (!await _safetyActions.isCurrent(_safetyService, owner)) return;
+      await _showSafetyNotice(
+        owner,
+        title: 'Aktion nicht verarbeitet',
+        message: 'Bitte lade den Bereich neu und prüfe den aktuellen Status.',
+      );
+    }
+    if (mounted && _safetyActions.isSynchronouslyCurrent(owner)) {
+      await _loadData();
+    }
   }
 
-  Future<bool> _confirmDelete() async {
-    return (await showModalBottomSheet<bool>(
+  Future<void> _openSwipeActions(MessageThread thread) async {
+    final owner = _safetyActions.capture();
+    final userId = _currentUser?.id;
+    if (owner == null ||
+        userId == null ||
+        userId.trim() != owner.context.user.id.trim() ||
+        thread.id == _translationDemoThreadId ||
+        thread.id.startsWith('mock_')) {
+      return;
+    }
+
+    final choice = await _safetyActions.showOwnedSheet<String>(
+      context: context,
+      owner: owner,
+      useRootNavigator: true,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      backgroundColor: Colors.transparent,
+      builder: (_, dismiss) => _SwipeActionSheet(onChoice: dismiss),
+    );
+    if (choice == null ||
+        !mounted ||
+        !await _safetyActions.isCurrent(_safetyService, owner)) {
+      return;
+    }
+
+    try {
+      if (choice == 'archive') {
+        final isArchived = thread.archivedForUserIds.contains(userId);
+        if (!await _safetyActions.isCurrent(_safetyService, owner)) return;
+        if (isArchived) {
+          await DataService.unarchiveMessageThreadForUser(
+            threadId: thread.id,
+            userId: userId,
+            sessionOwner: owner.context.owner.authOwner,
+          );
+        } else {
+          await DataService.archiveMessageThreadForUser(
+            threadId: thread.id,
+            userId: userId,
+            sessionOwner: owner.context.owner.authOwner,
+          );
+        }
+      } else if (choice == 'delete') {
+        final ok = await _confirmDelete(owner);
+        if (!ok || !await _safetyActions.isCurrent(_safetyService, owner)) {
+          return;
+        }
+        await DataService.deleteMessageThreadForUser(
+          threadId: thread.id,
+          userId: userId,
+          sessionOwner: owner.context.owner.authOwner,
+        );
+      }
+      if (!mounted || !await _safetyActions.isCurrent(_safetyService, owner)) {
+        return;
+      }
+      await _loadData();
+    } catch (error) {
+      debugPrint('[Messages] swipe action failed: $error');
+      await _showSafetyNotice(
+        owner,
+        title: 'Aktion nicht verarbeitet',
+        message: 'Bitte lade den Bereich neu und prüfe den aktuellen Status.',
+      );
+    }
+  }
+
+  Future<bool> _confirmDelete(SafetyActionOwner owner) async {
+    return (await _safetyActions.showOwnedSheet<bool>(
           context: context,
+          owner: owner,
           useRootNavigator: true,
           barrierColor: Colors.black.withValues(alpha: 0.45),
           backgroundColor: Colors.transparent,
-          builder: (context) => const _ConfirmDeleteSheet(),
+          builder: (context, dismiss) => _ConfirmDeleteSheet(onChoice: dismiss),
         )) ??
         false;
+  }
+
+  Future<void> _showSafetyNotice(
+    SafetyActionOwner owner, {
+    required String title,
+    String? message,
+  }) async {
+    if (!mounted || !await _safetyActions.isCurrent(_safetyService, owner)) {
+      return;
+    }
+    if (!mounted || !_safetyActions.isSynchronouslyCurrent(owner)) return;
+    await _safetyActions.showOwnedDialog<void>(
+      context: context,
+      owner: owner,
+      builder: (_, dismiss) => AlertDialog(
+        title: Text(title),
+        content: message == null ? null : Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => dismiss(null),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   String _formatTime(DateTime time) {
     final now = DateTime.now();
     final diff = now.difference(time);
-    if (diff.inDays == 0) return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    if (diff.inDays == 0) {
+      return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    }
     if (diff.inDays == 1) return 'Gestern';
     if (diff.inDays < 7) return '${diff.inDays}d';
     return '${time.day}.${time.month}.';
@@ -1183,34 +1093,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   Future<void> _openMessageSettings() async {
     debugPrint('[MessagesScreen] open settings tapped');
-    final result = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => const MessagesSettingsScreen()));
+    final result = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const MessagesSettingsScreen()));
     if (result == true) {
       await _loadData();
       if (!mounted) return;
-      final theme = Theme.of(context);
-      final isDark = theme.brightness == Brightness.dark;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              'Änderungen wurden gespeichert.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: isDark ? Colors.white : AppTheme.textPrimary(context),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            duration: const Duration(milliseconds: 2500),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
-            backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2E8F0)),
-            ),
-          ),
-        );
+      AppPopup.success(
+        context,
+        title: 'Änderungen gespeichert',
+      );
     }
   }
 }
@@ -1221,13 +1112,20 @@ class _InlineSearchBar extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final VoidCallback onClose;
   final String hintText;
-  const _InlineSearchBar({required this.controller, required this.focusNode, required this.onChanged, required this.onClose, required this.hintText});
+  const _InlineSearchBar(
+      {required this.controller,
+      required this.focusNode,
+      required this.onChanged,
+      required this.onClose,
+      required this.hintText});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final baseColor = theme.colorScheme.surface;
-    final overlay = theme.brightness == Brightness.dark ? baseColor.withValues(alpha: 0.24) : baseColor.withValues(alpha: 0.92);
+    final overlay = theme.brightness == Brightness.dark
+        ? baseColor.withValues(alpha: 0.24)
+        : baseColor.withValues(alpha: 0.92);
     final border = theme.colorScheme.onSurface.withValues(alpha: 0.08);
 
     return ClipRRect(
@@ -1245,11 +1143,15 @@ class _InlineSearchBar extends StatelessWidget {
             focusNode: focusNode,
             onChanged: onChanged,
             textInputAction: TextInputAction.search,
-            style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.bodyLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
             decoration: InputDecoration(
               hintText: hintText,
-              hintStyle: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.5), fontWeight: FontWeight.w600),
-              prefixIcon: Icon(Icons.search, color: theme.colorScheme.onSurface.withValues(alpha: 0.65)),
+              hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  fontWeight: FontWeight.w600),
+              prefixIcon: Icon(Icons.search,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.65)),
               suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
                 if (controller.text.isNotEmpty)
                   IconButton(
@@ -1257,17 +1159,25 @@ class _InlineSearchBar extends StatelessWidget {
                       controller.clear();
                       onChanged('');
                     },
-                    icon: Icon(Icons.close, color: theme.colorScheme.onSurface.withValues(alpha: 0.7), size: 18),
+                    icon: Icon(Icons.close,
+                        color:
+                            theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                        size: 18),
                   ),
                 IconButton(
                   onPressed: onClose,
-                  icon: Icon(Icons.keyboard_hide, color: theme.colorScheme.onSurface.withValues(alpha: 0.7), size: 18),
+                  icon: Icon(Icons.keyboard_hide,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                      size: 18),
                 ),
               ]),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none),
               filled: true,
               fillColor: Colors.transparent,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
             ),
           ),
         ),
@@ -1280,7 +1190,10 @@ class _FilterTabs extends StatelessWidget {
   final _MessagesFilter filter;
   final bool showBlocked;
   final ValueChanged<_MessagesFilter> onChanged;
-  const _FilterTabs({required this.filter, required this.showBlocked, required this.onChanged});
+  const _FilterTabs(
+      {required this.filter,
+      required this.showBlocked,
+      required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -1289,16 +1202,31 @@ class _FilterTabs extends StatelessWidget {
       physics: const BouncingScrollPhysics(),
       clipBehavior: Clip.none,
       child: Row(children: [
-        _FilterPill(label: 'Aktiv', selected: filter == _MessagesFilter.active, onTap: () => onChanged(_MessagesFilter.active)),
+        _FilterPill(
+            label: 'Aktiv',
+            selected: filter == _MessagesFilter.active,
+            onTap: () => onChanged(_MessagesFilter.active)),
         const SizedBox(width: 10),
-        _FilterPill(label: 'Alle', selected: filter == _MessagesFilter.all, onTap: () => onChanged(_MessagesFilter.all)),
+        _FilterPill(
+            label: 'Alle',
+            selected: filter == _MessagesFilter.all,
+            onTap: () => onChanged(_MessagesFilter.all)),
         const SizedBox(width: 10),
-        _FilterPill(label: 'Archiv', selected: filter == _MessagesFilter.archived, onTap: () => onChanged(_MessagesFilter.archived)),
+        _FilterPill(
+            label: 'Archiv',
+            selected: filter == _MessagesFilter.archived,
+            onTap: () => onChanged(_MessagesFilter.archived)),
         const SizedBox(width: 10),
-        _FilterPill(label: 'Support', selected: filter == _MessagesFilter.support, onTap: () => onChanged(_MessagesFilter.support)),
+        _FilterPill(
+            label: 'Support',
+            selected: filter == _MessagesFilter.support,
+            onTap: () => onChanged(_MessagesFilter.support)),
         if (showBlocked) ...[
           const SizedBox(width: 10),
-          _FilterPill(label: 'Blockiert', selected: filter == _MessagesFilter.blocked, onTap: () => onChanged(_MessagesFilter.blocked)),
+          _FilterPill(
+              label: 'Blockiert',
+              selected: filter == _MessagesFilter.blocked,
+              onTap: () => onChanged(_MessagesFilter.blocked)),
         ],
       ]),
     );
@@ -1309,15 +1237,19 @@ class _FilterPill extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _FilterPill({required this.label, required this.selected, required this.onTap});
+  const _FilterPill(
+      {required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final fill = selected
         ? Theme.of(context).colorScheme.primary
-        : (isDark ? AppTheme.surfaceSecondary(context) : const Color(0xFFF8FAFC));
-    final border = isDark ? AppTheme.glassStroke(context) : const Color(0xFFE2E8F0);
+        : (isDark
+            ? AppTheme.surfaceSecondary(context)
+            : const Color(0xFFF8FAFC));
+    final border =
+        isDark ? AppTheme.glassStroke(context) : const Color(0xFFE2E8F0);
     final text = selected ? Colors.white : AppTheme.textBody(context);
 
     return Material(
@@ -1342,11 +1274,11 @@ class _FilterPill extends StatelessWidget {
               overflow: TextOverflow.visible,
               softWrap: false,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: text,
-                fontSize: 14,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                letterSpacing: 0.0,
-              ),
+                    color: text,
+                    fontSize: 14,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    letterSpacing: 0.0,
+                  ),
             ),
           ),
         ),
@@ -1404,10 +1336,26 @@ class _ChatThreadTile extends StatelessWidget {
 
     final ColorFilter? grayscaleFilter = muted
         ? const ColorFilter.matrix([
-            0.2126, 0.7152, 0.0722, 0, 0,
-            0.2126, 0.7152, 0.0722, 0, 0,
-            0.2126, 0.7152, 0.0722, 0, 0,
-            0, 0, 0, 1, 0,
+            0.2126,
+            0.7152,
+            0.0722,
+            0,
+            0,
+            0.2126,
+            0.7152,
+            0.0722,
+            0,
+            0,
+            0.2126,
+            0.7152,
+            0.0722,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
           ])
         : null;
 
@@ -1428,8 +1376,13 @@ class _ChatThreadTile extends StatelessWidget {
     }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final border = isDark ? AppTheme.glassStroke(context) : const Color(0xFFE2E8F0);
-    final bg = isDark ? (highlighted ? AppTheme.surfaceSecondary(context) : AppTheme.surfaceMuted(context)) : Colors.white;
+    final border =
+        isDark ? AppTheme.glassStroke(context) : const Color(0xFFE2E8F0);
+    final bg = isDark
+        ? (highlighted
+            ? AppTheme.surfaceSecondary(context)
+            : AppTheme.surfaceMuted(context))
+        : Colors.white;
     final glow = const <BoxShadow>[];
 
     return ClipRRect(
@@ -1443,9 +1396,14 @@ class _ChatThreadTile extends StatelessWidget {
             onLongPress: onLongPress,
             borderRadius: BorderRadius.circular(18),
             child: Ink(
-              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(18), border: Border.all(color: border), boxShadow: glow),
+              decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: border),
+                  boxShadow: glow),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              child:
+                  Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
                 // Linkes Bild: Item-Bild quadratisch mit User-Avatar überlagert
                 Stack(
                   clipBehavior: Clip.none,
@@ -1453,12 +1411,17 @@ class _ChatThreadTile extends StatelessWidget {
                     grayscaleFilter == null
                         ? (isSupport
                             ? _SupportAvatar(size: 48)
-                            : _ItemImageTile(imageUrl: hasItemImage ? itemImageUrl : null, size: 48))
+                            : _ItemImageTile(
+                                imageUrl: hasItemImage ? itemImageUrl : null,
+                                size: 48))
                         : ColorFiltered(
                             colorFilter: grayscaleFilter,
                             child: isSupport
                                 ? _SupportAvatar(size: 48)
-                                : _ItemImageTile(imageUrl: hasItemImage ? itemImageUrl : null, size: 48),
+                                : _ItemImageTile(
+                                    imageUrl:
+                                        hasItemImage ? itemImageUrl : null,
+                                    size: 48),
                           ),
                     // Rundes User-Profilbild rechts unten überlagert
                     if (!isSupport)
@@ -1468,7 +1431,9 @@ class _ChatThreadTile extends StatelessWidget {
                         child: Container(
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: AppTheme.surfacePrimary(context), width: 2),
+                            border: Border.all(
+                                color: AppTheme.surfacePrimary(context),
+                                width: 2),
                           ),
                           child: grayscaleFilter == null
                               ? SitUserAvatar(
@@ -1522,11 +1487,14 @@ class _ChatThreadTile extends StatelessWidget {
                                 name,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(
                                       color: AppTheme.textPrimary(context),
                                       fontWeight: FontWeight.w600,
                                       fontSize: 16,
-                                      height: 22/16,
+                                      height: 22 / 16,
                                     ),
                               ),
                             ),
@@ -1536,7 +1504,11 @@ class _ChatThreadTile extends StatelessWidget {
                               Icon(
                                 Icons.verified,
                                 size: 14,
-                                color: isVerified ? BrandColors.success : (isDark ? Colors.grey.withValues(alpha: 0.5) : const Color(0xFF475569)),
+                                color: isVerified
+                                    ? BrandColors.success
+                                    : (isDark
+                                        ? Colors.grey.withValues(alpha: 0.5)
+                                        : const Color(0xFF475569)),
                               ),
                           ]),
                         ),
@@ -1550,11 +1522,14 @@ class _ChatThreadTile extends StatelessWidget {
                           ],
                           Text(
                             timeLabel,
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
                                   color: AppTheme.textSecondary(context),
                                   fontWeight: FontWeight.w400,
                                   fontSize: 12,
-                                  height: 16/12,
+                                  height: 16 / 12,
                                 ),
                           ),
                         ]),
@@ -1566,12 +1541,13 @@ class _ChatThreadTile extends StatelessWidget {
                           '· $itemTitle',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppTheme.textBody(context),
-                                fontWeight: FontWeight.w500,
-                                fontSize: 14,
-                                height: 20/14,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textBody(context),
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 14,
+                                    height: 20 / 14,
+                                  ),
                         ),
                       ],
                       if (muted || blocked) ...[
@@ -1581,9 +1557,14 @@ class _ChatThreadTile extends StatelessWidget {
                           runSpacing: 4,
                           children: [
                             if (muted)
-                              const _ThreadStateChip(icon: Icons.notifications_off_outlined, label: 'Stumm'),
+                              const _ThreadStateChip(
+                                  icon: Icons.notifications_off_outlined,
+                                  label: 'Stumm'),
                             if (blocked)
-                              const _ThreadStateChip(icon: Icons.block_outlined, label: 'Blockiert', danger: true),
+                              const _ThreadStateChip(
+                                  icon: Icons.block_outlined,
+                                  label: 'Blockiert',
+                                  danger: true),
                           ],
                         ),
                       ],
@@ -1593,19 +1574,21 @@ class _ChatThreadTile extends StatelessWidget {
                           lastMessage,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppTheme.textSecondary(context),
-                                fontWeight: FontWeight.w400,
-                                fontSize: 14,
-                                height: 20/14,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textSecondary(context),
+                                    fontWeight: FontWeight.w400,
+                                    fontSize: 14,
+                                    height: 20 / 14,
+                                  ),
                         ),
                       ],
                     ],
                   ),
                 ),
                 const SizedBox(width: 6),
-                Icon(Icons.chevron_right, color: AppTheme.textDisabled(context), size: 16),
+                Icon(Icons.chevron_right,
+                    color: AppTheme.textDisabled(context), size: 16),
               ]),
             ),
           ),
@@ -1615,18 +1598,22 @@ class _ChatThreadTile extends StatelessWidget {
   }
 }
 
-
 class _ThreadStateChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool danger;
-  const _ThreadStateChip({required this.icon, required this.label, this.danger = false});
+  const _ThreadStateChip(
+      {required this.icon, required this.label, this.danger = false});
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final color = danger ? Colors.red.shade300 : (isDark ? AppTheme.textSecondary(context) : const Color(0xFF1E293B));
-    final bg = danger ? Colors.red.withValues(alpha: 0.12) : (isDark ? AppTheme.surfaceMuted(context) : const Color(0xFFE2E8F0));
+    final color = danger
+        ? Colors.red.shade300
+        : (isDark ? AppTheme.textSecondary(context) : const Color(0xFF1E293B));
+    final bg = danger
+        ? Colors.red.withValues(alpha: 0.12)
+        : (isDark ? AppTheme.surfaceMuted(context) : const Color(0xFFE2E8F0));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
@@ -1639,7 +1626,9 @@ class _ThreadStateChip extends StatelessWidget {
         children: [
           Icon(icon, size: 11, color: color),
           const SizedBox(width: 4),
-          Text(label, style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w700)),
+          Text(label,
+              style: TextStyle(
+                  color: color, fontSize: 10.5, fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -1664,12 +1653,12 @@ class _ItemImageTile extends StatelessWidget {
         height: size,
         color: AppTheme.surfaceMuted(context),
         child: hasImage
-            ? Image.network(
-                url,
+            ? AppImage(
+                url: url,
                 width: size,
                 height: size,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _placeholder(context),
+                fallback: _placeholder(context),
               )
             : _placeholder(context),
       ),
@@ -1677,7 +1666,8 @@ class _ItemImageTile extends StatelessWidget {
   }
 
   Widget _placeholder(BuildContext context) => Center(
-        child: Icon(Icons.image_outlined, color: AppTheme.textDisabled(context), size: 22),
+        child: Icon(Icons.image_outlined,
+            color: AppTheme.textDisabled(context), size: 22),
       );
 }
 
@@ -1694,12 +1684,14 @@ class _SupportAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: BrandColors.primary.withValues(alpha: 0.18),
-        border: Border.all(color: BrandColors.primary.withValues(alpha: 0.3), width: 2),
+        border: Border.all(
+            color: BrandColors.primary.withValues(alpha: 0.3), width: 2),
       ),
       child: ClipOval(
         child: Center(
           child: Transform.translate(
-            offset: const Offset(0, 2.1), // 0.8mm nach unten für optische Zentrierung
+            offset: const Offset(
+                0, 2.1), // 0.8mm nach unten für optische Zentrierung
             child: Image.asset(
               'assets/images/icononly_transparent_nobuffer.png',
               width: size * 0.8,
@@ -1732,7 +1724,12 @@ class _StatusChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: color.withValues(alpha: 0.32), width: 1),
       ),
-      child: Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color, fontWeight: FontWeight.w600, fontSize: 12, height: 16/12)),
+      child: Text(label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              height: 16 / 12)),
     );
   }
 }
@@ -1741,16 +1738,14 @@ class _ThreadDismissible extends StatelessWidget {
   final Key dismissKey;
   final MessageThread thread;
   final Widget child;
-  final Future<void> Function() onArchiveToggle;
-  final Future<void> Function() onDelete;
+  final Future<void> Function() onSwipeActions;
   final bool enabled;
 
   const _ThreadDismissible({
     required this.dismissKey,
     required this.thread,
     required this.child,
-    required this.onArchiveToggle,
-    required this.onDelete,
+    required this.onSwipeActions,
     this.enabled = true,
   });
 
@@ -1761,21 +1756,10 @@ class _ThreadDismissible extends StatelessWidget {
       key: dismissKey,
       direction: DismissDirection.endToStart,
       background: const SizedBox.shrink(),
-      secondaryBackground: _SwipeActionsBackground(onArchive: () {}, onDelete: () {}),
+      secondaryBackground:
+          _SwipeActionsBackground(onArchive: () {}, onDelete: () {}),
       confirmDismiss: (dir) async {
-        // Instead of auto-action, open a quick action sheet (more trust-focused).
-        final choice = await showModalBottomSheet<String>(
-          context: context,
-          useRootNavigator: true,
-          barrierColor: Colors.black.withValues(alpha: 0.35),
-          backgroundColor: Colors.transparent,
-          builder: (context) => const _SwipeActionSheet(),
-        );
-        if (choice == 'archive') {
-          await onArchiveToggle();
-        } else if (choice == 'delete') {
-          await onDelete();
-        }
+        await onSwipeActions();
         return false;
       },
       child: child,
@@ -1786,7 +1770,8 @@ class _ThreadDismissible extends StatelessWidget {
 class _SwipeActionsBackground extends StatelessWidget {
   final VoidCallback onArchive;
   final VoidCallback onDelete;
-  const _SwipeActionsBackground({required this.onArchive, required this.onDelete});
+  const _SwipeActionsBackground(
+      {required this.onArchive, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -1799,9 +1784,17 @@ class _SwipeActionsBackground extends StatelessWidget {
         border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
       ),
       child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-        _SwipeActionPill(icon: Icons.archive_outlined, label: 'Archivieren', color: BrandColors.primary, onTap: onArchive),
+        _SwipeActionPill(
+            icon: Icons.archive_outlined,
+            label: 'Archivieren',
+            color: BrandColors.primary,
+            onTap: onArchive),
         const SizedBox(width: 10),
-        _SwipeActionPill(icon: Icons.delete_outline, label: 'Löschen', color: BrandColors.danger, onTap: onDelete),
+        _SwipeActionPill(
+            icon: Icons.delete_outline,
+            label: 'Löschen',
+            color: BrandColors.danger,
+            onTap: onDelete),
       ]),
     );
   }
@@ -1812,7 +1805,11 @@ class _SwipeActionPill extends StatelessWidget {
   final String label;
   final Color color;
   final VoidCallback onTap;
-  const _SwipeActionPill({required this.icon, required this.label, required this.color, required this.onTap});
+  const _SwipeActionPill(
+      {required this.icon,
+      required this.label,
+      required this.color,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1831,7 +1828,10 @@ class _SwipeActionPill extends StatelessWidget {
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(icon, size: 18, color: AppTheme.textPrimary(context)),
             const SizedBox(width: 8),
-            Text(label, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppTheme.textPrimary(context), fontWeight: FontWeight.w900)),
+            Text(label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: AppTheme.textPrimary(context),
+                    fontWeight: FontWeight.w900)),
           ]),
         ),
       ),
@@ -1840,12 +1840,15 @@ class _SwipeActionPill extends StatelessWidget {
 }
 
 class _SwipeActionSheet extends StatelessWidget {
-  const _SwipeActionSheet();
+  final ValueChanged<String?> onChoice;
+
+  const _SwipeActionSheet({required this.onChoice});
 
   @override
   Widget build(BuildContext context) {
     return _GlassSheet(
       title: 'Chat verwalten',
+      onClose: () => onChoice(null),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1853,7 +1856,7 @@ class _SwipeActionSheet extends StatelessWidget {
             icon: Icons.archive_outlined,
             title: 'Archivieren',
             subtitle: 'Du findest den Chat später im Archiv.',
-            onTap: () => Navigator.of(context).pop('archive'),
+            onTap: () => onChoice('archive'),
           ),
           const SizedBox(height: 10),
           _SheetAction(
@@ -1861,10 +1864,11 @@ class _SwipeActionSheet extends StatelessWidget {
             title: 'Löschen',
             subtitle: 'Entfernt den Chat dauerhaft (lokal).',
             danger: true,
-            onTap: () => Navigator.of(context).pop('delete'),
+            onTap: () => onChoice('delete'),
           ),
           const SizedBox(height: 12),
-          OutlinedButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Abbrechen')),
+          OutlinedButton(
+              onPressed: () => onChoice(null), child: const Text('Abbrechen')),
         ],
       ),
     );
@@ -1876,12 +1880,19 @@ class _ThreadOptionsSheet extends StatelessWidget {
   final bool hasUnread;
   final bool canBlock;
   final bool isBlocked;
-  const _ThreadOptionsSheet({required this.isArchived, required this.hasUnread, required this.canBlock, required this.isBlocked});
+  final ValueChanged<String?> onChoice;
+  const _ThreadOptionsSheet(
+      {required this.isArchived,
+      required this.hasUnread,
+      required this.canBlock,
+      required this.isBlocked,
+      required this.onChoice});
 
   @override
   Widget build(BuildContext context) {
     return _GlassSheet(
       title: 'Optionen',
+      onClose: () => onChoice(null),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1890,24 +1901,29 @@ class _ThreadOptionsSheet extends StatelessWidget {
               icon: Icons.mark_email_read_outlined,
               title: 'Als gelesen markieren',
               subtitle: 'Entfernt den ungelesen Badge.',
-              onTap: () => Navigator.of(context).pop('read'),
+              onTap: () => onChoice('read'),
             ),
             const SizedBox(height: 10),
           ],
           _SheetAction(
-            icon: isArchived ? Icons.unarchive_outlined : Icons.archive_outlined,
+            icon:
+                isArchived ? Icons.unarchive_outlined : Icons.archive_outlined,
             title: isArchived ? 'Aus Archiv holen' : 'Archivieren',
-            subtitle: isArchived ? 'Chat erscheint wieder unter „Alle“. ' : 'Chat erscheint unter „Archiv“.',
-            onTap: () => Navigator.of(context).pop(isArchived ? 'unarchive' : 'archive'),
+            subtitle: isArchived
+                ? 'Chat erscheint wieder unter „Alle“. '
+                : 'Chat erscheint unter „Archiv“.',
+            onTap: () => onChoice(isArchived ? 'unarchive' : 'archive'),
           ),
           const SizedBox(height: 10),
           if (canBlock || isBlocked)
             _SheetAction(
               icon: isBlocked ? Icons.lock_open_outlined : Icons.block,
               title: isBlocked ? 'Blockierung aufheben' : 'Blockieren',
-              subtitle: isBlocked ? 'Der Nutzer kann wieder normal kontaktiert werden.' : 'Nur nach abgeschlossener Buchung möglich.',
+              subtitle: isBlocked
+                  ? 'Der Nutzer kann wieder normal kontaktiert werden.'
+                  : 'Nur nach abgeschlossener Buchung möglich.',
               danger: !isBlocked,
-              onTap: () => Navigator.of(context).pop('block'),
+              onTap: () => onChoice('block'),
             ),
           const SizedBox(height: 10),
           _SheetAction(
@@ -1915,10 +1931,11 @@ class _ThreadOptionsSheet extends StatelessWidget {
             title: 'Löschen',
             subtitle: 'Entfernt den Chat dauerhaft (lokal).',
             danger: true,
-            onTap: () => Navigator.of(context).pop('delete'),
+            onTap: () => onChoice('delete'),
           ),
           const SizedBox(height: 12),
-          OutlinedButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Schließen')),
+          OutlinedButton(
+              onPressed: () => onChoice(null), child: const Text('Schließen')),
         ],
       ),
     );
@@ -1926,27 +1943,37 @@ class _ThreadOptionsSheet extends StatelessWidget {
 }
 
 class _ConfirmDeleteSheet extends StatelessWidget {
-  const _ConfirmDeleteSheet();
+  final ValueChanged<bool?> onChoice;
+
+  const _ConfirmDeleteSheet({required this.onChoice});
 
   @override
   Widget build(BuildContext context) {
     return _GlassSheet(
       title: 'Chat löschen?',
+      onClose: () => onChoice(null),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Diese Aktion kann nicht rückgängig gemacht werden. (Lokale Demo-Daten)',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.textBody(context), height: 1.45, fontWeight: FontWeight.w700),
+            'Diese Aktion kann nicht rückgängig gemacht werden.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppTheme.textBody(context),
+                height: 1.45,
+                fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 14),
           Row(children: [
-            Expanded(child: OutlinedButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Abbrechen'))),
+            Expanded(
+                child: OutlinedButton(
+                    onPressed: () => onChoice(false),
+                    child: const Text('Abbrechen'))),
             const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: BrandColors.danger),
-                onPressed: () => Navigator.of(context).pop(true),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: BrandColors.danger),
+                onPressed: () => onChoice(true),
                 child: const Text('Löschen'),
               ),
             ),
@@ -1960,7 +1987,12 @@ class _ConfirmDeleteSheet extends StatelessWidget {
 class _GlassSheet extends StatelessWidget {
   final String title;
   final Widget child;
-  const _GlassSheet({required this.title, required this.child});
+  final VoidCallback onClose;
+  const _GlassSheet({
+    required this.title,
+    required this.child,
+    required this.onClose,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1980,31 +2012,51 @@ class _GlassSheet extends StatelessWidget {
                 border: Border.all(color: AppTheme.glassStroke(context)),
               ),
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                SizedBox(
-                  height: 44,
-                  child: Stack(children: [
-                    Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppTheme.textDisabled(context), borderRadius: BorderRadius.circular(2)))),
-                    Positioned.fill(
-                      child: Center(
-                        child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppTheme.textPrimary(context), fontWeight: FontWeight.w900)),
-                      ),
+              child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      height: 44,
+                      child: Stack(children: [
+                        Center(
+                            child: Container(
+                                width: 40,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                    color: AppTheme.textDisabled(context),
+                                    borderRadius: BorderRadius.circular(2)))),
+                        Positioned.fill(
+                          child: Center(
+                            child: Text(title,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                        color: AppTheme.textPrimary(context),
+                                        fontWeight: FontWeight.w900)),
+                          ),
+                        ),
+                        Positioned(
+                          right: 4,
+                          top: 0,
+                          bottom: 0,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(22),
+                            onTap: onClose,
+                            child: SizedBox(
+                                width: 44,
+                                height: 44,
+                                child: Center(
+                                    child: Icon(Icons.close,
+                                        color: AppTheme.textPrimary(context)))),
+                          ),
+                        ),
+                      ]),
                     ),
-                    Positioned(
-                      right: 4,
-                      top: 0,
-                      bottom: 0,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(22),
-                        onTap: () => Navigator.of(context).pop(),
-                        child: SizedBox(width: 44, height: 44, child: Center(child: Icon(Icons.close, color: AppTheme.textPrimary(context)))),
-                      ),
-                    ),
+                    const SizedBox(height: 12),
+                    child,
                   ]),
-                ),
-                const SizedBox(height: 12),
-                child,
-              ]),
             ),
           ),
         ),
@@ -2019,7 +2071,12 @@ class _SheetAction extends StatelessWidget {
   final String subtitle;
   final bool danger;
   final VoidCallback onTap;
-  const _SheetAction({required this.icon, required this.title, required this.subtitle, required this.onTap, this.danger = false});
+  const _SheetAction(
+      {required this.icon,
+      required this.title,
+      required this.subtitle,
+      required this.onTap,
+      this.danger = false});
 
   @override
   Widget build(BuildContext context) {
@@ -2040,11 +2097,21 @@ class _SheetAction extends StatelessWidget {
             Icon(icon, color: c, size: 22),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(color: c, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 2),
-                Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.textSecondary(context), height: 1.35, fontWeight: FontWeight.w600)),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(color: c, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 2),
+                    Text(subtitle,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.textSecondary(context),
+                            height: 1.35,
+                            fontWeight: FontWeight.w600)),
+                  ]),
             ),
           ]),
         ),
@@ -2078,12 +2145,18 @@ class _EmptyState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(config.title, style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppTheme.textPrimary(context), fontWeight: FontWeight.w900)),
+          Text(config.title,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AppTheme.textPrimary(context),
+                  fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
           Text(
             config.body,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.textBody(context), height: 1.45, fontWeight: FontWeight.w700),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppTheme.textBody(context),
+                height: 1.45,
+                fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 18),
           Center(
@@ -2095,8 +2168,10 @@ class _EmptyState extends StatelessWidget {
                   onPressed: onCta,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: BrandColors.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -2109,7 +2184,8 @@ class _EmptyState extends StatelessWidget {
                           config.buttonLabel,
                           textAlign: TextAlign.center,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w700),
+                          style: const TextStyle(
+                              color: Colors.black, fontWeight: FontWeight.w700),
                         ),
                       ),
                     ],

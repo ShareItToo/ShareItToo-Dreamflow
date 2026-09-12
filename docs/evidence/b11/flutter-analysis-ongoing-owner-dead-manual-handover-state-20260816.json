@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-analysis-ongoing-owner-dead-manual-handover-state-cleanup",
+  "capturedAt": "2026-08-16T15:32:05Z",
+  "status": "passed-dead-owner-handover-visibility-state-reduction",
+  "baseline": {
+    "totalDiagnostics": 231,
+    "errors": 0,
+    "unusedElements": 62,
+    "asyncContextDiagnostics": 102,
+    "deprecatedMemberUse": 36,
+    "unusedElementParameters": 24,
+    "unusedFields": 7
+  },
+  "result": {
+    "totalDiagnostics": 230,
+    "errors": 0,
+    "diagnosticsRemovedThisBatch": 1,
+    "diagnosticsRemovedFromOriginal611": 381,
+    "unusedElements": 62,
+    "asyncContextDiagnostics": 102,
+    "deprecatedMemberUse": 36,
+    "unusedElementParameters": 24,
+    "unusedFields": 6,
+    "runtimeSourceFilesChanged": 1,
+    "runtimeSourceLinesRemoved": 1,
+    "runtimeSourceLinesAdded": 0,
+    "ciAnalyzerBaseline": 230
+  },
+  "safeRemovalScope": {
+    "removedUnusedFieldDiagnostics": 1,
+    "newAnalyzerDiagnosticsIntroduced": 0,
+    "reachableHandoverBranchesRemoved": 0,
+    "activeChallengeOrStepperFlowChanged": false,
+    "privacyBoundSourceFilesChanged": 0,
+    "displayedUiChanged": false,
+    "persistedDataChanged": false
+  },
+  "removedRegions": [
+    "obsolete manual-handover visibility state field"
+  ],
+  "preservedReachableFlows": [
+    "confirmed-time guards for pickup and return",
+    "pickup challenge issuance and pickup stepper",
+    "return challenge verification and return stepper",
+    "minimum photo evidence and verified return transition",
+    "owner-bound cancellation",
+    "owner-to-renter review"
+  ],
+  "remainingDiagnostics": {
+    "unused_element": 62,
+    "use_build_context_synchronously": 102,
+    "deprecated_member_use": 36,
+    "unused_element_parameter": 24,
+    "unused_field": 6
+  },
+  "verification": {
+    "flutterAnalyze": "passed-with-zero-errors-and-230-non-error-diagnostics",
+    "targetedFlutterTests": "passed-102",
+    "newCriticalWiringTests": "passed-8",
+    "flutterTests": "passed-268-one-skipped",
+    "googleOnlyProfileTest": "passed-1",
+    "technicalRegression": "passed-with-bounded-internal-candidate-rollover",
+    "webBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed",
+    "independentScopeReview": "passed-after-photo-cancellation-and-review-wiring-hardening"
+  },
+  "boundaries": {
+    "newAppCandidateBuilt": false,
+    "existingAppCandidateChanged": false,
+    "productionChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "testAccountsMutated": false,
+    "realMoneyUsed": false
+  }
+}

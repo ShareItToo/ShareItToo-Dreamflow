@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-support-evidence-scanner-and-upload-policy-readiness",
+  "version": "S4BW-2026-08-23.1",
+  "preparedOn": "2026-08-23",
+  "state": "prepared-external-scanner-and-policy-decisions-required",
+  "sourceBindings": {
+    "drive": {
+      "fileId": "1j8cpz2uwZBZiu6RLXjPQfo6bAWotUNLN",
+      "title": "09_SIT_SUPPORT_SOURCE_OF_TRUTH_V1.md",
+      "modifiedTime": "2026-08-20T22:27:16.931Z",
+      "sha256": "ae1ce047453b2efd6e0da80718da57de43a9efb8b93ef4ed6a0850c55abcc80b"
+    },
+    "repository": [
+      {
+        "path": "backend/src/config.js",
+        "sha256": "90922f999317f81e466f6d120a4655d775587552e52d2004372e36687ad73966"
+      },
+      {
+        "path": "backend/src/support_evidence_workflow.js",
+        "sha256": "6846344047ada6a2d0ad76a934bb3f12cc290e007e453751c0aa4ada3364b8c4"
+      },
+      {
+        "path": "docs/architecture/s4a-private-support-evidence-security-2026-08-22.md",
+        "sha256": "468c23b3adbfc87a65b08bd8dca76818f7ef6b01a0797d8761f1f1cdb6521632"
+      }
+    ]
+  },
+  "technicalBaseline": {
+    "intakeEnabled": false,
+    "productionEnableAllowed": false,
+    "operatingMode": "simulation",
+    "scannerTransport": "none",
+    "maxFileBytes": 8388608,
+    "allowedMimeTypes": [
+      "image/jpeg",
+      "image/png",
+      "image/webp"
+    ],
+    "accessGrantLifetimeSeconds": 120,
+    "externalAiAllowed": false,
+    "originalPublicAccessAllowed": false,
+    "deterministicFixtureOnly": true
+  },
+  "requiredExternalDecisions": {
+    "scannerDeploymentMode": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "scannerSecurityReview": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "processorAndTransferAssessment": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "uploadLimitApproval": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "allowedMimePolicyApproval": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "retentionAndLegalHoldBinding": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "operatorProcedureApproval": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "signedCandidateAndEnvironmentBinding": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    }
+  },
+  "evaluation": {
+    "requiredDecisionCount": 8,
+    "completedDecisionCount": 0,
+    "openDecisionKeys": [
+      "scannerDeploymentMode",
+      "scannerSecurityReview",
+      "processorAndTransferAssessment",
+      "uploadLimitApproval",
+      "allowedMimePolicyApproval",
+      "retentionAndLegalHoldBinding",
+      "operatorProcedureApproval",
+      "signedCandidateAndEnvironmentBinding"
+    ],
+    "externalReadiness": false,
+    "intakeActivationAllowed": false
+  },
+  "boundaries": {
+    "containsPersonalData": false,
+    "containsAccountIdentifiers": false,
+    "containsCredentials": false,
+    "containsSecrets": false,
+    "providerSelected": false,
+    "contractAccepted": false,
+    "paidServiceStarted": false,
+    "externalScannerCalled": false,
+    "supportEvidenceUploaded": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "pilotChanged": false,
+    "publicActivationChanged": false
+  }
+}

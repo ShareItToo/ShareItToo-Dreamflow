@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-closed-testing-draft",
+  "capturedAt": "2026-08-15T09:31:00+02:00",
+  "status": "exact-candidate-ready-review-blocked",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081506",
+    "commit": "c6ab5fc143c5d424aece3d8fb7dfe4a351cb02df",
+    "aabSha256": "ec56a4031294b94d101d7faec8a4fbab28a7a3a22907b17f6351da9764753a4b",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "draft": {
+    "track": "closed-alpha",
+    "name": "1.0.0-closed-2026081506",
+    "onlyExactCandidateSelected": true,
+    "readyToReleaseObserved": true,
+    "releaseErrorCountObserved": 0,
+    "countryPrepared": "Germany",
+    "testerListPrepared": true,
+    "feedbackChannelPrepared": true,
+    "savedToPublishingOverview": true,
+    "submittedForReview": false,
+    "rolloutStarted": false
+  },
+  "publishingOverview": {
+    "preparedChangeCountAfterPrivacyUrl": 13,
+    "privacyPolicyUrlSaved": true,
+    "privacyPolicyUrl": "https://shareittoo.com/privacy",
+    "dataSafetyDeclarationComplete": false,
+    "submitButtonEnabled": false,
+    "remainingHonestBlocker": "data-safety-provider-contract-retention-and-legal-classification-open"
+  },
+  "boundaries": {
+    "closedTestingStarted": false,
+    "minimumTesterClockStarted": false,
+    "reviewSubmitted": false,
+    "productionChanged": false,
+    "openTestingChanged": false,
+    "publicRolloutStarted": false,
+    "containsTesterAddresses": false,
+    "containsReviewCredentials": false,
+    "containsSecrets": false
+  }
+}

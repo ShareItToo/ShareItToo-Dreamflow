@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-stage-a-blue-ocean-n10-google-play-internal-testing-plan",
+  "status": "prepared-not-executed",
+  "pilotId": "heilbronn_wave0",
+  "track": "internal",
+  "candidatePlan": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "currentRepositoryBuildNumber": "2026082302",
+    "plannedBuildNumber": "2026082401",
+    "exactSourceCommit": "pending-final-candidate-cut",
+    "aabSha256": "pending-local-signed-build",
+    "archiveState": "pending-owner-only-local-archive",
+    "releaseName": "1.0.0-internal-2026082401",
+    "releaseNotesPath": "store/google-play/de-DE/blue_ocean_internal_release_notes.txt"
+  },
+  "requiredBeforeCandidateBuild": [
+    "N10-through-N13-source-and-documentation-complete",
+    "full-technical-regression-green-at-exact-source-commit",
+    "release-signing-config-present-without-secret-output",
+    "staging-only-api-and-no-real-money-flags-verified",
+    "owner-approves-exact-local-candidate-build"
+  ],
+  "requiredBeforeConsoleAction": [
+    "exact-aab-sha256-recorded",
+    "exact-source-commit-recorded",
+    "owner-only-local-archive-verified",
+    "privacy-permission-and-product-truth-rescan-green",
+    "GOOGLE_PLAY_INTERNAL_UPLOAD_GO",
+    "owner-present-in-google-play-console"
+  ],
+  "ownerConsoleActions": [
+    "verify-package-com.shareittoo.app-and-internal-track",
+    "create-new-internal-release-with-exact-bound-aab-only",
+    "review-play-app-signing-and-all-upload-warnings",
+    "add-only-the-private-three-slot-tester-list-outside-git",
+    "save-draft-then-recheck-version-code-hash-and-release-notes",
+    "activate-internal-release-only-after-GOOGLE_PLAY_INTERNAL_RELEASE_GO",
+    "share-private-opt-in-link-outside-git-and-public-channels",
+    "install-from-google-play-and-record-sanitized-exact-build-evidence"
+  ],
+  "testerDistribution": {
+    "plannedAdultSlots": ["HW0-A", "HW0-B", "HW0-C"],
+    "testerEmailsStoredInGit": false,
+    "optInLinkStoredInGit": false,
+    "instructionsPath": "docs/templates/BLUE_OCEAN_INTERNAL_TESTER_INSTRUCTIONS.md",
+    "feedbackPath": "docs/templates/BLUE_OCEAN_INTERNAL_TESTING_FEEDBACK.md",
+    "aggregateEvaluationPath": "docs/templates/blue_ocean_heilbronn_wave0_evaluation_sheet.csv"
+  },
+  "rollbackAndPreservation": {
+    "pauseNewInvitations": true,
+    "disableBlueOceanFlag": true,
+    "keepPreviousVerifiedInternalReleaseAvailableUntilReplacementVerified": true,
+    "preserveExactCandidateArchiveAndHashes": true,
+    "preserveSanitizedEvidence": true,
+    "preserveHumanRightsRequestsAndRequiredRetention": true,
+    "deleteOrRewriteExistingEvidence": false,
+    "consoleRollbackRequiresOwner": true,
+    "runbookPath": "docs/operations/BLUE_OCEAN_GOOGLE_PLAY_INTERNAL_TESTING_HANDOFF.md"
+  },
+  "hardStops": {
+    "productionTrack": true,
+    "openTestingTrack": true,
+    "closedTestingTrack": true,
+    "sendForReview": true,
+    "publicRollout": true,
+    "differentOrUnhashedArtifact": true,
+    "realMoney": true,
+    "publicRegistration": true,
+    "credentialsOrPersonalDataInRepository": true,
+    "unapprovedExternalProviderOrBilling": true
+  },
+  "boundaries": {
+    "aabBuilt": false,
+    "aabUploaded": false,
+    "playConsoleChanged": false,
+    "testerListCreatedOrChanged": false,
+    "testerInvited": false,
+    "optInLinkGeneratedOrShared": false,
+    "firebaseChanged": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "cloudChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false
+  }
+}

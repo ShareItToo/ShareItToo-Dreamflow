@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "kind": "rw20d-google-play-draft-truth-reconciliation",
+  "status": "reconciled-owner-handover-release-gated",
+  "recordedOn": "2026-08-27",
+  "contradiction": {
+    "historicalBuildSnapshotSaidUploadNotPerformed": true,
+    "laterOwnerHandoffSaidExactDraftUploaded": true,
+    "resolvedByTemporalScopeSeparation": true,
+    "historicalFactsChanged": false
+  },
+  "currentTruth": {
+    "sourceClassification": "owner-provided-macbook-codex-handover",
+    "directConsoleReverifiedFromThisWorktree": false,
+    "exactCandidateUploaded": true,
+    "bundleProcessed": true,
+    "draftSaved": true,
+    "releaseActivated": false,
+    "sentForReview": false,
+    "activeInternalVersionCode": "2026081509",
+    "candidateVersionCode": "2026082601",
+    "candidateExpectedInstalledOnOnePlus": false,
+    "nextRequiredGate": "GOOGLE_PLAY_INTERNAL_RELEASE_GO"
+  },
+  "references": {
+    "candidateManifest": "store/google-play/rw20-current-internal-candidate-manifest.json",
+    "currentUploadHandoff": "store/google-play/rw20-current-internal-upload-handoff.json",
+    "ownerDraftHandoff": "store/google-play/rw20a-internal-draft-oneplus-handoff.json",
+    "historicalBuildEvidence": "docs/evidence/release-readiness/rw20-current-play-internal-candidate-2026082601.json",
+    "operation": "docs/operations/RW20D_PLAY_DRAFT_TRUTH_RECONCILIATION_2026-08-27.md"
+  },
+  "boundaries": {
+    "consoleAccessed": false,
+    "storeChanged": false,
+    "releaseActivated": false,
+    "reviewSubmissionPerformed": false,
+    "testerListChanged": false,
+    "deviceAccessed": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "providerChanged": false,
+    "firebaseChanged": false,
+    "cloudVpsDnsChanged": false,
+    "pullRequestMerged": false
+  },
+  "verification": {
+    "state": "verified-exact-sha",
+    "implementationHead": "9fdca671b174b5b521fe797f202ffeca07abd595",
+    "localTechnicalRegression": "passed-standard-parallelism-no-workaround",
+    "githubRegression": {
+      "runId": 33033342045,
+      "headSha": "9fdca671b174b5b521fe797f202ffeca07abd595",
+      "conclusion": "success",
+      "publishApiImage": "skipped"
+    },
+    "githubCodeql": {
+      "runId": 33033342059,
+      "headSha": "9fdca671b174b5b521fe797f202ffeca07abd595",
+      "conclusion": "success"
+    },
+    "openCodeScanningAlerts": 0,
+    "workaroundIntroduced": false
+  },
+  "containsSecrets": false,
+  "containsTesterIdentity": false,
+  "containsOptInUrl": false,
+  "containsRawDeviceIdentifier": false,
+  "containsNetworkAddress": false
+}

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp101-codex-local-dev-synthetic-evaluation",
+  "status": "passed-bounded-developer-only-synthetic-evaluation",
+  "capturedOn": "2026-09-10",
+  "source": {
+    "head": "76e8a8bf87f3d76f606673385ec46b0c005be06d",
+    "adapter": "tool/codex_local_dev.mjs",
+    "classification": "CODEX_AUTH_LOCAL_DEV_SUPPORTED",
+    "authentication": "chatgpt"
+  },
+  "evaluation": {
+    "fixture": "cordless-drill.png",
+    "synthetic": true,
+    "schemaVersion": "listing-ai-draft-v1",
+    "promptVersion": "listing-ai-prompt-v1",
+    "category": "cat8",
+    "subcategory": "Bohrmaschinen",
+    "clarificationQuestionCount": 3,
+    "ownerConfirmationsTrue": 0,
+    "authoritativePriceCreated": false,
+    "publicationAllowed": false,
+    "automaticPublicationAllowed": false,
+    "payloadSha256": "98beeda1259e2e9b4ab5d4f0258124b5f4d3af7385d10c0a42c751a8524b3ede"
+  },
+  "boundaries": {
+    "apiBilling": false,
+    "credentialsExtracted": false,
+    "sessionPersisted": false,
+    "sandbox": "read-only",
+    "modelToolsEnabled": false,
+    "syntheticFixtureOnly": true,
+    "runtimeProviderEligible": false,
+    "stagingListingAiProviderChanged": false,
+    "externalStagingListingAiEnabled": false,
+    "automaticPublicationEnabled": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "storeChanged": false,
+    "firebaseChanged": false,
+    "cloudChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false
+  },
+  "containsSecrets": false,
+  "containsPrivateFilesystemPath": false,
+  "containsPersonalAccountData": false
+}

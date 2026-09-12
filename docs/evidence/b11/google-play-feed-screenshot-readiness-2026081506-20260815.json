@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-feed-screenshot-readiness",
+  "status": "exact-candidate-screenshots-byte-identical-existing-draft",
+  "capturedAt": "2026-08-15T07:59:49.428Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081506",
+    "commit": "c6ab5fc143c5d424aece3d8fb7dfe4a351cb02df",
+    "apkSha256": "8e391b1f3ffd10a6e78bf3a2abda3c7a3eb69b8998c47b3109b750b4ad237368",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "device": {
+    "platform": "android",
+    "modelClass": "Pixel 7 Pro",
+    "physicalResolution": "1440x3120",
+    "installedCandidateVerified": true,
+    "syntheticScreenshotSessionReady": true
+  },
+  "fixture": {
+    "status": "ready-reused",
+    "curatedListingCount": 4,
+    "createdDuringObservation": 0,
+    "containsPersonalData": false
+  },
+  "feedObservation": {
+    "curatedListingVisible": true,
+    "legacyTechnicalListingsVisible": false,
+    "placeholderImagesVisible": false,
+    "technicalFixtureCopyVisible": false,
+    "protectedActiveBookings": 6,
+    "protectedPublicListingsObserved": 6,
+    "storeScreenshotAccepted": true,
+    "validatedLocalCandidates": 4
+  },
+  "completedRemediation": {
+    "method": "reuse-previous-bounded-staging-cleanup",
+    "deletionPerformed": false,
+    "protectedBookingsPreserved": true,
+    "deletionAuthorized": false,
+    "productionChangeAuthorized": false
+  },
+  "candidateEvidenceRefs": [
+    "docs/evidence/b11/google-play-screenshot-candidate-feed-2026081506.json",
+    "docs/evidence/b11/google-play-screenshot-candidate-listing-detail-2026081506.json",
+    "docs/evidence/b11/google-play-screenshot-candidate-search-2026081506.json",
+    "docs/evidence/b11/google-play-screenshot-candidate-create-listing-2026081506.json"
+  ],
+  "sourceScreenshotEvidenceRef": "docs/evidence/b11/google-play-feed-screenshot-readiness-2026081505-20260815.json",
+  "consoleSaveEvidenceRef": "docs/evidence/b11/google-play-store-listing-saved-2026081505-20260815.json",
+  "consoleReconciliation": {
+    "sourceBuildNumber": "2026081505",
+    "allFourAssetsByteIdentical": true,
+    "uploadRequired": false,
+    "consoleDraftRetained": true,
+    "visualInspectionPassed": true
+  },
+  "boundaries": {
+    "screenshotUploaded": false,
+    "playConsoleChanged": false,
+    "publicStoreChanged": false,
+    "listingDeleted": false,
+    "listingPaused": false,
+    "productionChanged": false,
+    "paymentEndpointCalled": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

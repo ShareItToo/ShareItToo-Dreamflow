@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show ImageFilter;
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -5,28 +6,36 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/widgets/app_popup.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/handover_code.dart';
 import 'package:lendify/services/local_artifact_storage_service.dart';
+import 'package:lendify/widgets/private_pilot_risk_notice.dart';
+
+typedef CounterpartyConfirmationVerifier = Future<bool> Function({
+  String? qrPayload,
+  String? code,
+});
 
 class ReturnHandoverStepResult {
   final bool confirmed;
   final bool galleryUsed;
-  const ReturnHandoverStepResult({required this.confirmed, required this.galleryUsed});
+  const ReturnHandoverStepResult(
+      {required this.confirmed, required this.galleryUsed});
 }
 
 class ReturnHandoverStepperSheet {
-  static Future<ReturnHandoverStepResult?> show(BuildContext context, {
+  static Future<ReturnHandoverStepResult?> show(
+    BuildContext context, {
     required Item item,
     required RentalRequest request,
     required String renterName,
     required String ownerName,
     required String handoverCode,
+    String? qrPayload,
+    CounterpartyConfirmationVerifier? confirmationVerifier,
     bool viewerIsOwner = false,
     ReturnFlowMode mode = ReturnFlowMode.returnFlow,
   }) async {
@@ -42,6 +51,8 @@ class ReturnHandoverStepperSheet {
         renterName: renterName,
         ownerName: ownerName,
         handoverCode: handoverCode,
+        qrPayload: qrPayload,
+        confirmationVerifier: confirmationVerifier,
         viewerIsOwner: viewerIsOwner,
         mode: mode,
         fullScreen: false,
@@ -50,12 +61,15 @@ class ReturnHandoverStepperSheet {
   }
 
   // New: push full-screen page version
-  static Future<ReturnHandoverStepResult?> push(BuildContext context, {
+  static Future<ReturnHandoverStepResult?> push(
+    BuildContext context, {
     required Item item,
     required RentalRequest request,
     required String renterName,
     required String ownerName,
     required String handoverCode,
+    String? qrPayload,
+    CounterpartyConfirmationVerifier? confirmationVerifier,
     bool viewerIsOwner = false,
     ReturnFlowMode mode = ReturnFlowMode.returnFlow,
   }) async {
@@ -67,6 +81,8 @@ class ReturnHandoverStepperSheet {
           renterName: renterName,
           ownerName: ownerName,
           handoverCode: handoverCode,
+          qrPayload: qrPayload,
+          confirmationVerifier: confirmationVerifier,
           viewerIsOwner: viewerIsOwner,
           mode: mode,
         ),
@@ -81,9 +97,21 @@ class ReturnHandoverStepperPage extends StatelessWidget {
   final String renterName;
   final String ownerName;
   final String handoverCode;
+  final String? qrPayload;
+  final CounterpartyConfirmationVerifier? confirmationVerifier;
   final ReturnFlowMode mode;
   final bool viewerIsOwner;
-  const ReturnHandoverStepperPage({super.key, required this.item, required this.request, required this.renterName, required this.ownerName, required this.handoverCode, this.mode = ReturnFlowMode.returnFlow, this.viewerIsOwner = false});
+  const ReturnHandoverStepperPage(
+      {super.key,
+      required this.item,
+      required this.request,
+      required this.renterName,
+      required this.ownerName,
+      required this.handoverCode,
+      this.qrPayload,
+      this.confirmationVerifier,
+      this.mode = ReturnFlowMode.returnFlow,
+      this.viewerIsOwner = false});
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +123,8 @@ class ReturnHandoverStepperPage extends StatelessWidget {
         renterName: renterName,
         ownerName: ownerName,
         handoverCode: handoverCode,
+        qrPayload: qrPayload,
+        confirmationVerifier: confirmationVerifier,
         viewerIsOwner: viewerIsOwner,
         mode: mode,
         fullScreen: true,
@@ -109,19 +139,45 @@ class _ReturnHandoverStepper extends StatefulWidget {
   final String renterName;
   final String ownerName;
   final String handoverCode;
-  final bool fullScreen; // new: when true, fill the whole page instead of sheet height
+  final String? qrPayload;
+  final CounterpartyConfirmationVerifier? confirmationVerifier;
+  final bool
+      fullScreen; // new: when true, fill the whole page instead of sheet height
   final ReturnFlowMode mode;
   final bool viewerIsOwner;
-  const _ReturnHandoverStepper({required this.item, required this.request, required this.renterName, required this.ownerName, required this.handoverCode, this.mode = ReturnFlowMode.returnFlow, this.fullScreen = false, this.viewerIsOwner = false});
+  const _ReturnHandoverStepper(
+      {required this.item,
+      required this.request,
+      required this.renterName,
+      required this.ownerName,
+      required this.handoverCode,
+      this.qrPayload,
+      this.confirmationVerifier,
+      this.mode = ReturnFlowMode.returnFlow,
+      this.fullScreen = false,
+      this.viewerIsOwner = false});
 
   @override
   State<_ReturnHandoverStepper> createState() => _ReturnHandoverStepperState();
 }
 
 enum ReturnFlowMode { returnFlow, pickupFlow }
-enum _StepKind { photos, rideConfirm, damage, codes }
+
+enum _StepKind { photos, damage, codes }
 
 class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
+  static const List<String> _presenterEvidenceSlots = <String>[
+    'overview',
+    'detail',
+    'accessories',
+    'critical',
+  ];
+  static const Map<String, String> _presenterEvidenceLabels = <String, String>{
+    'overview': 'Gesamtansicht',
+    'detail': 'Detailansicht',
+    'accessories': 'Zubehör',
+    'critical': 'kritischer Zustandspunkt',
+  };
   // Dynamic steps based on mode
   late final List<_StepKind> _steps = _buildSteps();
   int _step = 0;
@@ -130,7 +186,15 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
 
   // Step: photos
   List<PlatformFile> _checkoutPhotos = [];
+  List<String> _checkoutPhotoSources = [];
   bool _galleryUsedInCheckoutPhotos = false;
+  int _presenterEvidenceCount = 0;
+  int _deviationEvidenceCount = 0;
+  bool _presenterNonCameraUsed = false;
+  String? _counterpartyDecision;
+  bool _savingEvidence = false;
+  bool _evidencePersisted = false;
+  String _lastPhotoSource = 'browser_picker';
 
   // Step: damage report (return flow only)
   bool _hasDamage = false;
@@ -143,15 +207,43 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   // Step: code confirm (now display-only + manual confirm)
   bool _otherPartyConfirmed = false;
 
-  // Step: ride compensation confirmation (Etappe 2, conditional)
-  bool? _rideAnsweredYes; // null until user selects
-  bool? _rideGrant; // final decision for this segment (grant/deny)
-  bool _resolvingLocation = false;
-
   @override
   void initState() {
     super.initState();
-    // no-op for removed steps
+    unawaited(_loadConditionEvidence());
+  }
+
+  String get _evidenceSegment =>
+      widget.mode == ReturnFlowMode.returnFlow ? 'return' : 'pickup';
+
+  bool get _viewerIsPresenter => widget.mode == ReturnFlowMode.pickupFlow
+      ? widget.viewerIsOwner
+      : !widget.viewerIsOwner;
+
+  Future<void> _loadConditionEvidence() async {
+    try {
+      final summary = await DataService.getConditionEvidenceSummary(
+        requestId: widget.request.id,
+        segment: _evidenceSegment,
+      );
+      if (!mounted) return;
+      final confirmation = summary['counterpartyConfirmation'];
+      setState(() {
+        _presenterEvidenceCount =
+            (summary['presenterPhotos'] as num?)?.toInt() ?? 0;
+        _deviationEvidenceCount =
+            (summary['deviationPhotos'] as num?)?.toInt() ?? 0;
+        _presenterNonCameraUsed = summary['presenterNonCameraUsed'] == true;
+        if (confirmation is Map) {
+          _counterpartyDecision = confirmation['decision']?.toString();
+          _evidencePersisted = true;
+        } else if (_deviationEvidenceCount > 0) {
+          _counterpartyDecision = 'deviation_recorded';
+        }
+      });
+    } catch (error) {
+      debugPrint('[handover] evidence summary failed: $error');
+    }
   }
 
   @override
@@ -168,14 +260,16 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
     switch (kind) {
       case _StepKind.photos:
         // Rename to domain wording per request
-        return widget.mode == ReturnFlowMode.returnFlow ? 'Rückgabe Fotos' : 'Übergabe Fotos';
-      case _StepKind.rideConfirm:
-        return 'Fahrtvergütung';
+        return widget.mode == ReturnFlowMode.returnFlow
+            ? 'Rückgabe Fotos'
+            : 'Übergabe Fotos';
       case _StepKind.damage:
         return 'Schaden melden';
       case _StepKind.codes:
         // In pickup flow this step is named "Übergabe-QR"
-        return widget.mode == ReturnFlowMode.returnFlow ? 'Rückgabe-QR' : 'Übergabe-QR';
+        return widget.mode == ReturnFlowMode.returnFlow
+            ? 'Rückgabe-QR'
+            : 'Übergabe-QR';
     }
   }
 
@@ -183,13 +277,22 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
     final kind = _steps[_step];
     switch (kind) {
       case _StepKind.photos:
-        return _checkoutPhotos.length >= 4;
-      case _StepKind.rideConfirm:
-        // Require the user to at least select an answer; location fallback optional
-        return _rideAnsweredYes != null;
+        if (_savingEvidence) return false;
+        if (_viewerIsPresenter) {
+          return _presenterEvidenceCount + _checkoutPhotos.length >= 4;
+        }
+        if (_presenterEvidenceCount < 4) return false;
+        if (_counterpartyDecision == 'confirmed') {
+          return _deviationEvidenceCount == 0 && _checkoutPhotos.isEmpty;
+        }
+        if (_counterpartyDecision == 'deviation_recorded') {
+          return _deviationEvidenceCount + _checkoutPhotos.length >= 1;
+        }
+        return false;
       case _StepKind.damage:
         if (!_hasDamage) return true;
-        return _damagePhotos.isNotEmpty || _damageNotesCtrl.text.trim().isNotEmpty;
+        return _damagePhotos.isNotEmpty ||
+            _damageNotesCtrl.text.trim().isNotEmpty;
       case _StepKind.codes:
         // Hard SIT rule: final completion requires true counterparty confirmation.
         return _otherPartyConfirmed;
@@ -198,19 +301,97 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
 
   Future<void> _next() async {
     if (!_canContinue) {
-      await AppPopup.toast(context, icon: Icons.error_outline, title: 'Bitte die Anforderungen dieses Schritts erfüllen.');
+      await AppPopup.toast(context,
+          icon: Icons.error_outline,
+          title: 'Bitte die Anforderungen dieses Schritts erfüllen.');
       return;
     }
+    if (_steps[_step] == _StepKind.photos && !_evidencePersisted) {
+      final saved = await _saveConditionEvidenceStep();
+      if (!saved) return;
+    }
+    if (!mounted) return;
     if (_step < _steps.length - 1) {
       setState(() => _step++);
     } else {
-      Navigator.of(context).pop(ReturnHandoverStepResult(confirmed: true, galleryUsed: _galleryUsedInCheckoutPhotos));
+      Navigator.of(context).pop(ReturnHandoverStepResult(
+          confirmed: true,
+          galleryUsed:
+              _galleryUsedInCheckoutPhotos || _presenterNonCameraUsed));
+    }
+  }
+
+  Future<bool> _saveConditionEvidenceStep() async {
+    setState(() => _savingEvidence = true);
+    try {
+      final kind =
+          _viewerIsPresenter ? 'presenter_photo' : 'counterparty_deviation';
+      while (_checkoutPhotos.isNotEmpty) {
+        final photo = _checkoutPhotos.first;
+        final bytes = photo.bytes;
+        if (bytes == null || bytes.isEmpty) {
+          throw StateError('condition_evidence_bytes_missing');
+        }
+        final source = _checkoutPhotoSources.isEmpty
+            ? (kIsWeb ? 'browser_picker' : 'gallery')
+            : _checkoutPhotoSources.first;
+        final semanticSlot = _viewerIsPresenter
+            ? _presenterEvidenceSlots[_presenterEvidenceCount]
+            : 'deviation';
+        await DataService.addConditionEvidencePhoto(
+          requestId: widget.request.id,
+          bytes: bytes,
+          filename: photo.name,
+          segment: _evidenceSegment,
+          kind: kind,
+          source: source,
+          semanticSlot: semanticSlot,
+        );
+        if (!mounted) return false;
+        setState(() {
+          _checkoutPhotos = _checkoutPhotos.sublist(1);
+          if (_checkoutPhotoSources.isNotEmpty) {
+            _checkoutPhotoSources = _checkoutPhotoSources.sublist(1);
+          }
+          if (_viewerIsPresenter) {
+            _presenterEvidenceCount++;
+            if (source != 'camera') _presenterNonCameraUsed = true;
+          } else {
+            _deviationEvidenceCount++;
+          }
+        });
+      }
+      if (!_viewerIsPresenter) {
+        await DataService.recordConditionConfirmation(
+          requestId: widget.request.id,
+          segment: _evidenceSegment,
+          decision: _counterpartyDecision!,
+        );
+      }
+      if (!mounted) return false;
+      setState(() => _evidencePersisted = true);
+      return true;
+    } catch (error) {
+      debugPrint('[handover] evidence persistence failed: $error');
+      if (mounted) {
+        await AppPopup.toast(
+          context,
+          icon: Icons.error_outline,
+          title: 'Fotodokumentation nicht gespeichert',
+          message:
+              'Bitte prüfe die Verbindung und versuche diesen Schritt erneut.',
+        );
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _savingEvidence = false);
     }
   }
 
   void _back() {
     if (_step == 0) {
-      Navigator.of(context).pop(const ReturnHandoverStepResult(confirmed: false, galleryUsed: false));
+      Navigator.of(context).pop(
+          const ReturnHandoverStepResult(confirmed: false, galleryUsed: false));
     } else {
       setState(() => _step--);
     }
@@ -218,8 +399,6 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final height = widget.fullScreen ? size.height : size.height * 0.92;
     final maxWidth = 760.0;
 
     return Material(
@@ -230,7 +409,9 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: maxWidth),
             child: ClipRRect(
-              borderRadius: widget.fullScreen ? BorderRadius.zero : const BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: widget.fullScreen
+                  ? BorderRadius.zero
+                  : const BorderRadius.vertical(top: Radius.circular(24)),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
                 child: Stack(
@@ -239,7 +420,8 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                     Positioned.fill(
                       child: ImageFiltered(
                         imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-                        child: Image.asset('assets/images/fulllogo.jpg', fit: BoxFit.cover),
+                        child: Image.asset('assets/images/fulllogo.jpg',
+                            fit: BoxFit.cover),
                       ),
                     ),
                     // Blue-tinted gradient overlay for stronger brand feel
@@ -265,8 +447,12 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                       child: Container(
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.22),
-                          borderRadius: widget.fullScreen ? BorderRadius.zero : const BorderRadius.vertical(top: Radius.circular(24)),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                          borderRadius: widget.fullScreen
+                              ? BorderRadius.zero
+                              : const BorderRadius.vertical(
+                                  top: Radius.circular(24)),
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.08)),
                         ),
                       ),
                     ),
@@ -277,7 +463,9 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                           Container(
                             width: 44,
                             height: 4,
-                            decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                            decoration: BoxDecoration(
+                                color: Colors.white24,
+                                borderRadius: BorderRadius.circular(2)),
                           ),
                         ] else
                           const SizedBox(height: 8),
@@ -287,14 +475,20 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                             children: [
                               // Close should abort the whole process and exit
                               IconButton(
-                                onPressed: () => Navigator.of(context).pop(const ReturnHandoverStepResult(confirmed: false, galleryUsed: false)),
-                                icon: const Icon(Icons.close, color: Colors.white),
+                                onPressed: () => Navigator.of(context).pop(
+                                    const ReturnHandoverStepResult(
+                                        confirmed: false, galleryUsed: false)),
+                                icon: const Icon(Icons.close,
+                                    color: Colors.white),
                               ),
                               Expanded(
                                 child: Center(
                                   child: Text(
                                     _title,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 18),
                                   ),
                                 ),
                               ),
@@ -304,7 +498,9 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                                 child: Center(
                                   child: Text(
                                     '${_step + 1}/${_steps.length}',
-                                    style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
+                                    style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontWeight: FontWeight.w700),
                                   ),
                                 ),
                               )
@@ -312,12 +508,23 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                           ),
                         ),
                         const SizedBox(height: 8),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: PrivatePilotRiskNotice(
+                            title: 'Dokumentation, kein SIT-Schadenschutz',
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         Expanded(
                           child: AnimatedSwitcher(
                             duration: const Duration(milliseconds: 400),
                             transitionBuilder: (child, animation) {
-                              final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
-                              return FadeTransition(opacity: curved, child: child);
+                              final curved = CurvedAnimation(
+                                  parent: animation,
+                                  curve: Curves.easeOutCubic,
+                                  reverseCurve: Curves.easeInCubic);
+                              return FadeTransition(
+                                  opacity: curved, child: child);
                             },
                             child: Padding(
                               key: ValueKey(_step),
@@ -330,20 +537,28 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                           child: Builder(builder: (context) {
                             final bool hidePrimaryAction = (
-                              // Renter in return flow (zeigt QR/Code); kein Primär-Button
-                              (!widget.viewerIsOwner && widget.mode == ReturnFlowMode.returnFlow && _steps[_step] == _StepKind.codes)
-                              ||
-                              // Owner in pickup flow beim Schritt "Übergabe-QR": keinen "Abschließen"-Button anzeigen
-                              (widget.viewerIsOwner && widget.mode == ReturnFlowMode.pickupFlow && _steps[_step] == _StepKind.codes)
-                            );
+                                // Renter in return flow (zeigt QR/Code); kein Primär-Button
+                                (!widget.viewerIsOwner &&
+                                        widget.mode ==
+                                            ReturnFlowMode.returnFlow &&
+                                        _steps[_step] == _StepKind.codes) ||
+                                    // Owner in pickup flow beim Schritt "Übergabe-QR": keinen "Abschließen"-Button anzeigen
+                                    (widget.viewerIsOwner &&
+                                        widget.mode ==
+                                            ReturnFlowMode.pickupFlow &&
+                                        _steps[_step] == _StepKind.codes));
                             return Row(
                               children: [
-                                TextButton(onPressed: _back, child: const Text('Zurück')),
+                                TextButton(
+                                    onPressed: _back,
+                                    child: const Text('Zurück')),
                                 const Spacer(),
                                 if (!hidePrimaryAction)
                                   FilledButton(
                                     onPressed: _canContinue ? _next : null,
-                                    child: Text(_step == _steps.length - 1 ? 'Abschließen' : 'Weiter'),
+                                    child: Text(_step == _steps.length - 1
+                                        ? 'Abschließen'
+                                        : 'Weiter'),
                                   ),
                               ],
                             );
@@ -366,8 +581,6 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
     switch (kind) {
       case _StepKind.photos:
         return _stepCheckoutPhotos();
-      case _StepKind.rideConfirm:
-        return _stepRideConfirm();
       case _StepKind.damage:
         return _stepDamage();
       case _StepKind.codes:
@@ -391,7 +604,8 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
 
   // Entfernt: Checkliste, Zeitplanung, Ort bestätigen, Abrechnung, Unterschriften
 
-  Widget _photoGrid(List<PlatformFile> files, VoidCallback onPick, {required String emptyText}) {
+  Widget _photoGrid(List<PlatformFile> files, VoidCallback onPick,
+      {required String emptyText}) {
     final grid = Wrap(
       alignment: files.isEmpty ? WrapAlignment.center : WrapAlignment.start,
       spacing: 8,
@@ -408,11 +622,14 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.10)),
                 ),
                 child: (f.bytes != null)
                     ? Image.memory(f.bytes!, fit: BoxFit.cover)
-                    : Center(child: Icon(Icons.image, color: Colors.white.withValues(alpha: 0.6))),
+                    : Center(
+                        child: Icon(Icons.image,
+                            color: Colors.white.withValues(alpha: 0.6))),
               ),
             ),
           ),
@@ -427,7 +644,8 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
             ),
-            child: const Center(child: Icon(Icons.add_a_photo, color: Colors.white70)),
+            child: const Center(
+                child: Icon(Icons.add_a_photo, color: Colors.white70)),
           ),
         ),
       ],
@@ -443,7 +661,9 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
         if (files.isEmpty && emptyText.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Text(emptyText, style: const TextStyle(color: Colors.white54), textAlign: TextAlign.center),
+            child: Text(emptyText,
+                style: const TextStyle(color: Colors.white54),
+                textAlign: TextAlign.center),
           ),
       ],
     );
@@ -453,166 +673,9 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
     final isReturn = widget.mode == ReturnFlowMode.returnFlow;
     final List<_StepKind> base = [];
     base.add(_StepKind.photos);
-    final bool showRideConfirm =
-        (!isReturn && widget.request.ownerDeliversAtDropoffChosen) ||
-        (isReturn && widget.request.ownerPicksUpAtReturnChosen);
-    if (showRideConfirm) base.add(_StepKind.rideConfirm);
     if (isReturn) base.add(_StepKind.damage);
     base.add(_StepKind.codes);
     return base;
-  }
-
-  Widget _rideInfoChip({required bool grant}) {
-    final color = grant ? Colors.greenAccent.withValues(alpha: 0.18) : Colors.redAccent.withValues(alpha: 0.18);
-    final border = grant ? Colors.greenAccent.withValues(alpha: 0.35) : Colors.redAccent.withValues(alpha: 0.35);
-    // Dynamic copy depending on viewer role: renter sees "dir", owner sees "dem Mieter".
-    final String text = grant
-        ? 'Fahrtvergütung wird freigegeben'
-        : (widget.viewerIsOwner
-            ? 'Die Fahrtvergütung wird dem Mieter zurückerstattet.'
-            : 'Die Fahrtvergütung wird dir zurückerstattet.');
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12), border: Border.all(color: border)),
-      child: Row(children: [
-        Icon(grant ? Icons.verified_outlined : Icons.block_outlined, color: Colors.white70, size: 18),
-        const SizedBox(width: 8),
-        Flexible(child: Text(text, style: const TextStyle(color: Colors.white)))]),
-    );
-  }
-
-  Future<void> _resolveByLocation() async {
-    if (_resolvingLocation) return;
-    setState(() => _resolvingLocation = true);
-    try {
-      LocationPermission perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      if (perm == LocationPermission.deniedForever || perm == LocationPermission.denied) {
-        await AppPopup.toast(context, icon: Icons.location_off, title: 'Standortzugriff verweigert.');
-        return;
-      }
-      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      final dLat = widget.request.deliveryLat;
-      final dLng = widget.request.deliveryLng;
-      if (dLat == null || dLng == null) {
-        await AppPopup.toast(context, icon: Icons.info_outline, title: 'Keine Zieladresse gespeichert');
-        return;
-      }
-      final distanceMeters = Geolocator.distanceBetween(pos.latitude, pos.longitude, dLat, dLng);
-      final nearRenter = distanceMeters <= 500; // within 0.5 km counts as Mieter-Standort
-      // Rule: near renter => Vermieter ist gefahren => freigeben; near owner => keine Vergütung
-      final grant = nearRenter;
-      setState(() {
-        _rideGrant = grant;
-      });
-      await AppPopup.toast(context, icon: grant ? Icons.verified_outlined : Icons.block_outlined, title: grant ? 'Vergütung wird freigegeben' : 'Keine Vergütung');
-    } catch (e) {
-      debugPrint('[handover] location resolve failed: $e');
-      await AppPopup.toast(context, icon: Icons.location_disabled, title: 'Standort konnte nicht ermittelt werden.');
-    } finally {
-      if (mounted) setState(() => _resolvingLocation = false);
-    }
-  }
-
-  Future<void> _persistRideDecisionIfAny() async {
-    // Persist lightweight decision so the caller page can release/cancel after Abschluss
-    try {
-      final segment = widget.mode == ReturnFlowMode.returnFlow ? 'return' : 'dropoff';
-      if (_rideAnsweredYes != null) {
-        // If user explicitly answered, that is authoritative unless a mismatch
-        final grant = _rideAnsweredYes!; // Ja => owner delivered/picked => grant
-        await DataService.setRideCompensationDecision(requestId: widget.request.id, segment: segment, grant: grant, reason: grant ? 'matched_yes' : 'matched_no');
-        _rideGrant = grant;
-      }
-      if (_rideGrant != null) {
-        final reason = _rideAnsweredYes == null ? 'location_only' : 'location_override';
-        await DataService.setRideCompensationDecision(requestId: widget.request.id, segment: segment, grant: _rideGrant!, reason: reason);
-      }
-    } catch (e) {
-      debugPrint('[handover] persist ride decision failed: $e');
-    }
-  }
-
-  Widget _stepRideConfirm() {
-    final isReturn = widget.mode == ReturnFlowMode.returnFlow;
-    final title = isReturn ? 'Rückgabe – Fahrtvergütung' : 'Übergabe – Fahrtvergütung';
-    final forRenterQ = isReturn ? 'Hat der Vermieter den Artikel bei dir abgeholt?' : 'Hat der Vermieter den Artikel zu dir geliefert?';
-    final forOwnerQ = isReturn ? 'Hast du den Artikel beim Mieter abgeholt?' : 'Hast du dem Mieter den Artikel geliefert?';
-    final q = widget.viewerIsOwner ? forOwnerQ : forRenterQ;
-    final breakdown = DataService.priceBreakdownForRequest(item: widget.item, req: widget.request);
-    final fee = isReturn ? breakdown.returnFee : breakdown.dropoffFee;
-
-    return Align(
-      alignment: Alignment.center,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 8),
-            _card(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-                Row(children: const [Icon(Icons.directions_car_filled_outlined, color: Colors.white70), SizedBox(width: 8), Text('Fahrtvergütung bestätigen', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))]),
-                const SizedBox(height: 8),
-                Text(q, style: const TextStyle(color: Colors.white)),
-                const SizedBox(height: 8),
-                Row(children: [
-                  Expanded(child: _rideChoiceButton(yes: true)),
-                  const SizedBox(width: 10),
-                  Expanded(child: _rideChoiceButton(yes: false)),
-                ]),
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withValues(alpha: 0.08))),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Row(children: const [Icon(Icons.info_outline, color: Colors.white70, size: 18), SizedBox(width: 6), Flexible(child: Text('Bei unterschiedlichen Antworten: Bitte Standort aktivieren, dann entscheidet der Ort.', style: TextStyle(color: Colors.white70)))]),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.center,
-                      child: FilledButton.icon(
-                        onPressed: _resolvingLocation ? null : () async {
-                          await _resolveByLocation();
-                          await _persistRideDecisionIfAny();
-                        },
-                        icon: const Icon(Icons.my_location),
-                        label: Text(_resolvingLocation ? 'Prüfe Standort…' : 'Standort prüfen'),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (_rideGrant != null) _rideInfoChip(grant: _rideGrant!),
-                  ]),
-                ),
-              ]),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Die Fahrtvergütung beträgt für diese ${isReturn ? 'Abholung' : 'Lieferung'} ${_fmtEuro(fee)}, sie ist blockiert und wird erst nach dem Abschluss freigegeben.',
-              style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _rideChoiceButton({required bool yes}) {
-    // Default pre-highlight "Ja" visually, without forcing selection.
-    final bool selected = (_rideAnsweredYes ?? true) == yes;
-    final icon = yes ? Icons.check_circle_outline : Icons.close;
-    final label = yes ? const Text('Ja') : const Text('Nein');
-    final onTap = () async {
-      setState(() { _rideAnsweredYes = yes; _rideGrant = yes; });
-      await _persistRideDecisionIfAny();
-    };
-    if (selected) {
-      return FilledButton.icon(onPressed: onTap, icon: Icon(icon), label: label);
-    }
-    return OutlinedButton.icon(onPressed: onTap, icon: Icon(icon), label: label);
   }
 
   void _openImagePreview(PlatformFile file) {
@@ -647,7 +710,8 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
               right: 8,
               top: 8,
               child: IconButton(
-                onPressed: () => Navigator.of(context, rootNavigator: true).maybePop(),
+                onPressed: () =>
+                    Navigator.of(context, rootNavigator: true).maybePop(),
                 icon: const Icon(Icons.close, color: Colors.white),
               ),
             ),
@@ -655,22 +719,29 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
         );
       },
       transitionBuilder: (context, anim, anim2, child) {
-        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
-        return FadeTransition(opacity: curved, child: ScaleTransition(scale: Tween<double>(begin: 0.98, end: 1.0).animate(curved), child: child));
+        final curved =
+            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return FadeTransition(
+            opacity: curved,
+            child: ScaleTransition(
+                scale: Tween<double>(begin: 0.98, end: 1.0).animate(curved),
+                child: child));
       },
     );
   }
 
-  Future<void> _pickPhotosGallery(Function(List<PlatformFile>) addToList, {bool allowMultiple = true}) async {
-    final res = await FilePicker.platform.pickFiles(
+  Future<void> _pickPhotosGallery(Function(List<PlatformFile>) addToList,
+      {bool allowMultiple = true}) async {
+    final res = await FilePicker.pickFiles(
       type: FileType.image,
       allowMultiple: allowMultiple,
-      allowCompression: true,
       withData: true,
     );
     if (res != null) {
       setState(() {
-        _galleryUsedInCheckoutPhotos = _galleryUsedInCheckoutPhotos || res.files.isNotEmpty;
+        _lastPhotoSource = kIsWeb ? 'browser_picker' : 'gallery';
+        _galleryUsedInCheckoutPhotos =
+            _galleryUsedInCheckoutPhotos || res.files.isNotEmpty;
         addToList(res.files);
       });
     }
@@ -679,11 +750,14 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   Future<void> _pickPhotoCamera(Function(List<PlatformFile>) addToList) async {
     try {
       final ImagePicker picker = ImagePicker();
-      final XFile? shot = await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
+      final XFile? shot =
+          await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
       if (shot != null) {
         final bytes = await shot.readAsBytes();
-        final pf = PlatformFile(name: shot.name, size: bytes.length, path: shot.path, bytes: bytes);
+        final pf = PlatformFile(
+            name: shot.name, size: bytes.length, path: shot.path, bytes: bytes);
         setState(() {
+          _lastPhotoSource = kIsWeb ? 'browser_picker' : 'camera';
           addToList([pf]);
           if (kIsWeb) _galleryUsedInCheckoutPhotos = true;
         });
@@ -697,17 +771,21 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
         if (!mounted || !result.shouldNotify) return;
         await AppPopup.toast(
           context,
-          icon: result.success ? Icons.check_circle_outline : Icons.info_outline,
+          icon:
+              result.success ? Icons.check_circle_outline : Icons.info_outline,
           title: result.message!,
         );
       }
     } catch (e) {
       debugPrint('[handover] camera pick failed: $e');
-      await AppPopup.toast(context, icon: Icons.error_outline, title: 'Kamera nicht verfügbar');
+      if (!mounted) return;
+      await AppPopup.toast(context,
+          icon: Icons.error_outline, title: 'Kamera nicht verfügbar');
     }
   }
 
-  Future<void> _pickPhotosMenu(Function(List<PlatformFile>) addToList, {bool multiple = true}) async {
+  Future<void> _pickPhotosMenu(Function(List<PlatformFile>) addToList,
+      {bool multiple = true}) async {
     await AppPopup.show(
       context,
       icon: Icons.add_a_photo,
@@ -740,6 +818,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
 
   Widget _stepCheckoutPhotos() {
     final isReturn = widget.mode == ReturnFlowMode.returnFlow;
+    final presenterLabel = isReturn ? 'Mieter' : 'Vermieter';
     return Align(
       alignment: Alignment.center,
       child: ConstrainedBox(
@@ -750,12 +829,15 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
           children: [
             const SizedBox(height: 8),
             Text(
-              _galleryUsedInCheckoutPhotos
-                  ? 'Bitte mindestens 4 Fotos hinzufügen. Galerie-Fotos werden bei der Bestätigung offengelegt.'
-                  : (kIsWeb
-                      ? 'Bitte mindestens 4 Fotos hinzufügen. Im Browser können Fotos nicht eindeutig als Live-Aufnahme verifiziert werden.'
-                      : 'Bitte mindestens 4 Fotos hinzufügen.'),
-              style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
+              _viewerIsPresenter
+                  ? (_galleryUsedInCheckoutPhotos
+                      ? 'Bitte mindestens 4 aktuelle Fotos hinzufügen. Galerie-Fotos werden bei der Bestätigung offengelegt.'
+                      : (kIsWeb
+                          ? 'Bitte mindestens 4 aktuelle Fotos hinzufügen. Im Browser kann eine Live-Aufnahme nicht eindeutig verifiziert werden.'
+                          : 'Bitte mindestens 4 aktuelle Fotos hinzufügen.'))
+                  : '$presenterLabel hat $_presenterEvidenceCount von 4 Pflichtfotos im geschützten Buchungs-Chat hinterlegt. Bestätige den Satz oder dokumentiere eine Abweichung.',
+              style: const TextStyle(
+                  color: Colors.white70, fontWeight: FontWeight.w700),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 10),
@@ -764,22 +846,110 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    isReturn ? 'Rückgabe Fotos (min. 4)' : 'Übergabe Fotos (min. 4)',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 8),
-                  _photoGrid(
-                    _checkoutPhotos,
-                    () => _pickPhotosMenu((newOnes) => _checkoutPhotos = [..._checkoutPhotos, ...newOnes], multiple: true),
-                    emptyText: '',
-                  ),
+                  if (_viewerIsPresenter) ...[
+                    Text(
+                      '${isReturn ? 'Rückgabe' : 'Übergabe'}-Fotos (${_presenterEvidenceCount + _checkoutPhotos.length}/4)',
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Pflichtmotive: ${_presenterEvidenceSlots.map((slot) => _presenterEvidenceLabels[slot]).join(', ')}.',
+                      style: const TextStyle(color: Colors.white60),
+                    ),
+                    const SizedBox(height: 8),
+                    _photoGrid(
+                      _checkoutPhotos,
+                      () => _pickPhotosMenu((newOnes) {
+                        final remaining = 4 -
+                            _presenterEvidenceCount -
+                            _checkoutPhotos.length;
+                        if (remaining <= 0) return;
+                        final accepted = newOnes.take(remaining).toList();
+                        _checkoutPhotos = [..._checkoutPhotos, ...accepted];
+                        _checkoutPhotoSources = [
+                          ..._checkoutPhotoSources,
+                          ...List<String>.filled(
+                              accepted.length, _lastPhotoSource),
+                        ];
+                      }, multiple: true),
+                      emptyText: '',
+                    ),
+                  ] else ...[
+                    _conditionDecisionButton(
+                      decision: 'confirmed',
+                      label: 'Fotos stimmen überein',
+                      icon: Icons.check_circle_outline,
+                      enabled: _deviationEvidenceCount == 0,
+                    ),
+                    const SizedBox(height: 8),
+                    _conditionDecisionButton(
+                      decision: 'deviation_recorded',
+                      label: 'Abweichung dokumentieren',
+                      icon: Icons.report_problem_outlined,
+                    ),
+                    if (_counterpartyDecision == 'deviation_recorded') ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Mindestens ein eigenes Gegenfoto ist erforderlich.',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 8),
+                      _photoGrid(
+                        _checkoutPhotos,
+                        () => _pickPhotosMenu((newOnes) {
+                          _checkoutPhotos = [..._checkoutPhotos, ...newOnes];
+                          _checkoutPhotoSources = [
+                            ..._checkoutPhotoSources,
+                            ...List<String>.filled(
+                                newOnes.length, _lastPhotoSource),
+                          ];
+                        }, multiple: true),
+                        emptyText: '',
+                      ),
+                    ],
+                  ],
+                  if (_savingEvidence) ...[
+                    const SizedBox(height: 12),
+                    const LinearProgressIndicator(),
+                  ],
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _conditionDecisionButton({
+    required String decision,
+    required String label,
+    required IconData icon,
+    bool enabled = true,
+  }) {
+    void select() {
+      setState(() {
+        _counterpartyDecision = decision;
+        if (decision == 'confirmed') {
+          _checkoutPhotos = [];
+          _checkoutPhotoSources = [];
+        }
+        _evidencePersisted = false;
+      });
+    }
+
+    if (_counterpartyDecision == decision) {
+      return FilledButton.icon(
+        onPressed: enabled ? select : null,
+        icon: Icon(icon),
+        label: Text(label),
+      );
+    }
+    return OutlinedButton.icon(
+      onPressed: enabled ? select : null,
+      icon: Icon(icon),
+      label: Text(label),
     );
   }
 
@@ -793,18 +963,29 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(children: const [Icon(Icons.report_gmailerrorred_outlined, color: Colors.white70), SizedBox(width: 8), Text('Schaden melden', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))]),
+              Row(children: const [
+                Icon(Icons.report_gmailerrorred_outlined,
+                    color: Colors.white70),
+                SizedBox(width: 8),
+                Text('Schaden melden',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w800))
+              ]),
               const SizedBox(height: 8),
               SwitchListTile(
                 value: _hasDamage,
                 onChanged: (v) => setState(() => _hasDamage = v),
-                title: const Text('Schaden vorhanden', style: TextStyle(color: Colors.white)),
+                title: const Text('Schaden vorhanden',
+                    style: TextStyle(color: Colors.white)),
               ),
               if (_hasDamage) ...[
                 const SizedBox(height: 8),
                 _photoGrid(
                   _damagePhotos,
-                  () => _pickPhotosMenu((newOnes) => _damagePhotos = [..._damagePhotos, ...newOnes], multiple: true),
+                  () => _pickPhotosMenu(
+                      (newOnes) =>
+                          _damagePhotos = [..._damagePhotos, ...newOnes],
+                      multiple: true),
                   emptyText: 'Beschädigungsfotos hinzufügen (optional).',
                 ),
                 const SizedBox(height: 8),
@@ -831,14 +1012,19 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
     final isReturn = widget.mode == ReturnFlowMode.returnFlow;
     final flowLabel = isReturn ? 'Rückgabe' : 'Übergabe';
     final bookingSeed = _computeBookingSeed(widget.item, widget.request);
-    final segment = isReturn ? HandoverCodeService.segmentReturn : HandoverCodeService.segmentPickup;
-    final presenterRole = isReturn ? HandoverCodeService.presenterRenter : HandoverCodeService.presenterOwner;
-    final qrData = HandoverCodeService.qrPayload(
-      segment: segment,
-      presenterRole: presenterRole,
-      code: widget.handoverCode,
-      bookingId: bookingSeed,
-    );
+    final segment = isReturn
+        ? HandoverCodeService.segmentReturn
+        : HandoverCodeService.segmentPickup;
+    final presenterRole = isReturn
+        ? HandoverCodeService.presenterRenter
+        : HandoverCodeService.presenterOwner;
+    final qrData = widget.qrPayload ??
+        HandoverCodeService.qrPayload(
+          segment: segment,
+          presenterRole: presenterRole,
+          code: widget.handoverCode,
+          bookingId: bookingSeed,
+        );
 
     // Owner:
     // - In pickup flow the owner SHOWS QR + Code to the renter
@@ -850,13 +1036,237 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
           alignment: Alignment.center,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 600),
-            child: _card(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Text('$flowLabel bestätigen', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+            child: _card(
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                  Text('$flowLabel bestätigen',
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Bitte scanne den QR‑Code des Mieters oder gib den Rückgabe‑Code manuell ein.',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _scanCounterpartyQr,
+                        icon: const Icon(Icons.qr_code_scanner),
+                        label: const Text('QR‑Code scannen'),
+                      ),
+                    ),
+                  ]),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () =>
+                          setState(() => _showManualEntry = !_showManualEntry),
+                      child: Text(_showManualEntry
+                          ? 'Eingabe ausblenden'
+                          : 'QR nicht möglich?'),
+                    ),
+                  ),
+                  if (_showManualEntry) ...[
+                    const SizedBox(height: 4),
+                    const Text('Code manuell eingeben',
+                        style: TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _manualCodeCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        hintText: '6‑stelliger Code',
+                        hintStyle: TextStyle(color: Colors.white54),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () async {
+                            final entered = _manualCodeCtrl.text.trim();
+                            if (entered.isEmpty) return;
+                            final verified =
+                                await _verifyCounterpartyCode(entered);
+                            if (!mounted) return;
+                            if (verified) {
+                              setState(() => _otherPartyConfirmed = true);
+                              await AppPopup.toast(context,
+                                  icon: Icons.check_circle_outline,
+                                  title: '$flowLabel per Code bestätigt');
+                            } else {
+                              await AppPopup.toast(context,
+                                  icon: Icons.error_outline,
+                                  title: isReturn
+                                      ? 'Dieser Code gehört nicht zu dieser Rückgabe. Bitte den aktuellen Rückgabe-Code verwenden.'
+                                      : 'Dieser Code passt nicht zu diesem Übergabeschritt. Bitte den aktuellen Code erneut anzeigen oder scannen.');
+                            }
+                          },
+                          icon: const Icon(Icons.key),
+                          label: const Text('Code bestätigen'),
+                        ),
+                      ),
+                    ]),
+                  ],
+                ])),
+          ),
+        );
+      } else {
+        // Owner (pickup): show QR + 6-digit code
+        return Align(
+          alignment: Alignment.center,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: _card(
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                  Text('$flowLabel bestätigen',
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Lass den Mieter deinen QR‑Code scannen. Falls das nicht klappt, gib ihm den 6‑stelligen $flowLabel‑Code.',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: GestureDetector(
+                      onTap: () => _showQrOverlay(context, qrData),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          color: Colors.white,
+                          padding: const EdgeInsets.all(12),
+                          child: QrImageView(
+                              data: qrData,
+                              version: QrVersions.auto,
+                              size: 180,
+                              backgroundColor: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    const Icon(Icons.vpn_key, color: Colors.white70),
+                    const SizedBox(width: 8),
+                    Text('$flowLabel‑Code',
+                        style: const TextStyle(
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w700)),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: Text(widget.handoverCode,
+                          style: const TextStyle(
+                              letterSpacing: 2,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white)),
+                    )
+                  ]),
+                ])),
+          ),
+        );
+      }
+    }
+
+    // Renter:
+    // - In Return flow (laufende Buchung) the renter SHOWS a QR + 6‑digit code to the owner.
+    // - In Pickup flow the renter scans the owner's QR or enters the code.
+    if (isReturn) {
+      // Show QR + 6-digit code for the renter to be scanned by the Vermieter
+      return Align(
+        alignment: Alignment.center,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: _card(
+              child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                Text('$flowLabel bestätigen',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 8),
+                const Text(
+                  'Lass den Vermieter deinen QR‑Code scannen. Falls das nicht klappt, gib ihm den 6‑stelligen Rückgabe‑Code.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 12),
+                Center(
+                  child: GestureDetector(
+                    onTap: () => _showQrOverlay(context, qrData),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        color: Colors.white,
+                        padding: const EdgeInsets.all(12),
+                        child: QrImageView(
+                            data: qrData,
+                            version: QrVersions.auto,
+                            size: 180,
+                            backgroundColor: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(children: [
+                  const Icon(Icons.vpn_key, color: Colors.white70),
+                  const SizedBox(width: 8),
+                  const Text('Rückgabe‑Code',
+                      style: TextStyle(
+                          color: Colors.white70, fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Text(widget.handoverCode,
+                        style: const TextStyle(
+                            letterSpacing: 2,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white)),
+                  )
+                ]),
+                // Hinweis entfernt: Kein "Warte, bis der Vermieter bestätigt hat." mehr in der Mieter-Rückgabeansicht.
+              ])),
+        ),
+      );
+    }
+
+    // Pickup flow (renter) → scan owner's QR or enter the code manually
+    return Align(
+      alignment: Alignment.center,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600),
+        child: _card(
+            child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+              Text('$flowLabel bestätigen',
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
               const Text(
-                'Bitte scanne den QR‑Code des Mieters oder gib den Rückgabe‑Code manuell ein.',
-                style: TextStyle(color: Colors.white70),
-              ),
+                  'Bitte scanne den QR‑Code des Vermieters oder gib den Code manuell ein.',
+                  style: TextStyle(color: Colors.white70),
+                  textAlign: TextAlign.left),
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(
@@ -870,13 +1280,17 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () => setState(() => _showManualEntry = !_showManualEntry),
-                  child: Text(_showManualEntry ? 'Eingabe ausblenden' : 'QR nicht möglich?'),
+                  onPressed: () =>
+                      setState(() => _showManualEntry = !_showManualEntry),
+                  child: Text(_showManualEntry
+                      ? 'Eingabe ausblenden'
+                      : 'QR nicht möglich?'),
                 ),
               ),
               if (_showManualEntry) ...[
                 const SizedBox(height: 4),
-                const Text('Code manuell eingeben', style: TextStyle(color: Colors.white70)),
+                const Text('Code manuell eingeben',
+                    style: TextStyle(color: Colors.white70)),
                 const SizedBox(height: 6),
                 TextField(
                   controller: _manualCodeCtrl,
@@ -896,11 +1310,19 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                       onPressed: () async {
                         final entered = _manualCodeCtrl.text.trim();
                         if (entered.isEmpty) return;
-                        if (entered == widget.handoverCode) {
+                        final verified = await _verifyCounterpartyCode(entered);
+                        if (!mounted) return;
+                        if (verified) {
                           setState(() => _otherPartyConfirmed = true);
-                          await AppPopup.toast(context, icon: Icons.check_circle_outline, title: '$flowLabel per Code bestätigt');
+                          await AppPopup.toast(context,
+                              icon: Icons.check_circle_outline,
+                              title: '$flowLabel per Code bestätigt');
                         } else {
-                          await AppPopup.toast(context, icon: Icons.error_outline, title: isReturn ? 'Dieser Code gehört nicht zu dieser Rückgabe. Bitte den aktuellen Rückgabe-Code verwenden.' : 'Dieser Code passt nicht zu diesem Übergabeschritt. Bitte den aktuellen Code erneut anzeigen oder scannen.');
+                          await AppPopup.toast(context,
+                              icon: Icons.error_outline,
+                              title: isReturn
+                                  ? 'Dieser Code gehört nicht zu dieser Rückgabe. Bitte den aktuellen Rückgabe-Code verwenden.'
+                                  : 'Dieser Code passt nicht zu diesem Übergabeschritt. Bitte den aktuellen Code erneut anzeigen oder scannen.');
                         }
                       },
                       icon: const Icon(Icons.key),
@@ -910,164 +1332,6 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                 ]),
               ],
             ])),
-          ),
-        );
-      } else {
-        // Owner (pickup): show QR + 6-digit code
-        return Align(
-          alignment: Alignment.center,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 600),
-            child: _card(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('$flowLabel bestätigen', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            Text(
-              'Lass den Mieter deinen QR‑Code scannen. Falls das nicht klappt, gib ihm den 6‑stelligen $flowLabel‑Code.',
-              style: const TextStyle(color: Colors.white70),
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: GestureDetector(
-                onTap: () => _showQrOverlay(context, qrData),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    color: Colors.white,
-                    padding: const EdgeInsets.all(12),
-                    child: QrImageView(data: qrData, version: QrVersions.auto, size: 180, backgroundColor: Colors.white),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(children: [
-              const Icon(Icons.vpn_key, color: Colors.white70),
-              const SizedBox(width: 8),
-              Text('$flowLabel‑Code', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700)),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-                child: Text(widget.handoverCode, style: const TextStyle(letterSpacing: 2, fontWeight: FontWeight.w800, color: Colors.white)),
-              )
-            ]),
-            ])),
-          ),
-        );
-      }
-    }
-
-    // Renter:
-    // - In Return flow (laufende Buchung) the renter SHOWS a QR + 6‑digit code to the owner.
-    // - In Pickup flow the renter scans the owner's QR or enters the code.
-    if (isReturn) {
-      // Show QR + 6-digit code for the renter to be scanned by the Vermieter
-      return Align(
-        alignment: Alignment.center,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: _card(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('$flowLabel bestätigen', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          const Text(
-            'Lass den Vermieter deinen QR‑Code scannen. Falls das nicht klappt, gib ihm den 6‑stelligen Rückgabe‑Code.',
-            style: TextStyle(color: Colors.white70),
-          ),
-          const SizedBox(height: 12),
-          Center(
-            child: GestureDetector(
-              onTap: () => _showQrOverlay(context, qrData),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(12),
-                  child: QrImageView(data: qrData, version: QrVersions.auto, size: 180, backgroundColor: Colors.white),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(children: [
-            const Icon(Icons.vpn_key, color: Colors.white70),
-            const SizedBox(width: 8),
-            const Text('Rückgabe‑Code', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w700)),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-              child: Text(widget.handoverCode, style: const TextStyle(letterSpacing: 2, fontWeight: FontWeight.w800, color: Colors.white)),
-            )
-          ]),
-          // Hinweis entfernt: Kein "Warte, bis der Vermieter bestätigt hat." mehr in der Mieter-Rückgabeansicht.
-        ])),
-        ),
-      );
-    }
-
-    // Pickup flow (renter) → scan owner's QR or enter the code manually
-    return Align(
-      alignment: Alignment.center,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600),
-        child: _card(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('$flowLabel bestätigen', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 8),
-        const Text('Bitte scanne den QR‑Code des Vermieters oder gib den Code manuell ein.',
-            style: TextStyle(color: Colors.white70), textAlign: TextAlign.left),
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: _scanCounterpartyQr,
-              icon: const Icon(Icons.qr_code_scanner),
-              label: const Text('QR‑Code scannen'),
-            ),
-          ),
-        ]),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () => setState(() => _showManualEntry = !_showManualEntry),
-            child: Text(_showManualEntry ? 'Eingabe ausblenden' : 'QR nicht möglich?'),
-          ),
-        ),
-        if (_showManualEntry) ...[
-          const SizedBox(height: 4),
-          const Text('Code manuell eingeben', style: TextStyle(color: Colors.white70)),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _manualCodeCtrl,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              hintText: '6‑stelliger Code',
-              hintStyle: TextStyle(color: Colors.white54),
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-            style: const TextStyle(color: Colors.white),
-          ),
-          const SizedBox(height: 8),
-          Row(children: [
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: () async {
-                  final entered = _manualCodeCtrl.text.trim();
-                  if (entered.isEmpty) return;
-                  if (entered == widget.handoverCode) {
-                    setState(() => _otherPartyConfirmed = true);
-                    await AppPopup.toast(context, icon: Icons.check_circle_outline, title: '$flowLabel per Code bestätigt');
-                  } else {
-                    await AppPopup.toast(context, icon: Icons.error_outline, title: isReturn ? 'Dieser Code gehört nicht zu dieser Rückgabe. Bitte den aktuellen Rückgabe-Code verwenden.' : 'Dieser Code passt nicht zu diesem Übergabeschritt. Bitte den aktuellen Code erneut anzeigen oder scannen.');
-                  }
-                },
-                icon: const Icon(Icons.key),
-                label: const Text('Code bestätigen'),
-              ),
-            ),
-          ]),
-        ],
-      ])),
       ),
     );
   }
@@ -1084,7 +1348,10 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
           height: MediaQuery.of(ctx).size.height * 0.86,
           child: Stack(children: [
             MobileScanner(
-              controller: MobileScannerController(detectionSpeed: DetectionSpeed.normal, facing: CameraFacing.back, torchEnabled: false),
+              controller: MobileScannerController(
+                  detectionSpeed: DetectionSpeed.normal,
+                  facing: CameraFacing.back,
+                  torchEnabled: false),
               onDetect: (capture) {
                 final barcodes = capture.barcodes;
                 if (barcodes.isEmpty) return;
@@ -1097,15 +1364,20 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
             Positioned(
               left: 8,
               top: 8,
-              child: IconButton(onPressed: () => Navigator.of(ctx).maybePop(), icon: const Icon(Icons.close, color: Colors.white)),
+              child: IconButton(
+                  onPressed: () => Navigator.of(ctx).maybePop(),
+                  icon: const Icon(Icons.close, color: Colors.white)),
             ),
             Align(
               alignment: Alignment.bottomCenter,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(
-                  widget.viewerIsOwner ? 'Scanne den QR‑Code des Mieters' : 'Scanne den QR‑Code des Vermieters',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                  widget.viewerIsOwner
+                      ? 'Scanne den QR‑Code des Mieters'
+                      : 'Scanne den QR‑Code des Vermieters',
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700),
                 ),
               ),
             )
@@ -1116,31 +1388,55 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
 
     if (!mounted) return;
     if (scanned == null || scanned!.isEmpty) {
-      await AppPopup.toast(context, icon: Icons.qr_code_2, title: 'Kein Code erkannt');
+      await AppPopup.toast(context,
+          icon: Icons.qr_code_2, title: 'Kein Code erkannt');
       return;
     }
 
     try {
       final raw = scanned!.trim();
-      final expectedSegment = widget.mode == ReturnFlowMode.returnFlow ? HandoverCodeService.segmentReturn : HandoverCodeService.segmentPickup;
-      final expectedPresenterRole = widget.mode == ReturnFlowMode.returnFlow ? HandoverCodeService.presenterRenter : HandoverCodeService.presenterOwner;
-      final matches = HandoverCodeService.isExpectedQrPayload(
-        raw,
-        segment: expectedSegment,
-        presenterRole: expectedPresenterRole,
-        code: widget.handoverCode,
-        bookingId: _computeBookingSeed(widget.item, widget.request),
-      );
+      final expectedSegment = widget.mode == ReturnFlowMode.returnFlow
+          ? HandoverCodeService.segmentReturn
+          : HandoverCodeService.segmentPickup;
+      final expectedPresenterRole = widget.mode == ReturnFlowMode.returnFlow
+          ? HandoverCodeService.presenterRenter
+          : HandoverCodeService.presenterOwner;
+      final matches = widget.confirmationVerifier != null
+          ? await widget.confirmationVerifier!(qrPayload: raw)
+          : HandoverCodeService.isExpectedQrPayload(
+              raw,
+              segment: expectedSegment,
+              presenterRole: expectedPresenterRole,
+              code: widget.handoverCode,
+              bookingId: _computeBookingSeed(widget.item, widget.request),
+            );
+      if (!mounted) return;
       if (!matches) {
-        await AppPopup.toast(context, icon: Icons.error_outline, title: widget.mode == ReturnFlowMode.returnFlow ? 'Dieser Code gehört nicht zu dieser Rückgabe. Bitte den aktuellen Rückgabe-Code verwenden.' : 'Dieser Code passt nicht zu diesem Übergabeschritt. Bitte den aktuellen Code erneut anzeigen oder scannen.');
+        await AppPopup.toast(context,
+            icon: Icons.error_outline,
+            title: widget.mode == ReturnFlowMode.returnFlow
+                ? 'Dieser Code gehört nicht zu dieser Rückgabe. Bitte den aktuellen Rückgabe-Code verwenden.'
+                : 'Dieser Code passt nicht zu diesem Übergabeschritt. Bitte den aktuellen Code erneut anzeigen oder scannen.');
         return;
       }
       setState(() => _otherPartyConfirmed = true);
-      await AppPopup.toast(context, icon: Icons.check_circle_outline, title: '${widget.mode == ReturnFlowMode.returnFlow ? 'Rückgabe' : 'Abholung'} per QR bestätigt');
+      await AppPopup.toast(context,
+          icon: Icons.check_circle_outline,
+          title:
+              '${widget.mode == ReturnFlowMode.returnFlow ? 'Rückgabe' : 'Abholung'} per QR bestätigt');
     } catch (e) {
       debugPrint('[handover] scan failed: $e');
-      await AppPopup.toast(context, icon: Icons.error_outline, title: 'Bestätigung fehlgeschlagen');
+      if (!mounted) return;
+      await AppPopup.toast(context,
+          icon: Icons.error_outline, title: 'Bestätigung fehlgeschlagen');
     }
+  }
+
+  Future<bool> _verifyCounterpartyCode(String code) async {
+    if (widget.confirmationVerifier != null) {
+      return widget.confirmationVerifier!(code: code);
+    }
+    return code == widget.handoverCode;
   }
 
   void _showQrOverlay(BuildContext context, String data) {
@@ -1168,11 +1464,19 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     boxShadow: [
-                      BoxShadow(color: theme.colorScheme.primary.withValues(alpha: 0.45), blurRadius: 28, spreadRadius: 1),
+                      BoxShadow(
+                          color:
+                              theme.colorScheme.primary.withValues(alpha: 0.45),
+                          blurRadius: 28,
+                          spreadRadius: 1),
                     ],
                   ),
                   padding: const EdgeInsets.all(16),
-                  child: QrImageView(data: data, version: QrVersions.auto, size: 300, backgroundColor: Colors.white),
+                  child: QrImageView(
+                      data: data,
+                      version: QrVersions.auto,
+                      size: 300,
+                      backgroundColor: Colors.white),
                 ),
               ),
             ),
@@ -1180,8 +1484,13 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
         );
       },
       transitionBuilder: (context, anim, anim2, child) {
-        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
-        return FadeTransition(opacity: curved, child: ScaleTransition(scale: Tween<double>(begin: 0.95, end: 1.0).animate(curved), child: child));
+        final curved =
+            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return FadeTransition(
+            opacity: curved,
+            child: ScaleTransition(
+                scale: Tween<double>(begin: 0.95, end: 1.0).animate(curved),
+                child: child));
       },
     );
   }
@@ -1192,26 +1501,9 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
 
   // Entfernt: Unterschriften
 
-  String _fmtDateTime(DateTime d) {
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '${two(d.day)}.${two(d.month)}.${d.year}';
-  }
-
-  String _fmtEuro(double v) {
-    String two = v.toStringAsFixed(2);
-    two = two.replaceAll('.', ',');
-    return '$two €';
-  }
-
-  Future<void> _openMaps(String query) async {
-    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}');
-    try {
-      await launchUrl(uri, mode: LaunchMode.platformDefault);
-    } catch (_) {}
-  }
-
   String _computeBookingSeed(Item item, RentalRequest req) {
-    final seed = ((item.id.hashCode) ^ (req.id.hashCode) ^ (item.title.hashCode)).abs();
+    final seed =
+        ((item.id.hashCode) ^ (req.id.hashCode) ^ (item.title.hashCode)).abs();
     final s = seed.toString().padLeft(8, '0');
     return 'BKG-${s.substring(0, 4)}-${s.substring(4, 8)}';
   }

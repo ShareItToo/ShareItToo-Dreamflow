@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-store-route-diagnostic",
+  "status": "failed-routing",
+  "capturedAt": "2026-08-10T21:46:57Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081029"
+  },
+  "checks": [
+    {
+      "surface": "production-public",
+      "path": "/support",
+      "httpStatus": 200,
+      "expectedPageMarkerPresent": false,
+      "complianceStatus": null
+    },
+    {
+      "surface": "production-public",
+      "path": "/privacy",
+      "httpStatus": 200,
+      "expectedPageMarkerPresent": false,
+      "complianceStatus": null
+    },
+    {
+      "surface": "production-public",
+      "path": "/account-deletion",
+      "httpStatus": 200,
+      "expectedPageMarkerPresent": false,
+      "complianceStatus": null
+    },
+    {
+      "surface": "staging-backend",
+      "path": "/api/v1/public/support",
+      "httpStatus": 503,
+      "expectedPageMarkerPresent": true,
+      "complianceStatus": "draft"
+    },
+    {
+      "surface": "staging-backend",
+      "path": "/api/v1/public/privacy",
+      "httpStatus": 503,
+      "expectedPageMarkerPresent": true,
+      "complianceStatus": "draft"
+    },
+    {
+      "surface": "staging-backend",
+      "path": "/api/v1/account-deletion",
+      "httpStatus": 200,
+      "expectedPageMarkerPresent": true,
+      "complianceStatus": "operational"
+    }
+  ],
+  "finding": {
+    "publicRoutesServeAppShell": true,
+    "stagingBackendPagesBehaveAsDesigned": true,
+    "publicUrlGatePassed": false
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "stagingChanged": false,
+    "legalContentApproved": false,
+    "containsSecrets": false,
+    "containsPersonalAccountData": false,
+    "containsRawDeviceIdentifiers": false
+  },
+  "nextRequired": [
+    "review the deployed route configuration against backend/ops/Caddyfile",
+    "obtain explicit approval before any production-facing route reload",
+    "repeat the public URL verifier after the reviewed route change",
+    "keep support and privacy in draft until legal content is approved"
+  ]
+}

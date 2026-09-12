@@ -25,5 +25,19 @@ That leaves the app in guest state so login can be tested normally.
 
 ## QA credentials
 
-- Walid: `walid.qa@shareittoo.local` / `walid123`
-- Laura: `laura.qa@shareittoo.local` / `laura123`
+The two local QA passwords are generated randomly for every `--apply` run and
+printed once after the seed is written. They are never committed. Use the
+displayed credentials for the current seed run; reseeding replaces them.
+
+## Reload verification
+
+The normal `--apply` path does not use a fixed sleep or reconnect timing. It
+guards the current main-frame loader through CDP, requests one `Page.reload`,
+waits for the correlated new main-frame `load` lifecycle event, and then checks
+that the document is complete and every targeted localStorage key exactly
+matches the seed. The success line reports only readiness and a verified-key
+count; it does not print stored values.
+
+`--no-reload` deliberately skips this boundary and is diagnostic only. Do not
+use it as reload-readiness evidence. A timeout or mismatch is a failed run; do
+not add a sleep or automatic retry.

@@ -1,0 +1,1 @@
+Interner ShareItToo-Test: Behebt das Laden öffentlicher Anzeigen auf „Entdecken“ ohne Anmeldung. Der Build nutzt ausschließlich Staging; echte Zahlungen und öffentliche Veröffentlichung bleiben deaktiviert.

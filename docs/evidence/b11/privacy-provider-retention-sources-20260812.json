@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "kind": "privacy-provider-retention-source-review",
+  "reviewedAt": "2026-08-12T00:00:00Z",
+  "status": "official-sources-reviewed-owner-and-legal-approval-open",
+  "sources": [
+    {
+      "provider": "Firebase Cloud Messaging",
+      "url": "https://firebase.google.com/support/privacy/",
+      "officialFact": "Firebase installation IDs are retained until the Firebase customer requests deletion; after that request, removal from live and backup systems is completed within 180 days."
+    },
+    {
+      "provider": "Firebase Crashlytics",
+      "url": "https://firebase.google.com/support/privacy/",
+      "officialFact": "Crash traces, processed minidump data and associated installation identifiers are retained for 90 days before removal from live and backup systems begins."
+    },
+    {
+      "provider": "Firebase Authentication",
+      "url": "https://firebase.google.com/support/privacy/",
+      "officialFact": "Firebase Authentication processes phone numbers, user agents and IP addresses for authentication, security and abuse prevention. Logged IP addresses are retained for a few weeks; other authentication information is retained until the Firebase customer initiates deletion of the associated user and is then removed from live and backup systems within 180 days."
+    },
+    {
+      "provider": "Firebase Authentication Admin SDK",
+      "url": "https://firebase.google.com/docs/auth/admin/manage-users",
+      "officialFact": "The Firebase Admin SDK supports retrieving a user by UID and deleting a user by UID from a trusted server. ShareItToo uses these operations to verify that a phone-only temporary identity is safe to remove and then deletes it before storing the ownership proof."
+    },
+    {
+      "provider": "Google Maps Platform",
+      "url": "https://developers.google.com/maps/security/compliance/security-compliance",
+      "officialFact": "Google Maps Platform logs may include the account identifier, device or server IP address, request URL, timestamp and technical app or device information. Google publishes no single fixed retention period for these logs and states that data is retained according to legitimate business need and deleted when no longer necessary."
+    },
+    {
+      "provider": "Google Play",
+      "url": "https://support.google.com/googleplay/android-developer/answer/10787469?hl=en",
+      "officialFact": "The Data safety form must reflect off-device collection by the app and included SDKs. Transfers to a service provider acting on the developer's behalf can fall under the documented service-provider exception to data sharing, while the collection still requires accurate disclosure."
+    },
+    {
+      "provider": "Google Play",
+      "url": "https://support.google.com/googleplay/android-developer/answer/13327111?hl=en",
+      "officialFact": "An app that supports account creation must provide both an in-app deletion path and a public web resource for account and associated-data deletion requests."
+    }
+  ],
+  "boundaries": {
+    "officialDocumentationReviewed": true,
+    "providerContractAcceptedByOwner": false,
+    "legalApproval": false,
+    "storeFormSubmitted": false,
+    "publicRoutesChanged": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

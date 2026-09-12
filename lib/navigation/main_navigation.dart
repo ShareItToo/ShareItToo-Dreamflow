@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kReleaseMode, visibleForTesting;
 import 'dart:math' as math;
 import 'package:lendify/screens/explore_screen.dart';
 import 'package:lendify/screens/wishlists_screen.dart';
@@ -14,7 +15,40 @@ import 'package:lendify/widgets/user_avatar.dart';
 import 'package:lendify/navigation/main_nav_controller.dart';
 import 'package:lendify/services/developer_preview_service.dart';
 import 'package:lendify/services/auth_service.dart';
+import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/widgets/login_nudge_sheet.dart';
+
+bool shouldGateAccountTab({
+  required bool hasSession,
+  required bool hasCurrentUser,
+  required bool backendEnabled,
+  required bool releaseMode,
+  required bool previewGuest,
+}) {
+  final guestGateEnabled = backendEnabled || releaseMode || previewGuest;
+  return guestGateEnabled && (!hasSession || !hasCurrentUser);
+}
+
+@visibleForTesting
+const List<String> mainNavigationLabelKeys = <String>[
+  'Entdecken',
+  'Mietkorb',
+  'Buchungen',
+  'Nachrichten',
+  'Mein SIT',
+];
+
+@visibleForTesting
+const double mainNavigationMinimumTouchTarget = kMinInteractiveDimension;
+
+@visibleForTesting
+Widget mainNavigationTouchTarget(Widget child) {
+  return SizedBox(
+    width: mainNavigationMinimumTouchTarget,
+    height: mainNavigationMinimumTouchTarget,
+    child: Center(child: child),
+  );
+}
 
 class MainNavigation extends StatefulWidget {
   final int initialIndex;
@@ -48,7 +82,7 @@ class _MainNavigationState extends State<MainNavigation> {
 
   final List<Widget> _screens = [
     const ExploreScreen(),
-    const WishlistsScreen(),
+    const RentalCartScreen(),
     const BookingsScreen(),
     const MessagesScreen(),
     const ProfileScreen(),
@@ -63,19 +97,10 @@ class _MainNavigationState extends State<MainNavigation> {
       builder: (context, sessionSnap) {
         final hasSession = sessionSnap.data != null;
         if (!hasSession) {
-          return Stack(clipBehavior: Clip.none, children: [
-            KeyedSubtree(
-              key: ValueKey('profile_guest_${active ? 'active' : 'idle'}'),
-              child: _ProfileNavIcon(photoUrl: null, active: active),
-            ),
-            const Positioned(
-                right: -2,
-                top: -2,
-                child: DecoratedBox(
-                    decoration: BoxDecoration(
-                        color: BrandColors.logoAccent, shape: BoxShape.circle),
-                    child: SizedBox(width: 8, height: 8))),
-          ]);
+          return KeyedSubtree(
+            key: ValueKey('profile_guest_${active ? 'active' : 'idle'}'),
+            child: _ProfileNavIcon(photoUrl: null, active: active),
+          );
         }
         return FutureBuilder<model.User?>(
           future: DataService.getCurrentUser(),
@@ -88,20 +113,10 @@ class _MainNavigationState extends State<MainNavigation> {
             final keySuffix = photoUrl == null
                 ? 'profile_guest_${active ? 'active' : 'idle'}'
                 : 'profile_${user?.id ?? 'unknown'}_${photoUrl}_${active ? 'active' : 'idle'}';
-            return Stack(clipBehavior: Clip.none, children: [
-              KeyedSubtree(
-                key: ValueKey(keySuffix),
-                child: _ProfileNavIcon(photoUrl: photoUrl, active: active),
-              ),
-              const Positioned(
-                  right: -2,
-                  top: -2,
-                  child: DecoratedBox(
-                      decoration: BoxDecoration(
-                          color: BrandColors.logoAccent,
-                          shape: BoxShape.circle),
-                      child: SizedBox(width: 8, height: 8))),
-            ]);
+            return KeyedSubtree(
+              key: ValueKey(keySuffix),
+              child: _ProfileNavIcon(photoUrl: photoUrl, active: active),
+            );
           },
         );
       },
@@ -117,13 +132,12 @@ class _MainNavigationState extends State<MainNavigation> {
       // Keep internal state in sync with the global controller.
       _currentIndex = nav.index;
     }
-    return WillPopScope(
-      onWillPop: () async {
-        if (_currentIndex != 0) {
+    return PopScope(
+      canPop: _currentIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _currentIndex != 0) {
           context.read<MainNavController>().setIndex(0);
-          return false;
         }
-        return true;
       },
       child: AppGradientBackground(
         child: Scaffold(
@@ -138,13 +152,23 @@ class _MainNavigationState extends State<MainNavigation> {
             onTap: (index) async {
               final preview = context.read<DeveloperPreviewController>();
               final session = await AuthService.readSession();
-              final isGuest = session == null && preview.isGuest;
+              final currentUser =
+                  session == null ? null : await DataService.getCurrentUser();
+              if (mounted && _currentUser?.id != currentUser?.id) {
+                setState(() => _currentUser = currentUser);
+              }
+              final isGuest = shouldGateAccountTab(
+                hasSession: session != null,
+                hasCurrentUser: currentUser != null,
+                backendEnabled: BackendConfig.enabled,
+                releaseMode: kReleaseMode,
+                previewGuest: preview.isGuest,
+              );
               // Soft logged-out experience:
-              // - Guests can open the Profile tab to explore.
-              // - Other tabs remain locked in guest mode.
-              if (isGuest && index != 0 && index != 4) {
+              // - Guests can prepare a local Mietkorb and explore Profile.
+              // - Booking and communication tabs remain account-bound.
+              if (isGuest && index != 0 && index != 1 && index != 4) {
                 final gateContext = switch (index) {
-                  1 => GuestGateContext.favorites,
                   2 => GuestGateContext.booking,
                   3 => GuestGateContext.messages,
                   _ => GuestGateContext.generic,
@@ -167,38 +191,54 @@ class _MainNavigationState extends State<MainNavigation> {
                 const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
             items: [
               BottomNavigationBarItem(
-                icon: _navIcon(Icons.search, 0),
-                activeIcon: _HoveringNavIcon(icon: Icons.search, active: true),
-                label: l10n.t('Erkunden'),
+                icon: mainNavigationTouchTarget(_navIcon(Icons.search, 0)),
+                activeIcon: mainNavigationTouchTarget(
+                  const _HoveringNavIcon(icon: Icons.search, active: true),
+                ),
+                label: l10n.t(mainNavigationLabelKeys[0]),
               ),
               BottomNavigationBarItem(
-                icon: _navIcon(Icons.favorite_border, 1),
-                activeIcon:
-                    _HoveringNavIcon(icon: Icons.favorite_border, active: true),
-                label: l10n.t('Wunschlisten'),
+                icon: mainNavigationTouchTarget(
+                  _navIcon(Icons.shopping_bag_outlined, 1),
+                ),
+                activeIcon: mainNavigationTouchTarget(
+                  const _HoveringNavIcon(
+                    icon: Icons.shopping_bag_outlined,
+                    active: true,
+                  ),
+                ),
+                label: l10n.t(mainNavigationLabelKeys[1]),
               ),
               BottomNavigationBarItem(
-                icon: _HoveringAssetNavIcon(
+                icon: mainNavigationTouchTarget(_HoveringAssetNavIcon(
                     asset: 'assets/images/icononly_transparent_nobuffer.png',
                     active: _currentIndex == 2,
-                    baseSize: 32.0),
-                activeIcon: _HoveringAssetNavIcon(
+                    baseSize: 32.0)),
+                activeIcon: mainNavigationTouchTarget(_HoveringAssetNavIcon(
                     asset: 'assets/images/icononly_transparent_nobuffer.png',
                     active: true,
-                    baseSize: 32.0),
-                label: l10n.t('Buchungen'),
+                    baseSize: 32.0)),
+                label: l10n.t(mainNavigationLabelKeys[2]),
               ),
               BottomNavigationBarItem(
-                icon: _MessagesNavIcon(
-                    active: _currentIndex == 3, userId: _currentUser?.id),
-                activeIcon:
-                    _MessagesNavIcon(active: true, userId: _currentUser?.id),
-                label: l10n.t('Nachrichten'),
+                icon: mainNavigationTouchTarget(_MessagesNavIcon(
+                  active: _currentIndex == 3,
+                  userId: _currentUser?.id,
+                )),
+                activeIcon: mainNavigationTouchTarget(_MessagesNavIcon(
+                  active: true,
+                  userId: _currentUser?.id,
+                )),
+                label: l10n.t(mainNavigationLabelKeys[3]),
               ),
               BottomNavigationBarItem(
-                icon: _buildProfileNavIcon(active: _currentIndex == 4),
-                activeIcon: _buildProfileNavIcon(active: true),
-                label: l10n.t('Profil'),
+                icon: mainNavigationTouchTarget(
+                  _buildProfileNavIcon(active: _currentIndex == 4),
+                ),
+                activeIcon: mainNavigationTouchTarget(
+                  _buildProfileNavIcon(active: true),
+                ),
+                label: l10n.t(mainNavigationLabelKeys[4]),
               ),
             ],
           ),
@@ -307,7 +347,8 @@ class _ProfileNavIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color border = active ? BrandColors.primary : AppTheme.navInactive(context);
+    final Color border =
+        active ? BrandColors.primary : AppTheme.navInactive(context);
     final double size = 20;
     return MouseRegion(
       child: SitUserAvatar(

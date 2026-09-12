@@ -14,7 +14,6 @@ class NotificationDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final model = _NotificationDetailModel.fromNotification(notification);
 
     return Stack(
@@ -33,7 +32,7 @@ class NotificationDetailScreen extends StatelessWidget {
             elevation: 0,
             scrolledUnderElevation: 0,
             surfaceTintColor: Colors.transparent,
-            leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context).maybePop()),
+            leading: IconButton(tooltip: MaterialLocalizations.of(context).backButtonTooltip, icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context).maybePop()),
           ),
           body: SafeArea(
             child: SingleChildScrollView(
@@ -299,7 +298,7 @@ class _NotificationDetailModel {
       return _NotificationDetailModel(
         title: title.isNotEmpty ? title : 'Zahlungsmethode benötigt',
         subline: 'Damit du reibungslos buchen und bezahlen kannst.',
-        explanation: 'Für Buchungen und Kautionen braucht SIT eine gültige Zahlungsmethode. Du kannst jederzeit eine Methode hinzufügen oder wechseln.',
+        explanation: 'Für bezahlte Buchungen braucht SIT eine gültige Zahlungsmethode. Du kannst jederzeit eine Methode hinzufügen oder wechseln.',
         bullets: const [
           'Füge eine Zahlungsmethode hinzu, um Anfragen schneller abschließen zu können.',
           'Bei abgelaufenen Karten: aktualisiere die Daten, bevor du buchst.',
@@ -435,8 +434,8 @@ class _NotificationDetailModel {
     if (diff.inHours < 24) return 'vor ${diff.inHours} Std.';
     if (diff.inDays < 7) return 'vor ${diff.inDays} Tg.';
     final weeks = (diff.inDays / 7).floor();
-    if (weeks < 5) return 'vor ${weeks} W.';
+    if (weeks < 5) return 'vor $weeks W.';
     final months = (diff.inDays / 30).floor();
-    return 'vor ${months} Mon.';
+    return 'vor $months Mon.';
   }
 }

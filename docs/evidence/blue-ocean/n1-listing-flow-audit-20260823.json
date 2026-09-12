@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-stage-a-blue-ocean-n1-listing-flow-audit",
+  "status": "verified-ready-for-n2",
+  "capturedAt": "2026-08-23T20:43:00Z",
+  "auditBaseHead": "d0866a38bd9384c9ac100018869f2805ee32df5f",
+  "matrix": [
+    {
+      "area": "manual_listing_ui",
+      "status": "DONE",
+      "finding": "Create, edit, save-as-draft and explicit publish actions already exist in one owner-controlled form.",
+      "sources": ["lib/screens/create_listing_screen.dart", "lib/services/data_service.dart", "lib/models/item.dart"],
+      "nextPackage": null
+    },
+    {
+      "area": "photo_selection_storage",
+      "status": "OPEN",
+      "finding": "Camera and gallery selection, sanitized backend upload and active-listing photo binding exist; an isolated AI-analysis derivative lifecycle does not.",
+      "sources": ["lib/screens/create_listing_screen.dart", "lib/services/backend_repository.dart", "backend/src/media_pipeline.js", "backend/src/app.js"],
+      "nextPackage": "N4"
+    },
+    {
+      "area": "category_allowlist",
+      "status": "DONE",
+      "finding": "Client and server enforce the same private-pilot category and subcategory positive list, including the Heilbronn-compatible tool categories.",
+      "sources": ["lib/config/private_pilot_config.dart", "backend/src/private_pilot_domain.js"],
+      "nextPackage": null
+    },
+    {
+      "area": "safety_moderation",
+      "status": "OPEN",
+      "finding": "Account scope controls, listing moderation state and review workflows exist; AI-draft validation, clarification and safety-bound provenance are not modeled.",
+      "sources": ["backend/src/app.js", "backend/src/moderation_workflow.js", "backend/sql/migrations/026_v52_categories_moderation_operator.up.sql"],
+      "nextPackage": "N2"
+    },
+    {
+      "area": "draft_model",
+      "status": "CONFLICT",
+      "finding": "Draft status exists, but the shared form and server payload require a nearly publish-complete listing; silently weakening Item or historical rows would violate rollback and data-preservation rules.",
+      "sources": ["lib/screens/create_listing_screen.dart", "lib/models/item.dart", "backend/src/listing_catalog.js"],
+      "nextPackage": "N2"
+    },
+    {
+      "area": "publish_transaction",
+      "status": "CONFLICT",
+      "finding": "Publication is explicit, audited and photo-gated, but the current POST can create an active listing directly; AI output requires its own draft-first review boundary and must never auto-publish.",
+      "sources": ["lib/screens/create_listing_screen.dart", "backend/src/app.js", "backend/src/listing_catalog.js"],
+      "nextPackage": "N6"
+    },
+    {
+      "area": "g5_enrichment",
+      "status": "DONE",
+      "finding": "G5A is a separate deterministic post-publication owner flow, limited to reviewed category templates and explicit outcomes, with external generative AI false.",
+      "sources": ["backend/src/listing_supply_enrichment.js", "lib/models/supply_enrichment.dart", "lib/config/supply_enrichment_technical_config.dart"],
+      "nextPackage": null
+    },
+    {
+      "area": "price_fields",
+      "status": "CONFLICT",
+      "finding": "Manual daily price fields and a legacy local heuristic exist, but the heuristic uses coarse city multipliers and floating values and is not SIT_REGIONAL_PRICE_ENGINE_V2 authority.",
+      "sources": ["lib/screens/create_listing_screen.dart", "lib/services/ai_price_calculator_service.dart", "lib/openai/openai_config.dart", "backend/src/listing_catalog.js"],
+      "nextPackage": "N5"
+    },
+    {
+      "area": "v52_fee_integration",
+      "status": "DONE",
+      "finding": "The backend converts listing price to minor units and later issues immutable V5.2 quote and fee snapshots; price recommendation must feed the listing price without bypassing quote authority.",
+      "sources": ["backend/src/app.js", "backend/src/booking_domain.js", "backend/src/booking_workflow.js"],
+      "nextPackage": null
+    },
+    {
+      "area": "privacy_retention",
+      "status": "OPEN",
+      "finding": "Listings and uploads are covered by export, erasure and retention inventories; prompt input, image-analysis derivatives and market observations need explicit lifecycles before use.",
+      "sources": ["backend/src/privacy_export.js", "backend/src/retention_inventory.js", "store/privacy-disclosures.json", "store/retention-deletion-readiness.json"],
+      "nextPackage": "N2"
+    },
+    {
+      "area": "feature_flags",
+      "status": "OPEN",
+      "finding": "Broad AI and G5 surfaces fail closed, but no narrow listing-AI gateway flag, mock mode or budget gate exists yet.",
+      "sources": ["lib/config/private_pilot_config.dart", "lib/openai/openai_config.dart", "backend/src/config.js", "lib/config/supply_enrichment_technical_config.dart"],
+      "nextPackage": "N3"
+    }
+  ],
+  "counts": {"DONE": 4, "OPEN": 4, "CONFLICT": 3, "total": 11},
+  "preservedInvariants": {
+    "manualListingCreationPreserved": true,
+    "historicalListingsUnchanged": true,
+    "existingPhotosUnchanged": true,
+    "explicitOwnerPublishRequired": true,
+    "listingAutoPublishAllowed": false,
+    "broadExternalAiAllowed": false,
+    "realMoneyAllowed": false,
+    "publicReleaseAllowed": false
+  },
+  "implementationOrder": ["N2", "N3", "N4", "N5", "N6"],
+  "boundaries": {
+    "productCodeChanged": false,
+    "historicalDataRewritten": false,
+    "providerCallPerformed": false,
+    "billingActivated": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "realMoneyEnabled": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false
+  }
+}

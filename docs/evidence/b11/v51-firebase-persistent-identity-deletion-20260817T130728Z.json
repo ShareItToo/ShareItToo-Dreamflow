@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-firebase-persistent-identity-deletion",
+  "status": "implemented-full-regression-passed-deployment-and-external-approvals-open",
+  "capturedAt": "2026-08-17T13:07:28Z",
+  "sourceBaseCommit": "14a8def47d233433a0c1bf424f129925b2e7ecdb",
+  "implementation": {
+    "transactionalQueueBeforeLocalIdentityErase": true,
+    "supportedProviders": "google-apple-facebook",
+    "sitAccountIdStoredInProviderQueue": false,
+    "providerUidStoredOnlyWhilePending": true,
+    "atomicSkipLockedClaim": true,
+    "staleProcessingRecovery": true,
+    "boundedExponentialRetry": true,
+    "providerUserNotFoundIsIdempotentSuccess": true,
+    "queueRowDeletedOnlyAfterTerminalProviderOutcome": true,
+    "startupAndPeriodicWorker": true,
+    "immediatePostCommitAttempt": true,
+    "providerErrorMessagePersistedOrLogged": false,
+    "providerUidLogged": false
+  },
+  "privacyBoundary": {
+    "temporaryPhoneOnlyIdentityDeletionPreserved": true,
+    "persistentSocialIdentityDeletionImplemented": true,
+    "firebaseProviderCompletionWindowDisclosed": "within-180-days-after-customer-initiated-user-deletion",
+    "immediateProviderErasurePromised": false,
+    "legalPrivacyCopyUpdated": true,
+    "inAppPrivacyCopyUpdated": true,
+    "publicPrivacyCopyUpdated": true,
+    "socialProvidersActivated": false
+  },
+  "pushAndCrashDecision": {
+    "firebaseCloudMessagingRetained": true,
+    "firebaseCrashlyticsRetained": true,
+    "separateVoluntaryChoices": true,
+    "nextCandidateDefaultOff": true,
+    "pushCannotEnableCrashlytics": true
+  },
+  "sourceBindings": {
+    "cleanupWorkerSha256": "fc7b99d321a7a2bb0a871dc4f57f18357ec47923fb03a19c1777bce8270a3057",
+    "migrationSha256": "24766e130717d7a07a892e75326b341340b9818771f949d79e59a2780035bd20",
+    "backendAppSha256": "9716faf170300f0c096e33a675237575a79a1980744ee47eea42c5871a193ae5",
+    "backendServerSha256": "3872b89075a655a36dab55d14b9bdb645f95fb45f3191f8fdb759e2fef46df58",
+    "unitTestsSha256": "192266e76d15de02ad4ca69cce55466e4f2b84e4dfabba4bde12f7084b469c7d",
+    "wiringTestsSha256": "62566d793865d84cfb7c3e85dae4d0015fd98b428dfc36c864e5773f5f92f38a",
+    "privacyManifestSha256": "7b3d11e404c15d7a00954ce8c9154f4f1822ddc7d5e78cdf726ac187ecade25f",
+    "retentionManifestSha256": "6d02d68f9f6124e2eaa33a7eb2883bcfaf61d0315e2ff60aba582ca6c47273b5",
+    "legalManifestSha256": "846555ca36d62fe73c51ee65d271660a9bedb9d7f841d85ef76940f0e0b08e36"
+  },
+  "verification": {
+    "targetedIdentityCleanupAndWiringTests": "passed-10",
+    "targetedPrivacyAndRetentionTests": "passed-55",
+    "targetedLegalTests": "passed-11",
+    "privacyValidator": "passed-draft-fail-closed",
+    "retentionValidator": "passed-draft-open-nine-decisions-execution-blocked-20",
+    "legalValidator": "passed-draft-fail-closed",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "fullFlutterTests": "passed-282-with-1-intentional-skip",
+    "flutterAnalyzer": "224-findings-0-errors-baseline-accepted",
+    "googleOnlySocialProfile": "passed",
+    "webDebugBuild": "passed-existing-wasm-dry-run-warnings-only",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "openGates": {
+    "migrationAppliedToStaging": true,
+    "stagingProviderDeletionDryRun": true,
+    "firebaseContractAcceptance": true,
+    "processingLocationsAndInternationalTransferApproval": true,
+    "socialProviderActivationApproval": true,
+    "storeDisclosureApproval": true,
+    "replacementCandidateBuildAndPhysicalVerification": true
+  },
+  "boundaries": {
+    "databaseMigrationApplied": false,
+    "firebaseUserDeletedForThisMilestone": false,
+    "providerConsoleChanged": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "deploymentOrUploadPerformed": false,
+    "storeSubmissionChanged": false,
+    "candidateBuiltOrRelabeled": false,
+    "realPaymentPerformed": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  },
+  "officialSources": [
+    "https://firebase.google.com/support/privacy/",
+    "https://firebase.google.com/docs/auth/admin/manage-users"
+  ]
+}

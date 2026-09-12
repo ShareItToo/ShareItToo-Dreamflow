@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp63-backend-dependency-security-and-candidate-refresh",
+  "status": "complete-local-and-github-build-ready-play-internal-upload-pending",
+  "capturedAt": "2026-09-09T00:02:46Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "triggerHead": "9200b6334e8ac0751278188e49f9b7a5e2c77f8a",
+    "candidateSourceHead": "2055a5c508689596c0f776c2cdf38b54f7e106c3",
+    "githubVerifiedHead": "17d749895da3ac7723a8b855ee1ea004931b3b32"
+  },
+  "advisories": [
+    {
+      "package": "sharp",
+      "advisory": "GHSA-rgj7-g3m4-5g8c",
+      "severity": "high",
+      "affected": "<0.35.4",
+      "patched": "0.35.4",
+      "selected": "0.35.4",
+      "runtimeReachability": "listing-image-processing"
+    },
+    {
+      "package": "nodemailer",
+      "advisory": "GHSA-8m3c-c648-2xjj",
+      "severity": "moderate",
+      "affected": "<=9.1.0",
+      "patched": "9.1.1",
+      "selected": "9.1.1",
+      "affectedLegacyResolveContentPathUsed": false
+    },
+    {
+      "package": "multer",
+      "advisory": "GHSA-wc9g-mqfw-jrwm",
+      "severity": "high",
+      "affected": "<2.3.0",
+      "patched": "2.3.0",
+      "selected": "2.3.0",
+      "runtimeReachability": "listing-image-upload-parser"
+    },
+    {
+      "package": "multer",
+      "advisory": "GHSA-qfvm-cv95-jqjf",
+      "severity": "high",
+      "affected": "=2.2.0",
+      "patched": "2.3.0",
+      "selected": "2.3.0",
+      "runtimeReachability": "listing-image-upload-parser"
+    },
+    {
+      "package": "multer",
+      "advisory": "GHSA-535w-7cp7-47q4",
+      "severity": "high",
+      "affected": "<2.3.0",
+      "patched": "2.3.0",
+      "selected": "2.3.0",
+      "runtimeReachability": "listing-image-upload-parser"
+    }
+  ],
+  "supersededLocalCandidate": {
+    "versionCode": "2026090901",
+    "sourceHead": "c056a43baedc3d347ca3f56e3462cb2f396733a2",
+    "aabSha256": "05357dda5c0d24643b74f24401800b8ebcd984aa937d69c3daed6b3404b97454",
+    "apkSha256": "2b647af3ac4b732e81e7bc3a63ee63dba7bff82ca74b2dffbf1a79721547b3c8",
+    "reason": "new-high-severity-multer-advisories-published-after-local-build",
+    "storeUploaded": false,
+    "mustNeverBeUploaded": true,
+    "archiveRetainedAsHistoricalEvidence": true
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090902",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "strictlyHigherThanActiveInternal": true,
+    "unusedInLocalGitRefsBeforeReservation": true,
+    "unusedInPrivateCandidateArchiveBeforeReservation": true,
+    "signedArchiveCreated": true,
+    "storeUploaded": false
+  },
+  "artifact": {
+    "archiveDirectoryName": "2026090902-2055a5c508689596c0f776c2cdf38b54f7e106c3",
+    "aabFileName": "shareittoo-1.0.0-2026090902-2055a5c508689596c0f776c2cdf38b54f7e106c3.aab",
+    "aabBytes": 109599360,
+    "aabSha256": "b1de03f47d8d185f6cbfe2e28b0db6bd56163e8d1aeeed5f9ebe289a40a3af5c",
+    "apkFileName": "shareittoo-1.0.0-2026090902-2055a5c508689596c0f776c2cdf38b54f7e106c3.apk",
+    "apkBytes": 136761953,
+    "apkSha256": "a30404283c92c2dd20e231d385af80e2dcbef510c12210a461f5469759f82dd6",
+    "privacyReportSha256": "5899009d5fe51dd35f9c159d4c0d293929705e898cb3de9a1fe8a6a9d32fb9f7",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "zipStructureValidation": "passed",
+    "bundletoolVersion": "1.18.1",
+    "bundletoolValidation": "passed",
+    "binaryPrivacyScan": "passed",
+    "ownerOnlyArchive": true,
+    "nonOverwritingArchive": true
+  },
+  "verification": {
+    "focusedSecurityFloorTests": "passed-2",
+    "backendSuite": "passed-850-skipped-2",
+    "backendSyntax": "passed",
+    "productionDependencyAudit": "passed-zero-known-vulnerabilities",
+    "signedReleaseBuild": "passed",
+    "canonicalUploadSigning": "passed",
+    "firebaseAndroidConfiguration": "passed",
+    "completeRegression": "passed-f67cf5a6427d777cd5fd0a9f62064c0316b7e57c",
+    "cleanCheckout": "passed-f67cf5a6427d777cd5fd0a9f62064c0316b7e57c-byte-identical-android",
+    "githubRegression": "passed-34291902058-head-17d749895da3ac7723a8b855ee1ea004931b3b32",
+    "githubCodeql": "passed-34291902100-head-17d749895da3ac7723a8b855ee1ea004931b3b32",
+    "currentPrMergeOpenCodeScanningAlerts": 0
+  },
+  "historicalStagingRatchet": {
+    "cause": "runtime-affecting-backend-security-update-after-wp55-deployment",
+    "deployedWp55BackendTreeStillExact": true,
+    "newerBackendTreeAcceptedOnlyWhenBoundToCurrentSignedInternalStagingCandidate": true,
+    "candidateSourceBackendTreeMustEqualCurrentHeadBackendTree": true,
+    "candidateSourceMustBeCurrentHeadAncestor": true,
+    "focusedWp55Tests": "passed-6",
+    "stagingDeploymentPerformed": false
+  },
+  "boundaries": {
+    "advisorySuppressed": false,
+    "auditExcluded": false,
+    "workaroundIntroduced": false,
+    "existingArtifactRewritten": false,
+    "deviceChanged": false,
+    "storeOrTesterListChanged": false,
+    "stagingOrProductionChanged": false,
+    "paymentProviderFirebaseCloudVpsDnsChanged": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false,
+    "containsTesterIdentity": false,
+    "containsRawDeviceIdentifier": false
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-stage-a-blue-ocean-n10-google-play-internal-testing-preparation",
+  "status": "verified-ready-for-n11",
+  "capturedAt": "2026-08-24T00:08:00Z",
+  "implementationBaseHead": "b606e2864b6ab429a9dd64c04280968720454581",
+  "planRef": "store/google-play/blue-ocean-internal-testing-plan.json",
+  "preparedArtifacts": {
+    "handoffRunbook": "docs/operations/BLUE_OCEAN_GOOGLE_PLAY_INTERNAL_TESTING_HANDOFF.md",
+    "testerInstructions": "docs/templates/BLUE_OCEAN_INTERNAL_TESTER_INSTRUCTIONS.md",
+    "feedbackTemplate": "docs/templates/BLUE_OCEAN_INTERNAL_TESTING_FEEDBACK.md",
+    "aggregateEvaluation": "docs/templates/blue_ocean_heilbronn_wave0_evaluation_sheet.csv",
+    "releaseNotes": "store/google-play/de-DE/blue_ocean_internal_release_notes.txt"
+  },
+  "candidateState": {
+    "versionName": "1.0.0",
+    "currentRepositoryBuildNumber": "2026082302",
+    "plannedBuildNumber": "2026082401",
+    "exactCommitBound": false,
+    "exactAabHashBound": false,
+    "signedAabBuilt": false,
+    "privateArchiveVerified": false
+  },
+  "targetedVerification": {
+    "planWiringTests": "passed-8",
+    "artifactValidatorTests": "passed-7",
+    "artifactValidator": "passed",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed"
+  },
+  "exactGitHubVerification": {
+    "headSha": "9533d4351c64d1b3df2b37b97e4ec0e9496f020e",
+    "regressionRunId": 32675709874,
+    "regressionConclusion": "success",
+    "codeqlRunId": 32675709863,
+    "codeqlConclusion": "success"
+  },
+  "boundaries": {
+    "aabBuilt": false,
+    "aabUploaded": false,
+    "playConsoleChanged": false,
+    "testerListCreatedOrChanged": false,
+    "testerInvited": false,
+    "optInLinkGeneratedOrShared": false,
+    "firebaseChanged": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "cloudChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false
+  },
+  "nextPackage": "N11"
+}

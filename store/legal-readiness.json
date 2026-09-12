@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "state": "draft",
+  "approvalAllowed": false,
+  "operatorReadinessDraft": {
+    "status": "confirmed-sole-proprietor-draft-only",
+    "sourceFile": "assets/legal/de/operator_readiness_draft_20260909.json",
+    "currentContentSha256": "35fd214b0cf355a2f1ee6084a89294f63495d0def49dffa8036105adb778bfcf",
+    "publicCommercialOperationAllowed": false,
+    "bindingContractAcceptanceAllowed": false
+  },
+  "v53OperatorAlignedDraft": {
+    "status": "draft-blocked-sole-proprietor",
+    "sourceFile": "assets/legal/de/legal_manifest_v53.json",
+    "currentContentSha256": "d1265d31f68a7c616d782a78cd77c22eadb03dabbbd7e9ebe36a485d6d1a49c6",
+    "documentCount": 9,
+    "publicCommercialOperationAllowed": false,
+    "bindingContractAcceptanceAllowed": false
+  },
+  "interimPilotRules": {
+    "version": "V5.1-2026-08-16",
+    "status": "active-for-internal-and-closed-testing",
+    "realPaymentsEnabled": false,
+    "replaceOnUserInstruction": true
+  },
+  "consentContract": {
+    "minimumUserAge": 18,
+    "explicitConfirmations": [
+      "minimumAge",
+      "terms",
+      "privacy",
+      "privateUse"
+    ],
+    "technicalStatus": "explicit-unversioned-draft",
+    "registrationSource": "lib/screens/register_screen.dart",
+    "authServiceSource": "lib/services/auth_service.dart",
+    "backendSource": "backend/src/app.js"
+  },
+  "documents": {
+    "terms": {
+      "status": "draft",
+      "sourceFile": "lib/screens/legal_terms_screen.dart",
+      "currentContentSha256": "cd3b51d55ff7ecc306451d6357d5e53ecaf6eaad10b7b994a476e9e3b1cb7acd",
+      "approvedContentSha256": null,
+      "publicUrl": null,
+      "approvalEvidenceRef": null
+    },
+    "communityRules": {
+      "status": "draft",
+      "sourceFile": "lib/screens/legal_community_rules_screen.dart",
+      "currentContentSha256": "917e22c8a101fb8b2a06770c11a223efbf4ecc83ae67e3214880440ceeddacb5",
+      "approvedContentSha256": null,
+      "publicUrl": null,
+      "approvalEvidenceRef": null
+    },
+    "cancellationPolicy": {
+      "status": "draft",
+      "sourceFile": "lib/screens/legal_cancellation_policy_screen.dart",
+      "currentContentSha256": "73e84736d726704d0f947b4d5614680f4d7c1ed8f4c508b9af931ed370aec2a4",
+      "approvedContentSha256": null,
+      "publicUrl": null,
+      "approvalEvidenceRef": null
+    },
+    "feesAndPayments": {
+      "status": "draft",
+      "sourceFile": "lib/screens/legal_fees_payments_screen.dart",
+      "currentContentSha256": "671174975a610376b19a8ab8c518b5e9075b767614a9eb6aee9c515979a74e94",
+      "approvedContentSha256": null,
+      "publicUrl": null,
+      "approvalEvidenceRef": null
+    },
+    "privacy": {
+      "status": "draft",
+      "sourceFile": "lib/screens/legal_privacy_screen.dart",
+      "currentContentSha256": "7de576e32c1d30feaab7ecf4bf0523e136f28a299ab353751442b59513fd53e8",
+      "approvedContentSha256": null,
+      "publicUrl": null,
+      "approvalEvidenceRef": null
+    },
+    "imprint": {
+      "status": "draft",
+      "sourceFile": "lib/screens/legal_imprint_screen.dart",
+      "currentContentSha256": "735afd6ad9200ce8f5e7e44716be572e8f890eb05826673e32843603fc0d2658",
+      "approvedContentSha256": null,
+      "publicUrl": null,
+      "approvalEvidenceRef": null
+    }
+  },
+  "requiredApprovals": {
+    "legalProviderIdentity": {
+      "status": "open",
+      "evidenceRef": null
+    },
+    "copyrightOwner": {
+      "status": "open",
+      "evidenceRef": null
+    },
+    "legalReview": {
+      "status": "open",
+      "evidenceRef": null
+    },
+    "userContentModerationPolicy": {
+      "status": "open",
+      "evidenceRef": null
+    },
+    "cancellationRefundNoDepositConsistency": {
+      "status": "open",
+      "evidenceRef": null
+    }
+  },
+  "openPilotDecisions": {
+    "platformContractAndWithdrawalTiming": {
+      "status": "superseded_by_v51",
+      "interimRule": "v51-exact-two-declarations-at-binding-booking-request",
+      "decisionBy": "V5.1 Teil A Nr. 11-13 und Umsetzungsauftrag Nr. 2-5",
+      "activeForInternalTesting": true,
+      "blocksLiveActivation": true
+    },
+    "withdrawalEffectOnPrivateRental": {
+      "status": "superseded_by_v51",
+      "interimRule": "v51-14-day-before-after-handover-effects-later-rights-review",
+      "decisionBy": "V5.1 Teil A Nr. 13 und Umsetzungsauftrag Nr. 5",
+      "activeForInternalTesting": true,
+      "blocksLiveActivation": true
+    },
+    "cancellationParameters": {
+      "status": "superseded_by_v51",
+      "interimRule": "v51-24h-50-percent-60min-and-actual-loss-after-start",
+      "decisionBy": "V5.1 Teil C und Umsetzungsauftrag Nr. 6",
+      "activeForInternalTesting": true,
+      "blocksLiveActivation": true
+    },
+    "marketplacePspMechanics": {
+      "status": "superseded_by_v51",
+      "interimRule": "licensed-marketplace-psp-test-only-until-evidenced",
+      "decisionBy": "V5.1 Teil E und PSP-Vertrag/Testabnahme",
+      "activeForInternalTesting": true,
+      "blocksLiveActivation": true
+    },
+    "missingReturnConfirmationWindow": {
+      "status": "superseded_by_v51",
+      "interimRule": "awaiting-return-confirmation-until-t0-plus-5-calendar-days",
+      "decisionBy": "V5.1 Teil E Nr. 2",
+      "activeForInternalTesting": true,
+      "blocksLiveActivation": false
+    },
+    "handoverPhotoWorkflow": {
+      "status": "superseded_by_v51",
+      "interimRule": "four-handover-party-photos-plus-counterparty-confirmation-or-deviation-photo",
+      "decisionBy": "V5.1 Teil D Nr. 2 und Umsetzungsauftrag Nr. 9",
+      "activeForInternalTesting": true,
+      "blocksLiveActivation": false
+    }
+  },
+  "storeGate": {
+    "field": "blockingGates.termsAndUserContentRules",
+    "status": "open"
+  },
+  "boundaries": {
+    "legalApproval": false,
+    "storeSubmissionChanged": false,
+    "publicRoutesChanged": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

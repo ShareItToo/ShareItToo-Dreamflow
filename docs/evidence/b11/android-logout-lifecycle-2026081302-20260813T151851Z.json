@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-logout-lifecycle-diagnostic",
+  "status": "passed-bounded-logout-lifecycle-diagnostic",
+  "capturedAt": "2026-08-13T15:18:51.438Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081302",
+    "commit": "530ed17e46dbd82916eef0d59f1b07e448c737f8",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "installed": {
+    "packageIdentityVerified": true,
+    "versionName": "1.0.0",
+    "buildNumber": "2026081302",
+    "apkSha256": "2a9f7e1e4ba0f43cd99f03e20635113e2b0aae2c8a18cc4b9394ebcd2b516e38"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "uiLogout": {"status": "passed", "result": "logout-confirmed-and-session-cleared"},
+    "coldStartGuestPersistence": {"status": "passed", "result": "guest-profile-restored-after-process-restart"},
+    "protectedChatAfterLogout": {"status": "passed", "result": "authentication-required-private-content-hidden"},
+    "postLogoutProcessAbsentPush": {"status": "passed", "result": "controlled-message-created-no-device-notification"}
+  },
+  "notificationProbe": {
+    "processAbsent": true,
+    "messageAccepted": true,
+    "observedNotificationCountBefore": 0,
+    "observedNotificationCountAfter": 0,
+    "notificationCountUnchanged": true,
+    "observationSeconds": 35
+  },
+  "boundaries": {
+    "syntheticAccountsOnly": true,
+    "directDiagnosticOnly": true,
+    "storeInstallationGateSatisfied": false,
+    "fullDeviceMatrixPassed": false,
+    "wifiOnlyDiagnostic": true,
+    "hotspotPassed": false,
+    "authenticatedDeepLinksPassed": false,
+    "realPushPassed": false,
+    "controlledPushSuppressionPassed": true,
+    "manualTalkBackTraversalPassed": false,
+    "iosTestFlightPassed": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "messageSent": true,
+    "lockCodeUsed": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  },
+  "isolation": {
+    "protectedReviewFixtureUnchanged": true,
+    "temporaryVaultRemovedAfterProbe": true,
+    "temporaryBookingCompleted": true,
+    "temporaryListingPaused": true,
+    "listingDeleted": false,
+    "containsReviewCredentials": false
+  }
+}

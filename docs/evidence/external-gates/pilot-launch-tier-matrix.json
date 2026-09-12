@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-pilot-launch-tier-matrix",
+  "assessedOn": "2026-08-23",
+  "state": "pilot-freeze-hold-no-go",
+  "freezeBaseline": {
+    "ref": "docs/operations/PILOT_FREEZE_BASELINE.md",
+    "controlCommit": "8f192c9c5f17fa5e70aa1ce844c9324771c23793",
+    "regressionRun": 32627458363,
+    "codeqlRun": 32627458364
+  },
+  "evidenceLevels": [
+    "technically-implemented",
+    "technically-tested",
+    "externally-evidenced",
+    "professionally-approved",
+    "pilot-approved",
+    "real-money-approved",
+    "public-launch-approved"
+  ],
+  "tiers": [
+    {
+      "id": "stage_a",
+      "order": 1,
+      "name": "closed-android-pilot-without-real-money",
+      "inherits": null,
+      "state": "hold-explicit-decision-required",
+      "activationDecision": "PILOT_STAGE_A_DECISION",
+      "audience": {
+        "invitationMode": "private-invitation-only",
+        "maximumAdults": 30,
+        "publicRegistration": false
+      },
+      "geography": {
+        "recommendedRegion": "spiegelberg",
+        "configured": false
+      },
+      "catalog": {
+        "categoryCodes": [
+          "cat8/Elektrowerkzeuge",
+          "cat8/Bohrmaschinen",
+          "cat8/Schleifer"
+        ],
+        "vehicles": false,
+        "delivery": false,
+        "shipping": false,
+        "express": false
+      },
+      "plannedFlows": {
+        "minimum": 30,
+        "maximum": 50,
+        "observedCompleted": null
+      },
+      "payment": {
+        "mode": "synthetic-or-test-based",
+        "realMoney": false,
+        "livePsp": false,
+        "multiLenderPayment": false
+      },
+      "distribution": {
+        "platform": "android",
+        "publicStoreLaunch": false
+      },
+      "productScope": {
+        "included": [
+          "v5.2-single-item-rental",
+          "discover",
+          "non-reserving-rental-cart",
+          "gemerkt",
+          "existing-booking-handover-return-support"
+        ],
+        "conditionallyExcluded": [
+          "g3",
+          "g4",
+          "g5"
+        ],
+        "conditionalEntryRequirements": [
+          "professional-review-new-g3-legal-document-version",
+          "required-privacy-and-contract-decisions",
+          "separate-explicit-walid-expanded-pilot-approval"
+        ],
+        "excluded": [
+          "sit-business",
+          "global-expansion",
+          "production-external-ai",
+          "multi-lender-payment",
+          "public-registration",
+          "vehicles",
+          "delivery",
+          "shipping",
+          "express"
+        ]
+      },
+      "requiredProofAreas": [
+        "professional-v5.2-stage-a-legal-review",
+        "authentic-operator-and-active-provider-facts",
+        "minimum-pilot-operations-roles-and-delegation",
+        "exact-candidate-android-device-evidence",
+        "required-firebase-owner-controls",
+        "stage-a-privacy-retention-and-legal-hold-decisions",
+        "pilot-region-roster-and-scope-envelope",
+        "explicit-stage-a-activation-decision"
+      ]
+    },
+    {
+      "id": "stage_b",
+      "order": 2,
+      "name": "closed-real-money-pilot",
+      "inherits": "stage_a",
+      "state": "hold-additional-payment-gates-required",
+      "activationDecision": "PILOT_STAGE_B_REAL_MONEY_DECISION",
+      "additionalRequirements": [
+        "selected-and-contractually-reviewed-marketplace-psp",
+        "authentic-kyc-and-onboarding-facts",
+        "dpa-region-transfer-and-contract-review",
+        "eight-authentic-sandbox-e2e-scenarios",
+        "refund-chargeback-payout-and-ledger-evidence",
+        "confirmed-tax-and-accounting-logic",
+        "separate-explicit-walid-real-money-approval"
+      ],
+      "payment": {
+        "realMoney": false,
+        "livePsp": false,
+        "sandboxScenarioRequiredCount": 8,
+        "sandboxScenarioPassedCount": 0
+      }
+    },
+    {
+      "id": "stage_c",
+      "order": 3,
+      "name": "public-regional-launch",
+      "inherits": "stage_b",
+      "state": "hold-additional-public-launch-gates-required",
+      "activationDecision": "PILOT_STAGE_C_PUBLIC_LAUNCH_DECISION",
+      "additionalRequirements": [
+        "store-approvals",
+        "complete-operator-and-consumer-information",
+        "authentic-operations-and-support-staffing",
+        "roles-delegates-and-absence-tests",
+        "complete-provider-privacy-and-retention-approvals",
+        "authentic-unit-economics",
+        "monitoring-and-incident-runbooks",
+        "separate-explicit-public-activation-decision"
+      ],
+      "distribution": {
+        "publicRegistration": false,
+        "publicStoreLaunch": false,
+        "publicRegionalActivation": false
+      }
+    }
+  ],
+  "summary": {
+    "tierCount": 3,
+    "activatedTierCount": 0,
+    "externallyReadyGateCount": 0,
+    "requiredExternalGateCount": 11,
+    "currentHighestApprovedTier": null,
+    "releaseDecision": "hold-no-go"
+  },
+  "sourceRefs": [
+    "docs/operations/PILOT_FREEZE_BASELINE.md",
+    "docs/evidence/external-gates/technical-setup-manifest.json",
+    "docs/evidence/p0b/pilot-go-no-go-dossier.json",
+    "docs/evidence/p0b-next/invited-synthetic-pilot-spiegelberg-cat8-readiness.json",
+    "docs/evidence/p0b-next/psp-sandbox-e2e-evidence.json",
+    "docs/evidence/support/support-test-matrix-v1-traceability.json",
+    "store/platform-account-readiness.json",
+    "store/privacy-disclosures.json",
+    "store/retention-deletion-readiness.json",
+    "store/submission.json"
+  ],
+  "boundaries": {
+    "pilotActivated": false,
+    "realMoneyUsed": false,
+    "livePspActivated": false,
+    "publicRegistrationEnabled": false,
+    "publicStoreLaunchStarted": false,
+    "productionChanged": false,
+    "providerChanged": false,
+    "cloudChanged": false,
+    "dnsChanged": false,
+    "vpsChanged": false,
+    "paidServiceStarted": false,
+    "contractAccepted": false,
+    "prMerged": false
+  }
+}

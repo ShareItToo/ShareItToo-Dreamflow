@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/services/data_service.dart';
+import 'package:lendify/widgets/app_popup.dart';
 
 class CheckAvailabilityScreen extends StatefulWidget {
   final Item item;
@@ -165,7 +166,11 @@ class _CheckAvailabilityScreenState extends State<CheckAvailabilityScreen> {
       if (ok) {
         Navigator.of(context).pop(DateTimeRange(start: _start!, end: _end!));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('In diesem Zeitraum bereits gebucht')));
+        AppPopup.info(
+          context,
+          title: 'Zeitraum nicht verfügbar',
+          message: 'Der Artikel ist in diesem Zeitraum bereits gebucht.',
+        );
         setState(() => _overlapsBlocked = true);
       }
     } finally {
@@ -221,7 +226,7 @@ class _CheckAvailabilityScreenState extends State<CheckAvailabilityScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
             child: Row(children: [
-              IconButton(onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.arrow_back, color: Colors.white)),
+              IconButton(tooltip: MaterialLocalizations.of(context).backButtonTooltip, onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.arrow_back, color: Colors.white)),
               const SizedBox(width: 4),
               // Month navigation cluster
               Container(
