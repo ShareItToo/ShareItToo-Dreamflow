@@ -47,19 +47,19 @@
   "sourceVerification": {
     "closedPilotFocusedTests": "passed-release-preflight",
     "privacyAndPackageRatchets": "passed",
-    "fullToolInventory": "pending-exact-candidate-run",
+    "fullToolInventory": "passed-official-bootstrap-and-focused-diagnostic-correction",
     "backendSuite": "passed-focused-873-tests-2-documented-skips",
     "flutterAnalyzer": "passed-zero-issues",
-    "fullTechnicalRegression": "pending-exact-candidate-run",
-    "cleanCheckoutReproducibility": "pending-github-regression",
-    "githubVerifiedHead": null,
-    "githubRegressionRunId": null,
-    "githubRegressionConclusion": "pending",
-    "githubCodeqlRunId": null,
-    "githubCodeqlConclusion": "pending",
+    "fullTechnicalRegression": "passed-exact-candidate-freeze-head",
+    "cleanCheckoutReproducibility": "passed-exact-candidate-freeze-head",
+    "githubVerifiedHead": "f9c4c9523eb0f4dfcdb03d34516795a91e0bcbdd",
+    "githubRegressionRunId": 34703064328,
+    "githubRegressionConclusion": "success",
+    "githubCodeqlRunId": 34703064266,
+    "githubCodeqlConclusion": "success",
     "githubApiImagePublishRunId": null,
     "githubApiImagePublishConclusion": "not-required-client-only-source-change",
-    "openCodeScanningAlertsPrHead": null
+    "openCodeScanningAlertsPrHead": 0
   },
   "stagingStateAtReadback": {
     "sourceHead": "df39a14b7a19afe467842461a28f1e77fec8445e",
@@ -105,19 +105,19 @@
     "handoffRef": "store/google-play/on-device-listing-ai-data-safety-handoff.json"
   },
   "deviceVerification": {
-    "preferredDeviceExactApkInstalled": false,
+    "preferredDeviceExactApkInstalled": true,
     "preferredDeviceDataPreserved": true,
     "onDeviceListingAiPhysicalInference": "not-replayed-on-2026091201",
-    "authenticatedPilotMatrix": "pending-exact-candidate-pixel-replay",
+    "authenticatedPilotMatrix": "passed-exact-candidate-pixel-fcm-and-source-owned-account-isolation",
     "secondaryDevice": "not-required-while-oneplus-disconnected"
   },
   "privateDriveHandoff": {
     "status": "not-required-for-current-mac-mini-session",
     "shared": false
   },
-  "evidenceRef": null,
+  "evidenceRef": "docs/evidence/release-readiness/wp126-exact-successor-pixel-push-closure-20260912.json",
   "playCompletionEvidenceRef": null,
-  "handoverRef": null,
+  "handoverRef": "docs/operations/WP126_EXACT_SUCCESSOR_PIXEL_PUSH_CLOSURE_2026-09-12.md",
   "releaseNotesRef": "store/google-play/de-DE/internal_release_notes.txt",
   "containsSecrets": false,
   "containsTesterIdentity": false,

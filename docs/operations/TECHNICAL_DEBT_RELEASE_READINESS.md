@@ -1,13 +1,37 @@
 # Technical debt required before release readiness
 
 Status: **closed, 21/21 deterministic exit contracts retained**. Non-live
-register created on 22.08.2026 and last verified on 23.08.2026. This closure is
-technical only and does not imply external-gate or release approval.
+register created on 22.08.2026 and last reverified on 12.09.2026. This closure
+is technical only and does not imply external-gate or release approval.
 
 This register prevents local test accommodations from becoming permanent
 product or release prerequisites. None of the entries changes production,
 Payment, Store, Cloud/VPS/DNS or pilot state. Release readiness must not be
 claimed until every item below has reproducible evidence and is closed.
+
+- 12.09.2026, WP126: a standalone `node --test test/tool/*.test.mjs`
+  diagnostic was invoked immediately after `flutter clean` without the
+  repository's declared dependency-bootstrap step. The MobileScanner and
+  Printing package-floor modules therefore started before generated
+  `.dart_tool/package_config.json` existed and appeared as two process-level
+  failures. The permanent complete runner already executes locked
+  `flutter pub get --enforce-lockfile` before this glob. With that explicit
+  precondition, the final inventory passed 2,743/2,743 tests; the complete
+  local gate and independent clean-checkout GitHub Regression `34703064328`
+  also passed. The unbootstrapped invocation and its later pass are diagnostic
+  evidence only, not a retry or parallelism accommodation. Existing
+  `TD-RR-001`, `TD-RR-003`, `TD-RR-012` and `TD-RR-021` contracts remain
+  unchanged and closed.
+
+- 12.09.2026, WP126: the first complete local gate refused to begin below its
+  fixed five-GiB effective-capacity floor after the signed candidate build.
+  Two superseded private candidate archives totaling 487,424 KiB were moved
+  recoverably to the connected Crucial X9 cold-storage directory. No current
+  candidate, source or user data was deleted. The unchanged gate then passed
+  inside its fixed bounds, and independent clean-checkout CI passed without
+  that relocation. The move is incident recovery only and cannot become a
+  release prerequisite; `TD-RR-012` and `TD-RR-021` remain closed by their
+  deterministic guards.
 
 - 11.09.2026, WP109: the first complete candidate-regression attempt passed
   the functional suites through Web/Wasm and then stopped at the single direct

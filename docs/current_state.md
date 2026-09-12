@@ -1,6 +1,31 @@
 # ShareItToo Current State
 
-## WP125 push registration recovery — source complete; physical replay pending
+## WP126 exact successor Pixel push closure — complete
+
+Signed Internal/Staging candidate `1.0.0+2026091201`, built from
+`1546812f625b4e8f1e700bf976410097cd45ac2f`, is installed data-preservingly on
+the physical Pixel 7 Pro. Installed APK bytes, upload signature, package and
+version match the private archive. Foreground, background and
+terminated-process FCM pass through the corrected isolated non-binding runner;
+the notification icon passed private visual review and the sensitive capture
+was moved to Trash.
+
+The candidate freeze passed the full local technical regression, GitHub
+Regression `34703064328` with independent clean checkout and CodeQL
+`34703064266`; open branch alerts are zero. Diagnostic correction
+`4f4ae2a2cce6672a61ca77fc3fcec57fb0aac245` adds exact support for the existing
+E-mail-link verified synthetic account pair without weakening owner/renter,
+payment or contract guards. GitHub Regression `34704553662` and CodeQL
+`34704553654` pass on that exact correction head. See
+`docs/operations/WP126_EXACT_SUCCESSOR_PIXEL_PUSH_CLOSURE_2026-09-12.md`.
+
+The OnePlus was disconnected and not contacted. No Production, Google Play,
+tester list, Firebase project, backend deployment, payment, real money,
+VPS/DNS, public registration or PR-merge state changed. Physical artificial
+transport-response-loss injection remains unclaimed; WP125's deterministic
+recovery and principal/epoch tests remain its evidence.
+
+## WP125 push registration recovery — source complete; physical replay closed by WP126
 
 The OnePlus push probe exposed a proven client correctness class: visible
 opt-in could be accepted while backend registration was unconfirmed, and
@@ -12,10 +37,11 @@ recovery and suppresses stale Account-A results without touching Account-B UI.
 
 The physical OnePlus failure itself is not attributed: its one foreground
 probe showed no banner, available backend inventory could not bind a row to
-that activation, and the device is now disconnected. The installed immutable
-`1.0.0+2026091110` candidate does not contain WP125. A strictly higher signed
-Internal/Staging successor must be replayed on the Pixel before delivery success
-is claimed. See
+that activation, and the device is now disconnected. The former installed
+immutable `1.0.0+2026091110` candidate did not contain WP125. WP126 now supplies
+the strictly higher signed Internal/Staging successor and proves exact-candidate
+delivery on the Pixel. Artificial transport-response loss remains source-tested
+rather than physically injected. See
 `docs/operations/WP125_PUSH_REGISTRATION_RECOVERY_2026-09-12.md`.
 
 No Production, Google Play, Firebase, backend deployment, payment, real-money

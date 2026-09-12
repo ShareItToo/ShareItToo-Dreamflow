@@ -1,4 +1,26 @@
-# Current Work Package: WP125 Push Registration Recovery — SOURCE COMPLETE; PHYSICAL REPLAY PENDING
+# Current Work Package: WP126 Exact Successor Pixel Push Closure — COMPLETE
+
+Exact signed Internal/Staging candidate `1.0.0+2026091201` is installed
+data-preservingly on the physical Pixel 7 Pro. Package, version, APK hash and
+upload signature match the immutable private archive. Controlled FCM passes in
+foreground, background and terminated-process states through the corrected
+isolated non-binding runner. The private icon review passed and the sensitive
+capture was moved to Trash.
+
+Candidate freeze `f9c4c9523eb0f4dfcdb03d34516795a91e0bcbdd` passes the full
+local gate, GitHub Regression `34703064328` with independent clean checkout and
+CodeQL `34703064266`. Diagnostic correction
+`4f4ae2a2cce6672a61ca77fc3fcec57fb0aac245` retains exact synthetic
+owner/renter verification and no-money/no-contract boundaries; GitHub
+Regression `34704553662` and CodeQL `34704553654` pass. See
+`docs/operations/WP126_EXACT_SUCCESSOR_PIXEL_PUSH_CLOSURE_2026-09-12.md`.
+
+The OnePlus is disconnected and was not contacted. No Production, Google Play,
+Firebase, backend deployment, payment, real money, VPS/DNS, public registration
+or PR-merge state changed. The next package must be chosen only after a compact
+decision review of the remaining launch-value gaps.
+
+# Previous Work Package: WP125 Push Registration Recovery — SOURCE COMPLETE; PHYSICAL REPLAY CLOSED BY WP126
 
 WP125 closes the proven source defects that allowed a visible push opt-in to
 coexist with unconfirmed backend registration. Exact session/epoch ownership,
