@@ -37,7 +37,7 @@ function privateJson(path, value) {
   chmodSync(path, 0o600);
 }
 
-function fixtures({ collide = false } = {}) {
+function fixtures({ collide = false, protectedStatus = 'email-link-verified-ready-for-login' } = {}) {
   const root = tempFixtures.makeSync('sit-account-deletion-');
   chmodSync(root, 0o700);
   const targetFile = resolve(root, 'target.json');
@@ -60,7 +60,7 @@ function fixtures({ collide = false } = {}) {
   privateJson(protectedFile, {
     schemaVersion: 1,
     kind: 'sit-staging-synthetic-account-vault',
-    status: 'email-link-verified-ready-for-login',
+    status: protectedStatus,
     apiBaseUrl: 'https://staging.shareittoo.com/api/v1',
     stripeLivemode: false,
     accounts: [
@@ -112,6 +112,20 @@ test('prepares an owner-only exact-candidate recovery journal without public ide
   assert.equal(read.journal.candidate.buildNumber, '2026090610');
   assert.equal(read.journal.targetVaultSha256.length, 64);
   assert.equal(read.journal.protectedVaultSha256.length, 64);
+});
+
+test('accepts a protected owner after a safely retired non-binding simulation', () => {
+  const { targetFile, protectedFile, journalFile } = fixtures({
+    protectedStatus: 'non-binding-simulation-retired',
+  });
+  const result = prepareAccountDeletionJournal({
+    targetVaultFile: targetFile,
+    protectedVaultFile: protectedFile,
+    journalFile,
+    candidate,
+  });
+  assert.equal(result.status, 'prepared-before-deletion');
+  assert.equal(result.protectedOwnerRestored, true);
 });
 
 test('refuses a target that collides with either protected principal', () => {

@@ -154,6 +154,7 @@ function protectedOwnerVault(path) {
     'fixture-verified-ready-for-login',
     'email-link-verified-ready-for-login',
     'email-linked-product-journey-retired',
+    'non-binding-simulation-retired',
   ]);
   const owner = vault?.accounts?.find((entry) => entry?.role === 'owner');
   if (vault?.schemaVersion !== 1
