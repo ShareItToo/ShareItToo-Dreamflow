@@ -85,13 +85,25 @@ function protectedVault(path) {
 
 export function reusableNonBindingDiagnosticContext(vault) {
   const simulation = vault?.nonBindingSimulation;
+  const expectedVerificationStatus = new Map([
+    ['isolated-staging-fixture', 'fixture-verified'],
+    ['email-link', 'email-link-verified'],
+  ]).get(vault?.verificationMethod);
+  const accountRoles = new Set(
+    Array.isArray(vault?.accounts)
+      ? vault.accounts.map((account) => account?.role)
+      : [],
+  );
   return vault?.status === 'non-binding-simulation-active'
-    && vault?.verificationMethod === 'isolated-staging-fixture'
+    && expectedVerificationStatus !== undefined
     && Array.isArray(vault.accounts)
     && vault.accounts.length === 2
+    && accountRoles.size === 2
+    && accountRoles.has('owner')
+    && accountRoles.has('renter')
     && vault.accounts.every((account) => (
       account?.registrationStatus === 'accepted'
-      && account?.verificationStatus === 'fixture-verified'
+      && account?.verificationStatus === expectedVerificationStatus
     ))
     && simulation?.schemaVersion === 1
     && simulation.status === 'accepted-chat-ready'

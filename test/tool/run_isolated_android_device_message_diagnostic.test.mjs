@@ -72,6 +72,22 @@ test('reuses only a verified accepted payment-free non-binding simulation', () =
     ...vault,
     nonBindingSimulation: { ...vault.nonBindingSimulation, stripeLivemode: true },
   }), false);
+  assert.equal(reusableNonBindingDiagnosticContext({
+    ...vault,
+    verificationMethod: 'email-link',
+    accounts: vault.accounts.map((account) => ({
+      ...account,
+      verificationStatus: 'email-link-verified',
+    })),
+  }), true);
+  assert.equal(reusableNonBindingDiagnosticContext({
+    ...vault,
+    accounts: vault.accounts.map((account) => ({ ...account, role: 'owner' })),
+  }), false);
+  assert.equal(reusableNonBindingDiagnosticContext({
+    ...vault,
+    verificationMethod: 'email-link',
+  }), false);
 
   const projected = projectNonBindingDiagnosticVault({
     ...vault,
