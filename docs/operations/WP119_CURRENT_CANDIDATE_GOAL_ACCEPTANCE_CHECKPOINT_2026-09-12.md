@@ -39,18 +39,20 @@ account deletion and the complete permission lifecycle partial until an exact
 - Facebook and Apple remain disabled provider packages. Apple is not required
   to finish an Android-only internal pilot if it is explicitly deferred.
 
-## Verification and boundaries
+## Closure verification and boundaries
 
-The evidence-base HEAD is clean and synchronized. GitHub Regression
-`34652971429` and CodeQL `34652971425` pass at that exact HEAD, current branch
-code-scanning alerts are zero and PR #7 remains Draft, open, clean and
-unmerged. There is no mobile or Backend runtime drift after the candidate
-source.
+The evidence-base HEAD was clean and synchronized before WP119. The resulting
+WP119 implementation HEAD `dba36d2f826ee220f4f79ad57d0e984a069322e3`
+passes the complete local Regression and exact-head GitHub Regression
+`34688883706` plus CodeQL `34688883690`. Current branch code-scanning alerts
+are zero and PR #7 remains Draft, open, clean and unmerged. There is no mobile
+or Backend runtime drift after the candidate source.
 
 WP119 changes only sanitized repository documentation, a deterministic
 validator and its tests. It performs no device, account, Store, Firebase,
 Stripe, payment, legal approval, Production, VPS/DNS or PR-merge mutation.
-Machine-readable evidence is in
+The overall acceptance status remains partial because the external and replay
+gates above are still open; that is not a failed WP119 closure. Machine-readable evidence is in
 `docs/evidence/release-readiness/wp119-current-candidate-goal-acceptance-20260912.json`.
 
 ## Next order

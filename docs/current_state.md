@@ -1,6 +1,6 @@
 # ShareItToo Current State
 
-## WP119 exact-current-candidate goal checkpoint — local closure in progress
+## WP119 exact-current-candidate goal checkpoint — complete; external gates remain
 
 The active Android Staging goal is now reconciled against exact signed
 candidate `1.0.0+2026091110`, immutable Staging Backend
@@ -19,6 +19,11 @@ OnePlus ADB proof; professional V5.2 snapshots and a manual TalkBack traversal
 remain open. No provider, money, device, Store, Firebase, Production, VPS/DNS
 or PR state changed. See
 `docs/operations/WP119_CURRENT_CANDIDATE_GOAL_ACCEPTANCE_CHECKPOINT_2026-09-12.md`.
+
+WP119 implementation HEAD `dba36d2f826ee220f4f79ad57d0e984a069322e3`
+passes the full local Regression, exact-head GitHub Regression `34688883706`
+and CodeQL `34688883690`; open branch code-scanning alerts are zero. PR #7
+remains Draft, open, clean and unmerged.
 
 ## WP118 fresh current-candidate Pixel renter/owner confirmation — complete
 

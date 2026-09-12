@@ -13,6 +13,7 @@ const rolloverPath = 'store/google-play/current-rollover-candidate.json';
 const evidenceBaseHead = '4018de1475e33e4f652a14bc98db7049bb84b06f';
 const candidateSourceHead = 'c8e2a49e14f5cae0026fa5f2bc327859fe0ff17b';
 const stagingRuntimeHead = 'df39a14b7a19afe467842461a28f1e77fec8445e';
+const implementationHead = 'dba36d2f826ee220f4f79ad57d0e984a069322e3';
 
 const expectedStates = new Map([
   ['candidate-provenance-signature-pixel-install', 'PASS'],
@@ -111,6 +112,27 @@ export function validateWp119CurrentCandidateGoalAcceptance({
   exact(value?.repository?.openCodeScanningAlerts, 0, 'open code-scanning alerts');
   exact(value?.repository?.pullRequest7, 'draft-open-clean-unmerged', 'PR boundary');
 
+  exact(value?.wp119Closure?.implementationHead, implementationHead,
+    'implementation head');
+  exact(value?.wp119Closure?.localFullRegression, 'success',
+    'local full Regression result');
+  exact(value?.wp119Closure?.githubRegression?.runId, 34688883706,
+    'closure Regression run');
+  exact(value?.wp119Closure?.githubRegression?.head, implementationHead,
+    'closure Regression head');
+  exact(value?.wp119Closure?.githubRegression?.conclusion, 'success',
+    'closure Regression result');
+  exact(value?.wp119Closure?.githubCodeql?.runId, 34688883690,
+    'closure CodeQL run');
+  exact(value?.wp119Closure?.githubCodeql?.head, implementationHead,
+    'closure CodeQL head');
+  exact(value?.wp119Closure?.githubCodeql?.conclusion, 'success',
+    'closure CodeQL result');
+  exact(value?.wp119Closure?.openCodeScanningAlerts, 0,
+    'closure open code-scanning alerts');
+  exact(value?.wp119Closure?.pullRequest7, 'draft-open-clean-unmerged',
+    'closure PR boundary');
+
   const candidate = value.candidate;
   exact(candidate?.applicationId, 'com.shareittoo.app', 'application ID');
   exact(candidate?.versionName, '1.0.0', 'version name');
@@ -201,7 +223,12 @@ export function validateWp119CurrentCandidateGoalAcceptance({
     fail('WP119 evidence contains private or secret-shaped content.');
   }
   if (checkGitState) {
-    for (const commit of [evidenceBaseHead, candidateSourceHead, stagingRuntimeHead]) {
+    for (const commit of [
+      evidenceBaseHead,
+      candidateSourceHead,
+      stagingRuntimeHead,
+      implementationHead,
+    ]) {
       assertAncestor(repositoryRoot, commit);
     }
     assertNoRuntimeDrift(repositoryRoot);

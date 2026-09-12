@@ -1,4 +1,4 @@
-# Current Work Package: WP119 Current-Candidate Goal Acceptance — LOCAL CLOSURE IN PROGRESS
+# Current Work Package: WP119 Current-Candidate Goal Acceptance — COMPLETE; EXTERNAL GATES OPEN
 
 WP119 reconciles the full active Android Staging goal against exact candidate
 `1.0.0+2026091110` and current immutable Staging truth. The fail-closed result
@@ -14,6 +14,11 @@ Binding V5.2 and manual TalkBack stay separate external/human gates. No live,
 provider, device, Store, Firebase, Production, VPS/DNS or PR mutation is part
 of the checkpoint. See
 `docs/operations/WP119_CURRENT_CANDIDATE_GOAL_ACCEPTANCE_CHECKPOINT_2026-09-12.md`.
+
+Closure is bound to implementation HEAD
+`dba36d2f826ee220f4f79ad57d0e984a069322e3`: full local Regression, GitHub
+Regression `34688883706` and CodeQL `34688883690` pass, open branch scanning
+alerts are zero and PR #7 remains Draft and unmerged.
 
 # Previous Work Package: WP118 Fresh Pixel Two-Role Confirmation — COMPLETE; ONEPLUS PENDING
 

@@ -46,6 +46,7 @@ test('rejects aggregate, candidate, CI and live-boundary drift', () => {
     (value) => { value.aggregate.partialCount = 12; },
     (value) => { value.candidate.versionCode = '2026091111'; },
     (value) => { value.repository.githubCodeql.conclusion = 'pending'; },
+    (value) => { value.wp119Closure.githubRegression.head = '0'.repeat(40); },
     (value) => { value.boundaries.paymentProviderCalled = true; },
   ]) {
     const invalid = structuredClone(evidence);

@@ -22,6 +22,22 @@
     "openCodeScanningAlerts": 0,
     "pullRequest7": "draft-open-clean-unmerged"
   },
+  "wp119Closure": {
+    "implementationHead": "dba36d2f826ee220f4f79ad57d0e984a069322e3",
+    "localFullRegression": "success",
+    "githubRegression": {
+      "runId": 34688883706,
+      "head": "dba36d2f826ee220f4f79ad57d0e984a069322e3",
+      "conclusion": "success"
+    },
+    "githubCodeql": {
+      "runId": 34688883690,
+      "head": "dba36d2f826ee220f4f79ad57d0e984a069322e3",
+      "conclusion": "success"
+    },
+    "openCodeScanningAlerts": 0,
+    "pullRequest7": "draft-open-clean-unmerged"
+  },
   "candidate": {
     "applicationId": "com.shareittoo.app",
     "versionName": "1.0.0",
