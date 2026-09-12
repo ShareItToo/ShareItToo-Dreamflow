@@ -7,6 +7,8 @@ const runtime = read('lib/services/firebase_runtime.dart');
 const android = read('android/app/src/main/AndroidManifest.xml');
 const ios = read('ios/Runner/Info.plist');
 const settings = read('lib/screens/notification_settings_screen.dart');
+const foregroundHost = read('lib/widgets/foreground_push_host.dart');
+const realtime = read('lib/services/backend_realtime_service.dart');
 const deletion = read('lib/services/account_deletion_service.dart');
 const backend = read('backend/src/app.js');
 const publicPrivacy = read('backend/src/account_actions.js');
@@ -24,7 +26,7 @@ test('runtime gates push and crash collection on persisted user decisions', () =
   assert.match(runtime, /setAutoInitEnabled\(_pushEnabled\)/);
   assert.match(runtime, /releaseMode && userEnabled/);
   assert.match(runtime, /userEnabled: _crashDiagnosticsEnabled/);
-  assert.match(runtime, /setPushEnabled\(bool enabled\)/);
+  assert.match(runtime, /setPushEnabled\(\s*bool enabled/u);
   assert.match(runtime, /setCrashDiagnosticsEnabled\(bool enabled\)/);
   assert.match(runtime, /deleteUnsentReports\(\)/);
   assert.doesNotMatch(runtime, /setUserIdentifier\(|setUserId\(/);
@@ -67,4 +69,34 @@ test('backend cleanup is current-session scoped and does not expose tokens', () 
   assert.match(route, /userId: req\.auth\.userId/);
   assert.match(route, /deletedCount/);
   assert.doesNotMatch(route, /token|token_hash/);
+});
+
+test('push registration is exact-session bound and retries on authenticated recovery', () => {
+  assert.match(runtime, /expectedSessionEpoch \?\? BackendRepository\.authSessionEpoch/u);
+  assert.match(runtime, /_pushOperationQueue/u);
+  assert.match(runtime, /registerPushDevice\([\s\S]*?expectedSessionEpoch: expectedSessionEpoch/u);
+  assert.match(runtime, /return await _syncPushRegistrationOnce\(requestedEpoch\)/u);
+  assert.match(runtime, /onTokenRefresh\.listen[\s\S]*?_registerRefreshedToken/u);
+  assert.match(foregroundHost, /WidgetsBindingObserver/u);
+  assert.match(foregroundHost, /AppLifecycleState\.resumed/u);
+  assert.match(foregroundHost, /BackendRealtimeService\.authenticatedReadyEvents/u);
+  assert.match(realtime, /decoded\['type'\] == 'ready'[\s\S]*?_authenticatedReadyEvents\.add\(null\)/u);
+});
+
+test('push cleanup is exact-session owned and cannot drift to a successor account', () => {
+  assert.match(runtime, /setPushBackendCleanupPending\([\s\S]*?ownerToken: cleanupOwnerToken/u);
+  assert.match(runtime, /preferences\.pushBackendCleanupOwnerToken != currentOwnerToken/u);
+  assert.match(runtime, /deleteCurrentSessionPushDevices\([\s\S]*?expectedSessionEpoch: expectedSessionEpoch/u);
+  assert.match(runtime, /return _pushOperationQueue\.run\([\s\S]*?_setPushEnabledOnce/u);
+});
+
+test('device-service consent dialog is route-owned and account-epoch guarded', () => {
+  assert.match(settings, /TrackedDialogRouteHandle<void>/u);
+  assert.match(settings, /routeHandle: handle/u);
+  assert.match(settings, /activeDialog\.dismiss\(\)/u);
+  assert.match(settings, /interactionEpoch == AuthService\.sessionEpoch/u);
+  assert.match(settings, /_showServiceError\([\s\S]*?interactionEpoch: interactionEpoch/u);
+  assert.doesNotMatch(settings, /Navigator\.of\(context, rootNavigator: true\)\.pop/u);
+  assert.match(settings, /Deine Einwilligung ist gespeichert/u);
+  assert.match(settings, /bestätigten Verbindung oder beim nächsten Öffnen/u);
 });

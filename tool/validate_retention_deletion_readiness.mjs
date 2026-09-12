@@ -1104,7 +1104,7 @@ function assertSourceContracts(root, sourceTexts) {
     'FirebaseMessaging.instance.deleteToken()',
     'FirebaseCrashlytics.instance.deleteUnsentReports()',
     'FirebaseInstallations.instance.delete()',
-    'deleteCurrentSessionPushDevices()',
+    'deleteCurrentSessionPushDevices(',
     'setDeliveryMetricsExportToBigQuery(false)',
   ]) {
     if (!firebaseRuntime.includes(marker)) {

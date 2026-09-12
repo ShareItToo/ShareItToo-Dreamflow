@@ -63,6 +63,23 @@ class LocalPrincipalScope {
   static String tokenForSession(AuthSession? session) =>
       fromSession(session).token;
 
+  /// Opaque, device-local identity for one exact authenticated session.
+  ///
+  /// This is safe to persist as cleanup ownership metadata: it contains no
+  /// email, user id, session id, token or credential value, and a later login
+  /// of the same account derives a different value when the backend session
+  /// changes.
+  static String tokenForSessionOwner(AuthSessionOwner owner) {
+    final userId = (owner.userId ?? '').trim();
+    final email = owner.email.trim().toLowerCase();
+    final sessionId = (owner.sessionId ?? '').trim();
+    final createdAt = owner.createdAt?.toUtc().toIso8601String() ?? '';
+    return _opaqueToken(
+      'session-owner',
+      '$userId|$email|$sessionId|$createdAt',
+    );
+  }
+
   static String tokenForUserId(String userId) {
     final normalized = userId.trim();
     if (normalized.isEmpty) return LocalPrincipalIdentity.guest.token;

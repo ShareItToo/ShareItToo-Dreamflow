@@ -4,6 +4,7 @@ class FirebaseServicePreferences {
   final bool pushEnabled;
   final bool crashDiagnosticsEnabled;
   final bool pushBackendCleanupPending;
+  final String? pushBackendCleanupOwnerToken;
   final bool pushLocalCleanupPending;
   final bool installationCleanupPending;
 
@@ -11,6 +12,7 @@ class FirebaseServicePreferences {
     required this.pushEnabled,
     required this.crashDiagnosticsEnabled,
     required this.pushBackendCleanupPending,
+    required this.pushBackendCleanupOwnerToken,
     required this.pushLocalCleanupPending,
     required this.installationCleanupPending,
   });
@@ -19,6 +21,7 @@ class FirebaseServicePreferences {
     pushEnabled: false,
     crashDiagnosticsEnabled: false,
     pushBackendCleanupPending: false,
+    pushBackendCleanupOwnerToken: null,
     pushLocalCleanupPending: false,
     installationCleanupPending: false,
   );
@@ -33,6 +36,8 @@ abstract final class FirebaseServicePreferencesStore {
   static const _decisionVersionKey = 'firebase_services_decision_version_v1';
   static const _pushCleanupPendingKey =
       'firebase_push_backend_cleanup_pending_v1';
+  static const _pushCleanupOwnerTokenKey =
+      'firebase_push_backend_cleanup_owner_token_v1';
   static const _pushLocalCleanupPendingKey =
       'firebase_push_local_cleanup_pending_v1';
   static const _installationCleanupPendingKey =
@@ -44,6 +49,7 @@ abstract final class FirebaseServicePreferencesStore {
       pushEnabled: prefs.getBool(_pushEnabledKey) ?? false,
       crashDiagnosticsEnabled: prefs.getBool(_crashEnabledKey) ?? false,
       pushBackendCleanupPending: prefs.getBool(_pushCleanupPendingKey) ?? false,
+      pushBackendCleanupOwnerToken: prefs.getString(_pushCleanupOwnerTokenKey),
       pushLocalCleanupPending:
           prefs.getBool(_pushLocalCleanupPendingKey) ?? false,
       installationCleanupPending:
@@ -75,9 +81,26 @@ abstract final class FirebaseServicePreferencesStore {
     await prefs.setString(_decisionVersionKey, decisionVersion);
   }
 
-  static Future<void> setPushBackendCleanupPending(bool pending) async {
+  static Future<void> setPushBackendCleanupPending(
+    bool pending, {
+    String? ownerToken,
+  }) async {
+    final normalizedOwnerToken = ownerToken?.trim();
+    if (pending &&
+        (normalizedOwnerToken == null || normalizedOwnerToken.isEmpty)) {
+      throw ArgumentError.value(
+        ownerToken,
+        'ownerToken',
+        'A pending backend cleanup must belong to one exact session.',
+      );
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_pushCleanupPendingKey, pending);
+    if (pending) {
+      await prefs.setString(_pushCleanupOwnerTokenKey, normalizedOwnerToken!);
+    } else {
+      await prefs.remove(_pushCleanupOwnerTokenKey);
+    }
   }
 
   static Future<void> setPushLocalCleanupPending(bool pending) async {

@@ -81,14 +81,16 @@ test('logout push boundary is synchronous and stale registration cannot reopen i
 
   const syncRegistration = method(
     firebaseRuntime,
-    'static Future<bool> syncPushRegistration() async',
-    'static Future<bool> setPushEnabled(bool enabled) async',
+    'static Future<bool> _syncPushRegistrationOnce(',
+    'static Future<bool> setPushEnabled(',
   );
   assert.match(
     syncRegistration,
     /final operationGeneration = \+\+_authenticatedPushSessionGeneration/u,
   );
   assert.match(syncRegistration, /final registered = await _registerToken/u);
+  assert.match(syncRegistration, /expectedSessionEpoch/u);
+  assert.match(syncRegistration, /BackendRepository\.authSessionEpoch/u);
   assert.match(
     syncRegistration,
     /!registered \|\|\s*operationGeneration != _authenticatedPushSessionGeneration/u,
@@ -100,6 +102,8 @@ test('logout push boundary is synchronous and stale registration cannot reopen i
     'operationGeneration != _authenticatedPushSessionGeneration',
   );
   assert.ok(finalGenerationCheck >= 0 && finalGenerationCheck < gateOpen);
+  assert.match(firebaseRuntime, /_pushOperationQueue/u);
+  assert.match(firebaseRuntime, /_registerRefreshedToken/u);
 });
 
 test('session transition cleanup preserves a successor profile and fails closed', () => {

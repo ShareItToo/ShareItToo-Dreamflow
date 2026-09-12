@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
+import 'package:lendify/services/backend_realtime_service.dart';
 import 'package:lendify/services/firebase_runtime.dart';
 import 'package:lendify/widgets/app_popup.dart';
 
@@ -11,6 +12,8 @@ class ForegroundPushHost extends StatefulWidget {
   final void Function(ForegroundPushMessage message)? onOpen;
   final GlobalKey<NavigatorState>? navigatorKey;
   final GlobalKey<ScaffoldMessengerState>? messengerKey;
+  final Stream<void>? registrationRecoverySignals;
+  final Future<bool> Function()? recoverPushRegistration;
 
   const ForegroundPushHost({
     super.key,
@@ -19,33 +22,86 @@ class ForegroundPushHost extends StatefulWidget {
     this.onOpen,
     this.navigatorKey,
     this.messengerKey,
+    this.registrationRecoverySignals,
+    this.recoverPushRegistration,
   });
 
   @override
   State<ForegroundPushHost> createState() => _ForegroundPushHostState();
 }
 
-class _ForegroundPushHostState extends State<ForegroundPushHost> {
+class _ForegroundPushHostState extends State<ForegroundPushHost>
+    with WidgetsBindingObserver {
   StreamSubscription<ForegroundPushMessage>? _subscription;
+  StreamSubscription<void>? _registrationRecoverySubscription;
   final Queue<ForegroundPushMessage> _pendingMessages = Queue();
   bool _showingMessage = false;
+  bool _registrationRecoveryRunning = false;
+  bool _registrationRecoveryPending = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _subscribe();
+    _subscribeToRegistrationRecovery();
   }
 
   @override
   void didUpdateWidget(covariant ForegroundPushHost oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.messages != widget.messages) _subscribe();
+    if (oldWidget.registrationRecoverySignals !=
+        widget.registrationRecoverySignals) {
+      _subscribeToRegistrationRecovery();
+    }
   }
 
   void _subscribe() {
     unawaited(_subscription?.cancel());
     _subscription = (widget.messages ?? FirebaseRuntime.foregroundMessages)
         .listen(_showMessage);
+  }
+
+  void _subscribeToRegistrationRecovery() {
+    unawaited(_registrationRecoverySubscription?.cancel());
+    _registrationRecoverySubscription = (widget.registrationRecoverySignals ??
+            BackendRealtimeService.authenticatedReadyEvents)
+        .listen((_) => _scheduleRegistrationRecovery());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _scheduleRegistrationRecovery();
+    }
+  }
+
+  void _scheduleRegistrationRecovery() {
+    if (_registrationRecoveryRunning) {
+      _registrationRecoveryPending = true;
+      return;
+    }
+    _registrationRecoveryRunning = true;
+    unawaited(_runRegistrationRecovery());
+  }
+
+  Future<void> _runRegistrationRecovery() async {
+    try {
+      do {
+        _registrationRecoveryPending = false;
+        final recover = widget.recoverPushRegistration;
+        if (recover == null) {
+          await FirebaseRuntime.syncPushRegistration();
+        } else {
+          await recover();
+        }
+      } while (mounted && _registrationRecoveryPending);
+    } catch (error) {
+      debugPrint('[ForegroundPushHost] registration recovery failed: $error');
+    } finally {
+      _registrationRecoveryRunning = false;
+    }
   }
 
   void _showMessage(ForegroundPushMessage message) {
@@ -110,7 +166,9 @@ class _ForegroundPushHostState extends State<ForegroundPushHost> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     unawaited(_subscription?.cancel());
+    unawaited(_registrationRecoverySubscription?.cancel());
     super.dispose();
   }
 

@@ -78,4 +78,103 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+      'serializes authenticated-ready recovery and coalesces repeated signals',
+      (tester) async {
+    final messages = StreamController<ForegroundPushMessage>.broadcast();
+    final recoverySignals = StreamController<void>.broadcast(sync: true);
+    final first = Completer<bool>();
+    final second = Completer<bool>();
+    var calls = 0;
+    addTearDown(messages.close);
+    addTearDown(recoverySignals.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ForegroundPushHost(
+          messages: messages.stream,
+          registrationRecoverySignals: recoverySignals.stream,
+          recoverPushRegistration: () {
+            calls += 1;
+            return calls == 1 ? first.future : second.future;
+          },
+          child: const Scaffold(body: Text('Start')),
+        ),
+      ),
+    );
+
+    recoverySignals.add(null);
+    recoverySignals.add(null);
+    recoverySignals.add(null);
+    await tester.pump();
+    expect(calls, 1);
+
+    first.complete(false);
+    await tester.pump();
+    expect(calls, 2);
+
+    second.complete(true);
+    await tester.pump();
+    expect(calls, 2);
+  });
+
+  testWidgets('retries registration when the app resumes', (tester) async {
+    final messages = StreamController<ForegroundPushMessage>.broadcast();
+    final recoverySignals = StreamController<void>.broadcast(sync: true);
+    var calls = 0;
+    addTearDown(messages.close);
+    addTearDown(recoverySignals.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ForegroundPushHost(
+          messages: messages.stream,
+          registrationRecoverySignals: recoverySignals.stream,
+          recoverPushRegistration: () async {
+            calls += 1;
+            return true;
+          },
+          child: const Scaffold(body: Text('Start')),
+        ),
+      ),
+    );
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+
+    expect(calls, 1);
+  });
+
+  testWidgets('a failed recovery does not block the next recovery signal',
+      (tester) async {
+    final messages = StreamController<ForegroundPushMessage>.broadcast();
+    final recoverySignals = StreamController<void>.broadcast(sync: true);
+    var calls = 0;
+    addTearDown(messages.close);
+    addTearDown(recoverySignals.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ForegroundPushHost(
+          messages: messages.stream,
+          registrationRecoverySignals: recoverySignals.stream,
+          recoverPushRegistration: () async {
+            calls += 1;
+            if (calls == 1) throw StateError('expected test failure');
+            return true;
+          },
+          child: const Scaffold(body: Text('Start')),
+        ),
+      ),
+    );
+
+    recoverySignals.add(null);
+    await tester.pump();
+    recoverySignals.add(null);
+    await tester.pump();
+
+    expect(calls, 2);
+  });
 }

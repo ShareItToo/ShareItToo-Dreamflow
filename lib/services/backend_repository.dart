@@ -182,17 +182,38 @@ class BackendRepository {
     );
   }
 
-  static Future<Map<String, dynamic>> registerPushDevice({
+  /// Registers the installation token only for the exact auth-session epoch
+  /// that requested the operation.
+  ///
+  /// FCM token acquisition is asynchronous. An account switch while the
+  /// platform SDK is resolving a token must therefore never let a delayed
+  /// registration fall through to the successor account's global session.
+  static Future<bool> registerPushDevice({
+    required int expectedSessionEpoch,
     required String token,
     required String platform,
     String? locale,
   }) async {
-    return _authorized(
+    if (expectedSessionEpoch != AuthService.sessionEpoch) return false;
+    final session = await AuthService.readSession();
+    if (session == null || expectedSessionEpoch != AuthService.sessionEpoch) {
+      return false;
+    }
+    final owner = AuthService.captureSessionOwner(session);
+    if (owner.epoch != expectedSessionEpoch ||
+        !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      return false;
+    }
+    await _authorizedForOwner(
+      owner: owner,
       method: 'PUT',
       path: '/auth/devices/push',
       body: {'token': token, 'platform': platform, 'locale': locale},
     );
+    return await AuthService.isSessionOwnerDefinitelyCurrent(owner);
   }
+
+  static int get authSessionEpoch => AuthService.sessionEpoch;
 
   static Future<void> deletePushDevice(String id) async {
     await _authorized(
@@ -201,11 +222,25 @@ class BackendRepository {
     );
   }
 
-  static Future<int> deleteCurrentSessionPushDevices() async {
-    final response = await _authorized(
+  static Future<int?> deleteCurrentSessionPushDevices({
+    required int expectedSessionEpoch,
+  }) async {
+    if (expectedSessionEpoch != AuthService.sessionEpoch) return null;
+    final session = await AuthService.readSession();
+    if (session == null || expectedSessionEpoch != AuthService.sessionEpoch) {
+      return null;
+    }
+    final owner = AuthService.captureSessionOwner(session);
+    if (owner.epoch != expectedSessionEpoch ||
+        !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      return null;
+    }
+    final response = await _authorizedForOwner(
+      owner: owner,
       method: 'DELETE',
       path: '/auth/devices/push/current',
     );
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) return null;
     return (response['deletedCount'] as num?)?.toInt() ?? 0;
   }
 

@@ -106,7 +106,7 @@ test('remote deletion cannot refresh or fall back to a successor principal', () 
   const remoteCall = method(
     repository,
     'static Future<void> deleteAccount({',
-    'static Future<Map<String, dynamic>> registerPushDevice(',
+    'static Future<bool> registerPushDevice(',
   );
   assert.match(remoteCall, /required AuthSessionOwner owner/u);
   assert.match(remoteCall, /_authorizedForOwner\([\s\S]*?owner: owner/u);

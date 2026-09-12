@@ -4,10 +4,12 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:lendify/theme.dart';
 import 'package:lendify/services/firebase_runtime.dart';
+import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/firebase_service_preferences.dart';
 import 'package:lendify/services/notification_preferences_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/widgets/app_popup.dart';
+import 'package:lendify/widgets/tracked_dialog_route.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
@@ -28,6 +30,8 @@ class _NotificationSettingsScreenState
   StreamSubscription<String>? _persistenceSubscription;
   final SharedPersistenceRefreshCoordinator _refreshCoordinator =
       SharedPersistenceRefreshCoordinator();
+  TrackedDialogRouteHandle<void>? _activeServiceDialog;
+  int? _serviceDialogEpoch;
 
   @override
   void initState() {
@@ -36,6 +40,11 @@ class _NotificationSettingsScreenState
     _persistenceSubscription = SharedPersistenceSync.changes.listen((key) {
       if (!mounted || key != SharedPersistenceSync.localSafetyPrivacyStateKey) {
         return;
+      }
+      final activeDialog = _activeServiceDialog;
+      if (activeDialog != null &&
+          _serviceDialogEpoch != AuthService.sessionEpoch) {
+        activeDialog.dismiss();
       }
       unawaited(_refreshCoordinator.schedule(() async {
         await SharedPersistenceSync.reloadPreferences();
@@ -83,33 +92,68 @@ class _NotificationSettingsScreenState
     required String title,
     required String message,
     required String confirmLabel,
+    required int interactionEpoch,
   }) async {
+    if (_activeServiceDialog != null) return false;
     var confirmed = false;
+    final handle = TrackedDialogRouteHandle<void>();
+    _activeServiceDialog = handle;
+    _serviceDialogEpoch = interactionEpoch;
     await AppPopup.show(
       context,
       icon: icon,
       title: title,
       message: message,
       barrierDismissible: false,
+      routeHandle: handle,
       actions: [
         OutlinedButton(
-          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+          onPressed: () => handle.dismiss(),
           child: const Text('Nicht aktivieren'),
         ),
         FilledButton(
           onPressed: () {
             confirmed = true;
-            Navigator.of(context, rootNavigator: true).pop();
+            handle.dismiss();
           },
           child: Text(confirmLabel),
         ),
       ],
     );
-    return confirmed;
+    if (identical(_activeServiceDialog, handle)) {
+      _activeServiceDialog = null;
+      _serviceDialogEpoch = null;
+    }
+    return confirmed && interactionEpoch == AuthService.sessionEpoch;
+  }
+
+  Future<void> _showServiceError({
+    required String title,
+    required String message,
+    required int interactionEpoch,
+  }) async {
+    if (_activeServiceDialog != null ||
+        interactionEpoch != AuthService.sessionEpoch) {
+      return;
+    }
+    final handle = TrackedDialogRouteHandle<void>();
+    _activeServiceDialog = handle;
+    _serviceDialogEpoch = interactionEpoch;
+    await AppPopup.error(
+      context,
+      title: title,
+      message: message,
+      routeHandle: handle,
+    );
+    if (identical(_activeServiceDialog, handle)) {
+      _activeServiceDialog = null;
+      _serviceDialogEpoch = null;
+    }
   }
 
   Future<void> _setPushEnabled(bool enabled) async {
     if (_serviceBusy) return;
+    final interactionEpoch = AuthService.sessionEpoch;
     if (enabled) {
       final confirmed = await _confirmService(
         icon: Icons.notifications_active_outlined,
@@ -117,27 +161,41 @@ class _NotificationSettingsScreenState
         message:
             'Firebase Cloud Messaging von Google verarbeitet eine technische Installationskennung und den Geräte-Token, damit SIT dir wichtige Buchungs- und Nachrichtenhinweise zustellen kann. Die Verarbeitung kann weltweit erfolgen. Du kannst Push hier jederzeit wieder ausschalten.',
         confirmLabel: 'Push aktivieren',
+        interactionEpoch: interactionEpoch,
       );
       if (!confirmed || !mounted) return;
     }
+    if (interactionEpoch != AuthService.sessionEpoch) return;
     setState(() => _serviceBusy = true);
-    final success = await FirebaseRuntime.setPushEnabled(enabled);
+    final success = await FirebaseRuntime.setPushEnabled(
+      enabled,
+      expectedSessionEpoch: interactionEpoch,
+    );
     if (!mounted) return;
+    if (interactionEpoch != AuthService.sessionEpoch) {
+      setState(() => _serviceBusy = false);
+      return;
+    }
     if (enabled && !success) {
-      await AppPopup.error(
-        context,
-        title: 'Push nicht aktiviert',
+      await _showServiceError(
+        title: 'Push noch nicht verbunden',
         message:
-            'Die Systemberechtigung wurde nicht erteilt oder der Dienst ist gerade nicht erreichbar. Du kannst es später erneut versuchen.',
+            'Deine Einwilligung ist gespeichert. Die Zustellung konnte noch nicht sicher eingerichtet werden. ShareItToo versucht es bei einer bestätigten Verbindung oder beim nächsten Öffnen der App erneut.',
+        interactionEpoch: interactionEpoch,
       );
     }
     if (!mounted) return;
+    if (interactionEpoch != AuthService.sessionEpoch) {
+      setState(() => _serviceBusy = false);
+      return;
+    }
     await _load();
     if (mounted) setState(() => _serviceBusy = false);
   }
 
   Future<void> _setCrashDiagnosticsEnabled(bool enabled) async {
     if (_serviceBusy) return;
+    final interactionEpoch = AuthService.sessionEpoch;
     if (enabled) {
       final confirmed = await _confirmService(
         icon: Icons.bug_report_outlined,
@@ -145,9 +203,11 @@ class _NotificationSettingsScreenState
         message:
             'Firebase Crashlytics von Google erhält technische Installations-, Sitzungs-, Geräte-, App-, Absturz- und Diagnosedaten, damit SIT Fehler beheben kann. Es werden keine Werbe-ID und keine SIT-Nutzerkennung übermittelt. Beim Ausschalten oder bei einer Kontolöschung löscht SIT ungesendete Berichte auf diesem Gerät und fordert die Löschung der Firebase-Installation an. Bereits gesendete Crashdaten bleiben nach Angaben des Anbieters 90 Tage gespeichert, bevor deren Entfernung beginnt; SIT kann sie ohne übermittelte SIT-Nutzerkennung keinem Konto zuordnen und nicht kontobezogen vorzeitig löschen. Die Verarbeitung kann weltweit erfolgen. Du kannst die Diagnose hier jederzeit wieder ausschalten.',
         confirmLabel: 'Crashdiagnose aktivieren',
+        interactionEpoch: interactionEpoch,
       );
       if (!confirmed || !mounted) return;
     }
+    if (interactionEpoch != AuthService.sessionEpoch) return;
     setState(() => _serviceBusy = true);
     await FirebaseRuntime.setCrashDiagnosticsEnabled(enabled);
     if (!mounted) return;

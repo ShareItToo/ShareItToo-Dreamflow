@@ -15,6 +15,7 @@ void main() {
     expect(preferences.pushEnabled, isFalse);
     expect(preferences.crashDiagnosticsEnabled, isFalse);
     expect(preferences.pushBackendCleanupPending, isFalse);
+    expect(preferences.pushBackendCleanupOwnerToken, isNull);
     expect(preferences.pushLocalCleanupPending, isFalse);
     expect(preferences.installationCleanupPending, isFalse);
   });
@@ -30,7 +31,10 @@ void main() {
       false,
       decidedAt: decidedAt,
     );
-    await FirebaseServicePreferencesStore.setPushBackendCleanupPending(true);
+    await FirebaseServicePreferencesStore.setPushBackendCleanupPending(
+      true,
+      ownerToken: 'opaque-session-owner',
+    );
     await FirebaseServicePreferencesStore.setPushLocalCleanupPending(true);
     await FirebaseServicePreferencesStore.setInstallationCleanupPending(true);
 
@@ -38,7 +42,30 @@ void main() {
     expect(preferences.pushEnabled, isTrue);
     expect(preferences.crashDiagnosticsEnabled, isFalse);
     expect(preferences.pushBackendCleanupPending, isTrue);
+    expect(
+      preferences.pushBackendCleanupOwnerToken,
+      'opaque-session-owner',
+    );
     expect(preferences.pushLocalCleanupPending, isTrue);
     expect(preferences.installationCleanupPending, isTrue);
+  });
+
+  test('backend cleanup cannot be persisted without an exact owner', () async {
+    await expectLater(
+      FirebaseServicePreferencesStore.setPushBackendCleanupPending(true),
+      throwsArgumentError,
+    );
+  });
+
+  test('clearing backend cleanup also removes its owner token', () async {
+    await FirebaseServicePreferencesStore.setPushBackendCleanupPending(
+      true,
+      ownerToken: 'opaque-session-owner',
+    );
+    await FirebaseServicePreferencesStore.setPushBackendCleanupPending(false);
+
+    final preferences = await FirebaseServicePreferencesStore.read();
+    expect(preferences.pushBackendCleanupPending, isFalse);
+    expect(preferences.pushBackendCleanupOwnerToken, isNull);
   });
 }

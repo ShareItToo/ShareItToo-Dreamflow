@@ -20,6 +20,14 @@ class BackendRealtimeService {
   static bool _networkUnavailable = false;
   static DateTime? _connectivityMonitoringStartedAt;
   static bool _pendingInitialConnectivityEcho = false;
+  static final StreamController<void> _authenticatedReadyEvents =
+      StreamController<void>.broadcast(sync: true);
+
+  /// Emits only after the backend has accepted the current realtime
+  /// authentication. Consumers may use this as an authoritative recovery
+  /// signal for idempotent, account-scoped synchronization.
+  static Stream<void> get authenticatedReadyEvents =>
+      _authenticatedReadyEvents.stream;
 
   @visibleForTesting
   static bool hasUsableConnectivity(Iterable<ConnectivityResult> results) =>
@@ -225,6 +233,9 @@ class BackendRealtimeService {
       final decoded = jsonDecode(raw.toString());
       if (decoded is! Map) return;
       final resource = decoded['resource']?.toString();
+      if (decoded['type'] == 'ready') {
+        _authenticatedReadyEvents.add(null);
+      }
       final prefs = await SharedPreferences.getInstance();
       final syncKeys = sharedPersistenceKeysForEvent(decoded);
       for (final key in syncKeys) {

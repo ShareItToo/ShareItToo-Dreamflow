@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/firebase_runtime.dart';
+import 'package:lendify/services/local_principal_scope.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -15,6 +19,73 @@ void main() {
     FirebaseRuntime.closeAuthenticatedPushSessionForLogout();
 
     expect(FirebaseRuntime.authenticatedPushSessionActive, isFalse);
+  });
+
+  test('serial queue preserves each caller epoch and survives failure',
+      () async {
+    final queue = EpochBoundSerialOperationQueue();
+    final firstGate = Completer<void>();
+    final observed = <int>[];
+
+    final first = queue.run(7, (epoch) async {
+      observed.add(epoch);
+      await firstGate.future;
+      return true;
+    });
+    final second = queue.run(9, (epoch) async {
+      observed.add(epoch);
+      throw StateError('expected test failure');
+    });
+    final third = queue.run(11, (epoch) async {
+      observed.add(epoch);
+      return true;
+    });
+
+    await Future<void>.delayed(Duration.zero);
+    expect(observed, [7]);
+    firstGate.complete();
+
+    expect(await first, isTrue);
+    expect(await second, isFalse);
+    expect(await third, isTrue);
+    expect(observed, [7, 9, 11]);
+  });
+
+  test('push cleanup owner token is opaque and exact-session scoped', () {
+    const ownerA = AuthSessionOwner(
+      userId: 'account-a',
+      sessionId: 'session-a',
+      email: 'account-a@example.invalid',
+      createdAt: null,
+      epoch: 4,
+    );
+    const sameSessionAfterRestart = AuthSessionOwner(
+      userId: 'account-a',
+      sessionId: 'session-a',
+      email: 'account-a@example.invalid',
+      createdAt: null,
+      epoch: 0,
+    );
+    const successorSession = AuthSessionOwner(
+      userId: 'account-a',
+      sessionId: 'session-b',
+      email: 'account-a@example.invalid',
+      createdAt: null,
+      epoch: 5,
+    );
+
+    final token = LocalPrincipalScope.tokenForSessionOwner(ownerA);
+    expect(
+      token,
+      LocalPrincipalScope.tokenForSessionOwner(sameSessionAfterRestart),
+    );
+    expect(
+      token,
+      isNot(LocalPrincipalScope.tokenForSessionOwner(successorSession)),
+    );
+    expect(token, isNot(contains(ownerA.userId!)));
+    expect(token, isNot(contains(ownerA.sessionId!)));
+    expect(token, isNot(contains(ownerA.email)));
   });
 
   group('FirebaseRuntimeConfig', () {

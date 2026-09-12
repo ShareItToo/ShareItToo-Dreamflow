@@ -10,7 +10,9 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'backend_config.dart';
 import 'backend_repository.dart';
+import 'auth_service.dart';
 import 'firebase_service_preferences.dart';
+import 'local_principal_scope.dart';
 import 'release_identity.dart';
 import 'shared_persistence_sync.dart';
 
@@ -260,6 +262,29 @@ Future<String?> waitForApplePushToken({
   return null;
 }
 
+/// A tiny fail-closed queue for principal-sensitive background operations.
+/// The caller's epoch is captured before queuing and passed unchanged when
+/// the operation eventually executes.
+@visibleForTesting
+class EpochBoundSerialOperationQueue {
+  Future<void> _tail = Future<void>.value();
+
+  Future<bool> run(
+    int requestedEpoch,
+    Future<bool> Function(int requestedEpoch) operation,
+  ) {
+    final completion = Completer<bool>();
+    _tail = _tail.then((_) async {
+      try {
+        completion.complete(await operation(requestedEpoch));
+      } catch (_) {
+        completion.complete(false);
+      }
+    });
+    return completion.future;
+  }
+}
+
 class FirebaseRuntime {
   static const MethodChannel _androidActionLinkChannel = MethodChannel(
     'com.shareittoo.app/push_action_links',
@@ -279,6 +304,8 @@ class FirebaseRuntime {
   static StreamSubscription<String>? _tokenRefreshSubscription;
   static StreamSubscription<RemoteMessage>? _openedMessageSubscription;
   static StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
+  static final EpochBoundSerialOperationQueue _pushOperationQueue =
+      EpochBoundSerialOperationQueue();
   static bool _initialized = false;
   static bool _pushEnabled = false;
   // Foreground delivery is account-session scoped even though the native FCM
@@ -503,12 +530,29 @@ class FirebaseRuntime {
     }
   }
 
-  static Future<bool> syncPushRegistration() async {
+  /// Serializes registration attempts while preserving the auth epoch from
+  /// the exact caller. A request queued under account A can therefore never
+  /// execute later against account B.
+  static Future<bool> syncPushRegistration({int? expectedSessionEpoch}) {
+    final requestedEpoch =
+        expectedSessionEpoch ?? BackendRepository.authSessionEpoch;
+    return _pushOperationQueue.run(
+      requestedEpoch,
+      _syncPushRegistrationOnce,
+    );
+  }
+
+  static Future<bool> _syncPushRegistrationOnce(
+    int expectedSessionEpoch,
+  ) async {
     final operationGeneration = ++_authenticatedPushSessionGeneration;
     _authenticatedPushSessionActive = false;
+    if (expectedSessionEpoch != BackendRepository.authSessionEpoch) {
+      return false;
+    }
     if (!_initialized || !BackendConfig.enabled) return false;
     if (!_pushEnabled) {
-      await _retryPendingPushBackendCleanup();
+      await _retryPendingPushBackendCleanup(expectedSessionEpoch);
       return false;
     }
     final platform = _platformName();
@@ -540,22 +584,38 @@ class FirebaseRuntime {
           return false;
         }
       }
-      final token = await FirebaseMessaging.instance.getToken();
-      if (token == null || token.trim().isEmpty) return false;
-      final registered = await _registerToken(token, platform);
-      if (!registered ||
-          operationGeneration != _authenticatedPushSessionGeneration) {
-        return false;
-      }
-      _tokenRefreshSubscription ??=
+      await _tokenRefreshSubscription?.cancel();
+      _tokenRefreshSubscription =
           FirebaseMessaging.instance.onTokenRefresh.listen(
         (refreshedToken) {
-          unawaited(_registerToken(refreshedToken, platform));
+          unawaited(
+            _pushOperationQueue.run(
+              expectedSessionEpoch,
+              (_) => _registerRefreshedToken(
+                refreshedToken,
+                platform,
+                expectedSessionEpoch: expectedSessionEpoch,
+                operationGeneration: operationGeneration,
+              ),
+            ),
+          );
         },
         onError: (Object error, StackTrace stack) {
           debugPrint('[FirebaseRuntime] token refresh unavailable: $error');
         },
       );
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token == null || token.trim().isEmpty) return false;
+      final registered = await _registerToken(
+        token,
+        platform,
+        expectedSessionEpoch: expectedSessionEpoch,
+      );
+      if (!registered ||
+          operationGeneration != _authenticatedPushSessionGeneration ||
+          expectedSessionEpoch != BackendRepository.authSessionEpoch) {
+        return false;
+      }
       if (operationGeneration != _authenticatedPushSessionGeneration) {
         return false;
       }
@@ -568,23 +628,47 @@ class FirebaseRuntime {
     }
   }
 
-  static Future<bool> setPushEnabled(bool enabled) async {
+  static Future<bool> setPushEnabled(
+    bool enabled, {
+    int? expectedSessionEpoch,
+  }) {
+    final requestedEpoch =
+        expectedSessionEpoch ?? BackendRepository.authSessionEpoch;
+    return _pushOperationQueue.run(
+      requestedEpoch,
+      (epoch) => _setPushEnabledOnce(enabled, epoch),
+    );
+  }
+
+  static Future<bool> _setPushEnabledOnce(
+    bool enabled,
+    int requestedEpoch,
+  ) async {
+    if (requestedEpoch != BackendRepository.authSessionEpoch) return false;
     if (!await initialize()) return false;
+    if (requestedEpoch != BackendRepository.authSessionEpoch) return false;
     if (!enabled) {
+      final cleanupOwnerToken =
+          await _captureCurrentPushCleanupOwnerToken(requestedEpoch);
+      if (cleanupOwnerToken == null) return false;
       closeAuthenticatedPushSessionForLogout();
       await FirebaseServicePreferencesStore.setPushEnabled(false);
-      await FirebaseServicePreferencesStore.setPushBackendCleanupPending(true);
+      await FirebaseServicePreferencesStore.setPushBackendCleanupPending(
+        true,
+        ownerToken: cleanupOwnerToken,
+      );
       await FirebaseServicePreferencesStore.setPushLocalCleanupPending(true);
       _pushEnabled = false;
       await _tokenRefreshSubscription?.cancel();
       _tokenRefreshSubscription = null;
+      if (requestedEpoch != BackendRepository.authSessionEpoch) return false;
       await _retryPendingPushLocalCleanup();
-      await _retryPendingPushBackendCleanup();
+      await _retryPendingPushBackendCleanup(requestedEpoch);
       return true;
     }
 
     if (!await _retryPendingPushLocalCleanup()) return false;
-    if (!await _retryPendingPushBackendCleanup()) return false;
+    if (!await _retryPendingPushBackendCleanup(requestedEpoch)) return false;
     try {
       await FirebaseMessaging.instance.setAutoInitEnabled(true);
       final platform = _platformName();
@@ -612,8 +696,7 @@ class FirebaseRuntime {
       }
       _pushEnabled = true;
       await FirebaseServicePreferencesStore.setPushEnabled(true);
-      await syncPushRegistration();
-      return true;
+      return await _syncPushRegistrationOnce(requestedEpoch);
     } catch (error) {
       _pushEnabled = false;
       await FirebaseServicePreferencesStore.setPushEnabled(false);
@@ -691,12 +774,49 @@ class FirebaseRuntime {
     }
   }
 
-  static Future<bool> _retryPendingPushBackendCleanup() async {
+  static Future<String?> _captureCurrentPushCleanupOwnerToken(
+    int expectedSessionEpoch,
+  ) async {
+    if (expectedSessionEpoch != BackendRepository.authSessionEpoch) return null;
+    final session = await AuthService.readSession();
+    if (session == null ||
+        expectedSessionEpoch != BackendRepository.authSessionEpoch) {
+      return null;
+    }
+    final owner = AuthService.captureSessionOwner(session);
+    if (owner.epoch != expectedSessionEpoch ||
+        !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      return null;
+    }
+    return LocalPrincipalScope.tokenForSessionOwner(owner);
+  }
+
+  static Future<bool> _retryPendingPushBackendCleanup(
+    int expectedSessionEpoch,
+  ) async {
     if (!BackendConfig.enabled) return true;
+    if (expectedSessionEpoch != BackendRepository.authSessionEpoch) {
+      return false;
+    }
     final preferences = await FirebaseServicePreferencesStore.read();
     if (!preferences.pushBackendCleanupPending) return true;
+    final currentOwnerToken =
+        await _captureCurrentPushCleanupOwnerToken(expectedSessionEpoch);
+    if (currentOwnerToken == null) return false;
+    if (preferences.pushBackendCleanupOwnerToken != currentOwnerToken) {
+      // A pending cleanup from A must never target the current session B.
+      // Keep the opaque marker so it can be retried if A's exact session
+      // becomes current again, but do not block B's own registration.
+      return true;
+    }
     try {
-      await BackendRepository.deleteCurrentSessionPushDevices();
+      final deleted = await BackendRepository.deleteCurrentSessionPushDevices(
+        expectedSessionEpoch: expectedSessionEpoch,
+      );
+      if (deleted == null ||
+          expectedSessionEpoch != BackendRepository.authSessionEpoch) {
+        return false;
+      }
       await FirebaseServicePreferencesStore.setPushBackendCleanupPending(false);
       return true;
     } catch (error) {
@@ -705,18 +825,48 @@ class FirebaseRuntime {
     }
   }
 
-  static Future<bool> _registerToken(String token, String platform) async {
+  static Future<bool> _registerToken(
+    String token,
+    String platform, {
+    required int expectedSessionEpoch,
+  }) async {
     try {
-      await BackendRepository.registerPushDevice(
+      return await BackendRepository.registerPushDevice(
+        expectedSessionEpoch: expectedSessionEpoch,
         token: token,
         platform: platform,
         locale: _locale,
       );
-      return true;
     } catch (error) {
       debugPrint('[FirebaseRuntime] push token sync unavailable: $error');
       return false;
     }
+  }
+
+  static Future<bool> _registerRefreshedToken(
+    String token,
+    String platform, {
+    required int expectedSessionEpoch,
+    required int operationGeneration,
+  }) async {
+    if (!_pushEnabled ||
+        operationGeneration != _authenticatedPushSessionGeneration ||
+        expectedSessionEpoch != BackendRepository.authSessionEpoch) {
+      return false;
+    }
+    final registered = await _registerToken(
+      token,
+      platform,
+      expectedSessionEpoch: expectedSessionEpoch,
+    );
+    if (registered &&
+        _pushEnabled &&
+        operationGeneration == _authenticatedPushSessionGeneration &&
+        expectedSessionEpoch == BackendRepository.authSessionEpoch) {
+      _authenticatedPushSessionActive = true;
+      return true;
+    }
+    return false;
   }
 
   static String? _platformName() {
