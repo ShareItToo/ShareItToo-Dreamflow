@@ -161,19 +161,59 @@ export function isV52ForegroundPushPopup(hierarchy) {
 
 const discoverNavigationLabels = ['Entdecken', 'Erkunden'];
 const accountNavigationLabels = ['Mein SIT', 'Profil'];
+const persistentBottomNavigationLabels = [
+  ...discoverNavigationLabels,
+  'Mietkorb',
+  'Buchungen',
+  'Nachrichten',
+  ...accountNavigationLabels,
+];
 
 function availableNavigationLabel(hierarchy, labels) {
   return labels.find((label) => namedNodes(hierarchy, label).length >= 1) ?? null;
 }
 
-function nodeCenter(tag, label) {
+function nodeBounds(tag, label) {
   const bounds = /^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$/.exec(attribute(tag, 'bounds') ?? '');
   if (!bounds) fail(`The sanitized ${label} action has invalid bounds.`);
   const values = bounds.slice(1).map(Number);
+  if (values[2] <= values[0] || values[3] <= values[1]) {
+    fail(`The sanitized ${label} action has empty bounds.`);
+  }
   return {
-    x: Math.round((values[0] + values[2]) / 2),
-    y: Math.round((values[1] + values[3]) / 2),
+    left: values[0],
+    top: values[1],
+    right: values[2],
+    bottom: values[3],
   };
+}
+
+function rectanglesOverlap(left, right) {
+  return Math.max(left.left, right.left) < Math.min(left.right, right.right)
+    && Math.max(left.top, right.top) < Math.min(left.bottom, right.bottom);
+}
+
+export function visibleNamedNodeTapPoint(tag, hierarchy, label) {
+  const target = nodeBounds(tag, label);
+  const occluders = persistentBottomNavigationLabels
+    .flatMap((navigationLabel) => namedNodes(hierarchy, navigationLabel))
+    .filter((candidate) => candidate !== tag
+      && attribute(candidate, 'class') === 'android.widget.Button'
+      && attribute(candidate, 'enabled') !== 'false'
+      && attribute(candidate, 'clickable') === 'true')
+    .map((candidate) => nodeBounds(candidate, 'bottom navigation'))
+    .filter((candidate) => rectanglesOverlap(target, candidate));
+  const visibleBottom = occluders.reduce(
+    (bottom, candidate) => Math.min(bottom, candidate.top),
+    target.bottom,
+  );
+  if (visibleBottom <= target.top) {
+    fail(`The sanitized ${label} action is fully occluded by bottom navigation.`);
+  }
+  return Object.freeze({
+    x: Math.round((target.left + target.right) / 2),
+    y: Math.round((target.top + visibleBottom) / 2),
+  });
 }
 
 function tapNamedNode(commandRunner, adbPath, device, hierarchy, label, { chooseLast = false } = {}) {
@@ -181,8 +221,12 @@ function tapNamedNode(commandRunner, adbPath, device, hierarchy, label, { choose
   const clickable = enabled.filter((tag) => attribute(tag, 'clickable') === 'true');
   const matches = clickable.length ? clickable : enabled;
   if (matches.length === 0) fail(`The sanitized ${label} action is missing.`);
-  const center = nodeCenter(chooseLast ? matches.at(-1) : matches[0], label);
-  adb(commandRunner, adbPath, device, ['shell', 'input', 'tap', String(center.x), String(center.y)]);
+  const point = visibleNamedNodeTapPoint(
+    chooseLast ? matches.at(-1) : matches[0],
+    hierarchy,
+    label,
+  );
+  adb(commandRunner, adbPath, device, ['shell', 'input', 'tap', String(point.x), String(point.y)]);
 }
 
 function inputText(commandRunner, adbPath, device, hierarchy, label, value) {

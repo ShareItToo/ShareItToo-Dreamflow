@@ -7,6 +7,7 @@ import {
   isAndroidSoftwareKeyboardShown,
   isV52ForegroundPushPopup,
   sendOppositeRoleMessage,
+  visibleNamedNodeTapPoint,
 } from '../../tool/diagnose_android_logout_lifecycle.mjs';
 
 function delayedPhysicalGuestResetRunner() {
@@ -87,6 +88,41 @@ test('guest reset tolerates a bounded slow physical cold start and profile load'
   });
   assert.equal(result, true);
   assert.equal(waits, 44);
+});
+
+test('taps the visible part of an action overlapped by persistent bottom navigation', () => {
+  const logout = '<node text="Abmelden" clickable="true" enabled="true" bounds="[60,2856][1381,3052]"/>';
+  const navigation = [
+    ['Entdecken', 0, 288],
+    ['Mietkorb', 288, 576],
+    ['Buchungen', 576, 864],
+    ['Nachrichten', 864, 1152],
+    ['Mein SIT', 1152, 1440],
+  ].map(([label, left, right]) => (
+    `<node class="android.widget.Button" content-desc="${label}&#10;Tab" clickable="true" enabled="true" bounds="[${left},2927][${right},3168]"/>`
+  )).join('');
+  assert.deepEqual(
+    visibleNamedNodeTapPoint(logout, `<hierarchy>${logout}${navigation}</hierarchy>`, 'Abmelden'),
+    { x: 721, y: 2892 },
+  );
+});
+
+test('keeps the center point when no persistent navigation target overlaps', () => {
+  const logout = '<node text="Abmelden" clickable="true" enabled="true" bounds="[40,1300][1040,1500]"/>';
+  const navigation = '<node class="android.widget.Button" content-desc="Mein SIT&#10;Tab" clickable="true" enabled="true" bounds="[864,1900][1080,2200]"/>';
+  assert.deepEqual(
+    visibleNamedNodeTapPoint(logout, `<hierarchy>${logout}${navigation}</hierarchy>`, 'Abmelden'),
+    { x: 540, y: 1400 },
+  );
+});
+
+test('fails closed when persistent navigation fully occludes an action', () => {
+  const logout = '<node text="Abmelden" clickable="true" enabled="true" bounds="[900,1950][1040,2050]"/>';
+  const navigation = '<node class="android.widget.Button" content-desc="Mein SIT&#10;Tab" clickable="true" enabled="true" bounds="[864,1900][1080,2200]"/>';
+  assert.throws(
+    () => visibleNamedNodeTapPoint(logout, `<hierarchy>${logout}${navigation}</hierarchy>`, 'Abmelden'),
+    /fully occluded by bottom navigation/u,
+  );
 });
 
 test('dismisses login input only for an exact visible Android software keyboard', () => {
