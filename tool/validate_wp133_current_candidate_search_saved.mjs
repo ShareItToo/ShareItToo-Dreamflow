@@ -13,6 +13,7 @@ const rolloverPath = 'store/google-play/current-rollover-candidate.json';
 const candidateHead = 'abf911d1c944a4e5874269111985d0cc4736546e';
 const wp132FinalHead = '7284258251a5f599ed74a4de63dfdc1f95b73df7';
 const diagnosticHead = 'b6f8c8194d34581904e1c97794a44b27f5b03326';
+const wp133ClosureHead = 'd0611efc9ed83dac210fecf0b81eb357b0fda2e5';
 const runtimeRoots = [
   'lib', 'android', 'assets', 'pubspec.yaml', 'pubspec.lock', 'backend/src', 'backend/sql',
 ];
@@ -62,8 +63,16 @@ function assertAncestor(repositoryRoot, head) {
 function validateSourceInventory(repositoryRoot, inventory) {
   exact(inventory?.map((item) => item.path), sourcePaths, 'source inventory');
   for (const item of inventory) {
-    if (!/^[a-f0-9]{64}$/u.test(item?.sha256 ?? '')
-        || digest(readFileSync(resolve(repositoryRoot, item.path))) !== item.sha256) {
+    let source;
+    try {
+      source = execFileSync('git', ['show', `${wp133ClosureHead}:${item.path}`], {
+        cwd: repositoryRoot,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+    } catch {
+      fail(`WP133 historical source is unavailable: ${item.path}.`);
+    }
+    if (!/^[a-f0-9]{64}$/u.test(item?.sha256 ?? '') || digest(source) !== item.sha256) {
       fail(`WP133 source digest drift: ${item?.path ?? 'unknown'}.`);
     }
   }
@@ -78,7 +87,11 @@ export function validateWp133CurrentCandidateSearchSaved({
   const value = evidence
     ?? JSON.parse(readFileSync(resolve(repositoryRoot, evidencePath), 'utf8'));
   const pointer = rollover
-    ?? JSON.parse(readFileSync(resolve(repositoryRoot, rolloverPath), 'utf8'));
+    ?? JSON.parse(execFileSync('git', ['show', `${wp133ClosureHead}:${rolloverPath}`], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }));
   rejectPrivateShape(value);
   if (/(?:\/(?:Users|home)\/|@[A-Za-z0-9]|\+49[0-9]|BEGIN PRIVATE|\b(?:sk|rk)_(?:test|live)_|\bwhsec_|deviceSerial|androidId|\bimei\b|\bn22-)/iu.test(JSON.stringify(value))) {
     fail('WP133 evidence contains private, secret or fixture-shaped content.');
@@ -229,11 +242,11 @@ export function validateWp133CurrentCandidateSearchSaved({
     evidenceRef: evidencePath,
   }, 'current candidate pointer');
   if (checkGitState) {
-    [candidateHead, wp132FinalHead, diagnosticHead].forEach((head) => {
+    [candidateHead, wp132FinalHead, diagnosticHead, wp133ClosureHead].forEach((head) => {
       assertAncestor(repositoryRoot, head);
     });
     const drift = execFileSync('git', [
-      'diff', '--name-only', candidateHead, '--', ...runtimeRoots,
+      'diff', '--name-only', candidateHead, wp133ClosureHead, '--', ...runtimeRoots,
     ], {
       cwd: repositoryRoot,
       encoding: 'utf8',
