@@ -473,15 +473,23 @@ export async function openExactSearch({
   });
   tapLabel(commandRunner, adbPath, device, hierarchy, 'Suchen');
   if (!expectedVisible) {
-    hierarchy = await waitForHierarchy({
-      commandRunner,
-      adbPath,
-      device,
-      wait,
-      attempts: 48,
-      label: 'empty exact filtered search result',
-      predicate: (value) => emptyExactSearchResultVisible(value, title),
-    });
+    try {
+      hierarchy = await waitForHierarchy({
+        commandRunner,
+        adbPath,
+        device,
+        wait,
+        attempts: 48,
+        label: 'empty exact filtered search result',
+        predicate: (value) => emptyExactSearchResultVisible(value, title),
+      });
+    } catch {
+      const latest = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+      fail(`The exact filtered search result did not settle (${classifyExactFilteredSearchResult(
+        latest,
+        { title, expectedFavoriteLabel: null },
+      )}).`);
+    }
     return { hierarchy, title, favoriteLabel: null };
   }
   const favoriteLabel = requireFavoriteState

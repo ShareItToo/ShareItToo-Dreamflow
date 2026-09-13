@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -231,6 +232,17 @@ test('accepts only a settled empty exact search result', () => {
   assert.equal(emptyExactSearchResultVisible(`${empty}<node content-desc="${title}"/>`, title), false);
   assert.equal(emptyExactSearchResultVisible(`${empty}<node class="android.widget.ProgressBar"/>`, title), false);
   assert.equal(emptyExactSearchResultVisible('<node content-desc="Suche nicht erreichbar"/>', title), false);
+});
+
+test('keeps empty-result timeout diagnostics sanitized and state-based', () => {
+  const source = readFileSync(
+    'tool/diagnose_android_search_saved_lifecycle.mjs',
+    'utf8',
+  );
+  assert.match(
+    source,
+    /label: 'empty exact filtered search result'[\s\S]*?catch \{[\s\S]*?classifyExactFilteredSearchResult\([\s\S]*?expectedFavoriteLabel: null/u,
+  );
 });
 
 function passingOperations(calls) {
