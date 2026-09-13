@@ -1,5 +1,25 @@
 # ShareItToo Current State
 
+## WP134 exact-current Staging support lifecycle — complete
+
+Signed Internal/Staging candidate `1.0.0+2026091309` now has a fresh isolated
+Support lifecycle against the healthy immutable Staging Backend: one
+simulation-only intake, independent two-admin review, publication without
+external delivery, reporter readback and a future next-update deadline.
+
+All three temporary identities and sessions are closed, the owner-only vault is
+deleted, and audit history is retained. API liveness, database, mail,
+notification queues and the zero-restart container passed after cleanup.
+Readiness remains degraded only by three noncritical historical Support
+follow-ups; critical overdue and P0-without-owner counts are zero.
+
+`staging-support-simulation-lifecycle` is PASS. The conservative portfolio is
+now **18 PASS, 6 PARTIAL and 8 OPEN**. See
+`docs/operations/WP134_CURRENT_CANDIDATE_STAGING_SUPPORT_2026-09-13.md`.
+
+No Production, real user, external delivery, Store, Firebase, payment, money,
+OnePlus or PR-merge state changed.
+
 ## WP133 exact-current search and saved-state lifecycle — complete
 
 Signed Internal/Staging candidate `1.0.0+2026091309` now passes exact search,

@@ -108,14 +108,14 @@
     "preferredDeviceExactApkInstalled": true,
     "preferredDeviceDataPreserved": true,
     "onDeviceListingAiPhysicalInference": "not-replayed-on-2026091309",
-    "authenticatedPilotMatrix": "partial-exact-current-report-block-and-search-saved-passed",
+    "authenticatedPilotMatrix": "partial-exact-current-report-block-search-saved-and-support-passed",
     "secondaryDevice": "not-required-while-oneplus-disconnected"
   },
   "privateDriveHandoff": {
     "status": "not-required-for-current-mac-mini-session",
     "shared": false
   },
-  "evidenceRef": "docs/evidence/release-readiness/wp133-current-candidate-search-saved-20260913.json",
+  "evidenceRef": "docs/evidence/release-readiness/wp134-current-candidate-staging-support-20260913.json",
   "playCompletionEvidenceRef": null,
   "handoverRef": null,
   "releaseNotesRef": "store/google-play/de-DE/internal_release_notes.txt",

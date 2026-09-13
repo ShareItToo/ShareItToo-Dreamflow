@@ -1,4 +1,18 @@
-# Current Work Package: WP133 Exact-Current Search/Saved State — COMPLETE
+# Current Work Package: WP134 Exact-Current Staging Support — COMPLETE
+
+Signed Internal/Staging `1.0.0+2026091309` now passes one fresh isolated
+Support lifecycle against immutable Staging Backend `df39a14…`: intake,
+separate two-admin review, publication without external delivery, reporter
+readback, future deadline and full temporary-account/session/vault cleanup.
+
+`staging-support-simulation-lifecycle` is PASS. Portfolio: **18 PASS / 6
+PARTIAL / 8 OPEN**. See
+`docs/operations/WP134_CURRENT_CANDIDATE_STAGING_SUPPORT_2026-09-13.md`.
+
+No Production, real user, external message, Store, Firebase, payment, money,
+OnePlus or PR-merge state changed.
+
+# Previous Work Package: WP133 Exact-Current Search/Saved State — COMPLETE
 
 Signed Internal/Staging `1.0.0+2026091309` passes the full physical Pixel
 search and saved-state lifecycle: exact query, category filter, detail, save,

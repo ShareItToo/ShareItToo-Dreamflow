@@ -77,8 +77,11 @@ export function assertWp68ExecutionGate({
   });
 }
 
-export function assertWp68StagingRuntimeImage(image) {
-  exact(image, wp68ExpectedStagingRuntimeImage, 'WP68 staging runtime image');
+export function assertWp68StagingRuntimeImage(
+  image,
+  expectedRuntimeImage = wp68ExpectedStagingRuntimeImage,
+) {
+  exact(image, expectedRuntimeImage, 'WP68 staging runtime image');
   return image;
 }
 
@@ -173,7 +176,10 @@ function runProcess(command, args, { input = null, timeoutMs = 45_000 } = {}) {
   });
 }
 
-async function readWp68StagingRuntimeImage({ sshHost = wp68SshHost } = {}) {
+async function readWp68StagingRuntimeImage({
+  sshHost = wp68SshHost,
+  expectedRuntimeImage = wp68ExpectedStagingRuntimeImage,
+} = {}) {
   const result = await runProcess('ssh', [
     '-o', 'BatchMode=yes',
     '-o', 'ConnectTimeout=10',
@@ -181,10 +187,10 @@ async function readWp68StagingRuntimeImage({ sshHost = wp68SshHost } = {}) {
     "docker inspect --format '{{.Config.Image}}' shareittoo-staging-api",
   ], { timeoutMs: 30_000 });
   const image = result.stdout.trim();
-  if (!/^shareittoo-api:[0-9a-f]{40}$/u.test(image)) {
+  if (!/^(?:ghcr\.io\/shareittoo\/)?shareittoo-api:[0-9a-f]{40}$/u.test(image)) {
     fail('WP68 staging runtime image probe returned an invalid value.');
   }
-  return assertWp68StagingRuntimeImage(image);
+  return assertWp68StagingRuntimeImage(image, expectedRuntimeImage);
 }
 
 function remoteNodeCommand(script) {
@@ -539,6 +545,7 @@ export function buildWp68Evidence({
 export async function executeWp68StagingSupportLifecycle({
   gate = process.env[wp68ExecutionGate],
   vaultPath = privateVaultPath(),
+  expectedRuntimeImage = wp68ExpectedStagingRuntimeImage,
   candidate = {
     applicationId: 'com.shareittoo.app',
     versionCode: '2026090904',
@@ -546,7 +553,9 @@ export async function executeWp68StagingSupportLifecycle({
   },
 } = {}) {
   assertWp68ExecutionGate({ gate });
-  const runtimeImage = await readWp68StagingRuntimeImage();
+  const runtimeImage = await readWp68StagingRuntimeImage({
+    expectedRuntimeImage,
+  });
   const boundCandidate = Object.freeze({ ...candidate, stagingRuntimeImage: runtimeImage });
   const targetVault = assertPrivateVaultPath(vaultPath);
   const vault = await buildWp68PrivateVault();
