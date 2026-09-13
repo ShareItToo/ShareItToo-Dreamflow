@@ -215,6 +215,34 @@ void main() {
   );
 
   testWidgets(
+    'empty search keeps the results heading and explicit empty truth',
+    (tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'items': '[]',
+      });
+      final semantics = tester.ensureSemantics();
+      try {
+        await tester.pumpWidget(harness(const SearchResultsScreen(
+          queryText: 'Keine Treffer',
+          results: <Item>[],
+        )));
+        await tester.pumpAndSettle();
+
+        expect(find.bySemanticsLabel('Suchergebnisse'), findsOneWidget);
+        expect(
+          find.text(
+            'Es gibt noch keinen Artikel zu deiner Suche. Komm bald wieder!',
+          ),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        semantics.dispose();
+      }
+    },
+  );
+
+  testWidgets(
     'rapid repeated save activation opens only one selection flow',
     (tester) async {
       final item = syntheticItem();

@@ -295,6 +295,12 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                   ),
                 ),
               const SliverToBoxAdapter(child: SizedBox(height: 8)),
+              SliverToBoxAdapter(child: Builder(builder: (context) {
+                final l10n = context.watch<LocalizationController>();
+                return _SectionHeader(
+                    title: l10n.t('Suchergebnisse'),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8));
+              })),
               if (items.isEmpty) ...[
                 SliverFillRemaining(
                   hasScrollBody: false,
@@ -311,13 +317,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                   ),
                 ),
               ] else ...[
-                // Nur Suchergebnisse
-                SliverToBoxAdapter(child: Builder(builder: (context) {
-                  final l10n = context.watch<LocalizationController>();
-                  return _SectionHeader(
-                      title: l10n.t('Suchergebnisse'),
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8));
-                })),
                 SliverPadding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: horizontalPadding),
