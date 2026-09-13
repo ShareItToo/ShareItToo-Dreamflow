@@ -33,7 +33,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "2069237feef16476743bd9d2670cb392ea69c845267d88b7a32f4dffa35aab18"
+      "sha256": "fe564fc03c7498e5054086c39fb3b428a7b3c575050457690bf4aa59ad9e90cd"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
@@ -81,11 +81,11 @@
     },
     {
       "path": "backend/src/retention_inventory.js",
-      "sha256": "841e2a762bade7e147e8af5451e329058dace7324d9df3e8c6eacfaf454d7f9f"
+      "sha256": "5710a397d81aa34306608b2971e83fe7e3027bc164ac397ac44400dc7a503e50"
     },
     {
       "path": "backend/src/privacy_export.js",
-      "sha256": "e3525f3c7ed39669155c22ed82cbf178a87f79723ef9756b5b7cddfc8daa8651"
+      "sha256": "f3d504d7650f8b94cc51db3483705ce4d381d9e5cf0c58021b9cc2e2779233b3"
     },
     {
       "path": "backend/src/observability.js",
