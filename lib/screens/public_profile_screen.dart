@@ -699,6 +699,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
         actions: [
           if (u != null)
             PopupMenuButton<String>(
+              tooltip: 'Mehr Optionen',
               icon: const Icon(Icons.more_vert),
               color: AppTheme.surfacePrimary(context),
               surfaceTintColor: Colors.transparent,

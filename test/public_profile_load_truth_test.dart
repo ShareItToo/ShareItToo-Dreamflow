@@ -91,6 +91,7 @@ void main() {
     expect(find.text('Wieder geladenes Profil'), findsWidgets);
     expect(find.text('Profil konnte nicht geladen werden'), findsNothing);
     expect(find.byIcon(Icons.more_vert), findsOneWidget);
+    expect(find.byTooltip('Mehr Optionen'), findsOneWidget);
   });
 
   testWidgets('session refresh clears the old profile before the next await',
