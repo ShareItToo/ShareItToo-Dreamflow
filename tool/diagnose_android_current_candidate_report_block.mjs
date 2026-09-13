@@ -261,9 +261,22 @@ async function openBlockedUsers({ commandRunner, adbPath, device, wait }) {
     predicate: (value) => currentHeadAndroidNamedNodes(value, 'Suche schließen').length > 0,
   });
   currentHeadAndroidAdb(commandRunner, adbPath, device, [
-    'shell', 'input', 'text', 'Blockierte%sNutzer',
+    'shell', 'input', 'text', 'Kontoeinstellungen',
   ]);
   currentHeadAndroidAdb(commandRunner, adbPath, device, ['shell', 'input', 'keyevent', '66']);
+  hierarchy = await waitForHierarchy({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+    attempts: 48,
+    label: 'account settings privacy section',
+    predicate: (value) => containsAllLabels(
+      value,
+      ['SICHERHEIT', 'DATENSCHUTZ', 'Blockierte Nutzer'],
+    ) && currentHeadAndroidNamedNodes(value, 'Suche schließen').length === 0,
+  });
+  tapLabel(commandRunner, adbPath, device, hierarchy, 'Blockierte Nutzer');
   return waitForHierarchy({
     commandRunner,
     adbPath,
@@ -271,7 +284,11 @@ async function openBlockedUsers({ commandRunner, adbPath, device, wait }) {
     wait,
     attempts: 48,
     label: 'blocked users',
-    predicate: (value) => currentHeadAndroidNamedNodes(value, 'Blockierte Nutzer').length > 0,
+    predicate: (value) => (
+      currentHeadAndroidNamedNodes(value, 'Blockierte Nutzer').length === 1
+        && currentHeadAndroidNamedNodes(value, 'DATENSCHUTZ').length === 0
+        && currentHeadAndroidNamedNodes(value, 'Suche schließen').length === 0
+    ),
   });
 }
 

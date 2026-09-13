@@ -51,6 +51,14 @@ test('keeps the report action reachable from an exact search result', () => {
     runner,
     /value\.includes\('Profil konnte nicht geladen werden'\)[\s\S]*?tapLabel\(commandRunner, adbPath, device, hierarchy, 'Erneut laden'\)[\s\S]*?attempts: 48/u,
   );
+  assert.match(
+    runner,
+    /'shell', 'input', 'text', 'Kontoeinstellungen'[\s\S]*?\['SICHERHEIT', 'DATENSCHUTZ', 'Blockierte Nutzer'\][\s\S]*?tapLabel\(commandRunner, adbPath, device, hierarchy, 'Blockierte Nutzer'\)[\s\S]*?currentHeadAndroidNamedNodes\(value, 'DATENSCHUTZ'\)\.length === 0/u,
+  );
+  assert.doesNotMatch(
+    runner,
+    /'shell', 'input', 'text', 'Blockierte%sNutzer'/u,
+  );
   assert.equal(
     runner.match(/`Anzeigenoptionen: \$\{journal\.targetListing\.title\}`/gu)?.length,
     2,
