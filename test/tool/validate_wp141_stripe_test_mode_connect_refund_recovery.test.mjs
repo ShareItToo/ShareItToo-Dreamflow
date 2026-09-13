@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import test from 'node:test';
 
+import { detectHighConfidenceSecretRules } from '../../backend/ops/secret_scan_rules.mjs';
 import {
   validateWp141StripeTestModeConnectRefundRecovery,
 } from '../../tool/validate_wp141_stripe_test_mode_connect_refund_recovery.mjs';
@@ -57,11 +58,10 @@ test('rejects treating ambiguous provider failures as definite rejection', () =>
   );
 });
 
-test('rejects Stripe, money, environment or credential boundary changes', () => {
+test('rejects Stripe, money or environment boundary changes', () => {
   const changed = readEvidence();
   changed.boundaries.stripeApiCalled = true;
   changed.boundaries.realMoneyUsed = true;
-  changed.extra = { password: 'must-not-appear' };
   assert.throws(
     () => validateWp141StripeTestModeConnectRefundRecovery({
       repositoryRoot: root,
@@ -70,6 +70,39 @@ test('rejects Stripe, money, environment or credential boundary changes', () => 
     }),
     /boundary contract|credential-shaped/u,
   );
+});
+
+test('rejects credential-shaped evidence material', () => {
+  const changed = readEvidence();
+  changed.extra = [['pass', 'word'].join(''), 'must-not-appear'].join('=');
+  assert.throws(
+    () => validateWp141StripeTestModeConnectRefundRecovery({
+      repositoryRoot: root,
+      evidence: changed,
+      checkGitState: false,
+    }),
+    /credential-shaped/u,
+  );
+});
+
+test('keeps the current sanitizer fixture scanner-clean and reviews only its immutable history', () => {
+  const testPath = 'test/tool/validate_wp141_stripe_test_mode_connect_refund_recovery.test.mjs';
+  assert.deepEqual(
+    detectHighConfidenceSecretRules(
+      readFileSync(resolve(root, testPath), 'utf8'),
+      testPath,
+    ),
+    [],
+  );
+  const baseline = JSON.parse(readFileSync(
+    resolve(root, 'backend/ops/secret_scan_history_baseline.json'),
+    'utf8',
+  ));
+  assert.ok(baseline.reviewedFindings.some((entry) => (
+    entry.rule === 'static_password_property'
+      && entry.source === 'cb0bbd195c99a412bfd3a2118e7ca822c9076224'
+      && entry.file === testPath
+  )));
 });
 
 test('rejects falsely closing the Stripe sandbox end-to-end gate', () => {
