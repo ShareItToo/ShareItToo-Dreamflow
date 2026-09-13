@@ -395,7 +395,11 @@ async function writePrivateVault(path, vault) {
   return target;
 }
 
-function runProcess(command, args, { input = null, timeoutMs = 60_000 } = {}) {
+function runProcess(command, args, {
+  input = null,
+  timeoutMs = 60_000,
+  failureLabel = 'command',
+} = {}) {
   return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(command, args, { shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
     const stdout = [];
@@ -415,7 +419,7 @@ function runProcess(command, args, { input = null, timeoutMs = 60_000 } = {}) {
         stderr: Buffer.concat(stderr).toString('utf8').trim(),
       };
       if (code === 0) resolvePromise(result);
-      else rejectPromise(new Error(`WP140 command failed (${code}).`));
+      else rejectPromise(new Error(`WP140 ${failureLabel} failed (${code}).`));
     });
     child.stdin.end(input ?? undefined);
   });
@@ -426,11 +430,14 @@ function remoteNodeCommand(script) {
   return `docker exec -i shareittoo-staging-api node --input-type=module --eval "$(printf %s ${encoded} | base64 -d)"`;
 }
 
-async function runRemoteJson(script, payload = {}, { timeoutMs = 60_000 } = {}) {
+async function runRemoteJson(script, payload = {}, {
+  timeoutMs = 60_000,
+  failureLabel = 'remote operation',
+} = {}) {
   const result = await runProcess('ssh', [
     '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
     wp140SshHost, remoteNodeCommand(script),
-  ], { input: JSON.stringify(payload), timeoutMs });
+  ], { input: JSON.stringify(payload), timeoutMs, failureLabel });
   try {
     return JSON.parse(result.stdout);
   } catch {
@@ -442,7 +449,7 @@ async function readRuntime() {
   const result = await runProcess('ssh', [
     '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', wp140SshHost,
     "docker inspect --format '{{.Config.Image}} {{.RestartCount}}' shareittoo-staging-api",
-  ], { timeoutMs: 30_000 });
+  ], { timeoutMs: 30_000, failureLabel: 'runtime inventory' });
   const match = /^(\S+) (\d+)$/u.exec(result.stdout);
   if (match === null) fail('WP140 runtime inventory is invalid.');
   return Object.freeze({ image: match[1], restartCount: Number(match[2]) });
@@ -759,7 +766,9 @@ export async function executeWp140({
   const beforeRuntime = await readRuntime();
   exact(beforeRuntime.image, wp140ExpectedRuntimeImage, 'WP140 runtime image');
   exact(beforeRuntime.restartCount, 0, 'WP140 runtime restart count');
-  const before = await runRemoteJson(remoteInventoryScript);
+  const before = await runRemoteJson(remoteInventoryScript, {}, {
+    failureLabel: 'read-only preflight',
+  });
   if (before?.status !== 'passed-read-only'
       || before?.overdueCount !== wp140ExpectedOverdueCount
       || before?.allNonLive !== true
@@ -780,7 +789,9 @@ export async function executeWp140({
   let primaryError = null;
   try {
     bootstrapAttempted = true;
-    const bootstrap = await runRemoteJson(remoteBootstrapScript, vault);
+    const bootstrap = await runRemoteJson(remoteBootstrapScript, vault, {
+      failureLabel: 'temporary admin bootstrap',
+    });
     if (bootstrap?.status !== 'bootstrapped' || bootstrap?.temporaryAdminCount !== 2) {
       fail('WP140 temporary admin bootstrap failed.');
     }
@@ -804,7 +815,9 @@ export async function executeWp140({
     const caseIds = targets.map((entry) => entry.id);
     const baselineByCase = new Map();
     const operations = {
-      attest: async () => runRemoteJson(remoteAttestationScript, { caseIds }),
+      attest: async () => runRemoteJson(remoteAttestationScript, { caseIds }, {
+        failureLabel: 'provenance attestation',
+      }),
       draft: async (supportCase, body, index) => {
         const beforeDetail = requireStatus(await requestJson(
           `/admin/support/cases/${encodeURIComponent(supportCase.id)}`, {
@@ -879,7 +892,9 @@ export async function executeWp140({
       },
     };
     const recovery = await recoverWp140Cases({ cases: targets, operations, now });
-    const after = await runRemoteJson(remoteAfterScript, { caseIds });
+    const after = await runRemoteJson(remoteAfterScript, { caseIds }, {
+      failureLabel: 'post-recovery audit',
+    });
     after.externalMessageSentCount = recovery.results.every(
       (entry) => entry.externalMessageSent === false,
     ) ? 0 : 1;
@@ -904,7 +919,7 @@ export async function executeWp140({
       try {
         cleanup = await runRemoteJson(remoteDecommissionScript, {
           accounts: vault.accounts.map(({ id, email, role }) => ({ id, email, role })),
-        });
+        }, { failureLabel: 'temporary admin decommission' });
       } catch (error) { cleanupError ??= error; }
     }
     try { await rm(targetVault, { force: true }); } catch (error) { cleanupError ??= error; }

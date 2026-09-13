@@ -282,5 +282,8 @@ test('builds identity-free closure evidence and keeps direct case writes forbidd
   assert.doesNotMatch(source, /DELETE\s+FROM\s+support_(?:cases|case_events|messages)/iu);
   assert.match(source, /externalMessageSent !== false/u);
   assert.match(source, /audit\.resource_id = user_account\.id::text/u);
+  assert.match(source, /failureLabel: 'provenance attestation'/u);
+  assert.match(source, /failureLabel: 'post-recovery audit'/u);
+  assert.doesNotMatch(source, /stderr.*failed/u);
   assert.match(source, /SIT_WP140_STAGING_HISTORICAL_SUPPORT_DEADLINE_RECOVERY_GO/u);
 });
