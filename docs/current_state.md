@@ -1,5 +1,25 @@
 # ShareItToo Current State
 
+## WP136 Bookings unread-snapshot and exact Pixel closure — complete
+
+The Bookings infinite-loading defect is fixed without a timeout or fixture
+reduction. A 136-row historical synthetic request set exposed a per-row full
+remote reload in unread counting. The current implementation validates the
+already authoritative snapshot for one exact principal, reads local markers
+once and fails closed on foreign rows, corrupt state or an Account-A-to-B
+transition. Deterministic 500-row and structural N+1 ratchets pass.
+
+Signed Internal/Staging `1.0.0+2026091311` is installed data-preservingly on
+the Pixel. The complete two-role listing, discovery, non-binding request,
+acceptance, Bookings, chat, three-state FCM, principal isolation and cleanup
+journey passes against Staging. Exact candidate source GitHub Regression
+`34748319125`, clean checkout and CodeQL `34748319084` pass with zero open
+alerts. See
+`docs/operations/WP136_BOOKINGS_UNREAD_SNAPSHOT_PIXEL_CLOSURE_2026-09-13.md`.
+
+No OnePlus, Google Play, Production, Firebase, Backend deployment, payment,
+real money, public registration or PR-merge state changed.
+
 ## WP134 exact-current Staging support lifecycle — complete
 
 Signed Internal/Staging candidate `1.0.0+2026091309` now has a fresh isolated

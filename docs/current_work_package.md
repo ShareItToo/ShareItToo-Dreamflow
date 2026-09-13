@@ -1,4 +1,23 @@
-# Current Work Package: WP134 Exact-Current Staging Support — COMPLETE
+# Current Work Package: WP136 Bookings Unread Snapshot / Pixel Closure — COMPLETE
+
+The 136-row Bookings failure is closed at source and on exact signed
+Internal/Staging candidate `1.0.0+2026091311`. Unread counting now consumes one
+authoritative request snapshot and one local marker read under an exact
+principal/epoch-equivalent reassertion, with foreign/corrupt/account-switch
+states failing closed. The old per-row complete backend reload is structurally
+forbidden and a 500-row deterministic regression passes.
+
+The Pixel data-preserving update, owner publication, renter discovery,
+non-binding request/acceptance, Bookings, chat, foreground/background/
+terminated-process FCM, Account-A-to-B isolation, cleanup and owner restoration
+all pass. Full local regression, exact-source GitHub Regression `34748319125`,
+independent clean checkout, CodeQL `34748319084` and zero alerts pass. See
+`docs/operations/WP136_BOOKINGS_UNREAD_SNAPSHOT_PIXEL_CLOSURE_2026-09-13.md`.
+
+No OnePlus, Play, Production, Firebase, Backend deployment, payment, money,
+public registration or PR-merge state changed.
+
+# Previous Work Package: WP134 Exact-Current Staging Support — COMPLETE
 
 Signed Internal/Staging `1.0.0+2026091309` now passes one fresh isolated
 Support lifecycle against immutable Staging Backend `df39a14…`: intake,
