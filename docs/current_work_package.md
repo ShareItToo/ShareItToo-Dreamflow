@@ -1,4 +1,24 @@
-# Current Work Package: WP137 Owner Decline / Competing Requests — COMPLETE
+# Current Work Package: WP138 Current-Candidate Google Sign-In — COMPLETE
+
+Strictly higher signed Internal/Staging `1.0.0+2026091312`, source
+`904c2b734160544aaeb1128cac15191a521739e7`, enables Google only and is
+installed data-preservingly on the physical Pixel. Chooser cancellation leaves
+no session and remains Guest after process death. First Google login,
+authenticated cold start and repeat login all resolve to the same private
+Staging profile fingerprint; no duplicate was observed and the protected
+synthetic owner is restored. Account creation versus existing linkage remains
+deliberately unasserted.
+
+Five runner checks, three Google-only Flutter checks, full local regression,
+the signed archive, candidate-source GitHub Regression `34753100834` with
+independent clean checkout, CodeQL `34753100820` and zero alerts pass. The
+portfolio is **20 PASS / 4 PARTIAL / 8 OPEN**. See
+`docs/operations/WP138_GOOGLE_SIGNIN_CURRENT_CANDIDATE_PIXEL_CLOSURE_2026-09-13.md`.
+
+No OnePlus, Play, Production, Firebase Console, Backend deployment, payment,
+money, Apple/Facebook, public registration or PR-merge state changed.
+
+# Previous Work Package: WP137 Owner Decline / Competing Requests — COMPLETE
 
 The unchanged signed Internal/Staging `1.0.0+2026091311` candidate passes the
 physical Pixel lifecycle for two overlapping non-binding requests under three

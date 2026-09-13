@@ -1,5 +1,28 @@
 # ShareItToo Current State
 
+## WP138 current-candidate Google sign-in — complete
+
+Strictly higher signed Internal/Staging candidate `1.0.0+2026091312`, source
+`904c2b734160544aaeb1128cac15191a521739e7`, enables Google only while
+retaining the closed non-binding Wave-0 envelope and on-device Listing AI. It
+was installed data-preservingly on the Pixel; package, exact APK bytes,
+canonical signature and preserved Android app-data identity all pass.
+
+Google chooser cancellation leaves no session and remains Guest after a cold
+start. First login, authenticated cold start and repeat login all pass for the
+exact private Google account and resolve to the same private profile
+fingerprint; no duplicate profile was observed. Account creation versus
+existing linkage is not asserted. The protected synthetic owner is restored.
+
+The complete local regression and signed archive pass. Candidate-source GitHub
+Regression `34753100834`, independent clean checkout, CodeQL `34753100820` and
+zero alerts pass. `google-signin` is now PASS; the conservative portfolio is
+**20 PASS, 4 PARTIAL and 8 OPEN**. See
+`docs/operations/WP138_GOOGLE_SIGNIN_CURRENT_CANDIDATE_PIXEL_CLOSURE_2026-09-13.md`.
+
+No OnePlus, Play, Production, Firebase Console, Backend deployment, payment,
+money, Apple/Facebook, public registration or PR-merge state changed.
+
 ## WP137 owner decline with competing requests — complete
 
 The unchanged signed Internal/Staging `1.0.0+2026091311` candidate now passes
