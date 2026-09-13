@@ -1,16 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { validateWp134 } from '../../tool/validate_wp134_current_candidate_staging_support.mjs';
 
 function fixtures() {
   const evidence = structuredClone(validateWp134());
-  const pointer = JSON.parse(readFileSync(
-    new URL('../../store/google-play/current-rollover-candidate.json', import.meta.url),
-    'utf8',
-  ));
-  return { evidence, pointer };
+  return { evidence };
 }
 
 test('accepts exact current-candidate support lifecycle evidence', () => {
@@ -19,10 +14,10 @@ test('accepts exact current-candidate support lifecycle evidence', () => {
 });
 
 test('rejects external delivery, incomplete cleanup or portfolio overclaim', () => {
-  const { evidence, pointer } = fixtures();
+  const { evidence } = fixtures();
   evidence.support.externalMessageSent = true;
   assert.throws(
-    () => validateWp134({ evidence, pointer, verifyInventory: false, verifyAncestry: false }),
+    () => validateWp134({ evidence, verifyInventory: false, verifyAncestry: false }),
     /external message/u,
   );
   const cleanup = fixtures();
@@ -53,7 +48,14 @@ test('rejects candidate, runtime and pointer drift', () => {
     /runtime image/u,
   );
   const pointer = fixtures();
-  pointer.pointer.evidenceRef = 'stale.json';
+  pointer.pointer = {
+    candidate: { versionCode: '2026091309' },
+    evidenceRef: 'stale.json',
+    deviceVerification: {
+      authenticatedPilotMatrix:
+        'partial-exact-current-report-block-search-saved-and-support-passed',
+    },
+  };
   assert.throws(
     () => validateWp134({ ...pointer, verifyInventory: false, verifyAncestry: false }),
     /evidence pointer/u,

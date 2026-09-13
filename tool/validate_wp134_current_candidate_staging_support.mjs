@@ -7,11 +7,10 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const evidencePath = resolve(
-  root,
-  'docs/evidence/release-readiness/wp134-current-candidate-staging-support-20260913.json',
-);
-const pointerPath = resolve(root, 'store/google-play/current-rollover-candidate.json');
+const evidencePath =
+  'docs/evidence/release-readiness/wp134-current-candidate-staging-support-20260913.json';
+const pointerPath = 'store/google-play/current-rollover-candidate.json';
+const wp134ClosureHead = 'ef83152428c7939eaa7d3aae77d79e3aa124d426';
 
 function fail(message) {
   throw new Error(message);
@@ -21,14 +20,23 @@ function exact(actual, expected, label) {
   if (actual !== expected) fail(`${label} is not exact.`);
 }
 
-function sha256(path) {
-  return createHash('sha256').update(readFileSync(resolve(root, path))).digest('hex');
+function sha256AtClosure(repositoryRoot, path) {
+  let source;
+  try {
+    source = execFileSync('git', ['show', `${wp134ClosureHead}:${path}`], {
+      cwd: repositoryRoot,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    fail(`WP134 historical source is unavailable: ${path}.`);
+  }
+  return createHash('sha256').update(source).digest('hex');
 }
 
-function ancestor(commit) {
+function ancestor(repositoryRoot, commit) {
   try {
     execFileSync('git', ['merge-base', '--is-ancestor', commit, 'HEAD'], {
-      cwd: root,
+      cwd: repositoryRoot,
       stdio: 'ignore',
     });
     return true;
@@ -38,11 +46,26 @@ function ancestor(commit) {
 }
 
 export function validateWp134({
-  evidence = JSON.parse(readFileSync(evidencePath, 'utf8')),
-  pointer = JSON.parse(readFileSync(pointerPath, 'utf8')),
+  repositoryRoot = root,
+  evidence,
+  pointer,
   verifyInventory = true,
   verifyAncestry = true,
 } = {}) {
+  const value = evidence
+    ?? JSON.parse(readFileSync(resolve(repositoryRoot, evidencePath), 'utf8'));
+  const historicalPointer = pointer
+    ?? JSON.parse(execFileSync(
+      'git',
+      ['show', `${wp134ClosureHead}:${pointerPath}`],
+      {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      },
+    ));
+  evidence = value;
+  pointer = historicalPointer;
   exact(evidence?.schemaVersion, 1, 'WP134 schema');
   exact(evidence?.kind, 'sit-wp134-current-candidate-staging-support-lifecycle', 'WP134 kind');
   exact(evidence?.status, 'passed-exact-current-candidate-staging-support-lifecycle', 'WP134 status');
@@ -60,7 +83,8 @@ export function validateWp134({
   for (const key of [
     'runtimeHealthyBeforeExecution',
     'runtimeHealthyAfterExecution',
-  ]) exact(evidence?.staging?.[key], true, `WP134 ${key}`);+  exact(evidence?.staging?.runtimeRestartCountBeforeExecution, 0, 'WP134 pre-run restarts');
+  ]) exact(evidence?.staging?.[key], true, `WP134 ${key}`);
+  exact(evidence?.staging?.runtimeRestartCountBeforeExecution, 0, 'WP134 pre-run restarts');
   exact(evidence?.staging?.runtimeRestartCountAfterExecution, 0, 'WP134 post-run restarts');
   exact(evidence?.staging?.apiLivenessAfterExecution, 'http-200-ok', 'WP134 liveness');
   exact(evidence?.staging?.databaseAfterExecution, 'ok', 'WP134 database');
@@ -101,12 +125,17 @@ export function validateWp134({
   if (verifyInventory) {
     const inventory = evidence?.source?.sourceInventory ?? {};
     for (const [path, expected] of Object.entries(inventory)) {
-      exact(sha256(path), expected, `WP134 source inventory ${path}`);
+      exact(
+        sha256AtClosure(repositoryRoot, path),
+        expected,
+        `WP134 source inventory ${path}`,
+      );
     }
   }
   if (verifyAncestry) {
-    if (!ancestor(evidence.source.candidateSourceCommit)
-        || !ancestor(evidence.source.stagingRuntimeHead)) {
+    if (!ancestor(repositoryRoot, wp134ClosureHead)
+        || !ancestor(repositoryRoot, evidence.source.candidateSourceCommit)
+        || !ancestor(repositoryRoot, evidence.source.stagingRuntimeHead)) {
       fail('WP134 candidate or runtime is not an ancestor of HEAD.');
     }
   }
