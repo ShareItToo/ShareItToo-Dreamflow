@@ -1,5 +1,23 @@
 # ShareItToo Current State
 
+## WP139 Staging private-registry read path — partial closure
+
+Exact source `fb04892331758e19b2b3835026ed8174e382dfb7` was published by
+GitHub run `34755213368`; Backend, PostgreSQL, Flutter, independent clean
+checkout and image publication all pass. The existing protected server
+authorization now reads the exact private manifest and config with digest
+`sha256:abd9a7c5b58ee875d10b3818d457db4101943d8b329bcbf963d19dcf24e71e6e`
+and matching OCI revision/version. Credential contents were not read.
+
+This is not yet a durable least-privilege pull PASS: the stored credential's
+scope remains unverified, the new eleven-layer target is uncached and its
+layer set differs from the running image, so no fresh layer pull is claimed.
+Staging remains on `df39a14b7a19afe467842461a28f1e77fec8445e` with zero
+restarts. No Docker login, VPS configuration/cache, runtime or other live
+state changed. `durable-private-registry-pull` remains OPEN and the portfolio
+stays **20 PASS, 4 PARTIAL and 8 OPEN**. See
+`docs/operations/WP139_STAGING_REGISTRY_READ_PATH_AUDIT_2026-09-13.md`.
+
 ## WP138 current-candidate Google sign-in — complete
 
 Strictly higher signed Internal/Staging candidate `1.0.0+2026091312`, source

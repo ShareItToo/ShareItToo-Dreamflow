@@ -1,4 +1,23 @@
-# Current Work Package: WP138 Current-Candidate Google Sign-In — COMPLETE
+# Current Work Package: WP139 Staging Registry Read Path — PARTIAL CLOSURE
+
+Exact private image source `fb04892331758e19b2b3835026ed8174e382dfb7` is
+published and readable from the Staging server with exact manifest digest and
+OCI labels. The protected Docker authorization remains mode `0600`; its value
+was not read or copied. A permanent read-only audit now fails closed on digest,
+label or mutation-boundary drift.
+
+The release-infrastructure requirement remains OPEN because the credential's
+minimum `read:packages` scope is unverified and the exact target's uncached,
+different layer set was not pulled. Closing it requires a package-read-only
+credential proof and one fresh exact-digest pull without switching the running
+container. The Staging runtime remains unchanged and healthy with zero
+restarts. Portfolio: **20 PASS / 4 PARTIAL / 8 OPEN**. See
+`docs/operations/WP139_STAGING_REGISTRY_READ_PATH_AUDIT_2026-09-13.md`.
+
+No VPS configuration/cache, Docker login, package visibility, runtime,
+Production, Store, Firebase, payment, DNS, device or PR-merge state changed.
+
+# Previous Work Package: WP138 Current-Candidate Google Sign-In — COMPLETE
 
 Strictly higher signed Internal/Staging `1.0.0+2026091312`, source
 `904c2b734160544aaeb1128cac15191a521739e7`, enables Google only and is
