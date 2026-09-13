@@ -674,6 +674,23 @@ async function requestJson(path, {
   return { response, value };
 }
 
+async function requestIdempotentJson(path, options) {
+  let firstError = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const result = await requestJson(path, options);
+      if (attempt === 0 && [408, 500, 502, 503, 504].includes(result.response.status)) {
+        continue;
+      }
+      return result;
+    } catch (error) {
+      firstError ??= error;
+      if (attempt === 1) throw firstError;
+    }
+  }
+  throw firstError ?? new Error('WP140 idempotent request failed.');
+}
+
 function requireStatus(result, expected, label) {
   if (result.response.status !== expected) {
     fail(`${label} returned HTTP ${result.response.status}.`);
@@ -756,21 +773,23 @@ export async function executeWp140({
   const vault = await buildPrivateVault();
   const targetVault = await writePrivateVault(vaultPath, vault);
   const sessions = [];
+  let bootstrapAttempted = false;
   let bootstrapped = false;
   let cleanup = null;
   let result = null;
   let primaryError = null;
   try {
+    bootstrapAttempted = true;
     const bootstrap = await runRemoteJson(remoteBootstrapScript, vault);
     if (bootstrap?.status !== 'bootstrapped' || bootstrap?.temporaryAdminCount !== 2) {
       fail('WP140 temporary admin bootstrap failed.');
     }
     bootstrapped = true;
     const [authorAccount, reviewerAccount] = vault.accounts;
-    const [authorSession, reviewerSession] = await Promise.all([
-      login(authorAccount), login(reviewerAccount),
-    ]);
-    sessions.push(authorSession, reviewerSession);
+    const authorSession = await login(authorAccount);
+    sessions.push(authorSession);
+    const reviewerSession = await login(reviewerAccount);
+    sessions.push(reviewerSession);
     const [authorStepUp, reviewerStepUp] = await Promise.all([
       stepUp(authorAccount, authorSession), stepUp(reviewerAccount, reviewerSession),
     ]);
@@ -793,7 +812,7 @@ export async function executeWp140({
           },
         ), 200, `WP140 target baseline ${index + 1}`);
         baselineByCase.set(supportCase.id, safeCounts(beforeDetail));
-        return requireStatus(await requestJson(
+        return requireStatus(await requestIdempotentJson(
           `/admin/support/cases/${encodeURIComponent(supportCase.id)}/progress-updates`, {
           method: 'POST', accessToken: authorSession.accessToken,
           stepUpToken: authorStepUp,
@@ -801,7 +820,7 @@ export async function executeWp140({
           },
         ), 201, `WP140 progress draft ${index + 1}`);
       },
-      review: async (supportCase, draft, index) => requireStatus(await requestJson(
+      review: async (supportCase, draft, index) => requireStatus(await requestIdempotentJson(
         `/admin/support/cases/${encodeURIComponent(supportCase.id)}/messages/${encodeURIComponent(draft.message.id)}/review`, {
           method: 'POST', accessToken: reviewerSession.accessToken,
           stepUpToken: reviewerStepUp,
@@ -813,7 +832,7 @@ export async function executeWp140({
           },
         },
       ), 200, `WP140 independent review ${index + 1}`),
-      publish: async (supportCase, draft, review, index) => requireStatus(await requestJson(
+      publish: async (supportCase, draft, review, index) => requireStatus(await requestIdempotentJson(
         `/admin/support/cases/${encodeURIComponent(supportCase.id)}/progress-updates/${encodeURIComponent(draft.progressUpdate.id)}/publication`, {
           method: 'POST', accessToken: authorSession.accessToken,
           stepUpToken: authorStepUp,
@@ -881,7 +900,7 @@ export async function executeWp140({
         if (!(await logout(session))) cleanupError ??= new Error('WP140 logout failed.');
       } catch (error) { cleanupError ??= error; }
     }
-    if (bootstrapped) {
+    if (bootstrapAttempted) {
       try {
         cleanup = await runRemoteJson(remoteDecommissionScript, {
           accounts: vault.accounts.map(({ id, email, role }) => ({ id, email, role })),
@@ -896,7 +915,7 @@ export async function executeWp140({
     }
   }
   if (primaryError !== null) throw primaryError;
-  if (result === null || cleanup?.status !== 'decommissioned'
+  if (!bootstrapped || result === null || cleanup?.status !== 'decommissioned'
       || cleanup?.temporaryAdminCount !== 2 || cleanup?.credentialsRevoked !== true) {
     fail('WP140 result or cleanup is incomplete.');
   }
