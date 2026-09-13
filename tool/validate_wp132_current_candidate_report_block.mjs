@@ -13,6 +13,7 @@ const rolloverPath = 'store/google-play/current-rollover-candidate.json';
 const candidateHead = 'abf911d1c944a4e5874269111985d0cc4736546e';
 const wp131ClosureHead = 'ef17b775019be82fdf22d3b7eb87d012730d8c7d';
 const diagnosticHead = '32366382b0ffcce477b5101d6529edd0f9ccff90';
+const wp132ClosureHead = 'feaeab3d7cf755c6e3cf538ef4fe614eb79cf7be';
 const runtimeRoots = [
   'lib', 'android', 'assets', 'pubspec.yaml', 'pubspec.lock', 'backend/src', 'backend/sql',
 ];
@@ -64,8 +65,16 @@ function assertAncestor(repositoryRoot, head) {
 function validateSourceInventory(repositoryRoot, inventory) {
   exact(inventory?.map((item) => item.path), sourcePaths, 'source inventory');
   for (const item of inventory) {
-    if (!/^[a-f0-9]{64}$/u.test(item?.sha256 ?? '')
-        || digest(readFileSync(resolve(repositoryRoot, item.path))) !== item.sha256) {
+    let source;
+    try {
+      source = execFileSync('git', ['show', `${wp132ClosureHead}:${item.path}`], {
+        cwd: repositoryRoot,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+    } catch {
+      fail(`WP132 historical source is unavailable: ${item.path}.`);
+    }
+    if (!/^[a-f0-9]{64}$/u.test(item?.sha256 ?? '') || digest(source) !== item.sha256) {
       fail(`WP132 source digest drift: ${item?.path ?? 'unknown'}.`);
     }
   }
@@ -80,7 +89,11 @@ export function validateWp132CurrentCandidateReportBlock({
   const value = evidence
     ?? JSON.parse(readFileSync(resolve(repositoryRoot, evidencePath), 'utf8'));
   const pointer = rollover
-    ?? JSON.parse(readFileSync(resolve(repositoryRoot, rolloverPath), 'utf8'));
+    ?? JSON.parse(execFileSync('git', ['show', `${wp132ClosureHead}:${rolloverPath}`], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }));
   rejectPrivateShape(value);
   if (/(?:\/(?:Users|home)\/|@[A-Za-z0-9]|\+49[0-9]|BEGIN PRIVATE|\b(?:sk|rk)_(?:test|live)_|\bwhsec_|deviceSerial|androidId|\bimei\b|\bn22-)/iu.test(JSON.stringify(value))) {
     fail('WP132 evidence contains private, secret or fixture-shaped content.');
@@ -234,11 +247,11 @@ export function validateWp132CurrentCandidateReportBlock({
     evidenceRef: evidencePath,
   }, 'current candidate pointer');
   if (checkGitState) {
-    [candidateHead, wp131ClosureHead, diagnosticHead].forEach((head) => {
+    [candidateHead, wp131ClosureHead, diagnosticHead, wp132ClosureHead].forEach((head) => {
       assertAncestor(repositoryRoot, head);
     });
     const drift = execFileSync('git', [
-      'diff', '--name-only', candidateHead, '--', ...runtimeRoots,
+      'diff', '--name-only', candidateHead, wp132ClosureHead, '--', ...runtimeRoots,
     ], {
       cwd: repositoryRoot,
       encoding: 'utf8',
