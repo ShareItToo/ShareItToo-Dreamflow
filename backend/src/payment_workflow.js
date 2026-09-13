@@ -4,6 +4,7 @@ import { config } from './config.js';
 import { inTransaction, pool } from './db.js';
 import {
   assertProviderPaymentBinding,
+  assertProviderRefundBinding,
   classifyDisputeTransferRecoveryFailure,
   captureLedger,
   disputeOwnerRecoveryLedger,
@@ -17,6 +18,7 @@ import {
   privatePilotReleasableOwnerAmount,
   providerOperationIdempotencyKey,
   refundLedger,
+  refundTransferReversalPlan,
   requestHash,
   splitRefund,
   transferLedger,
@@ -558,12 +560,48 @@ async function claimDisputeTransferRecovery(now) {
        )
        ORDER BY recovery.next_attempt_at, recovery.created_at
        LIMIT 1
-       FOR UPDATE OF recovery SKIP LOCKED`,
+       FOR UPDATE OF recovery, payment, payout SKIP LOCKED`,
       [now],
     );
     if (!result.rowCount) return null;
     const recovery = result.rows[0];
     const priorStatus = recovery.status;
+    const activeRefund = await client.query(
+      `SELECT 1 FROM refunds
+        WHERE payment_id = $1 AND status IN ('created', 'pending')
+        LIMIT 1`,
+      [recovery.payment_id],
+    );
+    if (activeRefund.rowCount) {
+      if (['processing', 'uncertain'].includes(priorStatus)) {
+        await client.query(
+          `UPDATE dispute_transfer_recoveries
+              SET status = 'manual_review', needs_review = true,
+                  lease_expires_at = NULL,
+                  last_error_category = 'integrity_conflict',
+                  last_error_code = 'active_refund_conflicts_with_uncertain_recovery'
+            WHERE id = $1`,
+          [recovery.id],
+        );
+        await client.query(
+          `UPDATE disputes SET transfer_recovery_state = 'needs_review',
+               transfer_recovery_needs_review = true,
+               transfer_recovery_issue_code =
+                 'active_refund_conflicts_with_uncertain_recovery'
+           WHERE id = $1`,
+          [recovery.dispute_id],
+        );
+        return { terminal: 'manual_review' };
+      }
+      await client.query(
+        `UPDATE disputes SET transfer_recovery_state = 'pending',
+             transfer_recovery_needs_review = false,
+             transfer_recovery_issue_code = 'waiting_for_active_refund'
+         WHERE id = $1`,
+        [recovery.dispute_id],
+      );
+      return { terminal: 'deferred' };
+    }
     const cancelRequested = recovery.cancel_requested === true
       || recovery.provider_funds_reinstated_at != null;
     if (cancelRequested && ['pending', 'retryable'].includes(priorStatus)) {
@@ -770,6 +808,14 @@ export async function reconcileDisputeTransferRecoveries({
       result.cancelled += 1;
       continue;
     }
+    if (recovery.terminal === 'deferred') {
+      result.deferred += 1;
+      continue;
+    }
+    if (recovery.terminal === 'manual_review') {
+      result.manualReview += 1;
+      continue;
+    }
     try {
       let reversal = null;
       if (['uncertain', 'processing'].includes(recovery.prior_status)
@@ -804,7 +850,11 @@ export async function reconcileDisputeTransferRecoveries({
         result.recovered += 1;
       }
     } catch (error) {
-      const classification = ['provider_reversal_binding_mismatch', 'dispute_recovery_state_mismatch']
+      const classification = [
+        'provider_reversal_binding_mismatch',
+        'provider_reversal_inventory_conflict',
+        'dispute_recovery_state_mismatch',
+      ]
         .includes(error?.code)
         ? {
           category: 'integrity_conflict',
@@ -1602,6 +1652,473 @@ export async function simulatePaymentEvent({ actor, paymentId, scenario, duplica
   return { eventId, scenario, ...applied };
 }
 
+async function prepareRefundTransferReversals(client, {
+  refund,
+  payment,
+  split,
+}) {
+  const existing = await client.query(
+    `SELECT count(*)::int AS count,
+            COALESCE(sum(amount_minor), 0)::bigint AS amount_minor,
+            COALESCE(sum(amount_minor) FILTER (
+              WHERE status = 'succeeded'
+            ), 0)::bigint AS succeeded_minor
+       FROM refund_transfer_reversals WHERE refund_id = $1`,
+    [refund.id],
+  );
+  if (existing.rows[0].count > 0) {
+    const amountMinor = Number(existing.rows[0].amount_minor);
+    const succeededMinor = Number(existing.rows[0].succeeded_minor);
+    const expectedMinor = Math.min(
+      split.ownerShareMinor,
+      Number(payment.transferred_minor) + succeededMinor,
+    );
+    if (amountMinor !== expectedMinor) {
+      throw new PaymentDomainError(409, 'refund_transfer_exposure_mismatch');
+    }
+    return {
+      count: existing.rows[0].count,
+      amountMinor,
+    };
+  }
+  const payouts = await client.query(
+    `SELECT id, provider_transfer_id, amount_minor, reversed_minor
+       FROM payouts
+      WHERE payment_id = $1
+        AND provider_transfer_id IS NOT NULL
+        AND status IN ('paid', 'reversed')
+        AND amount_minor > reversed_minor
+      ORDER BY transferred_at DESC NULLS LAST, created_at DESC, id DESC
+      FOR UPDATE`,
+    [payment.id],
+  );
+  const plan = refundTransferReversalPlan({
+    ownerShareMinor: split.ownerShareMinor,
+    transferredMinor: Number(payment.transferred_minor),
+    payouts: payouts.rows,
+  });
+  for (const allocation of plan.allocations) {
+    const id = crypto.randomUUID();
+    await client.query(
+      `INSERT INTO refund_transfer_reversals (
+         id, refund_id, payment_id, payout_id, provider_transfer_id,
+         provider_idempotency_key, amount_minor, currency, livemode
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        id,
+        refund.id,
+        payment.id,
+        allocation.payoutId,
+        allocation.providerTransferId,
+        providerOperationIdempotencyKey('refund_transfer_reversal', id),
+        allocation.amountMinor,
+        payment.currency,
+        config.payments.livemode,
+      ],
+    );
+  }
+  if (plan.allocations.length > 0) {
+    await client.query(
+      `UPDATE refunds SET status = 'pending', reverse_transfer = true
+       WHERE id = $1`,
+      [refund.id],
+    );
+  }
+  return { count: plan.allocations.length, amountMinor: plan.targetMinor };
+}
+
+async function claimRefundTransferReversal(refundId, now) {
+  return inTransaction(async (client) => {
+    const result = await client.query(
+      `SELECT reversal.*, payment.booking_id, payment.transferred_minor,
+              payment.status AS payment_status,
+              payment.currency AS payment_currency,
+              payment.livemode AS payment_livemode,
+              booking.owner_id,
+              refund.status AS refund_status,
+              refund.currency AS refund_currency,
+              refund.livemode AS refund_livemode,
+              payout.provider_transfer_id AS current_transfer_id,
+              payout.amount_minor AS payout_amount_minor,
+              payout.reversed_minor AS payout_reversed_minor,
+              payout.status AS payout_status,
+              payout.currency AS payout_currency,
+              payout.livemode AS payout_livemode
+         FROM refund_transfer_reversals AS reversal
+         JOIN payments AS payment ON payment.id = reversal.payment_id
+         JOIN bookings AS booking ON booking.id = payment.booking_id
+         JOIN refunds AS refund
+           ON refund.id = reversal.refund_id
+          AND refund.payment_id = reversal.payment_id
+         JOIN payouts AS payout
+           ON payout.id = reversal.payout_id
+          AND payout.payment_id = reversal.payment_id
+        WHERE reversal.refund_id = $1 AND (
+          (reversal.status IN ('pending', 'retryable', 'uncertain')
+            AND reversal.next_attempt_at <= $2)
+          OR
+          (reversal.status = 'processing' AND reversal.lease_expires_at <= $2)
+        )
+        ORDER BY reversal.next_attempt_at, reversal.created_at, reversal.id
+        LIMIT 1
+        FOR UPDATE OF reversal, payment, refund, payout SKIP LOCKED`,
+      [refundId, now],
+    );
+    if (!result.rowCount) return null;
+    const reversal = result.rows[0];
+    const priorStatus = reversal.status;
+    const amountMinor = Number(reversal.amount_minor);
+    const stateMismatch = reversal.current_transfer_id !== reversal.provider_transfer_id
+      || reversal.currency !== reversal.payment_currency
+      || reversal.currency !== reversal.refund_currency
+      || reversal.currency !== reversal.payout_currency
+      || reversal.livemode !== config.payments.livemode
+      || reversal.payment_livemode !== config.payments.livemode
+      || reversal.refund_livemode !== config.payments.livemode
+      || reversal.payout_livemode !== config.payments.livemode
+      || reversal.refund_status !== 'pending'
+      || !['captured', 'partially_refunded'].includes(reversal.payment_status)
+      || !['paid', 'reversed'].includes(reversal.payout_status)
+      || Number(reversal.transferred_minor) < amountMinor
+      || Number(reversal.payout_amount_minor) - Number(reversal.payout_reversed_minor)
+        < amountMinor;
+    if (stateMismatch) {
+      await client.query(
+        `UPDATE refund_transfer_reversals
+         SET status = 'manual_review', lease_expires_at = NULL,
+             needs_review = true, last_error_category = 'integrity_conflict',
+             last_error_code = 'refund_transfer_reversal_state_mismatch'
+         WHERE id = $1`,
+        [reversal.id],
+      );
+      await client.query(
+        `UPDATE refunds SET status = 'pending',
+             failure_code = 'refund_transfer_reversal_state_mismatch'
+         WHERE id = $1 AND status <> 'succeeded'`,
+        [reversal.refund_id],
+      );
+      await audit(client, {
+        action: 'payment.refund_transfer_reversal_deferred',
+        resourceType: 'refund_transfer_reversal',
+        resourceId: reversal.id,
+        metadata: {
+          refundId: reversal.refund_id,
+          paymentId: reversal.payment_id,
+          category: 'integrity_conflict',
+          attemptCount: Number(reversal.attempt_count),
+        },
+      });
+      return { ...reversal, terminal: 'manual_review' };
+    }
+    await client.query(
+      `UPDATE refund_transfer_reversals
+       SET status = 'processing', attempt_count = attempt_count + 1,
+           lease_expires_at = $2
+       WHERE id = $1`,
+      [reversal.id, new Date(now.getTime() + 120_000)],
+    );
+    return {
+      ...reversal,
+      prior_status: priorStatus,
+      attempt_count: Number(reversal.attempt_count) + 1,
+    };
+  }, { deadlockRetries: 2 });
+}
+
+async function markRefundTransferReversalFailure(reversal, classification, now) {
+  return inTransaction(async (client) => {
+    const status = classification.disposition === 'retryable'
+      ? 'retryable'
+      : classification.disposition === 'manual_review'
+        ? 'manual_review'
+        : 'uncertain';
+    const nextAttemptAt = status === 'manual_review'
+      ? now
+      : disputeRecoveryNextAttempt(now, reversal.attempt_count);
+    await client.query(
+      `UPDATE refund_transfer_reversals
+       SET status = $2, next_attempt_at = $3, lease_expires_at = NULL,
+           needs_review = $4, last_error_category = $5,
+           last_error_code = $6
+       WHERE id = $1 AND status = 'processing'`,
+      [
+        reversal.id,
+        status,
+        nextAttemptAt,
+        classification.needsReview,
+        classification.category,
+        classification.safeCode,
+      ],
+    );
+    await client.query(
+      `UPDATE refunds SET status = 'pending', failure_code = $2
+       WHERE id = $1`,
+      [reversal.refund_id, classification.safeCode],
+    );
+    await audit(client, {
+      action: 'payment.refund_transfer_reversal_deferred',
+      resourceType: 'refund_transfer_reversal',
+      resourceId: reversal.id,
+      metadata: {
+        refundId: reversal.refund_id,
+        paymentId: reversal.payment_id,
+        category: classification.category,
+        attemptCount: reversal.attempt_count,
+      },
+    });
+    return status;
+  });
+}
+
+async function completeRefundTransferReversal(reversal, providerReversal) {
+  const reversalId = providerId(providerReversal?.id);
+  const reversalTransferId = providerId(providerReversal?.transfer);
+  const amountMinor = Number(reversal.amount_minor);
+  if (!reversalId || reversalTransferId !== reversal.provider_transfer_id
+      || Number(providerReversal?.amount) !== amountMinor) {
+    throw new PaymentDomainError(409, 'provider_reversal_binding_mismatch');
+  }
+  return inTransaction(async (client) => {
+    const result = await client.query(
+      `SELECT reversal.*, payment.booking_id, payment.transferred_minor,
+              payment.status AS payment_status,
+              payment.currency AS payment_currency,
+              payment.livemode AS payment_livemode,
+              booking.owner_id,
+              refund.status AS refund_status,
+              refund.currency AS refund_currency,
+              refund.livemode AS refund_livemode,
+              payout.provider_transfer_id AS current_transfer_id,
+              payout.amount_minor AS payout_amount_minor,
+              payout.reversed_minor AS payout_reversed_minor,
+              payout.status AS payout_status,
+              payout.currency AS payout_currency,
+              payout.livemode AS payout_livemode
+         FROM refund_transfer_reversals AS reversal
+         JOIN payments AS payment ON payment.id = reversal.payment_id
+         JOIN bookings AS booking ON booking.id = payment.booking_id
+         JOIN refunds AS refund
+           ON refund.id = reversal.refund_id
+          AND refund.payment_id = reversal.payment_id
+         JOIN payouts AS payout
+           ON payout.id = reversal.payout_id
+          AND payout.payment_id = reversal.payment_id
+        WHERE reversal.id = $1
+        FOR UPDATE OF reversal, payment, refund, payout`,
+      [reversal.id],
+    );
+    if (!result.rowCount) {
+      throw new PaymentDomainError(500, 'refund_transfer_reversal_missing');
+    }
+    const stored = result.rows[0];
+    if (stored.status === 'succeeded') {
+      if (stored.provider_reversal_id !== reversalId) {
+        throw new PaymentDomainError(409, 'provider_reversal_binding_mismatch');
+      }
+      return false;
+    }
+    if (stored.status !== 'processing'
+        || stored.current_transfer_id !== stored.provider_transfer_id
+        || stored.currency !== stored.payment_currency
+        || stored.currency !== stored.refund_currency
+        || stored.currency !== stored.payout_currency
+        || stored.livemode !== config.payments.livemode
+        || stored.payment_livemode !== config.payments.livemode
+        || stored.refund_livemode !== config.payments.livemode
+        || stored.payout_livemode !== config.payments.livemode
+        || stored.refund_status !== 'pending'
+        || !['captured', 'partially_refunded'].includes(stored.payment_status)
+        || !['paid', 'reversed'].includes(stored.payout_status)
+        || Number(stored.transferred_minor) < amountMinor
+        || Number(stored.payout_amount_minor) - Number(stored.payout_reversed_minor)
+          < amountMinor) {
+      throw new PaymentDomainError(409, 'refund_transfer_reversal_state_mismatch');
+    }
+    const ledger = await insertLedger(client, {
+      key: `refund-transfer-reversal:${stored.id}`,
+      bookingId: stored.booking_id,
+      paymentId: stored.payment_id,
+      refundId: stored.refund_id,
+      payoutId: stored.payout_id,
+      type: 'owner_transfer_reversed',
+      currency: stored.currency,
+      providerReference: reversalId,
+      metadata: { refundTransferReversalId: stored.id },
+      entries: [
+        {
+          accountCode: 'stripe_clearing',
+          accountOwnerId: null,
+          debitMinor: amountMinor,
+          creditMinor: 0,
+        },
+        {
+          accountCode: 'owner_payable',
+          accountOwnerId: stored.owner_id,
+          debitMinor: 0,
+          creditMinor: amountMinor,
+        },
+      ],
+    });
+    if (!ledger.inserted) {
+      throw new PaymentDomainError(409, 'refund_transfer_reversal_state_mismatch');
+    }
+    const payout = await client.query(
+      `UPDATE payouts
+       SET reversed_minor = reversed_minor + $2,
+           status = CASE
+             WHEN reversed_minor + $2 >= amount_minor THEN 'reversed'
+             ELSE status
+           END
+       WHERE id = $1 AND amount_minor - reversed_minor >= $2
+       RETURNING id`,
+      [stored.payout_id, amountMinor],
+    );
+    const payment = await client.query(
+      `UPDATE payments SET transferred_minor = transferred_minor - $2
+       WHERE id = $1 AND transferred_minor >= $2
+       RETURNING id`,
+      [stored.payment_id, amountMinor],
+    );
+    if (!payout.rowCount || !payment.rowCount) {
+      throw new PaymentDomainError(409, 'refund_transfer_reversal_state_mismatch');
+    }
+    await client.query(
+      `UPDATE refund_transfer_reversals
+       SET status = 'succeeded', provider_reversal_id = $2,
+           succeeded_at = now(), lease_expires_at = NULL,
+           needs_review = false, last_error_category = NULL,
+           last_error_code = NULL
+       WHERE id = $1`,
+      [stored.id, reversalId],
+    );
+    await audit(client, {
+      action: 'payment.refund_transfer_reversed',
+      resourceType: 'refund_transfer_reversal',
+      resourceId: stored.id,
+      metadata: {
+        refundId: stored.refund_id,
+        paymentId: stored.payment_id,
+        payoutId: stored.payout_id,
+        amountMinor,
+        attemptCount: Number(stored.attempt_count),
+      },
+    });
+    return true;
+  }, { deadlockRetries: 2 });
+}
+
+export async function reconcileRefundTransferReversals({
+  refundId,
+  provider = stripeProvider,
+  now = new Date(),
+  limit = 100,
+} = {}) {
+  if (typeof refundId !== 'string' || !refundId
+      || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    throw new PaymentDomainError(500, 'invalid_refund_transfer_reversal_request');
+  }
+  let completedThisRun = 0;
+  for (let index = 0; index < limit; index += 1) {
+    const reversal = await claimRefundTransferReversal(refundId, now);
+    if (!reversal) break;
+    if (reversal.terminal === 'manual_review') break;
+    try {
+      let providerReversal = null;
+      if (['uncertain', 'processing'].includes(reversal.prior_status)) {
+        providerReversal = await provider.findTransferReversal({
+          transferId: reversal.provider_transfer_id,
+          refundTransferReversalId: reversal.id,
+        });
+      }
+      providerReversal ??= await provider.reverseTransfer({
+        transferId: reversal.provider_transfer_id,
+        amountMinor: Number(reversal.amount_minor),
+        idempotencyKey: reversal.provider_idempotency_key,
+        metadata: {
+          sit_booking_id: reversal.booking_id,
+          sit_payment_id: reversal.payment_id,
+          sit_refund_id: reversal.refund_id,
+          sit_refund_transfer_reversal_id: reversal.id,
+        },
+      });
+      if (await completeRefundTransferReversal(reversal, providerReversal)) {
+        completedThisRun += 1;
+      }
+    } catch (error) {
+      const classification = [
+        'provider_reversal_binding_mismatch',
+        'provider_reversal_inventory_conflict',
+        'refund_transfer_reversal_state_mismatch',
+      ].includes(error?.code)
+        ? {
+          category: 'integrity_conflict',
+          disposition: 'manual_review',
+          needsReview: true,
+          safeCode: error.code,
+        }
+        : classifyDisputeTransferRecoveryFailure(error);
+      await markRefundTransferReversalFailure(reversal, classification, now);
+    }
+  }
+  const aggregate = await pool.query(
+    `SELECT count(*)::int AS total,
+            count(*) FILTER (WHERE status = 'succeeded')::int AS succeeded,
+            count(*) FILTER (WHERE status = 'manual_review')::int AS manual_review,
+            count(*) FILTER (WHERE status <> 'succeeded')::int AS unresolved
+       FROM refund_transfer_reversals WHERE refund_id = $1`,
+    [refundId],
+  );
+  const state = aggregate.rows[0];
+  if (state.manual_review > 0) {
+    throw new PaymentDomainError(409, 'refund_transfer_reversal_needs_review');
+  }
+  if (state.unresolved > 0) {
+    throw new PaymentDomainError(503, 'refund_transfer_reversal_pending');
+  }
+  return {
+    total: state.total,
+    succeeded: state.succeeded,
+    completedThisRun,
+  };
+}
+
+async function markProviderRefundFailure({ refund, payment }, error) {
+  const classification = [
+    'provider_refund_binding_mismatch',
+    'provider_refund_failed',
+    'provider_refund_inventory_conflict',
+    'provider_refund_local_state_mismatch',
+  ].includes(error?.code)
+    ? {
+      category: 'integrity_conflict',
+      disposition: 'manual_review',
+      needsReview: true,
+      safeCode: error.code,
+    }
+    : classifyDisputeTransferRecoveryFailure(error);
+  const status = classification.disposition === 'manual_review'
+    ? 'failed'
+    : 'pending';
+  await inTransaction(async (client) => {
+    await client.query(
+      `UPDATE refunds SET status = $2, failure_code = $3
+        WHERE id = $1 AND status <> 'succeeded'`,
+      [refund.id, status, classification.safeCode],
+    );
+    await audit(client, {
+      action: 'payment.provider_refund_deferred',
+      resourceType: 'refund',
+      resourceId: refund.id,
+      metadata: {
+        paymentId: payment.id,
+        category: classification.category,
+        needsReview: classification.needsReview,
+      },
+    });
+  });
+  return classification;
+}
+
 export async function refundPayment({ actor = null, paymentId, amountMinor = null, reason = 'booking_cancelled', key: rawKey }) {
   ensurePaymentsEnabled(actor?.id ?? null);
   if (actor && actor.role !== 'admin') throw new PaymentDomainError(403, 'refund_requires_admin');
@@ -1609,15 +2126,9 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
   const prepared = await inTransaction(async (client) => {
     const result = await client.query(
       `SELECT payment.*, booking.owner_id, booking.renter_id, booking.workflow_status,
-              payout.id AS payout_id, payout.provider_transfer_id, payout.status AS payout_status,
-              payout.amount_minor AS payout_amount_minor, payout.reversed_minor AS payout_reversed_minor,
               COALESCE(refunded.owner_share_minor, 0) AS refunded_owner_minor
        FROM payments AS payment
        JOIN bookings AS booking ON booking.id = payment.booking_id
-       LEFT JOIN LATERAL (
-         SELECT * FROM payouts WHERE payment_id = payment.id AND status = 'paid'
-         ORDER BY created_at DESC LIMIT 1
-       ) AS payout ON true
        LEFT JOIN LATERAL (
          SELECT sum(owner_share_minor)::bigint AS owner_share_minor
          FROM refunds WHERE payment_id = payment.id AND status = 'succeeded'
@@ -1642,6 +2153,18 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
     if (providerDispute.rowCount) {
       throw new PaymentDomainError(409, 'refund_blocked_by_provider_dispute');
     }
+    const activeTransferRecovery = await client.query(
+      `SELECT 1 FROM dispute_transfer_recoveries
+        WHERE payment_id = $1
+          AND status IN (
+            'pending', 'processing', 'retryable', 'uncertain', 'manual_review'
+          )
+        LIMIT 1`,
+      [paymentId],
+    );
+    if (activeTransferRecovery.rowCount) {
+      throw new PaymentDomainError(409, 'refund_blocked_by_transfer_recovery');
+    }
     const activeRefund = await client.query(
       `SELECT idempotency_key FROM refunds
        WHERE payment_id = $1 AND status IN ('created', 'pending')
@@ -1650,6 +2173,20 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
     );
     if (activeRefund.rowCount && activeRefund.rows[0].idempotency_key !== key) {
       throw new PaymentDomainError(409, 'refund_in_progress');
+    }
+    const unresolvedFailedRefund = await client.query(
+      `SELECT 1 FROM refunds
+        WHERE payment_id = $1 AND status = 'failed'
+          AND failure_code IN (
+            'provider_refund_binding_mismatch',
+            'provider_refund_inventory_conflict',
+            'provider_refund_local_state_mismatch'
+          )
+        LIMIT 1`,
+      [paymentId],
+    );
+    if (unresolvedFailedRefund.rowCount) {
+      throw new PaymentDomainError(409, 'refund_provider_needs_review');
     }
     const remaining = Number(payment.captured_minor) - Number(payment.refunded_minor);
     const requestedAmount = amountMinor == null ? remaining : Number(amountMinor);
@@ -1665,13 +2202,24 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
     const existingRefund = await client.query('SELECT * FROM refunds WHERE idempotency_key = $1', [key]);
     if (existingRefund.rowCount) {
       const refund = existingRefund.rows[0];
+      if (refund.status === 'failed') {
+        throw new PaymentDomainError(409, 'refund_provider_needs_review');
+      }
+      const split = {
+        ownerShareMinor: Number(refund.owner_share_minor),
+        platformShareMinor: Number(refund.platform_share_minor),
+      };
+      const reversalPlan = await prepareRefundTransferReversals(client, {
+        refund,
+        payment,
+        split,
+      });
       return {
         payment,
         refund,
-        split: {
-          ownerShareMinor: Number(refund.owner_share_minor),
-          platformShareMinor: Number(refund.platform_share_minor),
-        },
+        split,
+        reversalPlan,
+        providerLookupRequired: true,
       };
     }
     const previousOwnerShare = Number(payment.refunded_owner_minor);
@@ -1698,126 +2246,183 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
       [
         paymentId, key, requestedAmount, payment.currency, text(reason, 500),
         payment.provider_charge_id, split.ownerShareMinor, split.platformShareMinor,
-        Boolean(payment.payout_id), config.payments.livemode,
+        false, config.payments.livemode,
       ],
     );
-    return { payment, refund: refund.rows[0], split };
+    const reversalPlan = await prepareRefundTransferReversals(client, {
+      refund: refund.rows[0],
+      payment,
+      split,
+    });
+    return {
+      payment,
+      refund: refund.rows[0],
+      split,
+      reversalPlan,
+      providerLookupRequired: false,
+    };
   });
   if (prepared.commandReplay) return { ...prepared.commandReplay, replayed: true };
   if (prepared.replay) return { payment: shapePayment(prepared.payment), replayed: true };
-  if (prepared.payment.provider_transfer_id) {
-    const reverseAmount = Math.min(prepared.split.ownerShareMinor, Number(prepared.payment.transferred_minor));
-    if (reverseAmount > 0) {
-      const reversal = await stripeProvider.reverseTransfer({
-        transferId: prepared.payment.provider_transfer_id,
-        amountMinor: reverseAmount,
-        idempotencyKey: providerOperationIdempotencyKey(
-          'refund_transfer_reversal',
-          prepared.refund.id,
-        ),
-        metadata: { sit_booking_id: prepared.payment.booking_id, sit_payment_id: paymentId },
-      });
-      const reversalInserted = await inTransaction(async (client) => {
-        const reversalLedger = await insertLedger(client, {
-          key: `${key}:transfer-reversal`, bookingId: prepared.payment.booking_id,
-          paymentId, payoutId: prepared.payment.payout_id,
-          type: 'owner_transfer_reversed', currency: prepared.payment.currency,
-          providerReference: reversal.id,
-          entries: [
-            { accountCode: 'stripe_clearing', accountOwnerId: null, debitMinor: reverseAmount, creditMinor: 0 },
-            { accountCode: 'owner_payable', accountOwnerId: prepared.payment.owner_id, debitMinor: 0, creditMinor: reverseAmount },
-          ],
-        });
-        if (reversalLedger.inserted) {
-          await client.query(
-            `UPDATE payouts
-             SET reversed_minor = reversed_minor + $2,
-                 status = CASE WHEN reversed_minor + $2 >= amount_minor THEN 'reversed' ELSE status END
-             WHERE id = $1`,
-            [prepared.payment.payout_id, reverseAmount],
-          );
-          await client.query(
-            'UPDATE payments SET transferred_minor = GREATEST(0, transferred_minor - $2) WHERE id = $1',
-            [paymentId, reverseAmount],
-          );
-        }
-        return reversalLedger.inserted;
-      });
-      if (reversalInserted) {
-        prepared.payment.transferred_minor = Math.max(
-          0,
-          Number(prepared.payment.transferred_minor) - reverseAmount,
-        );
-      }
-    }
+  if (prepared.reversalPlan.count > 0) {
+    await reconcileRefundTransferReversals({ refundId: prepared.refund.id });
+    prepared.payment.transferred_minor = Math.max(
+      0,
+      Number(prepared.payment.transferred_minor) - prepared.reversalPlan.amountMinor,
+    );
   }
-  const providerRefund = await stripeProvider.createRefund({
-    chargeId: prepared.payment.provider_charge_id,
-    amountMinor: Number(prepared.refund.amount_minor),
-    reverseTransfer: false,
-    refundPlatformFee: false,
-    idempotencyKey: providerOperationIdempotencyKey('refund', prepared.refund.id),
-    metadata: { sit_booking_id: prepared.payment.booking_id, sit_payment_id: paymentId, currency: prepared.payment.currency },
-  });
-  const response = await inTransaction(async (client) => {
-    const totalRefunded = Number(prepared.payment.refunded_minor) + Number(prepared.refund.amount_minor);
-    const finalStatus = totalRefunded === Number(prepared.payment.captured_minor) ? 'refunded' : 'partially_refunded';
-    await client.query(
-      `UPDATE refunds SET provider_refund_id = $2, status = 'succeeded', succeeded_at = now()
-       WHERE id = $1`,
-      [prepared.refund.id, providerRefund.id],
-    );
-    await client.query(
-      `UPDATE payments SET status = $2, refunded_minor = $3 WHERE id = $1`,
-      [paymentId, finalStatus, totalRefunded],
-    );
-    await insertLedger(client, {
-      key: `${key}:refund-ledger`, bookingId: prepared.payment.booking_id,
-      paymentId, refundId: prepared.refund.id,
-      type: 'payment_refunded', currency: prepared.payment.currency,
-      providerReference: providerRefund.id,
-      entries: refundLedger({
-        amountMinor: Number(prepared.refund.amount_minor),
-        ownerShareMinor: prepared.split.ownerShareMinor,
-        platformShareMinor: prepared.split.platformShareMinor,
-        ownerId: prepared.payment.owner_id,
-      }),
-    });
-    if (finalStatus === 'refunded') {
-      await client.query(
-        `UPDATE bookings SET status = 'completed', workflow_status = 'refunded',
-             refunded_at = COALESCE(refunded_at, now()), workflow_revision = workflow_revision + 1,
-             version = version + 1 WHERE id = $1`,
-        [prepared.payment.booking_id],
-      );
-      await enqueueBookingNotifications(client, {
-        bookingId: prepared.payment.booking_id,
-        eventKey: `booking:${prepared.payment.booking_id}:refunded:${key}`,
-        workflowStatus: 'refunded',
+  let providerRefund;
+  try {
+    if (prepared.providerLookupRequired) {
+      providerRefund = await stripeProvider.findRefund({
+        chargeId: prepared.payment.provider_charge_id,
+        refundId: prepared.refund.id,
       });
     }
-    await enqueueFinancialNotification(client, {
-      bookingId: prepared.payment.booking_id,
-      eventKey: `refund:${prepared.refund.id}:succeeded`,
-      kind: 'booking_refunded', recipientRole: 'renter',
-      amountMinor: prepared.refund.amount_minor, currency: prepared.payment.currency,
-    });
-    const value = {
-      refund: {
-        id: prepared.refund.id, status: 'succeeded',
-        amountMinor: Number(prepared.refund.amount_minor), currency: prepared.payment.currency,
+    providerRefund ??= await stripeProvider.createRefund({
+      chargeId: prepared.payment.provider_charge_id,
+      amountMinor: Number(prepared.refund.amount_minor),
+      reverseTransfer: false,
+      refundPlatformFee: false,
+      idempotencyKey: providerOperationIdempotencyKey('refund', prepared.refund.id),
+      metadata: {
+        sit_booking_id: prepared.payment.booking_id,
+        sit_payment_id: prepared.payment.id,
+        sit_refund_id: prepared.refund.id,
+        currency: prepared.payment.currency,
       },
-      payment: shapePayment({ ...prepared.payment, status: finalStatus, refunded_minor: totalRefunded, updated_at: new Date() }),
-      replayed: false,
-    };
-    await completeCommand(client, key, paymentId, value);
-    await audit(client, {
-      actorId: actor?.id ?? null, actorRole: actor?.role ?? 'system',
-      action: 'payment.refunded', resourceType: 'payment', resourceId: paymentId,
-      metadata: { amountMinor: prepared.refund.amount_minor, reason },
     });
-    return value;
-  });
+    assertProviderRefundBinding({
+      refund: prepared.refund,
+      payment: prepared.payment,
+      providerRefund,
+    });
+  } catch (error) {
+    await markProviderRefundFailure(prepared, error);
+    throw error;
+  }
+  let response;
+  try {
+    response = await inTransaction(async (client) => {
+      const locked = await client.query(
+        `SELECT payment.*,
+                refund.status AS refund_status,
+                refund.provider_refund_id AS stored_provider_refund_id,
+                command.completed_at AS command_completed_at,
+                command.response_payload AS command_response_payload
+           FROM payments AS payment
+           JOIN refunds AS refund
+             ON refund.id = $2 AND refund.payment_id = payment.id
+           JOIN payment_commands AS command
+             ON command.idempotency_key = $3 AND command.payment_id = payment.id
+          WHERE payment.id = $1
+          FOR UPDATE OF payment, refund, command`,
+        [paymentId, prepared.refund.id, key],
+      );
+      if (!locked.rowCount) {
+        throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
+      }
+      const current = locked.rows[0];
+      if (current.command_completed_at) {
+        return { ...current.command_response_payload, replayed: true };
+      }
+      if (!['created', 'pending'].includes(current.refund_status)
+          || !['captured', 'partially_refunded'].includes(current.status)) {
+        throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
+      }
+      assertProviderRefundBinding({
+        refund: prepared.refund,
+        payment: current,
+        providerRefund,
+      });
+      const totalRefunded = Number(current.refunded_minor)
+        + Number(prepared.refund.amount_minor);
+      if (totalRefunded > Number(current.captured_minor)) {
+        throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
+      }
+      const finalStatus = totalRefunded === Number(current.captured_minor)
+        ? 'refunded'
+        : 'partially_refunded';
+      const storedRefund = await client.query(
+        `UPDATE refunds SET provider_refund_id = $2, status = 'succeeded',
+             succeeded_at = now(), failure_code = NULL
+         WHERE id = $1 AND status IN ('created', 'pending')
+         RETURNING id`,
+        [prepared.refund.id, providerRefund.id],
+      );
+      const storedPayment = await client.query(
+        `UPDATE payments SET status = $2, refunded_minor = $3
+          WHERE id = $1 AND status IN ('captured', 'partially_refunded')
+          RETURNING id`,
+        [paymentId, finalStatus, totalRefunded],
+      );
+      if (!storedRefund.rowCount || !storedPayment.rowCount) {
+        throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
+      }
+      const ledger = await insertLedger(client, {
+        key: `${key}:refund-ledger`, bookingId: prepared.payment.booking_id,
+        paymentId, refundId: prepared.refund.id,
+        type: 'payment_refunded', currency: prepared.payment.currency,
+        providerReference: providerRefund.id,
+        entries: refundLedger({
+          amountMinor: Number(prepared.refund.amount_minor),
+          ownerShareMinor: prepared.split.ownerShareMinor,
+          platformShareMinor: prepared.split.platformShareMinor,
+          ownerId: prepared.payment.owner_id,
+        }),
+      });
+      if (!ledger.inserted) {
+        throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
+      }
+      if (finalStatus === 'refunded') {
+        await client.query(
+          `UPDATE bookings SET status = 'completed', workflow_status = 'refunded',
+               refunded_at = COALESCE(refunded_at, now()), workflow_revision = workflow_revision + 1,
+               version = version + 1 WHERE id = $1`,
+          [prepared.payment.booking_id],
+        );
+        await enqueueBookingNotifications(client, {
+          bookingId: prepared.payment.booking_id,
+          eventKey: `booking:${prepared.payment.booking_id}:refunded:${key}`,
+          workflowStatus: 'refunded',
+        });
+      }
+      await enqueueFinancialNotification(client, {
+        bookingId: prepared.payment.booking_id,
+        eventKey: `refund:${prepared.refund.id}:succeeded`,
+        kind: 'booking_refunded', recipientRole: 'renter',
+        amountMinor: prepared.refund.amount_minor, currency: prepared.payment.currency,
+      });
+      const value = {
+        refund: {
+          id: prepared.refund.id, status: 'succeeded',
+          amountMinor: Number(prepared.refund.amount_minor), currency: prepared.payment.currency,
+        },
+        payment: shapePayment({
+          ...current,
+          status: finalStatus,
+          refunded_minor: totalRefunded,
+          updated_at: new Date(),
+        }),
+        replayed: false,
+      };
+      await completeCommand(client, key, paymentId, value);
+      await audit(client, {
+        actorId: actor?.id ?? null, actorRole: actor?.role ?? 'system',
+        action: 'payment.refunded', resourceType: 'payment', resourceId: paymentId,
+        metadata: { amountMinor: prepared.refund.amount_minor, reason },
+      });
+      return value;
+    });
+  } catch (error) {
+    if ([
+      'provider_refund_binding_mismatch',
+      'provider_refund_local_state_mismatch',
+    ].includes(error?.code)) {
+      await markProviderRefundFailure(prepared, error);
+    }
+    throw error;
+  }
   return response;
 }
 
@@ -2005,6 +2610,32 @@ export async function reconcilePaymentLifecycle() {
   let payouts = 0;
   let failures = 0;
   const disputeRecoveries = await reconcileDisputeTransferRecoveries();
+  const pendingRefunds = await pool.query(
+    `SELECT refund.payment_id, refund.amount_minor, refund.reason,
+            refund.idempotency_key
+       FROM refunds AS refund
+      WHERE refund.status IN ('created', 'pending')
+        AND NOT EXISTS (
+          SELECT 1 FROM refund_transfer_reversals AS reversal
+           WHERE reversal.refund_id = refund.id
+             AND reversal.status = 'manual_review'
+        )
+      ORDER BY refund.updated_at, refund.id
+      LIMIT 20`,
+  );
+  for (const refund of pendingRefunds.rows) {
+    try {
+      await refundPayment({
+        paymentId: refund.payment_id,
+        amountMinor: Number(refund.amount_minor),
+        reason: refund.reason ?? 'reconciliation',
+        key: refund.idempotency_key,
+      });
+      refunds += 1;
+    } catch (error) {
+      if (!['payment_not_refundable'].includes(error.code)) failures += 1;
+    }
+  }
   const cancelled = await pool.query(
     `SELECT payment.id, payment.captured_minor, payment.refunded_minor,
             request.payload AS booking_payload
@@ -2130,10 +2761,28 @@ export async function paymentHealth() {
     `SELECT
        (SELECT count(*)::int FROM payments WHERE status IN ('created', 'requires_action', 'authorized')) AS pending,
        (SELECT count(*)::int FROM payment_provider_events WHERE status = 'failed') AS failed_events,
-       (SELECT count(*)::int FROM dispute_transfer_recoveries
-        WHERE status IN ('pending', 'processing', 'retryable', 'uncertain')) AS recovery_pending,
-       (SELECT count(*)::int FROM disputes
-        WHERE transfer_recovery_needs_review = true) AS recovery_needs_review,
+       ((SELECT count(*)::int FROM dispute_transfer_recoveries
+          WHERE status IN ('pending', 'processing', 'retryable', 'uncertain'))
+        +
+        (SELECT count(*)::int FROM refund_transfer_reversals
+          WHERE status IN ('pending', 'processing', 'retryable', 'uncertain'))
+        +
+        (SELECT count(*)::int FROM refunds AS refund
+          WHERE refund.status IN ('created', 'pending')
+            AND NOT EXISTS (
+              SELECT 1 FROM refund_transfer_reversals AS reversal
+               WHERE reversal.refund_id = refund.id
+                 AND reversal.status <> 'succeeded'
+            )))
+         AS recovery_pending,
+       ((SELECT count(*)::int FROM disputes
+          WHERE transfer_recovery_needs_review = true)
+        +
+        (SELECT count(*)::int FROM refund_transfer_reversals
+          WHERE needs_review = true OR status = 'manual_review')
+        +
+        (SELECT count(*)::int FROM refunds WHERE status = 'failed'))
+         AS recovery_needs_review,
        (SELECT count(*)::int FROM (
           SELECT transaction_id FROM ledger_entries GROUP BY transaction_id
           HAVING sum(debit_minor) <> sum(credit_minor)

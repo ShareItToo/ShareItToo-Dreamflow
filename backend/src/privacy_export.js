@@ -132,6 +132,7 @@ export async function buildAccountExport(client, userId) {
     depositCharges,
     disputes,
     disputeTransferRecoveries,
+    refundTransferReversals,
     auditEvents,
   ] = await runInOrder([
     rows(client,
@@ -994,6 +995,18 @@ export async function buildAccountExport(client, userId) {
         WHERE booking.owner_id = $1 OR booking.renter_id = $1
         ORDER BY recovery.created_at, recovery.id`, userId),
     rows(client,
+      `SELECT reversal.id, reversal.refund_id, payment.booking_id,
+              reversal.payout_id, reversal.status, reversal.amount_minor,
+              reversal.currency, reversal.attempt_count,
+              reversal.needs_review, reversal.last_error_category,
+              reversal.last_error_code, reversal.succeeded_at,
+              reversal.created_at, reversal.updated_at
+         FROM refund_transfer_reversals AS reversal
+         JOIN payments AS payment ON payment.id = reversal.payment_id
+         JOIN bookings AS booking ON booking.id = payment.booking_id
+        WHERE booking.owner_id = $1 OR booking.renter_id = $1
+        ORDER BY reversal.created_at, reversal.id`, userId),
+    rows(client,
       `SELECT action, resource_type, resource_id, request_id, created_at
        FROM audit_log WHERE actor_id = $1 ORDER BY created_at`, userId),
   ]);
@@ -1119,6 +1132,7 @@ export async function buildAccountExport(client, userId) {
       depositMandates,
       depositCharges,
       disputeTransferRecoveries,
+      refundTransferReversals,
     },
     auditEvents,
   };

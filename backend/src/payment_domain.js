@@ -164,6 +164,84 @@ export function splitRefund({ amountMinor, paymentAmountMinor, ownerPayoutMinor 
   });
 }
 
+export function refundTransferReversalPlan({
+  ownerShareMinor,
+  transferredMinor,
+  payouts,
+}) {
+  if (!Number.isSafeInteger(ownerShareMinor) || ownerShareMinor < 0
+      || !Number.isSafeInteger(transferredMinor) || transferredMinor < 0
+      || !Array.isArray(payouts)) {
+    throw new PaymentDomainError(400, 'invalid_refund_transfer_reversal_plan');
+  }
+  const targetMinor = Math.min(ownerShareMinor, transferredMinor);
+  let remainingMinor = targetMinor;
+  const allocations = [];
+  for (const payout of payouts) {
+    const amountMinor = Number(payout?.amount_minor);
+    const reversedMinor = Number(payout?.reversed_minor);
+    const payoutId = typeof payout?.id === 'string' ? payout.id.trim() : '';
+    const providerTransferId = typeof payout?.provider_transfer_id === 'string'
+      ? payout.provider_transfer_id.trim()
+      : '';
+    if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0
+        || !Number.isSafeInteger(reversedMinor) || reversedMinor < 0
+        || reversedMinor > amountMinor || !payoutId || !providerTransferId) {
+      throw new PaymentDomainError(409, 'refund_transfer_exposure_mismatch');
+    }
+    if (remainingMinor <= 0) continue;
+    const availableMinor = amountMinor - reversedMinor;
+    if (availableMinor <= 0) continue;
+    const allocatedMinor = Math.min(remainingMinor, availableMinor);
+    allocations.push(Object.freeze({
+      payoutId,
+      providerTransferId,
+      amountMinor: allocatedMinor,
+    }));
+    remainingMinor -= allocatedMinor;
+  }
+  if (remainingMinor !== 0) {
+    throw new PaymentDomainError(409, 'refund_transfer_exposure_mismatch');
+  }
+  return Object.freeze({
+    targetMinor,
+    allocations: Object.freeze(allocations),
+  });
+}
+
+export function assertProviderRefundBinding({ refund, payment, providerRefund }) {
+  const refundId = typeof providerRefund?.id === 'string'
+    ? providerRefund.id.trim()
+    : '';
+  const providerChargeId = typeof providerRefund?.charge === 'object'
+    ? providerRefund.charge?.id
+    : providerRefund?.charge;
+  const currency = typeof providerRefund?.currency === 'string'
+    ? providerRefund.currency.trim().toUpperCase()
+    : '';
+  const metadata = providerRefund?.metadata ?? {};
+  if (!refundId
+      || providerChargeId !== payment.provider_charge_id
+      || Number(providerRefund?.amount) !== Number(refund.amount_minor)
+      || currency !== payment.currency
+      || providerRefund?.livemode !== payment.livemode
+      || metadata.sit_booking_id !== payment.booking_id
+      || metadata.sit_payment_id !== payment.id
+      || metadata.sit_refund_id !== refund.id) {
+    throw new PaymentDomainError(409, 'provider_refund_binding_mismatch');
+  }
+  const status = typeof providerRefund?.status === 'string'
+    ? providerRefund.status.trim().toLowerCase()
+    : '';
+  if (status === 'succeeded') return true;
+  if (status === 'failed' || status === 'canceled' || status === 'cancelled') {
+    throw new PaymentDomainError(409, 'provider_refund_failed');
+  }
+  throw new PaymentDomainError(503, status === 'pending' || status === 'requires_action'
+    ? 'provider_refund_pending'
+    : 'provider_refund_state_unknown');
+}
+
 export function disputeTransferRecoveryAmount({
   disputeAmountMinor,
   paymentAmountMinor,

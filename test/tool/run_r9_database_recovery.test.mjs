@@ -23,9 +23,9 @@ function passedObservation() {
     postgresMajor: 16,
     migration: {
       emptyDatabaseTablesBeforeBootstrap: 0,
-      totalMigrations: 74,
+      totalMigrations: 75,
       firstMigration: '001_b3_foundation.up.sql',
-      lastMigration: '074_listing_ai_on_device_disclosure.up.sql',
+      lastMigration: '075_refund_transfer_reversal_recovery.up.sql',
       secondRunAppliedMigrations: 0,
       checksumMismatches: 0,
       schemaFingerprintSha256: hash,
@@ -66,7 +66,7 @@ function passedObservation() {
     olderUpgrade: {
       startingMigration: '027_g2_persistent_rental_cart.up.sql',
       startingMigrationCount: 27,
-      finalMigrationCount: 74,
+      finalMigrationCount: 75,
       secondRunAppliedMigrations: 0,
       legacyUsersPreserved: 4,
       legacyListingsPreserved: 2,
@@ -81,6 +81,7 @@ function passedObservation() {
         '069_regional_price_engine_r6_hardening.down.sql:R6 rollback blocked: hardened price snapshot data exists',
         '071_stripe_connect_accounts_v2.down.sql:Stripe Accounts v2 rollback blocked: v2 connected accounts exist',
         '074_listing_ai_on_device_disclosure.down.sql:On-device listing AI disclosure rollback blocked: durable consent history exists',
+        '075_refund_transfer_reversal_recovery.down.sql:Refund transfer reversal rollback blocked: durable provider recovery data exists',
       ],
       allDestructiveRollbacksRefused: true,
       restoredDataDigestUnchanged: true,
@@ -109,7 +110,7 @@ function passedObservation() {
 }
 
 test('accepts the complete isolated R9 recovery contract', async () => {
-  assert.equal(r9RequiredMigrationCount, 74);
+  assert.equal(r9RequiredMigrationCount, 75);
   const observation = passedObservation();
   assert.deepEqual(validateR9Observation(observation), observation);
   assert.deepEqual(await runR9DatabaseRecovery({

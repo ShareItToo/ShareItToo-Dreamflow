@@ -4,6 +4,7 @@ import { StripeProvider } from '../src/stripe_provider.js';
 
 import {
   assertProviderPaymentBinding,
+  assertProviderRefundBinding,
   classifyDisputeTransferRecoveryFailure,
   captureLedger,
   disputeOwnerRecoveryLedger,
@@ -12,6 +13,7 @@ import {
   paymentAmounts,
   paymentStatusForProvider,
   refundLedger,
+  refundTransferReversalPlan,
   requestHash,
   splitRefund,
   privatePilotReleasableOwnerAmount,
@@ -79,6 +81,46 @@ test('capture, transfer and refund ledger entries always balance', () => {
   assert.equal(balanced(transfer), true);
   assert.equal(balanced(refund), true);
   assert.deepEqual(split, { ownerShareMinor: 500, platformShareMinor: 95 });
+});
+
+test('refund transfer reversal plan spans immutable payouts newest first', () => {
+  assert.deepEqual(refundTransferReversalPlan({
+    ownerShareMinor: 800,
+    transferredMinor: 1000,
+    payouts: [
+      {
+        id: 'payout-new',
+        provider_transfer_id: 'tr_new',
+        amount_minor: '300',
+        reversed_minor: '0',
+      },
+      {
+        id: 'payout-old',
+        provider_transfer_id: 'tr_old',
+        amount_minor: '700',
+        reversed_minor: '0',
+      },
+    ],
+  }), {
+    targetMinor: 800,
+    allocations: [
+      { payoutId: 'payout-new', providerTransferId: 'tr_new', amountMinor: 300 },
+      { payoutId: 'payout-old', providerTransferId: 'tr_old', amountMinor: 500 },
+    ],
+  });
+});
+
+test('refund transfer reversal plan fails closed on missing payout exposure', () => {
+  assert.throws(() => refundTransferReversalPlan({
+    ownerShareMinor: 800,
+    transferredMinor: 1000,
+    payouts: [{
+      id: 'payout-only',
+      provider_transfer_id: 'tr_only',
+      amount_minor: '700',
+      reversed_minor: '0',
+    }],
+  }), (error) => error.code === 'refund_transfer_exposure_mismatch');
 });
 
 test('chargeback recovery is proportional, paid-exposure-bounded and replay-aware', () => {
@@ -252,6 +294,58 @@ test('provider payment events require exact local principal, object and mode bin
   }
 });
 
+test('provider refunds require exact payment, amount, currency, mode and metadata binding', () => {
+  const refund = { id: 'refund-1', amount_minor: '595' };
+  const payment = {
+    id: 'payment-1',
+    booking_id: 'booking-1',
+    provider_charge_id: 'ch-1',
+    currency: 'EUR',
+    livemode: false,
+  };
+  const providerRefund = {
+    id: 're-1',
+    charge: 'ch-1',
+    amount: 595,
+    currency: 'eur',
+    livemode: false,
+    status: 'succeeded',
+    metadata: {
+      sit_booking_id: 'booking-1',
+      sit_payment_id: 'payment-1',
+      sit_refund_id: 'refund-1',
+    },
+  };
+  assert.equal(assertProviderRefundBinding({ refund, payment, providerRefund }), true);
+  for (const changed of [
+    { ...providerRefund, id: '' },
+    { ...providerRefund, charge: 'ch-other' },
+    { ...providerRefund, amount: 596 },
+    { ...providerRefund, currency: 'usd' },
+    { ...providerRefund, livemode: true },
+    { ...providerRefund, metadata: { ...providerRefund.metadata, sit_booking_id: 'booking-other' } },
+    { ...providerRefund, metadata: { ...providerRefund.metadata, sit_payment_id: 'payment-other' } },
+    { ...providerRefund, metadata: { ...providerRefund.metadata, sit_refund_id: 'refund-other' } },
+  ]) {
+    assert.throws(
+      () => assertProviderRefundBinding({ refund, payment, providerRefund: changed }),
+      (error) => error.status === 409 && error.code === 'provider_refund_binding_mismatch',
+    );
+  }
+  assert.throws(
+    () => assertProviderRefundBinding({
+      refund, payment, providerRefund: { ...providerRefund, status: 'failed' },
+    }),
+    (error) => error.status === 409 && error.code === 'provider_refund_failed',
+  );
+  assert.throws(
+    () => assertProviderRefundBinding({
+      refund, payment, providerRefund: { ...providerRefund, status: 'pending' },
+    }),
+    (error) => error.status === 503 && error.code === 'provider_refund_pending',
+  );
+});
+
 test('memory Checkout emulates provider idempotency and rejects parameter drift', async () => {
   const provider = new StripeProvider({ mode: 'memory' });
   const request = {
@@ -382,6 +476,9 @@ test('Stripe SDK checkout, refund and transfer preserve separate-charges semanti
   const checkoutParams = captured[1][1];
   assert.equal(Object.hasOwn(checkoutParams, 'payment_method_types'), false);
   assert.equal(checkoutParams.payment_intent_data.transfer_group, 'booking_booking-1');
+  assert.equal(Object.hasOwn(checkoutParams.payment_intent_data, 'transfer_data'), false);
+  assert.equal(Object.hasOwn(checkoutParams.payment_intent_data, 'application_fee_amount'), false);
+  assert.equal(Object.hasOwn(checkoutParams.payment_intent_data, 'on_behalf_of'), false);
   assert.equal(Object.hasOwn(checkoutParams.payment_intent_data, 'setup_future_usage'), false);
   assert.match(checkoutParams.integration_identifier, /^shareittoo_android_[a-z]{8}$/u);
   assert.equal(captured[1][2].idempotencyKey, 'checkout:booking-1');
@@ -403,6 +500,8 @@ test('Stripe SDK checkout, refund and transfer preserve separate-charges semanti
   });
   assert.equal(captured[3][1].amount, 500);
   assert.equal(captured[3][1].destination, 'acct_test');
+  assert.equal(captured[3][1].source_transaction, 'ch_test');
+  assert.equal(captured[3][1].transfer_group, 'booking_booking-1');
 
   await provider.reverseTransfer({
     transferId: 'tr_test', amountMinor: 100, idempotencyKey: 'reversal:payment-1',
@@ -433,6 +532,52 @@ test('Stripe SDK checkout, refund and transfer preserve separate-charges semanti
     'tr_test',
     { limit: 100 },
   ]);
+
+  stripeClient.refunds.list = async (...args) => {
+    captured.push(['refund-list', ...args]);
+    return {
+      data: [{
+        id: 're_test',
+        charge: 'ch_test',
+        amount: 595,
+        metadata: { sit_refund_id: 'refund-1' },
+      }],
+      has_more: false,
+    };
+  };
+  assert.equal((await provider.findRefund({
+    chargeId: 'ch_test',
+    refundId: 'refund-1',
+  })).id, 're_test');
+  assert.deepEqual(captured[6].slice(0, 2), [
+    'refund-list',
+    { charge: 'ch_test', limit: 100 },
+  ]);
+});
+
+test('memory refund is idempotent, discoverable and rejects parameter drift', async () => {
+  const provider = new StripeProvider({ mode: 'memory' });
+  const request = {
+    chargeId: 'ch-memory-refund',
+    amountMinor: 595,
+    idempotencyKey: 'memory-refund-stable-key',
+    metadata: {
+      currency: 'EUR',
+      sit_booking_id: 'booking-memory-refund',
+      sit_payment_id: 'payment-memory-refund',
+      sit_refund_id: 'refund-memory-1',
+    },
+  };
+  const first = await provider.createRefund(request);
+  assert.deepEqual(await provider.createRefund(request), first);
+  assert.deepEqual(await provider.findRefund({
+    chargeId: request.chargeId,
+    refundId: request.metadata.sit_refund_id,
+  }), first);
+  await assert.rejects(
+    provider.createRefund({ ...request, amountMinor: 596 }),
+    (error) => error.code === 'provider_idempotency_payload_mismatch',
+  );
 });
 
 test('memory transfer reversal is idempotent and discoverable after an uncertain replay', async () => {
@@ -452,6 +597,40 @@ test('memory transfer reversal is idempotent and discoverable after an uncertain
   await assert.rejects(
     provider.reverseTransfer({ ...request, amountMinor: 251 }),
     (error) => error.code === 'provider_idempotency_payload_mismatch',
+  );
+});
+
+test('memory provider enforces transfer idempotency and cumulative reversal limit', async () => {
+  const provider = new StripeProvider({ mode: 'memory' });
+  const transferRequest = {
+    accountId: 'acct_memory_owner',
+    chargeId: 'ch_memory_payment',
+    amountMinor: 700,
+    currency: 'EUR',
+    transferGroup: 'booking_memory_refund',
+    idempotencyKey: 'memory-transfer-stable-key',
+    metadata: { sit_payment_id: 'payment-memory-refund' },
+  };
+  const transfer = await provider.createTransfer(transferRequest);
+  assert.deepEqual(await provider.createTransfer(transferRequest), transfer);
+  await assert.rejects(
+    provider.createTransfer({ ...transferRequest, amountMinor: 701 }),
+    (error) => error.code === 'provider_idempotency_payload_mismatch',
+  );
+  await provider.reverseTransfer({
+    transferId: transfer.id,
+    amountMinor: 500,
+    idempotencyKey: 'memory-reversal-first-key',
+    metadata: { sit_refund_transfer_reversal_id: 'refund-reversal-first' },
+  });
+  await assert.rejects(
+    provider.reverseTransfer({
+      transferId: transfer.id,
+      amountMinor: 201,
+      idempotencyKey: 'memory-reversal-over-limit-key',
+      metadata: { sit_refund_transfer_reversal_id: 'refund-reversal-over-limit' },
+    }),
+    (error) => error.code === 'transfer_reversal_amount_too_large',
   );
 });
 

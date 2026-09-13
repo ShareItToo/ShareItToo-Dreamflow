@@ -28,7 +28,7 @@ const requireFromBackend = createRequire(
   new URL('../backend/package.json', import.meta.url),
 );
 
-export const r9RequiredMigrationCount = 74;
+export const r9RequiredMigrationCount = 75;
 export const r9SyntheticAccountCount = 12;
 export const r9SyntheticListingCount = 6;
 export const r9ResultClassification = 'LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF';
@@ -62,6 +62,10 @@ const rollbackGuardExpectations = Object.freeze([
   Object.freeze({
     filename: '074_listing_ai_on_device_disclosure.down.sql',
     message: 'On-device listing AI disclosure rollback blocked: durable consent history exists',
+  }),
+  Object.freeze({
+    filename: '075_refund_transfer_reversal_recovery.down.sql',
+    message: 'Refund transfer reversal rollback blocked: durable provider recovery data exists',
   }),
 ]);
 
@@ -142,7 +146,7 @@ async function readMigrationPlan(root) {
   }
   if (plan.length !== r9RequiredMigrationCount
       || plan[0]?.filename !== '001_b3_foundation.up.sql'
-      || plan.at(-1)?.filename !== '074_listing_ai_on_device_disclosure.up.sql') {
+      || plan.at(-1)?.filename !== '075_refund_transfer_reversal_recovery.up.sql') {
     fail('r9_migration_inventory_unexpected');
   }
   return Object.freeze(plan);
@@ -576,6 +580,76 @@ async function legacyCounts(pool) {
   return result.rows[0];
 }
 
+async function insertRefundTransferReversalRollbackFixture(client) {
+  await client.query(
+    `INSERT INTO rental_requests (
+       id, item_id, owner_id, renter_id, status, payload
+     ) VALUES (
+       'r9-refund-reversal-guard', 'r9-listing-001',
+       'r9-user-001', 'r9-user-002', 'accepted',
+       '{"synthetic":true,"fixture":"r9_refund_reversal_guard"}'::jsonb
+     )`,
+  );
+  await client.query(
+    `INSERT INTO bookings (
+       id, listing_id, owner_id, renter_id, status, starts_at, ends_at,
+       currency, quoted_total_minor, security_deposit_minor
+     ) VALUES (
+       'r9-refund-reversal-guard', 'r9-listing-001',
+       'r9-user-001', 'r9-user-002', 'completed',
+       '2026-10-01T10:00:00Z', '2026-10-02T10:00:00Z',
+       'EUR', 1000, 0
+     )`,
+  );
+  const payment = await client.query(
+    `INSERT INTO payments (
+       booking_id, provider_charge_id, idempotency_key, status,
+       amount_minor, currency, rental_subtotal_minor, platform_fee_minor,
+       owner_payout_minor, security_deposit_minor, captured_minor,
+       transferred_minor, livemode
+     ) VALUES (
+       'r9-refund-reversal-guard', 'ch_r9_refund_reversal_guard',
+       'r9-refund-reversal-payment', 'captured',
+       1000, 'EUR', 900, 100, 900, 0, 1000, 900, false
+     ) RETURNING id`,
+  );
+  const payout = await client.query(
+    `INSERT INTO payouts (
+       booking_id, payee_id, provider_transfer_id,
+       provider_connected_account_id, payment_id, idempotency_key,
+       status, amount_minor, currency, reversed_minor,
+       transferred_at, paid_at, livemode
+     ) VALUES (
+       'r9-refund-reversal-guard', 'r9-user-001',
+       'tr_r9_refund_reversal_guard', 'acct_r9_synthetic_v2', $1,
+       'r9-refund-reversal-payout', 'paid', 900, 'EUR', 0,
+       now(), now(), false
+     ) RETURNING id`,
+    [payment.rows[0].id],
+  );
+  const refund = await client.query(
+    `INSERT INTO refunds (
+       payment_id, idempotency_key, status, amount_minor, currency,
+       provider_charge_id, owner_share_minor, platform_share_minor,
+       reverse_transfer, refund_platform_fee, livemode
+     ) VALUES (
+       $1, 'r9-refund-reversal-refund', 'pending', 900, 'EUR',
+       'ch_r9_refund_reversal_guard', 900, 0, true, false, false
+     ) RETURNING id`,
+    [payment.rows[0].id],
+  );
+  await client.query(
+    `INSERT INTO refund_transfer_reversals (
+       refund_id, payment_id, payout_id, provider_transfer_id,
+       provider_idempotency_key, amount_minor, currency, livemode
+     ) VALUES (
+       $1, $2, $3, 'tr_r9_refund_reversal_guard',
+       'r9-refund-transfer-reversal', 900, 'EUR', false
+     )`,
+    [refund.rows[0].id, payment.rows[0].id, payout.rows[0].id],
+  );
+}
+
 async function assertRollbackGuardRefusals(pool, root) {
   const refused = [];
   for (const guard of rollbackGuardExpectations) {
@@ -587,6 +661,9 @@ async function assertRollbackGuardRefusals(pool, root) {
     let caught = null;
     try {
       await client.query('BEGIN');
+      if (guard.filename === '075_refund_transfer_reversal_recovery.down.sql') {
+        await insertRefundTransferReversalRollbackFixture(client);
+      }
       try {
         await client.query(sql);
       } catch (error) {
@@ -658,7 +735,7 @@ async function closePools(pools) {
 
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
-  requiredLastMigration = '074_listing_ai_on_device_disclosure.up.sql',
+  requiredLastMigration = '075_refund_transfer_reversal_recovery.up.sql',
   requiredRollbackGuards = rollbackGuardExpectations,
 } = {}) {
   if (value?.schemaVersion !== 1

@@ -312,14 +312,26 @@ export class StripeProvider {
 
   async createRefund({ chargeId, amountMinor, idempotencyKey, metadata }) {
     if (this.mode === 'memory') {
-      return {
+      const fingerprint = requestHash({ chargeId, amountMinor, metadata });
+      const replay = this.memory.get(`refund-idempotency:${idempotencyKey}`);
+      if (replay) {
+        if (replay.fingerprint !== fingerprint) {
+          throw new PaymentDomainError(409, 'provider_idempotency_payload_mismatch');
+        }
+        return replay.result;
+      }
+      const result = {
         id: memoryId('re_memory'),
         status: 'succeeded',
         charge: chargeId,
         amount: amountMinor,
         currency: metadata.currency.toLowerCase(),
+        metadata,
         livemode: false,
       };
+      this.memory.set(`refund:${result.id}`, result);
+      this.memory.set(`refund-idempotency:${idempotencyKey}`, { fingerprint, result });
+      return result;
     }
     return this.call((client) => client.refunds.create({
       charge: chargeId,
@@ -328,9 +340,66 @@ export class StripeProvider {
     }, { idempotencyKey }));
   }
 
+  async findRefund({ chargeId, refundId }) {
+    if (typeof chargeId !== 'string' || !chargeId
+        || typeof refundId !== 'string' || !refundId) {
+      throw new PaymentDomainError(500, 'invalid_refund_lookup');
+    }
+    if (this.mode === 'memory') {
+      const matching = [];
+      for (const [key, refund] of this.memory) {
+        if (key.startsWith('refund:')
+            && refund.charge === chargeId
+            && refund.metadata?.sit_refund_id === refundId) {
+          matching.push(refund);
+        }
+      }
+      if (matching.length > 1) {
+        throw new PaymentDomainError(409, 'provider_refund_inventory_conflict');
+      }
+      return matching[0] ?? null;
+    }
+    const matching = [];
+    let startingAfter;
+    for (let pageIndex = 0; pageIndex < 100; pageIndex += 1) {
+      const page = await this.call((client) => client.refunds.list({
+        charge: chargeId,
+        limit: 100,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      }));
+      matching.push(...page.data.filter(
+        (refund) => refund.metadata?.sit_refund_id === refundId,
+      ));
+      if (matching.length > 1) {
+        throw new PaymentDomainError(409, 'provider_refund_inventory_conflict');
+      }
+      if (!page.has_more) return matching[0] ?? null;
+      startingAfter = typeof page.data.at(-1)?.id === 'string'
+        ? page.data.at(-1).id
+        : '';
+      if (!startingAfter) break;
+    }
+    throw new PaymentDomainError(503, 'stripe_refund_inventory_incomplete');
+  }
+
   async createTransfer({ accountId, chargeId, amountMinor, currency, transferGroup, idempotencyKey, metadata }) {
     if (this.mode === 'memory') {
-      return {
+      const fingerprint = requestHash({
+        accountId,
+        chargeId,
+        amountMinor,
+        currency,
+        transferGroup,
+        metadata,
+      });
+      const replay = this.memory.get(`transfer-idempotency:${idempotencyKey}`);
+      if (replay) {
+        if (replay.fingerprint !== fingerprint) {
+          throw new PaymentDomainError(409, 'provider_idempotency_payload_mismatch');
+        }
+        return replay.result;
+      }
+      const result = {
         id: memoryId('tr_memory'),
         destination: accountId,
         source_transaction: chargeId,
@@ -341,6 +410,9 @@ export class StripeProvider {
         livemode: false,
         created: Math.floor(Date.now() / 1000),
       };
+      this.memory.set(`transfer:${result.id}`, { ...result, reversed_amount: 0 });
+      this.memory.set(`transfer-idempotency:${idempotencyKey}`, { fingerprint, result });
+      return result;
     }
     return this.call((client) => client.transfers.create({
       destination: accountId,
@@ -362,6 +434,13 @@ export class StripeProvider {
         }
         return replay.result;
       }
+      const transfer = this.memory.get(`transfer:${transferId}`);
+      if (transfer && transfer.reversed_amount + amountMinor > transfer.amount) {
+        throw new PaymentDomainError(409, 'transfer_reversal_amount_too_large', {
+          providerStatus: 400,
+          providerType: 'StripeInvalidRequestError',
+        });
+      }
       const result = {
         id: memoryId('trr_memory'),
         transfer: transferId,
@@ -369,6 +448,7 @@ export class StripeProvider {
         metadata,
         created: Math.floor(Date.now() / 1000),
       };
+      if (transfer) transfer.reversed_amount += amountMinor;
       this.memory.set(`reversal:${result.id}`, result);
       this.memory.set(`reversal-idempotency:${idempotencyKey}`, {
         fingerprint,
@@ -383,27 +463,56 @@ export class StripeProvider {
     ));
   }
 
-  async findTransferReversal({ transferId, recoveryId }) {
+  async findTransferReversal({
+    transferId,
+    recoveryId = null,
+    refundTransferReversalId = null,
+  }) {
+    if ((typeof recoveryId === 'string' && recoveryId.length > 0)
+        === (typeof refundTransferReversalId === 'string'
+          && refundTransferReversalId.length > 0)) {
+      throw new PaymentDomainError(500, 'invalid_transfer_reversal_lookup');
+    }
+    const metadataKey = recoveryId
+      ? 'sit_recovery_id'
+      : 'sit_refund_transfer_reversal_id';
+    const metadataValue = recoveryId ?? refundTransferReversalId;
     if (this.mode === 'memory') {
+      const matching = [];
       for (const [key, reversal] of this.memory) {
         if (key.startsWith('reversal:')
             && reversal.transfer === transferId
-            && reversal.metadata?.sit_recovery_id === recoveryId) {
-          return reversal;
+            && reversal.metadata?.[metadataKey] === metadataValue) {
+          matching.push(reversal);
         }
       }
-      return null;
+      if (matching.length > 1) {
+        throw new PaymentDomainError(409, 'provider_reversal_inventory_conflict');
+      }
+      return matching[0] ?? null;
     }
-    const page = await this.call((client) => client.transfers.listReversals(
-      transferId,
-      { limit: 100 },
-    ));
-    const matching = page.data.filter(
-      (reversal) => reversal.metadata?.sit_recovery_id === recoveryId,
-    );
-    if (matching.length > 1 || (page.has_more && matching.length === 0)) {
-      throw new PaymentDomainError(503, 'stripe_reversal_inventory_incomplete');
+    const matching = [];
+    let startingAfter;
+    for (let pageIndex = 0; pageIndex < 100; pageIndex += 1) {
+      const page = await this.call((client) => client.transfers.listReversals(
+        transferId,
+        {
+          limit: 100,
+          ...(startingAfter ? { starting_after: startingAfter } : {}),
+        },
+      ));
+      matching.push(...page.data.filter(
+        (reversal) => reversal.metadata?.[metadataKey] === metadataValue,
+      ));
+      if (matching.length > 1) {
+        throw new PaymentDomainError(409, 'provider_reversal_inventory_conflict');
+      }
+      if (!page.has_more) return matching[0] ?? null;
+      startingAfter = typeof page.data.at(-1)?.id === 'string'
+        ? page.data.at(-1).id
+        : '';
+      if (!startingAfter) break;
     }
-    return matching[0] ?? null;
+    throw new PaymentDomainError(503, 'stripe_reversal_inventory_incomplete');
   }
 }

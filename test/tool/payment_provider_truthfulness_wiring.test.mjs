@@ -14,6 +14,10 @@ const migration = fs.readFileSync(
   'backend/sql/migrations/071_stripe_connect_accounts_v2.up.sql',
   'utf8',
 );
+const refundReversalMigration = fs.readFileSync(
+  'backend/sql/migrations/075_refund_transfer_reversal_recovery.up.sql',
+  'utf8',
+);
 
 test('server exposes one account-bound provider capability truth', () => {
   assert.match(app, /function paymentCapabilitiesFor\(userId\)/u);
@@ -102,6 +106,24 @@ test('separate charges and transfers never use destination-refund flags', () => 
   assert.doesNotMatch(provider, /refund_application_fee:/u);
   assert.match(provider, /client\.transfers\.create/u);
   assert.match(provider, /client\.transfers\.createReversal/u);
+});
+
+test('refund-side transfer reversals are payout-bound and durably recoverable', () => {
+  assert.match(refundReversalMigration, /CREATE TABLE refund_transfer_reversals/u);
+  assert.match(refundReversalMigration, /UNIQUE \(refund_id, payout_id\)/u);
+  assert.match(refundReversalMigration, /provider_idempotency_key TEXT NOT NULL UNIQUE/u);
+  assert.match(refundReversalMigration, /'uncertain'/u);
+  assert.match(refundReversalMigration, /FOREIGN KEY \(refund_id, payment_id\)/u);
+  assert.match(refundReversalMigration, /FOREIGN KEY \(payout_id, payment_id\)/u);
+  assert.match(workflow, /refundTransferReversalPlan/u);
+  assert.match(workflow, /sit_refund_transfer_reversal_id/u);
+  assert.match(workflow, /provider\.findTransferReversal/u);
+  assert.match(workflow, /stripeProvider\.findRefund/u);
+  assert.match(workflow, /assertProviderRefundBinding/u);
+  assert.match(workflow, /providerOperationIdempotencyKey\('refund_transfer_reversal', id\)/u);
+  assert.match(workflow, /UPDATE payments SET transferred_minor = transferred_minor - \$2/u);
+  assert.match(provider, /refundTransferReversalId/u);
+  assert.match(provider, /provider_refund_inventory_conflict/u);
 });
 
 test('financial notification does not invent a provider name', () => {

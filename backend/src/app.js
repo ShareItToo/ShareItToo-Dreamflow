@@ -1310,6 +1310,16 @@ async function accountDeletionPreflight(client, userId) {
         JOIN bookings AS booking ON booking.id = payment.booking_id
         WHERE (booking.owner_id = $1 OR booking.renter_id = $1)
           AND payment.status IN ('created', 'requires_action', 'authorized')) AS active_payments,
+       (SELECT count(*)::int FROM refund_transfer_reversals AS reversal
+        JOIN payments AS payment ON payment.id = reversal.payment_id
+        JOIN bookings AS booking ON booking.id = payment.booking_id
+        WHERE (booking.owner_id = $1 OR booking.renter_id = $1)
+          AND reversal.status <> 'succeeded') AS open_refund_reversals,
+       (SELECT count(*)::int FROM refunds AS refund
+        JOIN payments AS payment ON payment.id = refund.payment_id
+        JOIN bookings AS booking ON booking.id = payment.booking_id
+        WHERE (booking.owner_id = $1 OR booking.renter_id = $1)
+          AND refund.status IN ('created', 'pending', 'failed')) AS open_refunds,
        (SELECT count(*)::int FROM disputes AS dispute
         JOIN bookings AS booking ON booking.id = dispute.booking_id
         WHERE (booking.owner_id = $1 OR booking.renter_id = $1)
@@ -1338,6 +1348,8 @@ async function accountDeletionPreflight(client, userId) {
     ['active_bookings', 'Aktive oder bevorstehende Buchungen'],
     ['open_payouts', 'Offene Auszahlungen'],
     ['active_payments', 'Laufende Zahlungsabwicklung'],
+    ['open_refund_reversals', 'Offene Rückholung einer Auszahlung'],
+    ['open_refunds', 'Offene oder zu prüfende Erstattung'],
     ['open_disputes', 'Offene Streitfälle'],
     ['open_reports', 'Offene Moderationsfälle'],
     ['active_legal_holds', 'Rechtliche Aufbewahrungssperre'],

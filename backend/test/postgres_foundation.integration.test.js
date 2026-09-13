@@ -212,6 +212,7 @@ if (!databaseUrl) {
         '072_dispute_transfer_recovery.up.sql',
         '073_listing_ai_on_device_provider.up.sql',
         '074_listing_ai_on_device_disclosure.up.sql',
+        '075_refund_transfer_reversal_recovery.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);
@@ -2215,6 +2216,8 @@ if (!databaseUrl) {
       const {
         applyProviderEvent,
         reconcileDisputeTransferRecoveries,
+        reconcileRefundTransferReversals,
+        stripeProvider,
       } = await import('../src/payment_workflow.js');
       const { buildAccountExport } = await import('../src/privacy_export.js');
       const { createSupportCase } = await import('../src/support_case_workflow.js');
@@ -6800,6 +6803,18 @@ if (!databaseUrl) {
       // A reinstated recovery creates a compensating owner payable, but it
       // cannot pay automatically: the human dispute closure above is the
       // separate authorization that allows this fresh, residual payout.
+      // Keep part of the owner share contested so the eventual refund must
+      // reverse two independently created transfers, not just the newest one.
+      await setupPool.query(
+        `UPDATE bookings SET return_state = 'needsReview'
+          WHERE id = 'b8-payment-flow'`,
+      );
+      await setupPool.query(
+        `UPDATE rental_requests
+            SET payload = (payload - 'returnCaseClosedAt')
+              || '{"contestedAuthorizedMinor":990}'::jsonb
+          WHERE id = 'b8-payment-flow'`,
+      );
       const payoutAfterHumanDisputeClosure = await fetch(`${baseUrl}/v1/payments/${paymentId}/payout-release`, {
         method: 'POST',
         headers: { ...adminHeaders, 'Idempotency-Key': 'b8-no-duplicate-payout-after-partial-refund' },
@@ -6807,7 +6822,7 @@ if (!databaseUrl) {
       });
       assert.equal(payoutAfterHumanDisputeClosure.status, 201);
       const payoutAfterHumanDisputeClosurePayload = await payoutAfterHumanDisputeClosure.json();
-      assert.equal(payoutAfterHumanDisputeClosurePayload.payout.amountMinor, 1500);
+      assert.equal(payoutAfterHumanDisputeClosurePayload.payout.amountMinor, 600);
       const payoutAfterHumanDisputeClosureReplay = await fetch(`${baseUrl}/v1/payments/${paymentId}/payout-release`, {
         method: 'POST',
         headers: { ...adminHeaders, 'Idempotency-Key': 'b8-no-duplicate-payout-after-partial-refund' },
@@ -6816,11 +6831,190 @@ if (!databaseUrl) {
       assert.equal(payoutAfterHumanDisputeClosureReplay.status, 200);
       assert.equal((await payoutAfterHumanDisputeClosureReplay.json()).replayed, true);
 
-      const refundAfterPayout = await fetch(`${baseUrl}/v1/payments/${paymentId}/refunds`, {
-        method: 'POST',
-        headers: { ...adminHeaders, 'Idempotency-Key': 'b8-final-refund-after-owner-payout' },
-        body: JSON.stringify({ amountMinor: 1650, reason: 'integration_final_refund' }),
+      await setupPool.query(
+        `UPDATE bookings SET return_state = 'closed'
+          WHERE id = 'b8-payment-flow'`,
+      );
+      await setupPool.query(
+        `UPDATE rental_requests
+            SET payload = payload
+              || jsonb_build_object('returnCaseClosedAt', now()::text)
+          WHERE id = 'b8-payment-flow'`,
+      );
+      const residualPayoutAfterReturnClosure = await fetch(
+        `${baseUrl}/v1/payments/${paymentId}/payout-release`,
+        {
+          method: 'POST',
+          headers: {
+            ...adminHeaders,
+            'Idempotency-Key': 'b8-residual-payout-after-return-closure',
+          },
+          body: '{}',
+        },
+      );
+      assert.equal(residualPayoutAfterReturnClosure.status, 201);
+      assert.equal((await residualPayoutAfterReturnClosure.json()).payout.amountMinor, 900);
+
+      // The first provider reversal succeeds, but its response is lost. The
+      // request must remain pending locally, the provider refund must not run,
+      // and recovery must reuse the immutable reversal amount/key rather than
+      // deriving a smaller payload from the now-partially-updated payment.
+      const originalReverseTransfer = stripeProvider.reverseTransfer;
+      let lostReversalResponseInjected = false;
+      stripeProvider.reverseTransfer = async function reverseTransferWithLostResponse(args) {
+        const providerReversal = await originalReverseTransfer.call(this, args);
+        if (!lostReversalResponseInjected) {
+          lostReversalResponseInjected = true;
+          const error = new Error('simulated_transfer_reversal_response_lost');
+          error.code = 'ETIMEDOUT';
+          error.status = 503;
+          throw error;
+        }
+        return providerReversal;
+      };
+      let uncertainRefundResponse;
+      try {
+        uncertainRefundResponse = await fetch(`${baseUrl}/v1/payments/${paymentId}/refunds`, {
+          method: 'POST',
+          headers: { ...adminHeaders, 'Idempotency-Key': 'b8-final-refund-after-owner-payout' },
+          body: JSON.stringify({ amountMinor: 1650, reason: 'integration_final_refund' }),
+        });
+      } finally {
+        stripeProvider.reverseTransfer = originalReverseTransfer;
+      }
+      assert.equal(lostReversalResponseInjected, true);
+      assert.equal(uncertainRefundResponse.status, 503);
+      const pendingRefund = await setupPool.query(
+        `SELECT refund.id, refund.status, refund.provider_refund_id,
+                payment.status AS payment_status,
+                payment.transferred_minor
+           FROM refunds AS refund
+           JOIN payments AS payment ON payment.id = refund.payment_id
+          WHERE refund.idempotency_key = $1`,
+        ['b8-final-refund-after-owner-payout'],
+      );
+      assert.deepEqual(
+        {
+          status: pendingRefund.rows[0].status,
+          providerRefundId: pendingRefund.rows[0].provider_refund_id,
+          paymentStatus: pendingRefund.rows[0].payment_status,
+        },
+        {
+          status: 'pending',
+          providerRefundId: null,
+          paymentStatus: 'partially_refunded',
+        },
+      );
+      const pendingTransferReversals = await setupPool.query(
+        `SELECT status, amount_minor, attempt_count, needs_review
+           FROM refund_transfer_reversals
+          WHERE refund_id = $1
+          ORDER BY amount_minor DESC`,
+        [pendingRefund.rows[0].id],
+      );
+      assert.deepEqual(
+        pendingTransferReversals.rows.map((row) => row.amount_minor),
+        ['900', '600'],
+      );
+      const uncertainTransferReversal = pendingTransferReversals.rows.find(
+        (row) => row.status === 'uncertain',
+      );
+      const succeededTransferReversal = pendingTransferReversals.rows.find(
+        (row) => row.status === 'succeeded',
+      );
+      assert.deepEqual(
+        {
+          attemptCount: uncertainTransferReversal?.attempt_count,
+          needsReview: uncertainTransferReversal?.needs_review,
+        },
+        { attemptCount: 1, needsReview: true },
+      );
+      assert.deepEqual(
+        {
+          attemptCount: succeededTransferReversal?.attempt_count,
+          needsReview: succeededTransferReversal?.needs_review,
+        },
+        { attemptCount: 1, needsReview: false },
+      );
+      assert.equal(
+        pendingRefund.rows[0].transferred_minor,
+        uncertainTransferReversal.amount_minor,
+      );
+      assert.deepEqual(
+        await reconcileRefundTransferReversals({
+          refundId: pendingRefund.rows[0].id,
+          now: new Date(Date.now() + 5 * 60_000),
+        }),
+        { total: 2, succeeded: 2, completedThisRun: 1 },
+      );
+
+      // All transfer reversals are now locally settled. Simulate the provider
+      // accepting the actual refund while its response is lost. The retry must
+      // discover that exact refund by immutable metadata instead of creating a
+      // second provider refund.
+      const originalCreateRefund = stripeProvider.createRefund;
+      let lostProviderRefundResponseInjected = false;
+      stripeProvider.createRefund = async function createRefundWithLostResponse(args) {
+        const providerRefund = await originalCreateRefund.call(this, args);
+        if (!lostProviderRefundResponseInjected) {
+          lostProviderRefundResponseInjected = true;
+          const error = new Error('simulated_provider_refund_response_lost');
+          error.code = 'ETIMEDOUT';
+          error.status = 503;
+          throw error;
+        }
+        return providerRefund;
+      };
+      let uncertainProviderRefundResponse;
+      try {
+        uncertainProviderRefundResponse = await fetch(
+          `${baseUrl}/v1/payments/${paymentId}/refunds`,
+          {
+            method: 'POST',
+            headers: { ...adminHeaders, 'Idempotency-Key': 'b8-final-refund-after-owner-payout' },
+            body: JSON.stringify({ amountMinor: 1650, reason: 'integration_final_refund' }),
+          },
+        );
+      } finally {
+        stripeProvider.createRefund = originalCreateRefund;
+      }
+      assert.equal(lostProviderRefundResponseInjected, true);
+      assert.equal(uncertainProviderRefundResponse.status, 503);
+      const providerRefundPending = await setupPool.query(
+        `SELECT refund.status, refund.provider_refund_id,
+                payment.status AS payment_status, payment.transferred_minor,
+                count(reversal.id) FILTER (
+                  WHERE reversal.status = 'succeeded'
+                )::int AS succeeded_reversals
+           FROM refunds AS refund
+           JOIN payments AS payment ON payment.id = refund.payment_id
+           LEFT JOIN refund_transfer_reversals AS reversal
+             ON reversal.refund_id = refund.id
+          WHERE refund.id = $1
+          GROUP BY refund.id, payment.id`,
+        [pendingRefund.rows[0].id],
+      );
+      assert.deepEqual(providerRefundPending.rows[0], {
+        status: 'pending',
+        provider_refund_id: null,
+        payment_status: 'partially_refunded',
+        transferred_minor: '0',
+        succeeded_reversals: 2,
       });
+
+      stripeProvider.createRefund = async function rejectDuplicateProviderRefund() {
+        throw new Error('unexpected_duplicate_provider_refund');
+      };
+      let refundAfterPayout;
+      try {
+        refundAfterPayout = await fetch(`${baseUrl}/v1/payments/${paymentId}/refunds`, {
+          method: 'POST',
+          headers: { ...adminHeaders, 'Idempotency-Key': 'b8-final-refund-after-owner-payout' },
+          body: JSON.stringify({ amountMinor: 1650, reason: 'integration_final_refund' }),
+        });
+      } finally {
+        stripeProvider.createRefund = originalCreateRefund;
+      }
       assert.equal(refundAfterPayout.status, 201);
       const refundPayload = await refundAfterPayout.json();
       assert.equal(refundPayload.refund.status, 'succeeded');
@@ -6832,8 +7026,67 @@ if (!databaseUrl) {
       );
       assert.deepEqual(reversedPayouts.rows, [
         { status: 'reversed', amount_minor: '3000', reversed_minor: '3000' },
-        { status: 'reversed', amount_minor: '1500', reversed_minor: '1500' },
+        { status: 'reversed', amount_minor: '600', reversed_minor: '600' },
+        { status: 'reversed', amount_minor: '900', reversed_minor: '900' },
       ]);
+      const refundTransferReversals = await setupPool.query(
+        `SELECT reversal.status, reversal.amount_minor,
+                payout.amount_minor AS payout_amount_minor,
+                reversal.attempt_count, reversal.needs_review
+           FROM refund_transfer_reversals AS reversal
+           JOIN payouts AS payout ON payout.id = reversal.payout_id
+          WHERE reversal.refund_id = $1
+          ORDER BY payout.transferred_at DESC, payout.id DESC`,
+        [refundPayload.refund.id],
+      );
+      assert.deepEqual(refundTransferReversals.rows.map(
+        ({ attempt_count: _attemptCount, ...row }) => row,
+      ), [
+        {
+          status: 'succeeded',
+          amount_minor: '900',
+          payout_amount_minor: '900',
+          needs_review: false,
+        },
+        {
+          status: 'succeeded',
+          amount_minor: '600',
+          payout_amount_minor: '600',
+          needs_review: false,
+        },
+      ]);
+      assert.equal(
+        refundTransferReversals.rows.find(
+          (row) => row.amount_minor === uncertainTransferReversal.amount_minor,
+        ).attempt_count,
+        2,
+      );
+      assert.equal(
+        refundTransferReversals.rows.find(
+          (row) => row.amount_minor === succeededTransferReversal.amount_minor,
+        ).attempt_count,
+        1,
+      );
+      const refundTransferReversalRollback = await fs.readFile(
+        path.resolve(
+          currentDir,
+          '../sql/migrations/075_refund_transfer_reversal_recovery.down.sql',
+        ),
+        'utf8',
+      );
+      const refundTransferReversalRollbackClient = await setupPool.connect();
+      try {
+        await refundTransferReversalRollbackClient.query('BEGIN');
+        await assert.rejects(
+          refundTransferReversalRollbackClient.query(refundTransferReversalRollback),
+          (error) => error.code === 'P0001'
+            && error.message
+              === 'Refund transfer reversal rollback blocked: durable provider recovery data exists',
+        );
+        await refundTransferReversalRollbackClient.query('ROLLBACK');
+      } finally {
+        refundTransferReversalRollbackClient.release();
+      }
 
       const ledgerBalance = await setupPool.query(
         `SELECT transaction_id, sum(debit_minor)::bigint AS debit, sum(credit_minor)::bigint AS credit
@@ -7256,6 +7509,9 @@ if (!databaseUrl) {
       assert.ok(evidenceRetentionInventory.categories
         .find((entry) => entry.category === 'transactions')
         .datasets.some((entry) => entry.dataset === 'dispute_transfer_recoveries'));
+      assert.ok(evidenceRetentionInventory.categories
+        .find((entry) => entry.category === 'transactions')
+        .datasets.some((entry) => entry.dataset === 'refund_transfer_reversals'));
 
       const supportTemplateCatalog = await fetch(
         `${baseUrl}/v1/admin/support/message-templates`,
@@ -9064,6 +9320,11 @@ if (!databaseUrl) {
         entry.status === 'succeeded'
           && entry.amount_minor === '1500'
           && entry.recovered_minor === '1500'
+          && entry.needs_review === false
+      )));
+      assert.ok(accountExport.data.financialActivity.refundTransferReversals.some((entry) => (
+        entry.status === 'succeeded'
+          && ['600', '900'].includes(entry.amount_minor)
           && entry.needs_review === false
       )));
       assert.ok(accountExport.data.auditEvents.some((entry) => (
