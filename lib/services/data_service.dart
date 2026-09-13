@@ -250,6 +250,60 @@ class AccountListingMutationResult {
   });
 }
 
+enum AccountRentalRequestMutationFailureKind {
+  rejected,
+  localUnavailable,
+  outcomeUnknown,
+  principalChanged,
+}
+
+class AccountRentalRequestMutationFailure implements Exception {
+  final AccountRentalRequestMutationFailureKind kind;
+  final String? code;
+  final bool remoteAccepted;
+
+  const AccountRentalRequestMutationFailure._(
+    this.kind, {
+    this.code,
+    this.remoteAccepted = false,
+  });
+
+  const AccountRentalRequestMutationFailure.rejected(String code)
+      : this._(AccountRentalRequestMutationFailureKind.rejected, code: code);
+
+  const AccountRentalRequestMutationFailure.localUnavailable(
+    String? code, {
+    bool remoteAccepted = false,
+  }) : this._(
+          AccountRentalRequestMutationFailureKind.localUnavailable,
+          code: code,
+          remoteAccepted: remoteAccepted,
+        );
+
+  const AccountRentalRequestMutationFailure.outcomeUnknown([String? code])
+      : this._(
+          AccountRentalRequestMutationFailureKind.outcomeUnknown,
+          code: code,
+        );
+
+  const AccountRentalRequestMutationFailure.principalChanged({
+    bool remoteAccepted = false,
+  }) : this._(
+          AccountRentalRequestMutationFailureKind.principalChanged,
+          remoteAccepted: remoteAccepted,
+        );
+}
+
+class AccountRentalRequestMutationResult {
+  final RentalRequest request;
+  final bool remoteAccepted;
+
+  const AccountRentalRequestMutationResult({
+    required this.request,
+    required this.remoteAccepted,
+  });
+}
+
 class _OwnedListingCreateEvent {
   final AuthSessionOwner owner;
   final Item item;
@@ -263,6 +317,10 @@ class _OwnedListingCreateEvent {
 }
 
 class _AccountListingMutationAttempt {
+  bool remoteAccepted = false;
+}
+
+class _AccountRentalRequestMutationAttempt {
   bool remoteAccepted = false;
 }
 
@@ -435,12 +493,27 @@ class DataService {
   static bool _failNextAccountProfilePersistenceForTesting = false;
   static bool _clearSessionDuringNextAccountProfilePersistenceForTesting =
       false;
+  static bool _failNextRentalRequestPersistenceForTesting = false;
+  static bool
+      _simulatePrincipalChangeDuringNextRentalRequestPersistenceForTesting =
+      false;
 
   @visibleForTesting
   static int get maxLocalReviewsForTesting => _maxLocalReviews;
 
   @visibleForTesting
   static int get maxLocalUsersForTesting => _maxLocalUsers;
+
+  @visibleForTesting
+  static void failNextRentalRequestPersistenceForTesting() {
+    _failNextRentalRequestPersistenceForTesting = true;
+  }
+
+  @visibleForTesting
+  static void
+      simulatePrincipalChangeDuringNextRentalRequestPersistenceForTesting() {
+    _simulatePrincipalChangeDuringNextRentalRequestPersistenceForTesting = true;
+  }
 
   static Future<T> _runWishlistForCurrentPrincipal<T>(
     Future<T> Function(LocalPrincipalIdentity principal) operation, {
@@ -9471,6 +9544,69 @@ class DataService {
     }
   }
 
+  static Future<List<RentalRequest>> _getAllRentalRequestsForOwner({
+    required AuthSessionOwner owner,
+    required Future<void> Function() verifyAuthorization,
+  }) async {
+    await verifyAuthorization();
+    final prefs = await SharedPreferences.getInstance();
+    String? raw;
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final remote = await BackendRepository.getRentalRequestsForOwner(owner);
+      await verifyAuthorization();
+      raw = jsonEncode(remote);
+      _decodeRentalRequestsStrict(raw);
+      await _persistRentalRequestsDocumentForOwner(
+        prefs: prefs,
+        encoded: raw,
+        verifyAuthorization: verifyAuthorization,
+      );
+    }
+    raw ??= prefs.getString(_rentalRequestsKey);
+    if (raw == null) return const <RentalRequest>[];
+    if (raw.trim().isEmpty) {
+      throw const FormatException('Ungültiger lokaler Buchungsverlauf.');
+    }
+    final parsed = _decodeRentalRequestsStrict(raw);
+    await verifyAuthorization();
+    return parsed;
+  }
+
+  static Future<void> _persistRentalRequestsDocumentForOwner({
+    required SharedPreferences prefs,
+    required String encoded,
+    required Future<void> Function() verifyAuthorization,
+  }) async {
+    _decodeRentalRequestsStrict(encoded);
+    final previous = prefs.getString(_rentalRequestsKey);
+    try {
+      await verifyAuthorization();
+      if (_failNextRentalRequestPersistenceForTesting) {
+        _failNextRentalRequestPersistenceForTesting = false;
+        throw StateError('Synthetic rental request persistence failure.');
+      }
+      await _writePreferenceString(prefs, _rentalRequestsKey, encoded);
+      if (_simulatePrincipalChangeDuringNextRentalRequestPersistenceForTesting) {
+        _simulatePrincipalChangeDuringNextRentalRequestPersistenceForTesting =
+            false;
+        throw const AccountRentalRequestMutationFailure.principalChanged();
+      }
+      await verifyAuthorization();
+    } catch (_) {
+      if (prefs.getString(_rentalRequestsKey) == encoded) {
+        final restored = previous == null
+            ? await prefs.remove(_rentalRequestsKey)
+            : await prefs.setString(_rentalRequestsKey, previous);
+        if (!restored || prefs.getString(_rentalRequestsKey) != previous) {
+          throw StateError(
+            'Lokale Buchungen konnten nicht gespeichert oder wiederhergestellt werden.',
+          );
+        }
+      }
+      rethrow;
+    }
+  }
+
   static List<RentalRequest> _decodeRentalRequestsStrict(String raw) {
     final decoded = jsonDecode(raw);
     if (decoded is! List || decoded.length > _maxLocalRentalRequests) {
@@ -9985,6 +10121,198 @@ class DataService {
         legalDeclarations: legalDeclarations,
       );
     });
+  }
+
+  static Future<AccountRentalRequestMutationResult>
+      updateRentalRequestStatusForOwner({
+    required AuthSessionOwner owner,
+    required String expectedOwnerId,
+    required String requestId,
+    required String status,
+    List<Map<String, dynamic>>? legalDeclarations,
+  }) async {
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const AccountRentalRequestMutationFailure.principalChanged();
+    }
+    User captured;
+    try {
+      captured = await _requireCurrentOperationalUser(
+        requestedUserId: expectedOwnerId,
+      );
+    } catch (_) {
+      throw const AccountRentalRequestMutationFailure.principalChanged();
+    }
+    if (!_sessionMatchesOperationalUser(
+          AuthSession(
+            userId: owner.userId,
+            sessionId: owner.sessionId,
+            email: owner.email,
+            createdAt: owner.createdAt,
+          ),
+          userId: captured.id,
+          email: captured.email,
+        ) ||
+        !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const AccountRentalRequestMutationFailure.principalChanged();
+    }
+
+    return _rentalRequestMutationQueue.run(() async {
+      final attempt = _AccountRentalRequestMutationAttempt();
+
+      Future<void> verifyOwner() async {
+        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          throw AccountRentalRequestMutationFailure.principalChanged(
+            remoteAccepted: attempt.remoteAccepted,
+          );
+        }
+        try {
+          await _assertCurrentOperationalUserId(
+            captured.id,
+            expectedEmail: captured.email,
+          );
+        } catch (_) {
+          throw AccountRentalRequestMutationFailure.principalChanged(
+            remoteAccepted: attempt.remoteAccepted,
+          );
+        }
+      }
+
+      try {
+        await verifyOwner();
+        final all = await _getAllRentalRequestsForOwner(
+          owner: owner,
+          verifyAuthorization: verifyOwner,
+        );
+        final index = all.indexWhere((entry) => entry.id == requestId);
+        if (index < 0) {
+          throw const AccountRentalRequestMutationFailure.rejected(
+            'booking_not_found',
+          );
+        }
+        final current = all[index];
+        if (current.ownerId.trim() != captured.id.trim()) {
+          throw const AccountRentalRequestMutationFailure.principalChanged();
+        }
+
+        late final RentalRequest updated;
+        if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+          final remote = await BackendRepository.transitionBookingForOwner(
+            owner: owner,
+            bookingId: requestId,
+            status: status,
+            idempotencyKey: 'transition_${requestId}_${current.status}_$status',
+            legalDeclarations: legalDeclarations,
+          );
+          attempt.remoteAccepted = true;
+          await verifyOwner();
+          updated = RentalRequest.fromJson(remote);
+        } else {
+          updated = current.copyWith(
+            status: status,
+            legalDeclarations: legalDeclarations == null
+                ? current.legalDeclarations
+                : [...current.legalDeclarations, ...legalDeclarations],
+            acceptedAt: status == 'accepted' && current.acceptedAt == null
+                ? DateTime.now()
+                : current.acceptedAt,
+          );
+        }
+        if (updated.id != current.id ||
+            updated.ownerId.trim() != captured.id.trim()) {
+          throw AccountRentalRequestMutationFailure.localUnavailable(
+            'invalid_request_decision_response',
+            remoteAccepted: attempt.remoteAccepted,
+          );
+        }
+        all[index] = updated;
+        await _persistRentalRequestsDocumentForOwner(
+          prefs: await SharedPreferences.getInstance(),
+          encoded: jsonEncode(
+            all.map((entry) => entry.toJson()).toList(growable: false),
+          ),
+          verifyAuthorization: verifyOwner,
+        );
+        await verifyOwner();
+        SharedPersistenceSync.notify(SharedPersistenceSync.rentalRequestsKey);
+
+        if (status == 'accepted') {
+          try {
+            await _createMessageThreadForRequest(
+              updated,
+              expectedSessionOwner: owner,
+              expectedCurrentUserId: captured.id,
+            );
+          } catch (error) {
+            debugPrint(
+              '[DataService] owner-bound booking thread refresh failed: $error',
+            );
+          }
+          await verifyOwner();
+        }
+        return AccountRentalRequestMutationResult(
+          request: updated,
+          remoteAccepted: attempt.remoteAccepted,
+        );
+      } on AccountRentalRequestMutationFailure {
+        rethrow;
+      } on BackendException catch (error) {
+        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          throw AccountRentalRequestMutationFailure.principalChanged(
+            remoteAccepted: attempt.remoteAccepted,
+          );
+        }
+        throw _accountRentalRequestBackendFailure(error);
+      } catch (_) {
+        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          throw AccountRentalRequestMutationFailure.principalChanged(
+            remoteAccepted: attempt.remoteAccepted,
+          );
+        }
+        throw AccountRentalRequestMutationFailure.localUnavailable(
+          'local_request_decision_persistence_failed',
+          remoteAccepted: attempt.remoteAccepted,
+        );
+      }
+    });
+  }
+
+  static AccountRentalRequestMutationFailure
+      _accountRentalRequestBackendFailure(BackendException error) {
+    const rejected = <int, Set<String>>{
+      400: <String>{
+        'invalid_booking_transition',
+        'invalid_booking_status',
+        'invalid_cancellation_type',
+        'cancellation_type_without_cancellation',
+        'private_pilot_owner_acceptance_required',
+      },
+      401: <String>{
+        'authentication_required',
+        'invalid_or_expired_session',
+        'account_not_active',
+      },
+      403: <String>{
+        'booking_forbidden',
+        'renter_no_show_owner_required',
+        'action_blocked_by_moderation',
+      },
+      404: <String>{'booking_not_found'},
+      409: <String>{
+        'booking_revision_conflict',
+        'booking_request_expired',
+        'invalid_status_transition',
+        'pilot_simulation_transition_forbidden',
+        'pilot_simulation_no_show_not_applicable',
+        'fresh_booking_quote_required',
+        'booking_quote_not_found',
+        'renter_no_show_before_start',
+      },
+      429: <String>{'rate_limit_exceeded'},
+    };
+    if (rejected[error.statusCode]?.contains(error.code) == true) {
+      return AccountRentalRequestMutationFailure.rejected(error.code);
+    }
+    return AccountRentalRequestMutationFailure.outcomeUnknown(error.code);
   }
 
   static Future<void> _updateRentalRequestStatusUnlocked({
@@ -13329,17 +13657,42 @@ class DataService {
 
   /// Erstellt automatisch einen Message Thread wenn eine Anfrage angenommen wird
   static Future<void> _createMessageThreadForRequest(
-    RentalRequest request,
-  ) async {
+    RentalRequest request, {
+    AuthSessionOwner? expectedSessionOwner,
+    String? expectedCurrentUserId,
+  }) async {
     try {
-      final participant = await _requireCurrentRequestParticipant(request.id);
-      final expectedCurrentUserId = participant.$1.id;
-      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-        final remote = await BackendRepository.createOrGetBookingThread(
-          request.id,
+      late final String currentUserId;
+      if (expectedSessionOwner != null) {
+        currentUserId = (expectedCurrentUserId ?? '').trim();
+        if (currentUserId.isEmpty ||
+            !_isRequestParticipant(request, currentUserId)) {
+          throw StateError('Die lokale Buchung gehört zu einem anderen Konto.');
+        }
+        await _assertSessionOwnerOperationalUser(
+          expectedSessionOwner,
+          currentUserId,
         );
+      } else {
+        final participant = await _requireCurrentRequestParticipant(request.id);
+        currentUserId = participant.$1.id;
+      }
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final remote = expectedSessionOwner == null
+            ? await BackendRepository.createOrGetBookingThread(request.id)
+            : await BackendRepository.createOrGetBookingThreadForOwner(
+                owner: expectedSessionOwner,
+                bookingId: request.id,
+              );
         await _operationalMutationQueue.run(() async {
-          await _assertCurrentOperationalUserId(expectedCurrentUserId);
+          if (expectedSessionOwner != null) {
+            await _assertSessionOwnerOperationalUser(
+              expectedSessionOwner,
+              currentUserId,
+            );
+          } else {
+            await _assertCurrentOperationalUserId(currentUserId);
+          }
           final prefs = await SharedPreferences.getInstance();
           final currentRaw = prefs.getString(_messageThreadsKey);
           final current = currentRaw == null
@@ -13354,6 +13707,12 @@ class DataService {
                     (entry['requestId']?.toString() == request.id)),
           );
           current.add(remote);
+          if (expectedSessionOwner != null) {
+            await _assertSessionOwnerOperationalUser(
+              expectedSessionOwner,
+              currentUserId,
+            );
+          }
           await _persistMessageThreads(prefs, current);
         });
         return;
@@ -13367,7 +13726,14 @@ class DataService {
 
       var threadId = '';
       final created = await _operationalMutationQueue.run(() async {
-        await _assertCurrentOperationalUserId(expectedCurrentUserId);
+        if (expectedSessionOwner != null) {
+          await _assertSessionOwnerOperationalUser(
+            expectedSessionOwner,
+            currentUserId,
+          );
+        } else {
+          await _assertCurrentOperationalUserId(currentUserId);
+        }
         final prefs = await SharedPreferences.getInstance();
         final raw = await _readMessageThreads(prefs);
         final threads =

@@ -8,9 +8,12 @@ import 'package:lendify/models/user.dart' as model;
 import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/local_principal_scope.dart';
+import 'package:lendify/services/rental_request_decision_service.dart';
+import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/widgets/app_image.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/private_pilot_owner_acceptance_dialog.dart';
+import 'package:lendify/widgets/rental_request_decision_interaction.dart';
 import 'package:lendify/screens/ongoing_owner_detail_screen.dart';
 import 'package:lendify/widgets/box_chat_icon.dart';
 import 'package:lendify/widgets/review_prompt_sheet.dart';
@@ -39,6 +42,9 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
   int _loadRevision = 0;
   bool _isLoading = true;
   bool _loadFailed = false;
+  final _decisionService = const RentalRequestDecisionService();
+  final _decisionActions = RentalRequestDecisionInteractionController();
+  StreamSubscription<String>? _persistenceSubscription;
 
   @override
   void initState() {
@@ -51,6 +57,12 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
       if (mounted) setState(() {}); // refresh app bar title on tab change
     });
     _load();
+    _persistenceSubscription = SharedPersistenceSync.changes.listen((key) {
+      if (key != SharedPersistenceSync.accountSecurityStateKey) return;
+      _loadRevision += 1;
+      _decisionActions.invalidate();
+      if (mounted) unawaited(_load());
+    });
     _ticker = Timer.periodic(const Duration(minutes: 1), (_) async {
       if (!mounted) return;
       await _maybeShowReviewReminder();
@@ -64,6 +76,8 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
   void dispose() {
     _ticker?.cancel();
     _acceptanceDeadlineTimer?.cancel();
+    _persistenceSubscription?.cancel();
+    _decisionActions.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -157,6 +171,7 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
   Future<void> _load() async {
     final revision = ++_loadRevision;
     LocalPrincipalActionOwner? actionOwner;
+    RentalRequestDecisionContext? decisionContext;
     var coreCommitted = false;
     if (mounted) {
       setState(() {
@@ -169,7 +184,8 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
     }
     try {
       actionOwner = await LocalPrincipalActionOwner.capture();
-      final owner = await DataService.getCurrentUser();
+      decisionContext = await _decisionService.loadCurrentContext();
+      final owner = decisionContext?.user;
       await actionOwner.assertCurrent();
       if (!mounted || revision != _loadRevision) return;
       if (owner == null) {
@@ -193,6 +209,10 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
         setState(() => _isLoading = false);
         return;
       }
+      if (!await _decisionService.isContextCurrent(decisionContext!)) {
+        throw StateError('Das angemeldete Konto hat sich geändert.');
+      }
+      _decisionActions.replaceContext(decisionContext);
       _ownerId = owner.id;
       final requests = await DataService.getRentalRequestsForOwner(owner.id);
       await actionOwner.assertCurrent();
@@ -341,6 +361,7 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
         _entries = const [];
         _unreadCounts.clear();
       });
+      _decisionActions.invalidate();
       _scheduleAcceptanceDeadlineRefresh();
     }
   }
@@ -1081,6 +1102,209 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
     return deadline != null && deadline.isAfter(DateTime.now());
   }
 
+  Future<void> _acceptRequest(_OwnerEntry entry) async {
+    final owner = _decisionActions.capture();
+    if (owner == null) return;
+    try {
+      final declarations =
+          await _decisionActions.showOwnedDialog<List<Map<String, dynamic>>>(
+        context: context,
+        owner: owner,
+        barrierDismissible: false,
+        builder: (_, dismiss) => buildPrivatePilotOwnerAcceptanceDialog(
+          request: entry.r,
+          dismiss: dismiss,
+        ),
+      );
+      if (declarations == null ||
+          !await _decisionActions.isCurrent(_decisionService, owner)) {
+        return;
+      }
+      await _decisionService.execute(
+        context: owner.context,
+        request: entry.r,
+        status: 'accepted',
+        legalDeclarations: declarations,
+      );
+      if (!await _decisionActions.isCurrent(_decisionService, owner)) return;
+      if (!mounted) return;
+      final open = await _decisionActions.showOwnedPopup<bool>(
+        context: context,
+        owner: owner,
+        icon: Icons.check_circle_outline,
+        title: entry.r.simulationOnly
+            ? 'Du hast den Test angenommen.'
+            : 'Du hast die Anfrage akzeptiert.',
+        message: entry.r.simulationOnly
+            ? 'Die unverbindliche Pilot-Simulation ist jetzt für beide Testkonten sichtbar. Es bestehen kein Vertrag, keine Reservierung und keine Zahlung.'
+            : 'Du findest diese Anmietung jetzt unter „Kommende Vermietungen“ und kannst den Chat öffnen.',
+        barrierDismissible: false,
+        showCloseIcon: false,
+        autoCloseAfter: const Duration(seconds: 10),
+        actions: (dismiss) => [
+          FilledButton(
+            onPressed: () => dismiss(true),
+            child: const Text('Zur kommenden Vermietung'),
+          ),
+        ],
+      );
+      if (open == true &&
+          await _decisionActions.isCurrent(_decisionService, owner) &&
+          mounted) {
+        await _decisionActions.pushOwnedRoute<void>(
+          context: context,
+          owner: owner,
+          route: MaterialPageRoute<void>(
+            builder: (_) => OngoingOwnerDetailScreen(
+              requestId: entry.r.id,
+              titleOverride: 'Kommende Vermietung',
+            ),
+          ),
+        );
+      }
+      if (await _decisionActions.isCurrent(_decisionService, owner) &&
+          mounted) {
+        await _load();
+      }
+    } on RentalRequestDecisionFailure catch (failure) {
+      await _showDecisionFailure(owner, failure, accepting: true);
+    } catch (_) {
+      await _showUnexpectedDecisionFailure(owner);
+    }
+  }
+
+  Future<void> _declineRequest(_OwnerEntry entry) async {
+    final owner = _decisionActions.capture();
+    if (owner == null) return;
+    final confirmed = await _decisionActions.showOwnedPopup<bool>(
+      context: context,
+      owner: owner,
+      icon: Icons.block,
+      title: 'Anfrage ablehnen?',
+      message: 'Bist du sicher? Der Mieter wird informiert.',
+      actions: (dismiss) => [
+        OutlinedButton(
+          onPressed: () => dismiss(false),
+          child: const Text('Abbrechen'),
+        ),
+        FilledButton(
+          onPressed: () => dismiss(true),
+          child: const Text('Ablehnen'),
+        ),
+      ],
+    );
+    if (confirmed != true ||
+        !await _decisionActions.isCurrent(_decisionService, owner)) {
+      return;
+    }
+    try {
+      await _decisionService.execute(
+        context: owner.context,
+        request: entry.r,
+        status: 'declined',
+      );
+      if (!await _decisionActions.isCurrent(_decisionService, owner)) return;
+      if (!mounted) return;
+      final completed = await _decisionActions.showOwnedPopup<bool>(
+        context: context,
+        owner: owner,
+        icon: Icons.cancel_outlined,
+        title: 'Du hast die Anfrage abgelehnt.',
+        message: 'Du findest sie jetzt unter „Abgeschlossene Vermietungen“.',
+        showCloseIcon: false,
+        autoCloseAfter: const Duration(seconds: 15),
+        actions: (dismiss) => [
+          TextButton(
+            onPressed: () => dismiss(false),
+            child: const Text('OK'),
+          ),
+          FilledButton(
+            onPressed: () => dismiss(true),
+            child: const Text('Zu „Abgeschlossene Vermietungen“'),
+          ),
+        ],
+      );
+      if (!await _decisionActions.isCurrent(_decisionService, owner)) return;
+      if (!mounted) return;
+      if (completed == true) _tabController.animateTo(3);
+      await _load();
+    } on RentalRequestDecisionFailure catch (failure) {
+      await _showDecisionFailure(owner, failure, accepting: false);
+    } catch (_) {
+      await _showUnexpectedDecisionFailure(owner);
+    }
+  }
+
+  Future<void> _showDecisionFailure(
+    RentalRequestDecisionActionOwner owner,
+    RentalRequestDecisionFailure failure, {
+    required bool accepting,
+  }) async {
+    if (failure.kind == RentalRequestDecisionFailureKind.principalChanged ||
+        !await _decisionActions.isCurrent(_decisionService, owner)) {
+      return;
+    }
+    if (!mounted) return;
+    final verb = accepting ? 'Annahme' : 'Ablehnung';
+    final (title, message) = switch (failure.kind) {
+      RentalRequestDecisionFailureKind.rejected => (
+          '$verb abgelehnt',
+          failure.code == 'booking_request_expired'
+              ? 'Die Annahmefrist ist abgelaufen. Lade die Anfrage neu.'
+              : 'Der Server hat die Entscheidung eindeutig abgelehnt. Lade die Anfrage neu und prüfe ihren aktuellen Status.',
+        ),
+      RentalRequestDecisionFailureKind.localUnavailable
+          when failure.remoteAccepted =>
+        (
+          'Serverentscheidung bestätigt',
+          'Der Server hat die Entscheidung bestätigt, aber die lokale Ansicht konnte nicht sicher aktualisiert werden. Lade neu und sende sie nicht erneut.',
+        ),
+      RentalRequestDecisionFailureKind.localUnavailable => (
+          '$verb lokal nicht bestätigt',
+          'Die lokale Verarbeitung konnte nicht sicher abgeschlossen werden. Lade die Anfrage neu.',
+        ),
+      RentalRequestDecisionFailureKind.outcomeUnknown => (
+          'Entscheidungsstatus unklar',
+          'Die Anfrage könnte serverseitig verarbeitet worden sein. Lade den aktuellen Status neu und sende die Entscheidung nicht erneut.',
+        ),
+      RentalRequestDecisionFailureKind.principalChanged => ('', ''),
+    };
+    await _decisionActions.showOwnedPopup<void>(
+      context: context,
+      owner: owner,
+      icon: Icons.error_outline,
+      title: title,
+      message: message,
+      actions: (dismiss) => [
+        FilledButton(
+          onPressed: () => dismiss(null),
+          child: const Text('OK'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showUnexpectedDecisionFailure(
+    RentalRequestDecisionActionOwner owner,
+  ) async {
+    if (!await _decisionActions.isCurrent(_decisionService, owner)) return;
+    if (!mounted) return;
+    await _decisionActions.showOwnedPopup<void>(
+      context: context,
+      owner: owner,
+      icon: Icons.error_outline,
+      title: 'Entscheidung nicht bestätigt',
+      message:
+          'Die Entscheidung konnte nicht sicher bestätigt werden. Lade die Anfrage neu, bevor du sie erneut sendest.',
+      actions: (dismiss) => [
+        FilledButton(
+          onPressed: () => dismiss(null),
+          child: const Text('OK'),
+        ),
+      ],
+    );
+  }
+
   Widget? _buildInlineAction(String category, _OwnerEntry e) {
     switch (category) {
       case 'requests':
@@ -1090,145 +1314,14 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
             icon: Icons.check_circle_outline,
             label: 'Akzeptieren',
             color: const Color(0xFF22C55E),
-            onPressed: () async {
-              final declarations = await showPrivatePilotOwnerAcceptanceDialog(
-                context,
-                request: e.r,
-              );
-              if (declarations == null) return;
-              if (!mounted) return;
-              final accepted = await commitPrivatePilotOwnerAcceptance(
-                context,
-                request: e.r,
-                legalDeclarations: declarations,
-              );
-              if (!accepted) return;
-              if (!mounted) return;
-              await _load();
-              if (!mounted) return;
-              // Success popup (keeps overlay on top for 10 seconds, does not auto-navigate underlying page)
-              // ignore: unawaited_futures
-              AppPopup.show(
-                context,
-                icon: Icons.check_circle_outline,
-                title: e.r.simulationOnly
-                    ? 'Du hast den Test angenommen.'
-                    : 'Du hast die Anfrage akzeptiert.',
-                message: e.r.simulationOnly
-                    ? 'Die unverbindliche Pilot-Simulation ist jetzt für beide Testkonten sichtbar. Du kannst mit ${e.renter.displayName} den Chat testen. Es bestehen kein Vertrag, keine Reservierung und keine Zahlung.'
-                    : 'Du findest diese Anmietung jetzt unter „Kommende Vermietungen“.\n\nDu kannst jetzt mit ${e.renter.displayName} unter Nachrichten einen Chat starten.',
-                barrierDismissible: false,
-                showCloseIcon: false,
-                plainCloseIcon: true,
-                autoCloseAfter: const Duration(seconds: 10),
-                actions: [
-                  FilledButton(
-                    onPressed: () {
-                      // Close the popup then open the specific upcoming rental detail
-                      Navigator.of(context, rootNavigator: true).maybePop();
-                      Future.delayed(const Duration(milliseconds: 120),
-                          () async {
-                        if (!mounted) return;
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => OngoingOwnerDetailScreen(
-                              requestId: e.r.id,
-                              titleOverride: 'Kommende Vermietung',
-                            ),
-                          ),
-                        );
-                        if (!mounted) return;
-                        await _load();
-                      });
-                    },
-                    child: const Text('Zur kommenden Vermietung'),
-                  ),
-                ],
-              );
-            },
+            onPressed: () => _acceptRequest(e),
           ),
           const SizedBox(width: 6),
           _TinyTextButton(
             icon: Icons.cancel_outlined,
             label: 'Ablehnen',
             color: Theme.of(context).colorScheme.error,
-            onPressed: () async {
-              // Confirmation popup with app design before declining
-              await AppPopup.show(
-                context,
-                icon: Icons.block,
-                title: 'Anfrage ablehnen?',
-                message: 'Bist du sicher? Der Mieter wird informiert.',
-                plainCloseIcon: true,
-                leadingWidget: Builder(builder: (context) {
-                  final danger = Theme.of(context).colorScheme.error;
-                  return Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.transparent,
-                      border: Border.all(color: danger, width: 2),
-                    ),
-                    child: Icon(Icons.close, color: danger),
-                  );
-                }),
-                actions: [
-                  OutlinedButton(
-                    onPressed: () =>
-                        Navigator.of(context, rootNavigator: true).maybePop(),
-                    child: const Text('Abbrechen'),
-                  ),
-                  FilledButton(
-                    onPressed: () async {
-                      Navigator.of(context, rootNavigator: true).maybePop();
-                      await DataService.updateRentalRequestStatus(
-                          requestId: e.r.id, status: 'declined');
-                      if (!mounted) return;
-                      await _load();
-                      if (!mounted) return;
-                      // Auto-close after 3 seconds
-                      Future.delayed(const Duration(seconds: 3), () {
-                        if (mounted) {
-                          Navigator.of(context, rootNavigator: true).maybePop();
-                        }
-                      });
-                      // Result popup
-                      // ignore: unawaited_futures
-                      AppPopup.show(
-                        context,
-                        icon: Icons.cancel_outlined,
-                        title: 'Du hast die Anfrage abgelehnt.',
-                        message:
-                            'Du findest sie jetzt unter „Abgeschlossene Vermietungen“.',
-                        barrierDismissible: true,
-                        showCloseIcon: false,
-                        plainCloseIcon: true,
-                        autoCloseAfter: const Duration(seconds: 15),
-                        actions: [
-                          TextButton(
-                            onPressed: () =>
-                                Navigator.of(context, rootNavigator: true)
-                                    .maybePop(),
-                            child: const Text('OK'),
-                          ),
-                          FilledButton(
-                            onPressed: () {
-                              Navigator.of(context, rootNavigator: true)
-                                  .maybePop();
-                              _tabController.animateTo(3);
-                            },
-                            child:
-                                const Text('Zu „Abgeschlossene Vermietungen“'),
-                          ),
-                        ],
-                      );
-                    },
-                    child: const Text('Ablehnen'),
-                  ),
-                ],
-              );
-            },
+            onPressed: () => _declineRequest(e),
           ),
         ]);
       case 'completed':

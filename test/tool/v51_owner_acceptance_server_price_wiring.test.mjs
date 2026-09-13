@@ -90,16 +90,17 @@ test('owner sees exact rent, renter fee, renter total and intended payout', () =
 test('acceptance dialog and backend transition receive the same guarded quote flow', () => {
   assert.match(
     requestDetail,
-    /showPrivatePilotOwnerAcceptanceDialog\([\s\S]*?quote: displayedQuote,[\s\S]*?isBindingServerQuote: serverQuote != null/u,
+    /_acceptRequest\(\s+req,\s+displayedQuote,\s+serverQuote != null/u,
   );
   assert.match(
     requestDetail,
-    /if \(declarations == null\) return;[\s\S]*?commitPrivatePilotOwnerAcceptance\([\s\S]*?legalDeclarations: declarations/u,
+    /buildPrivatePilotOwnerAcceptanceDialog\([\s\S]*?quote: quote,[\s\S]*?isBindingServerQuote: isBindingServerQuote[\s\S]*?legalDeclarations: declarations/u,
   );
   assert.match(
-    dialog,
-    /commitPrivatePilotOwnerAcceptance\([\s\S]*?updateRentalRequestStatus\([\s\S]*?status: 'accepted'/u,
+    requestDetail,
+    /_decisionService\.execute\([\s\S]*?status: 'accepted',[\s\S]*?legalDeclarations: declarations/u,
   );
+  assert.match(dialog, /Widget buildPrivatePilotOwnerAcceptanceDialog/u);
   assert.match(dialog, /PrivatePilotConfig\.ownerAcceptanceDeclaration/u);
   assert.match(
     dialog,
@@ -185,9 +186,10 @@ test('every alternative owner-acceptance surface reaches the guarded dialog', ()
     '../../lib/screens/message_thread_screen.dart',
   ]) {
     const caller = readFileSync(new URL(relative, import.meta.url), 'utf8');
-    assert.match(caller, /showPrivatePilotOwnerAcceptanceDialog\(/u);
-    assert.match(caller, /commitPrivatePilotOwnerAcceptance\(/u);
-    assert.match(caller, /if \(!accepted\) return;/u);
+    assert.match(caller, /buildPrivatePilotOwnerAcceptanceDialog\(/u);
+    assert.match(caller, /showOwnedDialog<List<Map<String, dynamic>>>\(/u);
+    assert.match(caller, /(?:_decisionService|_requestDecisionService)\.execute\(/u);
+    assert.match(caller, /legalDeclarations: declarations/u);
   }
 });
 
@@ -268,9 +270,12 @@ test('the open owner detail disables acceptance exactly at the server deadline',
   );
   assert.match(
     ownerDetail,
-    /onPressed: acceptanceDeadlineValid[\s\S]*?showPrivatePilotOwnerAcceptanceDialog/u,
+    /onPressed: acceptanceDeadlineValid[\s\S]*?_acceptPendingRequest\(req\)/u,
   );
   assert.match(ownerDetail, /Annahmefrist abgelaufen/u);
   assert.match(ownerDetail, /Die verbindliche Annahmefrist fehlt/u);
-  assert.match(ownerDetail, /commitPrivatePilotOwnerAcceptance/u);
+  assert.match(
+    ownerDetail,
+    /_acceptPendingRequest\(RentalRequest request\)[\s\S]*?buildPrivatePilotOwnerAcceptanceDialog\([\s\S]*?_decisionService\.execute\([\s\S]*?status: 'accepted'/u,
+  );
 });

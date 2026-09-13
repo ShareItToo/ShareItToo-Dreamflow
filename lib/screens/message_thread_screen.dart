@@ -21,6 +21,7 @@ import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/services/messages_settings_service.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
+import 'package:lendify/services/rental_request_decision_service.dart';
 import 'package:lendify/services/local_artifact_storage_service.dart';
 import 'package:lendify/services/safety_action_service.dart';
 import 'package:lendify/theme.dart';
@@ -206,6 +207,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
   late final SafetyActionService _safetyService;
   final SafetyActionInteractionController _safetyActions =
       SafetyActionInteractionController();
+  final _requestDecisionService = const RentalRequestDecisionService();
   final TextEditingController _controller = TextEditingController();
   final FocusNode _inputFocus = FocusNode();
   final ScrollController _listController = ScrollController();
@@ -1271,6 +1273,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     final t = _thread;
     final r = _request;
     if (me == null || t == null) return;
+    SafetyActionOwner? requestDecisionOwner;
 
     try {
       switch (st) {
@@ -1286,26 +1289,35 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
             );
           } else {
             if (!_viewerIsOwner()) return;
-            final declarations = await showPrivatePilotOwnerAcceptanceDialog(
-              context,
-              request: r,
+            requestDecisionOwner = _safetyActions.capture();
+            final actionOwner = requestDecisionOwner;
+            if (actionOwner == null) return;
+            final declarations = await _safetyActions
+                .showOwnedDialog<List<Map<String, dynamic>>>(
+              context: context,
+              owner: actionOwner,
+              barrierDismissible: false,
+              builder: (_, dismiss) => buildPrivatePilotOwnerAcceptanceDialog(
+                request: r,
+                dismiss: dismiss,
+              ),
             );
             if (declarations == null) return;
-            if (!mounted) return;
-            final accepted = await commitPrivatePilotOwnerAcceptance(
-              context,
+            if (!await _safetyActions.isCurrent(_safetyService, actionOwner)) {
+              return;
+            }
+            await _requestDecisionService.execute(
+              context: RentalRequestDecisionContext(
+                user: actionOwner.context.user,
+                owner: actionOwner.context.owner,
+              ),
               request: r,
+              status: 'accepted',
               legalDeclarations: declarations,
             );
-            if (!accepted) return;
-            await DataService.updateMessageThreadBookingStatus(
-              threadId: t.id,
-              status: 'accepted',
-            );
-            await DataService.addSystemMessageToThread(
-              threadId: t.id,
-              text: 'Anfrage angenommen',
-            );
+            if (!await _safetyActions.isCurrent(_safetyService, actionOwner)) {
+              return;
+            }
           }
           break;
         case _ChatState.confirmed:
@@ -1381,6 +1393,11 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
         case _ChatState.support:
           return;
       }
+    } on RentalRequestDecisionFailure catch (failure) {
+      final owner = requestDecisionOwner;
+      if (owner != null) {
+        await _showRequestDecisionFailure(owner, failure, accepting: true);
+      }
     } catch (e) {
       debugPrint('[MessageThreadScreen] _applyPrimaryAction failed: $e');
       if (mounted) {
@@ -1403,6 +1420,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     if (me == null || t == null) return;
     if (st != _ChatState.requestOpen) return;
     if (r != null && !_viewerIsOwner()) return;
+    SafetyActionOwner? requestDecisionOwner;
 
     try {
       if (r == null) {
@@ -1415,24 +1433,82 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
           text: 'Anfrage abgelehnt',
         );
       } else {
-        await DataService.updateRentalRequestStatus(
-          requestId: r.id,
+        requestDecisionOwner = _safetyActions.capture();
+        final actionOwner = requestDecisionOwner;
+        if (actionOwner == null) return;
+        await _requestDecisionService.execute(
+          context: RentalRequestDecisionContext(
+            user: actionOwner.context.user,
+            owner: actionOwner.context.owner,
+          ),
+          request: r,
           status: 'declined',
         );
-        await DataService.updateMessageThreadBookingStatus(
-          threadId: t.id,
-          status: 'declined',
-        );
-        await DataService.addSystemMessageToThread(
-          threadId: t.id,
-          text: 'Anfrage abgelehnt',
-        );
+        if (!await _safetyActions.isCurrent(_safetyService, actionOwner)) {
+          return;
+        }
+      }
+    } on RentalRequestDecisionFailure catch (failure) {
+      final owner = requestDecisionOwner;
+      if (owner != null) {
+        await _showRequestDecisionFailure(owner, failure, accepting: false);
       }
     } catch (e) {
       debugPrint('[MessageThreadScreen] _applySecondaryAction failed: $e');
     } finally {
       await _load();
     }
+  }
+
+  Future<void> _showRequestDecisionFailure(
+    SafetyActionOwner owner,
+    RentalRequestDecisionFailure failure, {
+    required bool accepting,
+  }) async {
+    if (failure.kind == RentalRequestDecisionFailureKind.principalChanged ||
+        !await _safetyActions.isCurrent(_safetyService, owner)) {
+      return;
+    }
+    if (!mounted) return;
+    final verb = accepting ? 'Annahme' : 'Ablehnung';
+    final (title, message) = switch (failure.kind) {
+      RentalRequestDecisionFailureKind.rejected => (
+          '$verb abgelehnt',
+          failure.code == 'booking_request_expired'
+              ? 'Die Annahmefrist ist abgelaufen. Lade die Anfrage neu.'
+              : 'Der Server hat die Entscheidung eindeutig abgelehnt. Lade die Anfrage neu und prüfe ihren aktuellen Status.',
+        ),
+      RentalRequestDecisionFailureKind.localUnavailable
+          when failure.remoteAccepted =>
+        (
+          'Serverentscheidung bestätigt',
+          'Der Server hat die Entscheidung bestätigt, aber der Chat konnte lokal nicht sicher aktualisiert werden. Lade neu und sende sie nicht erneut.',
+        ),
+      RentalRequestDecisionFailureKind.localUnavailable => (
+          '$verb lokal nicht bestätigt',
+          'Die lokale Verarbeitung konnte nicht sicher abgeschlossen werden. Lade den Chat neu.',
+        ),
+      RentalRequestDecisionFailureKind.outcomeUnknown => (
+          'Entscheidungsstatus unklar',
+          'Die Anfrage könnte serverseitig verarbeitet worden sein. Lade ihren aktuellen Status neu und sende die Entscheidung nicht erneut.',
+        ),
+      RentalRequestDecisionFailureKind.principalChanged => ('', ''),
+    };
+    await _safetyActions.showOwnedDialog<void>(
+      context: context,
+      owner: owner,
+      barrierDismissible: false,
+      builder: (_, dismiss) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () => dismiss(null),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   ({String primary, String? secondary}) _actionLabels(_ChatState st) {

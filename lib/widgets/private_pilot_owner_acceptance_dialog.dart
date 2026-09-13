@@ -8,6 +8,7 @@ import 'package:lendify/services/backend_http.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/private_pilot_pricing.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
+import 'package:lendify/services/rental_request_decision_service.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/private_pilot_risk_notice.dart';
 
@@ -17,6 +18,24 @@ Future<List<Map<String, dynamic>>?> showPrivatePilotOwnerAcceptanceDialog(
   PrivatePilotQuote? quote,
   bool? isBindingServerQuote,
 }) async {
+  return showDialog<List<Map<String, dynamic>>>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) => buildPrivatePilotOwnerAcceptanceDialog(
+      request: request,
+      quote: quote,
+      isBindingServerQuote: isBindingServerQuote,
+      dismiss: (result) => Navigator.of(dialogContext).pop(result),
+    ),
+  );
+}
+
+Widget buildPrivatePilotOwnerAcceptanceDialog({
+  required RentalRequest request,
+  PrivatePilotQuote? quote,
+  bool? isBindingServerQuote,
+  required void Function(List<Map<String, dynamic>>? result) dismiss,
+}) {
   PrivatePilotQuote? requestSnapshot;
   try {
     requestSnapshot = PrivatePilotQuote.fromRentalRequestSnapshot(request);
@@ -33,16 +52,13 @@ Future<List<Map<String, dynamic>>?> showPrivatePilotOwnerAcceptanceDialog(
       BackendConfig.enabled &&
       !QaRuntimeService.isEnabled;
   final bindingDeadline = request.bindingExpiresAt;
-  return showDialog<List<Map<String, dynamic>>>(
-    context: context,
-    barrierDismissible: false,
-    builder: (dialogContext) => _OwnerAcceptanceDialog(
-      request: request,
-      displayedQuote: displayedQuote,
-      bindingServerQuote: bindingServerQuote,
-      requiresRemoteDeadline: requiresRemoteDeadline,
-      bindingDeadline: bindingDeadline,
-    ),
+  return _OwnerAcceptanceDialog(
+    request: request,
+    displayedQuote: displayedQuote,
+    bindingServerQuote: bindingServerQuote,
+    requiresRemoteDeadline: requiresRemoteDeadline,
+    bindingDeadline: bindingDeadline,
+    dismiss: dismiss,
   );
 }
 
@@ -52,6 +68,7 @@ class _OwnerAcceptanceDialog extends StatefulWidget {
   final bool bindingServerQuote;
   final bool requiresRemoteDeadline;
   final DateTime? bindingDeadline;
+  final void Function(List<Map<String, dynamic>>? result) dismiss;
 
   const _OwnerAcceptanceDialog({
     required this.request,
@@ -59,6 +76,7 @@ class _OwnerAcceptanceDialog extends StatefulWidget {
     required this.bindingServerQuote,
     required this.requiresRemoteDeadline,
     required this.bindingDeadline,
+    required this.dismiss,
   });
 
   @override
@@ -213,7 +231,7 @@ class _OwnerAcceptanceDialogState extends State<_OwnerAcceptanceDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => widget.dismiss(null),
           child: const Text('Abbrechen'),
         ),
         FilledButton(
@@ -226,11 +244,11 @@ class _OwnerAcceptanceDialogState extends State<_OwnerAcceptanceDialog> {
                     return;
                   }
                   if (widget.request.simulationOnly) {
-                    Navigator.of(context).pop(<Map<String, dynamic>>[]);
+                    widget.dismiss(<Map<String, dynamic>>[]);
                     return;
                   }
                   final acceptedAt = DateTime.now();
-                  Navigator.of(context).pop([
+                  widget.dismiss([
                     {
                       'type': 'owner_booking_acceptance',
                       'exactWording':
@@ -259,7 +277,23 @@ Future<bool> commitPrivatePilotOwnerAcceptance(
   BuildContext context, {
   required RentalRequest request,
   required List<Map<String, dynamic>> legalDeclarations,
+  RentalRequestDecisionService? decisionService,
+  RentalRequestDecisionContext? decisionContext,
 }) async {
+  if ((decisionService == null) != (decisionContext == null)) {
+    throw ArgumentError(
+      'Decision service and principal context must be supplied together.',
+    );
+  }
+  if (decisionService != null && decisionContext != null) {
+    await decisionService.execute(
+      context: decisionContext,
+      request: request,
+      status: 'accepted',
+      legalDeclarations: legalDeclarations,
+    );
+    return true;
+  }
   try {
     await DataService.updateRentalRequestStatus(
       requestId: request.id,

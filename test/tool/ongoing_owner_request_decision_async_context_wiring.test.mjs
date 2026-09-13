@@ -6,47 +6,46 @@ const source = readFileSync(
   new URL('../../lib/screens/ongoing_owner_detail_screen.dart', import.meta.url),
   'utf8',
 );
-const requestActionsStart = source.indexOf(
-  "        if (category == 'requests') ...[",
-);
-const requestActionsEnd = source.indexOf(
-  '        if (!req.simulationOnly &&',
-  requestActionsStart,
-);
+const start = source.indexOf('  Future<void> _acceptPendingRequest(');
+const end = source.indexOf('  @override\n  Widget build(', start);
+assert.ok(start >= 0 && end > start, 'expected owner decision method range');
+const requestActions = source.slice(start, end);
 
-assert.notEqual(requestActionsStart, -1, 'expected owner request actions start');
-assert.notEqual(requestActionsEnd, -1, 'expected owner request actions end');
-const requestActions = source.slice(requestActionsStart, requestActionsEnd);
-
-test('decline result UI requires the exact body context after refresh', () => {
+test('accept captures the exact principal before the first await', () => {
   assert.match(
     requestActions,
-    /status: 'declined',[\s\S]*?await _load\(\);\s+if \(!context\.mounted\) return;\s+\/\/ Auto-close after 3 seconds/u,
+    /_acceptPendingRequest\(RentalRequest request\) async \{\s+final owner = _decisionActions\.capture\(\);\s+if \(owner == null\) return;\s+try \{\s+final declarations =\s+await/u,
   );
   assert.match(
     requestActions,
-    /Future\.delayed\(const Duration\(seconds: 3\), \(\) \{\s+if \(context\.mounted\) \{\s+Navigator\.of\(\s+context,[\s\S]*?AppPopup\.show\(\s+context,\s+icon: Icons\.cancel_outlined/u,
+    /showOwnedDialog<List<Map<String, dynamic>>>\([\s\S]*?buildPrivatePilotOwnerAcceptanceDialog\([\s\S]*?dismiss: dismiss/u,
+  );
+  assert.match(
+    requestActions,
+    /_decisionActions\.isCurrent\(_decisionService, owner\)[\s\S]*?_decisionService\.execute\([\s\S]*?status: 'accepted',[\s\S]*?legalDeclarations: declarations[\s\S]*?_decisionActions\.isCurrent\(_decisionService, owner\)/u,
   );
 });
 
-test('accept result UI requires the exact body context after refresh', () => {
+test('decline captures and rechecks the exact principal around its decision', () => {
   assert.match(
     requestActions,
-    /type: 'accepted',[\s\S]*?await _load\(\);\s+if \(!context\.mounted\) return;\s+\/\/ Auto-close after 3 seconds/u,
+    /_declinePendingRequest\(RentalRequest request\) async \{\s+final owner = _decisionActions\.capture\(\);\s+if \(owner == null\) return;\s+final confirmed = await _decisionActions\.showOwnedPopup<bool>/u,
   );
   assert.match(
     requestActions,
-    /Future\.delayed\(const Duration\(seconds: 3\), \(\) \{\s+if \(context\.mounted\) \{\s+Navigator\.of\(context, rootNavigator: true\)[\s\S]*?AppPopup\.show\(\s+context,\s+icon: Icons\.check_circle_outline/u,
+    /confirmed != true \|\|[\s\S]*?_decisionActions\.isCurrent\(_decisionService, owner\)[\s\S]*?_decisionService\.execute\([\s\S]*?status: 'declined',[\s\S]*?_decisionActions\.isCurrent\(_decisionService, owner\)/u,
   );
 });
 
-test('request decision fix keeps the existing product timers exact', () => {
-  const timers = requestActions.match(
-    /Future\.delayed\(const Duration\(seconds: 3\)/gu,
-  ) ?? [];
-  assert.equal(timers.length, 2);
-  assert.doesNotMatch(
+test('typed results retain exact route ownership without timing closure', () => {
+  assert.match(requestActions, /on RentalRequestDecisionFailure catch \(failure\)/u);
+  assert.match(
     requestActions,
-    /ignore:\s*use_build_context_synchronously/u,
+    /replaceOwnedScreenRoute\(\s*owner,\s*MaterialPageRoute<void>\(/u,
   );
+  assert.match(requestActions, /showOwnedPopup<bool>/u);
+  assert.doesNotMatch(requestActions, /Future\.delayed/u);
+  assert.doesNotMatch(requestActions, /Navigator\.of\(/u);
+  assert.doesNotMatch(requestActions, /AppPopup\.show\(/u);
+  assert.doesNotMatch(requestActions, /DataService\.updateRentalRequestStatus\(/u);
 });

@@ -28,15 +28,20 @@ test('request detail cannot regain disabled express UI or actions', () => {
 });
 
 test('owner acceptance and decline status transitions remain wired', () => {
-  assert.match(requestDetail, /showPrivatePilotOwnerAcceptanceDialog\(/);
+  assert.match(requestDetail, /_decisionActions\.capture\(\)/);
   assert.match(
     requestDetail,
-    /commitPrivatePilotOwnerAcceptance\([\s\S]*?request: req,[\s\S]*?legalDeclarations: declarations[\s\S]*?if \(!accepted\) return;/,
+    /showOwnedDialog<List<Map<String, dynamic>>>\([\s\S]*?buildPrivatePilotOwnerAcceptanceDialog\([\s\S]*?request: request,[\s\S]*?dismiss: dismiss/u,
   );
   assert.match(
     requestDetail,
-    /DataService\.updateRentalRequestStatus\(\s*requestId: req\.id,\s*status: 'declined'\s*\)/,
+    /_decisionService\.execute\([\s\S]*?context: owner\.context,[\s\S]*?request: request,[\s\S]*?status: 'accepted',[\s\S]*?legalDeclarations: declarations/u,
   );
+  assert.match(
+    requestDetail,
+    /_decisionService\.execute\([\s\S]*?context: owner\.context,[\s\S]*?request: request,[\s\S]*?status: 'declined'/u,
+  );
+  assert.doesNotMatch(requestDetail, /DataService\.updateRentalRequestStatus\(/u);
 });
 
 test('request cards and renter profile navigation remain active', () => {

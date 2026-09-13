@@ -18,11 +18,16 @@ const bookingNavigation = section('Future<void> _navigateToBookingDetail', '\\n 
 const timeProposal = section('Future<void> _handleTimeProposal', '\\n  /// Übergabezeit vorschlagen');
 const profileNavigation = section('Future<void> _viewProfile', '\\n  Future<void> _toggleMuteNotifications');
 
-test('owner acceptance uses the owning State lifecycle after declarations', () => {
+test('owner acceptance keeps the exact principal and dialog lifecycle', () => {
   assert.match(
     primaryAction,
-    /final declarations = await showPrivatePilotOwnerAcceptanceDialog\([\s\S]*?if \(declarations == null\) return;\s+if \(!mounted\) return;\s+final accepted = await commitPrivatePilotOwnerAcceptance\(\s+context,/u,
+    /requestDecisionOwner = _safetyActions\.capture\(\)[\s\S]*?showOwnedDialog<List<Map<String, dynamic>>>\([\s\S]*?buildPrivatePilotOwnerAcceptanceDialog\([\s\S]*?if \(declarations == null\) return;[\s\S]*?_safetyActions\.isCurrent\(_safetyService, actionOwner\)[\s\S]*?_requestDecisionService\.execute\([\s\S]*?legalDeclarations: declarations/u,
   );
+  assert.match(
+    primaryAction,
+    /on RentalRequestDecisionFailure catch \(failure\)[\s\S]*?catch \(e\)/u,
+  );
+  assert.doesNotMatch(primaryAction, /commitPrivatePilotOwnerAcceptance\(/u);
   assert.doesNotMatch(primaryAction, /if \(!context\.mounted\) return;/u);
 });
 

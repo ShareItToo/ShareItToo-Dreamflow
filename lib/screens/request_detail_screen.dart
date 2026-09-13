@@ -8,11 +8,13 @@ import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/services/private_pilot_pricing.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
+import 'package:lendify/services/rental_request_decision_service.dart';
+import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:provider/provider.dart';
 import 'package:lendify/widgets/app_image.dart';
-import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/user_avatar.dart';
 import 'package:lendify/widgets/private_pilot_owner_acceptance_dialog.dart';
+import 'package:lendify/widgets/rental_request_decision_interaction.dart';
 
 class RequestDetailScreen extends StatefulWidget {
   final String requestId;
@@ -29,25 +31,82 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
   Item? _item;
   User? _renter;
   Timer? _acceptanceDeadlineTimer;
+  final _decisionService = const RentalRequestDecisionService();
+  final _decisionActions = RentalRequestDecisionInteractionController();
+  StreamSubscription<String>? _persistenceSubscription;
+  int _loadRevision = 0;
+  bool _loadFailed = false;
+  Route<dynamic>? _trackedScreenRoute;
+  VoidCallback? _releaseTrackedScreenRoute;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _persistenceSubscription = SharedPersistenceSync.changes.listen((key) {
+      if (key != SharedPersistenceSync.accountSecurityStateKey) return;
+      _loadRevision += 1;
+      _decisionActions.invalidate();
+      if (mounted) {
+        setState(() {
+          _req = null;
+          _item = null;
+          _renter = null;
+          _loadFailed = false;
+        });
+        unawaited(_load());
+      }
+    });
   }
 
   Future<void> _load() async {
-    final req = await DataService.getRentalRequestById(widget.requestId);
-    if (req == null) return;
-    final item = await DataService.getItemById(req.itemId);
-    final renter = await DataService.getUserById(req.renterId);
-    if (!mounted) return;
-    setState(() {
-      _req = req;
-      _item = item;
-      _renter = renter;
-    });
-    _scheduleAcceptanceDeadlineRefresh();
+    final revision = ++_loadRevision;
+    _decisionActions.invalidate();
+    try {
+      final actionContext = await _decisionService.loadCurrentContext();
+      if (actionContext == null) {
+        throw StateError('Für diese Anfrage ist eine Anmeldung erforderlich.');
+      }
+      final req = await DataService.getRentalRequestById(widget.requestId);
+      if (req == null || req.ownerId.trim() != actionContext.user.id.trim()) {
+        throw StateError('Die Anfrage gehört nicht zum aktuellen Konto.');
+      }
+      final item = await DataService.getItemById(req.itemId);
+      final renter = await DataService.getUserById(req.renterId);
+      if (item == null ||
+          renter == null ||
+          !await _decisionService.isContextCurrent(actionContext)) {
+        throw StateError('Die Anfrage konnte nicht sicher geladen werden.');
+      }
+      if (!mounted || revision != _loadRevision) return;
+      _decisionActions.replaceContext(actionContext);
+      setState(() {
+        _req = req;
+        _item = item;
+        _renter = renter;
+        _loadFailed = false;
+      });
+      _scheduleAcceptanceDeadlineRefresh();
+    } catch (_) {
+      if (!mounted || revision != _loadRevision) return;
+      _decisionActions.invalidate();
+      setState(() {
+        _req = null;
+        _item = null;
+        _renter = null;
+        _loadFailed = true;
+      });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route == null || identical(route, _trackedScreenRoute)) return;
+    _releaseTrackedScreenRoute?.call();
+    _trackedScreenRoute = route;
+    _releaseTrackedScreenRoute = _decisionActions.trackOwnedScreenRoute(route);
   }
 
   void _scheduleAcceptanceDeadlineRefresh() {
@@ -72,9 +131,170 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
         deadline.isAfter(now);
   }
 
+  Future<void> _acceptRequest(
+    RentalRequest request,
+    PrivatePilotQuote? quote,
+    bool isBindingServerQuote,
+  ) async {
+    final owner = _decisionActions.capture();
+    if (owner == null) return;
+    try {
+      final declarations =
+          await _decisionActions.showOwnedDialog<List<Map<String, dynamic>>>(
+        context: context,
+        owner: owner,
+        barrierDismissible: false,
+        builder: (_, dismiss) => buildPrivatePilotOwnerAcceptanceDialog(
+          request: request,
+          quote: quote,
+          isBindingServerQuote: isBindingServerQuote,
+          dismiss: dismiss,
+        ),
+      );
+      if (declarations == null ||
+          !mounted ||
+          !await _decisionActions.isCurrent(_decisionService, owner)) {
+        return;
+      }
+      await _decisionService.execute(
+        context: owner.context,
+        request: request,
+        status: 'accepted',
+        legalDeclarations: declarations,
+      );
+      if (!mounted ||
+          !await _decisionActions.isCurrent(_decisionService, owner)) {
+        return;
+      }
+      _decisionActions.completeOwnedScreenRoute(owner, true);
+    } on RentalRequestDecisionFailure catch (failure) {
+      await _showDecisionFailure(owner, failure, accepting: true);
+    } catch (_) {
+      await _showUnexpectedDecisionFailure(owner);
+    }
+  }
+
+  Future<void> _declineRequest(RentalRequest request) async {
+    final owner = _decisionActions.capture();
+    if (owner == null) return;
+    final confirmed = await _decisionActions.showOwnedPopup<bool>(
+      context: context,
+      owner: owner,
+      icon: Icons.block,
+      title: 'Anfrage ablehnen?',
+      message: 'Bist du sicher? Der Mieter wird informiert.',
+      actions: (dismiss) => [
+        OutlinedButton(
+          onPressed: () => dismiss(false),
+          child: const Text('Abbrechen'),
+        ),
+        FilledButton(
+          onPressed: () => dismiss(true),
+          child: const Text('Ablehnen'),
+        ),
+      ],
+    );
+    if (confirmed != true ||
+        !mounted ||
+        !await _decisionActions.isCurrent(_decisionService, owner)) {
+      return;
+    }
+    try {
+      await _decisionService.execute(
+        context: owner.context,
+        request: request,
+        status: 'declined',
+      );
+      if (!mounted ||
+          !await _decisionActions.isCurrent(_decisionService, owner)) {
+        return;
+      }
+      _decisionActions.completeOwnedScreenRoute(owner, true);
+    } on RentalRequestDecisionFailure catch (failure) {
+      await _showDecisionFailure(owner, failure, accepting: false);
+    } catch (_) {
+      await _showUnexpectedDecisionFailure(owner);
+    }
+  }
+
+  Future<void> _showDecisionFailure(
+    RentalRequestDecisionActionOwner owner,
+    RentalRequestDecisionFailure failure, {
+    required bool accepting,
+  }) async {
+    if (failure.kind == RentalRequestDecisionFailureKind.principalChanged ||
+        !await _decisionActions.isCurrent(_decisionService, owner)) {
+      return;
+    }
+    if (!mounted) return;
+    final verb = accepting ? 'Annahme' : 'Ablehnung';
+    final (title, message) = switch (failure.kind) {
+      RentalRequestDecisionFailureKind.rejected => (
+          '$verb abgelehnt',
+          failure.code == 'booking_request_expired'
+              ? 'Die Annahmefrist ist abgelaufen. Lade die Anfrage neu.'
+              : 'Der Server hat die Entscheidung eindeutig abgelehnt. Lade die Anfrage neu und prüfe ihren aktuellen Status.',
+        ),
+      RentalRequestDecisionFailureKind.localUnavailable
+          when failure.remoteAccepted =>
+        (
+          'Serverentscheidung bestätigt',
+          'Der Server hat die Entscheidung bestätigt, aber die lokale Ansicht konnte nicht sicher aktualisiert werden. Lade die Anfrage neu und sende sie nicht erneut.',
+        ),
+      RentalRequestDecisionFailureKind.localUnavailable => (
+          '$verb lokal nicht bestätigt',
+          'Die lokale Verarbeitung konnte nicht sicher abgeschlossen werden. Lade die Anfrage neu.',
+        ),
+      RentalRequestDecisionFailureKind.outcomeUnknown => (
+          'Entscheidungsstatus unklar',
+          'Die Anfrage könnte serverseitig verarbeitet worden sein. Lade ihren aktuellen Status neu und sende die Entscheidung nicht erneut.',
+        ),
+      RentalRequestDecisionFailureKind.principalChanged => ('', ''),
+    };
+    await _decisionActions.showOwnedPopup<void>(
+      context: context,
+      owner: owner,
+      icon: Icons.error_outline,
+      title: title,
+      message: message,
+      actions: (dismiss) => [
+        FilledButton(
+          onPressed: () => dismiss(null),
+          child: const Text('OK'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showUnexpectedDecisionFailure(
+    RentalRequestDecisionActionOwner owner,
+  ) async {
+    if (!await _decisionActions.isCurrent(_decisionService, owner)) {
+      return;
+    }
+    if (!mounted) return;
+    await _decisionActions.showOwnedPopup<void>(
+      context: context,
+      owner: owner,
+      icon: Icons.error_outline,
+      title: 'Entscheidung nicht bestätigt',
+      message:
+          'Die Entscheidung konnte nicht sicher bestätigt werden. Lade die Anfrage neu, bevor du sie erneut sendest.',
+      actions: (dismiss) => [
+        FilledButton(
+          onPressed: () => dismiss(null),
+          child: const Text('OK'),
+        ),
+      ],
+    );
+  }
+
   @override
   void dispose() {
     _acceptanceDeadlineTimer?.cancel();
+    _persistenceSubscription?.cancel();
+    _releaseTrackedScreenRoute?.call();
+    _decisionActions.dispose();
     super.dispose();
   }
 
@@ -113,88 +333,44 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
             : null;
     return Scaffold(
       appBar: AppBar(title: Text(widget.titleOverride ?? l10n.t('Anfrage'))),
-      body: (req == null || item == null || renter == null)
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(padding: const EdgeInsets.all(16), children: [
-              _ItemSummaryCard(
-                item: item,
-                request: req,
-                acceptanceBlockedReason: acceptanceBlockedReason,
-                acceptanceInfo: acceptanceInfo,
-                onAccept: displayedQuote == null || !deadlineValid
-                    ? null
-                    : () async {
-                        final declarations =
-                            await showPrivatePilotOwnerAcceptanceDialog(
-                          context,
-                          request: req,
-                          quote: displayedQuote,
-                          isBindingServerQuote: serverQuote != null,
-                        );
-                        if (declarations == null) return;
-                        if (!context.mounted) return;
-                        final accepted =
-                            await commitPrivatePilotOwnerAcceptance(
-                          context,
-                          request: req,
-                          legalDeclarations: declarations,
-                        );
-                        if (!accepted) return;
-                        if (!context.mounted) return;
-                        Navigator.of(context).pop(true);
-                      },
-                onDecline: () async {
-                  await AppPopup.show(
-                    context,
-                    icon: Icons.block,
-                    title: 'Anfrage ablehnen?',
-                    message: 'Bist du sicher? Der Mieter wird informiert.',
-                    plainCloseIcon: true,
-                    leadingWidget: Builder(builder: (context) {
-                      final danger = Theme.of(context).colorScheme.error;
-                      return Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.transparent,
-                          border: Border.all(color: danger, width: 2),
-                        ),
-                        child: Icon(Icons.close, color: danger),
-                      );
-                    }),
-                    actions: [
-                      OutlinedButton(
-                        onPressed: () =>
-                            Navigator.of(context, rootNavigator: true)
-                                .maybePop(),
-                        child: const Text('Abbrechen'),
-                      ),
-                      FilledButton(
-                        onPressed: () async {
-                          Navigator.of(context, rootNavigator: true).maybePop();
-                          await DataService.updateRentalRequestStatus(
-                              requestId: req.id, status: 'declined');
-                          if (!context.mounted) return;
-                          Navigator.of(context).pop(true);
-                        },
-                        child: Text(l10n.t('Ablehnen')),
-                      ),
-                    ],
-                  );
-                },
+      body: _loadFailed
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'Diese Anfrage konnte für das aktuelle Konto nicht sicher geladen werden.',
+                  textAlign: TextAlign.center,
+                ),
               ),
-              const SizedBox(height: 12),
-              _RenterCard(user: renter),
-              const SizedBox(height: 12),
-              _DatesCard(request: req),
-              const SizedBox(height: 12),
-              _PriceCard(
-                quote: displayedQuote,
-                isBindingServerQuote: serverQuote != null,
-              ),
-              const SizedBox(height: 20),
-            ]),
+            )
+          : (req == null || item == null || renter == null)
+              ? const Center(child: CircularProgressIndicator())
+              : ListView(padding: const EdgeInsets.all(16), children: [
+                  _ItemSummaryCard(
+                    item: item,
+                    request: req,
+                    acceptanceBlockedReason: acceptanceBlockedReason,
+                    acceptanceInfo: acceptanceInfo,
+                    onAccept: displayedQuote == null || !deadlineValid
+                        ? null
+                        : () => _acceptRequest(
+                              req,
+                              displayedQuote,
+                              serverQuote != null,
+                            ),
+                    onDecline: () => _declineRequest(req),
+                  ),
+                  const SizedBox(height: 12),
+                  _RenterCard(user: renter),
+                  const SizedBox(height: 12),
+                  _DatesCard(request: req),
+                  const SizedBox(height: 12),
+                  _PriceCard(
+                    quote: displayedQuote,
+                    isBindingServerQuote: serverQuote != null,
+                  ),
+                  const SizedBox(height: 20),
+                ]),
     );
   }
 }

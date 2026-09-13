@@ -96,7 +96,8 @@ test('active owner booking decisions details and reviews stay wired', () => {
   assert.match(ownerRequests, /DataService\.getRentalRequestsForOwner\(owner\.id\)/);
   assert.match(ownerRequests, /Widget _buildStatusChipForCard\(/);
   assert.match(ownerRequests, /Widget\? _buildInlineAction\(/);
-  assert.match(ownerRequests, /showPrivatePilotOwnerAcceptanceDialog\(/);
+  assert.match(ownerRequests, /buildPrivatePilotOwnerAcceptanceDialog\(/);
+  assert.match(ownerRequests, /_decisionService\.execute\(/);
   assert.match(ownerRequests, /OngoingOwnerDetailScreen\(/);
   assert.match(ownerRequests, /ReviewPromptSheet\.show\(/);
 });

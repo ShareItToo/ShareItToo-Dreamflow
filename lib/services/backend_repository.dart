@@ -1236,6 +1236,28 @@ class BackendRepository {
     return Map<String, dynamic>.from(response['booking'] as Map);
   }
 
+  static Future<Map<String, dynamic>> transitionBookingForOwner({
+    required AuthSessionOwner owner,
+    required String bookingId,
+    required String status,
+    required String idempotencyKey,
+    int? expectedRevision,
+    List<Map<String, dynamic>>? legalDeclarations,
+  }) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'POST',
+      path: '/bookings/${Uri.encodeComponent(bookingId)}/transitions',
+      body: {
+        'status': status,
+        if (expectedRevision != null) 'expectedRevision': expectedRevision,
+        if (legalDeclarations != null) 'legalDeclarations': legalDeclarations,
+      },
+      additionalHeaders: {'Idempotency-Key': idempotencyKey},
+    );
+    return Map<String, dynamic>.from(response['booking'] as Map);
+  }
+
   static Future<Map<String, dynamic>> issueBookingConfirmationChallenge({
     required String bookingId,
     required String segment,
@@ -1491,6 +1513,23 @@ class BackendRepository {
         .toList(growable: false);
   }
 
+  static Future<List<Map<String, dynamic>>> getRentalRequestsForOwner(
+    AuthSessionOwner owner,
+  ) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'GET',
+      path: '/rental-requests',
+    );
+    final requests = response['requests'];
+    if (requests is! List || requests.any((entry) => entry is! Map)) {
+      throw const BackendException(200, 'invalid_server_response');
+    }
+    return requests
+        .map((entry) => Map<String, dynamic>.from(entry as Map))
+        .toList(growable: false);
+  }
+
   static Future<List<Map<String, dynamic>>> syncRentalRequests(
     List<Map<String, dynamic>> requests,
   ) async {
@@ -1532,6 +1571,18 @@ class BackendRepository {
     String bookingId,
   ) async {
     final response = await _authorized(
+      method: 'POST',
+      path: '/message-threads/booking/${Uri.encodeComponent(bookingId)}',
+    );
+    return Map<String, dynamic>.from(response['thread'] as Map);
+  }
+
+  static Future<Map<String, dynamic>> createOrGetBookingThreadForOwner({
+    required AuthSessionOwner owner,
+    required String bookingId,
+  }) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
       method: 'POST',
       path: '/message-threads/booking/${Uri.encodeComponent(bookingId)}',
     );

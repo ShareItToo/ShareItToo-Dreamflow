@@ -45,10 +45,10 @@ test('owner price snapshot no longer receives a transient transport selection', 
 
 test('binding acceptance and decline actions remain active', () => {
   assert.match(ownerDetail, /_ownerAcceptanceDeadlineValid\(req\)/u);
-  assert.match(ownerDetail, /showPrivatePilotOwnerAcceptanceDialog\(/u);
-  assert.match(ownerDetail, /commitPrivatePilotOwnerAcceptance\(/u);
-  assert.match(ownerDetail, /DataService\.updateRentalRequestStatus\(/u);
-  assert.match(ownerDetail, /requestId: req\.id,[\s\S]*?status: 'declined'/u);
+  assert.match(ownerDetail, /buildPrivatePilotOwnerAcceptanceDialog\(/u);
+  assert.match(ownerDetail, /_decisionService\.execute\(/u);
+  assert.match(ownerDetail, /request: request,[\s\S]*?status: 'accepted'/u);
+  assert.match(ownerDetail, /request: request,[\s\S]*?status: 'declined'/u);
 });
 
 test('secure pickup return cancellation and review flows remain active', () => {
