@@ -72,7 +72,17 @@ void main() {
     );
     expect(blockedGuardBefore.allowed, isFalse);
 
-    final publicItemsBefore = await DataService.getPublicItems();
+    final publicSnapshotBefore = await DataService.getPublicCatalogSnapshot();
+    final publicItemsBefore = publicSnapshotBefore.items;
+    expect(publicSnapshotBefore.blockedOwnerIds, contains('blocked-owner'));
+    expect(
+      ProfileEcosystemService.canViewPublicProfileFromBlockedUsers(
+        profileUserId: 'blocked-owner',
+        currentUserId: 'viewer',
+        blockedUserIds: publicSnapshotBefore.blockedOwnerIds,
+      ).allowed,
+      isFalse,
+    );
     expect(
       publicItemsBefore.map((item) => item.ownerId),
       isNot(contains('blocked-owner')),

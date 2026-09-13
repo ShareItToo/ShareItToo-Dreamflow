@@ -29,14 +29,18 @@ void main() {
     final contextStart = load.indexOf(
       'final actionContextFuture = _safetyService.loadCurrentContext()',
     );
-    final catalogStart =
-        load.indexOf('final publicItemsFuture = DataService.getPublicItems()');
+    final catalogStart = load.indexOf(
+      'final publicCatalogFuture = DataService.getPublicCatalogSnapshot()',
+    );
     final firstAwait = load.indexOf('final actionContext = await');
 
     expect(contextStart, greaterThanOrEqualTo(0));
     expect(catalogStart, greaterThan(contextStart));
     expect(firstAwait, greaterThan(catalogStart));
     expect(load, isNot(contains('final items = await DataService.getItems()')));
+    expect(load, contains('canViewPublicProfileFromBlockedUsers'));
+    expect(load, contains('filterVisiblePublicItemsFromBlockedUsers'));
+    expect(load, isNot(contains('await ProfileEcosystemService.canView')));
   });
 
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{

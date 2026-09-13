@@ -517,7 +517,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     });
     try {
       final actionContextFuture = _safetyService.loadCurrentContext();
-      final publicItemsFuture = DataService.getPublicItems();
+      final publicCatalogFuture = DataService.getPublicCatalogSnapshot();
       final Future<User?> profileFuture;
       if (widget.previewUser != null) {
         profileFuture = Future<User?>.value(widget.previewUser);
@@ -531,11 +531,14 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       final actionContext = await actionContextFuture;
       final profileUser = await profileFuture ??
           (throw StateError('public_profile_not_found'));
-      final items = await publicItemsFuture;
+      final publicCatalog = await publicCatalogFuture;
+      final items = publicCatalog.items;
       final viewer = actionContext?.user ?? await DataService.getCurrentUser();
-      final profileGuard = await ProfileEcosystemService.canViewPublicProfile(
+      final profileGuard =
+          ProfileEcosystemService.canViewPublicProfileFromBlockedUsers(
         profileUserId: profileUser.id,
         currentUserId: viewer?.id,
+        blockedUserIds: publicCatalog.blockedOwnerIds,
       );
       if (!mounted || revision != _loadRevision) return;
       if (actionContext != null &&
@@ -574,7 +577,10 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
           ? ownerItems
               .where(ProfileEcosystemService.isPubliclyVisibleItem)
               .toList()
-          : await ProfileEcosystemService.filterVisiblePublicItems(ownerItems);
+          : ProfileEcosystemService.filterVisiblePublicItemsFromBlockedUsers(
+              ownerItems,
+              blockedUserIds: publicCatalog.blockedOwnerIds,
+            );
       if (!mounted || revision != _loadRevision) return;
       if (actionContext != null &&
           !await _safetyService.isContextCurrent(actionContext)) {

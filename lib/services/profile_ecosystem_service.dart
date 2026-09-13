@@ -96,12 +96,24 @@ class ProfileEcosystemService {
     required String? profileUserId,
     required String? currentUserId,
   }) async {
+    final blockedUserIds =
+        (await BlockedUsersService.getBlockedUserIds()).toSet();
+    return canViewPublicProfileFromBlockedUsers(
+      profileUserId: profileUserId,
+      currentUserId: currentUserId,
+      blockedUserIds: blockedUserIds,
+    );
+  }
+
+  static ActionGuardResult canViewPublicProfileFromBlockedUsers({
+    required String? profileUserId,
+    required String? currentUserId,
+    required Set<String> blockedUserIds,
+  }) {
     final targetId = (profileUserId ?? '').trim();
     if (targetId.isEmpty || targetId == currentUserId) {
       return const ActionGuardResult.allowed();
     }
-    final blockedUserIds =
-        (await BlockedUsersService.getBlockedUserIds()).toSet();
     if (blockedUserIds.contains(targetId)) {
       return const ActionGuardResult.blocked(
         reason:
@@ -189,6 +201,16 @@ class ProfileEcosystemService {
   static Future<List<Item>> filterVisiblePublicItems(List<Item> items) async {
     final blockedUserIds =
         (await BlockedUsersService.getBlockedUserIds()).toSet();
+    return filterVisiblePublicItemsFromBlockedUsers(
+      items,
+      blockedUserIds: blockedUserIds,
+    );
+  }
+
+  static List<Item> filterVisiblePublicItemsFromBlockedUsers(
+    List<Item> items, {
+    required Set<String> blockedUserIds,
+  }) {
     return items
         .where((item) => isPubliclyVisibleItem(item))
         .where((item) => !blockedUserIds.contains(item.ownerId))

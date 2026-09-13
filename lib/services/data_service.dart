@@ -96,6 +96,17 @@ class _LocalMutationQueue {
   }
 }
 
+class PublicCatalogSnapshot {
+  final List<Item> items;
+  final Set<String> blockedOwnerIds;
+
+  PublicCatalogSnapshot({
+    required List<Item> items,
+    required Iterable<String> blockedOwnerIds,
+  })  : items = List<Item>.unmodifiable(items),
+        blockedOwnerIds = Set<String>.unmodifiable(blockedOwnerIds);
+}
+
 /// Mutable fields of the device-local profile fallback.
 ///
 /// Identity, authorization, verification, moderation, payout and reputation
@@ -4909,8 +4920,9 @@ class DataService {
   }) =>
       backendEnabled && !qaRuntimeEnabled;
 
-  static Future<List<Item>> getPublicItems() async {
+  static Future<PublicCatalogSnapshot> getPublicCatalogSnapshot() async {
     final items = <Item>[];
+    final blockedUserIdsFuture = BlockedUsersService.getBlockedUserIds();
     if (shouldUseDedicatedPublicRemoteCatalog(
       backendEnabled: BackendConfig.enabled,
       qaRuntimeEnabled: QaRuntimeService.isEnabled,
@@ -4933,15 +4945,20 @@ class DataService {
     } else {
       items.addAll(await getItems());
     }
-    final blockedUserIds =
-        (await BlockedUsersService.getBlockedUserIds()).toSet();
+    final blockedUserIds = (await blockedUserIdsFuture).toSet();
     final filtered = items
         .where(isPublicCatalogItem)
         .where((item) => !blockedUserIds.contains(item.ownerId))
         .toList();
     filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return filtered;
+    return PublicCatalogSnapshot(
+      items: filtered,
+      blockedOwnerIds: blockedUserIds,
+    );
   }
+
+  static Future<List<Item>> getPublicItems() async =>
+      (await getPublicCatalogSnapshot()).items;
 
   static Future<List<Item>> searchPublicItems({
     String? query,
