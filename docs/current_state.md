@@ -1,5 +1,25 @@
 # ShareItToo Current State
 
+## WP142 current-goal external-gate checkpoint — Pixel/Staging passed
+
+Fresh readback confirms exact signed Internal/Staging candidate
+`1.0.0+2026091312` on the physical Pixel and healthy immutable Staging Backend
+`df39a14b7a19afe467842461a28f1e77fec8445e` with FCM/SMTP active, zero
+restarts and payment still deliberately on the memory transport. The private
+QA vault's four access-mode defects were tightened without reading or deleting
+credential material; its final structural audit is safe for a fresh two-role
+source.
+
+The exact 32-area portfolio is **21 PASS, 4 PARTIAL and 7 OPEN**. Every
+remaining item is bound to an external or human prerequisite: official social
+provider setup, Stripe reauthentication plus truthful/legal preflight,
+professional V5.2 approval, human TalkBack, OnePlus reconnection or a dedicated
+VPS registry gate. No hidden autonomous app/Backend gap was found. See
+`docs/operations/WP142_CURRENT_GOAL_EXTERNAL_GATE_CHECKPOINT_2026-09-13.md`.
+
+No provider request, test money, Production, Store, Firebase Console, Stripe
+account, OnePlus, PR merge or secret state changed.
+
 ## WP141 Stripe test-mode Connect refund recovery — complete locally
 
 The local payment architecture now safely reverses an owner share across

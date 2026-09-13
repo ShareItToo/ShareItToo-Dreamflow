@@ -1,4 +1,22 @@
-# Current Work Package: WP141 Stripe Test-Mode Connect Refund Recovery — COMPLETE LOCALLY
+# Current Work Package: WP142 Current-Goal External-Gate Checkpoint — COMPLETE LOCALLY
+
+The exact current Pixel and Staging baseline is freshly healthy: signed
+Internal/Staging `1.0.0+2026091312` matches the installed APK, authenticated
+Explore passes, and Backend `df39a14b7a19afe467842461a28f1e77fec8445e`
+runs with FCM/SMTP, zero restarts and memory-only payment. Four private QA-vault
+permission defects were repaired by tightening access modes only; the final
+structural audit is safe for new two-role provisioning.
+
+The current portfolio is **21 PASS / 4 PARTIAL / 7 OPEN** and all remaining
+items have an external or human gate. The official Stripe connection requires
+reauthentication; provider identity and professional approval are absent, so no
+provider traffic or test money ran. See
+`docs/operations/WP142_CURRENT_GOAL_EXTERNAL_GATE_CHECKPOINT_2026-09-13.md`.
+
+No Production, Store, Firebase Console, Stripe account, payment, legal
+approval, OnePlus, VPS, PR-merge or secret state changed.
+
+# Previous Work Package: WP141 Stripe Test-Mode Connect Refund Recovery — COMPLETE LOCALLY
 
 The local Stripe-compatible refund foundation is now payout-bound and
 recoverable. A refund spanning several partial payouts uses immutable
