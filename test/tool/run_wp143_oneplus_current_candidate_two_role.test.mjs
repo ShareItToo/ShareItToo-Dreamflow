@@ -3,9 +3,11 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 import {
+  assertWp143AdbInstallSuccess,
   assertWp143ExactCandidate,
   assertWp143PushOptInReady,
   classifyWp143Installation,
+  establishWp143OwnerPushPreflight,
   parseWp143Arguments,
   parseWp143InstalledPackage,
   validateWp143JourneyResult,
@@ -114,6 +116,63 @@ test('preserves the exact candidate and never resets app data', () => {
     dataPreservingUpdate: true,
     localAppDataReset: false,
   });
+});
+
+test('accepts ADB progress only when exact installation success is terminal', () => {
+  assert.equal(assertWp143AdbInstallSuccess('Success\n'), true);
+  assert.equal(assertWp143AdbInstallSuccess(`
+    Performing Push Install
+    candidate.apk: 1 file pushed
+    Success
+  `), true);
+  for (const output of [
+    '',
+    'Performing Push Install',
+    'Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]',
+    'Error\nSuccess',
+  ]) {
+    assert.throws(() => assertWp143AdbInstallSuccess(output), /WP143/u);
+  }
+});
+
+test('establishes the exact owner role before inspecting push settings', async () => {
+  const calls = [];
+  const result = await establishWp143OwnerPushPreflight({
+    sourceVaultFile: '/private/source.json',
+    commandRunner: () => '',
+    adbPath: '/opt/android/adb',
+    device: { serial: 'opaque' },
+    wait: async () => {},
+    readVault: () => ({ vault: { accounts: [{ role: 'owner' }, { role: 'renter' }] } }),
+    bindRole: async (value) => {
+      calls.push(value.role);
+      return { account: { role: 'owner' }, other: { role: 'renter' } };
+    },
+    restoreRole: async ({ operation }) => operation(),
+  });
+  assert.deepEqual(calls, ['owner']);
+  assert.deepEqual(result, {
+    status: 'exact-owner-session-established-for-push-preflight',
+    containsAccountIdentity: false,
+    containsSecrets: false,
+    containsTokens: false,
+  });
+});
+
+test('rejects an inexact principal before the push preflight', async () => {
+  await assert.rejects(() => establishWp143OwnerPushPreflight({
+    sourceVaultFile: '/private/source.json',
+    commandRunner: () => '',
+    adbPath: '/opt/android/adb',
+    device: { serial: 'opaque' },
+    wait: async () => {},
+    readVault: () => ({ vault: { accounts: [{ role: 'owner' }, { role: 'renter' }] } }),
+    bindRole: async () => ({
+      account: { role: 'renter' },
+      other: { role: 'owner' },
+    }),
+    restoreRole: async ({ operation }) => operation(),
+  }), /exact owner session/u);
 });
 
 test('rejects unsafe or ambiguous non-exact installations', () => {

@@ -61,3 +61,16 @@ No Production, Store, Firebase Console, Stripe account, provider traffic,
 payment, money, Pixel, OnePlus, Staging data, PR merge or secret state changed.
 Machine-readable evidence is in
 `docs/evidence/release-readiness/wp143-oneplus-current-candidate-two-role-preparation-20260913.json`.
+
+## Physical preflight correction
+
+The first physical installation returned additional normal ADB progress text
+before its terminal `Success` line. Android nevertheless installed the exact
+candidate. The runner now accepts only a terminal success without any failure
+marker and still performs the independent exact candidate verification
+immediately afterward. The first post-install preflight also proved that an
+existing authenticated session cannot be assumed after an update. Before
+inspecting Push choices, the runner now establishes the exact protected owner
+from the owner-only two-role vault and proves that the opposite principal is
+absent. Both findings are covered by deterministic negative tests and do not
+weaken the no-uninstall, no-reset or identity-redaction boundaries.

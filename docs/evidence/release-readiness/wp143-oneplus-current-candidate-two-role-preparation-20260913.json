@@ -119,8 +119,8 @@
     "privatePathRecorded": false
   },
   "sourceInventory": {
-    "tool/run_wp143_oneplus_current_candidate_two_role.mjs": "ca1bce0a02b0160c04465c9d44b97591e032412939d0ce61da111cae958220e8",
-    "test/tool/run_wp143_oneplus_current_candidate_two_role.test.mjs": "234f7f7819a18f75485f31b133ab4c848dca0a006462970452f6d39ebdab414e",
+    "tool/run_wp143_oneplus_current_candidate_two_role.mjs": "759d7fe02a98dcfb0aa379697e5ab2c9a5dc4f430d6dcb141db7a69567c54670",
+    "test/tool/run_wp143_oneplus_current_candidate_two_role.test.mjs": "8105c0ac9686e819cebe5fd982e77d91a451877cbee5ac89c177c3f674c74b62",
     "tool/run_wp117_oneplus_current_candidate_two_role.mjs": "0f70105d6672ea6aa6eac7c83fe86b67a74812700909d03d46bd3fd1f1d6255f",
     "tool/diagnose_android_email_verified_two_role_product_journey.mjs": "91151556b06d7e6707e1bf1fe447b92c1fcbbe8ef2e02f364c829f5a33a84f8e",
     "tool/validate_current_head_android_release_archive.mjs": "bc8239ed9e25dd77272fe4d750a265631bef51c40142f2c49aff9569c54ae120",

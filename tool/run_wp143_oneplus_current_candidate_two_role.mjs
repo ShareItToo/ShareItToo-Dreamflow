@@ -11,6 +11,10 @@ import {
   verifyCurrentHeadAndroidInstalledCandidate,
 } from './diagnose_current_head_android_main_navigation.mjs';
 import {
+  bindExactRole,
+  restoreExactRoleWithBoundedRetries,
+} from './diagnose_android_email_verified_two_role_product_journey.mjs';
+import {
   inspectCurrentCandidateAndroidDeviceServiceState,
 } from './diagnose_current_candidate_android_device_services_opt_in.mjs';
 import {
@@ -18,6 +22,9 @@ import {
   parseAdbDevices,
   selectSinglePhysicalDevice,
 } from './prepare_android_device_test.mjs';
+import {
+  readEmailVerifiedJourneyVault,
+} from './run_staging_email_verified_two_role_journey.mjs';
 import {
   validatePrivateAndroidReleaseArchive,
 } from './validate_current_head_android_release_archive.mjs';
@@ -288,7 +295,7 @@ function applyInstallationPlan({
       candidate.apkPath,
     ];
     const result = adb(commandRunner, adbPath, device, args);
-    if (result !== 'Success') fail('the exact candidate installation failed safely.');
+    assertWp143AdbInstallSuccess(result);
   }
   verifyCurrentHeadAndroidInstalledCandidate(
     commandRunner,
@@ -296,6 +303,71 @@ function applyInstallationPlan({
     device,
     candidate,
   );
+}
+
+export function assertWp143AdbInstallSuccess(output) {
+  const lines = String(output)
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.at(-1) !== 'Success'
+      || lines.some((line) => /(?:Failure|Error|INSTALL_FAILED)/u.test(line))) {
+    fail('the exact candidate installation failed safely.');
+  }
+  return true;
+}
+
+export async function establishWp143OwnerPushPreflight({
+  sourceVaultFile,
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+  readVault = readEmailVerifiedJourneyVault,
+  bindRole = bindExactRole,
+  restoreRole = restoreExactRoleWithBoundedRetries,
+} = {}) {
+  if (typeof sourceVaultFile !== 'string'
+      || sourceVaultFile.trim() === ''
+      || typeof commandRunner !== 'function'
+      || typeof adbPath !== 'string'
+      || adbPath.trim() === ''
+      || device === null
+      || typeof device !== 'object'
+      || typeof wait !== 'function'
+      || typeof readVault !== 'function'
+      || typeof bindRole !== 'function'
+      || typeof restoreRole !== 'function') {
+    fail('the exact owner push-preflight inputs are incomplete.');
+  }
+  const vault = readVault(sourceVaultFile)?.vault;
+  if (!Array.isArray(vault?.accounts)) {
+    fail('the exact owner push-preflight vault is unavailable.');
+  }
+  const restored = await restoreRole({
+    wait,
+    operation: async () => {
+      const bound = await bindRole({
+        vault,
+        role: 'owner',
+        commandRunner,
+        adbPath,
+        device,
+        wait,
+      });
+      return bound?.account?.role === 'owner'
+        && bound?.other?.role === 'renter';
+    },
+  });
+  if (restored !== true) {
+    fail('the exact owner session was not established for the push preflight.');
+  }
+  return Object.freeze({
+    status: 'exact-owner-session-established-for-push-preflight',
+    containsAccountIdentity: false,
+    containsSecrets: false,
+    containsTokens: false,
+  });
 }
 
 export function assertWp143PushOptInReady(value) {
@@ -427,6 +499,16 @@ async function main() {
     device,
     candidate,
   });
+  const wait = (milliseconds) => new Promise(
+    (resolvePromise) => setTimeout(resolvePromise, milliseconds),
+  );
+  const ownerPushPreflight = await establishWp143OwnerPushPreflight({
+    sourceVaultFile,
+    commandRunner,
+    adbPath: args.adbPath,
+    device,
+    wait,
+  });
   const deviceServices = await inspectCurrentCandidateAndroidDeviceServiceState({
     commandRunner,
     adbPath: args.adbPath,
@@ -458,6 +540,7 @@ async function main() {
       containsRawDeviceIdentifier: false,
     },
     installation: plan,
+    ownerPushPreflight,
     deviceServices: {
       pushEnabled: true,
       crashDiagnosticsEnabled: deviceServices.crashDiagnosticsEnabled,
