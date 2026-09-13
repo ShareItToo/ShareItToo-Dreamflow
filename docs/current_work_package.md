@@ -1,4 +1,23 @@
-# Current Work Package: WP131 Exact-Current Android Permission Lifecycle — COMPLETE
+# Current Work Package: WP132 Exact-Current Report/Block — COMPLETE
+
+Signed Internal/Staging `1.0.0+2026091309` passes the complete physical Pixel
+report, block, same-owner listing and cancelled-chat isolation, exact Blocked
+Users entry, unblock and restored-visibility lifecycle. The server confirms
+one report, one temporary block and final empty block truth. All isolated
+listings and role sessions are cleaned up, the protected owner is restored,
+and the moderation report is retained as audit. No contract, reservation,
+payment call or monetary effect occurred.
+
+`support-report-block` is PASS. Shared search code changed in the signed
+candidate, so the broader search/favorites/wishlists requirement remains
+PARTIAL until complete saved-state replay. Portfolio: **16 PASS / 8 PARTIAL /
+8 OPEN**. See
+`docs/operations/WP132_CURRENT_CANDIDATE_REPORT_BLOCK_2026-09-13.md`.
+
+No Production, Store, Firebase, payment, money, OnePlus or PR-merge state
+changed.
+
+# Previous Work Package: WP131 Exact-Current Android Permission Lifecycle — COMPLETE
 
 The unchanged signed Internal/Staging `1.0.0+2026091201` candidate passes the
 complete physical Pixel deny/allow/restart/settings/restoration lifecycle for

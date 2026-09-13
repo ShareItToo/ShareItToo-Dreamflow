@@ -1,5 +1,27 @@
 # ShareItToo Current State
 
+## WP132 exact-current report/block lifecycle — complete
+
+Signed Internal/Staging candidate `1.0.0+2026091309` now passes the complete
+physical Pixel report, owner-bound block, same-owner listing isolation,
+cancelled-chat isolation, Blocked Users entry, unblock and restored visibility
+lifecycle. The report was accepted exactly once; server truth confirmed one
+temporary block and then an empty block list.
+
+All three isolated listings are ended and absent from the public catalog, the
+temporary block is removed, both role sessions are revoked, and the protected
+Pixel owner is restored. The moderation report remains as audit history. No
+contract, reservation, payment endpoint or monetary effect occurred.
+
+`support-report-block` is PASS. The shared search implementation changed in
+the new signed candidate, so the broader search/favorites/wishlists requirement
+is conservatively PARTIAL pending its complete saved-state replay. The
+portfolio remains **16 PASS, 8 PARTIAL and 8 OPEN**. See
+`docs/operations/WP132_CURRENT_CANDIDATE_REPORT_BLOCK_2026-09-13.md`.
+
+No Production, Store, Firebase, payment, real money, OnePlus or PR-merge state
+changed.
+
 ## WP131 exact-current Android permission lifecycle — complete
 
 The unchanged signed Internal/Staging `1.0.0+2026091201` candidate now passes

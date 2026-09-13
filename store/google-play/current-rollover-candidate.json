@@ -105,17 +105,17 @@
     "handoffRef": "store/google-play/on-device-listing-ai-data-safety-handoff.json"
   },
   "deviceVerification": {
-    "preferredDeviceExactApkInstalled": false,
-    "preferredDeviceDataPreserved": false,
+    "preferredDeviceExactApkInstalled": true,
+    "preferredDeviceDataPreserved": true,
     "onDeviceListingAiPhysicalInference": "not-replayed-on-2026091309",
-    "authenticatedPilotMatrix": "pending-exact-candidate-pixel-verification",
+    "authenticatedPilotMatrix": "partial-exact-current-report-block-passed-search-saved-replay-pending",
     "secondaryDevice": "not-required-while-oneplus-disconnected"
   },
   "privateDriveHandoff": {
     "status": "not-required-for-current-mac-mini-session",
     "shared": false
   },
-  "evidenceRef": null,
+  "evidenceRef": "docs/evidence/release-readiness/wp132-current-candidate-report-block-20260913.json",
   "playCompletionEvidenceRef": null,
   "handoverRef": null,
   "releaseNotesRef": "store/google-play/de-DE/internal_release_notes.txt",
