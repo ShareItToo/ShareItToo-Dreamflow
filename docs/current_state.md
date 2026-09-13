@@ -1,5 +1,29 @@
 # ShareItToo Current State
 
+## WP141 Stripe test-mode Connect refund recovery — complete locally
+
+The local payment architecture now safely reverses an owner share across
+multiple partial payouts. Each reversal is immutable and payout-bound; both
+transfer-reversal and provider-refund lost-response cases recover through
+exact metadata, idempotency and provider-object binding. Refund and dispute
+recovery serialize on the payment, and final local settlement is command-
+locked so retries cannot duplicate accounting or notifications.
+
+PostgreSQL 16 integration, all 75 migrations, R9 backup/restore and guarded
+rollback, focused tests, full backend and local regression, closure-head
+Regression `34770241597`, independent clean checkout and CodeQL `34770241626`
+pass. Payment implementation is `45e40a06ab420ac46e15a04f7d2ac0dfa8ddecaf`;
+the exact privacy/retention source-hash rebind closes at
+`d2f88f704484efbd564038bd98d6f6a28e4d1c76`. All 68 focused ratchet tests
+pass and the rebind changed no disclosure or retention meaning.
+
+The portfolio remains **21 PASS, 4 PARTIAL and 7 OPEN**. Staging still uses the
+memory payment transport; authenticated Stripe account prerequisites and the
+official sandbox test-money payment/refund/simulated-payout journey remain
+OPEN. No Stripe, deployment, device, Store, Firebase, Production or PR-merge
+state changed. See
+`docs/operations/WP141_STRIPE_TEST_MODE_CONNECT_REFUND_RECOVERY_2026-09-13.md`.
+
 ## WP140 Staging historical Support deadline recovery — complete
 
 The three noncritical overdue historical Support simulations are recovered

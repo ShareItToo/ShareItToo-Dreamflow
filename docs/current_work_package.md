@@ -1,4 +1,31 @@
-# Current Work Package: WP140 Staging Historical Support Deadline Recovery — COMPLETE
+# Current Work Package: WP141 Stripe Test-Mode Connect Refund Recovery — COMPLETE LOCALLY
+
+The local Stripe-compatible refund foundation is now payout-bound and
+recoverable. A refund spanning several partial payouts uses immutable
+newest-first reversal rows with stable provider idempotency keys. Payment,
+refund and payout identity, currency, live mode and remaining exposure are
+locked and rechecked before both provider and ledger actions. Lost transfer-
+reversal and provider-refund responses recover by exact metadata lookup without
+duplicating money movement, ledger entries, workflow transitions or notices.
+
+PostgreSQL 16 integration, all 75 migrations, destructive rollback refusal,
+backup/restore, legacy upgrade, focused tests, full backend regression, full
+local technical regression, exact closure-head Regression `34770241597`,
+independent clean checkout and CodeQL `34770241626` pass. Payment source is
+`45e40a06ab420ac46e15a04f7d2ac0dfa8ddecaf`; privacy/retention ratchet closure
+is `d2f88f704484efbd564038bd98d6f6a28e4d1c76`. The first CI failure was
+caused by three legitimate WP141 source changes whose stored hashes were not
+yet rebound; all 68 focused ratchet tests pass after the exact six-entry
+rebind, with no semantic or gate change. Portfolio remains **21 PASS /
+4 PARTIAL / 7 OPEN** because no provider network call or test-money journey was
+performed. See
+`docs/operations/WP141_STRIPE_TEST_MODE_CONNECT_REFUND_RECOVERY_2026-09-13.md`.
+
+Staging remains memory-only. No Stripe API/Dashboard/account, credential,
+test-money, real-money, deployment, device, Store, Cloud, Firebase, Production
+or PR-merge state changed.
+
+# Previous Work Package: WP140 Staging Historical Support Deadline Recovery — COMPLETE
 
 Exactly three historical simulation-only P3 Support cases now have future
 deadlines. Two used independent two-admin review and official progress
