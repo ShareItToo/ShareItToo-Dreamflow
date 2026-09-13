@@ -105,7 +105,7 @@ export function emptyExactSearchResultVisible(hierarchy, title) {
     'Suchergebnisse',
     'Es gibt noch keinen Artikel zu deiner Suche. Komm bald wieder!',
   ])
-    && currentHeadAndroidNamedNodes(hierarchy, title).length === 0
+    && !exactSearchListingCardVisible(hierarchy, title, null)
     && !hierarchy.includes('class="android.widget.ProgressBar"')
     && currentHeadAndroidNamedNodes(hierarchy, 'Suche nicht erreichbar').length === 0;
 }

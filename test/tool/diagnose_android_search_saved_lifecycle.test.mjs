@@ -229,7 +229,20 @@ test('accepts only a settled empty exact search result', () => {
     '<node content-desc="Es gibt noch keinen Artikel zu deiner Suche. Komm bald wieder!"/>',
   ].join('');
   assert.equal(emptyExactSearchResultVisible(empty, title), true);
-  assert.equal(emptyExactSearchResultVisible(`${empty}<node content-desc="${title}"/>`, title), false);
+  assert.equal(
+    emptyExactSearchResultVisible(
+      `${empty}<node content-desc="${title}"/>`,
+      title,
+    ),
+    true,
+  );
+  assert.equal(
+    emptyExactSearchResultVisible(
+      `${empty}<node content-desc="Anzeige öffnen: ${title}"/>`,
+      title,
+    ),
+    false,
+  );
   assert.equal(emptyExactSearchResultVisible(`${empty}<node class="android.widget.ProgressBar"/>`, title), false);
   assert.equal(emptyExactSearchResultVisible('<node content-desc="Suche nicht erreichbar"/>', title), false);
 });
