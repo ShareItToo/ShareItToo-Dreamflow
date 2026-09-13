@@ -56,6 +56,10 @@ function activeCase(value) {
   return value?.status === 'received';
 }
 
+function caseReference(value) {
+  return crypto.createHash('sha256').update(String(value), 'utf8').digest('hex');
+}
+
 function allFlagsClear(flags) {
   const expected = ['safety', 'privacy', 'dsa', 'authority', 'article18Candidate',
     'money', 'accountTakeover'];
@@ -97,6 +101,65 @@ export function classifyWp140OverdueCases(cases, {
         || supportCase?.linkedPayoutId !== null
         || supportCase?.finalDecisionAvailable !== false) {
       fail('A WP140 target is not an exact noncritical simulation case.');
+    }
+    ids.add(supportCase.id);
+  }
+  return Object.freeze([...cases].sort((left, right) => (
+    String(left.createdAt).localeCompare(String(right.createdAt))
+  )));
+}
+
+export function classifyWp140RecoveryCases(cases, {
+  now = new Date(),
+} = {}) {
+  if (!Array.isArray(cases) || cases.length !== wp140ExpectedOverdueCount
+      || !(now instanceof Date) || !Number.isFinite(now.getTime())) {
+    fail('WP140 requires exactly three current recovery cases.');
+  }
+  const ids = new Set();
+  const allowedModes = new Set([
+    'pending_active_recipient',
+    'pending_closed_synthetic_recipient',
+    'published_progress',
+    'closed_synthetic_recipient_transition',
+  ]);
+  for (const supportCase of cases) {
+    const deadline = new Date(supportCase?.nextUpdateAt);
+    const mode = supportCase?.wp140Recovery?.mode;
+    const overdue = Number.isFinite(deadline.getTime()) && deadline.getTime() <= now.getTime();
+    const pendingMode = mode === 'pending_active_recipient'
+      || mode === 'pending_closed_synthetic_recipient';
+    const publishedMode = mode === 'published_progress';
+    const transitionedMode = mode === 'closed_synthetic_recipient_transition';
+    if (typeof supportCase?.id !== 'string' || supportCase.id.length < 20
+        || ids.has(supportCase.id)
+        || typeof supportCase?.reporterUserId !== 'string'
+        || supportCase.reporterUserId.length < 20
+        || supportCase?.operatingMode !== 'simulation'
+        || !['received', 'acknowledged'].includes(supportCase?.status)
+        || supportCase?.priority !== 'p3'
+        || supportCase?.caseType !== 'general_help'
+        || supportCase?.caseSubType !== 'app_error_or_display'
+        || !Number.isSafeInteger(supportCase?.version)
+        || supportCase.version < 1
+        || !Number.isFinite(deadline.getTime())
+        || !allFlagsClear(supportCase?.flags)
+        || supportCase?.linkedPaymentId !== null
+        || supportCase?.linkedRefundId !== null
+        || supportCase?.linkedPayoutId !== null
+        || supportCase?.finalDecisionAvailable !== false
+        || !allowedModes.has(mode)
+        || supportCase.wp140Recovery.pendingProgressCount !== 0
+        || (pendingMode && (!overdue || supportCase.status !== 'received'))
+        || (mode === 'pending_active_recipient'
+          && supportCase.wp140Recovery.reporterActive !== true)
+        || (mode === 'pending_closed_synthetic_recipient'
+          && supportCase.wp140Recovery.reporterActive !== false)
+        || (publishedMode && (overdue || supportCase.status !== 'received'
+          || supportCase.wp140Recovery.wp140PublishedCount !== 1))
+        || (transitionedMode && (overdue || supportCase.status !== 'acknowledged'
+          || supportCase.wp140Recovery.wp140TransitionCount !== 1))) {
+      fail('A WP140 recovery target is not exact.');
     }
     ids.add(supportCase.id);
   }
@@ -197,16 +260,80 @@ export async function recoverWp140Cases({
   operations,
   now = new Date(),
 } = {}) {
-  const required = ['attest', 'draft', 'review', 'publish', 'readback', 'readiness'];
+  const required = [
+    'attest', 'draft', 'review', 'publish', 'readback',
+    'existingReadback', 'transitionClosedRecipient', 'transitionReadback',
+    'readiness',
+  ];
   if (operations === null || typeof operations !== 'object'
       || required.some((key) => typeof operations[key] !== 'function')) {
     fail('WP140 recovery operations are incomplete.');
   }
-  const targets = classifyWp140OverdueCases(cases, { now });
+  const targets = classifyWp140RecoveryCases(cases, { now });
   assertWp140ProvenanceAttestation(await operations.attest(targets));
   const results = [];
   for (let index = 0; index < targets.length; index += 1) {
     const supportCase = targets[index];
+    const recoveryMode = supportCase.wp140Recovery.mode;
+    if (recoveryMode === 'published_progress'
+        || recoveryMode === 'closed_synthetic_recipient_transition') {
+      const existing = await operations.existingReadback(supportCase, index);
+      if (existing?.futureDeadlineConfirmed !== true
+          || existing?.priorEventHistoryPreserved !== true
+          || existing?.externalMessageSent !== false) {
+        fail('A WP140 existing recovery readback is incomplete.');
+      }
+      results.push(Object.freeze({
+        ordinal: index + 1,
+        recoveryMode,
+        progressPublished: recoveryMode === 'published_progress',
+        independentReview: recoveryMode === 'published_progress',
+        officialStatusTransition:
+          recoveryMode === 'closed_synthetic_recipient_transition',
+        futureDeadlineConfirmed: true,
+        priorEventHistoryPreserved: true,
+        externalMessageSent: false,
+      }));
+      continue;
+    }
+    if (recoveryMode === 'pending_closed_synthetic_recipient') {
+      const transition = await operations.transitionClosedRecipient(
+        supportCase,
+        buildWp140ProgressDraft(supportCase, { now }),
+        index,
+      );
+      const deadline = new Date(transition?.supportCase?.nextUpdateAt);
+      if (transition?.supportCase?.id !== supportCase.id
+          || transition?.supportCase?.status !== 'acknowledged'
+          || !Number.isSafeInteger(transition?.supportCase?.version)
+          || transition.supportCase.version <= supportCase.version
+          || !Number.isFinite(deadline.getTime())
+          || deadline.getTime() <= now.getTime()) {
+        fail('A WP140 closed-recipient transition is incomplete.');
+      }
+      const readback = await operations.transitionReadback(
+        supportCase,
+        transition,
+        index,
+      );
+      if (readback?.statusTransitionVisible !== true
+          || readback?.noMessageCreated !== true
+          || readback?.priorEventHistoryPreserved !== true
+          || readback?.externalMessageSent !== false) {
+        fail('A WP140 closed-recipient transition readback is incomplete.');
+      }
+      results.push(Object.freeze({
+        ordinal: index + 1,
+        recoveryMode: 'closed_synthetic_recipient_transition',
+        progressPublished: false,
+        independentReview: false,
+        officialStatusTransition: true,
+        futureDeadlineConfirmed: true,
+        priorEventHistoryPreserved: true,
+        externalMessageSent: false,
+      }));
+      continue;
+    }
     const payload = buildWp140ProgressDraft(supportCase, { now });
     const draft = requireDraft(await operations.draft(supportCase, payload, index));
     const review = requireReview(
@@ -228,8 +355,10 @@ export async function recoverWp140Cases({
     }
     results.push(Object.freeze({
       ordinal: index + 1,
+      recoveryMode: 'published_progress',
       progressPublished: true,
       independentReview: true,
+      officialStatusTransition: false,
       futureDeadlineConfirmed: true,
       priorEventHistoryPreserved: true,
       externalMessageSent: false,
@@ -257,21 +386,33 @@ export function buildWp140Evidence({
   cleanup,
   capturedAt = new Date().toISOString(),
 } = {}) {
+  const validBeforeRecoveryState = before?.cohortCount === wp140ExpectedOverdueCount
+    && ((before?.overdueCount === 1
+      && before?.wp140PublishedProgressCount === 2
+      && before?.wp140TransitionCount === 0)
+      || (before?.overdueCount === 0
+        && before?.wp140PublishedProgressCount === 2
+        && before?.wp140TransitionCount === 1));
   if (!/^[a-f0-9]{40}$/u.test(implementationHead ?? '')
       || runtimeImage !== wp140ExpectedRuntimeImage
       || runtimeRestartCountBefore !== 0
       || runtimeRestartCountAfter !== 0
-      || before?.overdueCount !== wp140ExpectedOverdueCount
+      || !validBeforeRecoveryState
       || before?.status !== 'passed-read-only'
       || before?.changed !== false
       || recovery?.results?.length !== wp140ExpectedOverdueCount
-      || recovery.results.some((entry) => entry?.progressPublished !== true
-        || entry?.independentReview !== true
-        || entry?.futureDeadlineConfirmed !== true
+      || recovery.results.some((entry) => entry?.futureDeadlineConfirmed !== true
         || entry?.priorEventHistoryPreserved !== true
         || entry?.externalMessageSent !== false)
+      || recovery.results.filter((entry) => entry?.progressPublished === true).length !== 2
+      || recovery.results.filter((entry) => entry?.independentReview === true).length !== 2
+      || recovery.results.filter(
+        (entry) => entry?.officialStatusTransition === true,
+      ).length !== 1
       || after?.overdueCount !== 0
       || after?.pendingProgressCount !== 0
+      || after?.wp140PublishedProgressCount !== 2
+      || after?.wp140TransitionCount !== 1
       || after?.priorHistoryPreserved !== true
       || after?.externalMessageSentCount !== 0
       || recovery?.readiness?.httpStatus !== 200
@@ -303,8 +444,10 @@ export function buildWp140Evidence({
       targetOperatingMode: 'simulation',
       targetPriority: 'p3',
       syntheticProvenanceConfirmed: true,
-      independentTwoAdminReview: true,
-      publishedProgressCount: wp140ExpectedOverdueCount,
+      independentTwoAdminReviewForPublishedProgress: true,
+      publishedProgressCount: 2,
+      independentReviewCount: 2,
+      closedSyntheticRecipientTransitionCount: 1,
       futureDeadlineCount: wp140ExpectedOverdueCount,
       overdueCountAfter: 0,
       pendingProgressCountAfter: 0,
@@ -455,35 +598,101 @@ async function readRuntime() {
   return Object.freeze({ image: match[1], restartCount: Number(match[2]) });
 }
 
-const remoteInventoryScript = `
+export const remoteInventoryScript = `
 import { pool } from './src/db.js';
 const result = await pool.query(\`
-  WITH overdue AS (
-    SELECT support_case.* FROM support_cases AS support_case
-     WHERE support_case.status NOT IN ('resolved', 'closed')
-       AND support_case.next_update_at <= now()
+  WITH cohort AS (
+    SELECT support_case.*,
+      user_account.account_status = 'active'
+        AND user_account.deactivated_at IS NULL AS reporter_active,
+      (SELECT count(*)::int FROM support_case_progress_updates AS progress
+        WHERE progress.case_id = support_case.id
+          AND progress.proposal_status = 'published'
+          AND progress.idempotency_key LIKE 'support.progress.propose:wp140-draft-%')
+        AS wp140_published_count,
+      (SELECT count(*)::int FROM support_case_events AS event
+        WHERE event.case_id = support_case.id
+          AND event.event_type = 'case.transitioned'
+          AND event.idempotency_key LIKE
+            'support.case.transition:wp140-closed-recipient-transition-%')
+        AS wp140_transition_count
+      FROM support_cases AS support_case
+      JOIN users AS user_account ON user_account.id = support_case.reporter_user_id
+      LEFT JOIN listings AS listing ON listing.id = support_case.linked_listing_id
+     WHERE support_case.operating_mode = 'simulation'
+       AND support_case.priority = 'p3'
+       AND support_case.case_type = 'general_help'
+       AND support_case.case_subtype = 'app_error_or_display'
+       AND NOT support_case.safety_flag AND NOT support_case.privacy_flag
+       AND NOT support_case.dsa_flag AND NOT support_case.authority_flag
+       AND NOT support_case.money_flag AND NOT support_case.account_takeover_flag
+       AND (
+         (user_account.email ~ '^[^@+]+\\\\+sit-[a-z0-9-]+-(owner|renter)@[^@]+$'
+           AND (user_account.profile->>'displayName') IN
+             ('SIT Test Vermieter', 'SIT Test Mieter'))
+         OR (user_account.email ~
+           '^wp68-[a-z0-9]+-reporter@staging\\\\.shareittoo\\\\.invalid$'
+           AND EXISTS (SELECT 1 FROM audit_log AS audit
+             WHERE audit.resource_id = user_account.id::text
+               AND audit.action = 'staging.support_test_actor_bootstrapped'))
+       )
+       AND (support_case.user_facing_summary ~* '(SIT|Staging|Test)'
+         OR coalesce(support_case.internal_summary, '') ~* '(SIT|Staging|Test)')
+       AND (support_case.linked_listing_id IS NULL
+         OR listing.title ~ '^SIT Rollenprüfung ')
+       AND (
+         (support_case.status = 'received' AND support_case.next_update_at <= now())
+         OR EXISTS (SELECT 1 FROM support_case_progress_updates AS progress
+           WHERE progress.case_id = support_case.id
+             AND progress.proposal_status = 'published'
+             AND progress.idempotency_key LIKE 'support.progress.propose:wp140-draft-%')
+         OR EXISTS (SELECT 1 FROM support_case_events AS event
+           WHERE event.case_id = support_case.id
+             AND event.event_type = 'case.transitioned'
+             AND event.idempotency_key LIKE
+               'support.case.transition:wp140-closed-recipient-transition-%')
+       )
   )
-  SELECT count(*)::int AS overdue_count,
+  SELECT count(*)::int AS cohort_count,
+    count(*) FILTER (WHERE status NOT IN ('resolved', 'closed')
+      AND next_update_at <= now())::int AS overdue_count,
     coalesce(bool_and(operating_mode = 'simulation'), false) AS all_non_live,
     coalesce(bool_and(priority = 'p3'), false) AS all_noncritical,
     coalesce(bool_and(NOT safety_flag AND NOT privacy_flag AND NOT dsa_flag
       AND NOT authority_flag AND NOT money_flag AND NOT account_takeover_flag), false) AS all_flags_clear,
-    (SELECT count(*)::int FROM support_case_events WHERE case_id IN (SELECT id FROM overdue)) AS event_count,
-    (SELECT count(*)::int FROM support_messages WHERE case_id IN (SELECT id FROM overdue)) AS message_count,
-    (SELECT count(*)::int FROM support_case_progress_updates WHERE case_id IN (SELECT id FROM overdue)) AS progress_count,
+    coalesce(sum(wp140_published_count), 0)::int AS wp140_published_progress_count,
+    coalesce(sum(wp140_transition_count), 0)::int AS wp140_transition_count,
+    json_agg(json_build_object(
+      'caseReference', encode(digest(id::text, 'sha256'), 'hex'),
+      'reporterActive', reporter_active,
+      'overdue', status NOT IN ('resolved', 'closed') AND next_update_at <= now(),
+      'wp140PublishedCount', wp140_published_count,
+      'wp140TransitionCount', wp140_transition_count,
+      'pendingProgressCount', (SELECT count(*)::int
+        FROM support_case_progress_updates AS progress
+        WHERE progress.case_id = cohort.id
+          AND progress.proposal_status IN ('pending_review', 'approved'))
+    ) ORDER BY created_at, id) AS case_references,
+    (SELECT count(*)::int FROM support_case_events WHERE case_id IN (SELECT id FROM cohort)) AS event_count,
+    (SELECT count(*)::int FROM support_messages WHERE case_id IN (SELECT id FROM cohort)) AS message_count,
+    (SELECT count(*)::int FROM support_case_progress_updates WHERE case_id IN (SELECT id FROM cohort)) AS progress_count,
     (SELECT count(*)::int FROM support_case_progress_updates
-      WHERE case_id IN (SELECT id FROM overdue)
+      WHERE case_id IN (SELECT id FROM cohort)
         AND proposal_status IN ('pending_review', 'approved')) AS pending_progress_count
-  FROM overdue
+  FROM cohort
 \`);
 const row = result.rows[0];
 await pool.end();
 process.stdout.write(JSON.stringify({
-  status: 'passed-read-only', overdueCount: row.overdue_count,
+  status: 'passed-read-only', cohortCount: row.cohort_count,
+  overdueCount: row.overdue_count,
   allNonLive: row.all_non_live, allNoncritical: row.all_noncritical,
   allFlagsClear: row.all_flags_clear, retainedEventCount: row.event_count,
   retainedMessageCount: row.message_count, priorProgressCount: row.progress_count,
-  pendingProgressCount: row.pending_progress_count, identifiersEmitted: false,
+  pendingProgressCount: row.pending_progress_count,
+  wp140PublishedProgressCount: row.wp140_published_progress_count,
+  wp140TransitionCount: row.wp140_transition_count,
+  caseReferences: row.case_references, identifiersEmitted: false,
   credentialsRead: false, changed: false,
 }));
 `;
@@ -523,8 +732,27 @@ const result = await pool.query(\`
   JOIN users AS user_account ON user_account.id = support_case.reporter_user_id
   LEFT JOIN listings AS listing ON listing.id = support_case.linked_listing_id
   WHERE support_case.id = ANY($1::uuid[])
-    AND support_case.status = 'received'
-    AND support_case.next_update_at <= now()
+    AND (
+      (support_case.status = 'received' AND support_case.next_update_at <= now()
+        AND NOT EXISTS (SELECT 1 FROM support_case_progress_updates AS progress
+          WHERE progress.case_id = support_case.id
+            AND progress.idempotency_key LIKE 'support.progress.propose:wp140-draft-%')
+        AND NOT EXISTS (SELECT 1 FROM support_case_events AS event
+          WHERE event.case_id = support_case.id
+            AND event.idempotency_key LIKE
+              'support.case.transition:wp140-closed-recipient-transition-%'))
+      OR (support_case.status = 'received' AND support_case.next_update_at > now()
+        AND EXISTS (SELECT 1 FROM support_case_progress_updates AS progress
+          WHERE progress.case_id = support_case.id
+            AND progress.proposal_status = 'published'
+            AND progress.idempotency_key LIKE 'support.progress.propose:wp140-draft-%'))
+      OR (support_case.status = 'acknowledged' AND support_case.next_update_at > now()
+        AND EXISTS (SELECT 1 FROM support_case_events AS event
+          WHERE event.case_id = support_case.id
+            AND event.event_type = 'case.transitioned'
+            AND event.idempotency_key LIKE
+              'support.case.transition:wp140-closed-recipient-transition-%'))
+    )
 \`, [input.caseIds]);
 const row = result.rows[0];
 await pool.end();
@@ -627,7 +855,7 @@ await pool.end();
 process.stdout.write(JSON.stringify(outcome));
 `;
 
-const remoteAfterScript = `
+export const remoteAfterScript = `
 import { pool } from './src/db.js';
 const chunks = [];
 for await (const chunk of process.stdin) chunks.push(chunk);
@@ -641,6 +869,15 @@ const result = await pool.query(\`
       WHERE case_id = ANY($1::uuid[]) AND proposal_status IN ('pending_review', 'approved')) AS pending_progress_count,
     (SELECT count(*)::int FROM support_case_progress_updates
       WHERE case_id = ANY($1::uuid[]) AND proposal_status = 'published') AS published_progress_count,
+    (SELECT count(*)::int FROM support_case_progress_updates
+      WHERE case_id = ANY($1::uuid[]) AND proposal_status = 'published'
+        AND idempotency_key LIKE 'support.progress.propose:wp140-draft-%')
+      AS wp140_published_progress_count,
+    (SELECT count(*)::int FROM support_case_events
+      WHERE case_id = ANY($1::uuid[]) AND event_type = 'case.transitioned'
+        AND idempotency_key LIKE
+          'support.case.transition:wp140-closed-recipient-transition-%')
+      AS wp140_transition_count,
     (SELECT count(*)::int FROM support_case_events
       WHERE case_id = ANY($1::uuid[])) AS event_count,
     (SELECT count(*)::int FROM support_messages
@@ -654,6 +891,8 @@ process.stdout.write(JSON.stringify({
   status: 'passed-read-only', overdueCount: row.overdue_count,
   pendingProgressCount: row.pending_progress_count,
   publishedProgressCount: row.published_progress_count,
+  wp140PublishedProgressCount: row.wp140_published_progress_count,
+  wp140TransitionCount: row.wp140_transition_count,
   eventCount: row.event_count, messageCount: row.message_count,
   progressCount: row.progress_count, identifiersEmitted: false,
   credentialsRead: false, changed: false,
@@ -700,7 +939,11 @@ async function requestIdempotentJson(path, options) {
 
 function requireStatus(result, expected, label) {
   if (result.response.status !== expected) {
-    fail(`${label} returned HTTP ${result.response.status}.`);
+    const code = typeof result.value?.error === 'string'
+      && /^[a-z0-9_]{3,100}$/u.test(result.value.error)
+      ? ` (${result.value.error})`
+      : '';
+    fail(`${label} returned HTTP ${result.response.status}${code}.`);
   }
   return result.value;
 }
@@ -770,11 +1013,15 @@ export async function executeWp140({
     failureLabel: 'read-only preflight',
   });
   if (before?.status !== 'passed-read-only'
-      || before?.overdueCount !== wp140ExpectedOverdueCount
+      || before?.cohortCount !== wp140ExpectedOverdueCount
+      || !Number.isSafeInteger(before?.overdueCount)
+      || before.overdueCount < 0 || before.overdueCount > wp140ExpectedOverdueCount
       || before?.allNonLive !== true
       || before?.allNoncritical !== true
       || before?.allFlagsClear !== true
       || before?.pendingProgressCount !== 0
+      || !Array.isArray(before?.caseReferences)
+      || before.caseReferences.length !== wp140ExpectedOverdueCount
       || before?.changed !== false) {
     fail('WP140 read-only preflight is not exact.');
   }
@@ -808,10 +1055,39 @@ export async function executeWp140({
       accessToken: authorSession.accessToken, stepUpToken: authorStepUp,
     }), 200, 'WP140 support inventory');
     const now = new Date();
-    const overdue = (Array.isArray(listed?.supportCases) ? listed.supportCases : [])
-      .filter((entry) => activeCase(entry)
-        && new Date(entry.nextUpdateAt).getTime() <= now.getTime());
-    const targets = classifyWp140OverdueCases(overdue, { now });
+    const recoveryByReference = new Map(before.caseReferences.map((entry) => [
+      entry.caseReference,
+      entry,
+    ]));
+    const targets = classifyWp140RecoveryCases(
+      (Array.isArray(listed?.supportCases) ? listed.supportCases : [])
+        .filter((entry) => recoveryByReference.has(caseReference(entry.id)))
+        .map((entry) => {
+          const state = recoveryByReference.get(caseReference(entry.id));
+          let mode = null;
+          if (state.wp140PublishedCount === 1 && state.overdue === false) {
+            mode = 'published_progress';
+          } else if (state.wp140TransitionCount === 1 && state.overdue === false) {
+            mode = 'closed_synthetic_recipient_transition';
+          } else if (state.wp140PublishedCount === 0
+              && state.wp140TransitionCount === 0 && state.overdue === true) {
+            mode = state.reporterActive === true
+              ? 'pending_active_recipient'
+              : 'pending_closed_synthetic_recipient';
+          }
+          return {
+            ...entry,
+            wp140Recovery: {
+              mode,
+              reporterActive: state.reporterActive,
+              pendingProgressCount: state.pendingProgressCount,
+              wp140PublishedCount: state.wp140PublishedCount,
+              wp140TransitionCount: state.wp140TransitionCount,
+            },
+          };
+        }),
+      { now },
+    );
     const caseIds = targets.map((entry) => entry.id);
     const baselineByCase = new Map();
     const operations = {
@@ -879,6 +1155,73 @@ export async function executeWp140({
           externalMessageSent: message?.externalMessageSent === true,
         };
       },
+      existingReadback: async (supportCase) => {
+        const detail = requireStatus(await requestJson(
+          `/admin/support/cases/${encodeURIComponent(supportCase.id)}`, {
+            accessToken: authorSession.accessToken, stepUpToken: authorStepUp,
+          },
+        ), 200, 'WP140 existing target readback');
+        const deadline = new Date(detail?.supportCase?.nextUpdateAt);
+        return {
+          futureDeadlineConfirmed: detail?.supportCase?.id === supportCase.id
+            && Number.isFinite(deadline.getTime()) && deadline.getTime() > now.getTime(),
+          priorEventHistoryPreserved: Array.isArray(detail?.events)
+            && Array.isArray(detail?.messages)
+            && Array.isArray(detail?.progressUpdates),
+          externalMessageSent: Array.isArray(detail?.messages)
+            && detail.messages.some((message) => message?.externalMessageSent === true),
+        };
+      },
+      transitionClosedRecipient: async (supportCase, payload, index) => {
+        const reviewerDetail = requireStatus(await requestJson(
+          `/admin/support/cases/${encodeURIComponent(supportCase.id)}`, {
+            accessToken: reviewerSession.accessToken, stepUpToken: reviewerStepUp,
+          },
+        ), 200, `WP140 closed-recipient review ${index + 1}`);
+        if (reviewerDetail?.supportCase?.id !== supportCase.id
+            || reviewerDetail.supportCase.status !== 'received'
+            || reviewerDetail.supportCase.version !== supportCase.version) {
+          fail('WP140 closed-recipient review is stale.');
+        }
+        baselineByCase.set(supportCase.id, safeCounts(reviewerDetail));
+        return requireStatus(await requestIdempotentJson(
+          `/admin/support/cases/${encodeURIComponent(supportCase.id)}/status`, {
+            method: 'PATCH', accessToken: authorSession.accessToken,
+            stepUpToken: authorStepUp,
+            idempotency: idempotencyKey(
+              `wp140-closed-recipient-transition-${index + 1}`,
+            ),
+            body: {
+              status: 'acknowledged',
+              expectedVersion: supportCase.version,
+              reason:
+                'Historischer kontrollierter Staging-Testfall mit bereits deaktiviertem synthetischem Testkonto; weitere Bearbeitung bleibt intern.',
+              nextAction:
+                'Historischen kontrollierten Staging-Testfall anhand der erhaltenen Nachweiskette weiter prüfen.',
+              nextUpdateAt: payload.nextUpdateAt,
+              waitingOn: 'support_owner',
+            },
+          },
+        ), 200, `WP140 closed-recipient transition ${index + 1}`);
+      },
+      transitionReadback: async (supportCase) => {
+        const detail = requireStatus(await requestJson(
+          `/admin/support/cases/${encodeURIComponent(supportCase.id)}`, {
+            accessToken: authorSession.accessToken, stepUpToken: authorStepUp,
+          },
+        ), 200, 'WP140 closed-recipient transition readback');
+        const beforeCounts = baselineByCase.get(supportCase.id);
+        const afterCounts = safeCounts(detail);
+        return {
+          statusTransitionVisible: detail?.supportCase?.status === 'acknowledged',
+          noMessageCreated: beforeCounts !== undefined
+            && afterCounts.messages === beforeCounts.messages
+            && afterCounts.progress === beforeCounts.progress,
+          priorEventHistoryPreserved: beforeCounts !== undefined
+            && afterCounts.events > beforeCounts.events,
+          externalMessageSent: false,
+        };
+      },
       readiness: async () => {
         const ready = await requestJson(wp140ReadyUrl, { absolute: true });
         return {
@@ -901,7 +1244,8 @@ export async function executeWp140({
     after.priorHistoryPreserved = after.eventCount >= before.retainedEventCount
       && after.messageCount >= before.retainedMessageCount
       && after.progressCount >= before.priorProgressCount;
-    if (after.publishedProgressCount < wp140ExpectedOverdueCount
+    if (after.wp140PublishedProgressCount !== 2
+        || after.wp140TransitionCount !== 1
         || after.externalMessageSentCount !== 0) {
       fail('WP140 post-recovery audit is incomplete.');
     }

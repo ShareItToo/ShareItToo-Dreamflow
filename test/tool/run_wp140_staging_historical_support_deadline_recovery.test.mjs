@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { resolve } from 'node:path';
 
@@ -9,10 +10,13 @@ import {
   buildWp140Evidence,
   buildWp140ProgressDraft,
   classifyWp140OverdueCases,
+  classifyWp140RecoveryCases,
   recoverWp140Cases,
   remoteAttestationScript,
   remoteBootstrapScript,
   remoteDecommissionScript,
+  remoteInventoryScript,
+  remoteAfterScript,
   wp140ExpectedRuntimeImage,
 } from '../../tool/run_wp140_staging_historical_support_deadline_recovery.mjs';
 
@@ -44,6 +48,13 @@ function supportCase(index) {
     linkedPayoutId: null,
     finalDecisionAvailable: false,
     flags: clearFlags,
+    wp140Recovery: {
+      mode: 'pending_active_recipient',
+      reporterActive: true,
+      pendingProgressCount: 0,
+      wp140PublishedCount: 0,
+      wp140TransitionCount: 0,
+    },
   };
 }
 
@@ -103,7 +114,49 @@ test('requires read-only synthetic provenance and zero pending proposals', () =>
   );
 });
 
+test('classifies a retry-safe mixed recovery cohort without reopening a closed reporter', () => {
+  const mixed = [
+    {
+      ...supportCase(1),
+      nextUpdateAt: '2026-09-20T13:00:00.000Z',
+      wp140Recovery: {
+        mode: 'published_progress', reporterActive: true,
+        pendingProgressCount: 0, wp140PublishedCount: 1, wp140TransitionCount: 0,
+      },
+    },
+    {
+      ...supportCase(2),
+      nextUpdateAt: '2026-09-20T13:00:00.000Z',
+      wp140Recovery: {
+        mode: 'published_progress', reporterActive: true,
+        pendingProgressCount: 0, wp140PublishedCount: 1, wp140TransitionCount: 0,
+      },
+    },
+    {
+      ...supportCase(3),
+      wp140Recovery: {
+        mode: 'pending_closed_synthetic_recipient', reporterActive: false,
+        pendingProgressCount: 0, wp140PublishedCount: 0, wp140TransitionCount: 0,
+      },
+    },
+  ];
+  const classified = classifyWp140RecoveryCases(mixed, { now });
+  assert.equal(classified.length, 3);
+  assert.equal(classified.at(-1).wp140Recovery.mode, 'published_progress');
+  assert.throws(
+    () => classifyWp140RecoveryCases([
+      mixed[0], mixed[1],
+      { ...mixed[2], wp140Recovery: { ...mixed[2].wp140Recovery, reporterActive: true } },
+    ], { now }),
+    /recovery target is not exact/u,
+  );
+});
+
 test('preserves remote regex escapes through both JavaScript evaluations', () => {
+  assert.equal(remoteInventoryScript.includes(String.raw`\\+sit-`), true);
+  assert.equal(remoteInventoryScript.includes(
+    String.raw`@staging\\.shareittoo\\.invalid`,
+  ), true);
   assert.equal(remoteAttestationScript.includes(String.raw`\\+sit-`), true);
   assert.equal(remoteAttestationScript.includes(
     String.raw`@staging\\.shareittoo\\.invalid`,
@@ -116,6 +169,19 @@ test('preserves remote regex escapes through both JavaScript evaluations', () =>
   ), true);
   assert.equal(remoteBootstrapScript.includes(String.raw`@staging\\.shareittoo`), false);
   assert.equal(remoteDecommissionScript.includes(String.raw`@staging\\.shareittoo`), false);
+  for (const script of [
+    remoteInventoryScript,
+    remoteAttestationScript,
+    remoteBootstrapScript,
+    remoteDecommissionScript,
+    remoteAfterScript,
+  ]) {
+    const syntax = spawnSync(process.execPath, ['--input-type=module', '--check'], {
+      input: script,
+      encoding: 'utf8',
+    });
+    assert.equal(syntax.status, 0, syntax.stderr);
+  }
 });
 
 test('builds truthful bounded progress content with a future deadline', () => {
@@ -192,6 +258,15 @@ test('recovers every case through independent review, publication and readback',
           externalMessageSent: false,
         };
       },
+      async existingReadback() {
+        assert.fail('fresh active recipients must not use existing readback');
+      },
+      async transitionClosedRecipient() {
+        assert.fail('fresh active recipients must not transition');
+      },
+      async transitionReadback() {
+        assert.fail('fresh active recipients must not use transition readback');
+      },
       async readiness() {
         calls.push('readiness');
         return {
@@ -212,6 +287,84 @@ test('recovers every case through independent review, publication and readback',
     'draft-3', 'review-3', 'publish-3', 'readback-3',
     'readiness',
   ]);
+});
+
+test('resumes two published cases and advances one closed synthetic recipient without a message', async () => {
+  const mixed = [
+    {
+      ...supportCase(1),
+      nextUpdateAt: '2026-09-20T13:00:00.000Z',
+      wp140Recovery: {
+        mode: 'published_progress', reporterActive: true,
+        pendingProgressCount: 0, wp140PublishedCount: 1, wp140TransitionCount: 0,
+      },
+    },
+    {
+      ...supportCase(2),
+      nextUpdateAt: '2026-09-20T13:00:00.000Z',
+      wp140Recovery: {
+        mode: 'published_progress', reporterActive: true,
+        pendingProgressCount: 0, wp140PublishedCount: 1, wp140TransitionCount: 0,
+      },
+    },
+    {
+      ...supportCase(3),
+      wp140Recovery: {
+        mode: 'pending_closed_synthetic_recipient', reporterActive: false,
+        pendingProgressCount: 0, wp140PublishedCount: 0, wp140TransitionCount: 0,
+      },
+    },
+  ];
+  const calls = [];
+  const recovery = await recoverWp140Cases({
+    cases: mixed,
+    now,
+    operations: {
+      attest: async () => attestation(),
+      draft: async () => assert.fail('published cases must not be drafted again'),
+      review: async () => assert.fail('published cases must not be reviewed again'),
+      publish: async () => assert.fail('published cases must not be published again'),
+      readback: async () => assert.fail('published cases use existing readback'),
+      existingReadback: async (_target, index) => {
+        calls.push(`existing-${index + 1}`);
+        return {
+          futureDeadlineConfirmed: true,
+          priorEventHistoryPreserved: true,
+          externalMessageSent: false,
+        };
+      },
+      transitionClosedRecipient: async (target, payload, index) => {
+        calls.push(`transition-${index + 1}`);
+        return {
+          supportCase: {
+            id: target.id,
+            status: 'acknowledged',
+            version: target.version + 1,
+            nextUpdateAt: payload.nextUpdateAt,
+          },
+        };
+      },
+      transitionReadback: async (_target, _transition, index) => {
+        calls.push(`transition-readback-${index + 1}`);
+        return {
+          statusTransitionVisible: true,
+          noMessageCreated: true,
+          priorEventHistoryPreserved: true,
+          externalMessageSent: false,
+        };
+      },
+      readiness: async () => ({
+        httpStatus: 200,
+        status: 'ok',
+        nextUpdateOverdue: 0,
+        criticalNextUpdateOverdue: 0,
+        p0WithoutOwner: 0,
+      }),
+    },
+  });
+  assert.deepEqual(calls, ['transition-1', 'transition-readback-1', 'existing-2', 'existing-3']);
+  assert.equal(recovery.results.filter((entry) => entry.progressPublished).length, 2);
+  assert.equal(recovery.results.filter((entry) => entry.officialStatusTransition).length, 1);
 });
 
 test('fails closed when publication or final readiness is ambiguous', async () => {
@@ -241,6 +394,13 @@ test('fails closed when publication or final readiness is ambiguous', async () =
       priorEventHistoryPreserved: true,
       externalMessageSent: false,
     }),
+    existingReadback: async () => ({
+      futureDeadlineConfirmed: true,
+      priorEventHistoryPreserved: true,
+      externalMessageSent: false,
+    }),
+    transitionClosedRecipient: async () => assert.fail('not expected'),
+    transitionReadback: async () => assert.fail('not expected'),
     readiness: async () => ({
       httpStatus: 503,
       status: 'degraded',
@@ -257,14 +417,28 @@ test('fails closed when publication or final readiness is ambiguous', async () =
 
 test('builds identity-free closure evidence and keeps direct case writes forbidden', () => {
   const recovery = {
-    results: [1, 2, 3].map((ordinal) => ({
-      ordinal,
-      progressPublished: true,
-      independentReview: true,
-      futureDeadlineConfirmed: true,
-      priorEventHistoryPreserved: true,
-      externalMessageSent: false,
-    })),
+    results: [
+      ...[1, 2].map((ordinal) => ({
+        ordinal,
+        recoveryMode: 'published_progress',
+        progressPublished: true,
+        independentReview: true,
+        officialStatusTransition: false,
+        futureDeadlineConfirmed: true,
+        priorEventHistoryPreserved: true,
+        externalMessageSent: false,
+      })),
+      {
+        ordinal: 3,
+        recoveryMode: 'closed_synthetic_recipient_transition',
+        progressPublished: false,
+        independentReview: false,
+        officialStatusTransition: true,
+        futureDeadlineConfirmed: true,
+        priorEventHistoryPreserved: true,
+        externalMessageSent: false,
+      },
+    ],
     readiness: {
       httpStatus: 200,
       status: 'ok',
@@ -278,11 +452,16 @@ test('builds identity-free closure evidence and keeps direct case writes forbidd
     runtimeImage: wp140ExpectedRuntimeImage,
     runtimeRestartCountBefore: 0,
     runtimeRestartCountAfter: 0,
-    before: { status: 'passed-read-only', overdueCount: 3, changed: false },
+    before: {
+      status: 'passed-read-only', cohortCount: 3, overdueCount: 1,
+      wp140PublishedProgressCount: 2, wp140TransitionCount: 0, changed: false,
+    },
     recovery,
     after: {
       overdueCount: 0,
       pendingProgressCount: 0,
+      wp140PublishedProgressCount: 2,
+      wp140TransitionCount: 1,
       priorHistoryPreserved: true,
       externalMessageSentCount: 0,
     },
@@ -291,6 +470,26 @@ test('builds identity-free closure evidence and keeps direct case writes forbidd
   assert.equal(evidence.portfolioEffect.totals.pass, 21);
   assert.equal(evidence.boundaries.externalMessageSent, false);
   assert.doesNotMatch(JSON.stringify(evidence), /caseId|reporterUserId|@/u);
+  assert.equal(buildWp140Evidence({
+    implementationHead: 'd'.repeat(40),
+    runtimeImage: wp140ExpectedRuntimeImage,
+    runtimeRestartCountBefore: 0,
+    runtimeRestartCountAfter: 0,
+    before: {
+      status: 'passed-read-only', cohortCount: 3, overdueCount: 0,
+      wp140PublishedProgressCount: 2, wp140TransitionCount: 1, changed: false,
+    },
+    recovery,
+    after: {
+      overdueCount: 0,
+      pendingProgressCount: 0,
+      wp140PublishedProgressCount: 2,
+      wp140TransitionCount: 1,
+      priorHistoryPreserved: true,
+      externalMessageSentCount: 0,
+    },
+    cleanup: { temporaryAdminCount: 2, credentialsRevoked: true, privateVaultDeleted: true },
+  }).status, 'passed-historical-simulation-deadline-recovery');
 
   const source = readFileSync(resolve(
     process.cwd(),
