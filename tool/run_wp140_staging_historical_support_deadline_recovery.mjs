@@ -987,6 +987,18 @@ function safeCounts(detail) {
   };
 }
 
+export function summarizeWp140ExistingDetail(detail, supportCase, now) {
+  const deadline = new Date(detail?.supportCase?.nextUpdateAt);
+  return Object.freeze({
+    futureDeadlineConfirmed: detail?.supportCase?.id === supportCase?.id
+      && Number.isFinite(deadline.getTime()) && deadline.getTime() > now.getTime(),
+    priorEventHistoryPreserved: Array.isArray(detail?.events)
+      && Array.isArray(detail?.messages),
+    externalMessageSent: Array.isArray(detail?.messages)
+      && detail.messages.some((message) => message?.externalMessageSent === true),
+  });
+}
+
 function currentHead() {
   const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   if (!/^[a-f0-9]{40}$/u.test(head)) fail('WP140 implementation HEAD is invalid.');
@@ -1161,16 +1173,7 @@ export async function executeWp140({
             accessToken: authorSession.accessToken, stepUpToken: authorStepUp,
           },
         ), 200, 'WP140 existing target readback');
-        const deadline = new Date(detail?.supportCase?.nextUpdateAt);
-        return {
-          futureDeadlineConfirmed: detail?.supportCase?.id === supportCase.id
-            && Number.isFinite(deadline.getTime()) && deadline.getTime() > now.getTime(),
-          priorEventHistoryPreserved: Array.isArray(detail?.events)
-            && Array.isArray(detail?.messages)
-            && Array.isArray(detail?.progressUpdates),
-          externalMessageSent: Array.isArray(detail?.messages)
-            && detail.messages.some((message) => message?.externalMessageSent === true),
-        };
+        return summarizeWp140ExistingDetail(detail, supportCase, now);
       },
       transitionClosedRecipient: async (supportCase, payload, index) => {
         const reviewerDetail = requireStatus(await requestJson(

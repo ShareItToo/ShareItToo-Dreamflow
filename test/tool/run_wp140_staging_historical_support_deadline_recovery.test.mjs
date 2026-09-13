@@ -17,6 +17,7 @@ import {
   remoteDecommissionScript,
   remoteInventoryScript,
   remoteAfterScript,
+  summarizeWp140ExistingDetail,
   wp140ExpectedRuntimeImage,
 } from '../../tool/run_wp140_staging_historical_support_deadline_recovery.mjs';
 
@@ -195,6 +196,27 @@ test('builds truthful bounded progress content with a future deadline', () => {
     () => buildWp140ProgressDraft(supportCase(1), { now, deadlineHours: 800 }),
     /interval is invalid/u,
   );
+});
+
+test('accepts the actual support detail shape without inventing a progressUpdates field', () => {
+  const summary = summarizeWp140ExistingDetail({
+    supportCase: {
+      id: supportCase(1).id,
+      nextUpdateAt: '2026-09-20T13:00:00.000Z',
+    },
+    events: [{ eventType: 'case.progress_update_published' }],
+    messages: [{ sendStatus: 'sent', externalMessageSent: false }],
+  }, supportCase(1), now);
+  assert.deepEqual(summary, {
+    futureDeadlineConfirmed: true,
+    priorEventHistoryPreserved: true,
+    externalMessageSent: false,
+  });
+  assert.equal(summarizeWp140ExistingDetail({
+    supportCase: { id: supportCase(1).id, nextUpdateAt: '2026-09-20T13:00:00.000Z' },
+    events: [],
+    messages: [{ externalMessageSent: true }],
+  }, supportCase(1), now).externalMessageSent, true);
 });
 
 test('recovers every case through independent review, publication and readback', async () => {
