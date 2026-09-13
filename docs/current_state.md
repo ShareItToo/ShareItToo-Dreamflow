@@ -1,5 +1,29 @@
 # ShareItToo Current State
 
+## WP145 OnePlus current-candidate two-role — physical pass
+
+Exact signed Internal/Staging `1.0.0+2026091312` now passes the complete
+physical OnePlus CPH2581 journey on the same candidate already proven on the
+Pixel. Two distinct verified principals complete owner publication, renter
+discovery, non-binding request/acceptance, chat, foreground/background/
+terminated-process FCM, Account-A-to-B isolation and terminal cleanup. The
+protected owner is restored, the listing is ended and no test booking remains.
+
+The physical preflight exposed and closed two runner defects: normal ADB
+progress before terminal installation success and an invalid assumption that
+an authenticated session survives every update. Exact candidate verification
+and exact-owner binding now precede Push inspection with deterministic
+negative tests; no timing workaround remains.
+
+The portfolio advances to **22 PASS / 4 PARTIAL / 6 OPEN**. Implementation
+HEAD `ec95dbe3da3d430ba91df949155275b68d056948` passes Regression
+`34785361712`, independent clean checkout, CodeQL `34785361710` and zero open
+alerts. See
+`docs/operations/WP145_ONEPLUS_CURRENT_CANDIDATE_TWO_ROLE_CLOSURE_2026-09-14.md`.
+
+No payment, Stripe provider traffic, money, contract, Production, Store,
+public registration, Pixel action or PR merge occurred.
+
 ## WP144 MacBook OnePlus execution runway — prepared; device pending
 
 WP143 is closed on exact head `07ce24325648ed797893ac39a6fec6472273135e`

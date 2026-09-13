@@ -1,4 +1,28 @@
-# Current Work Package: WP144 MacBook OnePlus Execution Runway — PREPARED; DEVICE PENDING
+# Current Work Package: WP145 OnePlus Current-Candidate Two-Role — PHYSICAL PASS
+
+Exact signed Internal/Staging `1.0.0+2026091312` passes the complete physical
+OnePlus CPH2581 two-role journey on the same candidate already proven on the
+Pixel. Owner publication, renter discovery, non-binding request/acceptance,
+chat, foreground/background/terminated-process FCM, principal isolation,
+cleanup and protected-owner restoration all pass. The final state has no active
+test listing or booking and no identity or credential in committed evidence.
+
+The runner now correctly accepts only terminal ADB installation success and
+establishes the exact owner before Push inspection. Eleven focused tests,
+three WP145 closure checks, twenty combined WP143/WP144/WP145 checks,
+implementation Regression `34785361712`, clean checkout, CodeQL `34785361710`
+and zero alerts pass. Portfolio is now
+**22 PASS / 4 PARTIAL / 6 OPEN**. See
+`docs/operations/WP145_ONEPLUS_CURRENT_CANDIDATE_TWO_ROLE_CLOSURE_2026-09-14.md`.
+
+Next action: finish exact closure-head local/GitHub regression, then return the
+OnePlus to Walid. Remaining product requirements stay behind their existing
+Facebook, Apple, Stripe, V5.2/legal, human TalkBack or VPS registry gates.
+
+No payment, Stripe provider traffic, money, contract, Production, Store,
+public registration, Pixel action or PR merge occurred.
+
+# Previous Work Package: WP144 MacBook OnePlus Execution Runway — PREPARED; DEVICE PENDING
 
 WP143 is exact-head GitHub-green. A separate clean official SIT checkout now
 exists on the online MacBook at that same head; the old dirty checkout was not
