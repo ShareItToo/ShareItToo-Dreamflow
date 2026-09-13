@@ -554,7 +554,7 @@ await inTransaction(async (client) => {
   for (const account of input.accounts) {
     if (!/^[0-9a-f-]{36}$/u.test(account.id)
         || account.role !== 'admin'
-        || !/^wp140-[a-z0-9]+-(author|reviewer)@staging\\\\.shareittoo\\\\.invalid$/u.test(account.email)
+        || !/^wp140-[a-z0-9]+-(author|reviewer)@staging\\.shareittoo\\.invalid$/u.test(account.email)
         || typeof account.passwordHash !== 'string' || !account.passwordHash.startsWith('scrypt$')) {
       throw new Error('wp140_bootstrap_account_invalid');
     }
@@ -590,7 +590,7 @@ const input = JSON.parse(Buffer.concat(chunks).toString('utf8'));
 if (!Array.isArray(input?.accounts) || input.accounts.length !== 2
     || input.accounts.some((account) => account.role !== 'admin'
       || !/^[0-9a-f-]{36}$/u.test(account.id)
-      || !/^wp140-[a-z0-9]+-(author|reviewer)@staging\\\\.shareittoo\\\\.invalid$/u.test(account.email))) {
+      || !/^wp140-[a-z0-9]+-(author|reviewer)@staging\\.shareittoo\\.invalid$/u.test(account.email))) {
   throw new Error('wp140_decommission_input_invalid');
 }
 let outcome;

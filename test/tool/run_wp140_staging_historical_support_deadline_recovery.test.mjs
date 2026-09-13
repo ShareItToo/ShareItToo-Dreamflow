@@ -104,10 +104,18 @@ test('requires read-only synthetic provenance and zero pending proposals', () =>
 });
 
 test('preserves remote regex escapes through both JavaScript evaluations', () => {
-  assert.match(remoteAttestationScript, /\\\\\+sit-/u);
-  assert.match(remoteAttestationScript, /@staging\\\\\.shareittoo\\\\\.invalid/u);
-  assert.match(remoteBootstrapScript, /@staging\\\\\.shareittoo\\\\\.invalid/u);
-  assert.match(remoteDecommissionScript, /@staging\\\\\.shareittoo\\\\\.invalid/u);
+  assert.equal(remoteAttestationScript.includes(String.raw`\\+sit-`), true);
+  assert.equal(remoteAttestationScript.includes(
+    String.raw`@staging\\.shareittoo\\.invalid`,
+  ), true);
+  assert.equal(remoteBootstrapScript.includes(
+    String.raw`@staging\.shareittoo\.invalid`,
+  ), true);
+  assert.equal(remoteDecommissionScript.includes(
+    String.raw`@staging\.shareittoo\.invalid`,
+  ), true);
+  assert.equal(remoteBootstrapScript.includes(String.raw`@staging\\.shareittoo`), false);
+  assert.equal(remoteDecommissionScript.includes(String.raw`@staging\\.shareittoo`), false);
 });
 
 test('builds truthful bounded progress content with a future deadline', () => {
@@ -294,8 +302,6 @@ test('builds identity-free closure evidence and keeps direct case writes forbidd
   assert.match(source, /audit\.resource_id = user_account\.id::text/u);
   assert.match(source, /failureLabel: 'provenance attestation'/u);
   assert.match(source, /failureLabel: 'post-recovery audit'/u);
-  assert.match(source, /\^\[\^@\+\]\+\\\\\\\\\+sit-/u);
-  assert.match(source, /@staging\\\\\\\\\.shareittoo\\\\\\\\\.invalid/u);
   assert.doesNotMatch(source, /stderr.*failed/u);
   assert.match(source, /SIT_WP140_STAGING_HISTORICAL_SUPPORT_DEADLINE_RECOVERY_GO/u);
 });
