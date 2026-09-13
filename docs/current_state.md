@@ -1,5 +1,23 @@
 # ShareItToo Current State
 
+## WP143 OnePlus current-candidate runner — prepared; device pending
+
+The stale-runner gap is closed locally without touching either phone. The
+historical WP117 runner remains bound to `2026091110`; the new versioned WP143
+runner accepts only signed Internal/Staging `1.0.0+2026091312` and the physical
+OnePlus CPH2581. It forbids uninstall and app-data reset, gates any required
+installation, permits only a data-preserving update from an older matching
+`1.0.0` candidate, and requires the complete two-role journey plus cleanup.
+
+The exact private archive and sanitized QA-vault structure pass. The Mac mini
+currently sees only the Pixel 7 Pro, so no OnePlus action ran and the portfolio
+remains **21 PASS / 4 PARTIAL / 7 OPEN**. All 11 focused WP143 tests and the
+complete local regression pass. See
+`docs/operations/WP143_ONEPLUS_CURRENT_CANDIDATE_TWO_ROLE_PREPARATION_2026-09-13.md`.
+
+No device, Staging data, Production, Store, Firebase Console, Stripe, payment,
+money, PR merge, identity, credential or secret state changed.
+
 ## WP142 current-goal external-gate checkpoint — Pixel/Staging passed
 
 Fresh readback confirms exact signed Internal/Staging candidate

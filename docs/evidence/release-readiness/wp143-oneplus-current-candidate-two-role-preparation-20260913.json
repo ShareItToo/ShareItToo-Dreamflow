@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp143-oneplus-current-candidate-two-role-preparation",
+  "status": "prepared-exact-current-candidate-oneplus-two-role-runner-device-pending",
+  "capturedAt": "2026-09-13T18:51:39Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "baselineHead": "38a15825b78ddca55e9d4e7da478a4bb6d6fb8d9",
+    "cleanBeforePackage": true,
+    "remoteAheadBeforePackage": 0,
+    "remoteBehindBeforePackage": 0,
+    "mobileRuntimePathsChanged": []
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091312",
+    "sourceCommit": "904c2b734160544aaeb1128cac15191a521739e7",
+    "releaseChannel": "internal",
+    "environment": "staging",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkSha256": "e6d1df85e4e8973765c594b8fe9eb2654c876ee11cafe6d94cfe5c57ff8d7fb9",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "firebaseConfigured": true,
+    "googleEnabled": true,
+    "appleEnabled": false,
+    "facebookEnabled": false,
+    "privateArchiveValidated": true,
+    "privateArchivePathRecorded": false
+  },
+  "predecessorGap": {
+    "historicalRunner": "tool/run_wp117_oneplus_current_candidate_two_role.mjs",
+    "historicalVersionCode": "2026091110",
+    "historicalSourceCommit": "c8e2a49e14f5cae0026fa5f2bc327859fe0ff17b",
+    "currentCandidateAcceptedByHistoricalRunner": false,
+    "historicalRunnerModified": false,
+    "supersededByVersionedRunner": true
+  },
+  "runner": {
+    "path": "tool/run_wp143_oneplus_current_candidate_two_role.mjs",
+    "exactPhysicalDevice": "OnePlus CPH2581",
+    "exactCandidateRequired": true,
+    "executionGateRequired": true,
+    "installationGateRequiredUnlessExactCandidateAlreadyInstalled": true,
+    "missingPackageInstallAllowedOnlyWithGate": true,
+    "olderSameVersionDataPreservingUpdateAllowedOnlyWithGate": true,
+    "sameOrNewerNonExactBuildRejected": true,
+    "differentVersionNameRejected": true,
+    "splitOrAmbiguousPackageRejected": true,
+    "uninstallUsed": false,
+    "packageResetUsed": false,
+    "localAppDataReset": false,
+    "stableVisiblePushOptInRequired": true,
+    "completeTwoRoleJourneyRequired": true,
+    "terminalFixtureCleanupRequired": true,
+    "protectedOwnerRestorationRequired": true,
+    "structuredSanitizedOutputRequired": true
+  },
+  "privateQaVault": {
+    "recognizedVaultCount": 192,
+    "activeSourceVaultCount": 0,
+    "retiredJourneyVaultCount": 188,
+    "otherRecognizedVaultCount": 4,
+    "invalidRecognizedVaultCount": 0,
+    "unsafeEntryCount": 0,
+    "safeForFreshSourceProvisioning": true,
+    "sourceSelected": false,
+    "sourceValidatedOnlyAtExecution": true,
+    "credentialMaterialRecorded": false,
+    "privatePathRecorded": false
+  },
+  "freshDeviceReadback": {
+    "authorizedPhysicalDeviceCount": 1,
+    "connectedManufacturer": "Google",
+    "connectedModel": "Pixel 7 Pro",
+    "exactOnePlusConnected": false,
+    "onePlusContacted": false,
+    "rawDeviceIdentifierRecorded": false
+  },
+  "verification": {
+    "focusedWp143Tests": "passed-11",
+    "fullTechnicalRegression": "passed",
+    "flutterAnalyzer": "passed-zero-diagnostics",
+    "flutterTests": "passed",
+    "webBuildAndWasmDryRun": "passed",
+    "loopbackSmoke": "passed",
+    "androidDebugBuild": "passed",
+    "githubRegression": "pending-final-head",
+    "githubCodeql": "pending-final-head"
+  },
+  "portfolio": {
+    "pass": 21,
+    "partial": 4,
+    "open": 7,
+    "onePlusCrossDeviceTwoRole": "OPEN"
+  },
+  "stripePreflight": {
+    "officialConnection": "reauthentication-required",
+    "providerTrafficPerformed": false,
+    "testMoneyPerformed": false,
+    "realMoneyPerformed": false
+  },
+  "boundaries": {
+    "physicalJourneyExecuted": false,
+    "onePlusContacted": false,
+    "pixelChanged": false,
+    "stagingDataChanged": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "firebaseConsoleChanged": false,
+    "stripeAccountChanged": false,
+    "providerTrafficPerformed": false,
+    "paymentPerformed": false,
+    "testMoneyUsed": false,
+    "realMoneyUsed": false,
+    "pullRequestMerged": false,
+    "secretReadOrRecorded": false,
+    "personalIdentityRecorded": false,
+    "privatePathRecorded": false
+  },
+  "sourceInventory": {
+    "tool/run_wp143_oneplus_current_candidate_two_role.mjs": "ca1bce0a02b0160c04465c9d44b97591e032412939d0ce61da111cae958220e8",
+    "test/tool/run_wp143_oneplus_current_candidate_two_role.test.mjs": "234f7f7819a18f75485f31b133ab4c848dca0a006462970452f6d39ebdab414e",
+    "tool/run_wp117_oneplus_current_candidate_two_role.mjs": "0f70105d6672ea6aa6eac7c83fe86b67a74812700909d03d46bd3fd1f1d6255f",
+    "tool/diagnose_android_email_verified_two_role_product_journey.mjs": "91151556b06d7e6707e1bf1fe447b92c1fcbbe8ef2e02f364c829f5a33a84f8e",
+    "tool/validate_current_head_android_release_archive.mjs": "bc8239ed9e25dd77272fe4d750a265631bef51c40142f2c49aff9569c54ae120",
+    "tool/audit_staging_two_role_vault_readiness.mjs": "dadf50a5619fe4dfa689509b560ce1daa8d4ef4b103405419d3e936f17562641",
+    "docs/evidence/release-readiness/wp142-current-goal-external-gate-checkpoint-20260913.json": "63f312326964d9376a65370c136709a93e90e9de4185963992fc791599ee217a"
+  }
+}

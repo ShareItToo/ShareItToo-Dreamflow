@@ -1,4 +1,25 @@
-# Current Work Package: WP142 Current-Goal External-Gate Checkpoint — COMPLETE LOCALLY
+# Current Work Package: WP143 OnePlus Current-Candidate Two-Role — PREPARED; DEVICE PENDING
+
+The historical WP117 runner is safely pinned to candidate `2026091110` and
+cannot execute the current `2026091312` candidate. WP143 adds a separate exact-
+candidate OnePlus CPH2581 runner while preserving historical evidence. It
+never uninstalls ShareItToo or clears app data, requires an explicit gate for
+an absent or older installation, and allows only a data-preserving replacement
+from an older matching `1.0.0` build.
+
+The exact signed Internal/Staging archive passes. The sanitized QA-vault audit
+is safe and source selection remains deferred until execution. Only the Pixel
+7 Pro is currently connected to the Mac mini, so the OnePlus was not contacted
+and no physical journey or Staging mutation ran. All 11 focused WP143 tests and
+the complete local regression pass. Portfolio remains **21 PASS / 4 PARTIAL /
+7 OPEN**. See
+`docs/operations/WP143_ONEPLUS_CURRENT_CANDIDATE_TWO_ROLE_PREPARATION_2026-09-13.md`.
+
+Next action: connect and unlock the OnePlus CPH2581, then execute the one
+bounded WP143 journey. No Production, Store, Firebase Console, Stripe, money,
+PR merge, device reset, identity, credential or secret state changed.
+
+# Previous Work Package: WP142 Current-Goal External-Gate Checkpoint — COMPLETE LOCALLY
 
 The exact current Pixel and Staging baseline is freshly healthy: signed
 Internal/Staging `1.0.0+2026091312` matches the installed APK, authenticated
