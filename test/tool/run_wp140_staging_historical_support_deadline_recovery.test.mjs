@@ -10,6 +10,9 @@ import {
   buildWp140ProgressDraft,
   classifyWp140OverdueCases,
   recoverWp140Cases,
+  remoteAttestationScript,
+  remoteBootstrapScript,
+  remoteDecommissionScript,
   wp140ExpectedRuntimeImage,
 } from '../../tool/run_wp140_staging_historical_support_deadline_recovery.mjs';
 
@@ -98,6 +101,13 @@ test('requires read-only synthetic provenance and zero pending proposals', () =>
     () => assertWp140ProvenanceAttestation(attestation({ pendingProgressCount: 1 })),
     /provenance is not safely proven/u,
   );
+});
+
+test('preserves remote regex escapes through both JavaScript evaluations', () => {
+  assert.match(remoteAttestationScript, /\\\\\+sit-/u);
+  assert.match(remoteAttestationScript, /@staging\\\\\.shareittoo\\\\\.invalid/u);
+  assert.match(remoteBootstrapScript, /@staging\\\\\.shareittoo\\\\\.invalid/u);
+  assert.match(remoteDecommissionScript, /@staging\\\\\.shareittoo\\\\\.invalid/u);
 });
 
 test('builds truthful bounded progress content with a future deadline', () => {
@@ -284,6 +294,8 @@ test('builds identity-free closure evidence and keeps direct case writes forbidd
   assert.match(source, /audit\.resource_id = user_account\.id::text/u);
   assert.match(source, /failureLabel: 'provenance attestation'/u);
   assert.match(source, /failureLabel: 'post-recovery audit'/u);
+  assert.match(source, /\^\[\^@\+\]\+\\\\\\\\\+sit-/u);
+  assert.match(source, /@staging\\\\\\\\\.shareittoo\\\\\\\\\.invalid/u);
   assert.doesNotMatch(source, /stderr.*failed/u);
   assert.match(source, /SIT_WP140_STAGING_HISTORICAL_SUPPORT_DEADLINE_RECOVERY_GO/u);
 });

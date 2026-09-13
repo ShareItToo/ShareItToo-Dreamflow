@@ -488,7 +488,7 @@ process.stdout.write(JSON.stringify({
 }));
 `;
 
-const remoteAttestationScript = `
+export const remoteAttestationScript = `
 import { pool } from './src/db.js';
 const chunks = [];
 for await (const chunk of process.stdin) chunks.push(chunk);
@@ -505,9 +505,9 @@ const result = await pool.query(\`
       AND NOT support_case.dsa_flag AND NOT support_case.authority_flag
       AND NOT support_case.money_flag AND NOT support_case.account_takeover_flag), false) AS all_flags_clear,
     coalesce(bool_and(
-      (user_account.email ~ '^[^@+]+\\+sit-[a-z0-9-]+-(owner|renter)@[^@]+$'
+      (user_account.email ~ '^[^@+]+\\\\+sit-[a-z0-9-]+-(owner|renter)@[^@]+$'
         AND (user_account.profile->>'displayName') IN ('SIT Test Vermieter', 'SIT Test Mieter'))
-      OR (user_account.email ~ '^wp68-[a-z0-9]+-reporter@staging\\.shareittoo\\.invalid$'
+      OR (user_account.email ~ '^wp68-[a-z0-9]+-reporter@staging\\\\.shareittoo\\\\.invalid$'
         AND EXISTS (SELECT 1 FROM audit_log AS audit
           WHERE audit.resource_id = user_account.id::text
             AND audit.action = 'staging.support_test_actor_bootstrapped'))
@@ -541,7 +541,7 @@ process.stdout.write(JSON.stringify({
 }));
 `;
 
-const remoteBootstrapScript = `
+export const remoteBootstrapScript = `
 import { pool, inTransaction } from './src/db.js';
 const chunks = [];
 for await (const chunk of process.stdin) chunks.push(chunk);
@@ -554,7 +554,7 @@ await inTransaction(async (client) => {
   for (const account of input.accounts) {
     if (!/^[0-9a-f-]{36}$/u.test(account.id)
         || account.role !== 'admin'
-        || !/^wp140-[a-z0-9]+-(author|reviewer)@staging\\.shareittoo\\.invalid$/u.test(account.email)
+        || !/^wp140-[a-z0-9]+-(author|reviewer)@staging\\\\.shareittoo\\\\.invalid$/u.test(account.email)
         || typeof account.passwordHash !== 'string' || !account.passwordHash.startsWith('scrypt$')) {
       throw new Error('wp140_bootstrap_account_invalid');
     }
@@ -582,7 +582,7 @@ await pool.end();
 process.stdout.write(JSON.stringify({ status: 'bootstrapped', temporaryAdminCount: 2 }));
 `;
 
-const remoteDecommissionScript = `
+export const remoteDecommissionScript = `
 import { pool, inTransaction } from './src/db.js';
 const chunks = [];
 for await (const chunk of process.stdin) chunks.push(chunk);
@@ -590,7 +590,7 @@ const input = JSON.parse(Buffer.concat(chunks).toString('utf8'));
 if (!Array.isArray(input?.accounts) || input.accounts.length !== 2
     || input.accounts.some((account) => account.role !== 'admin'
       || !/^[0-9a-f-]{36}$/u.test(account.id)
-      || !/^wp140-[a-z0-9]+-(author|reviewer)@staging\\.shareittoo\\.invalid$/u.test(account.email))) {
+      || !/^wp140-[a-z0-9]+-(author|reviewer)@staging\\\\.shareittoo\\\\.invalid$/u.test(account.email))) {
   throw new Error('wp140_decommission_input_invalid');
 }
 let outcome;
