@@ -1,4 +1,22 @@
-# Current Work Package: WP136 Bookings Unread Snapshot / Pixel Closure — COMPLETE
+# Current Work Package: WP137 Owner Decline / Competing Requests — COMPLETE
+
+The unchanged signed Internal/Staging `1.0.0+2026091311` candidate passes the
+physical Pixel lifecycle for two overlapping non-binding requests under three
+distinct principals. The owner declined exactly one through the real product
+UI and confirmation; the completed surface, untouched competing request,
+strict renter isolation, notification, terminal cleanup, listing retirement
+and protected-owner restoration all pass.
+
+Full local regression, implementation-head GitHub Regression `34750784804`,
+independent clean checkout, CodeQL `34750784788` and zero alerts pass. The
+portfolio is **19 PASS / 5 PARTIAL / 8 OPEN**. See
+`docs/operations/WP137_OWNER_DECLINE_COMPETING_REQUESTS_PIXEL_CLOSURE_2026-09-13.md`.
+
+No app candidate, OnePlus, Play, Production, Firebase, Backend deployment,
+payment, money, binding contract, reservation, public registration or PR-merge
+state changed.
+
+# Previous Work Package: WP136 Bookings Unread Snapshot / Pixel Closure — COMPLETE
 
 The 136-row Bookings failure is closed at source and on exact signed
 Internal/Staging candidate `1.0.0+2026091311`. Unread counting now consumes one

@@ -1,5 +1,25 @@
 # ShareItToo Current State
 
+## WP137 owner decline with competing requests — complete
+
+The unchanged signed Internal/Staging `1.0.0+2026091311` candidate now passes
+the exact physical Pixel decline lifecycle with three distinct principals and
+two overlapping non-binding requests. The owner declined one through the real
+request-detail confirmation; exactly one moved to completed, exactly one
+remained requested, each renter retained only their own server truth, and the
+declined renter notification appeared.
+
+Both requests are terminal, the isolated listing is ended and publicly absent,
+and the protected owner is restored. Full local regression, exact-implementation
+GitHub Regression `34750784804`, independent clean checkout, CodeQL
+`34750784788` and zero alerts pass. `offer-request-accept-decline` is now PASS;
+the conservative portfolio is **19 PASS, 5 PARTIAL and 8 OPEN**. See
+`docs/operations/WP137_OWNER_DECLINE_COMPETING_REQUESTS_PIXEL_CLOSURE_2026-09-13.md`.
+
+No app candidate, OnePlus, Play, Production, Firebase, Backend deployment,
+payment, money, binding contract, reservation, public registration or PR-merge
+state changed.
+
 ## WP136 Bookings unread-snapshot and exact Pixel closure — complete
 
 The Bookings infinite-loading defect is fixed without a timeout or fixture
