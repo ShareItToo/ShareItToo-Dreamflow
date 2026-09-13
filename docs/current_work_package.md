@@ -1,4 +1,24 @@
-# Current Work Package: WP139 Staging Registry Read Path — PARTIAL CLOSURE
+# Current Work Package: WP140 Staging Historical Support Deadline Recovery — COMPLETE
+
+Exactly three historical simulation-only P3 Support cases now have future
+deadlines. Two used independent two-admin review and official progress
+publication. The third belonged to a deliberately closed WP68 synthetic
+reporter and used the official administrator status transition without a new
+message, reporter reactivation or direct Support-table write. All prior audit
+history remains intact.
+
+Independent readback confirms readiness `200`, zero overdue active cases, zero
+pending progress, and no active temporary administrator, session or elevation.
+The runtime remains `df39a14b7a19afe467842461a28f1e77fec8445e` with zero
+restarts. Full local regression, exact implementation Regression
+`34764505554`, independent clean checkout and CodeQL `34764505588` pass.
+Portfolio: **21 PASS / 4 PARTIAL / 7 OPEN**. See
+`docs/operations/WP140_STAGING_HISTORICAL_SUPPORT_DEADLINE_RECOVERY_2026-09-13.md`.
+
+No Production, external message, payment, real money, Play, Firebase, app
+candidate, device or PR-merge state changed.
+
+# Previous Work Package: WP139 Staging Registry Read Path — PARTIAL CLOSURE
 
 Exact private image source `fb04892331758e19b2b3835026ed8174e382dfb7` is
 published and readable from the Staging server with exact manifest digest and

@@ -1,5 +1,26 @@
 # ShareItToo Current State
 
+## WP140 Staging historical Support deadline recovery — complete
+
+The three noncritical overdue historical Support simulations are recovered
+without deleting or rewriting prior history. Two valid synthetic recipients
+received independently reviewed progress publications through the official
+workflow; the retained WP68 case with a deliberately closed synthetic reporter
+used the official administrator status transition instead, with no recipient
+reactivation, new message or direct Support-table write.
+
+Independent closure readback shows readiness `200`, zero overdue active cases,
+zero pending progress proposals and zero active temporary administrators,
+sessions or elevations. The Staging runtime remains exact
+`df39a14b7a19afe467842461a28f1e77fec8445e` with zero restarts. Full local
+regression, exact implementation Regression `34764505554`, independent clean
+checkout and CodeQL `34764505588` pass. The portfolio is now **21 PASS, 4
+PARTIAL and 7 OPEN**. See
+`docs/operations/WP140_STAGING_HISTORICAL_SUPPORT_DEADLINE_RECOVERY_2026-09-13.md`.
+
+No Production, external Support delivery, payment, real money, Store,
+Firebase, app candidate, device or PR-merge state changed.
+
 ## WP139 Staging private-registry read path — partial closure
 
 Exact source `fb04892331758e19b2b3835026ed8174e382dfb7` was published by
