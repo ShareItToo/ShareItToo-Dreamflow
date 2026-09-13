@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
+  classifyPublicOwnerProfileHierarchy,
   classifyWp132ExactSearchFailure,
   exactMessageListingVisible,
   runCurrentCandidateReportBlockLifecycle,
@@ -79,6 +80,17 @@ test('recognizes the exact cancelled-booking chat semantics label', () => {
   assert.equal(exactMessageListingVisible(`<node content-desc="· ${title}"/>`, title), true);
   assert.equal(exactMessageListingVisible(`<node content-desc="${title}"/>`, title), true);
   assert.equal(exactMessageListingVisible('<node content-desc="Andere Anzeige"/>', title), false);
+});
+
+test('classifies a public-profile spinner without retaining private labels', () => {
+  const hierarchy = [
+    '<node content-desc="Öffentliches Profil"/>',
+    '<node class="android.widget.ProgressBar"/>',
+  ].join('');
+  assert.equal(
+    classifyPublicOwnerProfileHierarchy(hierarchy, 'Private Fixture Owner'),
+    'title1-owner0-menu0-progress1-error0-retry0-listing-options0-profile-action0',
+  );
 });
 
 test('classifies exact-search failures without retaining private details', () => {

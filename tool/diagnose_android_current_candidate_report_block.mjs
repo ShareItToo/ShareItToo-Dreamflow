@@ -148,17 +148,40 @@ function exactPublicOwnerProfileVisible(hierarchy, ownerName) {
     && currentHeadAndroidNamedNodes(hierarchy, 'Mehr Optionen').length >= 1;
 }
 
+export function classifyPublicOwnerProfileHierarchy(hierarchy, ownerName) {
+  const count = (label) => currentHeadAndroidNamedNodes(hierarchy, label).length;
+  return [
+    `title${count('Öffentliches Profil')}`,
+    `owner${count(ownerName)}`,
+    `menu${count('Mehr Optionen')}`,
+    `progress${hierarchy.includes('class="android.widget.ProgressBar"') ? 1 : 0}`,
+    `error${hierarchy.includes('Profil konnte nicht geladen werden') ? 1 : 0}`,
+    `retry${count('Erneut laden')}`,
+    `listing-options${count('Anzeigenoptionen')}`,
+    `profile-action${count('Vermieterprofil ansehen')}`,
+  ].join('-');
+}
+
 async function openExactPublicOwnerProfile({
   commandRunner, adbPath, device, wait, ownerName,
 }) {
-  let hierarchy = await waitForHierarchy({
-    commandRunner, adbPath, device, wait, attempts: 48,
-    label: 'exact public owner profile outcome',
-    predicate: (value) => (
-      exactPublicOwnerProfileVisible(value, ownerName)
-        || value.includes('Profil konnte nicht geladen werden')
-    ),
-  });
+  let hierarchy;
+  try {
+    hierarchy = await waitForHierarchy({
+      commandRunner, adbPath, device, wait, attempts: 48,
+      label: 'exact public owner profile outcome',
+      predicate: (value) => (
+        exactPublicOwnerProfileVisible(value, ownerName)
+          || value.includes('Profil konnte nicht geladen werden')
+      ),
+    });
+  } catch {
+    const latest = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+    fail(`The public owner profile did not settle (${classifyPublicOwnerProfileHierarchy(
+      latest,
+      ownerName,
+    )}).`);
+  }
   if (exactPublicOwnerProfileVisible(hierarchy, ownerName)) return hierarchy;
   if (currentHeadAndroidNamedNodes(hierarchy, 'Erneut laden').length !== 1) {
     fail('The public owner profile failed without an exact retry action.');
