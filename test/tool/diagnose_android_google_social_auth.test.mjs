@@ -69,6 +69,8 @@ test('real Google diagnostic is exact-account and restoration scoped', () => {
     'validatePrivateAndroidReleaseArchive',
     'verifyCurrentHeadAndroidInstalledCandidate',
     'exactPrivateGoogleAccountSelected: true',
+    "googleChooserCancellation: 'passed-no-session'",
+    'cancellationColdStartRemainedGuest: true',
     'sameStagingProfileAcrossAllThreeObservations: true',
     'duplicateAccountObserved: false',
     'protectedSyntheticOwnerRestored: true',
@@ -77,6 +79,12 @@ test('real Google diagnostic is exact-account and restoration scoped', () => {
     'containsPrivateFilesystemPaths: false',
     'google-failure-surface.xml',
     'private-capture-retained',
+    "'shell', 'input', 'keyevent', '4'",
+    "'shell', 'am', 'force-stop', applicationId",
+    'guest profile after Google cancellation',
+    'privateInputFile',
+    'privateOutputDirectory',
+    'constants.O_NOFOLLOW',
   ]) assert.match(source, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
   assert.doesNotMatch(source, /console\.log\(.*mailbox|JSON\.stringify\(.*mailbox/gu);
   assert.doesNotMatch(source, /clear data|pm clear|uninstall/gu);

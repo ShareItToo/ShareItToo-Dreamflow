@@ -3,13 +3,18 @@
 import { createHash } from 'node:crypto';
 import {
   chmodSync,
+  closeSync,
+  constants,
+  fstatSync,
   readFileSync,
+  realpathSync,
   statSync,
   writeFileSync,
   mkdirSync,
+  openSync,
 } from 'node:fs';
-import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { isAbsolute as isAbsolutePath, relative, resolve, sep } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   ensureAndroidGuestSession,
@@ -39,6 +44,7 @@ import {
 } from './validate_current_head_android_release_archive.mjs';
 
 const applicationId = 'com.shareittoo.app';
+const repositoryRoot = realpathSync(resolve(fileURLToPath(new URL('..', import.meta.url))));
 
 function fail(message) {
   throw new Error(message);
@@ -93,17 +99,54 @@ export function classifyGoogleSocialAuthSurface(hierarchy, { mailbox } = {}) {
   return 'unclassified';
 }
 
-function assertOwnerOnlyFile(path, label) {
-  const stat = statSync(path, { throwIfNoEntry: false });
-  if (stat === undefined || !stat.isFile() || stat.size === 0
+function privateInputFile(path, label) {
+  if (typeof path !== 'string' || !isAbsolutePath(path)) {
+    fail(`${label} must be an absolute owner-only file outside the repository.`);
+  }
+  const canonical = realpathSync(path);
+  const rel = relative(repositoryRoot, canonical);
+  const stat = statSync(canonical, { throwIfNoEntry: false });
+  if (rel === '' || (!rel.startsWith('..') && !isAbsolutePath(rel))
+      || stat === undefined || !stat.isFile() || stat.size === 0
       || (stat.mode & 0o077) !== 0) {
     fail(`${label} must be a non-empty owner-only file.`);
   }
+  return canonical;
+}
+
+function privateOutputDirectory(path) {
+  if (typeof path !== 'string' || !isAbsolutePath(path)) {
+    fail('Private Google evidence directory must be absolute.');
+  }
+  const absolute = resolve(path);
+  if (absolute === repositoryRoot || absolute.startsWith(`${repositoryRoot}${sep}`)) {
+    fail('Private Google evidence must remain outside the repository.');
+  }
+  mkdirSync(absolute, { recursive: true, mode: 0o700 });
+  chmodSync(absolute, 0o700);
+  const canonical = realpathSync(absolute);
+  const rel = relative(repositoryRoot, canonical);
+  if (rel === '' || (!rel.startsWith('..') && !isAbsolutePath(rel))
+      || (statSync(canonical).mode & 0o077) !== 0) {
+    fail('Private Google evidence must remain owner-only outside the repository.');
+  }
+  return canonical;
 }
 
 function readPrivateMailbox(path) {
-  assertOwnerOnlyFile(path, 'Private Google mailbox selector');
-  const mailbox = readFileSync(path, 'utf8').trim();
+  const canonical = privateInputFile(path, 'Private Google mailbox selector');
+  let descriptor;
+  let mailbox;
+  try {
+    descriptor = openSync(canonical, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const stat = fstatSync(descriptor);
+    if (!stat.isFile() || stat.size === 0 || (stat.mode & 0o077) !== 0) {
+      fail('Private Google mailbox selector must be a non-empty owner-only file.');
+    }
+    mailbox = readFileSync(descriptor, 'utf8').trim();
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
   if (mailbox.length > 254 || !/^[^@\s]+@[^@\s]+$/u.test(mailbox)) {
     fail('Private Google mailbox selector is invalid.');
   }
@@ -185,6 +228,83 @@ async function openProfile({ commandRunner, adbPath, device, wait }) {
   });
 }
 
+async function openGuestProfile({ commandRunner, adbPath, device, wait }) {
+  const main = await waitForCurrentHeadAndroidMainNavigation({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+  });
+  const destinations = currentHeadAndroidNamedNodes(main, 'Mein SIT')
+    .map((node) => ({ node, ...pointForNode(node, 'Mein SIT') }))
+    .toSorted((left, right) => right.y - left.y);
+  if (destinations.length === 0) fail('The sanitized guest profile destination is unavailable.');
+  currentHeadAndroidAdb(commandRunner, adbPath, device, [
+    'shell', 'input', 'tap', String(destinations[0].x), String(destinations[0].y),
+  ]);
+  return waitForHierarchy({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+    label: 'guest profile after Google cancellation',
+    predicate: (hierarchy) => (
+      currentHeadAndroidNamedNodes(hierarchy, 'Anmelden').length > 0
+        && currentHeadAndroidNamedNodes(hierarchy, 'Abmelden').length === 0
+    ),
+  });
+}
+
+async function cancelExactPrivateGoogleAccountChooser({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+  mailbox,
+}) {
+  const guest = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+  tapNamedNode(commandRunner, adbPath, device, guest, 'Anmelden', {
+    chooseLast: true,
+  });
+  let hierarchy = await waitForHierarchy({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+    label: 'Google cancellation login entry',
+    predicate: (value) => currentHeadAndroidNamedNodes(value, 'Mit Google anmelden').length === 1,
+  });
+  tapNamedNode(commandRunner, adbPath, device, hierarchy, 'Mit Google anmelden');
+  hierarchy = await waitForHierarchy({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+    label: 'Google cancellation account chooser',
+    predicate: (value) => currentHeadAndroidNamedNodes(value, mailbox).length === 1,
+  });
+  currentHeadAndroidAdb(commandRunner, adbPath, device, [
+    'shell', 'input', 'keyevent', '4',
+  ]);
+  await waitForHierarchy({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+    label: 'Google cancellation returned login entry',
+    predicate: (value) => (
+      currentHeadAndroidNamedNodes(value, 'Mit Google anmelden').length === 1
+        && currentHeadAndroidNamedNodes(value, 'Abmelden').length === 0
+    ),
+  });
+  currentHeadAndroidAdb(commandRunner, adbPath, device, [
+    'shell', 'am', 'force-stop', applicationId,
+  ]);
+  launchCurrentHeadAndroidCandidate(commandRunner, adbPath, device);
+  await openGuestProfile({ commandRunner, adbPath, device, wait });
+  return true;
+}
+
 async function loginWithExactPrivateGoogleAccount({
   commandRunner,
   adbPath,
@@ -263,8 +383,12 @@ export async function diagnoseAndroidGoogleSocialAuth({
     fail('The installed candidate is not the exact Google-only social profile.');
   }
   const mailbox = readPrivateMailbox(mailboxFile);
-  assertOwnerOnlyFile(protectedOwnerVaultFile, 'Protected synthetic owner vault');
-  const { vault } = readEmailVerifiedJourneyVault(protectedOwnerVaultFile);
+  const protectedOwnerVault = privateInputFile(
+    protectedOwnerVaultFile,
+    'Protected synthetic owner vault',
+  );
+  const privateEvidence = privateOutputDirectory(privateEvidenceDirectory);
+  const { vault } = readEmailVerifiedJourneyVault(protectedOwnerVault);
   const protectedOwner = vault.accounts.find((entry) => entry.role === 'owner');
   if (!protectedOwner) fail('Protected synthetic owner role is unavailable.');
 
@@ -272,10 +396,18 @@ export async function diagnoseAndroidGoogleSocialAuth({
   let firstProfile;
   let coldProfile;
   let repeatProfile;
+  let googleChooserCancellation = false;
   let failureSurface = 'unavailable';
   let failureSurfaceSha256 = null;
   try {
     await ensureAndroidGuestSession({ commandRunner, adbPath, device, wait });
+    googleChooserCancellation = await cancelExactPrivateGoogleAccountChooser({
+      commandRunner,
+      adbPath,
+      device,
+      wait,
+      mailbox,
+    });
     firstProfile = await loginWithExactPrivateGoogleAccount({
       commandRunner,
       adbPath,
@@ -307,7 +439,7 @@ export async function diagnoseAndroidGoogleSocialAuth({
       );
       failureSurface = classifyGoogleSocialAuthSurface(hierarchy, { mailbox });
       failureSurfaceSha256 = writePrivateHierarchy(
-        privateEvidenceDirectory,
+        privateEvidence,
         'google-failure-surface.xml',
         hierarchy,
       );
@@ -342,6 +474,9 @@ export async function diagnoseAndroidGoogleSocialAuth({
       { cause: diagnosticFailure },
     );
   }
+  if (!googleChooserCancellation) {
+    fail('The Google account chooser cancellation did not remain signed out.');
+  }
 
   const firstHash = googleProfileFingerprint(firstProfile);
   const coldHash = googleProfileFingerprint(coldProfile);
@@ -351,17 +486,17 @@ export async function diagnoseAndroidGoogleSocialAuth({
   }
   const privateHashes = {
     firstProfileSha256: writePrivateHierarchy(
-      privateEvidenceDirectory,
+      privateEvidence,
       'google-first-profile.xml',
       firstProfile,
     ),
     coldProfileSha256: writePrivateHierarchy(
-      privateEvidenceDirectory,
+      privateEvidence,
       'google-cold-profile.xml',
       coldProfile,
     ),
     repeatProfileSha256: writePrivateHierarchy(
-      privateEvidenceDirectory,
+      privateEvidence,
       'google-repeat-profile.xml',
       repeatProfile,
     ),
@@ -370,7 +505,7 @@ export async function diagnoseAndroidGoogleSocialAuth({
   return {
     schemaVersion: 1,
     kind: 'android-google-social-auth-principal-epoch-diagnostic',
-    status: 'passed-google-login-cold-start-repeat-and-owner-restore',
+    status: 'passed-google-cancel-login-cold-start-repeat-and-owner-restore',
     capturedAt,
     candidate: {
       applicationId: candidate.applicationId,
@@ -394,6 +529,8 @@ export async function diagnoseAndroidGoogleSocialAuth({
     device: deviceSummary,
     results: {
       exactPrivateGoogleAccountSelected: true,
+      googleChooserCancellation: 'passed-no-session',
+      cancellationColdStartRemainedGuest: true,
       firstGoogleLogin: 'passed',
       coldStartSessionPersistence: 'passed',
       repeatGoogleLogin: 'passed',
