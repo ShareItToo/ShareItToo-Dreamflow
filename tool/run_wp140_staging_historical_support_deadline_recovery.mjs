@@ -502,7 +502,7 @@ const result = await pool.query(\`
         AND (user_account.profile->>'displayName') IN ('SIT Test Vermieter', 'SIT Test Mieter'))
       OR (user_account.email ~ '^wp68-[a-z0-9]+-reporter@staging\\.shareittoo\\.invalid$'
         AND EXISTS (SELECT 1 FROM audit_log AS audit
-          WHERE audit.resource_id = user_account.id
+          WHERE audit.resource_id = user_account.id::text
             AND audit.action = 'staging.support_test_actor_bootstrapped'))
     ), false) AS all_synthetic_reporters,
     coalesce(bool_and(support_case.user_facing_summary ~* '(SIT|Staging|Test)'
