@@ -12,10 +12,10 @@ import {
 const candidate = Object.freeze({
   applicationId: 'com.shareittoo.app',
   versionName: '1.0.0',
-  buildNumber: '2026091308',
-  commit: 'db67c437c3d3d725873c1cd243599cc39d1282c3',
+  buildNumber: '2026091309',
+  commit: 'abf911d1c944a4e5874269111985d0cc4736546e',
   android: {
-    apkSha256: '1bd5fb6155075b5a64838a62a3d13f52abb6bf0facc06dcda9a2ad07edd82f19',
+    apkSha256: '6f688e3641f54da91caf0e4f7c039f192a0c4e481b3ebb98ac3b2723cbe27ddf',
   },
 });
 
