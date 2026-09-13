@@ -1,5 +1,24 @@
 # ShareItToo Current State
 
+## WP133 exact-current search and saved-state lifecycle — complete
+
+Signed Internal/Staging candidate `1.0.0+2026091309` now passes exact search,
+the coarse category filter, listing-detail opening, save to the built-in
+`Für später` list, process-restart persistence, Account-A/B isolation, renter
+restoration, exact removal and stable absence on the physical Pixel.
+
+The isolated listing is ended and publicly absent, the related saved
+assignment is removed, the temporary fixture is retired, and the protected
+Pixel owner is restored. No unrelated saved item, booking, contract,
+reservation, payment endpoint or monetary state changed.
+
+`search-filter-favorites-wishlists` is PASS. The conservative portfolio is now
+**17 PASS, 7 PARTIAL and 8 OPEN**. See
+`docs/operations/WP133_CURRENT_CANDIDATE_SEARCH_SAVED_2026-09-13.md`.
+
+No Production, Store, Firebase, payment, real money, OnePlus or PR-merge state
+changed.
+
 ## WP132 exact-current report/block lifecycle — complete
 
 Signed Internal/Staging candidate `1.0.0+2026091309` now passes the complete

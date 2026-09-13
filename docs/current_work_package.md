@@ -1,4 +1,19 @@
-# Current Work Package: WP132 Exact-Current Report/Block — COMPLETE
+# Current Work Package: WP133 Exact-Current Search/Saved State — COMPLETE
+
+Signed Internal/Staging `1.0.0+2026091309` passes the full physical Pixel
+search and saved-state lifecycle: exact query, category filter, detail, save,
+restart persistence, other-principal absence, renter restoration, removal and
+stable absence. The temporary listing is ended and publicly absent, the
+fixture is retired, and the protected owner is restored.
+
+`search-filter-favorites-wishlists` is PASS. Portfolio: **17 PASS / 7 PARTIAL /
+8 OPEN**. See
+`docs/operations/WP133_CURRENT_CANDIDATE_SEARCH_SAVED_2026-09-13.md`.
+
+No Production, Store, Firebase, payment, money, OnePlus or PR-merge state
+changed.
+
+# Previous Work Package: WP132 Exact-Current Report/Block — COMPLETE
 
 Signed Internal/Staging `1.0.0+2026091309` passes the complete physical Pixel
 report, block, same-owner listing and cancelled-chat isolation, exact Blocked
