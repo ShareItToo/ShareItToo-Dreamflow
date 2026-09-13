@@ -9850,13 +9850,42 @@ class DataService {
     required List<RentalRequest> requests,
   }) async {
     if (userId.isEmpty) return 0;
-    await _requireCurrentOperationalUser(requestedUserId: userId);
+    final current =
+        await _requireCurrentOperationalUser(requestedUserId: userId);
     try {
-      int unreadCount = 0;
+      // The caller already owns an authoritative request snapshot. Rechecking
+      // every request through _requireCurrentRequestParticipant would reload
+      // the complete backend request collection once per row. That turns a
+      // historic account into an unbounded serial network tail and can leave
+      // the Bookings surface showing loading indefinitely.
       for (final req in requests) {
-        final isRead = await isRequestRead(userId: userId, requestId: req.id);
-        if (!isRead) unreadCount++;
+        if (!_isRequestParticipant(req, current.id)) {
+          throw StateError('Die lokale Buchung gehört zu einem anderen Konto.');
+        }
       }
+
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_readRequestsKey);
+      final map = raw == null
+          ? <String, dynamic>{}
+          : _decodeReadRequestsStrict(raw);
+      final readRaw = map[current.id];
+      if (readRaw != null && readRaw is! List) {
+        throw const FormatException('Ungültige lokale Lesemarker.');
+      }
+      final readSet = (readRaw as List? ?? const <dynamic>[])
+          .map((entry) => entry.toString())
+          .toSet();
+
+      // A->B during the local read invalidates the complete result. The UI's
+      // captured LocalPrincipalActionOwner performs an additional route-level
+      // check before displaying it.
+      await _assertCurrentOperationalUserId(
+        current.id,
+        expectedEmail: current.email,
+      );
+      final unreadCount =
+          requests.where((request) => !readSet.contains(request.id)).length;
       return unreadCount;
     } catch (e) {
       debugPrint('[DataService] getUnreadCountForCategory error: $e');
