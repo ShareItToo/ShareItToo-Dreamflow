@@ -1,5 +1,29 @@
 # ShareItToo Current State
 
+## WP144 MacBook OnePlus execution runway — prepared; device pending
+
+WP143 is closed on exact head `07ce24325648ed797893ac39a6fec6472273135e`
+with GitHub Regression `34776401000`, independent clean checkout, CodeQL
+`34776400991` and zero open alerts. A new isolated official SIT checkout on the
+online MacBook matches that head and the WP143 runner exactly; the existing old
+and locally changed checkout remained untouched.
+
+The exact signed Internal/Staging `1.0.0+2026091312` four-file candidate
+archive and one fully retired synthetic two-role source were transferred
+byte-for-byte through the existing encrypted tailnet. Both were independently
+validated on the MacBook and remain owner-only. No private path, identity,
+credential or credential-derived digest is committed.
+
+ADB is available there but currently reports no Android device. No phone was
+contacted, no install or Staging journey ran and `oneplus-cross-device-two-role`
+remains OPEN. Portfolio remains **21 PASS / 4 PARTIAL / 7 OPEN**. See
+`docs/operations/WP144_MACBOOK_ONEPLUS_EXECUTION_RUNWAY_2026-09-13.md`.
+Focused WP144, combined WP143/WP144 and the complete local technical regression
+pass without a reduced or timing-based substitute.
+
+No Pixel, Staging business data, Production, Store, Firebase Console, Stripe,
+payment, money, PR merge, personal identity, credential or secret state changed.
+
 ## WP143 OnePlus current-candidate runner — prepared; device pending
 
 The stale-runner gap is closed locally without touching either phone. The

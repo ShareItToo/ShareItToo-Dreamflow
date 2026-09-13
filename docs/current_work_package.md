@@ -1,4 +1,24 @@
-# Current Work Package: WP143 OnePlus Current-Candidate Two-Role — PREPARED; DEVICE PENDING
+# Current Work Package: WP144 MacBook OnePlus Execution Runway — PREPARED; DEVICE PENDING
+
+WP143 is exact-head GitHub-green. A separate clean official SIT checkout now
+exists on the online MacBook at that same head; the old dirty checkout was not
+used or changed. The exact signed Internal/Staging `1.0.0+2026091312` archive
+and one fully retired synthetic owner/renter source were transferred through
+the existing encrypted tailnet, independently validated and retained with
+owner-only permissions. No private path, identity or credential is recorded.
+
+ADB is available on the MacBook but currently reports no Android device. The
+OnePlus was not contacted, no install or journey ran, and the portfolio remains
+**21 PASS / 4 PARTIAL / 7 OPEN**. See
+`docs/operations/WP144_MACBOOK_ONEPLUS_EXECUTION_RUNWAY_2026-09-13.md`.
+All three focused WP144 checks, the combined 14 WP143/WP144 checks and the
+complete local technical regression pass.
+
+Next action: connect, unlock and authorize the OnePlus CPH2581 on the MacBook,
+then run the exact WP143 data-preserving two-role journey. No Pixel, Staging
+data, Production, Store, Firebase, Stripe, payment, money or PR merge changed.
+
+# Previous Work Package: WP143 OnePlus Current-Candidate Two-Role — COMPLETE TECHNICALLY; DEVICE PENDING
 
 The historical WP117 runner is safely pinned to candidate `2026091110` and
 cannot execute the current `2026091312` candidate. WP143 adds a separate exact-
@@ -18,6 +38,11 @@ the complete local regression pass. Portfolio remains **21 PASS / 4 PARTIAL /
 Next action: connect and unlock the OnePlus CPH2581, then execute the one
 bounded WP143 journey. No Production, Store, Firebase Console, Stripe, money,
 PR merge, device reset, identity, credential or secret state changed.
+
+Exact-head GitHub Regression `34776401000`, its independent clean-checkout job,
+CodeQL `34776400991` and zero open code-scanning alerts subsequently passed at
+`07ce24325648ed797893ac39a6fec6472273135e`. The physical journey remains in
+the separately evidenced WP144 MacBook runway.
 
 # Previous Work Package: WP142 Current-Goal External-Gate Checkpoint — COMPLETE LOCALLY
 
