@@ -328,6 +328,14 @@ class _SearchSheetState extends State<_SearchSheet> {
   }
 
   Future<void> _openCategoryPicker() async {
+    FocusScope.of(context).unfocus();
+    _aiFocus.unfocus();
+    _whatFocus.unfocus();
+    _whereFocus.unfocus();
+    _hideWhatOverlay();
+    _hideWhereOverlay();
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
     final data = [
       for (final c in _coarseCategoryOrder)
         CategoryChipData(id: c, label: c, icon: _iconForCoarseGroup(c)),
@@ -986,6 +994,7 @@ class _SearchSheetState extends State<_SearchSheet> {
               child: TextField(
                 controller: _whatCtrl,
                 focusNode: _whatFocus,
+                onTapOutside: (_) => _whatFocus.unfocus(),
                 onChanged: _onQueryChangedWhat,
                 onSubmitted: (v) => _addToRecentWhat(v),
                 style: const TextStyle(color: Colors.white, fontSize: 13),

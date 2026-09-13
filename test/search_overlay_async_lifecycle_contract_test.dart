@@ -44,5 +44,23 @@ void main() {
         'if (mounted && _nearbyRecompute.isCurrent(generation))',
       ),
     );
+    expect(
+      source,
+      contains('onTapOutside: (_) => _whatFocus.unfocus()'),
+    );
+    expect(
+      source,
+      matches(RegExp(
+        r'Future<void> _openCategoryPicker\(\) async \{\s+'
+        r'FocusScope\.of\(context\)\.unfocus\(\);\s+'
+        r'_aiFocus\.unfocus\(\);\s+'
+        r'_whatFocus\.unfocus\(\);\s+'
+        r'_whereFocus\.unfocus\(\);\s+'
+        r'_hideWhatOverlay\(\);\s+'
+        r'_hideWhereOverlay\(\);\s+'
+        r'await WidgetsBinding\.instance\.endOfFrame;\s+'
+        r'if \(!mounted\) return;',
+      )),
+    );
   });
 }
