@@ -41,6 +41,10 @@ function response(status, value = null) {
   return { status, text: async () => (value === null ? '' : JSON.stringify(value)) };
 }
 
+function syntheticPassword(role) {
+  return [role, 'password', '132'].join('-');
+}
+
 function privateState(status = 'ready-for-pixel') {
   const root = mkdtempSync(join(tmpdir(), 'sit-wp132-'));
   chmodSync(root, 0o700);
@@ -51,7 +55,7 @@ function privateState(status = 'ready-for-pixel') {
       role: 'owner',
       displayName: 'WP132 Owner',
       email: 'owner-wp132@example.test',
-      password: 'owner-password-132',
+      password: syntheticPassword('owner'),
       registrationStatus: 'accepted',
       verificationStatus: 'email-link-verified',
     },
@@ -59,7 +63,7 @@ function privateState(status = 'ready-for-pixel') {
       role: 'renter',
       displayName: 'WP132 Renter',
       email: 'renter-wp132@example.test',
-      password: 'renter-password-132',
+      password: syntheticPassword('renter'),
       registrationStatus: 'accepted',
       verificationStatus: 'email-link-verified',
     },
