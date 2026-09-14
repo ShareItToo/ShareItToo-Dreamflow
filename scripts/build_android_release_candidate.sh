@@ -161,18 +161,35 @@ if [[ "${SIT_SOCIAL_GOOGLE_ENABLED:-0}" == "1" ||
   social_google_enabled=true
 fi
 social_apple_enabled=false
-if [[ "${SIT_SOCIAL_APPLE_ENABLED:-0}" == "1" ||
-      "${SIT_SOCIAL_APPLE_ENABLED:-}" == "true" ]]; then
-  social_apple_enabled=true
-fi
+case "${SIT_SOCIAL_APPLE_ENABLED:-0}" in
+  1|true)
+    node tool/validate_android_social_auth_provider_readiness.mjs --provider apple
+    social_apple_enabled=true
+    ;;
+  0|false|'') ;;
+  *)
+    echo "ERROR: SIT_SOCIAL_APPLE_ENABLED must be 0, 1, false, or true." >&2
+    exit 1
+    ;;
+esac
 social_facebook_enabled=false
-if [[ ("${SIT_SOCIAL_FACEBOOK_ENABLED:-0}" == "1" ||
-       "${SIT_SOCIAL_FACEBOOK_ENABLED:-}" == "true") &&
-      "${SIT_FACEBOOK_APP_ID:-}" =~ ^[1-9][0-9]{5,24}$ &&
-      -n "${SIT_FACEBOOK_CLIENT_TOKEN:-}" &&
-      "${SIT_FACEBOOK_CLIENT_TOKEN}" != "not-configured" ]]; then
-  social_facebook_enabled=true
-fi
+case "${SIT_SOCIAL_FACEBOOK_ENABLED:-0}" in
+  1|true)
+    node tool/validate_android_social_auth_provider_readiness.mjs --provider facebook
+    if [[ ! "${SIT_FACEBOOK_APP_ID:-}" =~ ^[1-9][0-9]{5,24}$ ||
+          -z "${SIT_FACEBOOK_CLIENT_TOKEN:-}" ||
+          "${SIT_FACEBOOK_CLIENT_TOKEN}" == "not-configured" ]]; then
+      echo "ERROR: Facebook release enablement requires protected App ID and client token inputs." >&2
+      exit 1
+    fi
+    social_facebook_enabled=true
+    ;;
+  0|false|'') ;;
+  *)
+    echo "ERROR: SIT_SOCIAL_FACEBOOK_ENABLED must be 0, 1, false, or true." >&2
+    exit 1
+    ;;
+esac
 common_args+=(
   "--dart-define=SIT_SOCIAL_GOOGLE_ENABLED=$social_google_enabled"
   "--dart-define=SIT_SOCIAL_APPLE_ENABLED=$social_apple_enabled"

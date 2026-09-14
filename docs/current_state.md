@@ -1,5 +1,30 @@
 # ShareItToo Current State
 
+## WP148 Android social-provider activation guard — technical closure; provider HOLD
+
+Email registration and Google sign-in remain the proven Android pilot paths.
+Facebook and Apple are locally implemented but remain disabled. The release
+build now requires the exact provider-readiness validator before either flag
+can become active and rejects malformed flag values; protected provider values
+remain outside Git.
+
+Facebook still lacks external Meta/Firebase configuration, signing-key hashes
+and exact-device acceptance. Apple is optional for this Android pilot and also
+lacks provider setup, privacy/relay decisions and explicit Apple authorization-
+token revocation on account deletion. Neither provider is represented as ready.
+
+Focused client, Backend, release-tooling and negative-gate tests pass. The
+portfolio remains **22 PASS / 5 PARTIAL / 5 OPEN**. See
+`docs/operations/WP148_ANDROID_SOCIAL_PROVIDER_ACTIVATION_GUARD_2026-09-14.md`.
+
+The complete CI-equivalent technical regression passes. The separate private
+retained-candidate check correctly stays closed because later Backend runtime
+changes postdate that artifact. A single new exact-head signed candidate is
+therefore required before the next distribution.
+
+No provider console, Firebase, candidate, device, deployment, Production,
+Store, payment, credential or PR-merge state changed.
+
 ## WP147 current external pilot-gate refresh — read-only complete; gates hold
 
 Fresh authenticated read-only Drive inspection confirms unchanged V5.2 and

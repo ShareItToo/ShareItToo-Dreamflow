@@ -1,4 +1,28 @@
-# Current Work Package: WP147 Current External Pilot-Gate Refresh — READ-ONLY COMPLETE; GATES HOLD
+# Current Work Package: WP148 Android Social-Provider Activation Guard — TECHNICAL CLOSURE; PROVIDER HOLD
+
+Email registration and Google sign-in remain the proven Android pilot paths.
+Facebook and Apple are locally prepared but remain disabled. A sanitized
+provider-readiness manifest and deterministic release-build guard now prevent
+either provider from being enabled by a feature flag without complete external
+configuration evidence and exact-candidate acceptance.
+
+Apple is not required for the Android pilot. Its provider setup, privacy/relay
+decisions and explicit authorization-token revocation remain absent. Facebook
+still requires Meta/Firebase configuration, both signing-key hashes and device
+acceptance. The portfolio therefore remains **22 PASS / 5 PARTIAL / 5 OPEN**.
+See
+`docs/operations/WP148_ANDROID_SOCIAL_PROVIDER_ACTIVATION_GUARD_2026-09-14.md`.
+
+The complete CI-equivalent technical regression passes. The private retained-
+candidate check correctly remains closed because later Backend runtime changes
+postdate that artifact; a single new exact-head candidate is required after the
+last runtime-affecting package and before the next distribution.
+
+Next independent package: prove the durable private-registry pull path without
+changing the running Staging service. No provider, Firebase, candidate, device,
+deployment, Production, Store, payment, credential or PR-merge state changed.
+
+# Previous Work Package: WP147 Current External Pilot-Gate Refresh — READ-ONLY COMPLETE; GATES HOLD
 
 Fresh authenticated read-only Drive inspection confirms that the authoritative
 V5.2 sources and Support Packet have not drifted and no newer professional legal
