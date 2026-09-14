@@ -1,5 +1,23 @@
 # ShareItToo Current State
 
+## WP147 current external pilot-gate refresh — read-only complete; gates hold
+
+Fresh authenticated read-only Drive inspection confirms unchanged V5.2 and
+Support Packet sources, no newer professional approval and no newer binding P0B
+decision evidence. The legal source still explicitly states that it has no
+lawyer approval. Fresh Stripe readback confirms exactly one official sandbox
+connection with `livemode=false`, zero connected accounts and zero webhook
+destinations.
+
+The professional legal/snapshot and marketplace contract/configuration gates
+therefore remain OPEN. Stripe sandbox E2E remains PARTIAL and the invited pilot
+remains HOLD at zero of four hard prerequisites; Staging remains memory-only.
+The portfolio stays **22 PASS / 5 PARTIAL / 5 OPEN**. See
+`docs/operations/WP147_CURRENT_EXTERNAL_PILOT_GATE_REFRESH_2026-09-14.md`.
+
+No Drive, legal, Stripe, payment, deployment, Production, Store, Firebase,
+device, credential, secret or PR-merge state changed.
+
 ## WP146 Stripe payout and activation guard — technical closure; provider HOLD
 
 The local payment runtime now has a commit- and evidence-bound, short-lived

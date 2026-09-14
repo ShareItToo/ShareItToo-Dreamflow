@@ -1,4 +1,27 @@
-# Current Work Package: WP146 Stripe Payout and Activation Guard — TECHNICAL CLOSURE; PROVIDER HOLD
+# Current Work Package: WP147 Current External Pilot-Gate Refresh — READ-ONLY COMPLETE; GATES HOLD
+
+Fresh authenticated read-only Drive inspection confirms that the authoritative
+V5.2 sources and Support Packet have not drifted and no newer professional legal
+approval or P0B decision evidence exists. The legal source still identifies
+itself as not lawyer-approved. Fresh Stripe readback confirms the official
+`ShareItToo Sandbox` connection remains sandbox-only with zero connected
+accounts and zero webhook destinations.
+
+The result is deliberately fail-closed: binding legal snapshots, marketplace
+contract/configuration and the eight-scenario Stripe sandbox journey remain
+unavailable. Staging remains memory-only. The portfolio stays **22 PASS / 5
+PARTIAL / 5 OPEN**. See
+`docs/operations/WP147_CURRENT_EXTERNAL_PILOT_GATE_REFRESH_2026-09-14.md`.
+
+Next independent package: audit the current Facebook and Apple sign-in
+implementation and provider-side prerequisites without creating accounts,
+apps, credentials or changing provider consoles. Email and Google remain the
+proven Android pilot authentication paths.
+
+No Drive, legal, Stripe, payment, deployment, Production, Store, Firebase,
+device, credential, secret or PR-merge state changed.
+
+# Previous Work Package: WP146 Stripe Payout and Activation Guard — TECHNICAL CLOSURE; PROVIDER HOLD
 
 The payment runtime now has a fail-closed, exact-evidence-bound authorization
 for a small synthetic Stripe sandbox pilot. It expires within 24 hours, requires
