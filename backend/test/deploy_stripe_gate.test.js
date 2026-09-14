@@ -294,4 +294,14 @@ test('deployment source keeps Stripe Staging opt-in, file-only, test-only and sa
     'STRIPE_WEBHOOK_SECRET_HOST_FILE',
     'STRIPE_CONNECT_WEBHOOK_SECRET_HOST_FILE',
   ]) assert.match(workflow, new RegExp(`${name}: /run/shareittoo-ci/`, 'u'));
+  assert.match(
+    workflow,
+    /PAYMENT_PILOT_USER_IDS: ci-compose-user-1,ci-compose-user-2,ci-compose-user-3/u,
+  );
+  assert.match(
+    workflow,
+    /PAYMENT_SANDBOX_AUTHORIZATION_ID: ci-compose-validation-only/u,
+  );
+  assert.match(workflow, /PAYMENT_SANDBOX_AUTH_ISSUED_AT: "2000-01-01T00:00:00Z"/u);
+  assert.match(workflow, /PAYMENT_SANDBOX_AUTH_EXPIRES_AT: "2000-01-01T00:01:00Z"/u);
 });

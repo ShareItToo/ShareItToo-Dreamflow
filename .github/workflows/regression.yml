@@ -105,6 +105,10 @@ jobs:
           STRIPE_SECRET_KEY_HOST_FILE: /run/shareittoo-ci/stripe-secret-key
           STRIPE_WEBHOOK_SECRET_HOST_FILE: /run/shareittoo-ci/stripe-webhook-secret
           STRIPE_CONNECT_WEBHOOK_SECRET_HOST_FILE: /run/shareittoo-ci/stripe-connect-webhook-secret
+          PAYMENT_PILOT_USER_IDS: ci-compose-user-1,ci-compose-user-2,ci-compose-user-3
+          PAYMENT_SANDBOX_AUTHORIZATION_ID: ci-compose-validation-only
+          PAYMENT_SANDBOX_AUTH_ISSUED_AT: "2000-01-01T00:00:00Z"
+          PAYMENT_SANDBOX_AUTH_EXPIRES_AT: "2000-01-01T00:01:00Z"
           SIT_LISTING_AI_MODEL: gpt-4o-mini-2024-07-18
           SIT_LISTING_AI_BUDGET_CENTS: "5"
           SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: "1"
