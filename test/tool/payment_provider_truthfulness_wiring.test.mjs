@@ -187,12 +187,31 @@ test('a signed dispute event cannot be overtaken by local payout finalization', 
 test('V5.2 payout waits for both the return timeline and fourteen-day solution window', () => {
   assert.match(domain, /export function payoutReleaseAvailableAt/u);
   assert.match(domain, /version !== v52ContractDocument\.version/u);
-  assert.match(domain, /addReturnPolicyCalendarDays\(acceptedAt, 14, rentalTimezone\)/u);
+  assert.match(domain, /endOfReturnPolicyCalendarDay\([\s\S]{0,120}deLegalDeadlineTimeZone/u);
+  assert.match(
+    domain,
+    /const authoritativeContractAt = contractTime\.acceptedAt > contractTime\.createdAt[\s\S]{0,140}\? contractTime\.acceptedAt[\s\S]{0,80}: contractTime\.createdAt/u,
+  );
+  assert.match(domain, /contractUserId !== renterId/u);
   assert.match(workflow, /contract\.accepted_at AS platform_contract_accepted_at/u);
   assert.match(workflow, /contract\.contract_version AS platform_contract_version/u);
+  assert.match(workflow, /contract\.user_id AS platform_contract_user_id/u);
   assert.match(workflow, /payoutReleaseAvailableAt\(\{/u);
   assert.match(workflow, /clock_timestamp\(\) AS database_now/u);
-  assert.match(workflow, /requireV52Contract: config\.payments\.transport === 'stripe'/u);
+  assert.doesNotMatch(workflow, /requireV52Contract/u);
+  assert.doesNotMatch(domain, /requireV52Contract/u);
+  assert.doesNotMatch(domain, /rentalTimezone/u);
+  assert.doesNotMatch(
+    domain,
+    /platformContractVersion\.trim|platformContractUserId\.trim|bookingRenterId\.trim/u,
+  );
+  assert.match(workflow, /OR NOT isfinite\(contract\.accepted_at\)/u);
+  assert.match(workflow, /active_payout\.status IS DISTINCT FROM 'failed'/u);
+  assert.match(
+    workflow,
+    /booking\.payout_instruction_due_at <= now\(\)[\s\S]{0,240}booking\.completed_at <= now\(\) - \(\$2::text \|\| ' hours'\)::interval/u,
+  );
+  assert.match(workflow, /contractBlocked: result\.rows\[0\]\.contract_blocked/u);
   assert.equal(workflow.match(/databaseNow <= availableAt/gu)?.length, 1);
   assert.equal(workflow.match(/new Date\(row\.database_now\) <= availableAt/gu)?.length, 1);
 });
@@ -271,8 +290,15 @@ test('expired sandbox authorization does not hide stored payment truth or local 
 test('withdrawal and payout share one locked calendar cutoff', () => {
   assert.match(withdrawalWorkflow, /FOR UPDATE OF booking, request/u);
   assert.match(withdrawalWorkflow, /SELECT clock_timestamp\(\) AS database_now/u);
-  assert.match(withdrawalWorkflow, /addReturnPolicyCalendarDays\([\s\S]{0,120}14,[\s\S]{0,120}row\.rental_timezone/u);
-  assert.match(bookingWorkflow, /addReturnPolicyCalendarDays\([\s\S]{0,120}14,[\s\S]{0,120}row\.rental_timezone/u);
+  assert.match(withdrawalWorkflow, /endOfReturnPolicyCalendarDay\([\s\S]{0,120}14,[\s\S]{0,120}deLegalDeadlineTimeZone/u);
+  assert.match(bookingWorkflow, /endOfReturnPolicyCalendarDay\([\s\S]{0,120}14,[\s\S]{0,120}deLegalDeadlineTimeZone/u);
+  assert.match(bookingWorkflow, /clock_timestamp\(\) AS database_now/u);
+  for (const source of [domain, withdrawalWorkflow, bookingWorkflow]) {
+    assert.match(
+      source,
+      /const authoritativeContractAt = contractTime\.acceptedAt > contractTime\.createdAt[\s\S]{0,140}\? contractTime\.acceptedAt[\s\S]{0,80}: contractTime\.createdAt/u,
+    );
+  }
   assert.doesNotMatch(withdrawalWorkflow, /14 \* 24 \* 60 \* 60/u);
   assert.doesNotMatch(bookingWorkflow, /14 \* 24 \* 60 \* 60/u);
 });

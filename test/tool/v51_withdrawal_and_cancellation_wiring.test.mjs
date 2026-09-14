@@ -37,7 +37,11 @@ test('withdrawal is race-safe, 14-day bounded and preserves later-right review',
   assert.match(withdrawalWorkflow, /SELECT clock_timestamp\(\) AS database_now/u);
   assert.match(
     withdrawalWorkflow,
-    /addReturnPolicyCalendarDays\([\s\S]{0,120}14,[\s\S]{0,120}row\.rental_timezone/u,
+    /endOfReturnPolicyCalendarDay\([\s\S]{0,120}14,[\s\S]{0,120}deLegalDeadlineTimeZone/u,
+  );
+  assert.match(
+    withdrawalWorkflow,
+    /const authoritativeContractAt = contractTime\.acceptedAt > contractTime\.createdAt[\s\S]{0,140}\? contractTime\.acceptedAt[\s\S]{0,80}: contractTime\.createdAt/u,
   );
   assert.doesNotMatch(withdrawalWorkflow, /14 \* 24 \* 60 \* 60 \* 1000/u);
   assert.match(withdrawalWorkflow, /manual_review_required/u);
@@ -79,6 +83,35 @@ test('cancellation stores two obligations and never invents an after-start amoun
   assert.match(cancellationPolicy, /refundBasisPoints: null/u);
   assert.match(cancellationCopy, /keine starre Stornopauschale/u);
   assert.doesNotMatch(cancellationCopy, /keine Rückerstattung/u);
+  assert.match(
+    bookingWorkflow,
+    /v51CancellationDecisionAtDatabaseTime\([\s\S]{0,180}databaseNow: contract\.database_now/u,
+  );
+  assert.match(
+    bookingWorkflow,
+    /v51CancellationDecisionAtDatabaseTime\(\{[\s\S]{0,500}contractVersion: contract\.contract_version[\s\S]{0,300}bookingRenterId: row\.renter_id/u,
+  );
+  assert.match(
+    bookingWorkflow,
+    /actorRole === 'renter' && cancellationDecision\.withdrawalGate\.redirectToWithdrawal/u,
+  );
+  assert.match(bookingWorkflow, /renter_no_show_manual_review_required/u);
+  assert.ok(
+    bookingWorkflow.indexOf('renter_no_show_manual_review_required')
+      < bookingWorkflow.indexOf('let cancellationDecision = null'),
+  );
+  assert.match(
+    bookingWorkflow,
+    /cancelAt: occurredAt/u,
+  );
+  assert.match(
+    bookingWorkflow,
+    /calculatedAt: transitionedAt\.toISOString\(\)/u,
+  );
+  assert.match(
+    bookingWorkflow,
+    /cancelled_at[\s\S]{0,400}usesCancellationEventClock \? '\$5' : 'now\(\)'/u,
+  );
 });
 
 test('app uses two-step withdrawal and a durable authenticated receipt', () => {

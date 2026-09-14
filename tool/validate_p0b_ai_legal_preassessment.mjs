@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -8,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const packageRoot = 'assets/legal/de/p0b-ai-preassessment-2026-09-14.1';
 const manifestPath = `${packageRoot}/manifest.json`;
+const reviewedSourceCommit = '2db2b90aab385aeba527fd559a33c269c8dc00cf';
 
 const decisionKeys = Object.freeze([
   'operatorIdentityAndImprint',
@@ -36,6 +38,29 @@ const allowedAiDecisions = new Set([
   'ai_hold_external_fact',
 ]);
 
+// These digests describe the exact historical inputs reviewed at the L2
+// checkpoint. Mutable implementation files are intentionally not re-hashed
+// against a later HEAD: doing so would make every legitimate correction look
+// like evidence tampering. The three L2 artifacts themselves remain live-hash
+// checked below.
+const reviewedSourceInventory = Object.freeze({
+  'assets/legal/de/p0b-ai-preassessment-2026-09-14.1/01_ai_rechtliche_vorpruefung.md': 'a1772c59c24158315f8e23e48bf81e4c225f26a6a1f8087bfb2339c0cc5f6e44',
+  'assets/legal/de/p0b-ai-preassessment-2026-09-14.1/02_decision_matrix.json': 'c715cc28e50e6f47d92d5ac7c8143a02eeca7d6ef4dd535d20490127ee5b333a',
+  'assets/legal/de/p0b-ai-preassessment-2026-09-14.1/03_astra_crosscheck_scope.md': 'fcbdaf3fb545a351617aa35411b2273210e012775665cad2b821441b5589092d',
+  'assets/legal/de/legal_manifest_v52.json': '757289c45dfe50c9f3f3ec9c96953f06b62f15b282bb1d6cdedc6e8e07d2e69b',
+  'assets/legal/de/legal_manifest_v53.json': 'd1265d31f68a7c616d782a78cd77c22eadb03dabbbd7e9ebe36a485d6d1a49c6',
+  'assets/legal/de/legal_review_intake_p0b_20260821.json': '2ce69106a3ea06ad6fa08a365a22716bf1342c44b107fa03cdda5a399e165696',
+  'assets/legal/de/legal_manifest_g3l_draft.json': 'd3bc9b74cf70324b448df4e9d10662ab3a03485028dfc9e2d7c81535b8f9a02a',
+  'docs/architecture/g3a-same-owner-multi-item-decision-2026-08-20.md': '39db40f9b4d16dc11bca4cae5b09c87c657fcb36611ab744ed5a21710ce9af7b',
+  'lib/screens/private_pilot_checkout_screen.dart': 'd00a622598d67cda94185554ba69312ad8401f7c415ddd49a2a2579fa87549c8',
+  'lib/screens/platform_withdrawal_screen.dart': 'b3664e160885647afbde0607ea83b1173f201c38f3f7bdcb238ab66ed29804be',
+  'backend/src/booking_group_legal_document.js': '1cc7b6d0bcf0a4edb7c69fba605322736d353a0ea6f589e2170ae98bfe547966',
+  'backend/src/payment_workflow.js': 'fd68b07de3b5ef017bb5f26531bd9c193385c66b5ba460cc6f9b871797efed9e',
+  'store/retention-deletion-readiness.json': '6858ba64d995e270660bc6ae7a5793cb0aec8bbd6dbeec66ef91779ab31e6dad',
+  'docs/compliance/s3n-separate-dsa-notice-intake-2026-08-22.md': 'daec509e0997739558f4c3a97fa8e0ce3610c816f96b184e65f51d556bc0c088',
+  'docs/compliance/s3o-dsa-notice-locator-completion-2026-08-22.md': '52c5d39a4019518bc8bd91b8013a7895feec1da822ac02ab57c620c75ca447d6',
+});
+
 function fail(message) {
   throw new Error(`P0B-L2 AI legal preassessment ${message}`);
 }
@@ -50,6 +75,24 @@ function digest(repositoryRoot, path) {
   return createHash('sha256')
     .update(readFileSync(resolve(repositoryRoot, path)))
     .digest('hex');
+}
+
+function historicalDigest(repositoryRoot, commit, path) {
+  let blob;
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', commit, 'HEAD'], {
+      cwd: repositoryRoot,
+      stdio: 'ignore',
+    });
+    blob = execFileSync('git', ['show', `${commit}:${path}`], {
+      cwd: repositoryRoot,
+      encoding: null,
+      maxBuffer: 16 * 1024 * 1024,
+    });
+  } catch {
+    fail(`cannot verify historical source ${path} at ${commit}.`);
+  }
+  return createHash('sha256').update(blob).digest('hex');
 }
 
 export function validateP0bAiLegalPreassessment({
@@ -145,11 +188,18 @@ export function validateP0bAiLegalPreassessment({
     }
   }
 
-  if (Object.keys(value?.sourceInventory ?? {}).length !== 15) {
-    fail('source inventory is incomplete.');
+  exact(value?.sourceInventory, reviewedSourceInventory, 'source inventory');
+  for (const [path, expected] of Object.entries(reviewedSourceInventory)) {
+    exact(historicalDigest(repositoryRoot, reviewedSourceCommit, path), expected,
+      `historical source ${path}`);
   }
-  for (const [path, expected] of Object.entries(value.sourceInventory)) {
-    exact(digest(repositoryRoot, path), expected, `source inventory ${path}`);
+  for (const path of [
+    value.assessment.report,
+    value.assessment.decisionMatrix,
+    value.assessment.astraCrosscheckScope,
+  ]) {
+    exact(digest(repositoryRoot, path), reviewedSourceInventory[path],
+      `L2 artifact ${path}`);
   }
 
   const report = readFileSync(resolve(repositoryRoot, value.assessment.report), 'utf8');

@@ -27,38 +27,140 @@ import {
   verifyStripeSignature,
 } from '../src/payment_domain.js';
 
+const validV52PayoutBinding = Object.freeze({
+  platformContractVersion: 'V5.2-2026-08-16',
+  platformContractUserId: 'renter-1',
+  bookingRenterId: 'renter-1',
+  platformContractCreatedAt: '2026-03-20T11:00:00.000Z',
+});
+
 test('V5.2 payout availability uses the later return and fourteen-day contract gate', () => {
   assert.equal(payoutReleaseAvailableAt({
     returnAvailableAt: '2026-03-30T10:00:00.000Z',
     platformContractAcceptedAt: '2026-03-20T11:00:00.000Z',
-    platformContractVersion: 'V5.2-2026-08-16',
-    rentalTimezone: 'Europe/Berlin',
-    requireV52Contract: true,
-  }).toISOString(), '2026-04-03T10:00:00.000Z');
+    ...validV52PayoutBinding,
+  }).toISOString(), '2026-04-03T21:59:59.999Z');
   assert.equal(payoutReleaseAvailableAt({
     returnAvailableAt: '2026-11-10T11:00:00.000Z',
     platformContractAcceptedAt: '2026-10-20T10:00:00.000Z',
-    platformContractVersion: 'V5.2-2026-08-16',
-    rentalTimezone: 'Europe/Berlin',
-    requireV52Contract: true,
+    ...validV52PayoutBinding,
+    platformContractCreatedAt: '2026-10-20T10:00:00.000Z',
   }).toISOString(), '2026-11-10T11:00:00.000Z');
   assert.equal(payoutReleaseAvailableAt({
     returnAvailableAt: '2026-09-10T10:00:00.000Z',
-    platformContractAcceptedAt: null,
-    platformContractVersion: null,
+    platformContractAcceptedAt: '2026-08-01T10:00:00.000Z',
+    ...validV52PayoutBinding,
+    platformContractCreatedAt: '2026-08-01T10:00:00.000Z',
   }).toISOString(), '2026-09-10T10:00:00.000Z');
   assert.throws(() => payoutReleaseAvailableAt({
     returnAvailableAt: '2026-09-10T10:00:00.000Z',
     platformContractAcceptedAt: null,
     platformContractVersion: null,
-    requireV52Contract: true,
   }), (error) => error.code === 'payout_contract_binding_invalid');
   assert.throws(() => payoutReleaseAvailableAt({
     returnAvailableAt: '2026-09-10T10:00:00.000Z',
     platformContractAcceptedAt: '2026-09-01T10:00:00.000Z',
     platformContractVersion: 'V5.2-unreviewed',
-    requireV52Contract: true,
   }), (error) => error.code === 'payout_contract_version_unsupported');
+});
+
+test('payout contract clock is calendar-stable across both Berlin DST changes', () => {
+  assert.equal(payoutReleaseAvailableAt({
+    returnAvailableAt: '2026-03-21T11:00:00.000Z',
+    platformContractAcceptedAt: '2026-03-20T11:00:00.000Z',
+    ...validV52PayoutBinding,
+  }).toISOString(), '2026-04-03T21:59:59.999Z');
+  assert.equal(payoutReleaseAvailableAt({
+    returnAvailableAt: '2026-10-21T10:00:00.000Z',
+    platformContractAcceptedAt: '2026-10-20T10:00:00.000Z',
+    ...validV52PayoutBinding,
+    platformContractCreatedAt: '2026-10-20T10:00:00.000Z',
+  }).toISOString(), '2026-11-03T22:59:59.999Z');
+});
+
+test('payout deadline uses the later authoritative contract day across Berlin midnight', () => {
+  assert.equal(payoutReleaseAvailableAt({
+    returnAvailableAt: '2026-09-15T10:00:00.000Z',
+    // 23:59 and 00:01 in Europe/Berlin remain within the permitted clock drift,
+    // but fall on different legal calendar days.
+    platformContractAcceptedAt: '2026-09-14T21:59:00.000Z',
+    platformContractCreatedAt: '2026-09-14T22:01:00.000Z',
+    platformContractVersion: 'V5.2-2026-08-16',
+    platformContractUserId: 'renter-1',
+    bookingRenterId: 'renter-1',
+  }).toISOString(), '2026-09-29T21:59:59.999Z');
+});
+
+test('every payout transport fails closed on missing or unsupported contract truth', () => {
+  for (const platformContractVersion of [null, undefined, '']) {
+    assert.throws(() => payoutReleaseAvailableAt({
+      returnAvailableAt: '2026-09-10T10:00:00.000Z',
+      platformContractAcceptedAt: null,
+      platformContractVersion,
+    }), (error) => error.code === 'payout_contract_binding_invalid');
+  }
+  for (const platformContractVersion of [
+    'V5.1-2026-08-11',
+    'V5.2-unreviewed',
+    'V5.3-2026-09-14',
+    ' V5.2-2026-08-16',
+    'V5.2-2026-08-16 ',
+  ]) {
+    assert.throws(() => payoutReleaseAvailableAt({
+      returnAvailableAt: '2026-09-10T10:00:00.000Z',
+      platformContractAcceptedAt: '2026-09-01T10:00:00.000Z',
+      platformContractCreatedAt: '2026-09-01T10:00:00.000Z',
+      platformContractVersion,
+    }), (error) => error.code === 'payout_contract_version_unsupported');
+  }
+  for (const platformContractAcceptedAt of [null, '', 'not-an-instant']) {
+    assert.throws(() => payoutReleaseAvailableAt({
+      returnAvailableAt: '2026-09-10T10:00:00.000Z',
+      platformContractAcceptedAt,
+      ...validV52PayoutBinding,
+    }), (error) => error.code === 'payout_contract_time_invalid');
+  }
+  for (const platformContractCreatedAt of [
+    null,
+    '',
+    'not-an-instant',
+    '2026-08-31T09:59:59.999Z',
+    '2026-09-01T10:05:00.001Z',
+  ]) {
+    assert.throws(() => payoutReleaseAvailableAt({
+      returnAvailableAt: '2026-09-10T10:00:00.000Z',
+      platformContractAcceptedAt: '2026-09-01T10:00:00.000Z',
+      ...validV52PayoutBinding,
+      platformContractCreatedAt,
+    }), (error) => error.code === 'payout_contract_time_invalid');
+  }
+  for (const [platformContractUserId, bookingRenterId] of [
+    [null, 'renter-1'],
+    ['renter-1', null],
+    ['renter-a', 'renter-b'],
+    [' renter-1', 'renter-1'],
+    ['renter-1', 'renter-1 '],
+  ]) {
+    assert.throws(() => payoutReleaseAvailableAt({
+      returnAvailableAt: '2026-09-10T10:00:00.000Z',
+      platformContractAcceptedAt: '2026-09-01T10:00:00.000Z',
+      platformContractCreatedAt: '2026-09-01T10:00:00.000Z',
+      platformContractVersion: 'V5.2-2026-08-16',
+      platformContractUserId,
+      bookingRenterId,
+    }), (error) => error.code === 'payout_contract_binding_invalid');
+  }
+});
+
+test('payout deadline stays closed through the final legal millisecond', () => {
+  const deadline = payoutReleaseAvailableAt({
+    returnAvailableAt: '2026-03-21T11:00:00.000Z',
+    platformContractAcceptedAt: '2026-03-20T11:00:00.000Z',
+    ...validV52PayoutBinding,
+  });
+  assert.equal(new Date(deadline.getTime() - 1) <= deadline, true);
+  assert.equal(new Date(deadline) <= deadline, true);
+  assert.equal(new Date(deadline.getTime() + 1) <= deadline, false);
 });
 
 test('provider transfer binding covers payout, charge, amount, mode and metadata', () => {

@@ -44,12 +44,28 @@ test('participants submit owned evidence while only an admin resolves server-sid
   assert.doesNotMatch(workflow, /refundPayment|releasePayout|createPaymentCheckout/u);
 });
 
-test('no-show is owner-asserted after start and 14-day renter withdrawal wins', () => {
+test('automatic renter no-show stays on manual review before any money path', () => {
   assert.match(bookingWorkflow, /v52_withdrawal_precedes_cancellation/u);
   assert.match(bookingWorkflow, /renter_no_show_owner_required/u);
+  assert.match(bookingWorkflow, /renter_no_show_manual_review_required/u);
   assert.match(bookingWorkflow, /renter_no_show_before_start/u);
   assert.match(bookingWorkflow, /cause: cancellationType === 'renter_no_show'/u);
   assert.match(bookingWorkflow, /openV52ActualLossCase/u);
+  assert.match(
+    bookingWorkflow,
+    /v51CancellationDecisionAtDatabaseTime\(\{[\s\S]{0,500}contractVersion: contract\.contract_version[\s\S]{0,300}bookingRenterId: row\.renter_id/u,
+  );
+  assert.match(
+    bookingWorkflow,
+    /actorRole === 'renter' && cancellationDecision\.withdrawalGate\.redirectToWithdrawal/u,
+  );
+  assert.match(workflow, /row\.contract_version !== v52ContractDocument\.version/u);
+  assert.match(workflow, /row\.platform_contract_user_id !== row\.renter_id/u);
+  assert.doesNotMatch(workflow, /startsWith\('V5\.2-'\)/u);
+  assert.ok(
+    bookingWorkflow.indexOf('renter_no_show_manual_review_required')
+      < bookingWorkflow.indexOf('let cancellationDecision = null'),
+  );
 });
 
 test('resolution produces separate debtor events and a hashed durable receipt', () => {

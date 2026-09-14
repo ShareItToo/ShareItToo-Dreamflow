@@ -1,5 +1,51 @@
 # ShareItToo Current State
 
+## WP149 payment V5.2 contract-binding parity — technical closure; legal/real-money HOLD
+
+Direct payout and reconciler payout now enforce one fail-closed invariant for
+every transport: an exact `V5.2-2026-08-16` contract bound to the booking renter,
+a valid persisted acceptance instant within five minutes of its immutable
+persistence clock, independently sourced from PostgreSQL for new contracts,
+and the later of the server-owned payout deadline or the end
+of the fourteenth German legal calendar day measured conservatively from the
+later bound acceptance/persistence instant. This prevents a permitted clock
+offset across Berlin midnight from shortening the window. Missing,
+unsupported, misbound or invalid contract data blocks payout and is visible in
+payment health; it cannot create payout, ledger or notification side effects.
+Cancellation and withdrawal now require the same principal and clock binding
+and use an exact known-version allowlist. Unknown, lowercase, truncated or
+whitespace-padded versions fail closed instead of falling back to legacy
+behavior. V5.1 cancellation, refund calculation and owner no-show use one
+DB-owned event instant rather than the application process clock.
+
+An owner assertion that the renter did not appear is not allowed to enter the
+automatic cancellation or actual-loss money path. The current data model does
+not independently prove both unsuccessful contact attempts or the absence of a
+different agreement required by the bound Part C wording. The endpoint
+therefore returns `renter_no_show_manual_review_required` before its contract
+query, booking mutation, refund obligation or actual-loss case; the neutral
+handover-exception/support route remains available. The dormant downstream
+V5.2 actual-loss binder was also tightened to the exact known V5.2 version and
+the exact renter principal.
+
+The remote MacBook Codex task requested as Astra Ultra returned
+**CORRECTIONS_REQUIRED** with **3 CONFIRM / 12 CORRECT / 3
+INSUFFICIENT_EVIDENCE**. Only a partial normalized result is retained, not a
+complete per-key raw transcript; it is not independently auditable as full
+scope completion. WP149 corrects the relevant day-end calculation. The
+possible weekend/public-holiday extension under § 193 BGB and the remaining
+legal corrections stay open. This is not professional legal approval and does
+not authorize real money.
+
+Focused checks, **921 passing Backend tests with 2 intentional skips**, fresh
+PostgreSQL integration, dependent Privacy/Retention checks and the complete
+CI-equivalent local regression pass without a reduced or timing-based
+substitute. See
+`docs/operations/WP149_PAYMENT_V52_CONTRACT_BINDING_PARITY_2026-09-14.md`.
+
+No provider request, Stripe mutation, money movement, deployment, Production,
+Store, Firebase, credential, device or PR-merge state changed.
+
 ## WP148 Android social-provider activation guard — technical closure; provider HOLD
 
 Email registration and Google sign-in remain the proven Android pilot paths.

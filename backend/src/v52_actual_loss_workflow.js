@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
 
 import { v52ActualLossAmounts } from './v51_termination_domain.js';
+import { v51ContractDocument } from './v51_contract_workflow.js';
+import { v52ContractDocument } from './v52_contract_workflow.js';
 
 export class V52ActualLossError extends Error {
   constructor(status, code, details = undefined) {
@@ -89,7 +91,7 @@ function escapeHtml(value) {
 }
 
 function assertV52Document(row) {
-  if (!String(row.contract_version ?? '').startsWith('V5.2-')
+  if (row.contract_version !== v52ContractDocument.version
       || row.document_key !== 'cancellation_refund'
       || row.document_version !== row.contract_version
       || row.document_locale !== row.contract_locale
@@ -212,7 +214,9 @@ export async function openV52ActualLossCase(client, {
   const binding = await client.query(
     `SELECT booking.id, booking.owner_id, booking.renter_id, booking.currency,
             booking.rental_subtotal_minor, booking.platform_fee_minor,
-            contract.id AS platform_contract_id, contract.contract_version,
+            contract.id AS platform_contract_id,
+            contract.user_id AS platform_contract_user_id,
+            contract.contract_version,
             contract.locale AS contract_locale, contract.quote_id, contract.quote_hash,
             contract.cancellation_refund_snapshot_id,
             document.document_key, document.document_version,
@@ -227,7 +231,14 @@ export async function openV52ActualLossCase(client, {
   );
   if (!binding.rowCount) return null;
   const row = binding.rows[0];
-  if (!String(row.contract_version).startsWith('V5.2-')) return null;
+  if (row.contract_version === v51ContractDocument.version) return null;
+  if (row.contract_version !== v52ContractDocument.version) {
+    throw new V52ActualLossError(409, 'v52_cancellation_contract_version_unsupported');
+  }
+  if (!row.platform_contract_user_id
+      || row.platform_contract_user_id !== row.renter_id) {
+    throw new V52ActualLossError(409, 'v52_cancellation_contract_binding_invalid');
+  }
   assertV52Document(row);
   const obligations = await client.query(
     `SELECT id, refund_type, debtor_role, status, maximum_minor

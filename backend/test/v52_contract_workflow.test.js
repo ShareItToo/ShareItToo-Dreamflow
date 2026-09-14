@@ -127,8 +127,17 @@ test('declarations, explicit acceptance, nine snapshots and receipt precede hand
       if (sql.includes('FROM legal_document_snapshots')) {
         return { rows: snapshotRows() };
       }
+      if (sql.includes('clock_timestamp() AS database_now')) {
+        return { rows: [{ database_now: new Date(acceptedAt.getTime() + 250) }] };
+      }
       if (sql.includes('INSERT INTO platform_contracts')) {
-        return { rows: [{ id: values[0], accepted_at: acceptedAt }] };
+        return {
+          rows: [{
+            id: values[0],
+            accepted_at: acceptedAt,
+            created_at: new Date(acceptedAt.getTime() + 250),
+          }],
+        };
       }
       if (sql.includes('INSERT INTO platform_contract_receipts')) {
         return { rows: [{ id: 'receipt-1', generated_at: acceptedAt }] };
@@ -173,10 +182,49 @@ test('declarations, explicit acceptance, nine snapshots and receipt precede hand
   assert.equal(contractInsert.values[6], 'snapshot-a');
   assert.equal(contractInsert.values[14], 'snapshot-i');
   assert.match(contractInsert.values[16], /^[0-9a-f]{64}$/u);
+  assert.equal(new Date(contractInsert.values[19]).getTime(), acceptedAt.getTime());
+  assert.equal(contractInsert.values[20], 'booking-create-1:platform-contract');
+  assert.equal(contractInsert.values.length, 21);
+  assert.match(contractInsert.sql, /\$20, clock_timestamp\(\), \$21/u);
   const receiptHtml = calls[receiptIndex].values[1];
   assert.match(receiptHtml, /Gebundene Dokumente/u);
   assert.match(receiptHtml, /Teil A/u);
   assert.match(receiptHtml, /Teil I/u);
+});
+
+test('V5.2 rejects a stale application acceptance clock before any contract writes', async () => {
+  const calls = [];
+  await assert.rejects(
+    persistV52PlatformContract({
+      async query(sql, values) {
+        calls.push({ sql, values });
+        if (sql.includes('FROM legal_document_snapshots')) {
+          return { rows: snapshotRows() };
+        }
+        if (sql.includes('clock_timestamp() AS database_now')) {
+          return { rows: [{ database_now: new Date(acceptedAt.getTime() + 300_001) }] };
+        }
+        return { rows: [] };
+      },
+    }, {
+      userId: 'renter-1',
+      bookingId: 'booking-1',
+      quoteId,
+      quoteHash,
+      quoteIssuedAt: issuedAt,
+      quoteExpiresAt: expiresAt,
+      clientBuild,
+      declarations: declarations(),
+      idempotencyKey: 'booking-create-stale-clock:platform-contract',
+      acceptedAt,
+    }),
+    (error) => error instanceof V52ContractWorkflowError
+      && error.code === 'v52_contract_time_invalid',
+  );
+  assert.equal(
+    calls.some(({ sql }) => sql.includes('INSERT INTO platform_contract')),
+    false,
+  );
 });
 
 test('no V5.2 contract or receipt is created while one snapshot is absent', async () => {

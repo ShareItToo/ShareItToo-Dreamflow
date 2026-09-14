@@ -1,5 +1,9 @@
 const formatterCache = new Map();
 
+// V5.2 is the German private-pilot contract set. Its consumer/legal deadline
+// clock must not inherit a listing's freely configurable availability zone.
+export const deLegalDeadlineTimeZone = 'Europe/Berlin';
+
 function instant(value, code) {
   const parsed = value instanceof Date ? new Date(value) : new Date(value);
   if (!Number.isFinite(parsed.getTime())) throw new Error(code);
@@ -140,4 +144,32 @@ export function addReturnPolicyCalendarDays(value, days, timezone = 'Europe/Berl
     month: shiftedDate.getUTCMonth() + 1,
     day: shiftedDate.getUTCDate(),
   }, zone);
+}
+
+// German day-based withdrawal periods expire at the end of the last local
+// calendar day. Represent that inclusive boundary as the final millisecond
+// before the next local day so existing `instant <= deadline` guards remain
+// explicit and deterministic across daylight-saving changes.
+export function endOfReturnPolicyCalendarDay(value, days, timezone = 'Europe/Berlin') {
+  const source = instant(value, 'invalid_return_policy_instant');
+  if (!Number.isSafeInteger(days) || days < 0 || days > 3660) {
+    throw new Error('invalid_return_policy_calendar_days');
+  }
+  const zone = returnPolicyTimeZone(timezone);
+  const sourceParts = localParts(source, zone);
+  const nextDate = new Date(Date.UTC(
+    sourceParts.year,
+    sourceParts.month - 1,
+    sourceParts.day + days + 1,
+  ));
+  const nextDayStartsAt = resolveLocalInstant({
+    year: nextDate.getUTCFullYear(),
+    month: nextDate.getUTCMonth() + 1,
+    day: nextDate.getUTCDate(),
+    hour: 0,
+    minute: 0,
+    second: 0,
+    millisecond: 0,
+  }, zone);
+  return new Date(nextDayStartsAt.getTime() - 1);
 }

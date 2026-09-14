@@ -20,13 +20,14 @@ function binding(overrides = {}) {
     rental_subtotal_minor: 10000,
     platform_fee_minor: 1000,
     platform_contract_id: '11111111-1111-4111-8111-111111111111',
-    contract_version: 'V5.2-2026-08-20',
+    platform_contract_user_id: 'renter-1',
+    contract_version: 'V5.2-2026-08-16',
     contract_locale: 'de',
     quote_id: 'quote-1',
     quote_hash: 'a'.repeat(64),
     cancellation_refund_snapshot_id: '22222222-2222-4222-8222-222222222222',
     document_key: 'cancellation_refund',
-    document_version: 'V5.2-2026-08-20',
+    document_version: 'V5.2-2026-08-16',
     document_locale: 'de',
     content_text: contentText,
     content_sha256: contentSha256,
@@ -108,6 +109,36 @@ test('fails closed when the contract-bound cancellation document hash is stale',
     idempotencyKey: 'cancel-command:actual-loss',
   }), (error) => error instanceof V52ActualLossError
     && error.code === 'v52_cancellation_contract_binding_invalid');
+});
+
+test('fails closed on an unknown V5.2 version or mismatched contract principal', async () => {
+  for (const [overrides, code] of [
+    [
+      {
+        contract_version: 'V5.2-unreviewed',
+        document_version: 'V5.2-unreviewed',
+      },
+      'v52_cancellation_contract_version_unsupported',
+    ],
+    [
+      { platform_contract_user_id: 'other-renter' },
+      'v52_cancellation_contract_binding_invalid',
+    ],
+  ]) {
+    const client = clientForOpen(binding(overrides));
+    await assert.rejects(() => openV52ActualLossCase(client, {
+      actor: { id: 'owner-1', role: 'user' },
+      bookingId: 'booking-1',
+      cause: 'renter_no_show',
+      rentRefundObligationId: '33333333-3333-4333-8333-333333333333',
+      sitFeeRefundObligationId: '44444444-4444-4444-8444-444444444444',
+      idempotencyKey: 'cancel-command:actual-loss',
+    }), (error) => error instanceof V52ActualLossError && error.code === code);
+    assert.equal(
+      client.calls.some(({ sql }) => sql.includes('INSERT INTO v52_actual_loss_cases')),
+      false,
+    );
+  }
 });
 
 test('leaves historical V5.1 cancellation pending without inventing a V5.2 case', async () => {

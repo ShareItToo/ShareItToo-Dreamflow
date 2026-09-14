@@ -46,7 +46,10 @@ function booking(workflowStatus = 'confirmed', returnedAt = null) {
     workflow_revision: 3,
     payload: { id: 'booking-1' },
     platform_contract_id: 'contract-1',
+    platform_contract_user_id: 'renter-1',
     platform_contract_accepted_at: new Date('2026-08-16T09:00:00.000Z'),
+    platform_contract_created_at: new Date('2026-08-16T09:00:00.000Z'),
+    contract_version: 'V5.1-2026-08-16',
   };
 }
 
@@ -185,6 +188,7 @@ test('late declaration is receipted but never mutates booking or invents refunds
   const row = booking('active');
   row.starts_at = new Date('2026-08-01T10:00:00.000Z');
   row.platform_contract_accepted_at = new Date('2026-08-01T09:00:00.000Z');
+  row.platform_contract_created_at = row.platform_contract_accepted_at;
   const client = clientForBooking(row);
   const result = await recordV51Withdrawal(client, {
     actor: { id: 'renter-1', role: 'user' },
@@ -207,9 +211,10 @@ test('late declaration is receipted but never mutates booking or invents refunds
 
 test('booking withdrawal uses locked database time and the Berlin calendar-day cutoff', async () => {
   const acceptedAt = new Date('2026-03-20T11:00:00.000Z');
-  const exactCutoff = new Date('2026-04-03T10:00:00.000Z');
+  const exactCutoff = new Date('2026-04-03T21:59:59.999Z');
   const exactRow = booking('active');
   exactRow.platform_contract_accepted_at = acceptedAt;
+  exactRow.platform_contract_created_at = acceptedAt;
   exactRow.starts_at = new Date('2026-03-25T10:00:00.000Z');
   const exact = await recordV51Withdrawal(clientForBooking(exactRow, exactCutoff), {
     actor: { id: 'renter-1', role: 'user' },
@@ -224,6 +229,7 @@ test('booking withdrawal uses locked database time and the Berlin calendar-day c
 
   const lateRow = booking('active');
   lateRow.platform_contract_accepted_at = acceptedAt;
+  lateRow.platform_contract_created_at = acceptedAt;
   lateRow.starts_at = new Date('2026-03-25T10:00:00.000Z');
   const late = await recordV51Withdrawal(
     clientForBooking(lateRow, new Date(exactCutoff.getTime() + 1)),
@@ -236,6 +242,96 @@ test('booking withdrawal uses locked database time and the Berlin calendar-day c
     },
   );
   assert.equal(late.withdrawal.eligibilityStatus, 'manual_review_required');
+});
+
+test('booking withdrawal uses the later persisted contract day across Berlin midnight', async () => {
+  const row = booking('active');
+  row.platform_contract_accepted_at = new Date('2026-03-20T22:59:59.999Z');
+  row.platform_contract_created_at = new Date('2026-03-20T23:00:00.000Z');
+  row.starts_at = new Date('2026-03-25T10:00:00.000Z');
+  const laterDayCutoff = new Date('2026-04-04T21:59:59.999Z');
+
+  const exact = await recordV51Withdrawal(clientForBooking(row, laterDayCutoff), {
+    actor: { id: 'renter-1', role: 'user' },
+    bookingId: 'booking-1',
+    raw: { scope: 'booking_contract', acknowledgedConsequences: true },
+    idempotencyKey: 'withdrawal-berlin-midnight-exact',
+    now: new Date('2026-03-21T00:00:00.000Z'),
+  });
+
+  assert.equal(exact.withdrawal.rightExpiresAt, laterDayCutoff.toISOString());
+  assert.equal(exact.withdrawal.eligibilityStatus, 'automatic_14_day');
+});
+
+test('booking withdrawal fails closed before effects on principal, version or time drift', async () => {
+  const cases = [
+    {
+      mutate(row) { row.platform_contract_user_id = 'other-renter'; },
+      code: 'v51_withdrawal_contract_binding_invalid',
+    },
+    {
+      mutate(row) { row.contract_version = 'V5.3-2026-09-14'; },
+      code: 'v51_withdrawal_contract_version_unsupported',
+    },
+    {
+      mutate(row) {
+        row.platform_contract_created_at = new Date(
+          row.platform_contract_accepted_at.getTime() + 300_001,
+        );
+      },
+      code: 'v51_withdrawal_contract_time_invalid',
+    },
+  ];
+  for (const candidate of cases) {
+    const row = booking('active');
+    candidate.mutate(row);
+    const client = clientForBooking(row);
+    await assert.rejects(recordV51Withdrawal(client, {
+      actor: { id: 'renter-1', role: 'user' },
+      bookingId: 'booking-1',
+      raw: { scope: 'booking_contract', acknowledgedConsequences: true },
+      idempotencyKey: `withdrawal-reject-${candidate.code}`,
+      now,
+    }), (error) => error instanceof V51WithdrawalError && error.code === candidate.code);
+    assert.equal(client.calls.some(({ sql }) => sql.includes('UPDATE bookings')), false);
+    assert.equal(
+      client.calls.some(({ sql }) => sql.includes('INSERT INTO v51_refund_obligations')),
+      false,
+    );
+    assert.equal(
+      client.calls.some(({ sql }) => sql.includes('INSERT INTO v51_withdrawals')),
+      false,
+    );
+  }
+});
+
+test('exact V5.2 withdrawal uses its contract-bound immutable document', async () => {
+  const row = booking();
+  const contentText = 'V5.2 gebundene Widerrufsinformation';
+  Object.assign(row, {
+    contract_version: 'V5.2-2026-08-16',
+    contract_locale: 'de',
+    withdrawal_document_snapshot_id: 'withdrawal-v52-doc',
+    withdrawal_document_key: 'imprint_withdrawal_shorttexts',
+    withdrawal_document_version: 'V5.2-2026-08-16',
+    withdrawal_document_locale: 'de',
+    withdrawal_document_content_type: 'text/plain',
+    withdrawal_document_content_text: contentText,
+    withdrawal_document_content_sha256: crypto.createHash('sha256')
+      .update(contentText)
+      .digest('hex'),
+  });
+  const client = clientForBooking(row);
+  await recordV51Withdrawal(client, {
+    actor: { id: 'renter-1', role: 'user' },
+    bookingId: 'booking-1',
+    raw: { scope: 'booking_contract', acknowledgedConsequences: true },
+    idempotencyKey: 'withdrawal-v52-bound-document',
+    now,
+  });
+  const receipt = client.calls.find(({ sql }) => sql.includes('INSERT INTO v51_withdrawal_receipts'));
+  assert.match(receipt.values[1], /V5\.2-2026-08-16/u);
+  assert.match(receipt.values[1], /V5\.2 gebundene Widerrufsinformation/u);
 });
 
 test('withdrawal accepts no reason field and fails closed without exact V5.1 document', async () => {

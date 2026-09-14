@@ -8,6 +8,23 @@ export const v52ContractDocument = Object.freeze({
   locale: 'de',
 });
 
+export const platformContractClockToleranceMs = 300_000;
+
+export function platformContractAcceptanceTimeBinding({ acceptedAt, createdAt }) {
+  if (acceptedAt == null || acceptedAt === '' || createdAt == null || createdAt === '') {
+    return null;
+  }
+  const accepted = new Date(acceptedAt);
+  const created = new Date(createdAt);
+  if (!Number.isFinite(accepted.getTime()) || !Number.isFinite(created.getTime())) {
+    return null;
+  }
+  if (Math.abs(accepted.getTime() - created.getTime()) > platformContractClockToleranceMs) {
+    return null;
+  }
+  return Object.freeze({ acceptedAt: accepted, createdAt: created });
+}
+
 export const v52ContractDocuments = Object.freeze([
   Object.freeze({ part: 'A', key: 'platform_terms' }),
   Object.freeze({ part: 'B', key: 'private_rental_terms' }),
@@ -249,6 +266,13 @@ export async function persistV52PlatformContract(client, {
   if (!snapshots.ready) {
     throw new V52ContractWorkflowError('v52_contract_documents_unavailable');
   }
+  const contractClock = await client.query('SELECT clock_timestamp() AS database_now');
+  if (!platformContractAcceptanceTimeBinding({
+    acceptedAt: contractAcceptedAt,
+    createdAt: contractClock.rows[0]?.database_now,
+  })) {
+    throw new V52ContractWorkflowError('v52_contract_time_invalid');
+  }
   const contractId = crypto.randomUUID();
   for (const declaration of normalizedDeclarations) {
     await client.query(
@@ -291,11 +315,12 @@ export async function persistV52PlatformContract(client, {
        payment_payout_snapshot_id, community_safety_snapshot_id,
        reporting_moderation_review_snapshot_id, privacy_snapshot_id,
        imprint_withdrawal_shorttexts_snapshot_id, sit_acceptance_wording,
-       sit_acceptance_sha256, locale, client_build, accepted_at, idempotency_key
+       sit_acceptance_sha256, locale, client_build, accepted_at, created_at,
+       idempotency_key
      ) VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-       $15, $16, $17, $18, $19, $20, $21
-     ) RETURNING id, accepted_at`,
+       $15, $16, $17, $18, $19, $20, clock_timestamp(), $21
+     ) RETURNING id, accepted_at, created_at`,
     [
       contractId,
       normalizedUserId,
@@ -320,7 +345,11 @@ export async function persistV52PlatformContract(client, {
       normalizedKey,
     ],
   );
-  if (contract.rows[0]?.id !== contractId) {
+  const persistedTime = platformContractAcceptanceTimeBinding({
+    acceptedAt: contract.rows[0]?.accepted_at,
+    createdAt: contract.rows[0]?.created_at,
+  });
+  if (contract.rows[0]?.id !== contractId || !persistedTime) {
     throw new V52ContractWorkflowError('v52_contract_not_created');
   }
   const receipt = await persistV51ContractReceipt(client, {

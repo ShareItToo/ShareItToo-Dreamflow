@@ -18,12 +18,16 @@ import {
   evaluateCancellation,
 } from './private_pilot_return_domain.js';
 import { v51CancellationAmounts } from './v51_termination_domain.js';
+import { v51ContractDocument } from './v51_contract_workflow.js';
 import { settleV51WithdrawalRefundAtReturn } from './v51_withdrawal_workflow.js';
 import { openV52ActualLossCase } from './v52_actual_loss_workflow.js';
 import { hasVerifiedBookingConfirmation } from './booking_confirmation_workflow.js';
 import { postgresDateText } from './postgres_date.js';
 import { shapePublicListing } from './listing_catalog.js';
-import { addReturnPolicyCalendarDays } from './return_calendar_policy.js';
+import {
+  deLegalDeadlineTimeZone,
+  endOfReturnPolicyCalendarDay,
+} from './return_calendar_policy.js';
 import {
   assertPrivatePilotAccountState,
   assertPrivatePilotBooking,
@@ -37,6 +41,8 @@ import {
 } from './private_pilot_domain.js';
 import {
   persistV52PlatformContract,
+  platformContractAcceptanceTimeBinding,
+  v52ContractDocument,
   V52ContractWorkflowError,
 } from './v52_contract_workflow.js';
 import {
@@ -1115,6 +1121,109 @@ function transitionPath(current, requested, { pilotWithoutPayment = false } = {}
   return [requested];
 }
 
+export function v52CancellationWithdrawalGate({
+  contractVersion,
+  contractAcceptedAt,
+  contractCreatedAt,
+  contractUserId,
+  bookingRenterId,
+  databaseNow,
+}) {
+  if (contractVersion == null
+      && contractAcceptedAt == null
+      && contractCreatedAt == null
+      && contractUserId == null) {
+    throw new BookingWorkflowError(409, 'v52_withdrawal_contract_binding_invalid');
+  }
+  const version = typeof contractVersion === 'string' ? contractVersion : '';
+  if (![v51ContractDocument.version, v52ContractDocument.version].includes(version)) {
+    throw new BookingWorkflowError(409, 'v52_withdrawal_contract_version_unsupported');
+  }
+  const contractPrincipal = typeof contractUserId === 'string' ? contractUserId : '';
+  const renterPrincipal = typeof bookingRenterId === 'string' ? bookingRenterId : '';
+  if (!contractPrincipal || !renterPrincipal || contractPrincipal !== renterPrincipal) {
+    throw new BookingWorkflowError(409, 'v52_withdrawal_contract_binding_invalid');
+  }
+  const contractTime = platformContractAcceptanceTimeBinding({
+    acceptedAt: contractAcceptedAt,
+    createdAt: contractCreatedAt,
+  });
+  if (!contractTime) {
+    throw new BookingWorkflowError(409, 'v52_withdrawal_contract_time_invalid');
+  }
+  if (version === v51ContractDocument.version) {
+    return Object.freeze({ redirectToWithdrawal: false, rightExpiresAt: null });
+  }
+  const authoritativeNow = new Date(databaseNow);
+  if (databaseNow == null || databaseNow === ''
+      || !Number.isFinite(authoritativeNow.getTime())) {
+    throw new BookingWorkflowError(503, 'v52_withdrawal_database_clock_invalid');
+  }
+  let rightExpiresAt;
+  try {
+    const authoritativeContractAt = contractTime.acceptedAt > contractTime.createdAt
+      ? contractTime.acceptedAt
+      : contractTime.createdAt;
+    rightExpiresAt = endOfReturnPolicyCalendarDay(
+      authoritativeContractAt,
+      14,
+      deLegalDeadlineTimeZone,
+    );
+  } catch {
+    throw new BookingWorkflowError(409, 'v52_withdrawal_contract_time_invalid');
+  }
+  return Object.freeze({
+    redirectToWithdrawal: authoritativeNow <= rightExpiresAt,
+    rightExpiresAt,
+  });
+}
+
+export function v51CancellationDecisionAtDatabaseTime({
+  databaseNow,
+  rentalStartAt,
+  contractConfirmedAt,
+  actorRole,
+  cancellationType,
+  contractVersion = null,
+  contractAcceptedAt = null,
+  contractCreatedAt = null,
+  contractUserId = null,
+  bookingRenterId = null,
+}) {
+  const occurredAt = new Date(databaseNow);
+  if (databaseNow == null || databaseNow === ''
+      || !Number.isFinite(occurredAt.getTime())) {
+    throw new BookingWorkflowError(503, 'booking_cancellation_database_clock_invalid');
+  }
+  const withdrawalGate = v52CancellationWithdrawalGate({
+    contractVersion,
+    contractAcceptedAt,
+    contractCreatedAt,
+    contractUserId,
+    bookingRenterId,
+    databaseNow: occurredAt,
+  });
+  if (cancellationType === 'renter_no_show') {
+    if (actorRole !== 'owner') {
+      throw new BookingWorkflowError(403, 'renter_no_show_owner_required');
+    }
+    if (occurredAt < new Date(rentalStartAt)) {
+      throw new BookingWorkflowError(409, 'renter_no_show_before_start');
+    }
+  }
+  return Object.freeze({
+    occurredAt,
+    withdrawalGate,
+    outcome: evaluateCancellation({
+      rentalStartAt,
+      cancelAt: occurredAt,
+      contractConfirmedAt,
+      actor: cancellationType === 'renter_no_show' ? 'renter' : actorRole,
+      noShow: cancellationType === 'renter_no_show',
+    }),
+  });
+}
+
 export async function transitionBooking(client, { actor, bookingId, raw, key, config }) {
   const candidate = object(raw, 'invalid_booking_transition');
   const commandKey = idempotencyKey(key ?? candidate.idempotencyKey);
@@ -1168,38 +1277,6 @@ export async function transitionBooking(client, { actor, bookingId, raw, key, co
     ownerId: row.owner_id,
     renterId: row.renter_id,
   });
-  const transitionedAt = new Date();
-  if (requested === 'cancelled' && actorRole === 'renter' && !simulationOnly) {
-    const contract = await client.query(
-      `SELECT contract_version, accepted_at
-         FROM platform_contracts WHERE booking_id = $1`,
-      [bookingId],
-    );
-    const acceptedAt = contract.rows[0]?.accepted_at
-      ? new Date(contract.rows[0].accepted_at)
-      : null;
-    let rightExpiresAt = null;
-    if (acceptedAt) {
-      try {
-        rightExpiresAt = addReturnPolicyCalendarDays(
-          acceptedAt,
-          14,
-          row.rental_timezone,
-        );
-      } catch {
-        throw new BookingWorkflowError(409, 'v52_withdrawal_contract_time_invalid');
-      }
-    }
-    if (String(contract.rows[0]?.contract_version ?? '').startsWith('V5.2-')
-        && rightExpiresAt
-        && transitionedAt <= rightExpiresAt) {
-      throw new BookingWorkflowError(409, 'v52_withdrawal_precedes_cancellation', {
-        bookingId,
-        rightExpiresAt: rightExpiresAt.toISOString(),
-        withdrawalPath: `/v1/bookings/${encodeURIComponent(bookingId)}/withdrawal`,
-      });
-    }
-  }
   if (requested === 'cancelled' && cancellationType === 'renter_no_show') {
     if (simulationOnly) {
       throw new BookingWorkflowError(409, 'pilot_simulation_no_show_not_applicable');
@@ -1207,10 +1284,42 @@ export async function transitionBooking(client, { actor, bookingId, raw, key, co
     if (actorRole !== 'owner') {
       throw new BookingWorkflowError(403, 'renter_no_show_owner_required');
     }
-    if (transitionedAt < new Date(row.starts_at)) {
-      throw new BookingWorkflowError(409, 'renter_no_show_before_start');
+    throw new BookingWorkflowError(409, 'renter_no_show_manual_review_required', {
+      supportPath: `/v1/bookings/${encodeURIComponent(bookingId)}/handover-exceptions`,
+    });
+  }
+  let cancellationDecision = null;
+  if (requested === 'cancelled' && !simulationOnly) {
+    const contractClock = await client.query(
+      `SELECT contract.contract_version, contract.accepted_at, contract.created_at,
+              contract.user_id,
+              clock_timestamp() AS database_now
+         FROM (SELECT 1) AS singleton
+         LEFT JOIN platform_contracts AS contract ON contract.booking_id = $1`,
+      [bookingId],
+    );
+    const contract = contractClock.rows[0] ?? {};
+    cancellationDecision = v51CancellationDecisionAtDatabaseTime({
+      databaseNow: contract.database_now,
+      rentalStartAt: row.starts_at,
+      contractConfirmedAt: row.accepted_at,
+      actorRole,
+      cancellationType,
+      contractVersion: contract.contract_version,
+      contractAcceptedAt: contract.accepted_at,
+      contractCreatedAt: contract.created_at,
+      contractUserId: contract.user_id,
+      bookingRenterId: row.renter_id,
+    });
+    if (actorRole === 'renter' && cancellationDecision.withdrawalGate.redirectToWithdrawal) {
+      throw new BookingWorkflowError(409, 'v52_withdrawal_precedes_cancellation', {
+        bookingId,
+        rightExpiresAt: cancellationDecision.withdrawalGate.rightExpiresAt.toISOString(),
+        withdrawalPath: `/v1/bookings/${encodeURIComponent(bookingId)}/withdrawal`,
+      });
     }
   }
+  const transitionedAt = cancellationDecision?.occurredAt ?? new Date();
   let current = row.workflow_status;
   if (current === requested) {
     const response = { booking: bookingPayload(row, actor.id), replayed: false };
@@ -1296,14 +1405,19 @@ export async function transitionBooking(client, { actor, bookingId, raw, key, co
       refunded: 'refunded_at',
       disputed: 'disputed_at',
     }[next];
-    const timestampSql = timestampColumn ? `, ${timestampColumn} = COALESCE(${timestampColumn}, now())` : '';
+    const usesCancellationEventClock = next === 'cancelled' && !simulationOnly;
+    const timestampSql = timestampColumn
+      ? `, ${timestampColumn} = COALESCE(${timestampColumn}, ${usesCancellationEventClock ? '$5' : 'now()'})`
+      : '';
     await client.query(
       `UPDATE bookings
        SET status = $2, workflow_status = $3, hold_expires_at = $4,
            workflow_revision = workflow_revision + 1, version = version + 1
            ${timestampSql}
        WHERE id = $1`,
-      [bookingId, legacyStatus, next, holdExpiresAt],
+      usesCancellationEventClock
+        ? [bookingId, legacyStatus, next, holdExpiresAt, transitionedAt]
+        : [bookingId, legacyStatus, next, holdExpiresAt],
     );
     if (next === 'accepted' && config.privatePilotV4Enabled && !simulationOnly) {
       const declaration = requiredPrivatePilotOwnerAcceptance(candidate);
@@ -1351,13 +1465,7 @@ export async function transitionBooking(client, { actor, bookingId, raw, key, co
       };
     }
     if (next === 'cancelled' && config.privatePilotV4Enabled && !simulationOnly) {
-      const outcome = evaluateCancellation({
-        rentalStartAt: row.starts_at,
-        cancelAt: transitionedAt,
-        contractConfirmedAt: row.accepted_at,
-        actor: cancellationType === 'renter_no_show' ? 'renter' : actorRole,
-        noShow: cancellationType === 'renter_no_show',
-      });
+      const outcome = cancellationDecision.outcome;
       const calculated = outcome.calculationStatus === 'final'
         ? v51CancellationAmounts({
             rentalSubtotalMinor: Number(row.rental_subtotal_minor),
@@ -1381,7 +1489,7 @@ export async function transitionBooking(client, { actor, bookingId, raw, key, co
           refundMinor: calculated.rentRefundMinor + calculated.sitFeeRefundMinor,
           retainedMinor: calculated.rentRetainedMinor + calculated.sitFeeRetainedMinor,
         }),
-        calculatedAt: new Date().toISOString(),
+        calculatedAt: transitionedAt.toISOString(),
         modelVersion: 'V5.1-2026-08-16',
       };
       const cancellationObligations = {};

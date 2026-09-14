@@ -37,6 +37,7 @@ import {
   stripeSandboxExecutionActive,
 } from './payment_execution_guard.js';
 import { StripeProvider } from './stripe_provider.js';
+import { v52ContractDocument } from './v52_contract_workflow.js';
 
 export const stripeProvider = new StripeProvider({
   mode: config.payments.transport,
@@ -2572,7 +2573,8 @@ export async function releasePayout({
       [`payment-payout:${paymentId}`],
     );
     const result = await client.query(
-      `SELECT payment.*, booking.owner_id, booking.workflow_status, booking.completed_at,
+      `SELECT payment.*, booking.owner_id, booking.renter_id,
+              booking.workflow_status, booking.completed_at,
               booking.ends_at, booking.return_state, booking.payout_instruction_due_at,
               booking.rental_timezone,
               request.payload AS booking_payload,
@@ -2628,7 +2630,9 @@ export async function releasePayout({
     }
     const contractClock = await client.query(
       `SELECT contract.accepted_at AS platform_contract_accepted_at,
+              contract.created_at AS platform_contract_created_at,
               contract.contract_version AS platform_contract_version,
+              contract.user_id AS platform_contract_user_id,
               clock_timestamp() AS database_now
          FROM (SELECT 1) AS singleton
          LEFT JOIN platform_contracts AS contract ON contract.booking_id = $1`,
@@ -2646,9 +2650,10 @@ export async function releasePayout({
     const availableAt = payoutReleaseAvailableAt({
       returnAvailableAt,
       platformContractAcceptedAt: contract.platform_contract_accepted_at,
+      platformContractCreatedAt: contract.platform_contract_created_at,
       platformContractVersion: contract.platform_contract_version,
-      rentalTimezone: payment.rental_timezone,
-      requireV52Contract: config.payments.transport === 'stripe',
+      platformContractUserId: contract.platform_contract_user_id,
+      bookingRenterId: payment.renter_id,
     });
     const databaseNow = new Date(contract.database_now);
     if (!Number.isFinite(databaseNow.getTime())) {
@@ -3192,9 +3197,11 @@ export async function reconcilePaymentLifecycle() {
   const eligible = await pool.query(
     `SELECT payment.id, payment.transferred_minor, booking.return_state,
             booking.workflow_status, booking.ends_at, booking.completed_at,
-            booking.payout_instruction_due_at, booking.rental_timezone,
+            booking.payout_instruction_due_at, booking.renter_id,
             contract.accepted_at AS platform_contract_accepted_at,
+            contract.created_at AS platform_contract_created_at,
             contract.contract_version AS platform_contract_version,
+            contract.user_id AS platform_contract_user_id,
             active_payout.idempotency_key AS active_payout_key,
             clock_timestamp() AS database_now
      FROM payments AS payment JOIN bookings AS booking ON booking.id = payment.booking_id
@@ -3245,9 +3252,10 @@ export async function reconcilePaymentLifecycle() {
       const availableAt = payoutReleaseAvailableAt({
         returnAvailableAt,
         platformContractAcceptedAt: row.platform_contract_accepted_at,
+        platformContractCreatedAt: row.platform_contract_created_at,
         platformContractVersion: row.platform_contract_version,
-        rentalTimezone: row.rental_timezone,
-        requireV52Contract: config.payments.transport === 'stripe',
+        platformContractUserId: row.platform_contract_user_id,
+        bookingRenterId: row.renter_id,
       });
       if (new Date(row.database_now) <= availableAt) continue;
       await releasePayout({
@@ -3277,10 +3285,61 @@ export async function paymentHealth() {
       unbalanced: 0,
       recoveryPending: 0,
       recoveryNeedsReview: 0,
+      contractBlocked: 0,
     };
   }
   const result = await pool.query(
-    `SELECT
+    `WITH contract_blocked AS (
+       SELECT count(*)::int AS total
+         FROM payments AS payment
+         JOIN bookings AS booking ON booking.id = payment.booking_id
+         LEFT JOIN platform_contracts AS contract ON contract.booking_id = booking.id
+         LEFT JOIN LATERAL (
+           SELECT payout.status
+             FROM payouts AS payout
+            WHERE payout.payment_id = payment.id
+              AND payout.status IN ('scheduled', 'pending', 'failed')
+            ORDER BY payout.created_at DESC, payout.id DESC
+            LIMIT 1
+         ) AS active_payout ON true
+         LEFT JOIN LATERAL (
+           SELECT COALESCE(sum(owner_share_minor), 0)::bigint AS owner_share_minor
+             FROM refunds
+            WHERE payment_id = payment.id AND status = 'succeeded'
+         ) AS refunded ON true
+        WHERE booking.workflow_status IN ('completed', 'cancelled')
+          AND payment.status IN ('captured', 'partially_refunded')
+          AND payment.transferred_minor
+              < payment.owner_payout_minor - refunded.owner_share_minor
+          AND active_payout.status IS DISTINCT FROM 'failed'
+          AND (
+            (booking.workflow_status = 'completed' AND (
+              booking.payout_instruction_due_at <= now()
+              OR (
+                booking.payout_instruction_due_at IS NULL
+                AND booking.completed_at <= now() - ($2::text || ' hours')::interval
+              )
+            ))
+            OR (
+              booking.workflow_status = 'cancelled'
+              AND booking.ends_at <= now() - ($2::text || ' hours')::interval
+            )
+          )
+          AND (
+            contract.id IS NULL
+            OR contract.contract_version IS DISTINCT FROM $1
+            OR contract.user_id IS DISTINCT FROM booking.renter_id
+            OR contract.accepted_at IS NULL
+            OR NOT isfinite(contract.accepted_at)
+            OR contract.created_at IS NULL
+            OR NOT isfinite(contract.created_at)
+            OR date_trunc('milliseconds', contract.accepted_at)
+                 < date_trunc('milliseconds', contract.created_at) - INTERVAL '5 minutes'
+            OR date_trunc('milliseconds', contract.accepted_at)
+                 > date_trunc('milliseconds', contract.created_at) + INTERVAL '5 minutes'
+          )
+     )
+     SELECT
        (SELECT count(*)::int FROM payments WHERE status IN ('created', 'requires_action', 'authorized')) AS pending,
        (SELECT count(*)::int FROM payment_provider_events WHERE status = 'failed') AS failed_events,
        ((SELECT count(*)::int FROM dispute_transfer_recoveries
@@ -3310,11 +3369,14 @@ export async function paymentHealth() {
           WHERE status = 'failed')
         +
         (SELECT count(*)::int FROM refunds WHERE status = 'failed'))
+        + (SELECT total FROM contract_blocked)
          AS recovery_needs_review,
+       (SELECT total FROM contract_blocked) AS contract_blocked,
        (SELECT count(*)::int FROM (
           SELECT transaction_id FROM ledger_entries GROUP BY transaction_id
           HAVING sum(debit_minor) <> sum(credit_minor)
         ) AS mismatch) AS unbalanced`,
+    [v52ContractDocument.version, config.payments.payoutHoldHours],
   );
   return {
     transport: config.payments.transport,
@@ -3324,5 +3386,6 @@ export async function paymentHealth() {
     unbalanced: result.rows[0].unbalanced,
     recoveryPending: result.rows[0].recovery_pending,
     recoveryNeedsReview: result.rows[0].recovery_needs_review,
+    contractBlocked: result.rows[0].contract_blocked,
   };
 }

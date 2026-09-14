@@ -1,9 +1,16 @@
 import crypto from 'node:crypto';
 
 import { enqueueV51WithdrawalNotifications } from './notifications.js';
-import { addReturnPolicyCalendarDays } from './return_calendar_policy.js';
+import {
+  deLegalDeadlineTimeZone,
+  endOfReturnPolicyCalendarDay,
+} from './return_calendar_policy.js';
 import { evaluateV51WithdrawalEffect } from './v51_termination_domain.js';
 import { v51ContractDocument } from './v51_contract_workflow.js';
+import {
+  platformContractAcceptanceTimeBinding,
+  v52ContractDocument,
+} from './v52_contract_workflow.js';
 
 export class V51WithdrawalError extends Error {
   constructor(status, code, details = undefined) {
@@ -89,14 +96,17 @@ async function v51WithdrawalDocument(client, at) {
 }
 
 function contractWithdrawalDocument(row) {
-  if (!String(row.contract_version ?? '').startsWith('V5.2-')) return null;
+  if (row.contract_version === v51ContractDocument.version) return null;
+  if (row.contract_version !== v52ContractDocument.version) {
+    throw new V51WithdrawalError(409, 'v51_withdrawal_contract_version_unsupported');
+  }
   if (!row.withdrawal_document_snapshot_id
       || row.withdrawal_document_key !== 'imprint_withdrawal_shorttexts'
       || row.withdrawal_document_version !== row.contract_version
       || row.withdrawal_document_locale !== row.contract_locale
       || sha256(row.withdrawal_document_content_text ?? '')
         !== row.withdrawal_document_content_sha256) {
-    throw new V51WithdrawalError(409, 'v52_withdrawal_contract_binding_invalid');
+    throw new V51WithdrawalError(409, 'v51_withdrawal_contract_binding_invalid');
   }
   return Object.freeze({
     id: row.withdrawal_document_snapshot_id,
@@ -306,7 +316,9 @@ export async function recordV51Withdrawal(client, {
               booking.rental_subtotal_minor, booking.platform_fee_minor,
               booking.workflow_revision, request.payload,
               contract.id AS platform_contract_id,
+              contract.user_id AS platform_contract_user_id,
               contract.accepted_at AS platform_contract_accepted_at,
+              contract.created_at AS platform_contract_created_at,
               contract.contract_version, contract.locale AS contract_locale,
               withdrawal_document.id AS withdrawal_document_snapshot_id,
               withdrawal_document.document_key AS withdrawal_document_key,
@@ -334,6 +346,21 @@ export async function recordV51Withdrawal(client, {
     if (row.renter_id !== actor.id) {
       throw new V51WithdrawalError(403, 'v51_withdrawal_forbidden');
     }
+    if (![v51ContractDocument.version, v52ContractDocument.version]
+      .includes(row.contract_version)) {
+      throw new V51WithdrawalError(409, 'v51_withdrawal_contract_version_unsupported');
+    }
+    if (!row.platform_contract_user_id
+        || row.platform_contract_user_id !== row.renter_id) {
+      throw new V51WithdrawalError(409, 'v51_withdrawal_contract_binding_invalid');
+    }
+    const contractTime = platformContractAcceptanceTimeBinding({
+      acceptedAt: row.platform_contract_accepted_at,
+      createdAt: row.platform_contract_created_at,
+    });
+    if (!contractTime) {
+      throw new V51WithdrawalError(409, 'v51_withdrawal_contract_time_invalid');
+    }
     if (['declined', 'refunded'].includes(row.workflow_status)) {
       throw new V51WithdrawalError(409, 'v51_withdrawal_booking_not_eligible');
     }
@@ -349,10 +376,13 @@ export async function recordV51Withdrawal(client, {
       now: submittedAt,
     });
     try {
-      rightExpiresAt = addReturnPolicyCalendarDays(
-        new Date(row.platform_contract_accepted_at),
+      const authoritativeContractAt = contractTime.acceptedAt > contractTime.createdAt
+        ? contractTime.acceptedAt
+        : contractTime.createdAt;
+      rightExpiresAt = endOfReturnPolicyCalendarDay(
+        authoritativeContractAt,
         14,
-        row.rental_timezone,
+        deLegalDeadlineTimeZone,
       );
     } catch {
       throw new V51WithdrawalError(409, 'v51_withdrawal_contract_time_invalid');

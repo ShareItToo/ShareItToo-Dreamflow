@@ -2215,11 +2215,19 @@ if (!databaseUrl) {
       const { drainNotificationOutbox } = await import('../src/notifications.js');
       const {
         applyProviderEvent,
+        paymentHealth,
         reconcileDisputeTransferRecoveries,
         reconcilePaymentLifecycle,
         reconcileRefundTransferReversals,
         stripeProvider,
       } = await import('../src/payment_workflow.js');
+      const {
+        persistV52PlatformContract,
+        v52CheckoutDeclarations,
+        v52ContractDocument,
+        v52ContractDocuments,
+        V52ContractWorkflowError,
+      } = await import('../src/v52_contract_workflow.js');
       const { buildAccountExport } = await import('../src/privacy_export.js');
       const { createSupportCase } = await import('../src/support_case_workflow.js');
       const { hashActionToken, hashPassword, signAccessToken } = await import('../src/security.js');
@@ -6349,7 +6357,8 @@ if (!databaseUrl) {
         }),
       });
       assert.equal(b8Create.status, 201);
-      assert.equal((await b8Create.json()).booking.quote.securityDepositMinor, 0);
+      const b8Created = await b8Create.json();
+      assert.equal(b8Created.booking.quote.securityDepositMinor, 0);
       const b8Accept = await fetch(`${baseUrl}/v1/bookings/b8-payment-flow/transitions`, {
         method: 'POST',
         headers: { ...ownerHeaders, 'Idempotency-Key': 'b8-accept-payment-booking' },
@@ -6572,6 +6581,319 @@ if (!databaseUrl) {
         body: JSON.stringify({ status: 'completed' }),
       });
       assert.equal(b8Complete.status, 200);
+
+      const b8MoneyMutationCounts = async () => (await setupPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM payouts WHERE payment_id = $1) AS payouts,
+           (SELECT count(*)::int FROM ledger_transactions
+             WHERE payment_id = $1 AND transaction_type = 'owner_transfer') AS transfers,
+           (SELECT count(*)::int FROM notifications
+             WHERE booking_id = 'b8-payment-flow' AND kind = 'payout_sent') AS notifications,
+           (SELECT count(*)::int FROM notification_outbox
+             WHERE booking_id = 'b8-payment-flow' AND kind = 'payout_sent') AS outbox`,
+        [paymentId],
+      )).rows[0];
+      const beforeMissingContractPayout = await b8MoneyMutationCounts();
+      const missingContractPayout = await fetch(
+        `${baseUrl}/v1/payments/${paymentId}/payout-release`,
+        {
+          method: 'POST',
+          headers: {
+            ...adminHeaders,
+            'Idempotency-Key': 'b8-missing-v52-contract-payout',
+          },
+          body: '{}',
+        },
+      );
+      assert.equal(missingContractPayout.status, 409);
+      assert.equal(
+        (await missingContractPayout.json()).error,
+        'payout_contract_binding_invalid',
+      );
+      const missingContractReconcile = await reconcilePaymentLifecycle();
+      assert.equal(missingContractReconcile.payouts, 0);
+      assert.ok(missingContractReconcile.failures >= 1);
+      assert.deepEqual(await b8MoneyMutationCounts(), beforeMissingContractPayout);
+      const missingContractHealth = await paymentHealth();
+      assert.ok(missingContractHealth.contractBlocked >= 1);
+      assert.ok(missingContractHealth.recoveryNeedsReview >= 1);
+
+      const contractAcceptedAt = new Date(Date.now() - (20 * 24 * 60 * 60 * 1000));
+      for (const document of v52ContractDocuments) {
+        const content = `Synthetic B8 V5.2 integration document for ${document.key}`;
+        await setupPool.query(
+          `INSERT INTO legal_document_snapshots (
+             document_key, document_version, locale, content_type,
+             content_text, content_sha256, effective_at
+           ) VALUES ($1, $2, $3, 'text/plain', $4, $5, $6)`,
+          [
+            document.key,
+            v52ContractDocument.version,
+            v52ContractDocument.locale,
+            content,
+            crypto.createHash('sha256').update(content).digest('hex'),
+            new Date(contractAcceptedAt.getTime() - 60_000),
+          ],
+        );
+      }
+      const syntheticQuoteId = 'b8-v52-contract-quote';
+      const syntheticQuoteHash = crypto.createHash('sha256')
+        .update('b8-v52-contract-quote-binding')
+        .digest('hex');
+      const syntheticClientBuild = 'b8-v52-contract-integration';
+      const staleContractInput = {
+        userId: 'renter-a',
+        bookingId: 'b8-payment-flow',
+        quoteId: syntheticQuoteId,
+        quoteHash: syntheticQuoteHash,
+        quoteIssuedAt: new Date(contractAcceptedAt.getTime() - 60_000),
+        quoteExpiresAt: new Date(contractAcceptedAt.getTime() + (9 * 60_000)),
+        clientBuild: syntheticClientBuild,
+        declarations: v52CheckoutDeclarations.map((declaration) => ({
+          type: declaration.type,
+          exactWording: declaration.wording,
+          documentName: v52ContractDocument.name,
+          documentVersion: v52ContractDocument.version,
+          language: v52ContractDocument.locale,
+          clientBuild: syntheticClientBuild,
+          quoteId: syntheticQuoteId,
+          quoteHash: syntheticQuoteHash,
+          documentReferences: declaration.documentReferences.map((reference) => ({
+            ...reference,
+          })),
+          accepted: true,
+          acceptedAt: contractAcceptedAt.toISOString(),
+        })),
+        idempotencyKey: 'b8-v52-contract-integration',
+        acceptedAt: contractAcceptedAt,
+      };
+      await assert.rejects(
+        inTransaction((client) => persistV52PlatformContract(client, staleContractInput)),
+        (error) => error instanceof V52ContractWorkflowError
+          && error.code === 'v52_contract_time_invalid',
+      );
+      assert.deepEqual((await setupPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM platform_contracts
+             WHERE booking_id = 'b8-payment-flow') AS contracts,
+           (SELECT count(*)::int FROM platform_contract_declarations
+             WHERE booking_id = 'b8-payment-flow') AS declarations`,
+      )).rows[0], { contracts: 0, declarations: 0 });
+
+      // A bounded raw fixture represents a valid historical contract whose
+      // acceptance and immutable database creation clocks really were old.
+      // Production application writes above may never manufacture that state.
+      const historicalSnapshotRows = (await setupPool.query(
+        `SELECT DISTINCT ON (document_key) document_key, id
+           FROM legal_document_snapshots
+          WHERE document_version = $1 AND locale = $2
+            AND document_key = ANY($3::text[])
+          ORDER BY document_key, effective_at DESC, created_at DESC, id DESC`,
+        [
+          v52ContractDocument.version,
+          v52ContractDocument.locale,
+          v52ContractDocuments.map((document) => document.key),
+        ],
+      )).rows;
+      assert.equal(historicalSnapshotRows.length, v52ContractDocuments.length);
+      const historicalSnapshotIds = Object.fromEntries(
+        historicalSnapshotRows.map((row) => [row.document_key, row.id]),
+      );
+      const syntheticAcceptanceWording = 'Synthetic historical V5.2 acceptance fixture.';
+      await setupPool.query(
+        `INSERT INTO platform_contracts (
+           user_id, booking_id, quote_id, quote_hash, contract_version,
+           platform_terms_snapshot_id, private_rental_terms_snapshot_id,
+           cancellation_refund_snapshot_id, handover_return_damage_snapshot_id,
+           payment_payout_snapshot_id, community_safety_snapshot_id,
+           reporting_moderation_review_snapshot_id, privacy_snapshot_id,
+           imprint_withdrawal_shorttexts_snapshot_id, sit_acceptance_wording,
+           sit_acceptance_sha256, locale, client_build, accepted_at, created_at,
+           idempotency_key
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+           $15, $16, $17, $18, $19, $20, $21
+         )`,
+        [
+          'renter-a',
+          'b8-payment-flow',
+          syntheticQuoteId,
+          syntheticQuoteHash,
+          v52ContractDocument.version,
+          historicalSnapshotIds.platform_terms,
+          historicalSnapshotIds.private_rental_terms,
+          historicalSnapshotIds.cancellation_refund,
+          historicalSnapshotIds.handover_return_damage,
+          historicalSnapshotIds.payment_payout,
+          historicalSnapshotIds.community_safety,
+          historicalSnapshotIds.reporting_moderation_review,
+          historicalSnapshotIds.privacy,
+          historicalSnapshotIds.imprint_withdrawal_shorttexts,
+          syntheticAcceptanceWording,
+          crypto.createHash('sha256').update(syntheticAcceptanceWording).digest('hex'),
+          v52ContractDocument.locale,
+          syntheticClientBuild,
+          contractAcceptedAt,
+          contractAcceptedAt,
+          'b8-v52-historical-contract-fixture',
+        ],
+      );
+      assert.deepEqual((await setupPool.query(
+        `SELECT contract_version,
+                accepted_at = $2::timestamptz AS accepted_at_matches,
+                created_at = $2::timestamptz AS created_at_matches
+           FROM platform_contracts WHERE booking_id = $1`,
+        ['b8-payment-flow', contractAcceptedAt],
+      )).rows[0], {
+        contract_version: v52ContractDocument.version,
+        accepted_at_matches: true,
+        created_at_matches: true,
+      });
+      const boundContractHealth = await paymentHealth();
+      assert.equal(
+        boundContractHealth.contractBlocked,
+        missingContractHealth.contractBlocked - 1,
+      );
+
+      // Health and execution must classify the same malformed persisted
+      // contract values. A parseable but stale acceptance instant must not
+      // shorten the legal hold, and version strings are never normalized.
+      await setupPool.query(
+        `UPDATE bookings
+            SET workflow_status = 'completed',
+                completed_at = now() - INTERVAL '2 hours',
+                payout_instruction_due_at = now() - INTERVAL '1 minute',
+                workflow_revision = workflow_revision + 1
+          WHERE id IN ('booking-a', 'booking-b')`,
+      );
+      const malformedPayments = (await setupPool.query(
+        `INSERT INTO payments (
+           booking_id, idempotency_key, status, amount_minor, currency,
+           rental_subtotal_minor, platform_fee_minor, owner_payout_minor,
+           security_deposit_minor, captured_minor, transfer_group, livemode
+         ) VALUES
+           ('booking-a', 'wp149-stale-contract-payment', 'captured', 3000, 'EUR',
+            2700, 300, 2700, 0, 3000, 'booking_booking-a', false),
+           ('booking-b', 'wp149-padded-version-payment', 'captured', 3000, 'EUR',
+            2700, 300, 2700, 0, 3000, 'booking_booking-b', false)
+         RETURNING id, booking_id`,
+      )).rows;
+      const cloneContractForHealth = async ({
+        bookingId,
+        userId,
+        contractVersion,
+        acceptedAtSql,
+        suffix,
+      }) => setupPool.query(
+        `INSERT INTO platform_contracts (
+           user_id, booking_id, quote_id, quote_hash, contract_version,
+           platform_terms_snapshot_id, private_rental_terms_snapshot_id,
+           locale, client_build, accepted_at, idempotency_key,
+           cancellation_refund_snapshot_id, handover_return_damage_snapshot_id,
+           payment_payout_snapshot_id, community_safety_snapshot_id,
+           reporting_moderation_review_snapshot_id, privacy_snapshot_id,
+           imprint_withdrawal_shorttexts_snapshot_id, sit_acceptance_wording,
+           sit_acceptance_sha256
+         )
+         SELECT $2, $1, 'wp149-health-' || $4, source.quote_hash, $3,
+                source.platform_terms_snapshot_id,
+                source.private_rental_terms_snapshot_id,
+                source.locale, source.client_build, ${acceptedAtSql},
+                'wp149-health-' || $4,
+                source.cancellation_refund_snapshot_id,
+                source.handover_return_damage_snapshot_id,
+                source.payment_payout_snapshot_id,
+                source.community_safety_snapshot_id,
+                source.reporting_moderation_review_snapshot_id,
+                source.privacy_snapshot_id,
+                source.imprint_withdrawal_shorttexts_snapshot_id,
+                source.sit_acceptance_wording, source.sit_acceptance_sha256
+           FROM platform_contracts AS source
+          WHERE source.booking_id = 'b8-payment-flow'`,
+        [bookingId, userId, contractVersion, suffix],
+      );
+      await cloneContractForHealth({
+        bookingId: 'booking-a',
+        userId: 'renter-a',
+        contractVersion: v52ContractDocument.version,
+        acceptedAtSql: `source.accepted_at - INTERVAL '1 day'`,
+        suffix: 'stale-time',
+      });
+      await cloneContractForHealth({
+        bookingId: 'booking-b',
+        userId: 'renter-b',
+        contractVersion: ` ${v52ContractDocument.version}`,
+        acceptedAtSql: 'source.accepted_at',
+        suffix: 'padded-version',
+      });
+      for (const [bookingId, expectedError] of [
+        ['booking-a', 'payout_contract_time_invalid'],
+        ['booking-b', 'payout_contract_version_unsupported'],
+      ]) {
+        const payment = malformedPayments.find((row) => row.booking_id === bookingId);
+        const response = await fetch(`${baseUrl}/v1/payments/${payment.id}/payout-release`, {
+          method: 'POST',
+          headers: {
+            ...adminHeaders,
+            'Idempotency-Key': `wp149-${bookingId}-contract-rejection`,
+          },
+          body: '{}',
+        });
+        assert.equal(response.status, 409);
+        assert.equal((await response.json()).error, expectedError);
+      }
+      const b8DueBeforeMalformedReconcile = (await setupPool.query(
+        `SELECT payout_instruction_due_at
+           FROM bookings WHERE id = 'b8-payment-flow'`,
+      )).rows[0].payout_instruction_due_at;
+      await setupPool.query(
+        `UPDATE bookings
+            SET payout_instruction_due_at = now() + INTERVAL '1 day'
+          WHERE id = 'b8-payment-flow'`,
+      );
+      const malformedReconcile = await reconcilePaymentLifecycle();
+      assert.equal(malformedReconcile.payouts, 0);
+      assert.ok(malformedReconcile.failures >= 2);
+      const malformedMoneyMutationCounts = await setupPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM payouts
+             WHERE payment_id = ANY($1::uuid[])) AS payouts,
+           (SELECT count(*)::int FROM ledger_transactions
+             WHERE payment_id = ANY($1::uuid[])
+               AND transaction_type = 'owner_transfer') AS transfers,
+           (SELECT count(*)::int FROM notifications
+             WHERE booking_id IN ('booking-a', 'booking-b')
+               AND kind = 'payout_sent') AS notifications,
+           (SELECT count(*)::int FROM notification_outbox
+             WHERE booking_id IN ('booking-a', 'booking-b')
+               AND kind = 'payout_sent') AS outbox`,
+        [malformedPayments.map((payment) => payment.id)],
+      );
+      assert.deepEqual(malformedMoneyMutationCounts.rows[0], {
+        payouts: 0,
+        transfers: 0,
+        notifications: 0,
+        outbox: 0,
+      });
+      const malformedContractHealth = await paymentHealth();
+      assert.equal(
+        malformedContractHealth.contractBlocked,
+        boundContractHealth.contractBlocked + 2,
+      );
+      assert.equal(
+        malformedContractHealth.recoveryNeedsReview,
+        boundContractHealth.recoveryNeedsReview + 2,
+      );
+      await setupPool.query(
+        `UPDATE bookings SET payout_instruction_due_at = $1
+          WHERE id = 'b8-payment-flow'`,
+        [b8DueBeforeMalformedReconcile],
+      );
+      await setupPool.query(
+        `UPDATE bookings
+            SET workflow_status = 'requested', workflow_revision = workflow_revision + 1
+          WHERE id IN ('booking-a', 'booking-b')`,
+      );
 
       await setupPool.query(
         `UPDATE disputes SET provider_status = 'lost'

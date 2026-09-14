@@ -1,4 +1,49 @@
-# Current Work Package: WP148 Android Social-Provider Activation Guard — TECHNICAL CLOSURE; PROVIDER HOLD
+# Current Work Package: WP149 Payment V5.2 Contract-Binding Parity — TECHNICAL CLOSURE; LEGAL/REAL-MONEY HOLD
+
+Every direct and reconciler payout now requires the exact persisted
+`V5.2-2026-08-16` platform contract, exact booking-renter principal binding, a
+valid acceptance instant bound within five minutes to its persistence clock
+independently sourced from PostgreSQL for new contracts, and the later of the
+server-owned payout deadline or the end of the fourteenth German legal calendar
+day measured conservatively from the later bound acceptance/persistence
+instant. Invalid or missing
+bindings remain held, surface through payment health and cannot create money,
+ledger or notification side effects.
+Cancellation and withdrawal enforce the same raw principal/clock invariant and
+an exact known-version allowlist. Malformed or unknown versions fail closed
+across cancellation, withdrawal, direct payout, reconciliation and health.
+V5.1 cancellation, refund calculation and owner no-show share one DB-owned
+event instant.
+
+Owner-declared renter no-show remains a manual-review-only condition. Because
+messages and mutable appointment payloads cannot prove two unsuccessful
+contact attempts plus the absence of a different agreement, the public
+cancellation path fails before any booking, obligation or actual-loss effect
+with `renter_no_show_manual_review_required`. The neutral support intake stays
+available. Downstream V5.2 actual-loss binding independently accepts only the
+exact known V5.2 version and exact renter principal.
+
+The remote MacBook Codex task requested as Astra Ultra returned
+**CORRECTIONS_REQUIRED** with **3 CONFIRM / 12 CORRECT / 3
+INSUFFICIENT_EVIDENCE**. The repository retains only a partial normalized
+result, not a complete per-key raw transcript, so full scope completion is not
+independently auditable. WP149 closes the identified day-end defect. The
+possible § 193 BGB weekend/public-holiday extension and the remaining legal
+corrections stay open; no AI review is represented as professional approval.
+
+Focused tests, **921 passing Backend tests with 2 intentional skips**, fresh
+PostgreSQL integration, dependent Privacy/Retention checks and the complete
+CI-equivalent local technical regression pass without reduced parallelism or
+a timing workaround. See
+`docs/operations/WP149_PAYMENT_V52_CONTRACT_BINDING_PARITY_2026-09-14.md`.
+
+Next bounded package after exact commit/push/CI closure: completed refund and
+payout command replay must return its immutable stored result even after the
+execution authorization expires, without weakening actor, request, payment or
+response binding. No provider, payment, money, deployment, Production, Store,
+Firebase, candidate, device, credential or PR-merge state changed.
+
+# Previous Work Package: WP148 Android Social-Provider Activation Guard — TECHNICAL CLOSURE; PROVIDER HOLD
 
 Email registration and Google sign-in remain the proven Android pilot paths.
 Facebook and Apple are locally prepared but remain disabled. A sanitized

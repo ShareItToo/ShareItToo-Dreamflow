@@ -1,7 +1,13 @@
 import crypto from 'node:crypto';
 
-import { addReturnPolicyCalendarDays } from './return_calendar_policy.js';
-import { v52ContractDocument } from './v52_contract_workflow.js';
+import {
+  deLegalDeadlineTimeZone,
+  endOfReturnPolicyCalendarDay,
+} from './return_calendar_policy.js';
+import {
+  platformContractAcceptanceTimeBinding,
+  v52ContractDocument,
+} from './v52_contract_workflow.js';
 
 export class PaymentDomainError extends Error {
   constructor(status, code, details = undefined) {
@@ -143,9 +149,10 @@ export function transferLedger({ amountMinor, ownerId }) {
 export function payoutReleaseAvailableAt({
   returnAvailableAt,
   platformContractAcceptedAt = null,
+  platformContractCreatedAt = null,
   platformContractVersion = null,
-  rentalTimezone = 'Europe/Berlin',
-  requireV52Contract = false,
+  platformContractUserId = null,
+  bookingRenterId = null,
 }) {
   if (returnAvailableAt == null || returnAvailableAt === '') {
     throw new PaymentDomainError(409, 'payout_return_time_invalid');
@@ -155,27 +162,42 @@ export function payoutReleaseAvailableAt({
     throw new PaymentDomainError(409, 'payout_return_time_invalid');
   }
   const version = typeof platformContractVersion === 'string'
-    ? platformContractVersion.trim()
+    ? platformContractVersion
     : '';
   if (!version) {
-    if (requireV52Contract) {
-      throw new PaymentDomainError(409, 'payout_contract_binding_invalid');
-    }
-    return returnAt;
+    throw new PaymentDomainError(409, 'payout_contract_binding_invalid');
   }
   if (version !== v52ContractDocument.version) {
     throw new PaymentDomainError(409, 'payout_contract_version_unsupported');
   }
-  if (platformContractAcceptedAt == null || platformContractAcceptedAt === '') {
+  const contractUserId = typeof platformContractUserId === 'string'
+    ? platformContractUserId
+    : '';
+  const renterId = typeof bookingRenterId === 'string' ? bookingRenterId : '';
+  if (
+    !contractUserId
+    || !renterId
+    || contractUserId !== renterId
+  ) {
+    throw new PaymentDomainError(409, 'payout_contract_binding_invalid');
+  }
+  const contractTime = platformContractAcceptanceTimeBinding({
+    acceptedAt: platformContractAcceptedAt,
+    createdAt: platformContractCreatedAt,
+  });
+  if (!contractTime) {
     throw new PaymentDomainError(409, 'payout_contract_time_invalid');
   }
-  const acceptedAt = new Date(platformContractAcceptedAt);
-  if (!Number.isFinite(acceptedAt.getTime())) {
-    throw new PaymentDomainError(409, 'payout_contract_time_invalid');
-  }
+  const authoritativeContractAt = contractTime.acceptedAt > contractTime.createdAt
+    ? contractTime.acceptedAt
+    : contractTime.createdAt;
   let solutionWindowEndsAt;
   try {
-    solutionWindowEndsAt = addReturnPolicyCalendarDays(acceptedAt, 14, rentalTimezone);
+    solutionWindowEndsAt = endOfReturnPolicyCalendarDay(
+      authoritativeContractAt,
+      14,
+      deLegalDeadlineTimeZone,
+    );
   } catch {
     throw new PaymentDomainError(409, 'payout_contract_time_invalid');
   }

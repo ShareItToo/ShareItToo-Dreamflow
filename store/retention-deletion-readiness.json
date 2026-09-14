@@ -281,7 +281,7 @@
     },
     {
       "path": "backend/src/return_calendar_policy.js",
-      "sha256": "d36aa4c4aeb835988a8cff24681ba00ddf44c0e9a076ec613cce6a683bd0e805"
+      "sha256": "2eef7bc3472ba63a0e4c03886783fadf78be163db2eff6e8c64220c3b06565fa"
     },
     {
       "path": "backend/src/v51_contract_workflow.js",
@@ -293,11 +293,11 @@
     },
     {
       "path": "backend/src/v51_withdrawal_workflow.js",
-      "sha256": "c3b009123accd1264d2423478cdc524521b58b9eeb9dc6757f1cd8c66e823195"
+      "sha256": "35508c213c6b9d193fce39b65f16d33cb19474c06b7f6bf2e1cf8e0baf445056"
     },
     {
       "path": "backend/src/booking_workflow.js",
-      "sha256": "86a57a3897b0cd3921887d0c9b140b46ce3b5f9133be99b83f6f4de02c8d3d9b"
+      "sha256": "82e05e4aad77c50c9b8d26f0e2dd2e4e1887651348fd588eb90c8cebc088d688"
     },
     {
       "path": "backend/src/booking_flow_time.js",
@@ -317,7 +317,7 @@
     },
     {
       "path": "backend/src/v52_actual_loss_workflow.js",
-      "sha256": "11721edd53f0c4e195289cce133663a5c822253d2b2216c519fe4b2651e62596"
+      "sha256": "0c3f4a700c4b66207d1b9c85d72da3573a111cfab9aca7371f00cc68651f9aea"
     },
     {
       "path": "backend/src/v52_handover_return_workflow.js",
