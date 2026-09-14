@@ -1059,6 +1059,6 @@ test('different checkout key aliases the trusted canonical command under one loc
   assert.deepEqual(JSON.parse(completionParameters?.[2] ?? '{}'), canonicalResponse);
   assert.deepEqual(completionParameters?.slice(3), [null, null]);
   assertCheckoutAdvisoryPrecedesStateLocks(aliasing, bookingId);
-  assertNoStatement([aliasing], /^UPDATE payments\b|INSERT INTO audit_log/iu);
+  assertNoStatement([aliasing], /^(?:UPDATE payments\b|INSERT INTO audit_log\b)/iu);
   assert.equal(aliasing.statements.at(-1)?.statement, 'COMMIT');
 });

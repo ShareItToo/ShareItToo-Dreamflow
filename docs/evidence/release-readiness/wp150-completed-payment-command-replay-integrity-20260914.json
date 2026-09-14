@@ -6,7 +6,7 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "3783edfe07e07ea60a31dbe6764d5671466955e75d2ef52a5203716fb4342a59"
+    "sourceInventoryDigest": "53209f0ed591137aa866a88d34a09aaa03bbdc2c674772d287b93c7444e80e0d"
   },
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -111,7 +111,7 @@
     "backend/src/app.js": "95293687d7b40af66935368e15be52100c55253b68c5e1df41d6461bf6d9e66a",
     "backend/src/payment_domain.js": "92db58a76883288b2a0b4f68c6cb5a3779ce6f322ce8ccef605313bc119c2fed",
     "backend/src/payment_workflow.js": "dfb0d18be86aab34ffb79013ac85de0a75031e65a339ddc68a6c6a326494be06",
-    "backend/test/payment_command_completion_replay.test.js": "9ff47dd84e977f3b42caa2211d420df4da7447753f1ff3a4af673db019f60959",
+    "backend/test/payment_command_completion_replay.test.js": "1f8b2cd32502de8eb0ea7513b4d01cdd5727701dc0e4d4aa164eb3a881146c7c",
     "backend/test/payment_command_replay_expiry.test.js": "3cd001184198f3b8ba218ea81ddd33365fc57038fd3108c24c0d94535519312f",
     "backend/test/payment_command_replay_integrity.test.js": "8f2f7d0f1b051dce2dd9b99022f55ccaaf5ae755f2d6ca3e02ba64a59fbb357d",
     "backend/test/payment_command_result_immutability.test.js": "4f9eae2ab7f30a7fda6cdf73fd85c29338b354b59089d235ea986928b0b3aee1",
