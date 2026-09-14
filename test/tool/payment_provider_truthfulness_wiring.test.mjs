@@ -22,6 +22,10 @@ const refundReversalMigration = fs.readFileSync(
   'backend/sql/migrations/075_refund_transfer_reversal_recovery.up.sql',
   'utf8',
 );
+const commandResultMigration = fs.readFileSync(
+  'backend/sql/migrations/076_payment_command_result_immutability.up.sql',
+  'utf8',
+);
 
 test('server exposes one account-bound provider capability truth', () => {
   assert.match(app, /function paymentCapabilitiesFor\(userId\)/u);
@@ -159,7 +163,9 @@ test('refund and payout preparations form a durable mutually exclusive fence', (
       < payoutRelease.indexOf('payout_blocked_by_refund_in_flight'),
     true,
   );
-  assert.match(refund, /completedCommand\.request_hash !== requestHash/u);
+  assert.match(refund, /completedCommand\.booking_id !== payment\.booking_id/u);
+  assert.match(refund, /completedCommand\.actor_id !== \(actor\?\.id \?\? null\)/u);
+  assert.match(payoutRelease, /completedCommand\.booking_id !== payment\.booking_id/u);
   assert.match(payoutRelease, /completedCommand\.actor_id !== \(actor\?\.id \?\? null\)/u);
 });
 
@@ -261,7 +267,7 @@ test('sandbox authorization gates each outbound mutation without blocking bound 
   assert.match(webhook, /provider_livemode_mismatch/u);
 });
 
-test('expired sandbox authorization does not hide stored payment truth or local review', () => {
+test('expired sandbox authorization does not hide exact completed payment truth or local review', () => {
   const enablement = workflow.slice(
     workflow.indexOf('function ensurePaymentsEnabled'),
     workflow.indexOf('function text'),
@@ -278,13 +284,137 @@ test('expired sandbox authorization does not hide stored payment truth or local 
     workflow.indexOf('export async function reviewFailedPayout'),
     workflow.indexOf('export async function reconcilePaymentLifecycle'),
   );
+  const refund = workflow.slice(
+    workflow.indexOf('export async function refundPayment'),
+    workflow.indexOf('async function markPayoutTransferFailure'),
+  );
+  const payoutRelease = workflow.slice(
+    workflow.indexOf('export async function releasePayout'),
+    workflow.indexOf('export async function reviewFailedPayout'),
+  );
   assert.doesNotMatch(enablement, /assertPaymentExecutionActive/u);
   assert.doesNotMatch(connectRead, /assertPaymentExecutionActive/u);
   assert.doesNotMatch(paymentRead, /assertPaymentExecutionActive/u);
   assert.doesNotMatch(review.split("if (normalizedAction === 'retry')")[0], /assertPaymentExecutionActive/u);
   assert.match(workflow, /createConnectOnboarding[\s\S]{0,180}assertPaymentExecutionActive/u);
-  assert.match(workflow, /refundPayment[\s\S]{0,220}assertPaymentExecutionActive/u);
-  assert.match(workflow, /releasePayout\(\{[\s\S]{0,320}assertPaymentExecutionActive/u);
+  assert.ok(refund.indexOf('validatedRefundCommandReplay') >= 0);
+  assert.ok(
+    refund.indexOf('validatedRefundCommandReplay')
+      < refund.indexOf('assertPaymentExecutionActive(config);'),
+  );
+  assert.ok(
+    refund.indexOf('assertPaymentExecutionActive(config);')
+      < refund.indexOf('beginCommand(client'),
+  );
+  assert.ok(payoutRelease.indexOf('validatedPayoutCommandReplay') >= 0);
+  assert.ok(
+    payoutRelease.indexOf('validatedPayoutCommandReplay')
+      < payoutRelease.indexOf('assertPaymentExecutionActive(config);'),
+  );
+  assert.ok(
+    payoutRelease.indexOf('assertPaymentExecutionActive(config);')
+      < payoutRelease.indexOf('beginCommand(client'),
+  );
+});
+
+test('completed payment command receipts are hash-bound, one-shot, and relation-bound', () => {
+  assert.match(commandResultMigration, /ADD COLUMN response_payload_sha256 CHAR\(64\)/u);
+  assert.match(commandResultMigration, /ADD COLUMN completion_integrity_version SMALLINT/u);
+  assert.match(commandResultMigration, /ADD COLUMN settlement_refunded_minor BIGINT/u);
+  assert.match(commandResultMigration, /ADD COLUMN settlement_transferred_minor BIGINT/u);
+  assert.match(
+    commandResultMigration,
+    /payment_commands_result_null_parity[\s\S]*payment_commands_result_object[\s\S]*payment_commands_result_hash/u,
+  );
+  assert.match(
+    commandResultMigration,
+    /BEFORE INSERT OR UPDATE OR DELETE ON payment_commands/u,
+  );
+  assert.match(commandResultMigration, /payment_command_completed_result_immutable/u);
+  assert.match(commandResultMigration, /payment_command_completed_deletion_forbidden/u);
+
+  const commandLookup = workflow.slice(
+    workflow.indexOf('async function paymentCommandForUpdate'),
+    workflow.indexOf('async function validatedRefundCommandReplay'),
+  );
+  assert.match(commandLookup, /command\.response_payload_sha256 IS NOT NULL/u);
+  assert.match(
+    commandLookup,
+    /digest\(command\.response_payload::text, 'sha256'\)/u,
+  );
+  assert.match(commandLookup, /AS response_payload_hash_valid/u);
+
+  const commandCompletion = workflow.slice(
+    workflow.indexOf('async function completeCommand'),
+    workflow.indexOf('function replayIntegrityFailure'),
+  );
+  assert.equal(
+    commandCompletion.match(/completed_at IS NULL/gu)?.length,
+    2,
+  );
+  assert.match(commandCompletion, /RETURNING idempotency_key/u);
+  assert.match(commandCompletion, /completed\.rowCount !== 1/u);
+  assert.match(commandCompletion, /payment_command_completion_conflict/u);
+
+  const commonValidator = workflow.slice(
+    workflow.indexOf('function validTrustedCompletedCommand'),
+    workflow.indexOf('export function validateCompletedRefundCommandReplay'),
+  );
+  for (const marker of [
+    'command.response_payload_hash_valid === true',
+    'command.completion_integrity_version === 1',
+    'command.actor_id === actorId',
+    'command.payment_id === paymentId',
+    'command.booking_id === bookingId',
+    'command.request_hash === requestHash(request)',
+    'command.response_payload.payment.refundedMinor === Number(refundedSnapshot)',
+    'command.response_payload.payment.transferredMinor === Number(transferredSnapshot)',
+  ]) assert.ok(commonValidator.includes(marker));
+
+  const connectCheckoutReplay = workflow.slice(
+    workflow.indexOf('function validStoredConnectOnboardingResponse'),
+    workflow.indexOf('function validStoredPaymentReceipt'),
+  );
+  assert.ok(connectCheckoutReplay.includes("exactKeys(response, ['account', 'onboardingUrl', 'expiresAt', 'providerMode', 'replayed'])"));
+  assert.ok(connectCheckoutReplay.includes("exactKeys(response, ['payment', 'checkoutUrl', 'providerMode', 'replayed'])"));
+
+  const refundValidator = workflow.slice(
+    workflow.indexOf('export function validateCompletedRefundCommandReplay'),
+    workflow.indexOf('export function validateCompletedPayoutCommandReplay'),
+  );
+  for (const marker of [
+    'refund.idempotency_key !== key',
+    'refund.payment_id !== paymentId',
+    'ledger.idempotency_key !== `${key}:refund-ledger`',
+    "ledger.transaction_type !== 'payment_refunded'",
+  ]) assert.ok(refundValidator.includes(marker));
+
+  const payoutValidator = workflow.slice(
+    workflow.indexOf('export function validateCompletedPayoutCommandReplay'),
+    workflow.indexOf('async function paymentCommandForUpdate'),
+  );
+  for (const marker of [
+    'payout.idempotency_key !== key',
+    'payout.payment_id !== paymentId',
+    'payout.booking_id !== payment.booking_id',
+    'ledger.idempotency_key === `${key}:transfer-ledger`',
+    "ledger.transaction_type === 'owner_transfer'",
+  ]) assert.ok(payoutValidator.includes(marker));
+});
+
+test('completed refund and payout HTTP replays do not wake the notification worker', () => {
+  const refundRoute = app.slice(
+    app.indexOf("app.post('/v1/payments/:id/refunds'"),
+    app.indexOf("app.post('/v1/payments/:id/payout-release'"),
+  );
+  const payoutRoute = app.slice(
+    app.indexOf("app.post('/v1/payments/:id/payout-release'"),
+    app.indexOf("app.post('/v1/admin/payouts/:id/review'"),
+  );
+  for (const route of [refundRoute, payoutRoute]) {
+    assert.match(route, /if \(!result\.replayed\) kickNotificationWorker\(\);/u);
+    assert.equal(route.match(/kickNotificationWorker\(\)/gu)?.length, 1);
+  }
 });
 
 test('withdrawal and payout share one locked calendar cutoff', () => {

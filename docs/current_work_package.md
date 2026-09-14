@@ -1,4 +1,46 @@
-# Current Work Package: WP149 Payment V5.2 Contract-Binding Parity — TECHNICAL CLOSURE; LEGAL/REAL-MONEY HOLD
+# Current Work Package: WP150 Completed Payment-Command Replay Integrity — TECHNICAL CLOSURE; EXTERNAL GATES HOLD
+
+Trusted-v1 completed refund and payout replays are now allowed past an expired sandbox
+execution authorization only when the persisted command and result are
+hash-valid and exactly bound to their principal, request, booking, payment,
+refund/payout row, immutable command-time refunded/transferred settlement
+snapshot, ledger header and canonical ledger entries. Historical completed
+commands keep a NULL integrity version and are not replay-trusted. Fresh or
+incomplete work still reaches the authorization guard and returns 503. Valid
+completed replay exits before provider or DML work, and its HTTP response does
+not wake the notification worker.
+
+Migration 076 enforces one-shot v1 completion and immutable completed commands.
+Historical response hashes are immutable from migration time but neither
+authentic pre-migration provenance nor replay trust. Connect and Checkout completion
+collisions return the canonical stored result only after full identity, digest
+and response-semantic validation. Admin payout cancellation binds
+completion to the original command actor.
+
+Focused WP150 verification and the complete CI-equivalent local technical
+regression pass. The deterministic closure validator is bound to the source
+inventory; exact-head GitHub Regression/CodeQL remain required after commit
+and push. See
+`docs/operations/WP150_COMPLETED_PAYMENT_COMMAND_REPLAY_INTEGRITY_2026-09-14.md`.
+
+P2 remains open for a future hard-delete design because
+`payment_commands.actor_id ON DELETE SET NULL` conflicts with permanent actor
+binding; current erasure remains soft anonymization. The durable
+`refund_platform_fee=true` row value versus provider option `false` remains a
+separate payment debt.
+Privacy/Retention classifications and behavior were not changed. Every external gate remains closed and no
+provider, payment, money, deployment, Production, Store, Firebase, credential,
+device or PR-merge action occurred.
+
+The focused set passes **18/18**, the Backend suite passes **939 with 2
+intentional skips**, and fresh PostgreSQL passes **2/2 and cleans up**. The
+proof includes SQL non-NULL settlement enforcement, the owner-bound Refund
+completion race, booking-scoped Checkout advisory-lock ordering and canonical
+K0/K1 aliasing, plus validation of each fresh Connect/Checkout response before
+persistence. Privacy/Retention classifications stay unchanged; their manifest
+updates are pure source-hash refreshes.
+
+# Previous Work Package: WP149 Payment V5.2 Contract-Binding Parity — TECHNICAL CLOSURE; LEGAL/REAL-MONEY HOLD
 
 Every direct and reconciler payout now requires the exact persisted
 `V5.2-2026-08-16` platform contract, exact booking-renter principal binding, a

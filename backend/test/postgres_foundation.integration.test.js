@@ -213,10 +213,153 @@ if (!databaseUrl) {
         '073_listing_ai_on_device_provider.up.sql',
         '074_listing_ai_on_device_disclosure.up.sql',
         '075_refund_transfer_reversal_recovery.up.sql',
+        '076_payment_command_result_immutability.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows.at(-1).checksum, /^[0-9a-f]{64}$/);
+
+      const wp150MigrationUp = await fs.readFile(
+        path.resolve(
+          currentDir,
+          '../sql/migrations/076_payment_command_result_immutability.up.sql',
+        ),
+        'utf8',
+      );
+      const wp150MigrationDown = await fs.readFile(
+        path.resolve(
+          currentDir,
+          '../sql/migrations/076_payment_command_result_immutability.down.sql',
+        ),
+        'utf8',
+      );
+      const wp150MigrationProbe = await setupPool.connect();
+      try {
+        await wp150MigrationProbe.query('BEGIN');
+        await wp150MigrationProbe.query('SAVEPOINT wp150_malformed_history');
+        await wp150MigrationProbe.query(wp150MigrationDown);
+        await wp150MigrationProbe.query(
+          `INSERT INTO payment_commands (
+             idempotency_key, command_type, request_hash, response_payload
+           ) VALUES (
+             'wp150-malformed-history', 'connect.onboard', $1,
+             '{"unsafe":"unconfirmed"}'::jsonb
+           )`,
+          ['a'.repeat(64)],
+        );
+        await assert.rejects(
+          wp150MigrationProbe.query(wp150MigrationUp),
+          (error) => error?.code === '23514'
+            && error?.message === 'payment_command_historical_completion_malformed',
+        );
+        await wp150MigrationProbe.query('ROLLBACK TO SAVEPOINT wp150_malformed_history');
+        await wp150MigrationProbe.query('COMMIT');
+      } catch (error) {
+        await wp150MigrationProbe.query('ROLLBACK');
+        throw error;
+      } finally {
+        wp150MigrationProbe.release();
+      }
+
+      await setupPool.query(
+        `INSERT INTO payment_commands (
+           idempotency_key, command_type, request_hash
+         ) VALUES ('wp150-result-immutability', 'connect.onboard', $1)`,
+        ['b'.repeat(64)],
+      );
+      const completedWp150Command = await setupPool.query(
+        `UPDATE payment_commands
+            SET response_payload = '{"result":"confirmed"}'::jsonb,
+                completed_at = now(),
+                completion_integrity_version = 1
+          WHERE idempotency_key = 'wp150-result-immutability'
+          RETURNING response_payload_sha256, completion_integrity_version,
+                    settlement_refunded_minor, settlement_transferred_minor`,
+      );
+      assert.match(
+        completedWp150Command.rows[0].response_payload_sha256,
+        /^[0-9a-f]{64}$/u,
+      );
+      assert.equal(completedWp150Command.rows[0].completion_integrity_version, 1);
+      assert.equal(completedWp150Command.rows[0].settlement_refunded_minor, null);
+      assert.equal(completedWp150Command.rows[0].settlement_transferred_minor, null);
+      const wp150CommandHash = await setupPool.query(
+        `SELECT response_payload_sha256 = encode(
+                  digest(response_payload::text, 'sha256'), 'hex'
+                ) AS matches
+           FROM payment_commands
+          WHERE idempotency_key = 'wp150-result-immutability'`,
+      );
+      assert.equal(wp150CommandHash.rows[0].matches, true);
+      for (const [statement, message] of [
+        [
+          `UPDATE payment_commands SET request_hash = $1
+            WHERE idempotency_key = 'wp150-result-immutability'`,
+          'payment_command_identity_immutable',
+        ],
+        [
+          `UPDATE payment_commands SET response_payload = '{"result":"rewritten"}'::jsonb
+            WHERE idempotency_key = 'wp150-result-immutability'`,
+          'payment_command_completed_result_immutable',
+        ],
+        [
+          `UPDATE payment_commands SET completed_at = completed_at + interval '1 second'
+            WHERE idempotency_key = 'wp150-result-immutability'`,
+          'payment_command_completed_result_immutable',
+        ],
+        [
+          `DELETE FROM payment_commands
+            WHERE idempotency_key = 'wp150-result-immutability'`,
+          'payment_command_completed_deletion_forbidden',
+        ],
+      ]) {
+        await assert.rejects(
+          setupPool.query(statement, statement.includes('$1') ? ['c'.repeat(64)] : []),
+          (error) => error?.code === '55000' && error?.message === message,
+        );
+      }
+      await setupPool.query(
+        `INSERT INTO payment_commands (
+           idempotency_key, command_type, request_hash
+         ) VALUES ('wp150-missing-settlement-snapshot', 'payment.refund', $1)`,
+        ['e'.repeat(64)],
+      );
+      const wp150ConstraintProbe = await setupPool.connect();
+      try {
+        await wp150ConstraintProbe.query('BEGIN');
+        await wp150ConstraintProbe.query(
+          `ALTER TABLE payment_commands
+             DISABLE TRIGGER payment_commands_result_immutability_guard`,
+        );
+        await assert.rejects(
+          wp150ConstraintProbe.query(
+            `UPDATE payment_commands
+                SET response_payload = '{"result":"unsafe-without-snapshot"}'::jsonb,
+                    completed_at = now(),
+                    completion_integrity_version = 1,
+                    response_payload_sha256 = encode(
+                      digest('{"result":"unsafe-without-snapshot"}'::jsonb::text, 'sha256'),
+                      'hex'
+                    )
+              WHERE idempotency_key = 'wp150-missing-settlement-snapshot'`,
+          ),
+          (error) => error?.code === '23514'
+            && error?.constraint === 'payment_commands_settlement_snapshot',
+        );
+      } finally {
+        await wp150ConstraintProbe.query('ROLLBACK');
+        wp150ConstraintProbe.release();
+      }
+      await setupPool.query(
+        `INSERT INTO payment_commands (
+           idempotency_key, command_type, request_hash
+         ) VALUES ('wp150-incomplete-deletion', 'connect.onboard', $1)`,
+        ['d'.repeat(64)],
+      );
+      assert.equal((await setupPool.query(
+        `DELETE FROM payment_commands
+          WHERE idempotency_key = 'wp150-incomplete-deletion'`,
+      )).rowCount, 1);
       const n2Client = await setupPool.connect();
       try {
         await n2Client.query('BEGIN');

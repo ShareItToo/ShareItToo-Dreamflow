@@ -1,5 +1,41 @@
 # ShareItToo Current State
 
+## WP150 completed payment-command replay integrity — technical closure; external gates HOLD
+
+Trusted-v1 completed refund and payout commands can now return their immutable
+stored result after sandbox execution authorization expires, but only after exact
+command, principal, request, booking, payment, response-hash, business-row,
+command-time settlement-snapshot, ledger-header and ledger-entry verification.
+Historical completed commands remain untrusted with a NULL integrity version.
+Fresh or incomplete commands
+still fail through the authorization gate with 503. A valid completed replay
+returns before provider or financial mutation and does not wake the
+notification worker.
+
+Migration 076 makes new v1 completion one-shot, stores immutable refunded and
+transferred settlement totals, and freezes completed command identity and
+result. Its historical hash backfill is immutable-from-migration evidence, not
+authentic pre-migration provenance and not replay trust. Canonical
+Connect/Checkout completion collisions return the stored response only after
+full identity, digest and response-semantic validation, and admin payout cancellation preserves
+the original command actor. Focused WP150 tests and the complete CI-equivalent
+local technical regression pass; exact-head GitHub gates remain pending. See
+`docs/operations/WP150_COMPLETED_PAYMENT_COMMAND_REPLAY_INTEGRITY_2026-09-14.md`.
+
+Two P2 debts remain explicit: the `payment_commands.actor_id` foreign key uses
+`ON DELETE SET NULL` while current erasure soft-anonymizes accounts, and the
+stored `refund_platform_fee=true` currently differs from the provider option
+sent as `false`.
+Privacy/Retention classifications and behavior were not changed. No provider, payment, deployment,
+Production, Store, Firebase, credential, device or PR-merge state changed.
+
+The focused closure set is **18/18**, the Backend suite is **939 passing with 2
+intentional skips**, and fresh PostgreSQL is **2/2 with cleanup**. It includes
+the non-NULL settlement constraint, owner-bound Refund finalization race,
+booking-scoped Checkout advisory lock with canonical K0/K1 aliasing, and fresh
+Connect/Checkout response validation. Privacy/Retention classifications remain
+unchanged; their manifests received hash-only refreshes.
+
 ## WP149 payment V5.2 contract-binding parity — technical closure; legal/real-money HOLD
 
 Direct payout and reconciler payout now enforce one fail-closed invariant for

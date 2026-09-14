@@ -812,6 +812,9 @@ node tool/validate_p0b_astra_ai_legal_crosscheck.mjs
 node --check tool/validate_wp149_payment_v52_contract_binding_parity.mjs
 node --test test/tool/validate_wp149_payment_v52_contract_binding_parity.test.mjs
 node tool/validate_wp149_payment_v52_contract_binding_parity.mjs
+node --check tool/validate_wp150_completed_payment_command_replay_integrity.mjs
+node --test test/tool/validate_wp150_completed_payment_command_replay_integrity.test.mjs
+node tool/validate_wp150_completed_payment_command_replay_integrity.mjs
 node --check backend/src/operational_readiness_gate.js
 node --test backend/test/operational_readiness_gate.test.js
 node --check tool/validate_p0b_ops_readiness.mjs

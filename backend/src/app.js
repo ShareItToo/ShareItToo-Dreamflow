@@ -2257,7 +2257,7 @@ export function createApp({
       reason: req.body?.reason,
       key: req.get('Idempotency-Key'),
     });
-    kickNotificationWorker();
+    if (!result.replayed) kickNotificationWorker();
     res.status(result.replayed ? 200 : 201).json(result);
   }));
 
@@ -2267,7 +2267,7 @@ export function createApp({
       paymentId: safeText(req.params.id, 80),
       key: req.get('Idempotency-Key'),
     });
-    kickNotificationWorker();
+    if (!result.replayed) kickNotificationWorker();
     res.status(result.replayed ? 200 : 201).json(result);
   }));
 
