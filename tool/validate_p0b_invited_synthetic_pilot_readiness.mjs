@@ -19,7 +19,7 @@ const expectedRepoSources = Object.freeze([
   Object.freeze(['docs/operations/p0b-ops-role-delegate-absence-gate.json', 'eb5cd54c3894f74534d21d04c079c942b276aa553324cd581b0d6519ae8800ff']),
   Object.freeze(['docs/evidence/p0b-next/signed-device-evidence.json', '9c7ec43fe113177095220514a07b238d0a2ed4177aaecb623590447fecce23aa']),
   Object.freeze(['docs/evidence/p0b-next/psp-sandbox-e2e-evidence.json', '769650b9d4fb633c053ecfa7df9aaf05a324a239d59e4ca8bc729feb658c4097']),
-  Object.freeze(['backend/src/config.js', '90922f999317f81e466f6d120a4655d775587552e52d2004372e36687ad73966']),
+  Object.freeze(['backend/src/config.js', 'ea884e57751fa61fccfedf65ae7553d5e9f960ed00696205e4703fae8834c70f']),
   Object.freeze(['backend/src/private_pilot_domain.js', 'bcc1f29927c15a29f4027b0ad731349bedced0bc445e0ce19aeff808d6fcbeee']),
   Object.freeze(['backend/src/invited_synthetic_pilot_readiness_gate.js', 'f8567c4293283a0e2b547a8d1fb758f8fc7b5bdf90df8ecffd7e0afc38991032']),
   Object.freeze(['backend/test/invited_synthetic_pilot_readiness_gate.test.js', '1690af0ff93075891ebf0ccb7b675fd7049f725f0162fea3d7660a935a3cd8d0']),

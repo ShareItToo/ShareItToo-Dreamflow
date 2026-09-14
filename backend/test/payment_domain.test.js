@@ -5,15 +5,19 @@ import { StripeProvider } from '../src/stripe_provider.js';
 import {
   assertProviderPaymentBinding,
   assertProviderRefundBinding,
+  assertProviderTransferBinding,
   classifyDisputeTransferRecoveryFailure,
   captureLedger,
   disputeOwnerRecoveryLedger,
   disputeOwnerRecoveryReinstatementLedger,
   disputeTransferRecoveryAmount,
+  isDefiniteProviderRejectionCode,
   paymentAmounts,
   paymentStatusForProvider,
+  payoutReleaseAvailableAt,
   refundLedger,
   refundTransferReversalPlan,
+  recoverOrCreateProviderTransfer,
   requestHash,
   splitRefund,
   privatePilotReleasableOwnerAmount,
@@ -22,6 +26,142 @@ import {
   transferLedger,
   verifyStripeSignature,
 } from '../src/payment_domain.js';
+
+test('V5.2 payout availability uses the later return and fourteen-day contract gate', () => {
+  assert.equal(payoutReleaseAvailableAt({
+    returnAvailableAt: '2026-03-30T10:00:00.000Z',
+    platformContractAcceptedAt: '2026-03-20T11:00:00.000Z',
+    platformContractVersion: 'V5.2-2026-08-16',
+    rentalTimezone: 'Europe/Berlin',
+    requireV52Contract: true,
+  }).toISOString(), '2026-04-03T10:00:00.000Z');
+  assert.equal(payoutReleaseAvailableAt({
+    returnAvailableAt: '2026-11-10T11:00:00.000Z',
+    platformContractAcceptedAt: '2026-10-20T10:00:00.000Z',
+    platformContractVersion: 'V5.2-2026-08-16',
+    rentalTimezone: 'Europe/Berlin',
+    requireV52Contract: true,
+  }).toISOString(), '2026-11-10T11:00:00.000Z');
+  assert.equal(payoutReleaseAvailableAt({
+    returnAvailableAt: '2026-09-10T10:00:00.000Z',
+    platformContractAcceptedAt: null,
+    platformContractVersion: null,
+  }).toISOString(), '2026-09-10T10:00:00.000Z');
+  assert.throws(() => payoutReleaseAvailableAt({
+    returnAvailableAt: '2026-09-10T10:00:00.000Z',
+    platformContractAcceptedAt: null,
+    platformContractVersion: null,
+    requireV52Contract: true,
+  }), (error) => error.code === 'payout_contract_binding_invalid');
+  assert.throws(() => payoutReleaseAvailableAt({
+    returnAvailableAt: '2026-09-10T10:00:00.000Z',
+    platformContractAcceptedAt: '2026-09-01T10:00:00.000Z',
+    platformContractVersion: 'V5.2-unreviewed',
+    requireV52Contract: true,
+  }), (error) => error.code === 'payout_contract_version_unsupported');
+});
+
+test('provider transfer binding covers payout, charge, amount, mode and metadata', () => {
+  const payout = {
+    id: 'payout-1', booking_id: 'booking-1', payment_id: 'payment-1',
+    provider_connected_account_id: 'acct-owner', amount_minor: '700',
+    currency: 'EUR', livemode: false,
+  };
+  const payment = {
+    id: 'payment-1', provider_charge_id: 'ch-payment',
+    transfer_group: 'booking-1', livemode: false,
+  };
+  const providerTransfer = {
+    id: 'tr-transfer', destination: 'acct-owner', source_transaction: 'ch-payment',
+    amount: 700, currency: 'eur', transfer_group: 'booking-1', livemode: false,
+    metadata: {
+      sit_booking_id: 'booking-1', sit_payment_id: 'payment-1', sit_payout_id: 'payout-1',
+    },
+  };
+  assert.equal(assertProviderTransferBinding({ payout, payment, providerTransfer }), true);
+  for (const changed of [
+    { ...providerTransfer, amount: 701 },
+    { ...providerTransfer, destination: 'acct-other' },
+    { ...providerTransfer, source_transaction: 'ch-other' },
+    { ...providerTransfer, livemode: true },
+    { ...providerTransfer, metadata: { ...providerTransfer.metadata, sit_payout_id: 'payout-2' } },
+  ]) {
+    assert.throws(
+      () => assertProviderTransferBinding({ payout, payment, providerTransfer: changed }),
+      (error) => error.code === 'provider_transfer_binding_mismatch',
+    );
+  }
+});
+
+test('payout transfer recovery finds a provider success whose response was lost', async () => {
+  const payout = {
+    id: 'payout-lost', booking_id: 'booking-lost', payment_id: 'payment-lost',
+    provider_connected_account_id: 'acct-owner', amount_minor: '700',
+    currency: 'EUR', livemode: false,
+  };
+  const payment = {
+    id: 'payment-lost', provider_charge_id: 'ch-payment',
+    transfer_group: 'booking-lost', livemode: false,
+  };
+  const request = {
+    accountId: 'acct-owner', chargeId: 'ch-payment', amountMinor: 700,
+    currency: 'EUR', transferGroup: 'booking-lost', idempotencyKey: 'stable-key',
+    metadata: {
+      sit_booking_id: 'booking-lost', sit_payment_id: 'payment-lost',
+      sit_payout_id: 'payout-lost',
+    },
+  };
+  const successfulTransfer = {
+    id: 'tr-lost-response', destination: 'acct-owner', source_transaction: 'ch-payment',
+    amount: 700, currency: 'eur', transfer_group: 'booking-lost', livemode: false,
+    metadata: request.metadata,
+  };
+  let providerState = null;
+  let createCalls = 0;
+  let findCalls = 0;
+  let guardCalls = 0;
+  const provider = {
+    async createTransfer() {
+      createCalls += 1;
+      providerState = successfulTransfer;
+      const error = new Error('response lost after provider success');
+      error.status = 503;
+      throw error;
+    },
+    async findTransfer() {
+      findCalls += 1;
+      return providerState;
+    },
+  };
+  await assert.rejects(recoverOrCreateProviderTransfer({
+    provider, payout, payment, request, recoverExisting: false,
+    beforeCreate: () => { guardCalls += 1; },
+  }));
+  assert.deepEqual(await recoverOrCreateProviderTransfer({
+    provider, payout, payment, request, recoverExisting: true,
+    beforeCreate: () => { guardCalls += 1; },
+  }), successfulTransfer);
+  assert.equal(createCalls, 1);
+  assert.equal(findCalls, 1);
+  assert.equal(guardCalls, 1);
+});
+
+test('payout transfer guard runs only for a new provider mutation', async () => {
+  let createCalls = 0;
+  const provider = {
+    async findTransfer() { return null; },
+    async createTransfer() { createCalls += 1; return null; },
+  };
+  await assert.rejects(recoverOrCreateProviderTransfer({
+    provider,
+    payout: {},
+    payment: {},
+    request: {},
+    recoverExisting: true,
+    beforeCreate: () => { throw new Error('authorization expired'); },
+  }), /authorization expired/u);
+  assert.equal(createCalls, 0);
+});
 
 test('private pilot payout releases only the undisputed authorized owner share', () => {
   const result = privatePilotReleasableOwnerAmount({
@@ -195,6 +335,29 @@ test('only exact structured reversal rejections are definite', () => {
     code: 'balance_insufficient',
     details: { providerStatus: 400, providerType: 'StripeInvalidRequestError' },
   }).disposition, 'retryable');
+});
+
+test('failed payout cancellation accepts only persisted definite rejection codes', () => {
+  for (const code of [
+    'amount_too_large',
+    'parameter_invalid_integer',
+    'parameter_missing',
+    'resource_missing',
+    'transfer_reversal_amount_too_large',
+  ]) {
+    assert.equal(isDefiniteProviderRejectionCode(code), true);
+  }
+  for (const code of [
+    'provider_transfer_binding_mismatch',
+    'provider_transfer_inventory_conflict',
+    'stripe_request_failed',
+    'timeout',
+    'bad_request',
+    '',
+    null,
+  ]) {
+    assert.equal(isDefiniteProviderRejectionCode(code), false);
+  }
 });
 
 test('Stripe webhook signatures reject tampering, expiry and malformed headers', () => {
@@ -609,10 +772,18 @@ test('memory provider enforces transfer idempotency and cumulative reversal limi
     currency: 'EUR',
     transferGroup: 'booking_memory_refund',
     idempotencyKey: 'memory-transfer-stable-key',
-    metadata: { sit_payment_id: 'payment-memory-refund' },
+    metadata: {
+      sit_payment_id: 'payment-memory-refund',
+      sit_payout_id: 'payout-memory-refund',
+    },
   };
   const transfer = await provider.createTransfer(transferRequest);
   assert.deepEqual(await provider.createTransfer(transferRequest), transfer);
+  assert.deepEqual(await provider.findTransfer({
+    accountId: transferRequest.accountId,
+    transferGroup: transferRequest.transferGroup,
+    payoutId: transferRequest.metadata.sit_payout_id,
+  }), transfer);
   await assert.rejects(
     provider.createTransfer({ ...transferRequest, amountMinor: 701 }),
     (error) => error.code === 'provider_idempotency_payload_mismatch',
@@ -632,6 +803,85 @@ test('memory provider enforces transfer idempotency and cumulative reversal limi
     }),
     (error) => error.code === 'transfer_reversal_amount_too_large',
   );
+});
+
+test('transfer recovery lookup paginates and fails closed on duplicate payout metadata', async () => {
+  const pages = [
+    {
+      data: [{
+        id: 'tr-unrelated', destination: 'acct-owner', transfer_group: 'booking-1',
+        metadata: { sit_payout_id: 'other-payout' },
+      }],
+      has_more: true,
+    },
+    {
+      data: [{
+        id: 'tr-match', destination: 'acct-owner', transfer_group: 'booking-1',
+        metadata: { sit_payout_id: 'payout-1' },
+      }],
+      has_more: false,
+    },
+  ];
+  const requests = [];
+  const provider = new StripeProvider({
+    mode: 'stripe',
+    stripeClient: {
+      transfers: {
+        async list(request, options) {
+          requests.push({ request, options });
+          return pages.shift();
+        },
+      },
+    },
+  });
+  assert.equal((await provider.findTransfer({
+    accountId: 'acct-owner', transferGroup: 'booking-1', payoutId: 'payout-1',
+  })).id, 'tr-match');
+  assert.deepEqual(requests, [
+    {
+      request: { destination: 'acct-owner', transfer_group: 'booking-1', limit: 100 },
+      options: { maxNetworkRetries: 0, timeout: 2_500 },
+    },
+    {
+      request: {
+        destination: 'acct-owner', transfer_group: 'booking-1', limit: 100,
+        starting_after: 'tr-unrelated',
+      },
+      options: { maxNetworkRetries: 0, timeout: 2_500 },
+    },
+  ]);
+
+  const duplicateProvider = new StripeProvider({
+    mode: 'stripe',
+    stripeClient: { transfers: { async list() {
+      return {
+        data: [
+          { id: 'tr-a', metadata: { sit_payout_id: 'payout-1' } },
+          { id: 'tr-b', metadata: { sit_payout_id: 'payout-1' } },
+        ],
+        has_more: false,
+      };
+    } } },
+  });
+  await assert.rejects(duplicateProvider.findTransfer({
+    accountId: 'acct-owner', transferGroup: 'booking-1', payoutId: 'payout-1',
+  }), (error) => error.code === 'provider_transfer_inventory_conflict');
+
+  let pageNumber = 0;
+  const incompleteProvider = new StripeProvider({
+    mode: 'stripe',
+    stripeClient: { transfers: { async list() {
+      pageNumber += 1;
+      return {
+        data: [{ id: `tr-page-${pageNumber}`, metadata: {} }],
+        has_more: true,
+      };
+    } } },
+  });
+  await assert.rejects(incompleteProvider.findTransfer({
+    accountId: 'acct-owner', transferGroup: 'booking-1', payoutId: 'payout-1',
+  }), (error) => error.code === 'stripe_transfer_inventory_incomplete');
+  assert.equal(pageNumber, 4);
 });
 
 test('Stripe SDK verifies both snapshot and thin webhook envelopes', () => {

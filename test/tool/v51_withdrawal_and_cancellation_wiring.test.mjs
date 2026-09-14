@@ -33,7 +33,13 @@ test('withdrawal is race-safe, 14-day bounded and preserves later-right review',
     withdrawalWorkflow,
     /ON CONFLICT \(booking_id\) WHERE scope = 'booking_contract' DO NOTHING/u,
   );
-  assert.match(withdrawalWorkflow, /14 \* 24 \* 60 \* 60 \* 1000/u);
+  assert.match(withdrawalWorkflow, /FOR UPDATE OF booking, request/u);
+  assert.match(withdrawalWorkflow, /SELECT clock_timestamp\(\) AS database_now/u);
+  assert.match(
+    withdrawalWorkflow,
+    /addReturnPolicyCalendarDays\([\s\S]{0,120}14,[\s\S]{0,120}row\.rental_timezone/u,
+  );
+  assert.doesNotMatch(withdrawalWorkflow, /14 \* 24 \* 60 \* 60 \* 1000/u);
   assert.match(withdrawalWorkflow, /manual_review_required/u);
   assert.match(
     withdrawalWorkflow,

@@ -9,7 +9,11 @@ const payout = fs.readFileSync('lib/screens/stripe_payout_account_screen.dart', 
 const checkout = fs.readFileSync('lib/screens/payment_checkout_screen.dart', 'utf8');
 const notifications = fs.readFileSync('backend/src/notifications.js', 'utf8');
 const provider = fs.readFileSync('backend/src/stripe_provider.js', 'utf8');
+const domain = fs.readFileSync('backend/src/payment_domain.js', 'utf8');
 const workflow = fs.readFileSync('backend/src/payment_workflow.js', 'utf8');
+const executionGuard = fs.readFileSync('backend/src/payment_execution_guard.js', 'utf8');
+const withdrawalWorkflow = fs.readFileSync('backend/src/v51_withdrawal_workflow.js', 'utf8');
+const bookingWorkflow = fs.readFileSync('backend/src/booking_workflow.js', 'utf8');
 const migration = fs.readFileSync(
   'backend/sql/migrations/071_stripe_connect_accounts_v2.up.sql',
   'utf8',
@@ -124,6 +128,176 @@ test('refund-side transfer reversals are payout-bound and durably recoverable', 
   assert.match(workflow, /UPDATE payments SET transferred_minor = transferred_minor - \$2/u);
   assert.match(provider, /refundTransferReversalId/u);
   assert.match(provider, /provider_refund_inventory_conflict/u);
+});
+
+test('refund and payout preparations form a durable mutually exclusive fence', () => {
+  const refund = workflow.slice(
+    workflow.indexOf('export async function refundPayment'),
+    workflow.indexOf('async function markPayoutTransferFailure'),
+  );
+  const payoutRelease = workflow.slice(
+    workflow.indexOf('export async function releasePayout'),
+    workflow.indexOf('export async function reviewFailedPayout'),
+  );
+  assert.match(refund, /FOR UPDATE OF payment, booking/u);
+  assert.match(
+    refund,
+    /FROM payouts[\s\S]{0,160}status IN \('scheduled', 'pending', 'failed'\)[\s\S]{0,160}refund_blocked_by_payout_in_flight/u,
+  );
+  assert.match(payoutRelease, /FOR UPDATE OF payment, booking/u);
+  assert.match(
+    payoutRelease,
+    /FROM refunds[\s\S]{0,160}status IN \('created', 'pending', 'failed'\)[\s\S]{0,160}payout_blocked_by_refund_in_flight/u,
+  );
+  assert.equal(
+    refund.indexOf('completedCommand?.completed_at')
+      < refund.indexOf('refund_blocked_by_payout_in_flight'),
+    true,
+  );
+  assert.equal(
+    payoutRelease.indexOf('completedCommand?.completed_at')
+      < payoutRelease.indexOf('payout_blocked_by_refund_in_flight'),
+    true,
+  );
+  assert.match(refund, /completedCommand\.request_hash !== requestHash/u);
+  assert.match(payoutRelease, /completedCommand\.actor_id !== \(actor\?\.id \?\? null\)/u);
+});
+
+test('a signed dispute event cannot be overtaken by local payout finalization', () => {
+  const disputeBranch = workflow.slice(
+    workflow.indexOf("if (event.type.startsWith('charge.dispute.'))"),
+    workflow.indexOf('export async function applyProviderEvent'),
+  );
+  assert.match(disputeBranch, /FOR UPDATE OF payment, booking/u);
+  assert.match(
+    disputeBranch,
+    /FROM payouts[\s\S]{0,120}status IN \('scheduled', 'pending'\)[\s\S]{0,180}provider_dispute_deferred_by_payout/u,
+  );
+  assert.equal(
+    disputeBranch.indexOf('provider_dispute_deferred_by_payout')
+      < disputeBranch.indexOf('INSERT INTO disputes'),
+    true,
+  );
+  assert.match(
+    workflow,
+    /UPDATE payment_provider_events SET status = 'failed'[\s\S]{0,160}last_error_code/u,
+  );
+});
+
+test('V5.2 payout waits for both the return timeline and fourteen-day solution window', () => {
+  assert.match(domain, /export function payoutReleaseAvailableAt/u);
+  assert.match(domain, /version !== v52ContractDocument\.version/u);
+  assert.match(domain, /addReturnPolicyCalendarDays\(acceptedAt, 14, rentalTimezone\)/u);
+  assert.match(workflow, /contract\.accepted_at AS platform_contract_accepted_at/u);
+  assert.match(workflow, /contract\.contract_version AS platform_contract_version/u);
+  assert.match(workflow, /payoutReleaseAvailableAt\(\{/u);
+  assert.match(workflow, /clock_timestamp\(\) AS database_now/u);
+  assert.match(workflow, /requireV52Contract: config\.payments\.transport === 'stripe'/u);
+  assert.equal(workflow.match(/databaseNow <= availableAt/gu)?.length, 1);
+  assert.equal(workflow.match(/new Date\(row\.database_now\) <= availableAt/gu)?.length, 1);
+});
+
+test('payout transfer recovery binds inventory before final ledger mutation', () => {
+  assert.match(provider, /async findTransfer\(\{ accountId, transferGroup, payoutId \}\)/u);
+  assert.match(provider, /client\.transfers\.list\(\{/u);
+  assert.match(provider, /transfer\.metadata\?\.sit_payout_id === payoutId/u);
+  assert.match(provider, /provider_transfer_inventory_conflict/u);
+  assert.match(domain, /export function assertProviderTransferBinding/u);
+  assert.match(domain, /export async function recoverOrCreateProviderTransfer/u);
+  assert.match(domain, /if \(recoverExisting\)/u);
+  assert.match(domain, /provider\.findTransfer\(\{/u);
+  assert.match(domain, /assertProviderTransferBinding\(\{ payout, payment, providerTransfer \}\)/u);
+  assert.match(workflow, /recoverOrCreateProviderTransfer\(\{/u);
+  assert.match(workflow, /recoverExisting: prepared\.recoverExistingPayout/u);
+  assert.match(workflow, /beforeCreate: \(\) => assertPaymentExecutionActive\(config\)/u);
+  assert.match(workflow, /payout\.provider_transfer_deferred/u);
+  assert.match(workflow, /pg_advisory_xact_lock\(hashtextextended\(\$1, 0\)\)/u);
+  assert.match(workflow, /SELECT \* FROM payment_commands WHERE idempotency_key = \$1 FOR UPDATE/u);
+  assert.match(workflow, /FOR UPDATE OF payout, payment/u);
+  assert.match(workflow, /if \(!ledger\.inserted\)/u);
+});
+
+test('sandbox authorization gates each outbound mutation without blocking bound webhooks', () => {
+  assert.match(executionGuard, /export function boundedPaymentCheckoutExpiresAt/u);
+  assert.match(executionGuard, /payment_sandbox_authorization_too_short/u);
+  for (const mutation of [
+    'createConnectedAccount',
+    'createAccountLink',
+    'createCustomer',
+    'createPaymentCheckout',
+    'createRefund',
+    'reverseTransfer',
+  ]) {
+    assert.match(
+      workflow,
+      new RegExp(`assertPaymentExecutionActive\\(config\\);[\\s\\S]{0,1200}${mutation}`),
+    );
+  }
+  const webhook = workflow.slice(
+    workflow.indexOf('export async function verifyAndApplyWebhook'),
+    workflow.indexOf('export async function simulatePaymentEvent'),
+  );
+  assert.doesNotMatch(webhook, /assertPaymentExecutionActive/u);
+  assert.match(webhook, /parseWebhookEvent/u);
+  assert.match(webhook, /provider_livemode_mismatch/u);
+});
+
+test('expired sandbox authorization does not hide stored payment truth or local review', () => {
+  const enablement = workflow.slice(
+    workflow.indexOf('function ensurePaymentsEnabled'),
+    workflow.indexOf('function text'),
+  );
+  const connectRead = workflow.slice(
+    workflow.indexOf('export async function getConnectStatus'),
+    workflow.indexOf('export async function createConnectOnboarding'),
+  );
+  const paymentRead = workflow.slice(
+    workflow.indexOf('export async function getBookingPayment'),
+    workflow.indexOf('async function recordCapture'),
+  );
+  const review = workflow.slice(
+    workflow.indexOf('export async function reviewFailedPayout'),
+    workflow.indexOf('export async function reconcilePaymentLifecycle'),
+  );
+  assert.doesNotMatch(enablement, /assertPaymentExecutionActive/u);
+  assert.doesNotMatch(connectRead, /assertPaymentExecutionActive/u);
+  assert.doesNotMatch(paymentRead, /assertPaymentExecutionActive/u);
+  assert.doesNotMatch(review.split("if (normalizedAction === 'retry')")[0], /assertPaymentExecutionActive/u);
+  assert.match(workflow, /createConnectOnboarding[\s\S]{0,180}assertPaymentExecutionActive/u);
+  assert.match(workflow, /refundPayment[\s\S]{0,220}assertPaymentExecutionActive/u);
+  assert.match(workflow, /releasePayout\(\{[\s\S]{0,320}assertPaymentExecutionActive/u);
+});
+
+test('withdrawal and payout share one locked calendar cutoff', () => {
+  assert.match(withdrawalWorkflow, /FOR UPDATE OF booking, request/u);
+  assert.match(withdrawalWorkflow, /SELECT clock_timestamp\(\) AS database_now/u);
+  assert.match(withdrawalWorkflow, /addReturnPolicyCalendarDays\([\s\S]{0,120}14,[\s\S]{0,120}row\.rental_timezone/u);
+  assert.match(bookingWorkflow, /addReturnPolicyCalendarDays\([\s\S]{0,120}14,[\s\S]{0,120}row\.rental_timezone/u);
+  assert.doesNotMatch(withdrawalWorkflow, /14 \* 24 \* 60 \* 60/u);
+  assert.doesNotMatch(bookingWorkflow, /14 \* 24 \* 60 \* 60/u);
+});
+
+test('failed payout cancellation requires positive definite rejection evidence', () => {
+  assert.match(workflow, /isDefiniteProviderRejectionCode\(payout\.failure_code\)/u);
+  assert.match(workflow, /payout_cancel_requires_definite_rejection/u);
+  const review = workflow.slice(
+    workflow.indexOf('export async function reviewFailedPayout'),
+    workflow.indexOf('export async function reconcilePaymentLifecycle'),
+  );
+  assert.doesNotMatch(review, /findTransfer/u);
+  assert.match(review, /manual_retry_pre_provider_rejected/u);
+});
+
+test('uncertain or review-required payouts keep account deletion blocked', () => {
+  assert.match(
+    app,
+    /FROM payouts[\s\S]{0,160}payee_id = \$1[\s\S]{0,120}status IN \('scheduled', 'pending', 'failed'\)/u,
+  );
+  assert.match(workflow, /status IN \('scheduled', 'pending'\)[\s\S]{0,100}status = 'scheduled' OR \$2 = 'failed'/u);
+  assert.match(workflow, /if \(!updated\.rowCount\) return;/u);
+  assert.match(workflow, /status IN \('scheduled', 'pending'\)/u);
+  assert.match(workflow, /payoutRefundObligationSnapshot/u);
+  assert.match(app, /open_refund_obligations/u);
 });
 
 test('financial notification does not invent a provider name', () => {

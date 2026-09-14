@@ -10,15 +10,18 @@ import {
   disputeOwnerRecoveryLedger,
   disputeOwnerRecoveryReinstatementLedger,
   disputeTransferRecoveryAmount,
+  isDefiniteProviderRejectionCode,
   PaymentDomainError,
   paymentAmounts,
   paymentIdempotencyKey,
   paymentStatusForProvider,
   payloadHash,
+  payoutReleaseAvailableAt,
   privatePilotReleasableOwnerAmount,
   providerOperationIdempotencyKey,
   refundLedger,
   refundTransferReversalPlan,
+  recoverOrCreateProviderTransfer,
   requestHash,
   splitRefund,
   transferLedger,
@@ -27,6 +30,12 @@ import {
   enqueueBookingNotifications,
   enqueueFinancialNotification,
 } from './notifications.js';
+import { payoutRefundObligationSnapshot } from './payment_refund_obligations.js';
+import {
+  assertPaymentExecutionActive,
+  boundedPaymentCheckoutExpiresAt,
+  stripeSandboxExecutionActive,
+} from './payment_execution_guard.js';
 import { StripeProvider } from './stripe_provider.js';
 
 export const stripeProvider = new StripeProvider({
@@ -835,17 +844,20 @@ export async function reconcileDisputeTransferRecoveries({
           continue;
         }
       }
-      reversal ??= await provider.reverseTransfer({
-        transferId: recovery.provider_transfer_id,
-        amountMinor: Number(recovery.amount_minor),
-        idempotencyKey: recovery.provider_idempotency_key,
-        metadata: {
-          sit_booking_id: recovery.booking_id,
-          sit_payment_id: recovery.payment_id,
-          sit_dispute_id: recovery.dispute_id,
-          sit_recovery_id: recovery.id,
-        },
-      });
+      if (!reversal) {
+        assertPaymentExecutionActive(config);
+        reversal = await provider.reverseTransfer({
+          transferId: recovery.provider_transfer_id,
+          amountMinor: Number(recovery.amount_minor),
+          idempotencyKey: recovery.provider_idempotency_key,
+          metadata: {
+            sit_booking_id: recovery.booking_id,
+            sit_payment_id: recovery.payment_id,
+            sit_dispute_id: recovery.dispute_id,
+            sit_recovery_id: recovery.id,
+          },
+        });
+      }
       if (await completeDisputeTransferRecovery(recovery, reversal)) {
         result.recovered += 1;
       }
@@ -880,6 +892,7 @@ export async function getConnectStatus(userId) {
 
 export async function createConnectOnboarding({ actor, raw, key: rawKey }) {
   ensurePaymentsEnabled(actor.id);
+  assertPaymentExecutionActive(config);
   const key = paymentIdempotencyKey(rawKey, 'connect.onboard');
   const country = text(raw?.country, 2).toUpperCase() || config.payments.connectCountry;
   const currency = text(raw?.currency, 3).toUpperCase() || config.payments.currency;
@@ -896,6 +909,7 @@ export async function createConnectOnboarding({ actor, raw, key: rawKey }) {
   let accountResult = await pool.query('SELECT * FROM stripe_connect_accounts WHERE user_id = $1', [actor.id]);
   let account = accountResult.rows[0];
   if (!account) {
+    assertPaymentExecutionActive(config);
     const created = await stripeProvider.createConnectedAccount({
       userId: actor.id,
       email: actor.email,
@@ -945,6 +959,7 @@ export async function createConnectOnboarding({ actor, raw, key: rawKey }) {
   }
   const refreshUrl = `${config.publicBaseUrl}/payments/connect/return?state=refresh`;
   const returnUrl = `${config.publicBaseUrl}/payments/connect/return?state=complete`;
+  assertPaymentExecutionActive(config);
   const link = await stripeProvider.createAccountLink({
     accountId: account.provider_account_id,
     refreshUrl,
@@ -976,6 +991,7 @@ async function ensureCustomer(actor) {
   const existing = await pool.query('SELECT * FROM stripe_customers WHERE user_id = $1', [actor.id]);
   if (existing.rowCount) return existing.rows[0];
   const name = text(actor.profile?.displayName, 120);
+  assertPaymentExecutionActive(config);
   const created = await stripeProvider.createCustomer({
     userId: actor.id,
     email: actor.email,
@@ -995,7 +1011,7 @@ async function ensureCustomer(actor) {
 export async function createPaymentCheckout({ actor, bookingId, key: rawKey }) {
   ensurePaymentsEnabled(actor.id);
   const key = paymentIdempotencyKey(rawKey, 'payment.checkout');
-  const requestedCheckoutExpiresAt = new Date(Date.now() + 45 * 60_000);
+  const requestedCheckoutExpiresAt = boundedPaymentCheckoutExpiresAt(config);
   const request = { bookingId };
   const prepared = await inTransaction(async (client) => {
     const command = await beginCommand(client, {
@@ -1127,6 +1143,17 @@ export async function createPaymentCheckout({ actor, bookingId, key: rawKey }) {
   if (prepared.replay) return { ...prepared.replay, replayed: true };
 
   const customer = await ensureCustomer(actor);
+  assertPaymentExecutionActive(config);
+  const providerCallNow = Date.now();
+  const authorizationExpiresAt = new Date(
+    config.payments.sandboxAuthorization?.expiresAt ?? '',
+  );
+  if (prepared.checkoutExpiresAt.getTime() - providerCallNow < 30 * 60_000
+      || (config.payments.transport === 'stripe'
+        && config.payments.livemode !== true
+        && prepared.checkoutExpiresAt > authorizationExpiresAt)) {
+    throw new PaymentDomainError(503, 'payment_sandbox_authorization_too_short');
+  }
   const expiresAt = Math.floor(prepared.checkoutExpiresAt.getTime() / 1000);
   // Keep provider parameters immutable across retries. Listing fields remain
   // editable after booking creation and must not change the payload associated
@@ -1417,6 +1444,19 @@ async function processProviderEvent(client, event) {
         || currency !== payment.currency
         || payment.livemode !== (event.livemode === true)) {
       throw new PaymentDomainError(409, 'provider_dispute_binding_mismatch');
+    }
+    // A payout provider call may already be in flight after its durable marker
+    // was committed. Keep this signed event durably failed/retryable instead
+    // of letting a persisted dispute be overtaken by local payout finalization.
+    // Both paths hold payment+booking here, so exactly one state transition wins.
+    const inFlightPayout = await client.query(
+      `SELECT 1 FROM payouts
+       WHERE payment_id = $1 AND status IN ('scheduled', 'pending')
+       LIMIT 1`,
+      [payment.id],
+    );
+    if (inFlightPayout.rowCount) {
+      throw new PaymentDomainError(503, 'provider_dispute_deferred_by_payout');
     }
     const disputeResult = await client.query(
       `INSERT INTO disputes (
@@ -2030,17 +2070,20 @@ export async function reconcileRefundTransferReversals({
           refundTransferReversalId: reversal.id,
         });
       }
-      providerReversal ??= await provider.reverseTransfer({
-        transferId: reversal.provider_transfer_id,
-        amountMinor: Number(reversal.amount_minor),
-        idempotencyKey: reversal.provider_idempotency_key,
-        metadata: {
-          sit_booking_id: reversal.booking_id,
-          sit_payment_id: reversal.payment_id,
-          sit_refund_id: reversal.refund_id,
-          sit_refund_transfer_reversal_id: reversal.id,
-        },
-      });
+      if (!providerReversal) {
+        assertPaymentExecutionActive(config);
+        providerReversal = await provider.reverseTransfer({
+          transferId: reversal.provider_transfer_id,
+          amountMinor: Number(reversal.amount_minor),
+          idempotencyKey: reversal.provider_idempotency_key,
+          metadata: {
+            sit_booking_id: reversal.booking_id,
+            sit_payment_id: reversal.payment_id,
+            sit_refund_id: reversal.refund_id,
+            sit_refund_transfer_reversal_id: reversal.id,
+          },
+        });
+      }
       if (await completeRefundTransferReversal(reversal, providerReversal)) {
         completedThisRun += 1;
       }
@@ -2121,6 +2164,7 @@ async function markProviderRefundFailure({ refund, payment }, error) {
 
 export async function refundPayment({ actor = null, paymentId, amountMinor = null, reason = 'booking_cancelled', key: rawKey }) {
   ensurePaymentsEnabled(actor?.id ?? null);
+  assertPaymentExecutionActive(config);
   if (actor && actor.role !== 'admin') throw new PaymentDomainError(403, 'refund_requires_admin');
   const key = paymentIdempotencyKey(rawKey, 'payment.refund');
   const prepared = await inTransaction(async (client) => {
@@ -2138,9 +2182,45 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
     );
     if (!result.rowCount) throw new PaymentDomainError(404, 'payment_not_found');
     const payment = result.rows[0];
+    const completedCommand = (await client.query(
+      'SELECT * FROM payment_commands WHERE idempotency_key = $1 FOR UPDATE',
+      [key],
+    )).rows[0];
+    if (completedCommand && (completedCommand.command_type !== 'payment.refund'
+        || completedCommand.payment_id !== paymentId
+        || completedCommand.actor_id !== (actor?.id ?? null))) {
+      throw new PaymentDomainError(409, 'idempotency_key_reused');
+    }
+    if (completedCommand?.completed_at) {
+      const replayAmount = amountMinor == null
+        ? Number(completedCommand.response_payload?.refund?.amountMinor)
+        : Number(amountMinor);
+      if (!Number.isSafeInteger(replayAmount) || replayAmount <= 0
+          || completedCommand.request_hash !== requestHash({
+            paymentId,
+            amountMinor: replayAmount,
+            reason,
+          })) {
+        throw new PaymentDomainError(409, 'idempotency_key_reused');
+      }
+      return { commandReplay: completedCommand.response_payload };
+    }
     if (!['captured', 'partially_refunded'].includes(payment.status)) {
       if (payment.status === 'refunded') return { replay: true, payment };
       throw new PaymentDomainError(409, 'payment_not_refundable');
+    }
+    // This check runs while both payment and booking are row-locked. The
+    // durable payout marker is therefore mutually exclusive with refund
+    // preparation even though the provider call happens outside this TX.
+    const inFlightPayout = await client.query(
+      `SELECT 1 FROM payouts
+       WHERE payment_id = $1
+         AND status IN ('scheduled', 'pending', 'failed')
+       LIMIT 1`,
+      [paymentId],
+    );
+    if (inFlightPayout.rowCount) {
+      throw new PaymentDomainError(409, 'refund_blocked_by_payout_in_flight');
     }
     const providerDispute = await client.query(
       `SELECT 1 FROM disputes
@@ -2279,19 +2359,22 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
         refundId: prepared.refund.id,
       });
     }
-    providerRefund ??= await stripeProvider.createRefund({
-      chargeId: prepared.payment.provider_charge_id,
-      amountMinor: Number(prepared.refund.amount_minor),
-      reverseTransfer: false,
-      refundPlatformFee: false,
-      idempotencyKey: providerOperationIdempotencyKey('refund', prepared.refund.id),
-      metadata: {
-        sit_booking_id: prepared.payment.booking_id,
-        sit_payment_id: prepared.payment.id,
-        sit_refund_id: prepared.refund.id,
-        currency: prepared.payment.currency,
-      },
-    });
+    if (!providerRefund) {
+      assertPaymentExecutionActive(config);
+      providerRefund = await stripeProvider.createRefund({
+        chargeId: prepared.payment.provider_charge_id,
+        amountMinor: Number(prepared.refund.amount_minor),
+        reverseTransfer: false,
+        refundPlatformFee: false,
+        idempotencyKey: providerOperationIdempotencyKey('refund', prepared.refund.id),
+        metadata: {
+          sit_booking_id: prepared.payment.booking_id,
+          sit_payment_id: prepared.payment.id,
+          sit_refund_id: prepared.refund.id,
+          currency: prepared.payment.currency,
+        },
+      });
+    }
     assertProviderRefundBinding({
       refund: prepared.refund,
       payment: prepared.payment,
@@ -2426,14 +2509,72 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
   return response;
 }
 
-export async function releasePayout({ actor = null, paymentId, key: rawKey }) {
+async function markPayoutTransferFailure({ payout, payment }, error, actor) {
+  const classification = [
+    'provider_transfer_binding_mismatch',
+    'provider_transfer_inventory_conflict',
+    'payout_transfer_local_state_mismatch',
+  ].includes(error?.code)
+    ? {
+      category: 'integrity_conflict',
+      disposition: 'manual_review',
+      needsReview: true,
+      safeCode: error.code,
+    }
+    : classifyDisputeTransferRecoveryFailure(error);
+  const status = classification.disposition === 'manual_review' ? 'failed' : 'pending';
+  await inTransaction(async (client) => {
+    await client.query(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [`payment-payout:${payment.id}`],
+    );
+    const updated = await client.query(
+      `UPDATE payouts SET status = $2, failure_code = $3
+        WHERE id = $1
+          AND status IN ('scheduled', 'pending')
+          AND (status = 'scheduled' OR $2 = 'failed')
+        RETURNING id`,
+      [payout.id, status, classification.safeCode],
+    );
+    if (!updated.rowCount) return;
+    await audit(client, {
+      actorId: actor?.id ?? null,
+      actorRole: actor?.role ?? 'system',
+      action: 'payout.provider_transfer_deferred',
+      resourceType: 'payout',
+      resourceId: payout.id,
+      metadata: {
+        paymentId: payment.id,
+        category: classification.category,
+        needsReview: classification.needsReview,
+      },
+    });
+  });
+  return classification;
+}
+
+export async function releasePayout({
+  actor = null,
+  paymentId,
+  key: rawKey,
+  internalRecovery = false,
+}) {
   ensurePaymentsEnabled(actor?.id ?? null);
+  assertPaymentExecutionActive(config);
   if (actor && actor.role !== 'admin') throw new PaymentDomainError(403, 'payout_release_requires_admin');
+  if (internalRecovery && actor != null) {
+    throw new PaymentDomainError(403, 'payout_internal_recovery_invalid');
+  }
   const key = paymentIdempotencyKey(rawKey, 'payment.release');
   const prepared = await inTransaction(async (client) => {
+    await client.query(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [`payment-payout:${paymentId}`],
+    );
     const result = await client.query(
       `SELECT payment.*, booking.owner_id, booking.workflow_status, booking.completed_at,
               booking.ends_at, booking.return_state, booking.payout_instruction_due_at,
+              booking.rental_timezone,
               request.payload AS booking_payload,
               connected.provider_account_id, connected.account_api_version,
               connected.recipient_transfers_status, connected.payouts_enabled,
@@ -2453,22 +2594,76 @@ export async function releasePayout({ actor = null, paymentId, key: rawKey }) {
     );
     if (!result.rowCount) throw new PaymentDomainError(404, 'payment_not_found');
     const payment = result.rows[0];
+    const completedCommand = (await client.query(
+      'SELECT * FROM payment_commands WHERE idempotency_key = $1 FOR UPDATE',
+      [key],
+    )).rows[0];
+    if (completedCommand && (completedCommand.command_type !== 'payment.release'
+        || completedCommand.payment_id !== paymentId
+        || (!internalRecovery
+          && completedCommand.actor_id !== (actor?.id ?? null)))) {
+      throw new PaymentDomainError(409, 'idempotency_key_reused');
+    }
+    if (completedCommand?.completed_at) {
+      return { commandReplay: completedCommand.response_payload };
+    }
     if (payment.status !== 'captured' && payment.status !== 'partially_refunded') {
       throw new PaymentDomainError(409, 'payment_not_settled');
     }
     if (!['completed', 'cancelled'].includes(payment.workflow_status)) {
       throw new PaymentDomainError(409, 'booking_not_completed');
     }
+    // Refund preparation takes the same payment/booking locks and persists a
+    // refund marker before its provider call. Whichever preparation wins the
+    // lock prevents the other money movement from starting concurrently.
+    const unresolvedRefund = await client.query(
+      `SELECT 1 FROM refunds
+       WHERE payment_id = $1
+         AND status IN ('created', 'pending', 'failed')
+       LIMIT 1`,
+      [paymentId],
+    );
+    if (unresolvedRefund.rowCount) {
+      throw new PaymentDomainError(409, 'payout_blocked_by_refund_in_flight');
+    }
+    const contractClock = await client.query(
+      `SELECT contract.accepted_at AS platform_contract_accepted_at,
+              contract.contract_version AS platform_contract_version,
+              clock_timestamp() AS database_now
+         FROM (SELECT 1) AS singleton
+         LEFT JOIN platform_contracts AS contract ON contract.booking_id = $1`,
+      [payment.booking_id],
+    );
+    const contract = contractClock.rows[0] ?? {};
     const fallbackBase = payment.workflow_status === 'cancelled'
       ? payment.ends_at
       : payment.completed_at;
-    const availableAt = payment.workflow_status === 'completed'
+    const returnAvailableAt = payment.workflow_status === 'completed'
       && payment.payout_instruction_due_at
       ? new Date(payment.payout_instruction_due_at)
       : new Date(new Date(fallbackBase).getTime()
           + config.payments.payoutHoldHours * 3_600_000);
-    if (Date.now() < availableAt.getTime()) {
+    const availableAt = payoutReleaseAvailableAt({
+      returnAvailableAt,
+      platformContractAcceptedAt: contract.platform_contract_accepted_at,
+      platformContractVersion: contract.platform_contract_version,
+      rentalTimezone: payment.rental_timezone,
+      requireV52Contract: config.payments.transport === 'stripe',
+    });
+    const databaseNow = new Date(contract.database_now);
+    if (!Number.isFinite(databaseNow.getTime())) {
+      throw new PaymentDomainError(503, 'payout_database_clock_invalid');
+    }
+    if (databaseNow <= availableAt) {
       throw new PaymentDomainError(409, 'payout_hold_active', { availableAt: availableAt.toISOString() });
+    }
+    const refundObligations = await payoutRefundObligationSnapshot(client, payment.booking_id);
+    if (refundObligations.blocked) {
+      throw new PaymentDomainError(409, 'payout_blocked_by_refund_obligation', {
+        outstandingMinor: refundObligations.outstandingMinor,
+        unresolved: refundObligations.unresolved,
+        conflictingFamilies: refundObligations.conflictingFamilies,
+      });
     }
     const dispute = await client.query(
       `SELECT 1 FROM disputes
@@ -2492,11 +2687,14 @@ export async function releasePayout({ actor = null, paymentId, key: rawKey }) {
       throw new PaymentDomainError(409, 'owner_payout_account_not_ready');
     }
     const activePayout = await client.query(
-      `SELECT idempotency_key FROM payouts
-       WHERE payment_id = $1 AND status IN ('scheduled', 'pending')
+      `SELECT * FROM payouts
+       WHERE payment_id = $1 AND status IN ('scheduled', 'pending', 'failed')
        ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
       [paymentId],
     );
+    if (activePayout.rowCount && activePayout.rows[0].status === 'failed') {
+      throw new PaymentDomainError(409, 'payout_transfer_needs_review');
+    }
     if (activePayout.rowCount && activePayout.rows[0].idempotency_key !== key) {
       throw new PaymentDomainError(409, 'payout_in_progress');
     }
@@ -2516,6 +2714,16 @@ export async function releasePayout({ actor = null, paymentId, key: rawKey }) {
     });
     const amount = payoutAmounts.releasableMinor;
     if (amount <= 0) {
+      const completedCommand = await client.query(
+        `SELECT * FROM payment_commands
+          WHERE idempotency_key = $1
+            AND command_type = 'payment.release'
+            AND payment_id = $2`,
+        [key, paymentId],
+      );
+      if (completedCommand.rows[0]?.completed_at) {
+        return { commandReplay: completedCommand.rows[0].response_payload };
+      }
       const existing = await client.query('SELECT * FROM payouts WHERE payment_id = $1 ORDER BY created_at DESC LIMIT 1', [paymentId]);
       if (!existing.rowCount && payoutAmounts.heldOwnerMinor > 0) {
         throw new PaymentDomainError(409, 'payout_held_by_return_case', {
@@ -2524,10 +2732,22 @@ export async function releasePayout({ actor = null, paymentId, key: rawKey }) {
       }
       return { replay: true, payment, payout: existing.rows[0] };
     }
-    const command = await beginCommand(client, {
-      key, actorId: actor?.id ?? null, type: 'payment.release',
-      request: { paymentId, amountMinor: amount }, bookingId: payment.booking_id, paymentId,
-    });
+    const commandRequest = { paymentId, amountMinor: amount };
+    const command = internalRecovery
+      ? (await client.query(
+          'SELECT * FROM payment_commands WHERE idempotency_key = $1 FOR UPDATE',
+          [key],
+        )).rows[0]
+      : await beginCommand(client, {
+          key, actorId: actor?.id ?? null, type: 'payment.release',
+          request: commandRequest, bookingId: payment.booking_id, paymentId,
+        });
+    if (!command
+        || command.command_type !== 'payment.release'
+        || command.request_hash !== requestHash(commandRequest)
+        || (internalRecovery && command.payment_id !== paymentId)) {
+      throw new PaymentDomainError(409, 'payout_recovery_command_mismatch');
+    }
     if (command.completed_at) return { commandReplay: command.response_payload };
     const existingPayout = await client.query('SELECT * FROM payouts WHERE idempotency_key = $1', [key]);
     const payout = existingPayout.rowCount ? existingPayout : await client.query(
@@ -2538,58 +2758,322 @@ export async function releasePayout({ actor = null, paymentId, key: rawKey }) {
        RETURNING *`,
       [payment.booking_id, payment.owner_id, paymentId, key, amount, payment.currency, availableAt, payment.provider_account_id, config.payments.livemode],
     );
-    return { payment, payout: payout.rows[0], amount };
+    const payoutRow = payout.rows[0];
+    if (payoutRow.booking_id !== payment.booking_id
+        || payoutRow.payee_id !== payment.owner_id
+        || payoutRow.payment_id !== paymentId
+        || payoutRow.idempotency_key !== key
+        || !['scheduled', 'pending'].includes(payoutRow.status)
+        || Number(payoutRow.amount_minor) !== amount
+        || payoutRow.currency !== payment.currency
+        || payoutRow.provider_connected_account_id !== payment.provider_account_id
+        || payoutRow.livemode !== config.payments.livemode) {
+      throw new PaymentDomainError(409, 'payout_transfer_local_state_mismatch');
+    }
+    return {
+      payment,
+      payout: payoutRow,
+      amount,
+      recoverExistingPayout: internalRecovery || existingPayout.rowCount > 0,
+    };
   });
   if (prepared.commandReplay) return { ...prepared.commandReplay, replayed: true };
   if (prepared.replay) return {
     payout: prepared.payout ? { id: prepared.payout.id, status: prepared.payout.status } : null,
     payment: shapePayment(prepared.payment), replayed: true,
   };
-  const transfer = await stripeProvider.createTransfer({
+  const transferRequest = {
     accountId: prepared.payment.provider_account_id,
     chargeId: prepared.payment.provider_charge_id,
     amountMinor: prepared.amount,
     currency: prepared.payment.currency,
     transferGroup: prepared.payment.transfer_group,
     idempotencyKey: providerOperationIdempotencyKey('payout_transfer', prepared.payout.id),
-    metadata: { sit_booking_id: prepared.payment.booking_id, sit_payment_id: paymentId, sit_payout_id: prepared.payout.id },
-  });
-  return inTransaction(async (client) => {
-    await client.query(
-      `UPDATE payouts SET status = 'paid', provider_transfer_id = $2,
-           transferred_at = now(), paid_at = now() WHERE id = $1`,
-      [prepared.payout.id, transfer.id],
+    metadata: {
+      sit_booking_id: prepared.payment.booking_id,
+      sit_payment_id: paymentId,
+      sit_payout_id: prepared.payout.id,
+    },
+  };
+  let transfer;
+  try {
+    transfer = await recoverOrCreateProviderTransfer({
+      provider: stripeProvider,
+      payout: prepared.payout,
+      payment: prepared.payment,
+      request: transferRequest,
+      recoverExisting: prepared.recoverExistingPayout,
+      beforeCreate: () => assertPaymentExecutionActive(config),
+    });
+  } catch (error) {
+    const classification = await markPayoutTransferFailure(prepared, error, actor);
+    throw new PaymentDomainError(
+      classification.disposition === 'manual_review' ? 409 : 503,
+      classification.disposition === 'manual_review'
+        ? 'payout_transfer_needs_review'
+        : 'payout_transfer_pending',
     );
-    await client.query('UPDATE payments SET transferred_minor = transferred_minor + $2 WHERE id = $1', [paymentId, prepared.amount]);
-    await insertLedger(client, {
-      key: `${key}:transfer-ledger`, bookingId: prepared.payment.booking_id,
-      paymentId, payoutId: prepared.payout.id,
-      type: 'owner_transfer', currency: prepared.payment.currency,
-      providerReference: transfer.id,
-      entries: transferLedger({ amountMinor: prepared.amount, ownerId: prepared.payment.owner_id }),
+  }
+  try {
+    return await inTransaction(async (client) => {
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        [`payment-payout:${paymentId}`],
+      );
+      const locked = await client.query(
+        `SELECT payout.*, payment.transferred_minor, payment.owner_payout_minor
+           FROM payouts AS payout
+           JOIN payments AS payment ON payment.id = payout.payment_id
+          WHERE payout.id = $1 AND payment.id::text = $2
+          FOR UPDATE OF payout, payment`,
+        [prepared.payout.id, paymentId],
+      );
+      const command = await client.query(
+        'SELECT * FROM payment_commands WHERE idempotency_key = $1 FOR UPDATE',
+        [key],
+      );
+      if (!command.rowCount) {
+        throw new PaymentDomainError(409, 'payout_transfer_local_state_mismatch');
+      }
+      if (command.rows[0].completed_at) {
+        return { ...command.rows[0].response_payload, replayed: true };
+      }
+      const currentPayout = locked.rows[0];
+      if (!currentPayout
+          || !['scheduled', 'pending'].includes(currentPayout.status)
+          || currentPayout.provider_transfer_id != null
+          || Number(currentPayout.amount_minor) !== prepared.amount
+          || Number(currentPayout.transferred_minor) + prepared.amount
+            > Number(currentPayout.owner_payout_minor)) {
+        throw new PaymentDomainError(409, 'payout_transfer_local_state_mismatch');
+      }
+      await client.query(
+        `UPDATE payouts SET status = 'paid', provider_transfer_id = $2,
+             failure_code = NULL, transferred_at = now(), paid_at = now()
+          WHERE id = $1`,
+        [prepared.payout.id, transfer.id],
+      );
+      await client.query('UPDATE payments SET transferred_minor = transferred_minor + $2 WHERE id = $1', [paymentId, prepared.amount]);
+      const ledger = await insertLedger(client, {
+        key: `${key}:transfer-ledger`, bookingId: prepared.payment.booking_id,
+        paymentId, payoutId: prepared.payout.id,
+        type: 'owner_transfer', currency: prepared.payment.currency,
+        providerReference: transfer.id,
+        entries: transferLedger({ amountMinor: prepared.amount, ownerId: prepared.payment.owner_id }),
+      });
+      if (!ledger.inserted) {
+        throw new PaymentDomainError(409, 'payout_transfer_local_state_mismatch');
+      }
+      await enqueueFinancialNotification(client, {
+        bookingId: prepared.payment.booking_id,
+        eventKey: `payout:${prepared.payout.id}:paid`, kind: 'payout_sent',
+        recipientRole: 'owner', amountMinor: prepared.amount, currency: prepared.payment.currency,
+      });
+      const value = {
+        payout: { id: prepared.payout.id, status: 'paid', amountMinor: prepared.amount, currency: prepared.payment.currency },
+        payment: shapePayment({ ...prepared.payment, transferred_minor: Number(prepared.payment.transferred_minor) + prepared.amount, updated_at: new Date() }),
+        replayed: false,
+      };
+      await completeCommand(client, key, paymentId, value);
+      await audit(client, {
+        actorId: actor?.id ?? null, actorRole: actor?.role ?? 'system',
+        action: 'payout.released', resourceType: 'payout', resourceId: prepared.payout.id,
+        metadata: { paymentId, amountMinor: prepared.amount },
+      });
+      return value;
     });
-    await enqueueFinancialNotification(client, {
-      bookingId: prepared.payment.booking_id,
-      eventKey: `payout:${prepared.payout.id}:paid`, kind: 'payout_sent',
-      recipientRole: 'owner', amountMinor: prepared.amount, currency: prepared.payment.currency,
-    });
-    const value = {
-      payout: { id: prepared.payout.id, status: 'paid', amountMinor: prepared.amount, currency: prepared.payment.currency },
-      payment: shapePayment({ ...prepared.payment, transferred_minor: Number(prepared.payment.transferred_minor) + prepared.amount, updated_at: new Date() }),
+  } catch (error) {
+    const classification = await markPayoutTransferFailure(prepared, error, actor);
+    throw new PaymentDomainError(
+      classification.disposition === 'manual_review' ? 409 : 503,
+      classification.disposition === 'manual_review'
+        ? 'payout_transfer_needs_review'
+        : 'payout_transfer_pending',
+    );
+  }
+}
+
+export async function reviewFailedPayout({ actor, payoutId, action, reasonCode }) {
+  ensurePaymentsEnabled(actor?.id ?? null);
+  if (actor?.role !== 'admin') {
+    throw new PaymentDomainError(403, 'payout_review_requires_admin');
+  }
+  const normalizedAction = text(action, 20);
+  const normalizedReason = text(reasonCode, 120);
+  if (!['retry', 'cancel'].includes(normalizedAction)
+      || !/^[a-z0-9][a-z0-9_:-]{7,119}$/u.test(normalizedReason)) {
+    throw new PaymentDomainError(400, 'payout_review_invalid');
+  }
+  const candidateResult = await pool.query(
+    `SELECT payout.payment_id
+       FROM payouts AS payout
+      WHERE payout.id::text = $1`,
+    [payoutId],
+  );
+  if (!candidateResult.rowCount) throw new PaymentDomainError(404, 'payout_not_found');
+  const candidate = candidateResult.rows[0];
+  const reviewed = await inTransaction(async (client) => {
+    await client.query(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [`payment-payout:${candidate.payment_id}`],
+    );
+    const locked = await client.query(
+      `SELECT payout.*, payment.status AS payment_status,
+              payment.amount_minor AS payment_amount_minor,
+              payment.rental_subtotal_minor, payment.platform_fee_minor,
+              payment.owner_payout_minor, payment.security_deposit_minor,
+              payment.captured_minor, payment.refunded_minor,
+              payment.transferred_minor, payment.currency AS payment_currency,
+              payment.provider_payment_id, payment.provider_checkout_session_id,
+              payment.provider_charge_id, payment.provider_customer_id,
+              payment.provider_payment_method_id, payment.transfer_group,
+              payment.livemode AS payment_livemode,
+              payment.created_at AS payment_created_at,
+              payment.updated_at AS payment_updated_at
+         FROM payouts AS payout
+         JOIN payments AS payment ON payment.id = payout.payment_id
+        WHERE payout.id::text = $1
+        FOR UPDATE OF payout, payment`,
+      [payoutId],
+    );
+    const payout = locked.rows[0];
+    if (payout?.status === 'cancelled' && normalizedAction === 'cancel') {
+      return {
+        response: { payout: { id: payout.id, status: 'cancelled' }, replayed: true },
+        payout,
+      };
+    }
+    if (!payout || payout.status !== 'failed'
+        || payout.payment_id !== candidate.payment_id) {
+      throw new PaymentDomainError(409, 'payout_review_state_invalid');
+    }
+    if (normalizedAction === 'cancel'
+        && !isDefiniteProviderRejectionCode(payout.failure_code)) {
+      throw new PaymentDomainError(409, 'payout_cancel_requires_definite_rejection');
+    }
+    if (normalizedAction === 'retry') {
+      const commandResult = await client.query(
+        'SELECT * FROM payment_commands WHERE idempotency_key = $1 FOR UPDATE',
+        [payout.idempotency_key],
+      );
+      const command = commandResult.rows[0];
+      const expectedRequest = {
+        paymentId: payout.payment_id,
+        amountMinor: Number(payout.amount_minor),
+      };
+      if (!command
+          || command.command_type !== 'payment.release'
+          || command.payment_id !== payout.payment_id
+          || command.completed_at != null
+          || command.request_hash !== requestHash(expectedRequest)) {
+        throw new PaymentDomainError(409, 'payout_recovery_command_mismatch');
+      }
+    }
+    const status = normalizedAction === 'retry' ? 'pending' : 'cancelled';
+    await client.query(
+      `UPDATE payouts
+          SET status = $2, failure_code = $3, updated_at = now()
+        WHERE id = $1`,
+      [
+        payout.id,
+        status,
+        normalizedAction === 'retry' ? 'manual_retry_authorized' : 'manual_cancel_authorized',
+      ],
+    );
+    const response = {
+      payout: { id: payout.id, status },
+      payment: shapePayment({
+        ...payout,
+        id: payout.payment_id,
+        status: payout.payment_status,
+        amount_minor: payout.payment_amount_minor,
+        currency: payout.payment_currency,
+        livemode: payout.payment_livemode,
+        created_at: payout.payment_created_at,
+        updated_at: payout.payment_updated_at,
+      }),
       replayed: false,
     };
-    await completeCommand(client, key, paymentId, value);
+    if (normalizedAction === 'cancel') {
+      await completeCommand(client, payout.idempotency_key, payout.payment_id, response);
+    }
     await audit(client, {
-      actorId: actor?.id ?? null, actorRole: actor?.role ?? 'system',
-      action: 'payout.released', resourceType: 'payout', resourceId: prepared.payout.id,
-      metadata: { paymentId, amountMinor: prepared.amount },
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: normalizedAction === 'retry'
+        ? 'payout.review_retry_authorized'
+        : 'payout.review_cancelled',
+      resourceType: 'payout',
+      resourceId: payout.id,
+      metadata: { paymentId: payout.payment_id, reasonCode: normalizedReason },
     });
-    return value;
+    return { response, payout };
   });
+  if (normalizedAction === 'cancel') return reviewed.response;
+  try {
+    return await releasePayout({
+      paymentId: reviewed.payout.payment_id,
+      key: reviewed.payout.idempotency_key,
+      internalRecovery: true,
+    });
+  } catch (error) {
+    if (!['payout_transfer_pending', 'payout_transfer_needs_review'].includes(error?.code)) {
+      await inTransaction(async (client) => {
+        await client.query(
+          'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+          [`payment-payout:${reviewed.payout.payment_id}`],
+        );
+        const restored = await client.query(
+          `UPDATE payouts
+              SET status = 'failed', failure_code = 'manual_retry_pre_provider_rejected',
+                  updated_at = now()
+            WHERE id = $1
+              AND status = 'pending'
+              AND failure_code = 'manual_retry_authorized'
+            RETURNING id`,
+          [reviewed.payout.id],
+        );
+        if (restored.rowCount) {
+          await audit(client, {
+            actorId: actor.id,
+            actorRole: actor.role,
+            action: 'payout.review_retry_rejected_before_provider',
+            resourceType: 'payout',
+            resourceId: reviewed.payout.id,
+            metadata: {
+              paymentId: reviewed.payout.payment_id,
+              reasonCode: normalizedReason,
+              safeCode: text(error?.code ?? error?.message, 120),
+            },
+          });
+        }
+      });
+    }
+    throw error;
+  }
 }
 
 export async function reconcilePaymentLifecycle() {
   if (!config.payments.enabled) {
+    return {
+      refunds: 0,
+      payouts: 0,
+      failures: 0,
+      disputeRecoveries: {
+        scheduled: 0,
+        deferred: 0,
+        needsReview: 0,
+        recovered: 0,
+        retryable: 0,
+        uncertain: 0,
+        manualReview: 0,
+        cancelled: 0,
+      },
+    };
+  }
+  // Scheduled reconciliation must stop quietly once a short-lived sandbox
+  // authorization expires. User and webhook entry points still fail explicitly.
+  if (!stripeSandboxExecutionActive(config)) {
     return {
       refunds: 0,
       payouts: 0,
@@ -2706,8 +3190,23 @@ export async function reconcilePaymentLifecycle() {
     }
   }
   const eligible = await pool.query(
-    `SELECT payment.id, payment.transferred_minor, booking.return_state
+    `SELECT payment.id, payment.transferred_minor, booking.return_state,
+            booking.workflow_status, booking.ends_at, booking.completed_at,
+            booking.payout_instruction_due_at, booking.rental_timezone,
+            contract.accepted_at AS platform_contract_accepted_at,
+            contract.contract_version AS platform_contract_version,
+            active_payout.idempotency_key AS active_payout_key,
+            clock_timestamp() AS database_now
      FROM payments AS payment JOIN bookings AS booking ON booking.id = payment.booking_id
+     LEFT JOIN platform_contracts AS contract ON contract.booking_id = booking.id
+     LEFT JOIN LATERAL (
+       SELECT payout.idempotency_key, payout.status
+         FROM payouts AS payout
+        WHERE payout.payment_id = payment.id
+          AND payout.status IN ('scheduled', 'pending', 'failed')
+        ORDER BY payout.created_at DESC, payout.id DESC
+        LIMIT 1
+     ) AS active_payout ON true
      LEFT JOIN LATERAL (
        SELECT COALESCE(sum(owner_share_minor), 0)::bigint AS owner_share_minor
        FROM refunds WHERE payment_id = payment.id AND status = 'succeeded'
@@ -2715,6 +3214,7 @@ export async function reconcilePaymentLifecycle() {
      WHERE booking.workflow_status IN ('completed', 'cancelled')
        AND payment.status IN ('captured', 'partially_refunded')
        AND payment.transferred_minor < payment.owner_payout_minor - refunded.owner_share_minor
+       AND active_payout.status IS DISTINCT FROM 'failed'
        AND (
          (booking.workflow_status = 'completed' AND (
            booking.payout_instruction_due_at <= now()
@@ -2734,13 +3234,35 @@ export async function reconcilePaymentLifecycle() {
   );
   for (const row of eligible.rows) {
     try {
+      const fallbackBase = row.workflow_status === 'cancelled'
+        ? row.ends_at
+        : row.completed_at;
+      const returnAvailableAt = row.workflow_status === 'completed'
+        && row.payout_instruction_due_at
+        ? new Date(row.payout_instruction_due_at)
+        : new Date(new Date(fallbackBase).getTime()
+            + config.payments.payoutHoldHours * 3_600_000);
+      const availableAt = payoutReleaseAvailableAt({
+        returnAvailableAt,
+        platformContractAcceptedAt: row.platform_contract_accepted_at,
+        platformContractVersion: row.platform_contract_version,
+        rentalTimezone: row.rental_timezone,
+        requireV52Contract: config.payments.transport === 'stripe',
+      });
+      if (new Date(row.database_now) <= availableAt) continue;
       await releasePayout({
         paymentId: row.id,
-        key: `system:payout:${row.id}:${row.transferred_minor}:${row.return_state}`,
+        key: row.active_payout_key
+          ?? `system:payout:${row.id}:${row.transferred_minor}:${row.return_state}`,
+        internalRecovery: row.active_payout_key != null,
       });
       payouts += 1;
     } catch (error) {
-      if (!['payout_blocked_by_dispute', 'owner_payout_account_not_ready'].includes(error.code)) failures += 1;
+      if (![
+        'payout_blocked_by_dispute',
+        'payout_blocked_by_refund_obligation',
+        'owner_payout_account_not_ready',
+      ].includes(error.code)) failures += 1;
     }
   }
   return { refunds, payouts, failures, disputeRecoveries };
@@ -2767,6 +3289,9 @@ export async function paymentHealth() {
         (SELECT count(*)::int FROM refund_transfer_reversals
           WHERE status IN ('pending', 'processing', 'retryable', 'uncertain'))
         +
+        (SELECT count(*)::int FROM payouts
+          WHERE status IN ('scheduled', 'pending'))
+        +
         (SELECT count(*)::int FROM refunds AS refund
           WHERE refund.status IN ('created', 'pending')
             AND NOT EXISTS (
@@ -2780,6 +3305,9 @@ export async function paymentHealth() {
         +
         (SELECT count(*)::int FROM refund_transfer_reversals
           WHERE needs_review = true OR status = 'manual_review')
+        +
+        (SELECT count(*)::int FROM payouts
+          WHERE status = 'failed')
         +
         (SELECT count(*)::int FROM refunds WHERE status = 'failed'))
          AS recovery_needs_review,

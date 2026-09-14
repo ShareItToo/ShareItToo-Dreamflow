@@ -2216,6 +2216,7 @@ if (!databaseUrl) {
       const {
         applyProviderEvent,
         reconcileDisputeTransferRecoveries,
+        reconcilePaymentLifecycle,
         reconcileRefundTransferReversals,
         stripeProvider,
       } = await import('../src/payment_workflow.js');
@@ -6590,15 +6591,150 @@ if (!databaseUrl) {
         [providerDisputeObject.id],
       );
 
-      const payoutRelease = await fetch(`${baseUrl}/v1/payments/${paymentId}/payout-release`, {
+      // The provider creates the transfer, but the first response is lost.
+      // Reconciliation must recover that exact transfer from durable payout
+      // metadata and the original command key without creating a duplicate.
+      const originalCreateTransfer = stripeProvider.createTransfer;
+      let lostTransferResponseInjected = false;
+      stripeProvider.createTransfer = async function createTransferWithLostResponse(args) {
+        const providerTransfer = await originalCreateTransfer.call(this, args);
+        if (!lostTransferResponseInjected) {
+          lostTransferResponseInjected = true;
+          const error = new Error('simulated_payout_transfer_response_lost');
+          error.code = 'ETIMEDOUT';
+          error.status = 503;
+          throw error;
+        }
+        return providerTransfer;
+      };
+      let uncertainPayoutRelease;
+      try {
+        uncertainPayoutRelease = await fetch(`${baseUrl}/v1/payments/${paymentId}/payout-release`, {
+          method: 'POST',
+          headers: { ...adminHeaders, 'Idempotency-Key': 'b8-release-owner-payout' },
+          body: '{}',
+        });
+      } finally {
+        stripeProvider.createTransfer = originalCreateTransfer;
+      }
+      assert.equal(lostTransferResponseInjected, true);
+      assert.equal(uncertainPayoutRelease.status, 503);
+      assert.equal((await uncertainPayoutRelease.json()).error, 'payout_transfer_pending');
+      const pendingPayoutAfterLostResponse = await setupPool.query(
+        `SELECT payout.id, payout.status, payout.provider_transfer_id,
+                payout.provider_connected_account_id, payment.transfer_group,
+                payment.provider_charge_id, payment.livemode
+           FROM payouts AS payout
+           JOIN payments AS payment ON payment.id = payout.payment_id
+          WHERE payout.payment_id = $1`,
+        [paymentId],
+      );
+      assert.equal(pendingPayoutAfterLostResponse.rows[0].status, 'pending');
+      assert.equal(pendingPayoutAfterLostResponse.rows[0].provider_transfer_id, null);
+
+      // A signed dispute arriving while that payout is provider-uncertain must
+      // stay durably retryable. Persisting it first would let the later payout
+      // recovery overtake a chargeback that should have blocked a new payout.
+      const deferredPayoutDisputeObject = {
+        id: 'dp_memory_b8_deferred_during_payout',
+        object: 'dispute',
+        charge: capturedProviderPayment.rows[0].provider_charge_id,
+        amount: 1650,
+        currency: 'eur',
+        reason: 'fraudulent',
+        status: 'under_review',
+        evidence_details: { due_by: 1800000050 },
+      };
+      const deferredPayoutDisputeEvent = {
+        id: 'evt_memory_b8_deferred_during_payout',
+        object: 'event',
+        type: 'charge.dispute.created',
+        created: 1799539350,
+        livemode: false,
+        data: { object: deferredPayoutDisputeObject },
+      };
+      const deferredPayoutDisputeRaw = Buffer.from(
+        JSON.stringify(deferredPayoutDisputeEvent),
+      );
+      await assert.rejects(
+        applyProviderEvent(deferredPayoutDisputeEvent, deferredPayoutDisputeRaw),
+        (error) => error?.code === 'provider_dispute_deferred_by_payout',
+      );
+      assert.deepEqual(
+        (await setupPool.query(
+          `SELECT status, last_error_code FROM payment_provider_events
+            WHERE provider_event_id = $1`,
+          [deferredPayoutDisputeEvent.id],
+        )).rows[0],
+        {
+          status: 'failed',
+          last_error_code: 'provider_dispute_deferred_by_payout',
+        },
+      );
+      assert.equal((await setupPool.query(
+        'SELECT count(*)::int AS count FROM disputes WHERE provider_dispute_id = $1',
+        [deferredPayoutDisputeObject.id],
+      )).rows[0].count, 0);
+
+      const payoutRecovery = await reconcilePaymentLifecycle();
+      assert.equal(payoutRecovery.payouts, 1);
+      const payoutReleaseReplay = await fetch(`${baseUrl}/v1/payments/${paymentId}/payout-release`, {
         method: 'POST',
         headers: { ...adminHeaders, 'Idempotency-Key': 'b8-release-owner-payout' },
         body: '{}',
       });
-      assert.equal(payoutRelease.status, 201);
-      const payoutPayload = await payoutRelease.json();
+      assert.equal(payoutReleaseReplay.status, 200);
+      const payoutPayload = await payoutReleaseReplay.json();
+      assert.equal(payoutPayload.replayed, true);
       assert.equal(payoutPayload.payout.status, 'paid');
       assert.equal(payoutPayload.payout.amountMinor, 3000);
+      const recoveredPayoutTransfer = await stripeProvider.findTransfer({
+        accountId: pendingPayoutAfterLostResponse.rows[0].provider_connected_account_id,
+        transferGroup: pendingPayoutAfterLostResponse.rows[0].transfer_group,
+        payoutId: pendingPayoutAfterLostResponse.rows[0].id,
+      });
+      assert.equal(
+        (await setupPool.query(
+          `SELECT provider_transfer_id FROM payouts WHERE payment_id = $1`,
+          [paymentId],
+        )).rows[0].provider_transfer_id,
+        recoveredPayoutTransfer.id,
+      );
+      assert.equal((await setupPool.query(
+        `SELECT count(*)::int AS count FROM ledger_transactions
+          WHERE payment_id = $1 AND transaction_type = 'owner_transfer'`,
+        [paymentId],
+      )).rows[0].count, 1);
+
+      const deferredPayoutDisputeRetry = await applyProviderEvent(
+        deferredPayoutDisputeEvent,
+        deferredPayoutDisputeRaw,
+      );
+      assert.deepEqual(deferredPayoutDisputeRetry, {
+        duplicate: true,
+        status: 'processed',
+      });
+      assert.deepEqual(
+        (await setupPool.query(
+          `SELECT dispute.status, booking.workflow_status
+             FROM disputes AS dispute
+             JOIN bookings AS booking ON booking.id = dispute.booking_id
+            WHERE dispute.provider_dispute_id = $1`,
+          [deferredPayoutDisputeObject.id],
+        )).rows[0],
+        { status: 'investigating', workflow_status: 'disputed' },
+      );
+      await setupPool.query(
+        `UPDATE disputes
+            SET status = 'closed', provider_status = 'won', resolved_at = now()
+          WHERE provider_dispute_id = $1`,
+        [deferredPayoutDisputeObject.id],
+      );
+      await setupPool.query(
+        `UPDATE bookings SET workflow_status = 'completed',
+             workflow_revision = workflow_revision + 1
+          WHERE id = 'b8-payment-flow'`,
+      );
 
       const paidOutDisputeObject = {
         id: 'dp_memory_b8_paid_transfer_chargeback',
@@ -6815,21 +6951,74 @@ if (!databaseUrl) {
               || '{"contestedAuthorizedMinor":990}'::jsonb
           WHERE id = 'b8-payment-flow'`,
       );
-      const payoutAfterHumanDisputeClosure = await fetch(`${baseUrl}/v1/payments/${paymentId}/payout-release`, {
+      const concurrentPayoutRequest = () => fetch(`${baseUrl}/v1/payments/${paymentId}/payout-release`, {
         method: 'POST',
         headers: { ...adminHeaders, 'Idempotency-Key': 'b8-no-duplicate-payout-after-partial-refund' },
         body: '{}',
       });
-      assert.equal(payoutAfterHumanDisputeClosure.status, 201);
-      const payoutAfterHumanDisputeClosurePayload = await payoutAfterHumanDisputeClosure.json();
+      const originalCreateTransferForReplayFence = stripeProvider.createTransfer;
+      let releaseHeldTransfer = () => {};
+      let providerTransferEnteredResolve = () => {};
+      const providerTransferEntered = new Promise((resolve) => {
+        providerTransferEnteredResolve = resolve;
+      });
+      const heldTransferRelease = new Promise((resolve) => {
+        releaseHeldTransfer = resolve;
+      });
+      let shouldHoldTransfer = true;
+      stripeProvider.createTransfer = async function createTransferWithReplayFence(args) {
+        if (shouldHoldTransfer) {
+          shouldHoldTransfer = false;
+          providerTransferEnteredResolve();
+          await heldTransferRelease;
+        }
+        return originalCreateTransferForReplayFence.call(this, args);
+      };
+      let concurrentPayoutResponses;
+      try {
+        const firstPayoutRequest = concurrentPayoutRequest();
+        await providerTransferEntered;
+        const completedRefundReplayDuringPayout = await fetch(
+          `${baseUrl}/v1/payments/${paymentId}/refunds`,
+          {
+            method: 'POST',
+            headers: {
+              ...adminHeaders,
+              'Idempotency-Key': 'b8-partial-refund-after-owner-payout',
+            },
+            body: JSON.stringify({
+              amountMinor: 1650,
+              reason: 'integration_partial_refund',
+            }),
+          },
+        );
+        assert.equal(completedRefundReplayDuringPayout.status, 200);
+        assert.equal((await completedRefundReplayDuringPayout.json()).replayed, true);
+        const secondPayoutRequest = concurrentPayoutRequest();
+        releaseHeldTransfer();
+        concurrentPayoutResponses = await Promise.all([
+          firstPayoutRequest,
+          secondPayoutRequest,
+        ]);
+      } finally {
+        releaseHeldTransfer();
+        stripeProvider.createTransfer = originalCreateTransferForReplayFence;
+      }
+      assert.deepEqual(
+        concurrentPayoutResponses.map((response) => response.status).sort(),
+        [200, 201],
+      );
+      const concurrentPayoutPayloads = await Promise.all(
+        concurrentPayoutResponses.map((response) => response.json()),
+      );
+      const payoutAfterHumanDisputeClosurePayload = concurrentPayoutPayloads.find(
+        (payload) => payload.replayed === false,
+      );
       assert.equal(payoutAfterHumanDisputeClosurePayload.payout.amountMinor, 600);
-      const payoutAfterHumanDisputeClosureReplay = await fetch(`${baseUrl}/v1/payments/${paymentId}/payout-release`, {
-        method: 'POST',
-        headers: { ...adminHeaders, 'Idempotency-Key': 'b8-no-duplicate-payout-after-partial-refund' },
-        body: '{}',
-      });
-      assert.equal(payoutAfterHumanDisputeClosureReplay.status, 200);
-      assert.equal((await payoutAfterHumanDisputeClosureReplay.json()).replayed, true);
+      assert.equal(
+        concurrentPayoutPayloads.filter((payload) => payload.replayed === true).length,
+        1,
+      );
 
       await setupPool.query(
         `UPDATE bookings SET return_state = 'closed'
@@ -6905,6 +7094,19 @@ if (!databaseUrl) {
           paymentStatus: 'partially_refunded',
         },
       );
+      const completedPayoutReplayDuringRefund = await fetch(
+        `${baseUrl}/v1/payments/${paymentId}/payout-release`,
+        {
+          method: 'POST',
+          headers: {
+            ...adminHeaders,
+            'Idempotency-Key': 'b8-release-owner-payout',
+          },
+          body: '{}',
+        },
+      );
+      assert.equal(completedPayoutReplayDuringRefund.status, 200);
+      assert.equal((await completedPayoutReplayDuringRefund.json()).replayed, true);
       const pendingTransferReversals = await setupPool.query(
         `SELECT status, amount_minor, attempt_count, needs_review
            FROM refund_transfer_reversals

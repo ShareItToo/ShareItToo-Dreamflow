@@ -9,12 +9,18 @@ import { StripeProvider } from '../src/stripe_provider.js';
 // provider credential, network request, database or payment is used.
 const snapshotSecret = 'whsec_snapshotunitfixture';
 const connectSecret = 'whsec_connectunitfixture';
+process.env.DATABASE_URL ??= 'postgres://example:example@localhost:5432/example';
+process.env.JWT_SECRET ??= 'test-secret-that-is-longer-than-thirty-two-characters';
 process.env.DEPLOYMENT_ENVIRONMENT = 'test';
 process.env.PAYMENT_TRANSPORT = 'stripe';
 process.env.STRIPE_SECRET_KEY = 'rk_test_localunitfixture';
 process.env.STRIPE_WEBHOOK_SECRET = snapshotSecret;
 process.env.STRIPE_CONNECT_WEBHOOK_SECRET = connectSecret;
 process.env.STRIPE_LIVEMODE = 'false';
+process.env.PAYMENT_PILOT_USER_IDS = 'synthetic-admin,synthetic-owner,synthetic-renter';
+process.env.PAYMENT_SANDBOX_AUTHORIZATION_ID = 'WP146-AUTH-WEBHOOK-001';
+process.env.PAYMENT_SANDBOX_AUTH_ISSUED_AT = new Date(Date.now() - 60_000).toISOString();
+process.env.PAYMENT_SANDBOX_AUTH_EXPIRES_AT = new Date(Date.now() + 60 * 60_000).toISOString();
 const { verifyAndApplyWebhook, stripeProvider } = await import('../src/payment_workflow.js');
 const { pool } = await import('../src/db.js');
 

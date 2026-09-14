@@ -208,6 +208,25 @@ const paymentPilotUserIds = csv(process.env.PAYMENT_PILOT_USER_IDS);
 if (paymentTransport === 'stripe' && stripeLivemode && paymentPilotUserIds.length === 0) {
   throw new Error('PAYMENT_PILOT_USER_IDS is required for live Stripe transport');
 }
+const paymentSandboxAuthorizationId = (process.env.PAYMENT_SANDBOX_AUTHORIZATION_ID ?? '').trim();
+const paymentSandboxAuthorizationIssuedAt = (process.env.PAYMENT_SANDBOX_AUTH_ISSUED_AT ?? '').trim();
+const paymentSandboxAuthorizationExpiresAt = (process.env.PAYMENT_SANDBOX_AUTH_EXPIRES_AT ?? '').trim();
+if (paymentTransport === 'stripe' && !stripeLivemode) {
+  const issuedAt = new Date(paymentSandboxAuthorizationIssuedAt);
+  const expiresAt = new Date(paymentSandboxAuthorizationExpiresAt);
+  const now = new Date();
+  if (paymentPilotUserIds.length === 0) {
+    throw new Error('PAYMENT_PILOT_USER_IDS is required for Stripe sandbox transport');
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$/u.test(paymentSandboxAuthorizationId)
+      || !Number.isFinite(issuedAt.getTime())
+      || !Number.isFinite(expiresAt.getTime())
+      || issuedAt > now
+      || expiresAt <= now
+      || expiresAt.getTime() - issuedAt.getTime() > 24 * 60 * 60 * 1000) {
+    throw new Error('Stripe sandbox transport requires a current bounded execution authorization');
+  }
+}
 
 const mailTransport = (process.env.MAIL_TRANSPORT ?? 'disabled').trim().toLowerCase();
 if (!['disabled', 'memory', 'smtp'].includes(mailTransport)) {
@@ -481,6 +500,11 @@ export const config = Object.freeze({
     currency: paymentCurrency,
     connectCountry,
     pilotUserIds: Object.freeze(paymentPilotUserIds),
+    sandboxAuthorization: Object.freeze({
+      id: paymentSandboxAuthorizationId,
+      issuedAt: paymentSandboxAuthorizationIssuedAt,
+      expiresAt: paymentSandboxAuthorizationExpiresAt,
+    }),
     payoutHoldHours: Math.min(24 * 30, Math.max(0, Number.parseInt(process.env.PAYOUT_HOLD_HOURS ?? '48', 10))),
   }),
 });

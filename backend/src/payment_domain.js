@@ -1,5 +1,8 @@
 import crypto from 'node:crypto';
 
+import { addReturnPolicyCalendarDays } from './return_calendar_policy.js';
+import { v52ContractDocument } from './v52_contract_workflow.js';
+
 export class PaymentDomainError extends Error {
   constructor(status, code, details = undefined) {
     super(code);
@@ -135,6 +138,103 @@ export function transferLedger({ amountMinor, ownerId }) {
     { accountCode: 'owner_payable', accountOwnerId: ownerId, debitMinor: amountMinor, creditMinor: 0 },
     { accountCode: 'stripe_clearing', accountOwnerId: null, debitMinor: 0, creditMinor: amountMinor },
   ]);
+}
+
+export function payoutReleaseAvailableAt({
+  returnAvailableAt,
+  platformContractAcceptedAt = null,
+  platformContractVersion = null,
+  rentalTimezone = 'Europe/Berlin',
+  requireV52Contract = false,
+}) {
+  if (returnAvailableAt == null || returnAvailableAt === '') {
+    throw new PaymentDomainError(409, 'payout_return_time_invalid');
+  }
+  const returnAt = new Date(returnAvailableAt);
+  if (!Number.isFinite(returnAt.getTime())) {
+    throw new PaymentDomainError(409, 'payout_return_time_invalid');
+  }
+  const version = typeof platformContractVersion === 'string'
+    ? platformContractVersion.trim()
+    : '';
+  if (!version) {
+    if (requireV52Contract) {
+      throw new PaymentDomainError(409, 'payout_contract_binding_invalid');
+    }
+    return returnAt;
+  }
+  if (version !== v52ContractDocument.version) {
+    throw new PaymentDomainError(409, 'payout_contract_version_unsupported');
+  }
+  if (platformContractAcceptedAt == null || platformContractAcceptedAt === '') {
+    throw new PaymentDomainError(409, 'payout_contract_time_invalid');
+  }
+  const acceptedAt = new Date(platformContractAcceptedAt);
+  if (!Number.isFinite(acceptedAt.getTime())) {
+    throw new PaymentDomainError(409, 'payout_contract_time_invalid');
+  }
+  let solutionWindowEndsAt;
+  try {
+    solutionWindowEndsAt = addReturnPolicyCalendarDays(acceptedAt, 14, rentalTimezone);
+  } catch {
+    throw new PaymentDomainError(409, 'payout_contract_time_invalid');
+  }
+  return solutionWindowEndsAt > returnAt ? solutionWindowEndsAt : returnAt;
+}
+
+export function assertProviderTransferBinding({ payout, payment, providerTransfer }) {
+  const transferId = providerObjectId(providerTransfer?.id);
+  const destinationId = providerObjectId(providerTransfer?.destination);
+  const sourceTransactionId = providerObjectId(providerTransfer?.source_transaction);
+  const currency = typeof providerTransfer?.currency === 'string'
+    ? providerTransfer.currency.trim().toUpperCase()
+    : '';
+  const metadata = providerTransfer?.metadata ?? {};
+  if (!transferId
+      || destinationId !== payout?.provider_connected_account_id
+      || sourceTransactionId !== payment?.provider_charge_id
+      || Number(providerTransfer?.amount) !== Number(payout?.amount_minor)
+      || currency !== payout?.currency
+      || providerTransfer?.transfer_group !== payment?.transfer_group
+      || providerTransfer?.livemode !== payout?.livemode
+      || providerTransfer?.livemode !== payment?.livemode
+      || metadata.sit_booking_id !== payout?.booking_id
+      || metadata.sit_payment_id !== payout?.payment_id
+      || metadata.sit_payout_id !== payout?.id) {
+    throw new PaymentDomainError(409, 'provider_transfer_binding_mismatch');
+  }
+  return true;
+}
+
+export async function recoverOrCreateProviderTransfer({
+  provider,
+  payout,
+  payment,
+  request,
+  recoverExisting = false,
+  beforeCreate = null,
+}) {
+  if (!provider || typeof provider.createTransfer !== 'function'
+      || (recoverExisting && typeof provider.findTransfer !== 'function')) {
+    throw new PaymentDomainError(500, 'provider_transfer_recovery_unavailable');
+  }
+  let providerTransfer = null;
+  if (recoverExisting) {
+    providerTransfer = await provider.findTransfer({
+      accountId: request.accountId,
+      transferGroup: request.transferGroup,
+      payoutId: payout.id,
+    });
+  }
+  if (!providerTransfer) {
+    if (beforeCreate != null && typeof beforeCreate !== 'function') {
+      throw new PaymentDomainError(500, 'provider_transfer_guard_invalid');
+    }
+    beforeCreate?.();
+    providerTransfer = await provider.createTransfer(request);
+  }
+  assertProviderTransferBinding({ payout, payment, providerTransfer });
+  return providerTransfer;
 }
 
 export function refundLedger({ amountMinor, ownerShareMinor, platformShareMinor, ownerId }) {
@@ -313,6 +413,11 @@ const definiteDisputeRecoveryRejectionCodes = new Set([
   'resource_missing',
   'transfer_reversal_amount_too_large',
 ]);
+
+export function isDefiniteProviderRejectionCode(code) {
+  return typeof code === 'string'
+    && definiteDisputeRecoveryRejectionCodes.has(code);
+}
 
 export function classifyDisputeTransferRecoveryFailure(error) {
   const code = typeof error?.code === 'string' && error.code

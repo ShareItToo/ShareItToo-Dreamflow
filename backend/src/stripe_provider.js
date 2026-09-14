@@ -406,6 +406,7 @@ export class StripeProvider {
         amount: amountMinor,
         currency: currency.toLowerCase(),
         transfer_group: transferGroup,
+        metadata,
         reversed: false,
         livemode: false,
         created: Math.floor(Date.now() / 1000),
@@ -422,6 +423,57 @@ export class StripeProvider {
       transfer_group: transferGroup,
       metadata,
     }, { idempotencyKey }));
+  }
+
+  async findTransfer({ accountId, transferGroup, payoutId }) {
+    if (typeof accountId !== 'string' || !accountId
+        || typeof transferGroup !== 'string' || !transferGroup
+        || typeof payoutId !== 'string' || !payoutId) {
+      throw new PaymentDomainError(500, 'invalid_transfer_lookup');
+    }
+    if (this.mode === 'memory') {
+      const matching = [];
+      for (const [key, transfer] of this.memory) {
+        if (key.startsWith('transfer:')
+            && transfer.destination === accountId
+            && transfer.transfer_group === transferGroup
+            && transfer.metadata?.sit_payout_id === payoutId) {
+          const providerTransfer = { ...transfer };
+          delete providerTransfer.reversed_amount;
+          matching.push(providerTransfer);
+        }
+      }
+      if (matching.length > 1) {
+        throw new PaymentDomainError(409, 'provider_transfer_inventory_conflict');
+      }
+      return matching[0] ?? null;
+    }
+    const matching = [];
+    let startingAfter;
+    const maximumPages = 4;
+    for (let pageIndex = 0; pageIndex < maximumPages; pageIndex += 1) {
+      const page = await this.call((client) => client.transfers.list({
+        destination: accountId,
+        transfer_group: transferGroup,
+        limit: 100,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      }, {
+        maxNetworkRetries: 0,
+        timeout: 2_500,
+      }));
+      matching.push(...page.data.filter(
+        (transfer) => transfer.metadata?.sit_payout_id === payoutId,
+      ));
+      if (matching.length > 1) {
+        throw new PaymentDomainError(409, 'provider_transfer_inventory_conflict');
+      }
+      if (!page.has_more) return matching[0] ?? null;
+      startingAfter = typeof page.data.at(-1)?.id === 'string'
+        ? page.data.at(-1).id
+        : '';
+      if (!startingAfter) break;
+    }
+    throw new PaymentDomainError(503, 'stripe_transfer_inventory_incomplete');
   }
 
   async reverseTransfer({ transferId, amountMinor, idempotencyKey, metadata }) {

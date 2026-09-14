@@ -40,6 +40,7 @@ function booking(workflowStatus = 'confirmed', returnedAt = null) {
     ends_at: new Date('2026-08-20T10:00:00.000Z'),
     returned_at: returnedAt,
     currency: 'EUR',
+    rental_timezone: 'Europe/Berlin',
     rental_subtotal_minor: 10000,
     platform_fee_minor: 1000,
     workflow_revision: 3,
@@ -49,7 +50,7 @@ function booking(workflowStatus = 'confirmed', returnedAt = null) {
   };
 }
 
-function clientForBooking(row) {
+function clientForBooking(row, databaseNow = now) {
   const calls = [];
   let refundIndex = 0;
   return {
@@ -67,6 +68,9 @@ function clientForBooking(row) {
       if (sql.includes("scope = 'booking_contract'")) return { rowCount: 0, rows: [] };
       if (sql.includes('FROM bookings AS booking') && sql.includes('platform_contracts')) {
         return { rowCount: 1, rows: [row] };
+      }
+      if (sql.includes('clock_timestamp() AS database_now')) {
+        return { rowCount: 1, rows: [{ database_now: databaseNow }] };
       }
       if (sql.includes('listing.payload AS listing_payload')) {
         return {
@@ -152,7 +156,10 @@ test('before-handover withdrawal atomically cancels and creates two full obligat
   assert.deepEqual(bookingUpdate.values.slice(1, 3), ['cancelled', 'cancelled']);
   const receiptAt = client.calls.findIndex(({ sql }) => sql.includes('INSERT INTO v51_withdrawal_receipts'));
   const eventAt = client.calls.findIndex(({ sql }) => sql.includes("'platform.withdrawal_effect_applied'"));
+  const bookingLockAt = client.calls.findIndex(({ sql }) => sql.includes('FOR UPDATE OF booking, request'));
+  const clockAt = client.calls.findIndex(({ sql }) => sql.includes('clock_timestamp() AS database_now'));
   assert.ok(eventAt >= 0 && eventAt < receiptAt);
+  assert.ok(bookingLockAt >= 0 && bookingLockAt < clockAt);
 });
 
 test('after-handover withdrawal requires return and never invents rent refund amount', async () => {
@@ -196,6 +203,39 @@ test('late declaration is receipted but never mutates booking or invents refunds
     client.calls.some(({ sql }) => sql.includes('INSERT INTO v51_refund_obligations')),
     false,
   );
+});
+
+test('booking withdrawal uses locked database time and the Berlin calendar-day cutoff', async () => {
+  const acceptedAt = new Date('2026-03-20T11:00:00.000Z');
+  const exactCutoff = new Date('2026-04-03T10:00:00.000Z');
+  const exactRow = booking('active');
+  exactRow.platform_contract_accepted_at = acceptedAt;
+  exactRow.starts_at = new Date('2026-03-25T10:00:00.000Z');
+  const exact = await recordV51Withdrawal(clientForBooking(exactRow, exactCutoff), {
+    actor: { id: 'renter-1', role: 'user' },
+    bookingId: 'booking-1',
+    raw: { scope: 'booking_contract', acknowledgedConsequences: true },
+    idempotencyKey: 'withdrawal-dst-exact',
+    now: new Date('2026-03-21T00:00:00.000Z'),
+  });
+  assert.equal(exact.withdrawal.rightExpiresAt, exactCutoff.toISOString());
+  assert.equal(exact.withdrawal.submittedAt, exactCutoff.toISOString());
+  assert.equal(exact.withdrawal.eligibilityStatus, 'automatic_14_day');
+
+  const lateRow = booking('active');
+  lateRow.platform_contract_accepted_at = acceptedAt;
+  lateRow.starts_at = new Date('2026-03-25T10:00:00.000Z');
+  const late = await recordV51Withdrawal(
+    clientForBooking(lateRow, new Date(exactCutoff.getTime() + 1)),
+    {
+      actor: { id: 'renter-1', role: 'user' },
+      bookingId: 'booking-1',
+      raw: { scope: 'booking_contract', acknowledgedConsequences: true },
+      idempotencyKey: 'withdrawal-dst-late',
+      now: new Date('2026-03-21T00:00:00.000Z'),
+    },
+  );
+  assert.equal(late.withdrawal.eligibilityStatus, 'manual_review_required');
 });
 
 test('withdrawal accepts no reason field and fails closed without exact V5.1 document', async () => {

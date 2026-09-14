@@ -126,10 +126,13 @@ import {
   paymentHealth,
   refundPayment,
   releasePayout,
+  reviewFailedPayout,
   simulatePaymentEvent,
   verifyAndApplyWebhook,
 } from './payment_workflow.js';
 import { PaymentDomainError } from './payment_domain.js';
+import { accountOpenRefundObligationCount } from './payment_refund_obligations.js';
+import { stripeSandboxExecutionActive } from './payment_execution_guard.js';
 import { ModerationDomainError } from './moderation_domain.js';
 import { v51DisabledTransportCode } from './v51_transport_domain.js';
 import {
@@ -423,12 +426,14 @@ const crashlyticsReportDeleteClient = config.crashReportDeletion.enabled
 
 function paymentCapabilitiesFor(userId) {
   const providerBacked = config.payments.transport === 'stripe';
+  const executionActive = stripeSandboxExecutionActive(config);
   const userEligible = config.payments.pilotUserIds.length === 0 ||
     config.payments.pilotUserIds.includes(userId);
-  const available = providerBacked && userEligible;
+  const available = providerBacked && executionActive && userEligible;
   return {
     provider: providerBacked ? 'stripe' : null,
     providerBacked,
+    executionActive,
     userEligible,
     checkoutAvailable: available,
     payoutOnboardingAvailable: available,
@@ -1302,10 +1307,10 @@ async function accountDeletionPreflight(client, userId) {
   const result = await client.query(
     `SELECT
        (SELECT count(*)::int FROM bookings
-        WHERE (owner_id = $1 OR renter_id = $1)
+       WHERE (owner_id = $1 OR renter_id = $1)
           AND status IN ('pending', 'accepted', 'running')) AS active_bookings,
        (SELECT count(*)::int FROM payouts
-        WHERE payee_id = $1 AND status IN ('scheduled', 'pending')) AS open_payouts,
+        WHERE payee_id = $1 AND status IN ('scheduled', 'pending', 'failed')) AS open_payouts,
        (SELECT count(*)::int FROM payments AS payment
         JOIN bookings AS booking ON booking.id = payment.booking_id
         WHERE (booking.owner_id = $1 OR booking.renter_id = $1)
@@ -1344,12 +1349,14 @@ async function accountDeletionPreflight(client, userId) {
     [userId],
   );
   const counts = result.rows[0] ?? {};
+  counts.open_refund_obligations = await accountOpenRefundObligationCount(client, userId);
   const definitions = [
     ['active_bookings', 'Aktive oder bevorstehende Buchungen'],
     ['open_payouts', 'Offene Auszahlungen'],
     ['active_payments', 'Laufende Zahlungsabwicklung'],
     ['open_refund_reversals', 'Offene Rückholung einer Auszahlung'],
     ['open_refunds', 'Offene oder zu prüfende Erstattung'],
+    ['open_refund_obligations', 'Offene Erstattungsverpflichtungen'],
     ['open_disputes', 'Offene Streitfälle'],
     ['open_reports', 'Offene Moderationsfälle'],
     ['active_legal_holds', 'Rechtliche Aufbewahrungssperre'],
@@ -2259,6 +2266,17 @@ export function createApp({
       actor: req.actor,
       paymentId: safeText(req.params.id, 80),
       key: req.get('Idempotency-Key'),
+    });
+    kickNotificationWorker();
+    res.status(result.replayed ? 200 : 201).json(result);
+  }));
+
+  app.post('/v1/admin/payouts/:id/review', requireAuth, requireActiveAccount, requireAdminRole, requireStaffElevation, asyncRoute(async (req, res) => {
+    const result = await reviewFailedPayout({
+      actor: req.actor,
+      payoutId: safeText(req.params.id, 80),
+      action: req.body?.action,
+      reasonCode: req.body?.reasonCode,
     });
     kickNotificationWorker();
     res.status(result.replayed ? 200 : 201).json(result);

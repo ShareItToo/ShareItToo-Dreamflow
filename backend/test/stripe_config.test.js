@@ -12,8 +12,10 @@ import test from 'node:test';
 
 function loadStripeConfiguration({
   key, livemode = 'false', environment = 'test', source = 'environment',
-  connectWebhookSecret = 'whsec_connectunitfixture',
+  connectWebhookSecret = 'whsec_connectunitfixture', sandboxAuthorization = true,
 }) {
+  const authorizationIssuedAt = new Date(Date.now() - 60_000).toISOString();
+  const authorizationExpiresAt = new Date(Date.now() + 60 * 60_000).toISOString();
   const directory = source === 'file'
     ? mkdtempSync(join(tmpdir(), 'sit-stripe-config-'))
     : null;
@@ -69,6 +71,18 @@ function loadStripeConfiguration({
           STRIPE_WEBHOOK_SECRET_FILE: paths?.webhook ?? '',
           STRIPE_CONNECT_WEBHOOK_SECRET_FILE: paths?.connect ?? '',
           STRIPE_LIVEMODE: livemode,
+          PAYMENT_PILOT_USER_IDS: sandboxAuthorization
+            ? 'synthetic-admin,synthetic-owner,synthetic-renter'
+            : '',
+          PAYMENT_SANDBOX_AUTHORIZATION_ID: sandboxAuthorization
+            ? 'WP146-AUTH-CONFIG-001'
+            : '',
+          PAYMENT_SANDBOX_AUTH_ISSUED_AT: sandboxAuthorization
+            ? authorizationIssuedAt
+            : '',
+          PAYMENT_SANDBOX_AUTH_EXPIRES_AT: sandboxAuthorization
+            ? authorizationExpiresAt
+            : '',
         },
       },
     );
@@ -139,4 +153,16 @@ test('Stripe mode rejects publishable and mode-mismatched credentials', () => {
   });
   assert.notEqual(mismatch.status, 0);
   assert.match(mismatch.stderr, /STRIPE_LIVEMODE must match STRIPE_SECRET_KEY/u);
+});
+
+test('Stripe sandbox transport requires isolated users and a current bounded authorization', () => {
+  const result = loadStripeConfiguration({
+    key: 'rk_test_localunitfixture',
+    source: 'file',
+    environment: 'staging',
+    sandboxAuthorization: false,
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /PAYMENT_PILOT_USER_IDS is required for Stripe sandbox transport/u);
+  assert.doesNotMatch(result.stderr, /rk_test_localunitfixture|whsec_/u);
 });

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { enqueueV51WithdrawalNotifications } from './notifications.js';
+import { addReturnPolicyCalendarDays } from './return_calendar_policy.js';
 import { evaluateV51WithdrawalEffect } from './v51_termination_domain.js';
 import { v51ContractDocument } from './v51_contract_workflow.js';
 
@@ -254,7 +255,7 @@ export async function recordV51Withdrawal(client, {
   if (electronicChannel !== 'in_app_download') {
     throw new V51WithdrawalError(409, 'v51_withdrawal_email_delivery_not_available');
   }
-  const submittedAt = new Date(now);
+  let submittedAt = new Date(now);
   if (!Number.isFinite(submittedAt.getTime())) {
     throw new V51WithdrawalError(400, 'v51_withdrawal_time_invalid');
   }
@@ -301,6 +302,7 @@ export async function recordV51Withdrawal(client, {
       `SELECT booking.id, booking.owner_id, booking.renter_id,
               booking.status, booking.workflow_status, booking.starts_at,
               booking.ends_at, booking.returned_at, booking.currency,
+              booking.rental_timezone,
               booking.rental_subtotal_minor, booking.platform_fee_minor,
               booking.workflow_revision, request.payload,
               contract.id AS platform_contract_id,
@@ -324,6 +326,11 @@ export async function recordV51Withdrawal(client, {
     );
     if (!booking.rowCount) throw new V51WithdrawalError(404, 'v51_booking_contract_not_found');
     row = booking.rows[0];
+    const databaseClock = await client.query('SELECT clock_timestamp() AS database_now');
+    submittedAt = new Date(databaseClock.rows[0]?.database_now);
+    if (!Number.isFinite(submittedAt.getTime())) {
+      throw new V51WithdrawalError(503, 'v51_withdrawal_database_clock_invalid');
+    }
     if (row.renter_id !== actor.id) {
       throw new V51WithdrawalError(403, 'v51_withdrawal_forbidden');
     }
@@ -341,11 +348,13 @@ export async function recordV51Withdrawal(client, {
       platformFeeMinor: Number(row.platform_fee_minor),
       now: submittedAt,
     });
-    rightExpiresAt = new Date(
-      new Date(row.platform_contract_accepted_at).getTime()
-        + (14 * 24 * 60 * 60 * 1000),
-    );
-    if (!Number.isFinite(rightExpiresAt.getTime())) {
+    try {
+      rightExpiresAt = addReturnPolicyCalendarDays(
+        new Date(row.platform_contract_accepted_at),
+        14,
+        row.rental_timezone,
+      );
+    } catch {
       throw new V51WithdrawalError(409, 'v51_withdrawal_contract_time_invalid');
     }
     eligibilityStatus = submittedAt <= rightExpiresAt

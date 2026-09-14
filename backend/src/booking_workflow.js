@@ -23,6 +23,7 @@ import { openV52ActualLossCase } from './v52_actual_loss_workflow.js';
 import { hasVerifiedBookingConfirmation } from './booking_confirmation_workflow.js';
 import { postgresDateText } from './postgres_date.js';
 import { shapePublicListing } from './listing_catalog.js';
+import { addReturnPolicyCalendarDays } from './return_calendar_policy.js';
 import {
   assertPrivatePilotAccountState,
   assertPrivatePilotBooking,
@@ -1177,9 +1178,18 @@ export async function transitionBooking(client, { actor, bookingId, raw, key, co
     const acceptedAt = contract.rows[0]?.accepted_at
       ? new Date(contract.rows[0].accepted_at)
       : null;
-    const rightExpiresAt = acceptedAt
-      ? new Date(acceptedAt.getTime() + (14 * 24 * 60 * 60 * 1000))
-      : null;
+    let rightExpiresAt = null;
+    if (acceptedAt) {
+      try {
+        rightExpiresAt = addReturnPolicyCalendarDays(
+          acceptedAt,
+          14,
+          row.rental_timezone,
+        );
+      } catch {
+        throw new BookingWorkflowError(409, 'v52_withdrawal_contract_time_invalid');
+      }
+    }
     if (String(contract.rows[0]?.contract_version ?? '').startsWith('V5.2-')
         && rightExpiresAt
         && transitionedAt <= rightExpiresAt) {
