@@ -1,4 +1,36 @@
-# Current Work Package: WP145 OnePlus Current-Candidate Two-Role — PHYSICAL PASS
+# Current Work Package: WP146 Stripe Payout and Activation Guard — TECHNICAL CLOSURE; PROVIDER HOLD
+
+The payment runtime now has a fail-closed, exact-evidence-bound authorization
+for a small synthetic Stripe sandbox pilot. It expires within 24 hours, requires
+three distinct owner-only test-secret files and checks authorization again
+immediately before every provider mutation. Accounts v2 Express recipients,
+separate charges/transfers, exact lost-response reconciliation, refund/payout/
+dispute serialization and V5.2 withdrawal/refund obligations are implemented
+and deterministically tested.
+
+The official connector is authenticated to exactly one `ShareItToo Sandbox`
+account in sandbox mode. Read-only observation found zero connected accounts
+and zero webhook destinations. That does not satisfy the product, contract,
+configuration, DPA, region, professional-review, credential or two-destination
+requirements, so committed evidence deliberately remains HOLD and cannot open
+deployment. Staging remains memory-only.
+
+Focused payment/security tests, 902 passing Backend tests with 2 intentional
+skips, fresh PostgreSQL integration and the full local technical regression
+pass. Exact implementation/correction HEAD
+`03021ef1206dcbcdb00bfd25b0f4b08f9e7be96f` passes CodeQL
+`34795091053`; Regression `34795091069` including independent clean checkout is
+its exact-head implementation gate. The final documentation head must pass the
+same GitHub gates before closure. Portfolio: **22 PASS / 5 PARTIAL / 5 OPEN**. See
+`docs/operations/WP146_STRIPE_PAYOUT_AND_ACTIVATION_GUARD_2026-09-14.md`.
+
+Next action: complete truthful external P0B evidence and professional approval,
+then create the two distinct sandbox webhook destinations, Connect test
+recipients and protected test credentials before running the eight official
+sandbox scenarios. No provider mutation, money, deployment, Production, Store,
+Firebase, device action or PR merge is authorized by this technical closure.
+
+# Previous Work Package: WP145 OnePlus Current-Candidate Two-Role — PHYSICAL PASS
 
 Exact signed Internal/Staging `1.0.0+2026091312` passes the complete physical
 OnePlus CPH2581 two-role journey on the same candidate already proven on the

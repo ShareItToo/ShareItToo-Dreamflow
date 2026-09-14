@@ -1,5 +1,34 @@
 # ShareItToo Current State
 
+## WP146 Stripe payout and activation guard — technical closure; provider HOLD
+
+The local payment runtime now has a commit- and evidence-bound, short-lived
+Stripe sandbox authorization, bounded pilot allowlist and distinct protected
+test-secret requirements. Provider mutations recheck authorization immediately
+before execution; lost responses reconcile by exact metadata and idempotency.
+Durable shared locks and markers serialize payout, refund and dispute handling,
+and withdrawal/cancellation/loss obligations block payout and account deletion.
+
+Exactly one authenticated `ShareItToo Sandbox` account was observed read-only
+with `livemode=false`, zero connected accounts and zero webhook destinations.
+Authentication is not activation evidence: contracts, approved configuration,
+Connect recipients, the separate platform/Connect destinations, protected test
+credentials, professional approval and the official eight-scenario sandbox
+journey remain HOLD. Staging remains memory-only; no Stripe mutation or money
+movement occurred.
+
+Focused payment/security tests, 902 passing Backend tests with 2 intentional
+skips, PostgreSQL integration and the complete local technical regression pass.
+Implementation/correction HEAD
+`03021ef1206dcbcdb00bfd25b0f4b08f9e7be96f` passes CodeQL
+`34795091053`; exact-head Regression `34795091069` is its implementation gate.
+The final documentation head must pass the same GitHub gates before closure.
+The portfolio advances to **22 PASS / 5 PARTIAL / 5 OPEN**. See
+`docs/operations/WP146_STRIPE_PAYOUT_AND_ACTIVATION_GUARD_2026-09-14.md`.
+
+No deployment, credential, provider configuration, payment, test money, real
+money, Production, Store, Firebase, VPS, device action or PR merge occurred.
+
 ## WP145 OnePlus current-candidate two-role — physical pass
 
 Exact signed Internal/Staging `1.0.0+2026091312` now passes the complete
