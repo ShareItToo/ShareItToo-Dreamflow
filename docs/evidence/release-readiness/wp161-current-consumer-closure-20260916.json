@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "package": "WP161-CURRENT-CONSUMER-CLOSURE-20260916",
+  "status": "technical-closure-pending-full-regression",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "baselineHead": "f2b6a32c387d43b93c137ce2217ba30dd6da4562",
+    "sourceHead": "2301de3cd0dc1f32b8a024ea7ea4101d8ea7d565"
+  },
+  "sourceInventory": [
+    {
+      "path": "scripts/release_host_capacity_guard.sh",
+      "sha256": "020d82dbd91ce89b26b7d16f0c38100c4725cc790b6c21dedd0507881751c4a2"
+    },
+    {
+      "path": "tool/check_current_consumer_closure.mjs",
+      "sha256": "11efa8ed062d23a86ad722297b92d47fda0c194889c4695f5055302d5157fa23"
+    },
+    {
+      "path": "test/tool/check_current_consumer_closure.test.mjs",
+      "sha256": "542f4c10f9578fd99a475b6009b49ca07c31599b849eb92a932594cc037e07e9"
+    },
+    {
+      "path": "docs/operations/WP161_CURRENT_CONSUMER_CLOSURE_RULES_2026-09-16.md",
+      "sha256": "34e798563b72c73d130fff0b09b22cb4c9c82f25eb588963f9540112390b17b1"
+    }
+  ],
+  "closure": {
+    "changedPathCount": 4,
+    "currentMutableManifestCount": 3,
+    "currentCodeConsumerCount": 0,
+    "directTestConsumerCount": 2,
+    "consumerTestCount": 2,
+    "preflightDurationMs": 165,
+    "historicalEvidenceRewritten": false
+  },
+  "consumerTests": [
+    "test/tool/check_current_consumer_closure.test.mjs",
+    "test/tool/release_host_capacity_guard_wiring.test.mjs"
+  ],
+  "migrationInventory": {
+    "count": 79,
+    "last": "079_special_category_intake_minimization.up.sql",
+    "runner": "tool/run_r9_database_recovery.mjs",
+    "test": "test/tool/run_r9_database_recovery.test.mjs"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "vpsChanged": false,
+    "cloudChanged": false,
+    "paymentChanged": false,
+    "storeChanged": false,
+    "deviceChanged": false,
+    "historicalEvidenceRewritten": false,
+    "credentialsExtracted": false
+  }
+}
