@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "package": "WP158-PLAY-INTERNAL-ARTIFACT-APP-CONTENT-PROVENANCE-20260915",
+  "status": "owner-gate-required-play-internal-current-release-readback",
+  "capturedAt": "2026-09-15T00:00:00Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "finalHead": "0eb67df1992d9a234b22281fa4ef1161137399d2",
+    "workingTreeClean": true,
+    "remoteAhead": 0,
+    "remoteBehind": 0
+  },
+  "currentCandidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091312",
+    "sourceCommit": "904c2b734160544aaeb1128cac15191a521739e7",
+    "releaseChannel": "internal",
+    "environment": "staging",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "socialAuth": { "googleEnabled": true, "appleEnabled": false, "facebookEnabled": false },
+    "artifactArchive": {
+      "present": true,
+      "exactOwnerOnlyFiles": 4,
+      "aabBytes": 138947362,
+      "aabSha256": "c0c0f27fb14d393b97c46b55bf81f201081dce1d9756f3468bfa442c4bdf9c6e",
+      "apkBytes": 200132865,
+      "apkSha256": "e6d1df85e4e8973765c594b8fe9eb2654c876ee11cafe6d94cfe5c57ff8d7fb9",
+      "privacyReportSha256": "77ecdd7ed447623243c2a04f4100eb284217a2a5f0005efa9487e8581bd84528",
+      "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+      "archiveValidation": "passed-owner-only-exact-four-files",
+      "privacyScan": "passed"
+    }
+  },
+  "archiveInventory": {
+    "primaryLocalLatestVersionCode": "2026091312",
+    "primaryLocalLatestSourceCommit": "904c2b734160544aaeb1128cac15191a521739e7",
+    "offloadedVolumeLatestVersionCode": "2026091311",
+    "offloadedVolumeCurrentCandidatePresent": false,
+    "privateFilesystemPathsRecorded": false
+  },
+  "driveInventory": {
+    "latestExactSITArtifactVersionCode": "2026091110",
+    "latestExactSITArtifactKind": "private-device-qa-apk",
+    "latestExactSITArtifactSourceCommit": "c8e2a49e14f5cae0026fa5f2bc327859fe0ff17b",
+    "latestExactSITArtifactBytes": 199608577,
+    "latestExactSITArtifactSha256": "711f058c113bd714abb1e4bcedf05d62a382004e1bf9882f6d85d04b876dd0f3",
+    "currentCandidateVersionCodePresent": false,
+    "privateDriveIdsOrUrlsRecorded": false
+  },
+  "historicalPlayTimeline": [
+    { "versionCode": "2026081509", "observation": "historical-active-internal", "source": "repository-handoff-evidence" },
+    { "versionCode": "2026082601", "observation": "owner-handover-draft-not-activated", "source": "rw20d-reconciliation" },
+    { "versionCode": "2026090204", "observation": "historical-active-internal", "source": "repository-completion-evidence" },
+    { "versionCode": "2026090711", "observation": "historical-active-internal", "source": "repository-readback-evidence" },
+    { "versionCode": "2026091311", "observation": "local-candidate-readback-active-play-2026090711-candidate-not-uploaded", "source": "repository-candidate-evidence" },
+    { "versionCode": "2026091312", "observation": "local-staging-device-candidate-no-play-mutation-evidence", "source": "repository-candidate-evidence" }
+  ],
+  "appContent": {
+    "savedHandoffBuildNumber": "2026081505",
+    "dataSafetyBindingBuildNumber": "2026081509",
+    "strictValidator": "fails-closed-candidate-binding-mismatch",
+    "currentCandidateRebound": false,
+    "historicalFilesRewritten": false
+  },
+  "playState": {
+    "currentTrackProven": false,
+    "currentActiveVersionProven": false,
+    "currentDraftsProven": false,
+    "currentTesterListProven": false,
+    "currentSigningAndPackageProven": false,
+    "authenticatedReadbackPerformed": false
+  },
+  "ownerGate": {
+    "required": true,
+    "token": "OWNER_GATE_REQUIRED:PLAY_INTERNAL_CURRENT_RELEASE_READBACK",
+    "reason": "Current Play state cannot be proven from repository, local archives and SIT Drive evidence alone.",
+    "nextAction": "Owner performs a read-only authenticated Play Console readback of INTERNAL track, active release, drafts, package, signing, app-content and tester list."
+  },
+  "boundaries": {
+    "consoleAccessed": false,
+    "storeChanged": false,
+    "uploadPerformed": false,
+    "activationPerformed": false,
+    "testerListChanged": false,
+    "providerChanged": false,
+    "paymentChanged": false,
+    "firebaseChanged": false,
+    "productionChanged": false,
+    "deviceChanged": false,
+    "pullRequestMerged": false,
+    "credentialsReadOrRecorded": false,
+    "privateFilesystemPathRecorded": false
+  },
+  "sourceInventory": {
+    "AGENTS.md": "ba6e0a0cfcde9ed5dbbe23a7a94b820169acfdf7d4545bdf499efa379e75c983",
+    "scripts/technical_regression_check.sh": "80b37877f2e1ac3f062afdeaafedecb9075ee96183527d2816413ca88045ccde",
+    "store/google-play/current-rollover-candidate.json": "4661f0780be26910e549658c59786cb6a2abaafe5b3042489ca1154cbe51f10b",
+    "store/google-play/app-content-handoff.json": "9af78ea3f4cc0199269eb1b7410e5dd574350bc7ca8eef9f3d220269a276cd76",
+    "store/google-play/rw20d-play-draft-truth-reconciliation.json": "a15c59f35200c222501a7e9e4e5aed537e98b2b7ec1487341eede6768ba9451c",
+    "docs/evidence/release-readiness/wp138-google-signin-current-candidate-pixel-closure-20260913.json": "20cd0eecf60bcae719f032aea6005d6540a7aea029e502758411c97958aff6e9",
+    "docs/evidence/release-readiness/wp142-current-goal-external-gate-checkpoint-20260913.json": "63f312326964d9376a65370c136709a93e90e9de4185963992fc791599ee217a",
+    "docs/evidence/release-readiness/wp143-oneplus-current-candidate-two-role-preparation-20260913.json": "ca3d9da3ccc2c445f20f0772cdccdd6d8636624da53971a2db16a9f9ab43083c",
+    "docs/evidence/release-readiness/wp145-oneplus-current-candidate-two-role-closure-20260914.json": "b1084713cd3b68b8c8d5f41ad483c04f4e676ffec9d1da2233af70a5d4ecf333",
+    "docs/operations/WP158_PLAY_INTERNAL_ARTIFACT_APP_CONTENT_PROVENANCE_2026-09-15.md": "f6f39746acb9d30c39513d912ddc3cba009bb481630c58d4e3d8c79cf3fdfa63",
+    "tool/validate_wp158_play_internal_artifact_app_content_provenance.mjs": "c58594684d799ab94fc51ad507bf551fa8deedc4ae7d7afecd7610b1cd345b8e",
+    "test/tool/validate_wp158_play_internal_artifact_app_content_provenance.test.mjs": "6d1d1d0e9d43d7cba16889b797f3f535aaa226c09012bffeb97a15a9463c3c39"
+  },
+  "captureAttestation": {
+    "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
+    "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
+    "sourceInventoryDigest": "6b47c621e3a65215b368194f74af6f0e1177af13874aeab8733b50a7e1166d19"
+  }
+}
