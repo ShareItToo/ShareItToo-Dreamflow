@@ -258,6 +258,8 @@ import {
   issueSupportEvidenceAccessGrant,
   listSupportEvidence,
   prepareSupportEvidenceFile,
+  cleanupSupportEvidenceFiles,
+  persistSupportEvidenceFiles,
   recordSupportEvidenceScanResult,
 } from './support_evidence_workflow.js';
 import {
@@ -4942,20 +4944,9 @@ export function createApp({
       const previewStorageName = preparedFile.preview
         ? `support-evidence-${fileId}-preview.webp`
         : null;
-      const originalPath = path.join(config.uploadDir, originalStorageName);
-      const previewPath = previewStorageName
-        ? path.join(config.uploadDir, previewStorageName)
-        : null;
-      await fs.mkdir(config.uploadDir, { recursive: true });
+      let persistedFiles = null;
       let result;
       try {
-        await fs.writeFile(originalPath, req.file.buffer, { flag: 'wx', mode: 0o640 });
-        if (previewPath) {
-          await fs.writeFile(previewPath, preparedFile.preview.bytes, {
-            flag: 'wx',
-            mode: 0o640,
-          });
-        }
         result = await inTransaction((client) => createSupportEvidence(client, {
           actor: req.actor,
           caseId: safeText(req.params.id, 80),
@@ -4978,18 +4969,18 @@ export function createApp({
           originalStorageName,
           previewStorageName,
           idempotencyKey: req.get('Idempotency-Key'),
+          persistFiles: async () => {
+            persistedFiles = await persistSupportEvidenceFiles({
+              uploadDir: config.uploadDir,
+              originalStorageName,
+              originalBytes: req.file.buffer,
+              previewStorageName,
+              previewBytes: preparedFile.preview?.bytes ?? null,
+            });
+          },
         }));
-        if (result.replayed) {
-          await Promise.all([
-            fs.unlink(originalPath).catch(() => {}),
-            previewPath ? fs.unlink(previewPath).catch(() => {}) : Promise.resolve(),
-          ]);
-        }
       } catch (error) {
-        await Promise.all([
-          fs.unlink(originalPath).catch(() => {}),
-          previewPath ? fs.unlink(previewPath).catch(() => {}) : Promise.resolve(),
-        ]);
+        if (persistedFiles) await cleanupSupportEvidenceFiles(persistedFiles);
         throw error;
       }
       res.set('Cache-Control', 'private, no-store');

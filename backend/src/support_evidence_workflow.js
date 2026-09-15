@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 import { fileTypeFromBuffer } from 'file-type';
 
@@ -33,6 +35,51 @@ const specialCategoryClassifications = new Set([
   'not_indicated',
   'possible_special_category',
 ]);
+
+export async function cleanupSupportEvidenceFiles({
+  fsApi = fs,
+  paths,
+  written,
+}) {
+  await Promise.all([
+    written?.original === true
+      ? fsApi.unlink(paths.originalPath).catch(() => {})
+      : Promise.resolve(),
+    written?.preview === true && paths.previewPath
+      ? fsApi.unlink(paths.previewPath).catch(() => {})
+      : Promise.resolve(),
+  ]);
+}
+
+export async function persistSupportEvidenceFiles({
+  fsApi = fs,
+  uploadDir,
+  originalStorageName,
+  originalBytes,
+  previewStorageName = null,
+  previewBytes = null,
+}) {
+  const paths = Object.freeze({
+    originalPath: path.join(uploadDir, originalStorageName),
+    previewPath: previewStorageName
+      ? path.join(uploadDir, previewStorageName)
+      : null,
+  });
+  const written = { original: false, preview: false };
+  await fsApi.mkdir(uploadDir, { recursive: true });
+  try {
+    await fsApi.writeFile(paths.originalPath, originalBytes, { flag: 'wx', mode: 0o640 });
+    written.original = true;
+    if (paths.previewPath) {
+      await fsApi.writeFile(paths.previewPath, previewBytes, { flag: 'wx', mode: 0o640 });
+      written.preview = true;
+    }
+  } catch (error) {
+    await cleanupSupportEvidenceFiles({ fsApi, paths, written });
+    throw error;
+  }
+  return Object.freeze({ paths, written: Object.freeze({ ...written }) });
+}
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -243,6 +290,7 @@ export async function createSupportEvidence(client, {
   originalStorageName,
   previewStorageName,
   idempotencyKey,
+  persistFiles = null,
 }) {
   if (!identifierPattern.test(idempotencyKey ?? '')) {
     throw new SupportCaseError(400, 'idempotency_key_required');
@@ -303,6 +351,17 @@ export async function createSupportEvidence(client, {
       409,
       'support_evidence_special_category_case_binding_required',
     );
+  }
+
+  // The transaction has now validated idempotency, case access/status and any
+  // special-category binding. Persisting the bytes here keeps file creation
+  // behind those checks and before COMMIT; the route owns cleanup if a later
+  // write or transaction commit fails.
+  if (persistFiles !== null) {
+    if (typeof persistFiles !== 'function') {
+      throw new SupportCaseError(500, 'support_evidence_file_persistence_invalid');
+    }
+    await persistFiles();
   }
 
   await client.query(
