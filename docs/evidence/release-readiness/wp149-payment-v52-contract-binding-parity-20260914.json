@@ -6,7 +6,7 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "8550a50a16a76db4435177d5d441d1a9b85cd3916cdcf3cd9c890620dc013a10"
+    "sourceInventoryDigest": "d439b3d8715ede51536648fc60d32398ccbcdf3a9782dbfc04d393ad9ac33679"
   },
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -160,7 +160,7 @@
     "backend/src/v52_contract_workflow.js": "c0e06b47f51398a5095a6de41c9545ff72daf6cc1b37bbfe7d886a0373d554a1",
     "backend/test/booking_withdrawal_deadline.test.js": "b968b4b4d8cfb21c90527e3b87f166c249e9555f6291105b89d56ff2c46be7d5",
     "backend/test/payment_domain.test.js": "437fe69d7abfbe45922834f6b473e73919bdadd0a4fdf8eb4414cf5ebf0f95b0",
-    "backend/test/postgres_foundation.integration.test.js": "01222d79e4a5514fcdaa05f4f254d8cbc331b20d3ad1ea5e1fc1adbc66402d04",
+    "backend/test/postgres_foundation.integration.test.js": "a096cebc280261d2aa988c12167834db8a86eb9a466d11a2c9d2b006c85a04db",
     "backend/test/return_calendar_policy.test.js": "12d702794405facaa72835299f203ad88642a24340d2a0972b6c66cc099e53ec",
     "backend/test/v51_withdrawal_workflow.test.js": "ffab494637bf8cb0445f5369841215cde26bfca3717ab0dc08bab4881f7dcac4",
     "backend/test/v52_actual_loss_persistence.test.js": "479314b6be1b8a8e48d37fdcc96763791f95fa8dfff02feaffd736ea36dafd95",
