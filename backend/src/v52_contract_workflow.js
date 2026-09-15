@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 
+import { assertActiveBindingContractVersion } from './legal_contract_version_registry.js';
 import { persistV51ContractReceipt } from './v51_contract_receipt.js';
 
 export const v52ContractDocument = Object.freeze({
@@ -202,6 +203,7 @@ export function validateV52CheckoutDeclarations(raw, {
 }
 
 export async function v52ContractDocumentReadiness(client, { at = new Date() } = {}) {
+  assertActiveBindingContractVersion(v52ContractDocument.version);
   const result = await client.query(
     `SELECT DISTINCT ON (document_key)
             id, document_key, document_version, content_type,
@@ -245,6 +247,7 @@ export async function persistV52PlatformContract(client, {
   idempotencyKey,
   acceptedAt = new Date(),
 }) {
+  assertActiveBindingContractVersion(v52ContractDocument.version);
   const normalizedUserId = requiredText(userId, 160, 'v52_contract_user_required');
   const normalizedBookingId = requiredText(bookingId, 160, 'v52_contract_booking_required');
   const normalizedQuoteId = requiredText(quoteId, 160, 'v52_contract_quote_required');

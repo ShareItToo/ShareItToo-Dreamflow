@@ -6,7 +6,7 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "8cfe577cc0953327c34c8e63588f1fbfd15a73e61cf50d4235c9efe4e46caeb9"
+    "sourceInventoryDigest": "dc5ad7a8082a9b94bcf5014ec6764ed1eb60aee74ff308cd7465ad2f7e5b92ae"
   },
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -157,7 +157,7 @@
     "backend/src/v51_contract_workflow.js": "506c735128379bcc2d57d08be12755fc533aa05ca1ddd5dbb8626efe56b78fc6",
     "backend/src/v51_withdrawal_workflow.js": "98f4c1ee0dbecf9cc44235e41834873e56c9f16aec98e60eae108a7e413d399d",
     "backend/src/v52_actual_loss_workflow.js": "0c3f4a700c4b66207d1b9c85d72da3573a111cfab9aca7371f00cc68651f9aea",
-    "backend/src/v52_contract_workflow.js": "3c31feb609b3a47c1a8371e9c9c69784ca570c80178975d86bf45f198000927f",
+    "backend/src/v52_contract_workflow.js": "c0e06b47f51398a5095a6de41c9545ff72daf6cc1b37bbfe7d886a0373d554a1",
     "backend/test/booking_withdrawal_deadline.test.js": "b968b4b4d8cfb21c90527e3b87f166c249e9555f6291105b89d56ff2c46be7d5",
     "backend/test/payment_domain.test.js": "a9845476f11587fa1a47fe522400c78233946503a65bc5a819274e9d73479e9f",
     "backend/test/postgres_foundation.integration.test.js": "aa6d82f16944d20fd7137c705b769d9e46690b28c88080d845e36e537ac8cd17",
@@ -166,11 +166,11 @@
     "backend/test/v52_actual_loss_persistence.test.js": "479314b6be1b8a8e48d37fdcc96763791f95fa8dfff02feaffd736ea36dafd95",
     "backend/test/v52_actual_loss_workflow.test.js": "16765f5f8eb20eee8fd5bdb69a7bac9b4249b522e23a302bb0d720e1073eb875",
     "backend/test/v52_contract_workflow.test.js": "7014a6c2a74861078b24bb198c5b3712ae65ddc4c28bcec3076d9f5c252aa686",
-    "docs/current_state.md": "96047c5924dac50b1ff8c280704f604ab80367185b44d594c1bfc8e6a406fe13",
-    "docs/current_work_package.md": "f8e579ebb9184a82c08bda3838a7cb25275f7a476f18bb66019c24e8d0fa5329",
+    "docs/current_state.md": "c235e0ec5a1c5cef4f08a357b255c790162b2ce9eb18cd073a3dcbac536ef4ae",
+    "docs/current_work_package.md": "401acc03d0c8e545af815d9f00c67f75686bd1a8c53f0b20dfdbbe97dd95ce2c",
     "docs/operations/WP149_PAYMENT_V52_CONTRACT_BINDING_PARITY_2026-09-14.md": "e87000894b3e7763c066e963259b9a13527f33aad74bff086e0e2cccf9f4feba",
     "scripts/technical_regression_check.sh": "40cf7b96d514b9f02fda2dd7553baf7523f54a41800da1363613951b2a587c20",
-    "store/privacy-disclosures.json": "09d3aff4fe7bde972c451650a13477fdadaf5dfb364d4cd892e242357767294b",
+    "store/privacy-disclosures.json": "fc4cd0ad7d465a6d78f1434e329e5358641d95a3c4a85408d9c180d531a3a8ed",
     "store/retention-deletion-readiness.json": "9109ce3ee90d91fb4ba31c030949f9d11cf63747f336fdd11e411c51f985c959",
     "test/tool/payment_provider_truthfulness_wiring.test.mjs": "28ae2b8d641cd50c145688eea626f47b5825192fe664261790a142f389f11d1c",
     "test/tool/v51_withdrawal_and_cancellation_wiring.test.mjs": "194ea5724a73232238bb0b6d9616c5d44f71af2c992e2378713fef6bf9784c7d",

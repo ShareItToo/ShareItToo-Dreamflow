@@ -17,6 +17,15 @@
     "publicCommercialOperationAllowed": false,
     "bindingContractAcceptanceAllowed": false
   },
+  "v54AstraCorrectedDraft": {
+    "status": "draft-blocked-after-ai-corrections",
+    "sourceFile": "assets/legal/de/legal_manifest_v54.json",
+    "currentContentSha256": "061c29a9f3b2b83ee6f1af7efed1c33d4896cdaafd0ad6ade1598c20d69196e4",
+    "documentCount": 9,
+    "professionalLegalApproval": false,
+    "publicCommercialOperationAllowed": false,
+    "bindingContractAcceptanceAllowed": false
+  },
   "interimPilotRules": {
     "version": "V5.1-2026-08-16",
     "status": "active-for-internal-and-closed-testing",

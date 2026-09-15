@@ -104,6 +104,18 @@ claimed until every item below has reproducible evidence and is closed.
 
 ## Observation log
 
+- 15.09.2026, WP152: after all repository tests passed, the first local
+  candidate-rollover regression stopped at the unchanged archive guard because
+  the metadata-bound `2026091311` candidate directory had been moved to the
+  Crucial-backed volume and replaced locally by a symlink. The guard correctly
+  requires a regular owner-only directory and was not weakened. A complete
+  repository-supported CI metadata-only run then passed Tool, Backend,
+  PostgreSQL, Flutter, analyzer, Web/Wasm, loopback and Android checks; it is
+  source-regression evidence only and does not claim private-archive validity.
+  Future local archive proof must use a regular owner-only archive directory or
+  a separately reviewed explicit external-root mechanism, never the symlink or
+  a pass-on-retry accommodation.
+
 - 11.09.2026, WP114: the first fresh isolated offline/realtime attempt stopped
   safely but the wrapper reduced the child reason to a generic failure. Its
   `finally` path retired the exact booking/listing; separate readback confirmed

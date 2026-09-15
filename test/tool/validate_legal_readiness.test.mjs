@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import test from 'node:test';
@@ -126,6 +127,26 @@ test('rejects stale V5.3 source evidence even while the legacy baseline remains 
       sourceTexts: { [path]: `${source}\n` },
     }),
     /v53OperatorAlignedDraft\.currentContentSha256 is stale/u,
+  );
+});
+
+test('rejects stale or prematurely activating V5.4 AI-correction evidence', () => {
+  const legalManifest = clone(baseLegalManifest);
+  legalManifest.v54AstraCorrectedDraft.currentContentSha256 = '0'.repeat(64);
+  assert.throws(
+    () => validate({ legalManifest }),
+    /v54AstraCorrectedDraft\.currentContentSha256 is stale/u,
+  );
+
+  const path = 'assets/legal/de/legal_manifest_v54.json';
+  const source = readFileSync(resolve(repositoryRoot, path), 'utf8')
+    .replace('"activationAllowed": false', '"activationAllowed": true');
+  const correctedManifest = clone(baseLegalManifest);
+  correctedManifest.v54AstraCorrectedDraft.currentContentSha256 =
+    createHash('sha256').update(source).digest('hex');
+  assert.throws(
+    () => validate({ legalManifest: correctedManifest, sourceTexts: { [path]: source } }),
+    /V5\.4 source must preserve corrections/u,
   );
 });
 

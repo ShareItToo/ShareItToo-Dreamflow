@@ -1,4 +1,47 @@
-# Current Work Package: WP151 Refund Provider/Durable-Truth Parity — TECHNICAL CLOSURE; FULL REGRESSION PASSED; EXTERNAL GATES HOLD
+# Current Work Package: WP152 V5.4 Contract Scope, Offer, Refund and Receipt Draft — TECHNICAL CLOSURE; INACTIVE; EXTERNAL GATES HOLD
+
+WP152 creates `V5.4-2026-09-15` as a separate nine-part, hash-bound and
+explicitly inactive AI legal successor. V5.2 and V5.3 remain byte-for-byte
+historical evidence; neither is rewritten or relabelled. V5.4 incorporates the
+available Astra correction cluster for platform scope, offer/counteroffer,
+checkout/durable confirmation, withdrawal/partial group/cancellation/refund and
+receipt issuer/debtor-creditor roles while preserving every unresolved fact and
+professional gate.
+
+The new contract model separates renter–SIT platform service from the
+renter–private-owner group rental, binds the group to an ordered position annex
+and treats any changed or late acceptance as a new counteroffer. A disclosed
+payment condition may activate the private rental only on provider-confirmed
+success; unknown transport remains unresolved and must not produce success,
+denial or duplicate payment. Position-level non-performance or dispute does not
+automatically alter unrelated positions.
+
+Part E now prospectively states the correct roles: renter is debtor and private
+owner creditor/service provider of rent; renter is debtor and SIT
+creditor/service provider of the platform fee. A provider payment confirmation
+is not an underlying invoice, and a combined overview cannot become one invoice
+for two services.
+
+The runtime registry recognizes V5.4 only as
+`draft-blocked-after-ai-corrections`. Binding acceptance remains exact V5.2;
+V5.4 fails with `legal_contract_version_inactive`, and unknown, padded or
+lowercase identifiers fail with `legal_contract_version_unsupported`. Existing
+V5.2 readiness and persistence both pass the exact guard.
+
+Focused V5.4/legal-readiness checks pass **19/19**, Backend registry/current
+V5.2 checks pass **10/10**, all Tool tests pass **3026/3026**, Backend passes
+**988 with 2 intentional skips**, fresh PostgreSQL passes **2/2 with cleanup**,
+and Flutter passes **952 with 33 intentional skips**. Backend static validation,
+analyzer zero, Web/Wasm, loopback and Android minSdk 24 pass; the complete local
+CI-equivalent technical regression exits 0. Deterministic WP152 evidence is
+closed; commit/push and exact-head GitHub Regression/CodeQL remain.
+
+The draft is not professional legal approval and does not activate V5.4. Astra's
+remaining corrections, incomplete raw cross-check capture, external operator,
+Stripe/ZAG and Business/Global facts, § 193 BGB, real money, provider, Store,
+Production, Firebase, Cloud/VPS, device and PR-merge gates all remain closed.
+
+# Previous Work Package: WP151 Refund Provider/Durable-Truth Parity — TECHNICAL CLOSURE; FULL REGRESSION PASSED; EXTERNAL GATES HOLD
 
 SIT now persists one exact Separate Charges and Transfers refund model:
 `separate_charge_manual_transfer_reversal_v1`. Migration 077 preserves every

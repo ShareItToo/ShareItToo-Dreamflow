@@ -6,7 +6,7 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "033129087a301e3fb6dd92a45acfecc38e2326563823c9cd4f81b8d37d53e073"
+    "sourceInventoryDigest": "e6b6414db413497371af558f13faae6c7e0b539bc1369769e3fe157c1841251e"
   },
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -116,11 +116,11 @@
     "backend/test/payment_command_replay_integrity.test.js": "9cd6e8a5ff9ba2dc3a48a7d7cd799143043005fc1bdca127036457ffb4f0733c",
     "backend/test/payment_command_result_immutability.test.js": "4f9eae2ab7f30a7fda6cdf73fd85c29338b354b59089d235ea986928b0b3aee1",
     "backend/test/postgres_foundation.integration.test.js": "aa6d82f16944d20fd7137c705b769d9e46690b28c88080d845e36e537ac8cd17",
-    "docs/current_state.md": "96047c5924dac50b1ff8c280704f604ab80367185b44d594c1bfc8e6a406fe13",
-    "docs/current_work_package.md": "f8e579ebb9184a82c08bda3838a7cb25275f7a476f18bb66019c24e8d0fa5329",
+    "docs/current_state.md": "c235e0ec5a1c5cef4f08a357b255c790162b2ce9eb18cd073a3dcbac536ef4ae",
+    "docs/current_work_package.md": "401acc03d0c8e545af815d9f00c67f75686bd1a8c53f0b20dfdbbe97dd95ce2c",
     "docs/operations/WP150_COMPLETED_PAYMENT_COMMAND_REPLAY_INTEGRITY_2026-09-14.md": "ddb1fa36922620a4c966045f7631c43862ffeadf965b4eadd8b1f416968e10f3",
     "scripts/technical_regression_check.sh": "40cf7b96d514b9f02fda2dd7553baf7523f54a41800da1363613951b2a587c20",
-    "store/privacy-disclosures.json": "09d3aff4fe7bde972c451650a13477fdadaf5dfb364d4cd892e242357767294b",
+    "store/privacy-disclosures.json": "fc4cd0ad7d465a6d78f1434e329e5358641d95a3c4a85408d9c180d531a3a8ed",
     "store/retention-deletion-readiness.json": "9109ce3ee90d91fb4ba31c030949f9d11cf63747f336fdd11e411c51f985c959",
     "test/tool/payment_provider_truthfulness_wiring.test.mjs": "28ae2b8d641cd50c145688eea626f47b5825192fe664261790a142f389f11d1c",
     "test/tool/run_r9_database_recovery.test.mjs": "a80e46143d918053ca21b6922ce8fe9ea28fe65837c278764af5f7c2e5b4fb3e",

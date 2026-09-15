@@ -1,5 +1,39 @@
 # ShareItToo Current State
 
+## WP152 V5.4 contract-scope/offer/refund/receipt draft — technical closure; inactive; external gates HOLD
+
+`V5.4-2026-09-15` is a new nine-part, hash-bound and explicitly inactive AI
+legal draft. It corrects the Astra-identified contract cluster prospectively:
+the scope and end of SIT's own platform service; exact offer, acceptance,
+counteroffer and disclosed payment-condition states; pre-order and durable
+confirmation timing; position-first cancellation/withdrawal/refund consequences;
+and debtor, creditor, service-provider and receipt-issuer roles. Historical V5.2
+and the inactive V5.3 predecessor remain byte-for-byte unchanged.
+
+The key Part E correction is explicit: the renter owes the private rent and the
+private owner is its creditor and service provider; separately, the renter owes
+the SIT fee and SIT is its creditor and service provider. A PSP confirmation is
+not an invoice for either underlying service. The proposed C2C group contract
+keeps ordered position snapshots and lets unaffected positions continue unless
+mandatory law, an express rule or an objectively interestless remainder permits
+whole-group exit.
+
+The Backend version registry still enables binding acceptance only for exact
+`V5.2-2026-08-16`. V5.4 returns `legal_contract_version_inactive`; unknown or
+malformed versions return `legal_contract_version_unsupported`. Focused legal
+and readiness checks pass **19/19**, registry/current V5.2 checks pass **10/10**,
+all Tool tests pass **3026/3026**, Backend passes **988 with 2 intentional
+skips**, PostgreSQL passes **2/2 with cleanup**, and Flutter passes **952 with
+33 intentional skips**. Analyzer, Web/Wasm, loopback and Android minSdk 24 are
+green; the complete local CI-equivalent regression exits 0. Exact-head GitHub
+gates remain pending until the closure commit is pushed. See
+`docs/operations/WP152_V54_CONTRACT_SCOPE_OFFER_REFUND_RECEIPT_DRAFT_2026-09-15.md`.
+
+This is not professional legal approval. Astra's remaining privacy, retention,
+export, DSA and position-review corrections, all insufficient external facts,
+the § 193 BGB issue and every live/payment/provider/Store/Production gate remain
+open. No external state changed.
+
 ## WP151 refund provider/durable-truth parity — technical closure; full regression PASSED; external gates HOLD
 
 Refunds now use the exact Separate Charges and Transfers model

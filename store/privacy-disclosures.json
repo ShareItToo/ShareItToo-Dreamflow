@@ -320,7 +320,7 @@
     },
     {
       "path": "backend/src/v52_contract_workflow.js",
-      "sha256": "3c31feb609b3a47c1a8371e9c9c69784ca570c80178975d86bf45f198000927f"
+      "sha256": "c0e06b47f51398a5095a6de41c9545ff72daf6cc1b37bbfe7d886a0373d554a1"
     },
     {
       "path": "backend/src/v51_termination_domain.js",

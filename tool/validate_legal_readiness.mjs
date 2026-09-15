@@ -61,6 +61,14 @@ const v53OperatorAlignedDraftContract = Object.freeze({
   serviceAddress: 'Bernhaldenweg 47, 71579 Spiegelberg, Deutschland',
 });
 
+const v54AstraCorrectedDraftContract = Object.freeze({
+  status: 'draft-blocked-after-ai-corrections',
+  sourceFile: 'assets/legal/de/legal_manifest_v54.json',
+  version: 'V5.4-2026-09-15',
+  predecessorVersion: 'V5.3-2026-09-09',
+  activeBindingVersion: 'V5.2-2026-08-16',
+});
+
 const v51SuccessorDecisionContract = [
   {
     manifestKey: 'platformContractAndWithdrawalTiming',
@@ -338,6 +346,51 @@ function assertV53OperatorAlignedDraft({ root, sourceTexts, legal }) {
   }
 }
 
+function assertV54AstraCorrectedDraft({ root, sourceTexts, legal }) {
+  const draft = object(legal.v54AstraCorrectedDraft, 'v54AstraCorrectedDraft');
+  if (draft.status !== v54AstraCorrectedDraftContract.status
+      || draft.sourceFile !== v54AstraCorrectedDraftContract.sourceFile
+      || draft.documentCount !== 9
+      || draft.professionalLegalApproval !== false
+      || draft.publicCommercialOperationAllowed !== false
+      || draft.bindingContractAcceptanceAllowed !== false) {
+    fail('v54AstraCorrectedDraft must remain a nine-part inactive AI legal draft.');
+  }
+  assertSha256(draft.currentContentSha256, 'v54AstraCorrectedDraft.currentContentSha256');
+  const serialized = sourceText(root, sourceTexts, draft.sourceFile);
+  if (sha256(serialized) !== draft.currentContentSha256) {
+    fail('v54AstraCorrectedDraft.currentContentSha256 is stale.');
+  }
+  const source = JSON.parse(serialized);
+  if (source?.schemaVersion !== 4
+      || source.version !== v54AstraCorrectedDraftContract.version
+      || source.status !== v54AstraCorrectedDraftContract.status
+      || source.activationAllowed !== false
+      || source.publiclyPublished !== false
+      || source.professionalLegalApproval !== false
+      || source.ownerAdoptionRecorded !== false
+      || source.derivation?.historicalV52AndV53RemainUnchanged !== true
+      || source.derivation?.astraOutcome !== 'CORRECTIONS_REQUIRED'
+      || source.derivation?.astraCaptureComplete !== false
+      || source.runtimePreparation?.activeBindingVersion
+        !== v54AstraCorrectedDraftContract.activeBindingVersion
+      || source.runtimePreparation?.preparedInactiveVersion
+        !== v54AstraCorrectedDraftContract.version
+      || source.runtimePreparation?.preparedVersionBindingAcceptanceAllowed !== false
+      || source.runtimePreparation?.unknownVersionFallbackAllowed !== false
+      || source.runtimePreparation?.runtimeActivationChanged !== false
+      || source.receiptRoles?.rentDebtor !== 'renter'
+      || source.receiptRoles?.rentCreditorAndServiceProvider !== 'private-owner'
+      || source.receiptRoles?.platformFeeDebtor !== 'renter'
+      || source.receiptRoles?.platformFeeCreditorAndServiceProvider !== 'sit'
+      || source.externalBoundaries?.realMoney !== false
+      || source.externalBoundaries?.paymentProviderActivation !== false
+      || !Array.isArray(source.documents)
+      || source.documents.length !== draft.documentCount) {
+    fail('V5.4 source must preserve corrections, explicit uncertainty and every activation hold.');
+  }
+}
+
 function assertInterimPilotContract({ root, sourceTexts, legal }) {
   const policy = object(legal.interimPilotRules, 'interimPilotRules');
   const expectedPolicyKeys = [
@@ -495,6 +548,7 @@ export function validateLegalReadiness({
   assertProviderIdentityFailsClosed({ root, sourceTexts });
   assertOperatorReadinessDraft({ root, sourceTexts, legal });
   assertV53OperatorAlignedDraft({ root, sourceTexts, legal });
+  assertV54AstraCorrectedDraft({ root, sourceTexts, legal });
   assertInterimPilotContract({ root, sourceTexts, legal });
 
   const documents = object(legal.documents, 'documents');
