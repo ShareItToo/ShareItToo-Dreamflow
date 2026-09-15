@@ -38,6 +38,10 @@ release evidence.
   typed JSONB base before applying `-` operators. Every SQL migration requires
   a real PostgreSQL 16 fresh-cluster gate before push; a local skip or
   unavailable local database is not release evidence.
+- Every new migration must update the current migration inventory, count and
+  last-file assertion together with its paired tests, then pass the real R9
+  PostgreSQL recovery gate. Historical R9/WP evidence remains bound to its
+  original snapshot and is never rewritten.
 
 ## Compact evidence and communication
 
