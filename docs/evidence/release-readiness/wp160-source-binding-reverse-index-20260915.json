@@ -3,7 +3,7 @@
   "package": "WP160-SOURCE-BINDING-REVERSE-INDEX-20260915",
   "repository": {
     "baselineHead": "c092cfe84965251f36a8f70525a49082f0959d63",
-    "targetRevision": "d60c5c0084d50b06d6e7a45ee5bc5c5d4ac72f67"
+    "targetRevision": "1081dea5800d6782d1d90fd94aaa8e6a3f38959e"
   },
   "changedSourcePaths": [
     "backend/sql/migrations/079_special_category_intake_minimization.down.sql",
@@ -29,6 +29,7 @@
     "backend/test/support_message_domain.test.js",
     "docs/current_state.md",
     "docs/current_work_package.md",
+    "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
     "docs/evidence/external-gates/support-evidence-scanner-readiness.json",
     "docs/evidence/release-readiness/wp160-special-category-health-data-intake-minimization-safety-20260915.json",
     "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md",
@@ -89,6 +90,7 @@
     "backend/test/support_message_domain.test.js",
     "docs/current_state.md",
     "docs/current_work_package.md",
+    "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
     "docs/evidence/external-gates/support-evidence-scanner-readiness.json",
     "docs/evidence/release-readiness/wp160-special-category-health-data-intake-minimization-safety-20260915.json",
     "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md",
@@ -126,10 +128,62 @@
     "tool/validate_wp160_special_category_health_data_intake.mjs",
     "docs/evidence/release-readiness/wp160-source-binding-reverse-index-20260915.json"
   ],
+  "currentMutableBindings": [
+    {
+      "binding": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "binding": "docs/evidence/external-gates/support-evidence-scanner-readiness.json",
+      "paths": [
+        "backend/src/support_evidence_workflow.js"
+      ]
+    },
+    {
+      "binding": "store/privacy-disclosures.json",
+      "paths": [
+        "backend/src/app.js",
+        "backend/src/handover_exception_domain.js",
+        "backend/src/moderation_domain.js",
+        "backend/src/privacy_export.js",
+        "backend/src/special_category_data_guard.js",
+        "backend/src/support_appeal_domain.js",
+        "backend/src/support_case_domain.js",
+        "backend/src/support_case_workflow.js",
+        "backend/src/support_decision_domain.js",
+        "backend/src/support_evidence_workflow.js",
+        "backend/src/support_message_domain.js",
+        "lib/screens/support_flow_screen.dart"
+      ]
+    },
+    {
+      "binding": "store/retention-deletion-readiness.json",
+      "paths": [
+        "backend/sql/migrations/079_special_category_intake_minimization.down.sql",
+        "backend/sql/migrations/079_special_category_intake_minimization.up.sql",
+        "backend/src/app.js",
+        "backend/src/handover_exception_domain.js",
+        "backend/src/moderation_domain.js",
+        "backend/src/privacy_export.js",
+        "backend/src/special_category_data_guard.js",
+        "backend/src/support_appeal_domain.js",
+        "backend/src/support_case_domain.js",
+        "backend/src/support_case_workflow.js",
+        "backend/src/support_decision_domain.js",
+        "backend/src/support_evidence_workflow.js",
+        "backend/src/support_message_domain.js",
+        "lib/screens/support_flow_screen.dart"
+      ]
+    }
+  ],
   "immutableHistoricalBindings": [
     {
       "evidence": "docs/evidence/release-readiness/wp05-cart-details-descendant-ownership-local-20260904.json",
       "paths": [
+        "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
         "store/privacy-disclosures.json",
         "store/retention-deletion-readiness.json"
       ]
@@ -137,12 +191,14 @@
     {
       "evidence": "docs/evidence/release-readiness/wp05-pixel-0405-preparation-20260904.json",
       "paths": [
+        "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
         "store/privacy-disclosures.json"
       ]
     },
     {
       "evidence": "docs/evidence/release-readiness/wp05-pixel-0406-preparation-20260904.json",
       "paths": [
+        "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
         "store/privacy-disclosures.json"
       ]
     },

@@ -6,7 +6,7 @@
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "baselineHead": "c092cfe84965251f36a8f70525a49082f0959d63",
-    "targetRevision": "d60c5c0084d50b06d6e7a45ee5bc5c5d4ac72f67",
+    "targetRevision": "1081dea5800d6782d1d90fd94aaa8e6a3f38959e",
     "workingTreeCleanAtCapture": true,
     "remoteAhead": 0,
     "remoteBehind": 0
@@ -73,16 +73,17 @@
     "backend/test/special_category_data_guard.test.js": "f8a75b3dafad948ea769fa29d8d5c9e715950cf9def3a154cdb79e5477e56e64",
     "backend/test/support_case_domain.test.js": "5104a8145fc48d56f2e9d3810d8a010ff1d6032e81e25d55afaf5d7ee1302d2c",
     "backend/test/support_case_workflow.test.js": "bdb61c6e91b045fccdb2011d0fec4eaf7dde6d7715277ef96bcdfc2508ce7b28",
-    "backend/test/support_evidence_workflow.test.js": "15a2b43137dfbe1cae80626dd33f30c50484bd406ea3b3d7343409c50ed7b314",
+    "backend/test/support_evidence_workflow.test.js": "684dde846e24a72ce4723a725fc850294c99e0977b21a498888bd19641de0b35",
     "backend/test/support_message_domain.test.js": "46da3eaba132fbf583beabebef077eb8dad93aa1d299d7765e8360d55c526819",
     "docs/current_state.md": "4e0d850275120a03b55f6205e15b3bc35ade086f584a9addb92a88629ca982a9",
     "docs/current_work_package.md": "d784df0469c20ac1eb4031807e461791e0baa0b728bbbc665169d554473f25d7",
-    "docs/evidence/external-gates/support-evidence-scanner-readiness.json": "a843e9547234b9c5b768b29f2b1415499dd7ec9d79f77cfe0e70038f3a451aaf",
-    "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md": "e46fab4b4f99efa2fa97e7a6b29ec8174bb61b9d6af402df70f018d542bdadd1",
+    "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json": "e305a2513d7ebbda2cd5b87841bea8a8eef9200f8afc31b092438b578acddacb",
+    "docs/evidence/external-gates/support-evidence-scanner-readiness.json": "d79ea31f1dfcdf3a381bbf548b1c49cd5a9f7e7e02003aa4e6f51d38f5f33a99",
+    "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md": "917b090136bfdf0a4d1c84574ab3f29b4830ee5f3a989605b0c1876ebba3db96",
     "docs/operations/WP160_SPECIAL_CATEGORY_HEALTH_DATA_INTAKE_MINIMIZATION_SAFETY_2026-09-15.md": "c9470a40ebf8a8f515aa22874fbbd6f2321d3fc5e50f2e517598c9974c6de0c4",
     "lib/screens/support_flow_screen.dart": "a66cacd62c8f80305a82bb8113c34de2f95da903a52427294f0f88997d9b95f8",
-    "store/privacy-disclosures.json": "e3bbec208f1f42ef03b5e218f9c87212768b2c1d7dbbc5dd401b1157e8911cbc",
-    "store/retention-deletion-readiness.json": "dd793da5bf190b997ef8a6f52811a027c021eef2db8c5e17870aefe6403646dd",
+    "store/privacy-disclosures.json": "aa825e68c46778dd27463e9d7af9c1e1328074771cda1c9cf733bccd8ccc4bce",
+    "store/retention-deletion-readiness.json": "26d9f42f35b0843b3bb35a3d69e858f0eb95e0854bbbd0a63f21999237a526f9",
     "test/support_flow_safety_triage_test.dart": "8148d1515dac155ad9b057fdea10dc40d4d5b9ec9825c9976520baeb4380745d",
     "test/tool/read_bound_source.test.mjs": "1bfbc6cf1449281ae520d375319204de0747724d108626fe1d49266d901c8e05",
     "test/tool/validate_privacy_disclosures.test.mjs": "dc710724b55c812b16c9697fb9f07b47daae1d04015bae857a7f880fb3e976d0",
@@ -93,8 +94,8 @@
     "test/tool/validate_wp152_v54_contract_draft.test.mjs": "dc8256f6d19327db4ae1269855ac721621ecdbb4e19b025cc09853810a5569d7",
     "test/tool/validate_wp153_position_review_release_parity.test.mjs": "7c3efbc897e6a37f0394c399c3ff0a6c1dde65ac9ff71d73763737e28780002a",
     "test/tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.test.mjs": "4031cce591fc7c5ddb41d73b1e4b2f1ca90ff0259276ad3d26699bdf90338cb8",
-    "test/tool/validate_wp160_source_binding_reverse_index.test.mjs": "f79b7ddb2901695a07ed7f08a2677b09b817005f639abb2ddc5ce55290b3593b",
-    "test/tool/validate_wp160_special_category_health_data_intake.test.mjs": "cadfad7c1c0444f15709481201dea1c09a6fca354c845aa4e40ecb5512506b9e",
+    "test/tool/validate_wp160_source_binding_reverse_index.test.mjs": "a1baa441440910fce0bf2f9f35c19bac8c804682cdfafbc9ae344fae4180c5a0",
+    "test/tool/validate_wp160_special_category_health_data_intake.test.mjs": "a7c802076a7979590ba858478cc9daafb0c16c2b8f61cc388884a46b133a3782",
     "test/tool/wp160_special_category_wiring.test.mjs": "7f0a32b4d67b873dc79c324b41ecd35772df4758eea5af2e9db84b975f1d2cc3",
     "tool/read_bound_source.mjs": "9bd4e30da7712eadc5fac9ff3379fda047a239f68a9b799767ac06ecaefcd93c",
     "tool/validate_privacy_disclosures.mjs": "b56299c87bbe6b494d90aa57e5b29e2bc34cb220a585c59f3729b5ed6ebc53e7",
@@ -109,12 +110,12 @@
     "tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs": "8e1a980852f28e2311d46693ab81ed106e28bf7d2a541d5ceb92539c0daa5c4c",
     "tool/validate_wp157_dsa_moderation_decision_appeal_parity.mjs": "846ff2fb1ddb8c969a30429adef9b656f4538237419f9ca4e17ff99134c29920",
     "tool/validate_wp159_processor_controller_region_transfer_truth.mjs": "be342eeeef3a2b7e989c3630972081a121c7f3a4d04dfddfccc28d2dfcdff4ac",
-    "tool/validate_wp160_source_binding_reverse_index.mjs": "55a97fe59372aa8c8fb3500964b6a55548d36674b86632eaf8c362bac7e13bc4",
+    "tool/validate_wp160_source_binding_reverse_index.mjs": "61e1feee18d2138a6d95fb2105c49e0fe8d44cb58b6f6642c54e93b76dfd5a8d",
     "tool/validate_wp160_special_category_health_data_intake.mjs": "ddfd328bea2da2a4a3e559036dbf26ff564d156784e1980de137c303c2fbd94a"
   },
   "captureAttestation": {
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "a40cfc7942597d3f089de78d28f1f313a07b94a60633f71382394b8aa6008b0c",
+    "sourceInventoryDigest": "5ff40e49634c892c299830d9a0b63e21c0618d06f1ead8d60c4b0dee4bb23f2c",
     "mode": "closure"
   }
 }
