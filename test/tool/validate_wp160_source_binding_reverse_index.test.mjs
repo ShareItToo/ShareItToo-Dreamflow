@@ -138,6 +138,13 @@ test('the full WP160 gate stays bound to the closure commit after a successor', 
     rmSync(resolve(clone, 'unrelated-wp160-successor.txt'));
     git(['add', '-u']);
     git(['commit', '-qm', 'remove successor fixture']);
+    const anchorFile = resolve(
+      clone,
+      'docs/evidence/release-readiness/wp160-special-category-health-data-intake-minimization-safety-20260915.json',
+    );
+    writeFileSync(anchorFile, `${readFileSync(anchorFile, 'utf8')}\n`);
+    git(['add', anchorFile]);
+    git(['commit', '-qm', 'touch closure evidence anchor']);
     writeFileSync(resolve(clone, 'docs/current_work_package.md'), 'bound source mutation\n');
     git(['add', 'docs/current_work_package.md']);
     git(['commit', '-qm', 'mutate bound source']);
