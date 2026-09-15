@@ -27,7 +27,7 @@ const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
 
 test('accepts the machine-derived WP160 reverse source-binding index', () => {
   const result = validateWp160ReverseIndex({ repositoryRoot });
-  assert.equal(result.changedSources, 58);
+  assert.equal(result.changedSources, 59);
   assert.ok(result.historicalBindings > 0);
   const derived = deriveWp160ReverseIndex({ repositoryRoot });
   assert.deepEqual(derived.currentMutableBindings.map(({ binding }) => binding), [
@@ -213,7 +213,7 @@ test('the full WP160 gate stays bound to the closure commit after a successor', 
         repositoryRoot: clone,
         evidence: incorrectTarget,
       }),
-      /source inventory paths is invalid/u,
+      /expected exact closure/u,
     );
   } finally {
     rmSync(clone, { recursive: true, force: true });

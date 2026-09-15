@@ -60,13 +60,15 @@ export function deriveChangedSourcePaths({
   targetRevision,
   baselineRevision = baselineHead,
 } = {}) {
+  const implicitCurrentTarget = targetRevision === undefined;
   const target = targetRevision ?? gitLines(repositoryRoot, ['rev-parse', 'HEAD'])[0];
   const changed = new Set([
     ...(target === precommitTargetRevision
       ? gitLines(repositoryRoot, ['diff', '--name-only', baselineRevision])
       : gitLines(repositoryRoot, ['diff', '--name-only', baselineRevision, target])),
   ]);
-  if (target === precommitTargetRevision || target === gitLines(repositoryRoot, ['rev-parse', 'HEAD'])[0]) {
+  if (target === precommitTargetRevision || (implicitCurrentTarget
+    && target === gitLines(repositoryRoot, ['rev-parse', 'HEAD'])[0])) {
     for (const path of gitLines(repositoryRoot, ['ls-files', '--others', '--exclude-standard'])) {
       changed.add(path);
     }
