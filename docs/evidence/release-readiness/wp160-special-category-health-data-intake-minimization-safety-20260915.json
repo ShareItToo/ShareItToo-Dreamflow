@@ -6,7 +6,7 @@
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "baselineHead": "c092cfe84965251f36a8f70525a49082f0959d63",
-    "targetRevision": "783e027f93ec8b446648f0b54f14b0370ecce9b8",
+    "targetRevision": "d60c5c0084d50b06d6e7a45ee5bc5c5d4ac72f67",
     "workingTreeCleanAtCapture": true,
     "remoteAhead": 0,
     "remoteBehind": 0
@@ -56,7 +56,7 @@
   "sourceInventory": {
     "backend/sql/migrations/079_special_category_intake_minimization.down.sql": "03314e09f068f32cf122fa6f440d1e5aaf164206b177f4c71031be9c83a169ff",
     "backend/sql/migrations/079_special_category_intake_minimization.up.sql": "7a715e45e42ef18823dba47985942523c0610a4ca5e1b7b9d9b509bc9b5fb50e",
-    "backend/src/app.js": "b5dcb11ff1b716679632be1bcb113e0b5001a1945141ed35d1fd4c2fcaa0b4b1",
+    "backend/src/app.js": "a04cfce7239fcd188fe1995bffb7f5d2df7d136f7428c96e8584439e0f100bd7",
     "backend/src/handover_exception_domain.js": "c3e9eebcf7302bd3160ce20715a56928408ea1817957818a5b95fda167b8ee00",
     "backend/src/moderation_domain.js": "a9cea4e6f25faf3d06762d8a45c04b1f1f3d290062aa6bc118ac6d8f9c050558",
     "backend/src/privacy_export.js": "00cf30b19fd5fdb8b69cfde3c1e77b7e7cb1e7995b81acf8e534a236873785ae",
@@ -65,7 +65,7 @@
     "backend/src/support_case_domain.js": "3316f17d244ff44a5e4c17afbb9fb7f0a6d46850e3a36879ec9f8a7b8adbfc4b",
     "backend/src/support_case_workflow.js": "799a5b834d468cc39fe93f37578565760ca87cfd3cc98085ce1e6642dade9ae8",
     "backend/src/support_decision_domain.js": "7537f0451bcd6295c67a03fb502f3052f1f7894082d79e196a57095eb4dfb642",
-    "backend/src/support_evidence_workflow.js": "3b88a56398b05b945e7841e3d6125d444c00cd6b5b80e08c23e1131f337c05db",
+    "backend/src/support_evidence_workflow.js": "540e389d9e54c07b42797bade21daa52ecb80671bf77098f707e648893e9a5d3",
     "backend/src/support_message_domain.js": "93392bffb853565e17e202de51716014eca698549e761e51eb3be91274d1dafb",
     "backend/test/handover_exception_domain.test.js": "69750b203740b1602d45e08088ad3309be588677867252e9027211a253866791",
     "backend/test/moderation_domain.test.js": "6a66f4e18747e0654311b77d19569f1d21cb48412729daf445fb5128d1fc4e61",
@@ -73,7 +73,7 @@
     "backend/test/special_category_data_guard.test.js": "f8a75b3dafad948ea769fa29d8d5c9e715950cf9def3a154cdb79e5477e56e64",
     "backend/test/support_case_domain.test.js": "5104a8145fc48d56f2e9d3810d8a010ff1d6032e81e25d55afaf5d7ee1302d2c",
     "backend/test/support_case_workflow.test.js": "bdb61c6e91b045fccdb2011d0fec4eaf7dde6d7715277ef96bcdfc2508ce7b28",
-    "backend/test/support_evidence_workflow.test.js": "24b696034c9144b8c2a38e75ede75406e1e9116a87375d013f2171c0362e5e9f",
+    "backend/test/support_evidence_workflow.test.js": "15a2b43137dfbe1cae80626dd33f30c50484bd406ea3b3d7343409c50ed7b314",
     "backend/test/support_message_domain.test.js": "46da3eaba132fbf583beabebef077eb8dad93aa1d299d7765e8360d55c526819",
     "docs/current_state.md": "4e0d850275120a03b55f6205e15b3bc35ade086f584a9addb92a88629ca982a9",
     "docs/current_work_package.md": "d784df0469c20ac1eb4031807e461791e0baa0b728bbbc665169d554473f25d7",
@@ -114,7 +114,7 @@
   },
   "captureAttestation": {
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "f91176c5fdcf55470220fcd42e332f55c58a1a0f1a3bb6e37c132bb7775be1b0",
+    "sourceInventoryDigest": "a40cfc7942597d3f089de78d28f1f313a07b94a60633f71382394b8aa6008b0c",
     "mode": "closure"
   }
 }
