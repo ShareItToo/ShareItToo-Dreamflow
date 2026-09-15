@@ -215,6 +215,7 @@ if (!databaseUrl) {
         '075_refund_transfer_reversal_recovery.up.sql',
         '076_payment_command_result_immutability.up.sql',
         '077_refund_provider_truth_parity.up.sql',
+        '078_retention_legal_hold_scope.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);

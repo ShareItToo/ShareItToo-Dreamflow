@@ -6,7 +6,7 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "b83cfc9bf1b4a3e4a66f051a0aaf8c605e78d41069936c615099236c567cd5f4"
+    "sourceInventoryDigest": "3ba119708841b8354a7e700865ea426a6e50f8d634f5dc9a76dde0eb98492744"
   },
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -167,8 +167,8 @@
     "backend/test/stripe_webhook_destinations.test.js": "d9369feebbdb7733a8d97d3e5e300a685bd9ac11b2db12f689a974ba49613bb1",
     "backend/test/v51_withdrawal_workflow.test.js": "ffab494637bf8cb0445f5369841215cde26bfca3717ab0dc08bab4881f7dcac4",
     "docs/compliance/u0-pilot-cockpit-unit-economics-2026-08-20.md": "bd3a09a38a75ac25f2686fa0c92460efc36b13c4d973cc79c2abc66ec23d4311",
-    "docs/current_state.md": "2f5903b889023b3572eb67ef0747cc89370a7c3b8ebe2321718ce6561fd88aae",
-    "docs/current_work_package.md": "b6e6f7b3fcdc5cd9b50a62a2f084fe5e7f30906bffceecfd950a4547c5ebbd44",
+    "docs/current_state.md": "b14417a4bf13d19de5d31e8222e330ef3797c2ec0c4429f06ac668547ef4de92",
+    "docs/current_work_package.md": "d2919220b698f4478f5c85b4a0c455d9ea6f64f9dc9422c5ce771d66b5c1c83f",
     "docs/operations/WP151_REFUND_PROVIDER_DURABLE_TRUTH_PARITY_2026-09-14.md": "2bc044e2abc4e8c2ce8dfae68e919b4e1b2ca1726c3581336ffcfa0ff448ec8d",
     "lib/models/invoice.dart": "60c5e27d5a742c5570701f6a865137823e8fca01d20b76025f200bbc30226d56",
     "lib/screens/invoice_detail_screen.dart": "098210b27bb814337d46ccb3df779476877a439c411d4712d94d4f62eaae0543",

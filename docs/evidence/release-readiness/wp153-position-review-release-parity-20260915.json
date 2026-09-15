@@ -106,7 +106,7 @@
     "backend/test/legal_contract_version_registry.test.js": "dccd49f212c2bcb8fd2d183b271f6221e5a842f0f03a0d9671f6795284c6f750",
     "backend/test/payment_domain.test.js": "437fe69d7abfbe45922834f6b473e73919bdadd0a4fdf8eb4414cf5ebf0f95b0",
     "backend/test/position_review_release_integrity.test.js": "5f7e545a0c481664fdea57af2738ff21aab061cc33a4433ce485dea49d8f7939",
-    "backend/test/postgres_foundation.integration.test.js": "01222d79e4a5514fcdaa05f4f254d8cbc331b20d3ad1ea5e1fc1adbc66402d04",
+    "backend/test/postgres_foundation.integration.test.js": "a096cebc280261d2aa988c12167834db8a86eb9a466d11a2c9d2b006c85a04db",
     "backend/test/v52_handover_return_workflow.test.js": "6e0164a0c5fee393294fbd36faf1914ff187e3421cb51bc3660f4e9887a7ac6b",
   "docs/current_state.md": "b14417a4bf13d19de5d31e8222e330ef3797c2ec0c4429f06ac668547ef4de92",
   "docs/current_work_package.md": "d2919220b698f4478f5c85b4a0c455d9ea6f64f9dc9422c5ce771d66b5c1c83f",
@@ -124,6 +124,6 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-  "sourceInventoryDigest": "1bf6efadbc0c186091fb69bddaaca4c7c4c1b8f6abb95a9c45d67cb382b4adbc"
+  "sourceInventoryDigest": "8416b75887f5910eb93719c246d32248888485f30102bdc6cee1bcf7086a854e"
   }
 }

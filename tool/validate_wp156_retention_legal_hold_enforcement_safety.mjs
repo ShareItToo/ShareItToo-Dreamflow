@@ -29,6 +29,7 @@ export const wp156SourcePaths = Object.freeze([
   'backend/ops/verify_restore.sh',
   'backend/test/account_legal_hold.test.js',
   'backend/test/retention_inventory.test.js',
+  'backend/test/postgres_foundation.integration.test.js',
   'test/tool/support_privacy_rights_control_plane_wiring.test.mjs',
   'test/tool/verify_restore_readiness_wiring.test.mjs',
   'test/tool/validate_retention_deletion_readiness.test.mjs',

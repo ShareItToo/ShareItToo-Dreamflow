@@ -82,11 +82,12 @@
     "backend/ops/verify_restore.sh": "473416fa71fca6b7862e28014bf6db0a41ed7a797be2af11bb051f7d3bbcd3d2",
     "backend/test/account_legal_hold.test.js": "2e6e22babbea654426b131c04c7c1316e10ea4a347c35f2795eda26d1a90241f",
     "backend/test/retention_inventory.test.js": "bd15e76866c39d330614295e680f32cf63f8a8970f4cdbd0ffa4e4b834bcab40",
+    "backend/test/postgres_foundation.integration.test.js": "a096cebc280261d2aa988c12167834db8a86eb9a466d11a2c9d2b006c85a04db",
     "test/tool/verify_restore_readiness_wiring.test.mjs": "8d5294ebf07b2772c14047c5d773d6e16088fdae961c1a1e155b2b31f1de1e45",
     "test/tool/validate_retention_deletion_readiness.test.mjs": "1db8f20c0da4c956aae8580b00e8048cc708833b0b7009e9691ef796cfb0b466",
     "test/tool/validate_wp156_retention_legal_hold_enforcement_safety.test.mjs": "5aee231aa9195a47d7abe228bb76014981e7982bfc094df5d7ffc59461b8bcdd",
     "tool/validate_retention_deletion_readiness.mjs": "b7b31cb4284df5ce0f9d5d29a848cfa423a2cc0c8337e66b2253d695f0f2a868",
-    "tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs": "31a199a0dccd4cf3b2ef658895a0c65f5d9278dd2f11be8f2ccc57c52b298d5c",
+    "tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs": "d7c085c5450752a9fe617d9e3b458fb25dd2e409bc219d2f50b589428f3895cb",
     "scripts/technical_regression_check.sh": "faf2aa11e4f7a49dc55dcc065afc92482e481bc356b6b173f2113bc4603c098e",
     "backend/src/support_privacy_rights_workflow.js": "4ec6c9dc11fe725af7a299e7006dafff82a75d05443efa55523531e502bac486",
     "test/tool/support_privacy_rights_control_plane_wiring.test.mjs": "61957f607793513749391ea8fdba330f4078a2063b3c636ceee611a82555da9b"
@@ -94,6 +95,6 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "e786daf982cbe149575cf1472e6d4f59ee33af350f1972da20d000d72ef9b70d"
+    "sourceInventoryDigest": "ac6510ac2c6e129755aa25d24da9aa777357e5d0c423fd28d7e8c4c714da596e"
   }
 }
