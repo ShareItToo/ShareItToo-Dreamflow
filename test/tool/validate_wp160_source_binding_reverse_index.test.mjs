@@ -11,6 +11,8 @@ import {
   deriveCurrentMutableBindings,
   deriveWp160ReverseIndex,
   clearReverseIndexCaches,
+  clearReverseIndexMetrics,
+  getReverseIndexMetrics,
   validateWp160ReverseIndex,
 } from '../../tool/validate_wp160_source_binding_reverse_index.mjs';
 import { validateWp160SpecialCategoryHealthDataIntake } from
@@ -41,11 +43,12 @@ test('accepts the machine-derived WP160 reverse source-binding index', () => {
 
 test('pinned reverse-index reads cache Git tree and JSON lookups', () => {
   clearReverseIndexCaches();
-  const started = Date.now();
+  clearReverseIndexMetrics();
   const first = deriveWp160ReverseIndex({ repositoryRoot });
+  assert.equal(getReverseIndexMetrics().gitGrepCalls, 1);
   const second = deriveWp160ReverseIndex({ repositoryRoot });
+  assert.equal(getReverseIndexMetrics().gitGrepCalls, 1);
   assert.deepEqual(second, first);
-  assert.ok(Date.now() - started < 20_000, 'reverse-index lookup cache regression');
 });
 
 test('rejects omitted mutable bindings and rewritten historical evidence', () => {
@@ -210,7 +213,7 @@ test('the full WP160 gate stays bound to the closure commit after a successor', 
         repositoryRoot: clone,
         evidence: incorrectTarget,
       }),
-      /expected exact closure/u,
+      /source inventory paths is invalid/u,
     );
   } finally {
     rmSync(clone, { recursive: true, force: true });

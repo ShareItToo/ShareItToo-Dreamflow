@@ -2,6 +2,7 @@
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,6 +15,11 @@ export const currentMutableBindingRoots = Object.freeze([
   'docs/evidence/external-gates',
   'store',
 ]);
+const historicalBindingRoot = 'docs/evidence/release-readiness';
+const reverseIndexSearchRoots = Object.freeze([
+  historicalBindingRoot,
+  ...currentMutableBindingRoots,
+]);
 
 // These are the WP160 implementation paths whose source changes can fan out
 // into already captured package evidence. The list is intentionally narrow:
@@ -23,10 +29,23 @@ export const precommitTargetRevision = 'WORKTREE_STAGED';
 
 const revisionJsonListCache = new Map();
 const revisionJsonCache = new Map();
+const candidateJsonCache = new Map();
+const revisionPathSetCache = new Map();
+const reverseIndexMetrics = { gitGrepCalls: 0 };
 
 export function clearReverseIndexCaches() {
   revisionJsonListCache.clear();
   revisionJsonCache.clear();
+  candidateJsonCache.clear();
+  revisionPathSetCache.clear();
+}
+
+export function clearReverseIndexMetrics() {
+  reverseIndexMetrics.gitGrepCalls = 0;
+}
+
+export function getReverseIndexMetrics() {
+  return { ...reverseIndexMetrics };
 }
 
 function gitLines(repositoryRoot, args) {
@@ -90,22 +109,81 @@ function inventoryPaths(value) {
   return [...paths];
 }
 
-function historicalBindings(repositoryRoot, changedSourcePaths, targetRevision) {
-  const evidenceRoot = 'docs/evidence/release-readiness';
-  const evidenceFiles = jsonFilesAtRevision(repositoryRoot, evidenceRoot, targetRevision);
+function historicalBindings(repositoryRoot, changedSourcePaths, targetRevision, candidateFiles = null) {
+  const evidenceFiles = jsonFilesAtRevision(
+    repositoryRoot,
+    historicalBindingRoot,
+    targetRevision,
+    candidateFiles,
+  );
   return evidenceFiles
     .filter((file) => file !== reverseIndexEvidencePath
       && file !== currentWp160EvidencePath)
     .map((file) => ({
-      name: file.slice(evidenceRoot.length + 1),
+      name: file.slice(historicalBindingRoot.length + 1),
       value: readJsonAtRevision(repositoryRoot, file, targetRevision),
     }))
     .map(({ name, value }) => ({
-      evidence: `docs/evidence/release-readiness/${name}`,
+      evidence: `${historicalBindingRoot}/${name}`,
       paths: inventoryPaths(value).filter((path) => changedSourcePaths.includes(path)).sort(),
     }))
     .filter(({ paths }) => paths.length > 0)
     .sort((left, right) => left.evidence.localeCompare(right.evidence));
+}
+
+function candidateJsonFilesAtRevision(repositoryRoot, changedSourcePaths, revision) {
+  if (changedSourcePaths.length === 0) return [];
+  if (revision === precommitTargetRevision) {
+    return reverseIndexSearchRoots
+      .flatMap((rootPath) => jsonFilesUnder(repositoryRoot, rootPath))
+      .sort();
+  }
+
+  const changedDigest = createHash('sha256')
+    .update(changedSourcePaths.join('\0'))
+    .digest('hex');
+  const cacheKey = `${repositoryRoot}\0${revision}\0${changedDigest}`;
+  const cached = candidateJsonCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  reverseIndexMetrics.gitGrepCalls += 1;
+  const args = [
+    '-C', repositoryRoot,
+    'grep', '-l', '-F',
+    ...changedSourcePaths.flatMap((path) => ['-e', path]),
+    revision,
+    '--',
+    ...reverseIndexSearchRoots,
+  ];
+  let output;
+  try {
+    output = execFileSync('git', args, { encoding: 'utf8' });
+  } catch (error) {
+    // git grep uses status 1 for a valid search with no matches. Any other
+    // status is a repository/search failure and must fail the validator.
+    if (error?.status === 1) {
+      candidateJsonCache.set(cacheKey, []);
+      return [];
+    }
+    fail(`git grep candidate discovery failed${error?.status ? ` (status ${error.status})` : ''}`);
+  }
+  const files = output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const separator = line.indexOf(':');
+      return separator < 0 ? line : line.slice(separator + 1);
+    })
+    .filter((file) => file.endsWith('.json'))
+    .sort();
+  candidateJsonCache.set(cacheKey, files);
+  return files;
+}
+
+function filesForRoot(files, rootPath) {
+  const prefix = `${rootPath}/`;
+  return files.filter((file) => file.startsWith(prefix));
 }
 
 function jsonFilesUnder(repositoryRoot, relativeRoot) {
@@ -121,7 +199,8 @@ function jsonFilesUnder(repositoryRoot, relativeRoot) {
   return found.map((file) => file.slice(repositoryRoot.length + 1)).sort();
 }
 
-function jsonFilesAtRevision(repositoryRoot, relativeRoot, revision) {
+function jsonFilesAtRevision(repositoryRoot, relativeRoot, revision, candidateFiles = null) {
+  if (candidateFiles !== null) return filesForRoot(candidateFiles, relativeRoot);
   if (revision === precommitTargetRevision) return jsonFilesUnder(repositoryRoot, relativeRoot);
   const cacheKey = `${repositoryRoot}\0${revision}\0${relativeRoot}`;
   const cached = revisionJsonListCache.get(cacheKey);
@@ -156,23 +235,28 @@ function existsAtRevision(repositoryRoot, relativePath, revision) {
       return false;
     }
   }
-  try {
-    execFileSync('git', ['-C', repositoryRoot, 'cat-file', '-e', `${revision}:${relativePath}`], {
-      stdio: ['ignore', 'ignore', 'ignore'],
-    });
-    return true;
-  } catch {
-    return false;
+  const cacheKey = `${repositoryRoot}\0${revision}`;
+  let paths = revisionPathSetCache.get(cacheKey);
+  if (paths === undefined) {
+    paths = new Set(gitLines(repositoryRoot, ['ls-tree', '-r', '--name-only', revision]));
+    revisionPathSetCache.set(cacheKey, paths);
   }
+  return paths.has(relativePath);
 }
 
 export function deriveCurrentMutableBindings(
   repositoryRoot,
   changedSourcePaths,
   targetRevision = precommitTargetRevision,
+  candidateFiles = null,
 ) {
   return currentMutableBindingRoots
-    .flatMap((rootPath) => jsonFilesAtRevision(repositoryRoot, rootPath, targetRevision))
+    .flatMap((rootPath) => jsonFilesAtRevision(
+      repositoryRoot,
+      rootPath,
+      targetRevision,
+      candidateFiles,
+    ))
     .sort()
     .map((binding) => {
       let value;
@@ -208,11 +292,22 @@ export function deriveWp160ReverseIndex({
       fail(`mutable binding is missing: ${path}`);
     }
   }
-  const historical = historicalBindings(repositoryRoot, changedSourcePaths, effectiveTarget);
+  const candidateFiles = candidateJsonFilesAtRevision(
+    repositoryRoot,
+    changedSourcePaths,
+    effectiveTarget,
+  );
+  const historical = historicalBindings(
+    repositoryRoot,
+    changedSourcePaths,
+    effectiveTarget,
+    candidateFiles,
+  );
   const current = deriveCurrentMutableBindings(
     repositoryRoot,
     changedSourcePaths,
     effectiveTarget,
+    candidateFiles,
   );
   return {
     schemaVersion: 1,
