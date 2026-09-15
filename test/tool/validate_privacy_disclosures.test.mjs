@@ -6,6 +6,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { validatePrivacyDisclosures } from '../../tool/validate_privacy_disclosures.mjs';
+import { boundSnapshotAttestationBrand } from '../../tool/read_bound_source.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const basePrivacyManifest = JSON.parse(
@@ -33,6 +34,7 @@ function validate({
   sourceTexts = {},
   evidenceTexts = {},
   requireApproved = false,
+  historicalSnapshot,
 } = {}) {
   return validatePrivacyDisclosures({
     root: repositoryRoot,
@@ -42,8 +44,26 @@ function validate({
     sourceTexts,
     evidenceTexts,
     requireApproved,
+    historicalSnapshot,
   });
 }
+
+test('historical source selection requires a genuine complete snapshot attestation', () => {
+  const forged = {
+    [boundSnapshotAttestationBrand]: true,
+    repositoryRoot,
+    baselineHead: '0'.repeat(40),
+    revision: '0'.repeat(40),
+    inventory: {},
+    inventoryDigest: '0'.repeat(64),
+  };
+  for (const historicalSnapshot of [[], {}, forged]) {
+    assert.throws(
+      () => validate({ historicalSnapshot }),
+      /bound snapshot attestation invalid/u,
+    );
+  }
+});
 
 test('accepts the honest fail-closed privacy disclosure draft', () => {
   const result = validate();

@@ -4,6 +4,7 @@ import { fileTypeFromBuffer } from 'file-type';
 
 import { sanitizeImage } from './media_pipeline.js';
 import { SupportCaseError } from './support_case_domain.js';
+import { detectPossibleSpecialCategoryFields } from './special_category_data_guard.js';
 
 const allowedMimeTypes = new Map([
   ['image/jpeg', 'jpg'],
@@ -27,6 +28,10 @@ const activeSubmissionStatuses = new Set([
   'decision_pending_approval',
   'decided',
   'reopened',
+]);
+const specialCategoryClassifications = new Set([
+  'not_indicated',
+  'possible_special_category',
 ]);
 
 function sha256(value) {
@@ -75,23 +80,50 @@ export function normalizeSupportEvidenceMetadata(raw) {
     'purpose',
     'claimedEventTime',
     'thirdPartyData',
+    'specialCategoryClassification',
   ]), 'support_evidence_metadata_invalid');
   if (value.thirdPartyData !== undefined && typeof value.thirdPartyData !== 'boolean') {
     throw new SupportCaseError(400, 'support_evidence_third_party_flag_invalid');
   }
+  const description = safeText(value.description, {
+    minimum: 3,
+    maximum: 2000,
+    code: 'support_evidence_description_invalid',
+  });
+  const purpose = safeText(value.purpose, {
+    minimum: 3,
+    maximum: 1000,
+    code: 'support_evidence_purpose_invalid',
+  });
+  const specialCategoryClassification = safeText(
+    value.specialCategoryClassification,
+    {
+      minimum: 1,
+      maximum: 60,
+      code: 'support_evidence_special_category_classification_required',
+    },
+  ).toLowerCase();
+  if (!specialCategoryClassifications.has(specialCategoryClassification)) {
+    throw new SupportCaseError(
+      400,
+      'support_evidence_special_category_classification_invalid',
+    );
+  }
+  const detection = detectPossibleSpecialCategoryFields({ description, purpose });
+  if (detection && specialCategoryClassification !== 'possible_special_category') {
+    throw new SupportCaseError(
+      409,
+      'support_evidence_special_category_classification_mismatch',
+      { detectionVersion: detection.detectionVersion },
+    );
+  }
   return Object.freeze({
-    description: safeText(value.description, {
-      minimum: 3,
-      maximum: 2000,
-      code: 'support_evidence_description_invalid',
-    }),
-    purpose: safeText(value.purpose, {
-      minimum: 3,
-      maximum: 1000,
-      code: 'support_evidence_purpose_invalid',
-    }),
+    description,
+    purpose,
     claimedEventTime: normalizeClaimedTime(value.claimedEventTime),
     thirdPartyData: value.thirdPartyData === true,
+    specialCategoryClassification,
+    specialCategoryDetection: detection,
   });
 }
 
@@ -171,6 +203,7 @@ function evidenceShape(row) {
     originalSha256: row.original_sha256,
     previewAvailable: row.scan_status === 'clean' && row.preview_storage_name != null,
     externalAiUsed: false,
+    specialCategoryClassification: row.special_category_classification ?? null,
     accessRequiresActiveAccount: true,
     accessRequiresOriginalSession: true,
   });
@@ -180,7 +213,8 @@ async function accessibleCase(client, { actor, caseId, forUpdate = false }) {
   const lock = forUpdate ? ' FOR UPDATE' : '';
   const result = await client.query(
     `SELECT id, human_readable_case_number, reporter_user_id,
-            affected_user_ids, linked_booking_id, linked_listing_id, status
+            affected_user_ids, linked_booking_id, linked_listing_id, status,
+            intake_scope_evidence
        FROM support_cases
       WHERE (id::text = $1 OR human_readable_case_number = $1)
         AND (reporter_user_id = $2 OR $2 = ANY(affected_user_ids))${lock}`,
@@ -226,6 +260,7 @@ export async function createSupportEvidence(client, {
     purpose: metadata.purpose,
     claimedEventTime: metadata.claimedEventTime?.toISOString() ?? null,
     thirdPartyData: metadata.thirdPartyData,
+    specialCategoryClassification: metadata.specialCategoryClassification,
     originalSha256: preparedFile.originalSha256,
   }));
 
@@ -240,7 +275,9 @@ export async function createSupportEvidence(client, {
             evidence.third_party_data_flag, evidence_file.scan_status,
             evidence_file.detected_mime_type, evidence_file.original_byte_size,
             evidence_file.original_sha256, evidence_file.preview_storage_name,
-            evidence_file.request_sha256
+            evidence_file.request_sha256,
+            evidence.integrity_metadata ->> 'specialCategoryClassification'
+              AS special_category_classification
        FROM support_evidence_files AS evidence_file
        JOIN support_evidence AS evidence ON evidence.id = evidence_file.evidence_id
       WHERE evidence_file.uploader_user_id = $1
@@ -257,6 +294,15 @@ export async function createSupportEvidence(client, {
   const supportCase = await accessibleCase(client, { actor, caseId, forUpdate: true });
   if (!activeSubmissionStatuses.has(supportCase.status)) {
     throw new SupportCaseError(409, 'support_evidence_case_not_accepting_files');
+  }
+  const caseSpecialCategoryHandling = supportCase.intake_scope_evidence
+    ?.specialCategoryHandling ?? null;
+  if (metadata.specialCategoryClassification === 'possible_special_category'
+      && caseSpecialCategoryHandling == null) {
+    throw new SupportCaseError(
+      409,
+      'support_evidence_special_category_case_binding_required',
+    );
   }
 
   await client.query(
@@ -285,6 +331,10 @@ export async function createSupportEvidence(client, {
         sourceTrust: 'user_submitted_unverified',
         usableAsDecisionEvidenceWithoutReview: false,
         externalAiUsed: false,
+        specialCategoryClassification: metadata.specialCategoryClassification,
+        specialCategoryDetectionVersion:
+          metadata.specialCategoryDetection?.detectionVersion ?? null,
+        specialCategoryHandlingInherited: caseSpecialCategoryHandling != null,
       }),
       metadata.thirdPartyData,
     ],
@@ -343,6 +393,8 @@ export async function createSupportEvidence(client, {
         originalByteSize: preparedFile.originalByteSize,
         thirdPartyData: metadata.thirdPartyData,
         externalAiUsed: false,
+        specialCategoryClassification: metadata.specialCategoryClassification,
+        specialCategoryHandlingInherited: caseSpecialCategoryHandling != null,
       }),
       `evidence-submit:${actor.id}:${idempotencyKey}`,
     ],
@@ -356,6 +408,8 @@ export async function createSupportEvidence(client, {
       scanStatus: preparedFile.scanStatus,
       originalByteSize: preparedFile.originalByteSize,
       externalAiUsed: false,
+      specialCategoryClassification: metadata.specialCategoryClassification,
+      specialCategoryHandlingInherited: caseSpecialCategoryHandling != null,
     },
   });
   return Object.freeze({
@@ -367,6 +421,7 @@ export async function createSupportEvidence(client, {
       claimed_event_time: metadata.claimedEventTime,
       received_at: new Date(),
       third_party_data_flag: metadata.thirdPartyData,
+      special_category_classification: metadata.specialCategoryClassification,
     }),
     replayed: false,
   });
@@ -380,7 +435,9 @@ export async function listSupportEvidence(client, { actor, caseId }) {
             evidence.claimed_event_time, evidence.received_at,
             evidence.third_party_data_flag, evidence_file.scan_status,
             evidence_file.detected_mime_type, evidence_file.original_byte_size,
-            evidence_file.original_sha256, evidence_file.preview_storage_name
+            evidence_file.original_sha256, evidence_file.preview_storage_name,
+            evidence.integrity_metadata ->> 'specialCategoryClassification'
+              AS special_category_classification
        FROM support_evidence AS evidence
        JOIN support_evidence_files AS evidence_file
          ON evidence_file.evidence_id = evidence.id

@@ -328,6 +328,19 @@ class SupportFlowResult {
     'Verarbeitung einschränken': SupportPrivacyRightsRequest('restriction'),
   };
 
+  static final _specialCategoryPattern = RegExp(
+    r'\b(gesundheit\w*|health\w*|medizin\w*|medical\w*|'
+    r'medication\w*|medikament\w*|diagnos\w*|symptom\w*|allerg\w*|'
+    r'schwanger\w*|pregnan\w*|behinder\w*|disabilit\w*|krankheit\w*|'
+    r'disease\w*|illness\w*|erkrank\w*|therapie\w*|behandlung\w*|'
+    r'treatment\w*|rezept\w*|arzt\w*|ärzt\w*|doctor\w*|physician\w*|'
+    r'hospital\w*|krankenhaus\w*|blutgruppe\w*|blood\s+type)\b',
+    caseSensitive: false,
+  );
+
+  static bool _containsPossibleSpecialCategoryData(String value) =>
+      _specialCategoryPattern.hasMatch(value);
+
   static const _feedbackContexts = <String, SupportFeedbackContext>{
     'Verbesserung für App und Bedienung': SupportFeedbackContext(
       feedbackKind: 'improvement_suggestion',
@@ -695,6 +708,21 @@ class SupportFlowResult {
       'immediateDanger': safetyTriage.immediateDanger,
       'safetyTriage': safetyTriage.toMap(),
       'issueScope': issueScope.toMap(),
+      if (_containsPossibleSpecialCategoryData(
+        '$summary ${productSafetyNotice?.riskDescription ?? ''}',
+      ))
+        'specialCategoryHandling': {
+          'version': 'sit_special_category_handling_v1',
+          'necessityAcknowledged': true,
+          'warningShown': true,
+          'ownerRole': route.caseType == 'trust_safety'
+              ? 'trust_safety_owner'
+              : (route.caseType == 'legal_authority'
+                  ? 'legal_authority_owner'
+                  : 'privacy_owner'),
+          'scope': 'case_bound',
+          'replicationPolicy': 'no_unrestricted_replication',
+        },
       if (isDsaNotice) 'dsaNotice': dsaNotice!.toMap(),
       if (isProductSafetyNotice)
         'productSafetyNotice': productSafetyNotice!.toMap(),
@@ -968,6 +996,7 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
   final _dsaLegalBasisController = TextEditingController();
   bool _dsaGoodFaithConfirmed = false;
   final _productIdentificationController = TextEditingController();
+  bool? _productSafetyInjuryOccurred;
   bool _productSafetyGuidanceAcknowledged = false;
   bool _handoverSafeAbortAcknowledged = false;
   bool _handoverDoNotPayAcknowledged = false;
@@ -1042,6 +1071,8 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
       _immediateDanger == true ||
       (_productIdentificationController.text.trim().length >= 3 &&
           _descriptionController.text.trim().length >= 20 &&
+          (_selectedSubCategory != 'Unfall oder Verletzung durch Produkt' ||
+              _productSafetyInjuryOccurred != null) &&
           _productSafetyGuidanceAcknowledged);
   bool get _submissionReady =>
       _dsaNoticeReady && _productSafetyNoticeReady && _handoverExceptionReady;
@@ -1984,6 +2015,7 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
             _handoverSafeAbortAcknowledged = false;
             _handoverDoNotPayAcknowledged = false;
             _handoverContactAttemptAcknowledged = false;
+            _productSafetyInjuryOccurred = null;
           }),
         );
       },
@@ -2111,6 +2143,13 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
           'Bei akuter Gefahr oder Verletzung rufe 112. SIT ist kein Notruf und '
           'kann keine Ferndiagnose oder Sicherheitsgarantie geben.',
         ),
+        const SizedBox(height: 8),
+        const Text(
+          'Bitte nenne Gesundheitsangaben nur, wenn sie für diesen konkreten '
+          'Sicherheitsfall notwendig sind. Sie werden fallgebunden und ohne '
+          'freie Weitergabe verarbeitet.',
+          style: TextStyle(fontSize: 12),
+        ),
         const SizedBox(height: 14),
         _supportTextField(
           controller: _productIdentificationController,
@@ -2143,6 +2182,36 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
             () => _productSafetyGuidanceAcknowledged = value == true,
           ),
         ),
+        if (_selectedSubCategory == 'Unfall oder Verletzung durch Produkt') ...[
+          const SizedBox(height: 8),
+          const Text(
+            'Ist eine Person tatsächlich verletzt worden? Bitte getrennt '
+            'vom Unfallgeschehen angeben.',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          RadioGroup<bool>(
+            groupValue: _productSafetyInjuryOccurred,
+            onChanged: (value) => setState(
+              () => _productSafetyInjuryOccurred = value,
+            ),
+            child: const Column(
+              children: [
+                RadioListTile<bool>(
+                  key: ValueKey('support_product_safety_injury_yes'),
+                  value: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Ja, eine Person wurde verletzt.'),
+                ),
+                RadioListTile<bool>(
+                  key: ValueKey('support_product_safety_injury_no'),
+                  value: false,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Nein, es gab keine Verletzung.'),
+                ),
+              ],
+            ),
+          ),
+        ],
         const Text(
           'Die Meldung erhält eine eigene Referenz und eine servergebundene '
           'Schnelltriagefrist. Sie löst keine automatische Sperre, '
@@ -2285,31 +2354,58 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
                           ? _buildProductSafetyFields()
                           : _isHandoverExceptionSelection
                               ? _buildHandoverExceptionFields()
-                              : TextField(
-                                  controller: _descriptionController,
-                                  maxLength: 1400,
-                                  maxLines: null,
-                                  expands: true,
-                                  textAlignVertical: TextAlignVertical.top,
-                                  style: TextStyle(
-                                    color: isDark
-                                        ? Colors.white.withValues(alpha: 0.95)
-                                        : AppTheme.textPrimary(context),
-                                    fontSize: 15,
-                                    height: 1.5,
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText:
-                                        'Was ist passiert? Beschreibe die Situation so genau wie möglich …',
-                                    hintStyle: TextStyle(
-                                      color: isDark
-                                          ? Colors.white.withValues(alpha: 0.35)
-                                          : AppTheme.textDisabled(context),
-                                      fontSize: 15,
+                              : Column(
+                                  children: [
+                                    if (SupportFlowResult
+                                        ._containsPossibleSpecialCategoryData(
+                                      _descriptionController.text,
+                                    ))
+                                      const Padding(
+                                        padding:
+                                            EdgeInsets.fromLTRB(16, 12, 16, 0),
+                                        child: Text(
+                                          'Bitte nenne Gesundheitsangaben nur, '
+                                          'wenn sie für diesen Fall notwendig '
+                                          'sind. Die Angabe bleibt fallgebunden '
+                                          'und wird nicht frei weitergegeben.',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _descriptionController,
+                                        onChanged: (_) => setState(() {}),
+                                        maxLength: 1400,
+                                        maxLines: null,
+                                        expands: true,
+                                        textAlignVertical:
+                                            TextAlignVertical.top,
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? Colors.white
+                                                  .withValues(alpha: 0.95)
+                                              : AppTheme.textPrimary(context),
+                                          fontSize: 15,
+                                          height: 1.5,
+                                        ),
+                                        decoration: InputDecoration(
+                                          hintText:
+                                              'Was ist passiert? Beschreibe die Situation so genau wie möglich …',
+                                          hintStyle: TextStyle(
+                                            color: isDark
+                                                ? Colors.white
+                                                    .withValues(alpha: 0.35)
+                                                : AppTheme.textDisabled(
+                                                    context),
+                                            fontSize: 15,
+                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.all(18),
+                                          border: InputBorder.none,
+                                        ),
+                                      ),
                                     ),
-                                    contentPadding: const EdgeInsets.all(18),
-                                    border: InputBorder.none,
-                                  ),
+                                  ],
                                 ),
                 ),
               ),
@@ -2422,8 +2518,7 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
                     : 'dangerous_product',
                 productIdentification: _productIdentificationController.text,
                 riskDescription: _descriptionController.text,
-                injuryOccurred: _selectedSubCategory ==
-                    'Unfall oder Verletzung durch Produkt',
+                injuryOccurred: _productSafetyInjuryOccurred == true,
                 safetyGuidanceAcknowledged: _productSafetyGuidanceAcknowledged,
               )
             : null,

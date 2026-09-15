@@ -6,6 +6,7 @@ import {
   normalizeSupportAccountRecoveryGuidance,
 } from './support_account_recovery_domain.js';
 import { readConsumerDisputeConfiguration } from './consumer_dispute_config.js';
+import { detectPossibleSpecialCategoryText } from './special_category_data_guard.js';
 
 const TEMPLATE_SOURCE_SHA256 = '947f307e7919eed543c28e36af4d2b364d87dcde52025649d0d4620d64baaaa5';
 const identifiers = /^[A-Za-z0-9_.:-]+$/u;
@@ -88,7 +89,11 @@ const credentialSolicitationPatterns = Object.freeze([
   /(?:^|[^\p{L}])(?:sende|schicke|teile|nenne|uebermittle|übermittle|gib)(?![^.!?]{0,100}(?:kein(?:e|en|er|es)?|nicht|niemals))[^.!?]{0,100}(?:passwort|pin|otp|tan|einmalcode|wiederherstellungscode|recovery[ _-]?code|karten(?:zugangs)?daten|kontozugangsdaten)(?:$|[^\p{L}])/iu,
   /(?:^|[^\p{L}])(?:wir|der support)\s+(?:brauchen|benoetigen|benötigen|verlangen|fordern)(?![^.!?]{0,100}(?:kein(?:e|en|er|es)?|nicht|niemals))[^.!?]{0,100}(?:passwort|pin|otp|tan|einmalcode|wiederherstellungscode|recovery[ _-]?code|karten(?:zugangs)?daten|kontozugangsdaten)(?:$|[^\p{L}])/iu,
 ]);
-const supportMessageContentClasses = new Set(['secret', 'personal_data']);
+const supportMessageContentClasses = new Set([
+  'secret',
+  'personal_data',
+  'special_category',
+]);
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -188,6 +193,7 @@ function sensitiveContentClass(value) {
   if (personalDataValuePatterns.some((pattern) => pattern.test(value))) {
     return 'personal_data';
   }
+  if (detectPossibleSpecialCategoryText(value)) return 'special_category';
   return null;
 }
 

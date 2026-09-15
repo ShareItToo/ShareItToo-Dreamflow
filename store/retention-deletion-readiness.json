@@ -33,7 +33,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "cf7aafce216f8543c935aa3b2877763b0dff4603ae8f7c812e7ae46df860cfd2"
+      "sha256": "b5dcb11ff1b716679632be1bcb113e0b5001a1945141ed35d1fd4c2fcaa0b4b1"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
@@ -53,7 +53,7 @@
     },
     {
       "path": "backend/src/moderation_domain.js",
-      "sha256": "55f46588ffac86b1ca2d49347a169811715818818ae8e9f3050f17028f0439e9"
+      "sha256": "a9cea4e6f25faf3d06762d8a45c04b1f1f3d290062aa6bc118ac6d8f9c050558"
     },
     {
       "path": "backend/src/moderation_decision_workflow.js",
@@ -85,7 +85,7 @@
     },
     {
       "path": "backend/src/privacy_export.js",
-      "sha256": "34db8eec19447c9f176068a3b2165a913449a3ba5ae9f6ce6d0c734c6852f690"
+      "sha256": "00cf30b19fd5fdb8b69cfde3c1e77b7e7cb1e7995b81acf8e534a236873785ae"
     },
     {
       "path": "backend/src/privacy_export_policy.js",
@@ -105,11 +105,15 @@
     },
     {
       "path": "backend/src/support_case_domain.js",
-      "sha256": "8d143ac32e6186636bc5215db32cdce95be9a88b4e91845359f9120fb2838281"
+      "sha256": "176ba95477697e4fc4477f6c703d18150a475cfefb2f56ede43bb49b8e608274"
+    },
+    {
+      "path": "backend/src/special_category_data_guard.js",
+      "sha256": "17da8b601a219a991c349ce07bbde7315465074711182a9a8c89f9f7be743355"
     },
     {
       "path": "backend/src/support_case_workflow.js",
-      "sha256": "b8e7da93cf230b6597da45d6756efec7cff1280419fc1eab6ce9942dcfac445d"
+      "sha256": "799a5b834d468cc39fe93f37578565760ca87cfd3cc98085ce1e6642dade9ae8"
     },
     {
       "path": "backend/src/handover_exception_domain.js",
@@ -145,7 +149,7 @@
     },
     {
       "path": "backend/src/support_appeal_domain.js",
-      "sha256": "a25cb9d1e65a9b38b48020b7293f51d7c4d9daf480323c1b53eb17c66059b942"
+      "sha256": "3a89eec648ae7e2d7c779c78933723099fa15f1fb1ded2454cae7d9480f1cefe"
     },
     {
       "path": "backend/src/support_appeal_workflow.js",
@@ -153,7 +157,7 @@
     },
     {
       "path": "backend/src/support_decision_domain.js",
-      "sha256": "7f1488ed387a4ea59d5fc2a448c2b5437f0ced014600262b85f4a51b697887d9"
+      "sha256": "7537f0451bcd6295c67a03fb502f3052f1f7894082d79e196a57095eb4dfb642"
     },
     {
       "path": "backend/src/support_decision_workflow.js",
@@ -181,7 +185,7 @@
     },
     {
       "path": "backend/src/support_message_domain.js",
-      "sha256": "8c3a30a2438fd4697ef1e0fbc8cbaf2e8cd4746c3f4889ed201a79ca34c2c7b5"
+      "sha256": "93392bffb853565e17e202de51716014eca698549e761e51eb3be91274d1dafb"
     },
     {
       "path": "backend/src/support_message_workflow.js",
@@ -217,7 +221,7 @@
     },
     {
       "path": "backend/src/support_evidence_workflow.js",
-      "sha256": "6846344047ada6a2d0ad76a934bb3f12cc290e007e453751c0aa4ada3364b8c4"
+      "sha256": "3b88a56398b05b945e7841e3d6125d444c00cd6b5b80e08c23e1131f337c05db"
     },
     {
       "path": "backend/src/support_safety_impact_domain.js",
@@ -375,6 +379,14 @@
       "path": "backend/sql/migrations/078_retention_legal_hold_scope.down.sql",
       "sha256": "d8094b0f8eefef1788697e3493fc469e68a453598ad3ec9b91605509ef735f53"
     },
+      {
+        "path": "backend/sql/migrations/079_special_category_intake_minimization.up.sql",
+        "sha256": "7a715e45e42ef18823dba47985942523c0610a4ca5e1b7b9d9b509bc9b5fb50e"
+      },
+      {
+        "path": "backend/sql/migrations/079_special_category_intake_minimization.down.sql",
+        "sha256": "03314e09f068f32cf122fa6f440d1e5aaf164206b177f4c71031be9c83a169ff"
+      },
     {
       "path": "backend/sql/migrations/078_retention_legal_hold_scope.up.sql",
       "sha256": "755fb77925500b6eef3b1a995358d8d473b0ef2f3e47753f5ff9f8064143989c"
@@ -729,7 +741,7 @@
     },
     {
       "path": "lib/screens/support_flow_screen.dart",
-      "sha256": "382e9043672a6d1c29b34d6b9a1bbc8216cec733e960421cab54e11ac09f2f88"
+      "sha256": "a71ee975629d539a38655a359528e4b533c1f7d63e205f218f4a53d5ad3dd604"
     },
     {
       "path": "lib/config/supply_enrichment_technical_config.dart",

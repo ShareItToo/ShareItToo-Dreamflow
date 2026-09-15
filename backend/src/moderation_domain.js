@@ -1,3 +1,5 @@
+import { assertNoPossibleSpecialCategoryText } from './special_category_data_guard.js';
+
 const REPORT_TARGETS = new Set(['user', 'listing', 'booking', 'message', 'review']);
 const REPORT_PRIORITIES = new Set(['low', 'normal', 'high', 'urgent']);
 const REVIEW_DIRECTIONS = new Set(['renter_to_owner', 'owner_to_renter']);
@@ -53,6 +55,11 @@ function requiredText(value, maximum, code) {
   if (typeof value !== 'string') throw new ModerationDomainError(400, code);
   const result = value.trim();
   if (!result || result.length > maximum) throw new ModerationDomainError(400, code);
+  assertNoPossibleSpecialCategoryText(result, {
+    errorFactory: (blockedCode, details) => new ModerationDomainError(409, blockedCode, details),
+    code: 'moderation_special_category_content_blocked',
+    field: code,
+  });
   return result;
 }
 
@@ -62,6 +69,11 @@ function optionalText(value, maximum, code) {
   const result = value.trim();
   if (!result) return null;
   if (result.length > maximum) throw new ModerationDomainError(400, code);
+  assertNoPossibleSpecialCategoryText(result, {
+    errorFactory: (blockedCode, details) => new ModerationDomainError(409, blockedCode, details),
+    code: 'moderation_special_category_content_blocked',
+    field: code,
+  });
   return result;
 }
 

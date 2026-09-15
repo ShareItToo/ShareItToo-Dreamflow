@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertBoundSnapshotAttestation } from './read_bound_source.mjs';
 
 const sourcePaths = [
   'lib/widgets/support_principal_controller.dart',
@@ -32,6 +33,7 @@ const sourcePaths = [
   'backend/src/db.js',
   'backend/src/mailer.js',
   'backend/src/support_case_domain.js',
+  'backend/src/special_category_data_guard.js',
   'backend/src/support_case_workflow.js',
   'backend/src/handover_exception_domain.js',
   'backend/src/handover_exception_workflow.js',
@@ -100,6 +102,8 @@ const sourcePaths = [
   'backend/sql/migrations/014_account_legal_holds.up.sql',
   'backend/sql/migrations/078_retention_legal_hold_scope.up.sql',
   'backend/sql/migrations/078_retention_legal_hold_scope.down.sql',
+  'backend/sql/migrations/079_special_category_intake_minimization.up.sql',
+  'backend/sql/migrations/079_special_category_intake_minimization.down.sql',
   'backend/sql/migrations/015_v51_contract_persistence.up.sql',
   'backend/sql/migrations/016_v51_booking_quotes.up.sql',
   'backend/sql/migrations/017_v51_contract_receipts.up.sql',
@@ -1799,6 +1803,7 @@ export function validateRetentionDeletionReadiness({
   sourceTexts = {},
   evidenceTexts = {},
   requireApproved = false,
+  historicalSnapshot,
 }) {
   const retention = object(retentionManifest, 'store/retention-deletion-readiness.json');
   const privacy = object(privacyManifest, 'store/privacy-disclosures.json');
@@ -1807,18 +1812,25 @@ export function validateRetentionDeletionReadiness({
   if (!['draft', 'approved'].includes(retention.state)) fail('retention state must be draft or approved.');
   if (typeof retention.approvalAllowed !== 'boolean') fail('approvalAllowed must be boolean.');
 
-  if (!Array.isArray(retention.sourceInventory) || retention.sourceInventory.length !== sourcePaths.length) {
+  const requiredSourcePaths = historicalSnapshot
+    ? (assertBoundSnapshotAttestation({
+      repositoryRoot: root,
+      snapshot: historicalSnapshot,
+      inventory: Object.fromEntries((retention.sourceInventory ?? []).map(({ path, sha256 }) => [path, sha256])),
+    }), (retention.sourceInventory ?? []).map(({ path }) => path))
+    : sourcePaths;
+  if (!Array.isArray(retention.sourceInventory) || retention.sourceInventory.length !== requiredSourcePaths.length) {
     fail('sourceInventory must contain every required retention source exactly once.');
   }
   const sourceMap = new Map();
   for (const entryValue of retention.sourceInventory) {
     const entry = object(entryValue, 'sourceInventory entry');
     exactKeys(entry, ['path', 'sha256'], `sourceInventory.${entry.path ?? 'unknown'}`);
-    if (!sourcePaths.includes(entry.path) || sourceMap.has(entry.path)) fail(`Unexpected or duplicate source path: ${entry.path}.`);
+    if (!requiredSourcePaths.includes(entry.path) || sourceMap.has(entry.path)) fail(`Unexpected or duplicate source path: ${entry.path}.`);
     if (!/^[a-f0-9]{64}$/.test(entry.sha256)) fail(`Invalid source hash: ${entry.path}.`);
     sourceMap.set(entry.path, entry.sha256);
   }
-  for (const path of sourcePaths) {
+  for (const path of requiredSourcePaths) {
     if (sha256(text(root, sourceTexts, path)) !== sourceMap.get(path)) fail(`sourceInventory hash is stale: ${path}.`);
   }
   assertSourceContracts(root, sourceTexts);

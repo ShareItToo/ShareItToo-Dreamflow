@@ -77,8 +77,13 @@ release evidence.
   changes. Before the first package commit, search the complete reverse-binding
   closure and refresh it once in dependency order. Avoid serial follow-up
   commits for bindings that were discoverable before staging; redesign cyclic
-  or self-referential bindings. A hash refresh cannot change an approval, legal
-  or release claim.
+  or self-referential bindings. Classify any mass source-drift fanout once from
+  that reverse index before a repeated full-gate rerun. A hash refresh cannot
+  change an approval, legal or release claim. Freeze the complete source-path
+  set and all validator, test and script changes before capturing source counts,
+  hashes and inventory digests; if a real change becomes necessary afterward,
+  invalidate the capture, rerun focused closure, and only then repeat the full
+  gate.
 - Drive stores this canonical policy once in the current SIT Codex folder.
   Repository `AGENTS.md`, `docs/current_work_package.md` and
   `docs/current_state.md` point to it instead of duplicating the full policy.

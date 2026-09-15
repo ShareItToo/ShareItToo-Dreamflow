@@ -50,7 +50,7 @@ test('rejects source drift and removal of the payout canonicalization', () => {
   value.sourceInventory['backend/src/payment_workflow.js'] = '0'.repeat(64);
   assert.throws(
     () => validateWp153PositionReviewReleaseParity({ repositoryRoot, evidence: value }),
-    /source inventory digest|source inventory backend/u,
+    /bound snapshot unavailable|source inventory digest|source inventory backend/u,
   );
 
   const path = 'backend/src/payment_workflow.js';
@@ -61,7 +61,7 @@ test('rejects source drift and removal of the payout canonicalization', () => {
       repositoryRoot,
       sourceTexts: { [path]: source },
     }),
-    /implementation is missing canonicalPositionReviewHold/u,
+    /bound source digest mismatch|implementation is missing canonicalPositionReviewHold/u,
   );
 });
 

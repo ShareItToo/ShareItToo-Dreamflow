@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { boundDigest, materializeBoundSourceTexts, resolveBoundSnapshot } from './read_bound_source.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath = 'docs/evidence/release-readiness/wp159-processor-controller-region-transfer-truth-20260915.json';
@@ -24,8 +25,8 @@ function fail(message) { throw new Error(`WP159 ${message}.`); }
 function exact(actual, expected, label) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${label} is invalid`);
 }
-function digest(repositoryRoot, path) {
-  return createHash('sha256').update(readFileSync(resolve(repositoryRoot, path))).digest('hex');
+function digest(repositoryRoot, path, sourceTexts, revision, expectedDigest) {
+  return boundDigest({ repositoryRoot, path, revision, sourceTexts, expectedDigest });
 }
 function inventoryDigest(inventory) {
   return createHash('sha256').update(Object.entries(inventory)
@@ -42,6 +43,27 @@ function object(value, label) {
 
 export function validateWp159ProcessorControllerRegionTransferTruth({ repositoryRoot = root, evidence, sourceTexts = {} } = {}) {
   const value = evidence ?? JSON.parse(readFileSync(resolve(repositoryRoot, evidencePath), 'utf8'));
+  const baselineRevision = value.repository?.finalHead ?? value.repository?.baselineHead;
+  let boundSnapshot;
+  try {
+    boundSnapshot = resolveBoundSnapshot({
+      repositoryRoot,
+      baselineHead: baselineRevision,
+      inventory: value.sourceInventory,
+      anchorPath: evidencePath,
+      finalHead: value.repository?.finalHead,
+    });
+  } catch (error) {
+    fail(error?.message ?? 'bound source snapshot unavailable.');
+  }
+  const boundRevision = boundSnapshot.revision;
+  sourceTexts = {
+    ...materializeBoundSourceTexts({
+      repositoryRoot,
+      snapshot: boundSnapshot,
+    }),
+    ...sourceTexts,
+  };
   exact(value.schemaVersion, 1, 'schemaVersion');
   exact(value.package, 'WP159-PROCESSOR-CONTROLLER-REGION-TRANSFER-TRUTH-20260915', 'package');
   exact(value.status, 'technical-recognized-account-gates-open', 'status');
@@ -136,7 +158,7 @@ export function validateWp159ProcessorControllerRegionTransferTruth({ repository
   exact(value.captureAttestation.sourceInventoryDigest, inventoryDigest(value.sourceInventory), 'source inventory digest');
   for (const path of wp159SourcePaths) {
     if (!/^[a-f0-9]{64}$/u.test(value.sourceInventory[path] ?? '')) fail(`source inventory ${path} is not SHA-256`);
-    exact(digest(repositoryRoot, path), value.sourceInventory[path], `source inventory ${path}`);
+    exact(digest(repositoryRoot, path, sourceTexts, boundRevision, value.sourceInventory[path]), value.sourceInventory[path], `source inventory ${path}`);
   }
   const handover = sourceTexts[handoverPath] ?? readFileSync(resolve(repositoryRoot, handoverPath), 'utf8');
   hasAll(handover, ['WP159', 'technical recipient facts', 'OWNER_GATE_REQUIRED:PROCESSOR_CONTRACT_REGION_TRANSFER_READBACK', 'No contract, DPA'], 'handover');
@@ -149,7 +171,9 @@ export function validateWp159ProcessorControllerRegionTransferTruth({ repository
   return { status: value.status, ownerGate: value.accountGates.ownerGate, providers: Object.keys(value.providerFindings).length };
 }
 
-function source(repositoryRoot, path, sourceTexts) { return sourceTexts?.[path] ?? readFileSync(resolve(repositoryRoot, path), 'utf8'); }
+function source(repositoryRoot, path, sourceTexts, revision) {
+  return boundText({ repositoryRoot, path, revision, sourceTexts });
+}
 function main() {
   const result = validateWp159ProcessorControllerRegionTransferTruth();
   console.log(`WP159 valid: providers=${result.providers}, ownerGate=${result.ownerGate}.`);

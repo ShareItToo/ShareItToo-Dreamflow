@@ -684,6 +684,42 @@ test('intake requires versioned single-issue evidence and rejects multiple issue
   assert.deepEqual(separated.issueScope, issueScope(true));
 });
 
+test('special-category wording fails closed until technical handling is explicit', () => {
+  const base = {
+    caseType: 'general_help',
+    caseSubType: 'general_how_to',
+    summary: 'Bitte die medizinische Angabe nur für diesen Supportfall prüfen.',
+    safetyTriage: safetyTriage(),
+    issueScope: issueScope(),
+  };
+  assert.throws(
+    () => normalizeSupportCaseInput(base, { now }),
+    /support_special_category_handling_required/u,
+  );
+  const result = normalizeSupportCaseInput({
+    ...base,
+    specialCategoryHandling: {
+      version: 'sit_special_category_handling_v1',
+      necessityAcknowledged: true,
+      warningShown: true,
+      ownerRole: 'privacy_owner',
+      scope: 'case_bound',
+      replicationPolicy: 'no_unrestricted_replication',
+    },
+  }, { now });
+  assert.deepEqual(result.issueScope.specialCategoryHandling, {
+    version: 'sit_special_category_handling_v1',
+    classification: 'possible_special_category',
+    necessityAcknowledged: true,
+    warningShown: true,
+    ownerRole: 'privacy_owner',
+    scope: 'case_bound',
+    replicationPolicy: 'no_unrestricted_replication',
+    detectionVersion: 'sit_special_category_detection_v1',
+    detectedFields: ['summary'],
+  });
+});
+
 test('transition graph is explicit and rejects skips, paused and stale versions', () => {
   assert.equal(canTransitionSupportCase('received', 'acknowledged'), true);
   assert.equal(canTransitionSupportCase('received', 'resolved'), false);

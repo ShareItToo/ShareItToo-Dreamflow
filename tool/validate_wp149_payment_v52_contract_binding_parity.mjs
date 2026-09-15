@@ -7,6 +7,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { validateP0bAstraAiLegalCrosscheck } from
   './validate_p0b_astra_ai_legal_crosscheck.mjs';
+import { boundDigest, materializeBoundSourceTexts, resolveBoundSnapshot } from
+  './read_bound_source.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath =
@@ -80,10 +82,12 @@ function exact(actual, expected, label) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${label} is invalid.`);
 }
 
-function digest(repositoryRoot, path) {
-  return createHash('sha256')
-    .update(readFileSync(resolve(repositoryRoot, path)))
-    .digest('hex');
+function digest(repositoryRoot, path, sourceTexts, revision, expectedDigest) {
+  try {
+    return boundDigest({ repositoryRoot, path, sourceTexts, revision, expectedDigest });
+  } catch (error) {
+    fail(error?.message ?? `bound source digest invalid: ${path}`);
+  }
 }
 
 function inventoryDigest(inventory) {
@@ -293,6 +297,23 @@ export function validateWp149PaymentV52ContractBindingParity({
 } = {}) {
   const value = evidence
     ?? JSON.parse(readFileSync(resolve(repositoryRoot, evidencePath), 'utf8'));
+  let boundSnapshot;
+  try {
+    boundSnapshot = resolveBoundSnapshot({
+      repositoryRoot,
+      baselineHead: value.repository?.baselineHead,
+      inventory: value.sourceInventory,
+      anchorPath: evidencePath,
+      finalHead: value.repository?.finalHead,
+    });
+  } catch (error) {
+    fail(error?.message ?? 'bound source snapshot unavailable.');
+  }
+  const boundRevision = boundSnapshot.revision;
+  sourceTexts = {
+    ...materializeBoundSourceTexts({ repositoryRoot, snapshot: boundSnapshot }),
+    ...sourceTexts,
+  };
 
   exact(value?.schemaVersion, 1, 'schema version');
   exact(value?.kind, 'sit-wp149-payment-v52-contract-binding-parity', 'kind');
@@ -490,12 +511,16 @@ export function validateWp149PaymentV52ContractBindingParity({
     if (!/^[a-f0-9]{64}$/u.test(expected ?? '')) {
       fail(`source inventory ${path} does not contain a SHA-256 digest.`);
     }
-    exact(digest(repositoryRoot, path), expected, `source inventory ${path}`);
+    exact(
+      digest(repositoryRoot, path, sourceTexts, boundRevision, expected),
+      expected,
+      `source inventory ${path}`,
+    );
   }
 
   validateRuntimeWiring(repositoryRoot, sourceTexts);
   const handoverText = handover
-    ?? readFileSync(resolve(repositoryRoot, handoverPath), 'utf8');
+    ?? source(repositoryRoot, handoverPath, sourceTexts);
   for (const marker of [
     'V5.2-2026-08-16',
     'contract.user_id',

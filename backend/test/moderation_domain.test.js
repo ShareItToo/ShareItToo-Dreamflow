@@ -30,6 +30,20 @@ test('report input is bounded, categorized and deduplicates evidence', () => {
   assert.equal(report.evidenceUploadIds.length, 1);
 });
 
+test('moderation free text rejects possible special-category content before storage', () => {
+  assert.throws(
+    () => normalizeReportInput({
+      targetType: 'listing',
+      targetId: 'listing-1',
+      reasonCode: 'content.review',
+      details: 'Die Diagnose der betroffenen Person steht im Text.',
+    }),
+    (error) => error instanceof ModerationDomainError
+      && error.code === 'moderation_special_category_content_blocked'
+      && error.details?.inputStored === false,
+  );
+});
+
 test('non-acute harassment intake owns reason and priority server-side', () => {
   const report = normalizeHarassmentBlockReportInput({
     targetUserId: 'user-2',

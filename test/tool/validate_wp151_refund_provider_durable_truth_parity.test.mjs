@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
@@ -7,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 
 import {
   validateWp151RefundProviderDurableTruthParity,
-  wp151SourcePaths,
 } from '../../tool/validate_wp151_refund_provider_durable_truth_parity.mjs';
 
 const evidenceUrl = new URL(
@@ -50,18 +48,7 @@ const paymentCheckoutUrl = new URL(
 const repositoryRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
 function fixture() {
-  const value = JSON.parse(readFileSync(evidenceUrl, 'utf8'));
-  value.sourceInventory = Object.fromEntries(wp151SourcePaths.map((path) => [
-    path,
-    createHash('sha256').update(readFileSync(resolve(repositoryRoot, path))).digest('hex'),
-  ]));
-  value.captureAttestation.sourceInventoryDigest = createHash('sha256')
-    .update(Object.entries(value.sourceInventory)
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-      .map(([path, hash]) => `${path}\0${hash}\n`)
-      .join(''))
-    .digest('hex');
-  return value;
+  return JSON.parse(readFileSync(evidenceUrl, 'utf8'));
 }
 
 test('accepts the exact fail-closed WP151 refund-provider truth closure', () => {

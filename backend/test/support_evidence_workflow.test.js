@@ -82,6 +82,7 @@ test('SUP-101 rejects HTML-like stored descriptions and unsafe control character
       description: '<img src=x onerror=alert(1)>',
       purpose: 'Dokumentation des gemeldeten Zustands.',
       thirdPartyData: false,
+      specialCategoryClassification: 'not_indicated',
     }),
     (error) => error.code === 'support_evidence_description_invalid',
   );
@@ -90,9 +91,39 @@ test('SUP-101 rejects HTML-like stored descriptions and unsafe control character
       description: 'Nachweis\u0000 mit Steuerzeichen',
       purpose: 'Dokumentation des gemeldeten Zustands.',
       thirdPartyData: false,
+      specialCategoryClassification: 'not_indicated',
     }),
     (error) => error.code === 'support_evidence_description_invalid',
   );
+});
+
+test('WP160 requires attachment classification and rejects health mismatch', () => {
+  assert.throws(
+    () => normalizeSupportEvidenceMetadata({
+      description: 'Dokumentation des gemeldeten Zustands.',
+      purpose: 'Dokumentation des gemeldeten Zustands.',
+      thirdPartyData: false,
+    }),
+    /support_evidence_special_category_classification_required/u,
+  );
+  assert.throws(
+    () => normalizeSupportEvidenceMetadata({
+      description: 'Medizinischer Befund als Nachweis.',
+      purpose: 'Nur für die konkrete Fallprüfung.',
+      thirdPartyData: false,
+      specialCategoryClassification: 'not_indicated',
+    }),
+    /support_evidence_special_category_classification_mismatch/u,
+  );
+  const normalized = normalizeSupportEvidenceMetadata({
+    description: 'Medizinischer Befund als Nachweis.',
+    purpose: 'Nur für die konkrete Fallprüfung.',
+    thirdPartyData: false,
+    specialCategoryClassification: 'possible_special_category',
+  });
+  assert.equal(normalized.specialCategoryClassification, 'possible_special_category');
+  assert.equal(normalized.specialCategoryDetection.detectionVersion,
+    'sit_special_category_detection_v1');
 });
 
 test('SUP-102 through SUP-105 are bound by database, config and route guards', () => {

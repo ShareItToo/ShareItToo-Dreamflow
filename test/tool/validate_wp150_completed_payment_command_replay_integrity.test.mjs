@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
@@ -7,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 
 import {
   validateWp150CompletedPaymentCommandReplayIntegrity,
-  wp150SourcePaths,
 } from '../../tool/validate_wp150_completed_payment_command_replay_integrity.mjs';
 
 const evidenceUrl = new URL(
@@ -27,18 +25,7 @@ const migrationUrl = new URL(
 const repositoryRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
 function fixture() {
-  const value = JSON.parse(readFileSync(evidenceUrl, 'utf8'));
-  value.sourceInventory = Object.fromEntries(wp150SourcePaths.map((path) => [
-    path,
-    createHash('sha256').update(readFileSync(resolve(repositoryRoot, path))).digest('hex'),
-  ]));
-  value.captureAttestation.sourceInventoryDigest = createHash('sha256')
-    .update(Object.entries(value.sourceInventory)
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-      .map(([path, hash]) => `${path}\0${hash}\n`)
-      .join(''))
-    .digest('hex');
-  return value;
+  return JSON.parse(readFileSync(evidenceUrl, 'utf8'));
 }
 
 test('accepts the exact fail-closed WP150 replay-integrity closure', () => {

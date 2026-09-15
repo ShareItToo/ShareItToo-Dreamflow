@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { validateLegalReadiness } from './validate_legal_readiness.mjs';
 import { validateV55LegalAssets } from './validate_v55_legal_assets.mjs';
+import { boundDigest, materializeBoundSourceTexts, resolveBoundSnapshot } from './read_bound_source.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath =
@@ -83,10 +84,8 @@ function source(repositoryRoot, path, sourceTexts) {
   return sourceTexts?.[path] ?? readFileSync(resolve(repositoryRoot, path), 'utf8');
 }
 
-function digest(repositoryRoot, path) {
-  return createHash('sha256')
-    .update(readFileSync(resolve(repositoryRoot, path)))
-    .digest('hex');
+function digest(repositoryRoot, path, sourceTexts, revision, expectedDigest) {
+  return boundDigest({ repositoryRoot, path, revision, sourceTexts, expectedDigest });
 }
 
 function inventoryDigest(inventory) {
@@ -107,6 +106,27 @@ export function validateWp153PositionReviewReleaseParity({
   const value = evidence ?? JSON.parse(
     readFileSync(resolve(repositoryRoot, evidencePath), 'utf8'),
   );
+  const baselineRevision = value.repository?.finalHead ?? value.repository?.baselineHead;
+  let boundSnapshot;
+  try {
+    boundSnapshot = resolveBoundSnapshot({
+      repositoryRoot,
+      baselineHead: baselineRevision,
+      inventory: value.sourceInventory,
+      anchorPath: evidencePath,
+      finalHead: value.repository?.finalHead,
+    });
+  } catch (error) {
+    fail(error?.message ?? 'bound source snapshot unavailable.');
+  }
+  const boundRevision = boundSnapshot.revision;
+  sourceTexts = {
+    ...materializeBoundSourceTexts({
+      repositoryRoot,
+      snapshot: boundSnapshot,
+    }),
+    ...sourceTexts,
+  };
   exact(value?.schemaVersion, 1, 'schema version');
   exact(value?.package, 'WP153-POSITION-REVIEW-RELEASE-PARITY-20260915', 'package');
   exact(value?.status,
@@ -181,7 +201,7 @@ export function validateWp153PositionReviewReleaseParity({
     if (!/^[a-f0-9]{64}$/u.test(value.sourceInventory[path] ?? '')) {
       fail(`source inventory ${path} does not contain a SHA-256 digest.`);
     }
-    exact(digest(repositoryRoot, path), value.sourceInventory[path],
+    exact(digest(repositoryRoot, path, sourceTexts, boundRevision, value.sourceInventory[path]), value.sourceInventory[path],
       `source inventory ${path}`);
   }
 

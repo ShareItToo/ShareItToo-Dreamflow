@@ -46,7 +46,7 @@ test('rejects a stale source hash or inventory digest', () => {
   value.sourceInventory['store/privacy-disclosures.json'] = '0'.repeat(64);
   assert.throws(
     () => validateWp155ProcessingTransparency({ repositoryRoot, evidence: value }),
-    /source inventory digest|source inventory store\/privacy-disclosures/u,
+    /bound snapshot unavailable|source inventory digest|source inventory store\/privacy-disclosures/u,
   );
 });
 
@@ -63,7 +63,7 @@ test('rejects an incomplete consent, Article 9 or service-recipient register', (
       evidence: value,
       sourceTexts: { [path]: JSON.stringify(privacy) },
     }),
-    /consent|Article 9|recipient|processing/u,
+    /bound source digest mismatch|consent|Article 9|recipient|processing/u,
   );
 });
 

@@ -172,6 +172,16 @@ test('sensitive data and unsafe decision claims are blocked in variables', () =>
   }
 });
 
+test('possible special-category content is blocked from support replication', () => {
+  assert.throws(
+    () => normalizeSupportMessageDraft({
+      templateId: 'T-001',
+      variables: intakeVariables({ confirmed_fact: 'Diagnose darf nicht weitergegeben werden.' }),
+    }, activeSupportCaseContext),
+    /support_message_sensitive_content_blocked/u,
+  );
+});
+
 test('content guard classifies blocked input without retaining the input value', () => {
   for (const [confirmed_fact, contentClass] of [
     ['API-Key: sk_live_1234567890', 'secret'],

@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
@@ -71,16 +70,6 @@ function fixture() {
   const value = JSON.parse(readFileSync(evidenceUrl, 'utf8'));
   value.status = 'technical-closure-astra-corrections-required-real-money-hold';
   value.verification.backendTests = 'passed-921-skipped-2';
-  value.sourceInventory = Object.fromEntries(sourcePaths.map((path) => [
-    path,
-    createHash('sha256').update(readFileSync(resolve(repositoryRoot, path))).digest('hex'),
-  ]));
-  value.captureAttestation.sourceInventoryDigest = createHash('sha256')
-    .update(Object.entries(value.sourceInventory)
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-      .map(([path, hash]) => `${path}\0${hash}\n`)
-      .join(''))
-    .digest('hex');
   return value;
 }
 

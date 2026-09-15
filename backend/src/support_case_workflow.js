@@ -142,6 +142,7 @@ export function shapeSupportCase(row, { staff = false, actorId = null, now = new
     responseDueAt: iso(row.response_due_at),
     evidenceDueAt: iso(row.evidence_due_at),
     internalSummary: row.internal_summary ?? null,
+    specialCategoryHandling: row.intake_scope_evidence?.specialCategoryHandling ?? null,
     productSafetyEvidence: row.product_safety_evidence ?? null,
     flags: Object.freeze({
       safety: row.safety_flag === true,
@@ -560,6 +561,14 @@ export async function createSupportCase(client, {
       ...(normalized.article18CandidateFlag ? { article18Candidate: true } : {}),
       issueScopeVersion: normalized.issueScope.version,
       separationGuidanceShown: normalized.issueScope.separationGuidanceShown,
+      ...(normalized.issueScope.specialCategoryHandling == null ? {} : {
+        specialCategoryClassification:
+          normalized.issueScope.specialCategoryHandling.classification,
+        specialCategoryOwnerRole: normalized.issueScope.specialCategoryHandling.ownerRole,
+        specialCategoryWarningShown: true,
+        specialCategoryReplicationPolicy:
+          normalized.issueScope.specialCategoryHandling.replicationPolicy,
+      }),
       ...(dsaNoticeEvidence == null ? {} : {
         dsaNoticeNumber,
         dsaNoticeVersion: dsaNoticeEvidence.version,

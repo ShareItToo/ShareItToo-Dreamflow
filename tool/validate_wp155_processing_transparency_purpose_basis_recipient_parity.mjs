@@ -6,6 +6,12 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { validatePrivacyDisclosures } from './validate_privacy_disclosures.mjs';
+import {
+  boundDigest,
+  deriveBoundSnapshotAttestation,
+  materializeBoundSourceTexts,
+  resolveBoundSnapshot,
+} from './read_bound_source.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath = 'docs/evidence/release-readiness/wp155-processing-transparency-purpose-basis-recipient-parity-20260915.json';
@@ -73,10 +79,8 @@ function inventoryDigest(inventory) {
     .digest('hex');
 }
 
-function digest(repositoryRoot, path) {
-  return createHash('sha256')
-    .update(readFileSync(resolve(repositoryRoot, path)))
-    .digest('hex');
+function digest(repositoryRoot, path, sourceTexts, revision, expectedDigest) {
+  return boundDigest({ repositoryRoot, path, revision, sourceTexts, expectedDigest });
 }
 
 function source(repositoryRoot, path, sourceTexts) {
@@ -93,6 +97,27 @@ export function validateWp155ProcessingTransparency({
   sourceTexts = {},
 } = {}) {
   const value = evidence ?? JSON.parse(readFileSync(resolve(repositoryRoot, evidencePath), 'utf8'));
+  const baselineRevision = value.repository?.finalHead ?? value.repository?.baselineHead;
+  let boundSnapshot;
+  try {
+    boundSnapshot = resolveBoundSnapshot({
+      repositoryRoot,
+      baselineHead: baselineRevision,
+      inventory: value.sourceInventory,
+      anchorPath: evidencePath,
+      finalHead: value.repository?.finalHead,
+    });
+  } catch (error) {
+    fail(error?.message ?? 'bound source snapshot unavailable.');
+  }
+  const boundRevision = boundSnapshot.revision;
+  sourceTexts = {
+    ...materializeBoundSourceTexts({
+      repositoryRoot,
+      snapshot: boundSnapshot,
+    }),
+    ...sourceTexts,
+  };
   exact(value.schemaVersion, 1, 'schemaVersion');
   exact(value.package, 'WP155-PROCESSING-TRANSPARENCY-PURPOSE-BASIS-RECIPIENT-PARITY-20260915', 'package');
   if (![
@@ -172,10 +197,23 @@ export function validateWp155ProcessingTransparency({
     if (!/^[a-f0-9]{64}$/u.test(value.sourceInventory[path] ?? '')) {
       fail(`source inventory ${path} is not a SHA-256 digest.`);
     }
-    exact(digest(repositoryRoot, path), value.sourceInventory[path], `source inventory ${path}`);
+    exact(digest(repositoryRoot, path, sourceTexts, boundRevision, value.sourceInventory[path]), value.sourceInventory[path], `source inventory ${path}`);
   }
 
   const privacy = JSON.parse(source(repositoryRoot, 'store/privacy-disclosures.json', sourceTexts));
+  const privacySnapshot = deriveBoundSnapshotAttestation({
+    repositoryRoot,
+    snapshot: boundSnapshot,
+    inventory: Object.fromEntries((privacy.sourceInventory ?? []).map(({ path, sha256 }) => [path, sha256])),
+  });
+  sourceTexts = {
+    ...sourceTexts,
+    ...materializeBoundSourceTexts({
+      repositoryRoot,
+      snapshot: privacySnapshot,
+    }),
+    ...sourceTexts,
+  };
   const decisions = privacy.processingTransparency?.requiredDecisions;
   exact(Object.keys(decisions ?? {}).sort(), [...decisionKeys].sort(), 'processing decisions');
   for (const key of decisionKeys) assertOpenDecision(decisions[key], `processing decision ${key}`);
@@ -189,6 +227,7 @@ export function validateWp155ProcessingTransparency({
     submissionManifest: JSON.parse(source(repositoryRoot, 'store/submission.json', sourceTexts)),
     deviceManifest: JSON.parse(source(repositoryRoot, 'store/device-validation.json', sourceTexts)),
     sourceTexts,
+    historicalSnapshot: privacySnapshot,
   });
   exact(privacyResult.processingActivityCount, 14, 'validator activity count');
 

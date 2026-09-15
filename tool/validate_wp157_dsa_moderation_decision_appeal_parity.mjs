@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { boundDigest, materializeBoundSourceTexts, resolveBoundSnapshot } from './read_bound_source.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath = 'docs/evidence/release-readiness/wp157-dsa-moderation-decision-appeal-parity-20260915.json';
@@ -35,8 +36,8 @@ function fail(message) { throw new Error(`WP157 ${message}.`); }
 function exact(actual, expected, label) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${label} is invalid`);
 }
-function digest(repositoryRoot, path) {
-  return createHash('sha256').update(readFileSync(resolve(repositoryRoot, path))).digest('hex');
+function digest(repositoryRoot, path, sourceTexts, revision, expectedDigest) {
+  return boundDigest({ repositoryRoot, path, revision, sourceTexts, expectedDigest });
 }
 function inventoryDigest(inventory) {
   return createHash('sha256').update(Object.entries(inventory)
@@ -52,6 +53,27 @@ function hasAll(text, markers, label) {
 
 export function validateWp157DsaModerationDecisionAppealParity({ repositoryRoot = root, evidence, sourceTexts = {} } = {}) {
   const value = evidence ?? JSON.parse(readFileSync(resolve(repositoryRoot, evidencePath), 'utf8'));
+  const baselineRevision = value.repository?.finalHead ?? value.repository?.baselineHead;
+  let boundSnapshot;
+  try {
+    boundSnapshot = resolveBoundSnapshot({
+      repositoryRoot,
+      baselineHead: baselineRevision,
+      inventory: value.sourceInventory,
+      anchorPath: evidencePath,
+      finalHead: value.repository?.finalHead,
+    });
+  } catch (error) {
+    fail(error?.message ?? 'bound source snapshot unavailable.');
+  }
+  const boundRevision = boundSnapshot.revision;
+  sourceTexts = {
+    ...materializeBoundSourceTexts({
+      repositoryRoot,
+      snapshot: boundSnapshot,
+    }),
+    ...sourceTexts,
+  };
   exact(value.schemaVersion, 1, 'schemaVersion');
   exact(value.package, 'WP157-DSA-MODERATION-DECISION-APPEAL-PARITY-20260915', 'package');
   if (!['technical-closure-focused-passed-full-regression-pending-external-gates-hold',
@@ -100,7 +122,7 @@ export function validateWp157DsaModerationDecisionAppealParity({ repositoryRoot 
     inventoryDigest(value.sourceInventory), 'source inventory digest');
   for (const path of wp157SourcePaths) {
     if (!/^[a-f0-9]{64}$/u.test(value.sourceInventory[path] ?? '')) fail(`source inventory ${path} is not a SHA-256 digest`);
-    exact(digest(repositoryRoot, path), value.sourceInventory[path], `source inventory ${path}`);
+    exact(digest(repositoryRoot, path, sourceTexts, boundRevision, value.sourceInventory[path]), value.sourceInventory[path], `source inventory ${path}`);
   }
 
   const workflow = source(repositoryRoot, 'backend/src/support_appeal_workflow.js', sourceTexts);

@@ -1,5 +1,21 @@
 # ShareItToo Current State
 
+## WP160 special-category / health-data intake minimization safety — TECHNICAL CLOSURE; ARTICLE 9 GATE OPEN
+
+WP160 separates accident reporting from an explicitly confirmed injury and
+removes the former automatic health inference from the product-safety path.
+Possible special-category wording is handled only through a versioned,
+case-bound technical classification with explicit warning, necessity and owner
+binding; unrestricted replication, unclassified attachments and raw
+classification leakage fail closed. Staff projection, audit and export carry
+only bounded classification metadata. No Article 9 basis, legal role,
+retention period or provider approval is selected. The coordination ratchet in
+`docs/current_work_package.md` also requires one exact task-completion event or
+local rollout record before a mentor `FIX` can be issued after an empty
+cross-task read. Focused WP160 tests and validators pass; production,
+provider, payment, Store, device and merge state remain unchanged. See
+`docs/operations/WP160_SPECIAL_CATEGORY_HEALTH_DATA_INTAKE_MINIMIZATION_SAFETY_2026-09-15.md`.
+
 ## WP157 DSA / moderation decision and appeal parity — technical closure; CI-equivalent regression PASSED; external gates HOLD
 
 WP157 keeps DSA applicability, operator/contact-point facts, statutory deadlines

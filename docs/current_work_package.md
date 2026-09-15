@@ -1,4 +1,28 @@
-# Current Work Package: WP157 DSA / Moderation Decision and Appeal Parity — TECHNICAL CLOSURE; CI-EQUIVALENT REGRESSION PASSED; EXTERNAL GATES HOLD
+# Current Work Package: WP160 Special-Category / Health-Data Intake Minimization Safety — TECHNICAL CLOSURE; LEGAL GATE OPEN
+
+WP160 also records a coordination ratchet for the Sol/Luna/Astra review loop:
+a completed cross-task read that returns empty `items` or an empty
+`latestAssistantMessageId` is not evidence of a silent worker turn. Before
+issuing a mentor `FIX`, Sol must verify one exact task-completion event in the
+task timeline or the corresponding local rollout record. The existing
+no-silent-turn rule remains unchanged: a delegated turn still must return the
+four-field capsule or a visible gate/blocker.
+
+WP160 technical closure is recorded in
+`docs/operations/WP160_SPECIAL_CATEGORY_HEALTH_DATA_INTAKE_MINIMIZATION_SAFETY_2026-09-15.md`.
+
+WP160 also binds the reusable source-closure ratchet: after shared-source
+changes, one machine-derived reverse-binding index is completed before the
+first full gate. A mass source-drift fanout is classified once from that index;
+historical package evidence remains immutable and repeated full-gate reruns do
+not substitute for a green mutable closure.
+
+Mutation-target rule: before every file mutation, resolve the target against
+`git rev-parse --show-toplevel` for this checkout. Abort if the resolved target
+is outside that exact repository root; never retry a guessed or chat-derived
+worktree path.
+
+# Previous Work Package: WP157 DSA / Moderation Decision and Appeal Parity — TECHNICAL CLOSURE; CI-EQUIVALENT REGRESSION PASSED; EXTERNAL GATES HOLD
 
 WP157 closes only the evidenced technical appeal gaps. Reporter-bound submission,
 admin-only claim, independent reviewer ownership, typed resolution outcomes,

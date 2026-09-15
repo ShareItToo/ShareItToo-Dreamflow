@@ -4970,6 +4970,7 @@ export function createApp({
                   : (req.body.thirdPartyData === 'false'
                       ? false
                       : req.body.thirdPartyData)),
+            specialCategoryClassification: req.body?.specialCategoryClassification,
           },
           preparedFile,
           evidenceId,

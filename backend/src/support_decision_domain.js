@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { SupportCaseError } from './support_case_domain.js';
+import { assertNoPossibleSpecialCategoryText } from './special_category_data_guard.js';
 
 const decisionCodes = /^[a-z0-9_.:-]+$/u;
 const identifiers = /^[A-Za-z0-9_.:-]+$/u;
@@ -29,6 +30,11 @@ function requiredText(value, maximum, code, minimum = 1) {
   if (result.length < minimum || result.length > maximum) {
     throw new SupportCaseError(400, code);
   }
+  assertNoPossibleSpecialCategoryText(result, {
+    errorFactory: (blockedCode, details) => new SupportCaseError(409, blockedCode, details),
+    code: 'support_special_category_content_blocked',
+    field: code,
+  });
   return result;
 }
 

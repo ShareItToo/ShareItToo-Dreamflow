@@ -216,6 +216,7 @@ if (!databaseUrl) {
         '076_payment_command_result_immutability.up.sql',
         '077_refund_provider_truth_parity.up.sql',
         '078_retention_legal_hold_scope.up.sql',
+        '079_special_category_intake_minimization.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);
@@ -8625,6 +8626,7 @@ if (!databaseUrl) {
         form.append('purpose', 'Dokumentation des gemeldeten synthetischen Zustands.');
         form.append('claimedEventTime', '2026-08-20T12:30:00.000Z');
         form.append('thirdPartyData', 'false');
+        form.append('specialCategoryClassification', 'not_indicated');
         form.append('file', new Blob([bytes], { type: mimeType }), fileName);
         return fetch(
           `${baseUrl}/v1/support/cases/${supportIntake.supportCase.id}/evidence`,

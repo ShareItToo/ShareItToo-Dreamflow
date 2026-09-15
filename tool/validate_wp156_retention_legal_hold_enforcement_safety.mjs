@@ -6,6 +6,12 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { validateRetentionDeletionReadiness } from './validate_retention_deletion_readiness.mjs';
+import {
+  boundDigest,
+  deriveBoundSnapshotAttestation,
+  materializeBoundSourceTexts,
+  resolveBoundSnapshot,
+} from './read_bound_source.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath = 'docs/evidence/release-readiness/wp156-retention-legal-hold-enforcement-safety-20260915.json';
@@ -52,8 +58,8 @@ function fail(message) { throw new Error(`WP156 ${message}`); }
 function exact(actual, expected, label) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${label} is invalid.`);
 }
-function digest(repositoryRoot, path) {
-  return createHash('sha256').update(readFileSync(resolve(repositoryRoot, path))).digest('hex');
+function digest(repositoryRoot, path, sourceTexts, revision, expectedDigest) {
+  return boundDigest({ repositoryRoot, path, revision, sourceTexts, expectedDigest });
 }
 function inventoryDigest(inventory) {
   return createHash('sha256').update(Object.entries(inventory)
@@ -66,6 +72,27 @@ function source(repositoryRoot, path, sourceTexts) {
 
 export function validateWp156RetentionLegalHoldSafety({ repositoryRoot = root, evidence, sourceTexts = {} } = {}) {
   const value = evidence ?? JSON.parse(readFileSync(resolve(repositoryRoot, evidencePath), 'utf8'));
+  const baselineRevision = value.repository?.finalHead ?? value.repository?.baselineHead;
+  let boundSnapshot;
+  try {
+    boundSnapshot = resolveBoundSnapshot({
+      repositoryRoot,
+      baselineHead: baselineRevision,
+      inventory: value.sourceInventory,
+      anchorPath: evidencePath,
+      finalHead: value.repository?.finalHead,
+    });
+  } catch (error) {
+    fail(error?.message ?? 'bound source snapshot unavailable.');
+  }
+  const boundRevision = boundSnapshot.revision;
+  sourceTexts = {
+    ...materializeBoundSourceTexts({
+      repositoryRoot,
+      snapshot: boundSnapshot,
+    }),
+    ...sourceTexts,
+  };
   exact(value.schemaVersion, 1, 'schemaVersion');
   exact(value.package, 'WP156-RETENTION-LEGAL-HOLD-ENFORCEMENT-SAFETY-20260915', 'package');
   if (![
@@ -121,16 +148,30 @@ export function validateWp156RetentionLegalHoldSafety({ repositoryRoot = root, e
     inventoryDigest(value.sourceInventory), 'source inventory digest');
   for (const path of wp156SourcePaths) {
     if (!/^[a-f0-9]{64}$/u.test(value.sourceInventory[path] ?? '')) fail(`source inventory ${path} is not a SHA-256 digest.`);
-    exact(digest(repositoryRoot, path), value.sourceInventory[path], `source inventory ${path}`);
+    exact(digest(repositoryRoot, path, sourceTexts, boundRevision, value.sourceInventory[path]), value.sourceInventory[path], `source inventory ${path}`);
   }
 
   const retention = JSON.parse(source(repositoryRoot, 'store/retention-deletion-readiness.json', sourceTexts));
   const privacy = JSON.parse(source(repositoryRoot, 'store/privacy-disclosures.json', sourceTexts));
+  const retentionSnapshot = deriveBoundSnapshotAttestation({
+    repositoryRoot,
+    snapshot: boundSnapshot,
+    inventory: Object.fromEntries((retention.sourceInventory ?? []).map(({ path, sha256 }) => [path, sha256])),
+  });
+  sourceTexts = {
+    ...sourceTexts,
+    ...materializeBoundSourceTexts({
+      repositoryRoot,
+      snapshot: retentionSnapshot,
+    }),
+    ...sourceTexts,
+  };
   const retentionResult = validateRetentionDeletionReadiness({
     root: repositoryRoot,
     retentionManifest: retention,
     privacyManifest: privacy,
     sourceTexts,
+    historicalSnapshot: retentionSnapshot,
   });
   exact(retentionResult.state, 'draft', 'retention state');
   exact(retentionResult.approvalAllowed, false, 'retention approval');

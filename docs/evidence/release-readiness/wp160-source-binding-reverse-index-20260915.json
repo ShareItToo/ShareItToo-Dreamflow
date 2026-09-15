@@ -1,0 +1,294 @@
+
+{
+  "schemaVersion": 1,
+  "package": "WP160-SOURCE-BINDING-REVERSE-INDEX-20260915",
+  "repository": {
+    "baselineHead": "c092cfe84965251f36a8f70525a49082f0959d63",
+    "targetRevision": "WORKTREE_STAGED"
+  },
+  "changedSourcePaths": [
+    "backend/sql/migrations/079_special_category_intake_minimization.down.sql",
+    "backend/sql/migrations/079_special_category_intake_minimization.up.sql",
+    "backend/src/app.js",
+    "backend/src/moderation_domain.js",
+    "backend/src/privacy_export.js",
+    "backend/src/special_category_data_guard.js",
+    "backend/src/support_appeal_domain.js",
+    "backend/src/support_case_domain.js",
+    "backend/src/support_case_workflow.js",
+    "backend/src/support_decision_domain.js",
+    "backend/src/support_evidence_workflow.js",
+    "backend/src/support_message_domain.js",
+    "backend/test/moderation_domain.test.js",
+    "backend/test/postgres_foundation.integration.test.js",
+    "backend/test/special_category_data_guard.test.js",
+    "backend/test/support_case_domain.test.js",
+    "backend/test/support_evidence_workflow.test.js",
+    "backend/test/support_message_domain.test.js",
+    "docs/current_state.md",
+    "docs/current_work_package.md",
+    "docs/evidence/external-gates/support-evidence-scanner-readiness.json",
+    "docs/evidence/release-readiness/wp160-special-category-health-data-intake-minimization-safety-20260915.json",
+    "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md",
+    "docs/operations/WP160_SPECIAL_CATEGORY_HEALTH_DATA_INTAKE_MINIMIZATION_SAFETY_2026-09-15.md",
+    "lib/screens/support_flow_screen.dart",
+    "store/privacy-disclosures.json",
+    "store/retention-deletion-readiness.json",
+    "test/tool/read_bound_source.test.mjs",
+    "test/tool/validate_privacy_disclosures.test.mjs",
+    "test/tool/validate_retention_deletion_readiness.test.mjs",
+    "test/tool/validate_wp149_payment_v52_contract_binding_parity.test.mjs",
+    "test/tool/validate_wp150_completed_payment_command_replay_integrity.test.mjs",
+    "test/tool/validate_wp151_refund_provider_durable_truth_parity.test.mjs",
+    "test/tool/validate_wp152_v54_contract_draft.test.mjs",
+    "test/tool/validate_wp153_position_review_release_parity.test.mjs",
+    "test/tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.test.mjs",
+    "test/tool/validate_wp160_source_binding_reverse_index.test.mjs",
+    "test/tool/validate_wp160_special_category_health_data_intake.test.mjs",
+    "test/tool/wp160_special_category_wiring.test.mjs",
+    "tool/read_bound_source.mjs",
+    "tool/validate_privacy_disclosures.mjs",
+    "tool/validate_retention_deletion_readiness.mjs",
+    "tool/validate_support_evidence_external_readiness.mjs",
+    "tool/validate_wp149_payment_v52_contract_binding_parity.mjs",
+    "tool/validate_wp150_completed_payment_command_replay_integrity.mjs",
+    "tool/validate_wp151_refund_provider_durable_truth_parity.mjs",
+    "tool/validate_wp152_v54_contract_draft.mjs",
+    "tool/validate_wp153_position_review_release_parity.mjs",
+    "tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.mjs",
+    "tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs",
+    "tool/validate_wp157_dsa_moderation_decision_appeal_parity.mjs",
+    "tool/validate_wp159_processor_controller_region_transfer_truth.mjs",
+    "tool/validate_wp160_source_binding_reverse_index.mjs",
+    "tool/validate_wp160_special_category_health_data_intake.mjs"
+  ],
+  "mutableBindings": [
+    "backend/sql/migrations/079_special_category_intake_minimization.down.sql",
+    "backend/sql/migrations/079_special_category_intake_minimization.up.sql",
+    "backend/src/app.js",
+    "backend/src/moderation_domain.js",
+    "backend/src/privacy_export.js",
+    "backend/src/special_category_data_guard.js",
+    "backend/src/support_appeal_domain.js",
+    "backend/src/support_case_domain.js",
+    "backend/src/support_case_workflow.js",
+    "backend/src/support_decision_domain.js",
+    "backend/src/support_evidence_workflow.js",
+    "backend/src/support_message_domain.js",
+    "backend/test/moderation_domain.test.js",
+    "backend/test/postgres_foundation.integration.test.js",
+    "backend/test/special_category_data_guard.test.js",
+    "backend/test/support_case_domain.test.js",
+    "backend/test/support_evidence_workflow.test.js",
+    "backend/test/support_message_domain.test.js",
+    "docs/current_state.md",
+    "docs/current_work_package.md",
+    "docs/evidence/external-gates/support-evidence-scanner-readiness.json",
+    "docs/evidence/release-readiness/wp160-special-category-health-data-intake-minimization-safety-20260915.json",
+    "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md",
+    "docs/operations/WP160_SPECIAL_CATEGORY_HEALTH_DATA_INTAKE_MINIMIZATION_SAFETY_2026-09-15.md",
+    "lib/screens/support_flow_screen.dart",
+    "store/privacy-disclosures.json",
+    "store/retention-deletion-readiness.json",
+    "test/tool/read_bound_source.test.mjs",
+    "test/tool/validate_privacy_disclosures.test.mjs",
+    "test/tool/validate_retention_deletion_readiness.test.mjs",
+    "test/tool/validate_wp149_payment_v52_contract_binding_parity.test.mjs",
+    "test/tool/validate_wp150_completed_payment_command_replay_integrity.test.mjs",
+    "test/tool/validate_wp151_refund_provider_durable_truth_parity.test.mjs",
+    "test/tool/validate_wp152_v54_contract_draft.test.mjs",
+    "test/tool/validate_wp153_position_review_release_parity.test.mjs",
+    "test/tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.test.mjs",
+    "test/tool/validate_wp160_source_binding_reverse_index.test.mjs",
+    "test/tool/validate_wp160_special_category_health_data_intake.test.mjs",
+    "test/tool/wp160_special_category_wiring.test.mjs",
+    "tool/read_bound_source.mjs",
+    "tool/validate_privacy_disclosures.mjs",
+    "tool/validate_retention_deletion_readiness.mjs",
+    "tool/validate_support_evidence_external_readiness.mjs",
+    "tool/validate_wp149_payment_v52_contract_binding_parity.mjs",
+    "tool/validate_wp150_completed_payment_command_replay_integrity.mjs",
+    "tool/validate_wp151_refund_provider_durable_truth_parity.mjs",
+    "tool/validate_wp152_v54_contract_draft.mjs",
+    "tool/validate_wp153_position_review_release_parity.mjs",
+    "tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.mjs",
+    "tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs",
+    "tool/validate_wp157_dsa_moderation_decision_appeal_parity.mjs",
+    "tool/validate_wp159_processor_controller_region_transfer_truth.mjs",
+    "tool/validate_wp160_source_binding_reverse_index.mjs",
+    "tool/validate_wp160_special_category_health_data_intake.mjs",
+    "docs/evidence/release-readiness/wp160-source-binding-reverse-index-20260915.json"
+  ],
+  "immutableHistoricalBindings": [
+    {
+      "evidence": "docs/evidence/release-readiness/wp05-cart-details-descendant-ownership-local-20260904.json",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp05-pixel-0405-preparation-20260904.json",
+      "paths": [
+        "store/privacy-disclosures.json"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp05-pixel-0406-preparation-20260904.json",
+      "paths": [
+        "store/privacy-disclosures.json"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp102-staging-verification-delivery-truth-20260910.json",
+      "paths": [
+        "backend/src/app.js",
+        "backend/test/postgres_foundation.integration.test.js"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp138-google-signin-current-candidate-pixel-closure-20260913.json",
+      "paths": [
+        "store/privacy-disclosures.json"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp141-stripe-test-mode-connect-refund-recovery-20260913.json",
+      "paths": [
+        "backend/src/app.js",
+        "backend/src/privacy_export.js",
+        "backend/test/postgres_foundation.integration.test.js",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp149-payment-v52-contract-binding-parity-20260914.json",
+      "paths": [
+        "backend/test/postgres_foundation.integration.test.js",
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "test/tool/validate_privacy_disclosures.test.mjs",
+        "test/tool/validate_retention_deletion_readiness.test.mjs",
+        "test/tool/validate_wp149_payment_v52_contract_binding_parity.test.mjs",
+        "tool/validate_privacy_disclosures.mjs",
+        "tool/validate_retention_deletion_readiness.mjs",
+        "tool/validate_wp149_payment_v52_contract_binding_parity.mjs"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp150-completed-payment-command-replay-integrity-20260914.json",
+      "paths": [
+        "backend/src/app.js",
+        "backend/test/postgres_foundation.integration.test.js",
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "test/tool/validate_privacy_disclosures.test.mjs",
+        "test/tool/validate_retention_deletion_readiness.test.mjs",
+        "test/tool/validate_wp150_completed_payment_command_replay_integrity.test.mjs",
+        "tool/validate_privacy_disclosures.mjs",
+        "tool/validate_retention_deletion_readiness.mjs",
+        "tool/validate_wp150_completed_payment_command_replay_integrity.mjs"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp151-refund-provider-durable-truth-parity-20260914.json",
+      "paths": [
+        "backend/src/app.js",
+        "backend/src/privacy_export.js",
+        "backend/test/postgres_foundation.integration.test.js",
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "test/tool/validate_wp151_refund_provider_durable_truth_parity.test.mjs",
+        "tool/validate_wp151_refund_provider_durable_truth_parity.mjs"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp152-v54-contract-draft-20260915.json",
+      "paths": [
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "store/privacy-disclosures.json",
+        "test/tool/validate_wp152_v54_contract_draft.test.mjs",
+        "tool/validate_wp152_v54_contract_draft.mjs"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp153-position-review-release-parity-20260915.json",
+      "paths": [
+        "backend/test/postgres_foundation.integration.test.js",
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "test/tool/validate_wp153_position_review_release_parity.test.mjs",
+        "tool/validate_wp153_position_review_release_parity.mjs"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp155-processing-transparency-purpose-basis-recipient-parity-20260915.json",
+      "paths": [
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "test/tool/validate_privacy_disclosures.test.mjs",
+        "test/tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.test.mjs",
+        "tool/validate_privacy_disclosures.mjs",
+        "tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.mjs"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp156-retention-legal-hold-enforcement-safety-20260915.json",
+      "paths": [
+        "backend/src/app.js",
+        "backend/test/postgres_foundation.integration.test.js",
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "test/tool/validate_retention_deletion_readiness.test.mjs",
+        "tool/validate_retention_deletion_readiness.mjs",
+        "tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp157-dsa-moderation-decision-appeal-parity-20260915.json",
+      "paths": [
+        "backend/src/app.js",
+        "backend/src/support_appeal_domain.js",
+        "backend/src/support_case_domain.js",
+        "backend/src/support_case_workflow.js",
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md",
+        "tool/validate_wp157_dsa_moderation_decision_appeal_parity.mjs"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp159-processor-controller-region-transfer-truth-20260915.json",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "tool/validate_wp159_processor_controller_region_transfer_truth.mjs"
+      ]
+    },
+    {
+      "evidence": "docs/evidence/release-readiness/wp74-dispute-transfer-recovery-20260909.json",
+      "paths": [
+        "backend/src/app.js",
+        "backend/src/privacy_export.js"
+      ]
+    }
+  ],
+  "boundaries": {
+    "historicalEvidenceRewritten": false,
+    "currentMutableClosureRequired": true,
+    "repeatedFullRegressionSubstitutesForReverseIndex": false
+  }
+}

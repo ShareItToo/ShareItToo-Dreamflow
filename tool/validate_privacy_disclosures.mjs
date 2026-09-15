@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertBoundSnapshotAttestation } from './read_bound_source.mjs';
 
 const sourcePaths = [
   'lib/widgets/support_principal_controller.dart',
@@ -31,6 +32,7 @@ const sourcePaths = [
   'backend/src/db.js',
   'backend/src/mailer.js',
   'backend/src/support_case_domain.js',
+  'backend/src/special_category_data_guard.js',
   'backend/src/support_case_workflow.js',
   'backend/src/handover_exception_domain.js',
   'backend/src/handover_exception_workflow.js',
@@ -1931,6 +1933,7 @@ export function validatePrivacyDisclosures({
   sourceTexts = {},
   evidenceTexts = {},
   requireApproved = false,
+  historicalSnapshot,
 }) {
   const privacy = object(privacyManifest, 'store/privacy-disclosures.json');
   const submission = object(submissionManifest, 'store/submission.json');
@@ -1954,7 +1957,14 @@ export function validatePrivacyDisclosures({
     fail('Privacy candidate package identity must match store/submission.json.');
   }
 
-  if (!Array.isArray(privacy.sourceInventory) || privacy.sourceInventory.length !== sourcePaths.length) {
+  const requiredSourcePaths = historicalSnapshot
+    ? (assertBoundSnapshotAttestation({
+      repositoryRoot: root,
+      snapshot: historicalSnapshot,
+      inventory: Object.fromEntries((privacy.sourceInventory ?? []).map(({ path, sha256 }) => [path, sha256])),
+    }), (privacy.sourceInventory ?? []).map(({ path }) => path))
+    : sourcePaths;
+  if (!Array.isArray(privacy.sourceInventory) || privacy.sourceInventory.length !== requiredSourcePaths.length) {
     fail('sourceInventory must contain every required privacy source exactly once.');
   }
   const sourceMap = new Map();
@@ -1965,8 +1975,8 @@ export function validatePrivacyDisclosures({
     assertSha256(entry.sha256, `sourceInventory.${entry.path}.sha256`);
     sourceMap.set(entry.path, entry.sha256);
   }
-  if (sourcePaths.some((path) => !sourceMap.has(path))) fail('sourceInventory paths do not match the required contract.');
-  for (const path of sourcePaths) {
+  if (requiredSourcePaths.some((path) => !sourceMap.has(path))) fail('sourceInventory paths do not match the required contract.');
+  for (const path of requiredSourcePaths) {
     const actual = sha256(sourceText(root, sourceTexts, path));
     if (actual !== sourceMap.get(path)) fail(`sourceInventory hash is stale: ${path}.`);
   }

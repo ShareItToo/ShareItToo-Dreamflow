@@ -1,5 +1,10 @@
 import crypto from 'node:crypto';
 
+import {
+  detectPossibleSpecialCategoryFields,
+  normalizeSpecialCategoryHandling,
+} from './special_category_data_guard.js';
+
 export const supportCaseFamilies = Object.freeze({
   general_help: Object.freeze([
     'login_or_registration',
@@ -562,7 +567,7 @@ function normalizeSupportSafetyTriage(raw) {
   });
 }
 
-function normalizeSupportIssueScope(raw) {
+function normalizeSupportIssueScope(raw, { specialCategoryHandling = null } = {}) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new SupportCaseError(400, 'support_issue_scope_required');
   }
@@ -585,6 +590,7 @@ function normalizeSupportIssueScope(raw) {
     version,
     singleIssueConfirmed: true,
     separationGuidanceShown: raw.separationGuidanceShown,
+    ...(specialCategoryHandling == null ? {} : { specialCategoryHandling }),
   });
 }
 
@@ -801,7 +807,6 @@ export function normalizeSupportCaseInput(raw, {
     throw new SupportCaseError(409, 'support_specialized_intake_required');
   }
   const safetyTriage = normalizeSupportSafetyTriage(raw.safetyTriage);
-  const issueScope = normalizeSupportIssueScope(raw.issueScope);
   if (raw.immediateDanger !== undefined
       && raw.immediateDanger !== safetyTriage.immediateDanger) {
     throw new SupportCaseError(400, 'support_safety_triage_conflict');
@@ -836,6 +841,29 @@ export function normalizeSupportCaseInput(raw, {
         && caseSubType === 'dangerous_item_or_injury',
     },
   );
+  const userFacingSummary = requiredText(
+    raw.summary,
+    2000,
+    'support_summary_required',
+    3,
+  );
+  const specialCategoryDetection = detectPossibleSpecialCategoryFields({
+    summary: userFacingSummary,
+    productSafetyRiskDescription: productSafetyNotice?.riskDescription,
+  });
+  const specialCategoryHandling = normalizeSpecialCategoryHandling(
+    raw.specialCategoryHandling,
+    {
+      detection: specialCategoryDetection,
+      errorFactory: (code, details) => new SupportCaseError(409, `support_${code}`, details),
+      requiredCode: 'special_category_handling_required',
+      shapeCode: 'special_category_handling_invalid',
+      notApplicableCode: 'special_category_handling_not_applicable',
+    },
+  );
+  const issueScope = normalizeSupportIssueScope(raw.issueScope, {
+    specialCategoryHandling,
+  });
   const internalCheckpointMinutes = {
     p0: 15,
     p1: 60,
@@ -885,7 +913,7 @@ export function normalizeSupportCaseInput(raw, {
         ? 'Feedback beantworten und dem bestätigten Produktbereich zuordnen.'
         : 'Eingang fachlich prüfen und einem verantwortlichen Owner zuweisen.'),
     nextUpdateAt: deadline,
-    userFacingSummary: requiredText(raw.summary, 2000, 'support_summary_required', 3),
+    userFacingSummary,
   });
 }
 

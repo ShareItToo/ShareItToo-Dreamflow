@@ -9,6 +9,7 @@ import {
   assessRetentionExecutionReadiness,
   validateRetentionDeletionReadiness,
 } from '../../tool/validate_retention_deletion_readiness.mjs';
+import { boundSnapshotAttestationBrand } from '../../tool/read_bound_source.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const baseRetention = JSON.parse(readFileSync(resolve(root, 'store/retention-deletion-readiness.json'), 'utf8'));
@@ -16,9 +17,26 @@ const basePrivacy = JSON.parse(readFileSync(resolve(root, 'store/privacy-disclos
 const clone = (value) => structuredClone(value);
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 
-function validate({ retentionManifest = clone(baseRetention), privacyManifest = clone(basePrivacy), sourceTexts = {}, evidenceTexts = {}, requireApproved = false } = {}) {
-  return validateRetentionDeletionReadiness({ root, retentionManifest, privacyManifest, sourceTexts, evidenceTexts, requireApproved });
+function validate({ retentionManifest = clone(baseRetention), privacyManifest = clone(basePrivacy), sourceTexts = {}, evidenceTexts = {}, requireApproved = false, historicalSnapshot } = {}) {
+  return validateRetentionDeletionReadiness({ root, retentionManifest, privacyManifest, sourceTexts, evidenceTexts, requireApproved, historicalSnapshot });
 }
+
+test('historical source selection requires a genuine complete snapshot attestation', () => {
+  const forged = {
+    [boundSnapshotAttestationBrand]: true,
+    repositoryRoot: root,
+    baselineHead: '0'.repeat(40),
+    revision: '0'.repeat(40),
+    inventory: {},
+    inventoryDigest: '0'.repeat(64),
+  };
+  for (const historicalSnapshot of [[], {}, forged]) {
+    assert.throws(
+      () => validate({ historicalSnapshot }),
+      /bound snapshot attestation invalid/u,
+    );
+  }
+});
 
 function closeProcessorVerification(processor, { ownerEvidence = true } = {}) {
   processor.retentionOwnerVerified = true;

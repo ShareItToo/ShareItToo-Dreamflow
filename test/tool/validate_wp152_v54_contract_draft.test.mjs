@@ -46,7 +46,7 @@ test('rejects source drift and a V5.4 runtime selection', () => {
   value.sourceInventory['assets/legal/de/legal_manifest_v54.json'] = '0'.repeat(64);
   assert.throws(
     () => validateWp152V54ContractDraft({ repositoryRoot, evidence: value }),
-    /source inventory digest|source inventory assets/u,
+    /bound snapshot unavailable|source inventory digest|source inventory assets/u,
   );
 
   const path = 'backend/src/legal_contract_version_registry.js';
@@ -59,7 +59,7 @@ test('rejects source drift and a V5.4 runtime selection', () => {
       repositoryRoot,
       sourceTexts: { [path]: source },
     }),
-    /runtime registry is missing activeBindingContractVersion/u,
+    /bound source digest mismatch|runtime registry is missing activeBindingContractVersion/u,
   );
 });
 

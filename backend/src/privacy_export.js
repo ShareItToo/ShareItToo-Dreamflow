@@ -659,6 +659,8 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
               support_case.linked_listing_id, support_case.waiting_on,
               support_case.next_action, support_case.next_update_at,
               support_case.user_facing_summary,
+              support_case.intake_scope_evidence -> 'specialCategoryHandling'
+                AS special_category_handling,
               support_case.appeal_available, support_case.appeal_deadline,
               support_case.appeal_configured_at,
               support_case.closure_reason, support_case.created_at,
@@ -835,7 +837,9 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
               evidence.linked_booking_id, evidence.linked_listing_id,
               evidence.third_party_data_flag, evidence.access_level,
               evidence.retention_category, evidence.legal_hold_flag,
-              evidence.review_result, evidence.limitations
+              evidence.review_result, evidence.limitations,
+              evidence.integrity_metadata ->> 'specialCategoryClassification'
+                AS special_category_classification
          FROM support_evidence AS evidence
         WHERE evidence.submitter_id = $1
           AND evidence.access_level = 'user_visible'

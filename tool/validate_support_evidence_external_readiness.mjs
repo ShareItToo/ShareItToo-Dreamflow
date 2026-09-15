@@ -25,7 +25,7 @@ const repositorySources = Object.freeze([
   ]),
   Object.freeze([
     'backend/src/support_evidence_workflow.js',
-    '6846344047ada6a2d0ad76a934bb3f12cc290e007e453751c0aa4ada3364b8c4',
+    '3b88a56398b05b945e7841e3d6125d444c00cd6b5b80e08c23e1131f337c05db',
   ]),
   Object.freeze([
     'docs/architecture/s4a-private-support-evidence-security-2026-08-22.md',
