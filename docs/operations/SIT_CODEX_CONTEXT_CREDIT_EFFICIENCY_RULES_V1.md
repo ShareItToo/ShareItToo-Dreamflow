@@ -74,7 +74,11 @@ release evidence.
   never weaken clean-checkout reproducibility or make a local workaround a
   permanent prerequisite.
 - Preserve source-hash ratchets and update them mechanically when a bound source
-  changes. A hash refresh cannot change an approval, legal or release claim.
+  changes. Before the first package commit, search the complete reverse-binding
+  closure and refresh it once in dependency order. Avoid serial follow-up
+  commits for bindings that were discoverable before staging; redesign cyclic
+  or self-referential bindings. A hash refresh cannot change an approval, legal
+  or release claim.
 - Drive stores this canonical policy once in the current SIT Codex folder.
   Repository `AGENTS.md`, `docs/current_work_package.md` and
   `docs/current_state.md` point to it instead of duplicating the full policy.

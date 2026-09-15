@@ -39,8 +39,8 @@ export function normalizeSupportAppealInput(raw) {
   });
 }
 
-export function supportAppealIdempotencyKey(value) {
-  return supportCaseIdempotencyKey(value, 'support.appeal.submit');
+export function supportAppealIdempotencyKey(value, namespace = 'support.appeal.submit') {
+  return supportCaseIdempotencyKey(value, namespace);
 }
 
 export function newHumanReadableAppealNumber(randomBytes = crypto.randomBytes(9)) {

@@ -1,3 +1,23 @@
+# Current Work Package: WP157 DSA / Moderation Decision and Appeal Parity — TECHNICAL CLOSURE; CI-EQUIVALENT REGRESSION PASSED; EXTERNAL GATES HOLD
+
+WP157 closes only the evidenced technical appeal gaps. Reporter-bound submission,
+admin-only claim, independent reviewer ownership, typed resolution outcomes,
+durable next-update fallback and durable user-visible resolution are now bound
+to exact principal/content/action/reason/source. No automatic reopen or external
+delivery occurs. The Flutter projection fails closed on inconsistent terminal
+results. DSA applicability, operator facts, statutory deadlines and professional
+legal approval remain undecided; BUILD/production/provider gates remain closed.
+
+Focused Backend, wiring and support-case checks pass. The permanent WP157
+validator is registered in the full technical regression. The CI-equivalent
+full run passed with Tool 3060/3060, Flutter/analyzer, Web/Wasm, loopback smoke
+and Android debug/minSdk checks green. Strict local Play archive validation is
+still blocked by the unavailable historical owner-only AAB and stale app-content
+metadata; the documented CI/rollover path is recorded as Technical Debt and is
+not release proof. Commit, push and GitHub Regression/CodeQL remain pending.
+
+See `docs/operations/WP157_DSA_MODERATION_DECISION_APPEAL_PARITY_2026-09-15.md`.
+
 # Current Work Package: WP156 Retention and Legal-Hold Enforcement Safety — FULL LOCAL REGRESSION PASSED; EXTERNAL GATES HOLD
 
 WP156 makes the technical legal-hold boundary explicit without deciding legal

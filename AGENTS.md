@@ -105,8 +105,13 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 3. Keep changes narrow and reversible. Add or update a focused regression for
    behavioral fixes.
 4. If a file listed in a `sourceInventory` changes, update every exact binding
-   for that path to the file's SHA-256 and run the associated validators. A hash
-   refresh never authorizes changing legal/privacy claims or approval state.
+   for that path to the file's SHA-256 and run the associated validators. Before
+   the first package commit, compute the complete reverse-binding closure and
+   update it once in dependency order; do not create serial inventory-refresh
+   commits for dependencies that were discoverable up front. A hash refresh
+   never authorizes changing legal/privacy claims or approval state. If the
+   closure is cyclic or self-referential, redesign the binding instead of
+   chasing hashes across commits.
 5. Run focused checks first. Run the complete technical regression at package
    and release gates.
 6. Use `git add -- <confirmed paths>` only. Review the staged diff and never use

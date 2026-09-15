@@ -201,7 +201,12 @@ import {
   recordSupportSafetyImpactReview,
 } from './support_safety_impact_workflow.js';
 import { recordSupportDuplicateCaseLink } from './support_duplicate_case_workflow.js';
-import { submitSupportAppeal } from './support_appeal_workflow.js';
+import {
+  claimSupportAppeal,
+  listSupportAppeals,
+  resolveSupportAppeal,
+  submitSupportAppeal,
+} from './support_appeal_workflow.js';
 import {
   createSupportBreakGlassGrant,
   listSupportBreakGlassReviews,
@@ -5419,6 +5424,35 @@ export function createApp({
       limit: req.query.limit ?? 100,
     });
     res.set('Cache-Control', 'private, no-store').json({ supportCases });
+  }));
+
+  app.get('/v1/admin/support/appeals', requireAuth, requireActiveAccount, requireAdminRole, requireStaffElevation, asyncRoute(async (req, res) => {
+    const appeals = await listSupportAppeals(pool, {
+      actor: req.actor,
+      status: req.query.status,
+    });
+    res.set('Cache-Control', 'private, no-store').json({ appeals });
+  }));
+
+  app.post('/v1/admin/support/appeals/:id/claim', requireAuth, requireActiveAccount, requireAdminRole, requireStaffElevation, asyncRoute(async (req, res) => {
+    const result = await inTransaction((client) => claimSupportAppeal(client, {
+      actor: req.actor,
+      appealId: safeText(req.params.id, 80),
+      idempotencyKey: req.get('Idempotency-Key'),
+    }));
+    res.set('Cache-Control', 'private, no-store')
+      .status(result.replayed ? 200 : 201)
+      .json(result);
+  }));
+
+  app.post('/v1/admin/support/appeals/:id/resolve', requireAuth, requireActiveAccount, requireAdminRole, requireStaffElevation, asyncRoute(async (req, res) => {
+    const result = await inTransaction((client) => resolveSupportAppeal(client, {
+      actor: req.actor,
+      appealId: safeText(req.params.id, 80),
+      raw: req.body,
+      idempotencyKey: req.get('Idempotency-Key'),
+    }));
+    res.set('Cache-Control', 'private, no-store').json(result);
   }));
 
   app.get('/v1/admin/support/operational-alerts', requireAuth, requireActiveAccount, requireAdminRole, requireStaffElevation, asyncRoute(async (req, res) => {

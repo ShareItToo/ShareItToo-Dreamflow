@@ -120,12 +120,12 @@
     "backend/src/v52_contract_workflow.js": "c0e06b47f51398a5095a6de41c9545ff72daf6cc1b37bbfe7d886a0373d554a1",
     "backend/test/legal_contract_version_registry.test.js": "dccd49f212c2bcb8fd2d183b271f6221e5a842f0f03a0d9671f6795284c6f750",
     "backend/test/v52_contract_workflow.test.js": "7014a6c2a74861078b24bb198c5b3712ae65ddc4c28bcec3076d9f5c252aa686",
-  "docs/current_state.md": "b14417a4bf13d19de5d31e8222e330ef3797c2ec0c4429f06ac668547ef4de92",
-  "docs/current_work_package.md": "d2919220b698f4478f5c85b4a0c455d9ea6f64f9dc9422c5ce771d66b5c1c83f",
+  "docs/current_state.md": "ed3ce0d12a793adbbeede01f6f8f13657d46abe76cce6b550e88230b0ac62e32",
+  "docs/current_work_package.md": "7b76edc7a5291a160930bb15fa91cd4eeaa7709b75ce40632e0d74ef20d29b52",
     "docs/operations/TECHNICAL_DEBT_RELEASE_READINESS.md": "c43ad059863360c60a52fedf5a56a104477a84a607ecb76c310c5eeb1aa98935",
     "docs/operations/WP152_V54_CONTRACT_SCOPE_OFFER_REFUND_RECEIPT_DRAFT_2026-09-15.md": "bbc68890dbde5b6770ff144f19853597ac92a572af04103e0653dbaa5a886b64",
     "store/legal-readiness.json": "4465be600f1d029d6d52239761a26e0e868e06ade7bdab19043cc3dff25808ce",
-    "store/privacy-disclosures.json": "304af9d3a6b08a9d13b97b2b3664d985dc55568572e4881297c53196ba61a0f2",
+    "store/privacy-disclosures.json": "56ae74525d5d9a0833972e075f9a2b5c766668eda7f76f37d96cba164e450b3f",
     "test/tool/validate_legal_readiness.test.mjs": "30310889d2faf27af1ffbbea8031246a355146b71025f5ee27fb4559d9c679f4",
     "test/tool/validate_v54_legal_assets.test.mjs": "f94c0b8dc764dc9e5f4bbe2f5e9288a8c766183ea768056ce753002d1ffa250f",
     "test/tool/validate_wp152_v54_contract_draft.test.mjs": "f680dcdb151853a48b1bb2286c8913f4391fb4e4043c93078426e02f5e8e69be",
@@ -136,6 +136,6 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-  "sourceInventoryDigest": "0630593421e977911edd5fcc3d66984f5eebb02c70c1304a6558a907e47e1c66"
+  "sourceInventoryDigest": "dbd34021a94352d7f4d023199348f291b52f9c15f6c6d4e8c0004e9c78e101a7"
   }
 }

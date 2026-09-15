@@ -110,6 +110,9 @@ node --test test/tool/validate_privacy_disclosures.test.mjs
 node --test test/tool/validate_messaging_launch_scope.test.mjs
 node --test test/tool/support_final_decision_wiring.test.mjs
 node --test test/tool/support_appeal_wiring.test.mjs
+node --check tool/validate_wp157_dsa_moderation_decision_appeal_parity.mjs
+node --test test/tool/validate_wp157_dsa_moderation_decision_appeal_parity.test.mjs
+node tool/validate_wp157_dsa_moderation_decision_appeal_parity.mjs
 node --test test/tool/support_break_glass_wiring.test.mjs
 node --test test/tool/support_message_template_wiring.test.mjs
 node --test test/tool/support_status_machine_v1_alignment_wiring.test.mjs

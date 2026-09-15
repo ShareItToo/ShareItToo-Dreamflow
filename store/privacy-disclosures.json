@@ -148,11 +148,11 @@
     },
     {
       "path": "backend/src/support_appeal_domain.js",
-      "sha256": "756c4b6a9a39257b5dbebe695fd48e11f8b495723939d484c12f0249a9977687"
+      "sha256": "a25cb9d1e65a9b38b48020b7293f51d7c4d9daf480323c1b53eb17c66059b942"
     },
     {
       "path": "backend/src/support_appeal_workflow.js",
-      "sha256": "f58da062139d90f6c342d68fce957d7996384d97275a0dd128eeb153ab7d7dc4"
+      "sha256": "7986cc71b5f1b380d03cb1882845577bfa252a049c2b93a733a710a39d6baf49"
     },
     {
       "path": "backend/src/support_decision_domain.js",
@@ -764,7 +764,7 @@
     },
     {
       "path": "lib/screens/support_cases_screen.dart",
-      "sha256": "bdd8c5f1e2823330747ab29f33849e92cdc95e77e7d2ac70e3fd7374792468fe"
+      "sha256": "e0395b296cd2d7e16958aff093b524dc6385a313ffab60ec6396191bc70b0d59"
     },
     {
       "path": "lib/screens/support_flow_screen.dart",
@@ -904,7 +904,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "ceff8df7d81b47702bdbad13133bc73c86c9913b3f52bc908352c19269e832fb"
+      "sha256": "cf7aafce216f8543c935aa3b2877763b0dff4603ae8f7c812e7ae46df860cfd2"
     },
     {
       "path": "backend/src/rate_limit_policy.js",

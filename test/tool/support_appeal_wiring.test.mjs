@@ -44,3 +44,27 @@ test('appeal surface and route remain explicit, reporter-bound and non-live', ()
   assert.match(workflow, /new_evidence_ids[\s\S]*'\{\}'::uuid\[\]/u);
   assert.doesNotMatch(workflow, /publishTo|sendEmail|sendPush|refundPayment|releasePayout/u);
 });
+
+test('appeal status has an explicit admin claim/resolve path and durable receipt fallback', () => {
+  assert.match(workflow, /export async function listSupportAppeals/u);
+  assert.match(workflow, /export async function claimSupportAppeal/u);
+  assert.match(workflow, /export async function resolveSupportAppeal/u);
+  assert.match(workflow, /case_next_update_at/u);
+  assert.match(workflow, /status = 'under_review'/u);
+  assert.match(workflow, /independence_flag = true/u);
+  assert.match(workflow, /automaticReopen: false/u);
+  assert.match(workflow, /externalMessageSent: false/u);
+  assert.match(workflow, /support_appeal_implementation_changes_required/u);
+  assert.match(
+    app,
+    /app\.get\('\/v1\/admin\/support\/appeals'[\s\S]*?requireAdminRole[\s\S]*?requireStaffElevation/u,
+  );
+  assert.match(
+    app,
+    /app\.post\('\/v1\/admin\/support\/appeals\/:id\/claim'[\s\S]*?requireAdminRole[\s\S]*?requireStaffElevation/u,
+  );
+  assert.match(
+    app,
+    /app\.post\('\/v1\/admin\/support\/appeals\/:id\/resolve'[\s\S]*?requireAdminRole[\s\S]*?requireStaffElevation/u,
+  );
+});

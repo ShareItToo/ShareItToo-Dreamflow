@@ -363,6 +363,9 @@ class SupportAppealViewData {
   final String nextUpdateDisplay;
   final String materialSummary;
   final String interimEffect;
+  final String? outcome;
+  final String? outcomeReason;
+  final String? communicatedAt;
 
   const SupportAppealViewData({
     required this.id,
@@ -375,6 +378,9 @@ class SupportAppealViewData {
     required this.nextUpdateDisplay,
     required this.materialSummary,
     required this.interimEffect,
+    required this.outcome,
+    required this.outcomeReason,
+    required this.communicatedAt,
   });
 
   factory SupportAppealViewData.fromMap(Map<String, dynamic> value) {
@@ -388,6 +394,10 @@ class SupportAppealViewData {
     final nextUpdateDisplay = _requiredText(value, 'nextUpdateDisplay');
     final materialSummary = _requiredText(value, 'materialSummary');
     final interimEffect = _requiredText(value, 'interimEffect');
+    final outcome = _optionalText(value, 'outcome');
+    final outcomeReason = _optionalText(value, 'outcomeReason');
+    final communicatedAt = _optionalText(value, 'communicatedAt');
+    final resolved = const {'upheld', 'modified', 'reversed'}.contains(status);
     if (!RegExp(
           r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
         ).hasMatch(id) ||
@@ -404,6 +414,13 @@ class SupportAppealViewData {
         materialSummary.length > 500 ||
         interimEffect.length > 500 ||
         value['externalMessageSent'] != false ||
+        (outcome != null &&
+            !const {'upheld', 'modified', 'reversed'}.contains(outcome)) ||
+        (resolved &&
+            (outcome != status || outcomeReason == null || communicatedAt == null)) ||
+        (!resolved && (outcome != null || outcomeReason != null || communicatedAt != null)) ||
+        (communicatedAt != null && DateTime.tryParse(communicatedAt) == null) ||
+        (outcomeReason != null && outcomeReason.length > 8000) ||
         value['timezone'] != 'Europe/Berlin') {
       throw const FormatException('invalid_support_appeal');
     }
@@ -418,6 +435,9 @@ class SupportAppealViewData {
       nextUpdateDisplay: nextUpdateDisplay,
       materialSummary: materialSummary,
       interimEffect: interimEffect,
+      outcome: outcome,
+      outcomeReason: outcomeReason,
+      communicatedAt: communicatedAt,
     );
   }
 }
@@ -1548,6 +1568,14 @@ class _SupportAppealCardState extends State<_SupportAppealCard> {
     final supportCase = widget.supportCase;
     final appeal = widget.appeal;
     if (supportCase.appealState == 'submitted') {
+      final resolved = appeal != null &&
+          const {'upheld', 'modified', 'reversed'}.contains(appeal.status);
+      final outcomeLabel = switch (appeal?.outcome) {
+        'upheld' => 'Ursprüngliche Entscheidung bestätigt',
+        'modified' => 'Entscheidung geändert',
+        'reversed' => 'Entscheidung aufgehoben',
+        _ => null,
+      };
       return _SupportInfoCard(
         key: const ValueKey('support_appeal_receipt'),
         title: 'Überprüfungsantrag',
@@ -1578,6 +1606,20 @@ class _SupportAppealCardState extends State<_SupportAppealCard> {
               appeal.interimEffect,
               style: const TextStyle(color: Colors.white70, height: 1.45),
             ),
+            if (resolved && outcomeLabel != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Status: $outcomeLabel',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+              ),
+              if (appeal.outcomeReason != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  appeal.outcomeReason!,
+                  style: const TextStyle(color: Colors.white70, height: 1.45),
+                ),
+              ],
+            ],
             const SizedBox(height: 10),
             _SupportMetaLine(
               icon: Icons.schedule_outlined,

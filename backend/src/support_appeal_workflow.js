@@ -25,7 +25,11 @@ function display(value) {
   }).format(new Date(value));
 }
 
-function shapeAppeal(row, actorId) {
+function shapeAppeal(row, actor) {
+  const actorId = typeof actor === 'string' ? actor : actor?.id;
+  const privilegedOutcomeViewer = actor && typeof actor === 'object'
+    && ['admin', 'staff'].includes(actor.role);
+  const terminal = ['upheld', 'modified', 'reversed', 'closed'].includes(row.status);
   return Object.freeze({
     id: row.id,
     reviewNumber: row.human_readable_appeal_number,
@@ -33,22 +37,62 @@ function shapeAppeal(row, actorId) {
     status: row.status,
     submittedAt: iso(row.submitted_at),
     submittedDisplay: display(row.submitted_at),
-    nextUpdateAt: iso(row.next_update_at),
-    nextUpdateDisplay: display(row.next_update_at),
+    nextUpdateAt: iso(row.next_update_at ?? row.case_next_update_at),
+    nextUpdateDisplay: display(row.next_update_at ?? row.case_next_update_at),
     materialSummary: row.submitted_by === actorId
       ? 'Deine Begründung wurde vollständig und sicher aufgenommen.'
       : 'Ein begründeter Überprüfungsantrag wurde sicher aufgenommen.',
     interimEffect: 'Der Antrag selbst löst keine automatische Änderung oder externe Maßnahme aus.',
+    reviewOwnerAssigned: row.reviewer_id != null,
+    independentReview: row.independence_flag === true,
+    outcome: terminal ? (row.outcome ?? null) : null,
+    outcomeReason: terminal && (row.submitted_by === actorId || privilegedOutcomeViewer)
+      ? (row.outcome_reason ?? null)
+      : null,
+    communicatedAt: terminal ? iso(row.communicated_at) : null,
     externalMessageSent: false,
     timezone: supportCaseTimeZone,
   });
 }
 
-async function writeAudit(client, { actor, appealId, caseId, decisionId }) {
+function appealOutcome(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SupportCaseError(400, 'support_appeal_resolution_invalid');
+  }
+  const outcome = typeof raw.outcome === 'string' ? raw.outcome.trim().toLowerCase() : '';
+  if (!['upheld', 'modified', 'reversed'].includes(outcome)) {
+    throw new SupportCaseError(400, 'support_appeal_outcome_invalid');
+  }
+  const outcomeReason = typeof raw.outcomeReason === 'string'
+    ? raw.outcomeReason.trim()
+    : '';
+  if (outcomeReason.length < 3 || outcomeReason.length > 8000) {
+    throw new SupportCaseError(400, 'support_appeal_outcome_reason_required');
+  }
+  const implementationChanges = raw.implementationChanges ?? [];
+  if (!Array.isArray(implementationChanges) || implementationChanges.length > 20
+      || implementationChanges.some((entry) => typeof entry !== 'object'
+        || entry === null || Array.isArray(entry))) {
+    throw new SupportCaseError(400, 'support_appeal_implementation_changes_invalid');
+  }
+  if (outcome !== 'upheld' && implementationChanges.length === 0) {
+    throw new SupportCaseError(400, 'support_appeal_implementation_changes_required');
+  }
+  return Object.freeze({ outcome, outcomeReason, implementationChanges });
+}
+
+async function writeAudit(client, {
+  actor,
+  appealId,
+  caseId,
+  decisionId,
+  action = 'support.appeal_submitted',
+  metadata = {},
+}) {
   await client.query(
     `INSERT INTO audit_log (
        actor_id, actor_role, action, resource_type, resource_id, metadata
-     ) VALUES ($1, $2, 'support.appeal_submitted', 'support_appeal', $3, $4::jsonb)`,
+     ) VALUES ($1, $2, $5, 'support_appeal', $3, $4::jsonb)`,
     [
       actor.id,
       actor.role,
@@ -59,7 +103,9 @@ async function writeAudit(client, { actor, appealId, caseId, decisionId }) {
         externalMessageSent: false,
         automaticReopen: false,
         evidenceUploadUsed: false,
+        ...metadata,
       }),
+      action,
     ],
   );
 }
@@ -73,7 +119,8 @@ export async function submitSupportAppeal(client, {
 }) {
   const key = supportAppealIdempotencyKey(idempotencyKey);
   const replay = await client.query(
-    `SELECT appeal.*, support_case.human_readable_case_number AS case_number
+    `SELECT appeal.*, support_case.human_readable_case_number AS case_number,
+            support_case.next_update_at AS case_next_update_at
        FROM support_appeals AS appeal
        JOIN support_cases AS support_case ON support_case.id = appeal.case_id
       WHERE appeal.idempotency_key = $1`,
@@ -84,7 +131,7 @@ export async function submitSupportAppeal(client, {
     if (row.submitted_by !== actor.id || String(row.case_id) !== String(caseId)) {
       throw new SupportCaseError(409, 'support_appeal_idempotency_conflict');
     }
-    return Object.freeze({ appeal: shapeAppeal(row, actor.id), replayed: true });
+    return Object.freeze({ appeal: shapeAppeal(row, actor), replayed: true });
   }
 
   const locked = await client.query(
@@ -93,7 +140,8 @@ export async function submitSupportAppeal(client, {
   );
   if (!locked.rowCount) throw new SupportCaseError(404, 'support_case_not_found');
   const concurrentReplay = await client.query(
-    `SELECT appeal.*, support_case.human_readable_case_number AS case_number
+    `SELECT appeal.*, support_case.human_readable_case_number AS case_number,
+            support_case.next_update_at AS case_next_update_at
        FROM support_appeals AS appeal
        JOIN support_cases AS support_case ON support_case.id = appeal.case_id
       WHERE appeal.idempotency_key = $1`,
@@ -104,7 +152,7 @@ export async function submitSupportAppeal(client, {
     if (row.submitted_by !== actor.id || String(row.case_id) !== String(caseId)) {
       throw new SupportCaseError(409, 'support_appeal_idempotency_conflict');
     }
-    return Object.freeze({ appeal: shapeAppeal(row, actor.id), replayed: true });
+    return Object.freeze({ appeal: shapeAppeal(row, actor), replayed: true });
   }
   const input = normalizeSupportAppealInput(raw);
   const supportCase = locked.rows[0];
@@ -147,7 +195,8 @@ export async function submitSupportAppeal(client, {
     throw new SupportCaseError(409, 'support_appeal_decision_not_published');
   }
   const prior = await client.query(
-    `SELECT appeal.*, support_case.human_readable_case_number AS case_number
+    `SELECT appeal.*, support_case.human_readable_case_number AS case_number,
+            support_case.next_update_at AS case_next_update_at
        FROM support_appeals AS appeal
        JOIN support_cases AS support_case ON support_case.id = appeal.case_id
       WHERE appeal.original_decision_id = $1 AND appeal.submitted_by = $2`,
@@ -180,7 +229,8 @@ export async function submitSupportAppeal(client, {
   );
   if (!inserted.rowCount) {
     const winner = await client.query(
-      `SELECT appeal.*, support_case.human_readable_case_number AS case_number
+      `SELECT appeal.*, support_case.human_readable_case_number AS case_number,
+              support_case.next_update_at AS case_next_update_at
          FROM support_appeals AS appeal
          JOIN support_cases AS support_case ON support_case.id = appeal.case_id
         WHERE appeal.idempotency_key = $1
@@ -192,7 +242,7 @@ export async function submitSupportAppeal(client, {
     if (winner.rowCount && winner.rows[0].idempotency_key === key
         && String(winner.rows[0].case_id) === String(caseId)) {
       return Object.freeze({
-        appeal: shapeAppeal(winner.rows[0], actor.id),
+        appeal: shapeAppeal(winner.rows[0], actor),
         replayed: true,
       });
     }
@@ -225,6 +275,10 @@ export async function submitSupportAppeal(client, {
       actor.id,
       appeal.id,
       JSON.stringify({
+        principalId: actor.id,
+        action: 'appeal.submitted',
+        reason: 'Authenticated review request recorded.',
+        source: 'sit-api',
         reviewNumber: appeal.human_readable_appeal_number,
         nextUpdateAt: iso(appeal.next_update_at),
         externalMessageSent: false,
@@ -239,13 +293,14 @@ export async function submitSupportAppeal(client, {
     caseId: supportCase.id,
     decisionId: supportCase.decision_id,
   });
-  return Object.freeze({ appeal: shapeAppeal(appeal, actor.id), replayed: false });
+  return Object.freeze({ appeal: shapeAppeal(appeal, actor), replayed: false });
 }
 
 export async function getSupportAppealForCase(client, { actor, supportCase, staff = false }) {
   if (!supportCase.appeal_id) return null;
   const result = await client.query(
-    `SELECT appeal.*, support_case.human_readable_case_number AS case_number
+    `SELECT appeal.*, support_case.human_readable_case_number AS case_number,
+            support_case.next_update_at AS case_next_update_at
        FROM support_appeals AS appeal
        JOIN support_cases AS support_case ON support_case.id = appeal.case_id
       WHERE appeal.id = $1 AND appeal.case_id = $2`,
@@ -256,5 +311,204 @@ export async function getSupportAppealForCase(client, { actor, supportCase, staf
   if (!staff && row.submitted_by !== supportCase.reporter_user_id) {
     throw new SupportCaseError(409, 'support_appeal_receipt_unavailable');
   }
-  return shapeAppeal(row, actor.id);
+  return shapeAppeal(row, actor);
+}
+
+export async function listSupportAppeals(client, { actor, status = null } = {}) {
+  if (actor?.role !== 'admin') {
+    throw new SupportCaseError(403, 'support_appeal_staff_forbidden');
+  }
+  const normalizedStatus = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  const allowedStatuses = ['submitted', 'under_review', 'upheld', 'modified', 'reversed', 'closed'];
+  if (normalizedStatus && !allowedStatuses.includes(normalizedStatus)) {
+    throw new SupportCaseError(400, 'support_appeal_status_invalid');
+  }
+  const result = await client.query(
+    `SELECT appeal.*, support_case.human_readable_case_number AS case_number,
+            support_case.next_update_at AS case_next_update_at
+       FROM support_appeals AS appeal
+       JOIN support_cases AS support_case ON support_case.id = appeal.case_id
+      WHERE ($1::text IS NULL OR appeal.status = $1)
+      ORDER BY appeal.submitted_at, appeal.id
+      LIMIT 200`,
+    [normalizedStatus || null],
+  );
+  return result.rows.map((row) => shapeAppeal(row, actor));
+}
+
+export async function claimSupportAppeal(client, {
+  actor,
+  appealId,
+  idempotencyKey,
+  now = new Date(),
+}) {
+  if (actor?.role !== 'admin') {
+    throw new SupportCaseError(403, 'support_appeal_claim_forbidden');
+  }
+  const key = supportAppealIdempotencyKey(idempotencyKey, 'support.appeal.claim');
+  const replay = await client.query(
+    `SELECT appeal.*, support_case.human_readable_case_number AS case_number,
+            support_case.next_update_at AS case_next_update_at
+       FROM support_appeals AS appeal
+       JOIN support_cases AS support_case ON support_case.id = appeal.case_id
+       JOIN support_case_events AS event
+         ON event.entity_type = 'support_appeal'
+        AND event.entity_id = appeal.id::text
+      WHERE event.idempotency_key = $1`,
+    [`${key}:event`],
+  );
+  if (replay.rowCount) {
+    if (String(replay.rows[0].id) !== String(appealId)) {
+      throw new SupportCaseError(409, 'support_appeal_claim_idempotency_conflict');
+    }
+    return { appeal: shapeAppeal(replay.rows[0], actor), replayed: true };
+  }
+  const locked = await client.query(
+    `SELECT appeal.*, support_case.human_readable_case_number AS case_number,
+            support_case.next_update_at AS case_next_update_at
+       FROM support_appeals AS appeal
+       JOIN support_cases AS support_case ON support_case.id = appeal.case_id
+      WHERE appeal.id::text = $1
+      FOR UPDATE OF appeal`,
+    [appealId],
+  );
+  if (!locked.rowCount) throw new SupportCaseError(404, 'support_appeal_not_found');
+  const row = locked.rows[0];
+  if (row.status !== 'submitted') {
+    throw new SupportCaseError(409, 'support_appeal_not_claimable');
+  }
+  const updated = await client.query(
+    `UPDATE support_appeals
+        SET status = 'under_review', reviewer_id = $2, independence_flag = true
+      WHERE id = $1 AND status = 'submitted' AND reviewer_id IS NULL
+      RETURNING *`,
+    [row.id, actor.id],
+  );
+  if (!updated.rowCount) throw new SupportCaseError(409, 'support_appeal_claim_conflict');
+  await client.query(
+    `INSERT INTO support_case_events (
+       case_id, event_type, actor_type, actor_id, entity_type, entity_id,
+       structured_payload, automation_used, visibility, idempotency_key,
+       source_system, created_at
+     ) VALUES ($1, 'appeal.claimed', 'admin', $2, 'support_appeal', $3,
+       $4::jsonb, false, 'internal', $5, 'sit-api', $6)`,
+    [row.case_id, actor.id, row.id, JSON.stringify({
+      principalId: row.submitted_by,
+      action: 'appeal.claimed',
+      reason: 'Independent human review started.',
+      source: 'sit-api',
+      independentReview: true,
+    }), `${key}:event`, now],
+  );
+  await writeAudit(client, {
+    actor,
+    appealId: row.id,
+    caseId: row.case_id,
+    decisionId: row.original_decision_id,
+    action: 'support.appeal_claimed',
+    metadata: { independentReview: true },
+  });
+  return {
+    appeal: shapeAppeal({
+      ...updated.rows[0],
+      case_number: row.case_number,
+      case_next_update_at: row.case_next_update_at,
+    }, actor),
+    replayed: false,
+  };
+}
+
+export async function resolveSupportAppeal(client, {
+  actor,
+  appealId,
+  raw,
+  idempotencyKey,
+  now = new Date(),
+}) {
+  if (actor?.role !== 'admin') {
+    throw new SupportCaseError(403, 'support_appeal_resolution_forbidden');
+  }
+  const input = appealOutcome(raw);
+  const key = supportAppealIdempotencyKey(idempotencyKey, 'support.appeal.resolve');
+  const replay = await client.query(
+    `SELECT appeal.*, support_case.human_readable_case_number AS case_number,
+            support_case.next_update_at AS case_next_update_at
+       FROM support_appeals AS appeal
+       JOIN support_cases AS support_case ON support_case.id = appeal.case_id
+       JOIN support_case_events AS event
+         ON event.entity_type = 'support_appeal'
+        AND event.entity_id = appeal.id::text
+      WHERE event.idempotency_key = $1`,
+    [`${key}:event`],
+  );
+  if (replay.rowCount) {
+    if (String(replay.rows[0].id) !== String(appealId)) {
+      throw new SupportCaseError(409, 'support_appeal_resolution_idempotency_conflict');
+    }
+    return { appeal: shapeAppeal(replay.rows[0], actor), replayed: true };
+  }
+  const locked = await client.query(
+    `SELECT appeal.*, support_case.human_readable_case_number AS case_number,
+            support_case.next_update_at AS case_next_update_at
+       FROM support_appeals AS appeal
+       JOIN support_cases AS support_case ON support_case.id = appeal.case_id
+      WHERE appeal.id::text = $1
+      FOR UPDATE OF appeal`,
+    [appealId],
+  );
+  if (!locked.rowCount) throw new SupportCaseError(404, 'support_appeal_not_found');
+  const row = locked.rows[0];
+  if (row.status !== 'under_review' || row.reviewer_id !== actor.id
+      || row.independence_flag !== true) {
+    throw new SupportCaseError(409, 'support_appeal_independent_review_required');
+  }
+  const updated = await client.query(
+    `UPDATE support_appeals
+        SET status = $2, outcome = $3, outcome_reason = $4,
+            implementation_changes = $5::jsonb, communicated_at = $6
+      WHERE id = $1 AND status = 'under_review' AND reviewer_id = $7
+      RETURNING *`,
+    [row.id, input.outcome, input.outcome, input.outcomeReason,
+      JSON.stringify(input.implementationChanges), now, actor.id],
+  );
+  if (!updated.rowCount) throw new SupportCaseError(409, 'support_appeal_resolution_conflict');
+  await client.query(
+    `INSERT INTO support_case_events (
+       case_id, event_type, actor_type, actor_id, entity_type, entity_id,
+       structured_payload, automation_used, visibility, idempotency_key,
+       source_system, created_at
+     ) VALUES ($1, 'appeal.resolved', 'admin', $2, 'support_appeal', $3,
+       $4::jsonb, false, 'user_visible', $5, 'sit-api', $6)`,
+    [row.case_id, actor.id, row.id, JSON.stringify({
+      principalId: row.submitted_by,
+      action: 'appeal.resolved',
+      reason: input.outcomeReason,
+      source: 'sit-api',
+      outcome: input.outcome,
+      outcomeReason: input.outcomeReason,
+      implementationChanges: input.implementationChanges,
+      externalMessageSent: false,
+      automaticReopen: false,
+    }), `${key}:event`, now],
+  );
+  await writeAudit(client, {
+    actor,
+    appealId: row.id,
+    caseId: row.case_id,
+    decisionId: row.original_decision_id,
+    action: 'support.appeal_resolved',
+    metadata: {
+      outcome: input.outcome,
+      externalMessageSent: false,
+      automaticReopen: false,
+    },
+  });
+  return {
+    appeal: shapeAppeal({
+      ...updated.rows[0],
+      case_number: row.case_number,
+      case_next_update_at: row.case_next_update_at,
+    }, actor),
+    replayed: false,
+  };
 }

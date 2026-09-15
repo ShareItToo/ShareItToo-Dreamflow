@@ -1,5 +1,24 @@
 # ShareItToo Current State
 
+## WP157 DSA / moderation decision and appeal parity — technical closure; CI-equivalent regression PASSED; external gates HOLD
+
+WP157 keeps DSA applicability, operator/contact-point facts, statutory deadlines
+and professional legal approval fail-closed while closing the evidenced
+technical appeal lifecycle. Appeals are reporter-bound on submission, admin
+claimed with explicit independence, resolved through typed outcomes with bounded
+implementation truth, and projected with durable next-update and user-visible
+resolution fields. Claim and resolve replays are namespace- and Appeal-ID-bound;
+no automatic reopen or external delivery is performed. The typed Flutter parser
+rejects inconsistent terminal results. Focused checks pass and the permanent
+validator is in the complete regression; the CI-equivalent run passed with Tool
+3060/3060, Flutter/analyzer, Web/Wasm, loopback smoke and Android debug/minSdk
+checks green. Strict local Play archive validation remains blocked by the
+unavailable historical owner-only AAB and stale app-content metadata; the
+documented CI/rollover path is Technical Debt, not release proof. Git commit,
+push and exact-head GitHub gates remain pending. No external state changed.
+
+See `docs/operations/WP157_DSA_MODERATION_DECISION_APPEAL_PARITY_2026-09-15.md`.
+
 ## WP156 retention and legal-hold enforcement safety — FULL LOCAL REGRESSION PASSED; external gates HOLD
 
 WP156 is technically fail-closed: legal holds are explicit record-scoped

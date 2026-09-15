@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  claimSupportAppeal,
   getSupportAppealForCase,
+  resolveSupportAppeal,
   submitSupportAppeal,
 } from '../src/support_appeal_workflow.js';
 
@@ -248,4 +250,131 @@ test('case detail receipt is bound to the exact appeal and hides submitted groun
   assert.equal(result.materialSummary, 'Deine Begründung wurde vollständig und sicher aufgenommen.');
   assert.equal('grounds' in result, false);
   client.done();
+});
+
+test('appeal claim is admin-owned, independent and idempotent through the durable event', async () => {
+  const client = new ScriptedClient([
+    { match: /support_case_events AS event/u, result: noRows },
+    {
+      match: /FOR UPDATE OF appeal/u,
+      result: { rowCount: 1, rows: [appealRow({ case_next_update_at: new Date('2026-08-21T11:00:00.000Z') })] },
+    },
+    {
+      match: /SET status = 'under_review'/u,
+      result: {
+        rowCount: 1,
+        rows: [appealRow({
+          status: 'under_review',
+          reviewer_id: 'admin-1',
+          independence_flag: true,
+          case_next_update_at: new Date('2026-08-21T11:00:00.000Z'),
+        })],
+      },
+    },
+    {
+      match: /appeal\.claimed/u,
+      check: ({ params }) => {
+        const payload = JSON.parse(params[3]);
+        assert.equal(payload.action, 'appeal.claimed');
+        assert.equal(payload.source, 'sit-api');
+        assert.equal(payload.principalId, 'user-1');
+      },
+      result: noRows,
+    },
+    { match: /INSERT INTO audit_log/u, result: noRows },
+  ]);
+  const result = await claimSupportAppeal(client, {
+    actor: { id: 'admin-1', role: 'admin' },
+    appealId,
+    idempotencyKey: 'claim-1',
+    now,
+  });
+  assert.equal(result.appeal.status, 'under_review');
+  assert.equal(result.appeal.reviewOwnerAssigned, true);
+  assert.equal(result.appeal.independentReview, true);
+  assert.equal(result.appeal.nextUpdateAt, '2026-08-21T11:00:00.000Z');
+  client.done();
+});
+
+test('appeal resolution records a durable user-visible result without reopening or external delivery', async () => {
+  const client = new ScriptedClient([
+    { match: /support_case_events AS event/u, result: noRows },
+    {
+      match: /FOR UPDATE OF appeal/u,
+      result: {
+        rowCount: 1,
+        rows: [appealRow({
+          status: 'under_review',
+          reviewer_id: 'admin-1',
+          independence_flag: true,
+          case_next_update_at: new Date('2026-08-21T11:00:00.000Z'),
+        })],
+      },
+    },
+    {
+      match: /SET status = \$2, outcome = \$3/u,
+      check: ({ params }) => {
+        assert.equal(params[1], 'reversed');
+        assert.equal(params[2], 'reversed');
+        assert.equal(params[3], 'Die Maßnahme wird nach der Prüfung nicht fortgeführt.');
+        assert.deepEqual(JSON.parse(params[4]), [{ change: 'manual_follow_up_required' }]);
+      },
+      result: {
+        rowCount: 1,
+        rows: [appealRow({
+          status: 'reversed',
+          outcome: 'reversed',
+          outcome_reason: 'Die Maßnahme wird nach der Prüfung nicht fortgeführt.',
+          implementation_changes: [{ change: 'manual_follow_up_required' }],
+          communicated_at: now,
+          reviewer_id: 'admin-1',
+          independence_flag: true,
+          case_next_update_at: new Date('2026-08-21T11:00:00.000Z'),
+        })],
+      },
+    },
+    {
+      match: /appeal\.resolved/u,
+      check: ({ params }) => {
+        const payload = JSON.parse(params[3]);
+        assert.equal(payload.action, 'appeal.resolved');
+        assert.equal(payload.source, 'sit-api');
+        assert.equal(payload.principalId, 'user-1');
+        assert.equal(payload.automaticReopen, false);
+        assert.equal(payload.externalMessageSent, false);
+      },
+      result: noRows,
+    },
+    { match: /INSERT INTO audit_log/u, result: noRows },
+  ]);
+  const result = await resolveSupportAppeal(client, {
+    actor: { id: 'admin-1', role: 'admin' },
+    appealId,
+    raw: {
+      outcome: 'reversed',
+      outcomeReason: 'Die Maßnahme wird nach der Prüfung nicht fortgeführt.',
+      implementationChanges: [{ change: 'manual_follow_up_required' }],
+    },
+    idempotencyKey: 'resolve-1',
+    now,
+  });
+  assert.equal(result.appeal.status, 'reversed');
+  assert.equal(result.appeal.outcome, 'reversed');
+  assert.equal(result.appeal.outcomeReason, 'Die Maßnahme wird nach der Prüfung nicht fortgeführt.');
+  assert.equal(result.appeal.communicatedAt, now.toISOString());
+  client.done();
+});
+
+test('appeal resolution rejects modified or reversed outcomes without explicit implementation truth', async () => {
+  const client = { query: () => assert.fail('database must not be queried') };
+  await assert.rejects(
+    resolveSupportAppeal(client, {
+      actor: { id: 'admin-1', role: 'admin' },
+      appealId,
+      raw: { outcome: 'modified', outcomeReason: 'Geändert.' },
+      idempotencyKey: 'resolve-invalid',
+      now,
+    }),
+    /support_appeal_implementation_changes_required/u,
+  );
 });
