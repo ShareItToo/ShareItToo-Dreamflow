@@ -105,11 +105,11 @@
     },
     {
       "path": "backend/src/support_case_domain.js",
-      "sha256": "176ba95477697e4fc4477f6c703d18150a475cfefb2f56ede43bb49b8e608274"
+      "sha256": "3316f17d244ff44a5e4c17afbb9fb7f0a6d46850e3a36879ec9f8a7b8adbfc4b"
     },
     {
       "path": "backend/src/special_category_data_guard.js",
-      "sha256": "17da8b601a219a991c349ce07bbde7315465074711182a9a8c89f9f7be743355"
+      "sha256": "d2e53b65e6c0b95784efc49b65720ad08fb41c24a352dd75aadde3733dda90ff"
     },
     {
       "path": "backend/src/support_case_workflow.js",
@@ -117,7 +117,7 @@
     },
     {
       "path": "backend/src/handover_exception_domain.js",
-      "sha256": "8f147b1c6d9c5f79971fe110c612c13da6118adfe33e642b79ce907223092a6b"
+      "sha256": "c3e9eebcf7302bd3160ce20715a56928408ea1817957818a5b95fda167b8ee00"
     },
     {
       "path": "backend/src/handover_exception_workflow.js",
@@ -741,7 +741,7 @@
     },
     {
       "path": "lib/screens/support_flow_screen.dart",
-      "sha256": "fe9cac0013c6f320000bfb07d578361a2a5e9907d3a575bae639977d8b1dc702"
+      "sha256": "a66cacd62c8f80305a82bb8113c34de2f95da903a52427294f0f88997d9b95f8"
     },
     {
       "path": "lib/config/supply_enrichment_technical_config.dart",

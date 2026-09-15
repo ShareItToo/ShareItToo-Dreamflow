@@ -68,6 +68,11 @@ release evidence.
 
 ## Candidate and source discipline
 
+- Before any mutation, verify the exact repository root
+  `/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808` and reject any
+  other worktree path. Use only currently exposed tool/API names; after a
+  deprecated-tool error do not retry an alias, and retain the exec session ID
+  together with its terminal exit result.
 - Maintain one successor candidate for one accepted source state. Do not create
   additional builds merely to inspect unchanged behavior.
 - Reuse verified local dependencies and the scoped Mac-mini build workspace;
