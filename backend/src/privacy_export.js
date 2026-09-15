@@ -1,6 +1,8 @@
-function rows(client, sql, userId) {
+import { trustedRefundProviderModel } from './payment_domain.js';
+
+function rows(client, sql, userId, parameters = []) {
   return async () => {
-    const result = await client.query(sql, [userId]);
+    const result = await client.query(sql, [userId, ...parameters]);
     return result.rows;
   };
 }
@@ -859,9 +861,34 @@ export async function buildAccountExport(client, userId) {
               message_push_enabled, booking_push_enabled, locale, updated_at
        FROM notification_preferences WHERE user_id = $1`, userId),
     rows(client,
-      `SELECT id, category, kind, priority, title, body, entity_type,
-              entity_id, booking_id, thread_id, read_at, archived_at, created_at
-       FROM notifications WHERE user_id = $1 ORDER BY created_at`, userId),
+      `SELECT notification.id, notification.category, notification.kind,
+              notification.priority, notification.title, notification.body,
+              notification.entity_type, notification.entity_id,
+              notification.booking_id, notification.thread_id,
+              notification.read_at, notification.archived_at,
+              notification.created_at,
+              CASE
+                WHEN notification.kind <> 'booking_refunded' THEN 'not_applicable'
+                WHEN EXISTS (
+                  SELECT 1
+                    FROM refunds AS refund
+                    JOIN payments AS payment ON payment.id = refund.payment_id
+                   WHERE payment.booking_id = notification.booking_id
+                     AND notification.event_key =
+                       'refund:' || refund.id::text || ':succeeded'
+                     AND refund.status = 'succeeded'
+                     AND refund.provider_refund_id IS NOT NULL
+                     AND btrim(refund.provider_refund_id) <> ''
+                     AND refund.succeeded_at IS NOT NULL
+                     AND refund.failure_code IS NULL
+                     AND refund.provider_refund_model = $2
+                     AND refund.legacy_refund_platform_fee_claim IS NULL
+                ) THEN 'provider_bound'
+                ELSE 'historical_unverified'
+              END AS source_truth_status
+       FROM notifications AS notification
+       WHERE notification.user_id = $1
+       ORDER BY notification.created_at`, userId, [trustedRefundProviderModel]),
     rows(client,
       `SELECT id, booking_id, listing_id,
               CASE WHEN reviewer_id = $1 THEN 'submitted' ELSE 'received' END AS relationship,
@@ -923,37 +950,108 @@ export async function buildAccountExport(client, userId) {
       `SELECT id, blocked_id, reason_code, created_at, unblocked_at
        FROM user_blocks WHERE blocker_id = $1 ORDER BY created_at`, userId),
     rows(client,
-      `SELECT payment.id, payment.booking_id, payment.status,
+      `SELECT payment.id, payment.booking_id,
+              payment.status AS stored_payment_status_unverified,
               payment.amount_minor, payment.currency, payment.rental_subtotal_minor,
               payment.platform_fee_minor, payment.owner_payout_minor,
               payment.security_deposit_minor, payment.captured_minor,
-              payment.refunded_minor, payment.transferred_minor,
+              payment.refunded_minor AS stored_refunded_minor_unverified,
+              payment.transferred_minor,
+              COALESCE(refund_truth.refund_truth_status, 'needsReview')
+                AS refund_truth_status,
+              (refund_truth.payment_id IS NULL
+                OR refund_truth.refund_truth_status = 'needsReview')
+                AS refund_truth_needs_review,
+              COALESCE(refund_truth.refund_truth_status = 'pending', false)
+                AS refund_truth_pending,
+              CASE
+                WHEN refund_truth.payment_id IS NULL
+                  OR refund_truth.refund_truth_status = 'needsReview'
+                  THEN NULL
+                ELSE (
+                  SELECT COALESCE(sum(refund.amount_minor), 0)::bigint
+                    FROM refunds AS refund
+                   WHERE refund.payment_id = payment.id
+                     AND refund.status = 'succeeded'
+                     AND refund.provider_refund_id IS NOT NULL
+                     AND btrim(refund.provider_refund_id) <> ''
+                     AND refund.succeeded_at IS NOT NULL
+                     AND refund.failure_code IS NULL
+                     AND refund.provider_refund_model = $2
+                     AND refund.legacy_refund_platform_fee_claim IS NULL
+                )
+              END AS provider_confirmed_refunded_minor,
+              CASE
+                WHEN refund_truth.payment_id IS NULL
+                  OR refund_truth.refund_truth_status = 'needsReview'
+                  THEN NULL
+                ELSE refund_truth.settled_refund_minor
+              END AS locally_settled_refunded_minor,
+              CASE
+                WHEN refund_truth.refund_truth_status IN ('none', 'providerBound')
+                  THEN refund_truth.settled_refund_minor
+                ELSE NULL
+              END AS verified_refunded_minor,
               payment.created_at, payment.updated_at
        FROM payments AS payment
        JOIN bookings AS booking ON booking.id = payment.booking_id
+       LEFT JOIN sit_payment_refund_truth AS refund_truth
+         ON refund_truth.payment_id = payment.id
        WHERE booking.owner_id = $1 OR booking.renter_id = $1
-       ORDER BY payment.created_at`, userId),
+       ORDER BY payment.created_at`, userId, [trustedRefundProviderModel]),
     rows(client,
       `SELECT refund.id, payment.booking_id, refund.status,
               refund.amount_minor, refund.currency, refund.created_at,
-              refund.updated_at
+              refund.updated_at,
+              CASE
+                WHEN refund.status = 'succeeded'
+                  AND refund.provider_refund_id IS NOT NULL
+                  AND btrim(refund.provider_refund_id) <> ''
+                  AND refund.succeeded_at IS NOT NULL
+                  AND refund.failure_code IS NULL
+                  AND refund.provider_refund_model = $2
+                  AND refund.legacy_refund_platform_fee_claim IS NULL
+                  THEN 'provider_bound'
+                WHEN refund.provider_refund_model = $2
+                  AND refund.legacy_refund_platform_fee_claim IS NULL
+                  THEN 'provider_outcome_unconfirmed'
+                ELSE 'historical_unverified'
+              END AS provider_truth_status
        FROM refunds AS refund
        JOIN payments AS payment ON payment.id = refund.payment_id
        JOIN bookings AS booking ON booking.id = payment.booking_id
        WHERE booking.owner_id = $1 OR booking.renter_id = $1
-       ORDER BY refund.created_at`, userId),
+       ORDER BY refund.created_at`, userId, [trustedRefundProviderModel]),
     rows(client,
       `SELECT id, booking_id, status, amount_minor, currency, available_at,
               paid_at, created_at, updated_at
        FROM payouts WHERE payee_id = $1 ORDER BY created_at`, userId),
     rows(client,
-      `SELECT id, booking_id, document_type, document_number, currency,
-              amount_minor, private_rent_minor, sit_fee_minor,
-              owner_payout_minor, rent_refund_minor, sit_fee_refund_minor,
-              supplier_role, debtor_role, tax_treatment, test_mode,
-              snapshot, content_html, artifact_sha256, issued_at, created_at
-       FROM financial_documents
-       WHERE audience_user_id = $1 ORDER BY issued_at`, userId),
+      `SELECT document.id, document.booking_id, document.document_type,
+              document.document_number, document.currency,
+              document.amount_minor, document.private_rent_minor,
+              document.sit_fee_minor, document.owner_payout_minor,
+              document.rent_refund_minor, document.sit_fee_refund_minor,
+              document.supplier_role, document.debtor_role,
+              document.tax_treatment, document.test_mode,
+              document.snapshot, document.content_html,
+              document.artifact_sha256, document.issued_at, document.created_at,
+              CASE
+                WHEN document.refund_id IS NULL THEN 'not_applicable'
+                WHEN source_refund.status = 'succeeded'
+                  AND source_refund.provider_refund_id IS NOT NULL
+                  AND btrim(source_refund.provider_refund_id) <> ''
+                  AND source_refund.succeeded_at IS NOT NULL
+                  AND source_refund.failure_code IS NULL
+                  AND source_refund.provider_refund_model = $2
+                  AND source_refund.legacy_refund_platform_fee_claim IS NULL
+                  THEN 'provider_bound'
+                ELSE 'historical_unverified'
+              END AS source_truth_status
+       FROM financial_documents AS document
+       LEFT JOIN refunds AS source_refund ON source_refund.id = document.refund_id
+       WHERE document.audience_user_id = $1
+       ORDER BY document.issued_at`, userId, [trustedRefundProviderModel]),
     rows(client,
       `SELECT event.id, event.document_id, event.event_type,
               event.artifact_sha256, event.occurred_at, event.metadata

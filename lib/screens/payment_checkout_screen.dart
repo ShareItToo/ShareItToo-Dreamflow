@@ -67,12 +67,16 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen>
     } on BackendException catch (error) {
       if (!mounted) return;
       setState(() {
+        _state = null;
+        _capabilities = null;
         _loading = false;
         _error = _message(error.code);
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
+        _state = null;
+        _capabilities = null;
         _loading = false;
         _error = 'Der Zahlungsstatus konnte gerade nicht geladen werden.';
       });
@@ -148,6 +152,9 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen>
     final amounts = payment ?? quote;
     final currency = amounts?['currency']?.toString() ?? 'EUR';
     final paymentStatus = payment?['status']?.toString();
+    final refundTruthStatus = payment?['refundTruthStatus']?.toString();
+    final refundVerificationPending =
+        refundTruthStatus == 'pending' || refundTruthStatus == 'needsReview';
     final captured = const {'captured', 'partially_refunded', 'refunded'}
         .contains(paymentStatus);
     final providerAvailable = _providerAvailable(_capabilities);
@@ -180,7 +187,9 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen>
                           Text(
                             !providerAvailable
                                 ? 'Zahlung noch nicht freigeschaltet'
-                                : (captured
+                                : (refundVerificationPending
+                                    ? 'Erstattungsstatus wird geprüft'
+                                    : captured
                                     ? 'Zahlung bestätigt'
                                     : (testMode
                                         ? 'Zahlungstest'
@@ -191,7 +200,9 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen>
                           Text(
                             !providerAvailable
                                 ? 'Für dieses Konto ist noch kein echter Marketplace-Zahlungsdienst freigeschaltet. ShareItToo fordert deshalb keine Karten-, Konto- oder Sicherheitsdaten an.'
-                                : (captured
+                                : (refundVerificationPending
+                                    ? 'Anbieterbestätigung und lokale Verbuchung werden sicher abgeglichen. Bis dahin wird weder ein bestätigter Erstattungsbetrag noch ein neuer Checkout angezeigt.'
+                                    : captured
                                     ? 'Der freigeschaltete Zahlungsdienst hat die Zahlung bestätigt. Der Status stammt direkt vom Server.'
                                     : (testMode
                                         ? 'Dieser Checkout ist ausschließlich für gekennzeichnete Tests vorgesehen. Es fließt kein echtes Geld.'
@@ -212,7 +223,9 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen>
                                 value: _money(
                                     amounts['ownerPayoutMinor'], currency)),
                           ],
-                          if (providerAvailable && !captured) ...[
+                          if (providerAvailable &&
+                              !captured &&
+                              !refundVerificationPending) ...[
                             const SizedBox(height: 18),
                             SizedBox(
                               width: double.infinity,

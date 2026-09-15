@@ -26,7 +26,9 @@ class Invoice {
   final bool testMode;
   final DateTime issuedAt;
   final String artifactSha256;
-  final String downloadPath;
+  final String sourceTruthStatus;
+  final bool needsReview;
+  final String? downloadPath;
   final InvoiceBookingDetails booking;
   final String sitFeeTaxLabel;
 
@@ -51,6 +53,8 @@ class Invoice {
     required this.testMode,
     required this.issuedAt,
     required this.artifactSha256,
+    required this.sourceTruthStatus,
+    required this.needsReview,
     required this.downloadPath,
     required this.booking,
     required this.sitFeeTaxLabel,
@@ -62,6 +66,8 @@ class Invoice {
   DateTime get createdAt => issuedAt;
   DateTime get updatedAt => issuedAt;
   double get amount => amountMinor / 100;
+  bool get canDownloadArtifact =>
+      !needsReview && (sourceKind == 'qa_simulation' || downloadPath != null);
 
   InvoicePriceBreakdown get pricing => InvoicePriceBreakdown(
         vatRate: 0,
@@ -106,10 +112,36 @@ class Invoice {
     if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(artifactSha256)) {
       throw const FormatException('Invalid financial document artifact hash');
     }
-    final downloadPath = _requiredString(json['downloadPath'], 'downloadPath');
-    if (downloadPath !=
-        '/v1/financial-documents/${Uri.encodeComponent(id)}/artifact') {
-      throw const FormatException('Invalid financial document download path');
+    final sourceKind = _requiredString(json['sourceKind'], 'sourceKind');
+    final sourceTruthStatus =
+        _requiredString(json['sourceTruthStatus'], 'sourceTruthStatus');
+    if (json['needsReview'] is! bool) {
+      throw const FormatException('Invalid financial document review status');
+    }
+    final needsReview = json['needsReview'] as bool;
+    final expectedNeedsReview = sourceTruthStatus == 'historical_unverified';
+    final validSourceTruth = sourceKind == 'refund'
+        ? const {'provider_bound', 'historical_unverified'}
+            .contains(sourceTruthStatus)
+        : sourceTruthStatus == 'not_applicable';
+    if (!validSourceTruth || needsReview != expectedNeedsReview) {
+      throw const FormatException(
+          'Inconsistent financial document source truth');
+    }
+    final expectedDownloadPath =
+        '/v1/financial-documents/${Uri.encodeComponent(id)}/artifact';
+    final String? downloadPath;
+    if (needsReview) {
+      if (!json.containsKey('downloadPath') || json['downloadPath'] != null) {
+        throw const FormatException(
+            'Review-only financial document must not be downloadable');
+      }
+      downloadPath = null;
+    } else {
+      downloadPath = _requiredString(json['downloadPath'], 'downloadPath');
+      if (downloadPath != expectedDownloadPath) {
+        throw const FormatException('Invalid financial document download path');
+      }
     }
     if (json['testMode'] is! bool) {
       throw const FormatException('Invalid financial document test mode');
@@ -124,7 +156,6 @@ class Invoice {
         _requiredMinor(json['rentRefundMinor'], 'rentRefundMinor');
     final sitFeeRefundMinor =
         _requiredMinor(json['sitFeeRefundMinor'], 'sitFeeRefundMinor');
-    final sourceKind = _requiredString(json['sourceKind'], 'sourceKind');
     _validateAmounts(
       type: type,
       sourceKind: sourceKind,
@@ -156,6 +187,8 @@ class Invoice {
       testMode: json['testMode'] as bool,
       issuedAt: issuedAt,
       artifactSha256: artifactSha256,
+      sourceTruthStatus: sourceTruthStatus,
+      needsReview: needsReview,
       downloadPath: downloadPath,
       booking: InvoiceBookingDetails.fromJson(bookingJson),
       sitFeeTaxLabel: _requiredString(
@@ -191,6 +224,8 @@ class Invoice {
         'testMode': testMode,
         'issuedAt': issuedAt.toIso8601String(),
         'artifactSha256': artifactSha256,
+        'sourceTruthStatus': sourceTruthStatus,
+        'needsReview': needsReview,
         'downloadPath': downloadPath,
         'booking': booking.toJson(),
         'sitFeeTaxLabel': sitFeeTaxLabel,

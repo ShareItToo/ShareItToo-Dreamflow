@@ -121,6 +121,9 @@ test('verified thin workflow retrieves the account and keeps original raw payloa
       if (sql.startsWith('SELECT * FROM payment_provider_events')) {
         return { rows: [{ payload_sha256: hash, status: delivered ? 'processed' : 'received' }] };
       }
+      if (sql.startsWith('SELECT user_id FROM stripe_connect_accounts')) {
+        return { rows: [], rowCount: 0 };
+      }
       return { rows: [], rowCount: 1 };
     },
     release() {},

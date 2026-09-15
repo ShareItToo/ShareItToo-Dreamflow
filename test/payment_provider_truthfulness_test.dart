@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/screens/payment_checkout_screen.dart';
 import 'package:lendify/screens/payment_methods_screen.dart';
 import 'package:lendify/screens/stripe_payout_account_screen.dart';
+import 'package:lendify/services/backend_http.dart';
 
 void main() {
   testWidgets('unavailable provider never presents Stripe or a payment action',
@@ -181,6 +182,95 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    expect(find.text('Zahlung noch nicht freigeschaltet'), findsOneWidget);
+    expect(find.byType(FilledButton), findsNothing);
+  });
+
+  for (final truthStatus in ['pending', 'needsReview']) {
+    testWidgets(
+        'refund truth $truthStatus is neutral and never offers checkout',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: PaymentCheckoutScreen(
+          bookingId: 'booking-refund-$truthStatus',
+          loadCapabilities: () async => const {
+            'provider': 'stripe',
+            'providerBacked': true,
+            'checkoutAvailable': true,
+            'mode': 'test',
+          },
+          loadPayment: (_) async => {
+            'quote': const {
+              'amountMinor': 6600,
+              'platformFeeMinor': 600,
+              'ownerPayoutMinor': 6000,
+              'currency': 'EUR',
+            },
+            'payment': {
+              'status': 'refund_verification_pending',
+              'refundTruthStatus': truthStatus,
+              'refundedMinor': null,
+              'amountMinor': 6600,
+              'platformFeeMinor': 600,
+              'ownerPayoutMinor': 6000,
+              'currency': 'EUR',
+            },
+          },
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Erstattungsstatus wird geprüft'), findsOneWidget);
+      expect(find.textContaining('sicher abgeglichen'), findsOneWidget);
+      expect(find.text('Zahlung bestätigt'), findsNothing);
+      expect(find.text('Test-Checkout öffnen'), findsNothing);
+      expect(find.byType(FilledButton), findsNothing);
+    });
+  }
+
+  testWidgets('refresh failure clears previously confirmed payment truth',
+      (tester) async {
+    var failRefresh = false;
+    await tester.pumpWidget(MaterialApp(
+      home: PaymentCheckoutScreen(
+        bookingId: 'booking-stale-truth',
+        loadCapabilities: () async => const {
+          'provider': 'stripe',
+          'providerBacked': true,
+          'checkoutAvailable': true,
+          'mode': 'test',
+        },
+        loadPayment: (_) async {
+          if (failRefresh) {
+            throw const BackendException(503, 'payment_provider_unavailable');
+          }
+          return const {
+            'quote': {
+              'amountMinor': 6600,
+              'platformFeeMinor': 600,
+              'ownerPayoutMinor': 6000,
+              'currency': 'EUR',
+            },
+            'payment': {
+              'status': 'captured',
+              'refundTruthStatus': 'none',
+              'amountMinor': 6600,
+              'platformFeeMinor': 600,
+              'ownerPayoutMinor': 6000,
+              'currency': 'EUR',
+            },
+          };
+        },
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Zahlung bestätigt'), findsOneWidget);
+
+    failRefresh = true;
+    await tester.tap(find.byIcon(Icons.refresh));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Zahlung bestätigt'), findsNothing);
     expect(find.text('Zahlung noch nicht freigeschaltet'), findsOneWidget);
     expect(find.byType(FilledButton), findsNothing);
   });

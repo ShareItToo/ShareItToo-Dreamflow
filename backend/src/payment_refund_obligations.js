@@ -41,14 +41,25 @@ export function evaluateRefundObligationSnapshot(row = {}) {
     row.succeeded_refund_minor,
     'refund_obligation_state_invalid',
   );
+  const untrustedRefundCount = nonNegativeInteger(
+    row.untrusted_refund_count,
+    'refund_obligation_state_invalid',
+  );
+  const unresolvedRefundCount = nonNegativeInteger(
+    row.unresolved_refund_count,
+    'refund_obligation_state_invalid',
+  );
   const dueMinor = withdrawalDueMinor + cancellationDueMinor;
   if (!Number.isSafeInteger(dueMinor)) {
     throw new PaymentDomainError(409, 'refund_obligation_state_invalid');
   }
   const conflictingFamilies = withdrawalCount > 0 && cancellationCount > 0;
+  const providerTruthNeedsReview = untrustedRefundCount > 0
+    || unresolvedRefundCount > 0;
   const unresolved = withdrawalUnresolved > 0
     || cancellationUnresolved > 0
-    || actualLossUnresolved > 0;
+    || actualLossUnresolved > 0
+    || providerTruthNeedsReview;
   const outstandingMinor = Math.max(0, dueMinor - succeededRefundMinor);
   return Object.freeze({
     blocked: conflictingFamilies || unresolved || outstandingMinor > 0,
@@ -57,6 +68,9 @@ export function evaluateRefundObligationSnapshot(row = {}) {
     outstandingMinor,
     dueMinor,
     succeededRefundMinor,
+    providerTruthNeedsReview,
+    untrustedRefundCount,
+    unresolvedRefundCount,
   });
 }
 
@@ -76,7 +90,9 @@ const snapshotsSql = `
          COALESCE(cancellation.unresolved_count, 0)::int AS cancellation_unresolved_count,
          COALESCE(cancellation.due_minor, 0)::bigint AS cancellation_due_minor,
          COALESCE(actual_loss.unresolved_count, 0)::int AS actual_loss_unresolved_count,
-         COALESCE(refunded.succeeded_minor, 0)::bigint AS succeeded_refund_minor
+         COALESCE(refunded.succeeded_minor, 0)::bigint AS succeeded_refund_minor,
+         COALESCE(refunded.untrusted_count, 0)::int AS untrusted_refund_count,
+         COALESCE(refunded.unresolved_count, 0)::int AS unresolved_refund_count
     FROM target_bookings AS target
     LEFT JOIN LATERAL (
       SELECT count(*)::int AS obligation_count,
@@ -120,11 +136,17 @@ const snapshotsSql = `
          AND resolution.id IS NULL
     ) AS actual_loss ON true
     LEFT JOIN LATERAL (
-      SELECT COALESCE(sum(refund.amount_minor), 0)::bigint AS succeeded_minor
+      SELECT COALESCE(sum(refund_truth.settled_refund_minor), 0)::bigint
+               AS succeeded_minor,
+             COALESCE(sum(refund_truth.untrusted_refund_count), 0)::int
+               AS untrusted_count,
+             count(*) FILTER (
+               WHERE refund_truth.refund_truth_status IN ('pending', 'needsReview')
+             )::int AS unresolved_count
         FROM payments AS payment
-        JOIN refunds AS refund ON refund.payment_id = payment.id
+        JOIN sit_payment_refund_truth AS refund_truth
+          ON refund_truth.payment_id = payment.id
        WHERE payment.booking_id = target.id
-         AND refund.status = 'succeeded'
     ) AS refunded ON true
    ORDER BY target.id`;
 

@@ -28,7 +28,7 @@ const requireFromBackend = createRequire(
   new URL('../backend/package.json', import.meta.url),
 );
 
-export const r9RequiredMigrationCount = 76;
+export const r9RequiredMigrationCount = 77;
 export const r9SyntheticAccountCount = 12;
 export const r9SyntheticListingCount = 6;
 export const r9ResultClassification = 'LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF';
@@ -66,6 +66,10 @@ const rollbackGuardExpectations = Object.freeze([
   Object.freeze({
     filename: '075_refund_transfer_reversal_recovery.down.sql',
     message: 'Refund transfer reversal rollback blocked: durable provider recovery data exists',
+  }),
+  Object.freeze({
+    filename: '077_refund_provider_truth_parity.down.sql',
+    message: 'Refund provider truth rollback blocked: post-migration refunds exist',
   }),
 ]);
 
@@ -146,7 +150,7 @@ async function readMigrationPlan(root) {
   }
   if (plan.length !== r9RequiredMigrationCount
       || plan[0]?.filename !== '001_b3_foundation.up.sql'
-      || plan.at(-1)?.filename !== '076_payment_command_result_immutability.up.sql') {
+      || plan.at(-1)?.filename !== '077_refund_provider_truth_parity.up.sql') {
     fail('r9_migration_inventory_unexpected');
   }
   return Object.freeze(plan);
@@ -631,10 +635,12 @@ async function insertRefundTransferReversalRollbackFixture(client) {
     `INSERT INTO refunds (
        payment_id, idempotency_key, status, amount_minor, currency,
        provider_charge_id, owner_share_minor, platform_share_minor,
-       reverse_transfer, refund_platform_fee, livemode
+       reverse_transfer, provider_refund_model, local_settlement_status,
+       provider_observation_status, livemode
      ) VALUES (
        $1, 'r9-refund-reversal-refund', 'pending', 900, 'EUR',
-       'ch_r9_refund_reversal_guard', 900, 0, true, false, false
+       'ch_r9_refund_reversal_guard', 900, 0, true,
+       'separate_charge_manual_transfer_reversal_v1', 'pending', 'none', false
      ) RETURNING id`,
     [payment.rows[0].id],
   );
@@ -661,7 +667,10 @@ async function assertRollbackGuardRefusals(pool, root) {
     let caught = null;
     try {
       await client.query('BEGIN');
-      if (guard.filename === '075_refund_transfer_reversal_recovery.down.sql') {
+      if ([
+        '075_refund_transfer_reversal_recovery.down.sql',
+        '077_refund_provider_truth_parity.down.sql',
+      ].includes(guard.filename)) {
         await insertRefundTransferReversalRollbackFixture(client);
       }
       try {
@@ -735,7 +744,7 @@ async function closePools(pools) {
 
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
-  requiredLastMigration = '076_payment_command_result_immutability.up.sql',
+  requiredLastMigration = '077_refund_provider_truth_parity.up.sql',
   requiredRollbackGuards = rollbackGuardExpectations,
 } = {}) {
   if (value?.schemaVersion !== 1

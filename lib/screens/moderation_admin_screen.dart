@@ -877,7 +877,7 @@ class _ModerationAdminScreenState extends State<ModerationAdminScreen> {
               count: _payments.length,
               rows: _payments,
               titleKey: 'id',
-              subtitleKeys: const ['status', 'currency']),
+              subtitleKeys: const ['status', 'currency', 'refundTruthStatus']),
           _DataSection(
               title: 'Unveränderliches Audit',
               count: _audit.length,

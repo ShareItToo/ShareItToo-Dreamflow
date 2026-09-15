@@ -273,13 +273,14 @@ export class StripeProvider {
       const result = {
         id,
         object: 'checkout.session',
+        status: 'open',
         url,
         payment_intent: paymentIntent,
         customer: customerId,
         expires_at: expiresAt,
         livemode: false,
       };
-      this.memory.set(id, { ...result, bookingId, paymentId, amountMinor, currency, transferGroup });
+      this.memory.set(id, result);
       this.memory.set(`checkout-idempotency:${idempotencyKey}`, {
         fingerprint: idempotencyFingerprint,
         result,
@@ -308,6 +309,22 @@ export class StripeProvider {
       },
       metadata: { sit_booking_id: bookingId, sit_payment_id: paymentId },
     }, { idempotencyKey }));
+  }
+
+  async expirePaymentCheckout({ sessionId }) {
+    if (this.mode === 'memory') {
+      const session = this.memory.get(sessionId);
+      if (!session || session.object !== 'checkout.session') {
+        throw new PaymentDomainError(404, 'provider_checkout_session_not_found');
+      }
+      if (session.status === 'complete') {
+        throw new PaymentDomainError(409, 'provider_checkout_session_already_complete');
+      }
+      session.status = 'expired';
+      session.url = null;
+      return session;
+    }
+    return this.call((client) => client.checkout.sessions.expire(sessionId));
   }
 
   async createRefund({ chargeId, amountMinor, idempotencyKey, metadata }) {

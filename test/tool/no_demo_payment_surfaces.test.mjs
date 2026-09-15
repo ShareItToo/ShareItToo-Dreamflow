@@ -45,5 +45,8 @@ test('booking menu names status rather than promising payment', () => {
   );
   assert.doesNotMatch(booking, /label: 'Zahlung',[\s\S]*?value: 'payment'/u);
   assert.match(checkout, /Zahlung noch nicht freigeschaltet/u);
-  assert.match(checkout, /if \(providerAvailable && !captured\)/u);
+  assert.match(
+    checkout,
+    /if \(providerAvailable &&\s*!captured &&\s*!refundVerificationPending\)/u,
+  );
 });

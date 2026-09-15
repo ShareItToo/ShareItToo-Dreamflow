@@ -118,17 +118,40 @@ test('refund receipt exists only after success and preserves separate debtors', 
     amount_minor: 2200,
     owner_share_minor: 2000,
     platform_share_minor: 200,
+    legacy_refund_platform_fee_claim: null,
+    provider_refund_model: 'separate_charge_manual_transfer_reversal_v1',
+    provider_refund_id: 're_refund1',
+    failure_code: null,
     succeeded_at: null,
+    local_settlement_status: 'pending',
+    local_settled_at: null,
+    local_settlement_error_code: null,
+    provider_observation_status: 'none',
   };
   assert.deepEqual(build({ refundRows: [pending] }), []);
   const [receipt] = build({
-    refundRows: [{ ...pending, status: 'succeeded', succeeded_at: base.updated_at }],
+    refundRows: [{
+      ...pending,
+      status: 'succeeded',
+      succeeded_at: base.updated_at,
+      local_settlement_status: 'completed',
+      local_settled_at: base.updated_at,
+    }],
   });
   assert.equal(receipt.documentType, 'refund_receipt');
   assert.equal(receipt.rentRefundMinor, 2000);
   assert.equal(receipt.sitFeeRefundMinor, 200);
   assert.match(receipt.contentHtml, /Schuldner Vermieter/u);
   assert.match(receipt.contentHtml, /Schuldner SIT/u);
+  assert.deepEqual(build({
+    refundRows: [{
+      ...pending,
+      status: 'succeeded',
+      succeeded_at: base.updated_at,
+      legacy_refund_platform_fee_claim: true,
+      provider_refund_model: null,
+    }],
+  }), []);
 });
 
 test('document number, artifact and hash are deterministic for the same immutable source', () => {
@@ -183,6 +206,18 @@ test('financial document storage, authenticated download and privacy inventory a
   assert.match(migration, /document_type = 'owner_payout_statement'[\s\S]*amount_minor = owner_payout_minor/u);
   assert.match(migration, /document_type = 'refund_receipt'[\s\S]*amount_minor = rent_refund_minor \+ sit_fee_refund_minor/u);
   assert.match(service, /observedHash !== row\.artifact_sha256/u);
+  assert.match(service, /financial_document_refund_truth_unverified/u);
+  assert.match(service, /sourceTruthStatus/u);
+  assert.match(service, /provider_refund_model = \$2/u);
+  assert.match(service, /source_refund\.status = 'succeeded'/u);
+  assert.match(service, /source_refund\.provider_refund_id IS NOT NULL/u);
+  assert.match(service, /source_refund\.succeeded_at IS NOT NULL/u);
+  assert.match(service, /source_refund\.failure_code IS NULL/u);
+  assert.equal(
+    (service.match(/(?:LEFT )?JOIN sit_payment_refund_truth AS refund_truth/gu) ?? []).length,
+    3,
+  );
+  assert.match(service, /refund_truth\.refund_truth_status = 'providerBound'/u);
   assert.match(app, /\/v1\/financial-documents[\s\S]*requireAuth[\s\S]*requireActiveAccount/u);
   assert.match(app, /Cache-Control': 'private, no-store'/u);
   assert.match(privacyExport, /financialDocuments/u);

@@ -26,6 +26,10 @@ const commandResultMigration = fs.readFileSync(
   'backend/sql/migrations/076_payment_command_result_immutability.up.sql',
   'utf8',
 );
+const refundTruthMigration = fs.readFileSync(
+  'backend/sql/migrations/077_refund_provider_truth_parity.up.sql',
+  'utf8',
+);
 
 test('server exposes one account-bound provider capability truth', () => {
   assert.match(app, /function paymentCapabilitiesFor\(userId\)/u);
@@ -78,7 +82,7 @@ test('direct checkout is server- and client-gated by the same capability', () =>
   assert.match(checkout, /if \(!_providerAvailable\(_capabilities\)\) return;/u);
   assert.match(
     checkout,
-    /if \(providerAvailable && !captured\)[\s\S]*?FilledButton\.icon/u,
+    /if \(providerAvailable &&\s*!captured &&\s*!refundVerificationPending\)[\s\S]*?FilledButton\.icon/u,
   );
   assert.match(checkout, /Zahlung noch nicht freigeschaltet/u);
   assert.match(checkout, /Test-Checkout öffnen/u);
@@ -114,6 +118,22 @@ test('separate charges and transfers never use destination-refund flags', () => 
   assert.doesNotMatch(provider, /refund_application_fee:/u);
   assert.match(provider, /client\.transfers\.create/u);
   assert.match(provider, /client\.transfers\.createReversal/u);
+  assert.match(
+    refundTruthMigration,
+    /RENAME COLUMN refund_platform_fee TO legacy_refund_platform_fee_claim/u,
+  );
+  assert.match(
+    refundTruthMigration,
+    /provider_refund_model = 'separate_charge_manual_transfer_reversal_v1'/u,
+  );
+  assert.match(workflow, /sit_refund_model: trustedRefundProviderModel/u);
+  assert.match(domain, /metadata\.sit_refund_model !== refund\.provider_refund_model/u);
+  const refundProviderCall = workflow.slice(
+    workflow.indexOf('providerRefund = await stripeProvider.createRefund'),
+    workflow.indexOf('assertProviderRefundBinding({',
+      workflow.indexOf('providerRefund = await stripeProvider.createRefund')),
+  );
+  assert.doesNotMatch(refundProviderCall, /refundPlatformFee|reverseTransfer/u);
 });
 
 test('refund-side transfer reversals are payout-bound and durably recoverable', () => {
@@ -151,7 +171,7 @@ test('refund and payout preparations form a durable mutually exclusive fence', (
   assert.match(payoutRelease, /FOR UPDATE OF payment, booking/u);
   assert.match(
     payoutRelease,
-    /FROM refunds[\s\S]{0,160}status IN \('created', 'pending', 'failed'\)[\s\S]{0,160}payout_blocked_by_refund_in_flight/u,
+    /FROM refunds[\s\S]{0,160}status <> 'succeeded'[\s\S]{0,160}local_settlement_status <> 'completed'[\s\S]{0,160}payout_blocked_by_refund_in_flight/u,
   );
   assert.equal(
     refund.indexOf('completedCommand?.completed_at')
@@ -385,6 +405,8 @@ test('completed payment command receipts are hash-bound, one-shot, and relation-
   for (const marker of [
     'refund.idempotency_key !== key',
     'refund.payment_id !== paymentId',
+    'refund.provider_refund_model !== trustedRefundProviderModel',
+    'refund.legacy_refund_platform_fee_claim != null',
     'ledger.idempotency_key !== `${key}:refund-ledger`',
     "ledger.transaction_type !== 'payment_refunded'",
   ]) assert.ok(refundValidator.includes(marker));

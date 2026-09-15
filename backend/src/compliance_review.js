@@ -25,6 +25,8 @@ function nonNegativeMinor(value, code) {
 export function evaluateProfessionalReviewTrigger({
   receivedPlatformFeeMinor,
   refundedPlatformFeeMinor,
+  untrustedRefundCount = 0,
+  unresolvedRefundCount = 0,
   reserveAttestation = null,
   incidentTrigger = null,
 }) {
@@ -36,8 +38,19 @@ export function evaluateProfessionalReviewTrigger({
     refundedPlatformFeeMinor,
     'compliance_refunded_fee_invalid',
   );
-  const netReceived = Math.max(0, received - refunded);
-  const thresholdReached = netReceived >= professionalReviewThresholdMinor;
+  const untrustedRefunds = nonNegativeMinor(
+    untrustedRefundCount,
+    'compliance_untrusted_refund_count_invalid',
+  );
+  const unresolvedRefunds = nonNegativeMinor(
+    unresolvedRefundCount,
+    'compliance_unresolved_refund_count_invalid',
+  );
+  const refundTruthExact = untrustedRefunds === 0 && unresolvedRefunds === 0;
+  const netReceived = refundTruthExact ? Math.max(0, received - refunded) : null;
+  const thresholdReached = refundTruthExact
+    ? netReceived >= professionalReviewThresholdMinor
+    : null;
   const reserveDue = reserveAttestation
     ? nonNegativeMinor(reserveAttestation.operationsDueMinor, 'compliance_operations_due_invalid')
       + nonNegativeMinor(reserveAttestation.taxDueMinor, 'compliance_tax_due_invalid')
@@ -53,9 +66,12 @@ export function evaluateProfessionalReviewTrigger({
     && reserveAvailable !== null
     && reserveAvailable >= reserveDue;
   const reviewRequired = Boolean(incidentTrigger)
+    || !refundTruthExact
     || (thresholdReached && reservesCovered);
   let status = 'monitoring';
   if (incidentTrigger) status = 'professional_review_required_earlier_incident';
+  else if (untrustedRefunds > 0) status = 'professional_review_required_untrusted_refund_truth';
+  else if (unresolvedRefunds > 0) status = 'professional_review_required_unresolved_refund_truth';
   else if (reviewRequired) status = 'professional_review_required';
   else if (thresholdReached) status = 'threshold_reached_reserve_evidence_open';
   return Object.freeze({
@@ -63,8 +79,11 @@ export function evaluateProfessionalReviewTrigger({
     currency: 'EUR',
     thresholdMinor: professionalReviewThresholdMinor,
     receivedPlatformFeeMinor: received,
-    refundedPlatformFeeMinor: refunded,
+    refundedPlatformFeeMinor: refundTruthExact ? refunded : null,
     netReceivedPlatformFeeMinor: netReceived,
+    refundTruthExact,
+    untrustedRefundCount: untrustedRefunds,
+    unresolvedRefundCount: unresolvedRefunds,
     thresholdReached,
     reserveEvidencePresent: reserveAttestation !== null,
     reserveDueMinor: reserveDue,
@@ -88,19 +107,26 @@ async function audit(client, { actor, action, resourceType, resourceId, metadata
 export async function getProfessionalReviewStatus(client) {
   const fees = await client.query(
     `SELECT
-       COALESCE(sum(payment.platform_fee_minor), 0)::bigint AS received_platform_fee_minor,
-       COALESCE((
-         SELECT sum(refund.platform_share_minor)
-           FROM refunds AS refund
-           JOIN payments AS refunded_payment ON refunded_payment.id = refund.payment_id
-          WHERE refund.status = 'succeeded'
-            AND refund.livemode = true
-            AND refunded_payment.livemode = true
-       ), 0)::bigint AS refunded_platform_fee_minor
-     FROM payments AS payment
-     WHERE payment.livemode = true
-       AND payment.status IN ('captured', 'partially_refunded', 'refunded')
-       AND payment.captured_minor = payment.amount_minor`,
+       COALESCE(sum(payment.platform_fee_minor) FILTER (
+         WHERE payment.status IN ('captured', 'partially_refunded', 'refunded')
+           AND payment.captured_minor = payment.amount_minor
+       ), 0)::bigint AS received_platform_fee_minor,
+       COALESCE(sum(
+         refund_truth.settled_refund_minor
+           - refund_truth.settled_owner_refund_minor
+       ) FILTER (
+         WHERE refund_truth.refund_truth_status IN ('none', 'providerBound')
+       ), 0)::bigint AS refunded_platform_fee_minor,
+       count(*) FILTER (
+         WHERE refund_truth.refund_truth_status = 'needsReview'
+       )::bigint AS untrusted_refund_count,
+       count(*) FILTER (
+         WHERE refund_truth.refund_truth_status = 'pending'
+       )::bigint AS unresolved_refund_count
+       FROM payments AS payment
+       JOIN sit_payment_refund_truth AS refund_truth
+         ON refund_truth.payment_id = payment.id
+      WHERE payment.livemode = true`,
   );
   const reserve = await client.query(
     `SELECT * FROM compliance_reserve_attestations
@@ -119,6 +145,8 @@ export async function getProfessionalReviewStatus(client) {
     ...evaluateProfessionalReviewTrigger({
       receivedPlatformFeeMinor: Number(feeRow.received_platform_fee_minor ?? 0),
       refundedPlatformFeeMinor: Number(feeRow.refunded_platform_fee_minor ?? 0),
+      untrustedRefundCount: Number(feeRow.untrusted_refund_count ?? 0),
+      unresolvedRefundCount: Number(feeRow.unresolved_refund_count ?? 0),
       reserveAttestation: reserveRow
         ? {
             operationsDueMinor: Number(reserveRow.operations_due_minor),

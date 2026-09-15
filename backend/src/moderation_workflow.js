@@ -1284,15 +1284,33 @@ export async function listStaffBookings(client, { limit, offset }) {
 
 export async function listStaffPayments(client, { limit, offset }) {
   const result = await client.query(
-    `SELECT id, booking_id, status, currency, amount_minor, captured_minor,
-            refunded_minor, transferred_minor, livemode, created_at
-     FROM payments ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-    [integer(limit, 50, { minimum: 1, maximum: 200 }), integer(offset, 0, { minimum: 0, maximum: 100_000 })],
+    `SELECT payment.id, payment.booking_id, payment.status, payment.currency,
+            payment.amount_minor, payment.captured_minor,
+            CASE
+              WHEN refund_truth.refund_truth_status IN ('pending', 'needsReview')
+                THEN NULL
+              ELSE refund_truth.settled_refund_minor
+            END AS verified_refunded_minor,
+            refund_truth.refund_truth_status,
+            payment.transferred_minor, payment.livemode, payment.created_at
+       FROM payments AS payment
+       JOIN sit_payment_refund_truth AS refund_truth
+         ON refund_truth.payment_id = payment.id
+      ORDER BY payment.created_at DESC
+      LIMIT $1 OFFSET $2`,
+    [
+      integer(limit, 50, { minimum: 1, maximum: 200 }),
+      integer(offset, 0, { minimum: 0, maximum: 100_000 }),
+    ],
   );
   return result.rows.map((row) => ({
     id: row.id, bookingId: row.booking_id, status: row.status, currency: row.currency,
     amountMinor: Number(row.amount_minor), capturedMinor: Number(row.captured_minor),
-    refundedMinor: Number(row.refunded_minor), transferredMinor: Number(row.transferred_minor),
+    refundedMinor: row.verified_refunded_minor === null
+      ? null
+      : Number(row.verified_refunded_minor),
+    refundTruthStatus: row.refund_truth_status,
+    transferredMinor: Number(row.transferred_minor),
     livemode: row.livemode, createdAt: new Date(row.created_at).toISOString(),
   }));
 }

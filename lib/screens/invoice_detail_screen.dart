@@ -23,7 +23,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.autoStartDownload) {
+    if (widget.autoStartDownload && widget.invoice.canDownloadArtifact) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _downloadPdf());
     }
   }
@@ -113,7 +113,8 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
               tooltip: MaterialLocalizations.of(context).backButtonTooltip,
               icon: const Icon(Icons.arrow_back_rounded),
               onPressed: () => Navigator.of(context).maybePop()),
-          title: Text(_typeLabel(inv.type)),
+          title: Text(
+              inv.needsReview ? 'Prüfung erforderlich' : _typeLabel(inv.type)),
         ),
         body: SafeArea(
           child: Column(children: [
@@ -121,6 +122,23 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
                 children: [
+                  if (inv.needsReview) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.orangeAccent),
+                      ),
+                      child: const Text(
+                        'Dieser historische Erstattungsbeleg ist noch nicht '
+                        'durch die aktuelle Provider-Wahrheit bestätigt. '
+                        'Beträge und PDF-Aktionen bleiben bis zur Prüfung ausgeblendet.',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   if (inv.testMode) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -136,7 +154,8 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  Text(_typeLabel(inv.type), style: theme.textTheme.titleLarge),
+                  Text(inv.needsReview ? inv.title : _typeLabel(inv.type),
+                      style: theme.textTheme.titleLarge),
                   const SizedBox(height: 4),
                   Text(inv.bookingId,
                       style: theme.textTheme.titleMedium?.copyWith(
@@ -203,46 +222,67 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                             offset: const Offset(0, 10))
                       ],
                     ),
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Beträge', style: theme.textTheme.titleMedium),
-                          const SizedBox(height: 10),
-                          ..._documentAmountRows(context, inv),
-                          const SizedBox(height: 8),
-                          Container(
-                              height: 1,
-                              color: Colors.white.withValues(alpha: 0.08)),
-                          const SizedBox(height: 8),
-                          _moneyRow(context, 'Dokumentbetrag', inv.amount,
-                              emphasize: true),
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              color: Colors.black.withValues(alpha: 0.20),
-                              border: Border.all(
-                                  color: cs.primary.withValues(alpha: 0.22)),
-                            ),
-                            child: Text(
-                              _documentNotice(inv),
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.82),
-                                height: 1.4,
+                    child: inv.needsReview
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Beträge werden geprüft',
+                                  style: theme.textTheme.titleMedium),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Bis zur bestätigten Zuordnung des '
+                                'Erstattungsvorgangs werden hier keine '
+                                'Geldbeträge angezeigt.',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.82),
+                                  height: 1.4,
+                                ),
                               ),
-                            ),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Beträge',
+                                  style: theme.textTheme.titleMedium),
+                              const SizedBox(height: 10),
+                              ..._documentAmountRows(context, inv),
+                              const SizedBox(height: 8),
+                              Container(
+                                  height: 1,
+                                  color: Colors.white.withValues(alpha: 0.08)),
+                              const SizedBox(height: 8),
+                              _moneyRow(context, 'Dokumentbetrag', inv.amount,
+                                  emphasize: true),
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  color: Colors.black.withValues(alpha: 0.20),
+                                  border: Border.all(
+                                      color:
+                                          cs.primary.withValues(alpha: 0.22)),
+                                ),
+                                child: Text(
+                                  _documentNotice(inv),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: Colors.white.withValues(alpha: 0.82),
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                              if (inv.artifactSha256.isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                Text(
+                                  'Unveränderlicher Nachweis: ${inv.artifactSha256.substring(0, 12)}…',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: Colors.white60,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                          if (inv.artifactSha256.isNotEmpty) ...[
-                            const SizedBox(height: 10),
-                            Text(
-                              'Unveränderlicher Nachweis: ${inv.artifactSha256.substring(0, 12)}…',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: Colors.white60,
-                              ),
-                            ),
-                          ],
-                        ]),
                   ),
                 ],
               ),
@@ -255,42 +295,56 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                     top: BorderSide(
                         color: Colors.white.withValues(alpha: 0.08))),
               ),
-              child: Row(children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _busy ? null : _downloadPdf,
-                    icon: Icon(Icons.picture_as_pdf_rounded,
-                        color: _busy ? Colors.white54 : cs.primary),
-                    label: Text('PDF herunterladen',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                            color: Colors.white, fontWeight: FontWeight.w700)),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.14)),
-                      backgroundColor: Colors.black.withValues(alpha: 0.18),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
+              child: inv.canDownloadArtifact
+                  ? Row(children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _busy ? null : _downloadPdf,
+                          icon: Icon(Icons.picture_as_pdf_rounded,
+                              color: _busy ? Colors.white54 : cs.primary),
+                          label: Text('PDF herunterladen',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700)),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                                color: Colors.white.withValues(alpha: 0.14)),
+                            backgroundColor:
+                                Colors.black.withValues(alpha: 0.18),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: _busy ? null : _sharePdf,
+                          icon: Icon(Icons.ios_share_rounded,
+                              color: cs.onPrimary),
+                          label: Text('Beleg teilen',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: cs.onPrimary,
+                                  fontWeight: FontWeight.w800)),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: cs.primary,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
+                          ),
+                        ),
+                      ),
+                    ])
+                  : Text(
+                      'PDF-Download und Teilen sind bis zum Abschluss der '
+                      'Prüfung deaktiviert.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.orangeAccent,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: _busy ? null : _sharePdf,
-                    icon: Icon(Icons.ios_share_rounded, color: cs.onPrimary),
-                    label: Text('Beleg teilen',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                            color: cs.onPrimary, fontWeight: FontWeight.w800)),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: cs.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
-                    ),
-                  ),
-                ),
-              ]),
             ),
           ]),
         ),

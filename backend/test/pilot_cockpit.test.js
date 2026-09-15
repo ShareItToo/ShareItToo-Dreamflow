@@ -8,6 +8,7 @@ import {
   parsePilotCockpitPeriod,
   PilotCockpitError,
 } from '../src/pilot_cockpit.js';
+import { trustedRefundProviderModel } from '../src/payment_domain.js';
 
 const admin = Object.freeze({ id: 'admin-id', role: 'admin' });
 const period = parsePilotCockpitPeriod('2026-01-01', '2026-02-01');
@@ -75,6 +76,11 @@ function completeRows() {
       captured_booking_count: 2,
       completed_handover_count: 1,
       incomplete_capture_count: 0,
+      canonical_refund_count: 1,
+      review_only_refund_count: 0,
+      pending_refund_count: 0,
+      untrusted_refund_count: 0,
+      unresolved_refund_count: 0,
       gross_gmv_minor: 3_000,
       captured_cash_minor: 3_300,
       refunded_cash_minor: 550,
@@ -238,6 +244,112 @@ test('missing provider, VAT, founder or cost evidence cannot become zero or prof
   assert.equal(snapshot.profitability, 'undetermined');
 });
 
+test('central needsReview truth keeps gross capture but suppresses refund-derived economics', () => {
+  const rows = completeRows();
+  rows.paymentRows[0].review_only_refund_count = 1;
+  const snapshot = buildPilotCockpitSnapshot({
+    actor: admin,
+    period,
+    ...rows,
+    aggregateRows: aggregateRows([0, 0, 0, 0, 0]),
+    assumptions: assumptions({ allDisabled: true }),
+    reportingCurrencies: ['EUR'],
+  });
+  const bucket = snapshot.currencyBuckets[0];
+  assert.deepEqual(bucket.refundTruth, {
+    canonicalProviderModel: trustedRefundProviderModel,
+    exact: false,
+    status: 'needsReview',
+    reviewOnlyPaymentCount: {
+      value: 1,
+      evidenceClass: 'actual',
+      completeness: 'complete',
+      source: ['backend.sit_payment_refund_truth.refund_truth_status'],
+    },
+    pendingPaymentCount: {
+      value: 0,
+      evidenceClass: 'actual',
+      completeness: 'complete',
+      source: ['backend.sit_payment_refund_truth.refund_truth_status'],
+    },
+    untrustedRefundCount: {
+      value: 1,
+      evidenceClass: 'actual',
+      completeness: 'complete',
+      source: ['backend.sit_payment_refund_truth.refund_truth_status'],
+    },
+    unresolvedRefundCount: {
+      value: 0,
+      evidenceClass: 'actual',
+      completeness: 'complete',
+      source: ['backend.sit_payment_refund_truth.refund_truth_status'],
+    },
+  });
+  assert.equal(bucket.actualFlows.grossMerchandiseValue.amountMinor, 3_000);
+  assert.equal(bucket.actualFlows.capturedCash.amountMinor, 3_300);
+  assert.equal(bucket.actualFlows.platformRevenueGross.amountMinor, 300);
+  for (const metric of [
+    bucket.actualFlows.rentRefunded,
+    bucket.actualFlows.netMerchandiseValue,
+    bucket.actualFlows.refundedCash,
+    bucket.actualFlows.platformRevenueRefunded,
+    bucket.actualFlows.platformRevenueNet,
+    bucket.actualFlows.providerFees.gross,
+    bucket.actualFlows.providerFees.refunded,
+    bucket.actualFlows.providerFees.net,
+    bucket.actualFlows.vatComponent.captured,
+    bucket.actualFlows.vatComponent.refunded,
+    bucket.actualFlows.vatComponent.net,
+    bucket.cashView.result,
+    bucket.normalizedView.result,
+    bucket.normalizedView.contributionPerCapturedBooking,
+    bucket.normalizedView.contributionPerCompletedHandover,
+  ]) {
+    assert.equal(metric.amountMinor, null);
+    assert.equal(metric.knownAmountMinor, undefined);
+    assert.equal(metric.reason, 'needs_review_refund_truth');
+  }
+  assert.equal(bucket.normalizedView.profitability, 'undetermined');
+  assert.equal(snapshot.profitability, 'undetermined');
+});
+
+test('central pending truth keeps every refund-derived metric unavailable', () => {
+  const rows = completeRows();
+  rows.paymentRows[0].pending_refund_count = 1;
+  const snapshot = buildPilotCockpitSnapshot({
+    actor: admin,
+    period,
+    ...rows,
+    aggregateRows: aggregateRows([0, 0, 0, 0, 0]),
+    assumptions: assumptions({ allDisabled: true }),
+    reportingCurrencies: ['EUR'],
+  });
+  const bucket = snapshot.currencyBuckets[0];
+  assert.equal(bucket.refundTruth.exact, false);
+  assert.equal(bucket.refundTruth.status, 'pending');
+  assert.equal(bucket.refundTruth.pendingPaymentCount.value, 1);
+  assert.equal(bucket.refundTruth.unresolvedRefundCount.value, 1);
+  for (const metric of [
+    bucket.actualFlows.rentRefunded,
+    bucket.actualFlows.netMerchandiseValue,
+    bucket.actualFlows.refundedCash,
+    bucket.actualFlows.platformRevenueRefunded,
+    bucket.actualFlows.platformRevenueNet,
+    bucket.actualFlows.providerFees.net,
+    bucket.actualFlows.vatComponent.net,
+    bucket.cashView.result,
+    bucket.normalizedView.result,
+    bucket.normalizedView.contributionPerCapturedBooking,
+    bucket.normalizedView.contributionPerCompletedHandover,
+  ]) {
+    assert.equal(metric.amountMinor, null);
+    assert.equal(metric.knownAmountMinor, undefined);
+    assert.equal(metric.reason, 'pending_refund_truth');
+  }
+  assert.equal(bucket.normalizedView.profitability, 'undetermined');
+  assert.equal(snapshot.profitability, 'undetermined');
+});
+
 test('admin-only collector is bounded, aggregate-only and contains SELECT queries only', async () => {
   const calls = [];
   const results = [
@@ -266,6 +378,22 @@ test('admin-only collector is bounded, aggregate-only and contains SELECT querie
     assert.match(call.statement.trim(), /^(?:WITH|SELECT)\b/u);
     assert.doesNotMatch(call.statement, /\b(?:INSERT|UPDATE|DELETE|TRUNCATE)\b/iu);
   }
+  assert.deepEqual(calls[0].values, [period.fromInclusive, period.toExclusive]);
+  assert.equal(calls[1].values.length, 2);
+  assert.equal(calls[2].values.length, 2);
+  assert.match(calls[0].statement, /JOIN sit_payment_refund_truth AS refund_truth/u);
+  assert.match(
+    calls[0].statement,
+    /refund_truth_status = 'needsReview'[\s\S]*AS review_only_refund_count/u,
+  );
+  assert.match(
+    calls[0].statement,
+    /refund_truth_status = 'pending'[\s\S]*AS pending_refund_count/u,
+  );
+  assert.match(
+    calls[0].statement,
+    /refund\.local_settlement_status = 'completed'[\s\S]*refund_truth\.refund_truth_status IN \('none', 'providerBound'\)/u,
+  );
   assert.equal(calls.at(-1).values.at(-1), 5_001);
 
   const deniedClient = { query: async () => assert.fail('support must not reach a query') };

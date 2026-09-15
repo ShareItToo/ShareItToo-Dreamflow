@@ -1,5 +1,9 @@
 import crypto from 'node:crypto';
 
+import {
+  lockBookingFinancialPrincipals,
+  lockFinancialPrincipals,
+} from './account_financial_fence.js';
 import { enqueueV51WithdrawalNotifications } from './notifications.js';
 import {
   deLegalDeadlineTimeZone,
@@ -119,7 +123,7 @@ function contractWithdrawalDocument(row) {
 
 function effectConsequences(effect) {
   if (effect.manualReviewRequired) {
-    return 'Die elektronische Erklärung wurde empfangen. Das garantierte vertragliche 14-Tage-Fenster ist abgelaufen; mögliche längere gesetzliche Rechte werden geprüft. Buchung und Erstattungen werden bis dahin nicht automatisch verändert.';
+    return 'Die elektronische Erklärung wurde empfangen. Anspruch, Frist und mögliche Auswirkungen auf Buchung und Erstattungen werden geprüft. Bis zum Abschluss werden Buchung und Erstattungen nicht automatisch verändert.';
   }
   if (effect.phase === 'account_only') {
     return 'Der Widerruf des Kontovertrags wurde empfangen. Betroffene Buchungen werden nicht stillschweigend verändert.';
@@ -130,6 +134,23 @@ function effectConsequences(effect) {
   return effect.returnRequired
     ? 'Die Nutzung endet. Die dokumentierte Rückgabe muss jetzt abgeschlossen werden. Die SIT-Plattformgebühr wird vollständig erstattet; der übrige Mietpreis wird nach bestätigter Rückgabe zeitanteilig berechnet.'
     : 'Die Rückgabe ist bestätigt. Die SIT-Plattformgebühr wird vollständig und der übrige Mietpreis zeitanteilig getrennt zur Erstattung vorgemerkt.';
+}
+
+function withdrawalEffectStatus(effect) {
+  if (effect.manualReviewRequired) return 'manual_review_required';
+  if (effect.phase === 'before_handover') return 'booking_cancelled';
+  if (effect.phase === 'after_handover') {
+    return effect.returnRequired ? 'return_required' : 'return_completed';
+  }
+  return 'received';
+}
+
+function refundTruthInteger(value) {
+  const parsed = Number(value ?? 0);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new V51WithdrawalError(409, 'v51_withdrawal_refund_truth_invalid');
+  }
+  return parsed;
 }
 
 export function renderV51WithdrawalReceipt({
@@ -265,6 +286,26 @@ export async function recordV51Withdrawal(client, {
   if (electronicChannel !== 'in_app_download') {
     throw new V51WithdrawalError(409, 'v51_withdrawal_email_delivery_not_available');
   }
+  let normalizedBookingId = null;
+  if (scope === 'booking_contract') {
+    normalizedBookingId = text(
+      bookingId ?? raw?.bookingId,
+      120,
+      'v51_withdrawal_booking_required',
+    );
+    const principalFence = await lockBookingFinancialPrincipals(
+      client,
+      normalizedBookingId,
+    );
+    if (!principalFence) {
+      throw new V51WithdrawalError(404, 'v51_booking_contract_not_found');
+    }
+    if (!principalFence.principalsPresent) {
+      throw new V51WithdrawalError(409, 'v51_withdrawal_principal_binding_missing');
+    }
+  } else {
+    await lockFinancialPrincipals(client, [actor.id]);
+  }
   let submittedAt = new Date(now);
   if (!Number.isFinite(submittedAt.getTime())) {
     throw new V51WithdrawalError(400, 'v51_withdrawal_time_invalid');
@@ -279,10 +320,14 @@ export async function recordV51Withdrawal(client, {
   }
 
   const user = await client.query(
-    'SELECT email, profile FROM users WHERE id = $1',
+    `SELECT email, profile, account_status, deactivated_at
+       FROM users WHERE id = $1 FOR UPDATE`,
     [actor.id],
   );
   if (!user.rowCount) throw new V51WithdrawalError(404, 'user_not_found');
+  if (user.rows[0].account_status === 'closed' || user.rows[0].deactivated_at) {
+    throw new V51WithdrawalError(409, 'v51_withdrawal_principal_closed');
+  }
   const name = actorName(user.rows[0].profile, user.rows[0].email);
   let document = scope === 'account_contract'
     ? await v51WithdrawalDocument(client, submittedAt)
@@ -294,11 +339,9 @@ export async function recordV51Withdrawal(client, {
     bookingWorkflowStatus: null,
     returnRequired: false,
   });
-  let normalizedBookingId = null;
   let eligibilityStatus = 'account_contract_received';
   let rightExpiresAt = null;
   if (scope === 'booking_contract') {
-    normalizedBookingId = text(bookingId ?? raw?.bookingId, 120, 'v51_withdrawal_booking_required');
     const existing = await client.query(
       `SELECT id FROM v51_withdrawals
         WHERE booking_id = $1 AND user_id = $2 AND scope = 'booking_contract'
@@ -337,7 +380,41 @@ export async function recordV51Withdrawal(client, {
       [normalizedBookingId],
     );
     if (!booking.rowCount) throw new V51WithdrawalError(404, 'v51_booking_contract_not_found');
-    row = booking.rows[0];
+    // The booking lock is acquired in the preceding statement. Under PostgreSQL
+    // READ COMMITTED, this second statement receives a fresh snapshot after any
+    // refund finalization that held the same booking lock has committed. Keeping
+    // the aggregate inside the locking SELECT would retain the pre-wait snapshot
+    // and could create duplicate withdrawal obligations after a partial refund.
+    const refundTruth = await client.query(
+      `SELECT count(payment.id)::int AS payment_count,
+              COALESCE(sum(payment.captured_minor), 0)::bigint
+                AS total_captured_minor,
+              COALESCE(sum(refund_truth.settled_refund_minor), 0)::bigint
+                AS locally_settled_refund_minor,
+              count(payment.id) FILTER (
+                WHERE refund_truth.payment_id IS NULL
+                  OR refund_truth.refund_truth_status = 'needsReview'
+                  OR refund_truth.refund_truth_status IS NULL
+                  OR refund_truth.refund_truth_status NOT IN (
+                    'none', 'pending', 'providerBound', 'needsReview'
+                  )
+                  OR refund_truth.settled_refund_within_capture
+                    IS DISTINCT FROM true
+                  OR refund_truth.refund_cache_matches_settlement
+                    IS DISTINCT FROM true
+                  OR refund_truth.refund_status_matches_settlement
+                    IS DISTINCT FROM true
+              )::int AS refund_truth_review_count,
+              count(payment.id) FILTER (
+                WHERE refund_truth.refund_truth_status = 'pending'
+              )::int AS refund_truth_pending_count
+         FROM payments AS payment
+         LEFT JOIN sit_payment_refund_truth AS refund_truth
+           ON refund_truth.payment_id = payment.id
+        WHERE payment.booking_id = $1`,
+      [normalizedBookingId],
+    );
+    row = { ...booking.rows[0], ...(refundTruth.rows[0] ?? {}) };
     const databaseClock = await client.query('SELECT clock_timestamp() AS database_now');
     submittedAt = new Date(databaseClock.rows[0]?.database_now);
     if (!Number.isFinite(submittedAt.getTime())) {
@@ -361,20 +438,63 @@ export async function recordV51Withdrawal(client, {
     if (!contractTime) {
       throw new V51WithdrawalError(409, 'v51_withdrawal_contract_time_invalid');
     }
-    if (['declined', 'refunded'].includes(row.workflow_status)) {
+    if (row.workflow_status === 'declined') {
+      throw new V51WithdrawalError(409, 'v51_withdrawal_booking_not_eligible');
+    }
+    const paymentCount = refundTruthInteger(row.payment_count);
+    const totalCapturedMinor = refundTruthInteger(row.total_captured_minor);
+    const locallySettledRefundMinor = refundTruthInteger(
+      row.locally_settled_refund_minor,
+    );
+    const refundTruthReviewCount = refundTruthInteger(row.refund_truth_review_count);
+    const refundTruthPendingCount = refundTruthInteger(row.refund_truth_pending_count);
+    const exactFullLocalRefund = paymentCount > 0
+      && totalCapturedMinor > 0
+      && locallySettledRefundMinor === totalCapturedMinor
+      && refundTruthReviewCount === 0
+      && refundTruthPendingCount === 0;
+    const partialLocalRefund = locallySettledRefundMinor > 0
+      && !exactFullLocalRefund;
+    const providerTruthNeedsReview = refundTruthReviewCount > 0
+      || refundTruthPendingCount > 0
+      || locallySettledRefundMinor > totalCapturedMinor
+      || partialLocalRefund
+      || row.workflow_status === 'cancelled'
+      || (row.workflow_status !== 'refunded' && exactFullLocalRefund)
+      || (row.workflow_status === 'refunded' && !exactFullLocalRefund);
+    if (row.workflow_status === 'refunded' && !providerTruthNeedsReview) {
       throw new V51WithdrawalError(409, 'v51_withdrawal_booking_not_eligible');
     }
     document = contractWithdrawalDocument(row)
       ?? await v51WithdrawalDocument(client, submittedAt);
-    effect = evaluateV51WithdrawalEffect({
-      workflowStatus: row.workflow_status,
-      rentalStartAt: row.starts_at,
-      rentalEndAt: row.ends_at,
-      confirmedReturnAt: row.returned_at,
-      rentalSubtotalMinor: Number(row.rental_subtotal_minor),
-      platformFeeMinor: Number(row.platform_fee_minor),
-      now: submittedAt,
-    });
+    if (providerTruthNeedsReview && row.workflow_status === 'refunded') {
+      effect = Object.freeze({
+        phase: 'after_handover',
+        bookingWorkflowStatus: row.workflow_status,
+        returnRequired: false,
+        manualReviewRequired: true,
+        reviewReason: 'refund_provider_truth_unverified',
+      });
+    } else {
+      effect = evaluateV51WithdrawalEffect({
+        workflowStatus: row.workflow_status,
+        rentalStartAt: row.starts_at,
+        rentalEndAt: row.ends_at,
+        confirmedReturnAt: row.returned_at,
+        rentalSubtotalMinor: Number(row.rental_subtotal_minor),
+        platformFeeMinor: Number(row.platform_fee_minor),
+        now: submittedAt,
+      });
+      if (providerTruthNeedsReview) {
+        effect = Object.freeze({
+          phase: effect.phase,
+          bookingWorkflowStatus: row.workflow_status,
+          returnRequired: false,
+          manualReviewRequired: true,
+          reviewReason: 'refund_provider_truth_unverified',
+        });
+      }
+    }
     try {
       const authoritativeContractAt = contractTime.acceptedAt > contractTime.createdAt
         ? contractTime.acceptedAt
@@ -387,7 +507,7 @@ export async function recordV51Withdrawal(client, {
     } catch {
       throw new V51WithdrawalError(409, 'v51_withdrawal_contract_time_invalid');
     }
-    eligibilityStatus = submittedAt <= rightExpiresAt
+    eligibilityStatus = !providerTruthNeedsReview && submittedAt <= rightExpiresAt
       ? 'automatic_14_day'
       : 'manual_review_required';
     if (eligibilityStatus === 'manual_review_required') {
@@ -396,6 +516,7 @@ export async function recordV51Withdrawal(client, {
         bookingWorkflowStatus: row.workflow_status,
         returnRequired: false,
         manualReviewRequired: true,
+        reviewReason: effect.reviewReason ?? 'withdrawal_window_elapsed',
       });
     }
   }
@@ -420,15 +541,7 @@ export async function recordV51Withdrawal(client, {
       name,
       electronicChannel,
       effect.phase,
-      effect.phase === 'before_handover'
-        ? (effect.manualReviewRequired
-            ? 'manual_review_required'
-            : 'booking_cancelled')
-        : (effect.phase === 'after_handover'
-            ? (effect.manualReviewRequired
-                ? 'manual_review_required'
-                : (effect.returnRequired ? 'return_required' : 'return_completed'))
-            : 'received'),
+      withdrawalEffectStatus(effect),
       eligibilityStatus,
       rightExpiresAt,
       submittedAt,
@@ -550,6 +663,7 @@ export async function recordV51Withdrawal(client, {
       phase: effect.phase,
       returnRequired: false,
       manualReviewRequired: true,
+      reviewReason: effect.reviewReason,
     });
   }
 
@@ -611,15 +725,7 @@ export async function recordV51Withdrawal(client, {
       actorName: name,
       electronicChannel,
       effectPhase: effect.phase,
-      effectStatus: effect.phase === 'before_handover'
-        ? (effect.manualReviewRequired
-            ? 'manual_review_required'
-            : 'booking_cancelled')
-        : (effect.phase === 'after_handover'
-            ? (effect.manualReviewRequired
-                ? 'manual_review_required'
-                : (effect.returnRequired ? 'return_required' : 'return_completed'))
-            : 'received'),
+      effectStatus: withdrawalEffectStatus(effect),
       eligibilityStatus,
       rightExpiresAt: rightExpiresAt?.toISOString() ?? null,
       submittedAt: submittedAt.toISOString(),

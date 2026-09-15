@@ -1,4 +1,50 @@
-# Current Work Package: WP150 Completed Payment-Command Replay Integrity — TECHNICAL CLOSURE; EXTERNAL GATES HOLD
+# Current Work Package: WP151 Refund Provider/Durable-Truth Parity — TECHNICAL CLOSURE; FULL REGRESSION PASSED; EXTERNAL GATES HOLD
+
+SIT now persists one exact Separate Charges and Transfers refund model:
+`separate_charge_manual_transfer_reversal_v1`. Migration 077 preserves every
+old `refund_platform_fee` value as the explicitly unverified
+`legacy_refund_platform_fee_claim`, never backfills historical provider truth,
+requires canonical truth for new rows, freezes preparation and successful
+provider outcome, forbids deletion and refuses an unsafe down migration.
+
+Fresh, uncertain-response, replay, recovery and finalization paths bind the
+exact command, payment, refund snapshot and provider metadata. Owner-transfer
+recovery remains separately durable and retries only its residual amount. No
+`refund_application_fee` or `reverse_transfer` flag is emitted and no payment
+economics changed.
+
+Untrusted or unresolved refund truth cannot escape through payout, automated
+reconciliation, account deletion, refund obligations, withdrawal,
+notifications, financial documents, privacy export, staff reporting,
+professional review or Pilot-Cockpit metrics. It produces conflict,
+`needsReview`, manual review or explicitly unavailable financial values as
+appropriate, never a fabricated exact provider outcome or profit.
+
+Notifications require the exact `refund:<id>:succeeded` event identity and
+central `providerBound` truth; financial-document creation, list readback and
+artifact readback require the same central truth. Refund finalization rechecks
+provider disputes and transfer recovery after the provider call. Checkout
+revalidates both principals after provider creation and expires the exact
+Session before returning a local rejection; unproved cleanup becomes
+`payment_checkout_cleanup_required`. V5.1 locks Booking/Request before reading
+refund truth in a fresh READ COMMITTED statement. Failed/cancelled refund rows,
+payment-status drift and Pilot-Cockpit per-unit reason drift also fail closed.
+
+The consolidated focused Backend matrix passes **128/128**, Backend passes
+**985 with 2 intentional skips**, fresh PostgreSQL passes **2/2 and cleans
+up**, targeted tool tests pass **64/64**, all Tool tests pass **3015/3015**,
+and focused Flutter truth/UI tests pass **20/20**. The deterministic WP151 closure
+validator is source-bound. The complete local CI-equivalent technical regression
+passes with exit 0; exact-head GitHub Regression/CodeQL remain pending. All
+external gates remain closed; no
+provider, payment, money, deployment, Production, Store, Firebase, credential,
+device or PR-merge action occurred.
+
+The Astra/WP149 result remains **CORRECTIONS_REQUIRED** (3 CONFIRM / 12 CORRECT
+/ 3 INSUFFICIENT_EVIDENCE). § 193 BGB and remaining legal corrections stay
+open; neither AI review nor WP151 is professional legal approval.
+
+# Previous Work Package: WP150 Completed Payment-Command Replay Integrity — TECHNICAL CLOSURE; EXTERNAL GATES HOLD
 
 Trusted-v1 completed refund and payout replays are now allowed past an expired sandbox
 execution authorization only when the persisted command and result are

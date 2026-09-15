@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/models/invoice.dart';
+import 'package:lendify/services/invoice_pdf_service.dart';
+import 'package:lendify/services/invoices_service.dart';
 
 Map<String, dynamic> documentJson({
   String type = 'booking_payment_receipt',
@@ -10,6 +12,8 @@ Map<String, dynamic> documentJson({
   int ownerPayoutMinor = 0,
   int rentRefundMinor = 0,
   int sitFeeRefundMinor = 0,
+  String sourceTruthStatus = 'not_applicable',
+  bool needsReview = false,
 }) =>
     {
       'id': 'document-1',
@@ -32,6 +36,8 @@ Map<String, dynamic> documentJson({
       'testMode': true,
       'issuedAt': '2026-08-19T12:00:00.000Z',
       'artifactSha256': 'a' * 64,
+      'sourceTruthStatus': sourceTruthStatus,
+      'needsReview': needsReview,
       'downloadPath': '/v1/financial-documents/document-1/artifact',
       'sitFeeTaxLabel': 'im Testbetrieb nicht freigegeben',
       'booking': {
@@ -97,6 +103,7 @@ void main() {
           sitFeeMinor: 0,
           rentRefundMinor: 2000,
           sitFeeRefundMinor: 200,
+          sourceTruthStatus: 'provider_bound',
         ),
       ),
     };
@@ -134,6 +141,107 @@ void main() {
         },
       }),
       throwsFormatException,
+    );
+  });
+
+  test('historical refund remains review-only without a download capability',
+      () {
+    final json = documentJson(
+      type: 'refund_receipt',
+      sourceKind: 'refund',
+      amountMinor: 2200,
+      privateRentMinor: 0,
+      sitFeeMinor: 0,
+      rentRefundMinor: 2000,
+      sitFeeRefundMinor: 200,
+      sourceTruthStatus: 'historical_unverified',
+      needsReview: true,
+    )..['downloadPath'] = null;
+
+    final invoice = Invoice.fromJson(json);
+
+    expect(invoice.needsReview, isTrue);
+    expect(invoice.sourceTruthStatus, 'historical_unverified');
+    expect(invoice.downloadPath, isNull);
+    expect(invoice.canDownloadArtifact, isFalse);
+    expect(invoice.toJson()['downloadPath'], isNull);
+  });
+
+  test('review truth, review flag, and download capability must agree', () {
+    expect(
+      () => Invoice.fromJson({
+        ...documentJson(),
+        'needsReview': true,
+      }),
+      throwsFormatException,
+    );
+    expect(
+      () => Invoice.fromJson({
+        ...documentJson(
+          type: 'refund_receipt',
+          sourceKind: 'refund',
+          amountMinor: 2200,
+          privateRentMinor: 0,
+          sitFeeMinor: 0,
+          rentRefundMinor: 2000,
+          sitFeeRefundMinor: 200,
+          sourceTruthStatus: 'historical_unverified',
+          needsReview: true,
+        ),
+        'downloadPath': '/v1/financial-documents/document-1/artifact',
+      }),
+      throwsFormatException,
+    );
+  });
+
+  test(
+      'mixed valid and historical server response preserves both and excludes review amount from totals',
+      () {
+    final valid = documentJson();
+    final historical = documentJson(
+      type: 'refund_receipt',
+      sourceKind: 'refund',
+      amountMinor: 2200,
+      privateRentMinor: 0,
+      sitFeeMinor: 0,
+      rentRefundMinor: 2000,
+      sitFeeRefundMinor: 200,
+      sourceTruthStatus: 'historical_unverified',
+      needsReview: true,
+    )
+      ..['id'] = 'document-historical'
+      ..['sourceId'] = 'refund-historical'
+      ..['downloadPath'] = null;
+
+    final invoices = InvoicesService.parseServerDocuments([valid, historical]);
+
+    expect(invoices, hasLength(2));
+    expect(invoices.where((invoice) => invoice.needsReview), hasLength(1));
+    expect(InvoicesService.sumAmountForYear(invoices, 2026), 44.0);
+  });
+
+  test('review-only artifact checks fail locally before download or PDF build',
+      () async {
+    final json = documentJson(
+      type: 'refund_receipt',
+      sourceKind: 'refund',
+      amountMinor: 2200,
+      privateRentMinor: 0,
+      sitFeeMinor: 0,
+      rentRefundMinor: 2000,
+      sitFeeRefundMinor: 200,
+      sourceTruthStatus: 'historical_unverified',
+      needsReview: true,
+    )..['downloadPath'] = null;
+    final invoice = Invoice.fromJson(json);
+
+    await expectLater(
+      InvoicesService.verifyDownloadArtifact(invoice),
+      throwsA(isA<StateError>()),
+    );
+    await expectLater(
+      InvoicePdfService.buildPdf(invoice),
+      throwsA(isA<StateError>()),
     );
   });
 }

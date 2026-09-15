@@ -13,6 +13,9 @@ class InvoicePdfService {
   static const _boldFontAsset = 'assets/fonts/Roboto-Bold.ttf';
 
   static Future<Uint8List> buildPdf(Invoice invoice) async {
+    if (!invoice.canDownloadArtifact) {
+      throw StateError('financial_document_not_downloadable');
+    }
     try {
       final theme = await _loadTheme();
       final document = pw.Document(

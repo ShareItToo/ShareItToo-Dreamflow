@@ -1,5 +1,43 @@
 # ShareItToo Current State
 
+## WP151 refund provider/durable-truth parity — technical closure; full regression PASSED; external gates HOLD
+
+Refunds now use the exact Separate Charges and Transfers model
+`separate_charge_manual_transfer_reversal_v1`. Migration 077 preserves the old
+Boolean only as `legacy_refund_platform_fee_claim`; it is never provider
+evidence. New preparation and confirmed provider outcomes are immutable,
+refund deletion is refused, and fresh/replay/recovery/finalization paths bind
+the exact command, payment, snapshot, provider metadata and residual transfer
+reversal. No Stripe Connect refund flags or payment economics changed.
+
+Untrusted or unresolved refund truth is fail-closed across payout/reconciler,
+account deletion, obligations, withdrawal, notifications, financial-document
+readback, privacy export, staff aggregates, professional review and the Pilot
+Cockpit. Gross capture may remain factual; refund-derived net, cash,
+provider-cost, VAT and profitability values cannot appear exact. The focused
+Backend matrix is **128/128**, Backend is **985 passing with 2 intentional
+skips**, PostgreSQL is **2/2 with cleanup**, targeted tool tests are **64/64**,
+all Tool tests are **3015/3015**, and focused Flutter truth/UI tests are
+**20/20**. The complete local CI-equivalent technical regression passes with
+exit 0; exact-head GitHub checks remain pending. See
+`docs/operations/WP151_REFUND_PROVIDER_DURABLE_TRUTH_PARITY_2026-09-14.md`.
+
+Refund notifications are bound to the exact `refund:<id>:succeeded` event and
+central `providerBound` truth. Financial-document creation, listing and
+artifact retrieval use that same central truth. Refund finalization rechecks
+provider disputes and transfer recovery after the provider call. Checkout
+expires the exact provider Session if a principal becomes commerce-inactive
+before local delivery, otherwise returning cleanup-required rather than a
+false rejection. V5.1 locks Booking/Request before reading refund truth
+in a fresh READ COMMITTED statement; staff cancelled/status drift and Pilot
+Cockpit per-unit reason drift fail closed.
+
+The Astra/WP149 comparison remains **CORRECTIONS_REQUIRED** with **3 CONFIRM /
+12 CORRECT / 3 INSUFFICIENT_EVIDENCE**. The possible § 193 BGB extension and
+remaining legal corrections stay open; this is not professional legal
+approval and real money remains HOLD. No provider, payment, deployment,
+Production, Store, Firebase, credential, device or PR-merge state changed.
+
 ## WP150 completed payment-command replay integrity — technical closure; external gates HOLD
 
 Trusted-v1 completed refund and payout commands can now return their immutable

@@ -14,7 +14,7 @@ class InvoicesService {
     try {
       if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
         final rows = await BackendRepository.getFinancialDocuments();
-        return _sorted(rows.map(Invoice.fromJson));
+        return parseServerDocuments(rows);
       }
       if (!QaRuntimeService.isEnabled) return const [];
       final current = await DataService.getCurrentUser();
@@ -32,7 +32,7 @@ class InvoicesService {
         final current = await DataService.getCurrentUser();
         if (current?.id != userId) return const [];
         final rows = await BackendRepository.getFinancialDocuments();
-        return _sorted(rows.map(Invoice.fromJson));
+        return parseServerDocuments(rows);
       }
       if (!QaRuntimeService.isEnabled) return const [];
 
@@ -64,6 +64,9 @@ class InvoicesService {
   /// the app renders the immutable snapshot as a PDF view. QA simulations are
   /// deliberately local and carry no server artifact.
   static Future<void> verifyDownloadArtifact(Invoice invoice) async {
+    if (!invoice.canDownloadArtifact) {
+      throw StateError('financial_document_not_downloadable');
+    }
     if (QaRuntimeService.isEnabled) return;
     if (!BackendConfig.enabled) {
       throw StateError('financial_document_backend_required');
@@ -198,7 +201,9 @@ class InvoicesService {
       testMode: true,
       issuedAt: issuedAt,
       artifactSha256: '',
-      downloadPath: '',
+      sourceTruthStatus: 'qa_simulation',
+      needsReview: false,
+      downloadPath: null,
       booking: booking,
       sitFeeTaxLabel: 'QA-Testbeleg – keine steuerliche Rechnung',
     );
@@ -208,6 +213,22 @@ class InvoicesService {
     final result = documents.toList()
       ..sort((left, right) => right.issuedAt.compareTo(left.issuedAt));
     return result;
+  }
+
+  /// Parses each server row independently so one malformed or review-only
+  /// historical row can never erase other valid financial documents.
+  static List<Invoice> parseServerDocuments(
+    Iterable<Map<String, dynamic>> rows,
+  ) {
+    final documents = <Invoice>[];
+    for (final row in rows) {
+      try {
+        documents.add(Invoice.fromJson(row));
+      } catch (error) {
+        debugPrint('[InvoicesService] ignored invalid document row: $error');
+      }
+    }
+    return _sorted(documents);
   }
 
   static String _stableDigits(String value) {
@@ -222,7 +243,9 @@ class InvoicesService {
   static double sumAmountForYear(List<Invoice> invoices, int year) {
     var minor = 0;
     for (final invoice in invoices) {
-      if (invoice.issuedAt.year == year) minor += invoice.amountMinor;
+      if (!invoice.needsReview && invoice.issuedAt.year == year) {
+        minor += invoice.amountMinor;
+      }
     }
     return minor / 100;
   }

@@ -18,6 +18,9 @@ export class PaymentDomainError extends Error {
   }
 }
 
+export const trustedRefundProviderModel =
+  'separate_charge_manual_transfer_reversal_v1';
+
 export function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
@@ -343,13 +346,18 @@ export function assertProviderRefundBinding({ refund, payment, providerRefund })
     : '';
   const metadata = providerRefund?.metadata ?? {};
   if (!refundId
+      || refund.payment_id !== payment.id
+      || refund.provider_charge_id !== payment.provider_charge_id
+      || refund.currency !== payment.currency
+      || refund.livemode !== payment.livemode
       || providerChargeId !== payment.provider_charge_id
       || Number(providerRefund?.amount) !== Number(refund.amount_minor)
       || currency !== payment.currency
       || providerRefund?.livemode !== payment.livemode
       || metadata.sit_booking_id !== payment.booking_id
       || metadata.sit_payment_id !== payment.id
-      || metadata.sit_refund_id !== refund.id) {
+      || metadata.sit_refund_id !== refund.id
+      || metadata.sit_refund_model !== refund.provider_refund_model) {
     throw new PaymentDomainError(409, 'provider_refund_binding_mismatch');
   }
   const status = typeof providerRefund?.status === 'string'

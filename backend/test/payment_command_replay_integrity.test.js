@@ -126,7 +126,14 @@ function refundArguments({ full = false } = {}) {
     provider_charge_id: payment.provider_charge_id,
     owner_share_minor: String(ownerShareMinor),
     platform_share_minor: String(platformShareMinor),
+    legacy_refund_platform_fee_claim: null,
+    provider_refund_model: 'separate_charge_manual_transfer_reversal_v1',
     succeeded_at: new Date('2026-09-14T09:30:00.000Z'),
+    failure_code: null,
+    local_settlement_status: 'completed',
+    local_settled_at: new Date('2026-09-14T09:30:01.000Z'),
+    local_settlement_error_code: null,
+    provider_observation_status: 'none',
     livemode: false,
   };
   const response = {
@@ -331,9 +338,23 @@ test('completed refund receipt is accepted only with every durable binding intac
     ['refund status', (value) => { value.refund.status = 'pending'; }],
     ['refund currency', (value) => { value.refund.currency = 'USD'; }],
     ['refund mode', (value) => { value.refund.livemode = true; }],
+    ['refund provider model', (value) => { value.refund.provider_refund_model = 'legacy'; }],
+    ['refund legacy provider claim', (value) => {
+      value.refund.legacy_refund_platform_fee_claim = true;
+    }],
     ['refund provider id', (value) => { value.refund.provider_refund_id = ''; }],
     ['refund charge id', (value) => { value.refund.provider_charge_id = 'different-charge'; }],
     ['refund completion clock', (value) => { value.refund.succeeded_at = null; }],
+    ['refund local settlement status', (value) => {
+      value.refund.local_settlement_status = 'pending';
+    }],
+    ['refund local settlement clock', (value) => { value.refund.local_settled_at = null; }],
+    ['refund local settlement error', (value) => {
+      value.refund.local_settlement_error_code = 'ledger_mismatch';
+    }],
+    ['refund provider observation', (value) => {
+      value.refund.provider_observation_status = 'needs_review';
+    }],
     ['refund split', (value) => { value.refund.owner_share_minor = '1499'; }],
     ['missing ledger', (value) => { value.ledger = null; }],
     ['ledger key', (value) => { value.ledger.idempotency_key = 'different-ledger'; }],

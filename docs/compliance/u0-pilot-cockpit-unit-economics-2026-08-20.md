@@ -176,3 +176,22 @@ bleibt Draft und wurde nicht gemergt. Vor G3A ist eine neue Entscheidung von
 Walid zu Zeitpunkt und Umfang erforderlich. Offene reale Finance-Eingaben,
 Rollenbesetzungen, Account-RBAC, Abwesenheitstests und Release-/Store-Gates
 bleiben HOLD und wurden nicht erfunden.
+
+## WP151-Addendum — Refund-Provenienz (14.09.2026)
+
+Die historische U0-Aussage zu Refund-Kennzahlen gilt ab Migration 077 nur fuer
+Refunds mit dem exakten Provider-Modell
+`separate_charge_manual_transfer_reversal_v1` und leerer Legacy-Behauptung.
+Der fruehere Boolean bleibt unveraendert als
+`legacy_refund_platform_fee_claim` erhalten, belegt aber kein Providerergebnis.
+
+Das Cockpit summiert ausschliesslich erfolgreiche kanonische Refunds und weist
+die Anzahl nicht vertrauenswuerdiger Refunds unabhaengig vom lokalen
+Refundstatus getrennt aus. Sobald diese Anzahl groesser null ist, bleiben
+Brutto-Capture-Fakten sichtbar, aber refund-abgeleitete
+Netto-, Cash-, Profitabilitaets-, Providerkosten- und USt-Kennzahlen werden
+`unavailable`; Profitabilitaet ist `undetermined`. Auch der professionelle
+Review-Trigger zeigt dann keinen exakten Netto-Plattformgebuehrbetrag oder
+Schwellenwert an und verlangt Review. Dies ist eine fail-closed Korrektur der
+Evidence-Semantik, keine Aenderung an Providerkonfiguration oder
+Zahlungsoekonomie.

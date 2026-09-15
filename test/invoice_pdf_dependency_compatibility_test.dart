@@ -30,6 +30,8 @@ void main() {
       'testMode': true,
       'issuedAt': '2026-08-23T12:00:00.000Z',
       'artifactSha256': 'a' * 64,
+      'sourceTruthStatus': 'not_applicable',
+      'needsReview': false,
       'downloadPath':
           '/v1/financial-documents/document-pdf-compatibility/artifact',
       'sitFeeTaxLabel': 'im Testbetrieb nicht freigegeben',

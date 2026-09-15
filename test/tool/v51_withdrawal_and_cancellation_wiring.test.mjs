@@ -47,7 +47,7 @@ test('withdrawal is race-safe, 14-day bounded and preserves later-right review',
   assert.match(withdrawalWorkflow, /manual_review_required/u);
   assert.match(
     withdrawalWorkflow,
-    /Buchung und Erstattungen werden bis dahin nicht automatisch verändert/u,
+    /Bis zum Abschluss werden Buchung und Erstattungen nicht automatisch verändert/u,
   );
 });
 

@@ -1,4 +1,5 @@
 import { buildOperationalDelegationCockpit } from './operational_delegation.js';
+import { trustedRefundProviderModel } from './payment_domain.js';
 
 const EVIDENCE_CLASSES = new Set(['actual', 'configured', 'estimated', 'unavailable']);
 const COST_CATEGORIES = Object.freeze(['kyc', 'fraud', 'cloud', 'ai', 'marketing']);
@@ -474,6 +475,17 @@ function unavailableMetric(code, knownAmountMinor, source, reason) {
   });
 }
 
+function unavailableRefundTruthMetric(code, source, reason) {
+  return moneyMetric({
+    currency: code,
+    amountMinor: null,
+    evidenceClass: 'unavailable',
+    completeness: 'unavailable',
+    source,
+    reason,
+  });
+}
+
 function buildCurrencyBucket({
   code,
   paymentRow = {},
@@ -483,9 +495,29 @@ function buildCurrencyBucket({
   founderIndependence,
 }) {
   const paymentSource = ['backend.payments', 'backend.refunds'];
+  const refundTruthSource = ['backend.sit_payment_refund_truth.refund_truth_status'];
   const capturedBookingCount = safeCount(paymentRow.captured_booking_count, 'captured_booking_count');
   const completedHandoverCount = safeCount(paymentRow.completed_handover_count, 'completed_handover_count');
   const incompleteCaptureCount = safeCount(paymentRow.incomplete_capture_count, 'incomplete_capture_count');
+  const reviewOnlyRefundCount = safeCount(
+    paymentRow.review_only_refund_count ?? paymentRow.untrusted_refund_count,
+    'review_only_refund_count',
+  );
+  const pendingRefundCount = safeCount(
+    paymentRow.pending_refund_count ?? paymentRow.unresolved_refund_count,
+    'pending_refund_count',
+  );
+  const refundTruthStatus = reviewOnlyRefundCount > 0
+    ? 'needsReview'
+    : pendingRefundCount > 0
+      ? 'pending'
+      : 'stable';
+  const refundTruthReason = refundTruthStatus === 'needsReview'
+    ? 'needs_review_refund_truth'
+    : refundTruthStatus === 'pending'
+      ? 'pending_refund_truth'
+      : null;
+  const refundTruthExact = refundTruthReason === null;
   const grossGmvKnown = safeMinor(paymentRow.gross_gmv_minor, 'gross_gmv_minor');
   const capturedCash = safeMinor(paymentRow.captured_cash_minor, 'captured_cash_minor');
   const refundedCash = safeMinor(paymentRow.refunded_cash_minor, 'refunded_cash_minor');
@@ -498,27 +530,35 @@ function buildCurrencyBucket({
     paymentRow.platform_revenue_refunded_minor,
     'platform_revenue_refunded_minor',
   );
-  const breakdownComplete = incompleteCaptureCount === 0;
-  const grossGmv = breakdownComplete
+  const captureBreakdownComplete = incompleteCaptureCount === 0;
+  const refundBreakdownComplete = captureBreakdownComplete && refundTruthExact;
+  const refundUnavailableReason = refundTruthExact
+    ? 'partial_capture_breakdown_unavailable'
+    : refundTruthReason;
+  const grossGmv = captureBreakdownComplete
     ? actualMetric(code, grossGmvKnown, paymentSource)
     : unavailableMetric(code, grossGmvKnown, paymentSource, 'partial_capture_breakdown_unavailable');
   const netGmvKnown = addMinor(grossGmvKnown, -rentRefunded, 'net_gmv_minor');
-  const netGmv = breakdownComplete
+  const netGmv = refundBreakdownComplete
     ? actualMetric(code, netGmvKnown, paymentSource)
-    : unavailableMetric(code, netGmvKnown, paymentSource, 'partial_capture_breakdown_unavailable');
+    : (refundTruthExact
+        ? unavailableMetric(code, netGmvKnown, paymentSource, refundUnavailableReason)
+        : unavailableRefundTruthMetric(code, paymentSource, refundUnavailableReason));
   const platformRevenueNetKnown = addMinor(
     platformRevenueGrossKnown,
     -platformRevenueRefunded,
     'platform_revenue_net_minor',
   );
-  const platformRevenueNet = breakdownComplete
+  const platformRevenueNet = refundBreakdownComplete
     ? actualMetric(code, platformRevenueNetKnown, paymentSource)
-    : unavailableMetric(
-      code,
-      platformRevenueNetKnown,
-      paymentSource,
-      'partial_capture_breakdown_unavailable',
-    );
+    : (refundTruthExact
+        ? unavailableMetric(
+          code,
+          platformRevenueNetKnown,
+          paymentSource,
+          refundUnavailableReason,
+        )
+        : unavailableRefundTruthMetric(code, paymentSource, refundUnavailableReason));
 
   const providerCaptureEvents = safeCount(providerRow.capture_event_count, 'provider.capture_event_count');
   const providerCaptureEvidence = safeCount(providerRow.capture_evidenced_count, 'provider.capture_evidenced_count');
@@ -526,7 +566,8 @@ function buildCurrencyBucket({
   const providerRefundEvidence = safeCount(providerRow.refund_evidenced_count, 'provider.refund_evidenced_count');
   const providerFeeGrossKnown = safeMinor(providerRow.provider_fee_gross_minor, 'provider_fee_gross_minor');
   const providerFeeRefundedKnown = safeMinor(providerRow.provider_fee_refunded_minor, 'provider_fee_refunded_minor');
-  const providerComplete = providerCaptureEvents === providerCaptureEvidence
+  const providerComplete = refundTruthExact
+    && providerCaptureEvents === providerCaptureEvidence
     && providerRefundEvents === providerRefundEvidence;
   const providerFeeNetKnown = addMinor(
     providerFeeGrossKnown,
@@ -534,16 +575,25 @@ function buildCurrencyBucket({
     'provider_fee_net_minor',
   );
   const providerSource = ['backend.ledger_transactions.metadata:explicit-provider-fee-only'];
+  const providerUnavailableReason = refundTruthExact
+    ? 'provider_fee_evidence_missing'
+    : refundTruthReason;
   const providerFees = {
     gross: providerComplete
       ? actualMetric(code, providerFeeGrossKnown, providerSource)
-      : unavailableMetric(code, providerFeeGrossKnown, providerSource, 'provider_fee_evidence_missing'),
+      : (refundTruthExact
+          ? unavailableMetric(code, providerFeeGrossKnown, providerSource, providerUnavailableReason)
+          : unavailableRefundTruthMetric(code, providerSource, providerUnavailableReason)),
     refunded: providerComplete
       ? actualMetric(code, providerFeeRefundedKnown, providerSource)
-      : unavailableMetric(code, providerFeeRefundedKnown, providerSource, 'provider_fee_evidence_missing'),
+      : (refundTruthExact
+          ? unavailableMetric(code, providerFeeRefundedKnown, providerSource, providerUnavailableReason)
+          : unavailableRefundTruthMetric(code, providerSource, providerUnavailableReason)),
     net: providerComplete
       ? actualMetric(code, providerFeeNetKnown, providerSource)
-      : unavailableMetric(code, providerFeeNetKnown, providerSource, 'provider_fee_evidence_missing'),
+      : (refundTruthExact
+          ? unavailableMetric(code, providerFeeNetKnown, providerSource, providerUnavailableReason)
+          : unavailableRefundTruthMetric(code, providerSource, providerUnavailableReason)),
   };
 
   const vatCaptureEvents = safeCount(vatRow.capture_event_count, 'vat.capture_event_count');
@@ -552,20 +602,30 @@ function buildCurrencyBucket({
   const vatRefundEvidence = safeCount(vatRow.refund_evidenced_count, 'vat.refund_evidenced_count');
   const vatCapturedKnown = safeMinor(vatRow.vat_captured_minor, 'vat_captured_minor');
   const vatRefundedKnown = safeMinor(vatRow.vat_refunded_minor, 'vat_refunded_minor');
-  const vatComplete = vatCaptureEvents === vatCaptureEvidence
+  const vatComplete = refundTruthExact
+    && vatCaptureEvents === vatCaptureEvidence
     && vatRefundEvents === vatRefundEvidence;
   const vatNetKnown = addMinor(vatCapturedKnown, -vatRefundedKnown, 'vat_net_minor');
   const vatSource = ['backend.financial_documents.snapshot:explicit-vat-component-only'];
+  const vatUnavailableReason = refundTruthExact
+    ? 'vat_component_evidence_missing'
+    : refundTruthReason;
   const vatComponent = {
     captured: vatComplete
       ? actualMetric(code, vatCapturedKnown, vatSource)
-      : unavailableMetric(code, vatCapturedKnown, vatSource, 'vat_component_evidence_missing'),
+      : (refundTruthExact
+          ? unavailableMetric(code, vatCapturedKnown, vatSource, vatUnavailableReason)
+          : unavailableRefundTruthMetric(code, vatSource, vatUnavailableReason)),
     refunded: vatComplete
       ? actualMetric(code, vatRefundedKnown, vatSource)
-      : unavailableMetric(code, vatRefundedKnown, vatSource, 'vat_component_evidence_missing'),
+      : (refundTruthExact
+          ? unavailableMetric(code, vatRefundedKnown, vatSource, vatUnavailableReason)
+          : unavailableRefundTruthMetric(code, vatSource, vatUnavailableReason)),
     net: vatComplete
       ? actualMetric(code, vatNetKnown, vatSource)
-      : unavailableMetric(code, vatNetKnown, vatSource, 'vat_component_evidence_missing'),
+      : (refundTruthExact
+          ? unavailableMetric(code, vatNetKnown, vatSource, vatUnavailableReason)
+          : unavailableRefundTruthMetric(code, vatSource, vatUnavailableReason)),
   };
 
   const costClasses = COST_CATEGORIES.map((category) => {
@@ -674,12 +734,18 @@ function buildCurrencyBucket({
       completeness: 'complete',
       source: [paymentSource, providerSource].flat(),
     })
-    : unavailableMetric(
-      code,
-      knownCashResult,
-      [paymentSource, providerSource, 'explicit-external-cash-cost-inputs'].flat(),
-      'cash_cost_inputs_unavailable_or_non_actual',
-    );
+    : (refundTruthExact
+        ? unavailableMetric(
+          code,
+          knownCashResult,
+          [paymentSource, providerSource, 'explicit-external-cash-cost-inputs'].flat(),
+          'cash_cost_inputs_unavailable_or_non_actual',
+        )
+        : unavailableRefundTruthMetric(
+          code,
+          [paymentSource, providerSource, 'explicit-external-cash-cost-inputs'].flat(),
+          refundTruthReason,
+        ));
 
   const normalizedInputs = [platformRevenueNet, providerFees.net, vatComponent.net,
     ...costClasses.map((entry) => entry.metric), founderReplacementCost];
@@ -708,12 +774,18 @@ function buildCurrencyBucket({
       completeness: 'complete',
       source: [...new Set(normalizedInputs.flatMap((entry) => entry.source))],
     })
-    : unavailableMetric(
-      code,
-      knownNormalizedResult,
-      [...new Set(normalizedInputs.flatMap((entry) => entry.source))],
-      'normalized_input_unavailable',
-    );
+    : (refundTruthExact
+        ? unavailableMetric(
+          code,
+          knownNormalizedResult,
+          [...new Set(normalizedInputs.flatMap((entry) => entry.source))],
+          'normalized_input_unavailable',
+        )
+        : unavailableRefundTruthMetric(
+          code,
+          [...new Set(normalizedInputs.flatMap((entry) => entry.source))],
+          refundTruthReason,
+        ));
 
   const perUnit = (divisor, label) => normalizedComplete && divisor > 0
     ? moneyMetric({
@@ -723,15 +795,34 @@ function buildCurrencyBucket({
       completeness: 'complete',
       source: [`normalized-period-result/${label}`],
     })
-    : unavailableMetric(
-      code,
-      0,
-      [`normalized-period-result/${label}`],
-      normalizedComplete ? `${label}_count_zero` : 'normalized_input_unavailable',
-    );
+    : (refundTruthExact
+        ? unavailableMetric(
+          code,
+          0,
+          [`normalized-period-result/${label}`],
+          normalizedComplete ? `${label}_count_zero` : 'normalized_input_unavailable',
+        )
+        : unavailableRefundTruthMetric(
+          code,
+          [`normalized-period-result/${label}`],
+          refundTruthReason,
+        ));
 
   return {
     currency: code,
+    refundTruth: {
+      canonicalProviderModel: trustedRefundProviderModel,
+      exact: refundTruthExact,
+      status: refundTruthStatus,
+      reviewOnlyPaymentCount: countMetric(reviewOnlyRefundCount, refundTruthSource),
+      pendingPaymentCount: countMetric(pendingRefundCount, refundTruthSource),
+      // Compatibility aliases retained for existing cockpit consumers.
+      untrustedRefundCount: countMetric(reviewOnlyRefundCount, refundTruthSource),
+      unresolvedRefundCount: countMetric(
+        pendingRefundCount,
+        refundTruthSource,
+      ),
+    },
     activity: {
       capturedBookingCount: countMetric(capturedBookingCount, paymentSource),
       completedHandoverCount: countMetric(
@@ -741,11 +832,19 @@ function buildCurrencyBucket({
     },
     actualFlows: {
       grossMerchandiseValue: grossGmv,
-      rentRefunded: actualMetric(code, rentRefunded, paymentSource),
+      rentRefunded: refundTruthExact
+        ? actualMetric(code, rentRefunded, paymentSource)
+        : unavailableRefundTruthMetric(code, paymentSource, refundTruthReason),
       netMerchandiseValue: netGmv,
       capturedCash: actualMetric(code, capturedCash, ['backend.payments.captured_minor']),
-      refundedCash: actualMetric(code, refundedCash, ['backend.refunds.amount_minor']),
-      platformRevenueGross: breakdownComplete
+      refundedCash: refundTruthExact
+        ? actualMetric(code, refundedCash, ['backend.refunds.amount_minor'])
+        : unavailableRefundTruthMetric(
+          code,
+          ['backend.sit_payment_refund_truth.settled_refund_minor'],
+          refundTruthReason,
+        ),
+      platformRevenueGross: captureBreakdownComplete
         ? actualMetric(code, platformRevenueGrossKnown, paymentSource)
         : unavailableMetric(
           code,
@@ -753,7 +852,9 @@ function buildCurrencyBucket({
           paymentSource,
           'partial_capture_breakdown_unavailable',
         ),
-      platformRevenueRefunded: actualMetric(code, platformRevenueRefunded, paymentSource),
+      platformRevenueRefunded: refundTruthExact
+        ? actualMetric(code, platformRevenueRefunded, paymentSource)
+        : unavailableRefundTruthMetric(code, paymentSource, refundTruthReason),
       platformRevenueNet,
       vatComponent,
       providerFees,
@@ -891,34 +992,90 @@ async function collectPilotCockpitRows(client, period) {
   const values = [period.fromInclusive, period.toExclusive];
   const payments = await client.query(
     `WITH captured AS (
+       SELECT payment.currency,
+              count(DISTINCT payment.booking_id)::bigint AS captured_booking_count,
+              count(*) FILTER (
+                WHERE payment.captured_minor <> payment.amount_minor
+              )::bigint AS incomplete_capture_count,
+              COALESCE(sum(CASE
+                WHEN payment.captured_minor = payment.amount_minor
+                  THEN payment.rental_subtotal_minor ELSE 0
+              END), 0)::bigint AS gross_gmv_minor,
+              COALESCE(sum(payment.captured_minor), 0)::bigint AS captured_cash_minor,
+              COALESCE(sum(CASE
+                WHEN payment.captured_minor = payment.amount_minor
+                  THEN payment.platform_fee_minor ELSE 0
+              END), 0)::bigint AS platform_revenue_gross_minor
+         FROM payments AS payment
+        WHERE payment.captured_at >= $1::timestamptz
+          AND payment.captured_at < $2::timestamptz
+          AND payment.captured_minor > 0
+          AND payment.status IN ('captured', 'partially_refunded', 'refunded')
+        GROUP BY payment.currency
+     ), refund_truth_scope AS (
+       SELECT payment.id AS payment_id, payment.currency,
+              refund_truth.refund_truth_status
+         FROM payments AS payment
+         JOIN sit_payment_refund_truth AS refund_truth
+           ON refund_truth.payment_id = payment.id
+        WHERE payment.captured_at >= $1::timestamptz
+          AND payment.captured_at < $2::timestamptz
+          AND payment.captured_minor > 0
+       UNION
+       SELECT payment.id AS payment_id, payment.currency,
+              refund_truth.refund_truth_status
+         FROM refunds AS refund
+         JOIN payments AS payment ON payment.id = refund.payment_id
+         JOIN sit_payment_refund_truth AS refund_truth
+           ON refund_truth.payment_id = payment.id
+        WHERE COALESCE(
+                refund.local_settled_at,
+                refund.provider_observed_at,
+                refund.succeeded_at,
+                refund.updated_at
+              ) >= $1::timestamptz
+          AND COALESCE(
+                refund.local_settled_at,
+                refund.provider_observed_at,
+                refund.succeeded_at,
+                refund.updated_at
+              ) < $2::timestamptz
+     ), refund_truth_state AS (
        SELECT currency,
-              count(DISTINCT booking_id)::bigint AS captured_booking_count,
-              count(*) FILTER (WHERE captured_minor <> amount_minor)::bigint AS incomplete_capture_count,
-              COALESCE(sum(CASE WHEN captured_minor = amount_minor THEN rental_subtotal_minor ELSE 0 END), 0)::bigint AS gross_gmv_minor,
-              COALESCE(sum(captured_minor), 0)::bigint AS captured_cash_minor,
-              COALESCE(sum(CASE WHEN captured_minor = amount_minor THEN platform_fee_minor ELSE 0 END), 0)::bigint AS platform_revenue_gross_minor
-         FROM payments
-        WHERE captured_at >= $1::timestamptz AND captured_at < $2::timestamptz
-          AND captured_minor > 0
-          AND status IN ('captured', 'partially_refunded', 'refunded')
+              count(*) FILTER (
+                WHERE refund_truth_status = 'needsReview'
+              )::bigint AS review_only_refund_count,
+              count(*) FILTER (
+                WHERE refund_truth_status = 'pending'
+              )::bigint AS pending_refund_count
+         FROM refund_truth_scope
         GROUP BY currency
      ), refunded AS (
-       SELECT refund.currency,
+       SELECT payment.currency,
+              count(*)::bigint AS canonical_refund_count,
               COALESCE(sum(refund.amount_minor), 0)::bigint AS refunded_cash_minor,
               COALESCE(sum(refund.owner_share_minor), 0)::bigint AS rent_refunded_minor,
-              COALESCE(sum(refund.platform_share_minor), 0)::bigint AS platform_revenue_refunded_minor
+              COALESCE(sum(refund.platform_share_minor), 0)::bigint
+                AS platform_revenue_refunded_minor
          FROM refunds AS refund
-        WHERE refund.status = 'succeeded'
-          AND COALESCE(refund.succeeded_at, refund.updated_at) >= $1::timestamptz
-          AND COALESCE(refund.succeeded_at, refund.updated_at) < $2::timestamptz
-        GROUP BY refund.currency
+         JOIN payments AS payment ON payment.id = refund.payment_id
+         JOIN sit_payment_refund_truth AS refund_truth
+           ON refund_truth.payment_id = payment.id
+        WHERE refund.local_settlement_status = 'completed'
+          AND refund.local_settled_at >= $1::timestamptz
+          AND refund.local_settled_at < $2::timestamptz
+          AND refund_truth.refund_truth_status IN ('none', 'providerBound')
+        GROUP BY payment.currency
      ), completed AS (
        SELECT currency, count(*)::bigint AS completed_handover_count
          FROM bookings
         WHERE completed_at >= $1::timestamptz AND completed_at < $2::timestamptz
         GROUP BY currency
      ), currencies AS (
-       SELECT currency FROM captured UNION SELECT currency FROM refunded UNION SELECT currency FROM completed
+       SELECT currency FROM captured
+       UNION SELECT currency FROM refund_truth_state
+       UNION SELECT currency FROM refunded
+       UNION SELECT currency FROM completed
      )
      SELECT currencies.currency,
             COALESCE(captured.captured_booking_count, 0)::bigint AS captured_booking_count,
@@ -926,28 +1083,47 @@ async function collectPilotCockpitRows(client, period) {
             COALESCE(captured.incomplete_capture_count, 0)::bigint AS incomplete_capture_count,
             COALESCE(captured.gross_gmv_minor, 0)::bigint AS gross_gmv_minor,
             COALESCE(captured.captured_cash_minor, 0)::bigint AS captured_cash_minor,
+            COALESCE(refunded.canonical_refund_count, 0)::bigint AS canonical_refund_count,
+            COALESCE(refund_truth_state.review_only_refund_count, 0)::bigint
+              AS review_only_refund_count,
+            COALESCE(refund_truth_state.pending_refund_count, 0)::bigint
+              AS pending_refund_count,
+            COALESCE(refund_truth_state.review_only_refund_count, 0)::bigint
+              AS untrusted_refund_count,
+            COALESCE(refund_truth_state.pending_refund_count, 0)::bigint
+              AS unresolved_refund_count,
             COALESCE(refunded.refunded_cash_minor, 0)::bigint AS refunded_cash_minor,
             COALESCE(refunded.rent_refunded_minor, 0)::bigint AS rent_refunded_minor,
             COALESCE(captured.platform_revenue_gross_minor, 0)::bigint AS platform_revenue_gross_minor,
             COALESCE(refunded.platform_revenue_refunded_minor, 0)::bigint AS platform_revenue_refunded_minor
        FROM currencies
        LEFT JOIN captured USING (currency)
+       LEFT JOIN refund_truth_state USING (currency)
        LEFT JOIN refunded USING (currency)
        LEFT JOIN completed USING (currency)
       ORDER BY currencies.currency`,
     values,
   );
   const provider = await client.query(
-    `WITH provider_events AS (
-       SELECT currency, transaction_type,
-              CASE WHEN metadata->>'providerFeeMinor' ~ '^[0-9]{1,15}$'
-                THEN (metadata->>'providerFeeMinor')::bigint END AS provider_fee_minor,
-              CASE WHEN metadata->>'providerFeeRefundMinor' ~ '^[0-9]{1,15}$'
-                THEN (metadata->>'providerFeeRefundMinor')::bigint END AS provider_fee_refund_minor,
-              nullif(metadata->>'providerFeeEvidenceRef', '') AS provider_fee_evidence_ref
-         FROM ledger_transactions
-        WHERE created_at >= $1::timestamptz AND created_at < $2::timestamptz
-          AND transaction_type IN ('payment_captured', 'payment_refunded')
+     `WITH provider_events AS (
+       SELECT ledger.currency, ledger.transaction_type,
+              CASE WHEN ledger.metadata->>'providerFeeMinor' ~ '^[0-9]{1,15}$'
+                THEN (ledger.metadata->>'providerFeeMinor')::bigint END AS provider_fee_minor,
+              CASE WHEN ledger.metadata->>'providerFeeRefundMinor' ~ '^[0-9]{1,15}$'
+                THEN (ledger.metadata->>'providerFeeRefundMinor')::bigint
+              END AS provider_fee_refund_minor,
+              nullif(ledger.metadata->>'providerFeeEvidenceRef', '')
+                AS provider_fee_evidence_ref
+         FROM ledger_transactions AS ledger
+         LEFT JOIN sit_payment_refund_truth AS refund_truth
+           ON refund_truth.payment_id = ledger.payment_id
+        WHERE ledger.created_at >= $1::timestamptz
+          AND ledger.created_at < $2::timestamptz
+          AND ledger.transaction_type IN ('payment_captured', 'payment_refunded')
+          AND (
+            ledger.transaction_type = 'payment_captured'
+            OR refund_truth.refund_truth_status IN ('none', 'providerBound')
+          )
      )
      SELECT currency,
             count(*) FILTER (WHERE transaction_type = 'payment_captured')::bigint AS capture_event_count,
@@ -1015,14 +1191,17 @@ async function collectPilotCockpitRows(client, period) {
                 THEN (document.snapshot->>'sitFeeVatRefundMinor')::bigint END AS vat_refund_minor,
               nullif(document.snapshot->>'vatEvidenceRef', '') AS vat_evidence_ref
          FROM refunds AS refund
+         JOIN sit_payment_refund_truth AS refund_truth
+           ON refund_truth.payment_id = refund.payment_id
          LEFT JOIN LATERAL (
            SELECT snapshot FROM financial_documents
             WHERE refund_id = refund.id AND document_type = 'refund_receipt'
             ORDER BY issued_at DESC LIMIT 1
          ) AS document ON true
-        WHERE refund.status = 'succeeded'
-          AND COALESCE(refund.succeeded_at, refund.updated_at) >= $1::timestamptz
-          AND COALESCE(refund.succeeded_at, refund.updated_at) < $2::timestamptz
+        WHERE refund.local_settlement_status = 'completed'
+          AND refund.local_settled_at >= $1::timestamptz
+          AND refund.local_settled_at < $2::timestamptz
+          AND refund_truth.refund_truth_status IN ('none', 'providerBound')
      ), refunded AS (
        SELECT currency,
               count(*)::bigint AS refund_event_count,

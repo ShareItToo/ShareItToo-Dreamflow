@@ -156,7 +156,14 @@ function completedRefundScenario(overrides = {}) {
     provider_charge_id: payment.provider_charge_id,
     owner_share_minor: '1500',
     platform_share_minor: '150',
+    legacy_refund_platform_fee_claim: null,
+    provider_refund_model: 'separate_charge_manual_transfer_reversal_v1',
     succeeded_at: new RealDate('2026-09-14T09:40:00.000Z'),
+    failure_code: null,
+    local_settlement_status: 'completed',
+    local_settled_at: new RealDate('2026-09-14T09:40:01.000Z'),
+    local_settlement_error_code: null,
+    provider_observation_status: 'none',
     livemode: false,
   };
   const response = {
@@ -205,6 +212,7 @@ function completedRefundScenario(overrides = {}) {
     ledger,
     ledgers: overrides.ledgers ?? [ledger],
     ledgerEntries: overrides.ledgerEntries ?? refundLedgerEntries(),
+    refundTruth: overrides.refundTruth,
   };
 }
 
@@ -267,6 +275,53 @@ function completedPayoutScenario(overrides = {}) {
     ledger,
     ledgers: overrides.ledgers ?? [ledger],
     ledgerEntries: overrides.ledgerEntries ?? transferLedgerEntries(),
+    refundTruth: overrides.refundTruth,
+  };
+}
+
+function refundTruthRow(scenario) {
+  const settledRefund = scenario.refund?.status === 'succeeded'
+    && scenario.refund?.local_settlement_status === 'completed';
+  const defaults = settledRefund
+    ? {
+        refund_truth_status: 'providerBound',
+        settled_refund_count: '1',
+        settled_refund_minor: scenario.refund.amount_minor,
+        settled_owner_refund_minor: scenario.refund.owner_share_minor,
+      }
+    : {
+        refund_truth_status: 'none',
+        settled_refund_count: '0',
+        settled_refund_minor: '0',
+        settled_owner_refund_minor: '0',
+      };
+  return {
+    payment_id: scenario.payment.id,
+    untrusted_refund_count: '0',
+    invalid_refund_count: '0',
+    active_refund_count: '0',
+    terminal_refund_count: '0',
+    provider_observation_review_count: '0',
+    provider_bound_local_pending_count: '0',
+    provider_bound_local_review_count: '0',
+    settled_refund_within_capture: true,
+    refund_cache_matches_settlement: true,
+    refund_status_matches_settlement: true,
+    ...defaults,
+    ...scenario.refundTruth,
+  };
+}
+
+function needsReviewRefundTruth({ untrusted = false } = {}) {
+  return {
+    refund_truth_status: 'needsReview',
+    untrusted_refund_count: untrusted ? '1' : '0',
+    invalid_refund_count: untrusted ? '0' : '1',
+    settled_refund_count: '0',
+    settled_refund_minor: '0',
+    settled_owner_refund_minor: '0',
+    refund_cache_matches_settlement: false,
+    refund_status_matches_settlement: false,
   };
 }
 
@@ -282,6 +337,22 @@ function transactionClient(scenario) {
       if (statement.includes('pg_advisory_xact_lock')) {
         return { rowCount: 1, rows: [{}] };
       }
+      if (statement.includes('FROM users')
+          && statement.includes('id = ANY($1::text[])')) {
+        const ids = parameters[0];
+        return {
+          rowCount: ids.length,
+          rows: ids.map((id) => ({
+            id,
+            account_status: 'active',
+            deactivated_at: null,
+          })),
+        };
+      }
+      if (statement.startsWith('SELECT * FROM sit_payment_refund_truth')) {
+        assert.deepEqual(parameters, [scenario.payment.id]);
+        return { rowCount: 1, rows: [refundTruthRow(scenario)] };
+      }
       if (statement.includes('FROM payments AS payment')) {
         return { rowCount: 1, rows: [scenario.payment] };
       }
@@ -291,6 +362,10 @@ function transactionClient(scenario) {
           : { rowCount: 1, rows: [scenario.command] };
       }
       if (statement.startsWith('SELECT * FROM refunds')) {
+        if (statement.includes('idempotency_key = $1')
+            && parameters[0] !== scenario.refund?.idempotency_key) {
+          return { rowCount: 0, rows: [] };
+        }
         return scenario.refund == null
           ? { rowCount: 0, rows: [] }
           : { rowCount: 1, rows: [scenario.refund] };
@@ -311,6 +386,12 @@ function transactionClient(scenario) {
       if (statement.includes('FROM ledger_entries WHERE transaction_id')) {
         assert.deepEqual(parameters, [scenario.ledger.id]);
         return { rowCount: scenario.ledgerEntries.length, rows: scenario.ledgerEntries };
+      }
+      if (statement.startsWith('SELECT 1 FROM payouts')
+          || statement.startsWith('SELECT 1 FROM disputes')
+          || statement.startsWith('SELECT 1 FROM dispute_transfer_recoveries')
+          || statement.startsWith('SELECT idempotency_key FROM refunds')) {
+        return { rowCount: 0, rows: [] };
       }
       throw new Error(`unexpected_wp150_sql:${statement.slice(0, 120)}`);
     },
@@ -411,6 +492,7 @@ test('malformed completed results fail closed after expiry without provider or m
   expireSandboxClock(t);
   const refund = completedRefundScenario({
     ledgerEntries: [],
+    refundTruth: needsReviewRefundTruth(),
   });
   const payout = completedPayoutScenario({
     ledgerEntries: transferLedgerEntries().map((entry, index) => (
@@ -423,36 +505,69 @@ test('malformed completed results fail closed after expiry without provider or m
     id: 'ffffffff-ffff-4fff-8fff-fffffffff150',
     idempotency_key: 'competing-expired-refund-ledger',
   });
+  competingRefund.refundTruth = needsReviewRefundTruth();
   const competingPayout = completedPayoutScenario();
   competingPayout.ledgers.push({
     ...competingPayout.ledger,
     id: '99999999-9999-4999-8999-999999999150',
     idempotency_key: 'competing-expired-payout-ledger',
   });
-  const fixtures = useClients(t, [refund, payout, competingRefund, competingPayout]);
+  const legacyRefund = completedRefundScenario({
+    refund: {
+      legacy_refund_platform_fee_claim: true,
+      provider_refund_model: null,
+    },
+    refundTruth: needsReviewRefundTruth({ untrusted: true }),
+  });
+  const fixtures = useClients(
+    t,
+    [refund, payout, competingRefund, competingPayout, legacyRefund],
+  );
   const providerMocks = rejectOutboundProviderCalls(t);
 
-  for (const operation of [
-    () => refundPayment({
-      actor,
-      paymentId,
-      amountMinor: 1650,
-      reason: refundReason,
-      key: refundKey,
-    }),
-    () => releasePayout({ actor, paymentId, key: payoutKey }),
-    () => refundPayment({
-      actor,
-      paymentId,
-      amountMinor: 1650,
-      reason: refundReason,
-      key: refundKey,
-    }),
-    () => releasePayout({ actor, paymentId, key: payoutKey }),
+  for (const { operation, code } of [
+    {
+      operation: () => refundPayment({
+        actor,
+        paymentId,
+        amountMinor: 1650,
+        reason: refundReason,
+        key: refundKey,
+      }),
+      code: 'payment_command_replay_integrity_mismatch',
+    },
+    {
+      operation: () => releasePayout({ actor, paymentId, key: payoutKey }),
+      code: 'payment_command_replay_integrity_mismatch',
+    },
+    {
+      operation: () => refundPayment({
+        actor,
+        paymentId,
+        amountMinor: 1650,
+        reason: refundReason,
+        key: refundKey,
+      }),
+      code: 'payment_command_replay_integrity_mismatch',
+    },
+    {
+      operation: () => releasePayout({ actor, paymentId, key: payoutKey }),
+      code: 'payment_command_replay_integrity_mismatch',
+    },
+    {
+      operation: () => refundPayment({
+        actor,
+        paymentId,
+        amountMinor: 1650,
+        reason: refundReason,
+        key: refundKey,
+      }),
+      code: 'payment_command_replay_integrity_mismatch',
+    },
   ]) {
     await assert.rejects(operation(), (error) => (
       error?.status === 409
-      && error?.code === 'payment_command_replay_integrity_mismatch'
+      && error?.code === code
     ));
   }
 
@@ -520,6 +635,45 @@ test('fresh and incomplete refund or payout commands remain blocked after expiry
     await assert.rejects(entry.operation(), (error) => (
       error?.status === 503
       && error?.code === 'payment_sandbox_authorization_expired'
+    ));
+  }
+
+  assertReadOnlyTransactions(fixtures);
+  assertNoProviderCalls(providerMocks);
+  assert.ok(fixtures.every(({ statements }) => statements.at(-1) === 'ROLLBACK'));
+});
+
+test('fresh refund and payout commands reject untrusted central refund truth read-only', async (t) => {
+  const refundScenario = {
+    ...completedRefundScenario(),
+    command: null,
+    refundTruth: needsReviewRefundTruth({ untrusted: true }),
+  };
+  const payoutScenario = {
+    ...completedPayoutScenario(),
+    command: null,
+    refundTruth: needsReviewRefundTruth({ untrusted: true }),
+  };
+  const fixtures = useClients(t, [refundScenario, payoutScenario]);
+  const providerMocks = rejectOutboundProviderCalls(t);
+
+  for (const operation of [
+    () => refundPayment({
+      actor,
+      paymentId,
+      amountMinor: 1650,
+      reason: refundReason,
+      key: 'wp151-fresh-refund-over-legacy-history',
+    }),
+    () => releasePayout({
+      actor,
+      paymentId,
+      key: 'wp151-fresh-payout-over-legacy-history',
+    }),
+  ]) {
+    await assert.rejects(operation(), (error) => (
+      error?.status === 409
+      && error?.code === 'refund_truth_needs_review'
     ));
   }
 

@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 
+import { trustedRefundProviderModel } from './payment_domain.js';
+
 export class FinancialDocumentError extends Error {
   constructor(status, code) {
     super(code);
@@ -231,7 +233,18 @@ export function buildFinancialDocumentDrafts({
     }
   }
   for (const row of refundRows) {
-    if (row.renter_id !== actorId || row.status !== 'succeeded') continue;
+    if (row.renter_id !== actorId
+        || row.status !== 'succeeded'
+        || row.provider_refund_model !== trustedRefundProviderModel
+        || row.legacy_refund_platform_fee_claim != null
+        || typeof row.provider_refund_id !== 'string'
+        || row.provider_refund_id.trim().length === 0
+        || row.succeeded_at == null
+        || row.failure_code != null
+        || row.local_settlement_status !== 'completed'
+        || row.local_settled_at == null
+        || row.local_settlement_error_code != null
+        || row.provider_observation_status !== 'none') continue;
     drafts.push(makeDraft({
       row, actorId, type: 'refund_receipt', sourceKind: 'refund',
       sourceId: row.refund_id, issuedAt: row.succeeded_at ?? row.updated_at,
@@ -256,14 +269,19 @@ function shape(row) {
   const snapshot = row.snapshot && typeof row.snapshot === 'object' ? row.snapshot : {};
   const sourceId = row.payment_id ?? row.refund_id ?? row.payout_id;
   const sourceKind = row.payment_id ? 'payment' : (row.refund_id ? 'refund' : 'payout');
+  const refundTruthUnverified = row.source_truth_status === 'historical_unverified';
   return Object.freeze({
     id: row.id,
     documentNumber: row.document_number,
     bookingId: row.booking_id,
     type: row.document_type,
-    title: documentTitle(row.document_type),
+    title: refundTruthUnverified
+      ? 'Historischer Erstattungsbeleg – Prüfung erforderlich'
+      : documentTitle(row.document_type),
     sourceKind,
     sourceId,
+    sourceTruthStatus: row.source_truth_status ?? 'not_applicable',
+    needsReview: refundTruthUnverified,
     currency: row.currency,
     amountMinor: minor(row.amount_minor),
     privateRentMinor: minor(row.private_rent_minor),
@@ -277,7 +295,9 @@ function shape(row) {
     testMode: row.test_mode === true,
     issuedAt: iso(row.issued_at),
     artifactSha256: row.artifact_sha256,
-    downloadPath: `/v1/financial-documents/${encodeURIComponent(row.id)}/artifact`,
+    downloadPath: refundTruthUnverified
+      ? null
+      : `/v1/financial-documents/${encodeURIComponent(row.id)}/artifact`,
     booking: Object.freeze({
       itemTitle: text(snapshot.itemTitle, 'Mietgegenstand'),
       renterName: text(snapshot.renterName, 'Mieter'),
@@ -321,17 +341,36 @@ async function sourceRows(client, actorId) {
     `SELECT refund.id AS refund_id, refund.status, refund.amount_minor,
             refund.owner_share_minor, refund.platform_share_minor,
             refund.succeeded_at, refund.updated_at, refund.livemode,
+            refund.provider_refund_id, refund.failure_code,
+            refund.provider_refund_model,
+            refund.legacy_refund_platform_fee_claim,
+            refund.local_settlement_status, refund.local_settled_at,
+            refund.local_settlement_error_code,
+            refund.provider_observation_status,
             ${sourceColumns}
        FROM refunds AS refund
        JOIN payments AS payment ON payment.id = refund.payment_id
+       JOIN sit_payment_refund_truth AS refund_truth
+         ON refund_truth.payment_id = payment.id
        JOIN bookings AS booking ON booking.id = payment.booking_id
        JOIN listings AS listing ON listing.id = booking.listing_id
        JOIN users AS owner ON owner.id = booking.owner_id
        JOIN users AS renter ON renter.id = booking.renter_id
        LEFT JOIN platform_contracts AS contract ON contract.booking_id = booking.id
       WHERE booking.renter_id = $1 AND refund.status = 'succeeded'
+        AND refund.provider_refund_id IS NOT NULL
+        AND btrim(refund.provider_refund_id) <> ''
+        AND refund.succeeded_at IS NOT NULL
+        AND refund.failure_code IS NULL
+        AND refund.provider_refund_model = $2
+        AND refund.legacy_refund_platform_fee_claim IS NULL
+        AND refund.local_settlement_status = 'completed'
+        AND refund.local_settled_at IS NOT NULL
+        AND refund.local_settlement_error_code IS NULL
+        AND refund.provider_observation_status = 'none'
+        AND refund_truth.refund_truth_status = 'providerBound'
       ORDER BY refund.created_at, refund.id`,
-    [actorId],
+    [actorId, trustedRefundProviderModel],
   );
   const payouts = await client.query(
     `SELECT payout.id AS payout_id, payout.status, payout.amount_minor,
@@ -392,15 +431,38 @@ export async function listFinancialDocuments(client, { actorId, legalConfig = {}
     }
   }
   const result = await client.query(
-    `SELECT id, booking_id, document_type, payment_id, refund_id, payout_id,
-            document_number, currency, amount_minor, private_rent_minor,
-            sit_fee_minor, owner_payout_minor, rent_refund_minor,
-            sit_fee_refund_minor, supplier_role, debtor_role, tax_treatment,
-            test_mode, snapshot, artifact_sha256, issued_at
-       FROM financial_documents
-      WHERE audience_user_id = $1
-      ORDER BY issued_at DESC, id DESC`,
-    [actorId],
+    `SELECT document.id, document.booking_id, document.document_type,
+            document.payment_id, document.refund_id, document.payout_id,
+            document.document_number, document.currency, document.amount_minor,
+            document.private_rent_minor, document.sit_fee_minor,
+            document.owner_payout_minor, document.rent_refund_minor,
+            document.sit_fee_refund_minor, document.supplier_role,
+            document.debtor_role, document.tax_treatment, document.test_mode,
+            document.snapshot, document.artifact_sha256, document.issued_at,
+            CASE
+              WHEN document.refund_id IS NULL THEN 'not_applicable'
+              WHEN source_refund.status = 'succeeded'
+                AND refund_truth.refund_truth_status = 'providerBound'
+                AND source_refund.provider_refund_id IS NOT NULL
+                AND btrim(source_refund.provider_refund_id) <> ''
+                AND source_refund.succeeded_at IS NOT NULL
+                AND source_refund.failure_code IS NULL
+                AND source_refund.provider_refund_model = $2
+                AND source_refund.legacy_refund_platform_fee_claim IS NULL
+                AND source_refund.local_settlement_status = 'completed'
+                AND source_refund.local_settled_at IS NOT NULL
+                AND source_refund.local_settlement_error_code IS NULL
+                AND source_refund.provider_observation_status = 'none'
+                THEN 'provider_bound'
+              ELSE 'historical_unverified'
+            END AS source_truth_status
+       FROM financial_documents AS document
+       LEFT JOIN refunds AS source_refund ON source_refund.id = document.refund_id
+       LEFT JOIN sit_payment_refund_truth AS refund_truth
+         ON refund_truth.payment_id = source_refund.payment_id
+      WHERE document.audience_user_id = $1
+      ORDER BY document.issued_at DESC, document.id DESC`,
+    [actorId, trustedRefundProviderModel],
   );
   return Object.freeze(result.rows.map(shape));
 }
@@ -411,15 +473,39 @@ export async function getFinancialDocumentArtifact(client, { actorId, documentId
     throw new FinancialDocumentError(400, 'financial_document_id_invalid');
   }
   const result = await client.query(
-    `SELECT id, document_number, content_html, artifact_sha256
-       FROM financial_documents
-      WHERE id = $1 AND audience_user_id = $2`,
-    [id, actorId],
+    `SELECT document.id, document.document_number, document.content_html,
+            document.artifact_sha256,
+            CASE
+              WHEN document.refund_id IS NULL THEN 'not_applicable'
+              WHEN source_refund.status = 'succeeded'
+                AND refund_truth.refund_truth_status = 'providerBound'
+                AND source_refund.provider_refund_id IS NOT NULL
+                AND btrim(source_refund.provider_refund_id) <> ''
+                AND source_refund.succeeded_at IS NOT NULL
+                AND source_refund.failure_code IS NULL
+                AND source_refund.provider_refund_model = $3
+                AND source_refund.legacy_refund_platform_fee_claim IS NULL
+                AND source_refund.local_settlement_status = 'completed'
+                AND source_refund.local_settled_at IS NOT NULL
+                AND source_refund.local_settlement_error_code IS NULL
+                AND source_refund.provider_observation_status = 'none'
+                THEN 'provider_bound'
+              ELSE 'historical_unverified'
+            END AS source_truth_status
+       FROM financial_documents AS document
+       LEFT JOIN refunds AS source_refund ON source_refund.id = document.refund_id
+       LEFT JOIN sit_payment_refund_truth AS refund_truth
+         ON refund_truth.payment_id = source_refund.payment_id
+      WHERE document.id = $1 AND document.audience_user_id = $2`,
+    [id, actorId, trustedRefundProviderModel],
   );
   if (!result.rowCount) {
     throw new FinancialDocumentError(404, 'financial_document_not_found');
   }
   const row = result.rows[0];
+  if (row.source_truth_status === 'historical_unverified') {
+    throw new FinancialDocumentError(409, 'financial_document_refund_truth_unverified');
+  }
   const observedHash = crypto.createHash('sha256').update(row.content_html, 'utf8').digest('hex');
   if (observedHash !== row.artifact_sha256) {
     throw new FinancialDocumentError(409, 'financial_document_hash_mismatch');

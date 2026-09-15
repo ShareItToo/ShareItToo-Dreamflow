@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { config } from './config.js';
 import { inTransaction, pool } from './db.js';
 import { sendTransactionalEmail } from './mailer.js';
+import { trustedRefundProviderModel } from './payment_domain.js';
 import { sendPushToUser } from './push_sender.js';
 
 const BOOKING_NOTIFICATION_DEFINITIONS = Object.freeze({
@@ -276,12 +277,12 @@ export async function enqueueV51WithdrawalNotifications(client, {
   const title = itemTitle(row.listing_payload);
   const actionUrl = bookingActionUrl(bookingId);
   const ownerBody = manualReviewRequired
-    ? `Eine Widerrufserklärung zu „${title}“ ist nach dem garantierten 14-Tage-Fenster eingegangen und wird auf mögliche längere Rechte geprüft. Buchung und Geldstatus bleiben unverändert.`
+    ? `Eine Widerrufserklärung zu „${title}“ ist eingegangen und wird manuell auf die anwendbaren Rechte und den verlässlichen Erstattungsstand geprüft. Buchung und Geldstatus bleiben unverändert.`
     : phase === 'before_handover'
     ? `Der SIT-Plattformvertrag zu „${title}“ wurde widerrufen. Die Buchung ist beendet; Mietpreis und SIT-Gebühr werden getrennt abgewickelt.`
     : `Der SIT-Plattformvertrag zu „${title}“ wurde widerrufen. ${returnRequired ? 'Die dokumentierte Rückgabe ist jetzt erforderlich.' : 'Die bestätigte Rückgabe wird zeitanteilig abgerechnet.'}`;
   const renterBody = manualReviewRequired
-    ? `Deine Erklärung zu „${title}“ ist eingegangen. Mögliche längere gesetzliche Rechte werden geprüft; bis dahin wurden Buchung und Erstattungen nicht automatisch verändert.`
+    ? `Deine Erklärung zu „${title}“ ist eingegangen. Die anwendbaren Rechte und der verlässliche Erstattungsstand werden geprüft; bis dahin wurden Buchung und Erstattungen nicht automatisch verändert.`
     : phase === 'before_handover'
     ? `Dein Widerruf zu „${title}“ ist eingegangen. Die Buchung wurde kostenfrei beendet und beide Erstattungen wurden getrennt vorgemerkt.`
     : `Dein Widerruf zu „${title}“ ist eingegangen. ${returnRequired ? 'Bitte schließe jetzt die dokumentierte Rückgabe ab.' : 'Die zeitanteilige Mietpreiserstattung und die vollständige SIT-Gebührenerstattung wurden getrennt vorgemerkt.'}`;
@@ -549,6 +550,32 @@ async function userDeliveryContext(userId) {
   return result.rows[0] ?? null;
 }
 
+export async function refundNotificationTruthTrusted(row, database = pool) {
+  if (row.kind !== 'booking_refunded') return true;
+  const result = await database.query(
+    `SELECT
+       EXISTS (
+         SELECT 1
+           FROM refunds AS refund
+           JOIN payments AS payment ON payment.id = refund.payment_id
+           JOIN sit_payment_refund_truth AS refund_truth
+             ON refund_truth.payment_id = payment.id
+          WHERE payment.booking_id = $1
+            AND $3 = 'refund:' || refund.id::text || ':succeeded'
+            AND refund.status = 'succeeded'
+            AND refund.provider_refund_id IS NOT NULL
+            AND btrim(refund.provider_refund_id) <> ''
+            AND refund.succeeded_at IS NOT NULL
+            AND refund.failure_code IS NULL
+            AND refund.provider_refund_model = $2
+            AND refund.legacy_refund_platform_fee_claim IS NULL
+            AND refund_truth.refund_truth_status = 'providerBound'
+       ) AS trusted`,
+    [row.booking_id, trustedRefundProviderModel, row.event_key],
+  );
+  return result.rows[0]?.trusted === true;
+}
+
 function channelEnabled(row, context) {
   if (!context || context.account_status !== 'active') return false;
   if (row.channel === 'in_app') return context.in_app_enabled;
@@ -563,6 +590,17 @@ function channelEnabled(row, context) {
 }
 
 async function deliverClaim(row) {
+  if (!await refundNotificationTruthTrusted(row)) {
+    return {
+      outcome: 'suppressed',
+      provider: 'refund_truth_guard',
+      providerMessageId: null,
+      metadata: {
+        sourceTruthStatus: 'historical_unverified',
+        needsReview: true,
+      },
+    };
+  }
   const context = await userDeliveryContext(row.user_id);
   if (!channelEnabled(row, context)) {
     return { outcome: 'suppressed', provider: 'preference', providerMessageId: null, metadata: {} };

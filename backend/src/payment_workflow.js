@@ -25,6 +25,7 @@ import {
   requestHash,
   splitRefund,
   transferLedger,
+  trustedRefundProviderModel,
 } from './payment_domain.js';
 import {
   enqueueBookingNotifications,
@@ -38,6 +39,18 @@ import {
 } from './payment_execution_guard.js';
 import { StripeProvider } from './stripe_provider.js';
 import { v52ContractDocument } from './v52_contract_workflow.js';
+import {
+  lockBookingFinancialPrincipals,
+  lockFinancialPrincipals,
+  lockPaymentFinancialPrincipals,
+} from './account_financial_fence.js';
+import {
+  assertRefundTruthRecoverableFor,
+  assertRefundTruthSettled,
+  parsePaymentRefundTruthRow,
+  publicPaymentRefundTruth,
+  readPaymentRefundTruth,
+} from './refund_truth.js';
 
 export const stripeProvider = new StripeProvider({
   mode: config.payments.transport,
@@ -45,6 +58,84 @@ export const stripeProvider = new StripeProvider({
   apiVersion: config.payments.apiVersion,
   livemode: config.payments.livemode,
 });
+
+function assertTrustedRefundProviderModel(refund) {
+  if (refund?.provider_refund_model !== trustedRefundProviderModel
+      || refund?.legacy_refund_platform_fee_claim != null) {
+    throw new PaymentDomainError(409, 'refund_provider_semantics_untrusted');
+  }
+  return true;
+}
+
+function assertPreparedRefundIntegrity({
+  refund,
+  payment,
+  key,
+  amountMinor,
+  reason,
+}) {
+  assertTrustedRefundProviderModel(refund);
+  const ownerShareMinor = Number(refund?.owner_share_minor);
+  const platformShareMinor = Number(refund?.platform_share_minor);
+  const providerPending = ['created', 'pending'].includes(refund?.status)
+    && refund?.provider_refund_id == null
+    && refund?.succeeded_at == null
+    && refund?.local_settlement_status === 'pending'
+    && refund?.local_settled_at == null
+    && refund?.local_settlement_error_code == null;
+  const providerBoundRecoverable = refund?.status === 'succeeded'
+    && typeof refund?.provider_refund_id === 'string'
+    && refund.provider_refund_id.trim().length > 0
+    && refund?.succeeded_at != null
+    && refund?.failure_code == null
+    && ['pending', 'needs_review'].includes(refund?.local_settlement_status)
+    && refund?.local_settled_at == null
+    && (refund?.local_settlement_status !== 'pending'
+      || refund?.local_settlement_error_code == null)
+    && (refund?.local_settlement_status !== 'needs_review'
+      || (typeof refund?.local_settlement_error_code === 'string'
+        && refund.local_settlement_error_code.trim().length > 0));
+  if ((!providerPending && !providerBoundRecoverable)
+      || refund.payment_id !== payment.id
+      || refund.idempotency_key !== key
+      || typeof payment.provider_charge_id !== 'string'
+      || payment.provider_charge_id.length === 0
+      || refund.provider_charge_id !== payment.provider_charge_id
+      || refund.currency !== payment.currency
+      || refund.livemode !== payment.livemode
+      || refund.livemode !== config.payments.livemode
+      || refund.reason !== text(reason, 500)
+      || Number(refund.amount_minor) !== amountMinor
+      || !Number.isSafeInteger(ownerShareMinor)
+      || !Number.isSafeInteger(platformShareMinor)
+      || ownerShareMinor < 0
+      || platformShareMinor < 0
+      || ownerShareMinor + platformShareMinor !== amountMinor) {
+    throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
+  }
+  return true;
+}
+
+function assertRefundFinalizationPaymentIntegrity({ current, prepared }) {
+  const original = prepared.payment;
+  if (current.id !== original.id
+      || current.booking_id !== original.booking_id
+      || current.owner_id !== original.owner_id
+      || current.renter_id !== original.renter_id
+      || current.status !== original.status
+      || current.provider_charge_id !== original.provider_charge_id
+      || current.currency !== original.currency
+      || current.livemode !== original.livemode
+      || Number(current.amount_minor) !== Number(original.amount_minor)
+      || Number(current.captured_minor) !== Number(original.captured_minor)
+      || Number(current.refunded_minor) !== Number(original.refunded_minor)
+      || Number(current.transferred_minor) !== Number(original.transferred_minor)
+      || Number(current.owner_payout_minor) !== Number(original.owner_payout_minor)
+      || Number(current.platform_fee_minor) !== Number(original.platform_fee_minor)) {
+    throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
+  }
+  return true;
+}
 
 function ensurePaymentsEnabled(userId = null) {
   if (!config.payments.enabled) throw new PaymentDomainError(503, 'payments_disabled');
@@ -209,6 +300,20 @@ function shapePayment(row) {
     capturedAt: row.captured_at ? new Date(row.captured_at).toISOString() : null,
     livemode: row.livemode,
     updatedAt: new Date(row.updated_at).toISOString(),
+  };
+}
+
+function shapePaymentWithRefundTruth(row, truth) {
+  const refundTruth = publicPaymentRefundTruth(truth);
+  const shaped = shapePayment(row);
+  return {
+    ...shaped,
+    status: refundTruth.needsReview || refundTruth.pending
+      ? 'refund_verification_pending'
+      : shaped.status,
+    refundedMinor: refundTruth.refundedMinor,
+    refundTruthStatus: refundTruth.status,
+    needsReview: refundTruth.needsReview,
   };
 }
 
@@ -462,7 +567,13 @@ function validStoredPaymentReceipt(receipt, payment, type) {
     'refundedMinor', 'transferredMinor', 'platformFeeMinor',
     'ownerPayoutMinor', 'currency', 'failureCode', 'livemode', 'updatedAt',
   ];
-  if (!allowedKeys(receipt, requiredKeys, ['checkoutExpiresAt', 'capturedAt'])
+  const optionalKeys = ['checkoutExpiresAt', 'capturedAt'];
+  if (type === 'payment.refund') {
+    optionalKeys.push('refundTruthStatus', 'needsReview');
+  }
+  const refundTruthReceiptPresent = type === 'payment.refund'
+    && (receipt?.refundTruthStatus !== undefined || receipt?.needsReview !== undefined);
+  if (!allowedKeys(receipt, requiredKeys, optionalKeys)
       || receipt.id !== payment.id
       || receipt.bookingId !== payment.booking_id
       || receipt.currency !== payment.currency
@@ -477,6 +588,9 @@ function validStoredPaymentReceipt(receipt, payment, type) {
       || !Number.isSafeInteger(receipt.transferredMinor)
       || receipt.transferredMinor < 0
       || receipt.transferredMinor > receipt.ownerPayoutMinor
+      || (refundTruthReceiptPresent
+        && (receipt.refundTruthStatus !== 'providerBound'
+          || receipt.needsReview !== false))
       || (receipt.failureCode !== null && typeof receipt.failureCode !== 'string')
       || !validInstant(receipt.checkoutExpiresAt, { nullable: true })
       || !validInstant(receipt.capturedAt, { nullable: true })
@@ -594,6 +708,12 @@ export function validateCompletedRefundCommandReplay({
       || refund.reason !== text(reason, 500)
       || refund.currency !== payment.currency
       || refund.livemode !== payment.livemode
+      || refund.provider_refund_model !== trustedRefundProviderModel
+      || refund.legacy_refund_platform_fee_claim != null
+      || refund.local_settlement_status !== 'completed'
+      || !validDatabaseInstant(refund.local_settled_at)
+      || refund.local_settlement_error_code != null
+      || refund.provider_observation_status !== 'none'
       || typeof payment.provider_charge_id !== 'string'
       || payment.provider_charge_id.length === 0
       || typeof refund.provider_refund_id !== 'string'
@@ -1004,12 +1124,19 @@ export async function scheduleDisputeTransferRecoveries({ limit = 20 } = {}) {
     let deferred = 0;
     let needsReview = 0;
     for (const dispute of disputes.rows) {
-      const activeRefund = await client.query(
-        `SELECT 1 FROM refunds
-         WHERE payment_id = $1 AND status IN ('created', 'pending') LIMIT 1`,
-        [dispute.payment_id],
-      );
-      if (activeRefund.rowCount) {
+      const refundTruth = await readPaymentRefundTruth(client, dispute.payment_id);
+      if (refundTruth.status === 'needsReview') {
+        needsReview += 1;
+        await client.query(
+          `UPDATE disputes SET transfer_recovery_state = 'needs_review',
+               transfer_recovery_needs_review = true,
+               transfer_recovery_issue_code = 'refund_truth_needs_review'
+           WHERE id = $1`,
+          [dispute.id],
+        );
+        continue;
+      }
+      if (refundTruth.status === 'pending') {
         deferred += 1;
         await client.query(
           `UPDATE disputes SET transfer_recovery_state = 'pending',
@@ -1140,13 +1267,27 @@ async function claimDisputeTransferRecovery(now) {
     if (!result.rowCount) return null;
     const recovery = result.rows[0];
     const priorStatus = recovery.status;
-    const activeRefund = await client.query(
-      `SELECT 1 FROM refunds
-        WHERE payment_id = $1 AND status IN ('created', 'pending')
-        LIMIT 1`,
-      [recovery.payment_id],
-    );
-    if (activeRefund.rowCount) {
+    const refundTruth = await readPaymentRefundTruth(client, recovery.payment_id);
+    if (refundTruth.status === 'needsReview') {
+      await client.query(
+        `UPDATE dispute_transfer_recoveries
+            SET status = 'manual_review', needs_review = true,
+                lease_expires_at = NULL,
+                last_error_category = 'integrity_conflict',
+                last_error_code = 'refund_truth_needs_review'
+          WHERE id = $1`,
+        [recovery.id],
+      );
+      await client.query(
+        `UPDATE disputes SET transfer_recovery_state = 'needs_review',
+             transfer_recovery_needs_review = true,
+             transfer_recovery_issue_code = 'refund_truth_needs_review'
+         WHERE id = $1`,
+        [recovery.dispute_id],
+      );
+      return { terminal: 'manual_review' };
+    }
+    if (refundTruth.status === 'pending') {
       if (['processing', 'uncertain'].includes(priorStatus)) {
         await client.query(
           `UPDATE dispute_transfer_recoveries
@@ -1613,12 +1754,72 @@ async function ensureCustomer(actor) {
   return result.rows[0];
 }
 
+async function expireAndRecordAbandonedCheckout({
+  actor,
+  bookingId,
+  paymentId,
+  session,
+  failureCode,
+}) {
+  let expired;
+  try {
+    expired = await stripeProvider.expirePaymentCheckout({ sessionId: session.id });
+  } catch (error) {
+    throw new PaymentDomainError(503, 'payment_checkout_cleanup_required', {
+      providerCode: text(error?.code, 120) || 'checkout_expiration_failed',
+    });
+  }
+  if (expired?.id !== session.id || expired?.status !== 'expired') {
+    throw new PaymentDomainError(503, 'payment_checkout_cleanup_required');
+  }
+  await inTransaction(async (client) => {
+    const principalFence = await lockBookingFinancialPrincipals(client, bookingId);
+    if (!principalFence) {
+      throw new PaymentDomainError(503, 'payment_checkout_cleanup_required');
+    }
+    await client.query(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [`payment-checkout:${bookingId}`],
+    );
+    const cancelled = await client.query(
+      `UPDATE payments
+          SET provider_checkout_session_id = $2,
+              status = 'cancelled',
+              failure_code = $3,
+              checkout_expires_at = LEAST(checkout_expires_at, now()),
+              cancelled_at = COALESCE(cancelled_at, now())
+        WHERE id = $1
+          AND (provider_checkout_session_id IS NULL
+            OR provider_checkout_session_id = $2)
+          AND status IN ('created', 'requires_action', 'authorized', 'cancelled')
+        RETURNING id`,
+      [paymentId, session.id, failureCode],
+    );
+    if (!cancelled.rowCount) {
+      throw new PaymentDomainError(503, 'payment_checkout_cleanup_required');
+    }
+    await audit(client, {
+      actorId: actor.id,
+      actorRole: actor.role,
+      action: 'payment.checkout_expired_before_delivery',
+      resourceType: 'payment',
+      resourceId: paymentId,
+      metadata: { bookingId, reason: failureCode },
+    });
+  });
+}
+
 export async function createPaymentCheckout({ actor, bookingId, key: rawKey }) {
   ensurePaymentsEnabled(actor.id);
   const key = paymentIdempotencyKey(rawKey, 'payment.checkout');
   const requestedCheckoutExpiresAt = boundedPaymentCheckoutExpiresAt(config);
   const request = { bookingId };
   const prepared = await inTransaction(async (client) => {
+    const principalFence = await lockBookingFinancialPrincipals(client, bookingId);
+    if (!principalFence) throw new PaymentDomainError(404, 'booking_not_found');
+    if (!principalFence.commerceActive) {
+      throw new PaymentDomainError(409, 'payment_principal_inactive');
+    }
     await client.query(
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
       [`payment-checkout:${bookingId}`],
@@ -1685,6 +1886,21 @@ export async function createPaymentCheckout({ actor, bookingId, key: rawKey }) {
     let payment = existing.rows[0];
     if (payment?.status === 'captured' || payment?.status === 'partially_refunded') {
       throw new PaymentDomainError(409, 'booking_already_paid');
+    }
+    if (!payment && command.payment_id) {
+      const abandoned = await client.query(
+        `SELECT id, status, checkout_command_key
+           FROM payments
+          WHERE id = $1 AND booking_id = $2
+          FOR UPDATE`,
+        [command.payment_id, bookingId],
+      );
+      if (abandoned.rowCount === 1
+          && abandoned.rows[0].status === 'cancelled'
+          && abandoned.rows[0].checkout_command_key === key) {
+        throw new PaymentDomainError(409, 'payment_checkout_expired');
+      }
+      replayIntegrityFailure();
     }
     if (!payment) {
       const paymentId = crypto.randomUUID();
@@ -1830,6 +2046,19 @@ export async function createPaymentCheckout({ actor, bookingId, key: rawKey }) {
     expiresAt,
     idempotencyKey: providerOperationIdempotencyKey('checkout', prepared.payment.id),
   });
+  if (session?.status !== 'open'
+      || typeof session?.url !== 'string'
+      || !/^https?:\/\//u.test(session.url)) {
+    const error = new PaymentDomainError(409, 'provider_checkout_session_not_open');
+    await expireAndRecordAbandonedCheckout({
+      actor,
+      bookingId,
+      paymentId: prepared.payment.id,
+      session,
+      failureCode: error.code,
+    });
+    throw error;
+  }
   const response = {
     payment: shapePayment({
       ...prepared.payment,
@@ -1851,61 +2080,76 @@ export async function createPaymentCheckout({ actor, bookingId, key: rawKey }) {
   }
   let resolvedResponse = response;
   let completionReplayed = false;
-  await inTransaction(async (client) => {
-    await client.query(
-      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
-      [`payment-checkout:${bookingId}`],
-    );
-    let completedAny = false;
-    for (const commandKey of new Set(prepared.commandKeysToComplete)) {
-      const completion = await completeCommand(client, {
-        key: commandKey,
-        paymentId: prepared.payment.id,
-        response: resolvedResponse,
-        type: 'payment.checkout',
-        actorId: actor.id,
-        bookingId,
-        request,
-        allowCompletedReplay: true,
-      });
-      if (completion.completed) {
-        completedAny = true;
-      } else {
-        if (completionReplayed
-            && requestHash(resolvedResponse) !== requestHash(completion.response)) {
-          throw new PaymentDomainError(409, 'payment_command_completion_conflict');
-        }
-        if (completedAny
-            && requestHash(resolvedResponse) !== requestHash(completion.response)) {
-          throw new PaymentDomainError(409, 'payment_command_completion_conflict');
-        }
-        if (!validStoredCheckoutResponse(completion.response, {
-          payment: prepared.payment,
-          bookingId,
-        })) {
-          replayIntegrityFailure();
-        }
-        resolvedResponse = completion.response;
-        completionReplayed = true;
+  try {
+    await inTransaction(async (client) => {
+      const principalFence = await lockBookingFinancialPrincipals(client, bookingId);
+      if (!principalFence?.commerceActive) {
+        throw new PaymentDomainError(409, 'payment_principal_inactive');
       }
-    }
-    if (!completedAny || completionReplayed) return;
-    await client.query(
-      `UPDATE payments
-       SET provider_checkout_session_id = $2, provider_payment_id = COALESCE($3, provider_payment_id),
-           provider_customer_id = $4, checkout_expires_at = $5
-       WHERE id = $1`,
-      [prepared.payment.id, session.id, providerId(session.payment_intent), customer.provider_customer_id, providerInstant(session.expires_at)],
-    );
-    await audit(client, {
-      actorId: actor.id,
-      actorRole: actor.role,
-      action: 'payment.checkout_created',
-      resourceType: 'payment',
-      resourceId: prepared.payment.id,
-      metadata: { bookingId, amountMinor: prepared.amounts.amountMinor, currency: prepared.amounts.currency },
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        [`payment-checkout:${bookingId}`],
+      );
+      let completedAny = false;
+      for (const commandKey of new Set(prepared.commandKeysToComplete)) {
+        const completion = await completeCommand(client, {
+          key: commandKey,
+          paymentId: prepared.payment.id,
+          response: resolvedResponse,
+          type: 'payment.checkout',
+          actorId: actor.id,
+          bookingId,
+          request,
+          allowCompletedReplay: true,
+        });
+        if (completion.completed) {
+          completedAny = true;
+        } else {
+          if (completionReplayed
+              && requestHash(resolvedResponse) !== requestHash(completion.response)) {
+            throw new PaymentDomainError(409, 'payment_command_completion_conflict');
+          }
+          if (completedAny
+              && requestHash(resolvedResponse) !== requestHash(completion.response)) {
+            throw new PaymentDomainError(409, 'payment_command_completion_conflict');
+          }
+          if (!validStoredCheckoutResponse(completion.response, {
+            payment: prepared.payment,
+            bookingId,
+          })) {
+            replayIntegrityFailure();
+          }
+          resolvedResponse = completion.response;
+          completionReplayed = true;
+        }
+      }
+      if (!completedAny || completionReplayed) return;
+      await client.query(
+        `UPDATE payments
+         SET provider_checkout_session_id = $2, provider_payment_id = COALESCE($3, provider_payment_id),
+             provider_customer_id = $4, checkout_expires_at = $5
+         WHERE id = $1`,
+        [prepared.payment.id, session.id, providerId(session.payment_intent), customer.provider_customer_id, providerInstant(session.expires_at)],
+      );
+      await audit(client, {
+        actorId: actor.id,
+        actorRole: actor.role,
+        action: 'payment.checkout_created',
+        resourceType: 'payment',
+        resourceId: prepared.payment.id,
+        metadata: { bookingId, amountMinor: prepared.amounts.amountMinor, currency: prepared.amounts.currency },
+      });
     });
-  });
+  } catch (error) {
+    await expireAndRecordAbandonedCheckout({
+      actor,
+      bookingId,
+      paymentId: prepared.payment.id,
+      session,
+      failureCode: text(error?.code, 120) || 'payment_checkout_local_failure',
+    });
+    throw error;
+  }
   return completionReplayed
     ? { ...resolvedResponse, replayed: true }
     : resolvedResponse;
@@ -1921,11 +2165,27 @@ export async function getBookingPayment({ actor, bookingId }) {
             booking.owner_payout_minor AS booking_owner_payout_minor,
             booking.currency AS booking_currency,
             payout.id AS payout_id, payout.status AS payout_status,
-            payout.available_at, payout.paid_at
+            payout.available_at, payout.paid_at,
+            refund_truth.untrusted_refund_count,
+            refund_truth.invalid_refund_count,
+            refund_truth.active_refund_count,
+            refund_truth.terminal_refund_count,
+            refund_truth.provider_observation_review_count,
+            refund_truth.provider_bound_local_pending_count,
+            refund_truth.provider_bound_local_review_count,
+            refund_truth.settled_refund_count,
+            refund_truth.settled_refund_minor,
+            refund_truth.settled_owner_refund_minor,
+            refund_truth.settled_refund_within_capture,
+            refund_truth.refund_cache_matches_settlement,
+            refund_truth.refund_status_matches_settlement,
+            refund_truth.refund_truth_status
      FROM bookings AS booking
      LEFT JOIN LATERAL (
        SELECT * FROM payments WHERE booking_id = booking.id ORDER BY created_at DESC LIMIT 1
      ) AS payment ON true
+     LEFT JOIN sit_payment_refund_truth AS refund_truth
+       ON refund_truth.payment_id = payment.id
      LEFT JOIN LATERAL (
        SELECT * FROM payouts WHERE booking_id = booking.id ORDER BY created_at DESC LIMIT 1
      ) AS payout ON true
@@ -1950,7 +2210,9 @@ export async function getBookingPayment({ actor, bookingId }) {
       ownerPayoutMinor: Number(row.booking_owner_payout_minor),
       currency: row.booking_currency,
     },
-    payment: row.id ? shapePayment(row) : null,
+    payment: row.id
+      ? shapePaymentWithRefundTruth(row, parsePaymentRefundTruthRow(row))
+      : null,
     payout: row.payout_id ? {
       id: row.payout_id,
       status: row.payout_status,
@@ -2048,6 +2310,13 @@ async function processProviderEvent(client, event) {
   if (isConnectedAccountProviderEvent(event.type)) {
     const snapshot = connectedAccountSnapshot(object);
     const eventAt = providerInstant(event.created) ?? new Date();
+    const principal = await client.query(
+      'SELECT user_id FROM stripe_connect_accounts WHERE provider_account_id = $1',
+      [object.id],
+    );
+    if (principal.rowCount === 1) {
+      await lockFinancialPrincipals(client, [principal.rows[0].user_id]);
+    }
     await client.query(
       `UPDATE stripe_connect_accounts
        SET details_submitted = $2, charges_enabled = $3, payouts_enabled = $4,
@@ -2084,12 +2353,20 @@ async function processProviderEvent(client, event) {
   const mappedStatus = paymentStatusForProvider(event.type, object);
   if (mappedStatus) {
     const paymentId = text(object.metadata?.sit_payment_id, 80);
+    const candidate = await client.query(
+      `SELECT id
+         FROM payments
+        WHERE id::text = $1 OR provider_payment_id = $2
+        ORDER BY created_at DESC LIMIT 1`,
+      [paymentId, object.id],
+    );
+    if (!candidate.rowCount) return 'ignored';
+    await lockPaymentFinancialPrincipals(client, candidate.rows[0].id);
     const paymentResult = await client.query(
       `SELECT payment.*, booking.owner_id
        FROM payments AS payment JOIN bookings AS booking ON booking.id = payment.booking_id
-       WHERE payment.id::text = $1 OR payment.provider_payment_id = $2
-       ORDER BY payment.created_at DESC LIMIT 1 FOR UPDATE OF payment`,
-      [paymentId, object.id],
+       WHERE payment.id = $1 FOR UPDATE OF payment`,
+      [candidate.rows[0].id],
     );
     if (!paymentResult.rowCount) return 'ignored';
     const payment = paymentResult.rows[0];
@@ -2129,11 +2406,17 @@ async function processProviderEvent(client, event) {
   }
   if (event.type.startsWith('charge.dispute.')) {
     const chargeId = providerId(object.charge);
+    const candidate = await client.query(
+      'SELECT id FROM payments WHERE provider_charge_id = $1',
+      [chargeId],
+    );
+    if (!candidate.rowCount) return 'ignored';
+    await lockPaymentFinancialPrincipals(client, candidate.rows[0].id);
     const paymentResult = await client.query(
       `SELECT payment.*, booking.renter_id, booking.owner_id, booking.workflow_status
        FROM payments AS payment JOIN bookings AS booking ON booking.id = payment.booking_id
-       WHERE payment.provider_charge_id = $1 FOR UPDATE OF payment, booking`,
-      [chargeId],
+       WHERE payment.id = $1 FOR UPDATE OF payment, booking`,
+      [candidate.rows[0].id],
     );
     if (!paymentResult.rowCount) return 'ignored';
     const payment = paymentResult.rows[0];
@@ -2420,6 +2703,7 @@ async function prepareRefundTransferReversals(client, {
     return {
       count: existing.rows[0].count,
       amountMinor,
+      succeededMinor,
     };
   }
   const payouts = await client.query(
@@ -2465,7 +2749,11 @@ async function prepareRefundTransferReversals(client, {
       [refund.id],
     );
   }
-  return { count: plan.allocations.length, amountMinor: plan.targetMinor };
+  return {
+    count: plan.allocations.length,
+    amountMinor: plan.targetMinor,
+    succeededMinor: 0,
+  };
 }
 
 async function claimRefundTransferReversal(refundId, now) {
@@ -2479,6 +2767,8 @@ async function claimRefundTransferReversal(refundId, now) {
               refund.status AS refund_status,
               refund.currency AS refund_currency,
               refund.livemode AS refund_livemode,
+              refund.provider_refund_model AS refund_provider_model,
+              refund.legacy_refund_platform_fee_claim AS refund_legacy_claim,
               payout.provider_transfer_id AS current_transfer_id,
               payout.amount_minor AS payout_amount_minor,
               payout.reversed_minor AS payout_reversed_minor,
@@ -2516,6 +2806,8 @@ async function claimRefundTransferReversal(refundId, now) {
       || reversal.livemode !== config.payments.livemode
       || reversal.payment_livemode !== config.payments.livemode
       || reversal.refund_livemode !== config.payments.livemode
+      || reversal.refund_provider_model !== trustedRefundProviderModel
+      || reversal.refund_legacy_claim != null
       || reversal.payout_livemode !== config.payments.livemode
       || reversal.refund_status !== 'pending'
       || !['captured', 'partially_refunded'].includes(reversal.payment_status)
@@ -2629,6 +2921,8 @@ async function completeRefundTransferReversal(reversal, providerReversal) {
               refund.status AS refund_status,
               refund.currency AS refund_currency,
               refund.livemode AS refund_livemode,
+              refund.provider_refund_model AS refund_provider_model,
+              refund.legacy_refund_platform_fee_claim AS refund_legacy_claim,
               payout.provider_transfer_id AS current_transfer_id,
               payout.amount_minor AS payout_amount_minor,
               payout.reversed_minor AS payout_reversed_minor,
@@ -2666,6 +2960,8 @@ async function completeRefundTransferReversal(reversal, providerReversal) {
         || stored.livemode !== config.payments.livemode
         || stored.payment_livemode !== config.payments.livemode
         || stored.refund_livemode !== config.payments.livemode
+        || stored.refund_provider_model !== trustedRefundProviderModel
+        || stored.refund_legacy_claim != null
         || stored.payout_livemode !== config.payments.livemode
         || stored.refund_status !== 'pending'
         || !['captured', 'partially_refunded'].includes(stored.payment_status)
@@ -2826,12 +3122,42 @@ export async function reconcileRefundTransferReversals({
   };
 }
 
-async function markProviderRefundFailure({ refund, payment }, error) {
-  const classification = [
+async function markProviderRefundFailure({ refund, payment }, error, providerRefund = null) {
+  const ambiguousProviderOutcome = [
     'provider_refund_binding_mismatch',
-    'provider_refund_failed',
     'provider_refund_inventory_conflict',
     'provider_refund_local_state_mismatch',
+  ].includes(error?.code);
+  if (ambiguousProviderOutcome) {
+    await inTransaction(async (client) => {
+      await client.query(
+        `UPDATE refunds
+            SET status = 'pending', failure_code = $2,
+                local_settlement_status = 'pending',
+                local_settlement_error_code = NULL,
+                provider_observation_status = 'needs_review',
+                provider_observation_reference = $3,
+                provider_observation_error_code = $2,
+                provider_observed_at = now()
+          WHERE id = $1 AND status IN ('created', 'pending')`,
+        [refund.id, error.code, providerId(providerRefund?.id)],
+      );
+      await audit(client, {
+        action: 'payment.provider_refund_observation_needs_review',
+        resourceType: 'refund',
+        resourceId: refund.id,
+        metadata: { paymentId: payment.id, safeCode: error.code },
+      });
+    });
+    return {
+      category: 'uncertain_provider_outcome',
+      disposition: 'manual_review',
+      needsReview: true,
+      safeCode: error.code,
+    };
+  }
+  const classification = [
+    'provider_refund_failed',
   ].includes(error?.code)
     ? {
       category: 'integrity_conflict',
@@ -2845,9 +3171,17 @@ async function markProviderRefundFailure({ refund, payment }, error) {
     : 'pending';
   await inTransaction(async (client) => {
     await client.query(
-      `UPDATE refunds SET status = $2, failure_code = $3
+      `UPDATE refunds SET status = $2, failure_code = $3,
+           local_settlement_status = $4,
+           local_settlement_error_code = $5
         WHERE id = $1 AND status <> 'succeeded'`,
-      [refund.id, status, classification.safeCode],
+      [
+        refund.id,
+        status,
+        classification.safeCode,
+        status === 'failed' ? 'needs_review' : 'pending',
+        status === 'failed' ? classification.safeCode : null,
+      ],
     );
     await audit(client, {
       action: 'payment.provider_refund_deferred',
@@ -2863,20 +3197,143 @@ async function markProviderRefundFailure({ refund, payment }, error) {
   return classification;
 }
 
+async function persistProviderRefundSuccess({ refund, payment }, providerRefund) {
+  return inTransaction(async (client) => {
+    await lockPaymentFinancialPrincipals(client, payment.id);
+    const locked = await client.query(
+      `SELECT payment.*, booking.owner_id, booking.renter_id,
+              to_jsonb(refund) AS current_refund
+         FROM payments AS payment
+         JOIN bookings AS booking ON booking.id = payment.booking_id
+         JOIN refunds AS refund
+           ON refund.id = $2 AND refund.payment_id = payment.id
+        WHERE payment.id = $1
+        FOR UPDATE OF payment, booking, refund`,
+      [payment.id, refund.id],
+    );
+    if (locked.rowCount !== 1) {
+      throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
+    }
+    const current = locked.rows[0];
+    const currentRefund = current.current_refund;
+    assertTrustedRefundProviderModel(currentRefund);
+    assertProviderRefundBinding({
+      refund: currentRefund,
+      payment: current,
+      providerRefund,
+    });
+    if (currentRefund.status === 'succeeded') {
+      if (currentRefund.provider_refund_id !== providerRefund.id
+          || currentRefund.succeeded_at == null
+          || !['pending', 'needs_review', 'completed']
+            .includes(currentRefund.local_settlement_status)) {
+        throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
+      }
+      return currentRefund;
+    }
+    if (!['created', 'pending'].includes(currentRefund.status)
+        || currentRefund.provider_refund_id != null
+        || currentRefund.succeeded_at != null
+        || currentRefund.local_settlement_status !== 'pending') {
+      throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
+    }
+    const stored = await client.query(
+      `UPDATE refunds
+          SET provider_refund_id = $2, status = 'succeeded',
+              succeeded_at = now(), failure_code = NULL,
+              local_settlement_status = 'pending',
+              local_settled_at = NULL,
+              local_settlement_error_code = NULL
+        WHERE id = $1 AND status IN ('created', 'pending')
+        RETURNING *`,
+      [currentRefund.id, providerRefund.id],
+    );
+    if (stored.rowCount !== 1) {
+      throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
+    }
+    await audit(client, {
+      action: 'payment.provider_refund_confirmed',
+      resourceType: 'refund',
+      resourceId: currentRefund.id,
+      metadata: { paymentId: payment.id },
+    });
+    return stored.rows[0];
+  });
+}
+
+async function markProviderRefundSettlementReview({ refund, payment }, error) {
+  const safeCode = [
+    'provider_refund_binding_mismatch',
+    'provider_refund_local_state_mismatch',
+    'refund_truth_missing',
+    'refund_truth_invalid',
+    'refund_truth_needs_review',
+    'provider_refund_dispute_conflict',
+    'provider_refund_transfer_recovery_conflict',
+    'payment_principal_inactive',
+  ].includes(error?.code)
+    ? error.code
+    : 'provider_refund_local_settlement_failed';
+  await inTransaction(async (client) => {
+    await client.query(
+      `UPDATE refunds
+          SET local_settlement_status = 'needs_review',
+              local_settlement_error_code = $2
+        WHERE id = $1
+          AND status = 'succeeded'
+          AND local_settlement_status IN ('pending', 'needs_review')`,
+      [refund.id, safeCode],
+    );
+    await audit(client, {
+      action: 'payment.provider_refund_local_settlement_needs_review',
+      resourceType: 'refund',
+      resourceId: refund.id,
+      metadata: { paymentId: payment.id, safeCode },
+    });
+  });
+}
+
+async function assertNoRefundFinalizationDisputeConflict(client, paymentId) {
+  const result = await client.query(
+    `SELECT
+       EXISTS (
+         SELECT 1 FROM disputes
+          WHERE payment_id = $1
+            AND provider_funds_withdrawn_at IS NOT NULL
+            AND provider_funds_reinstated_at IS NULL
+       ) AS active_provider_dispute,
+       EXISTS (
+         SELECT 1 FROM dispute_transfer_recoveries
+          WHERE payment_id = $1
+            AND status IN (
+              'pending', 'processing', 'retryable', 'uncertain', 'manual_review'
+            )
+       ) AS active_transfer_recovery`,
+    [paymentId],
+  );
+  if (result.rows[0]?.active_provider_dispute === true) {
+    throw new PaymentDomainError(409, 'provider_refund_dispute_conflict');
+  }
+  if (result.rows[0]?.active_transfer_recovery === true) {
+    throw new PaymentDomainError(409, 'provider_refund_transfer_recovery_conflict');
+  }
+}
+
 export async function refundPayment({ actor = null, paymentId, amountMinor = null, reason = 'booking_cancelled', key: rawKey }) {
   ensurePaymentsEnabled(actor?.id ?? null);
   if (actor && actor.role !== 'admin') throw new PaymentDomainError(403, 'refund_requires_admin');
   const key = paymentIdempotencyKey(rawKey, 'payment.refund');
   const prepared = await inTransaction(async (client) => {
+    const principalFence = await lockPaymentFinancialPrincipals(client, paymentId);
+    if (!principalFence) throw new PaymentDomainError(404, 'payment_not_found');
+    if (!principalFence.principalsPresent) {
+      throw new PaymentDomainError(409, 'payment_principal_binding_missing');
+    }
     const result = await client.query(
       `SELECT payment.*, booking.owner_id, booking.renter_id, booking.workflow_status,
-              COALESCE(refunded.owner_share_minor, 0) AS refunded_owner_minor
+              0::bigint AS refunded_owner_minor
        FROM payments AS payment
        JOIN bookings AS booking ON booking.id = payment.booking_id
-       LEFT JOIN LATERAL (
-         SELECT sum(owner_share_minor)::bigint AS owner_share_minor
-         FROM refunds WHERE payment_id = payment.id AND status = 'succeeded'
-       ) AS refunded ON true
        WHERE payment.id::text = $1 FOR UPDATE OF payment, booking`,
       [paymentId],
     );
@@ -2902,7 +3359,6 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
     }
     assertPaymentExecutionActive(config);
     if (!['captured', 'partially_refunded'].includes(payment.status)) {
-      if (payment.status === 'refunded') return { replay: true, payment };
       throw new PaymentDomainError(409, 'payment_not_refundable');
     }
     // This check runs while both payment and booking are row-locked. The
@@ -2943,54 +3399,48 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
     }
     const activeRefund = await client.query(
       `SELECT idempotency_key FROM refunds
-       WHERE payment_id = $1 AND status IN ('created', 'pending')
+       WHERE payment_id = $1
+         AND (
+           status IN ('created', 'pending')
+           OR (status = 'succeeded'
+             AND local_settlement_status IN ('pending', 'needs_review'))
+         )
        ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
       [paymentId],
     );
     if (activeRefund.rowCount && activeRefund.rows[0].idempotency_key !== key) {
       throw new PaymentDomainError(409, 'refund_in_progress');
     }
-    const unresolvedFailedRefund = await client.query(
-      `SELECT 1 FROM refunds
-        WHERE payment_id = $1 AND status = 'failed'
-          AND failure_code IN (
-            'provider_refund_binding_mismatch',
-            'provider_refund_inventory_conflict',
-            'provider_refund_local_state_mismatch'
-          )
-        LIMIT 1`,
-      [paymentId],
-    );
-    if (unresolvedFailedRefund.rowCount) {
-      throw new PaymentDomainError(409, 'refund_provider_needs_review');
-    }
     const remaining = Number(payment.captured_minor) - Number(payment.refunded_minor);
     const requestedAmount = amountMinor == null ? remaining : Number(amountMinor);
     if (!Number.isSafeInteger(requestedAmount) || requestedAmount <= 0 || requestedAmount > remaining) {
       throw new PaymentDomainError(400, 'invalid_refund_amount');
     }
-    const command = await beginCommand(client, {
-      key, actorId: actor?.id ?? null, type: 'payment.refund',
-      request: { paymentId, amountMinor: requestedAmount, reason },
-      bookingId: payment.booking_id, paymentId,
-    });
-    if (command.completed_at) {
-      return { commandReplay: await validatedRefundCommandReplay(client, {
-        command: await paymentCommandForUpdate(client, key),
-        payment,
-        actorId: actor?.id ?? null,
-        paymentId,
-        key,
-        amountMinor: requestedAmount,
-        reason,
-      }) };
-    }
     const existingRefund = await client.query('SELECT * FROM refunds WHERE idempotency_key = $1', [key]);
     if (existingRefund.rowCount) {
       const refund = existingRefund.rows[0];
-      if (refund.status === 'failed') {
+      if (['failed', 'cancelled'].includes(refund.status)) {
         throw new PaymentDomainError(409, 'refund_provider_needs_review');
       }
+      assertPreparedRefundIntegrity({
+        refund,
+        payment,
+        key,
+        amountMinor: requestedAmount,
+        reason,
+      });
+      if (!completedCommand
+          || completedCommand.request_hash !== requestHash({
+            paymentId,
+            amountMinor: requestedAmount,
+            reason,
+          })) {
+        throw new PaymentDomainError(409, 'idempotency_key_reused');
+      }
+      assertRefundTruthRecoverableFor(
+        refund,
+        await readPaymentRefundTruth(client, paymentId),
+      );
       const split = {
         ownerShareMinor: Number(refund.owner_share_minor),
         platformShareMinor: Number(refund.platform_share_minor),
@@ -3008,7 +3458,26 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
         providerLookupRequired: true,
       };
     }
-    const previousOwnerShare = Number(payment.refunded_owner_minor);
+    const settledTruth = assertRefundTruthSettled(
+      await readPaymentRefundTruth(client, paymentId),
+    );
+    const command = await beginCommand(client, {
+      key, actorId: actor?.id ?? null, type: 'payment.refund',
+      request: { paymentId, amountMinor: requestedAmount, reason },
+      bookingId: payment.booking_id, paymentId,
+    });
+    if (command.completed_at) {
+      return { commandReplay: await validatedRefundCommandReplay(client, {
+        command: await paymentCommandForUpdate(client, key),
+        payment,
+        actorId: actor?.id ?? null,
+        paymentId,
+        key,
+        amountMinor: requestedAmount,
+        reason,
+      }) };
+    }
+    const previousOwnerShare = settledTruth.settledOwnerMinor;
     const remainingOwnerShare = Math.max(0, Number(payment.owner_payout_minor) - previousOwnerShare);
     const proportionalSplit = splitRefund({
       amountMinor: requestedAmount,
@@ -3026,15 +3495,24 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
       `INSERT INTO refunds (
          payment_id, idempotency_key, status, amount_minor, currency, reason,
          provider_charge_id, owner_share_minor, platform_share_minor,
-         reverse_transfer, refund_platform_fee, livemode
-       ) VALUES ($1, $2, 'created', $3, $4, $5, $6, $7, $8, $9, true, $10)
+         reverse_transfer, provider_refund_model, local_settlement_status,
+         provider_observation_status, livemode
+       ) VALUES ($1, $2, 'created', $3, $4, $5, $6, $7, $8, $9, $10,
+                 'pending', 'none', $11)
        RETURNING *`,
       [
         paymentId, key, requestedAmount, payment.currency, text(reason, 500),
         payment.provider_charge_id, split.ownerShareMinor, split.platformShareMinor,
-        false, config.payments.livemode,
+        false, trustedRefundProviderModel, config.payments.livemode,
       ],
     );
+    assertPreparedRefundIntegrity({
+      refund: refund.rows[0],
+      payment,
+      key,
+      amountMinor: requestedAmount,
+      reason,
+    });
     const reversalPlan = await prepareRefundTransferReversals(client, {
       refund: refund.rows[0],
       payment,
@@ -3054,7 +3532,8 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
     await reconcileRefundTransferReversals({ refundId: prepared.refund.id });
     prepared.payment.transferred_minor = Math.max(
       0,
-      Number(prepared.payment.transferred_minor) - prepared.reversalPlan.amountMinor,
+      Number(prepared.payment.transferred_minor)
+        - (prepared.reversalPlan.amountMinor - prepared.reversalPlan.succeededMinor),
     );
   }
   let providerRefund;
@@ -3070,13 +3549,12 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
       providerRefund = await stripeProvider.createRefund({
         chargeId: prepared.payment.provider_charge_id,
         amountMinor: Number(prepared.refund.amount_minor),
-        reverseTransfer: false,
-        refundPlatformFee: false,
         idempotencyKey: providerOperationIdempotencyKey('refund', prepared.refund.id),
         metadata: {
           sit_booking_id: prepared.payment.booking_id,
           sit_payment_id: prepared.payment.id,
           sit_refund_id: prepared.refund.id,
+          sit_refund_model: trustedRefundProviderModel,
           currency: prepared.payment.currency,
         },
       });
@@ -3087,16 +3565,28 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
       providerRefund,
     });
   } catch (error) {
-    await markProviderRefundFailure(prepared, error);
+    await markProviderRefundFailure(prepared, error, providerRefund);
+    throw error;
+  }
+  try {
+    prepared.refund = await persistProviderRefundSuccess(prepared, providerRefund);
+  } catch (error) {
+    // A confirmed provider result must never be demoted to a local failure.
+    // If even its durable binding cannot be written, the original refund row
+    // remains pending and the stable provider idempotency key forces lookup on
+    // retry rather than a second provider refund.
     throw error;
   }
   let response;
   try {
     response = await inTransaction(async (client) => {
+      const principalFence = await lockPaymentFinancialPrincipals(client, paymentId);
+      if (!principalFence?.principalsPresent) {
+        throw new PaymentDomainError(409, 'payment_principal_binding_missing');
+      }
       const locked = await client.query(
-        `SELECT payment.*, booking.owner_id,
-                refund.status AS refund_status,
-                refund.provider_refund_id AS stored_provider_refund_id,
+        `SELECT payment.*, booking.owner_id, booking.renter_id,
+                to_jsonb(refund) AS current_refund,
                 command.completed_at AS command_completed_at,
                 command.response_payload AS command_response_payload
            FROM payments AS payment
@@ -3113,6 +3603,7 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
         throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
       }
       const current = locked.rows[0];
+      const currentRefund = current.current_refund;
       if (current.command_completed_at) {
         const replay = await validatedRefundCommandReplay(client, {
           command: await paymentCommandForUpdate(client, key),
@@ -3125,52 +3616,78 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
         });
         return { ...replay, replayed: true };
       }
-      if (!['created', 'pending'].includes(current.refund_status)
+      // The provider call runs outside the database transaction. Recheck the
+      // dispute/recovery fence only after reacquiring payment+booking locks so
+      // a webhook that won the same lock order cannot be missed by settlement.
+      await assertNoRefundFinalizationDisputeConflict(client, paymentId);
+      assertPreparedRefundIntegrity({
+        refund: currentRefund,
+        payment: current,
+        key,
+        amountMinor: Number(prepared.refund.amount_minor),
+        reason,
+      });
+      assertRefundTruthRecoverableFor(
+        currentRefund,
+        await readPaymentRefundTruth(client, paymentId),
+      );
+      assertRefundFinalizationPaymentIntegrity({ current, prepared });
+      if (Number(currentRefund.owner_share_minor) !== prepared.split.ownerShareMinor
+          || Number(currentRefund.platform_share_minor) !== prepared.split.platformShareMinor
+          || currentRefund.reverse_transfer !== (prepared.reversalPlan.count > 0)
           || !['captured', 'partially_refunded'].includes(current.status)) {
         throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
       }
       assertProviderRefundBinding({
-        refund: prepared.refund,
+        refund: currentRefund,
         payment: current,
         providerRefund,
       });
       const totalRefunded = Number(current.refunded_minor)
-        + Number(prepared.refund.amount_minor);
+        + Number(currentRefund.amount_minor);
       if (totalRefunded > Number(current.captured_minor)) {
         throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
       }
       const finalStatus = totalRefunded === Number(current.captured_minor)
         ? 'refunded'
         : 'partially_refunded';
-      const storedRefund = await client.query(
-        `UPDATE refunds SET provider_refund_id = $2, status = 'succeeded',
-             succeeded_at = now(), failure_code = NULL
-         WHERE id = $1 AND status IN ('created', 'pending')
-         RETURNING id`,
-        [prepared.refund.id, providerRefund.id],
-      );
       const storedPayment = await client.query(
         `UPDATE payments SET status = $2, refunded_minor = $3
           WHERE id = $1 AND status IN ('captured', 'partially_refunded')
           RETURNING id`,
         [paymentId, finalStatus, totalRefunded],
       );
-      if (!storedRefund.rowCount || !storedPayment.rowCount) {
+      if (!storedPayment.rowCount) {
         throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
       }
       const ledger = await insertLedger(client, {
-        key: `${key}:refund-ledger`, bookingId: prepared.payment.booking_id,
-        paymentId, refundId: prepared.refund.id,
-        type: 'payment_refunded', currency: prepared.payment.currency,
+        key: `${key}:refund-ledger`, bookingId: current.booking_id,
+        paymentId, refundId: currentRefund.id,
+        type: 'payment_refunded', currency: currentRefund.currency,
         providerReference: providerRefund.id,
         entries: refundLedger({
-          amountMinor: Number(prepared.refund.amount_minor),
-          ownerShareMinor: prepared.split.ownerShareMinor,
-          platformShareMinor: prepared.split.platformShareMinor,
-          ownerId: prepared.payment.owner_id,
+          amountMinor: Number(currentRefund.amount_minor),
+          ownerShareMinor: Number(currentRefund.owner_share_minor),
+          platformShareMinor: Number(currentRefund.platform_share_minor),
+          ownerId: current.owner_id,
         }),
       });
       if (!ledger.inserted) {
+        throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
+      }
+      const storedRefund = await client.query(
+        `UPDATE refunds
+            SET local_settlement_status = 'completed',
+                local_settled_at = now(),
+                local_settlement_error_code = NULL
+          WHERE id = $1
+            AND status = 'succeeded'
+            AND provider_refund_id = $2
+            AND local_settlement_status IN ('pending', 'needs_review')
+          RETURNING id`,
+        [currentRefund.id, providerRefund.id],
+      );
+      if (!storedRefund.rowCount) {
         throw new PaymentDomainError(409, 'provider_refund_local_state_mismatch');
       }
       if (finalStatus === 'refunded') {
@@ -3178,24 +3695,24 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
           `UPDATE bookings SET status = 'completed', workflow_status = 'refunded',
                refunded_at = COALESCE(refunded_at, now()), workflow_revision = workflow_revision + 1,
                version = version + 1 WHERE id = $1`,
-          [prepared.payment.booking_id],
+          [current.booking_id],
         );
         await enqueueBookingNotifications(client, {
-          bookingId: prepared.payment.booking_id,
-          eventKey: `booking:${prepared.payment.booking_id}:refunded:${key}`,
+          bookingId: current.booking_id,
+          eventKey: `booking:${current.booking_id}:refunded:${key}`,
           workflowStatus: 'refunded',
         });
       }
       await enqueueFinancialNotification(client, {
-        bookingId: prepared.payment.booking_id,
-        eventKey: `refund:${prepared.refund.id}:succeeded`,
+        bookingId: current.booking_id,
+        eventKey: `refund:${currentRefund.id}:succeeded`,
         kind: 'booking_refunded', recipientRole: 'renter',
-        amountMinor: prepared.refund.amount_minor, currency: prepared.payment.currency,
+        amountMinor: currentRefund.amount_minor, currency: currentRefund.currency,
       });
       const value = {
         refund: {
-          id: prepared.refund.id, status: 'succeeded',
-          amountMinor: Number(prepared.refund.amount_minor), currency: prepared.payment.currency,
+          id: currentRefund.id, status: 'succeeded',
+          amountMinor: Number(currentRefund.amount_minor), currency: currentRefund.currency,
         },
         payment: shapePayment({
           ...current,
@@ -3205,16 +3722,18 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
         }),
         replayed: false,
       };
+      value.payment.refundTruthStatus = 'providerBound';
+      value.payment.needsReview = false;
       await completeCommand(client, {
         key,
         paymentId,
         response: value,
         type: 'payment.refund',
         actorId: actor?.id ?? null,
-        bookingId: prepared.payment.booking_id,
+        bookingId: current.booking_id,
         request: {
           paymentId,
-          amountMinor: Number(prepared.refund.amount_minor),
+          amountMinor: Number(currentRefund.amount_minor),
           reason,
         },
         settlementSnapshot: {
@@ -3225,17 +3744,12 @@ export async function refundPayment({ actor = null, paymentId, amountMinor = nul
       await audit(client, {
         actorId: actor?.id ?? null, actorRole: actor?.role ?? 'system',
         action: 'payment.refunded', resourceType: 'payment', resourceId: paymentId,
-        metadata: { amountMinor: prepared.refund.amount_minor, reason },
+        metadata: { amountMinor: currentRefund.amount_minor, reason },
       });
       return value;
     });
   } catch (error) {
-    if ([
-      'provider_refund_binding_mismatch',
-      'provider_refund_local_state_mismatch',
-    ].includes(error?.code)) {
-      await markProviderRefundFailure(prepared, error);
-    }
+    await markProviderRefundSettlementReview(prepared, error);
     throw error;
   }
   return response;
@@ -3298,6 +3812,11 @@ export async function releasePayout({
   }
   const key = paymentIdempotencyKey(rawKey, 'payment.release');
   const prepared = await inTransaction(async (client) => {
+    const principalFence = await lockPaymentFinancialPrincipals(client, paymentId);
+    if (!principalFence) throw new PaymentDomainError(404, 'payment_not_found');
+    if (!principalFence.principalsPresent) {
+      throw new PaymentDomainError(409, 'payment_principal_binding_missing');
+    }
     await client.query(
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
       [`payment-payout:${paymentId}`],
@@ -3312,15 +3831,11 @@ export async function releasePayout({
               connected.recipient_transfers_status, connected.payouts_enabled,
               connected.dashboard_type,
               connected.fees_collector, connected.losses_collector,
-              COALESCE(refunded.owner_share_minor, 0) AS refunded_owner_minor
+              0::bigint AS refunded_owner_minor
        FROM payments AS payment
        JOIN bookings AS booking ON booking.id = payment.booking_id
        JOIN rental_requests AS request ON request.id = booking.id
        LEFT JOIN stripe_connect_accounts AS connected ON connected.user_id = booking.owner_id
-       LEFT JOIN LATERAL (
-         SELECT sum(owner_share_minor)::bigint AS owner_share_minor
-         FROM refunds WHERE payment_id = payment.id AND status = 'succeeded'
-       ) AS refunded ON true
        WHERE payment.id::text = $1 FOR UPDATE OF payment, booking`,
       [paymentId],
     );
@@ -3343,10 +3858,13 @@ export async function releasePayout({
         key,
       }) };
     }
-    assertPaymentExecutionActive(config);
     if (completedCommand?.completed_at) {
       throw new PaymentDomainError(409, 'payout_recovery_command_mismatch');
     }
+    const refundTruth = assertRefundTruthSettled(
+      await readPaymentRefundTruth(client, paymentId),
+    );
+    assertPaymentExecutionActive(config);
     if (payment.status !== 'captured' && payment.status !== 'partially_refunded') {
       throw new PaymentDomainError(409, 'payment_not_settled');
     }
@@ -3359,7 +3877,10 @@ export async function releasePayout({
     const unresolvedRefund = await client.query(
       `SELECT 1 FROM refunds
        WHERE payment_id = $1
-         AND status IN ('created', 'pending', 'failed')
+         AND (
+           status <> 'succeeded'
+           OR local_settlement_status <> 'completed'
+         )
        LIMIT 1`,
       [paymentId],
     );
@@ -3451,7 +3972,7 @@ export async function releasePayout({
     const payoutAmounts = privatePilotReleasableOwnerAmount({
       paymentAmountMinor: Number(payment.amount_minor),
       ownerPayoutMinor: Number(payment.owner_payout_minor),
-      refundedOwnerMinor: Number(payment.refunded_owner_minor),
+      refundedOwnerMinor: refundTruth.settledOwnerMinor,
       transferredMinor: Number(payment.transferred_minor),
       contestedAuthorizedMinor,
     });
@@ -3557,6 +4078,10 @@ export async function releasePayout({
   }
   try {
     return await inTransaction(async (client) => {
+      const principalFence = await lockPaymentFinancialPrincipals(client, paymentId);
+      if (!principalFence?.principalsPresent) {
+        throw new PaymentDomainError(409, 'payment_principal_binding_missing');
+      }
       await client.query(
         'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
         [`payment-payout:${paymentId}`],
@@ -3589,6 +4114,7 @@ export async function releasePayout({
         return { ...replay, replayed: true };
       }
       const currentPayout = locked.rows[0];
+      assertRefundTruthSettled(await readPaymentRefundTruth(client, paymentId));
       if (!currentPayout
           || !['scheduled', 'pending'].includes(currentPayout.status)
           || currentPayout.provider_transfer_id != null
@@ -3878,7 +4404,14 @@ export async function reconcilePaymentLifecycle() {
     `SELECT refund.payment_id, refund.amount_minor, refund.reason,
             refund.idempotency_key
        FROM refunds AS refund
-      WHERE refund.status IN ('created', 'pending')
+      WHERE (
+          refund.status IN ('created', 'pending')
+          OR (refund.status = 'succeeded'
+            AND refund.local_settlement_status IN ('pending', 'needs_review'))
+        )
+        AND refund.provider_refund_model = $1
+        AND refund.legacy_refund_platform_fee_claim IS NULL
+        AND refund.provider_observation_status = 'none'
         AND NOT EXISTS (
           SELECT 1 FROM refund_transfer_reversals AS reversal
            WHERE reversal.refund_id = refund.id
@@ -3886,6 +4419,7 @@ export async function reconcilePaymentLifecycle() {
         )
       ORDER BY refund.updated_at, refund.id
       LIMIT 20`,
+    [trustedRefundProviderModel],
   );
   for (const refund of pendingRefunds.rows) {
     try {
@@ -3901,14 +4435,18 @@ export async function reconcilePaymentLifecycle() {
     }
   }
   const cancelled = await pool.query(
-    `SELECT payment.id, payment.captured_minor, payment.refunded_minor,
+    `SELECT payment.id, payment.captured_minor,
+            refund_truth.settled_refund_minor AS refunded_minor,
             request.payload AS booking_payload
      FROM payments AS payment
      JOIN bookings AS booking ON booking.id = payment.booking_id
      JOIN rental_requests AS request ON request.id = booking.id
+     JOIN sit_payment_refund_truth AS refund_truth
+       ON refund_truth.payment_id = payment.id
      WHERE booking.workflow_status = 'cancelled'
        AND payment.status IN ('captured', 'partially_refunded')
-       AND payment.captured_minor > payment.refunded_minor
+       AND payment.captured_minor > refund_truth.settled_refund_minor
+       AND refund_truth.refund_truth_status IN ('none', 'providerBound')
      ORDER BY booking.updated_at LIMIT 20`,
   );
   for (const row of cancelled.rows) {
@@ -3934,16 +4472,20 @@ export async function reconcilePaymentLifecycle() {
     }
   }
   const resolvedReturnCases = await pool.query(
-    `SELECT payment.id, payment.captured_minor, payment.refunded_minor,
+    `SELECT payment.id, payment.captured_minor,
+            refund_truth.settled_refund_minor AS refunded_minor,
             request.payload AS booking_payload
      FROM payments AS payment
      JOIN bookings AS booking ON booking.id = payment.booking_id
      JOIN rental_requests AS request ON request.id = booking.id
+     JOIN sit_payment_refund_truth AS refund_truth
+       ON refund_truth.payment_id = payment.id
      WHERE booking.workflow_status = 'completed'
        AND booking.return_state = 'closed'
        AND payment.status IN ('captured', 'partially_refunded')
-       AND payment.captured_minor > payment.refunded_minor
+       AND payment.captured_minor > refund_truth.settled_refund_minor
        AND request.payload #> '{returnCaseResolution}' IS NOT NULL
+       AND refund_truth.refund_truth_status IN ('none', 'providerBound')
      ORDER BY booking.updated_at LIMIT 20`,
   );
   for (const row of resolvedReturnCases.rows) {
@@ -3989,14 +4531,14 @@ export async function reconcilePaymentLifecycle() {
         ORDER BY payout.created_at DESC, payout.id DESC
         LIMIT 1
      ) AS active_payout ON true
-     LEFT JOIN LATERAL (
-       SELECT COALESCE(sum(owner_share_minor), 0)::bigint AS owner_share_minor
-       FROM refunds WHERE payment_id = payment.id AND status = 'succeeded'
-     ) AS refunded ON true
+     JOIN sit_payment_refund_truth AS refund_truth
+       ON refund_truth.payment_id = payment.id
      WHERE booking.workflow_status IN ('completed', 'cancelled')
        AND payment.status IN ('captured', 'partially_refunded')
-       AND payment.transferred_minor < payment.owner_payout_minor - refunded.owner_share_minor
+       AND payment.transferred_minor
+           < payment.owner_payout_minor - refund_truth.settled_owner_refund_minor
        AND active_payout.status IS DISTINCT FROM 'failed'
+       AND refund_truth.refund_truth_status IN ('none', 'providerBound')
        AND (
          (booking.workflow_status = 'completed' AND (
            booking.payout_instruction_due_at <= now()
@@ -4077,16 +4619,15 @@ export async function paymentHealth() {
             ORDER BY payout.created_at DESC, payout.id DESC
             LIMIT 1
          ) AS active_payout ON true
-         LEFT JOIN LATERAL (
-           SELECT COALESCE(sum(owner_share_minor), 0)::bigint AS owner_share_minor
-             FROM refunds
-            WHERE payment_id = payment.id AND status = 'succeeded'
-         ) AS refunded ON true
+         JOIN sit_payment_refund_truth AS refund_truth
+           ON refund_truth.payment_id = payment.id
         WHERE booking.workflow_status IN ('completed', 'cancelled')
           AND payment.status IN ('captured', 'partially_refunded')
           AND payment.transferred_minor
-              < payment.owner_payout_minor - refunded.owner_share_minor
+              < payment.owner_payout_minor
+                - refund_truth.settled_owner_refund_minor
           AND active_payout.status IS DISTINCT FROM 'failed'
+          AND refund_truth.refund_truth_status IN ('none', 'providerBound')
           AND (
             (booking.workflow_status = 'completed' AND (
               booking.payout_instruction_due_at <= now()
@@ -4126,13 +4667,8 @@ export async function paymentHealth() {
         (SELECT count(*)::int FROM payouts
           WHERE status IN ('scheduled', 'pending'))
         +
-        (SELECT count(*)::int FROM refunds AS refund
-          WHERE refund.status IN ('created', 'pending')
-            AND NOT EXISTS (
-              SELECT 1 FROM refund_transfer_reversals AS reversal
-               WHERE reversal.refund_id = refund.id
-                 AND reversal.status <> 'succeeded'
-            )))
+        (SELECT count(*)::int FROM sit_payment_refund_truth
+          WHERE refund_truth_status = 'pending'))
          AS recovery_pending,
        ((SELECT count(*)::int FROM disputes
           WHERE transfer_recovery_needs_review = true)
@@ -4143,7 +4679,8 @@ export async function paymentHealth() {
         (SELECT count(*)::int FROM payouts
           WHERE status = 'failed')
         +
-        (SELECT count(*)::int FROM refunds WHERE status = 'failed'))
+        (SELECT count(*)::int FROM sit_payment_refund_truth
+          WHERE refund_truth_status = 'needsReview'))
         + (SELECT total FROM contract_blocked)
          AS recovery_needs_review,
        (SELECT total FROM contract_blocked) AS contract_blocked,
@@ -4151,7 +4688,10 @@ export async function paymentHealth() {
           SELECT transaction_id FROM ledger_entries GROUP BY transaction_id
           HAVING sum(debit_minor) <> sum(credit_minor)
         ) AS mismatch) AS unbalanced`,
-    [v52ContractDocument.version, config.payments.payoutHoldHours],
+    [
+      v52ContractDocument.version,
+      config.payments.payoutHoldHours,
+    ],
   );
   return {
     transport: config.payments.transport,

@@ -182,7 +182,7 @@ class _InvoicesScreenState extends State<InvoicesScreen>
                               style: theme.textTheme.labelSmall?.copyWith(
                                   color: Colors.white.withValues(alpha: 0.80))),
                           const SizedBox(height: 2),
-                          Text('${_formatEuro(yearTotal)} Gesamtvolumen',
+                          Text('${_formatEuro(yearTotal)} bestätigtes Volumen',
                               style: theme.textTheme.titleMedium),
                         ]),
                   ),
@@ -402,7 +402,9 @@ class _InvoiceCard extends StatelessWidget {
           Expanded(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${invoice.booking.itemTitle} – $_typeLabel',
+              Text(
+                  '${invoice.booking.itemTitle} – '
+                  '${invoice.needsReview ? invoice.title : _typeLabel}',
                   style: theme.textTheme.titleMedium),
               const SizedBox(height: 4),
               Text(
@@ -414,28 +416,39 @@ class _InvoiceCard extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(_formatEuro(invoice.amount),
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w800)),
+            Text(
+                invoice.needsReview
+                    ? 'Betrag wird geprüft'
+                    : _formatEuro(invoice.amount),
+                style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: invoice.needsReview ? Colors.orangeAccent : null)),
             const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => InvoiceDetailScreen(
-                      invoice: invoice, autoStartDownload: true))),
-              icon: Icon(Icons.picture_as_pdf_rounded,
-                  size: 18, color: cs.primary),
-              label: Text('PDF herunterladen',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: Colors.white)),
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
-                backgroundColor: Colors.black.withValues(alpha: 0.18),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+            if (invoice.canDownloadArtifact)
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => InvoiceDetailScreen(
+                        invoice: invoice, autoStartDownload: true))),
+                icon: Icon(Icons.picture_as_pdf_rounded,
+                    size: 18, color: cs.primary),
+                label: Text('PDF herunterladen',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: Colors.white)),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
+                  backgroundColor: Colors.black.withValues(alpha: 0.18),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+              )
+            else
+              Text(
+                'Prüfung erforderlich',
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: Colors.orangeAccent),
               ),
-            ),
           ]),
         ]),
       ),

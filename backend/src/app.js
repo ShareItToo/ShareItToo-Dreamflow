@@ -32,6 +32,7 @@ import {
 } from './auth_session_actions.js';
 import { config } from './config.js';
 import { inTransaction, pool } from './db.js';
+import { lockFinancialPrincipals } from './account_financial_fence.js';
 import {
   amountToMinor,
   canTransitionBooking,
@@ -130,7 +131,10 @@ import {
   simulatePaymentEvent,
   verifyAndApplyWebhook,
 } from './payment_workflow.js';
-import { PaymentDomainError } from './payment_domain.js';
+import {
+  PaymentDomainError,
+  trustedRefundProviderModel,
+} from './payment_domain.js';
 import { accountOpenRefundObligationCount } from './payment_refund_obligations.js';
 import { stripeSandboxExecutionActive } from './payment_execution_guard.js';
 import { ModerationDomainError } from './moderation_domain.js';
@@ -1303,7 +1307,7 @@ async function resetPasswordWithToken(token, password) {
   });
 }
 
-async function accountDeletionPreflight(client, userId) {
+export async function accountDeletionPreflight(client, userId) {
   const result = await client.query(
     `SELECT
        (SELECT count(*)::int FROM bookings
@@ -1320,11 +1324,13 @@ async function accountDeletionPreflight(client, userId) {
         JOIN bookings AS booking ON booking.id = payment.booking_id
         WHERE (booking.owner_id = $1 OR booking.renter_id = $1)
           AND reversal.status <> 'succeeded') AS open_refund_reversals,
-       (SELECT count(*)::int FROM refunds AS refund
-        JOIN payments AS payment ON payment.id = refund.payment_id
+       (SELECT count(*)::int FROM payments AS payment
         JOIN bookings AS booking ON booking.id = payment.booking_id
+        JOIN sit_payment_refund_truth AS refund_truth
+          ON refund_truth.payment_id = payment.id
         WHERE (booking.owner_id = $1 OR booking.renter_id = $1)
-          AND refund.status IN ('created', 'pending', 'failed')) AS open_refunds,
+          AND refund_truth.refund_truth_status IN ('pending', 'needsReview'))
+          AS open_refunds,
        (SELECT count(*)::int FROM disputes AS dispute
         JOIN bookings AS booking ON booking.id = dispute.booking_id
         WHERE (booking.owner_id = $1 OR booking.renter_id = $1)
@@ -1402,6 +1408,19 @@ async function reconcileExpiredAccountSuspension(email) {
 }
 
 async function eraseAccount(client, user, { actorRole = 'user', source = 'app' } = {}) {
+  await lockFinancialPrincipals(client, [user.id]);
+  const lockedAccount = await client.query(
+    `SELECT id
+       FROM users
+      WHERE id = $1
+        AND account_status = 'active'
+        AND deactivated_at IS NULL
+      FOR UPDATE`,
+    [user.id],
+  );
+  if (lockedAccount.rowCount !== 1) {
+    throw new HttpError(409, 'account_deletion_state_changed');
+  }
   const preflight = await accountDeletionPreflight(client, user.id);
   if (!preflight.canDelete) throw new HttpError(409, 'account_deletion_blocked', preflight);
   const anonymousEmail = `deleted+${crypto.randomUUID()}@anonymized.invalid`;
@@ -1597,6 +1616,39 @@ async function listThreads(client, userId) {
     });
   }
   return threads;
+}
+
+export function publicNotification(row = {}) {
+  const historicalUnverified = row.source_truth_status === 'historical_unverified';
+  const payload = row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
+    ? row.payload
+    : {};
+  return {
+    id: row.id,
+    category: row.category,
+    kind: row.kind,
+    priority: row.priority,
+    title: historicalUnverified ? 'Erstattungsstatus nicht bestätigt' : row.title,
+    body: historicalUnverified
+      ? 'Der frühere Hinweis ist nicht eindeutig an einen bestätigten Anbieterstatus gebunden. Bitte prüfe den Erstattungsstatus.'
+      : row.body,
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    bookingId: row.booking_id,
+    threadId: row.thread_id,
+    requestId: payload.requestId ?? row.booking_id,
+    ctaLabel: historicalUnverified ? 'Status prüfen' : (payload.ctaLabel ?? null),
+    actionUrl: row.action_url,
+    payload: historicalUnverified
+      ? { ...payload, sourceTruthStatus: 'historical_unverified', needsReview: true }
+      : payload,
+    sourceTruthStatus: row.source_truth_status ?? 'not_applicable',
+    needsReview: historicalUnverified,
+    read: Boolean(row.read_at),
+    archived: Boolean(row.archived_at),
+    critical: row.priority === 3 && ['important', 'payments'].includes(row.category),
+    ts: new Date(row.created_at).toISOString(),
+  };
 }
 
 export function createApp({
@@ -5190,34 +5242,35 @@ export function createApp({
       : null;
     const includeArchived = req.query.includeArchived === 'true';
     const result = await pool.query(
-      `SELECT * FROM notifications
-       WHERE user_id = $1
+      `SELECT notification.*,
+              CASE
+                WHEN notification.kind <> 'booking_refunded' THEN 'not_applicable'
+                WHEN EXISTS (
+                  SELECT 1
+                    FROM refunds AS refund
+                    JOIN payments AS payment ON payment.id = refund.payment_id
+                   WHERE payment.booking_id = notification.booking_id
+                     AND notification.event_key =
+                       'refund:' || refund.id::text || ':succeeded'
+                     AND refund.status = 'succeeded'
+                     AND refund.provider_refund_id IS NOT NULL
+                     AND btrim(refund.provider_refund_id) <> ''
+                     AND refund.succeeded_at IS NOT NULL
+                     AND refund.failure_code IS NULL
+                     AND refund.provider_refund_model = $5
+                     AND refund.legacy_refund_platform_fee_claim IS NULL
+                ) THEN 'provider_bound'
+                ELSE 'historical_unverified'
+              END AS source_truth_status
+         FROM notifications AS notification
+       WHERE notification.user_id = $1
          AND ($2::boolean OR archived_at IS NULL)
          AND ($3::timestamptz IS NULL OR created_at < $3)
        ORDER BY created_at DESC, id DESC
        LIMIT $4`,
-      [req.auth.userId, includeArchived, before, limit],
+      [req.auth.userId, includeArchived, before, limit, trustedRefundProviderModel],
     );
-    const notifications = result.rows.map((row) => ({
-      id: row.id,
-      category: row.category,
-      kind: row.kind,
-      priority: row.priority,
-      title: row.title,
-      body: row.body,
-      entityType: row.entity_type,
-      entityId: row.entity_id,
-      bookingId: row.booking_id,
-      threadId: row.thread_id,
-      requestId: row.payload?.requestId ?? row.booking_id,
-      ctaLabel: row.payload?.ctaLabel ?? null,
-      actionUrl: row.action_url,
-      payload: row.payload ?? {},
-      read: Boolean(row.read_at),
-      archived: Boolean(row.archived_at),
-      critical: row.priority === 3 && ['important', 'payments'].includes(row.category),
-      ts: new Date(row.created_at).toISOString(),
-    }));
+    const notifications = result.rows.map(publicNotification);
     res.json({
       notifications,
       nextBefore: result.rowCount === limit ? notifications.at(-1)?.ts ?? null : null,

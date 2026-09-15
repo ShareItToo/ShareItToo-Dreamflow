@@ -23,7 +23,10 @@ const {
   reviewFailedPayout,
   stripeProvider,
 } = await import('../src/payment_workflow.js');
-const { requestHash } = await import('../src/payment_domain.js');
+const {
+  providerOperationIdempotencyKey,
+  requestHash,
+} = await import('../src/payment_domain.js');
 const { pool } = await import('../src/db.js');
 
 after(() => pool.end());
@@ -55,6 +58,58 @@ function transactionClient(queryHandler) {
       },
       release() {},
     },
+  };
+}
+
+function financialFenceResult(statement, parameters, {
+  bookingId,
+  paymentId = null,
+  ownerId,
+  renterId,
+}) {
+  if (statement.startsWith('SELECT owner_id, renter_id FROM bookings')) {
+    assert.deepEqual(parameters, [bookingId]);
+    return { rowCount: 1, rows: [{ owner_id: ownerId, renter_id: renterId }] };
+  }
+  if (statement.startsWith('SELECT booking.owner_id, booking.renter_id FROM payments')) {
+    assert.deepEqual(parameters, [paymentId]);
+    return { rowCount: 1, rows: [{ owner_id: ownerId, renter_id: renterId }] };
+  }
+  if (statement.startsWith('SELECT id, account_status, deactivated_at FROM users')
+      || (statement.startsWith('SELECT id FROM users')
+        && statement.includes('id = ANY($1::text[])'))) {
+    const ids = [ownerId, renterId].sort();
+    assert.deepEqual(parameters, [ids]);
+    return {
+      rowCount: ids.length,
+      rows: ids.map((id) => ({
+        id,
+        account_status: 'active',
+        deactivated_at: null,
+      })),
+    };
+  }
+  return null;
+}
+
+function settledRefundTruthRow(paymentId, overrides = {}) {
+  return {
+    payment_id: paymentId,
+    refund_truth_status: 'none',
+    untrusted_refund_count: '0',
+    invalid_refund_count: '0',
+    active_refund_count: '0',
+    terminal_refund_count: '0',
+    provider_observation_review_count: '0',
+    provider_bound_local_pending_count: '0',
+    provider_bound_local_review_count: '0',
+    settled_refund_count: '0',
+    settled_refund_minor: '0',
+    settled_owner_refund_minor: '0',
+    settled_refund_within_capture: true,
+    refund_cache_matches_settlement: true,
+    refund_status_matches_settlement: true,
+    ...overrides,
   };
 }
 
@@ -450,6 +505,12 @@ test('concurrent Checkout completion returns the stored response without payment
     response_payload_hash_valid: true,
   };
   const prepare = transactionClient(async (statement, parameters) => {
+    const fence = financialFenceResult(statement, parameters, {
+      bookingId,
+      ownerId,
+      renterId: actor.id,
+    });
+    if (fence) return fence;
     if (statement.startsWith('INSERT INTO payment_commands')) {
       return { rowCount: 1, rows: [] };
     }
@@ -469,6 +530,12 @@ test('concurrent Checkout completion returns the stored response without payment
     throw new Error(`unexpected_wp150_checkout_prepare_sql:${statement}`);
   });
   const completion = transactionClient(async (statement, parameters) => {
+    const fence = financialFenceResult(statement, parameters, {
+      bookingId,
+      ownerId,
+      renterId: actor.id,
+    });
+    if (fence) return fence;
     if (statement.includes('FROM payment_commands AS command')) {
       assert.deepEqual(parameters, [key]);
       return { rowCount: 1, rows: [completed] };
@@ -487,6 +554,7 @@ test('concurrent Checkout completion returns the stored response without payment
   useTransactionClients(t, [prepare, completion]);
   const checkoutCall = t.mock.method(stripeProvider, 'createPaymentCheckout', async () => ({
     id: 'cs_wp150_new_race_response',
+    status: 'open',
     payment_intent: 'pi_wp150_new_race_response',
     url: 'https://new.example.invalid/checkout',
     expires_at: Math.floor(checkoutExpiresAt.getTime() / 1000),
@@ -627,7 +695,13 @@ test('early completed Checkout replay with false response semantics fails closed
     settlement_refunded_minor: null,
     settlement_transferred_minor: null,
   };
-  const transaction = transactionClient(async (statement) => {
+  const transaction = transactionClient(async (statement, parameters) => {
+    const fence = financialFenceResult(statement, parameters, {
+      bookingId,
+      ownerId: 'wp150-checkout-integrity-owner',
+      renterId: actor.id,
+    });
+    if (fence) return fence;
     if (statement.startsWith('INSERT INTO payment_commands')) {
       return { rowCount: 0, rows: [] };
     }
@@ -712,7 +786,14 @@ test('concurrent Refund finalization replays the owner-bound completed result wi
     owner_share_minor: '1500',
     platform_share_minor: '150',
     reverse_transfer: false,
-    refund_platform_fee: true,
+    legacy_refund_platform_fee_claim: null,
+    provider_refund_model: 'separate_charge_manual_transfer_reversal_v1',
+    failure_code: null,
+    succeeded_at: null,
+    local_settlement_status: 'pending',
+    local_settled_at: null,
+    local_settlement_error_code: null,
+    provider_observation_status: 'none',
     livemode: false,
   };
   const succeededRefund = {
@@ -720,6 +801,11 @@ test('concurrent Refund finalization replays the owner-bound completed result wi
     status: 'succeeded',
     provider_refund_id: providerRefundId,
     succeeded_at: new Date('2026-09-14T10:10:00.000Z'),
+  };
+  const locallySettledRefund = {
+    ...succeededRefund,
+    local_settlement_status: 'completed',
+    local_settled_at: new Date('2026-09-14T10:10:01.000Z'),
   };
   const completedPayment = {
     ...initialPayment,
@@ -794,13 +880,31 @@ test('concurrent Refund finalization replays the owner-bound completed result wi
   ];
 
   const preparation = transactionClient(async (statement, parameters) => {
-    if (statement.includes('FROM payments AS payment')
-        && statement.includes('LEFT JOIN LATERAL')) {
+    const fence = financialFenceResult(statement, parameters, {
+      bookingId,
+      paymentId,
+      ownerId,
+      renterId: initialPayment.renter_id,
+    });
+    if (fence) return fence;
+    if (statement.startsWith('SELECT payment.*, booking.owner_id,')) {
       assert.deepEqual(parameters, [paymentId]);
       return { rowCount: 1, rows: [initialPayment] };
     }
+    if (statement.startsWith('SELECT * FROM sit_payment_refund_truth')) {
+      assert.deepEqual(parameters, [paymentId]);
+      return { rowCount: 1, rows: [settledRefundTruthRow(paymentId)] };
+    }
     if (statement.includes('FROM payment_commands AS command')) {
       assert.deepEqual(parameters, [key]);
+      return { rowCount: 0, rows: [] };
+    }
+    if (statement.startsWith('SELECT 1 FROM refunds')
+        && statement.includes('legacy_refund_platform_fee_claim')) {
+      assert.deepEqual(parameters, [
+        paymentId,
+        'separate_charge_manual_transfer_reversal_v1',
+      ]);
       return { rowCount: 0, rows: [] };
     }
     if (statement.startsWith('SELECT 1 FROM payouts')
@@ -823,6 +927,9 @@ test('concurrent Refund finalization replays the owner-bound completed result wi
       return { rowCount: 0, rows: [] };
     }
     if (statement.startsWith('INSERT INTO refunds')) {
+      assert.match(statement, /provider_refund_model/u);
+      assert.doesNotMatch(statement, /refund_platform_fee/u);
+      assert.equal(parameters[9], 'separate_charge_manual_transfer_reversal_v1');
       return { rowCount: 1, rows: [createdRefund] };
     }
     if (statement.includes('FROM refund_transfer_reversals WHERE refund_id = $1')) {
@@ -836,7 +943,39 @@ test('concurrent Refund finalization replays the owner-bound completed result wi
     }
     throw new Error(`unexpected_wp150_refund_prepare_sql:${statement}`);
   });
+  const providerPersistence = transactionClient(async (statement, parameters) => {
+    const fence = financialFenceResult(statement, parameters, {
+      bookingId,
+      paymentId,
+      ownerId,
+      renterId: initialPayment.renter_id,
+    });
+    if (fence) return fence;
+    if (statement.startsWith('SELECT payment.*, booking.owner_id,')
+        && statement.includes('to_jsonb(refund) AS current_refund')) {
+      assert.deepEqual(parameters, [paymentId, refundId]);
+      return {
+        rowCount: 1,
+        rows: [{ ...initialPayment, current_refund: createdRefund }],
+      };
+    }
+    if (statement.startsWith('UPDATE refunds SET provider_refund_id')) {
+      assert.deepEqual(parameters, [refundId, providerRefundId]);
+      return { rowCount: 1, rows: [succeededRefund] };
+    }
+    if (statement.startsWith('INSERT INTO audit_log')) {
+      return { rowCount: 1, rows: [] };
+    }
+    throw new Error(`unexpected_wp151_refund_provider_persist_sql:${statement}`);
+  });
   const finalization = transactionClient(async (statement, parameters) => {
+    const fence = financialFenceResult(statement, parameters, {
+      bookingId,
+      paymentId,
+      ownerId,
+      renterId: initialPayment.renter_id,
+    });
+    if (fence) return fence;
     if (statement.startsWith('SELECT payment.*, booking.owner_id,')) {
       assert.match(statement, /JOIN bookings AS booking ON booking\.id = payment\.booking_id/u);
       assert.deepEqual(parameters, [paymentId, refundId, key]);
@@ -844,8 +983,7 @@ test('concurrent Refund finalization replays the owner-bound completed result wi
         rowCount: 1,
         rows: [{
           ...completedPayment,
-          refund_status: 'succeeded',
-          stored_provider_refund_id: providerRefundId,
+          current_refund: locallySettledRefund,
           command_completed_at: completedCommand.completed_at,
           command_response_payload: storedResponse,
         }],
@@ -857,7 +995,7 @@ test('concurrent Refund finalization replays the owner-bound completed result wi
     }
     if (statement.startsWith('SELECT * FROM refunds')) {
       assert.deepEqual(parameters, [key, paymentId]);
-      return { rowCount: 1, rows: [succeededRefund] };
+      return { rowCount: 1, rows: [locallySettledRefund] };
     }
     if (statement.startsWith('SELECT * FROM ledger_transactions')) {
       assert.deepEqual(parameters, [refundId]);
@@ -869,7 +1007,7 @@ test('concurrent Refund finalization replays the owner-bound completed result wi
     }
     throw new Error(`unexpected_wp150_refund_final_sql:${statement}`);
   });
-  useTransactionClients(t, [preparation, finalization]);
+  useTransactionClients(t, [preparation, providerPersistence, finalization]);
   const directDatabase = t.mock.method(
     pool,
     'query',
@@ -891,6 +1029,7 @@ test('concurrent Refund finalization replays the owner-bound completed result wi
       sit_booking_id: bookingId,
       sit_payment_id: paymentId,
       sit_refund_id: refundId,
+      sit_refund_model: 'separate_charge_manual_transfer_reversal_v1',
       currency: 'EUR',
     },
   }));
@@ -905,6 +1044,18 @@ test('concurrent Refund finalization replays the owner-bound completed result wi
 
   assert.deepEqual(result, { ...storedResponse, replayed: true });
   assert.equal(providerCreate.mock.callCount(), 1);
+  assert.deepEqual(providerCreate.mock.calls[0].arguments, [{
+    chargeId: initialPayment.provider_charge_id,
+    amountMinor,
+    idempotencyKey: providerOperationIdempotencyKey('refund', refundId),
+    metadata: {
+      sit_booking_id: bookingId,
+      sit_payment_id: paymentId,
+      sit_refund_id: refundId,
+      sit_refund_model: 'separate_charge_manual_transfer_reversal_v1',
+      currency: 'EUR',
+    },
+  }]);
   assert.equal(providerLookup.mock.callCount(), 0);
   assert.equal(directDatabase.mock.callCount(), 0);
   assertNoStatement(
@@ -912,6 +1063,146 @@ test('concurrent Refund finalization replays the owner-bound completed result wi
     /^(?:INSERT|UPDATE|DELETE|MERGE|TRUNCATE)\b/iu,
   );
   assert.equal(finalization.statements.at(-1)?.statement, 'COMMIT');
+});
+
+test('fresh refund recovery rejects every persisted preparation drift before DML or provider work', async (t) => {
+  const actor = { id: 'wp151-refund-guard-admin', role: 'admin' };
+  const paymentId = '15151515-1515-4515-8515-151515151515';
+  const bookingId = 'wp151-refund-guard-booking';
+  const key = 'wp151-refund-guard-key';
+  const reason = 'wp151_refund_guard';
+  const amountMinor = 550;
+  const payment = {
+    id: paymentId,
+    booking_id: bookingId,
+    owner_id: 'wp151-refund-guard-owner',
+    renter_id: 'wp151-refund-guard-renter',
+    workflow_status: 'completed',
+    status: 'partially_refunded',
+    amount_minor: '1100',
+    captured_minor: '1100',
+    refunded_minor: '0',
+    refunded_owner_minor: '0',
+    transferred_minor: '0',
+    owner_payout_minor: '1000',
+    platform_fee_minor: '100',
+    currency: 'EUR',
+    provider_charge_id: 'ch_wp151_refund_guard',
+    livemode: false,
+  };
+  const command = {
+    idempotency_key: key,
+    actor_id: actor.id,
+    command_type: 'payment.refund',
+    request_hash: requestHash({ paymentId, amountMinor, reason }),
+    booking_id: bookingId,
+    payment_id: paymentId,
+    completed_at: null,
+  };
+  const refund = {
+    id: '25252525-2525-4525-8525-252525252525',
+    payment_id: paymentId,
+    idempotency_key: key,
+    status: 'pending',
+    amount_minor: String(amountMinor),
+    currency: 'EUR',
+    reason,
+    provider_refund_id: null,
+    provider_charge_id: payment.provider_charge_id,
+    owner_share_minor: '500',
+    platform_share_minor: '50',
+    reverse_transfer: false,
+    legacy_refund_platform_fee_claim: null,
+    provider_refund_model: 'separate_charge_manual_transfer_reversal_v1',
+    failure_code: null,
+    succeeded_at: null,
+    local_settlement_status: 'pending',
+    local_settled_at: null,
+    local_settlement_error_code: null,
+    provider_observation_status: 'none',
+    livemode: false,
+  };
+  const cases = [
+    ['payment', { payment_id: '35353535-3535-4535-8535-353535353535' }],
+    ['key', { idempotency_key: 'different-key' }],
+    ['status', { status: 'succeeded' }],
+    ['amount', { amount_minor: '551' }],
+    ['currency', { currency: 'USD' }],
+    ['reason', { reason: 'different_reason' }],
+    ['charge', { provider_charge_id: 'ch_different' }],
+    ['owner split', { owner_share_minor: '501' }],
+    ['platform split', { platform_share_minor: '49' }],
+    ['provider result', { provider_refund_id: 're_unbound' }],
+    ['mode', { livemode: true }],
+    ['model', {
+      legacy_refund_platform_fee_claim: true,
+      provider_refund_model: null,
+    }],
+  ];
+  const fixtures = cases.map(([label, overrides]) => transactionClient(
+    async (statement, parameters) => {
+      const fence = financialFenceResult(statement, parameters, {
+        bookingId,
+        paymentId,
+        ownerId: payment.owner_id,
+        renterId: payment.renter_id,
+      });
+      if (fence) return fence;
+      if (statement.startsWith('SELECT payment.*, booking.owner_id,')) {
+        return { rowCount: 1, rows: [payment] };
+      }
+      if (statement.includes('FROM payment_commands AS command')) {
+        return { rowCount: 1, rows: [command] };
+      }
+      if (statement.startsWith('SELECT 1 FROM refunds')
+          && statement.includes('legacy_refund_platform_fee_claim')) {
+        return label === 'model'
+          ? { rowCount: 1, rows: [{}] }
+          : { rowCount: 0, rows: [] };
+      }
+      if (statement.startsWith('SELECT 1 FROM payouts')
+          || statement.startsWith('SELECT 1 FROM disputes')
+          || statement.startsWith('SELECT 1 FROM dispute_transfer_recoveries')
+          || (statement.startsWith('SELECT 1 FROM refunds')
+            && statement.includes("status = 'failed'"))) {
+        return { rowCount: 0, rows: [] };
+      }
+      if (statement.startsWith('SELECT idempotency_key FROM refunds')) {
+        return { rowCount: 0, rows: [] };
+      }
+      if (statement === 'SELECT * FROM refunds WHERE idempotency_key = $1') {
+        assert.deepEqual(parameters, [key]);
+        return { rowCount: 1, rows: [{ ...refund, ...overrides }] };
+      }
+      throw new Error(`unexpected_wp151_refund_guard_sql:${statement}`);
+    },
+  ));
+  useTransactionClients(t, fixtures);
+  const providerLookup = t.mock.method(
+    stripeProvider,
+    'findRefund',
+    async () => { throw new Error('unexpected_wp151_refund_lookup'); },
+  );
+  const providerCreate = t.mock.method(
+    stripeProvider,
+    'createRefund',
+    async () => { throw new Error('unexpected_wp151_refund_create'); },
+  );
+
+  for (const [label] of cases) {
+    await assert.rejects(
+      refundPayment({ actor, paymentId, amountMinor, reason, key }),
+      (error) => error?.status === 409
+        && error?.code === (label === 'model'
+          ? 'refund_provider_semantics_untrusted'
+          : 'provider_refund_local_state_mismatch'),
+    );
+  }
+
+  assertNoStatement(fixtures, /^(?:INSERT|UPDATE|DELETE|MERGE|TRUNCATE)\b/iu);
+  assert.ok(fixtures.every(({ statements }) => statements.at(-1)?.statement === 'ROLLBACK'));
+  assert.equal(providerLookup.mock.callCount(), 0);
+  assert.equal(providerCreate.mock.callCount(), 0);
 });
 
 test('different checkout key aliases the trusted canonical command under one lock order', async (t) => {
@@ -1004,6 +1295,12 @@ test('different checkout key aliases the trusted canonical command under one loc
   };
   let completionParameters;
   const aliasing = transactionClient(async (statement, parameters) => {
+    const fence = financialFenceResult(statement, parameters, {
+      bookingId,
+      ownerId: booking.owner_id,
+      renterId: actor.id,
+    });
+    if (fence) return fence;
     if (statement.startsWith('INSERT INTO payment_commands')) {
       return { rowCount: 1, rows: [] };
     }

@@ -44,6 +44,11 @@ function booking(workflowStatus = 'confirmed', returnedAt = null) {
     rental_subtotal_minor: 10000,
     platform_fee_minor: 1000,
     workflow_revision: 3,
+    payment_count: 1,
+    total_captured_minor: 11000,
+    locally_settled_refund_minor: 0,
+    refund_truth_review_count: 0,
+    refund_truth_pending_count: 0,
     payload: { id: 'booking-1' },
     platform_contract_id: 'contract-1',
     platform_contract_user_id: 'renter-1',
@@ -60,9 +65,30 @@ function clientForBooking(row, databaseNow = now) {
     calls,
     async query(sql, values) {
       calls.push({ sql, values });
+      if (sql.includes('SELECT owner_id, renter_id')
+          && sql.includes('FROM bookings')) {
+        return {
+          rowCount: 1,
+          rows: [{ owner_id: row.owner_id, renter_id: row.renter_id }],
+        };
+      }
+      if (sql.includes('pg_advisory_xact_lock')) {
+        return { rowCount: 1, rows: [] };
+      }
+      if (sql.includes('id = ANY($1::text[])')) {
+        return {
+          rowCount: 2,
+          rows: [{ id: row.owner_id }, { id: row.renter_id }],
+        };
+      }
       if (sql.includes('FROM v51_withdrawals WHERE idempotency_key')) return { rowCount: 0, rows: [] };
-      if (sql.includes('SELECT email, profile FROM users')) {
-        return { rowCount: 1, rows: [{ email: 'renter@example.test', profile: { displayName: 'Renter <One>' } }] };
+      if (sql.includes('SELECT email, profile, account_status, deactivated_at')) {
+        return { rowCount: 1, rows: [{
+          email: 'renter@example.test',
+          profile: { displayName: 'Renter <One>' },
+          account_status: 'active',
+          deactivated_at: null,
+        }] };
       }
       if (sql.includes("document_key = 'withdrawal'")) return { rowCount: 1, rows: [document()] };
       if (sql.includes('INSERT INTO v51_withdrawals')) {
@@ -71,6 +97,18 @@ function clientForBooking(row, databaseNow = now) {
       if (sql.includes("scope = 'booking_contract'")) return { rowCount: 0, rows: [] };
       if (sql.includes('FROM bookings AS booking') && sql.includes('platform_contracts')) {
         return { rowCount: 1, rows: [row] };
+      }
+      if (sql.includes('AS locally_settled_refund_minor')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            payment_count: row.payment_count,
+            total_captured_minor: row.total_captured_minor,
+            locally_settled_refund_minor: row.locally_settled_refund_minor,
+            refund_truth_review_count: row.refund_truth_review_count,
+            refund_truth_pending_count: row.refund_truth_pending_count,
+          }],
+        };
       }
       if (sql.includes('clock_timestamp() AS database_now')) {
         return { rowCount: 1, rows: [{ database_now: databaseNow }] };
@@ -160,9 +198,13 @@ test('before-handover withdrawal atomically cancels and creates two full obligat
   const receiptAt = client.calls.findIndex(({ sql }) => sql.includes('INSERT INTO v51_withdrawal_receipts'));
   const eventAt = client.calls.findIndex(({ sql }) => sql.includes("'platform.withdrawal_effect_applied'"));
   const bookingLockAt = client.calls.findIndex(({ sql }) => sql.includes('FOR UPDATE OF booking, request'));
+  const refundTruthAt = client.calls.findIndex(({ sql }) => (
+    sql.includes('AS locally_settled_refund_minor')
+  ));
   const clockAt = client.calls.findIndex(({ sql }) => sql.includes('clock_timestamp() AS database_now'));
   assert.ok(eventAt >= 0 && eventAt < receiptAt);
-  assert.ok(bookingLockAt >= 0 && bookingLockAt < clockAt);
+  assert.ok(bookingLockAt >= 0 && bookingLockAt < refundTruthAt);
+  assert.ok(refundTruthAt < clockAt);
 });
 
 test('after-handover withdrawal requires return and never invents rent refund amount', async () => {
@@ -207,6 +249,172 @@ test('late declaration is receipted but never mutates booking or invents refunds
     client.calls.some(({ sql }) => sql.includes('INSERT INTO v51_refund_obligations')),
     false,
   );
+});
+
+test('untrusted refund history forces withdrawal review without booking or refund effects', async () => {
+  const row = booking('refunded');
+  row.refund_truth_review_count = 1;
+  const client = clientForBooking(row);
+  const result = await recordV51Withdrawal(client, {
+    actor: { id: 'renter-1', role: 'user' },
+    bookingId: 'booking-1',
+    raw: { scope: 'booking_contract', acknowledgedConsequences: true },
+    idempotencyKey: 'withdrawal-untrusted-refund-history',
+    now,
+  });
+
+  assert.equal(result.withdrawal.eligibilityStatus, 'manual_review_required');
+  assert.equal(result.withdrawal.effectStatus, 'manual_review_required');
+  assert.equal(result.booking.workflowStatus, 'refunded');
+  assert.equal(result.rentRefund, null);
+  assert.equal(result.sitFeeRefund, null);
+  assert.equal(client.calls.some(({ sql }) => sql.includes('UPDATE bookings')), false);
+  assert.equal(
+    client.calls.some(({ sql }) => sql.includes('INSERT INTO v51_refund_obligations')),
+    false,
+  );
+  const receipt = client.calls.find(({ sql }) => sql.includes('INSERT INTO v51_withdrawal_receipts'));
+  assert.match(receipt.values[1], /Anspruch, Frist und mögliche Auswirkungen/u);
+  assert.equal(receipt.values[1].includes('14-Tage-Fenster ist abgelaufen'), false);
+  const bookingRead = client.calls.find(({ sql }) => (
+    sql.includes('FROM bookings AS booking') && sql.includes('platform_contracts')
+  ));
+  const refundTruthRead = client.calls.find(({ sql }) => (
+    sql.includes('AS locally_settled_refund_minor')
+  ));
+  assert.deepEqual(bookingRead.values, ['booking-1']);
+  assert.deepEqual(refundTruthRead.values, ['booking-1']);
+  assert.match(refundTruthRead.sql, /LEFT JOIN sit_payment_refund_truth AS refund_truth/u);
+  assert.match(refundTruthRead.sql, /refund_truth\.refund_truth_status = 'needsReview'/u);
+  assert.match(refundTruthRead.sql, /refund_truth\.refund_cache_matches_settlement[\s\S]*IS DISTINCT FROM true/u);
+  assert.match(refundTruthRead.sql, /refund_truth\.refund_status_matches_settlement[\s\S]*IS DISTINCT FROM true/u);
+});
+
+test('unresolved canonical refund forces withdrawal review without any booking effect', async () => {
+  const row = booking('confirmed');
+  row.refund_truth_pending_count = 1;
+  const client = clientForBooking(row);
+  const result = await recordV51Withdrawal(client, {
+    actor: { id: 'renter-1', role: 'user' },
+    bookingId: 'booking-1',
+    raw: { scope: 'booking_contract', acknowledgedConsequences: true },
+    idempotencyKey: 'withdrawal-unresolved-canonical-refund',
+    now,
+  });
+
+  assert.equal(result.withdrawal.eligibilityStatus, 'manual_review_required');
+  assert.equal(result.withdrawal.effectStatus, 'manual_review_required');
+  assert.equal(result.booking.workflowStatus, 'confirmed');
+  assert.equal(result.rentRefund, null);
+  assert.equal(result.sitFeeRefund, null);
+  assert.equal(client.calls.some(({ sql }) => sql.includes('UPDATE bookings')), false);
+  assert.equal(
+    client.calls.some(({ sql }) => sql.includes('INSERT INTO v51_refund_obligations')),
+    false,
+  );
+});
+
+test('an already cancelled booking records the declaration without creating new effects', async () => {
+  const row = booking('cancelled');
+  const client = clientForBooking(row);
+  const result = await recordV51Withdrawal(client, {
+    actor: { id: 'renter-1', role: 'user' },
+    bookingId: 'booking-1',
+    raw: { scope: 'booking_contract', acknowledgedConsequences: true },
+    idempotencyKey: 'withdrawal-already-cancelled-booking',
+    now,
+  });
+
+  assert.equal(result.withdrawal.eligibilityStatus, 'manual_review_required');
+  assert.equal(result.withdrawal.effectStatus, 'manual_review_required');
+  assert.equal(result.booking.workflowStatus, 'cancelled');
+  assert.equal(result.rentRefund, null);
+  assert.equal(result.sitFeeRefund, null);
+  assert.equal(client.calls.some(({ sql }) => sql.includes('UPDATE bookings')), false);
+  assert.equal(
+    client.calls.some(({ sql }) => sql.includes('INSERT INTO v51_refund_obligations')),
+    false,
+  );
+});
+
+test('only a fully locally-settled canonical refund across every payment is ineligible', async () => {
+  const row = booking('refunded');
+  row.payment_count = 2;
+  row.locally_settled_refund_minor = row.total_captured_minor;
+  const client = clientForBooking(row);
+
+  await assert.rejects(recordV51Withdrawal(client, {
+    actor: { id: 'renter-1', role: 'user' },
+    bookingId: 'booking-1',
+    raw: { scope: 'booking_contract', acknowledgedConsequences: true },
+    idempotencyKey: 'withdrawal-canonical-refunded-booking',
+    now,
+  }), (error) => error instanceof V51WithdrawalError
+    && error.code === 'v51_withdrawal_booking_not_eligible');
+  assert.equal(
+    client.calls.some(({ sql }) => sql.includes('INSERT INTO v51_withdrawals')),
+    false,
+  );
+});
+
+test('canonical partial refund on an active booking cannot create duplicate obligations', async () => {
+  const row = booking('active');
+  row.payment_count = 2;
+  row.locally_settled_refund_minor = 100;
+  const client = clientForBooking(row);
+  const result = await recordV51Withdrawal(client, {
+    actor: { id: 'renter-1', role: 'user' },
+    bookingId: 'booking-1',
+    raw: { scope: 'booking_contract', acknowledgedConsequences: true },
+    idempotencyKey: 'withdrawal-partially-refunded-active-booking',
+    now,
+  });
+
+  assert.equal(result.withdrawal.effectStatus, 'manual_review_required');
+  assert.equal(result.booking.workflowStatus, 'active');
+  assert.equal(client.calls.some(({ sql }) => sql.includes('UPDATE bookings')), false);
+  assert.equal(
+    client.calls.some(({ sql }) => sql.includes('INSERT INTO v51_refund_obligations')),
+    false,
+  );
+});
+
+test('a provider-confirmed refund awaiting local settlement forces review', async () => {
+  const row = booking('refunded');
+  row.refund_truth_pending_count = 1;
+  const client = clientForBooking(row);
+  const result = await recordV51Withdrawal(client, {
+    actor: { id: 'renter-1', role: 'user' },
+    bookingId: 'booking-1',
+    raw: { scope: 'booking_contract', acknowledgedConsequences: true },
+    idempotencyKey: 'withdrawal-provider-bound-local-pending',
+    now,
+  });
+
+  assert.equal(result.withdrawal.effectStatus, 'manual_review_required');
+  assert.equal(result.booking.workflowStatus, 'refunded');
+  assert.equal(result.rentRefund, null);
+  assert.equal(result.sitFeeRefund, null);
+  assert.equal(client.calls.some(({ sql }) => sql.includes('UPDATE bookings')), false);
+});
+
+test('cached amount or payment-status drift cannot masquerade as a full refund', async () => {
+  const row = booking('refunded');
+  row.locally_settled_refund_minor = row.total_captured_minor;
+  row.refund_truth_review_count = 1;
+  const client = clientForBooking(row);
+  const result = await recordV51Withdrawal(client, {
+    actor: { id: 'renter-1', role: 'user' },
+    bookingId: 'booking-1',
+    raw: { scope: 'booking_contract', acknowledgedConsequences: true },
+    idempotencyKey: 'withdrawal-refund-cache-drift',
+    now,
+  });
+
+  assert.equal(result.withdrawal.eligibilityStatus, 'manual_review_required');
+  assert.equal(result.withdrawal.effectStatus, 'manual_review_required');
+  assert.equal(result.booking.workflowStatus, 'refunded');
+  assert.equal(client.calls.some(({ sql }) => sql.includes('UPDATE bookings')), false);
 });
 
 test('booking withdrawal uses locked database time and the Berlin calendar-day cutoff', async () => {
@@ -344,9 +552,18 @@ test('withdrawal accepts no reason field and fails closed without exact V5.1 doc
 
   const client = {
     async query(sql) {
+      if (sql.includes('pg_advisory_xact_lock')) return { rowCount: 1, rows: [] };
       if (sql.includes('FROM v51_withdrawals WHERE idempotency_key')) return { rowCount: 0, rows: [] };
-      if (sql.includes('SELECT email, profile FROM users')) {
-        return { rowCount: 1, rows: [{ email: 'renter@example.test', profile: {} }] };
+      if (sql.includes('SELECT email, profile, account_status, deactivated_at')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            email: 'renter@example.test',
+            profile: {},
+            account_status: 'active',
+            deactivated_at: null,
+          }],
+        };
       }
       return { rowCount: 0, rows: [] };
     },

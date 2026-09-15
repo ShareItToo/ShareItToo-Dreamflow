@@ -560,7 +560,15 @@ test('provider payment events require exact local principal, object and mode bin
 });
 
 test('provider refunds require exact payment, amount, currency, mode and metadata binding', () => {
-  const refund = { id: 'refund-1', amount_minor: '595' };
+  const refund = {
+    id: 'refund-1',
+    payment_id: 'payment-1',
+    amount_minor: '595',
+    provider_charge_id: 'ch-1',
+    currency: 'EUR',
+    livemode: false,
+    provider_refund_model: 'separate_charge_manual_transfer_reversal_v1',
+  };
   const payment = {
     id: 'payment-1',
     booking_id: 'booking-1',
@@ -579,9 +587,25 @@ test('provider refunds require exact payment, amount, currency, mode and metadat
       sit_booking_id: 'booking-1',
       sit_payment_id: 'payment-1',
       sit_refund_id: 'refund-1',
+      sit_refund_model: 'separate_charge_manual_transfer_reversal_v1',
     },
   };
   assert.equal(assertProviderRefundBinding({ refund, payment, providerRefund }), true);
+  for (const changedRefund of [
+    { ...refund, payment_id: 'payment-other' },
+    { ...refund, provider_charge_id: 'ch-other' },
+    { ...refund, currency: 'USD' },
+    { ...refund, livemode: true },
+  ]) {
+    assert.throws(
+      () => assertProviderRefundBinding({
+        refund: changedRefund,
+        payment,
+        providerRefund,
+      }),
+      (error) => error.status === 409 && error.code === 'provider_refund_binding_mismatch',
+    );
+  }
   for (const changed of [
     { ...providerRefund, id: '' },
     { ...providerRefund, charge: 'ch-other' },
@@ -591,6 +615,7 @@ test('provider refunds require exact payment, amount, currency, mode and metadat
     { ...providerRefund, metadata: { ...providerRefund.metadata, sit_booking_id: 'booking-other' } },
     { ...providerRefund, metadata: { ...providerRefund.metadata, sit_payment_id: 'payment-other' } },
     { ...providerRefund, metadata: { ...providerRefund.metadata, sit_refund_id: 'refund-other' } },
+    { ...providerRefund, metadata: { ...providerRefund.metadata, sit_refund_model: 'legacy' } },
   ]) {
     assert.throws(
       () => assertProviderRefundBinding({ refund, payment, providerRefund: changed }),
@@ -637,6 +662,60 @@ test('memory Checkout emulates provider idempotency and rejects parameter drift'
     idempotencyKey: 'different-provider-key',
   });
   assert.notEqual(second.id, first.id);
+});
+
+test('Checkout expiration is explicit, idempotent and removes the delivery URL', async () => {
+  const provider = new StripeProvider({ mode: 'memory' });
+  const request = {
+    paymentId: 'payment-expire-1',
+    bookingId: 'booking-expire-1',
+    customerId: 'customer-expire-1',
+    amountMinor: 1190,
+    currency: 'EUR',
+    itemTitle: 'Kamera',
+    transferGroup: 'booking_booking-expire-1',
+    successUrl: 'https://example.test/success',
+    cancelUrl: 'https://example.test/cancel',
+    expiresAt: 1799539200,
+    idempotencyKey: 'stable-provider-expire-key',
+  };
+  const created = await provider.createPaymentCheckout(request);
+
+  assert.equal(created.status, 'open');
+  const expired = await provider.expirePaymentCheckout({ sessionId: created.id });
+  assert.equal(expired.status, 'expired');
+  assert.equal(expired.url, null);
+  assert.deepEqual(await provider.expirePaymentCheckout({ sessionId: created.id }), expired);
+  assert.deepEqual(await provider.createPaymentCheckout(request), expired);
+  await assert.rejects(
+    provider.expirePaymentCheckout({ sessionId: 'cs_missing' }),
+    (error) => error.status === 404
+      && error.code === 'provider_checkout_session_not_found',
+  );
+});
+
+test('Stripe transport expires the exact Checkout Session', async () => {
+  const captured = [];
+  const provider = new StripeProvider({
+    mode: 'stripe',
+    secretKey: 'rk_test_unit',
+    stripeClient: {
+      checkout: {
+        sessions: {
+          expire: async (...args) => {
+            captured.push(args);
+            return { id: args[0], status: 'expired', url: null };
+          },
+        },
+      },
+    },
+  });
+
+  const result = await provider.expirePaymentCheckout({ sessionId: 'cs_exact' });
+
+  assert.deepEqual(captured, [['cs_exact']]);
+  assert.equal(result.id, 'cs_exact');
+  assert.equal(result.status, 'expired');
 });
 
 test('Stripe transport creates recipient-only Accounts v2 onboarding', async () => {
@@ -750,10 +829,14 @@ test('Stripe SDK checkout, refund and transfer preserve separate-charges semanti
 
   await provider.createRefund({
     chargeId: 'ch_test', amountMinor: 595, idempotencyKey: 'refund:payment-1',
-    metadata: { currency: 'EUR', sit_payment_id: 'payment-1' },
-    reverseTransfer: true, refundPlatformFee: true,
+    metadata: {
+      currency: 'EUR',
+      sit_payment_id: 'payment-1',
+      sit_refund_model: 'separate_charge_manual_transfer_reversal_v1',
+    },
   });
   const refundParams = captured[2][1];
+  assert.deepEqual(Object.keys(refundParams).sort(), ['amount', 'charge', 'metadata']);
   assert.equal(Object.hasOwn(refundParams, 'reverse_transfer'), false);
   assert.equal(Object.hasOwn(refundParams, 'refund_application_fee'), false);
   assert.equal(captured[2][2].idempotencyKey, 'refund:payment-1');
@@ -831,6 +914,7 @@ test('memory refund is idempotent, discoverable and rejects parameter drift', as
       sit_booking_id: 'booking-memory-refund',
       sit_payment_id: 'payment-memory-refund',
       sit_refund_id: 'refund-memory-1',
+      sit_refund_model: 'separate_charge_manual_transfer_reversal_v1',
     },
   };
   const first = await provider.createRefund(request);

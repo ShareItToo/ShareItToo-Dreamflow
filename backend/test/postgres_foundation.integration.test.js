@@ -214,6 +214,7 @@ if (!databaseUrl) {
         '074_listing_ai_on_device_disclosure.up.sql',
         '075_refund_transfer_reversal_recovery.up.sql',
         '076_payment_command_result_immutability.up.sql',
+        '077_refund_provider_truth_parity.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);
@@ -259,6 +260,290 @@ if (!databaseUrl) {
         throw error;
       } finally {
         wp150MigrationProbe.release();
+      }
+
+      const wp151MigrationUp = await fs.readFile(
+        path.resolve(
+          currentDir,
+          '../sql/migrations/077_refund_provider_truth_parity.up.sql',
+        ),
+        'utf8',
+      );
+      const wp151MigrationDown = await fs.readFile(
+        path.resolve(
+          currentDir,
+          '../sql/migrations/077_refund_provider_truth_parity.down.sql',
+        ),
+        'utf8',
+      );
+      const wp151MigrationProbe = await setupPool.connect();
+      try {
+        await wp151MigrationProbe.query('BEGIN');
+        await wp151MigrationProbe.query(wp151MigrationDown);
+        await wp151MigrationProbe.query(
+          `INSERT INTO users (id, email, profile)
+           VALUES
+             ('wp151-owner', 'wp151-owner@example.invalid', '{}'::jsonb),
+             ('wp151-renter', 'wp151-renter@example.invalid', '{}'::jsonb)`,
+        );
+        await wp151MigrationProbe.query(
+          `INSERT INTO listings (id, owner_id, payload, is_active)
+           VALUES ('wp151-listing', 'wp151-owner', '{}'::jsonb, false)`,
+        );
+        await wp151MigrationProbe.query(
+          `INSERT INTO rental_requests (
+             id, item_id, owner_id, renter_id, status, payload
+           ) VALUES (
+             'wp151-booking', 'wp151-listing', 'wp151-owner',
+             'wp151-renter', 'accepted', '{}'::jsonb
+           )`,
+        );
+        await wp151MigrationProbe.query(
+          `INSERT INTO bookings (
+             id, listing_id, owner_id, renter_id, status, starts_at, ends_at,
+             currency, quoted_total_minor, security_deposit_minor
+           ) VALUES (
+             'wp151-booking', 'wp151-listing', 'wp151-owner', 'wp151-renter',
+             'completed', '2026-10-01T10:00:00Z', '2026-10-02T10:00:00Z',
+             'EUR', 1000, 0
+           )`,
+        );
+        const wp151Payment = await wp151MigrationProbe.query(
+          `INSERT INTO payments (
+             booking_id, provider_charge_id, idempotency_key, status,
+             amount_minor, currency, rental_subtotal_minor, platform_fee_minor,
+             owner_payout_minor, security_deposit_minor, captured_minor,
+             transferred_minor, livemode
+           ) VALUES (
+             'wp151-booking', 'ch_wp151', 'wp151-payment', 'captured',
+             1000, 'EUR', 900, 100, 900, 0, 1000, 0, false
+           ) RETURNING id`,
+        );
+        await wp151MigrationProbe.query(
+          `INSERT INTO refunds (
+             payment_id, idempotency_key, status, amount_minor, currency,
+             provider_charge_id, owner_share_minor, platform_share_minor,
+             reverse_transfer, refund_platform_fee, livemode
+           ) VALUES
+           (
+             $1, 'wp151-legacy-refund-true', 'succeeded', 100, 'EUR',
+             'ch_wp151', 90, 10, false, true, false
+           ),
+           (
+             $1, 'wp151-legacy-refund-false', 'succeeded', 100, 'EUR',
+             'ch_wp151', 90, 10, false, false, false
+           )`,
+          [wp151Payment.rows[0].id],
+        );
+        await wp151MigrationProbe.query(wp151MigrationUp);
+        const legacyRefunds = await wp151MigrationProbe.query(
+          `SELECT idempotency_key, legacy_refund_platform_fee_claim,
+                  provider_refund_model
+             FROM refunds
+            WHERE idempotency_key LIKE 'wp151-legacy-refund-%'
+            ORDER BY idempotency_key`,
+        );
+        assert.deepEqual(legacyRefunds.rows, [
+          {
+            idempotency_key: 'wp151-legacy-refund-false',
+            legacy_refund_platform_fee_claim: false,
+            provider_refund_model: null,
+          },
+          {
+            idempotency_key: 'wp151-legacy-refund-true',
+            legacy_refund_platform_fee_claim: true,
+            provider_refund_model: null,
+          },
+        ]);
+        const legacyHealth = await wp151MigrationProbe.query(
+          `SELECT
+             count(*) FILTER (
+               WHERE status IN ('created', 'pending')
+                 AND provider_refund_model =
+                   'separate_charge_manual_transfer_reversal_v1'
+                 AND legacy_refund_platform_fee_claim IS NULL
+             )::int AS recovery_pending,
+             count(*) FILTER (
+               WHERE status = 'failed'
+                  OR provider_refund_model IS DISTINCT FROM
+                    'separate_charge_manual_transfer_reversal_v1'
+                  OR legacy_refund_platform_fee_claim IS NOT NULL
+             )::int AS recovery_needs_review
+           FROM refunds`,
+        );
+        assert.deepEqual(legacyHealth.rows[0], {
+          recovery_pending: 0,
+          recovery_needs_review: 2,
+        });
+        await wp151MigrationProbe.query('SAVEPOINT wp151_legacy_round_trip');
+        await wp151MigrationProbe.query(wp151MigrationDown);
+        const rolledBackLegacyClaims = await wp151MigrationProbe.query(
+          `SELECT idempotency_key, refund_platform_fee
+             FROM refunds
+            WHERE idempotency_key LIKE 'wp151-legacy-refund-%'
+            ORDER BY idempotency_key`,
+        );
+        assert.deepEqual(rolledBackLegacyClaims.rows, [
+          {
+            idempotency_key: 'wp151-legacy-refund-false',
+            refund_platform_fee: false,
+          },
+          {
+            idempotency_key: 'wp151-legacy-refund-true',
+            refund_platform_fee: true,
+          },
+        ]);
+        await wp151MigrationProbe.query(wp151MigrationUp);
+        await wp151MigrationProbe.query('RELEASE SAVEPOINT wp151_legacy_round_trip');
+        await wp151MigrationProbe.query(
+          `INSERT INTO refunds (
+             payment_id, idempotency_key, status, amount_minor, currency,
+             provider_charge_id, owner_share_minor, platform_share_minor,
+             reverse_transfer, provider_refund_model, local_settlement_status,
+             provider_observation_status, livemode
+           ) VALUES (
+             $1, 'wp151-canonical-refund', 'created', 50, 'EUR',
+             'ch_wp151', 45, 5, false,
+             'separate_charge_manual_transfer_reversal_v1', 'pending', 'none',
+             false
+           )`,
+          [wp151Payment.rows[0].id],
+        );
+        const canonicalRefund = await wp151MigrationProbe.query(
+          `SELECT legacy_refund_platform_fee_claim, provider_refund_model
+             FROM refunds WHERE idempotency_key = 'wp151-canonical-refund'`,
+        );
+        assert.deepEqual(canonicalRefund.rows[0], {
+          legacy_refund_platform_fee_claim: null,
+          provider_refund_model: 'separate_charge_manual_transfer_reversal_v1',
+        });
+        for (const mutation of [
+          'local_settlement_status = NULL',
+          'provider_observation_status = NULL',
+        ]) {
+          await wp151MigrationProbe.query('SAVEPOINT wp151_null_state');
+          await assert.rejects(
+            wp151MigrationProbe.query(
+              `UPDATE refunds SET ${mutation}
+                WHERE idempotency_key = 'wp151-canonical-refund'`,
+            ),
+            (error) => error?.code === '23514',
+          );
+          await wp151MigrationProbe.query('ROLLBACK TO SAVEPOINT wp151_null_state');
+        }
+        await wp151MigrationProbe.query('SAVEPOINT wp151_corrupt_null_readback');
+        await wp151MigrationProbe.query(
+          'ALTER TABLE refunds DROP CONSTRAINT refunds_local_settlement_status_check',
+        );
+        await wp151MigrationProbe.query(
+          `UPDATE refunds
+              SET local_settlement_status = NULL,
+                  provider_observation_status = NULL
+            WHERE idempotency_key = 'wp151-canonical-refund'`,
+        );
+        const corruptedNullTruth = await wp151MigrationProbe.query(
+          `SELECT invalid_refund_count, refund_truth_status
+             FROM sit_payment_refund_truth
+            WHERE payment_id = $1`,
+          [wp151Payment.rows[0].id],
+        );
+        assert.deepEqual(corruptedNullTruth.rows[0], {
+          invalid_refund_count: 1,
+          refund_truth_status: 'needsReview',
+        });
+        await wp151MigrationProbe.query(
+          'ROLLBACK TO SAVEPOINT wp151_corrupt_null_readback',
+        );
+        await wp151MigrationProbe.query('SAVEPOINT wp151_truth_mutation');
+        await assert.rejects(
+          wp151MigrationProbe.query(
+            `UPDATE refunds SET provider_refund_model = 'legacy'
+              WHERE idempotency_key = 'wp151-canonical-refund'`,
+          ),
+          (error) => error?.code === '55000'
+            && error?.message === 'refund_provider_truth_immutable',
+        );
+        await wp151MigrationProbe.query('ROLLBACK TO SAVEPOINT wp151_truth_mutation');
+        await wp151MigrationProbe.query('SAVEPOINT wp151_preparation_mutation');
+        await assert.rejects(
+          wp151MigrationProbe.query(
+            `UPDATE refunds SET amount_minor = amount_minor + 1
+              WHERE idempotency_key = 'wp151-canonical-refund'`,
+          ),
+          (error) => error?.code === '55000'
+            && error?.message === 'refund_preparation_immutable',
+        );
+        await wp151MigrationProbe.query('ROLLBACK TO SAVEPOINT wp151_preparation_mutation');
+        await wp151MigrationProbe.query('SAVEPOINT wp151_incomplete_outcome');
+        await assert.rejects(
+          wp151MigrationProbe.query(
+            `UPDATE refunds SET status = 'succeeded'
+              WHERE idempotency_key = 'wp151-canonical-refund'`,
+          ),
+          (error) => error?.code === '23514'
+            && error?.message === 'refund_provider_outcome_incomplete',
+        );
+        await wp151MigrationProbe.query('ROLLBACK TO SAVEPOINT wp151_incomplete_outcome');
+        for (const mutation of [
+          "provider_refund_id = 're_wp151_half_state'",
+          'succeeded_at = now()',
+        ]) {
+          await wp151MigrationProbe.query('SAVEPOINT wp151_half_outcome');
+          await assert.rejects(
+            wp151MigrationProbe.query(
+              `UPDATE refunds SET ${mutation}
+                WHERE idempotency_key = 'wp151-canonical-refund'`,
+            ),
+            (error) => error?.code === '23514'
+              && error?.message === 'refund_provider_outcome_incomplete',
+          );
+          await wp151MigrationProbe.query('ROLLBACK TO SAVEPOINT wp151_half_outcome');
+        }
+        await wp151MigrationProbe.query(
+          `UPDATE refunds SET status = 'succeeded',
+               provider_refund_id = 're_wp151_canonical', succeeded_at = now()
+            WHERE idempotency_key = 'wp151-canonical-refund'`,
+        );
+        for (const mutation of [
+          "status = 'pending'",
+          "provider_refund_id = 're_wp151_changed'",
+          "succeeded_at = succeeded_at + interval '1 second'",
+        ]) {
+          await wp151MigrationProbe.query('SAVEPOINT wp151_outcome_mutation');
+          await assert.rejects(
+            wp151MigrationProbe.query(
+              `UPDATE refunds SET ${mutation}
+                WHERE idempotency_key = 'wp151-canonical-refund'`,
+            ),
+            (error) => error?.code === '55000'
+              && error?.message === 'refund_provider_outcome_immutable',
+          );
+          await wp151MigrationProbe.query('ROLLBACK TO SAVEPOINT wp151_outcome_mutation');
+        }
+        await wp151MigrationProbe.query('SAVEPOINT wp151_delete_refund');
+        await assert.rejects(
+          wp151MigrationProbe.query(
+            `DELETE FROM refunds
+              WHERE idempotency_key = 'wp151-canonical-refund'`,
+          ),
+          (error) => error?.code === '55000'
+            && error?.message === 'refund_provider_record_delete_forbidden',
+        );
+        await wp151MigrationProbe.query('ROLLBACK TO SAVEPOINT wp151_delete_refund');
+        await wp151MigrationProbe.query('SAVEPOINT wp151_unsafe_rollback');
+        await assert.rejects(
+          wp151MigrationProbe.query(wp151MigrationDown),
+          (error) => error?.code === 'P0001'
+            && error?.message
+              === 'Refund provider truth rollback blocked: post-migration refunds exist',
+        );
+        await wp151MigrationProbe.query('ROLLBACK TO SAVEPOINT wp151_unsafe_rollback');
+        await wp151MigrationProbe.query('ROLLBACK');
+      } catch (error) {
+        await wp151MigrationProbe.query('ROLLBACK');
+        throw error;
+      } finally {
+        wp151MigrationProbe.release();
       }
 
       await setupPool.query(
@@ -2372,6 +2657,7 @@ if (!databaseUrl) {
         V52ContractWorkflowError,
       } = await import('../src/v52_contract_workflow.js');
       const { buildAccountExport } = await import('../src/privacy_export.js');
+      const { recordV51Withdrawal } = await import('../src/v51_withdrawal_workflow.js');
       const { createSupportCase } = await import('../src/support_case_workflow.js');
       const { hashActionToken, hashPassword, signAccessToken } = await import('../src/security.js');
       applicationPool = pool;
@@ -6898,6 +7184,187 @@ if (!databaseUrl) {
         missingContractHealth.contractBlocked - 1,
       );
 
+      // V51 must acquire the booking lock before it reads refund truth. This
+      // forces a fresh READ COMMITTED snapshot after a concurrent refund
+      // finalization commits; otherwise the pre-wait statement snapshot could
+      // create full withdrawal obligations after a partial provider refund.
+      const wp151RaceBookingId = 'wp151-v51-refund-snapshot-race';
+      await setupPool.query(
+        `INSERT INTO rental_requests (
+           id, item_id, owner_id, renter_id, status, payload
+         ) VALUES (
+           $1, 'listing-1', 'owner', 'renter-a', 'accepted',
+           jsonb_build_object(
+             'id', $1::text,
+             'itemId', 'listing-1',
+             'ownerId', 'owner',
+             'renterId', 'renter-a',
+             'status', 'accepted',
+             'start', '2035-01-10T10:00:00.000Z',
+             'end', '2035-01-12T10:00:00.000Z'
+           )
+         )`,
+        [wp151RaceBookingId],
+      );
+      await setupPool.query(
+        `INSERT INTO bookings (
+           id, listing_id, owner_id, renter_id, status, workflow_status,
+           workflow_version, starts_at, ends_at, currency,
+           rental_subtotal_minor, platform_fee_minor, owner_payout_minor,
+           quoted_total_minor, security_deposit_minor
+         ) VALUES (
+           $1, 'listing-1', 'owner', 'renter-a', 'accepted', 'confirmed', 1,
+           '2035-01-10T10:00:00.000Z', '2035-01-12T10:00:00.000Z', 'EUR',
+           900, 100, 900, 1000, 0
+         )`,
+        [wp151RaceBookingId],
+      );
+      await setupPool.query(
+        `UPDATE bookings
+            SET workflow_status = 'confirmed',
+                workflow_revision = workflow_revision + 1
+          WHERE id = $1`,
+        [wp151RaceBookingId],
+      );
+      const wp151RaceQuoteHash = crypto.createHash('sha256')
+        .update('wp151-v51-refund-snapshot-race-quote')
+        .digest('hex');
+      const wp151RaceAcceptance = 'Synthetic WP151 exact V5.2 acceptance.';
+      await setupPool.query(
+        `INSERT INTO platform_contracts (
+           user_id, booking_id, quote_id, quote_hash, contract_version,
+           platform_terms_snapshot_id, private_rental_terms_snapshot_id,
+           cancellation_refund_snapshot_id, handover_return_damage_snapshot_id,
+           payment_payout_snapshot_id, community_safety_snapshot_id,
+           reporting_moderation_review_snapshot_id, privacy_snapshot_id,
+           imprint_withdrawal_shorttexts_snapshot_id, sit_acceptance_wording,
+           sit_acceptance_sha256, locale, client_build, accepted_at,
+           idempotency_key
+         )
+         SELECT
+           'renter-a', $1, 'wp151-v51-refund-snapshot-race-quote', $2,
+           source.contract_version, source.platform_terms_snapshot_id,
+           source.private_rental_terms_snapshot_id,
+           source.cancellation_refund_snapshot_id,
+           source.handover_return_damage_snapshot_id,
+           source.payment_payout_snapshot_id,
+           source.community_safety_snapshot_id,
+           source.reporting_moderation_review_snapshot_id,
+           source.privacy_snapshot_id,
+           source.imprint_withdrawal_shorttexts_snapshot_id,
+           $3, $4, source.locale, 'wp151-race-integration', now(),
+           'wp151-v51-refund-snapshot-race-contract'
+         FROM platform_contracts AS source
+         WHERE source.booking_id = 'b8-payment-flow'`,
+        [
+          wp151RaceBookingId,
+          wp151RaceQuoteHash,
+          wp151RaceAcceptance,
+          crypto.createHash('sha256').update(wp151RaceAcceptance).digest('hex'),
+        ],
+      );
+      const wp151RacePayment = await setupPool.query(
+        `INSERT INTO payments (
+           booking_id, provider_charge_id, idempotency_key, status,
+           amount_minor, currency, rental_subtotal_minor, platform_fee_minor,
+           owner_payout_minor, security_deposit_minor, captured_minor,
+           transferred_minor, livemode
+         ) VALUES (
+           $1, 'ch_wp151_v51_refund_snapshot_race',
+           'wp151-v51-refund-snapshot-race-payment', 'captured',
+           1000, 'EUR', 900, 100, 900, 0, 1000, 0, false
+         ) RETURNING id`,
+        [wp151RaceBookingId],
+      );
+      const wp151RaceRefund = await setupPool.query(
+        `INSERT INTO refunds (
+           payment_id, idempotency_key, status, amount_minor, currency, reason,
+           provider_charge_id, owner_share_minor, platform_share_minor,
+           reverse_transfer, provider_refund_model, local_settlement_status,
+           provider_observation_status, livemode
+         ) VALUES (
+           $1, 'wp151-v51-refund-snapshot-race-refund', 'created', 100, 'EUR',
+           'integration_partial_refund', 'ch_wp151_v51_refund_snapshot_race',
+           90, 10, false, 'separate_charge_manual_transfer_reversal_v1',
+           'pending', 'none', false
+         ) RETURNING id`,
+        [wp151RacePayment.rows[0].id],
+      );
+      const wp151Finalizer = await setupPool.connect();
+      const wp151Withdrawal = await setupPool.connect();
+      try {
+        await wp151Finalizer.query('BEGIN');
+        await wp151Finalizer.query(
+          `SELECT booking.id
+             FROM bookings AS booking
+             JOIN payments AS payment ON payment.booking_id = booking.id
+             JOIN refunds AS refund ON refund.payment_id = payment.id
+            WHERE booking.id = $1 AND refund.id = $2
+            FOR UPDATE OF booking, payment, refund`,
+          [wp151RaceBookingId, wp151RaceRefund.rows[0].id],
+        );
+        await wp151Finalizer.query(
+          `UPDATE refunds
+              SET status = 'succeeded', provider_refund_id = $2,
+                  succeeded_at = now(), failure_code = NULL
+            WHERE id = $1`,
+          [wp151RaceRefund.rows[0].id, 're_wp151_v51_refund_snapshot_race'],
+        );
+        await wp151Finalizer.query(
+          `UPDATE payments
+              SET status = 'partially_refunded', refunded_minor = 100
+            WHERE id = $1`,
+          [wp151RacePayment.rows[0].id],
+        );
+
+        await wp151Withdrawal.query('BEGIN');
+        const wp151WithdrawalResult = recordV51Withdrawal(wp151Withdrawal, {
+          actor: { id: 'renter-a', role: 'user' },
+          bookingId: wp151RaceBookingId,
+          raw: {
+            scope: 'booking_contract',
+            acknowledgedConsequences: true,
+            electronicChannel: 'in_app_download',
+          },
+          idempotencyKey: 'wp151-v51-refund-snapshot-race-withdrawal',
+        });
+        let wp151ReaderBlocked = false;
+        for (let attempt = 0; attempt < 200; attempt += 1) {
+          const activity = await setupPool.query(
+            `SELECT cardinality(pg_blocking_pids($1)) > 0 AS blocked`,
+            [wp151Withdrawal.processID],
+          );
+          if (activity.rows[0]?.blocked === true) {
+            wp151ReaderBlocked = true;
+            break;
+          }
+          await setupPool.query('SELECT pg_sleep(0.01)');
+        }
+        assert.equal(wp151ReaderBlocked, true);
+        await wp151Finalizer.query('COMMIT');
+
+        const raceResult = await wp151WithdrawalResult;
+        assert.equal(raceResult.withdrawal.effectStatus, 'manual_review_required');
+        assert.equal(raceResult.withdrawal.eligibilityStatus, 'manual_review_required');
+        assert.equal(raceResult.booking.workflowStatus, 'confirmed');
+        assert.equal(raceResult.rentRefund, null);
+        assert.equal(raceResult.sitFeeRefund, null);
+        assert.equal((await wp151Withdrawal.query(
+          `SELECT count(*)::int AS count
+             FROM v51_refund_obligations
+            WHERE booking_id = $1`,
+          [wp151RaceBookingId],
+        )).rows[0].count, 0);
+        await wp151Withdrawal.query('ROLLBACK');
+      } catch (error) {
+        await wp151Finalizer.query('ROLLBACK').catch(() => {});
+        await wp151Withdrawal.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        wp151Finalizer.release();
+        wp151Withdrawal.release();
+      }
+
       // Health and execution must classify the same malformed persisted
       // contract values. A parseable but stale acceptance instant must not
       // shorten the legal hold, and version strings are never normalized.
@@ -7019,13 +7486,24 @@ if (!databaseUrl) {
         outbox: 0,
       });
       const malformedContractHealth = await paymentHealth();
+      assert.deepEqual((await setupPool.query(
+        `SELECT refund_truth_status, invalid_refund_count
+           FROM sit_payment_refund_truth
+          WHERE payment_id = $1`,
+        [wp151RacePayment.rows[0].id],
+      )).rows[0], {
+        refund_truth_status: 'needsReview',
+        invalid_refund_count: 0,
+      });
       assert.equal(
         malformedContractHealth.contractBlocked,
         boundContractHealth.contractBlocked + 2,
       );
       assert.equal(
         malformedContractHealth.recoveryNeedsReview,
-        boundContractHealth.recoveryNeedsReview + 2,
+        // The two malformed contracts and the intentionally interrupted
+        // provider-success/local-settlement race all require review.
+        boundContractHealth.recoveryNeedsReview + 3,
       );
       await setupPool.query(
         `UPDATE bookings SET payout_instruction_due_at = $1
@@ -7394,6 +7872,32 @@ if (!databaseUrl) {
       assert.equal(partialRefundAfterPayout.status, 201);
       const partialRefundPayload = await partialRefundAfterPayout.json();
       assert.equal(partialRefundPayload.payment.status, 'partially_refunded');
+      const partialRefundTruth = await setupPool.query(
+        `SELECT id, provider_charge_id, owner_share_minor,
+                platform_share_minor, legacy_refund_platform_fee_claim,
+                provider_refund_model
+           FROM refunds WHERE idempotency_key = $1`,
+        ['b8-partial-refund-after-owner-payout'],
+      );
+      assert.deepEqual({
+        ownerShareMinor: partialRefundTruth.rows[0].owner_share_minor,
+        platformShareMinor: partialRefundTruth.rows[0].platform_share_minor,
+        legacyClaim: partialRefundTruth.rows[0].legacy_refund_platform_fee_claim,
+        providerModel: partialRefundTruth.rows[0].provider_refund_model,
+      }, {
+        ownerShareMinor: '1500',
+        platformShareMinor: '150',
+        legacyClaim: null,
+        providerModel: 'separate_charge_manual_transfer_reversal_v1',
+      });
+      const partialProviderRefund = await stripeProvider.findRefund({
+        chargeId: partialRefundTruth.rows[0].provider_charge_id,
+        refundId: partialRefundTruth.rows[0].id,
+      });
+      assert.equal(
+        partialProviderRefund.metadata.sit_refund_model,
+        partialRefundTruth.rows[0].provider_refund_model,
+      );
       const partiallyReversedPayout = await setupPool.query(
         `SELECT status, reversed_minor FROM payouts WHERE payment_id = $1`,
         [paymentId],
@@ -7457,8 +7961,14 @@ if (!databaseUrl) {
             }),
           },
         );
-        assert.equal(completedRefundReplayDuringPayout.status, 200);
-        assert.equal((await completedRefundReplayDuringPayout.json()).replayed, true);
+        const completedRefundReplayDuringPayoutPayload =
+          await completedRefundReplayDuringPayout.json();
+        assert.equal(
+          completedRefundReplayDuringPayout.status,
+          200,
+          JSON.stringify(completedRefundReplayDuringPayoutPayload),
+        );
+        assert.equal(completedRefundReplayDuringPayoutPayload.replayed, true);
         const secondPayoutRequest = concurrentPayoutRequest();
         releaseHeldTransfer();
         concurrentPayoutResponses = await Promise.all([

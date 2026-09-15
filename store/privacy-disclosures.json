@@ -80,7 +80,7 @@
     },
     {
       "path": "backend/src/privacy_export.js",
-      "sha256": "f3d504d7650f8b94cc51db3483705ce4d381d9e5cf0c58021b9cc2e2779233b3"
+      "sha256": "f93bd2f3e357161eae96a72656ed2cf30683018fb1359620af09bae672fd0554"
     },
     {
       "path": "backend/src/observability.js",
@@ -284,7 +284,7 @@
     },
     {
       "path": "backend/src/moderation_workflow.js",
-      "sha256": "534253d5bcdcb541b73740d9b58e7b70568397dc9f53e04fa28ef2c8158a912a"
+      "sha256": "375cc4babfb0bc09e57e12accf1c85783e92a3465c21710710a962ca1496c794"
     },
     {
       "path": "backend/src/moderation_decision_workflow.js",
@@ -304,7 +304,7 @@
     },
     {
       "path": "backend/src/compliance_review.js",
-      "sha256": "21dd9f9d05143840425bd80b4a082ac6cd9f6a8fe07ccea8fbab854d7476d5cb"
+      "sha256": "af8b855473b6c99cb0b636240880e1bdb9af2eda72f96c5ec19e60aa31f0fe0c"
     },
     {
       "path": "backend/src/operator_readiness.js",
@@ -328,7 +328,7 @@
     },
     {
       "path": "backend/src/v51_withdrawal_workflow.js",
-      "sha256": "35508c213c6b9d193fce39b65f16d33cb19474c06b7f6bf2e1cf8e0baf445056"
+      "sha256": "98f4c1ee0dbecf9cc44235e41834873e56c9f16aec98e60eae108a7e413d399d"
     },
     {
       "path": "backend/src/v52_actual_loss_workflow.js",
@@ -608,7 +608,7 @@
     },
     {
       "path": "backend/src/financial_documents.js",
-      "sha256": "f8de734a21577f038cd881aca8e07f6fcd3ecf776ab18e9e76bdd48b72177000"
+      "sha256": "6e561a95bc221d79f979e90f84b689fad06fee626018ebac595f8f150e99f841"
     },
     {
       "path": "backend/sql/migrations/020_v51_financial_documents.up.sql",
@@ -632,7 +632,7 @@
     },
     {
       "path": "backend/src/notifications.js",
-      "sha256": "72d400d24b5fe98fd1ed71e2d9e1e8614740a575d967a45ea89b0408368f9582"
+      "sha256": "197800e61f9679262e6c0ef9ad5337cca5810ed44aeec55b9add6004402347ef"
     },
     {
       "path": "backend/src/push_sender.js",
@@ -752,7 +752,7 @@
     },
     {
       "path": "lib/screens/moderation_admin_screen.dart",
-      "sha256": "79797c86064137ac8f84f7dfc21e217c25d062725de9878c319ae45984adf425"
+      "sha256": "8d9902c0eee25988518a5168c0d12a0983ba9aed134b3ffe11bff8c9f1a887a7"
     },
     {
       "path": "lib/screens/moderation_decisions_screen.dart",
@@ -836,27 +836,27 @@
     },
     {
       "path": "lib/screens/payment_checkout_screen.dart",
-      "sha256": "552f08b2c2037f0513dfbbcc49f106dbb815831a657da1c8e435085cac41dda2"
+      "sha256": "322206148524f0b42dae31b96b62d023fb79bff0288d7f9ccd62d2100e011ce8"
     },
     {
       "path": "lib/models/invoice.dart",
-      "sha256": "88a76b48770de56737b6e9a2330101ffaa34261b050ef728befe64043105574c"
+      "sha256": "60c5e27d5a742c5570701f6a865137823e8fca01d20b76025f200bbc30226d56"
     },
     {
       "path": "lib/services/invoices_service.dart",
-      "sha256": "00df3ef3c2f31b00e1bd50889ec67d6af25a9d2285a2e2c3bfb1ab299eb7ad4a"
+      "sha256": "26e8fac9ad07c7c71012fdc8fe707c7c1b3efa486bebf5a216194e456126e673"
     },
     {
       "path": "lib/services/invoice_pdf_service.dart",
-      "sha256": "115b09ca2a8fc47059aa7b044ef7b557a973de667df5176fa28a0a5170d6db82"
+      "sha256": "9ed4df9a7f922f59003827ce65c75c214a34a67a00d0ec2a1bab4d29fb741914"
     },
     {
       "path": "lib/screens/invoices_screen.dart",
-      "sha256": "2313df95285340683deadb31ed9141f393fd1ec4ac56a7ec358ce38a775497ac"
+      "sha256": "2566abd3a051bc6e6ff71ce1ff4dc793af55db7b8084303f40dc80cac92af8c9"
     },
     {
       "path": "lib/screens/invoice_detail_screen.dart",
-      "sha256": "18270de113da5210087f4c105ce609d10a7e3d7b60ac458dbc3f639e5ce671eb"
+      "sha256": "098210b27bb814337d46ccb3df779476877a439c411d4712d94d4f62eaae0543"
     },
     {
       "path": "lib/screens/booking_detail_screen.dart",
@@ -900,7 +900,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "95293687d7b40af66935368e15be52100c55253b68c5e1df41d6461bf6d9e66a"
+      "sha256": "276b31559087725855c3cfb6f86141757e5209836172eba5c4a92fb74eb2d7ab"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
