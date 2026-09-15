@@ -98,6 +98,8 @@ const sourcePaths = [
   'backend/sql/schema.sql',
   'backend/sql/migrations/006_b7_communications.up.sql',
   'backend/sql/migrations/014_account_legal_holds.up.sql',
+  'backend/sql/migrations/078_retention_legal_hold_scope.up.sql',
+  'backend/sql/migrations/078_retention_legal_hold_scope.down.sql',
   'backend/sql/migrations/015_v51_contract_persistence.up.sql',
   'backend/sql/migrations/016_v51_booking_quotes.up.sql',
   'backend/sql/migrations/017_v51_contract_receipts.up.sql',
@@ -655,6 +657,8 @@ function assertSourceContracts(root, sourceTexts) {
     fail('Independent moderation review evidence must be append-only, exportable and rollback-protected.');
   }
   const legalHoldMigration = text(root, sourceTexts, 'backend/sql/migrations/014_account_legal_holds.up.sql');
+  const legalHoldScopeMigration = text(root, sourceTexts, 'backend/sql/migrations/078_retention_legal_hold_scope.up.sql');
+  const legalHoldScopeRollback = text(root, sourceTexts, 'backend/sql/migrations/078_retention_legal_hold_scope.down.sql');
   for (const marker of [
     'CREATE TABLE IF NOT EXISTS account_legal_holds',
     'account_legal_holds_one_active_per_user_idx',
@@ -662,6 +666,19 @@ function assertSourceContracts(root, sourceTexts) {
     'release_idempotency_key TEXT UNIQUE',
   ]) {
     if (!legalHoldMigration.includes(marker)) fail(`Account legal-hold migration is missing the contract: ${marker}.`);
+  }
+  for (const marker of [
+    'ADD COLUMN IF NOT EXISTS dataset_key TEXT',
+    'ADD COLUMN IF NOT EXISTS record_key TEXT',
+    'ADD COLUMN IF NOT EXISTS review_due_at TIMESTAMPTZ',
+    'ADD COLUMN IF NOT EXISTS hold_ends_at TIMESTAMPTZ',
+    'retention legal-hold migration requires explicit scope and review/end values',
+    'account_legal_holds_one_active_per_record_idx',
+  ]) {
+    if (!legalHoldScopeMigration.includes(marker)) fail(`Record-scoped legal-hold migration is missing the contract: ${marker}.`);
+  }
+  if (!legalHoldScopeRollback.includes('rollback refused: record-scoped retention legal-hold evidence exists')) {
+    fail('Record-scoped legal-hold rollback must be refusal-only.');
   }
   for (const marker of [
     'active_legal_holds',
@@ -1926,6 +1943,14 @@ export function validateRetentionDeletionReadiness({
       || controls.legalHold?.adminStepUpRequired !== true
       || controls.legalHold?.supportRoleDenied !== true
       || controls.legalHold?.idempotentLifecycle !== true
+      || controls.legalHold?.recordScoped !== true
+      || controls.legalHold?.datasetAndRecordRequired !== true
+      || controls.legalHold?.reviewAndEndRequired !== true
+      || controls.legalHold?.unboundedHoldRejected !== true
+      || controls.legalHold?.expiredHoldDoesNotBlockDeletion !== true
+      || controls.legalHold?.auditIncludesScopeAndWindow !== true
+      || controls.legalHold?.profileRestoreGuard
+        !== 'isolated-restore-rejects-revived-deleted-profile'
       || controls.legalHold?.technicalEvidenceRef !== legalHoldEvidencePath) {
     fail('Credential cleanup and retention controls must stay technically enforced and policy-fail-closed.');
   }

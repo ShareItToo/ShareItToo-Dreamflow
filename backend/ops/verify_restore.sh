@@ -80,12 +80,35 @@ if [[ ! "$task_table_count" =~ ^[0-9]+$ ]] || (( task_table_count < 1 )); then
   exit 1
 fi
 
+# A restore check must never turn an erased profile back into an active or
+# identifiable profile.  Keep this aggregate-only: no user IDs/emails leave
+# the isolated verifier.  The check is deliberately read-only and applies only
+# to this temporary restore database, never to production.
+task_deleted_profile_guard="$(docker exec "$task_container" psql -U shareittoo_restore -d shareittoo_restore -Atc \
+  "SELECT count(*) FILTER (WHERE account_status = 'active'),
+          count(*) FILTER (WHERE account_status <> 'closed'
+                             OR deactivated_at IS NULL
+                             OR password_hash IS NOT NULL
+                             OR email !~ '^deleted\\+[^@]+@anonymized\\.invalid$')
+     FROM users
+    WHERE personal_data_erased_at IS NOT NULL;")"
+if [[ ! "$task_deleted_profile_guard" =~ ^[0-9]+\|[0-9]+$ ]]; then
+  echo "Isolated restore deleted-profile guard returned an invalid aggregate result." >&2
+  exit 1
+fi
+task_active_erased_profiles="${task_deleted_profile_guard%%|*}"
+task_invalid_erased_profiles="${task_deleted_profile_guard##*|}"
+if (( task_active_erased_profiles > 0 || task_invalid_erased_profiles > 0 )); then
+  echo "Isolated restore contains revived or incompletely erased profile state." >&2
+  exit 1
+fi
+
 tar -xzf "$task_uploads" --no-same-owner --no-same-permissions -C "$task_extract_dir"
 task_upload_count="$(find "$task_extract_dir" -type f | wc -l | tr -d ' ')"
 
 install -d -m 700 "$task_report_dir"
 task_report="$task_report_dir/restore-check-$task_run_id.json"
-printf '{"backupTimestamp":"%s","databaseTables":%s,"uploadFiles":%s,"verifiedAt":"%s"}\n' \
+printf '{"backupTimestamp":"%s","databaseTables":%s,"uploadFiles":%s,"deletedProfileRestoreGuard":"passed","verifiedAt":"%s"}\n' \
   "$task_timestamp" "$task_table_count" "$task_upload_count" "$task_run_id" > "$task_report"
 chmod 600 "$task_report"
 

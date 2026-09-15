@@ -69,6 +69,8 @@ test('deadline reminders are internal, idempotent and expose no transport', () =
 
 test('legal holds stay separate and privacy artifacts are exported and inventoried safely', () => {
   assert.match(workflow, /FROM account_legal_holds AS legal_hold/u);
+  assert.ok((workflow.match(/hold_ends_at >= now\(\)/gu) ?? []).length >= 4);
+  assert.match(app, /hold_ends_at >= now\(\)/u);
   assert.match(workflow, /erasureExecutionAllowed: false/u);
   assert.match(workflow, /disclosureAllowed: false/u);
   for (const table of [

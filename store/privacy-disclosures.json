@@ -128,7 +128,7 @@
     },
     {
       "path": "backend/src/support_privacy_rights_workflow.js",
-      "sha256": "fe21456dd0bfc158682b6f908ed8d8a463668ff827c4cc4d645ec46a34d08173"
+      "sha256": "4ec6c9dc11fe725af7a299e7006dafff82a75d05443efa55523531e502bac486"
     },
     {
       "path": "backend/src/support_privacy_incident_domain.js",
@@ -288,7 +288,7 @@
     },
     {
       "path": "backend/src/moderation_workflow.js",
-      "sha256": "375cc4babfb0bc09e57e12accf1c85783e92a3465c21710710a962ca1496c794"
+      "sha256": "af94348d8c9bef577a79713b538465f9321c886702b38827d9e9695cfc39f5c6"
     },
     {
       "path": "backend/src/moderation_decision_workflow.js",
@@ -904,7 +904,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "119e1e00f1d5a2055daf9060b6478ede80f5616afd2c4e5f4ff7d3f0bde5c3cf"
+      "sha256": "ceff8df7d81b47702bdbad13133bc73c86c9913b3f52bc908352c19269e832fb"
     },
     {
       "path": "backend/src/rate_limit_policy.js",

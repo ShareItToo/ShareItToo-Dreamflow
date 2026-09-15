@@ -12,4 +12,10 @@ test('isolated restore waits for the final Postgres TCP server', () => {
 
   assert.equal(readinessProbes.length, 2);
   assert.doesNotMatch(script, /pg_isready -U shareittoo_restore/);
+  assert.match(script, /deletedProfileRestoreGuard/u);
+  assert.match(script, /personal_data_erased_at IS NOT NULL/u);
+  assert.match(script, /account_status <> 'closed'/u);
+  assert.match(script, /password_hash IS NOT NULL/u);
+  assert.match(script, /email !~ '\^deleted\\\\\+\[\^@\]\+@anonymized\\\\\.invalid\$'/u);
+  assert.match(script, /revived or incompletely erased profile state/u);
 });

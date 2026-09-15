@@ -6,7 +6,7 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "45854cd5bc91c3c00a876a988e94aaa0e403169f7390bb596e3b5bdeb74cfeb2"
+    "sourceInventoryDigest": "549c07909ddb18708334fd5a56da51d8c6179c0209e61bb7b3fbed18cfde0e11"
   },
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -166,12 +166,12 @@
     "backend/test/v52_actual_loss_persistence.test.js": "479314b6be1b8a8e48d37fdcc96763791f95fa8dfff02feaffd736ea36dafd95",
     "backend/test/v52_actual_loss_workflow.test.js": "16765f5f8eb20eee8fd5bdb69a7bac9b4249b522e23a302bb0d720e1073eb875",
     "backend/test/v52_contract_workflow.test.js": "7014a6c2a74861078b24bb198c5b3712ae65ddc4c28bcec3076d9f5c252aa686",
-    "docs/current_state.md": "21640ce297327ab08e8357dc88c88325443203384daf473aec23ba91e2a35fb8",
-    "docs/current_work_package.md": "2bdace2e2a10531e5192f0a685176362f0ef140ef5168abc077005ea066dc51a",
+    "docs/current_state.md": "2f5903b889023b3572eb67ef0747cc89370a7c3b8ebe2321718ce6561fd88aae",
+    "docs/current_work_package.md": "b6e6f7b3fcdc5cd9b50a62a2f084fe5e7f30906bffceecfd950a4547c5ebbd44",
     "docs/operations/WP149_PAYMENT_V52_CONTRACT_BINDING_PARITY_2026-09-14.md": "e87000894b3e7763c066e963259b9a13527f33aad74bff086e0e2cccf9f4feba",
-    "scripts/technical_regression_check.sh": "a2bac13ef49f5e846517293d8f3010b575939de875f3e0156b07fd1679c32ba1",
-    "store/privacy-disclosures.json": "4448cbd7a5528ef11eb48cfa116269e2711db05a4d03419800f7a467e25d1b25",
-    "store/retention-deletion-readiness.json": "347a2e768f24193d04fe803ba5feb193e889b9784514d63e70e553ead2da5488",
+    "scripts/technical_regression_check.sh": "faf2aa11e4f7a49dc55dcc065afc92482e481bc356b6b173f2113bc4603c098e",
+    "store/privacy-disclosures.json": "304af9d3a6b08a9d13b97b2b3664d985dc55568572e4881297c53196ba61a0f2",
+    "store/retention-deletion-readiness.json": "ccfcb96f5124b9b65cfb2704f5f4a93f35e0a115d66cab68344a61412a23c0b6",
     "test/tool/payment_provider_truthfulness_wiring.test.mjs": "28ae2b8d641cd50c145688eea626f47b5825192fe664261790a142f389f11d1c",
     "test/tool/v51_withdrawal_and_cancellation_wiring.test.mjs": "194ea5724a73232238bb0b6d9616c5d44f71af2c992e2378713fef6bf9784c7d",
     "test/tool/validate_p0b_astra_ai_legal_crosscheck.test.mjs": "1c0b806a11a5d30119276074ae659031a6eef5a384e99ffed54ee69b0590c937",
@@ -181,7 +181,7 @@
     "tool/validate_p0b_ai_legal_preassessment.mjs": "4823d05e0c12c78a0d83d854a0d4c8674db14984988899645652a11d4ba24b17",
     "tool/validate_p0b_astra_ai_legal_crosscheck.mjs": "f9c761d8c14df7a10dbb1ffbaf7c911249e81b2e10b84cbbb0a016dcd4d96199",
     "tool/validate_privacy_disclosures.mjs": "3f0742a16233c6cef8bba890ad7b98d48245b33b7eb109511b11e4b3ade92384",
-    "tool/validate_retention_deletion_readiness.mjs": "0e95e1e2743e70a1a17e32e17a3697e3bdc32ecfcce032c9c10b814583d8f324",
+    "tool/validate_retention_deletion_readiness.mjs": "b7b31cb4284df5ce0f9d5d29a848cfa423a2cc0c8337e66b2253d695f0f2a868",
     "tool/validate_wp149_payment_v52_contract_binding_parity.mjs": "84b0b533c621c8d30623c51a6ab82eb9399b2472b9efc1bc16d9899f1ad6731d"
   }
 }

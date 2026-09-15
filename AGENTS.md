@@ -40,6 +40,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 - Team handoffs use four short fields: `RESULT`, `EVIDENCE`, `BLOCKER`, `NEXT`.
   Add detail only when Maximus/owner action, safety or regulated risk requires
   it. Never compress away a decisive error, version, hash, source or gate.
+- A delegated Luna turn must not end silently. If the package is unfinished and
+  no named gate blocks it, continue the same package. If execution must stop,
+  return the four-field capsule with the exact preserved paths and next command;
+  an idle/completed turn state alone is not a valid blocker or handoff.
 
 ## Project-safe handoffs
 

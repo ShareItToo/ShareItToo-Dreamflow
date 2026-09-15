@@ -101,13 +101,41 @@ function legalHoldShape(row) {
   return {
     id: row.id,
     userId: row.user_id,
+    datasetKey: row.dataset_key,
+    recordKey: row.record_key,
     reasonCode: row.reason_code,
     placedBy: row.placed_by,
     createdAt: new Date(row.created_at).toISOString(),
+    reviewDueAt: new Date(row.review_due_at).toISOString(),
+    holdEndsAt: new Date(row.hold_ends_at).toISOString(),
     releasedAt: row.released_at ? new Date(row.released_at).toISOString() : null,
     releasedBy: row.released_by ?? null,
     releaseReasonCode: row.release_reason_code ?? null,
   };
+}
+
+function legalHoldTimestamp(value, code) {
+  if (typeof value !== 'string' || !value.trim() || !Number.isFinite(Date.parse(value))) {
+    throw new ModerationWorkflowError(400, code);
+  }
+  return new Date(value).toISOString();
+}
+
+function legalHoldScope(candidate) {
+  const datasetKey = text(candidate.datasetKey, 120).toLowerCase();
+  const recordKey = text(candidate.recordKey, 240);
+  if (!datasetKey || !/^[a-z0-9_.:-]+$/.test(datasetKey)) {
+    throw new ModerationWorkflowError(400, 'legal_hold_dataset_required');
+  }
+  if (!recordKey || !/^[A-Za-z0-9_.:-]+$/.test(recordKey)) {
+    throw new ModerationWorkflowError(400, 'legal_hold_record_required');
+  }
+  const reviewDueAt = legalHoldTimestamp(candidate.reviewDueAt, 'legal_hold_review_due_required');
+  const holdEndsAt = legalHoldTimestamp(candidate.holdEndsAt, 'legal_hold_end_required');
+  if (Date.parse(holdEndsAt) < Date.parse(reviewDueAt)) {
+    throw new ModerationWorkflowError(400, 'legal_hold_window_invalid');
+  }
+  return { datasetKey, recordKey, reviewDueAt, holdEndsAt };
 }
 
 async function assertReportTarget(client, actorId, report) {
@@ -951,6 +979,7 @@ export async function liftUserSuspension(client, {
 export async function createAccountLegalHold(client, { actor, userId, raw, idempotencyKey }) {
   if (actor.role !== 'admin') throw new ModerationWorkflowError(403, 'admin_role_required');
   const candidate = object(raw, 'invalid_legal_hold');
+  const scope = legalHoldScope(candidate);
   const reasonCode = text(candidate.reasonCode, 120).toLowerCase();
   if (!reasonCode || !/^[a-z0-9_.:-]+$/.test(reasonCode)) {
     throw new ModerationWorkflowError(400, 'legal_hold_reason_required');
@@ -973,24 +1002,39 @@ export async function createAccountLegalHold(client, { actor, userId, raw, idemp
     throw new ModerationWorkflowError(409, 'staff_legal_hold_requires_emergency_process');
   }
   const active = await client.query(
-    'SELECT id FROM account_legal_holds WHERE user_id = $1 AND released_at IS NULL FOR UPDATE',
-    [userId],
+    `SELECT id FROM account_legal_holds
+     WHERE user_id = $1 AND dataset_key = $2 AND record_key = $3
+       AND released_at IS NULL AND hold_ends_at >= now()
+     FOR UPDATE`,
+    [userId, scope.datasetKey, scope.recordKey],
   );
-  if (active.rowCount) throw new ModerationWorkflowError(409, 'active_legal_hold_exists');
+  if (active.rowCount) throw new ModerationWorkflowError(409, 'active_legal_hold_exists_for_record');
 
   const inserted = await client.query(
     `INSERT INTO account_legal_holds (
-       user_id, reason_code, note, placed_by, idempotency_key
-     ) VALUES ($1, $2, $3, $4, $5)
+       user_id, dataset_key, record_key, reason_code, note, placed_by,
+       review_due_at, hold_ends_at, idempotency_key
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [userId, reasonCode, text(candidate.note, 8000) || null, actor.id, key],
+    [
+      userId, scope.datasetKey, scope.recordKey, reasonCode,
+      text(candidate.note, 8000) || null, actor.id,
+      scope.reviewDueAt, scope.holdEndsAt, key,
+    ],
   );
   await audit(client, {
     actor,
     action: 'privacy.account_legal_hold_created',
     resourceType: 'user',
     resourceId: userId,
-    metadata: { legalHoldId: inserted.rows[0].id, reasonCode },
+    metadata: {
+      legalHoldId: inserted.rows[0].id,
+      reasonCode,
+      datasetKey: scope.datasetKey,
+      recordKey: scope.recordKey,
+      reviewDueAt: scope.reviewDueAt,
+      holdEndsAt: scope.holdEndsAt,
+    },
   });
   return { legalHold: legalHoldShape(inserted.rows[0]), replayed: false };
 }

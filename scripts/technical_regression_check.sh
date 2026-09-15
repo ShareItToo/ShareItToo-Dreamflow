@@ -1228,6 +1228,10 @@ flutter test --reporter expanded \
 flutter test --reporter expanded \
   test/rw20_listing_mutation_principal_epoch_transaction_test.dart
 
+node --check tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs
+node --test test/tool/validate_wp156_retention_legal_hold_enforcement_safety.test.mjs
+node tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs
+
 if ! web_build_output="$(flutter build web --debug 2>&1)"; then
   printf '%s\n' "$web_build_output"
   echo "ERROR: Flutter Web debug build failed." >&2

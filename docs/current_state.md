@@ -1,5 +1,22 @@
 # ShareItToo Current State
 
+## WP156 retention and legal-hold enforcement safety — FULL LOCAL REGRESSION PASSED; external gates HOLD
+
+WP156 is technically fail-closed: legal holds are explicit record-scoped
+dataset/record entries with operator-supplied review and end timestamps;
+unbounded or inferred holds are rejected, support is denied, and active
+uniqueness is per record. Account deletion treats only an expired hold as no
+longer blocking. Migration 078 adds the columns before its legacy-row check and
+refuses rows without explicit values. The isolated restore verifier checks
+aggregate deleted-profile state and rejects revived or incompletely anonymized
+profiles without exposing identifiers. Retention inventory remains read-only,
+aggregate-only and execution-disabled; all 10 retention decisions remain open.
+Focused tests and validators pass. The complete CI-equivalent local regression
+exited 0, including tool tests, Flutter, analyzer, Web/Wasm, loopback smoke,
+Android debug build and release-host capacity checks. No external state changed.
+See
+`docs/operations/WP156_RETENTION_LEGAL_HOLD_ENFORCEMENT_SAFETY_2026-09-15.md`.
+
 ## WP155 processing transparency, purpose/basis and recipient parity — full local regression PASSED; external gates HOLD
 
 The privacy draft now has one fail-closed processing register with exactly

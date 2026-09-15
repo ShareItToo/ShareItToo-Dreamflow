@@ -48,6 +48,14 @@ CREATE INDEX IF NOT EXISTS auth_action_tokens_expiry_idx
 CREATE TABLE IF NOT EXISTS account_legal_holds (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  dataset_key TEXT NOT NULL CHECK (
+    char_length(dataset_key) BETWEEN 1 AND 120
+    AND dataset_key ~ '^[a-z0-9_.:-]+$'
+  ),
+  record_key TEXT NOT NULL CHECK (
+    char_length(record_key) BETWEEN 1 AND 240
+    AND record_key ~ '^[A-Za-z0-9_.:-]+$'
+  ),
   reason_code TEXT NOT NULL CHECK (
     char_length(reason_code) BETWEEN 1 AND 120
     AND reason_code ~ '^[a-z0-9_.:-]+$'
@@ -61,6 +69,8 @@ CREATE TABLE IF NOT EXISTS account_legal_holds (
       AND release_reason_code ~ '^[a-z0-9_.:-]+$'
     )
   ),
+  review_due_at TIMESTAMPTZ NOT NULL,
+  hold_ends_at TIMESTAMPTZ NOT NULL,
   idempotency_key TEXT NOT NULL UNIQUE,
   release_idempotency_key TEXT UNIQUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -71,10 +81,11 @@ CREATE TABLE IF NOT EXISTS account_legal_holds (
     OR
     (released_at IS NOT NULL AND released_by IS NOT NULL AND release_reason_code IS NOT NULL
       AND release_idempotency_key IS NOT NULL AND released_at >= created_at)
-  )
+  ),
+  CHECK (review_due_at >= created_at AND hold_ends_at >= review_due_at)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS account_legal_holds_one_active_per_user_idx
-  ON account_legal_holds(user_id) WHERE released_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS account_legal_holds_one_active_per_record_idx
+  ON account_legal_holds(user_id, dataset_key, record_key) WHERE released_at IS NULL;
 CREATE INDEX IF NOT EXISTS account_legal_holds_created_idx
   ON account_legal_holds(created_at DESC, id);
 

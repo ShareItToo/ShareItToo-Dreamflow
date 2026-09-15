@@ -126,7 +126,8 @@ export async function getPrivacyRightsRequestForCase(client, {
             support_case.current_owner_role,
             (SELECT count(*)::int FROM account_legal_holds AS legal_hold
               WHERE legal_hold.user_id = privacy_request.subject_user_id
-                AND legal_hold.released_at IS NULL) AS active_legal_hold_count
+                AND legal_hold.released_at IS NULL
+                AND legal_hold.hold_ends_at >= now()) AS active_legal_hold_count
        FROM support_privacy_rights_requests AS privacy_request
        JOIN support_cases AS support_case ON support_case.id = privacy_request.case_id
       WHERE privacy_request.case_id::text = $1
@@ -159,7 +160,8 @@ export async function verifyPrivacyRightsRequestIdentity(client, {
     `SELECT privacy_request.*, support_case.human_readable_case_number,
             (SELECT count(*)::int FROM account_legal_holds AS legal_hold
               WHERE legal_hold.user_id = privacy_request.subject_user_id
-                AND legal_hold.released_at IS NULL) AS active_legal_hold_count
+                AND legal_hold.released_at IS NULL
+                AND legal_hold.hold_ends_at >= now()) AS active_legal_hold_count
        FROM support_privacy_identity_verifications AS verification
        JOIN support_privacy_rights_requests AS privacy_request
          ON privacy_request.id = verification.privacy_request_id
@@ -286,7 +288,8 @@ export async function recordPrivacyRightsDeadlineExtension(client, {
             support_case.current_owner_role,
             (SELECT count(*)::int FROM account_legal_holds AS legal_hold
               WHERE legal_hold.user_id = privacy_request.subject_user_id
-                AND legal_hold.released_at IS NULL) AS active_legal_hold_count
+                AND legal_hold.released_at IS NULL
+                AND legal_hold.hold_ends_at >= now()) AS active_legal_hold_count
        FROM support_privacy_deadline_extensions AS extension
        JOIN support_privacy_rights_requests AS privacy_request
          ON privacy_request.id = extension.privacy_request_id
@@ -426,7 +429,8 @@ export async function listPrivacyRightsQueue(client, {
             support_case.current_owner_role,
             (SELECT count(*)::int FROM account_legal_holds AS legal_hold
               WHERE legal_hold.user_id = privacy_request.subject_user_id
-                AND legal_hold.released_at IS NULL) AS active_legal_hold_count
+                AND legal_hold.released_at IS NULL
+                AND legal_hold.hold_ends_at >= now()) AS active_legal_hold_count
        FROM support_privacy_rights_requests AS privacy_request
        JOIN support_cases AS support_case ON support_case.id = privacy_request.case_id
       WHERE privacy_request.processing_status <> 'completed'

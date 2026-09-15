@@ -1,4 +1,24 @@
-# Current Work Package: WP155 Processing Transparency, Purpose/Basis and Recipient Parity — FULL LOCAL REGRESSION PASSED; EXTERNAL GATES HOLD
+# Current Work Package: WP156 Retention and Legal-Hold Enforcement Safety — FULL LOCAL REGRESSION PASSED; EXTERNAL GATES HOLD
+
+WP156 makes the technical legal-hold boundary explicit without deciding legal
+retention periods. Holds are record-scoped by dataset and record key, require
+operator-supplied review/end timestamps, remain admin/idempotency controlled,
+and never use a blanket or inferred duration. Account deletion ignores only
+expired unreleased holds; active holds still block it. The 078 migration adds
+columns before checking legacy rows and refuses to proceed when an existing row
+has no explicit scope/window, so no data is invented or silently discarded.
+
+The isolated restore verifier now rejects aggregate evidence of revived or
+incompletely anonymized deleted profiles. Retention inventory remains
+identifier-free, read-only and execution-disabled; all 10 retention decisions
+remain open. Focused legal-hold, restore-wiring, retention and privacy checks
+pass. The complete CI-equivalent local regression exited 0, including tool
+tests, Flutter, analyzer, Web/Wasm, loopback smoke, Android debug build and
+release-host capacity checks. No provider, payment, production, Store, Firebase, cloud/VPS, device,
+credential or PR-merge action occurred. See
+`docs/operations/WP156_RETENTION_LEGAL_HOLD_ENFORCEMENT_SAFETY_2026-09-15.md`.
+
+# Previous Work Package: WP155 Processing Transparency, Purpose/Basis and Recipient Parity — FULL LOCAL REGRESSION PASSED; EXTERNAL GATES HOLD
 
 WP155 adds a fail-closed processing-transparency register to the privacy draft.
 It contains exactly **14 processing activities**, covers all **18 disclosed

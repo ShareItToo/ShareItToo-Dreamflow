@@ -38,6 +38,10 @@ release evidence.
 - Internal Sol/Luna/Astra messages use only `RESULT`, `EVIDENCE`, `BLOCKER` and
   `NEXT`. Omit narrative unless a Maximus/owner action, safety issue or
   regulated risk cannot be handled correctly without it.
+- A delegated worker turn never ends silently. When unfinished without a named
+  gate, continue the same package. If a runtime boundary forces a stop, return
+  the four-field capsule with preserved paths and the exact next action so Sol
+  can resume it without reconstructing context.
 - Never copy credentials, account identifiers, private links, raw device IDs,
   cookies, tokens, KYC data or secret-bearing configuration into Git, Drive
   reports or chat.

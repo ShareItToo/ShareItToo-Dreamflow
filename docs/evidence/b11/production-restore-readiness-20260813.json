@@ -28,7 +28,7 @@
   },
   "source": {
     "path": "backend/ops/verify_restore.sh",
-    "sha256": "b971055ffd9e28dbbc1e0706a23e7cbbafbe9b2618ccee9d3d7ec52f768ede49",
+    "sha256": "473416fa71fca6b7862e28014bf6db0a41ed7a797be2af11bb051f7d3bbcd3d2",
     "tcpReadinessHost": "127.0.0.1"
   },
   "liveVerification": {

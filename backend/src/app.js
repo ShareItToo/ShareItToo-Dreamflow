@@ -1355,7 +1355,8 @@ export async function accountDeletionPreflight(client, userId) {
         WHERE support_case.reporter_user_id = $1
            OR $1 = ANY(support_case.affected_user_ids)) AS support_case_records,
        (SELECT count(*)::int FROM account_legal_holds
-        WHERE user_id = $1 AND released_at IS NULL) AS active_legal_holds`,
+        WHERE user_id = $1 AND released_at IS NULL
+          AND hold_ends_at >= now()) AS active_legal_holds`,
     [userId],
   );
   const counts = result.rows[0] ?? {};

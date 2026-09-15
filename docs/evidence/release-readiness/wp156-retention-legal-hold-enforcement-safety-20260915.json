@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "package": "WP156-RETENTION-LEGAL-HOLD-ENFORCEMENT-SAFETY-20260915",
+  "status": "technical-closure-full-regression-passed-external-gates-hold",
+  "capturedAt": "2026-09-15T01:00:00Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "baselineHead": "3ff7f9cb2b0f1efdb4dd8443ba9ea7ccdf70c9cc",
+    "finalHead": "3ff7f9cb2b0f1efdb4dd8443ba9ea7ccdf70c9cc",
+    "remoteAhead": 0,
+    "remoteBehind": 0
+  },
+  "decisions": {
+    "openCount": 10,
+    "openKeys": [
+      "inactiveAccountPeriod",
+      "transactionalRecordPeriod",
+      "communicationPeriod",
+      "privacyRightsPeriod",
+      "moderationEvidencePeriod",
+      "auditSecurityLogPeriod",
+      "expiredCredentialPurgePeriod",
+      "backupErasureWindow",
+      "externalProcessorRetention",
+      "legalHoldProcess"
+    ],
+    "executionEnabled": false,
+    "legalDurationsInvented": false,
+    "professionalLegalApproval": false
+  },
+  "invariants": {
+    "recordScoped": true,
+    "datasetAndRecordRequired": true,
+    "reviewAndEndRequired": true,
+    "unboundedHoldRejected": true,
+    "expiredHoldDoesNotBlockDeletion": true,
+    "auditIncludesScopeAndWindow": true,
+    "supportRoleDenied": true,
+    "oneActiveHoldPerRecord": true,
+    "noProfileRestoreFromBackup": true,
+    "restoreCheckIsIsolated": true,
+    "inventoryIsAggregateOnly": true,
+    "inventoryExecutionDisabled": true
+  },
+  "verification": {
+    "retentionReadiness": "valid-draft-execution-blocked",
+    "accountLegalHoldTests": "passed",
+    "restoreWiringTests": "passed",
+    "fullTechnicalRegression": "passed-ci-equivalent-exit-0",
+    "githubRegression": "pending",
+    "githubCodeql": "pending"
+  },
+  "boundaries": {
+    "providerRequestPerformed": false,
+    "paymentPerformed": false,
+    "moneyMoved": false,
+    "deploymentChanged": false,
+    "productionChanged": false,
+    "publicActivationChanged": false,
+    "storeChanged": false,
+    "firebaseChanged": false,
+    "cloudOrVpsChanged": false,
+    "credentialReadOrRecorded": false,
+    "deviceChanged": false,
+    "pullRequestMerged": false
+  },
+  "sourceInventory": {
+    "AGENTS.md": "9f53db239ced1b4901815efe1b05071e7cb86125f1b9bc37b1cbe5fcf125724f",
+    "docs/current_state.md": "b14417a4bf13d19de5d31e8222e330ef3797c2ec0c4429f06ac668547ef4de92",
+    "docs/current_work_package.md": "d2919220b698f4478f5c85b4a0c455d9ea6f64f9dc9422c5ce771d66b5c1c83f",
+    "docs/operations/WP156_RETENTION_LEGAL_HOLD_ENFORCEMENT_SAFETY_2026-09-15.md": "aefcaa4bc15ac6b22697c7b79a17f94ec2d2487235d0d3ccc0abcdd4490be37a",
+    "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md": "9dd69c568efead3e08eb7dd25ca6c8e7d9f5f95e077395acb6db222ab7625e9c",
+    "store/privacy-disclosures.json": "304af9d3a6b08a9d13b97b2b3664d985dc55568572e4881297c53196ba61a0f2",
+    "store/retention-deletion-readiness.json": "ccfcb96f5124b9b65cfb2704f5f4a93f35e0a115d66cab68344a61412a23c0b6",
+    "backend/src/moderation_workflow.js": "af94348d8c9bef577a79713b538465f9321c886702b38827d9e9695cfc39f5c6",
+    "backend/src/app.js": "ceff8df7d81b47702bdbad13133bc73c86c9913b3f52bc908352c19269e832fb",
+    "backend/src/retention_inventory.js": "5710a397d81aa34306608b2971e83fe7e3027bc164ac397ac44400dc7a503e50",
+    "backend/sql/schema.sql": "06059d6f0aef63c276a2df6cc2e011f667e637df8d2a60c4350a9681edb7d2a0",
+    "backend/sql/migrations/014_account_legal_holds.up.sql": "6daf3bf2433be6468399058dce5edeac35027fb211003a30c77ade4a95164123",
+    "backend/sql/migrations/078_retention_legal_hold_scope.up.sql": "755fb77925500b6eef3b1a995358d8d473b0ef2f3e47753f5ff9f8064143989c",
+    "backend/sql/migrations/078_retention_legal_hold_scope.down.sql": "d8094b0f8eefef1788697e3493fc469e68a453598ad3ec9b91605509ef735f53",
+    "backend/ops/verify_restore.sh": "473416fa71fca6b7862e28014bf6db0a41ed7a797be2af11bb051f7d3bbcd3d2",
+    "backend/test/account_legal_hold.test.js": "2e6e22babbea654426b131c04c7c1316e10ea4a347c35f2795eda26d1a90241f",
+    "backend/test/retention_inventory.test.js": "bd15e76866c39d330614295e680f32cf63f8a8970f4cdbd0ffa4e4b834bcab40",
+    "test/tool/verify_restore_readiness_wiring.test.mjs": "8d5294ebf07b2772c14047c5d773d6e16088fdae961c1a1e155b2b31f1de1e45",
+    "test/tool/validate_retention_deletion_readiness.test.mjs": "1db8f20c0da4c956aae8580b00e8048cc708833b0b7009e9691ef796cfb0b466",
+    "test/tool/validate_wp156_retention_legal_hold_enforcement_safety.test.mjs": "5aee231aa9195a47d7abe228bb76014981e7982bfc094df5d7ffc59461b8bcdd",
+    "tool/validate_retention_deletion_readiness.mjs": "b7b31cb4284df5ce0f9d5d29a848cfa423a2cc0c8337e66b2253d695f0f2a868",
+    "tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs": "31a199a0dccd4cf3b2ef658895a0c65f5d9278dd2f11be8f2ccc57c52b298d5c",
+    "scripts/technical_regression_check.sh": "faf2aa11e4f7a49dc55dcc065afc92482e481bc356b6b173f2113bc4603c098e",
+    "backend/src/support_privacy_rights_workflow.js": "4ec6c9dc11fe725af7a299e7006dafff82a75d05443efa55523531e502bac486",
+    "test/tool/support_privacy_rights_control_plane_wiring.test.mjs": "61957f607793513749391ea8fdba330f4078a2063b3c636ceee611a82555da9b"
+  },
+  "captureAttestation": {
+    "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
+    "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
+    "sourceInventoryDigest": "e786daf982cbe149575cf1472e6d4f59ee33af350f1972da20d000d72ef9b70d"
+  }
+}
