@@ -6,7 +6,7 @@
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "baselineHead": "c092cfe84965251f36a8f70525a49082f0959d63",
-    "targetRevision": "a4c923a552dfc798800e80e44573e58ad9d58616",
+    "targetRevision": "66cd0190fd5316113cf96e3677fa41be012d16c3",
     "workingTreeCleanAtCapture": true,
     "remoteAhead": 0,
     "remoteBehind": 0
@@ -55,8 +55,8 @@
   ],
   "sourceInventory": {
     "backend/sql/migrations/079_special_category_intake_minimization.down.sql": "03314e09f068f32cf122fa6f440d1e5aaf164206b177f4c71031be9c83a169ff",
-    "backend/sql/migrations/079_special_category_intake_minimization.up.sql": "7a715e45e42ef18823dba47985942523c0610a4ca5e1b7b9d9b509bc9b5fb50e",
-    "backend/src/app.js": "a04cfce7239fcd188fe1995bffb7f5d2df7d136f7428c96e8584439e0f100bd7",
+    "backend/sql/migrations/079_special_category_intake_minimization.up.sql": "353d56b11eb16044a1adb9a70da3f1316e0d047d3fdbb95806b856dc727237dd",
+    "backend/src/app.js": "984bb489c815c3a2a8d6729ef8900f5d47b1bc82956d865b0e2b343bf81d860d",
     "backend/src/handover_exception_domain.js": "c3e9eebcf7302bd3160ce20715a56928408ea1817957818a5b95fda167b8ee00",
     "backend/src/moderation_domain.js": "a9cea4e6f25faf3d06762d8a45c04b1f1f3d290062aa6bc118ac6d8f9c050558",
     "backend/src/privacy_export.js": "00cf30b19fd5fdb8b69cfde3c1e77b7e7cb1e7995b81acf8e534a236873785ae",
@@ -69,7 +69,7 @@
     "backend/src/support_message_domain.js": "93392bffb853565e17e202de51716014eca698549e761e51eb3be91274d1dafb",
     "backend/test/handover_exception_domain.test.js": "69750b203740b1602d45e08088ad3309be588677867252e9027211a253866791",
     "backend/test/moderation_domain.test.js": "6a66f4e18747e0654311b77d19569f1d21cb48412729daf445fb5128d1fc4e61",
-    "backend/test/postgres_foundation.integration.test.js": "0826cbf91961d4524a259108f7c116b6e5d12d27ded2f2d403cba04917b0df7b",
+    "backend/test/postgres_foundation.integration.test.js": "8fa6de544a1b8a1fd712acd6b06c6a147d85aacee1e08cba5762f22ce3aad47c",
     "backend/test/special_category_data_guard.test.js": "f8a75b3dafad948ea769fa29d8d5c9e715950cf9def3a154cdb79e5477e56e64",
     "backend/test/support_case_domain.test.js": "5104a8145fc48d56f2e9d3810d8a010ff1d6032e81e25d55afaf5d7ee1302d2c",
     "backend/test/support_case_workflow.test.js": "bdb61c6e91b045fccdb2011d0fec4eaf7dde6d7715277ef96bcdfc2508ce7b28",
@@ -78,7 +78,7 @@
     "docs/current_state.md": "4e0d850275120a03b55f6205e15b3bc35ade086f584a9addb92a88629ca982a9",
     "docs/current_work_package.md": "d784df0469c20ac1eb4031807e461791e0baa0b728bbbc665169d554473f25d7",
     "docs/evidence/external-gates/support-evidence-scanner-readiness.json": "d79ea31f1dfcdf3a381bbf548b1c49cd5a9f7e7e02003aa4e6f51d38f5f33a99",
-    "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md": "917b090136bfdf0a4d1c84574ab3f29b4830ee5f3a989605b0c1876ebba3db96",
+    "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md": "06cabe332dcf55254c9ebcc5a578a02a793074b015be3f6fe5909824fffbb3b3",
     "docs/operations/WP160_SPECIAL_CATEGORY_HEALTH_DATA_INTAKE_MINIMIZATION_SAFETY_2026-09-15.md": "c9470a40ebf8a8f515aa22874fbbd6f2321d3fc5e50f2e517598c9974c6de0c4",
     "lib/screens/support_flow_screen.dart": "a66cacd62c8f80305a82bb8113c34de2f95da903a52427294f0f88997d9b95f8",
     "store/privacy-disclosures.json": "aa825e68c46778dd27463e9d7af9c1e1328074771cda1c9cf733bccd8ccc4bce",
@@ -114,7 +114,7 @@
   },
   "captureAttestation": {
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "5891859bc154910758bd556662764e4dfe86f45b3b61fa7efeaae2ad19a3ab70",
+    "sourceInventoryDigest": "49bac93c3bdf05de253ed45feee3c1894b5b7b2f21cf39a7c7d0cd5d64710659",
     "mode": "closure"
   }
 }
