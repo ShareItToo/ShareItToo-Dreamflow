@@ -5,7 +5,7 @@
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "baselineHead": "f2b6a32c387d43b93c137ce2217ba30dd6da4562",
-    "sourceHead": "2301de3cd0dc1f32b8a024ea7ea4101d8ea7d565"
+    "sourceHead": "0357886420ee8fab63cb88bcc722d019e8cc62ab"
   },
   "sourceInventory": [
     {
@@ -23,20 +23,26 @@
     {
       "path": "docs/operations/WP161_CURRENT_CONSUMER_CLOSURE_RULES_2026-09-16.md",
       "sha256": "34e798563b72c73d130fff0b09b22cb4c9c82f25eb588963f9540112390b17b1"
+    },
+    {
+      "path": "tool/validate_wp160_special_category_health_data_intake.mjs",
+      "sha256": "fa40dcd81a21eecd4207793f79e2806aa8c5d3e8da5a07d5afacf1c3cbe41056"
     }
   ],
   "closure": {
-    "changedPathCount": 4,
+    "changedPathCount": 5,
     "currentMutableManifestCount": 3,
-    "currentCodeConsumerCount": 0,
-    "directTestConsumerCount": 2,
-    "consumerTestCount": 2,
-    "preflightDurationMs": 165,
+    "currentCodeConsumerCount": 1,
+    "directTestConsumerCount": 4,
+    "consumerTestCount": 4,
+    "preflightDurationMs": 168,
     "historicalEvidenceRewritten": false
   },
   "consumerTests": [
     "test/tool/check_current_consumer_closure.test.mjs",
-    "test/tool/release_host_capacity_guard_wiring.test.mjs"
+    "test/tool/release_host_capacity_guard_wiring.test.mjs",
+    "test/tool/validate_wp160_source_binding_reverse_index.test.mjs",
+    "test/tool/validate_wp160_special_category_health_data_intake.test.mjs"
   ],
   "migrationInventory": {
     "count": 79,
