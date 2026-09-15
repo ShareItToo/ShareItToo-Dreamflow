@@ -131,6 +131,66 @@ test('exact revision mode ignores later anchor-only evidence successors', () => 
   }
 });
 
+test('exact and non-exact cache entries stay isolated in both call orders', () => {
+  const run = ({ exactFirst }) => {
+    const { repo, baseline } = fixture();
+    try {
+      writeFileSync(join(repo, 'stable.txt'), 'stable-v3\n');
+      git(repo, ['add', '.']);
+      git(repo, ['commit', '-qm', 'source closure']);
+      const final = git(repo, ['rev-parse', 'HEAD']);
+      const inventory = { 'stable.txt': digest('stable-v3\n') };
+      if (exactFirst) {
+        writeFileSync(join(repo, 'closure-evidence.json'), '{"anchor":false,"v":3}\n');
+        git(repo, ['add', 'closure-evidence.json']);
+        git(repo, ['commit', '-qm', 'anchor-only successor']);
+        const exact = resolveBoundSnapshot({
+          repositoryRoot: repo,
+          baselineHead: baseline,
+          anchorPath: 'closure-evidence.json',
+          finalHead: final,
+          exactRevision: true,
+          inventory,
+        });
+        const nonExact = resolveBoundSnapshot({
+          repositoryRoot: repo,
+          baselineHead: baseline,
+          anchorPath: 'closure-evidence.json',
+          finalHead: final,
+          inventory,
+        });
+        assert.equal(exact.revision, final);
+        assert.notEqual(nonExact.revision, exact.revision);
+      } else {
+        const nonExactBeforeSuccessor = resolveBoundSnapshot({
+          repositoryRoot: repo,
+          baselineHead: baseline,
+          anchorPath: 'closure-evidence.json',
+          finalHead: final,
+          inventory,
+        });
+        writeFileSync(join(repo, 'closure-evidence.json'), '{"anchor":false,"v":3}\n');
+        git(repo, ['add', 'closure-evidence.json']);
+        git(repo, ['commit', '-qm', 'anchor-only successor']);
+        const exactAfterSuccessor = resolveBoundSnapshot({
+          repositoryRoot: repo,
+          baselineHead: baseline,
+          anchorPath: 'closure-evidence.json',
+          finalHead: final,
+          exactRevision: true,
+          inventory,
+        });
+        assert.equal(nonExactBeforeSuccessor.revision, final);
+        assert.equal(exactAfterSuccessor.revision, final);
+      }
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  };
+  run({ exactFirst: false });
+  run({ exactFirst: true });
+});
+
 test('rejects a wrong digest and injected source drift', () => {
   const { repo, baseline } = fixture();
   try {
