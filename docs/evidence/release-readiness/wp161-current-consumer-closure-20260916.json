@@ -14,7 +14,7 @@
     },
     {
       "path": "tool/check_current_consumer_closure.mjs",
-      "sha256": "11efa8ed062d23a86ad722297b92d47fda0c194889c4695f5055302d5157fa23"
+      "sha256": "4e82122d0e4b8b655f991752a6a787a1c12b9e0bf48ef5c717073743f8448664"
     },
     {
       "path": "test/tool/check_current_consumer_closure.test.mjs",
