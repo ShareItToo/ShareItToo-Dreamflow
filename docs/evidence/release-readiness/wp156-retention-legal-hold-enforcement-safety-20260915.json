@@ -86,8 +86,10 @@
     "test/tool/verify_restore_readiness_wiring.test.mjs": "8d5294ebf07b2772c14047c5d773d6e16088fdae961c1a1e155b2b31f1de1e45",
     "test/tool/validate_retention_deletion_readiness.test.mjs": "1db8f20c0da4c956aae8580b00e8048cc708833b0b7009e9691ef796cfb0b466",
     "test/tool/validate_wp156_retention_legal_hold_enforcement_safety.test.mjs": "5aee231aa9195a47d7abe228bb76014981e7982bfc094df5d7ffc59461b8bcdd",
+    "test/tool/run_r9_database_recovery.test.mjs": "11bc924745bc4120c92a9554742df34efecff1ac1b34df99e5ae969faa20a6ba",
     "tool/validate_retention_deletion_readiness.mjs": "b7b31cb4284df5ce0f9d5d29a848cfa423a2cc0c8337e66b2253d695f0f2a868",
-    "tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs": "d7c085c5450752a9fe617d9e3b458fb25dd2e409bc219d2f50b589428f3895cb",
+    "tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs": "346cdca5cede592b7f4955a22439db0fcf5833cff9f5f4d5195cb5a484da9499",
+    "tool/run_r9_database_recovery.mjs": "a8566901f992bb05e78382fc4c3e0a1267e1e8cce0ac413e5c2681d9b8fef796",
     "scripts/technical_regression_check.sh": "faf2aa11e4f7a49dc55dcc065afc92482e481bc356b6b173f2113bc4603c098e",
     "backend/src/support_privacy_rights_workflow.js": "4ec6c9dc11fe725af7a299e7006dafff82a75d05443efa55523531e502bac486",
     "test/tool/support_privacy_rights_control_plane_wiring.test.mjs": "61957f607793513749391ea8fdba330f4078a2063b3c636ceee611a82555da9b"
@@ -95,6 +97,6 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "ac6510ac2c6e129755aa25d24da9aa777357e5d0c423fd28d7e8c4c714da596e"
+    "sourceInventoryDigest": "25a761f0b68b582ee5bc37b62538a537f617e7367215afa2ac39806e4a95ab98"
   }
 }

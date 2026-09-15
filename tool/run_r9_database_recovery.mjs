@@ -28,7 +28,7 @@ const requireFromBackend = createRequire(
   new URL('../backend/package.json', import.meta.url),
 );
 
-export const r9RequiredMigrationCount = 77;
+export const r9RequiredMigrationCount = 78;
 export const r9SyntheticAccountCount = 12;
 export const r9SyntheticListingCount = 6;
 export const r9ResultClassification = 'LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF';
@@ -150,7 +150,7 @@ async function readMigrationPlan(root) {
   }
   if (plan.length !== r9RequiredMigrationCount
       || plan[0]?.filename !== '001_b3_foundation.up.sql'
-      || plan.at(-1)?.filename !== '077_refund_provider_truth_parity.up.sql') {
+      || plan.at(-1)?.filename !== '078_retention_legal_hold_scope.up.sql') {
     fail('r9_migration_inventory_unexpected');
   }
   return Object.freeze(plan);
@@ -744,7 +744,7 @@ async function closePools(pools) {
 
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
-  requiredLastMigration = '077_refund_provider_truth_parity.up.sql',
+  requiredLastMigration = '078_retention_legal_hold_scope.up.sql',
   requiredRollbackGuards = rollbackGuardExpectations,
 } = {}) {
   if (value?.schemaVersion !== 1

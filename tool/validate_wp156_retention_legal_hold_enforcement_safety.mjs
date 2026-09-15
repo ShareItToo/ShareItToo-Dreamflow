@@ -34,8 +34,10 @@ export const wp156SourcePaths = Object.freeze([
   'test/tool/verify_restore_readiness_wiring.test.mjs',
   'test/tool/validate_retention_deletion_readiness.test.mjs',
   'test/tool/validate_wp156_retention_legal_hold_enforcement_safety.test.mjs',
+  'test/tool/run_r9_database_recovery.test.mjs',
   'tool/validate_retention_deletion_readiness.mjs',
   'tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs',
+  'tool/run_r9_database_recovery.mjs',
   'scripts/technical_regression_check.sh',
 ]);
 
