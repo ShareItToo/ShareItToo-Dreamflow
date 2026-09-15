@@ -30,6 +30,10 @@ release evidence.
   be reproduced.
 - Keep normal deterministic timing and parallelism. Rate-limit, cache, timing
   or reduced-parallelism workarounds are Technical Debt, never release proof.
+- When a push automatically starts CI, do not push intermediate repair states:
+  bundle repairs locally with focused tests, push one stable source state, then
+  one final evidence-only state. The sole exception is a necessary external CI
+  diagnosis, which must be documented.
 
 ## Compact evidence and communication
 

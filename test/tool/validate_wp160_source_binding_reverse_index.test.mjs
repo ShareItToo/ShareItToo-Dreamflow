@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +8,7 @@ import test from 'node:test';
 
 import {
   deriveChangedSourcePaths,
+  deriveCurrentMutableBindings,
   deriveWp160ReverseIndex,
   validateWp160ReverseIndex,
 } from '../../tool/validate_wp160_source_binding_reverse_index.mjs';
@@ -25,6 +26,16 @@ test('accepts the machine-derived WP160 reverse source-binding index', () => {
   const result = validateWp160ReverseIndex({ repositoryRoot });
   assert.equal(result.changedSources, 58);
   assert.ok(result.historicalBindings > 0);
+  const derived = deriveWp160ReverseIndex({ repositoryRoot });
+  assert.deepEqual(derived.currentMutableBindings.map(({ binding }) => binding), [
+    'docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json',
+    'docs/evidence/external-gates/support-evidence-scanner-readiness.json',
+    'store/privacy-disclosures.json',
+    'store/retention-deletion-readiness.json',
+  ]);
+  assert.ok(derived.currentMutableBindings
+    .find(({ binding }) => binding.endsWith('support-evidence-scanner-readiness.json'))
+    .paths.includes('backend/src/support_evidence_workflow.js'));
 });
 
 test('rejects omitted mutable bindings and rewritten historical evidence', () => {
@@ -44,6 +55,13 @@ test('rejects omitted mutable bindings and rewritten historical evidence', () =>
     .filter((path) => path !== 'docs/current_work_package.md');
   assert.throws(
     () => validateWp160ReverseIndex({ repositoryRoot, evidence: omittedChangedDoc }),
+    /machine-derived closure/u,
+  );
+  const omittedCurrentConsumer = structuredClone(evidence);
+  omittedCurrentConsumer.currentMutableBindings = omittedCurrentConsumer.currentMutableBindings
+    .filter(({ binding }) => !binding.endsWith('support-evidence-scanner-readiness.json'));
+  assert.throws(
+    () => validateWp160ReverseIndex({ repositoryRoot, evidence: omittedCurrentConsumer }),
     /machine-derived closure/u,
   );
   const rewritten = structuredClone(evidence);
@@ -159,5 +177,30 @@ test('the full WP160 gate stays bound to the closure commit after a successor', 
     );
   } finally {
     rmSync(clone, { recursive: true, force: true });
+  }
+});
+
+test('current mutable roots discover a newly added manifest automatically', () => {
+  const repository = mkdtempSync(join(tmpdir(), 'sit-wp160-current-root-'));
+  try {
+    mkdirSync(join(repository, 'docs/evidence/external-gates'), { recursive: true });
+    mkdirSync(join(repository, 'store'), { recursive: true });
+    const manifest = JSON.stringify({
+      sourceBindings: {
+        repository: [{ path: 'backend/src/new-current-source.js', sha256: 'a'.repeat(64) }],
+      },
+    });
+    writeFileSync(join(repository, 'docs/evidence/external-gates', 'first.json'), manifest);
+    writeFileSync(join(repository, 'store', 'fourth.json'), manifest);
+    const bindings = deriveCurrentMutableBindings(
+      repository,
+      ['backend/src/new-current-source.js'],
+    );
+    assert.deepEqual(bindings.map(({ binding }) => binding), [
+      'docs/evidence/external-gates/first.json',
+      'store/fourth.json',
+    ]);
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
   }
 });

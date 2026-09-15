@@ -10,6 +10,10 @@ export const reverseIndexEvidencePath =
   'docs/evidence/release-readiness/wp160-source-binding-reverse-index-20260915.json';
 export const currentWp160EvidencePath =
   'docs/evidence/release-readiness/wp160-special-category-health-data-intake-minimization-safety-20260915.json';
+export const currentMutableBindingRoots = Object.freeze([
+  'docs/evidence/external-gates',
+  'store',
+]);
 
 // These are the WP160 implementation paths whose source changes can fan out
 // into already captured package evidence. The list is intentionally narrow:
@@ -104,6 +108,40 @@ function historicalBindings(repositoryRoot, changedSourcePaths) {
     .sort((left, right) => left.evidence.localeCompare(right.evidence));
 }
 
+function jsonFilesUnder(repositoryRoot, relativeRoot) {
+  const found = [];
+  const visit = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const child = resolve(directory, entry.name);
+      if (entry.isDirectory()) visit(child);
+      else if (entry.isFile() && entry.name.endsWith('.json')) found.push(child);
+    }
+  };
+  visit(resolve(repositoryRoot, relativeRoot));
+  return found.map((file) => file.slice(repositoryRoot.length + 1)).sort();
+}
+
+export function deriveCurrentMutableBindings(repositoryRoot, changedSourcePaths) {
+  return currentMutableBindingRoots
+    .flatMap((rootPath) => jsonFilesUnder(repositoryRoot, rootPath))
+    .sort()
+    .map((binding) => {
+      let value;
+      try {
+        value = JSON.parse(readFileSync(resolve(repositoryRoot, binding), 'utf8'));
+      } catch {
+        fail(`current mutable binding is missing or invalid: ${binding}`);
+      }
+      return {
+        binding,
+        paths: inventoryPaths(value)
+          .filter((path) => changedSourcePaths.includes(path))
+          .sort(),
+      };
+    })
+    .filter(({ paths }) => paths.length > 0);
+}
+
 export function deriveWp160ReverseIndex({
   repositoryRoot = root,
   targetRevision,
@@ -119,6 +157,7 @@ export function deriveWp160ReverseIndex({
     try { statSync(resolve(repositoryRoot, path)); } catch { fail(`mutable binding is missing: ${path}`); }
   }
   const historical = historicalBindings(repositoryRoot, changedSourcePaths);
+  const current = deriveCurrentMutableBindings(repositoryRoot, changedSourcePaths);
   return {
     schemaVersion: 1,
     package: 'WP160-SOURCE-BINDING-REVERSE-INDEX-20260915',
@@ -128,6 +167,7 @@ export function deriveWp160ReverseIndex({
     },
     changedSourcePaths,
     mutableBindings: [...mutableBindingFiles],
+    currentMutableBindings: current,
     immutableHistoricalBindings: historical,
     boundaries: {
       historicalEvidenceRewritten: false,

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import test from 'node:test';
 
@@ -227,6 +228,19 @@ const evidenceArguments = Object.freeze({
   idempotencyKey: 'support-evidence-test-001',
 });
 
+function requestHash(argumentsValue) {
+  const metadata = argumentsValue.rawMetadata;
+  return crypto.createHash('sha256').update(JSON.stringify({
+    caseId: argumentsValue.caseId,
+    description: metadata.description,
+    purpose: metadata.purpose,
+    claimedEventTime: null,
+    thirdPartyData: metadata.thirdPartyData,
+    specialCategoryClassification: metadata.specialCategoryClassification,
+    originalSha256: argumentsValue.preparedFile.originalSha256,
+  })).digest('hex');
+}
+
 function caseLookupSteps(intakeScopeEvidence = {}) {
   return [
     { match: /pg_advisory_xact_lock/u },
@@ -315,6 +329,43 @@ test('evidence bytes are persisted after validation and before database inserts'
   assert.equal(result.replayed, false);
   assert.deepEqual(events, ['persist-before-3']);
   assert.equal(client.calls.findIndex(({ sql }) => /INSERT INTO support_evidence \(/u.test(sql)), 3);
+});
+
+test('idempotent evidence replay performs no file persistence or inserts', async () => {
+  let persistCalls = 0;
+  const client = new EvidenceScriptedClient([
+    { match: /pg_advisory_xact_lock/u },
+    {
+      match: /SELECT evidence\.id AS evidence_id/u,
+      result: {
+        rowCount: 1,
+        rows: [{
+          evidence_id: evidenceArguments.evidenceId,
+          file_id: evidenceArguments.fileId,
+          case_id: evidenceArguments.caseId,
+          description: evidenceArguments.rawMetadata.description,
+          purpose: evidenceArguments.rawMetadata.purpose,
+          claimed_event_time: null,
+          received_at: new Date('2026-08-21T10:00:00.000Z'),
+          third_party_data_flag: false,
+          scan_status: 'pending',
+          detected_mime_type: 'image/jpeg',
+          original_byte_size: evidenceArguments.preparedFile.originalByteSize,
+          original_sha256: evidenceArguments.preparedFile.originalSha256,
+          preview_storage_name: evidenceArguments.previewStorageName,
+          request_sha256: requestHash(evidenceArguments),
+          special_category_classification: 'not_indicated',
+        }],
+      },
+    },
+  ]);
+  const result = await createSupportEvidence(client, {
+    ...evidenceArguments,
+    persistFiles: async () => { persistCalls += 1; },
+  });
+  assert.equal(result.replayed, true);
+  assert.equal(persistCalls, 0);
+  assert.equal(client.calls.some(({ sql }) => /INSERT INTO/u.test(sql)), false);
 });
 
 test('evidence write failure occurs before inserts and can be cleaned by the caller', async () => {
