@@ -60,6 +60,17 @@ export function validateWp160SpecialCategoryHealthDataIntake({ repositoryRoot = 
     fail('target revision is missing or invalid');
   }
   const isPrecommit = value.captureAttestation?.mode === 'precommit';
+  if (!isPrecommit) {
+    // A successor checkout may contain additional source paths. Reject a
+    // caller that relabels the closure evidence to that successor before
+    // deriving its inventory, so the result remains bound to the captured
+    // WP160 closure instead of failing with an incidental path mismatch.
+    const storedEvidence = JSON.parse(readFileSync(resolve(repositoryRoot, currentWp160EvidencePath), 'utf8'));
+    const storedTarget = storedEvidence.repository?.targetRevision;
+    if (/^[a-f0-9]{40}$/u.test(storedTarget ?? '') && storedTarget !== targetRevision) {
+      fail(`bound snapshot resolved ${targetRevision}, expected exact closure ${storedTarget}`);
+    }
+  }
   const expectedSourcePaths = deriveWp160SourcePaths({ repositoryRoot, targetRevision });
   exact(
     Object.keys(value.sourceInventory ?? {}).sort(),

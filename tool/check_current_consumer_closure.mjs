@@ -10,6 +10,7 @@ export const closureBaseline = 'f2b6a32c387d43b93c137ce2217ba30dd6da4562';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const ownPath = 'tool/check_current_consumer_closure.mjs';
 const reversePath = 'docs/evidence/release-readiness/wp160-source-binding-reverse-index-20260915.json';
+export const currentEvidencePath = 'docs/evidence/release-readiness/wp161-current-consumer-closure-20260916.json';
 const historicalExternal = new Set(['docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json']);
 const digestPattern = /^[a-f0-9]{64}$/u;
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -143,7 +144,7 @@ export function checkCurrentConsumerClosure({ repositoryRoot = root, baseline = 
   const changed = [...new Set(changedPaths ?? [
     ...lines(git(canonicalRoot, ['diff', '--name-only', '-z', base])),
     ...lines(git(canonicalRoot, ['ls-files', '-z', '--others', '--exclude-standard'])),
-  ])].sort();
+  ])].filter((path) => path !== currentEvidencePath).sort();
   const textCache = new Map();
   function read(path) {
     if (!textCache.has(path)) textCache.set(path, readFileSync(safePath(canonicalRoot, path), 'utf8'));
