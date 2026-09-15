@@ -120,8 +120,8 @@
     "backend/src/v52_contract_workflow.js": "c0e06b47f51398a5095a6de41c9545ff72daf6cc1b37bbfe7d886a0373d554a1",
     "backend/test/legal_contract_version_registry.test.js": "dccd49f212c2bcb8fd2d183b271f6221e5a842f0f03a0d9671f6795284c6f750",
     "backend/test/v52_contract_workflow.test.js": "7014a6c2a74861078b24bb198c5b3712ae65ddc4c28bcec3076d9f5c252aa686",
-    "docs/current_state.md": "a473870895aaefb5affe8a91d5c671fe0d1117f5b7a4a832f41b78110a33d64f",
-    "docs/current_work_package.md": "5a49311d599248b027c8eede00de1fdf8935a255c38da28225ca4fde51935afb",
+    "docs/current_state.md": "21640ce297327ab08e8357dc88c88325443203384daf473aec23ba91e2a35fb8",
+    "docs/current_work_package.md": "2bdace2e2a10531e5192f0a685176362f0ef140ef5168abc077005ea066dc51a",
     "docs/operations/TECHNICAL_DEBT_RELEASE_READINESS.md": "c43ad059863360c60a52fedf5a56a104477a84a607ecb76c310c5eeb1aa98935",
     "docs/operations/WP152_V54_CONTRACT_SCOPE_OFFER_REFUND_RECEIPT_DRAFT_2026-09-15.md": "bbc68890dbde5b6770ff144f19853597ac92a572af04103e0653dbaa5a886b64",
     "store/legal-readiness.json": "4465be600f1d029d6d52239761a26e0e868e06ade7bdab19043cc3dff25808ce",
@@ -136,6 +136,6 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "8796b6fa85c86f6c40b63be12f697d86c5dd72b9f93d6183c60d5951d0f76c0d"
+    "sourceInventoryDigest": "f7ed0ec95a83d86ebdfd05d710f458994ec55b788bb7b24726fd2831639af3de"
   }
 }

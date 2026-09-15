@@ -20,6 +20,27 @@ search before rereading large sources, avoid unchanged duplicate gates and
 retain all audit evidence. Efficiency must never weaken deterministic tests,
 exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 
+## Sol, Luna and Astra review loop
+
+- Luna executes one bounded package and returns useful evidence, not a claim of
+  perfect completeness. Sol performs a targeted review and records exactly one
+  decision: `PASS`, `FIX` or `ASTRA_GATE_REQUIRED:<gate-id>`.
+- Sol is also the mentor. After two independent occurrences of the same
+  avoidable error, closure omission, unsafe assumption or wasteful reasoning
+  pattern, stop repeating it. Sol gives one direct corrective rule and updates
+  the nearest authoritative instruction. Add a deterministic test, validator
+  or fail-closed guard when the pattern is technically enforceable. Duplicate
+  UI output or repeated reporting of one still-open incident counts once.
+- After every review, Sol assigns Luna the next bounded task. A `FIX` must name
+  the failed assertion and expected proof; it must not request a broad restart.
+- Escalate to Astra only at a named gate involving contradictory evidence or a
+  material decision in money, contract, privacy, security, release truth or
+  user data. Astra is an AI reviewer and cannot replace professional or owner
+  approval. Technical incompleteness stays with Luna under `FIX`.
+- Team handoffs use four short fields: `RESULT`, `EVIDENCE`, `BLOCKER`, `NEXT`.
+  Add detail only when Maximus/owner action, safety or regulated risk requires
+  it. Never compress away a decisive error, version, hash, source or gate.
+
 ## Project-safe handoffs
 
 - Before every handoff, message, automation or task routing action, identify the

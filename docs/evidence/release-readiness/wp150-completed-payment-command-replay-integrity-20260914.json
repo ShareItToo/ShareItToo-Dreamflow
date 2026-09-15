@@ -6,7 +6,7 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "586c42cffa8d02ee8057d4fd5ed3a3e0ae28d1be0aec498b2fc9a42655bec433"
+    "sourceInventoryDigest": "e7b83cf823fd32b0a850145f23e5f3d330689f2ce7b87c49e0757484b13d11c4"
   },
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -116,8 +116,8 @@
     "backend/test/payment_command_replay_integrity.test.js": "9cd6e8a5ff9ba2dc3a48a7d7cd799143043005fc1bdca127036457ffb4f0733c",
     "backend/test/payment_command_result_immutability.test.js": "4f9eae2ab7f30a7fda6cdf73fd85c29338b354b59089d235ea986928b0b3aee1",
     "backend/test/postgres_foundation.integration.test.js": "01222d79e4a5514fcdaa05f4f254d8cbc331b20d3ad1ea5e1fc1adbc66402d04",
-    "docs/current_state.md": "a473870895aaefb5affe8a91d5c671fe0d1117f5b7a4a832f41b78110a33d64f",
-    "docs/current_work_package.md": "5a49311d599248b027c8eede00de1fdf8935a255c38da28225ca4fde51935afb",
+    "docs/current_state.md": "21640ce297327ab08e8357dc88c88325443203384daf473aec23ba91e2a35fb8",
+    "docs/current_work_package.md": "2bdace2e2a10531e5192f0a685176362f0ef140ef5168abc077005ea066dc51a",
     "docs/operations/WP150_COMPLETED_PAYMENT_COMMAND_REPLAY_INTEGRITY_2026-09-14.md": "ddb1fa36922620a4c966045f7631c43862ffeadf965b4eadd8b1f416968e10f3",
     "scripts/technical_regression_check.sh": "a2bac13ef49f5e846517293d8f3010b575939de875f3e0156b07fd1679c32ba1",
     "store/privacy-disclosures.json": "4448cbd7a5528ef11eb48cfa116269e2711db05a4d03419800f7a467e25d1b25",

@@ -35,11 +35,32 @@ release evidence.
 
 - Keep raw command output local. Record only the command/gate identity, result,
   exact HEAD, relevant counts or artifact hashes and a short failure cause.
+- Internal Sol/Luna/Astra messages use only `RESULT`, `EVIDENCE`, `BLOCKER` and
+  `NEXT`. Omit narrative unless a Maximus/owner action, safety issue or
+  regulated risk cannot be handled correctly without it.
 - Never copy credentials, account identifiers, private links, raw device IDs,
   cookies, tokens, KYC data or secret-bearing configuration into Git, Drive
   reports or chat.
 - Notify Walid through the established Maximus/Telegram route only for a truly
   non-delegable owner action. Continue every independent package lane quietly.
+
+## Mentor ratchet after repeated mistakes
+
+- Count independent occurrences, not duplicated UI output or repeated status
+  for one unresolved incident. On the second occurrence of the same avoidable
+  mistake, closure omission, unsafe assumption or wasteful reasoning pattern,
+  stop and state one concrete cause and one corrective rule.
+- Update only the nearest authoritative instruction; search first and do not
+  duplicate the rule across historical handovers. If enforceable, add a focused
+  regression, validator or fail-closed guard in the owning package.
+- Sol labels the review `PASS`, `FIX` or `ASTRA_GATE_REQUIRED:<gate-id>`.
+  `FIX` names the failed assertion and required proof. Astra is used only for a
+  named money, contract, privacy, security, release-truth or user-data gate,
+  never for ordinary incompleteness and never as a substitute for professional
+  or owner approval.
+- After each review, give Luna exactly one bounded next task. Preserve already
+  correct work and never restart the whole package merely because one assertion
+  failed.
 
 ## Candidate and source discipline
 

@@ -18,7 +18,9 @@ regression. Focused privacy tests pass **28/28**, privacy manifest validation
 is valid, legal/retention drafts remain fail-closed, the two relevant Flutter
 tests pass and analyzer is clean. The complete CI-equivalent technical
 regression exits **0**, including Web/Wasm, loopback smoke, Android debug
-minSdk 24 and release-host capacity checks. See
+minSdk 24 and release-host capacity checks. The root `AGENTS.md` and canonical
+context/credit policy are hash-bound closure sources; the historical WP71
+validator remains green without rewriting its evidence. See
 `docs/operations/WP155_PROCESSING_TRANSPARENCY_PURPOSE_BASIS_RECIPIENT_PARITY_2026-09-15.md`.
 
 No provider, payment, money, Store, Firebase, production, cloud/VPS, DNS,

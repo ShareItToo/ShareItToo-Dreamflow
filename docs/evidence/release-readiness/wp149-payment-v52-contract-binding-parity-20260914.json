@@ -6,7 +6,7 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "8e15ac7c3d104e2ef4b1cfc6d5e338dacef7d5586667401fa290e9c7a57c7072"
+    "sourceInventoryDigest": "45854cd5bc91c3c00a876a988e94aaa0e403169f7390bb596e3b5bdeb74cfeb2"
   },
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -166,8 +166,8 @@
     "backend/test/v52_actual_loss_persistence.test.js": "479314b6be1b8a8e48d37fdcc96763791f95fa8dfff02feaffd736ea36dafd95",
     "backend/test/v52_actual_loss_workflow.test.js": "16765f5f8eb20eee8fd5bdb69a7bac9b4249b522e23a302bb0d720e1073eb875",
     "backend/test/v52_contract_workflow.test.js": "7014a6c2a74861078b24bb198c5b3712ae65ddc4c28bcec3076d9f5c252aa686",
-    "docs/current_state.md": "a473870895aaefb5affe8a91d5c671fe0d1117f5b7a4a832f41b78110a33d64f",
-    "docs/current_work_package.md": "5a49311d599248b027c8eede00de1fdf8935a255c38da28225ca4fde51935afb",
+    "docs/current_state.md": "21640ce297327ab08e8357dc88c88325443203384daf473aec23ba91e2a35fb8",
+    "docs/current_work_package.md": "2bdace2e2a10531e5192f0a685176362f0ef140ef5168abc077005ea066dc51a",
     "docs/operations/WP149_PAYMENT_V52_CONTRACT_BINDING_PARITY_2026-09-14.md": "e87000894b3e7763c066e963259b9a13527f33aad74bff086e0e2cccf9f4feba",
     "scripts/technical_regression_check.sh": "a2bac13ef49f5e846517293d8f3010b575939de875f3e0156b07fd1679c32ba1",
     "store/privacy-disclosures.json": "4448cbd7a5528ef11eb48cfa116269e2711db05a4d03419800f7a467e25d1b25",

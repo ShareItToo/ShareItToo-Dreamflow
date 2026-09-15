@@ -12,10 +12,12 @@ const evidencePath = 'docs/evidence/release-readiness/wp155-processing-transpare
 const handoverPath = 'docs/operations/WP155_PROCESSING_TRANSPARENCY_PURPOSE_BASIS_RECIPIENT_PARITY_2026-09-15.md';
 
 export const wp155SourcePaths = Object.freeze([
+  'AGENTS.md',
   'assets/legal/de/privacy_v5.html',
   'docs/current_state.md',
   'docs/current_work_package.md',
   handoverPath,
+  'docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md',
   'lib/screens/legal_privacy_screen.dart',
   'store/legal-readiness.json',
   'store/privacy-disclosures.json',

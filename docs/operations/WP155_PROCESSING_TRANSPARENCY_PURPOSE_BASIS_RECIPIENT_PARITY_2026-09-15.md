@@ -68,6 +68,11 @@ regression is now closed below.
 The local closure gate is complete. GitHub Regression and CodeQL remain
 pending until the closure commit is pushed at its exact head.
 
+The repository mentor/credit policy is carried as a hash-bound source for this
+closure together with the root `AGENTS.md` routing rules. The historical WP71
+candidate validator was rerun unchanged and passed; this does not reopen or
+rewrite WP71's physical evidence.
+
 ## Remaining gates and risks
 
 The public privacy text, controller/processor roles, AVVs, regions/transfers,

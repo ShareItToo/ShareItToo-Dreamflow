@@ -16,7 +16,10 @@ Flutter tests pass, analyzer has **0 findings**, and the WP155 validator is
 permanently registered in the complete regression. The complete local
 CI-equivalent regression exits **0**, including Web/Wasm, loopback smoke,
 Android debug minSdk 24 and release-host capacity checks. GitHub
-Regression/CodeQL remain pending until the closure commit is pushed. See
+Regression/CodeQL remain pending until the closure commit is pushed. The root
+`AGENTS.md` and canonical context/credit policy are hash-bound WP155
+sources; the historical WP71 validator remains green without rewriting its
+evidence. See
 `docs/operations/WP155_PROCESSING_TRANSPARENCY_PURPOSE_BASIS_RECIPIENT_PARITY_2026-09-15.md`.
 
 No external provider, payment, Store, Firebase, production, cloud/VPS, DNS,
