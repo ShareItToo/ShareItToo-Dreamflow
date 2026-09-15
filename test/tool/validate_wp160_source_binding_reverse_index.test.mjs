@@ -27,7 +27,7 @@ const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
 
 test('accepts the machine-derived WP160 reverse source-binding index', () => {
   const result = validateWp160ReverseIndex({ repositoryRoot });
-  assert.equal(result.changedSources, 58);
+  assert.equal(result.changedSources, 60);
   assert.ok(result.historicalBindings > 0);
   const derived = deriveWp160ReverseIndex({ repositoryRoot });
   assert.deepEqual(derived.currentMutableBindings.map(({ binding }) => binding), [
