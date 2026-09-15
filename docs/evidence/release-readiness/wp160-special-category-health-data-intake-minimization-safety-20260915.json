@@ -7,7 +7,7 @@
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "baselineHead": "c092cfe84965251f36a8f70525a49082f0959d63",
-    "targetRevision": "c9869cbeebf1f527c05559292235291ce0457840",
+    "targetRevision": "9473e4e97ee4de9ce3bcc8b18232a641fd39b781",
     "workingTreeCleanAtCapture": true,
     "remoteAhead": 0,
     "remoteBehind": 0
@@ -107,11 +107,11 @@
     "tool/validate_wp157_dsa_moderation_decision_appeal_parity.mjs": "846ff2fb1ddb8c969a30429adef9b656f4538237419f9ca4e17ff99134c29920",
     "tool/validate_wp159_processor_controller_region_transfer_truth.mjs": "be342eeeef3a2b7e989c3630972081a121c7f3a4d04dfddfccc28d2dfcdff4ac",
     "tool/validate_wp160_source_binding_reverse_index.mjs": "55a97fe59372aa8c8fb3500964b6a55548d36674b86632eaf8c362bac7e13bc4",
-    "tool/validate_wp160_special_category_health_data_intake.mjs": "7bc0cf4e520640658ccdfb235e2da10d0ee067cee5df7375275e41fac275a9ab"
+    "tool/validate_wp160_special_category_health_data_intake.mjs": "ab0787c2bcaf57f77beb3fd31ca05431f7bfd955d4cdc4e8e58a7e7cce2c2e0e"
   },
   "captureAttestation": {
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "07bf20148f4385abd3bfd531bd6e9e7568e700e73169171745f8ab7412fe0453",
+    "sourceInventoryDigest": "e1067c11f18670585e03b5cce7f754ca7e78f05b2c316f3d370dc12be8b0985f",
     "mode": "closure"
   }
 }

@@ -81,6 +81,9 @@ export function validateWp160SpecialCategoryHealthDataIntake({ repositoryRoot = 
         anchorPath: evidencePath,
         finalHead: targetRevision,
       });
+      if (boundSnapshot.revision !== targetRevision) {
+        fail(`bound snapshot resolved ${boundSnapshot.revision}, expected exact closure ${targetRevision}`);
+      }
       sourceTexts = {
         ...materializeBoundSourceTexts({ repositoryRoot, snapshot: boundSnapshot }),
         ...sourceTexts,

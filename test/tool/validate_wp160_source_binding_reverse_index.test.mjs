@@ -138,6 +138,18 @@ test('the full WP160 gate stays bound to the closure commit after a successor', 
       evidence: closureEvidence,
     });
     assert.deepEqual(after, before);
+    writeFileSync(resolve(clone, 'docs/current_work_package.md'), 'bound source mutation\n');
+    git(['add', 'docs/current_work_package.md']);
+    git(['commit', '-qm', 'mutate bound source']);
+    const incorrectTarget = structuredClone(closureEvidence);
+    incorrectTarget.repository.targetRevision = git(['rev-parse', 'HEAD']);
+    assert.throws(
+      () => validateWp160SpecialCategoryHealthDataIntake({
+        repositoryRoot: clone,
+        evidence: incorrectTarget,
+      }),
+      /source inventory paths|exact closure|bound snapshot unavailable/u,
+    );
   } finally {
     rmSync(clone, { recursive: true, force: true });
   }
