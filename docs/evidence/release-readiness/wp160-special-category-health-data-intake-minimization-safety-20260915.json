@@ -6,7 +6,7 @@
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "baselineHead": "c092cfe84965251f36a8f70525a49082f0959d63",
-    "targetRevision": "1081dea5800d6782d1d90fd94aaa8e6a3f38959e",
+    "targetRevision": "a4c923a552dfc798800e80e44573e58ad9d58616",
     "workingTreeCleanAtCapture": true,
     "remoteAhead": 0,
     "remoteBehind": 0
@@ -77,7 +77,6 @@
     "backend/test/support_message_domain.test.js": "46da3eaba132fbf583beabebef077eb8dad93aa1d299d7765e8360d55c526819",
     "docs/current_state.md": "4e0d850275120a03b55f6205e15b3bc35ade086f584a9addb92a88629ca982a9",
     "docs/current_work_package.md": "d784df0469c20ac1eb4031807e461791e0baa0b728bbbc665169d554473f25d7",
-    "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json": "e305a2513d7ebbda2cd5b87841bea8a8eef9200f8afc31b092438b578acddacb",
     "docs/evidence/external-gates/support-evidence-scanner-readiness.json": "d79ea31f1dfcdf3a381bbf548b1c49cd5a9f7e7e02003aa4e6f51d38f5f33a99",
     "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md": "917b090136bfdf0a4d1c84574ab3f29b4830ee5f3a989605b0c1876ebba3db96",
     "docs/operations/WP160_SPECIAL_CATEGORY_HEALTH_DATA_INTAKE_MINIMIZATION_SAFETY_2026-09-15.md": "c9470a40ebf8a8f515aa22874fbbd6f2321d3fc5e50f2e517598c9974c6de0c4",
@@ -94,13 +93,13 @@
     "test/tool/validate_wp152_v54_contract_draft.test.mjs": "dc8256f6d19327db4ae1269855ac721621ecdbb4e19b025cc09853810a5569d7",
     "test/tool/validate_wp153_position_review_release_parity.test.mjs": "7c3efbc897e6a37f0394c399c3ff0a6c1dde65ac9ff71d73763737e28780002a",
     "test/tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.test.mjs": "4031cce591fc7c5ddb41d73b1e4b2f1ca90ff0259276ad3d26699bdf90338cb8",
-    "test/tool/validate_wp160_source_binding_reverse_index.test.mjs": "a1baa441440910fce0bf2f9f35c19bac8c804682cdfafbc9ae344fae4180c5a0",
-    "test/tool/validate_wp160_special_category_health_data_intake.test.mjs": "a7c802076a7979590ba858478cc9daafb0c16c2b8f61cc388884a46b133a3782",
+    "test/tool/validate_wp160_source_binding_reverse_index.test.mjs": "a14706fdad0aa4fbd6948897bee8ca9c0655763baced9eed920a85429d9cab72",
+    "test/tool/validate_wp160_special_category_health_data_intake.test.mjs": "cadfad7c1c0444f15709481201dea1c09a6fca354c845aa4e40ecb5512506b9e",
     "test/tool/wp160_special_category_wiring.test.mjs": "7f0a32b4d67b873dc79c324b41ecd35772df4758eea5af2e9db84b975f1d2cc3",
     "tool/read_bound_source.mjs": "9bd4e30da7712eadc5fac9ff3379fda047a239f68a9b799767ac06ecaefcd93c",
     "tool/validate_privacy_disclosures.mjs": "b56299c87bbe6b494d90aa57e5b29e2bc34cb220a585c59f3729b5ed6ebc53e7",
     "tool/validate_retention_deletion_readiness.mjs": "cb17afeabab9e08b9cd4199c1d25c0b5267b4e49b8ab852323dabc7ed2d45083",
-    "tool/validate_support_evidence_external_readiness.mjs": "8677270e919c7984e43a1535c43e8b99c748b5e06a77d1234a841ff146999b01",
+    "tool/validate_support_evidence_external_readiness.mjs": "b0d1b889fc161407cdb90b6e6f333a57afda101ee4e9d47ba7e56ff5f4777361",
     "tool/validate_wp149_payment_v52_contract_binding_parity.mjs": "b61011eaacae866c19ee9f91abcfec01ab1f0272701b455363ea39355af7defe",
     "tool/validate_wp150_completed_payment_command_replay_integrity.mjs": "4052419789ee732ef1e1be624fa25cd144e90a70d3c01ad178decf0acd9eedeb",
     "tool/validate_wp151_refund_provider_durable_truth_parity.mjs": "a4f3df05e1def7ae8cfd0b163002564f0030a4f711b32d338eea528eddf1af5e",
@@ -110,12 +109,12 @@
     "tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs": "8e1a980852f28e2311d46693ab81ed106e28bf7d2a541d5ceb92539c0daa5c4c",
     "tool/validate_wp157_dsa_moderation_decision_appeal_parity.mjs": "846ff2fb1ddb8c969a30429adef9b656f4538237419f9ca4e17ff99134c29920",
     "tool/validate_wp159_processor_controller_region_transfer_truth.mjs": "be342eeeef3a2b7e989c3630972081a121c7f3a4d04dfddfccc28d2dfcdff4ac",
-    "tool/validate_wp160_source_binding_reverse_index.mjs": "61e1feee18d2138a6d95fb2105c49e0fe8d44cb58b6f6642c54e93b76dfd5a8d",
+    "tool/validate_wp160_source_binding_reverse_index.mjs": "b605def41634287dadc62bc05b9c08deacf7046459957d009b3ac886116ca4b4",
     "tool/validate_wp160_special_category_health_data_intake.mjs": "ddfd328bea2da2a4a3e559036dbf26ff564d156784e1980de137c303c2fbd94a"
   },
   "captureAttestation": {
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "5ff40e49634c892c299830d9a0b63e21c0618d06f1ead8d60c4b0dee4bb23f2c",
+    "sourceInventoryDigest": "5891859bc154910758bd556662764e4dfe86f45b3b61fa7efeaae2ad19a3ab70",
     "mode": "closure"
   }
 }

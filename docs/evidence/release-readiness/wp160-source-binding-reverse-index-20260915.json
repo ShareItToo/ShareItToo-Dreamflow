@@ -3,7 +3,7 @@
   "package": "WP160-SOURCE-BINDING-REVERSE-INDEX-20260915",
   "repository": {
     "baselineHead": "c092cfe84965251f36a8f70525a49082f0959d63",
-    "targetRevision": "1081dea5800d6782d1d90fd94aaa8e6a3f38959e"
+    "targetRevision": "a4c923a552dfc798800e80e44573e58ad9d58616"
   },
   "changedSourcePaths": [
     "backend/sql/migrations/079_special_category_intake_minimization.down.sql",
@@ -29,7 +29,6 @@
     "backend/test/support_message_domain.test.js",
     "docs/current_state.md",
     "docs/current_work_package.md",
-    "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
     "docs/evidence/external-gates/support-evidence-scanner-readiness.json",
     "docs/evidence/release-readiness/wp160-special-category-health-data-intake-minimization-safety-20260915.json",
     "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md",
@@ -90,7 +89,6 @@
     "backend/test/support_message_domain.test.js",
     "docs/current_state.md",
     "docs/current_work_package.md",
-    "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
     "docs/evidence/external-gates/support-evidence-scanner-readiness.json",
     "docs/evidence/release-readiness/wp160-special-category-health-data-intake-minimization-safety-20260915.json",
     "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md",
@@ -129,13 +127,6 @@
     "docs/evidence/release-readiness/wp160-source-binding-reverse-index-20260915.json"
   ],
   "currentMutableBindings": [
-    {
-      "binding": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
-      "paths": [
-        "store/privacy-disclosures.json",
-        "store/retention-deletion-readiness.json"
-      ]
-    },
     {
       "binding": "docs/evidence/external-gates/support-evidence-scanner-readiness.json",
       "paths": [
@@ -179,11 +170,535 @@
       ]
     }
   ],
+  "currentCodeConsumers": [
+    {
+      "consumer": "tool/run_local_postgres_integration.mjs",
+      "paths": [
+        "backend/test/postgres_foundation.integration.test.js"
+      ]
+    },
+    {
+      "consumer": "tool/run_r5_repeated_postgres_stability.mjs",
+      "paths": [
+        "backend/test/postgres_foundation.integration.test.js"
+      ]
+    },
+    {
+      "consumer": "tool/run_r8_bounded_concurrency.mjs",
+      "paths": [
+        "backend/test/postgres_foundation.integration.test.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_blue_ocean_n3_listing_ai_gateway.mjs",
+      "paths": [
+        "backend/src/app.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_blue_ocean_n4_image_privacy_pipeline.mjs",
+      "paths": [
+        "backend/src/app.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_blue_ocean_n5_regional_price_engine_v2.mjs",
+      "paths": [
+        "backend/src/app.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_blue_ocean_n6_listing_workflow.mjs",
+      "paths": [
+        "backend/src/app.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_blue_ocean_n7_evaluation_corpus.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/test/postgres_foundation.integration.test.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_external_gate_execution_board.mjs",
+      "paths": [
+        "docs/evidence/external-gates/support-evidence-scanner-readiness.json",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_external_gate_setup.mjs",
+      "paths": [
+        "docs/evidence/external-gates/support-evidence-scanner-readiness.json",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_g2_data_lifecycle.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/src/privacy_export.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_google_play_data_safety_answer_matrix.mjs",
+      "paths": [
+        "store/privacy-disclosures.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_google_play_service_provider_sharing_classification.mjs",
+      "paths": [
+        "store/privacy-disclosures.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_legal_readiness.mjs",
+      "paths": [
+        "backend/src/app.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_p0b_ai_legal_preassessment.mjs",
+      "paths": [
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_p0b_pilot_dossier.mjs",
+      "paths": [
+        "docs/current_work_package.md",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_phone_verification_readiness.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "store/privacy-disclosures.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_privacy_disclosures.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/src/handover_exception_domain.js",
+        "backend/src/moderation_domain.js",
+        "backend/src/privacy_export.js",
+        "backend/src/special_category_data_guard.js",
+        "backend/src/support_appeal_domain.js",
+        "backend/src/support_case_domain.js",
+        "backend/src/support_case_workflow.js",
+        "backend/src/support_decision_domain.js",
+        "backend/src/support_evidence_workflow.js",
+        "backend/src/support_message_domain.js",
+        "lib/screens/support_flow_screen.dart",
+        "store/privacy-disclosures.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_product_safety_readiness.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/src/support_case_domain.js",
+        "backend/src/support_case_workflow.js",
+        "lib/screens/support_flow_screen.dart"
+      ]
+    },
+    {
+      "consumer": "tool/validate_r4_android_lifecycle_failure_matrix.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/test/postgres_foundation.integration.test.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_r5_repeated_device_stability.mjs",
+      "paths": [
+        "backend/test/postgres_foundation.integration.test.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_r8_bounded_concurrency.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/test/postgres_foundation.integration.test.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_retention_deletion_readiness.mjs",
+      "paths": [
+        "backend/sql/migrations/079_special_category_intake_minimization.down.sql",
+        "backend/sql/migrations/079_special_category_intake_minimization.up.sql",
+        "backend/src/app.js",
+        "backend/src/handover_exception_domain.js",
+        "backend/src/moderation_domain.js",
+        "backend/src/privacy_export.js",
+        "backend/src/special_category_data_guard.js",
+        "backend/src/support_appeal_domain.js",
+        "backend/src/support_case_domain.js",
+        "backend/src/support_case_workflow.js",
+        "backend/src/support_decision_domain.js",
+        "backend/src/support_evidence_workflow.js",
+        "backend/src/support_message_domain.js",
+        "lib/screens/support_flow_screen.dart",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw0_reduced_wave0_product_journey.mjs",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw10_local_security_control_truthfulness.mjs",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "tool/validate_privacy_disclosures.mjs",
+        "tool/validate_retention_deletion_readiness.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw12_security_success_ui_principal_epoch.mjs",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw16_session_transition_principal_epoch.mjs",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw17_account_deletion_principal_epoch_transaction.mjs",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "tool/validate_privacy_disclosures.mjs",
+        "tool/validate_retention_deletion_readiness.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw4_reduced_wave0_local_principal_isolation.mjs",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "tool/validate_privacy_disclosures.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw5_local_safety_privacy_principal_isolation.mjs",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "test/tool/validate_privacy_disclosures.test.mjs",
+        "test/tool/validate_retention_deletion_readiness.test.mjs",
+        "tool/validate_privacy_disclosures.mjs",
+        "tool/validate_retention_deletion_readiness.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw6_local_operational_authorization_truth_recovery.mjs",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "tool/validate_privacy_disclosures.mjs",
+        "tool/validate_retention_deletion_readiness.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw7_local_listing_catalog_authorization_durability.mjs",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "tool/validate_privacy_disclosures.mjs",
+        "tool/validate_retention_deletion_readiness.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw8_local_review_reputation_authorization_durability.mjs",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "tool/validate_privacy_disclosures.mjs",
+        "tool/validate_retention_deletion_readiness.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw9_local_account_profile_authorization_durability.mjs",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "tool/validate_privacy_disclosures.mjs",
+        "tool/validate_retention_deletion_readiness.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_support_evidence_external_readiness.mjs",
+      "paths": [
+        "backend/src/support_evidence_workflow.js",
+        "docs/evidence/external-gates/support-evidence-scanner-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_support_launch_content.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/src/support_message_domain.js",
+        "store/privacy-disclosures.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp138_google_signin_current_candidate_pixel_closure.mjs",
+      "paths": [
+        "store/privacy-disclosures.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp141_stripe_test_mode_connect_refund_recovery.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/src/privacy_export.js",
+        "backend/test/postgres_foundation.integration.test.js",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp50_staging_backend_parity_preflight.mjs",
+      "paths": [
+        "backend/src/app.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp52_drive_source_reconciliation.mjs",
+      "paths": [
+        "backend/src/support_case_domain.js",
+        "docs/evidence/external-gates/support-evidence-scanner-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp74_dispute_transfer_recovery.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/src/privacy_export.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp79_current_candidate_acceptance_matrix.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/src/privacy_export.js"
+      ]
+    }
+  ],
+  "immutableHistoricalCodeConsumers": [
+    {
+      "consumer": "tool/validate_active_infrastructure_mail_provider_readiness.mjs",
+      "paths": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_n17_staging_listing_ai_activation_readiness.mjs",
+      "paths": [
+        "backend/src/app.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_p0b_psp_sandbox_e2e.mjs",
+      "paths": [
+        "backend/test/postgres_foundation.integration.test.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw11_regression_completeness_stale_support_wiring.mjs",
+      "paths": [
+        "backend/src/app.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw13_security_logout_all_outcome_principal_epoch.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw14_security_remote_device_revocation_outcome_principal_epoch.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw15_security_logout_all_prompt_result_principal_epoch.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw18_contact_verification_principal_epoch_transaction.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/test/postgres_foundation.integration.test.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw19_profile_location_mutation_principal_epoch_transaction.mjs",
+      "paths": [
+        "backend/src/app.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_rw20_listing_mutation_principal_epoch_transaction.mjs",
+      "paths": [
+        "backend/src/app.js"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp149_payment_v52_contract_binding_parity.mjs",
+      "paths": [
+        "backend/test/postgres_foundation.integration.test.js",
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "test/tool/validate_privacy_disclosures.test.mjs",
+        "test/tool/validate_retention_deletion_readiness.test.mjs",
+        "test/tool/validate_wp149_payment_v52_contract_binding_parity.test.mjs",
+        "tool/validate_privacy_disclosures.mjs",
+        "tool/validate_retention_deletion_readiness.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp150_completed_payment_command_replay_integrity.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/test/postgres_foundation.integration.test.js",
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "test/tool/validate_privacy_disclosures.test.mjs",
+        "test/tool/validate_retention_deletion_readiness.test.mjs",
+        "test/tool/validate_wp150_completed_payment_command_replay_integrity.test.mjs",
+        "tool/validate_privacy_disclosures.mjs",
+        "tool/validate_retention_deletion_readiness.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp151_refund_provider_durable_truth_parity.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/src/privacy_export.js",
+        "backend/test/postgres_foundation.integration.test.js",
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "test/tool/validate_wp151_refund_provider_durable_truth_parity.test.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp152_v54_contract_draft.mjs",
+      "paths": [
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "store/privacy-disclosures.json",
+        "test/tool/validate_wp152_v54_contract_draft.test.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp153_position_review_release_parity.mjs",
+      "paths": [
+        "backend/test/postgres_foundation.integration.test.js",
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "test/tool/validate_wp153_position_review_release_parity.test.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.mjs",
+      "paths": [
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "test/tool/validate_privacy_disclosures.test.mjs",
+        "test/tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.test.mjs",
+        "tool/validate_privacy_disclosures.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/test/postgres_foundation.integration.test.js",
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "test/tool/validate_retention_deletion_readiness.test.mjs",
+        "tool/validate_retention_deletion_readiness.mjs"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp157_dsa_moderation_decision_appeal_parity.mjs",
+      "paths": [
+        "backend/src/app.js",
+        "backend/src/support_appeal_domain.js",
+        "backend/src/support_case_domain.js",
+        "backend/src/support_case_workflow.js",
+        "docs/current_state.md",
+        "docs/current_work_package.md",
+        "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp159_processor_controller_region_transfer_truth.mjs",
+      "paths": [
+        "store/privacy-disclosures.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp160_source_binding_reverse_index.mjs",
+      "paths": [
+        "docs/evidence/external-gates/support-evidence-scanner-readiness.json",
+        "docs/evidence/release-readiness/wp160-special-category-health-data-intake-minimization-safety-20260915.json"
+      ]
+    },
+    {
+      "consumer": "tool/validate_wp160_special_category_health_data_intake.mjs",
+      "paths": [
+        "docs/current_work_package.md",
+        "docs/evidence/release-readiness/wp160-special-category-health-data-intake-minimization-safety-20260915.json",
+        "docs/operations/WP160_SPECIAL_CATEGORY_HEALTH_DATA_INTAKE_MINIMIZATION_SAFETY_2026-09-15.md"
+      ]
+    }
+  ],
   "immutableHistoricalBindings": [
     {
       "evidence": "docs/evidence/release-readiness/wp05-cart-details-descendant-ownership-local-20260904.json",
       "paths": [
-        "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
         "store/privacy-disclosures.json",
         "store/retention-deletion-readiness.json"
       ]
@@ -191,14 +706,12 @@
     {
       "evidence": "docs/evidence/release-readiness/wp05-pixel-0405-preparation-20260904.json",
       "paths": [
-        "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
         "store/privacy-disclosures.json"
       ]
     },
     {
       "evidence": "docs/evidence/release-readiness/wp05-pixel-0406-preparation-20260904.json",
       "paths": [
-        "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
         "store/privacy-disclosures.json"
       ]
     },
