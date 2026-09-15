@@ -6,7 +6,7 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "3ba119708841b8354a7e700865ea426a6e50f8d634f5dc9a76dde0eb98492744"
+    "sourceInventoryDigest": "064d1fa532c07f8c80f2b9ac3fff689a80a9aad3ebabc85c4e3be4e80d6a8e1e"
   },
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -159,7 +159,7 @@
     "backend/test/payment_domain.test.js": "437fe69d7abfbe45922834f6b473e73919bdadd0a4fdf8eb4414cf5ebf0f95b0",
     "backend/test/payment_refund_obligations.test.js": "bde6e2642378c2757b12181eb46bddfda2861b76fd0d0b74d1ce09566f11b9d2",
     "backend/test/pilot_cockpit.test.js": "ee351161fc27d7a1710f0c53510da0b858e25a0ecbfbb15a18468a7c50c72f39",
-    "backend/test/postgres_foundation.integration.test.js": "01222d79e4a5514fcdaa05f4f254d8cbc331b20d3ad1ea5e1fc1adbc66402d04",
+    "backend/test/postgres_foundation.integration.test.js": "a096cebc280261d2aa988c12167834db8a86eb9a466d11a2c9d2b006c85a04db",
     "backend/test/privacy_export_refund_truth.test.js": "c2f7232ddb9ef6199d2288d74437526534c7a5e29cfcc77e0c4cb55059ed2531",
     "backend/test/refund_finalization_snapshot_guard.test.js": "9774beebe52be9f35b699a710c17922ec04cf4555beddd3ac175e793b87032a6",
     "backend/test/refund_notification_truth.test.js": "2c358176bc7264d933cb6f704e1b6c503edd49eb71bc031af6488b1ecbab55b2",
@@ -186,10 +186,10 @@
     "test/payment_provider_truthfulness_test.dart": "c30c853b05067c5eabbe04b10a3a88db49540ddbf29f2481ecd4e42619e67859",
     "test/tool/no_demo_payment_surfaces.test.mjs": "5a0a29ebacaeb9fa2d6d27f0a6a01e880216fed1bca64093d298686dfefad652",
     "test/tool/payment_provider_truthfulness_wiring.test.mjs": "28ae2b8d641cd50c145688eea626f47b5825192fe664261790a142f389f11d1c",
-    "test/tool/run_r9_database_recovery.test.mjs": "a80e46143d918053ca21b6922ce8fe9ea28fe65837c278764af5f7c2e5b4fb3e",
+    "test/tool/run_r9_database_recovery.test.mjs": "11bc924745bc4120c92a9554742df34efecff1ac1b34df99e5ae969faa20a6ba",
     "test/tool/v51_withdrawal_and_cancellation_wiring.test.mjs": "194ea5724a73232238bb0b6d9616c5d44f71af2c992e2378713fef6bf9784c7d",
     "test/tool/validate_wp151_refund_provider_durable_truth_parity.test.mjs": "819583040b5e44b1dd3e4bbe54c19a0be0f03f1301c771ec20292bfeb4e7ccfa",
-    "tool/run_r9_database_recovery.mjs": "a9bbdacc744155f2846487cbe43b1a3dba8e070f78e1d19a88e057ba4521aac5",
-    "tool/validate_wp151_refund_provider_durable_truth_parity.mjs": "7e1f81c4121b67964b7b3766f4e4ce904be1ac52026b29a8ef60221dddd156e8"
+    "tool/run_r9_database_recovery.mjs": "a8566901f992bb05e78382fc4c3e0a1267e1e8cce0ac413e5c2681d9b8fef796",
+    "tool/validate_wp151_refund_provider_durable_truth_parity.mjs": "ddc203684999c183260b4904d22e3b62e398d64738c108ab088ca86244f26c60"
   }
 }

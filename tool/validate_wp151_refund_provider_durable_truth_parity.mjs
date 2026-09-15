@@ -555,10 +555,10 @@ function validateRuntime(repositoryRoot, sourceTexts) {
   ]) includes(postgres, marker, 'PostgreSQL proof');
 
   for (const marker of [
-    'export const r9RequiredMigrationCount = 77',
+    'export const r9RequiredMigrationCount = 78',
     "filename: '077_refund_provider_truth_parity.down.sql'",
     'Refund provider truth rollback blocked: post-migration refunds exist',
-    "requiredLastMigration = '077_refund_provider_truth_parity.up.sql'",
+    "requiredLastMigration = '078_retention_legal_hold_scope.up.sql'",
   ]) includes(recovery, marker, 'R9 recovery inventory');
 }
 
