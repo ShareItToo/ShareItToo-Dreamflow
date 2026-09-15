@@ -31,7 +31,6 @@ test('accepts the machine-derived WP160 reverse source-binding index', () => {
   assert.ok(result.historicalBindings > 0);
   const derived = deriveWp160ReverseIndex({ repositoryRoot });
   assert.deepEqual(derived.currentMutableBindings.map(({ binding }) => binding), [
-    'docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json',
     'docs/evidence/external-gates/support-evidence-scanner-readiness.json',
     'store/privacy-disclosures.json',
     'store/retention-deletion-readiness.json',
@@ -39,6 +38,13 @@ test('accepts the machine-derived WP160 reverse source-binding index', () => {
   assert.ok(derived.currentMutableBindings
     .find(({ binding }) => binding.endsWith('support-evidence-scanner-readiness.json'))
     .paths.includes('backend/src/support_evidence_workflow.js'));
+  assert.ok(derived.currentCodeConsumers.some(({ consumer, paths }) =>
+    consumer === 'tool/validate_support_evidence_external_readiness.mjs'
+      && paths.includes('backend/src/support_evidence_workflow.js')));
+  assert.equal(derived.currentMutableBindings.some(({ binding }) =>
+    binding.endsWith('active-infrastructure-mail-provider-readiness.json')), false);
+  assert.equal(derived.currentCodeConsumers.some(({ consumer }) =>
+    consumer === 'tool/validate_active_infrastructure_mail_provider_readiness.mjs'), false);
 });
 
 test('pinned reverse-index reads cache Git tree and JSON lookups', () => {
@@ -75,6 +81,13 @@ test('rejects omitted mutable bindings and rewritten historical evidence', () =>
     .filter(({ binding }) => !binding.endsWith('support-evidence-scanner-readiness.json'));
   assert.throws(
     () => validateWp160ReverseIndex({ repositoryRoot, evidence: omittedCurrentConsumer }),
+    /machine-derived closure/u,
+  );
+  const omittedCodeConsumer = structuredClone(evidence);
+  omittedCodeConsumer.currentCodeConsumers = omittedCodeConsumer.currentCodeConsumers
+    .filter(({ consumer }) => consumer !== 'tool/validate_support_evidence_external_readiness.mjs');
+  assert.throws(
+    () => validateWp160ReverseIndex({ repositoryRoot, evidence: omittedCodeConsumer }),
     /machine-derived closure/u,
   );
   const rewritten = structuredClone(evidence);
