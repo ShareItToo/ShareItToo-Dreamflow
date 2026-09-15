@@ -847,10 +847,14 @@ export function normalizeSupportCaseInput(raw, {
     'support_summary_required',
     3,
   );
-  const specialCategoryDetection = detectPossibleSpecialCategoryFields({
-    summary: userFacingSummary,
-    productSafetyRiskDescription: productSafetyNotice?.riskDescription,
-  });
+  const specialCategoryDetection = detectPossibleSpecialCategoryFields(
+    productSafetyNotice
+      ? {
+        productSafetyRiskDescription: productSafetyNotice.riskDescription,
+        productSafetyInjuryOccurred: productSafetyNotice.injuryOccurred === true,
+      }
+      : { summary: userFacingSummary },
+  );
   const specialCategoryHandling = normalizeSpecialCategoryHandling(
     raw.specialCategoryHandling,
     {
@@ -861,6 +865,30 @@ export function normalizeSupportCaseInput(raw, {
       notApplicableCode: 'special_category_handling_not_applicable',
     },
   );
+  const specialCategoryOwnerRole = specialCategoryHandling
+    ? ({
+      trust_safety: 'trust_safety_owner',
+      privacy_security: 'privacy_owner',
+      legal_authority: 'legal_authority_owner',
+    }[caseType] ?? 'privacy_owner')
+    : null;
+  if (specialCategoryHandling) {
+    if (specialCategoryHandling.ownerRole !== specialCategoryOwnerRole) {
+      throw new SupportCaseError(409, 'support_special_category_owner_role_mismatch', {
+        expectedOwnerRole: specialCategoryOwnerRole,
+        receivedOwnerRole: specialCategoryHandling.ownerRole,
+      });
+    }
+  }
+  const effectiveRoute = specialCategoryHandling
+    ? Object.freeze({
+      ...route,
+      ownerRole: specialCategoryOwnerRole,
+      approvalLevel: 'red_explicit_decision',
+      waitingOn: specialCategoryOwnerRole,
+      privacyFlag: true,
+    })
+    : route;
   const issueScope = normalizeSupportIssueScope(raw.issueScope, {
     specialCategoryHandling,
   });
@@ -870,7 +898,7 @@ export function normalizeSupportCaseInput(raw, {
     p2: 240,
     p3: 1440,
     p4: 1440,
-  }[route.priority];
+    }[effectiveRoute.priority];
   const deadline = nextUpdateAt === undefined
     ? new Date(now.getTime() + (internalCheckpointMinutes * 60 * 1000))
     : requiredFutureDate(nextUpdateAt, now, 'support_next_update_at_required');
@@ -896,7 +924,7 @@ export function normalizeSupportCaseInput(raw, {
     caseType,
     caseSubType,
     status: 'received',
-    ...route,
+    ...effectiveRoute,
     sourceChannel,
     operatingMode,
     locale: 'de-DE',
@@ -907,7 +935,7 @@ export function normalizeSupportCaseInput(raw, {
     productSafetyNotice,
     feedbackContext,
     waitingReason: 'Der Eingang wartet auf die fachliche Übernahme.',
-    nextAction: route.priority === 'p0'
+    nextAction: effectiveRoute.priority === 'p0'
       ? 'Sicherheitsroute unverzüglich prüfen und einem verantwortlichen Owner zuweisen.'
       : (feedbackCase
         ? 'Feedback beantworten und dem bestätigten Produktbereich zuordnen.'

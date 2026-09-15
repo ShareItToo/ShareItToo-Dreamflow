@@ -291,6 +291,7 @@ class SupportFlowResult {
   final SupportIssueScope issueScope;
   final SupportDsaNotice? dsaNotice;
   final SupportProductSafetyNotice? productSafetyNotice;
+  final bool specialCategoryNecessityAcknowledged;
   final bool handoverSafeAbortAcknowledged;
   final bool handoverDoNotPayAcknowledged;
   final bool handoverContactAttemptAcknowledged;
@@ -305,6 +306,7 @@ class SupportFlowResult {
     required this.issueScope,
     this.dsaNotice,
     this.productSafetyNotice,
+    this.specialCategoryNecessityAcknowledged = false,
     this.handoverSafeAbortAcknowledged = false,
     this.handoverDoNotPayAcknowledged = false,
     this.handoverContactAttemptAcknowledged = false,
@@ -329,17 +331,48 @@ class SupportFlowResult {
   };
 
   static final _specialCategoryPattern = RegExp(
-    r'\b(gesundheit\w*|health\w*|medizin\w*|medical\w*|'
-    r'medication\w*|medikament\w*|diagnos\w*|symptom\w*|allerg\w*|'
-    r'schwanger\w*|pregnan\w*|behinder\w*|disabilit\w*|krankheit\w*|'
-    r'disease\w*|illness\w*|erkrank\w*|therapie\w*|behandlung\w*|'
-    r'treatment\w*|rezept\w*|arzt\w*|ärzt\w*|doctor\w*|physician\w*|'
-    r'hospital\w*|krankenhaus\w*|blutgruppe\w*|blood\s+type)\b',
+    r'(gesundheit|health|medizin|medical|medication|medikament|diagnos|'
+    r'symptom|allerg|schwanger|pregnan|behinder|disabilit|krankheit|'
+    r'disease|illness|erkrank|therapie|behandlung|treatment|'
+    r'rezept|arzt|ärzt|doctor|physician|hospital|krankenhaus|blutgruppe|'
+    r'blood\s+type)',
     caseSensitive: false,
+    unicode: true,
+  );
+  static final _specialCategoryInjuryPattern = RegExp(
+    r'(injur|(?:person|jemand|körperlich|koerperlich)[^.!?]{0,50}verletz|'
+    r'verletz[^.!?]{0,50}(?:person|jemand|körperlich|koerperlich))',
+    caseSensitive: false,
+    unicode: true,
   );
 
-  static bool _containsPossibleSpecialCategoryData(String value) =>
-      _specialCategoryPattern.hasMatch(value);
+  static bool _isUnicodeLetterBefore(String value, int index) {
+    if (index <= 0) return false;
+    var codeUnitIndex = index - 1;
+    var codePoint = value.codeUnitAt(codeUnitIndex);
+    if (codePoint >= 0xDC00 && codePoint <= 0xDFFF && codeUnitIndex > 0) {
+      final high = value.codeUnitAt(codeUnitIndex - 1);
+      if (high >= 0xD800 && high <= 0xDBFF) {
+        codePoint = 0x10000 + ((high - 0xD800) << 10) + (codePoint - 0xDC00);
+      }
+    }
+    final character = String.fromCharCode(codePoint);
+    return character.toLowerCase() != character.toUpperCase();
+  }
+
+  static bool _containsPossibleSpecialCategoryData(
+    String value, {
+    bool includeInjury = true,
+  }) {
+    final normalized = value.toLowerCase();
+    final textMatch = _specialCategoryPattern
+        .allMatches(normalized)
+        .any((match) => !_isUnicodeLetterBefore(normalized, match.start));
+    if (textMatch || !includeInjury) return textMatch;
+    return _specialCategoryInjuryPattern
+        .allMatches(normalized)
+        .any((match) => !_isUnicodeLetterBefore(normalized, match.start));
+  }
 
   static const _feedbackContexts = <String, SupportFeedbackContext>{
     'Verbesserung für App und Bedienung': SupportFeedbackContext(
@@ -647,6 +680,9 @@ class SupportFlowResult {
     if (details.length < 10) {
       throw const FormatException('handover_exception_details_required');
     }
+    if (_containsPossibleSpecialCategoryData(details)) {
+      throw const FormatException('special_category_handover_route_required');
+    }
     return <String, dynamic>{
       'kind': kind,
       'details': details,
@@ -696,6 +732,20 @@ class SupportFlowResult {
     final description = userDescription.trim();
     final summary = '$mainCategoryLabel: $subCategory.'
         '${description.isEmpty ? '' : ' $description'}';
+    final specialCategoryDetected = productSafetyNotice != null
+        ? _containsPossibleSpecialCategoryData(
+              productSafetyNotice!.riskDescription,
+            ) ||
+            productSafetyNotice!.injuryOccurred
+        : _containsPossibleSpecialCategoryData(
+            summary,
+            includeInjury: false,
+          );
+    if (specialCategoryDetected && !specialCategoryNecessityAcknowledged) {
+      throw const FormatException(
+        'special_category_necessity_confirmation_required',
+      );
+    }
     final requestId = context.requestId.trim();
     final itemId = context.itemId.trim();
     final profileContext =
@@ -708,9 +758,7 @@ class SupportFlowResult {
       'immediateDanger': safetyTriage.immediateDanger,
       'safetyTriage': safetyTriage.toMap(),
       'issueScope': issueScope.toMap(),
-      if (_containsPossibleSpecialCategoryData(
-        '$summary ${productSafetyNotice?.riskDescription ?? ''}',
-      ))
+      if (specialCategoryDetected)
         'specialCategoryHandling': {
           'version': 'sit_special_category_handling_v1',
           'necessityAcknowledged': true,
@@ -822,6 +870,8 @@ class SupportFlowResult {
       issueScope: issueScope,
       dsaNotice: dsaNotice,
       productSafetyNotice: productSafetyNotice,
+      specialCategoryNecessityAcknowledged:
+          specialCategoryNecessityAcknowledged,
       handoverSafeAbortAcknowledged: handoverSafeAbortAcknowledged,
       handoverDoNotPayAcknowledged: handoverDoNotPayAcknowledged,
       handoverContactAttemptAcknowledged: handoverContactAttemptAcknowledged,
@@ -998,6 +1048,7 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
   final _productIdentificationController = TextEditingController();
   bool? _productSafetyInjuryOccurred;
   bool _productSafetyGuidanceAcknowledged = false;
+  bool _specialCategoryNecessityAcknowledged = false;
   bool _handoverSafeAbortAcknowledged = false;
   bool _handoverDoNotPayAcknowledged = false;
   bool _handoverContactAttemptAcknowledged = false;
@@ -1074,8 +1125,23 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
           (_selectedSubCategory != 'Unfall oder Verletzung durch Produkt' ||
               _productSafetyInjuryOccurred != null) &&
           _productSafetyGuidanceAcknowledged);
+  bool get _specialCategoryDataDetected =>
+      SupportFlowResult._containsPossibleSpecialCategoryData(
+        _descriptionController.text,
+        includeInjury:
+            _isProductSafetySelection || _isHandoverExceptionSelection,
+      ) ||
+      _productSafetyInjuryOccurred == true;
+  bool get _specialCategoryHandlingReady =>
+      !_specialCategoryDataDetected ||
+      (_isHandoverExceptionSelection
+          ? false
+          : _specialCategoryNecessityAcknowledged);
   bool get _submissionReady =>
-      _dsaNoticeReady && _productSafetyNoticeReady && _handoverExceptionReady;
+      _dsaNoticeReady &&
+      _productSafetyNoticeReady &&
+      _handoverExceptionReady &&
+      _specialCategoryHandlingReady;
 
   @override
   void initState() {
@@ -2016,6 +2082,7 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
             _handoverDoNotPayAcknowledged = false;
             _handoverContactAttemptAcknowledged = false;
             _productSafetyInjuryOccurred = null;
+            _specialCategoryNecessityAcknowledged = false;
           }),
         );
       },
@@ -2052,13 +2119,53 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
       maxLength: maxLength,
       minLines: minLines,
       maxLines: maxLines,
-      onChanged: (_) => setState(() {}),
+      onChanged: (_) => setState(() {
+        if (identical(controller, _descriptionController)) {
+          _specialCategoryNecessityAcknowledged = false;
+        }
+      }),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         alignLabelWithHint: true,
         border: const OutlineInputBorder(),
       ),
+    );
+  }
+
+  Widget _buildSpecialCategoryAcknowledgement() {
+    if (!_specialCategoryDataDetected) return const SizedBox.shrink();
+    if (_isHandoverExceptionSelection) {
+      return const Text(
+        'Diese Angabe kann im Übergabeweg nicht fallgebunden als besondere '
+        'Kategorie verarbeitet werden. Nutze dafür den passenden Datenschutz- '
+        'oder Trust-&-Safety-Supportweg; die Übergabemeldung bleibt gesperrt.',
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Mögliche besondere Kategorie: Bitte bestätige ausdrücklich, dass '
+          'diese Angabe für genau diesen Fall notwendig ist. Sie bleibt '
+          'fallgebunden und wird nicht frei weitergegeben.',
+          style: TextStyle(fontSize: 12),
+        ),
+        CheckboxListTile(
+          key:
+              const ValueKey('support_special_category_necessity_acknowledged'),
+          value: _specialCategoryNecessityAcknowledged,
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text(
+            'Ich bestätige die Notwendigkeit dieser Angabe für diesen Fall. *',
+          ),
+          onChanged: (value) => setState(
+            () => _specialCategoryNecessityAcknowledged = value == true,
+          ),
+        ),
+      ],
     );
   }
 
@@ -2119,6 +2226,8 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
             () => _dsaGoodFaithConfirmed = value == true,
           ),
         ),
+        const SizedBox(height: 12),
+        _buildSpecialCategoryAcknowledgement(),
         const Text(
           'Die Eingangsbestätigung ist noch keine Entscheidung über die '
           'Rechtswidrigkeit und löst keine automatische Entfernung aus.',
@@ -2192,7 +2301,10 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
           RadioGroup<bool>(
             groupValue: _productSafetyInjuryOccurred,
             onChanged: (value) => setState(
-              () => _productSafetyInjuryOccurred = value,
+              () {
+                _productSafetyInjuryOccurred = value;
+                _specialCategoryNecessityAcknowledged = false;
+              },
             ),
             child: const Column(
               children: [
@@ -2212,6 +2324,8 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
             ),
           ),
         ],
+        const SizedBox(height: 12),
+        _buildSpecialCategoryAcknowledgement(),
         const Text(
           'Die Meldung erhält eine eigene Referenz und eine servergebundene '
           'Schnelltriagefrist. Sie löst keine automatische Sperre, '
@@ -2304,6 +2418,8 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
             }
           }),
         ),
+        const SizedBox(height: 12),
+        _buildSpecialCategoryAcknowledgement(),
         const Text(
           'Der Eingang erstellt nur einen P1-Prüffall im internen Testmodus. '
           'Übergabestatus, Buchungsstatus, Zahlung, Erstattung, Schuld und '
@@ -2356,25 +2472,14 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
                               ? _buildHandoverExceptionFields()
                               : Column(
                                   children: [
-                                    if (SupportFlowResult
-                                        ._containsPossibleSpecialCategoryData(
-                                      _descriptionController.text,
-                                    ))
-                                      const Padding(
-                                        padding:
-                                            EdgeInsets.fromLTRB(16, 12, 16, 0),
-                                        child: Text(
-                                          'Bitte nenne Gesundheitsangaben nur, '
-                                          'wenn sie für diesen Fall notwendig '
-                                          'sind. Die Angabe bleibt fallgebunden '
-                                          'und wird nicht frei weitergegeben.',
-                                          style: TextStyle(fontSize: 12),
-                                        ),
-                                      ),
+                                    _buildSpecialCategoryAcknowledgement(),
                                     Expanded(
                                       child: TextField(
                                         controller: _descriptionController,
-                                        onChanged: (_) => setState(() {}),
+                                        onChanged: (_) => setState(() {
+                                          _specialCategoryNecessityAcknowledged =
+                                              false;
+                                        }),
                                         maxLength: 1400,
                                         maxLines: null,
                                         expands: true,
@@ -2499,6 +2604,8 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
           singleIssueConfirmed: true,
           separationGuidanceShown: _separationGuidanceShown,
         ),
+        specialCategoryNecessityAcknowledged:
+            _specialCategoryNecessityAcknowledged,
         dsaNotice: _immediateDanger != true && _isDsaNoticeSelection
             ? SupportDsaNotice(
                 contentType:

@@ -275,6 +275,30 @@ void main() {
     });
   });
 
+  test(
+      'handover exceptions reject special-category details instead of storing them',
+      () {
+    const result = SupportFlowResult(
+      mainCategory: 'handover',
+      subCategory: 'Artikel ist nicht wie beschrieben',
+      userDescription: 'Eine Person wurde körperlich verletzt beim Übergang.',
+      context: _context,
+      safetyTriage: SupportSafetyTriage(
+        immediateDanger: false,
+        guidanceShown: false,
+      ),
+      issueScope: SupportIssueScope(
+        singleIssueConfirmed: true,
+        separationGuidanceShown: false,
+      ),
+      handoverSafeAbortAcknowledged: true,
+    );
+    expect(
+      () => result.toHandoverExceptionInput(),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
   test('non-urgent feedback uses exact P4 context and suppresses entity links',
       () {
     const result = SupportFlowResult(
@@ -396,6 +420,7 @@ void main() {
         singleIssueConfirmed: true,
         separationGuidanceShown: false,
       ),
+      specialCategoryNecessityAcknowledged: true,
       productSafetyNotice: SupportProductSafetyNotice(
         issueKind: 'accident_or_injury',
         productIdentification: 'Bohrmaschine Modell X',
@@ -429,6 +454,73 @@ void main() {
         contains('Produktsicherheitsmeldung SIT-P-ABCDEFGHJKLM'));
     expect(confirmed.canonicalReceiptMessage,
         contains('keine technische oder rechtliche Bewertung'));
+  });
+
+  test(
+      'special-category confirmation is explicit for Unicode text and injury yes',
+      () {
+    const unicodeText = SupportFlowResult(
+      mainCategory: 'other',
+      subCategory: 'Ich brauche Hilfe vom Support',
+      userDescription: 'Ärztin hat die notwendige Meldung bestätigt.',
+      context: _context,
+      safetyTriage: SupportSafetyTriage(
+        immediateDanger: false,
+        guidanceShown: false,
+      ),
+      issueScope: SupportIssueScope(
+        singleIssueConfirmed: true,
+        separationGuidanceShown: false,
+      ),
+    );
+    expect(
+      () => unicodeText.toBackendInput(),
+      throwsA(isA<FormatException>()),
+    );
+    const confirmedUnicode = SupportFlowResult(
+      mainCategory: 'other',
+      subCategory: 'Ich brauche Hilfe vom Support',
+      userDescription: 'Ärztin hat die notwendige Meldung bestätigt.',
+      context: _context,
+      safetyTriage: SupportSafetyTriage(
+        immediateDanger: false,
+        guidanceShown: false,
+      ),
+      issueScope: SupportIssueScope(
+        singleIssueConfirmed: true,
+        separationGuidanceShown: false,
+      ),
+      specialCategoryNecessityAcknowledged: true,
+    );
+    expect(
+      confirmedUnicode.toBackendInput()['specialCategoryHandling'],
+      isA<Map<String, dynamic>>(),
+    );
+    const rightsText = SupportFlowResult(
+      mainCategory: 'dsa_notice',
+      subCategory: 'Anzeige / Artikel',
+      userDescription: 'Dieser Inhalt verletzt meine Rechte.',
+      context: _context,
+      safetyTriage: SupportSafetyTriage(
+        immediateDanger: false,
+        guidanceShown: false,
+      ),
+      issueScope: SupportIssueScope(
+        singleIssueConfirmed: true,
+        separationGuidanceShown: false,
+      ),
+      dsaNotice: SupportDsaNotice(
+        contentType: 'listing',
+        contentLocator: 'listing:listing-1',
+        illegalityStatement: 'Dieser Inhalt verletzt meine Rechte.',
+        jurisdictionOrLegalBasis: 'Deutschland',
+        goodFaithConfirmed: true,
+      ),
+    );
+    expect(
+      rightsText.toBackendInput().containsKey('specialCategoryHandling'),
+      isFalse,
+    );
   });
 
   test(

@@ -5,16 +5,21 @@ export const specialCategoryDetectionVersion = 'sit_special_category_detection_v
 export const specialCategoryHandlingVersion = 'sit_special_category_handling_v1';
 
 const specialCategoryPatterns = Object.freeze([
-  /\b(?:gesundheit\w*|health\w*)\b/iu,
-  /\b(?:medizin\w*|medical\w*|medication\w*|medikament\w*)\b/iu,
-  /\b(?:diagnos\w*|symptom\w*)\b/iu,
-  /\b(?:allerg\w*)\b/iu,
-  /\b(?:schwanger\w*|pregnan\w*)\b/iu,
-  /\b(?:behinder\w*|disabilit\w*)\b/iu,
-  /\b(?:krankheit\w*|disease\w*|illness\w*|erkrank\w*)\b/iu,
-  /\b(?:therapie\w*|behandlung\w*|treatment\w*|rezept\w*)\b/iu,
-  /\b(?:arzt\w*|ärzt\w*|doctor\w*|physician\w*|hospital\w*|krankenhaus\w*)\b/iu,
-  /\b(?:blutgruppe\w*|blood\s+type)\b/iu,
+  /(?<!\p{L})(?:gesundheit\p{L}*|health\p{L}*)(?!\p{L})/iu,
+  /(?<!\p{L})(?:medizin\p{L}*|medical\p{L}*|medication\p{L}*|medikament\p{L}*)(?!\p{L})/iu,
+  /(?<!\p{L})(?:diagnos\p{L}*|symptom\p{L}*)(?!\p{L})/iu,
+  /(?<!\p{L})(?:allerg\p{L}*)(?!\p{L})/iu,
+  /(?<!\p{L})(?:schwanger\p{L}*|pregnan\p{L}*)(?!\p{L})/iu,
+  /(?<!\p{L})(?:behinder\p{L}*|disabilit\p{L}*)(?!\p{L})/iu,
+  /(?<!\p{L})(?:krankheit\p{L}*|disease\p{L}*|illness\p{L}*|erkrank\p{L}*)(?!\p{L})/iu,
+  /(?<!\p{L})(?:therapie\p{L}*|behandlung\p{L}*|treatment\p{L}*|rezept\p{L}*)(?!\p{L})/iu,
+  /(?<!\p{L})(?:arzt\p{L}*|ärzt\p{L}*|doctor\p{L}*|physician\p{L}*|hospital\p{L}*|krankenhaus\p{L}*)(?!\p{L})/iu,
+  /(?<!\p{L})(?:blutgruppe\p{L}*|blood\s+type)(?!\p{L})/iu,
+]);
+const injuryPatterns = Object.freeze([
+  /(?<!\p{L})injur\p{L}*(?!\p{L})/iu,
+  /(?<!\p{L})(?:person|jemand|körperlich|koerperlich)\p{L}*[^.!?]{0,50}verletz\p{L}*/iu,
+  /(?<!\p{L})verletz\p{L}*[^.!?]{0,50}(?:person|jemand|körperlich|koerperlich)\p{L}*(?!\p{L})/iu,
 ]);
 
 const allowedOwnerRoles = new Set([
@@ -27,10 +32,13 @@ function text(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-export function detectPossibleSpecialCategoryText(value) {
+export function detectPossibleSpecialCategoryText(value, { includeInjury = true } = {}) {
   const normalized = text(value);
   if (!normalized) return null;
-  const patternIndex = specialCategoryPatterns.findIndex((pattern) => pattern.test(normalized));
+  const patterns = includeInjury
+    ? [...specialCategoryPatterns, ...injuryPatterns]
+    : specialCategoryPatterns;
+  const patternIndex = patterns.findIndex((pattern) => pattern.test(normalized));
   if (patternIndex < 0) return null;
   return Object.freeze({
     classification: 'possible_special_category',
@@ -43,7 +51,17 @@ export function detectPossibleSpecialCategoryFields(fields) {
   if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return null;
   const matches = Object.entries(fields)
     .map(([field, value]) => {
-      const detection = detectPossibleSpecialCategoryText(value);
+      if (field === 'productSafetyInjuryOccurred' && value === true) {
+        return {
+          field,
+          classification: 'possible_special_category',
+          detectionVersion: specialCategoryDetectionVersion,
+          patternIndex: null,
+        };
+      }
+      const detection = detectPossibleSpecialCategoryText(value, {
+        includeInjury: field !== 'summary',
+      });
       return detection ? { field, ...detection } : null;
     })
     .filter(Boolean);

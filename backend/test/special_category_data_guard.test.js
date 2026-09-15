@@ -60,6 +60,31 @@ test('requires explicit technical warning, necessity and owner binding', () => {
   assert.doesNotMatch(JSON.stringify(normalized), /Diagnose/u);
 });
 
+test('detects structured injury state and Unicode-letter words', () => {
+  assert.deepEqual(detectPossibleSpecialCategoryFields({
+    productSafetyInjuryOccurred: true,
+  }), {
+    classification: 'possible_special_category',
+    detectionVersion: specialCategoryDetectionVersion,
+    fields: ['productSafetyInjuryOccurred'],
+  });
+  assert.deepEqual(detectPossibleSpecialCategoryFields({
+    summary: 'Ärztin bestätigt die Meldung.',
+  }), {
+    classification: 'possible_special_category',
+    detectionVersion: specialCategoryDetectionVersion,
+    fields: ['summary'],
+  });
+  assert.equal(
+    detectPossibleSpecialCategoryText('Dieser Inhalt verletzt meine Rechte.'),
+    null,
+  );
+  assert.ok(
+    detectPossibleSpecialCategoryText('Eine Person wurde körperlich verletzt.'),
+  );
+  assert.ok(detectPossibleSpecialCategoryText('The person was injured.'));
+});
+
 test('rejects a handling object when no possible special-category data was detected', () => {
   assert.throws(
     () => normalizeSpecialCategoryHandling(handling, {

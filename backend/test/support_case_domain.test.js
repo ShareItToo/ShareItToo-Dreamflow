@@ -718,6 +718,52 @@ test('special-category wording fails closed until technical handling is explicit
     detectionVersion: 'sit_special_category_detection_v1',
     detectedFields: ['summary'],
   });
+  assert.equal(result.ownerRole, 'privacy_owner');
+  assert.equal(result.waitingOn, 'privacy_owner');
+  assert.equal(result.privacyFlag, true);
+  assert.equal(result.approvalLevel, 'red_explicit_decision');
+});
+
+test('structured injury requires handling and server-derived owner role', () => {
+  const base = {
+    caseType: 'trust_safety',
+    caseSubType: 'dangerous_item_or_injury',
+    summary: 'Produktsicherheitsmeldung ohne Zusatz.',
+    safetyTriage: safetyTriage(),
+    issueScope: issueScope(),
+    productSafetyNotice: {
+      version: 'sit_product_safety_intake_v1',
+      contactPointVersion: 'sit_product_safety_contact_point_v1',
+      issueKind: 'accident_or_injury',
+      productIdentification: 'Modell X',
+      riskDescription: 'Sturz beim Betrieb des Produkts.',
+      injuryOccurred: true,
+      safetyGuidanceAcknowledged: true,
+    },
+  };
+  assert.throws(
+    () => normalizeSupportCaseInput(base, { now }),
+    /support_special_category_handling_required/u,
+  );
+  const handling = {
+    version: 'sit_special_category_handling_v1',
+    necessityAcknowledged: true,
+    warningShown: true,
+    ownerRole: 'privacy_owner',
+    scope: 'case_bound',
+    replicationPolicy: 'no_unrestricted_replication',
+  };
+  assert.throws(
+    () => normalizeSupportCaseInput({ ...base, specialCategoryHandling: handling }, { now }),
+    /support_special_category_owner_role_mismatch/u,
+  );
+  const accepted = normalizeSupportCaseInput({
+    ...base,
+    specialCategoryHandling: { ...handling, ownerRole: 'trust_safety_owner' },
+  }, { now });
+  assert.deepEqual(accepted.issueScope.specialCategoryHandling.detectedFields, [
+    'productSafetyInjuryOccurred',
+  ]);
 });
 
 test('transition graph is explicit and rejects skips, paused and stale versions', () => {
