@@ -109,16 +109,13 @@ test('pinned closure revision stays stable after an unrelated successor commit',
 });
 
 test('the full WP160 gate stays bound to the closure commit after a successor', () => {
-  const closureCommit = execFileSync('git', ['-C', repositoryRoot, 'rev-parse', 'HEAD'], {
-    encoding: 'utf8',
-  }).trim();
   const closureEvidence = structuredClone(
     JSON.parse(readFileSync(resolve(
       repositoryRoot,
       'docs/evidence/release-readiness/wp160-special-category-health-data-intake-minimization-safety-20260915.json',
     ), 'utf8')),
   );
-  closureEvidence.repository.targetRevision = closureCommit;
+  const closureCommit = closureEvidence.repository.targetRevision;
   closureEvidence.captureAttestation.mode = 'closure';
   const clone = mkdtempSync(join(tmpdir(), 'sit-wp160-successor-'));
   const git = (args) => execFileSync('git', ['-C', clone, ...args], { encoding: 'utf8' }).trim();
@@ -138,6 +135,9 @@ test('the full WP160 gate stays bound to the closure commit after a successor', 
       evidence: closureEvidence,
     });
     assert.deepEqual(after, before);
+    rmSync(resolve(clone, 'unrelated-wp160-successor.txt'));
+    git(['add', '-u']);
+    git(['commit', '-qm', 'remove successor fixture']);
     writeFileSync(resolve(clone, 'docs/current_work_package.md'), 'bound source mutation\n');
     git(['add', 'docs/current_work_package.md']);
     git(['commit', '-qm', 'mutate bound source']);
@@ -148,7 +148,7 @@ test('the full WP160 gate stays bound to the closure commit after a successor', 
         repositoryRoot: clone,
         evidence: incorrectTarget,
       }),
-      /source inventory paths|exact closure|bound snapshot unavailable/u,
+      /expected exact closure/u,
     );
   } finally {
     rmSync(clone, { recursive: true, force: true });
