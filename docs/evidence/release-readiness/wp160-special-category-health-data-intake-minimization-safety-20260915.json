@@ -6,7 +6,7 @@
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "baselineHead": "c092cfe84965251f36a8f70525a49082f0959d63",
-    "targetRevision": "7f4d9bff114d636b5455747f6fa3ef72de9b7248",
+    "targetRevision": "820c288832e958e94c0d91819b680617aeec8b2c",
     "workingTreeCleanAtCapture": true,
     "remoteAhead": 0,
     "remoteBehind": 0
@@ -84,7 +84,7 @@
     "store/privacy-disclosures.json": "cf4fa482943de1f90a2f86b924f8630a3089b2af868234bb8c470b202fa17765",
     "store/retention-deletion-readiness.json": "35a92c5ee4412397908d8d8df40b9418d879bc5c0532540aa95205d38d7e79ac",
     "test/support_flow_safety_triage_test.dart": "238b8c80764156f8f09197b00b4365155f8c016b5ffc7f6637e5a91c837a8418",
-    "test/tool/read_bound_source.test.mjs": "4bb11a9561013811750beba494844c6225772a4a5f5f381c04dfc23117e3d6cb",
+    "test/tool/read_bound_source.test.mjs": "1bfbc6cf1449281ae520d375319204de0747724d108626fe1d49266d901c8e05",
     "test/tool/validate_privacy_disclosures.test.mjs": "dc710724b55c812b16c9697fb9f07b47daae1d04015bae857a7f880fb3e976d0",
     "test/tool/validate_retention_deletion_readiness.test.mjs": "b82ca741d2fb785e9742f3404704d3441612376b0d922a063e898ac6735660c5",
     "test/tool/validate_wp149_payment_v52_contract_binding_parity.test.mjs": "f51d43191c997c6fa08264aec83b93585e5963f231c9df203496ec35e46d5ba3",
@@ -114,7 +114,7 @@
   },
   "captureAttestation": {
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "f423eb480d6c811dcb908f2e41d266d0b31bf2d6487deb812e90b5167b42aabd",
+    "sourceInventoryDigest": "9fb01cabf018f550fad57bbbc538c78aaad2d272367ad9b1ee535c28350ae523",
     "mode": "closure"
   }
 }
