@@ -364,7 +364,7 @@ test('create persists controlled P4 feedback without linked entities or escalati
   client.done();
 });
 
-test('product-safety creation snapshots bounded evidence and a rapid triage receipt', async () => {
+test('neutral product-safety creation remains recordable without Article 9 data', async () => {
   const client = new ScriptedClient([
     { match: /FROM support_cases/, result: noRows },
     {
@@ -397,9 +397,8 @@ test('product-safety creation snapshots bounded evidence and a rapid triage rece
           contactPointVersion: 'sit_product_safety_contact_point_v1',
           issueKind: 'accident_or_injury',
           productIdentification: 'Bohrmaschine Modell X',
-          riskDescription:
-              'Beim Einschalten trat Rauch aus und eine Hand wurde verletzt.',
-          injuryOccurred: true,
+          riskDescription: 'Beim Einschalten trat Rauch aus, ohne Verletzung.',
+          injuryOccurred: false,
           safetyGuidanceAcknowledged: true,
           sourceChannel: 'app',
           submittedAt: now.toISOString(),
@@ -470,7 +469,7 @@ test('product-safety creation snapshots bounded evidence and a rapid triage rece
     raw: {
       caseType: 'trust_safety',
       caseSubType: 'dangerous_item_or_injury',
-      summary: 'Unfall oder Verletzung durch Produkt gesondert melden.',
+      summary: 'Defektes Produkt ohne Verletzung gesondert melden.',
       safetyTriage: safetyTriage(),
       issueScope: issueScope(),
       productSafetyNotice: {
@@ -478,18 +477,9 @@ test('product-safety creation snapshots bounded evidence and a rapid triage rece
         contactPointVersion: 'sit_product_safety_contact_point_v1',
         issueKind: 'accident_or_injury',
         productIdentification: 'Bohrmaschine Modell X',
-        riskDescription:
-            'Beim Einschalten trat Rauch aus und eine Hand wurde verletzt.',
-        injuryOccurred: true,
+        riskDescription: 'Beim Einschalten trat Rauch aus, ohne Verletzung.',
+        injuryOccurred: false,
         safetyGuidanceAcknowledged: true,
-      },
-      specialCategoryHandling: {
-        version: 'sit_special_category_handling_v1',
-        necessityAcknowledged: true,
-        warningShown: true,
-        ownerRole: 'trust_safety_owner',
-        scope: 'case_bound',
-        replicationPolicy: 'no_unrestricted_replication',
       },
     },
     idempotencyKey: 'product-safety-key-1',

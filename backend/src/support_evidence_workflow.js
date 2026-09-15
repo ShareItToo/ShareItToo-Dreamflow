@@ -261,7 +261,7 @@ async function accessibleCase(client, { actor, caseId, forUpdate = false }) {
   const result = await client.query(
     `SELECT id, human_readable_case_number, reporter_user_id,
             affected_user_ids, linked_booking_id, linked_listing_id, status,
-            intake_scope_evidence
+            case_type, case_subtype, intake_scope_evidence
        FROM support_cases
       WHERE (id::text = $1 OR human_readable_case_number = $1)
         AND (reporter_user_id = $2 OR $2 = ANY(affected_user_ids))${lock}`,
@@ -345,11 +345,16 @@ export async function createSupportEvidence(client, {
   }
   const caseSpecialCategoryHandling = supportCase.intake_scope_evidence
     ?.specialCategoryHandling ?? null;
+  // Article 9 authorization is intentionally not issued by any current route.
+  // Historical rows remain readable, but new sensitive uploads fail before
+  // persistFiles can write bytes or emit workflow/audit events.
   if (metadata.specialCategoryClassification === 'possible_special_category'
-      && caseSpecialCategoryHandling == null) {
+      || (supportCase.case_type === 'trust_safety'
+        && supportCase.case_subtype === 'dangerous_item_or_injury'
+        && caseSpecialCategoryHandling == null)) {
     throw new SupportCaseError(
       409,
-      'support_evidence_special_category_case_binding_required',
+      'support_evidence_article9_server_authorization_required',
     );
   }
 

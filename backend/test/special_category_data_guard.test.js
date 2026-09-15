@@ -40,10 +40,20 @@ test('requires explicit technical warning, necessity and owner binding', () => {
       detection,
       errorFactory: (code, details) => Object.assign(new Error(code), { details }),
     }),
-    /special_category_handling_required/u,
+    /article9_server_authorization_required/u,
   );
+  const serverApproval = {
+    version: 'sit_article9_server_authorization_v1',
+    source: 'server',
+    decision: 'approved',
+    approvalReference: 'approval-1234',
+    caseBinding: 'case-123',
+    article9Basis: 'future-reviewed-basis',
+    issuedAt: '2026-08-21T10:00:00.000Z',
+  };
   const normalized = normalizeSpecialCategoryHandling(handling, {
     detection,
+    serverSideArticle9Authorization: serverApproval,
     errorFactory: (code, details) => Object.assign(new Error(code), { details }),
   });
   assert.deepEqual(normalized, {
@@ -56,6 +66,8 @@ test('requires explicit technical warning, necessity and owner binding', () => {
     replicationPolicy: 'no_unrestricted_replication',
     detectionVersion: specialCategoryDetectionVersion,
     detectedFields: ['summary'],
+    authorizationVersion: 'sit_article9_server_authorization_v1',
+    authorizationReference: 'approval-1234',
   });
   assert.doesNotMatch(JSON.stringify(normalized), /Diagnose/u);
 });
@@ -79,6 +91,7 @@ test('detects structured injury state and Unicode-letter words', () => {
     detectPossibleSpecialCategoryText('Dieser Inhalt verletzt meine Rechte.'),
     null,
   );
+  assert.equal(detectPossibleSpecialCategoryText('Keine Verletzung, nur ein defektes Gerät.'), null);
   assert.ok(
     detectPossibleSpecialCategoryText('Eine Person wurde körperlich verletzt.'),
   );

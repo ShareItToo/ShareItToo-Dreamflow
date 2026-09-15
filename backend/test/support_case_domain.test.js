@@ -694,34 +694,22 @@ test('special-category wording fails closed until technical handling is explicit
   };
   assert.throws(
     () => normalizeSupportCaseInput(base, { now }),
-    /support_special_category_handling_required/u,
+    /support_article9_server_authorization_required/u,
   );
-  const result = normalizeSupportCaseInput({
-    ...base,
-    specialCategoryHandling: {
-      version: 'sit_special_category_handling_v1',
-      necessityAcknowledged: true,
-      warningShown: true,
-      ownerRole: 'privacy_owner',
-      scope: 'case_bound',
-      replicationPolicy: 'no_unrestricted_replication',
-    },
-  }, { now });
-  assert.deepEqual(result.issueScope.specialCategoryHandling, {
-    version: 'sit_special_category_handling_v1',
-    classification: 'possible_special_category',
-    necessityAcknowledged: true,
-    warningShown: true,
-    ownerRole: 'privacy_owner',
-    scope: 'case_bound',
-    replicationPolicy: 'no_unrestricted_replication',
-    detectionVersion: 'sit_special_category_detection_v1',
-    detectedFields: ['summary'],
-  });
-  assert.equal(result.ownerRole, 'privacy_owner');
-  assert.equal(result.waitingOn, 'privacy_owner');
-  assert.equal(result.privacyFlag, true);
-  assert.equal(result.approvalLevel, 'red_explicit_decision');
+  assert.throws(
+    () => normalizeSupportCaseInput({
+      ...base,
+      specialCategoryHandling: {
+        version: 'sit_special_category_handling_v1',
+        necessityAcknowledged: true,
+        warningShown: true,
+        ownerRole: 'privacy_owner',
+        scope: 'case_bound',
+        replicationPolicy: 'no_unrestricted_replication',
+      },
+    }, { now }),
+    /support_article9_server_authorization_required/u,
+  );
 });
 
 test('contextual injury in a general-help summary uses privacy handling', () => {
@@ -734,24 +722,22 @@ test('contextual injury in a general-help summary uses privacy handling', () => 
   };
   assert.throws(
     () => normalizeSupportCaseInput(base, { now }),
-    /support_special_category_handling_required/u,
+    /support_article9_server_authorization_required/u,
   );
-  const result = normalizeSupportCaseInput({
-    ...base,
-    specialCategoryHandling: {
-      version: 'sit_special_category_handling_v1',
-      necessityAcknowledged: true,
-      warningShown: true,
-      ownerRole: 'privacy_owner',
-      scope: 'case_bound',
-      replicationPolicy: 'no_unrestricted_replication',
-    },
-  }, { now });
-  assert.equal(result.ownerRole, 'privacy_owner');
-  assert.equal(result.waitingOn, 'privacy_owner');
-  assert.equal(result.privacyFlag, true);
-  assert.equal(result.approvalLevel, 'red_explicit_decision');
-  assert.deepEqual(result.issueScope.specialCategoryHandling.detectedFields, ['summary']);
+  assert.throws(
+    () => normalizeSupportCaseInput({
+      ...base,
+      specialCategoryHandling: {
+        version: 'sit_special_category_handling_v1',
+        necessityAcknowledged: true,
+        warningShown: true,
+        ownerRole: 'privacy_owner',
+        scope: 'case_bound',
+        replicationPolicy: 'no_unrestricted_replication',
+      },
+    }, { now }),
+    /support_article9_server_authorization_required/u,
+  );
 });
 
 test('structured injury requires handling and server-derived owner role', () => {
@@ -773,7 +759,7 @@ test('structured injury requires handling and server-derived owner role', () => 
   };
   assert.throws(
     () => normalizeSupportCaseInput(base, { now }),
-    /support_special_category_handling_required/u,
+    /support_article9_server_authorization_required/u,
   );
   const handling = {
     version: 'sit_special_category_handling_v1',
@@ -785,15 +771,8 @@ test('structured injury requires handling and server-derived owner role', () => 
   };
   assert.throws(
     () => normalizeSupportCaseInput({ ...base, specialCategoryHandling: handling }, { now }),
-    /support_special_category_owner_role_mismatch/u,
+    /support_article9_server_authorization_required/u,
   );
-  const accepted = normalizeSupportCaseInput({
-    ...base,
-    specialCategoryHandling: { ...handling, ownerRole: 'trust_safety_owner' },
-  }, { now });
-  assert.deepEqual(accepted.issueScope.specialCategoryHandling.detectedFields, [
-    'productSafetyInjuryOccurred',
-  ]);
 });
 
 test('transition graph is explicit and rejects skips, paused and stale versions', () => {

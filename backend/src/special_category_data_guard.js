@@ -3,6 +3,10 @@
 
 export const specialCategoryDetectionVersion = 'sit_special_category_detection_v1';
 export const specialCategoryHandlingVersion = 'sit_special_category_handling_v1';
+// A client warning/checkbox is never Article 9 authorization.  This versioned
+// shape is reserved for a future server-owned legal gate; no current route
+// issues it and no legal basis is selected in the present staging mode.
+export const article9ServerAuthorizationVersion = 'sit_article9_server_authorization_v1';
 
 const specialCategoryPatterns = Object.freeze([
   /(?<!\p{L})(?:gesundheit\p{L}*|health\p{L}*)(?!\p{L})/iu,
@@ -35,15 +39,27 @@ function text(value) {
 export function detectPossibleSpecialCategoryText(value, { includeInjury = true } = {}) {
   const normalized = text(value);
   if (!normalized) return null;
-  const patterns = includeInjury
-    ? [...specialCategoryPatterns, ...injuryPatterns]
-    : specialCategoryPatterns;
-  const patternIndex = patterns.findIndex((pattern) => pattern.test(normalized));
-  if (patternIndex < 0) return null;
+  const specialIndex = specialCategoryPatterns.findIndex((pattern) => pattern.test(normalized));
+  if (specialIndex >= 0) {
+    return Object.freeze({
+      classification: 'possible_special_category',
+      detectionVersion: specialCategoryDetectionVersion,
+      patternIndex: specialIndex,
+    });
+  }
+  if (!includeInjury) return null;
+  // Explicitly neutral accident reports such as "keine Verletzung" are not
+  // health data.  Keep scanning the rest of the text for actual medical terms.
+  const injuryText = normalized.replace(
+    /\b(?:keine?|ohne|no|without)\s+(?:eine?\s+)?(?:person\s+)?(?:körperlich\s+|koerperlich\s+)?verletz\p{L}*/giu,
+    ' ',
+  );
+  const injuryIndex = injuryPatterns.findIndex((pattern) => pattern.test(injuryText));
+  if (injuryIndex < 0) return null;
   return Object.freeze({
     classification: 'possible_special_category',
     detectionVersion: specialCategoryDetectionVersion,
-    patternIndex,
+    patternIndex: specialCategoryPatterns.length + injuryIndex,
   });
 }
 
@@ -74,6 +90,7 @@ export function detectPossibleSpecialCategoryFields(fields, { includeInjury = tr
 
 export function normalizeSpecialCategoryHandling(raw, {
   detection = null,
+  serverSideArticle9Authorization = null,
   errorFactory,
   requiredCode = 'special_category_handling_required',
   shapeCode = 'special_category_handling_invalid',
@@ -86,6 +103,13 @@ export function normalizeSpecialCategoryHandling(raw, {
   if (!detection) {
     if (raw !== undefined && raw !== null) fail(notApplicableCode);
     return null;
+  }
+  if (!isTrustedServerArticle9Authorization(serverSideArticle9Authorization)) {
+    fail('article9_server_authorization_required', {
+      detectionVersion: detection.detectionVersion,
+      inputStored: false,
+      externalDelivery: false,
+    });
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     fail(requiredCode, { detectionVersion: detection.detectionVersion });
@@ -120,7 +144,25 @@ export function normalizeSpecialCategoryHandling(raw, {
     replicationPolicy: 'no_unrestricted_replication',
     detectionVersion: detection.detectionVersion,
     detectedFields: Object.freeze([...detection.fields]),
+    authorizationVersion: article9ServerAuthorizationVersion,
+    authorizationReference: serverSideArticle9Authorization.approvalReference,
   });
+}
+
+export function isTrustedServerArticle9Authorization(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const keys = new Set([
+    'version', 'source', 'decision', 'approvalReference', 'caseBinding',
+    'article9Basis', 'issuedAt',
+  ]);
+  if (Object.keys(value).some((key) => !keys.has(key))) return false;
+  return text(value.version) === article9ServerAuthorizationVersion
+    && value.source === 'server'
+    && value.decision === 'approved'
+    && /^[A-Za-z0-9_.:-]{8,160}$/u.test(text(value.approvalReference))
+    && /^[A-Za-z0-9_.:-]{3,160}$/u.test(text(value.caseBinding))
+    && /^[A-Za-z0-9_.:-]{3,160}$/u.test(text(value.article9Basis))
+    && Number.isFinite(new Date(value.issuedAt).getTime());
 }
 
 export function assertNoPossibleSpecialCategoryText(value, {

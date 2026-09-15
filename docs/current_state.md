@@ -1,5 +1,18 @@
 # ShareItToo Current State
 
+## WP162 Article 9 server-side default deny — TECHNICAL CLOSURE; LEGAL GATE OPEN
+
+New possible special-category/health inputs are now rejected server-side
+unless a strict server-owned, case-bound authorization is supplied. No current
+route issues such authorization and no Article 9 basis is selected, so client
+warnings, checkboxes, role labels and claimed approvals cannot open the gate.
+Sensitive evidence is rejected before file persistence, inserts, audit or
+workflow forwarding; historical rows remain readable/exportable. Neutral
+product-safety reports with explicit `injuryOccurred: false` remain recordable.
+Focused WP162 tests pass. No production, provider, payment, Store, cloud/VPS,
+DNS or device state changed. See
+`docs/operations/WP162_ARTICLE9_SERVER_SIDE_DEFAULT_DENY_2026-09-16.md`.
+
 ## WP160 special-category / health-data intake minimization safety — TECHNICAL CLOSURE; ARTICLE 9 GATE OPEN
 
 WP160 separates accident reporting from an explicitly confirmed injury and

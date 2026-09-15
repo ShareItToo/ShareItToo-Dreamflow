@@ -1,5 +1,16 @@
 # Current Work Package: WP160 Special-Category / Health-Data Intake Minimization Safety — TECHNICAL CLOSURE; LEGAL GATE OPEN
 
+## WP162 Article 9 server-side default deny — technical closure; legal gate open
+
+WP162 corrects the earlier classification-only boundary. The client cannot
+authorize Article 9 processing: warnings, necessity acknowledgements and role
+labels are advisory input only. With no selected legal basis, the current
+server default is deny for newly detected sensitive case text and evidence.
+The rejection happens before persistence, forwarding, audit or file writes.
+Neutral accident/product-safety reports remain recordable when injury is
+explicitly false. Existing read/export and retention behavior is preserved.
+See `docs/operations/WP162_ARTICLE9_SERVER_SIDE_DEFAULT_DENY_2026-09-16.md`.
+
 WP160 also records a coordination ratchet for the Sol/Luna/Astra review loop:
 a completed cross-task read that returns empty `items` or an empty
 `latestAssistantMessageId` is not evidence of a silent worker turn. Before

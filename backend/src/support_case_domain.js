@@ -788,6 +788,7 @@ export function normalizeSupportCaseInput(raw, {
   sourceChannel = 'app',
   operatingMode = 'simulation',
   specializedIntakeAuthority = null,
+  serverSideArticle9Authorization = null,
   nextUpdateAt,
   now = new Date(),
 } = {}) {
@@ -865,6 +866,7 @@ export function normalizeSupportCaseInput(raw, {
     raw.specialCategoryHandling,
     {
       detection: specialCategoryDetection,
+      serverSideArticle9Authorization,
       errorFactory: (code, details) => new SupportCaseError(409, `support_${code}`, details),
       requiredCode: 'special_category_handling_required',
       shapeCode: 'special_category_handling_invalid',

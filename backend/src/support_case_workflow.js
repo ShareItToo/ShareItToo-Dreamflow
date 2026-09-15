@@ -266,6 +266,7 @@ export async function createSupportCase(client, {
   sourceChannel = 'app',
   operatingMode = 'simulation',
   specializedIntakeAuthority = null,
+  serverSideArticle9Authorization = null,
   now = new Date(),
 }) {
   if (!actor?.id || !['user', 'support', 'admin'].includes(actor.role)) {
@@ -291,6 +292,7 @@ export async function createSupportCase(client, {
     sourceChannel,
     operatingMode,
     specializedIntakeAuthority,
+    serverSideArticle9Authorization,
     nextUpdateAt,
     now,
   });

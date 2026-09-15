@@ -293,7 +293,7 @@ test('evidence persistence starts only after case and classification gates', asy
       },
       persistFiles: async () => { fileWrites += 1; },
     }),
-    /support_evidence_special_category_case_binding_required/u,
+    /support_evidence_article9_server_authorization_required/u,
   );
   assert.equal(fileWrites, 0);
   assert.equal(unboundSpecial.calls.some(({ sql }) => /INSERT INTO/u.test(sql)), false);
