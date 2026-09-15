@@ -61,6 +61,16 @@ export function validateWp160SpecialCategoryHealthDataIntake({ repositoryRoot = 
   }
   const isPrecommit = value.captureAttestation?.mode === 'precommit';
   const expectedSourcePaths = deriveWp160SourcePaths({ repositoryRoot, targetRevision });
+  exact(
+    Object.keys(value.sourceInventory ?? {}).sort(),
+    [...expectedSourcePaths].sort(),
+    'source inventory paths',
+  );
+  exact(
+    value.captureAttestation?.sourceInventoryDigest,
+    inventoryDigest(value.sourceInventory),
+    'source inventory digest',
+  );
   if (!isPrecommit) {
     let boundSnapshot;
     try {

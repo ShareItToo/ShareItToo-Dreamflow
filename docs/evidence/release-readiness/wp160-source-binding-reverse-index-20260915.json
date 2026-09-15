@@ -4,7 +4,7 @@
   "package": "WP160-SOURCE-BINDING-REVERSE-INDEX-20260915",
   "repository": {
     "baselineHead": "c092cfe84965251f36a8f70525a49082f0959d63",
-    "targetRevision": "WORKTREE_STAGED"
+    "targetRevision": "c9869cbeebf1f527c05559292235291ce0457840"
   },
   "changedSourcePaths": [
     "backend/sql/migrations/079_special_category_intake_minimization.down.sql",
