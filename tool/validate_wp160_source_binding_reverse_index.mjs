@@ -17,11 +17,11 @@ export const currentMutableBindingRoots = Object.freeze([
 export const currentExternalGateBindingFiles = Object.freeze([
   'docs/evidence/external-gates/support-evidence-scanner-readiness.json',
 ]);
-export const historicalExternalGateBindingFiles = Object.freeze([
-  'docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json',
-]);
-export const historicalCodeConsumerFiles = Object.freeze([
-  'tool/validate_active_infrastructure_mail_provider_readiness.mjs',
+export const historicalCodeConsumerMarkers = Object.freeze([
+  'resolveBoundSnapshot',
+  'materializeBoundSourceTexts',
+  'readBoundSource',
+  'sourceBindingHead',
 ]);
 const historicalBindingRoot = 'docs/evidence/release-readiness';
 const codeConsumerRoot = 'tool';
@@ -275,7 +275,7 @@ function currentMutableBindingFilesAtRevision(repositoryRoot, revision, candidat
   return [...new Set([...dynamicFiles, ...declaredCurrentExternal])].sort();
 }
 
-function currentCodeConsumersAtRevision(
+function codeConsumersAtRevision(
   repositoryRoot,
   changedSourcePaths,
   revision,
@@ -284,9 +284,8 @@ function currentCodeConsumersAtRevision(
   const candidates = candidateFiles === null
     ? candidateFilesAtRevision(repositoryRoot, changedSourcePaths, revision)
     : candidateFiles;
-  return filesForRoot(candidates, codeConsumerRoot)
+  const consumers = filesForRoot(candidates, codeConsumerRoot)
     .filter((file) => /\.(?:mjs|js)$/u.test(file))
-    .filter((file) => !historicalCodeConsumerFiles.includes(file))
     .map((consumer) => {
       let source;
       try {
@@ -296,6 +295,7 @@ function currentCodeConsumersAtRevision(
       }
       return {
         consumer,
+        historical: historicalCodeConsumerMarkers.some((marker) => source.includes(marker)),
         paths: changedSourcePaths
           .filter((path) => path !== consumer && source.includes(path))
           .sort(),
@@ -303,6 +303,11 @@ function currentCodeConsumersAtRevision(
     })
     .filter(({ paths }) => paths.length > 0)
     .sort((left, right) => left.consumer.localeCompare(right.consumer));
+  const historical = consumers.filter(({ historical }) => historical)
+    .map(({ historical, ...entry }) => entry);
+  const current = consumers.filter(({ historical }) => !historical)
+    .map(({ historical, ...entry }) => entry);
+  return { current, historical };
 }
 
 function existsAtRevision(repositoryRoot, relativePath, revision) {
@@ -381,7 +386,7 @@ export function deriveWp160ReverseIndex({
     effectiveTarget,
     candidateFiles,
   );
-  const currentCodeConsumers = currentCodeConsumersAtRevision(
+  const codeConsumers = codeConsumersAtRevision(
     repositoryRoot,
     changedSourcePaths,
     effectiveTarget,
@@ -397,7 +402,8 @@ export function deriveWp160ReverseIndex({
     changedSourcePaths,
     mutableBindings: [...mutableBindingFiles],
     currentMutableBindings: current,
-    currentCodeConsumers,
+    currentCodeConsumers: codeConsumers.current,
+    immutableHistoricalCodeConsumers: codeConsumers.historical,
     immutableHistoricalBindings: historical,
     boundaries: {
       historicalEvidenceRewritten: false,

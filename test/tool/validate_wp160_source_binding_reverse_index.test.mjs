@@ -45,6 +45,10 @@ test('accepts the machine-derived WP160 reverse source-binding index', () => {
     binding.endsWith('active-infrastructure-mail-provider-readiness.json')), false);
   assert.equal(derived.currentCodeConsumers.some(({ consumer }) =>
     consumer === 'tool/validate_active_infrastructure_mail_provider_readiness.mjs'), false);
+  assert.ok(derived.immutableHistoricalCodeConsumers.some(({ consumer }) =>
+    consumer === 'tool/validate_active_infrastructure_mail_provider_readiness.mjs'));
+  assert.ok(derived.immutableHistoricalCodeConsumers.some(({ consumer }) =>
+    consumer === 'tool/validate_wp159_processor_controller_region_transfer_truth.mjs'));
 });
 
 test('pinned reverse-index reads cache Git tree and JSON lookups', () => {
@@ -243,14 +247,18 @@ test('current mutable roots discover a newly added manifest automatically', () =
         repository: [{ path: 'backend/src/new-current-source.js', sha256: 'a'.repeat(64) }],
       },
     });
-    writeFileSync(join(repository, 'docs/evidence/external-gates', 'first.json'), manifest);
+    writeFileSync(join(
+      repository,
+      'docs/evidence/external-gates',
+      'support-evidence-scanner-readiness.json',
+    ), manifest);
     writeFileSync(join(repository, 'store', 'fourth.json'), manifest);
     const bindings = deriveCurrentMutableBindings(
       repository,
       ['backend/src/new-current-source.js'],
     );
     assert.deepEqual(bindings.map(({ binding }) => binding), [
-      'docs/evidence/external-gates/first.json',
+      'docs/evidence/external-gates/support-evidence-scanner-readiness.json',
       'store/fourth.json',
     ]);
   } finally {
