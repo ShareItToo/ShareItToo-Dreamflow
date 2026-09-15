@@ -11,6 +11,8 @@ import {
   deriveWp160ReverseIndex,
   validateWp160ReverseIndex,
 } from '../../tool/validate_wp160_source_binding_reverse_index.mjs';
+import { validateWp160SpecialCategoryHealthDataIntake } from
+  '../../tool/validate_wp160_special_category_health_data_intake.mjs';
 
 const repositoryRoot = resolve(new URL('../..', import.meta.url).pathname);
 const evidencePath = resolve(
@@ -103,5 +105,40 @@ test('pinned closure revision stays stable after an unrelated successor commit',
     assert.deepEqual(pinned, ['bound-test.md']);
   } finally {
     rmSync(repository, { recursive: true, force: true });
+  }
+});
+
+test('the full WP160 gate stays bound to the closure commit after a successor', () => {
+  const closureCommit = execFileSync('git', ['-C', repositoryRoot, 'rev-parse', 'HEAD'], {
+    encoding: 'utf8',
+  }).trim();
+  const closureEvidence = structuredClone(
+    JSON.parse(readFileSync(resolve(
+      repositoryRoot,
+      'docs/evidence/release-readiness/wp160-special-category-health-data-intake-minimization-safety-20260915.json',
+    ), 'utf8')),
+  );
+  closureEvidence.repository.targetRevision = closureCommit;
+  closureEvidence.captureAttestation.mode = 'closure';
+  const clone = mkdtempSync(join(tmpdir(), 'sit-wp160-successor-'));
+  const git = (args) => execFileSync('git', ['-C', clone, ...args], { encoding: 'utf8' }).trim();
+  try {
+    execFileSync('git', ['clone', '--no-hardlinks', repositoryRoot, clone], { stdio: 'ignore' });
+    const before = validateWp160SpecialCategoryHealthDataIntake({
+      repositoryRoot: clone,
+      evidence: closureEvidence,
+    });
+    writeFileSync(join(clone, 'unrelated-wp160-successor.txt'), 'successor\n');
+    git(['add', 'unrelated-wp160-successor.txt']);
+    git(['config', 'user.email', 'fixture@example.invalid']);
+    git(['config', 'user.name', 'fixture']);
+    git(['commit', '-qm', 'unrelated successor']);
+    const after = validateWp160SpecialCategoryHealthDataIntake({
+      repositoryRoot: clone,
+      evidence: closureEvidence,
+    });
+    assert.deepEqual(after, before);
+  } finally {
+    rmSync(clone, { recursive: true, force: true });
   }
 });
