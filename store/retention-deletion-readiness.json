@@ -33,7 +33,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "a04cfce7239fcd188fe1995bffb7f5d2df7d136f7428c96e8584439e0f100bd7"
+      "sha256": "984bb489c815c3a2a8d6729ef8900f5d47b1bc82956d865b0e2b343bf81d860d"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
@@ -381,7 +381,7 @@
     },
       {
         "path": "backend/sql/migrations/079_special_category_intake_minimization.up.sql",
-        "sha256": "7a715e45e42ef18823dba47985942523c0610a4ca5e1b7b9d9b509bc9b5fb50e"
+        "sha256": "353d56b11eb16044a1adb9a70da3f1316e0d047d3fdbb95806b856dc727237dd"
       },
       {
         "path": "backend/sql/migrations/079_special_category_intake_minimization.down.sql",
