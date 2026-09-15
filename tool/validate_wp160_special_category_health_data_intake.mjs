@@ -90,6 +90,9 @@ export function validateWp160SpecialCategoryHealthDataIntake({ repositoryRoot = 
         ...sourceTexts,
       };
     } catch (error) {
+      if (/bound snapshot unavailable/u.test(error?.message ?? '')) {
+        fail(`bound snapshot unavailable at expected exact closure ${targetRevision}`);
+      }
       fail(error?.message ?? 'bound source snapshot unavailable');
     }
   }
