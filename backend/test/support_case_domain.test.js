@@ -724,6 +724,36 @@ test('special-category wording fails closed until technical handling is explicit
   assert.equal(result.approvalLevel, 'red_explicit_decision');
 });
 
+test('contextual injury in a general-help summary uses privacy handling', () => {
+  const base = {
+    caseType: 'general_help',
+    caseSubType: 'general_how_to',
+    summary: 'Eine Person wurde körperlich verletzt und braucht Hilfe.',
+    safetyTriage: safetyTriage(),
+    issueScope: issueScope(),
+  };
+  assert.throws(
+    () => normalizeSupportCaseInput(base, { now }),
+    /support_special_category_handling_required/u,
+  );
+  const result = normalizeSupportCaseInput({
+    ...base,
+    specialCategoryHandling: {
+      version: 'sit_special_category_handling_v1',
+      necessityAcknowledged: true,
+      warningShown: true,
+      ownerRole: 'privacy_owner',
+      scope: 'case_bound',
+      replicationPolicy: 'no_unrestricted_replication',
+    },
+  }, { now });
+  assert.equal(result.ownerRole, 'privacy_owner');
+  assert.equal(result.waitingOn, 'privacy_owner');
+  assert.equal(result.privacyFlag, true);
+  assert.equal(result.approvalLevel, 'red_explicit_decision');
+  assert.deepEqual(result.issueScope.specialCategoryHandling.detectedFields, ['summary']);
+});
+
 test('structured injury requires handling and server-derived owner role', () => {
   const base = {
     caseType: 'trust_safety',

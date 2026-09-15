@@ -854,6 +854,12 @@ export function normalizeSupportCaseInput(raw, {
         productSafetyInjuryOccurred: productSafetyNotice.injuryOccurred === true,
       }
       : { summary: userFacingSummary },
+    {
+      // DSA illegality wording is not a health/safety statement; keep its
+      // dedicated notice path from inheriting contextual injury semantics.
+      includeInjury: !(caseType === 'moderation_content'
+        && caseSubType === 'illegal_content_notice'),
+    },
   );
   const specialCategoryHandling = normalizeSpecialCategoryHandling(
     raw.specialCategoryHandling,

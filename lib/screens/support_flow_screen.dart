@@ -739,7 +739,9 @@ class SupportFlowResult {
             productSafetyNotice!.injuryOccurred
         : _containsPossibleSpecialCategoryData(
             summary,
-            includeInjury: false,
+            // DSA illegality statements use a dedicated legal-notice route;
+            // all other summaries retain contextual injury detection.
+            includeInjury: !isDsaNotice,
           );
     if (specialCategoryDetected && !specialCategoryNecessityAcknowledged) {
       throw const FormatException(
@@ -1128,8 +1130,7 @@ class _SupportFlowScreenState extends State<SupportFlowScreen> {
   bool get _specialCategoryDataDetected =>
       SupportFlowResult._containsPossibleSpecialCategoryData(
         _descriptionController.text,
-        includeInjury:
-            _isProductSafetySelection || _isHandoverExceptionSelection,
+        includeInjury: !_isDsaNoticeSelection,
       ) ||
       _productSafetyInjuryOccurred == true;
   bool get _specialCategoryHandlingReady =>

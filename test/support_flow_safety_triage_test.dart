@@ -521,6 +521,44 @@ void main() {
       rightsText.toBackendInput().containsKey('specialCategoryHandling'),
       isFalse,
     );
+
+    const injuryText = SupportFlowResult(
+      mainCategory: 'other',
+      subCategory: 'Ich brauche Hilfe vom Support',
+      userDescription: 'Eine Person wurde körperlich verletzt und braucht Hilfe.',
+      context: _context,
+      safetyTriage: SupportSafetyTriage(
+        immediateDanger: false,
+        guidanceShown: false,
+      ),
+      issueScope: SupportIssueScope(
+        singleIssueConfirmed: true,
+        separationGuidanceShown: false,
+      ),
+    );
+    expect(
+      () => injuryText.toBackendInput(),
+      throwsA(isA<FormatException>()),
+    );
+    const confirmedInjury = SupportFlowResult(
+      mainCategory: 'other',
+      subCategory: 'Ich brauche Hilfe vom Support',
+      userDescription: 'Eine Person wurde körperlich verletzt und braucht Hilfe.',
+      context: _context,
+      safetyTriage: SupportSafetyTriage(
+        immediateDanger: false,
+        guidanceShown: false,
+      ),
+      issueScope: SupportIssueScope(
+        singleIssueConfirmed: true,
+        separationGuidanceShown: false,
+      ),
+      specialCategoryNecessityAcknowledged: true,
+    );
+    expect(
+      confirmedInjury.toBackendInput()['specialCategoryHandling'],
+      isA<Map<String, dynamic>>(),
+    );
   });
 
   test(

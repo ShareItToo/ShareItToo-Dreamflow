@@ -47,7 +47,7 @@ export function detectPossibleSpecialCategoryText(value, { includeInjury = true 
   });
 }
 
-export function detectPossibleSpecialCategoryFields(fields) {
+export function detectPossibleSpecialCategoryFields(fields, { includeInjury = true } = {}) {
   if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return null;
   const matches = Object.entries(fields)
     .map(([field, value]) => {
@@ -59,9 +59,7 @@ export function detectPossibleSpecialCategoryFields(fields) {
           patternIndex: null,
         };
       }
-      const detection = detectPossibleSpecialCategoryText(value, {
-        includeInjury: field !== 'summary',
-      });
+      const detection = detectPossibleSpecialCategoryText(value, { includeInjury });
       return detection ? { field, ...detection } : null;
     })
     .filter(Boolean);

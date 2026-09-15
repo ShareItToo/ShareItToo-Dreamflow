@@ -83,6 +83,23 @@ test('detects structured injury state and Unicode-letter words', () => {
     detectPossibleSpecialCategoryText('Eine Person wurde körperlich verletzt.'),
   );
   assert.ok(detectPossibleSpecialCategoryText('The person was injured.'));
+  assert.equal(
+    detectPossibleSpecialCategoryFields(
+      { summary: 'Dieser Hinweis ist körperlich verletzt relevant.' },
+      { includeInjury: false },
+    ),
+    null,
+  );
+  assert.deepEqual(
+    detectPossibleSpecialCategoryFields({
+      summary: 'Eine Person wurde körperlich verletzt.',
+    }),
+    {
+      classification: 'possible_special_category',
+      detectionVersion: specialCategoryDetectionVersion,
+      fields: ['summary'],
+    },
+  );
 });
 
 test('rejects a handling object when no possible special-category data was detected', () => {
