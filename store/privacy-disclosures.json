@@ -36,7 +36,7 @@
     },
     {
       "path": "lib/screens/legal_privacy_screen.dart",
-      "sha256": "7de576e32c1d30feaab7ecf4bf0523e136f28a299ab353751442b59513fd53e8"
+      "sha256": "05183e2623c3012e3c5dca7e73e40173ca3c70e006138fe735f364cdd706620d"
     },
     {
       "path": "assets/legal/de/privacy_v5.html",
@@ -1420,6 +1420,843 @@
       ]
     }
   ],
+  "processingTransparency": {
+    "schemaVersion": 1,
+    "state": "technical-draft-fail-closed",
+    "approvalAllowed": false,
+    "officialSources": [
+      "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+      "https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/principles-gdpr_en",
+      "https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/obligations_en",
+      "https://www.edpb.europa.eu/system/files/2023-09/wp260rev01_en.pdf"
+    ],
+    "recipientClasses": [
+      "deviceLocalOnly",
+      "firstPartyBackend",
+      "hostingerVps",
+      "googleWorkspaceSmtpRelay",
+      "firebaseAuthentication",
+      "firebaseCloudMessaging",
+      "firebaseCrashlytics",
+      "googleMapsPlatform",
+      "stripe",
+      "otherRentalParty",
+      "publicProfileAudience",
+      "authorizedSupport",
+      "competentAuthorities"
+    ],
+    "activities": [
+      {
+        "id": "account_core",
+        "runtimeState": "active",
+        "dataTypes": [
+          "name",
+          "emailAddress",
+          "phoneNumber",
+          "userId",
+          "deviceOrOtherIds"
+        ],
+        "dataSources": [
+          "data_subject",
+          "authentication_provider",
+          "security_observation"
+        ],
+        "purposes": [
+          {
+            "id": "account_service",
+            "legalBasis": "article_6_1_b",
+            "basisStatus": "technical_interpretation_unapproved",
+            "condition": "necessary_for_requested_account_and_authentication_service",
+            "consentControl": null,
+            "legitimateInterest": null,
+            "statutoryReference": null
+          },
+          {
+            "id": "account_security",
+            "legalBasis": "article_6_1_f",
+            "basisStatus": "professional_review_required",
+            "condition": "necessary_and_proportionate_account_abuse_prevention",
+            "consentControl": null,
+            "legitimateInterest": "protect_users_accounts_and_platform",
+            "statutoryReference": null
+          }
+        ],
+        "recipients": [
+          "firstPartyBackend",
+          "hostingerVps",
+          "firebaseAuthentication",
+          "googleWorkspaceSmtpRelay"
+        ],
+        "retentionDecisionRefs": [
+          "inactiveAccountPeriod",
+          "expiredCredentialPurgePeriod",
+          "externalProcessorRetention"
+        ],
+        "automatedDecisioning": "none",
+        "specialCategory": {
+          "inScope": false,
+          "article9BasisStatus": "not_applicable"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "exactPurposeBasisMapping",
+          "legitimateInterestAssessments",
+          "controllerAndRecipientIdentity",
+          "processorContractsRegionsTransfers",
+          "retentionSchedule"
+        ]
+      },
+      {
+        "id": "profile_listing_publication",
+        "runtimeState": "active",
+        "dataTypes": [
+          "name",
+          "physicalAddress",
+          "userId",
+          "approximateLocation",
+          "photos",
+          "otherUserContent"
+        ],
+        "dataSources": [
+          "data_subject"
+        ],
+        "purposes": [
+          {
+            "id": "profile_and_listing_service",
+            "legalBasis": "article_6_1_b",
+            "basisStatus": "technical_interpretation_unapproved",
+            "condition": "necessary_for_requested_profile_or_listing_publication",
+            "consentControl": null,
+            "legitimateInterest": null,
+            "statutoryReference": null
+          }
+        ],
+        "recipients": [
+          "firstPartyBackend",
+          "hostingerVps",
+          "publicProfileAudience"
+        ],
+        "retentionDecisionRefs": [
+          "inactiveAccountPeriod",
+          "externalProcessorRetention"
+        ],
+        "automatedDecisioning": "none",
+        "specialCategory": {
+          "inScope": false,
+          "article9BasisStatus": "not_applicable"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "exactPurposeBasisMapping",
+          "retentionSchedule"
+        ]
+      },
+      {
+        "id": "discovery_wishlist_and_location",
+        "runtimeState": "conditional_user_choice",
+        "dataTypes": [
+          "userId",
+          "approximateLocation",
+          "preciseLocation",
+          "appInteractions"
+        ],
+        "dataSources": [
+          "data_subject",
+          "device_sensor_on_demand",
+          "service_observation"
+        ],
+        "purposes": [
+          {
+            "id": "search_wishlist_and_distance",
+            "legalBasis": "article_6_1_b",
+            "basisStatus": "technical_interpretation_unapproved",
+            "condition": "necessary_for_requested_discovery_or_saved_state",
+            "consentControl": null,
+            "legitimateInterest": null,
+            "statutoryReference": null
+          },
+          {
+            "id": "precise_device_location",
+            "legalBasis": "article_6_1_a",
+            "basisStatus": "professional_review_required",
+            "condition": "only_after_explicit_on_demand_location_action",
+            "consentControl": "on_demand_revocable_os_permission",
+            "legitimateInterest": null,
+            "statutoryReference": null
+          }
+        ],
+        "recipients": [
+          "deviceLocalOnly",
+          "firstPartyBackend",
+          "hostingerVps",
+          "googleMapsPlatform"
+        ],
+        "retentionDecisionRefs": [
+          "externalProcessorRetention"
+        ],
+        "automatedDecisioning": "none",
+        "specialCategory": {
+          "inScope": false,
+          "article9BasisStatus": "not_applicable"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "exactPurposeBasisMapping",
+          "processorContractsRegionsTransfers",
+          "retentionSchedule",
+          "exactCandidateParity"
+        ]
+      },
+      {
+        "id": "booking_contract_and_counterparty",
+        "runtimeState": "active",
+        "dataTypes": [
+          "name",
+          "emailAddress",
+          "phoneNumber",
+          "physicalAddress",
+          "userId",
+          "purchaseHistory",
+          "otherFinancialInfo"
+        ],
+        "dataSources": [
+          "data_subject",
+          "other_rental_party",
+          "service_observation"
+        ],
+        "purposes": [
+          {
+            "id": "contract_preparation_and_performance",
+            "legalBasis": "article_6_1_b",
+            "basisStatus": "technical_interpretation_unapproved",
+            "condition": "necessary_for_requested_booking_and_physical_handover",
+            "consentControl": null,
+            "legitimateInterest": null,
+            "statutoryReference": null
+          }
+        ],
+        "recipients": [
+          "firstPartyBackend",
+          "hostingerVps",
+          "otherRentalParty",
+          "googleWorkspaceSmtpRelay"
+        ],
+        "retentionDecisionRefs": [
+          "transactionalRecordPeriod",
+          "communicationPeriod",
+          "externalProcessorRetention",
+          "legalHoldProcess"
+        ],
+        "automatedDecisioning": "none",
+        "specialCategory": {
+          "inScope": false,
+          "article9BasisStatus": "not_applicable"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "exactPurposeBasisMapping",
+          "retentionSchedule"
+        ]
+      },
+      {
+        "id": "messages_handover_and_dispute_evidence",
+        "runtimeState": "active",
+        "dataTypes": [
+          "userId",
+          "physicalAddress",
+          "preciseLocation",
+          "photos",
+          "inAppMessages",
+          "otherUserContent",
+          "purchaseHistory"
+        ],
+        "dataSources": [
+          "data_subject",
+          "other_rental_party",
+          "device_sensor_on_demand",
+          "service_observation"
+        ],
+        "purposes": [
+          {
+            "id": "booking_communication_and_evidence",
+            "legalBasis": "article_6_1_b",
+            "basisStatus": "technical_interpretation_unapproved",
+            "condition": "necessary_for_requested_communication_handover_and_return",
+            "consentControl": null,
+            "legitimateInterest": null,
+            "statutoryReference": null
+          },
+          {
+            "id": "fraud_prevention_and_legal_claims",
+            "legalBasis": "article_6_1_f",
+            "basisStatus": "professional_review_required",
+            "condition": "case_bound_necessary_and_proportionate_use_only",
+            "consentControl": null,
+            "legitimateInterest": "prevent_fraud_and_establish_exercise_or_defend_claims",
+            "statutoryReference": null
+          }
+        ],
+        "recipients": [
+          "firstPartyBackend",
+          "hostingerVps",
+          "otherRentalParty",
+          "authorizedSupport"
+        ],
+        "retentionDecisionRefs": [
+          "communicationPeriod",
+          "moderationEvidencePeriod",
+          "externalProcessorRetention",
+          "legalHoldProcess"
+        ],
+        "automatedDecisioning": "human_review_only_signals",
+        "specialCategory": {
+          "inScope": false,
+          "article9BasisStatus": "not_applicable"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "exactPurposeBasisMapping",
+          "legitimateInterestAssessments",
+          "retentionSchedule"
+        ]
+      },
+      {
+        "id": "support_moderation_and_product_safety",
+        "runtimeState": "active_high_risk_legal_gate",
+        "dataTypes": [
+          "name",
+          "emailAddress",
+          "userId",
+          "photos",
+          "otherUserContent",
+          "healthInfo"
+        ],
+        "dataSources": [
+          "data_subject",
+          "other_user",
+          "authorized_support",
+          "competent_authority"
+        ],
+        "purposes": [
+          {
+            "id": "requested_support",
+            "legalBasis": "article_6_1_b",
+            "basisStatus": "professional_review_required",
+            "condition": "necessary_for_requested_support_service",
+            "consentControl": null,
+            "legitimateInterest": null,
+            "statutoryReference": null
+          },
+          {
+            "id": "safety_and_platform_compliance",
+            "legalBasis": "article_6_1_c",
+            "basisStatus": "professional_review_required",
+            "condition": "only_to_the_extent_an_exact_applicable_duty_requires_processing",
+            "consentControl": null,
+            "legitimateInterest": null,
+            "statutoryReference": "dsa_gpsr_and_national_applicability_mapping_open"
+          },
+          {
+            "id": "abuse_prevention_and_legal_claims",
+            "legalBasis": "article_6_1_f",
+            "basisStatus": "professional_review_required",
+            "condition": "case_bound_necessary_and_proportionate_use_only",
+            "consentControl": null,
+            "legitimateInterest": "protect_users_and_platform_and_handle_legal_claims",
+            "statutoryReference": null
+          }
+        ],
+        "recipients": [
+          "firstPartyBackend",
+          "hostingerVps",
+          "authorizedSupport",
+          "competentAuthorities"
+        ],
+        "retentionDecisionRefs": [
+          "moderationEvidencePeriod",
+          "auditSecurityLogPeriod",
+          "externalProcessorRetention",
+          "legalHoldProcess"
+        ],
+        "automatedDecisioning": "human_review_only_signals",
+        "specialCategory": {
+          "inScope": true,
+          "article9BasisStatus": "open_professional_review_required"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "exactPurposeBasisMapping",
+          "legitimateInterestAssessments",
+          "statutoryObligationMapping",
+          "specialCategoryArticle9Basis",
+          "retentionSchedule"
+        ]
+      },
+      {
+        "id": "security_fraud_and_audit",
+        "runtimeState": "active",
+        "dataTypes": [
+          "userId",
+          "deviceOrOtherIds",
+          "otherUserContent",
+          "appInteractions"
+        ],
+        "dataSources": [
+          "service_observation",
+          "data_subject",
+          "other_user"
+        ],
+        "purposes": [
+          {
+            "id": "security_fraud_and_audit",
+            "legalBasis": "article_6_1_f",
+            "basisStatus": "professional_review_required",
+            "condition": "necessary_proportionate_access_limited_and_time_limited",
+            "consentControl": null,
+            "legitimateInterest": "protect_users_platform_and_evidence_integrity",
+            "statutoryReference": null
+          }
+        ],
+        "recipients": [
+          "firstPartyBackend",
+          "hostingerVps",
+          "authorizedSupport"
+        ],
+        "retentionDecisionRefs": [
+          "auditSecurityLogPeriod",
+          "externalProcessorRetention",
+          "legalHoldProcess"
+        ],
+        "automatedDecisioning": "human_review_only_signals",
+        "specialCategory": {
+          "inScope": false,
+          "article9BasisStatus": "not_applicable"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "legitimateInterestAssessments",
+          "retentionSchedule"
+        ]
+      },
+      {
+        "id": "transactional_email",
+        "runtimeState": "active",
+        "dataTypes": [
+          "emailAddress",
+          "userId",
+          "purchaseHistory"
+        ],
+        "dataSources": [
+          "data_subject",
+          "service_observation"
+        ],
+        "purposes": [
+          {
+            "id": "requested_transaction_communication",
+            "legalBasis": "article_6_1_b",
+            "basisStatus": "technical_interpretation_unapproved",
+            "condition": "necessary_for_requested_account_or_booking_service",
+            "consentControl": null,
+            "legitimateInterest": null,
+            "statutoryReference": null
+          },
+          {
+            "id": "mandatory_notice",
+            "legalBasis": "article_6_1_c",
+            "basisStatus": "professional_review_required",
+            "condition": "only_for_an_exact_applicable_notice_duty",
+            "consentControl": null,
+            "legitimateInterest": null,
+            "statutoryReference": "event_specific_statutory_mapping_open"
+          },
+          {
+            "id": "account_security_notice",
+            "legalBasis": "article_6_1_f",
+            "basisStatus": "professional_review_required",
+            "condition": "necessary_proportionate_non_marketing_security_notice",
+            "consentControl": null,
+            "legitimateInterest": "protect_account_and_notify_material_security_events",
+            "statutoryReference": null
+          }
+        ],
+        "recipients": [
+          "firstPartyBackend",
+          "hostingerVps",
+          "googleWorkspaceSmtpRelay"
+        ],
+        "retentionDecisionRefs": [
+          "communicationPeriod",
+          "externalProcessorRetention"
+        ],
+        "automatedDecisioning": "none",
+        "specialCategory": {
+          "inScope": false,
+          "article9BasisStatus": "not_applicable"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "exactPurposeBasisMapping",
+          "legitimateInterestAssessments",
+          "statutoryObligationMapping",
+          "processorContractsRegionsTransfers",
+          "retentionSchedule"
+        ]
+      },
+      {
+        "id": "push_notifications",
+        "runtimeState": "source_ready_exact_candidate_required",
+        "dataTypes": [
+          "userId",
+          "deviceOrOtherIds"
+        ],
+        "dataSources": [
+          "device_installation",
+          "service_observation"
+        ],
+        "purposes": [
+          {
+            "id": "transactional_push_delivery",
+            "legalBasis": "article_6_1_a",
+            "basisStatus": "professional_review_required",
+            "condition": "separate_voluntary_default_off_choice_without_marketing",
+            "consentControl": "separate_default_off_and_revocable",
+            "legitimateInterest": null,
+            "statutoryReference": null
+          }
+        ],
+        "recipients": [
+          "firstPartyBackend",
+          "hostingerVps",
+          "firebaseCloudMessaging"
+        ],
+        "retentionDecisionRefs": [
+          "externalProcessorRetention"
+        ],
+        "automatedDecisioning": "none",
+        "specialCategory": {
+          "inScope": false,
+          "article9BasisStatus": "not_applicable"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "exactPurposeBasisMapping",
+          "processorContractsRegionsTransfers",
+          "retentionSchedule",
+          "exactCandidateParity"
+        ]
+      },
+      {
+        "id": "crash_diagnostics",
+        "runtimeState": "source_ready_exact_candidate_required",
+        "dataTypes": [
+          "deviceOrOtherIds",
+          "crashData",
+          "otherDiagnostics",
+          "appInteractions"
+        ],
+        "dataSources": [
+          "device_installation",
+          "service_observation"
+        ],
+        "purposes": [
+          {
+            "id": "voluntary_crash_diagnostics",
+            "legalBasis": "article_6_1_a",
+            "basisStatus": "professional_review_required",
+            "condition": "separate_voluntary_default_off_choice_without_advertising_analytics",
+            "consentControl": "separate_default_off_and_revocable",
+            "legitimateInterest": null,
+            "statutoryReference": null
+          }
+        ],
+        "recipients": [
+          "firebaseCrashlytics"
+        ],
+        "retentionDecisionRefs": [
+          "externalProcessorRetention"
+        ],
+        "automatedDecisioning": "none",
+        "specialCategory": {
+          "inScope": false,
+          "article9BasisStatus": "not_applicable"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "exactPurposeBasisMapping",
+          "processorContractsRegionsTransfers",
+          "retentionSchedule",
+          "exactCandidateParity"
+        ]
+      },
+      {
+        "id": "external_identity_verification",
+        "runtimeState": "phone_active_social_providers_disabled",
+        "dataTypes": [
+          "name",
+          "emailAddress",
+          "phoneNumber",
+          "userId"
+        ],
+        "dataSources": [
+          "data_subject",
+          "authentication_provider"
+        ],
+        "purposes": [
+          {
+            "id": "chosen_external_authentication_or_phone_verification",
+            "legalBasis": "pending_professional_review",
+            "basisStatus": "professional_review_required",
+            "condition": "only_after_the_user_starts_an_enabled_provider_flow",
+            "consentControl": "explicit_user_started_provider_flow",
+            "legitimateInterest": null,
+            "statutoryReference": null
+          }
+        ],
+        "recipients": [
+          "firstPartyBackend",
+          "hostingerVps",
+          "firebaseAuthentication"
+        ],
+        "retentionDecisionRefs": [
+          "expiredCredentialPurgePeriod",
+          "externalProcessorRetention"
+        ],
+        "automatedDecisioning": "none",
+        "specialCategory": {
+          "inScope": false,
+          "article9BasisStatus": "not_applicable"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "exactPurposeBasisMapping",
+          "processorContractsRegionsTransfers",
+          "retentionSchedule",
+          "exactCandidateParity"
+        ]
+      },
+      {
+        "id": "payments_and_settlement",
+        "runtimeState": "provider_disabled_memory_only",
+        "dataTypes": [
+          "userId",
+          "purchaseHistory",
+          "paymentInfo",
+          "otherFinancialInfo"
+        ],
+        "dataSources": [
+          "data_subject",
+          "other_rental_party",
+          "payment_provider",
+          "service_observation"
+        ],
+        "purposes": [
+          {
+            "id": "payment_execution",
+            "legalBasis": "article_6_1_b",
+            "basisStatus": "professional_review_required",
+            "condition": "only_after_separate_provider_and_contract_activation",
+            "consentControl": null,
+            "legitimateInterest": null,
+            "statutoryReference": null
+          },
+          {
+            "id": "financial_compliance",
+            "legalBasis": "article_6_1_c",
+            "basisStatus": "professional_review_required",
+            "condition": "only_to_the_extent_an_exact_applicable_duty_requires_processing",
+            "consentControl": null,
+            "legitimateInterest": null,
+            "statutoryReference": "tax_accounting_psp_and_platform_mapping_open"
+          },
+          {
+            "id": "payment_fraud_and_legal_claims",
+            "legalBasis": "article_6_1_f",
+            "basisStatus": "professional_review_required",
+            "condition": "necessary_and_proportionate_after_provider_activation",
+            "consentControl": null,
+            "legitimateInterest": "secure_payment_processing_and_legal_claims",
+            "statutoryReference": null
+          }
+        ],
+        "recipients": [
+          "firstPartyBackend",
+          "hostingerVps",
+          "stripe",
+          "otherRentalParty",
+          "competentAuthorities"
+        ],
+        "retentionDecisionRefs": [
+          "transactionalRecordPeriod",
+          "externalProcessorRetention",
+          "legalHoldProcess"
+        ],
+        "automatedDecisioning": "human_review_only_signals",
+        "specialCategory": {
+          "inScope": false,
+          "article9BasisStatus": "not_applicable"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "exactPurposeBasisMapping",
+          "legitimateInterestAssessments",
+          "statutoryObligationMapping",
+          "processorContractsRegionsTransfers",
+          "retentionSchedule",
+          "exactCandidateParity"
+        ]
+      },
+      {
+        "id": "privacy_rights_and_account_erasure",
+        "runtimeState": "active",
+        "dataTypes": [
+          "name",
+          "emailAddress",
+          "userId",
+          "photos",
+          "inAppMessages",
+          "otherUserContent",
+          "purchaseHistory",
+          "otherFinancialInfo",
+          "deviceOrOtherIds"
+        ],
+        "dataSources": [
+          "data_subject",
+          "service_observation",
+          "other_rental_party"
+        ],
+        "purposes": [
+          {
+            "id": "data_subject_rights_and_erasure",
+            "legalBasis": "article_6_1_c",
+            "basisStatus": "technical_interpretation_unapproved",
+            "condition": "necessary_to_handle_an_authenticated_data_subject_request",
+            "consentControl": null,
+            "legitimateInterest": null,
+            "statutoryReference": "gdpr_articles_12_to_22"
+          }
+        ],
+        "recipients": [
+          "firstPartyBackend",
+          "hostingerVps",
+          "authorizedSupport"
+        ],
+        "retentionDecisionRefs": [
+          "privacyRightsPeriod",
+          "externalProcessorRetention",
+          "legalHoldProcess"
+        ],
+        "automatedDecisioning": "none",
+        "specialCategory": {
+          "inScope": false,
+          "article9BasisStatus": "not_applicable"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "exactPurposeBasisMapping",
+          "retentionSchedule"
+        ]
+      },
+      {
+        "id": "retention_legal_hold_and_claims",
+        "runtimeState": "active_policy_execution_blocked",
+        "dataTypes": [
+          "userId",
+          "photos",
+          "inAppMessages",
+          "otherUserContent",
+          "purchaseHistory",
+          "otherFinancialInfo",
+          "deviceOrOtherIds"
+        ],
+        "dataSources": [
+          "service_observation",
+          "data_subject",
+          "other_rental_party",
+          "competent_authority"
+        ],
+        "purposes": [
+          {
+            "id": "mandatory_record_retention",
+            "legalBasis": "article_6_1_c",
+            "basisStatus": "professional_review_required",
+            "condition": "only_for_exact_record_categories_and_applicable_periods",
+            "consentControl": null,
+            "legitimateInterest": null,
+            "statutoryReference": "record_category_specific_german_and_eu_mapping_open"
+          },
+          {
+            "id": "legal_hold_and_claims",
+            "legalBasis": "article_6_1_f",
+            "basisStatus": "professional_review_required",
+            "condition": "case_bound_owner_authorized_and_time_limited",
+            "consentControl": null,
+            "legitimateInterest": "establish_exercise_or_defend_legal_claims",
+            "statutoryReference": null
+          }
+        ],
+        "recipients": [
+          "firstPartyBackend",
+          "hostingerVps",
+          "authorizedSupport",
+          "competentAuthorities"
+        ],
+        "retentionDecisionRefs": [
+          "transactionalRecordPeriod",
+          "communicationPeriod",
+          "moderationEvidencePeriod",
+          "auditSecurityLogPeriod",
+          "backupErasureWindow",
+          "externalProcessorRetention",
+          "legalHoldProcess"
+        ],
+        "automatedDecisioning": "none",
+        "specialCategory": {
+          "inScope": false,
+          "article9BasisStatus": "not_applicable"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "legitimateInterestAssessments",
+          "statutoryObligationMapping",
+          "retentionSchedule"
+        ]
+      }
+    ],
+    "requiredDecisions": {
+      "exactPurposeBasisMapping": {
+        "status": "open",
+        "evidenceRef": null
+      },
+      "legitimateInterestAssessments": {
+        "status": "open",
+        "evidenceRef": null
+      },
+      "statutoryObligationMapping": {
+        "status": "open",
+        "evidenceRef": null
+      },
+      "specialCategoryArticle9Basis": {
+        "status": "open",
+        "evidenceRef": null
+      },
+      "controllerAndRecipientIdentity": {
+        "status": "open",
+        "evidenceRef": null
+      },
+      "processorContractsRegionsTransfers": {
+        "status": "open",
+        "evidenceRef": null
+      },
+      "retentionSchedule": {
+        "status": "open",
+        "evidenceRef": null
+      },
+      "exactCandidateParity": {
+        "status": "open",
+        "evidenceRef": null
+      }
+    }
+  },
   "requiredDecisions": {
     "googlePlayDataSafetyQuestionnaire": {
       "status": "open",

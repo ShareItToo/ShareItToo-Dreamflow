@@ -6,7 +6,7 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "03cdec58cb7e0ef379b961a31176c700fa64636f12bfbe255af6dfec8b19b15e"
+    "sourceInventoryDigest": "586c42cffa8d02ee8057d4fd5ed3a3e0ae28d1be0aec498b2fc9a42655bec433"
   },
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -116,19 +116,19 @@
     "backend/test/payment_command_replay_integrity.test.js": "9cd6e8a5ff9ba2dc3a48a7d7cd799143043005fc1bdca127036457ffb4f0733c",
     "backend/test/payment_command_result_immutability.test.js": "4f9eae2ab7f30a7fda6cdf73fd85c29338b354b59089d235ea986928b0b3aee1",
     "backend/test/postgres_foundation.integration.test.js": "01222d79e4a5514fcdaa05f4f254d8cbc331b20d3ad1ea5e1fc1adbc66402d04",
-    "docs/current_state.md": "40b4066a1892d51f08b2e81404e01f3dc38981c7788173ea2da10bc05bd8f36f",
-    "docs/current_work_package.md": "a588c17e35b46434c2125eaa4d53953fadc08524db5faf1da1b4ba286b006466",
+    "docs/current_state.md": "a473870895aaefb5affe8a91d5c671fe0d1117f5b7a4a832f41b78110a33d64f",
+    "docs/current_work_package.md": "5a49311d599248b027c8eede00de1fdf8935a255c38da28225ca4fde51935afb",
     "docs/operations/WP150_COMPLETED_PAYMENT_COMMAND_REPLAY_INTEGRITY_2026-09-14.md": "ddb1fa36922620a4c966045f7631c43862ffeadf965b4eadd8b1f416968e10f3",
-    "scripts/technical_regression_check.sh": "1b4020a12d643a369dce91b8a78a318564518664ca58619978a3fcf4e54d21e2",
-    "store/privacy-disclosures.json": "2ebce23d3d98985e74cc5e4dc167ec855f74fac26c9710001939324311912b88",
-    "store/retention-deletion-readiness.json": "c429b13d46f84a35354192859a05ae77fcb315c63d6fee2362e34b2d02bd85a1",
+    "scripts/technical_regression_check.sh": "a2bac13ef49f5e846517293d8f3010b575939de875f3e0156b07fd1679c32ba1",
+    "store/privacy-disclosures.json": "4448cbd7a5528ef11eb48cfa116269e2711db05a4d03419800f7a467e25d1b25",
+    "store/retention-deletion-readiness.json": "347a2e768f24193d04fe803ba5feb193e889b9784514d63e70e553ead2da5488",
     "test/tool/payment_provider_truthfulness_wiring.test.mjs": "28ae2b8d641cd50c145688eea626f47b5825192fe664261790a142f389f11d1c",
     "test/tool/run_r9_database_recovery.test.mjs": "a80e46143d918053ca21b6922ce8fe9ea28fe65837c278764af5f7c2e5b4fb3e",
-    "test/tool/validate_privacy_disclosures.test.mjs": "7f46226141f7ebc456c80ee9fdecf05815f0bf3cca2e0e5d37d3820c5502f6b1",
+    "test/tool/validate_privacy_disclosures.test.mjs": "450256854f3488151b394d0943608388b0a7c5153aa49ced24637b52a6ec7e55",
     "test/tool/validate_retention_deletion_readiness.test.mjs": "1db8f20c0da4c956aae8580b00e8048cc708833b0b7009e9691ef796cfb0b466",
     "test/tool/validate_wp150_completed_payment_command_replay_integrity.test.mjs": "5552ab73443161b2fab6dcdfa8b7140fea149d30f123b8449584ce384f103ae5",
     "tool/run_r9_database_recovery.mjs": "a9bbdacc744155f2846487cbe43b1a3dba8e070f78e1d19a88e057ba4521aac5",
-    "tool/validate_privacy_disclosures.mjs": "17b4e86a20d2c4d6bef1774e6b03a2d48587914f52dc96c5e9783f4d26665003",
+    "tool/validate_privacy_disclosures.mjs": "3f0742a16233c6cef8bba890ad7b98d48245b33b7eb109511b11e4b3ade92384",
     "tool/validate_retention_deletion_readiness.mjs": "0e95e1e2743e70a1a17e32e17a3697e3bdc32ecfcce032c9c10b814583d8f324",
     "tool/validate_wp150_completed_payment_command_replay_integrity.mjs": "1565cfc086017fb18724aa82816abbbca7ee2e4451b7579564c99af754c032ca"
   }

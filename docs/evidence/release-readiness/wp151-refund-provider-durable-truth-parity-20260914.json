@@ -6,7 +6,7 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "2bc5f0cff84b262b0a30dba6be4bf62ea299a9853ba11f8bdf44d53cf8f8fdb2"
+    "sourceInventoryDigest": "2cb45eb084327c07393acc0fd42f4e70d17b05e72460b12e2c87c90c998b433c"
   },
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -167,8 +167,8 @@
     "backend/test/stripe_webhook_destinations.test.js": "d9369feebbdb7733a8d97d3e5e300a685bd9ac11b2db12f689a974ba49613bb1",
     "backend/test/v51_withdrawal_workflow.test.js": "ffab494637bf8cb0445f5369841215cde26bfca3717ab0dc08bab4881f7dcac4",
     "docs/compliance/u0-pilot-cockpit-unit-economics-2026-08-20.md": "bd3a09a38a75ac25f2686fa0c92460efc36b13c4d973cc79c2abc66ec23d4311",
-    "docs/current_state.md": "40b4066a1892d51f08b2e81404e01f3dc38981c7788173ea2da10bc05bd8f36f",
-    "docs/current_work_package.md": "a588c17e35b46434c2125eaa4d53953fadc08524db5faf1da1b4ba286b006466",
+    "docs/current_state.md": "a473870895aaefb5affe8a91d5c671fe0d1117f5b7a4a832f41b78110a33d64f",
+    "docs/current_work_package.md": "5a49311d599248b027c8eede00de1fdf8935a255c38da28225ca4fde51935afb",
     "docs/operations/WP151_REFUND_PROVIDER_DURABLE_TRUTH_PARITY_2026-09-14.md": "2bc044e2abc4e8c2ce8dfae68e919b4e1b2ca1726c3581336ffcfa0ff448ec8d",
     "lib/models/invoice.dart": "60c5e27d5a742c5570701f6a865137823e8fca01d20b76025f200bbc30226d56",
     "lib/screens/invoice_detail_screen.dart": "098210b27bb814337d46ccb3df779476877a439c411d4712d94d4f62eaae0543",
@@ -177,9 +177,9 @@
     "lib/screens/payment_checkout_screen.dart": "322206148524f0b42dae31b96b62d023fb79bff0288d7f9ccd62d2100e011ce8",
     "lib/services/invoice_pdf_service.dart": "9ed4df9a7f922f59003827ce65c75c214a34a67a00d0ec2a1bab4d29fb741914",
     "lib/services/invoices_service.dart": "26e8fac9ad07c7c71012fdc8fe707c7c1b3efa486bebf5a216194e456126e673",
-    "scripts/technical_regression_check.sh": "1b4020a12d643a369dce91b8a78a318564518664ca58619978a3fcf4e54d21e2",
-    "store/privacy-disclosures.json": "2ebce23d3d98985e74cc5e4dc167ec855f74fac26c9710001939324311912b88",
-    "store/retention-deletion-readiness.json": "c429b13d46f84a35354192859a05ae77fcb315c63d6fee2362e34b2d02bd85a1",
+    "scripts/technical_regression_check.sh": "a2bac13ef49f5e846517293d8f3010b575939de875f3e0156b07fd1679c32ba1",
+    "store/privacy-disclosures.json": "4448cbd7a5528ef11eb48cfa116269e2711db05a4d03419800f7a467e25d1b25",
+    "store/retention-deletion-readiness.json": "347a2e768f24193d04fe803ba5feb193e889b9784514d63e70e553ead2da5488",
     "test/invoice_pdf_dependency_compatibility_test.dart": "0efc25fc49cb1a5d36e59bb96245922e74bec12cd0db62bb7d6f2ecf9b3df61b",
     "test/invoice_review_truth_ui_test.dart": "2d0e40e64ef5d3e8addf18a1bdfd31621a55a893b7ce0079a9454701ab48557d",
     "test/invoice_server_snapshot_model_test.dart": "aa6c9f527d9221b0fd6be10b6e6399c289fb8466d269a35a76391ca5276fa72d",

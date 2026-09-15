@@ -300,6 +300,78 @@ const purposeValues = new Set([
   'analytics',
 ]);
 
+const processingActivityIds = [
+  'account_core',
+  'profile_listing_publication',
+  'discovery_wishlist_and_location',
+  'booking_contract_and_counterparty',
+  'messages_handover_and_dispute_evidence',
+  'support_moderation_and_product_safety',
+  'security_fraud_and_audit',
+  'transactional_email',
+  'push_notifications',
+  'crash_diagnostics',
+  'external_identity_verification',
+  'payments_and_settlement',
+  'privacy_rights_and_account_erasure',
+  'retention_legal_hold_and_claims',
+];
+
+const processingRecipientClasses = [
+  'deviceLocalOnly',
+  'firstPartyBackend',
+  'hostingerVps',
+  'googleWorkspaceSmtpRelay',
+  'firebaseAuthentication',
+  'firebaseCloudMessaging',
+  'firebaseCrashlytics',
+  'googleMapsPlatform',
+  'stripe',
+  'otherRentalParty',
+  'publicProfileAudience',
+  'authorizedSupport',
+  'competentAuthorities',
+];
+
+const processingDecisionKeys = [
+  'exactPurposeBasisMapping',
+  'legitimateInterestAssessments',
+  'statutoryObligationMapping',
+  'specialCategoryArticle9Basis',
+  'controllerAndRecipientIdentity',
+  'processorContractsRegionsTransfers',
+  'retentionSchedule',
+  'exactCandidateParity',
+];
+
+const retentionDecisionKeys = new Set([
+  'inactiveAccountPeriod',
+  'transactionalRecordPeriod',
+  'communicationPeriod',
+  'privacyRightsPeriod',
+  'moderationEvidencePeriod',
+  'auditSecurityLogPeriod',
+  'expiredCredentialPurgePeriod',
+  'backupErasureWindow',
+  'externalProcessorRetention',
+  'legalHoldProcess',
+]);
+
+const legalBasisValues = new Set([
+  'article_6_1_a',
+  'article_6_1_b',
+  'article_6_1_c',
+  'article_6_1_f',
+  'pending_professional_review',
+]);
+
+const officialProcessingSources = [
+  'https://eur-lex.europa.eu/eli/reg/2016/679/oj',
+  'https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/principles-gdpr_en',
+  'https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/obligations_en',
+  'https://www.edpb.europa.eu/system/files/2023-09/wp260rev01_en.pdf',
+];
+
 const forbiddenSensitiveKeys = /^(password|secret|token|apiKey|privateKey|serviceAccount|credential|reviewAccount|email)$/i;
 const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 
@@ -381,6 +453,339 @@ function assertApproval(value, label) {
   if (!ref.startsWith('docs/evidence/b11/') || ref.includes('..') || !ref.endsWith('.json')) {
     fail(`${label}.evidenceRef must stay under docs/evidence/b11.`);
   }
+}
+
+function assertProcessingTransparency({ privacy, services, root, sourceTexts }) {
+  const register = object(
+    privacy.processingTransparency,
+    'processingTransparency',
+  );
+  assertExactKeys(register, [
+    'schemaVersion',
+    'state',
+    'approvalAllowed',
+    'officialSources',
+    'recipientClasses',
+    'activities',
+    'requiredDecisions',
+  ], 'processingTransparency');
+  if (register.schemaVersion !== 1
+      || !['technical-draft-fail-closed', 'approved'].includes(register.state)
+      || typeof register.approvalAllowed !== 'boolean') {
+    fail('Processing transparency has an unsupported approval state.');
+  }
+  if (!Array.isArray(register.officialSources)
+      || register.officialSources.join(',') !== officialProcessingSources.join(',')) {
+    fail('Processing transparency must retain the exact official GDPR sources.');
+  }
+  if (!Array.isArray(register.recipientClasses)
+      || register.recipientClasses.join(',') !== processingRecipientClasses.join(',')) {
+    fail('Processing transparency recipient classes are incomplete or reordered.');
+  }
+
+  const registerDecisions = object(
+    register.requiredDecisions,
+    'processingTransparency.requiredDecisions',
+  );
+  assertExactKeys(
+    registerDecisions,
+    processingDecisionKeys,
+    'processingTransparency.requiredDecisions',
+  );
+  processingDecisionKeys.forEach((key) => assertApproval(
+    registerDecisions[key],
+    `processingTransparency.requiredDecisions.${key}`,
+  ));
+  const processingDecisionsOpen = processingDecisionKeys.every(
+    (key) => registerDecisions[key].status === 'open',
+  );
+  const processingDecisionsClosed = processingDecisionKeys.every(
+    (key) => registerDecisions[key].status === 'closed',
+  );
+  const processingApproved = register.state === 'approved'
+    && register.approvalAllowed === true
+    && processingDecisionsClosed;
+  if (register.state === 'technical-draft-fail-closed') {
+    if (register.approvalAllowed !== false || !processingDecisionsOpen) {
+      fail('Draft processing transparency must keep every legal and external decision open.');
+    }
+  } else if (!processingApproved) {
+    fail('Approved processing transparency is incomplete.');
+  }
+
+  if (!Array.isArray(register.activities)
+      || register.activities.length !== processingActivityIds.length) {
+    fail('Processing transparency must contain every required activity exactly once.');
+  }
+  const observedActivityIds = [];
+  const observedPurposeIds = new Set();
+  const coveredDataTypes = new Set();
+  const coveredCollectedDataTypes = new Set();
+  const usedRecipients = new Set();
+  const usedProcessingGates = new Set();
+  const allowedRuntimeStates = new Set([
+    'active',
+    'conditional_user_choice',
+    'active_high_risk_legal_gate',
+    'source_ready_exact_candidate_required',
+    'phone_active_social_providers_disabled',
+    'provider_disabled_memory_only',
+    'active_policy_execution_blocked',
+  ]);
+  const allowedBasisStatuses = new Set([
+    'technical_interpretation_unapproved',
+    'professional_review_required',
+    'approved',
+  ]);
+  const allowedConsentControls = new Set([
+    'on_demand_revocable_os_permission',
+    'separate_default_off_and_revocable',
+    'explicit_user_started_provider_flow',
+  ]);
+  const allowedAutomatedDecisioning = new Set([
+    'none',
+    'human_review_only_signals',
+  ]);
+
+  for (const rawActivity of register.activities) {
+    const activity = object(rawActivity, 'processingTransparency activity');
+    const activityLabel = `processingTransparency.activities.${activity.id ?? 'unknown'}`;
+    assertExactKeys(activity, [
+      'id',
+      'runtimeState',
+      'dataTypes',
+      'dataSources',
+      'purposes',
+      'recipients',
+      'retentionDecisionRefs',
+      'automatedDecisioning',
+      'specialCategory',
+      'disclosureStatus',
+      'unresolvedGates',
+    ], activityLabel);
+    const activityId = nonEmptyString(activity.id, `${activityLabel}.id`);
+    observedActivityIds.push(activityId);
+    if (!allowedRuntimeStates.has(activity.runtimeState)) {
+      fail(`${activityLabel}.runtimeState is unsupported.`);
+    }
+    if (!Array.isArray(activity.dataTypes) || activity.dataTypes.length === 0
+        || new Set(activity.dataTypes).size !== activity.dataTypes.length
+        || activity.dataTypes.some((id) => !dataTypeIds.includes(id))) {
+      fail(`${activityLabel}.dataTypes must be a unique non-empty subset of the privacy inventory.`);
+    }
+    activity.dataTypes.forEach((id) => {
+      coveredDataTypes.add(id);
+      if (activity.runtimeState !== 'provider_disabled_memory_only') {
+        coveredCollectedDataTypes.add(id);
+      }
+    });
+    if (!Array.isArray(activity.dataSources) || activity.dataSources.length === 0
+        || new Set(activity.dataSources).size !== activity.dataSources.length
+        || activity.dataSources.some((value) => typeof value !== 'string' || value.trim() === '')) {
+      fail(`${activityLabel}.dataSources must be unique non-empty technical source classes.`);
+    }
+    if (!Array.isArray(activity.purposes) || activity.purposes.length === 0) {
+      fail(`${activityLabel}.purposes must map every activity to at least one purpose and basis.`);
+    }
+    for (const rawPurpose of activity.purposes) {
+      const purpose = object(rawPurpose, `${activityLabel}.purpose`);
+      assertExactKeys(purpose, [
+        'id',
+        'legalBasis',
+        'basisStatus',
+        'condition',
+        'consentControl',
+        'legitimateInterest',
+        'statutoryReference',
+      ], `${activityLabel}.purpose`);
+      const purposeId = nonEmptyString(purpose.id, `${activityLabel}.purpose.id`);
+      if (observedPurposeIds.has(purposeId)) {
+        fail(`Processing transparency contains duplicate purpose ${purposeId}.`);
+      }
+      observedPurposeIds.add(purposeId);
+      if (!legalBasisValues.has(purpose.legalBasis)
+          || !allowedBasisStatuses.has(purpose.basisStatus)) {
+        fail(`${activityLabel}.${purposeId} has an unsupported legal-basis state.`);
+      }
+      nonEmptyString(purpose.condition, `${activityLabel}.${purposeId}.condition`);
+      if (purpose.legalBasis === 'article_6_1_a') {
+        if (!allowedConsentControls.has(purpose.consentControl)
+            || purpose.legitimateInterest !== null
+            || purpose.statutoryReference !== null) {
+          fail(`${activityLabel}.${purposeId} must bind consent to an explicit revocable control.`);
+        }
+      } else if (purpose.legalBasis === 'article_6_1_f') {
+        nonEmptyString(
+          purpose.legitimateInterest,
+          `${activityLabel}.${purposeId}.legitimateInterest`,
+        );
+        if (purpose.consentControl !== null || purpose.statutoryReference !== null
+            || (!processingApproved
+              && !activity.unresolvedGates.includes('legitimateInterestAssessments'))) {
+          fail(`${activityLabel}.${purposeId} must retain the open legitimate-interest assessment.`);
+        }
+      } else if (purpose.legalBasis === 'article_6_1_c') {
+        nonEmptyString(
+          purpose.statutoryReference,
+          `${activityLabel}.${purposeId}.statutoryReference`,
+        );
+        if (purpose.consentControl !== null || purpose.legitimateInterest !== null) {
+          fail(`${activityLabel}.${purposeId} must not mix statutory duty with another basis.`);
+        }
+        if (!processingApproved
+            && purpose.basisStatus === 'professional_review_required'
+            && !activity.unresolvedGates.includes('statutoryObligationMapping')) {
+          fail(`${activityLabel}.${purposeId} must retain the open statutory mapping.`);
+        }
+      } else if (purpose.legalBasis === 'article_6_1_b') {
+        if (purpose.consentControl !== null || purpose.legitimateInterest !== null
+            || purpose.statutoryReference !== null) {
+          fail(`${activityLabel}.${purposeId} must keep the contract basis distinct.`);
+        }
+      } else if (processingApproved
+          || purpose.consentControl !== 'explicit_user_started_provider_flow'
+          || !activity.unresolvedGates.includes('exactPurposeBasisMapping')) {
+        fail(`${activityLabel}.${purposeId} pending basis must remain explicitly gated.`);
+      }
+      if (processingApproved && purpose.basisStatus !== 'approved') {
+        fail(`${activityLabel}.${purposeId} must have an approved purpose-specific basis.`);
+      }
+    }
+    if (!Array.isArray(activity.recipients) || activity.recipients.length === 0
+        || new Set(activity.recipients).size !== activity.recipients.length
+        || activity.recipients.some((id) => !processingRecipientClasses.includes(id))) {
+      fail(`${activityLabel}.recipients must be a unique non-empty approved recipient-class subset.`);
+    }
+    activity.recipients.forEach((id) => usedRecipients.add(id));
+    if (!Array.isArray(activity.retentionDecisionRefs)
+        || activity.retentionDecisionRefs.length === 0
+        || new Set(activity.retentionDecisionRefs).size !== activity.retentionDecisionRefs.length
+        || activity.retentionDecisionRefs.some((id) => !retentionDecisionKeys.has(id))) {
+      fail(`${activityLabel}.retentionDecisionRefs must point to known retention decisions.`);
+    }
+    if (!allowedAutomatedDecisioning.has(activity.automatedDecisioning)) {
+      fail(`${activityLabel}.automatedDecisioning is unsupported.`);
+    }
+    const specialCategory = object(
+      activity.specialCategory,
+      `${activityLabel}.specialCategory`,
+    );
+    assertExactKeys(
+      specialCategory,
+      ['inScope', 'article9BasisStatus'],
+      `${activityLabel}.specialCategory`,
+    );
+    const containsHealth = activity.dataTypes.includes('healthInfo');
+    if (containsHealth !== specialCategory.inScope) {
+      fail(`${activityLabel} must classify healthInfo as special-category data.`);
+    }
+    if (containsHealth) {
+      const validArticle9 = processingApproved
+        ? specialCategory.article9BasisStatus === 'approved'
+        : specialCategory.article9BasisStatus === 'open_professional_review_required'
+          && activity.unresolvedGates.includes('specialCategoryArticle9Basis');
+      if (!validArticle9) {
+        fail(`${activityLabel} must retain the open Article 9 basis gate.`);
+      }
+    } else if (specialCategory.article9BasisStatus !== 'not_applicable') {
+      fail(`${activityLabel} must not invent an Article 9 basis.`);
+    }
+    const expectedDisclosureStatus = processingApproved
+      ? 'approved'
+      : 'draft_not_legally_approved';
+    if (activity.disclosureStatus !== expectedDisclosureStatus) {
+      fail(`${activityLabel} has an inconsistent disclosure approval state.`);
+    }
+    if (!Array.isArray(activity.unresolvedGates)
+        || new Set(activity.unresolvedGates).size !== activity.unresolvedGates.length
+        || activity.unresolvedGates.some((id) => registerDecisions[id]?.status !== 'open')
+        || (processingApproved && activity.unresolvedGates.length !== 0)
+        || (!processingApproved && activity.unresolvedGates.length === 0)) {
+      fail(`${activityLabel}.unresolvedGates must reference open processing decisions.`);
+    }
+    activity.unresolvedGates.forEach((id) => usedProcessingGates.add(id));
+  }
+  if (observedActivityIds.join(',') !== processingActivityIds.join(',')) {
+    fail('Processing transparency activities must use the required IDs and order.');
+  }
+  if (dataTypeIds.some((id) => !coveredDataTypes.has(id))) {
+    fail('Processing transparency does not cover every disclosed data type.');
+  }
+  if (!processingApproved
+      && processingDecisionKeys.some((id) => !usedProcessingGates.has(id))) {
+    fail('Every open processing decision must be bound to at least one activity.');
+  }
+  for (const item of privacy.dataTypes) {
+    if (item.collected === true && !coveredCollectedDataTypes.has(item.id)) {
+      fail(`Collected data type ${item.id} lacks an active or conditional processing activity.`);
+    }
+  }
+  for (const serviceId of [
+    'firstPartyBackend',
+    'hostingerVps',
+    'googleWorkspaceSmtpRelay',
+    'firebaseAuthentication',
+    'firebaseCloudMessaging',
+    'firebaseCrashlytics',
+    'googleMapsPlatform',
+    'stripe',
+  ]) {
+    if (!Object.hasOwn(services, serviceId) || !usedRecipients.has(serviceId)) {
+      fail(`Processing transparency is missing service recipient ${serviceId}.`);
+    }
+  }
+  if (usedRecipients.has('openAiHelpers')) {
+    fail('Disabled external AI must not appear as a processing recipient.');
+  }
+  const activityById = new Map(register.activities.map((item) => [item.id, item]));
+  const payment = activityById.get('payments_and_settlement');
+  if (!processingApproved && (payment?.runtimeState !== 'provider_disabled_memory_only'
+      || !payment.dataTypes.includes('paymentInfo')
+      || !payment.recipients.includes('stripe')
+      || !payment.unresolvedGates.includes('exactCandidateParity'))) {
+    fail('Payment processing must remain a separately gated disabled provider activity.');
+  }
+  for (const id of ['push_notifications', 'crash_diagnostics']) {
+    const activity = activityById.get(id);
+    if (!processingApproved
+        && (activity?.runtimeState !== 'source_ready_exact_candidate_required'
+          || !activity.unresolvedGates.includes('exactCandidateParity'))) {
+      fail(`${id} must remain bound to a future exact opt-in candidate.`);
+    }
+  }
+  const externalIdentity = activityById.get('external_identity_verification');
+  if (!processingApproved
+      && (externalIdentity?.runtimeState !== 'phone_active_social_providers_disabled'
+        || externalIdentity.purposes[0]?.legalBasis !== 'pending_professional_review')) {
+    fail('External identity processing must preserve phone/social provider truth and the open basis.');
+  }
+
+  const privacyUi = sourceText(root, sourceTexts, 'lib/screens/legal_privacy_screen.dart');
+  for (const marker of [
+    'Rechtsgrundlagen und Empfänger',
+    'Art. 6 Abs. 1 Buchst. a DSGVO',
+    'Art. 6 Abs. 1 Buchst. b DSGVO',
+    'Art. 6 Abs. 1 Buchst. c DSGVO',
+    'Art. 6 Abs. 1 Buchst. f DSGVO',
+    'Ein deaktivierter Zahlungs-, Social-Login-, Karten- oder KI-Anbieter',
+    'technische Vorbereitung gilt nicht als rechtliche Freigabe',
+  ]) {
+    if (!privacyUi.includes(marker)) {
+      fail(`In-app processing transparency is missing ${marker}.`);
+    }
+  }
+  const legalDraft = sourceText(root, sourceTexts, 'assets/legal/de/privacy_v5.html');
+  for (const marker of [
+    '3. Rechtsgrundlagen und Pflichtangaben',
+    '18. Empfänger und Auftragsverarbeiter',
+    '19. Drittlandübermittlungen',
+    'Ein Dienst, dessen Betreiber, Vertragsrolle, Region, Datenfelder oder Löschfrist nicht dokumentiert',
+  ]) {
+    if (!legalDraft.includes(marker)) {
+      fail(`Legal privacy draft is missing processing-transparency marker: ${marker}.`);
+    }
+  }
+  return { approved: processingApproved };
 }
 
 function assertSourceContracts({ root, sourceTexts }) {
@@ -2077,6 +2482,13 @@ export function validatePrivacyDisclosures({
     fail('The automatic bound candidate requires non-optional, non-linked app interaction disclosure for analytics.');
   }
 
+  const processingTransparency = assertProcessingTransparency({
+    privacy,
+    services,
+    root,
+    sourceTexts,
+  });
+
   const decisions = object(privacy.requiredDecisions, 'requiredDecisions');
   assertExactKeys(decisions, decisionKeys, 'requiredDecisions');
   decisionKeys.forEach((key) => assertApproval(decisions[key], `requiredDecisions.${key}`));
@@ -2119,6 +2531,7 @@ export function validatePrivacyDisclosures({
   const activeProcessorsOpen = activeProcessorApprovals.every((value) => value === false);
   const approved = privacy.state === 'approved'
     && privacy.approvalAllowed === true
+    && processingTransparency.approved
     && allDecisionsClosed
     && formsVerified
     && activeProcessorsApproved
@@ -2128,6 +2541,7 @@ export function validatePrivacyDisclosures({
 
   if (privacy.state === 'draft') {
     if (privacy.approvalAllowed !== false
+        || processingTransparency.approved
         || !allDecisionsOpen
         || !activeProcessorsOpen
         || formsVerified
@@ -2144,6 +2558,7 @@ export function validatePrivacyDisclosures({
     approvalAllowed: privacy.approvalAllowed,
     dataTypeCount: privacy.dataTypes.length,
     externalServiceCount: serviceKeys.length,
+    processingActivityCount: processingActivityIds.length,
     storeGate: storeGate.status,
     binaryReleaseCheck: binary.releaseCheckStatus,
   };
@@ -2163,6 +2578,7 @@ function main() {
   console.log(
     `Privacy disclosures valid: state=${result.state}, approvalAllowed=${result.approvalAllowed}, `
     + `dataTypes=${result.dataTypeCount}, services=${result.externalServiceCount}, `
+    + `processingActivities=${result.processingActivityCount}, `
     + `binaryReleaseCheck=${result.binaryReleaseCheck}, finalBinaryPrivacyScan=${result.storeGate}.`,
   );
 }

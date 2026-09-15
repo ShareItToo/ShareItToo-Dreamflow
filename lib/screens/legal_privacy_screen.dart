@@ -93,6 +93,30 @@ class LegalPrivacyScreen extends StatelessWidget {
           ],
         ),
         LegalSectionCard(
+          icon: Icons.balance_outlined,
+          title: 'Rechtsgrundlagen und Empfänger',
+          children: const [
+            LegalParagraph(
+              'Welche Rechtsgrundlage gilt, hängt vom konkreten Zweck ab. ShareItToo ordnet deshalb nicht pauschal alle Verarbeitungen nur einer Rechtsgrundlage zu:',
+            ),
+            SizedBox(height: 10),
+            LegalBullets(items: [
+              'Art. 6 Abs. 1 Buchst. b DSGVO für Daten, die zur angeforderten Konto-, Inserat-, Such-, Buchungs-, Kommunikations-, Übergabe- oder Rückgabefunktion erforderlich sind',
+              'Art. 6 Abs. 1 Buchst. a DSGVO für getrennt freiwillig aktivierte Funktionen wie Push, Crashdiagnose und den ausdrücklich gestarteten präzisen Gerätestandort; die Auswahl kann mit Wirkung für die Zukunft widerrufen werden',
+              'Art. 6 Abs. 1 Buchst. c DSGVO nur, soweit eine konkret anwendbare gesetzliche Pflicht die jeweilige Verarbeitung verlangt',
+              'Art. 6 Abs. 1 Buchst. f DSGVO für erforderliche Sicherheits-, Betrugspräventions-, Missbrauchsabwehr- und Rechtsverteidigungsmaßnahmen nach einer dokumentierten Interessenabwägung; dagegen kann aus Gründen der besonderen Situation Widerspruch eingelegt werden',
+            ]),
+            SizedBox(height: 10),
+            LegalParagraph(
+              'Je nach Vorgang erhalten nur die andere Mietpartei, ausdrücklich berechtigte Supportpersonen, gesetzlich zuständige Stellen und die für die jeweilige Funktion erforderlichen technischen Dienstleister Daten. Dazu gehören derzeit Backend-/Hosting- und Transaktionsmail-Dienste sowie bei getrennter Aktivierung die unten genannten Google-/Firebase-Dienste. Ein deaktivierter Zahlungs-, Social-Login-, Karten- oder KI-Anbieter erhält aus der deaktivierten Funktion keine Daten.',
+            ),
+            SizedBox(height: 10),
+            LegalParagraph(
+              'Die genaue Zuordnung je Verarbeitungsvorgang und die noch offenen Anbieter-, Vertrags-, Regions-, Transfer-, Aufbewahrungs- und Löschangaben bleiben bis zur abschließenden Prüfung gesperrt. Eine bloße technische Vorbereitung gilt nicht als rechtliche Freigabe.',
+            ),
+          ],
+        ),
+        LegalSectionCard(
           icon: Icons.hub_outlined,
           title: 'Technische Dienste',
           children: const [

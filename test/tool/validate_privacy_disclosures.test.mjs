@@ -51,8 +51,77 @@ test('accepts the honest fail-closed privacy disclosure draft', () => {
   assert.equal(result.approvalAllowed, false);
   assert.equal(result.dataTypeCount, 18);
   assert.equal(result.externalServiceCount, 11);
+  assert.equal(result.processingActivityCount, 14);
   assert.equal(result.binaryReleaseCheck, 'passed');
   assert.equal(result.storeGate, 'open');
+});
+
+test('rejects an incomplete purpose-basis-recipient activity inventory', () => {
+  const privacyManifest = clone(basePrivacyManifest);
+  privacyManifest.processingTransparency.activities.pop();
+  assert.throws(
+    () => validate({ privacyManifest }),
+    /every required activity exactly once/u,
+  );
+});
+
+test('rejects consent processing without its explicit revocable control', () => {
+  const privacyManifest = clone(basePrivacyManifest);
+  privacyManifest.processingTransparency.activities
+    .find((item) => item.id === 'push_notifications')
+    .purposes[0].consentControl = null;
+  assert.throws(
+    () => validate({ privacyManifest }),
+    /bind consent to an explicit revocable control/u,
+  );
+});
+
+test('rejects a legitimate-interest purpose without the open balancing gate', () => {
+  const privacyManifest = clone(basePrivacyManifest);
+  const activity = privacyManifest.processingTransparency.activities
+    .find((item) => item.id === 'security_fraud_and_audit');
+  activity.unresolvedGates = activity.unresolvedGates
+    .filter((item) => item !== 'legitimateInterestAssessments');
+  assert.throws(
+    () => validate({ privacyManifest }),
+    /open legitimate-interest assessment/u,
+  );
+});
+
+test('rejects health information without the separate Article 9 gate', () => {
+  const privacyManifest = clone(basePrivacyManifest);
+  const activity = privacyManifest.processingTransparency.activities
+    .find((item) => item.id === 'support_moderation_and_product_safety');
+  activity.specialCategory.article9BasisStatus = 'not_applicable';
+  assert.throws(
+    () => validate({ privacyManifest }),
+    /open Article 9 basis gate/u,
+  );
+});
+
+test('rejects an enabled service missing from all activity recipients', () => {
+  const privacyManifest = clone(basePrivacyManifest);
+  for (const activity of privacyManifest.processingTransparency.activities) {
+    activity.recipients = activity.recipients
+      .filter((item) => item !== 'googleWorkspaceSmtpRelay');
+  }
+  assert.throws(
+    () => validate({ privacyManifest }),
+    /missing service recipient googleWorkspaceSmtpRelay/u,
+  );
+});
+
+test('rejects in-app privacy copy that hides purpose-specific legal bases', () => {
+  const path = 'lib/screens/legal_privacy_screen.dart';
+  const privacyManifest = clone(basePrivacyManifest);
+  const changed = readFileSync(resolve(repositoryRoot, path), 'utf8')
+    .replace('Rechtsgrundlagen und Empfänger', 'Weitere Informationen');
+  privacyManifest.sourceInventory.find((entry) => entry.path === path).sha256 =
+    sha256(changed);
+  assert.throws(
+    () => validate({ privacyManifest, sourceTexts: { [path]: changed } }),
+    /In-app processing transparency is missing Rechtsgrundlagen und Empfänger/u,
+  );
 });
 
 test('rejects cross-principal or externally transferred local safety state', () => {
@@ -257,6 +326,28 @@ test('accepts a complete internally consistent approved fixture', () => {
 
   privacyManifest.state = 'approved';
   privacyManifest.approvalAllowed = true;
+  privacyManifest.processingTransparency.state = 'approved';
+  privacyManifest.processingTransparency.approvalAllowed = true;
+  for (const [key, decision] of Object.entries(
+    privacyManifest.processingTransparency.requiredDecisions,
+  )) {
+    decision.status = 'closed';
+    decision.evidenceRef = `docs/evidence/b11/processing-${key}.json`;
+  }
+  for (const activity of privacyManifest.processingTransparency.activities) {
+    activity.disclosureStatus = 'approved';
+    activity.unresolvedGates = [];
+    if (activity.specialCategory.inScope) {
+      activity.specialCategory.article9BasisStatus = 'approved';
+    }
+    for (const purpose of activity.purposes) {
+      if (purpose.legalBasis === 'pending_professional_review') {
+        purpose.legalBasis = 'article_6_1_b';
+        purpose.consentControl = null;
+      }
+      purpose.basisStatus = 'approved';
+    }
+  }
   privacyManifest.externalServices.googleMapsPlatform.clientCredentialEmbedded = false;
   privacyManifest.externalServices.googleMapsPlatform.serverProxied = true;
   privacyManifest.externalServices.googleMapsPlatform.serverCredentialRestrictionVerified = true;

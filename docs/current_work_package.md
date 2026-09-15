@@ -1,4 +1,30 @@
-# Current Work Package: WP154 Account Export Scope and Counterparty Protection — TECHNICAL CLOSURE; FULL LOCAL REGRESSION PASSED; EXTERNAL GATES HOLD
+# Current Work Package: WP155 Processing Transparency, Purpose/Basis and Recipient Parity — FULL LOCAL REGRESSION PASSED; EXTERNAL GATES HOLD
+
+WP155 adds a fail-closed processing-transparency register to the privacy draft.
+It contains exactly **14 processing activities**, covers all **18 disclosed
+data types** and **13 recipient classes**, and maps each activity to its
+technical source classes, purpose-specific legal-basis candidate, consent or
+legitimate-interest controls, retention decision references and unresolved
+gates. All eight purpose/controller/processor/Article-9/retention/exact-
+candidate decisions remain open; no professional legal approval is claimed.
+
+The in-app privacy surface now names the four technical Article 6 basis
+families, recipient classes and the fact that technical preparation is not
+legal approval. Payment remains provider-disabled and memory-only; disabled
+social/AI recipients are not added; push, crash, maps and external identity
+flows retain their exact candidate or external-fact holds. The permanent
+WP155 validator and negative tests are registered in the complete technical
+regression. Focused privacy tests pass **28/28**, privacy manifest validation
+is valid, legal/retention drafts remain fail-closed, the two relevant Flutter
+tests pass and analyzer is clean. The complete CI-equivalent technical
+regression exits **0**, including Web/Wasm, loopback smoke, Android debug
+minSdk 24 and release-host capacity checks. See
+`docs/operations/WP155_PROCESSING_TRANSPARENCY_PURPOSE_BASIS_RECIPIENT_PARITY_2026-09-15.md`.
+
+No provider, payment, money, Store, Firebase, production, cloud/VPS, DNS,
+device, credential or PR-merge action occurred.
+
+# Previous Work Package: WP154 Account Export Scope and Counterparty Protection — TECHNICAL CLOSURE; FULL LOCAL REGRESSION PASSED; EXTERNAL GATES HOLD
 
 WP154 separates the authenticated access copy from the narrower data-portability
 projection. The exact purpose is part of the request, audit, schema and private

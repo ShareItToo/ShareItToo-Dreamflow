@@ -830,6 +830,9 @@ node tool/validate_v55_legal_assets.mjs
 node --check tool/validate_wp153_position_review_release_parity.mjs
 node --test test/tool/validate_wp153_position_review_release_parity.test.mjs
 node tool/validate_wp153_position_review_release_parity.mjs
+node --check tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.mjs
+node --test test/tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.test.mjs
+node tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.mjs
 node --check backend/src/operational_readiness_gate.js
 node --test backend/test/operational_readiness_gate.test.js
 node --check tool/validate_p0b_ops_readiness.mjs

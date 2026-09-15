@@ -1,5 +1,27 @@
 # ShareItToo Current State
 
+## WP155 processing transparency, purpose/basis and recipient parity — full local regression PASSED; external gates HOLD
+
+The privacy draft now has one fail-closed processing register with exactly
+**14 activities**, **18 data types** and **13 recipient classes**. Each activity
+binds technical sources, purpose-specific Article 6 basis candidates, explicit
+consent or legitimate-interest controls, recipient classes, retention decision
+references, automated-decisioning truth and unresolved gates. All eight legal,
+controller/processor, transfer, retention, Article 9 and exact-candidate
+decisions remain open; the register is not professional legal approval.
+
+Focused privacy tool tests pass **28/28**, the manifest validator is valid,
+legal and retention readiness remain fail-closed drafts, the two relevant
+Flutter tests pass, analyzer has **0 findings**, and the WP155 validator is
+permanently registered in the complete regression. The complete local
+CI-equivalent regression exits **0**, including Web/Wasm, loopback smoke,
+Android debug minSdk 24 and release-host capacity checks. GitHub
+Regression/CodeQL remain pending until the closure commit is pushed. See
+`docs/operations/WP155_PROCESSING_TRANSPARENCY_PURPOSE_BASIS_RECIPIENT_PARITY_2026-09-15.md`.
+
+No external provider, payment, Store, Firebase, production, cloud/VPS, DNS,
+device, credential or PR-merge state changed.
+
 ## WP154 account-export scope and counterparty protection — technical closure; full local regression PASSED; external gates HOLD
 
 The authenticated export now separates an Article-15-oriented `access_copy`
