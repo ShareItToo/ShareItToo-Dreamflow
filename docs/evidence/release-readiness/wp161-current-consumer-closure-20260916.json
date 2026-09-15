@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "package": "WP161-CURRENT-CONSUMER-CLOSURE-20260916",
-  "status": "technical-closure-pending-full-regression",
+  "status": "technical-closure-full-regression-passed-external-gates-hold",
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "baselineHead": "f2b6a32c387d43b93c137ce2217ba30dd6da4562",
-    "sourceHead": "0357886420ee8fab63cb88bcc722d019e8cc62ab"
+    "sourceHead": "038b38d3eb797b31b742424b639cfbf8b5d7c001"
   },
   "sourceInventory": [
     {
@@ -22,7 +22,7 @@
     },
     {
       "path": "docs/operations/WP161_CURRENT_CONSUMER_CLOSURE_RULES_2026-09-16.md",
-      "sha256": "34e798563b72c73d130fff0b09b22cb4c9c82f25eb588963f9540112390b17b1"
+      "sha256": "6cbd644ed378d6dd4943711245eab4b02c3ad77a7f54fe48aa706c30fe5c0b1b"
     },
     {
       "path": "tool/validate_wp160_special_category_health_data_intake.mjs",
@@ -37,6 +37,39 @@
     "consumerTestCount": 4,
     "preflightDurationMs": 168,
     "historicalEvidenceRewritten": false
+  },
+  "verification": {
+    "focusedWp161Tests": "passed-17-of-17",
+    "consumerMatrix": "passed-32-of-32",
+    "closureChecker": "passed-manifests-3-code-1-tests-4-migrations-79",
+    "localFullRegression": {
+      "status": "passed",
+      "exitCode": 0,
+      "tests": 3107,
+      "passed": 3106,
+      "failed": 0,
+      "intentionalSkipped": 1
+    },
+    "githubRegression": {
+      "runId": 35030524809,
+      "verifiedHead": "9abacd615fbe7333f436038e862f608da01315fb",
+      "status": "completed",
+      "conclusion": "success",
+      "requiredJobs": [
+        "postgres-runner-proof",
+        "backend-regression",
+        "flutter-regression",
+        "r10-clean-reproducibility"
+      ],
+      "publishApiImage": "skipped"
+    },
+    "githubCodeql": {
+      "runId": 35030524869,
+      "verifiedHead": "9abacd615fbe7333f436038e862f608da01315fb",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    "externalEvidencePrecedesSourceCommit": true
   },
   "consumerTests": [
     "test/tool/check_current_consumer_closure.test.mjs",
