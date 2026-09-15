@@ -34,6 +34,10 @@ release evidence.
   bundle repairs locally with focused tests, push one stable source state, then
   one final evidence-only state. The sole exception is a necessary external CI
   diagnosis, which must be documented.
+- Every JSONB subtraction chain in a PostgreSQL migration must parenthesize its
+  typed JSONB base before applying `-` operators. Every SQL migration requires
+  a real PostgreSQL 16 fresh-cluster gate before push; a local skip or
+  unavailable local database is not release evidence.
 
 ## Compact evidence and communication
 

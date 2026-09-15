@@ -8620,6 +8620,7 @@ if (!databaseUrl) {
         mimeType = 'image/jpeg',
         fileName = 'synthetic-evidence.jpg',
         description = 'Synthetischer Bildnachweis für den kontrollierten Integrationstest.',
+        extraField = false,
       }) => {
         const form = new FormData();
         form.append('description', description);
@@ -8627,6 +8628,7 @@ if (!databaseUrl) {
         form.append('claimedEventTime', '2026-08-20T12:30:00.000Z');
         form.append('thirdPartyData', 'false');
         form.append('specialCategoryClassification', 'not_indicated');
+        if (extraField) form.append('unexpectedField', 'must be rejected');
         form.append('file', new Blob([bytes], { type: mimeType }), fileName);
         return fetch(
           `${baseUrl}/v1/support/cases/${supportIntake.supportCase.id}/evidence`,
@@ -8669,6 +8671,16 @@ if (!databaseUrl) {
         [evidenceUpload.evidence.id],
       );
       assert.equal(evidenceRowsAfterReplay.rows[0].count, 1);
+
+      const extraMultipartFieldResponse = await createEvidenceUpload({
+        idempotencyKey: 's4a-support-evidence-extra-field',
+        extraField: true,
+      });
+      assert.equal(extraMultipartFieldResponse.status, 400);
+      assert.equal(
+        (await extraMultipartFieldResponse.json()).error,
+        'multipart_fields_too_many',
+      );
 
       const executableBytes = Buffer.alloc(512);
       executableBytes.write('MZ', 0, 'ascii');

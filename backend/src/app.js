@@ -1839,7 +1839,7 @@ export function createApp({
   const blueOceanListingMutationLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const supportEvidenceUpload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: config.supportEvidence.maxFileBytes, files: 1, fields: 4 },
+    limits: { fileSize: config.supportEvidence.maxFileBytes, files: 1, fields: 5 },
   });
   app.use(rateLimit({
     ...coreRateLimitPolicies.general,
@@ -6241,6 +6241,7 @@ export function createApp({
   app.use((req, res) => res.status(404).json(errorPayload(req, 'not_found')));
   app.use((error, req, res, _next) => {
     const uploadTooLarge = error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE';
+    const uploadFieldsExceeded = error instanceof multer.MulterError && error.code === 'LIMIT_FIELD_COUNT';
     const invalidProcessedImage = error instanceof ImageProcessingError;
     const bookingConflict = error?.code === '23P01';
     const workflowError = error instanceof BookingWorkflowError;
@@ -6267,14 +6268,18 @@ export function createApp({
       ? 409
       : (uploadTooLarge
           ? 413
-          : (invalidProcessedImage ? 422 : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || pilotCockpitError || mapsProxyError || bookingConfirmationError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.status : (error?.status ?? 500))));
+          : (uploadFieldsExceeded
+              ? 400
+              : (invalidProcessedImage ? 422 : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || pilotCockpitError || mapsProxyError || bookingConfirmationError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.status : (error?.status ?? 500)))));
     const code = uploadTooLarge
       ? 'image_too_large'
-      : (invalidProcessedImage
-          ? error.code
-          : (bookingConflict
-          ? 'booking_period_unavailable'
-          : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || pilotCockpitError || mapsProxyError || bookingConfirmationError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.code : (status === 500 ? 'internal_error' : 'request_failed'))));
+      : (uploadFieldsExceeded
+          ? 'multipart_fields_too_many'
+          : (invalidProcessedImage
+              ? error.code
+              : (bookingConflict
+              ? 'booking_period_unavailable'
+              : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || pilotCockpitError || mapsProxyError || bookingConfirmationError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.code : (status === 500 ? 'internal_error' : 'request_failed')))));
     if (status >= 500) console.error(safeErrorLog(req, status, code, error));
     res.status(status).json(errorPayload(req, code, error?.details));
   });

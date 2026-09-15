@@ -32,7 +32,7 @@ ALTER TABLE support_cases
             'detectedFields'
           ]
           AND (
-            intake_scope_evidence -> 'specialCategoryHandling'
+            (intake_scope_evidence -> 'specialCategoryHandling')
               - 'version'
               - 'classification'
               - 'necessityAcknowledged'
