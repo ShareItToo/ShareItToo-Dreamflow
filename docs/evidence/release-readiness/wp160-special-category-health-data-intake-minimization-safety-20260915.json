@@ -6,7 +6,7 @@
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "baselineHead": "c092cfe84965251f36a8f70525a49082f0959d63",
-    "targetRevision": "81ec51c490ee9afac42e1e23b3c6a6a8ca73dac0",
+    "targetRevision": "de319493599658d4a12627442718e7b11d0fd1c7",
     "workingTreeCleanAtCapture": true,
     "remoteAhead": 0,
     "remoteBehind": 0
@@ -94,7 +94,7 @@
     "test/tool/validate_wp152_v54_contract_draft.test.mjs": "dc8256f6d19327db4ae1269855ac721621ecdbb4e19b025cc09853810a5569d7",
     "test/tool/validate_wp153_position_review_release_parity.test.mjs": "7c3efbc897e6a37f0394c399c3ff0a6c1dde65ac9ff71d73763737e28780002a",
     "test/tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.test.mjs": "4031cce591fc7c5ddb41d73b1e4b2f1ca90ff0259276ad3d26699bdf90338cb8",
-    "test/tool/validate_wp160_source_binding_reverse_index.test.mjs": "a14706fdad0aa4fbd6948897bee8ca9c0655763baced9eed920a85429d9cab72",
+    "test/tool/validate_wp160_source_binding_reverse_index.test.mjs": "62eddcdfa2ce2d76630aa3b89d5e380084aeabdab44386486400fcff967a128b",
     "test/tool/validate_wp160_special_category_health_data_intake.test.mjs": "cadfad7c1c0444f15709481201dea1c09a6fca354c845aa4e40ecb5512506b9e",
     "test/tool/wp160_special_category_wiring.test.mjs": "7f0a32b4d67b873dc79c324b41ecd35772df4758eea5af2e9db84b975f1d2cc3",
     "tool/read_bound_source.mjs": "9bd4e30da7712eadc5fac9ff3379fda047a239f68a9b799767ac06ecaefcd93c",
@@ -116,7 +116,7 @@
   },
   "captureAttestation": {
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "dd2039dc95bfe55f02688becbcc49ec1617af0a233be69b23bbdfe4030f22424",
+    "sourceInventoryDigest": "62e03590cf4b6514b73fe27b97420292410c1a89d31a227491d16f3fca1860a1",
     "mode": "closure"
   }
 }
