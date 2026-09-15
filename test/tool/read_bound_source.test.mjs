@@ -111,6 +111,26 @@ test('anchor resolution ignores unrelated descendant commits', () => {
   }
 });
 
+test('exact revision mode ignores later anchor-only evidence successors', () => {
+  const { repo, baseline, successor } = fixture();
+  try {
+    writeFileSync(join(repo, 'closure-evidence.json'), '{"anchor":false}\n');
+    git(repo, ['add', 'closure-evidence.json']);
+    git(repo, ['commit', '-qm', 'touch closure anchor']);
+    const exact = resolveBoundSnapshot({
+      repositoryRoot: repo,
+      baselineHead: baseline,
+      anchorPath: 'closure-evidence.json',
+      finalHead: successor,
+      exactRevision: true,
+      inventory: { 'stable.txt': digest('stable-v2\n') },
+    });
+    assert.equal(exact.revision, successor);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
 test('rejects a wrong digest and injected source drift', () => {
   const { repo, baseline } = fixture();
   try {

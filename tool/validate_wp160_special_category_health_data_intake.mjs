@@ -80,6 +80,7 @@ export function validateWp160SpecialCategoryHealthDataIntake({ repositoryRoot = 
         inventory: value.sourceInventory,
         anchorPath: evidencePath,
         finalHead: targetRevision,
+        exactRevision: true,
       });
       if (boundSnapshot.revision !== targetRevision) {
         fail(`bound snapshot resolved ${boundSnapshot.revision}, expected exact closure ${targetRevision}`);

@@ -57,6 +57,7 @@ export function resolveBoundSnapshot({
   inventory,
   anchorPath,
   finalHead,
+  exactRevision = false,
 } = {}) {
   assertRevision(baselineHead, 'bound snapshot baseline');
   if (inventory === null || typeof inventory !== 'object' || Array.isArray(inventory)) {
@@ -70,7 +71,7 @@ export function resolveBoundSnapshot({
   }
   if (anchorPath !== undefined) assertSafePath(anchorPath);
   const digest = inventoryDigest(inventory);
-  const cacheKey = `${repositoryRoot}\0${baselineHead}\0${anchorPath ?? ''}\0${finalHead ?? ''}\0${digest}`;
+  const cacheKey = `${repositoryRoot}\0${baselineHead}\0${anchorPath ?? ''}\0${finalHead ?? ''}\0${exactRevision ? 'exact' : 'search'}\0${digest}`;
   const cached = snapshotCache.get(cacheKey);
   if (cached !== undefined) return cached;
   const head = execFileSync('git', ['-C', repositoryRoot, 'rev-parse', '--verify', 'HEAD'], {
@@ -85,32 +86,44 @@ export function resolveBoundSnapshot({
   } catch {
     throw new Error(`bound snapshot unavailable: baseline is not current-branch ancestry ${baselineHead}`);
   }
-  let descendants;
-  if (anchorPath === undefined) {
-    descendants = execFileSync(
-      'git',
-      ['-C', repositoryRoot, 'rev-list', '--ancestry-path', '--reverse', `${baselineHead}..${head}`],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
-    ).trim().split(/\s+/u).filter(Boolean);
-  } else {
-    descendants = execFileSync(
-      'git',
-      ['-C', repositoryRoot, 'log', '--format=%H', '--reverse', '--ancestry-path',
-        `${baselineHead}..${head}`, '--', anchorPath],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
-    ).trim().split(/\s+/u).filter(Boolean);
-  }
-  const candidates = [baselineHead, ...descendants];
-  if (finalHead !== undefined) {
+  let searchHead = head;
+  if (exactRevision) {
+    if (finalHead === undefined) {
+      throw new Error('bound snapshot exact revision requires final head');
+    }
     assertRevision(finalHead, 'bound snapshot final head');
     try {
       execFileSync('git', ['-C', repositoryRoot, 'merge-base', '--is-ancestor', finalHead, head], {
         stdio: ['ignore', 'ignore', 'ignore'],
       });
-      if (!candidates.includes(finalHead)) candidates.push(finalHead);
     } catch {
       throw new Error(`bound snapshot final head is not current-branch ancestry ${finalHead}`);
     }
+    searchHead = finalHead;
+  }
+  let candidates;
+  if (exactRevision) {
+    candidates = [finalHead];
+  } else if (anchorPath === undefined) {
+    let descendants;
+    descendants = execFileSync(
+      'git',
+      ['-C', repositoryRoot, 'rev-list', '--ancestry-path', '--reverse', `${baselineHead}..${searchHead}`],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    ).trim().split(/\s+/u).filter(Boolean);
+    candidates = [baselineHead, ...descendants];
+  } else {
+    let descendants;
+    descendants = execFileSync(
+      'git',
+      ['-C', repositoryRoot, 'log', '--format=%H', '--reverse', '--ancestry-path',
+        `${baselineHead}..${searchHead}`, '--', anchorPath],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    ).trim().split(/\s+/u).filter(Boolean);
+    candidates = [baselineHead, ...descendants];
+  }
+  if (finalHead !== undefined && !exactRevision) {
+    if (!candidates.includes(finalHead)) candidates.push(finalHead);
   }
   for (const revision of candidates) {
     let matches = true;
