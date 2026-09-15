@@ -6,7 +6,7 @@
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "baselineHead": "c092cfe84965251f36a8f70525a49082f0959d63",
-    "targetRevision": "95de141fa51a43b6f58037c520ce5cf163b39596",
+    "targetRevision": "c4e394d1f2977f5cd6bbab0273b09e49ac58f033",
     "workingTreeCleanAtCapture": true,
     "remoteAhead": 0,
     "remoteBehind": 0
@@ -84,7 +84,7 @@
     "store/privacy-disclosures.json": "cf4fa482943de1f90a2f86b924f8630a3089b2af868234bb8c470b202fa17765",
     "store/retention-deletion-readiness.json": "35a92c5ee4412397908d8d8df40b9418d879bc5c0532540aa95205d38d7e79ac",
     "test/support_flow_safety_triage_test.dart": "238b8c80764156f8f09197b00b4365155f8c016b5ffc7f6637e5a91c837a8418",
-    "test/tool/read_bound_source.test.mjs": "85414642b70d25f577f8cde2ad6643315234ccc0983a97638bc0b1fa8c858c40",
+    "test/tool/read_bound_source.test.mjs": "4bb11a9561013811750beba494844c6225772a4a5f5f381c04dfc23117e3d6cb",
     "test/tool/validate_privacy_disclosures.test.mjs": "dc710724b55c812b16c9697fb9f07b47daae1d04015bae857a7f880fb3e976d0",
     "test/tool/validate_retention_deletion_readiness.test.mjs": "b82ca741d2fb785e9742f3404704d3441612376b0d922a063e898ac6735660c5",
     "test/tool/validate_wp149_payment_v52_contract_binding_parity.test.mjs": "f51d43191c997c6fa08264aec83b93585e5963f231c9df203496ec35e46d5ba3",
@@ -93,10 +93,10 @@
     "test/tool/validate_wp152_v54_contract_draft.test.mjs": "dc8256f6d19327db4ae1269855ac721621ecdbb4e19b025cc09853810a5569d7",
     "test/tool/validate_wp153_position_review_release_parity.test.mjs": "7c3efbc897e6a37f0394c399c3ff0a6c1dde65ac9ff71d73763737e28780002a",
     "test/tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.test.mjs": "4031cce591fc7c5ddb41d73b1e4b2f1ca90ff0259276ad3d26699bdf90338cb8",
-    "test/tool/validate_wp160_source_binding_reverse_index.test.mjs": "bd3a73bb75978ce36449239b9ef1fe7263e840351c4142752d97da12360b3334",
-    "test/tool/validate_wp160_special_category_health_data_intake.test.mjs": "fc7835dd76a49934299374648e25a797afb68dce083d898d78c663034a1704fd",
+    "test/tool/validate_wp160_source_binding_reverse_index.test.mjs": "f79b7ddb2901695a07ed7f08a2677b09b817005f639abb2ddc5ce55290b3593b",
+    "test/tool/validate_wp160_special_category_health_data_intake.test.mjs": "cadfad7c1c0444f15709481201dea1c09a6fca354c845aa4e40ecb5512506b9e",
     "test/tool/wp160_special_category_wiring.test.mjs": "7f0a32b4d67b873dc79c324b41ecd35772df4758eea5af2e9db84b975f1d2cc3",
-    "tool/read_bound_source.mjs": "24bb12ff265dbd2da4a0f5c3f8b6398dc86d3aecfe53d2a85165c078a2a6bb47",
+    "tool/read_bound_source.mjs": "9bd4e30da7712eadc5fac9ff3379fda047a239f68a9b799767ac06ecaefcd93c",
     "tool/validate_privacy_disclosures.mjs": "b56299c87bbe6b494d90aa57e5b29e2bc34cb220a585c59f3729b5ed6ebc53e7",
     "tool/validate_retention_deletion_readiness.mjs": "cb17afeabab9e08b9cd4199c1d25c0b5267b4e49b8ab852323dabc7ed2d45083",
     "tool/validate_support_evidence_external_readiness.mjs": "8677270e919c7984e43a1535c43e8b99c748b5e06a77d1234a841ff146999b01",
@@ -110,11 +110,11 @@
     "tool/validate_wp157_dsa_moderation_decision_appeal_parity.mjs": "846ff2fb1ddb8c969a30429adef9b656f4538237419f9ca4e17ff99134c29920",
     "tool/validate_wp159_processor_controller_region_transfer_truth.mjs": "be342eeeef3a2b7e989c3630972081a121c7f3a4d04dfddfccc28d2dfcdff4ac",
     "tool/validate_wp160_source_binding_reverse_index.mjs": "55a97fe59372aa8c8fb3500964b6a55548d36674b86632eaf8c362bac7e13bc4",
-    "tool/validate_wp160_special_category_health_data_intake.mjs": "dd5f93996030e689f517191c50869e465deaac8a33450891e13f360ae3ff0b4d"
+    "tool/validate_wp160_special_category_health_data_intake.mjs": "af63b1560654d6f12b7408ef66253bfbb65850c743d87c7a68e2b9e790d589cf"
   },
   "captureAttestation": {
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "7248efabf758e03067870cabadc36d2af5c25766dae2fc7bf97471a1a53a812b",
+    "sourceInventoryDigest": "4050c09f9d66d08f36504e66b1442acf931be742f8e6ed099203cbf11306cc79",
     "mode": "closure"
   }
 }
