@@ -3,7 +3,7 @@
   "package": "WP160-SOURCE-BINDING-REVERSE-INDEX-20260915",
   "repository": {
     "baselineHead": "c092cfe84965251f36a8f70525a49082f0959d63",
-    "targetRevision": "66cd0190fd5316113cf96e3677fa41be012d16c3"
+    "targetRevision": "81ec51c490ee9afac42e1e23b3c6a6a8ca73dac0"
   },
   "changedSourcePaths": [
     "backend/sql/migrations/079_special_category_intake_minimization.down.sql",
@@ -38,6 +38,7 @@
     "store/retention-deletion-readiness.json",
     "test/support_flow_safety_triage_test.dart",
     "test/tool/read_bound_source.test.mjs",
+    "test/tool/run_r9_database_recovery.test.mjs",
     "test/tool/validate_privacy_disclosures.test.mjs",
     "test/tool/validate_retention_deletion_readiness.test.mjs",
     "test/tool/validate_wp149_payment_v52_contract_binding_parity.test.mjs",
@@ -50,6 +51,7 @@
     "test/tool/validate_wp160_special_category_health_data_intake.test.mjs",
     "test/tool/wp160_special_category_wiring.test.mjs",
     "tool/read_bound_source.mjs",
+    "tool/run_r9_database_recovery.mjs",
     "tool/validate_privacy_disclosures.mjs",
     "tool/validate_retention_deletion_readiness.mjs",
     "tool/validate_support_evidence_external_readiness.mjs",
@@ -98,6 +100,7 @@
     "store/retention-deletion-readiness.json",
     "test/support_flow_safety_triage_test.dart",
     "test/tool/read_bound_source.test.mjs",
+    "test/tool/run_r9_database_recovery.test.mjs",
     "test/tool/validate_privacy_disclosures.test.mjs",
     "test/tool/validate_retention_deletion_readiness.test.mjs",
     "test/tool/validate_wp149_payment_v52_contract_binding_parity.test.mjs",
@@ -110,6 +113,7 @@
     "test/tool/validate_wp160_special_category_health_data_intake.test.mjs",
     "test/tool/wp160_special_category_wiring.test.mjs",
     "tool/read_bound_source.mjs",
+    "tool/run_r9_database_recovery.mjs",
     "tool/validate_privacy_disclosures.mjs",
     "tool/validate_retention_deletion_readiness.mjs",
     "tool/validate_support_evidence_external_readiness.mjs",
@@ -330,6 +334,13 @@
       ]
     },
     {
+      "consumer": "tool/validate_r9_database_recovery.mjs",
+      "paths": [
+        "test/tool/run_r9_database_recovery.test.mjs",
+        "tool/run_r9_database_recovery.mjs"
+      ]
+    },
+    {
       "consumer": "tool/validate_retention_deletion_readiness.mjs",
       "paths": [
         "backend/sql/migrations/079_special_category_intake_minimization.down.sql",
@@ -472,7 +483,9 @@
         "backend/src/privacy_export.js",
         "backend/test/postgres_foundation.integration.test.js",
         "store/privacy-disclosures.json",
-        "store/retention-deletion-readiness.json"
+        "store/retention-deletion-readiness.json",
+        "test/tool/run_r9_database_recovery.test.mjs",
+        "tool/run_r9_database_recovery.mjs"
       ]
     },
     {
@@ -492,7 +505,8 @@
       "consumer": "tool/validate_wp74_dispute_transfer_recovery.mjs",
       "paths": [
         "backend/src/app.js",
-        "backend/src/privacy_export.js"
+        "backend/src/privacy_export.js",
+        "tool/run_r9_database_recovery.mjs"
       ]
     },
     {
@@ -596,9 +610,11 @@
         "docs/current_work_package.md",
         "store/privacy-disclosures.json",
         "store/retention-deletion-readiness.json",
+        "test/tool/run_r9_database_recovery.test.mjs",
         "test/tool/validate_privacy_disclosures.test.mjs",
         "test/tool/validate_retention_deletion_readiness.test.mjs",
         "test/tool/validate_wp150_completed_payment_command_replay_integrity.test.mjs",
+        "tool/run_r9_database_recovery.mjs",
         "tool/validate_privacy_disclosures.mjs",
         "tool/validate_retention_deletion_readiness.mjs"
       ]
@@ -613,7 +629,9 @@
         "docs/current_work_package.md",
         "store/privacy-disclosures.json",
         "store/retention-deletion-readiness.json",
-        "test/tool/validate_wp151_refund_provider_durable_truth_parity.test.mjs"
+        "test/tool/run_r9_database_recovery.test.mjs",
+        "test/tool/validate_wp151_refund_provider_durable_truth_parity.test.mjs",
+        "tool/run_r9_database_recovery.mjs"
       ]
     },
     {
@@ -657,7 +675,9 @@
         "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md",
         "store/privacy-disclosures.json",
         "store/retention-deletion-readiness.json",
+        "test/tool/run_r9_database_recovery.test.mjs",
         "test/tool/validate_retention_deletion_readiness.test.mjs",
+        "tool/run_r9_database_recovery.mjs",
         "tool/validate_retention_deletion_readiness.mjs"
       ]
     },
@@ -735,7 +755,9 @@
         "backend/src/privacy_export.js",
         "backend/test/postgres_foundation.integration.test.js",
         "store/privacy-disclosures.json",
-        "store/retention-deletion-readiness.json"
+        "store/retention-deletion-readiness.json",
+        "test/tool/run_r9_database_recovery.test.mjs",
+        "tool/run_r9_database_recovery.mjs"
       ]
     },
     {
@@ -763,9 +785,11 @@
         "docs/current_work_package.md",
         "store/privacy-disclosures.json",
         "store/retention-deletion-readiness.json",
+        "test/tool/run_r9_database_recovery.test.mjs",
         "test/tool/validate_privacy_disclosures.test.mjs",
         "test/tool/validate_retention_deletion_readiness.test.mjs",
         "test/tool/validate_wp150_completed_payment_command_replay_integrity.test.mjs",
+        "tool/run_r9_database_recovery.mjs",
         "tool/validate_privacy_disclosures.mjs",
         "tool/validate_retention_deletion_readiness.mjs",
         "tool/validate_wp150_completed_payment_command_replay_integrity.mjs"
@@ -781,7 +805,9 @@
         "docs/current_work_package.md",
         "store/privacy-disclosures.json",
         "store/retention-deletion-readiness.json",
+        "test/tool/run_r9_database_recovery.test.mjs",
         "test/tool/validate_wp151_refund_provider_durable_truth_parity.test.mjs",
+        "tool/run_r9_database_recovery.mjs",
         "tool/validate_wp151_refund_provider_durable_truth_parity.mjs"
       ]
     },
@@ -829,7 +855,9 @@
         "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md",
         "store/privacy-disclosures.json",
         "store/retention-deletion-readiness.json",
+        "test/tool/run_r9_database_recovery.test.mjs",
         "test/tool/validate_retention_deletion_readiness.test.mjs",
+        "tool/run_r9_database_recovery.mjs",
         "tool/validate_retention_deletion_readiness.mjs",
         "tool/validate_wp156_retention_legal_hold_enforcement_safety.mjs"
       ]
@@ -858,7 +886,8 @@
       "evidence": "docs/evidence/release-readiness/wp74-dispute-transfer-recovery-20260909.json",
       "paths": [
         "backend/src/app.js",
-        "backend/src/privacy_export.js"
+        "backend/src/privacy_export.js",
+        "tool/run_r9_database_recovery.mjs"
       ]
     }
   ],

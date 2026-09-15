@@ -6,7 +6,7 @@
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "baselineHead": "c092cfe84965251f36a8f70525a49082f0959d63",
-    "targetRevision": "66cd0190fd5316113cf96e3677fa41be012d16c3",
+    "targetRevision": "81ec51c490ee9afac42e1e23b3c6a6a8ca73dac0",
     "workingTreeCleanAtCapture": true,
     "remoteAhead": 0,
     "remoteBehind": 0
@@ -78,13 +78,14 @@
     "docs/current_state.md": "4e0d850275120a03b55f6205e15b3bc35ade086f584a9addb92a88629ca982a9",
     "docs/current_work_package.md": "d784df0469c20ac1eb4031807e461791e0baa0b728bbbc665169d554473f25d7",
     "docs/evidence/external-gates/support-evidence-scanner-readiness.json": "d79ea31f1dfcdf3a381bbf548b1c49cd5a9f7e7e02003aa4e6f51d38f5f33a99",
-    "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md": "06cabe332dcf55254c9ebcc5a578a02a793074b015be3f6fe5909824fffbb3b3",
+    "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md": "c07426e7c598812143248842689f0496a468379368d907477d288a6683cf9b40",
     "docs/operations/WP160_SPECIAL_CATEGORY_HEALTH_DATA_INTAKE_MINIMIZATION_SAFETY_2026-09-15.md": "c9470a40ebf8a8f515aa22874fbbd6f2321d3fc5e50f2e517598c9974c6de0c4",
     "lib/screens/support_flow_screen.dart": "a66cacd62c8f80305a82bb8113c34de2f95da903a52427294f0f88997d9b95f8",
-    "store/privacy-disclosures.json": "aa825e68c46778dd27463e9d7af9c1e1328074771cda1c9cf733bccd8ccc4bce",
-    "store/retention-deletion-readiness.json": "26d9f42f35b0843b3bb35a3d69e858f0eb95e0854bbbd0a63f21999237a526f9",
+    "store/privacy-disclosures.json": "137ee97568e590b0156d401717421730ec3bacf02c3d0573c93565ec0f2f7861",
+    "store/retention-deletion-readiness.json": "f89ab72fbc563695725d929c594175078423478b86da3d9f891c24fb4f4adc58",
     "test/support_flow_safety_triage_test.dart": "8148d1515dac155ad9b057fdea10dc40d4d5b9ec9825c9976520baeb4380745d",
     "test/tool/read_bound_source.test.mjs": "1bfbc6cf1449281ae520d375319204de0747724d108626fe1d49266d901c8e05",
+    "test/tool/run_r9_database_recovery.test.mjs": "3eff190eb4e598ab47b6ea0ec6aaf18d9c13a40fe98fe04e0c3f63ba4bdfb160",
     "test/tool/validate_privacy_disclosures.test.mjs": "dc710724b55c812b16c9697fb9f07b47daae1d04015bae857a7f880fb3e976d0",
     "test/tool/validate_retention_deletion_readiness.test.mjs": "b82ca741d2fb785e9742f3404704d3441612376b0d922a063e898ac6735660c5",
     "test/tool/validate_wp149_payment_v52_contract_binding_parity.test.mjs": "f51d43191c997c6fa08264aec83b93585e5963f231c9df203496ec35e46d5ba3",
@@ -97,6 +98,7 @@
     "test/tool/validate_wp160_special_category_health_data_intake.test.mjs": "cadfad7c1c0444f15709481201dea1c09a6fca354c845aa4e40ecb5512506b9e",
     "test/tool/wp160_special_category_wiring.test.mjs": "7f0a32b4d67b873dc79c324b41ecd35772df4758eea5af2e9db84b975f1d2cc3",
     "tool/read_bound_source.mjs": "9bd4e30da7712eadc5fac9ff3379fda047a239f68a9b799767ac06ecaefcd93c",
+    "tool/run_r9_database_recovery.mjs": "bb6c4312bae1c7aafdae08226a27db1f3bab0e60cd9873eafd30d144a8dadcc2",
     "tool/validate_privacy_disclosures.mjs": "b56299c87bbe6b494d90aa57e5b29e2bc34cb220a585c59f3729b5ed6ebc53e7",
     "tool/validate_retention_deletion_readiness.mjs": "cb17afeabab9e08b9cd4199c1d25c0b5267b4e49b8ab852323dabc7ed2d45083",
     "tool/validate_support_evidence_external_readiness.mjs": "b0d1b889fc161407cdb90b6e6f333a57afda101ee4e9d47ba7e56ff5f4777361",
@@ -114,7 +116,7 @@
   },
   "captureAttestation": {
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "49bac93c3bdf05de253ed45feee3c1894b5b7b2f21cf39a7c7d0cd5d64710659",
+    "sourceInventoryDigest": "dd2039dc95bfe55f02688becbcc49ec1617af0a233be69b23bbdfe4030f22424",
     "mode": "closure"
   }
 }
