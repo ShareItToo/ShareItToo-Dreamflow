@@ -27,6 +27,11 @@ release_host_capacity_generated_kib() {
 }
 
 release_host_capacity_begin() {
+  # Fail before capacity probes, dependency installation or builds. This
+  # function is sourced by the complete regression entrypoint and by release
+  # builders, so the same current-consumer closure protects both paths.
+  node tool/check_current_consumer_closure.mjs
+
   RELEASE_HOST_BEFORE_FREE_KIB="$(release_host_capacity_free_kib)"
   RELEASE_HOST_BEFORE_GENERATED_KIB="$(release_host_capacity_generated_kib)"
   readonly RELEASE_HOST_BEFORE_FREE_KIB
