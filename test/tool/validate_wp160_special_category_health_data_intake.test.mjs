@@ -10,7 +10,7 @@ const evidence = JSON.parse(await readFile(evidencePath, 'utf8'));
 test('accepts technical WP160 closure while keeping Article 9 open', () => {
   const result = validateWp160SpecialCategoryHealthDataIntake({ evidence });
   assert.equal(result.article9Gate, 'ASTRA_GATE_REQUIRED:SPECIAL_CATEGORY_ARTICLE9_BASIS');
-  assert.equal(result.sourceCount, 57);
+  assert.equal(result.sourceCount, 59);
 });
 
 test('rejects a selected Article 9 basis', () => {
