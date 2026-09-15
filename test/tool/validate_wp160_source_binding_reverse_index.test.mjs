@@ -10,6 +10,7 @@ import {
   deriveChangedSourcePaths,
   deriveCurrentMutableBindings,
   deriveWp160ReverseIndex,
+  clearReverseIndexCaches,
   validateWp160ReverseIndex,
 } from '../../tool/validate_wp160_source_binding_reverse_index.mjs';
 import { validateWp160SpecialCategoryHealthDataIntake } from
@@ -36,6 +37,15 @@ test('accepts the machine-derived WP160 reverse source-binding index', () => {
   assert.ok(derived.currentMutableBindings
     .find(({ binding }) => binding.endsWith('support-evidence-scanner-readiness.json'))
     .paths.includes('backend/src/support_evidence_workflow.js'));
+});
+
+test('pinned reverse-index reads cache Git tree and JSON lookups', () => {
+  clearReverseIndexCaches();
+  const started = Date.now();
+  const first = deriveWp160ReverseIndex({ repositoryRoot });
+  const second = deriveWp160ReverseIndex({ repositoryRoot });
+  assert.deepEqual(second, first);
+  assert.ok(Date.now() - started < 20_000, 'reverse-index lookup cache regression');
 });
 
 test('rejects omitted mutable bindings and rewritten historical evidence', () => {
@@ -143,6 +153,33 @@ test('the full WP160 gate stays bound to the closure commit after a successor', 
       repositoryRoot: clone,
       evidence: closureEvidence,
     });
+    const reverseBefore = deriveWp160ReverseIndex({
+      repositoryRoot: clone,
+      targetRevision: closureCommit,
+    });
+    const futureHistorical = resolve(
+      clone,
+      'docs/evidence/release-readiness/wp161-future-successor.json',
+    );
+    writeFileSync(futureHistorical, JSON.stringify({
+      sourceInventory: { 'backend/src/app.js': 'a'.repeat(64) },
+    }));
+    const successorManifest = resolve(clone, 'store/new-current-manifest.json');
+    writeFileSync(successorManifest, JSON.stringify({
+      sourceBindings: {
+        repository: [{ path: 'backend/src/app.js', sha256: 'a'.repeat(64) }],
+      },
+    }));
+    assert.deepEqual(
+      deriveWp160ReverseIndex({ repositoryRoot: clone, targetRevision: closureCommit }),
+      reverseBefore,
+    );
+    rmSync(successorManifest);
+    rmSync(futureHistorical);
+    assert.deepEqual(
+      deriveWp160ReverseIndex({ repositoryRoot: clone, targetRevision: closureCommit }),
+      reverseBefore,
+    );
     writeFileSync(join(clone, 'unrelated-wp160-successor.txt'), 'successor\n');
     git(['add', 'unrelated-wp160-successor.txt']);
     git(['config', 'user.email', 'fixture@example.invalid']);
