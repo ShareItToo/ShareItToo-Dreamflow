@@ -69,6 +69,20 @@ test('client routing, acute danger and missing or surplus acknowledgements fail 
   }
 });
 
+test('handover details reject special-category content before persistence but keep legal wording', () => {
+  assert.throws(
+    () => normalizeHandoverExceptionInput(intake('item_mismatch', {
+      details: 'Eine Person wurde körperlich verletzt beim Übergang.',
+    })),
+    (error) => error.code === 'handover_exception_special_category_route_required'
+      && error.details?.inputStored === false,
+  );
+  const legal = normalizeHandoverExceptionInput(intake('item_mismatch', {
+    details: 'Der Inhalt verletzt meine Rechte und weicht von der Anzeige ab.',
+  }));
+  assert.equal(legal.details, 'Der Inhalt verletzt meine Rechte und weicht von der Anzeige ab.');
+});
+
 test('audit receipt is deterministic, minimized and non-decisional', () => {
   const normalized = normalizeHandoverExceptionInput(intake('item_mismatch'));
   const requestFingerprint = handoverExceptionFingerprint({

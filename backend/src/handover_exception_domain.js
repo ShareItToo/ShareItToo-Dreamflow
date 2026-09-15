@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { detectPossibleSpecialCategoryText } from './special_category_data_guard.js';
 
 export const handoverExceptionVersion = 'v52_handover_exception_v1';
 
@@ -87,6 +88,19 @@ export function normalizeHandoverExceptionInput(raw) {
     throw new HandoverExceptionError(400, 'handover_exception_kind_invalid');
   }
   const details = requiredText(raw.details, 1400, 'handover_exception_details_required', 10);
+  const specialCategoryDetection = detectPossibleSpecialCategoryText(details);
+  if (specialCategoryDetection) {
+    throw new HandoverExceptionError(
+      409,
+      'handover_exception_special_category_route_required',
+      {
+        classification: specialCategoryDetection.classification,
+        detectionVersion: specialCategoryDetection.detectionVersion,
+        inputStored: false,
+        externalDelivery: false,
+      },
+    );
+  }
   const safeAbortGuidanceAcknowledged = raw.safeAbortGuidanceAcknowledged === true;
   const doNotPayGuidanceAcknowledged = raw.doNotPayGuidanceAcknowledged === true;
   const contactAttemptAcknowledged = raw.contactAttemptAcknowledged === true;
