@@ -150,6 +150,26 @@ test('rejects stale or prematurely activating V5.4 AI-correction evidence', () =
   );
 });
 
+test('rejects stale or prematurely activating V5.5 position-review evidence', () => {
+  const legalManifest = clone(baseLegalManifest);
+  legalManifest.v55PositionReviewDraft.currentContentSha256 = '0'.repeat(64);
+  assert.throws(
+    () => validate({ legalManifest }),
+    /v55PositionReviewDraft\.currentContentSha256 is stale/u,
+  );
+
+  const path = 'assets/legal/de/legal_manifest_v55.json';
+  const source = readFileSync(resolve(repositoryRoot, path), 'utf8')
+    .replace('"activationAllowed": false', '"activationAllowed": true');
+  const correctedManifest = clone(baseLegalManifest);
+  correctedManifest.v55PositionReviewDraft.currentContentSha256 =
+    createHash('sha256').update(source).digest('hex');
+  assert.throws(
+    () => validate({ legalManifest: correctedManifest, sourceTexts: { [path]: source } }),
+    /V5\.5 source must preserve the position-review correction/u,
+  );
+});
+
 test('rejects hardcoded client consent', () => {
   const authPath = baseLegalManifest.consentContract.authServiceSource;
   const authSource = readFileSync(resolve(repositoryRoot, authPath), 'utf8')

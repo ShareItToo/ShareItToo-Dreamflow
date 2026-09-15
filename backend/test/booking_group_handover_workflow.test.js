@@ -64,6 +64,7 @@ test('item evidence, accessories, damage, timers and needsReview remain isolated
     evidenceRows,
     returnCase: {
       id: 'case-camera',
+      case_status: 'needsReview',
       reason_code: 'damage',
       contested_authorized_minor: 500,
       undisputed_releasable_minor: 2800,
@@ -85,12 +86,55 @@ test('item evidence, accessories, damage, timers and needsReview remain isolated
   });
   assert.equal(disputed.operationalState, 'needs_review');
   assert.equal(disputed.damage.returnCase.id, 'case-camera');
+  assert.deepEqual(disputed.review, {
+    active: true,
+    scope: 'booking_position',
+    caseId: 'case-camera',
+    reasonCode: 'damage',
+    humanReviewRequired: true,
+    decisionStatus: 'pending',
+    appealStatus: 'available_after_formal_decision_when_applicable',
+    unrelatedPositionsBlocked: false,
+  });
   assert.equal(disputed.return.accessories.evidenceId, 'evidence-2');
   assert.equal(disputed.chat.threadId, 'thread-camera');
   assert.equal(unrelated.operationalState, 'independent');
   assert.equal(unrelated.damage.needsReview, false);
   assert.equal(unrelated.damage.returnCase, null);
+  assert.equal(unrelated.review.active, false);
+  assert.equal(unrelated.review.scope, 'booking_position');
+  assert.equal(unrelated.review.unrelatedPositionsBlocked, false);
   assert.equal(unrelated.chat.threadId, 'thread-lens');
+});
+
+test('item review projection fails closed on missing or cross-state canonical truth', () => {
+  const position = {
+    group_position_id: 'position-camera',
+    group_quote_position_id: 'quote-position-camera',
+    listing_id: 'listing-camera',
+    booking_id: 'booking-camera',
+    platform_contract_id: 'contract-camera',
+    workflow_status: 'completed',
+    return_state: 'needsReview',
+    thread_id: 'thread-camera',
+  };
+  assert.throws(
+    () => buildBookingGroupItemHandoverState({ position }),
+    /booking_group_review_truth_mismatch/u,
+  );
+  assert.throws(
+    () => buildBookingGroupItemHandoverState({
+      position: { ...position, return_state: 'payoutEligible' },
+      returnCase: {
+        id: 'case-camera',
+        case_status: 'unresolved',
+        reason_code: 'damage',
+        contested_authorized_minor: 500,
+        undisputed_releasable_minor: 2800,
+      },
+    }),
+    /booking_group_review_truth_mismatch/u,
+  );
 });
 
 test('only an explicit system-risk hold elevates the group state', () => {

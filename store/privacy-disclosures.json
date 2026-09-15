@@ -600,7 +600,7 @@
     },
     {
       "path": "backend/src/v52_handover_return_workflow.js",
-      "sha256": "618d7eaaa8abd23d604df35127fa23cd06704285748a739d6ee8458c83dc0bf6"
+      "sha256": "61afa8496f2af34537c892074e83209f34eb6b447c9c67640efdbba8ebe3ee44"
     },
     {
       "path": "backend/src/retention_inventory.js",

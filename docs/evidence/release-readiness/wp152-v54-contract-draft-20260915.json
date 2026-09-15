@@ -116,26 +116,26 @@
     "assets/legal/de/v54/part_g_reporting_moderation_review.html": "e7e342131382f44d708fae6ce6285b72864c2f57a54d9e2053149e88f84bbcae",
     "assets/legal/de/v54/part_h_privacy.html": "ef979030c4092999b756b94230ed5231dba0b726d62144bb9384de82f6367b40",
     "assets/legal/de/v54/part_i_imprint_withdrawal_shorttexts.html": "ae759e5e460419041daa3938e33de538b1b3216db4033d78a5022f978ce98a76",
-    "backend/src/legal_contract_version_registry.js": "4ef6e3c9c01c39569de080a50393e6557505d2470b7f9e7111c86de24f6bc7e0",
+    "backend/src/legal_contract_version_registry.js": "8fc36981c8840d046ca5daca5ae8e5418c1795bffc520a507ee997ac7e6cf178",
     "backend/src/v52_contract_workflow.js": "c0e06b47f51398a5095a6de41c9545ff72daf6cc1b37bbfe7d886a0373d554a1",
-    "backend/test/legal_contract_version_registry.test.js": "9a41933bfc4d6e6bcd7de007cce38e45e06d65b7a83ae8834a70eca9773bc3a3",
+    "backend/test/legal_contract_version_registry.test.js": "dccd49f212c2bcb8fd2d183b271f6221e5a842f0f03a0d9671f6795284c6f750",
     "backend/test/v52_contract_workflow.test.js": "7014a6c2a74861078b24bb198c5b3712ae65ddc4c28bcec3076d9f5c252aa686",
-    "docs/current_state.md": "c235e0ec5a1c5cef4f08a357b255c790162b2ce9eb18cd073a3dcbac536ef4ae",
-    "docs/current_work_package.md": "401acc03d0c8e545af815d9f00c67f75686bd1a8c53f0b20dfdbbe97dd95ce2c",
+    "docs/current_state.md": "ea7caa468794065bf2ec97cc5b5bbfdb2738d9c66a265f036ff904f3c1866df2",
+    "docs/current_work_package.md": "2d6c6c02a0a0a053fedfa899c77707e7024e4d91dcb752558560e8549591f236",
     "docs/operations/TECHNICAL_DEBT_RELEASE_READINESS.md": "c43ad059863360c60a52fedf5a56a104477a84a607ecb76c310c5eeb1aa98935",
     "docs/operations/WP152_V54_CONTRACT_SCOPE_OFFER_REFUND_RECEIPT_DRAFT_2026-09-15.md": "bbc68890dbde5b6770ff144f19853597ac92a572af04103e0653dbaa5a886b64",
-    "store/legal-readiness.json": "858eff8c64193c0336381687200e84c8e0a772fc1cd9bb594ee32d2730acba21",
-    "store/privacy-disclosures.json": "fc4cd0ad7d465a6d78f1434e329e5358641d95a3c4a85408d9c180d531a3a8ed",
-    "test/tool/validate_legal_readiness.test.mjs": "fe0a84c63dc0bc5cf432955944d5db9df94d0ceb9640722789c4173d5550d74d",
+    "store/legal-readiness.json": "adb14df74ac48783717ac96d5a72a52debc3e69d84ed21384991debc4b49d9f3",
+    "store/privacy-disclosures.json": "776b72e2da6b8a72848f8f11ae25e6c3a7ad682e74c3ecbb80241cfbbe0819bd",
+    "test/tool/validate_legal_readiness.test.mjs": "30310889d2faf27af1ffbbea8031246a355146b71025f5ee27fb4559d9c679f4",
     "test/tool/validate_v54_legal_assets.test.mjs": "f94c0b8dc764dc9e5f4bbe2f5e9288a8c766183ea768056ce753002d1ffa250f",
     "test/tool/validate_wp152_v54_contract_draft.test.mjs": "f680dcdb151853a48b1bb2286c8913f4391fb4e4043c93078426e02f5e8e69be",
-    "tool/validate_legal_readiness.mjs": "02962a6aff84358ac3c436ca3f6a84b2ffbfe28fb56e5c8e63d37a7dbc41fad1",
+    "tool/validate_legal_readiness.mjs": "f47dfbf8feb1dbbd52c3357ca082d5df202ca91c547361d4d1835f3dccdb6c42",
     "tool/validate_v54_legal_assets.mjs": "7123089d3bdc6738afea9ad91b0b1ae9e05890f32a0771d6a1be68f94119c425",
     "tool/validate_wp152_v54_contract_draft.mjs": "2d678fbee0026edb24afe0e6819c79a712ddca9894bf7b5871564c2a47aa6804"
   },
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "30eeab27d00f106fe12d23ee0121d82ec41b121c95ebbe1be686deb98202f589"
+    "sourceInventoryDigest": "73ac570bce47d036719f54da3191dce34a62821288cf0cc0b841169e6ba6ad7c"
   }
 }

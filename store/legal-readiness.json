@@ -26,6 +26,15 @@
     "publicCommercialOperationAllowed": false,
     "bindingContractAcceptanceAllowed": false
   },
+  "v55PositionReviewDraft": {
+    "status": "draft-blocked-after-position-review-correction",
+    "sourceFile": "assets/legal/de/legal_manifest_v55.json",
+    "currentContentSha256": "2847a20df27917e26b451f7cc152dc0406454c798f29a005f026bb9f85b0a650",
+    "documentCount": 9,
+    "professionalLegalApproval": false,
+    "publicCommercialOperationAllowed": false,
+    "bindingContractAcceptanceAllowed": false
+  },
   "interimPilotRules": {
     "version": "V5.1-2026-08-16",
     "status": "active-for-internal-and-closed-testing",

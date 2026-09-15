@@ -4899,6 +4899,100 @@ if (!databaseUrl) {
           bookingGroupId: acceptedInitial.group.id,
           idempotencyKey: 'g3d-schedule-shared-appointments',
         })).replayed, true);
+        const g3dReviewReportId = crypto.randomUUID();
+        const g3dReviewBookingCaseId = crypto.randomUUID();
+        const g3dReviewReturnCaseId = crypto.randomUUID();
+        const g3dReviewOpenedAt = new Date();
+        const g3dReviewT0 = new Date(g3dReviewOpenedAt.getTime() - (60 * 60 * 1000));
+        const g3dReviewResponseDueAt = new Date(
+          g3dReviewOpenedAt.getTime() + (5 * 24 * 60 * 60 * 1000),
+        );
+        const g3dReviewUpdateDueAt = new Date(
+          g3dReviewOpenedAt.getTime() + (7 * 24 * 60 * 60 * 1000),
+        );
+        const g3dReviewBinding = (await g3dClient.query(
+          `SELECT contract.id AS platform_contract_id,
+                  contract.handover_return_damage_snapshot_id,
+                  contract.quote_id, contract.quote_hash,
+                  contract.contract_version, contract.locale,
+                  booking.quoted_total_minor
+             FROM platform_contracts AS contract
+             JOIN bookings AS booking ON booking.id = contract.booking_id
+            WHERE contract.booking_id = $1`,
+          [itemBindings[0].bookingId],
+        )).rows[0];
+        await g3dClient.query(
+          `INSERT INTO reports (
+             id, reporter_id, target_type, target_id, reason_code, details,
+             status, priority, reporter_reference, last_event_at
+           ) VALUES (
+             $1, 'owner', 'booking', $2, 'damage',
+             'Canonical G3D exact-position review isolation evidence.',
+             'open', 'normal', 'wp153_g3d_position_review_fixture', $3
+           )`,
+          [g3dReviewReportId, itemBindings[0].bookingId, g3dReviewOpenedAt],
+        );
+        await g3dClient.query(
+          `INSERT INTO booking_cases (
+             id, booking_id, opened_by, opened_at, reason, substantiated,
+             status, contested_authorized_minor, undisputed_releasable_minor,
+             response_due_at, next_status_update_due_at, metadata
+           ) VALUES (
+             $1, $2, 'owner', $3,
+             'Canonical G3D exact-position review isolation evidence.', true,
+             'needsReview', 100, $4::bigint - 100, $5, $6,
+             jsonb_build_object('reportId', $7::text, 'source', 'v52_return_case')
+           )`,
+          [
+            g3dReviewBookingCaseId,
+            itemBindings[0].bookingId,
+            g3dReviewOpenedAt,
+            g3dReviewBinding.quoted_total_minor,
+            g3dReviewResponseDueAt,
+            g3dReviewUpdateDueAt,
+            g3dReviewReportId,
+          ],
+        );
+        await g3dClient.query(
+          `INSERT INTO v52_return_cases (
+             id, booking_case_id, report_id, booking_id, platform_contract_id,
+             handover_return_damage_snapshot_id, quote_id, quote_hash,
+             contract_version, locale, opened_by, opened_by_role, reason_code,
+             reason_details, t0, t1, report_deadline, response_due_at,
+             next_status_update_due_at, deadline_timezone, deadline_policy_version,
+             authorized_booking_minor, contested_authorized_minor,
+             undisputed_releasable_minor, additional_charge_minor,
+             idempotency_key, command_sha256, created_at
+           ) VALUES (
+             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+             'owner', 'owner', 'damage',
+             'Canonical G3D exact-position review isolation evidence.',
+             $11::timestamptz, $12::timestamptz,
+             $11::timestamptz + INTERVAL '48 hours', $13, $14,
+             'UTC', 2, $15, 100, $15::bigint - 100, 0,
+             'wp153-g3d-position-review-isolation', $16, $12
+           )`,
+          [
+            g3dReviewReturnCaseId,
+            g3dReviewBookingCaseId,
+            g3dReviewReportId,
+            itemBindings[0].bookingId,
+            g3dReviewBinding.platform_contract_id,
+            g3dReviewBinding.handover_return_damage_snapshot_id,
+            g3dReviewBinding.quote_id,
+            g3dReviewBinding.quote_hash,
+            g3dReviewBinding.contract_version,
+            g3dReviewBinding.locale,
+            g3dReviewT0,
+            g3dReviewOpenedAt,
+            g3dReviewResponseDueAt,
+            g3dReviewUpdateDueAt,
+            g3dReviewBinding.quoted_total_minor,
+            crypto.createHash('sha256')
+              .update('wp153-g3d-position-review-isolation')
+              .digest('hex'),
+          ],
+        );
         await g3dClient.query(
           `UPDATE bookings SET return_state = 'needsReview'
             WHERE id = $1`,
@@ -7910,14 +8004,100 @@ if (!databaseUrl) {
       // separate authorization that allows this fresh, residual payout.
       // Keep part of the owner share contested so the eventual refund must
       // reverse two independently created transfers, not just the newest one.
+      // This bounded persistence fixture represents the canonical V5.2 case
+      // that production creates through openV52ReturnCase. The route-level
+      // deadline, evidence and payout-race guards are covered separately; the
+      // purpose here is to exercise payout release against the append-only
+      // case truth rather than mutable rental-request JSON.
+      const positionReviewReportId = crypto.randomUUID();
+      const positionReviewBookingCaseId = crypto.randomUUID();
+      const positionReviewReturnCaseId = crypto.randomUUID();
+      const positionReviewOpenedAt = new Date();
+      const positionReviewT0 = new Date(positionReviewOpenedAt.getTime() - (60 * 60 * 1000));
+      const positionReviewResponseDueAt = new Date(
+        positionReviewOpenedAt.getTime() + (5 * 24 * 60 * 60 * 1000),
+      );
+      const positionReviewUpdateDueAt = new Date(
+        positionReviewOpenedAt.getTime() + (7 * 24 * 60 * 60 * 1000),
+      );
+      const positionReviewBinding = (await setupPool.query(
+        `SELECT contract.id AS platform_contract_id,
+                contract.handover_return_damage_snapshot_id,
+                contract.quote_id, contract.quote_hash,
+                contract.contract_version, contract.locale
+           FROM platform_contracts AS contract
+          WHERE contract.booking_id = 'b8-payment-flow'`,
+      )).rows[0];
       await setupPool.query(
-        `UPDATE bookings SET return_state = 'needsReview'
-          WHERE id = 'b8-payment-flow'`,
+        `INSERT INTO reports (
+           id, reporter_id, target_type, target_id, reason_code, details,
+           status, priority, reporter_reference, last_event_at
+         ) VALUES (
+           $1, 'owner', 'booking', 'b8-payment-flow', 'damage',
+           'Canonical exact-position payout-hold integration evidence.',
+           'open', 'normal', 'wp153_position_review_fixture', $2
+         )`,
+        [positionReviewReportId, positionReviewOpenedAt],
       );
       await setupPool.query(
-        `UPDATE rental_requests
-            SET payload = (payload - 'returnCaseClosedAt')
-              || '{"contestedAuthorizedMinor":990}'::jsonb
+        `INSERT INTO booking_cases (
+           id, booking_id, opened_by, opened_at, reason, substantiated,
+           status, contested_authorized_minor, undisputed_releasable_minor,
+           response_due_at, next_status_update_due_at, metadata
+         ) VALUES (
+           $1, 'b8-payment-flow', 'owner', $2,
+           'Canonical exact-position payout-hold integration evidence.', true,
+           'needsReview', 990, 2310, $3, $4,
+           jsonb_build_object('reportId', $5::text, 'source', 'v52_return_case')
+         )`,
+        [
+          positionReviewBookingCaseId,
+          positionReviewOpenedAt,
+          positionReviewResponseDueAt,
+          positionReviewUpdateDueAt,
+          positionReviewReportId,
+        ],
+      );
+      await setupPool.query(
+        `INSERT INTO v52_return_cases (
+           id, booking_case_id, report_id, booking_id, platform_contract_id,
+           handover_return_damage_snapshot_id, quote_id, quote_hash,
+           contract_version, locale, opened_by, opened_by_role, reason_code,
+           reason_details, t0, t1, report_deadline, response_due_at,
+           next_status_update_due_at, deadline_timezone, deadline_policy_version,
+           authorized_booking_minor, contested_authorized_minor,
+           undisputed_releasable_minor, additional_charge_minor,
+           idempotency_key, command_sha256, created_at
+         ) VALUES (
+           $1, $2, $3, 'b8-payment-flow', $4, $5, $6, $7, $8, $9,
+           'owner', 'owner', 'damage',
+           'Canonical exact-position payout-hold integration evidence.',
+           $10::timestamptz, $11::timestamptz,
+           $10::timestamptz + INTERVAL '48 hours', $12, $13,
+           'UTC', 2, 3300, 990, 2310, 0,
+           'wp153-position-review-payout-hold', $14, $11
+         )`,
+        [
+          positionReviewReturnCaseId,
+          positionReviewBookingCaseId,
+          positionReviewReportId,
+          positionReviewBinding.platform_contract_id,
+          positionReviewBinding.handover_return_damage_snapshot_id,
+          positionReviewBinding.quote_id,
+          positionReviewBinding.quote_hash,
+          positionReviewBinding.contract_version,
+          positionReviewBinding.locale,
+          positionReviewT0,
+          positionReviewOpenedAt,
+          positionReviewResponseDueAt,
+          positionReviewUpdateDueAt,
+          crypto.createHash('sha256')
+            .update('wp153-position-review-payout-hold')
+            .digest('hex'),
+        ],
+      );
+      await setupPool.query(
+        `UPDATE bookings SET return_state = 'needsReview'
           WHERE id = 'b8-payment-flow'`,
       );
       const concurrentPayoutRequest = () => fetch(`${baseUrl}/v1/payments/${paymentId}/payout-release`, {
@@ -8000,10 +8180,10 @@ if (!databaseUrl) {
           WHERE id = 'b8-payment-flow'`,
       );
       await setupPool.query(
-        `UPDATE rental_requests
-            SET payload = payload
-              || jsonb_build_object('returnCaseClosedAt', now()::text)
-          WHERE id = 'b8-payment-flow'`,
+        `UPDATE booking_cases
+            SET status = 'closed', closed_at = now()
+          WHERE id = $1`,
+        [positionReviewBookingCaseId],
       );
       const residualPayoutAfterReturnClosure = await fetch(
         `${baseUrl}/v1/payments/${paymentId}/payout-release`,

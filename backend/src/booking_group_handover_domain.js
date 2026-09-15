@@ -113,6 +113,12 @@ export function buildBookingGroupItemHandoverState({
   };
   const bound = Boolean(position.booking_id);
   const needsReview = position.return_state === 'needsReview';
+  const openReviewStatuses = new Set(['needsReview', 'awaitingResponse', 'unresolved']);
+  const openReviewCase = returnCase != null
+    && openReviewStatuses.has(returnCase.case_status);
+  if ((needsReview && !openReviewCase) || (!needsReview && openReviewCase)) {
+    throw new Error('booking_group_review_truth_mismatch');
+  }
   return freeze({
     groupPositionId: position.group_position_id,
     groupQuotePositionId: position.group_quote_position_id,
@@ -135,6 +141,18 @@ export function buildBookingGroupItemHandoverState({
         contestedAuthorizedMinor: Number(returnCase.contested_authorized_minor),
         undisputedReleasableMinor: Number(returnCase.undisputed_releasable_minor),
       } : null,
+    },
+    review: {
+      active: needsReview,
+      scope: 'booking_position',
+      caseId: needsReview ? returnCase.id : null,
+      reasonCode: needsReview ? returnCase.reason_code : null,
+      humanReviewRequired: needsReview,
+      decisionStatus: needsReview ? 'pending' : 'none',
+      appealStatus: needsReview
+        ? 'available_after_formal_decision_when_applicable'
+        : 'not_applicable',
+      unrelatedPositionsBlocked: false,
     },
     timers: {
       returnT0: position.return_t0 ? iso(position.return_t0, 'invalid_item_return_t0') : null,

@@ -1,5 +1,6 @@
 export const activeBindingContractVersion = 'V5.2-2026-08-16';
 export const preparedBindingContractVersion = 'V5.4-2026-09-15';
+export const positionReviewDraftContractVersion = 'V5.5-2026-09-15';
 
 const policies = Object.freeze(new Map([
   [activeBindingContractVersion, Object.freeze({
@@ -12,6 +13,13 @@ const policies = Object.freeze(new Map([
   [preparedBindingContractVersion, Object.freeze({
     version: preparedBindingContractVersion,
     status: 'draft-blocked-after-ai-corrections',
+    bindingContractAcceptanceAllowed: false,
+    publicActivationAllowed: false,
+    realMoneyAllowed: false,
+  })],
+  [positionReviewDraftContractVersion, Object.freeze({
+    version: positionReviewDraftContractVersion,
+    status: 'draft-blocked-after-position-review-correction',
     bindingContractAcceptanceAllowed: false,
     publicActivationAllowed: false,
     realMoneyAllowed: false,

@@ -530,6 +530,60 @@ export function privatePilotReleasableOwnerAmount({
   });
 }
 
+export function canonicalPositionReviewHold({
+  bookingId,
+  paymentAmountMinor,
+  returnState,
+  returnCaseId = null,
+  returnCaseBookingId = null,
+  returnCaseStatus = null,
+  authorizedBookingMinor = null,
+  contestedAuthorizedMinor = null,
+  undisputedReleasableMinor = null,
+  reasonCode = null,
+}) {
+  const casePresent = returnCaseId != null;
+  const caseOpen = casePresent && ['needsReview', 'awaitingResponse', 'unresolved']
+    .includes(returnCaseStatus);
+  if (returnState !== 'needsReview') {
+    if (caseOpen) {
+      throw new PaymentDomainError(409, 'payout_return_case_state_mismatch');
+    }
+    return Object.freeze({
+      reviewCaseId: null,
+      reasonCode: null,
+      contestedAuthorizedMinor: 0,
+    });
+  }
+  if (!casePresent || !caseOpen) {
+    throw new PaymentDomainError(409, 'payout_return_case_truth_missing');
+  }
+  const values = [
+    paymentAmountMinor,
+    authorizedBookingMinor,
+    contestedAuthorizedMinor,
+    undisputedReleasableMinor,
+  ];
+  if (typeof bookingId !== 'string' || bookingId.length === 0
+      || returnCaseBookingId !== bookingId
+      || typeof returnCaseId !== 'string' || returnCaseId.length === 0
+      || typeof reasonCode !== 'string' || !/^[A-Za-z0-9_.:-]{1,120}$/u.test(reasonCode)
+      || !values.every(Number.isSafeInteger)
+      || paymentAmountMinor <= 0
+      || authorizedBookingMinor !== paymentAmountMinor
+      || contestedAuthorizedMinor <= 0
+      || contestedAuthorizedMinor > authorizedBookingMinor
+      || undisputedReleasableMinor
+        !== authorizedBookingMinor - contestedAuthorizedMinor) {
+    throw new PaymentDomainError(409, 'payout_return_case_truth_invalid');
+  }
+  return Object.freeze({
+    reviewCaseId: returnCaseId,
+    reasonCode,
+    contestedAuthorizedMinor,
+  });
+}
+
 export function paymentStatusForProvider(eventType, object = {}) {
   if (eventType === 'checkout.session.expired') return 'cancelled';
   if (eventType === 'checkout.session.async_payment_failed') return 'failed';

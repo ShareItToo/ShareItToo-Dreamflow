@@ -88,7 +88,11 @@ function raw(overrides = {}) {
   };
 }
 
-function returnCaseClient({ bindingRow = binding(), evidenceRows = null } = {}) {
+function returnCaseClient({
+  bindingRow = binding(),
+  evidenceRows = null,
+  databaseNow = new Date('2026-08-20T10:00:00.000Z'),
+} = {}) {
   const state = { writes: [] };
   return {
     state,
@@ -103,6 +107,15 @@ function returnCaseClient({ bindingRow = binding(), evidenceRows = null } = {}) 
       if (compact.startsWith('SELECT upload.id, upload.content_sha256')) {
         const rows = evidenceRows ?? [{ id: uploadId, content_sha256: 'b'.repeat(64) }];
         return { rowCount: rows.length, rows };
+      }
+      if (compact === 'SELECT clock_timestamp() AS database_now') {
+        return {
+          rowCount: 1,
+          rows: [{ database_now: databaseNow }],
+        };
+      }
+      if (compact.startsWith('SELECT payout.id FROM payouts AS payout')) {
+        return { rowCount: 0, rows: [] };
       }
       if (compact.startsWith('SELECT id FROM booking_cases')) {
         return { rowCount: 0, rows: [] };
@@ -289,7 +302,7 @@ test('return case rejects before T0 and after the inclusive 48-hour boundary', a
     ['2026-08-20T09:59:59.999Z', 'v52_return_report_window_not_open'],
     ['2026-08-22T10:00:00.001Z', 'v52_return_report_window_closed'],
   ]) {
-    const client = returnCaseClient();
+    const client = returnCaseClient({ databaseNow: new Date(now) });
     await assert.rejects(
       openV52ReturnCase(client, {
         actor: { id: 'owner-1', role: 'user' },
@@ -305,7 +318,9 @@ test('return case rejects before T0 and after the inclusive 48-hour boundary', a
 });
 
 test('exact T0+48h opens one substantiated case and cannot create an additional charge', async () => {
-  const client = returnCaseClient();
+  const client = returnCaseClient({
+    databaseNow: new Date('2026-08-22T10:00:00.000Z'),
+  });
   const result = await openV52ReturnCase(client, {
     actor: { id: 'owner-1', role: 'user' },
     bookingId: 'booking-1',
@@ -331,6 +346,7 @@ test('V5.2 response and update deadlines use calendar days in the booking timezo
       ends_at: openedAt,
       return_t0: openedAt,
     }),
+    databaseNow: openedAt,
   });
   const result = await openV52ReturnCase(client, {
     actor: { id: 'owner-1', role: 'user' },
@@ -356,6 +372,7 @@ test('changed return T0 requires distinct participant proposal and confirmation'
         returnTimeConfirmedAt: '2026-08-20T09:00:00.000Z',
       },
     }),
+    databaseNow: new Date('2026-08-20T10:00:00.000Z'),
   });
   const result = await openV52ReturnCase(client, {
     actor: { id: 'owner-1', role: 'user' },
@@ -380,6 +397,7 @@ test('changed return T0 accepts a complete distinct-participant confirmation', a
         returnTimeConfirmedAt: '2026-08-20T09:00:00.000Z',
       },
     }),
+    databaseNow: new Date('2026-08-20T12:00:00.000Z'),
   });
   const result = await openV52ReturnCase(client, {
     actor: { id: 'owner-1', role: 'user' },
@@ -414,6 +432,42 @@ test('return case rejects unowned evidence and amounts above the immutable quote
       now: new Date('2026-08-20T10:00:00.000Z'),
     }),
     (error) => error.code === 'v52_return_case_amount_exceeds_authorization',
+  );
+});
+
+test('return case uses the locked database clock and refuses a started payout', async () => {
+  const client = returnCaseClient({
+    databaseNow: new Date('2026-08-22T10:00:00.001Z'),
+  });
+  await assert.rejects(
+    openV52ReturnCase(client, {
+      actor: { id: 'owner-1', role: 'user' },
+      bookingId: 'booking-1',
+      raw: raw(),
+      idempotencyKey: 'return-case-stale-client-clock',
+      now: new Date('2026-08-22T09:59:59.999Z'),
+    }),
+    (error) => error.code === 'v52_return_report_window_closed',
+  );
+
+  const payoutClient = returnCaseClient();
+  const originalQuery = payoutClient.query.bind(payoutClient);
+  payoutClient.query = async (sql, values) => {
+    const compact = sql.replace(/\s+/g, ' ').trim();
+    if (compact.startsWith('SELECT payout.id FROM payouts AS payout')) {
+      return { rowCount: 1, rows: [{ id: 'payout-in-flight' }] };
+    }
+    return originalQuery(sql, values);
+  };
+  await assert.rejects(
+    openV52ReturnCase(payoutClient, {
+      actor: { id: 'owner-1', role: 'user' },
+      bookingId: 'booking-1',
+      raw: raw(),
+      idempotencyKey: 'return-case-payout-race',
+      now: new Date('2026-08-22T10:00:00.000Z'),
+    }),
+    (error) => error.code === 'v52_return_case_conflicts_with_payout',
   );
 });
 

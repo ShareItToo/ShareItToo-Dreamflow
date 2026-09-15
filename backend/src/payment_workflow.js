@@ -5,6 +5,7 @@ import { inTransaction, pool } from './db.js';
 import {
   assertProviderPaymentBinding,
   assertProviderRefundBinding,
+  canonicalPositionReviewHold,
   classifyDisputeTransferRecoveryFailure,
   captureLedger,
   disputeOwnerRecoveryLedger,
@@ -3826,7 +3827,13 @@ export async function releasePayout({
               booking.workflow_status, booking.completed_at,
               booking.ends_at, booking.return_state, booking.payout_instruction_due_at,
               booking.rental_timezone,
-              request.payload AS booking_payload,
+              return_case.id::text AS return_case_id,
+              return_case.booking_id AS return_case_booking_id,
+              return_case.case_status AS return_case_status,
+              return_case.authorized_booking_minor AS return_case_authorized_minor,
+              return_case.contested_authorized_minor AS return_case_contested_minor,
+              return_case.undisputed_releasable_minor AS return_case_undisputed_minor,
+              return_case.reason_code AS return_case_reason_code,
               connected.provider_account_id, connected.account_api_version,
               connected.recipient_transfers_status, connected.payouts_enabled,
               connected.dashboard_type,
@@ -3834,7 +3841,19 @@ export async function releasePayout({
               0::bigint AS refunded_owner_minor
        FROM payments AS payment
        JOIN bookings AS booking ON booking.id = payment.booking_id
-       JOIN rental_requests AS request ON request.id = booking.id
+       LEFT JOIN LATERAL (
+         SELECT return_case.id, return_case.booking_id,
+                booking_case.status AS case_status,
+                return_case.authorized_booking_minor,
+                return_case.contested_authorized_minor,
+                return_case.undisputed_releasable_minor,
+                return_case.reason_code
+           FROM v52_return_cases AS return_case
+           JOIN booking_cases AS booking_case
+             ON booking_case.id = return_case.booking_case_id
+          WHERE return_case.booking_id = booking.id
+          LIMIT 1
+       ) AS return_case ON true
        LEFT JOIN stripe_connect_accounts AS connected ON connected.user_id = booking.owner_id
        WHERE payment.id::text = $1 FOR UPDATE OF payment, booking`,
       [paymentId],
@@ -3962,19 +3981,30 @@ export async function releasePayout({
     if (activePayout.rowCount && activePayout.rows[0].idempotency_key !== key) {
       throw new PaymentDomainError(409, 'payout_in_progress');
     }
-    const payload = payment.booking_payload && typeof payment.booking_payload === 'object'
-      ? payment.booking_payload
-      : {};
-    const contestedAuthorizedMinor = payment.return_state === 'needsReview'
-      && !payload.returnCaseClosedAt
-      ? Number(payload.contestedAuthorizedMinor ?? 0)
-      : 0;
+    const positionReview = canonicalPositionReviewHold({
+      bookingId: payment.booking_id,
+      paymentAmountMinor: Number(payment.amount_minor),
+      returnState: payment.return_state,
+      returnCaseId: payment.return_case_id,
+      returnCaseBookingId: payment.return_case_booking_id,
+      returnCaseStatus: payment.return_case_status,
+      authorizedBookingMinor: payment.return_case_authorized_minor == null
+        ? null
+        : Number(payment.return_case_authorized_minor),
+      contestedAuthorizedMinor: payment.return_case_contested_minor == null
+        ? null
+        : Number(payment.return_case_contested_minor),
+      undisputedReleasableMinor: payment.return_case_undisputed_minor == null
+        ? null
+        : Number(payment.return_case_undisputed_minor),
+      reasonCode: payment.return_case_reason_code,
+    });
     const payoutAmounts = privatePilotReleasableOwnerAmount({
       paymentAmountMinor: Number(payment.amount_minor),
       ownerPayoutMinor: Number(payment.owner_payout_minor),
       refundedOwnerMinor: refundTruth.settledOwnerMinor,
       transferredMinor: Number(payment.transferred_minor),
-      contestedAuthorizedMinor,
+      contestedAuthorizedMinor: positionReview.contestedAuthorizedMinor,
     });
     const amount = payoutAmounts.releasableMinor;
     if (amount <= 0) {
@@ -4036,6 +4066,7 @@ export async function releasePayout({
       payment,
       payout: payoutRow,
       amount,
+      positionReview,
       recoverExistingPayout: internalRecovery || existingPayout.rowCount > 0,
     };
   });
@@ -4166,7 +4197,17 @@ export async function releasePayout({
       await audit(client, {
         actorId: actor?.id ?? null, actorRole: actor?.role ?? 'system',
         action: 'payout.released', resourceType: 'payout', resourceId: prepared.payout.id,
-        metadata: { paymentId, amountMinor: prepared.amount },
+        metadata: {
+          paymentId,
+          amountMinor: prepared.amount,
+          reviewScope: prepared.positionReview?.reviewCaseId
+            ? 'booking_position'
+            : 'none',
+          reviewCaseId: prepared.positionReview?.reviewCaseId ?? null,
+          reviewReasonCode: prepared.positionReview?.reasonCode ?? null,
+          contestedAuthorizedMinor:
+            prepared.positionReview?.contestedAuthorizedMinor ?? 0,
+        },
       });
       return value;
     });

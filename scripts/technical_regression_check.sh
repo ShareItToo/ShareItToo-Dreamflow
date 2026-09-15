@@ -818,6 +818,18 @@ node tool/validate_wp150_completed_payment_command_replay_integrity.mjs
 node --check tool/validate_wp151_refund_provider_durable_truth_parity.mjs
 node --test test/tool/validate_wp151_refund_provider_durable_truth_parity.test.mjs
 node tool/validate_wp151_refund_provider_durable_truth_parity.mjs
+node --check tool/validate_v54_legal_assets.mjs
+node --test test/tool/validate_v54_legal_assets.test.mjs
+node tool/validate_v54_legal_assets.mjs
+node --check tool/validate_wp152_v54_contract_draft.mjs
+node --test test/tool/validate_wp152_v54_contract_draft.test.mjs
+node tool/validate_wp152_v54_contract_draft.mjs
+node --check tool/validate_v55_legal_assets.mjs
+node --test test/tool/validate_v55_legal_assets.test.mjs
+node tool/validate_v55_legal_assets.mjs
+node --check tool/validate_wp153_position_review_release_parity.mjs
+node --test test/tool/validate_wp153_position_review_release_parity.test.mjs
+node tool/validate_wp153_position_review_release_parity.mjs
 node --check backend/src/operational_readiness_gate.js
 node --test backend/test/operational_readiness_gate.test.js
 node --check tool/validate_p0b_ops_readiness.mjs

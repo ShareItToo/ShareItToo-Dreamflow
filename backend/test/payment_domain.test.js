@@ -7,6 +7,7 @@ import {
   assertProviderRefundBinding,
   assertProviderTransferBinding,
   classifyDisputeTransferRecoveryFailure,
+  canonicalPositionReviewHold,
   captureLedger,
   disputeOwnerRecoveryLedger,
   disputeOwnerRecoveryReinstatementLedger,
@@ -288,6 +289,77 @@ test('private pilot payout accounts for refunds and prior transfers', () => {
   });
   assert.equal(result.heldOwnerMinor, 100);
   assert.equal(result.releasableMinor, 300);
+});
+
+test('position review hold accepts only canonical exact-booking return-case truth', () => {
+  assert.deepEqual(canonicalPositionReviewHold({
+    bookingId: 'booking-a',
+    paymentAmountMinor: 1100,
+    returnState: 'needsReview',
+    returnCaseId: 'case-a',
+    returnCaseBookingId: 'booking-a',
+    returnCaseStatus: 'awaitingResponse',
+    authorizedBookingMinor: 1100,
+    contestedAuthorizedMinor: 330,
+    undisputedReleasableMinor: 770,
+    reasonCode: 'damage',
+  }), {
+    reviewCaseId: 'case-a',
+    reasonCode: 'damage',
+    contestedAuthorizedMinor: 330,
+  });
+});
+
+test('position review hold fails closed for missing, foreign or inconsistent truth', () => {
+  const base = {
+    bookingId: 'booking-a',
+    paymentAmountMinor: 1100,
+    returnState: 'needsReview',
+    returnCaseId: 'case-a',
+    returnCaseBookingId: 'booking-a',
+    returnCaseStatus: 'needsReview',
+    authorizedBookingMinor: 1100,
+    contestedAuthorizedMinor: 330,
+    undisputedReleasableMinor: 770,
+    reasonCode: 'damage',
+  };
+  for (const candidate of [
+    { ...base, returnCaseId: null },
+    { ...base, returnCaseBookingId: 'booking-b' },
+    { ...base, authorizedBookingMinor: 1200 },
+    { ...base, undisputedReleasableMinor: 771 },
+    { ...base, reasonCode: '' },
+  ]) {
+    assert.throws(
+      () => canonicalPositionReviewHold(candidate),
+      (error) => ['payout_return_case_truth_missing', 'payout_return_case_truth_invalid']
+        .includes(error.code),
+    );
+  }
+});
+
+test('position review hold rejects open-case state drift and leaves unrelated bookings clear', () => {
+  assert.throws(() => canonicalPositionReviewHold({
+    bookingId: 'booking-a',
+    paymentAmountMinor: 1100,
+    returnState: 'closed',
+    returnCaseId: 'case-a',
+    returnCaseBookingId: 'booking-a',
+    returnCaseStatus: 'unresolved',
+    authorizedBookingMinor: 1100,
+    contestedAuthorizedMinor: 330,
+    undisputedReleasableMinor: 770,
+    reasonCode: 'damage',
+  }), (error) => error.code === 'payout_return_case_state_mismatch');
+  assert.deepEqual(canonicalPositionReviewHold({
+    bookingId: 'booking-b',
+    paymentAmountMinor: 2200,
+    returnState: 'payoutEligible',
+  }), {
+    reviewCaseId: null,
+    reasonCode: null,
+    contestedAuthorizedMinor: 0,
+  });
 });
 
 function balanced(entries) {

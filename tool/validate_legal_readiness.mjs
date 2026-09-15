@@ -69,6 +69,14 @@ const v54AstraCorrectedDraftContract = Object.freeze({
   activeBindingVersion: 'V5.2-2026-08-16',
 });
 
+const v55PositionReviewDraftContract = Object.freeze({
+  status: 'draft-blocked-after-position-review-correction',
+  sourceFile: 'assets/legal/de/legal_manifest_v55.json',
+  version: 'V5.5-2026-09-15',
+  predecessorVersion: 'V5.4-2026-09-15',
+  activeBindingVersion: 'V5.2-2026-08-16',
+});
+
 const v51SuccessorDecisionContract = [
   {
     manifestKey: 'platformContractAndWithdrawalTiming',
@@ -391,6 +399,55 @@ function assertV54AstraCorrectedDraft({ root, sourceTexts, legal }) {
   }
 }
 
+function assertV55PositionReviewDraft({ root, sourceTexts, legal }) {
+  const draft = object(legal.v55PositionReviewDraft, 'v55PositionReviewDraft');
+  if (draft.status !== v55PositionReviewDraftContract.status
+      || draft.sourceFile !== v55PositionReviewDraftContract.sourceFile
+      || draft.documentCount !== 9
+      || draft.professionalLegalApproval !== false
+      || draft.publicCommercialOperationAllowed !== false
+      || draft.bindingContractAcceptanceAllowed !== false) {
+    fail('v55PositionReviewDraft must remain a nine-part inactive AI legal draft.');
+  }
+  assertSha256(draft.currentContentSha256, 'v55PositionReviewDraft.currentContentSha256');
+  const serialized = sourceText(root, sourceTexts, draft.sourceFile);
+  if (sha256(serialized) !== draft.currentContentSha256) {
+    fail('v55PositionReviewDraft.currentContentSha256 is stale.');
+  }
+  const source = JSON.parse(serialized);
+  const addressed = source.correctionScope?.addressedInThisDraft ?? [];
+  const remaining = source.correctionScope?.stillOpenForLaterPackages ?? [];
+  if (source?.schemaVersion !== 5
+      || source.version !== v55PositionReviewDraftContract.version
+      || source.status !== v55PositionReviewDraftContract.status
+      || source.activationAllowed !== false
+      || source.publiclyPublished !== false
+      || source.professionalLegalApproval !== false
+      || source.ownerAdoptionRecorded !== false
+      || source.derivation?.historicalV52V53AndV54RemainUnchanged !== true
+      || source.derivation?.predecessorV54ManifestPath
+        !== 'assets/legal/de/legal_manifest_v54.json'
+      || source.runtimePreparation?.activeBindingVersion
+        !== v55PositionReviewDraftContract.activeBindingVersion
+      || source.runtimePreparation?.preparedInactiveVersion
+        !== v55PositionReviewDraftContract.version
+      || source.runtimePreparation?.preparedVersionBindingAcceptanceAllowed !== false
+      || source.runtimePreparation?.unknownVersionFallbackAllowed !== false
+      || source.runtimePreparation?.runtimeActivationChanged !== false
+      || !addressed.includes('positionNeedsReviewAndUnrelatedRelease')
+      || remaining.includes('positionNeedsReviewAndUnrelatedRelease')
+      || source.contractModel?.positionReview?.scope !== 'exact-booking-position'
+      || source.contractModel?.positionReview?.humanDecisionRequired !== true
+      || source.contractModel?.positionReview?.missingOrContradictoryTruth
+        !== 'fail-closed-no-release-no-liability-decision'
+      || source.externalBoundaries?.realMoney !== false
+      || source.externalBoundaries?.paymentProviderActivation !== false
+      || !Array.isArray(source.documents)
+      || source.documents.length !== draft.documentCount) {
+    fail('V5.5 source must preserve the position-review correction and every activation hold.');
+  }
+}
+
 function assertInterimPilotContract({ root, sourceTexts, legal }) {
   const policy = object(legal.interimPilotRules, 'interimPilotRules');
   const expectedPolicyKeys = [
@@ -549,6 +606,7 @@ export function validateLegalReadiness({
   assertOperatorReadinessDraft({ root, sourceTexts, legal });
   assertV53OperatorAlignedDraft({ root, sourceTexts, legal });
   assertV54AstraCorrectedDraft({ root, sourceTexts, legal });
+  assertV55PositionReviewDraft({ root, sourceTexts, legal });
   assertInterimPilotContract({ root, sourceTexts, legal });
 
   const documents = object(legal.documents, 'documents');

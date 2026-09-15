@@ -1,5 +1,35 @@
 # ShareItToo Current State
 
+## WP153 position review and unrelated-release parity — technical closure; full local regression PASSED; external gates HOLD
+
+The payout path no longer trusts mutable rental-request JSON for a disputed
+amount. Exact `needsReview` release now requires the same booking's canonical
+V5.2 return case, open case status, immutable authorized/contested/undisputed
+arithmetic and reason. Only the proportional owner share of the affected
+position remains held; exact-booking dispute checks and the existing separately
+documented account/payout suspension gates remain independent.
+
+Return-case opening reads PostgreSQL time in a fresh statement after acquiring
+the booking lock and refuses an ordinary case after payout has started. The
+group projection and typed Flutter parser both fail closed on missing or
+cross-state case truth and expose position scope, reason, human-review status
+and `unrelatedPositionsBlocked: false`.
+
+`V5.5-2026-09-15` is a new nine-part, hash-bound and inactive legal successor
+for this correction. Historical V5.2/V5.3/V5.4 remain unchanged, V5.2 remains
+the only binding version, and V5.5 has no legal approval or activation. Focused
+Backend passes **60/60**, Flutter **5/5**, legal/readiness **19/19**, and the
+Backend full suite reports **988 top-level tests, 997 passed, 2 intentional
+skips**. Fresh PostgreSQL passes **2/2 with cleanup**, all Tool tests pass
+**3036/3036**, and the complete CI-equivalent local regression exits 0.
+Exact-head GitHub Regression/CodeQL remain pending until the closure commit is
+pushed. See
+`docs/operations/WP153_POSITION_REVIEW_AND_UNRELATED_RELEASE_PARITY_2026-09-15.md`.
+
+No external state changed. Provider reserves and independently justified
+principal-wide holds remain separate risks. Privacy, export, retention, DSA,
+operator, PSP/ZAG and Business/Global gates remain open.
+
 ## WP152 V5.4 contract-scope/offer/refund/receipt draft — technical closure; inactive; external gates HOLD
 
 `V5.4-2026-09-15` is a new nine-part, hash-bound and explicitly inactive AI

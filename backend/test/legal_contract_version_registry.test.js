@@ -6,6 +6,7 @@ import {
   assertActiveBindingContractVersion,
   legalContractVersionPolicy,
   LegalContractVersionError,
+  positionReviewDraftContractVersion,
   preparedBindingContractVersion,
 } from '../src/legal_contract_version_registry.js';
 
@@ -17,6 +18,21 @@ test('keeps the existing exact V5.2 internal runtime active without opening live
     publicActivationAllowed: false,
     realMoneyAllowed: false,
   });
+});
+
+test('exposes V5.5 only as the inactive position-review successor', () => {
+  assert.deepEqual(legalContractVersionPolicy(positionReviewDraftContractVersion), {
+    version: 'V5.5-2026-09-15',
+    status: 'draft-blocked-after-position-review-correction',
+    bindingContractAcceptanceAllowed: false,
+    publicActivationAllowed: false,
+    realMoneyAllowed: false,
+  });
+  assert.throws(
+    () => assertActiveBindingContractVersion(positionReviewDraftContractVersion),
+    (error) => error instanceof LegalContractVersionError
+      && error.code === 'legal_contract_version_inactive',
+  );
 });
 
 test('exposes V5.4 only as an inactive prepared policy', () => {
@@ -37,6 +53,7 @@ test('exposes V5.4 only as an inactive prepared policy', () => {
 test('rejects unknown, padded and malformed contract versions without fallback', () => {
   for (const version of [
     'V5.4',
+    'V5.5',
     'V5.4-2026-09-15 ',
     'v5.2-2026-08-16',
     '',

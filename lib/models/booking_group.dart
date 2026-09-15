@@ -299,6 +299,9 @@ class BookingGroupHandoverItem {
   final bool needsReview;
   final String? returnState;
   final String? returnCaseId;
+  final String? reviewReasonCode;
+  final bool humanReviewRequired;
+  final bool unrelatedPositionsBlocked;
   final DateTime? returnT0;
   final DateTime? reportDeadline;
   final DateTime? clarificationDeadline;
@@ -317,6 +320,9 @@ class BookingGroupHandoverItem {
     required this.needsReview,
     this.returnState,
     this.returnCaseId,
+    this.reviewReasonCode,
+    this.humanReviewRequired = false,
+    this.unrelatedPositionsBlocked = false,
     this.returnT0,
     this.reportDeadline,
     this.clarificationDeadline,
@@ -327,10 +333,25 @@ class BookingGroupHandoverItem {
 
   factory BookingGroupHandoverItem.fromJson(Map<String, dynamic> json) {
     final damage = _map(json['damage'], 'item.damage');
+    final review = _map(json['review'], 'item.review');
     final chat = _map(json['chat'], 'item.chat');
     final timers = _map(json['timers'], 'item.timers');
+    final needsReview = damage['needsReview'] == true;
+    final returnCase = damage['returnCase'];
+    final reviewReasonCode = review['reasonCode']?.toString().trim();
     if (chat['scope'] != 'item_booking_only') {
       throw const FormatException('Invalid booking group chat scope');
+    }
+    if (review['active'] != needsReview ||
+        review['scope'] != 'booking_position' ||
+        review['humanReviewRequired'] != needsReview ||
+        review['unrelatedPositionsBlocked'] != false ||
+        (needsReview &&
+            (returnCase is! Map ||
+                review['caseId']?.toString() != returnCase['id']?.toString() ||
+                reviewReasonCode == null ||
+                reviewReasonCode.isEmpty))) {
+      throw const FormatException('Invalid item review truth');
     }
     return BookingGroupHandoverItem(
       groupPositionId:
@@ -346,11 +367,14 @@ class BookingGroupHandoverItem {
       returnEvidence: BookingGroupEvidenceSegment.fromJson(
         _map(json['return'], 'item.return'),
       ),
-      needsReview: damage['needsReview'] == true,
+      needsReview: needsReview,
       returnState: damage['returnState']?.toString(),
-      returnCaseId: damage['returnCase'] is Map
-          ? (damage['returnCase'] as Map)['id']?.toString()
+      returnCaseId: returnCase is Map
+          ? returnCase['id']?.toString()
           : null,
+      reviewReasonCode: reviewReasonCode,
+      humanReviewRequired: review['humanReviewRequired'] == true,
+      unrelatedPositionsBlocked: review['unrelatedPositionsBlocked'] == true,
       returnT0: _optionalDateTime(timers['returnT0'], 'item.returnT0'),
       reportDeadline:
           _optionalDateTime(timers['reportDeadline'], 'item.reportDeadline'),

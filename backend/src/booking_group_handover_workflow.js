@@ -407,12 +407,17 @@ export async function getBookingGroupHandoverReturn(client, {
       [bookingIds],
     );
     returnCases = await client.query(
-      `SELECT id, booking_id, reason_code, contested_authorized_minor,
-              undisputed_releasable_minor, response_due_at,
-              next_status_update_due_at
-         FROM v52_return_cases
-        WHERE booking_id = ANY($1::text[])
-        ORDER BY booking_id, created_at DESC`,
+      `SELECT return_case.id, return_case.booking_id, return_case.reason_code,
+              booking_case.status AS case_status,
+              return_case.contested_authorized_minor,
+              return_case.undisputed_releasable_minor,
+              return_case.response_due_at,
+              return_case.next_status_update_due_at
+         FROM v52_return_cases AS return_case
+         JOIN booking_cases AS booking_case
+           ON booking_case.id = return_case.booking_case_id
+        WHERE return_case.booking_id = ANY($1::text[])
+        ORDER BY return_case.booking_id, return_case.created_at DESC`,
       [bookingIds],
     );
   }

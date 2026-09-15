@@ -1,4 +1,30 @@
-# Current Work Package: WP152 V5.4 Contract Scope, Offer, Refund and Receipt Draft — TECHNICAL CLOSURE; INACTIVE; EXTERNAL GATES HOLD
+# Current Work Package: WP153 Position Review and Unrelated Release Parity — TECHNICAL CLOSURE; FULL LOCAL REGRESSION PASSED; EXTERNAL GATES HOLD
+
+WP153 binds payout review truth to the exact position's append-only V5.2 return
+case and current case status. Mutable request JSON cannot set the held amount.
+Missing, foreign, state-drifted or arithmetically contradictory case truth
+blocks payout before a provider call. Only the proportional owner share of the
+contested authorized amount is held; the rest of that position and unrelated
+positions continue through their own independent gates.
+
+Return-case opening takes the booking row lock before reading a fresh database
+clock and refuses a standard late case once payout has started. Booking-group
+projection and the typed Flutter parser require the same item-bound case,
+reason, human review and explicit `unrelatedPositionsBlocked: false` contract.
+
+V5.5 is a separate nine-part, hash-bound and inactive legal successor for this
+correction. It does not rewrite V5.2, V5.3 or V5.4; exact V5.2 remains the only
+binding runtime version. V5.5 is not professionally approved and cannot be
+activated by this package.
+
+Focused Backend passes **60/60**, Flutter **5/5**, V5.5/readiness **19/19**,
+and the Backend suite reports **988 top-level tests, 997 passed, 2 intentional
+skips**. Fresh PostgreSQL passes **2/2 with cleanup**, all Tool tests pass
+**3036/3036**, and the complete CI-equivalent regression exits 0. Commit/push
+and exact-head GitHub Regression/CodeQL remain pending. No external state
+changed.
+
+# Previous Work Package: WP152 V5.4 Contract Scope, Offer, Refund and Receipt Draft — TECHNICAL CLOSURE; INACTIVE; EXTERNAL GATES HOLD
 
 WP152 creates `V5.4-2026-09-15` as a separate nine-part, hash-bound and
 explicitly inactive AI legal successor. V5.2 and V5.3 remain byte-for-byte

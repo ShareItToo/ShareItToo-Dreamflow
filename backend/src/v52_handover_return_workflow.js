@@ -508,7 +508,6 @@ export async function openV52ReturnCase(client, {
   bookingId,
   raw,
   idempotencyKey: rawIdempotencyKey,
-  now = new Date(),
 }) {
   const key = idempotencyKey(rawIdempotencyKey);
   const reasonCode = text(raw?.reasonCode, 120, 'v52_return_case_reason_code_invalid');
@@ -552,7 +551,16 @@ export async function openV52ReturnCase(client, {
     throw new V52HandoverReturnError(409, 'v52_return_case_wrong_booking_state');
   }
 
-  const openedAt = instant(now, 'v52_return_case_time_invalid');
+  // Read the database clock in a new statement only after the booking row lock
+  // has been acquired. A caller clock, transaction-start clock or value
+  // evaluated before the lock wait must not reopen an elapsed report window.
+  const databaseClock = await client.query(
+    'SELECT clock_timestamp() AS database_now',
+  );
+  const openedAt = instant(
+    databaseClock.rows[0]?.database_now,
+    'v52_return_case_time_invalid',
+  );
   const t0 = returnT0(binding);
   const deadlineTimezone = returnPolicyTimeZone(binding.rental_timezone);
   const reportDeadline = new Date(t0.getTime() + 48 * 60 * 60 * 1000);
@@ -561,6 +569,20 @@ export async function openV52ReturnCase(client, {
   }
   if (openedAt > reportDeadline) {
     throw new V52HandoverReturnError(409, 'v52_return_report_window_closed');
+  }
+  const payoutAlreadyStarted = await client.query(
+    `SELECT payout.id
+       FROM payouts AS payout
+       JOIN payments AS payment ON payment.id = payout.payment_id
+      WHERE payment.booking_id = $1
+        AND payout.status IN ('scheduled', 'pending', 'paid', 'reversed')
+      ORDER BY payout.created_at DESC
+      LIMIT 1
+      FOR UPDATE OF payout`,
+    [bookingId],
+  );
+  if (payoutAlreadyStarted.rowCount) {
+    throw new V52HandoverReturnError(409, 'v52_return_case_conflicts_with_payout');
   }
   const authorizedBookingMinor = Number(binding.quoted_total_minor);
   if (!Number.isSafeInteger(authorizedBookingMinor)
