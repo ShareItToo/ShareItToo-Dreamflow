@@ -11,7 +11,7 @@ test('privacy export UI uses the owner-bound service and exact route handles', (
   assert.match(screen, /SharedPersistenceSync\.accountSecurityStateKey/u);
   assert.match(screen, /_passwordDialog\?\.dismiss\(\)/u);
   assert.match(screen, /_outcomeDialog\?\.dismiss\(\)/u);
-  assert.match(screen, /showTrackedDialog<String>/u);
+  assert.match(screen, /showTrackedDialog<_PrivacyExportAuthorization>/u);
   assert.doesNotMatch(screen, /Navigator\.of\([^)]*\)\.pop/u);
   assert.doesNotMatch(screen, /Future(?:<void>)?\.delayed/u);
   assert.doesNotMatch(screen, /BackendRepository\.exportAccountData/u);
@@ -23,6 +23,7 @@ test('export HTTP transport cannot refresh or fall back to the current principal
   const exportMethod = repository.slice(repository.indexOf('exportAccountData({'),
     repository.indexOf('static Future<void> deleteAccount'));
   assert.match(exportMethod, /required AuthSessionOwner owner/u);
+  assert.match(exportMethod, /'exportPurpose': exportPurpose/u);
   assert.match(exportMethod, /return _authorizedForOwner\([\s\S]*owner: owner,/u);
   assert.doesNotMatch(exportMethod, /return _authorized\(/u);
   const transport = repository.slice(repository.indexOf('static Future<Map<String, dynamic>> _authorizedForOwner'),

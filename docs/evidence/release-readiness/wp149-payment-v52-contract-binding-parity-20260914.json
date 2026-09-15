@@ -6,7 +6,7 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "f2f20d8b5c6d1254ef3964fc03f7bdbed3d1ac9b4cb52254fb96b3af289c7f04"
+    "sourceInventoryDigest": "392c890c231f65f1911883da093b7ef70eded2c76213d4b1c9f1134e047cd8e0"
   },
   "repository": {
     "branch": "codex/master-workflow-20260808",
@@ -160,18 +160,18 @@
     "backend/src/v52_contract_workflow.js": "c0e06b47f51398a5095a6de41c9545ff72daf6cc1b37bbfe7d886a0373d554a1",
     "backend/test/booking_withdrawal_deadline.test.js": "b968b4b4d8cfb21c90527e3b87f166c249e9555f6291105b89d56ff2c46be7d5",
     "backend/test/payment_domain.test.js": "437fe69d7abfbe45922834f6b473e73919bdadd0a4fdf8eb4414cf5ebf0f95b0",
-    "backend/test/postgres_foundation.integration.test.js": "791d45b5c7dc1abaa2afc4f05c2463768123bf485ca2dc0b6ec093b3b63395f1",
+    "backend/test/postgres_foundation.integration.test.js": "01222d79e4a5514fcdaa05f4f254d8cbc331b20d3ad1ea5e1fc1adbc66402d04",
     "backend/test/return_calendar_policy.test.js": "12d702794405facaa72835299f203ad88642a24340d2a0972b6c66cc099e53ec",
     "backend/test/v51_withdrawal_workflow.test.js": "ffab494637bf8cb0445f5369841215cde26bfca3717ab0dc08bab4881f7dcac4",
     "backend/test/v52_actual_loss_persistence.test.js": "479314b6be1b8a8e48d37fdcc96763791f95fa8dfff02feaffd736ea36dafd95",
     "backend/test/v52_actual_loss_workflow.test.js": "16765f5f8eb20eee8fd5bdb69a7bac9b4249b522e23a302bb0d720e1073eb875",
     "backend/test/v52_contract_workflow.test.js": "7014a6c2a74861078b24bb198c5b3712ae65ddc4c28bcec3076d9f5c252aa686",
-    "docs/current_state.md": "ea7caa468794065bf2ec97cc5b5bbfdb2738d9c66a265f036ff904f3c1866df2",
-    "docs/current_work_package.md": "2d6c6c02a0a0a053fedfa899c77707e7024e4d91dcb752558560e8549591f236",
+    "docs/current_state.md": "40b4066a1892d51f08b2e81404e01f3dc38981c7788173ea2da10bc05bd8f36f",
+    "docs/current_work_package.md": "a588c17e35b46434c2125eaa4d53953fadc08524db5faf1da1b4ba286b006466",
     "docs/operations/WP149_PAYMENT_V52_CONTRACT_BINDING_PARITY_2026-09-14.md": "e87000894b3e7763c066e963259b9a13527f33aad74bff086e0e2cccf9f4feba",
     "scripts/technical_regression_check.sh": "1b4020a12d643a369dce91b8a78a318564518664ca58619978a3fcf4e54d21e2",
-    "store/privacy-disclosures.json": "776b72e2da6b8a72848f8f11ae25e6c3a7ad682e74c3ecbb80241cfbbe0819bd",
-    "store/retention-deletion-readiness.json": "47d066cb38b21b6593b8858f0bf603a75fcf7b6f8ebadf230e105e0005cf222e",
+    "store/privacy-disclosures.json": "2ebce23d3d98985e74cc5e4dc167ec855f74fac26c9710001939324311912b88",
+    "store/retention-deletion-readiness.json": "c429b13d46f84a35354192859a05ae77fcb315c63d6fee2362e34b2d02bd85a1",
     "test/tool/payment_provider_truthfulness_wiring.test.mjs": "28ae2b8d641cd50c145688eea626f47b5825192fe664261790a142f389f11d1c",
     "test/tool/v51_withdrawal_and_cancellation_wiring.test.mjs": "194ea5724a73232238bb0b6d9616c5d44f71af2c992e2378713fef6bf9784c7d",
     "test/tool/validate_p0b_astra_ai_legal_crosscheck.test.mjs": "1c0b806a11a5d30119276074ae659031a6eef5a384e99ffed54ee69b0590c937",
@@ -180,8 +180,8 @@
     "test/tool/validate_wp149_payment_v52_contract_binding_parity.test.mjs": "d6050f3370f3ad235415963aed0fd92df57e3113411d95c0d8ef5b4223f3a8e8",
     "tool/validate_p0b_ai_legal_preassessment.mjs": "4823d05e0c12c78a0d83d854a0d4c8674db14984988899645652a11d4ba24b17",
     "tool/validate_p0b_astra_ai_legal_crosscheck.mjs": "f9c761d8c14df7a10dbb1ffbaf7c911249e81b2e10b84cbbb0a016dcd4d96199",
-    "tool/validate_privacy_disclosures.mjs": "b78f41588e8a1a14520df4f5a730ae1190924f3b2f177fe40f6569f76bfb56f9",
-    "tool/validate_retention_deletion_readiness.mjs": "97cd27d1f33dec1d6e66344c3fd1e68dbdb78b98e0ed24a000678459d690d478",
+    "tool/validate_privacy_disclosures.mjs": "17b4e86a20d2c4d6bef1774e6b03a2d48587914f52dc96c5e9783f4d26665003",
+    "tool/validate_retention_deletion_readiness.mjs": "0e95e1e2743e70a1a17e32e17a3697e3bdc32ecfcce032c9c10b814583d8f324",
     "tool/validate_wp149_payment_v52_contract_binding_parity.mjs": "84b0b533c621c8d30623c51a6ab82eb9399b2472b9efc1bc16d9899f1ad6731d"
   }
 }

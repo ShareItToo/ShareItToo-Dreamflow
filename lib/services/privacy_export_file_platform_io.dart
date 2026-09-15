@@ -4,6 +4,11 @@ import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 
 const _controlledDirectoryPrefix = 'sit_privacy_export_';
+const _privacyExportFilenames = <String>{
+  'shareittoo-data-export.json',
+  'shareittoo-access-copy.json',
+  'shareittoo-data-portability.json',
+};
 const _legacyTemporaryDirectoryPattern =
     r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
 
@@ -38,7 +43,7 @@ Future<void> removePrivacyExportShareSource(
   final parent = file.parent;
   if (parent.parent.absolute.path != root.absolute.path ||
       !_basename(parent.path).startsWith(_controlledDirectoryPrefix) ||
-      _basename(file.path) != 'shareittoo-data-export.json') {
+      !_privacyExportFilenames.contains(_basename(file.path))) {
     throw const FileSystemException(
       'Refusing to remove a file outside the controlled privacy-export cache.',
     );
@@ -64,14 +69,16 @@ Future<void> purgeRetainedPrivacyExportFiles({
     final entries = await entity.list(followLinks: false).toList();
     if (entries.length == 1 &&
         entries.single is File &&
-        _basename(entries.single.path) == 'shareittoo-data-export.json') {
+        _privacyExportFilenames.contains(_basename(entries.single.path))) {
       await entity.delete(recursive: true);
     }
   }
 
-  final pluginCopy = File(
-    '${root.path}${Platform.pathSeparator}share_plus'
-    '${Platform.pathSeparator}shareittoo-data-export.json',
-  );
-  if (await pluginCopy.exists()) await pluginCopy.delete();
+  for (final filename in _privacyExportFilenames) {
+    final pluginCopy = File(
+      '${root.path}${Platform.pathSeparator}share_plus'
+      '${Platform.pathSeparator}$filename',
+    );
+    if (await pluginCopy.exists()) await pluginCopy.delete();
+  }
 }

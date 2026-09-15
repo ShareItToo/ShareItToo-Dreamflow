@@ -2873,19 +2873,19 @@ if (!databaseUrl) {
             await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
             return buildAccountExport(client, account.id);
           });
-          assert.equal(exported.account.id, account.id);
-          assert.deepEqual(
-            exported.marketplace.rentalCart.items.map(
-              (item) => item.client_item_id,
-            ),
-            [`r8-cart-${String(index + 1).padStart(3, '0')}`],
+          assert.equal(exported.policy.purpose, 'access_copy');
+          assert.equal(exported.data.account.email, account.email);
+          assert.equal(exported.data.marketplace.rentalCart.items.length, 1);
+          assert.equal(exported.data.communication.support.cases.length, 1);
+          const serialized = JSON.stringify(exported.data);
+          assert.equal(serialized.replaceAll(account.email, '').includes(account.id), false);
+          assert.equal(
+            serialized.includes(`r8-cart-${String(index + 1).padStart(3, '0')}`),
+            false,
           );
-          assert.deepEqual(
-            exported.communication.support.cases.map(
-              (supportCaseEntry) => supportCaseEntry.id,
-            ),
-            [r8CohortResults[index].supportCaseId],
-          );
+          for (const other of r8PrivacyAccounts) {
+            if (other.id !== account.id) assert.equal(serialized.includes(other.email), false);
+          }
         },
       );
       await restartApplicationServer();
@@ -10602,6 +10602,7 @@ if (!databaseUrl) {
         headers: ownerHeaders,
         body: JSON.stringify({
           currentPassword: createEphemeralAcceptancePassword(),
+          exportPurpose: 'access_copy',
         }),
       });
       assert.equal(wrongPasswordExportResponse.status, 401);
@@ -10612,7 +10613,10 @@ if (!databaseUrl) {
           ...ownerHeaders,
           'X-Request-ID': 'b10-owner-export',
         },
-        body: JSON.stringify({ currentPassword: ownerPassword }),
+        body: JSON.stringify({
+          currentPassword: ownerPassword,
+          exportPurpose: 'access_copy',
+        }),
       });
       assert.equal(exportResponse.status, 200);
       assert.equal(exportResponse.headers.get('x-request-id'), 'b10-owner-export');
@@ -10620,19 +10624,25 @@ if (!databaseUrl) {
       assert.match(exportResponse.headers.get('cache-control'), /no-store/);
       assert.match(
         exportResponse.headers.get('content-disposition'),
-        /shareittoo-data-export\.json/,
+        /shareittoo-access-copy\.json/,
       );
       const accountExport = await exportResponse.json();
-      assert.equal(accountExport.schemaVersion, '1.0');
+      assert.equal(accountExport.schemaVersion, '2.0');
+      assert.equal(accountExport.exportPurpose, 'access_copy');
       assert.equal(accountExport.accountId, 'owner');
+      assert.equal(accountExport.policy.referenceScope, 'document_local');
+      assert.equal(accountExport.policy.rawInternalIdentifiersIncluded, false);
       assert.equal(accountExport.data.account.email, 'owner@example.com');
-      assert.ok(accountExport.data.marketplace.listings.some((entry) => entry.id === 'listing-1'));
-      assert.ok(accountExport.data.marketplace.bookings.some((entry) => entry.id === 'b6-flow'));
+      assert.ok(accountExport.data.marketplace.listings.length > 0);
+      assert.ok(accountExport.data.marketplace.bookings.length > 0);
       assert.ok(accountExport.data.marketplace.bookingGroups.groups.some(
-        (entry) => entry.id === acceptedInitial.group.id && entry.my_role === 'owner',
+        (entry) => entry.my_role === 'owner',
       ));
+      const exportedGroupReferences = new Set(
+        accountExport.data.marketplace.bookingGroups.groups.map((entry) => entry.id),
+      );
       assert.ok(accountExport.data.marketplace.bookingGroups.stateEvents.some(
-        (entry) => entry.booking_group_id === acceptedInitial.group.id,
+        (entry) => exportedGroupReferences.has(entry.booking_group_id),
       ));
       assert.equal(
         accountExport.data.marketplace.bookingGroups.itemEvidenceRemainsInV52BookingRecords,
@@ -10643,7 +10653,7 @@ if (!databaseUrl) {
         false,
       );
       const exportedMessageThread = accountExport.data.communication.messageThreads
-        .find((entry) => entry.id === 'privacy-export-unarchived-thread');
+        .find((entry) => entry.archived_by_me === false);
       assert.ok(exportedMessageThread);
       assert.equal(exportedMessageThread.archived_by_me, false);
       assert.ok(accountExport.data.communication.messageThreads.every(
@@ -10652,18 +10662,18 @@ if (!databaseUrl) {
       ));
       assert.equal(
         accountExport.data.communication.messageThreads
-          .find((entry) => entry.id === 'thread-1')?.archived_by_me,
+          .find((entry) => entry.archived_by_me === true)?.archived_by_me,
         true,
       );
       const ownerLocationMessages = accountExport.data.communication.messages.filter(
-        (entry) => entry.id.startsWith('s3t-location-'),
+        (entry) => entry.body.includes('LOCATION_SHARE|'),
       );
       assert.match(
-        ownerLocationMessages.find((entry) => entry.id === 's3t-location-owner').body,
+        ownerLocationMessages.find((entry) => entry.sent_by_me === true).body,
         /Eigenweg 7/u,
       );
       const ownerReceivedLocation = ownerLocationMessages.find(
-        (entry) => entry.id === 's3t-location-renter',
+        (entry) => entry.sent_by_me === false,
       ).body;
       assert.match(ownerReceivedLocation, /THIRD_PARTY_EXACT_LOCATION_OMITTED/u);
       assert.doesNotMatch(ownerReceivedLocation, /Fremdweg|52\.502|13\.402|maps\.example/u);
@@ -10686,8 +10696,35 @@ if (!databaseUrl) {
       )));
       assert.ok(accountExport.data.auditEvents.some((entry) => (
         entry.action === 'account.data_exported'
-          && entry.request_id === 'b10-owner-export'
       )));
+      assert.ok(accountExport.data.authentication.sessions.every((entry) => (
+        !Object.hasOwn(entry, 'device_label')
+          && !Object.hasOwn(entry, 'user_agent')
+          && !Object.hasOwn(entry, 'ip_address')
+      )));
+      assert.ok(accountExport.data.authentication.identities.every((entry) => (
+        !Object.hasOwn(entry, 'provider_subject')
+          && !Object.hasOwn(entry, 'firebase_user_id')
+      )));
+      assert.ok(accountExport.data.trustAndSafety.moderationDecisions.every((entry) => (
+        !Object.hasOwn(entry, 'facts')
+          && !Object.hasOwn(entry, 'basis')
+          && !Object.hasOwn(entry, 'reasoning')
+          && !Object.hasOwn(entry, 'detection_method')
+      )));
+      const ownerExportAudit = await setupPool.query(
+        `SELECT metadata
+           FROM audit_log
+          WHERE actor_id = 'owner'
+            AND action = 'account.data_exported'
+            AND request_id = 'b10-owner-export'`,
+      );
+      assert.equal(ownerExportAudit.rowCount, 1);
+      assert.deepEqual(ownerExportAudit.rows[0].metadata, {
+        exportPurpose: 'access_copy',
+        schemaVersion: '2.0',
+        policyVersion: 'sit-account-export-policy-v2',
+      });
       await restartApplicationServer();
       const renterExportResponse = await fetch(`${baseUrl}/v1/account/export`, {
         method: 'POST',
@@ -10695,16 +10732,19 @@ if (!databaseUrl) {
           ...renterAHeaders,
           'X-Request-ID': 'b10-renter-export',
         },
-        body: JSON.stringify({ currentPassword: renterAPassword }),
+        body: JSON.stringify({
+          currentPassword: renterAPassword,
+          exportPurpose: 'access_copy',
+        }),
       });
       assert.equal(renterExportResponse.status, 200);
       const renterExport = await renterExportResponse.json();
       assert.equal(renterExport.accountId, 'renter-a');
       assert.ok(renterExport.data.marketplace.bookingGroups.groups.some(
-        (entry) => entry.id === acceptedInitial.group.id && entry.my_role === 'renter',
+        (entry) => entry.my_role === 'renter',
       ));
       assert.ok(
-        renterExport.data.marketplace.bookingQuotes.some((entry) => entry.id === quoted.quoteId),
+        renterExport.data.marketplace.bookingQuotes.length > 0,
       );
       assert.equal(renterExport.data.marketplace.rentalCart.reservationCreated, false);
       assert.equal(
@@ -10717,13 +10757,18 @@ if (!databaseUrl) {
       );
       const exportedFeedbackCase =
         renterExport.data.communication.support.cases.find(
-          (entry) => entry.id === feedbackIntake.supportCase.id,
+          (entry) => entry.feedback_context != null,
         );
       assert.deepEqual(exportedFeedbackCase.feedback_context, feedbackContext);
       assert.equal(exportedFeedbackCase.priority, 'p4');
+      const exportedSupportCase =
+        renterExport.data.communication.support.cases.find(
+          (entry) => entry.human_readable_case_number === supportIntake.supportCase.caseNumber,
+        );
+      assert.ok(exportedSupportCase);
       assert.equal(
         renterExport.data.communication.support.progressUpdates.filter(
-          (entry) => entry.case_id === supportIntake.supportCase.id
+          (entry) => entry.case_id === exportedSupportCase.id
             && entry.proposal_status === 'published',
         ).length,
         2,
@@ -10740,11 +10785,12 @@ if (!databaseUrl) {
           && entry.relation_type === 'duplicate_of'
           && /^[0-9a-f]{64}$/u.test(entry.snapshot_sha256),
       ));
-      assert.ok(renterExport.data.communication.support.legacyImports.some(
-        (entry) => entry.id === legacyImport.migration.importId,
-      ));
+      assert.ok(renterExport.data.communication.support.legacyImports.length > 0);
+      const submittedEvidenceReferences = new Set(
+        renterExport.data.communication.support.submittedEvidence.map((entry) => entry.id),
+      );
       assert.ok(renterExport.data.communication.support.submittedEvidenceFiles.some(
-        (entry) => entry.evidence_id === evidenceUpload.evidence.id
+        (entry) => submittedEvidenceReferences.has(entry.evidence_id)
           && entry.scan_status === 'clean'
           && entry.external_ai_used === false,
       ));
@@ -10765,19 +10811,21 @@ if (!databaseUrl) {
         6,
       );
       const renterOwnerLocation = renterExport.data.communication.messages.find(
-        (entry) => entry.id === 's3t-location-owner',
+        (entry) => entry.sent_by_me === false && entry.body.includes('LOCATION_SHARE|'),
       ).body;
       assert.match(renterOwnerLocation, /THIRD_PARTY_EXACT_LOCATION_OMITTED/u);
       assert.doesNotMatch(renterOwnerLocation, /Eigenweg|52\.501|13\.401|maps\.example/u);
       assert.match(
         renterExport.data.communication.messages.find(
-          (entry) => entry.id === 's3t-location-renter',
+          (entry) => entry.sent_by_me === true && entry.body.includes('LOCATION_SHARE|'),
         ).body,
         /Fremdweg 9/u,
       );
       assert.equal(
-        renterExport.data.marketplace.rentalCart.items[0].client_item_id,
-        'cartitem_move_1',
+        /^ref_\d{6}$/u.test(
+          renterExport.data.marketplace.rentalCart.items[0].client_item_id,
+        ),
+        true,
       );
       const serializedExport = JSON.stringify(accountExport);
       for (const forbiddenField of [
@@ -10787,6 +10835,54 @@ if (!databaseUrl) {
       ]) {
         assert.equal(serializedExport.includes(forbiddenField), false, forbiddenField);
       }
+
+      const portabilityResponse = await fetch(`${baseUrl}/v1/account/export`, {
+        method: 'POST',
+        headers: renterAHeaders,
+        body: JSON.stringify({
+          currentPassword: renterAPassword,
+          exportPurpose: 'data_portability',
+        }),
+      });
+      assert.equal(portabilityResponse.status, 200);
+      assert.match(
+        portabilityResponse.headers.get('content-disposition'),
+        /shareittoo-data-portability\.json/u,
+      );
+      const portabilityExport = await portabilityResponse.json();
+      assert.equal(portabilityExport.schemaVersion, '2.0');
+      assert.equal(portabilityExport.exportPurpose, 'data_portability');
+      assert.equal(
+        portabilityExport.policy.portabilityExcludesReceivedAndInferredRecords,
+        true,
+      );
+      assert.equal(
+        portabilityExport.data.communication.messages.every(
+          (entry) => entry.sent_by_me === true,
+        ),
+        true,
+      );
+      assert.equal(
+        portabilityExport.data.communication.messages.some(
+          (entry) => entry.body.includes('Fremdweg 9'),
+        ),
+        true,
+      );
+      assert.equal(
+        portabilityExport.data.communication.messages.some(
+          (entry) => entry.body.includes('Eigenweg 7'),
+        ),
+        false,
+      );
+      assert.equal(Object.hasOwn(portabilityExport.data, 'auditEvents'), false);
+      assert.equal(
+        Object.hasOwn(portabilityExport.data.notifications, 'history'),
+        false,
+      );
+      assert.equal(
+        Object.hasOwn(portabilityExport.data.trustAndSafety, 'moderationDecisions'),
+        false,
+      );
 
       const outsiderHeaders = { Authorization: `Bearer ${tokenFor('outsider')}` };
       const rentalResponse = await fetch(`${baseUrl}/v1/rental-requests`, { headers: outsiderHeaders });
@@ -11609,6 +11705,7 @@ if (!databaseUrl) {
         },
         body: JSON.stringify({
           currentPassword: createEphemeralAcceptancePassword(),
+          exportPurpose: 'access_copy',
         }),
       });
       assert.equal(passwordlessExportResponse.status, 409);

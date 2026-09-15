@@ -138,6 +138,10 @@ import {
 import { accountOpenRefundObligationCount } from './payment_refund_obligations.js';
 import { stripeSandboxExecutionActive } from './payment_execution_guard.js';
 import { ModerationDomainError } from './moderation_domain.js';
+import {
+  accountExportPurposes,
+  validateAccountExportPurpose,
+} from './privacy_export_policy.js';
 import { v51DisabledTransportCode } from './v51_transport_domain.js';
 import {
   createAccountLegalHold,
@@ -3043,11 +3047,20 @@ export function createApp({
 
   app.post('/v1/account/export', requireAuth, requireActiveAccount, exportLimiter, asyncRoute(async (req, res) => {
     const raw = ensureObject(req.body, 'account_export_request_invalid');
-    if (Object.keys(raw).length !== 1
+    if (Object.keys(raw).length !== 2
         || !Object.hasOwn(raw, 'currentPassword')
+        || !Object.hasOwn(raw, 'exportPurpose')
         || typeof raw.currentPassword !== 'string'
         || raw.currentPassword.length < 1) {
       throw new HttpError(400, 'account_export_request_invalid');
+    }
+    let exportPurpose;
+    try {
+      exportPurpose = validateAccountExportPurpose(raw.exportPurpose);
+    } catch {
+      throw new HttpError(400, 'account_export_purpose_invalid', {
+        allowedPurposes: accountExportPurposes,
+      });
     }
     const account = await pool.query(
       'SELECT password_hash FROM users WHERE id = $1',
@@ -3067,19 +3080,31 @@ export function createApp({
         resourceType: 'user',
         resourceId: req.auth.userId,
         requestId: req.requestId,
+        metadata: {
+          exportPurpose,
+          schemaVersion: '2.0',
+          policyVersion: 'sit-account-export-policy-v2',
+        },
       });
-      const data = await buildAccountExport(client, req.auth.userId);
-      if (!data) throw new HttpError(404, 'user_not_found');
+      const exportResult = await buildAccountExport(client, req.auth.userId, {
+        purpose: exportPurpose,
+      });
+      if (!exportResult) throw new HttpError(404, 'user_not_found');
       return {
-        schemaVersion: '1.0',
+        schemaVersion: '2.0',
+        exportPurpose,
         generatedAt: new Date().toISOString(),
         accountId: req.auth.userId,
-        data,
+        policy: exportResult.policy,
+        data: exportResult.data,
       };
     });
+    const filename = exportPurpose === 'data_portability'
+      ? 'shareittoo-data-portability.json'
+      : 'shareittoo-access-copy.json';
     res.set({
       'Cache-Control': 'private, no-store',
-      'Content-Disposition': 'attachment; filename="shareittoo-data-export.json"',
+      'Content-Disposition': `attachment; filename="${filename}"`,
       'X-Content-Type-Options': 'nosniff',
     }).json(document);
   }));

@@ -256,11 +256,15 @@ async function main() {
     assert.equal(deniedOrigin.value.requestId, `${runId}-cors-denied`);
 
     const accountExport = await api('/account/export', {
+      method: 'POST',
       token: users.owner.token,
       headers: { 'X-Request-ID': `${runId}-export` },
+      body: { currentPassword: password, exportPurpose: 'access_copy' },
     });
     assert.match(accountExport.response.headers.get('cache-control') ?? '', /no-store/u);
-    assert.match(accountExport.response.headers.get('content-disposition') ?? '', /shareittoo-data-export\.json/u);
+    assert.match(accountExport.response.headers.get('content-disposition') ?? '', /shareittoo-access-copy\.json/u);
+    assert.equal(accountExport.value.schemaVersion, '2.0');
+    assert.equal(accountExport.value.exportPurpose, 'access_copy');
     assert.equal(accountExport.value.accountId, users.owner.id);
     assert.equal(accountExport.value.data.account.email, users.owner.email);
     const serializedExport = JSON.stringify(accountExport.value);

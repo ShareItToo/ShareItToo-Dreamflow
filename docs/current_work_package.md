@@ -1,4 +1,28 @@
-# Current Work Package: WP153 Position Review and Unrelated Release Parity — TECHNICAL CLOSURE; FULL LOCAL REGRESSION PASSED; EXTERNAL GATES HOLD
+# Current Work Package: WP154 Account Export Scope and Counterparty Protection — TECHNICAL CLOSURE; FULL LOCAL REGRESSION PASSED; EXTERNAL GATES HOLD
+
+WP154 separates the authenticated access copy from the narrower data-portability
+projection. The exact purpose is part of the request, audit, schema and private
+filename. The root account ID is retained only for client principal binding;
+structured payload identifiers become document-local references.
+
+Known credentials, device/network/provider identifiers, internal
+request/payment/configuration hashes and internal security/moderation fields
+are withheld and checked by a fail-closed runtime postcondition. Received
+structured exact locations are redacted. Portability includes only
+own/provided/observed records and excludes received/inferred records and quote
+positions that do not belong to the principal's own quote.
+
+The Flutter flow keeps the captured principal and session epoch through remote
+and local assembly, sharing and result UI. Focused Backend passes **5/5**,
+wiring **4/4**, combined Flutter interaction **28/28**, Backend reports
+**1002 tests, 1000 passed and 2 intentional skips**, and fresh PostgreSQL passes
+**2/2 with cleanup**. The complete CI-equivalent Mac-mini regression exits 0:
+Tool tests **3041/3041**, Flutter **954 passed plus 33 intentional skips**,
+analyzer **0 findings**, Web/Wasm, loopback and Android debug build passed.
+Commit/push and exact-head GitHub Regression/CodeQL remain pending. No external
+state changed.
+
+# Previous Work Package: WP153 Position Review and Unrelated Release Parity — TECHNICAL CLOSURE; FULL LOCAL REGRESSION PASSED; EXTERNAL GATES HOLD
 
 WP153 binds payout review truth to the exact position's append-only V5.2 return
 case and current case status. Mutable request JSON cannot set the held amount.

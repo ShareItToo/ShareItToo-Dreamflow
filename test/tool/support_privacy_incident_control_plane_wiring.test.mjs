@@ -55,10 +55,11 @@ test('SUP-129 deadline alarm is internal, idempotent and visible only behind adm
 
 test('SUP-130 export is password re-authenticated and accepts no target account selector', () => {
   assert.match(app, /app\.post\('\/v1\/account\/export'/u);
-  assert.match(app, /Object\.keys\(raw\)\.length !== 1/u);
+  assert.match(app, /Object\.keys\(raw\)\.length !== 2/u);
+  assert.match(app, /Object\.hasOwn\(raw, 'exportPurpose'\)/u);
   assert.match(app, /verifyPassword\(raw\.currentPassword/u);
   assert.match(repository, /method: 'POST'/u);
-  assert.match(repository, /body: \{'currentPassword': currentPassword\}/u);
+  assert.match(repository, /'currentPassword': currentPassword,\s*'exportPurpose': exportPurpose,/u);
   assert.match(screen, /privacy-data-export-password/u);
   assert.match(screen, /obscureText: true/u);
 });

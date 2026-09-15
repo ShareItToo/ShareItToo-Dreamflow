@@ -1,4 +1,5 @@
 import { trustedRefundProviderModel } from './payment_domain.js';
+import { applyAccountExportPolicy } from './privacy_export_policy.js';
 
 function rows(client, sql, userId, parameters = []) {
   return async () => {
@@ -35,7 +36,7 @@ export function minimizeThirdPartyStructuredLocations(messages) {
   return Object.freeze({ messages: minimized, omittedCount });
 }
 
-export async function buildAccountExport(client, userId) {
+export async function buildAccountExport(client, userId, { purpose = 'access_copy' } = {}) {
   const accountResult = await client.query(
     `SELECT id, email, profile, role, account_status, phone_e164,
             email_verified_at, phone_verified_at, terms_accepted_at,
@@ -1111,7 +1112,7 @@ export async function buildAccountExport(client, userId) {
 
   const privacySafeMessages = minimizeThirdPartyStructuredLocations(messages);
 
-  return {
+  const raw = {
     account,
     authentication: { sessions, identities, pushDevices },
     marketplace: {
@@ -1234,4 +1235,5 @@ export async function buildAccountExport(client, userId) {
     },
     auditEvents,
   };
+  return applyAccountExportPolicy(raw, purpose);
 }

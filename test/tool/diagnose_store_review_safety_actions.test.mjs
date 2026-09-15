@@ -53,11 +53,13 @@ function successfulFetch(calls) {
     if (path === '/auth/login') return response(200, { accessToken: `${login++ ? 'renter' : 'owner'}-${'t'.repeat(40)}` });
     if (path === '/auth/me') return response(200, { user: { id: options.headers.Authorization.includes('owner') ? 'owner-id' : 'renter-id' } });
     if (path === '/account/export') return response(200, {
-      schemaVersion: '1.0', accountId: 'renter-id', data: {
-        account: { id: 'renter-id' }, authentication: {}, marketplace: {}, communication: {},
+      schemaVersion: '2.0', exportPurpose: 'access_copy', accountId: 'renter-id',
+      policy: { purpose: 'access_copy', rawInternalIdentifiersIncluded: false },
+      data: {
+        account: { id: 'ref_000001' }, authentication: {}, marketplace: {}, communication: {},
         notifications: {}, trustAndSafety: {}, financialActivity: {}, auditEvents: [],
       },
-    }, { 'cache-control': 'private, no-store', 'content-disposition': 'attachment; filename="shareittoo-data-export.json"' });
+    }, { 'cache-control': 'private, no-store', 'content-disposition': 'attachment; filename="shareittoo-access-copy.json"' });
     if (path === '/reports' && method === 'POST') return response(201, { report: { id: 'report-safe', targetType: 'listing', targetId: 'listing-safe', status: 'open' } });
     if (path === '/reports/mine') return response(200, { reports: [{ id: 'report-safe' }] });
     if (path === '/user-blocks/owner-id' && ['PUT', 'DELETE'].includes(method)) return response(204, null);
@@ -89,7 +91,10 @@ test('passes report, temporary block cleanup and private export without leaking 
   assert.ok(calls.some((entry) => entry.path === '/message-threads/thread-safe' && entry.method === 'PATCH'));
   const exportCall = calls.find((entry) => entry.path === '/account/export');
   assert.equal(exportCall.method, 'POST');
-  assert.deepEqual(exportCall.body, { currentPassword: `renter-${'y'.repeat(24)}` });
+  assert.deepEqual(exportCall.body, {
+    currentPassword: `renter-${'y'.repeat(24)}`,
+    exportPurpose: 'access_copy',
+  });
 });
 
 test('runs safety actions on a non-binding simulation without claiming a contract', async () => {
@@ -112,7 +117,7 @@ test('rejects an incomplete or cacheable account export before moderation mutati
       vaultFile: fixture(),
       fetchImpl: async (url, options) => {
         if (new URL(url).pathname.endsWith('/account/export')) {
-          return response(200, { schemaVersion: '1.0' }, { 'cache-control': 'public' });
+          return response(200, { schemaVersion: '2.0' }, { 'cache-control': 'public' });
         }
         return fetchImpl(url, options);
       },

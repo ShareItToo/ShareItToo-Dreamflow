@@ -67,17 +67,23 @@ test('privacy export accepts only ready or exact non-binding active two-role sta
 
 function payload(overrides = {}) {
   return Buffer.from(JSON.stringify({
-    schemaVersion: '1.0',
+    schemaVersion: '2.0',
+    exportPurpose: 'access_copy',
     accountId: 'owner-id',
     generatedAt: '2026-09-06T18:00:00.000Z',
-    data: { profile: { email: 'owner@example.invalid' } },
+    policy: {
+      purpose: 'access_copy',
+      rawInternalIdentifiersIncluded: false,
+      authenticationSecretsIncluded: false,
+    },
+    data: { profile: { email: 'owner@example.invalid', id: 'ref_000001' } },
     localDevice: {
-      accountProfile: { accountId: 'owner-id' },
-      savedItems: { accountId: 'owner-id' },
-      ownedListings: { accountId: 'owner-id' },
-      reviews: { accountId: 'owner-id' },
-      operationalRecords: { accountId: 'owner-id' },
-      safetyPrivacy: { accountId: 'owner-id' },
+      accountProfile: { accountId: 'local_ref_000001' },
+      savedItems: { accountId: 'local_ref_000001' },
+      ownedListings: { accountId: 'local_ref_000001' },
+      reviews: { accountId: 'local_ref_000001' },
+      operationalRecords: { accountId: 'local_ref_000001' },
+      safetyPrivacy: { accountId: 'local_ref_000001' },
     },
     ...overrides,
   }));
@@ -158,7 +164,10 @@ test('temporary Android sink has no network or external-storage capability', () 
 
 test('share-surface cleanup is bound only to the exact WP33 export', () => {
   assert.equal(privacyExportChooserOwned(
-    `<hierarchy>${androidNode({ text: 'shareittoo-data-export.json' })}</hierarchy>`,
+    `<hierarchy>${androidNode({ text: 'shareittoo-access-copy.json' })}</hierarchy>`,
+  ), true);
+  assert.equal(privacyExportChooserOwned(
+    `<hierarchy>${androidNode({ text: 'shareittoo-data-portability.json' })}</hierarchy>`,
   ), true);
   assert.equal(privacyExportChooserOwned(
     `<hierarchy>${androidNode({ text: 'unrelated-private-document.pdf' })}</hierarchy>`,
@@ -229,13 +238,32 @@ test('accepts an exact owner-bound export with all six local sections', () => {
   assert.equal(result.exactOwnerBound, true);
   assert.equal(result.foreignEmailAbsent, true);
   assert.equal(result.foreignOpaqueIdentifierOutsideSharedRecordsAbsent, true);
-  assert.deepEqual(result.sharedCounterpartySections, []);
   assert.deepEqual(result.localSections, [
     'accountProfile',
     'operationalRecords',
     'ownedListings',
     'reviews',
     'safetyPrivacy',
+    'savedItems',
+  ]);
+});
+
+test('accepts the exact reduced local section set for portability', () => {
+  const raw = JSON.parse(payload().toString('utf8'));
+  raw.exportPurpose = 'data_portability';
+  raw.policy.purpose = 'data_portability';
+  raw.localDevice = {
+    accountProfile: raw.localDevice.accountProfile,
+    savedItems: raw.localDevice.savedItems,
+    ownedListings: raw.localDevice.ownedListings,
+  };
+  const result = validatePrivacyExportPayload({
+    bytes: Buffer.from(JSON.stringify(raw)),
+    ...identities,
+  });
+  assert.deepEqual(result.localSections, [
+    'accountProfile',
+    'ownedListings',
     'savedItems',
   ]);
 });
@@ -274,22 +302,15 @@ test('rejects a foreign root principal or account email anywhere', () => {
   );
 });
 
-test('allows opaque counterpart references only in shared local record sections', () => {
-  const shared = JSON.parse(payload().toString('utf8'));
-  shared.localDevice.operationalRecords.thread = { participantId: 'renter-id' };
-  shared.localDevice.reviews.received = [{ reviewerId: 'renter-id' }];
-  shared.localDevice.safetyPrivacy.blockedUserIds = ['renter-id'];
-  const result = validatePrivacyExportPayload({
-    bytes: Buffer.from(JSON.stringify(shared)),
-    ...identities,
-  });
-  assert.deepEqual(result.sharedCounterpartySections, [
+test('rejects raw principal identifiers from every local section', () => {
+  for (const section of [
+    'accountProfile',
+    'ownedListings',
+    'savedItems',
     'operationalRecords',
     'reviews',
     'safetyPrivacy',
-  ]);
-
-  for (const section of ['accountProfile', 'ownedListings', 'savedItems']) {
+  ]) {
     const unsafe = JSON.parse(payload().toString('utf8'));
     unsafe.localDevice[section].foreignUserId = 'renter-id';
     assert.throws(
@@ -297,7 +318,7 @@ test('allows opaque counterpart references only in shared local record sections'
         bytes: Buffer.from(JSON.stringify(unsafe)),
         ...identities,
       }),
-      /principal-private local export section/u,
+      /raw principal identifier/u,
     );
   }
 });
@@ -308,13 +329,13 @@ test('rejects missing sections, cross-owner local sections and credential keys',
       bytes: payload({ localDevice: { accountProfile: { accountId: 'owner-id' } } }),
       ...identities,
     }),
-    /exact six local sections/u,
+    /exact purpose-bound local sections/u,
   );
   const wrongSection = JSON.parse(payload().toString('utf8'));
-  wrongSection.localDevice.reviews.accountId = 'renter-id';
+  wrongSection.localDevice.reviews.accountId = 'owner-id';
   assert.throws(
     () => validatePrivacyExportPayload({ bytes: Buffer.from(JSON.stringify(wrongSection)), ...identities }),
-    /belongs to another principal/u,
+    /raw principal identifier/u,
   );
   assert.throws(
     () => validatePrivacyExportPayload({

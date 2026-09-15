@@ -66,6 +66,32 @@ void main() {
     expect((value['localDevice'] as Map).keys,
         PrivacyExportSection.values.map((s) => s.name));
     expect(value['accountId'], _ownerA.userId);
+    expect(value['exportPurpose'], 'access_copy');
+    expect(
+      (value['localDevice'] as Map)['accountProfile']['accountId'],
+      startsWith('local_ref_'),
+    );
+  });
+
+  test('portability exports only own portable local sections', () async {
+    final service = _ExportService();
+    final value = await service.prepare(
+      owner: _ownerA,
+      currentPassword: _syntheticAccountProof,
+      purpose: PrivacyExportPurpose.dataPortability,
+    );
+    expect(service.remotePurposes, [PrivacyExportPurpose.dataPortability]);
+    expect(service.localReads, [
+      PrivacyExportSection.accountProfile,
+      PrivacyExportSection.savedItems,
+      PrivacyExportSection.ownedListings,
+    ]);
+    expect((value['localDevice'] as Map).keys, [
+      'accountProfile',
+      'savedItems',
+      'ownedListings',
+    ]);
+    expect(value['exportPurpose'], 'data_portability');
   });
 
   test('stale owner cannot start any remote or local export', () async {
@@ -216,6 +242,37 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('UI purpose selection reaches the remote and local projections',
+      (tester) async {
+    final service = _ExportService();
+    final payloads = <Map<String, dynamic>>[];
+    await tester.pumpWidget(MaterialApp(
+        home: PrivacyInfoScreen(
+      exportService: service,
+      shareExport: (bytes) async {
+        payloads.add(jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>);
+        return const ShareResult('test', ShareResultStatus.success);
+      },
+    )));
+    await _openExport(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('privacy-data-export-purpose')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Datenportabilität').last);
+    await tester.pumpAndSettle();
+    await _confirmExport(tester);
+    await tester.pumpAndSettle();
+    expect(service.remotePurposes, [PrivacyExportPurpose.dataPortability]);
+    expect(payloads.single['exportPurpose'], 'data_portability');
+    expect((payloads.single['localDevice'] as Map).keys, [
+      'accountProfile',
+      'savedItems',
+      'ownedListings',
+    ]);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('already handed-off share has no stale success after A to B',
       (tester) async {
     final service = _ExportService();
@@ -249,10 +306,16 @@ const _ownerA = AuthSessionOwner(
     createdAt: null,
     epoch: 0);
 
-Map<String, dynamic> _remote({String accountId = 'export-account-a'}) => {
-      'schemaVersion': '1.0',
+Map<String, dynamic> _remote({
+  String accountId = 'export-account-a',
+  PrivacyExportPurpose purpose = PrivacyExportPurpose.accessCopy,
+}) =>
+    {
+      'schemaVersion': '2.0',
+      'exportPurpose': purpose.wireValue,
       'generatedAt': '2026-09-04T00:00:00Z',
       'accountId': accountId,
+      'policy': <String, dynamic>{'purpose': purpose.wireValue},
       'data': <String, dynamic>{'fixture': true},
     };
 
@@ -262,6 +325,7 @@ class _ExportService extends PrivacyExportService {
   final remoteStarted = Completer<void>();
   AuthSessionOwner activeOwner = _ownerA;
   int remoteCalls = 0;
+  final remotePurposes = <PrivacyExportPurpose>[];
   final localReads = <PrivacyExportSection>[];
   void Function(PrivacyExportSection)? afterLocal;
 
@@ -285,11 +349,17 @@ class _ExportService extends PrivacyExportService {
       identical(owner, activeOwner);
   @override
   Future<Map<String, dynamic>> readRemote(
-      AuthSessionOwner owner, String currentPassword) async {
+    AuthSessionOwner owner,
+    String currentPassword,
+    PrivacyExportPurpose purpose,
+  ) async {
     expect(identical(owner, activeOwner), isTrue);
     remoteCalls++;
+    remotePurposes.add(purpose);
     if (!remoteStarted.isCompleted) remoteStarted.complete();
-    return remote == null ? response ?? _remote() : remote!.future;
+    return remote == null
+        ? response ?? _remote(purpose: purpose)
+        : remote!.future;
   }
 
   @override

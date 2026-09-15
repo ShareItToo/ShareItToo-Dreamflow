@@ -24,6 +24,7 @@ const sourcePaths = [
   'backend/src/account_actions.js',
   'backend/src/auth_session_actions.js',
   'backend/src/privacy_export.js',
+  'backend/src/privacy_export_policy.js',
   'backend/src/observability.js',
   'backend/src/server.js',
   'backend/src/credential_cleanup.js',
@@ -532,6 +533,23 @@ function assertSourceContracts({ root, sourceTexts }) {
     'progressUpdates: supportProgressUpdates',
   ]) {
     if (!exportSource.includes(marker)) fail(`Backend privacy export is missing ${marker}.`);
+  }
+  const exportPolicy = sourceText(
+    root,
+    sourceTexts,
+    'backend/src/privacy_export_policy.js',
+  );
+  for (const marker of [
+    "'access_copy'",
+    "'data_portability'",
+    'assertSanitized(data, references)',
+    'rawInternalIdentifiersIncluded: false',
+    'authenticationSecretsIncluded: false',
+    'portabilityExcludesReceivedAndInferredRecords',
+  ]) {
+    if (!exportPolicy.includes(marker)) {
+      fail(`Backend privacy export policy is missing ${marker}.`);
+    }
   }
   const breakGlassMigration = sourceText(
     root,

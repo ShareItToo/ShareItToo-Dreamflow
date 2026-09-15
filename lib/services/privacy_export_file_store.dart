@@ -6,6 +6,13 @@ import 'privacy_export_file_platform_stub.dart'
     if (dart.library.io) 'privacy_export_file_platform_io.dart';
 
 const privacyExportFilename = 'shareittoo-data-export.json';
+const privacyAccessCopyFilename = 'shareittoo-access-copy.json';
+const privacyDataPortabilityFilename = 'shareittoo-data-portability.json';
+const privacyExportFilenames = <String>{
+  privacyExportFilename,
+  privacyAccessCopyFilename,
+  privacyDataPortabilityFilename,
+};
 
 class PreparedPrivacyExportFile {
   final XFile file;
@@ -29,18 +36,24 @@ class PrivacyExportFileStore {
 
   const PrivacyExportFileStore({this.temporaryDirectoryPath});
 
-  Future<PreparedPrivacyExportFile> prepare(Uint8List bytes) async {
+  Future<PreparedPrivacyExportFile> prepare(
+    Uint8List bytes, {
+    String filename = privacyAccessCopyFilename,
+  }) async {
+    if (!privacyExportFilenames.contains(filename)) {
+      throw ArgumentError.value(filename, 'filename');
+    }
     await purgeRetainedCopies();
     final path = await createPrivacyExportShareFile(
       bytes,
-      privacyExportFilename,
+      filename,
       temporaryDirectoryPath: temporaryDirectoryPath,
     );
     return PreparedPrivacyExportFile._(
       path == null
           ? XFile.fromData(
               bytes,
-              name: privacyExportFilename,
+              name: filename,
               mimeType: 'application/json',
             )
           : XFile(path, mimeType: 'application/json'),

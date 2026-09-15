@@ -56,6 +56,10 @@ const sinkApplicationId = 'com.shareittoo.dev.privacyexportsink';
 const sinkActivity = `${sinkApplicationId}/.ExportReceiverActivity`;
 const sinkLabel = 'SIT Export Test';
 const exportFileName = 'shareittoo-data-export.json';
+const visibleExportFileNames = Object.freeze([
+  'shareittoo-access-copy.json',
+  'shareittoo-data-portability.json',
+]);
 const expectedLocalSections = Object.freeze([
   'accountProfile',
   'operationalRecords',
@@ -64,12 +68,8 @@ const expectedLocalSections = Object.freeze([
   'safetyPrivacy',
   'savedItems',
 ]);
-const sharedCounterpartyLocalSections = Object.freeze([
-  'operationalRecords',
-  'reviews',
-  'safetyPrivacy',
-]);
 const forbiddenKeyPattern = /(?:password|passcode|credential|access.?token|refresh.?token|session.?token|cookie|private.?key|api.?key|authorization)/iu;
+const forbiddenInternalKeyPattern = /^(?:device_label|user_agent|ip_address|provider_subject|firebase_user_id|session_id|idempotency_key|request_hash|response_payload|payment_configuration_key|compatibility_hash|membership_hash|private_pilot_region_code|moderation_status|moderation_reason_code|payload_sha256|facts|basis|reasoning|detection_method|automated_means|reporter_reference|access_level|retention_category|legal_hold_flag|review_result|limitations|scan_engine|quarantine_reason_code|last_error_category|last_error_code|request_id)$/u;
 const allowedSecurityMetadataPath = 'data.account.password_changed_at';
 
 function fail(message) {
@@ -179,8 +179,12 @@ export function validatePrivacyExportPayload({
     fail('The received privacy export is not valid JSON.');
   }
   if (value === null || Array.isArray(value) || typeof value !== 'object'
-      || value.schemaVersion !== '1.0'
+      || value.schemaVersion !== '2.0'
+      || !['access_copy', 'data_portability'].includes(value.exportPurpose)
       || value.accountId !== ownerUserId
+      || value.policy?.purpose !== value.exportPurpose
+      || value.policy?.rawInternalIdentifiersIncluded !== false
+      || value.policy?.authenticationSecretsIncluded !== false
       || typeof value.generatedAt !== 'string'
       || !Number.isFinite(Date.parse(value.generatedAt))
       || value.data === null || Array.isArray(value.data) || typeof value.data !== 'object'
@@ -189,15 +193,15 @@ export function validatePrivacyExportPayload({
     fail('The privacy export root contract or exact owner binding is invalid.');
   }
   const sections = Object.keys(value.localDevice).toSorted();
-  if (!sameJson(sections, expectedLocalSections)) {
-    fail('The privacy export does not contain the exact six local sections.');
+  const expectedSections = value.exportPurpose === 'access_copy'
+    ? expectedLocalSections
+    : ['accountProfile', 'ownedListings', 'savedItems'];
+  if (!sameJson(sections, expectedSections)) {
+    fail('The privacy export does not contain the exact purpose-bound local sections.');
   }
   for (const [name, section] of Object.entries(value.localDevice)) {
     if (section === null || Array.isArray(section) || typeof section !== 'object') {
       fail(`The ${name} privacy export section is invalid.`);
-    }
-    if (Object.hasOwn(section, 'accountId') && section.accountId !== ownerUserId) {
-      fail(`The ${name} privacy export section belongs to another principal.`);
     }
   }
   const serialized = bytes.toString('utf8');
@@ -210,13 +214,14 @@ export function validatePrivacyExportPayload({
   if (identityAppears(JSON.stringify(value.data), foreignUserId)) {
     fail('The remote privacy export contains a foreign opaque principal identifier.');
   }
-  const sharedCounterpartySections = [];
+  if (identityAppears(JSON.stringify(value.data), ownerUserId)) {
+    fail('The remote privacy export contains the raw owner principal identifier.');
+  }
   for (const [name, section] of Object.entries(value.localDevice)) {
-    if (!identityAppears(JSON.stringify(section), foreignUserId)) continue;
-    if (!sharedCounterpartyLocalSections.includes(name)) {
-      fail('A principal-private local export section contains a foreign opaque identifier.');
+    if (identityAppears(JSON.stringify(section), foreignUserId)
+        || identityAppears(JSON.stringify(section), ownerUserId)) {
+      fail(`The ${name} local export section contains a raw principal identifier.`);
     }
-    sharedCounterpartySections.push(name);
   }
   const forbiddenFields = recursiveFields(value).filter((field) => (
     forbiddenKeyPattern.test(field.key)
@@ -225,15 +230,20 @@ export function validatePrivacyExportPayload({
   if (forbiddenFields.length > 0) {
     fail('The privacy export contains a credential- or session-shaped key.');
   }
+  const forbiddenInternalFields = recursiveFields(value)
+    .filter((field) => forbiddenInternalKeyPattern.test(field.key));
+  if (forbiddenInternalFields.length > 0) {
+    fail('The privacy export contains an internal security or provider field.');
+  }
   return Object.freeze({
     schemaVersion: value.schemaVersion,
     exactOwnerBound: true,
     ownerIdentityPresent: true,
     foreignEmailAbsent: true,
     foreignOpaqueIdentifierOutsideSharedRecordsAbsent: true,
-    sharedCounterpartySections: sharedCounterpartySections.toSorted(),
     localSections: sections,
     forbiddenCredentialKeyCount: 0,
+    forbiddenInternalKeyCount: 0,
     bytes: bytes.length,
     sha256: sha256(bytes),
   });
@@ -759,7 +769,9 @@ function foregroundPackage(commandRunner, adbPath, device) {
 }
 
 export function privacyExportChooserOwned(hierarchy) {
-  return currentHeadAndroidNamedNodes(hierarchy, exportFileName).length > 0;
+  return visibleExportFileNames.some(
+    (filename) => currentHeadAndroidNamedNodes(hierarchy, filename).length > 0,
+  );
 }
 
 async function dismissOwnedPrivacyExportChooser({
@@ -1017,9 +1029,9 @@ export async function runAndroidPrivacyExportPayload({
         foreignEmailAbsent: payload.foreignEmailAbsent,
         foreignOpaqueIdentifierOutsideSharedRecordsAbsent:
           payload.foreignOpaqueIdentifierOutsideSharedRecordsAbsent,
-        sharedCounterpartySections: payload.sharedCounterpartySections,
         localSections: payload.localSections,
         forbiddenCredentialKeyCount: payload.forbiddenCredentialKeyCount,
+        forbiddenInternalKeyCount: payload.forbiddenInternalKeyCount,
         exportBytes: payload.bytes,
         exportSha256: payload.sha256,
       },

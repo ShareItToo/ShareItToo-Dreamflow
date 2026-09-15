@@ -17,7 +17,7 @@ const ioStore = readFileSync(
 );
 
 test('privacy export uses a controlled source instead of XFile.fromData on IO', () => {
-  assert.match(screen, /exportFileStore\.prepare\(bytes\)/u);
+  assert.match(screen, /exportFileStore\.prepare\(\s*bytes,\s*filename: purpose\.filename,/u);
   assert.match(screen, /prepared\.removeControlledSource\(\)/u);
   assert.doesNotMatch(screen, /XFile\.fromData/u);
   assert.match(ioStore, /sit_privacy_export_/u);
@@ -34,6 +34,8 @@ test('cache cleanup targets only exact privacy export paths', () => {
   assert.match(ioStore, /sit_privacy_export_/u);
   assert.match(ioStore, /share_plus/u);
   assert.match(ioStore, /shareittoo-data-export\.json/u);
+  assert.match(ioStore, /shareittoo-access-copy\.json/u);
+  assert.match(ioStore, /shareittoo-data-portability\.json/u);
   assert.match(ioStore, /entries\.length == 1/u);
   assert.doesNotMatch(ioStore, /root\.delete\(recursive: true\)/u);
 });

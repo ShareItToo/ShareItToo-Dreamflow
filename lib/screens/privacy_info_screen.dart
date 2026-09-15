@@ -27,6 +27,16 @@ class PrivacyInfoScreen extends StatefulWidget {
   State<PrivacyInfoScreen> createState() => _PrivacyInfoScreenState();
 }
 
+class _PrivacyExportAuthorization {
+  final String currentPassword;
+  final PrivacyExportPurpose purpose;
+
+  const _PrivacyExportAuthorization({
+    required this.currentPassword,
+    required this.purpose,
+  });
+}
+
 class _PrivacyInfoScreenState extends State<PrivacyInfoScreen> {
   bool _exporting = false;
   bool _preparing = false;
@@ -34,7 +44,7 @@ class _PrivacyInfoScreenState extends State<PrivacyInfoScreen> {
   int _revision = 0;
   AuthSessionOwner? _owner;
   StreamSubscription<String>? _subscription;
-  TrackedDialogRouteHandle<String>? _passwordDialog;
+  TrackedDialogRouteHandle<_PrivacyExportAuthorization>? _passwordDialog;
   TrackedDialogRouteHandle<void>? _outcomeDialog;
 
   @override
@@ -103,59 +113,87 @@ class _PrivacyInfoScreenState extends State<PrivacyInfoScreen> {
     }
   }
 
-  Future<String?> _requestCurrentPassword() async {
+  Future<_PrivacyExportAuthorization?> _requestCurrentPassword() async {
     final passwordController = TextEditingController();
-    final handle = TrackedDialogRouteHandle<String>();
+    var purpose = PrivacyExportPurpose.accessCopy;
+    final handle = TrackedDialogRouteHandle<_PrivacyExportAuthorization>();
     _passwordDialog = handle;
     try {
-      return await showTrackedDialog<String>(
+      return await showTrackedDialog<_PrivacyExportAuthorization>(
         context: context,
         handle: handle,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Datenexport bestätigen'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Gib aus Sicherheitsgründen dein aktuelles Passwort ein. Der Export wird ausschließlich für dein angemeldetes Konto erstellt.',
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                key: const ValueKey('privacy-data-export-password'),
-                controller: passwordController,
-                obscureText: true,
-                autofocus: true,
-                enableSuggestions: false,
-                autocorrect: false,
-                decoration: const InputDecoration(
-                  labelText: 'Aktuelles Passwort',
-                  prefixIcon: Icon(Icons.lock_outline),
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Datenexport bestätigen'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Wähle den Zweck und bestätige ihn mit deinem aktuellen Passwort. Der Export wird ausschließlich für dein angemeldetes Konto erstellt.',
                 ),
-                onSubmitted: (value) {
-                  if (value.isNotEmpty) {
-                    handle.dismiss(value);
+                const SizedBox(height: 14),
+                DropdownButtonFormField<PrivacyExportPurpose>(
+                  key: const ValueKey('privacy-data-export-purpose'),
+                  initialValue: purpose,
+                  decoration: const InputDecoration(labelText: 'Exportzweck'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: PrivacyExportPurpose.accessCopy,
+                      child: Text('Datenauskunft / Kopie'),
+                    ),
+                    DropdownMenuItem(
+                      value: PrivacyExportPurpose.dataPortability,
+                      child: Text('Datenportabilität'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setDialogState(() => purpose = value);
+                  },
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  key: const ValueKey('privacy-data-export-password'),
+                  controller: passwordController,
+                  obscureText: true,
+                  autofocus: true,
+                  enableSuggestions: false,
+                  autocorrect: false,
+                  decoration: const InputDecoration(
+                    labelText: 'Aktuelles Passwort',
+                    prefixIcon: Icon(Icons.lock_outline),
+                  ),
+                  onSubmitted: (value) {
+                    if (value.isNotEmpty) {
+                      handle.dismiss(_PrivacyExportAuthorization(
+                        currentPassword: value,
+                        purpose: purpose,
+                      ));
+                    }
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: handle.dismiss,
+                child: const Text('Abbrechen'),
+              ),
+              FilledButton(
+                key: const ValueKey('privacy-data-export-confirm'),
+                onPressed: () {
+                  final password = passwordController.text;
+                  if (password.isNotEmpty) {
+                    handle.dismiss(_PrivacyExportAuthorization(
+                      currentPassword: password,
+                      purpose: purpose,
+                    ));
                   }
                 },
+                child: const Text('Export erstellen'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: handle.dismiss,
-              child: const Text('Abbrechen'),
-            ),
-            FilledButton(
-              key: const ValueKey('privacy-data-export-confirm'),
-              onPressed: () {
-                final password = passwordController.text;
-                if (password.isNotEmpty) {
-                  handle.dismiss(password);
-                }
-              },
-              child: const Text('Export erstellen'),
-            ),
-          ],
         ),
       );
     } finally {
@@ -171,12 +209,13 @@ class _PrivacyInfoScreenState extends State<PrivacyInfoScreen> {
     setState(() => _exporting = true);
     try {
       if (!await _current(owner, revision)) return;
-      final currentPassword = await _requestCurrentPassword();
-      if (currentPassword == null || !await _current(owner, revision)) return;
+      final authorization = await _requestCurrentPassword();
+      if (authorization == null || !await _current(owner, revision)) return;
       setState(() => _preparing = true);
       final export = await widget.exportService.prepare(
         owner: owner,
-        currentPassword: currentPassword,
+        currentPassword: authorization.currentPassword,
+        purpose: authorization.purpose,
       );
       final bytes = Uint8List.fromList(
         utf8.encode(const JsonEncoder.withIndent('  ').convert(export)),
@@ -184,7 +223,9 @@ class _PrivacyInfoScreenState extends State<PrivacyInfoScreen> {
       if (!await _current(owner, revision)) return;
       // Once handed to the OS, an existing share cannot be revoked by popping
       // a Flutter route. Never hand off stale bytes or show its result under B.
-      final result = await (widget.shareExport ?? _shareExport)(bytes);
+      final result = await (widget.shareExport != null
+          ? widget.shareExport!(bytes)
+          : _shareControlledExport(bytes, authorization.purpose));
       if (!await _current(owner, revision)) return;
       setState(() => _preparing = false);
       await _showOutcome(
@@ -217,16 +258,18 @@ class _PrivacyInfoScreenState extends State<PrivacyInfoScreen> {
     }
   }
 
-  Future<ShareResult> _shareExport(Uint8List bytes) {
-    return _shareControlledExport(bytes);
-  }
-
-  Future<ShareResult> _shareControlledExport(Uint8List bytes) async {
-    final prepared = await widget.exportFileStore.prepare(bytes);
+  Future<ShareResult> _shareControlledExport(
+    Uint8List bytes,
+    PrivacyExportPurpose purpose,
+  ) async {
+    final prepared = await widget.exportFileStore.prepare(
+      bytes,
+      filename: purpose.filename,
+    );
     try {
       return await SharePlus.instance.share(ShareParams(
         files: [prepared.file],
-        fileNameOverrides: const [privacyExportFilename],
+        fileNameOverrides: [purpose.filename],
         subject: 'Dein ShareItToo-Datenexport',
         downloadFallbackEnabled: true,
       ));

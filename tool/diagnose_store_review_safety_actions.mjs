@@ -92,10 +92,13 @@ function assertPrivateExport(result, expectedAccountId) {
   const data = document?.data;
   if (!/\bprivate\b/i.test(cacheControl)
       || !/\bno-store\b/i.test(cacheControl)
-      || !/attachment;\s*filename="shareittoo-data-export\.json"/i.test(disposition)
-      || document?.schemaVersion !== '1.0'
+      || !/attachment;\s*filename="shareittoo-access-copy\.json"/i.test(disposition)
+      || document?.schemaVersion !== '2.0'
+      || document?.exportPurpose !== 'access_copy'
       || document?.accountId !== expectedAccountId
-      || data?.account?.id !== expectedAccountId
+      || document?.policy?.purpose !== 'access_copy'
+      || document?.policy?.rawInternalIdentifiersIncluded !== false
+      || !/^ref_\d{6}$/u.test(data?.account?.id ?? '')
       || !data.authentication
       || !data.marketplace
       || !data.communication
@@ -131,7 +134,10 @@ export async function diagnoseStoreReviewSafetyActions({
   const accountExport = await request(fetchImpl, '/account/export', {
     method: 'POST',
     token: renterToken,
-    body: { currentPassword: selected.accounts.get('renter').password },
+    body: {
+      currentPassword: selected.accounts.get('renter').password,
+      exportPurpose: 'access_copy',
+    },
   });
   assertPrivateExport(accountExport, renterId);
 

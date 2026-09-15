@@ -13,15 +13,15 @@
     },
     {
       "path": "lib/screens/privacy_info_screen.dart",
-      "sha256": "b8322e4b53f08b8c644bee12d498bc713a0f28ef6f55a263f28f017fe9a24b61"
+      "sha256": "5d8b89223bb6b1e2cc60abeb3435a6f5f04807deca3c97fc0149aebb5421ca03"
     },
     {
       "path": "lib/services/privacy_export_file_store.dart",
-      "sha256": "5796e16786edb87a85c2bf5722f1ef3593667392a73625f379e900043225849d"
+      "sha256": "47cb180d25ab811e301cc6b20d7649f01b07a4ca62978904b521ef8d026bc1fe"
     },
     {
       "path": "lib/services/privacy_export_file_platform_io.dart",
-      "sha256": "2ea2cc4c02a71a05d95a9fd12741a2e18f07ab7c1fe944885feb6e83eba7d97a"
+      "sha256": "f8c047def6d42e98d05acdd0cc1a86d96b6473ef7960c2fc06b0e92df28ac60a"
     },
     {
       "path": "lib/services/privacy_export_file_platform_stub.dart",
@@ -33,7 +33,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "276b31559087725855c3cfb6f86141757e5209836172eba5c4a92fb74eb2d7ab"
+      "sha256": "119e1e00f1d5a2055daf9060b6478ede80f5616afd2c4e5f4ff7d3f0bde5c3cf"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
@@ -85,7 +85,11 @@
     },
     {
       "path": "backend/src/privacy_export.js",
-      "sha256": "f93bd2f3e357161eae96a72656ed2cf30683018fb1359620af09bae672fd0554"
+      "sha256": "34db8eec19447c9f176068a3b2165a913449a3ba5ae9f6ce6d0c734c6852f690"
+    },
+    {
+      "path": "backend/src/privacy_export_policy.js",
+      "sha256": "e57a5790a34852bbe82fa951d58e0436ce29e2af88458e5222fb7a9c058653bd"
     },
     {
       "path": "backend/src/observability.js",
@@ -697,7 +701,7 @@
     },
     {
       "path": "lib/services/backend_repository.dart",
-      "sha256": "980c785bae39cfecb04f08988d7c0c4ca8aec267f50d3d0ec669496dd182a44b"
+      "sha256": "01210f15eeb0f4760881ceb31be243e427523f726fcc0fb2a696dc241a95c8a8"
     },
     {
       "path": "lib/screens/help_center_screen.dart",

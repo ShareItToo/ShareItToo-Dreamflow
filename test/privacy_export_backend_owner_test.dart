@@ -31,7 +31,7 @@ void main() {
     return;
   }
 
-  test('HTTP export uses captured A credential and password-only body',
+  test('HTTP export uses captured A credential and an exact purpose-bound body',
       () async {
     final owner = await _useSession('a');
     var calls = 0;
@@ -46,8 +46,10 @@ void main() {
               expect(request.url.path, '/api/v1/account/export');
               expect(
                   request.headers['Authorization'], 'Bearer fixture-access-a');
-              expect(jsonDecode(request.body),
-                  {'currentPassword': _syntheticAccountProof});
+              expect(jsonDecode(request.body), {
+                'currentPassword': _syntheticAccountProof,
+                'exportPurpose': 'access_copy',
+              });
               return http.Response(jsonEncode(_document(owner)), 200);
             }));
     expect(calls, 1);
@@ -122,9 +124,11 @@ Future<AuthSessionOwner> _useSession(String suffix) async {
 }
 
 Map<String, dynamic> _document(AuthSessionOwner owner) => {
-      'schemaVersion': '1.0',
+      'schemaVersion': '2.0',
+      'exportPurpose': 'access_copy',
       'generatedAt': '2026-09-04T00:00:00Z',
       'accountId': owner.userId,
+      'policy': <String, dynamic>{'purpose': 'access_copy'},
       'data': <String, dynamic>{},
     };
 

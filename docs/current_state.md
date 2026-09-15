@@ -1,5 +1,35 @@
 # ShareItToo Current State
 
+## WP154 account-export scope and counterparty protection — technical closure; full local regression PASSED; external gates HOLD
+
+The authenticated export now separates an Article-15-oriented `access_copy`
+from the narrower Article-20-oriented `data_portability` projection. Schema 2.0
+binds the exact purpose, current principal and policy; purpose-specific private
+filenames prevent the two artifacts from being confused.
+
+Structured internal identifiers inside the payload become document-local
+references. Authentication secrets, device/network/provider identifiers,
+internal request/payment/configuration hashes and internal security/moderation
+signals are withheld and a runtime postcondition fails closed if known
+forbidden keys or raw structured identifiers remain. Received structured exact
+locations are redacted. Portability retains own/provided/observed data and
+excludes received or inferred records, including unrelated quote positions.
+
+The Flutter flow preserves principal/epoch ownership across every await, local
+section, share and outcome boundary. Focused Backend passes **5/5**, wiring
+**4/4**, combined Flutter interaction **28/28**, the Backend suite reports
+**1002 tests, 1000 passed and 2 intentional skips**, and fresh PostgreSQL passes
+**2/2 with cleanup**. The complete CI-equivalent Mac-mini regression exits 0:
+Tool tests **3041/3041**, Flutter **954 passed plus 33 intentional skips**,
+analyzer **0 findings**, Web/Wasm, loopback and Android debug build passed.
+Exact-head GitHub gates remain pending. See
+`docs/operations/WP154_ACCOUNT_EXPORT_SCOPE_AND_COUNTERPARTY_PROTECTION_2026-09-15.md`.
+
+This is a conservative technical implementation, not professional legal
+approval. Edge-case redaction, privacy purposes/legal bases/recipients,
+retention/legal-hold periods, DSA transparency and all external facts remain
+open. No external state changed.
+
 ## WP153 position review and unrelated-release parity — technical closure; full local regression PASSED; external gates HOLD
 
 The payout path no longer trusts mutable rental-request JSON for a disputed

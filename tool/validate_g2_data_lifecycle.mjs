@@ -686,7 +686,8 @@ export function validateG2DataLifecycle({
     'DataService.exportSavedItemsForPrivacy()',
     'DataService.exportReviewRecordsForPrivacy()',
     'LocalSafetyPrivacyService.exportCurrentPrincipal()',
-    "'localDevice': local",
+    "'localDevice': minimized",
+    "'localDevicePolicy': <String, dynamic>",
   ], 'Privacy export and disclosure');
   const legalPrivacy = source(root, sourceTexts, sourcePaths.legalPrivacy);
   includesEvery(legalPrivacy, [

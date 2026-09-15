@@ -27,6 +27,7 @@ const sourcePaths = [
   'backend/src/operator_readiness.js',
   'backend/src/retention_inventory.js',
   'backend/src/privacy_export.js',
+  'backend/src/privacy_export_policy.js',
   'backend/src/observability.js',
   'backend/src/db.js',
   'backend/src/mailer.js',
