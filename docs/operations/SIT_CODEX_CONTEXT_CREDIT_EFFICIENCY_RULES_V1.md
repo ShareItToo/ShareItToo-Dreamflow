@@ -44,12 +44,12 @@ release evidence.
 - Notify Walid through the established Maximus/Telegram route only for a truly
   non-delegable owner action. Continue every independent package lane quietly.
 
-## Mentor ratchet after repeated mistakes
+## Mentor ratchet from the first mistake
 
 - Count independent occurrences, not duplicated UI output or repeated status
-  for one unresolved incident. On the second occurrence of the same avoidable
-  mistake, closure omission, unsafe assumption or wasteful reasoning pattern,
-  stop and state one concrete cause and one corrective rule.
+  for one unresolved incident. At the first recognized avoidable mistake,
+  closure omission, unsafe assumption or wasteful reasoning pattern, stop it
+  before recurrence and state one concrete cause and one corrective rule.
 - Update only the nearest authoritative instruction; search first and do not
   duplicate the rule across historical handovers. If enforceable, add a focused
   regression, validator or fail-closed guard in the owning package.

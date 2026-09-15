@@ -94,12 +94,12 @@
     "test/tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.test.mjs": "68a357a775842c50ac2cbaa7fab5079a8302d1c6821495788a6b41f176738d11",
     "tool/validate_privacy_disclosures.mjs": "3f0742a16233c6cef8bba890ad7b98d48245b33b7eb109511b11e4b3ade92384",
     "tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.mjs": "54eee7ec1ae1bed88f0a55f2f49602b1282eb4a5ca98ae5108ccc6bde120b143",
-    "AGENTS.md": "aa9efa07c4f7756a1b2e630cbb273d13aae32e8ce6ab33c57c2a491999855d9a",
-    "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md": "99776324d859b65874fba30a779fa7387e8a1c18c72f9bd935921a34047391b2"
+    "AGENTS.md": "1e3abc30cefc36864a337a3f9a5e28501ab1e398d2f4a5adbcaca73a5f0827e9",
+    "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md": "b7a69509e19f3b06c114ce4ff009899260918846dcd197f8c3cdf80e5aaca0e2"
   },
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "b1a84ff6acabe1ef34c9d03e207128bfaf93fad52c1af7beab4c824fbf1b308e"
+    "sourceInventoryDigest": "70c752e2600ae0121d312fdb1c1525ffbd06e68607c0511961b0e93cc6399399"
   }
 }

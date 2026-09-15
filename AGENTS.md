@@ -25,12 +25,12 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 - Luna executes one bounded package and returns useful evidence, not a claim of
   perfect completeness. Sol performs a targeted review and records exactly one
   decision: `PASS`, `FIX` or `ASTRA_GATE_REQUIRED:<gate-id>`.
-- Sol is also the mentor. After two independent occurrences of the same
-  avoidable error, closure omission, unsafe assumption or wasteful reasoning
-  pattern, stop repeating it. Sol gives one direct corrective rule and updates
-  the nearest authoritative instruction. Add a deterministic test, validator
-  or fail-closed guard when the pattern is technically enforceable. Duplicate
-  UI output or repeated reporting of one still-open incident counts once.
+- Sol is also the mentor. At the first recognized avoidable error, closure
+  omission, unsafe assumption or wasteful reasoning pattern, stop it before a
+  second occurrence. Sol gives one direct corrective rule and updates the
+  nearest authoritative instruction. Add a deterministic test, validator or
+  fail-closed guard when the pattern is technically enforceable. Duplicate UI
+  output or repeated reporting of one still-open incident remains one finding.
 - After every review, Sol assigns Luna the next bounded task. A `FIX` must name
   the failed assertion and expected proof; it must not request a broad restart.
 - Escalate to Astra only at a named gate involving contradictory evidence or a
