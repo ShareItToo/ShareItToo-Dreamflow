@@ -518,7 +518,7 @@ export function validateExternalGateExecutionBoard({
     legal.professionallyReviewed === false && legal.openDecisionKeys?.length === 18,
     'legal_external_state_drift',
   );
-  const operations = readJson('docs/operations/p0b-ops-role-delegate-absence-gate.json');
+  const operations = readJson('docs/operations/p0b-ops-role-delegate-absence-gate-wp170.json');
   assertCondition(
     operations.evaluation?.assignedRoleCount === 0
       && operations.evaluation?.humanAbsenceTestsPassed === 0,

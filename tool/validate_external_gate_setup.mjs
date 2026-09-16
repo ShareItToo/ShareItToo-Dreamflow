@@ -500,7 +500,7 @@ export function validateExternalGateSetup({
   assertCondition(legal.openDecisionKeys?.length === 18, 'legal_decision_count_drift');
 
   const operations = readJson(
-    'docs/operations/p0b-ops-role-delegate-absence-gate.json',
+    'docs/operations/p0b-ops-role-delegate-absence-gate-wp170.json',
     sourceOverrides,
   );
   assertCondition(operations.evaluation?.requiredRoleCount === 6, 'operations_role_count_drift');

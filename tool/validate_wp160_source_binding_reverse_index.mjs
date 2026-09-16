@@ -16,6 +16,7 @@ export const currentMutableBindingRoots = Object.freeze([
 ]);
 export const currentExternalGateBindingFiles = Object.freeze([
   'docs/evidence/external-gates/support-evidence-scanner-readiness.json',
+  'docs/operations/p0b-ops-role-delegate-absence-gate-wp170.json',
 ]);
 export const historicalCodeConsumerMarkers = Object.freeze([
   'resolveBoundSnapshot',
@@ -267,12 +268,9 @@ function currentMutableBindingFilesAtRevision(repositoryRoot, revision, candidat
     revision,
     candidateFiles,
   ));
-  const externalCandidates = candidateFiles === null
-    ? jsonFilesAtRevision(repositoryRoot, 'docs/evidence/external-gates', revision)
-    : filesForRoot(candidateFiles, 'docs/evidence/external-gates');
-  const declaredCurrentExternal = externalCandidates
-    .filter((file) => currentExternalGateBindingFiles.includes(file));
-  return [...new Set([...dynamicFiles, ...declaredCurrentExternal])].sort();
+  const declaredCurrent = currentExternalGateBindingFiles
+    .filter((file) => existsAtRevision(repositoryRoot, file, revision));
+  return [...new Set([...dynamicFiles, ...declaredCurrent])].sort();
 }
 
 function codeConsumersAtRevision(

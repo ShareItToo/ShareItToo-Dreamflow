@@ -40,6 +40,32 @@ function technicalOnlyTests() {
   }));
 }
 
+function completeSyntheticRoleAssignments() {
+  return openRoleAssignments().map((assignment, index) => ({
+    ...assignment,
+    primaryPrincipalRef: `synthetic:wp170:primary:${index}`,
+    delegatePrincipalRef: `synthetic:wp170:delegate:${index}`,
+    companySystemRef: 'synthetic:wp170:company-system',
+    primaryRbacEvidenceRef: `synthetic:wp170:rbac:primary:${index}`,
+    delegateRbacEvidenceRef: `synthetic:wp170:rbac:delegate:${index}`,
+    primaryMfaVerified: true,
+    delegateMfaVerified: true,
+    ownerApproved: true,
+  }));
+}
+
+function completeSyntheticAbsenceTests({ startedAt, endedAt, absenceWindowHours }) {
+  return technicalOnlyTests().map((entry) => ({
+    ...entry,
+    humanAbsenceTestPassed: true,
+    absenceWindowHours,
+    startedAt,
+    endedAt,
+    auditEvidenceRef: 'synthetic:wp170:absence-audit',
+    founderOperationalActionObserved: false,
+  }));
+}
+
 test('reports technical rehearsal separately from missing people and absence evidence', () => {
   assert.deepEqual(evaluateOperationalReadinessGate({
     roleAssignments: openRoleAssignments(),
@@ -61,17 +87,7 @@ test('reports technical rehearsal separately from missing people and absence evi
 });
 
 test('accepts only complete distinct company-system assignments and 72-hour evidence', () => {
-  const roleAssignments = openRoleAssignments().map((assignment, index) => ({
-    ...assignment,
-    primaryPrincipalRef: `company:person:primary-${index}`,
-    delegatePrincipalRef: `company:person:delegate-${index}`,
-    companySystemRef: 'company-system:iam',
-    primaryRbacEvidenceRef: `evidence:primary-${index}`,
-    delegateRbacEvidenceRef: `evidence:delegate-${index}`,
-    primaryMfaVerified: true,
-    delegateMfaVerified: true,
-    ownerApproved: true,
-  }));
+  const roleAssignments = completeSyntheticRoleAssignments();
   const processAbsenceTests = technicalOnlyTests().map((entry, index) => ({
     ...entry,
     humanAbsenceTestPassed: true,
@@ -87,6 +103,64 @@ test('accepts only complete distinct company-system assignments and 72-hour evid
   assert.equal(result.soleFounderPrimaryRoleMappings, 0);
   assert.equal(result.humanAbsenceTestsPassed, 4);
   assert.equal(result.busFactorEvidenced, true);
+});
+
+test('WP170 synthetic fixture rejects declared 72 hours when timestamps span only one hour', () => {
+  const result = evaluateOperationalReadinessGate({
+    roleAssignments: completeSyntheticRoleAssignments(),
+    processAbsenceTests: completeSyntheticAbsenceTests({
+      startedAt: '2026-08-21T00:00:00Z',
+      endedAt: '2026-08-21T01:00:00Z',
+      absenceWindowHours: 72,
+    }),
+  });
+  assert.equal(result.humanAbsenceTestsPassed, 0);
+  assert.equal(result.operationsReady, false);
+});
+
+test('WP170 synthetic fixture accepts exactly measured 72-hour timestamps', () => {
+  const result = evaluateOperationalReadinessGate({
+    roleAssignments: completeSyntheticRoleAssignments(),
+    processAbsenceTests: completeSyntheticAbsenceTests({
+      startedAt: '2026-08-21T00:00:00Z',
+      endedAt: '2026-08-24T00:00:00Z',
+      absenceWindowHours: 72,
+    }),
+  });
+  assert.equal(result.humanAbsenceTestsPassed, 4);
+  assert.equal(result.operationsReady, true);
+});
+
+test('WP170 synthetic fixture rejects malformed, negative and mismatched windows', () => {
+  for (const fixture of [
+    {
+      startedAt: 'not-a-date',
+      endedAt: '2026-08-24T00:00:00Z',
+      absenceWindowHours: 72,
+    },
+    {
+      startedAt: '2026-08-24T00:00:00Z',
+      endedAt: '2026-08-21T00:00:00Z',
+      absenceWindowHours: -72,
+    },
+    {
+      startedAt: '2026-08-21T00:00:00Z',
+      endedAt: '2026-08-24T00:00:00Z',
+      absenceWindowHours: '72',
+    },
+    {
+      startedAt: '2026-08-21T00:00:00Z',
+      endedAt: '2026-08-24T00:00:00Z',
+      absenceWindowHours: 73,
+    },
+  ]) {
+    const result = evaluateOperationalReadinessGate({
+      roleAssignments: completeSyntheticRoleAssignments(),
+      processAbsenceTests: completeSyntheticAbsenceTests(fixture),
+    });
+    assert.equal(result.humanAbsenceTestsPassed, 0);
+    assert.equal(result.operationsReady, false);
+  }
 });
 
 test('records a founder primary map without treating it as independent delegation', () => {

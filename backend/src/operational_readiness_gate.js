@@ -69,13 +69,21 @@ function roleAssignmentReady(assignment) {
 }
 
 function humanAbsenceTestReady(test) {
+  const startedAt = nonEmpty(test.startedAt) ? Date.parse(test.startedAt) : NaN;
+  const endedAt = nonEmpty(test.endedAt) ? Date.parse(test.endedAt) : NaN;
+  const measuredWindowHours = (endedAt - startedAt) / (60 * 60 * 1000);
+  const declaredWindowHours = test.absenceWindowHours;
+  const windowMatches = Number.isFinite(declaredWindowHours)
+    && typeof declaredWindowHours === 'number'
+    && Number.isFinite(measuredWindowHours)
+    && Math.abs(measuredWindowHours - declaredWindowHours) < 1e-9;
   return test.humanAbsenceTestPassed === true
-    && test.absenceWindowHours >= 72
-    && nonEmpty(test.startedAt)
-    && nonEmpty(test.endedAt)
-    && Number.isFinite(Date.parse(test.startedAt))
-    && Number.isFinite(Date.parse(test.endedAt))
-    && Date.parse(test.endedAt) > Date.parse(test.startedAt)
+    && windowMatches
+    && declaredWindowHours >= 72
+    && measuredWindowHours >= 72
+    && Number.isFinite(startedAt)
+    && Number.isFinite(endedAt)
+    && endedAt > startedAt
     && nonEmpty(test.auditEvidenceRef)
     && test.founderOperationalActionObserved === false
     && test.realUserDataUsed === false

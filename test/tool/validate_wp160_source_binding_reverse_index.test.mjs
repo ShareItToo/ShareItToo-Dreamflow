@@ -13,6 +13,7 @@ import {
   clearReverseIndexCaches,
   clearReverseIndexMetrics,
   getReverseIndexMetrics,
+  precommitTargetRevision,
   validateWp160ReverseIndex,
 } from '../../tool/validate_wp160_source_binding_reverse_index.mjs';
 import { validateWp160SpecialCategoryHealthDataIntake } from
@@ -29,9 +30,10 @@ test('accepts the machine-derived WP160 reverse source-binding index', () => {
   const result = validateWp160ReverseIndex({ repositoryRoot });
   assert.equal(result.changedSources, 60);
   assert.ok(result.historicalBindings > 0);
-  const derived = deriveWp160ReverseIndex({ repositoryRoot });
+  const derived = deriveWp160ReverseIndex({ repositoryRoot, targetRevision: precommitTargetRevision });
   assert.deepEqual(derived.currentMutableBindings.map(({ binding }) => binding), [
     'docs/evidence/external-gates/support-evidence-scanner-readiness.json',
+    'docs/operations/p0b-ops-role-delegate-absence-gate-wp170.json',
     'store/privacy-disclosures.json',
     'store/retention-deletion-readiness.json',
   ]);
@@ -54,9 +56,9 @@ test('accepts the machine-derived WP160 reverse source-binding index', () => {
 test('pinned reverse-index reads cache Git tree and JSON lookups', () => {
   clearReverseIndexCaches();
   clearReverseIndexMetrics();
-  const first = deriveWp160ReverseIndex({ repositoryRoot });
+  const first = deriveWp160ReverseIndex({ repositoryRoot, targetRevision: evidence.repository.targetRevision });
   assert.equal(getReverseIndexMetrics().gitGrepCalls, 1);
-  const second = deriveWp160ReverseIndex({ repositoryRoot });
+  const second = deriveWp160ReverseIndex({ repositoryRoot, targetRevision: evidence.repository.targetRevision });
   assert.equal(getReverseIndexMetrics().gitGrepCalls, 1);
   assert.deepEqual(second, first);
 });

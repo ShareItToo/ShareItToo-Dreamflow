@@ -59,7 +59,7 @@
       "blocksTiers": ["stage_a", "stage_b", "stage_c"],
       "currentStatus": "prepared-external-assignments-required",
       "technicalEvidenceRefs": [
-        "docs/operations/p0b-ops-role-delegate-absence-gate.json",
+        "docs/operations/p0b-ops-role-delegate-absence-gate-wp170.json",
         "docs/operations/P0B_OPS_ASSIGNMENT_AND_ABSENCE_RUNBOOK.md"
       ],
       "technicalEvidenceSummary": "Six roles, six distinct delegates and four absence-test procedures are defined; all four technical rehearsals pass.",
