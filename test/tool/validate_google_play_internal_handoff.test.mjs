@@ -24,7 +24,7 @@ const canonicalInternalRelease = JSON.parse(await readFile(
   new URL(`../../${canonicalHandoff.internalReleaseEvidenceRef}`, import.meta.url),
   'utf8'));
 const explicitRollover = JSON.parse(await readFile(
-  new URL('../../store/google-play/rollover-candidate-2026091601.json', import.meta.url),
+  new URL('../../store/google-play/rollover-candidate-2026091602.json', import.meta.url),
   'utf8'));
 
 test('candidate rollover ignores test-only drift but retains runtime drift', () => {
@@ -55,9 +55,9 @@ test('candidate rollover ignores test-only drift but retains runtime drift', () 
 test('validates the explicitly named current rollover candidate and zero runtime drift', async () => {
   const result = await validateExplicitCurrentRolloverCandidate({ repositoryRoot });
   assert.equal(explicitCurrentRolloverCandidatePath,
-    'store/google-play/rollover-candidate-2026091601.json');
+    'store/google-play/rollover-candidate-2026091602.json');
   assert.equal(explicitCurrentRolloverStatus,
-    'build-ready-github-verified-play-internal-upload-pending');
+    'built-and-archived-internal-staging-upload-pending');
   assert.equal(result.buildNumber, explicitRollover.candidate.versionCode);
   assert.equal(result.candidate.artifactSourceHead, explicitRollover.candidate.artifactSourceHead);
   assert.deepEqual(result.runtimeDrift, []);
@@ -71,7 +71,7 @@ test('rejects a missing or wrong explicit rollover successor', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'sit-explicit-rollover-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const wrong = structuredClone(explicitRollover);
-  wrong.candidate.versionCode = '2026091602';
+  wrong.candidate.versionCode = '2026091603';
   const wrongPath = join(root, 'wrong.json');
   await writeFile(wrongPath, JSON.stringify(wrong));
   await assert.rejects(() => validateExplicitCurrentRolloverCandidate({

@@ -100,9 +100,9 @@ export const candidateRolloverNonRuntimeExactPaths = Object.freeze([
 ]);
 
 export const explicitCurrentRolloverCandidatePath =
-  'store/google-play/rollover-candidate-2026091601.json';
+  'store/google-play/rollover-candidate-2026091602.json';
 export const explicitCurrentRolloverStatus =
-  'build-ready-github-verified-play-internal-upload-pending';
+  'built-and-archived-internal-staging-upload-pending';
 
 export function candidateRolloverRuntimeDrift(changedPaths) {
   return [...changedPaths].filter((path) =>
