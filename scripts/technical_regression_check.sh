@@ -838,9 +838,9 @@ node --test test/tool/validate_wp155_processing_transparency_purpose_basis_recip
 node tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.mjs
 node --check backend/src/operational_readiness_gate.js
 node --test backend/test/operational_readiness_gate.test.js
-node --check tool/validate_p0b_ops_readiness.mjs
-node --test test/tool/validate_p0b_ops_readiness.test.mjs
-node tool/validate_p0b_ops_readiness.mjs
+node --check tool/validate_wp170_p0b_ops_readiness.mjs
+node --test test/tool/validate_wp170_p0b_ops_readiness.test.mjs
+node tool/validate_wp170_p0b_ops_readiness.mjs
 node --check tool/validate_p0b_signed_device_evidence.mjs
 node --test test/tool/validate_p0b_signed_device_evidence.test.mjs
 if [[ "${CI:-false}" == "true" ]]; then
@@ -873,6 +873,9 @@ node tool/validate_p0b_psp_sandbox_e2e.mjs
 node --check tool/validate_p0b_invited_synthetic_pilot_readiness.mjs
 node --test test/tool/validate_p0b_invited_synthetic_pilot_readiness.test.mjs
 node tool/validate_p0b_invited_synthetic_pilot_readiness.mjs
+node --check tool/validate_p0b_ops_historical_snapshot.mjs
+node --test test/tool/validate_p0b_ops_historical_snapshot.test.mjs
+node tool/validate_p0b_ops_historical_snapshot.mjs
 node --test test/tool/g5b_listing_sets_wiring.test.mjs
 node --test test/tool/analyzer_baseline_wiring.test.mjs
 node --test test/tool/validate_flutter_analyzer_debt.test.mjs

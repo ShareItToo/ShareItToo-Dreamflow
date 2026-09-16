@@ -12,6 +12,12 @@ const ownPath = 'tool/check_current_consumer_closure.mjs';
 const reversePath = 'docs/evidence/release-readiness/wp160-source-binding-reverse-index-20260915.json';
 export const currentEvidencePath = 'docs/evidence/release-readiness/wp161-current-consumer-closure-20260916.json';
 const historicalExternal = new Set(['docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json']);
+// WP158 is an active current-candidate provenance ratchet. It remains
+// fail-closed and owner-gated, but its source inventory must follow the
+// current regression harness without rewriting immutable historical evidence.
+const currentEvidenceExceptions = new Set([
+  'docs/evidence/release-readiness/wp158-play-internal-artifact-app-content-provenance-20260915.json',
+]);
 const digestPattern = /^[a-f0-9]{64}$/u;
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -88,7 +94,8 @@ export function sourceBindings(value, manifest) {
 
 function isCurrentManifest(path) {
   return path.endsWith('.json') && (path.startsWith('store/')
-    || (path.startsWith('docs/evidence/external-gates/') && !historicalExternal.has(path)));
+    || (path.startsWith('docs/evidence/external-gates/') && !historicalExternal.has(path))
+    || currentEvidenceExceptions.has(path));
 }
 
 function isHistoricalManifest(path) {
