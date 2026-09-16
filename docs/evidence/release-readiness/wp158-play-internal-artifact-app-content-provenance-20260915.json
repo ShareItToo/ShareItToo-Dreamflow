@@ -95,7 +95,7 @@
   },
   "sourceInventory": {
     "AGENTS.md": "ba6e0a0cfcde9ed5dbbe23a7a94b820169acfdf7d4545bdf499efa379e75c983",
-    "scripts/technical_regression_check.sh": "f006cae3a38710c4394d765d0a4dc18ec286344d9ffc012efe72f91df6752463",
+    "scripts/technical_regression_check.sh": "80b37877f2e1ac3f062afdeaafedecb9075ee96183527d2816413ca88045ccde",
     "store/google-play/current-rollover-candidate.json": "4661f0780be26910e549658c59786cb6a2abaafe5b3042489ca1154cbe51f10b",
     "store/google-play/app-content-handoff.json": "9af78ea3f4cc0199269eb1b7410e5dd574350bc7ca8eef9f3d220269a276cd76",
     "store/google-play/rw20d-play-draft-truth-reconciliation.json": "a15c59f35200c222501a7e9e4e5aed537e98b2b7ec1487341eede6768ba9451c",
@@ -110,6 +110,6 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "0f98b5568084f110603cb9b529fd9ce84e84b2a1f33d5e95dbe12dbc97005c62"
+    "sourceInventoryDigest": "6b47c621e3a65215b368194f74af6f0e1177af13874aeab8733b50a7e1166d19"
   }
 }
