@@ -1,48 +1,79 @@
-import 'dart:convert';
+import 'package:lendify/services/backend_config.dart';
+import 'package:lendify/services/backend_repository.dart';
+import 'package:lendify/services/local_safety_privacy_service.dart';
+import 'package:lendify/services/qa_runtime_service.dart';
 
-import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-/// Local-only user reporting store.
-///
-/// Until a backend is connected, we store reports locally so the UI is testable.
+/// Server-authoritative reporting with an explicit local QA fallback.
 class UserReportsService {
-  static const _key = 'user_reports_v1';
-
   static Future<void> addReport({
     required String reporterUserId,
     required String reportedUserId,
-    required String reason,
+    required String reasonCode,
     String details = '',
     List<String> evidenceNames = const [],
+    List<String> evidenceUploadIds = const [],
     String? reference,
   }) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_key);
-      List<dynamic> list = [];
-      if (raw != null && raw.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(raw);
-          if (decoded is List) list = decoded;
-        } catch (_) {
-          list = [];
-        }
-      }
-      final now = DateTime.now();
-      list.add({
-        'id': 'rep_${now.microsecondsSinceEpoch}',
-        'reporterUserId': reporterUserId,
-        'reportedUserId': reportedUserId,
-        'reason': reason,
-        'details': details,
-        'evidenceNames': evidenceNames,
-        'reference': reference,
-        'createdAt': now.toIso8601String(),
-      });
-      await prefs.setString(_key, jsonEncode(list));
-    } catch (e) {
-      debugPrint('[UserReportsService] addReport failed: $e');
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      await BackendRepository.createReport(
+        targetType: 'user',
+        targetId: reportedUserId,
+        reasonCode: reasonCode,
+        details: details,
+        reference: reference,
+        evidenceUploadIds: evidenceUploadIds,
+      );
+      return;
     }
+    await LocalSafetyPrivacyService.addReport(
+      reporterUserId: reporterUserId,
+      reportedUserId: reportedUserId,
+      reasonCode: reasonCode,
+      details: details,
+      evidenceNames: evidenceNames,
+      reference: reference,
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> getLocalReports() =>
+      LocalSafetyPrivacyService.getReports();
+
+  static Future<bool> addHarassmentBlockReport({
+    required String reporterUserId,
+    required String reportedUserId,
+    required bool immediateDanger,
+    required String idempotencyKey,
+    String details = '',
+    List<String> evidenceNames = const [],
+    List<String> evidenceUploadIds = const [],
+    String? reference,
+  }) async {
+    if (immediateDanger) {
+      throw ArgumentError.value(
+        immediateDanger,
+        'immediateDanger',
+        'Akute Gefahr muss in den Sicherheitsweg umgeleitet werden.',
+      );
+    }
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final result = await BackendRepository.createHarassmentBlockReport(
+        targetUserId: reportedUserId,
+        immediateDanger: false,
+        idempotencyKey: idempotencyKey,
+        details: details,
+        reference: reference,
+        evidenceUploadIds: evidenceUploadIds,
+      );
+      final protection = result['protection'];
+      return protection is Map && protection['directContactBlocked'] == true;
+    }
+    await LocalSafetyPrivacyService.addHarassmentReportAndBlock(
+      reporterUserId: reporterUserId,
+      reportedUserId: reportedUserId,
+      details: details,
+      evidenceNames: evidenceNames,
+      reference: reference,
+    );
+    return true;
   }
 }

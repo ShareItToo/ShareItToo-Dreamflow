@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-stage-a-blue-ocean-n11-codex-local-guardrails",
+  "status": "verified-ready-for-n12",
+  "capturedAt": "2026-08-24T00:20:00Z",
+  "implementationBaseHead": "9533d4351c64d1b3df2b37b97e4ec0e9496f020e",
+  "officialSupport": {
+    "documentation": "https://learn.chatgpt.com/docs/hooks",
+    "repoLocalHooksJson": "supported",
+    "preToolUseBlocking": "supported",
+    "stopLifecycleHook": "supported",
+    "trustReviewRequired": true,
+    "completeEnforcementBoundary": false,
+    "observedCliVersion": "codex-cli 0.149.0-alpha.4.1",
+    "observedFeatureState": "hooks stable true"
+  },
+  "implementation": {
+    "hooksConfig": ".codex/hooks.json",
+    "hookScript": ".codex/hooks/sit_guardrail.py",
+    "architecture": "docs/architecture/n11-codex-local-guardrails-2026-08-24.md",
+    "scope": "repo-local-reversible-optional-defense-in-depth",
+    "userConfigChanged": false,
+    "pluginInstalled": false,
+    "trustState": "pending-official-review-on-next-hook-discovery"
+  },
+  "guardrails": {
+    "destructiveGitToken": "implemented",
+    "externalMutationToken": "implemented",
+    "productionPaymentStoreVpsDnsCloudBlock": "implemented-known-command-patterns",
+    "stagedHighConfidenceSecretScan": "implemented-without-secret-output",
+    "fastSitValidatorsBeforeCommit": "implemented",
+    "automaticPendingGateArtifact": "implemented-git-metadata-only"
+  },
+  "limitations": [
+    "hooks-are-not-a-complete-enforcement-boundary",
+    "only-supported-local-tool-paths-are-observed",
+    "pattern-matching-cannot-identify-every-external-mutation",
+    "trust-review-is-required-after-hook-definition-change",
+    "fast-precommit-validation-does-not-replace-full-regression-or-github-ci"
+  ],
+  "targetedVerification": {
+    "hookBehaviorTests": "passed-10",
+    "artifactValidatorTests": "passed-7",
+    "artifactValidator": "passed",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed"
+  },
+  "exactGitHubVerification": {
+    "headSha": "31bdfb9fff0b423c85508d1b9944f3588a56d70c",
+    "regressionRunId": 32676272328,
+    "regressionConclusion": "success",
+    "codeqlRunId": 32676272346,
+    "codeqlConclusion": "success"
+  },
+  "boundaries": {
+    "hookTrustedOrActivatedByN11": false,
+    "userCodexConfigChanged": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "storeChanged": false,
+    "firebaseChanged": false,
+    "cloudChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false
+  },
+  "nextPackage": "N12"
+}

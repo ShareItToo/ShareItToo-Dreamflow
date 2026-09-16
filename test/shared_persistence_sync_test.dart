@@ -50,6 +50,29 @@ void main() {
     expect(await next, SharedPersistenceSync.messageThreadsKey);
   });
 
+  test('catch-up notification emits one bounded delayed retry', () async {
+    SharedPersistenceSync.cancelCatchUpRetries();
+    final changes = <String>[];
+    final subscription = SharedPersistenceSync.changes.listen(changes.add);
+
+    SharedPersistenceSync.notifyWithCatchUpRetry(
+      SharedPersistenceSync.messageThreadsKey,
+      retryDelay: const Duration(milliseconds: 10),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+
+    expect(
+      changes
+          .where(
+            (key) => key == SharedPersistenceSync.messageThreadsKey,
+          )
+          .length,
+      2,
+    );
+    await subscription.cancel();
+    SharedPersistenceSync.cancelCatchUpRetries();
+  });
+
   test('refresh coordinator serializes and coalesces concurrent events',
       () async {
     final coordinator = SharedPersistenceRefreshCoordinator();

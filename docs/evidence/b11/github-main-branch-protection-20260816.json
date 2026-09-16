@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "kind": "github-main-branch-protection",
+  "capturedAt": "2026-08-16T05:48:00Z",
+  "status": "enabled-and-verified",
+  "repository": "walidwalidchraibi-dot/ShareItToo-Dreamflow",
+  "branch": "main",
+  "protection": {
+    "requiredPullRequest": true,
+    "requiredApprovingReviewCount": 0,
+    "soloMaintainerDeadlockAvoided": true,
+    "dismissStaleReviews": true,
+    "requireConversationResolution": true,
+    "requireLinearHistory": true,
+    "enforceForAdministrators": true,
+    "allowForcePushes": false,
+    "allowDeletions": false,
+    "strictStatusChecksRequireCurrentMain": true,
+    "requiredChecks": [
+      {
+        "context": "backend-regression",
+        "githubAppId": 15368,
+        "githubApp": "github-actions"
+      },
+      {
+        "context": "flutter-regression",
+        "githubAppId": 15368,
+        "githubApp": "github-actions"
+      }
+    ]
+  },
+  "verification": {
+    "pullRequest": 7,
+    "pullRequestState": "open-draft",
+    "pullRequestMerged": false,
+    "headCommit": "55e65f6617f9a12d0ae71bb10a61a640014e5d59",
+    "githubRunId": 31929471745,
+    "githubRunUrl": "https://github.com/walidwalidchraibi-dot/ShareItToo-Dreamflow/actions/runs/31929471745",
+    "githubRunConclusion": "success",
+    "backendRegression": "passed-including-postgresql-integration",
+    "flutterRegression": "passed",
+    "apiImagePublication": "skipped-for-pull-request"
+  },
+  "boundaries": {
+    "approvalReviewRequired": false,
+    "reason": "single-maintainer-repository-must-not-require-an-unobtainable-independent-approval",
+    "branchLocked": false,
+    "pullRequestMerged": false,
+    "productionChanged": false,
+    "newAppCandidateBuilt": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "realMoneyUsed": false
+  }
+}

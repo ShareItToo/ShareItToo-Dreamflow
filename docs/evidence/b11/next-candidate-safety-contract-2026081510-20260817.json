@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "kind": "next-internal-candidate-safety-contract",
+  "status": "prepared-not-built",
+  "capturedAt": "2026-08-17T06:30:00Z",
+  "baselineCandidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "commit": "3fa045b98897f9551f91da932136c2b100b2d700",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "plannedCandidate": {
+    "versionName": "1.0.0",
+    "buildNumber": "2026081510",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "googleLoginEnabled": true,
+    "appleLoginEnabled": false,
+    "facebookLoginEnabled": false,
+    "firebaseCloudMessagingRetained": true,
+    "firebaseCrashlyticsRetained": true,
+    "independentDeviceServiceOptIns": true,
+    "deviceServicesDefaultOff": true,
+    "controlledCrashDiagnosticRunId": "b11-android-2026081510",
+    "largeTextRemediationRequired": true,
+    "v51LegalAssetsActivation": "draft-blocked"
+  },
+  "validation": {
+    "preparedPlan": "passed",
+    "futureBuildProfileFixture": "passed",
+    "googleOnlyGate": "passed",
+    "productionAndStoreSubmissionGate": "passed-fail-closed",
+    "buildBoundCrashRunGate": "passed-fail-closed",
+    "testsPassed": 14
+  },
+  "boundaries": {
+    "buildNumberChanged": false,
+    "signedCandidateBuilt": false,
+    "candidateUploaded": false,
+    "storeChanged": false,
+    "productionChanged": false,
+    "paymentEndpointCalled": false,
+    "legalAssetsActivated": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

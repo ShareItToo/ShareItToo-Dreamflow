@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp30-return-case-ui-reachability-closure",
+  "status": "complete-locally-and-on-github-physical-open",
+  "capturedAt": "2026-09-06T15:44:53Z",
+  "workPackage": "WP30",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "baseHead": "292c15e951956328c503c370e0371eb126596f9b",
+    "implementationHead": "ec8c85fce8b52b68286ca4adbf2ca91416069fce",
+    "implementationTreeClean": true,
+    "implementationRemoteDivergence": "0/0"
+  },
+  "cause": {
+    "securedReturnCaseScreenHadProductionCaller": false,
+    "visibleIssueMenusPreviouslyOpenedGeneralSupportOnly": true,
+    "generalSupportCreatedDedicatedV52ReturnCase": false
+  },
+  "closure": {
+    "renterEntryPointReachable": true,
+    "ownerEntryPointReachable": true,
+    "generalSupportRetainedSeparately": true,
+    "requiresCompletedBooking": true,
+    "requiresRealNonSimulationBooking": true,
+    "requiresAcceptedV52Contract": true,
+    "requiresInclusiveReturnReportWindow": true,
+    "rejectsExistingCaseOrNeedsReview": true,
+    "missingTruthFailsClosed": true,
+    "principalCapturedBeforeFirstAwait": true,
+    "principalRecheckedBeforeRouteAndAfterResult": true,
+    "exactOwnedRouteOnly": true,
+    "globalNavigatorPopUsed": false,
+    "bookingTruthReloadedAfterSuccess": true
+  },
+  "localVerification": {
+    "focusedPolicyTestsPassed": 6,
+    "focusedWiringTestsPassed": 4,
+    "repositoryToolTestsPassed": 2345,
+    "repositoryToolTestsFailed": 0,
+    "flutterTestsPassed": 900,
+    "flutterDeclaredSkips": 33,
+    "analyzerIssues": 0,
+    "fullTechnicalRegressionPassed": true,
+    "backendSuitePassed": true,
+    "backendSyntaxPassed": true,
+    "dependencyAuditPassed": true,
+    "secretScanPassed": true,
+    "postgresRunnerPassed": true,
+    "webWasmPassed": true,
+    "loopbackSmokePassed": true,
+    "androidMinSdk24BuildPassed": true,
+    "cleanCheckoutHeadMatched": true,
+    "cleanCheckoutInitialAndFinalTreeClean": true,
+    "androidBuildAttempts": 2,
+    "androidBuildReproduction": "byte-identical",
+    "androidPayloadEntriesCompared": 794,
+    "temporaryCheckoutAndCachesRemoved": true
+  },
+  "github": {
+    "regressionRunId": 34042259106,
+    "regressionConclusion": "success",
+    "regressionRequiredJobsPassed": 4,
+    "codeqlRunId": 34042259112,
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0,
+    "pullRequest": 7,
+    "pullRequestDraft": true,
+    "pullRequestState": "OPEN",
+    "pullRequestMergeable": true,
+    "pullRequestMerged": false
+  },
+  "candidateSeparation": {
+    "installedPixelCandidateVersion": "1.0.0+2026090607",
+    "installedPixelCandidateSourceHead": "0708609f66ecebee75e7d3786130c5231e578148",
+    "wp30IncludedInInstalledCandidate": false,
+    "physicalReturnCaseJourneyClaimed": false,
+    "newCandidateRequired": true
+  },
+  "remaining": [
+    "strictly-newer-signed-internal-staging-candidate",
+    "data-preserving-pixel-update",
+    "isolated-physical-v52-return-case-journey-and-cleanup"
+  ],
+  "boundaries": {
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "backendDeployed": false,
+    "firebaseConsoleChanged": false,
+    "providerChanged": false,
+    "paymentOrKycCalled": false,
+    "productionChanged": false,
+    "publicRegistrationChanged": false,
+    "cloudVpsDnsChanged": false,
+    "pixelChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "moneySpent": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsPrivateFilesystemPath": false,
+    "containsRawDeviceIdentifier": false
+  }
+}

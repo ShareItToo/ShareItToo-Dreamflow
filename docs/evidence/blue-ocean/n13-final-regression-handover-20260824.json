@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-stage-a-blue-ocean-n13-final-regression-handover",
+  "status": "verified-stage-a-blue-ocean-decision",
+  "capturedAt": "2026-08-24T01:10:00Z",
+  "implementationBaseHead": "efaa7ee3af59c13334cb4a3b7ca384178ce0b09e",
+  "handoverRef": "docs/operations/STAGE_A_BLUE_OCEAN_DECISION_HANDOVER_2026-08-24.md",
+  "repositorySnapshot": {
+    "repository": "walidwalidchraibi-dot/ShareItToo-Dreamflow",
+    "branch": "codex/master-workflow-20260808",
+    "localHeadBeforeN13": "efaa7ee3af59c13334cb4a3b7ca384178ce0b09e",
+    "upstream": "origin/codex/master-workflow-20260808",
+    "upstreamHeadBeforeN13Push": "8ded33b8ed7c84d307014263b678c3fd9177038c",
+    "workingTreeBeforeN13": "n13-package-only",
+    "pullRequest": 7,
+    "pullRequestState": "open-draft-unmerged-mergeable-blocked",
+    "verifiedImplementationHead": "110263d5b1582563a0cc9ec4e2e730f56e3969f9",
+    "finalTreeState": "clean-and-synchronized-after-evidence-closure"
+  },
+  "packageStates": {
+    "N0": "verified-ready-for-n1",
+    "N1": "verified-ready-for-n2",
+    "N2": "verified-ready-for-n3",
+    "N3": "verified-ready-for-n4",
+    "N4": "verified-ready-for-n5",
+    "N5": "verified-ready-for-n6",
+    "N6": "verified-ready-for-n7",
+    "N7": "verified-ready-for-n8",
+    "N8": "verified-ready-for-n9",
+    "N9": "verified-ready-for-n10",
+    "N10": "verified-ready-for-n11",
+    "N11": "verified-ready-for-n12",
+    "N12": "verified-ready-for-n13"
+  },
+  "localVerification": {
+    "focusedBackendTests": "passed-119",
+    "focusedArtifactAndPolicyTests": "passed-125",
+    "postgres16FreshClusterIntegration": "passed-and-cleaned",
+    "backendRegression": "passed-725-one-documented-skip",
+    "flutterRegression": "passed-387-one-documented-skip",
+    "flutterAnalyzer": "passed-reviewed-debt-ratchet-122",
+    "privacyAndRetention": "passed-fail-closed-draft",
+    "supportTraceability": "passed-167-scenarios",
+    "aiSchemaAndPromptInjection": "passed",
+    "imagePrivacy": "passed",
+    "regionalPriceEngineV2": "passed",
+    "syntheticHarness": "passed-twice-exact-replay",
+    "webBuildWasmAndLoopbackSmoke": "passed",
+    "androidDebug": "passed-448-tasks-min-sdk-24",
+    "dependencyAudit": "passed-no-known-production-vulnerabilities",
+    "secretScan": "passed-no-high-confidence-secrets-12-reviewed-historical-baseline",
+    "fullTechnicalRegression": "passed-ci-metadata-candidate-rollover-mode"
+  },
+  "syntheticComparison": {
+    "classification": "SYNTHETIC_PLANNING_OUTPUT_NOT_HUMAN_EVIDENCE",
+    "syntheticParticipants": 30,
+    "attemptedFlows": 40,
+    "completedFlows": 37,
+    "replaySha256": "1c95d0ace4b101bdf7c09c5ad7116abf749430b1f08d834ec4c6868504f8ecd0",
+    "cohorts": [
+      {
+        "id": "CORE",
+        "attempted": 13,
+        "completed": 12,
+        "meanDraftSeconds": 505,
+        "meanPublishReadySeconds": 660,
+        "fieldEditRateBasisPoints": 10000,
+        "manualFallbacks": 0
+      },
+      {
+        "id": "GROWTH",
+        "attempted": 13,
+        "completed": 12,
+        "meanDraftSeconds": 469,
+        "meanPublishReadySeconds": 604,
+        "fieldEditRateBasisPoints": 10000,
+        "manualFallbacks": 0
+      },
+      {
+        "id": "BLUE_OCEAN",
+        "attempted": 14,
+        "completed": 13,
+        "meanDraftSeconds": 235,
+        "meanPublishReadySeconds": 340,
+        "fieldEditRateBasisPoints": 6095,
+        "manualFallbacks": 2
+      }
+    ]
+  },
+  "readiness": {
+    "aiListingAssistant": "technical-default-off-complete-external-provider-not-configured",
+    "imagePrivacy": "technical-pipeline-complete-real-scanner-provider-deferred",
+    "regionalPriceEngineV2": "deterministic-complete-no-synthetic-learning",
+    "heilbronnWave0": "prepared-not-activated-owner-and-external-gates-open",
+    "googlePlayInternalTesting": "handoff-prepared-no-aab-build-upload-console-or-testers"
+  },
+  "remainingBlockers": [
+    "private-operator-config-outside-repository",
+    "owner-approved-exact-signed-hash-bound-internal-aab",
+    "play-upload-and-separate-internal-release-owner-gates",
+    "private-three-adult-roster-consent-and-physical-device-tests",
+    "professional-review-deferred-and-unreviewed-risk-accepted",
+    "real-provider-contract-privacy-security-region-retention-and-budget",
+    "real-roles-delegates-firebase-owner-checks-and-authentic-economics",
+    "scanner-psp-apple-public-release-and-production-deferred"
+  ],
+  "costState": {
+    "preparedFreeActionsExpectedNewExternalEur": 0,
+    "optionalAiPilotHardCapEur": 5,
+    "optionalAiPilotBudgetApproved": false,
+    "allOtherExternalCosts": "unknown-unapproved-require-quote-and-maximum-eur-token"
+  },
+  "acceptedAndDeferredRisk": {
+    "professionalReview": "PROFESSIONAL_REVIEW_DEFERRED_BY_OWNER",
+    "unreviewedRisk": "UNREVIEWED_RISK_ACCEPTED",
+    "professionalApprovalClaimed": false,
+    "riskResolvedClaimed": false
+  },
+  "recommendedCurrentTokens": [
+    "AI_LISTING_PROVIDER_HOLD",
+    "GOOGLE_PLAY_INTERNAL_HOLD",
+    "HEILBRONN_WAVE0_HOLD"
+  ],
+  "preparedReplyTokens": [
+    "AI_LISTING_PILOT_BUDGET_5_EUR_GO",
+    "AI_LISTING_PROVIDER_HOLD",
+    "GOOGLE_PLAY_INTERNAL_UPLOAD_GO",
+    "GOOGLE_PLAY_INTERNAL_HOLD",
+    "HEILBRONN_WAVE0_ACTIVATION_GO",
+    "HEILBRONN_WAVE0_HOLD"
+  ],
+  "driveHandover": {
+    "targetFolderId": "1YOBStKRnK1jOxWiCQz17MlGj7F3yNKWc",
+    "uploaded": true,
+    "fileId": "11GsMbfw7ZhkC4FuCmpLdFmniyHTaIO30"
+  },
+  "exactGitHubVerification": {
+    "headSha": "110263d5b1582563a0cc9ec4e2e730f56e3969f9",
+    "regressionRunId": 32677663885,
+    "regressionConclusion": "success",
+    "codeqlRunId": 32677663883,
+    "codeqlConclusion": "success"
+  },
+  "boundaries": {
+    "externalProviderCallPerformed": false,
+    "billingOrPaidCallPerformed": false,
+    "ownerLoginOrSecretActionPerformed": false,
+    "aabBuiltOrUploaded": false,
+    "playConsoleOrTesterChanged": false,
+    "physicalDeviceChanged": false,
+    "humanPilotActivated": false,
+    "realPersonDataUsed": false,
+    "firebaseOrCloudChanged": false,
+    "productionVpsOrDnsChanged": false,
+    "pspKycOrRealMoneyActivated": false,
+    "appleOrScannerChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false
+  },
+  "finalGate": "STAGE_A_BLUE_OCEAN_DECISION"
+}

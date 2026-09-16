@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp126-exact-successor-pixel-push-closure",
+  "status": "exact-successor-pixel-push-closure-passed",
+  "capturedOn": "2026-09-12",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "artifactSourceHead": "1546812f625b4e8f1e700bf976410097cd45ac2f",
+    "candidateFreezeHead": "f9c4c9523eb0f4dfcdb03d34516795a91e0bcbdd",
+    "diagnosticCorrectionHead": "4f4ae2a2cce6672a61ca77fc3fcec57fb0aac245"
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091201",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "minSdkVersion": 24,
+    "targetSdkVersion": 36,
+    "compileSdkVersion": 36,
+    "firebaseAndroidConfigured": true,
+    "aabBytes": 138736330,
+    "aabSha256": "81c204fd65d83a0403d203b606328880acb0787d076093240efab87d00575399",
+    "apkBytes": 199608577,
+    "apkSha256": "a8bfda4c1a0e7302b2528db8edfbe1318e88322023f65588da032220a24badd4",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "binaryPrivacyScanPassed": true,
+    "externalListingAiEnabled": false,
+    "listingAiExecutionLocation": "android_on_device"
+  },
+  "localVerification": {
+    "releasePreflightPassed": true,
+    "privateArchiveIndependentValidationPassed": true,
+    "completeTechnicalRegressionPassed": true,
+    "candidateFreezeHead": "f9c4c9523eb0f4dfcdb03d34516795a91e0bcbdd",
+    "flutterAnalyzerIssues": 0,
+    "webWasmPassed": true,
+    "loopbackSmokePassed": true,
+    "androidBuildPassed": true,
+    "officialBootstrappedToolInventoryPassed": true,
+    "postCorrectionToolTestsPassed": 2743,
+    "postCorrectionToolTestsFailed": 0,
+    "unbootstrappedToolGlobAcceptedAsEvidence": false,
+    "unbootstrappedFailureCause": "missing-generated-package-config-before-declared-bootstrap"
+  },
+  "github": {
+    "candidateFreezeRegression": {
+      "runId": 34703064328,
+      "headSha": "f9c4c9523eb0f4dfcdb03d34516795a91e0bcbdd",
+      "conclusion": "success",
+      "cleanCheckoutJob": "success"
+    },
+    "candidateFreezeCodeql": {
+      "runId": 34703064266,
+      "headSha": "f9c4c9523eb0f4dfcdb03d34516795a91e0bcbdd",
+      "conclusion": "success"
+    },
+    "diagnosticCorrectionRegression": {
+      "runId": 34704553662,
+      "headSha": "4f4ae2a2cce6672a61ca77fc3fcec57fb0aac245",
+      "conclusion": "success"
+    },
+    "diagnosticCorrectionCodeql": {
+      "runId": 34704553654,
+      "headSha": "4f4ae2a2cce6672a61ca77fc3fcec57fb0aac245",
+      "conclusion": "success"
+    },
+    "openBranchCodeScanningAlerts": 0,
+    "pullRequest7": "draft-open-clean-mergeable-unmerged"
+  },
+  "pixel": {
+    "physical": true,
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "installedVersionBefore": "1.0.0+2026091110",
+    "installedVersionAfter": "1.0.0+2026091201",
+    "strictlyNewerBuildInstalled": true,
+    "candidateSignatureMatchedInstalledApp": true,
+    "installedCandidateHashMatched": true,
+    "firstInstallTimePreserved": true,
+    "dataInodePreserved": true,
+    "foregroundActivityVerifiedAfterUpdate": true,
+    "uninstallUsed": false,
+    "dataResetUsed": false,
+    "storeDeliveryUsed": false
+  },
+  "controlledFcm": {
+    "status": "passed-exact-candidate-isolated-non-binding",
+    "foreground": true,
+    "background": true,
+    "terminatedProcess": true,
+    "notificationIconVisualReview": "passed-private-capture-brand-icon-clear",
+    "privateCaptureSha256": "101971e45993a58c8fa019b1a062dffc7d6d11a3a40288b9b712731cc9f44cb4",
+    "privateCaptureCommitted": false,
+    "privateCaptureMovedToTrash": true,
+    "physicalTransportResponseLossInjected": false,
+    "sourceRecoveryContractsPassed": true,
+    "accountPrincipalEpochIsolationSourceContractsPassed": true
+  },
+  "diagnosticCorrection": {
+    "sourceHead": "4f4ae2a2cce6672a61ca77fc3fcec57fb0aac245",
+    "toolSha256": "c16cc5adb01a8103630626f27556dce57bee43d225b3873437aa4ae497da4625",
+    "testSha256": "99d9376018413a2c51ba68135c8ab4beb800eed2b8712808e3d5187c7b9daffa",
+    "focusedTestsPassed": 6,
+    "emailLinkVerifiedSyntheticPairAccepted": true,
+    "fixtureVerifiedSyntheticPairRetained": true,
+    "exactOwnerRenterRolesRequired": true,
+    "mixedOrUnknownVerificationRejected": true,
+    "physicalCorrectedIsolationRunPassed": true
+  },
+  "safePreparationStops": {
+    "typedV52DocumentGateCount": 2,
+    "typedStatus": 409,
+    "typedCode": "v52_contract_documents_unavailable",
+    "deviceSuccessClaimedFromStoppedAttempts": false,
+    "contractCreated": false,
+    "reservationCreated": false,
+    "paymentEndpointCalled": false,
+    "monetaryEffectMinor": 0
+  },
+  "cleanup": {
+    "nonBindingBookingCancelled": true,
+    "exactSyntheticListingPaused": true,
+    "publicCatalogEntryRemoved": true,
+    "protectedAccountIdentityRecorded": false,
+    "privateCaptureRetainedOutsideTrash": false,
+    "onePlusContacted": false
+  },
+  "capacity": {
+    "fixedCapacityGateRetained": true,
+    "firstGateStoppedBeforeTestsBelowRequiredReserve": true,
+    "supersededPrivateArchivesMovedToRecoverableExternalColdStorage": 2,
+    "movedKiB": 487424,
+    "currentCandidateMoved": false,
+    "sourceOrUserDataDeleted": false,
+    "manualRelocationAcceptedAsReleaseEvidence": false,
+    "independentCleanCheckoutPassed": true
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "firebaseProjectChanged": false,
+    "backendDeploymentChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "vpsDnsChanged": false,
+    "publicRegistrationChanged": false,
+    "prMerged": false,
+    "containsSecrets": false,
+    "containsAccountIdentity": false,
+    "containsRawDeviceIdentifier": false,
+    "containsPrivateFilesystemPath": false,
+    "containsFixtureIdentifier": false
+  },
+  "remaining": [
+    "physical-transport-response-loss-fault-injection-not-claimed",
+    "on-device-listing-ai-not-replayed-on-2026091201",
+    "wider-two-role-journey-not-replayed-because-runtime-delta-is-push-only",
+    "professional-v52-binding-gate",
+    "stripe-sandbox-gate",
+    "manual-talkback-gate",
+    "all-live-store-production-gates"
+  ]
+}

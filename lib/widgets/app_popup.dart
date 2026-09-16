@@ -2,22 +2,70 @@ import 'package:flutter/material.dart';
 import 'dart:ui' as ui;
 import 'package:lendify/theme.dart';
 import 'package:lendify/widgets/login_nudge_sheet.dart';
+import 'package:lendify/widgets/tracked_dialog_route.dart';
 
 /// Unified popup and toast utilities to keep a consistent, modern glass style
 /// across the entire app. Use these instead of SnackBar or small bottom sheets.
 class AppPopup {
+  /// Centered success feedback for short completed actions.
+  static Future<void> success(
+    BuildContext context, {
+    required String title,
+    String? message,
+    TrackedDialogRouteHandle<void>? routeHandle,
+  }) =>
+      toast(
+        context,
+        icon: Icons.check_circle_outline_rounded,
+        title: title,
+        message: message,
+        routeHandle: routeHandle,
+      );
+
+  /// Centered, persistent feedback for failures that need attention.
+  static Future<void> error(
+    BuildContext context, {
+    required String title,
+    String? message,
+    TrackedDialogRouteHandle<void>? routeHandle,
+  }) =>
+      show(
+        context,
+        icon: Icons.error_outline_rounded,
+        title: title,
+        message: message,
+        routeHandle: routeHandle,
+      );
+
+  /// Centered informational feedback for blocked or unavailable actions.
+  static Future<void> info(
+    BuildContext context, {
+    required String title,
+    String? message,
+    TrackedDialogRouteHandle<void>? routeHandle,
+  }) =>
+      show(
+        context,
+        icon: Icons.info_outline_rounded,
+        title: title,
+        message: message,
+        routeHandle: routeHandle,
+      );
+
   /// Shows a lightweight anchored menu near the top-right (SIT style).
   /// Returns the selected value or null when dismissed.
   static Future<String?> showMenuActions(
     BuildContext context, {
-    required List<({String value, IconData icon, String label, Color? color})> items,
+    required List<({String value, IconData icon, String label, Color? color})>
+        items,
   }) async {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final size = MediaQuery.of(context).size;
     // Anchor roughly to the top-right under the app bar
-    final position = RelativeRect.fromLTRB(size.width - 8, kToolbarHeight + 8, 8, size.height - kToolbarHeight - 8);
+    final position = RelativeRect.fromLTRB(size.width - 8, kToolbarHeight + 8,
+        8, size.height - kToolbarHeight - 8);
 
     return await showMenu<String>(
       context: context,
@@ -66,7 +114,8 @@ class AppPopup {
                 child: Text(
                   it.label,
                   style: TextStyle(
-                    color: isDark ? Colors.white : AppTheme.textPrimary(context),
+                    color:
+                        isDark ? Colors.white : AppTheme.textPrimary(context),
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -76,13 +125,15 @@ class AppPopup {
       ],
     );
   }
+
   /// Shows a centered glass dialog with optional actions.
   ///
   /// - icon: leading icon shown in a subtle circular badge
   /// - title: bold title
   /// - message: secondary text below the title
   /// - actions: optional row of action buttons (aligned to full width)
-  static Future<void> show(BuildContext context, {
+  static Future<void> show(
+    BuildContext context, {
     required IconData icon,
     required String title,
     String? message,
@@ -100,22 +151,19 @@ class AppPopup {
     bool showCloseIcon = true,
     // New: optional auto-close duration for standard popups
     Duration? autoCloseAfter,
+    TrackedDialogRouteHandle<void>? routeHandle,
   }) async {
+    final handle = routeHandle ?? TrackedDialogRouteHandle<void>();
+    var closed = false;
     // Schedule auto-close if requested
     if (autoCloseAfter != null) {
       Future<void>.delayed(autoCloseAfter).then((_) {
-        try {
-          final nav = Navigator.maybeOf(context, rootNavigator: true);
-          if (nav != null && nav.canPop()) {
-            nav.maybePop();
-          }
-        } catch (_) {
-          // Silently ignore if navigator is unavailable (e.g., context disposed)
-        }
+        if (!closed) handle.dismiss();
       });
     }
-    await showGeneralDialog<void>(
+    await showTrackedGeneralDialog<void>(
       context: context,
+      handle: handle,
       barrierDismissible: barrierDismissible,
       barrierLabel: title,
       // Keep barrier technically transparent; we render our own dimming+blur layer
@@ -141,20 +189,20 @@ class AppPopup {
                   constraints: const BoxConstraints(maxWidth: 720),
                   child: Material(
                     color: Colors.transparent,
-                    child: _GlassCard(
+                    child: _scrollableGlassCard(_GlassCard(
                       leadingIcon: icon,
                       leadingWidget: leadingWidget,
                       title: title,
                       message: message,
                       actions: actions,
-                      onClose: () => Navigator.of(ctx).maybePop(),
+                      onClose: handle.dismiss,
                       plainCloseIcon: plainCloseIcon,
                       showClose: showCloseIcon,
                       accentGradient: accentGradient,
                       backgroundColor: backgroundColor,
                       borderColor: borderColor,
                       useExploreBackground: useExploreBackground,
-                    ),
+                    )),
                   ),
                 ),
               ),
@@ -172,17 +220,19 @@ class AppPopup {
           ),
         );
       },
-    );
+    ).whenComplete(() => closed = true);
   }
 
   static Future<void> showLoginRequired(BuildContext context) async {
     // Replaced legacy centered dialog with the standard premium bottom sheet.
-    await showGuestRestrictionSheet(context, gateContext: GuestGateContext.generic);
+    await showGuestRestrictionSheet(context,
+        gateContext: GuestGateContext.generic);
   }
 
   /// Lightweight variant that auto dismisses after [duration].
   /// Shows the same centered glass card but without actions and with no close icon.
-  static Future<void> toast(BuildContext context, {
+  static Future<void> toast(
+    BuildContext context, {
     required IconData icon,
     required String title,
     String? message,
@@ -193,20 +243,16 @@ class AppPopup {
     Color? backgroundColor,
     Color? borderColor,
     bool useExploreBackground = false,
+    TrackedDialogRouteHandle<void>? routeHandle,
   }) async {
-    bool closed = false;
+    var closed = false;
+    final handle = routeHandle ?? TrackedDialogRouteHandle<void>();
     Future<void>.delayed(duration).then((_) {
-      try {
-        final nav = Navigator.maybeOf(context, rootNavigator: true);
-        if (!closed && nav != null && nav.canPop()) {
-          nav.maybePop();
-        }
-      } catch (_) {
-        // Ignore navigator lookup failures
-      }
+      if (!closed) handle.dismiss();
     });
-    await showGeneralDialog<void>(
+    await showTrackedGeneralDialog<void>(
       context: context,
+      handle: handle,
       barrierDismissible: true,
       barrierLabel: title,
       barrierColor: Colors.transparent,
@@ -230,7 +276,7 @@ class AppPopup {
                   constraints: const BoxConstraints(maxWidth: 640),
                   child: Material(
                     color: Colors.transparent,
-                    child: _GlassCard(
+                    child: _scrollableGlassCard(_GlassCard(
                       leadingIcon: icon,
                       leadingWidget: leadingWidget,
                       title: title,
@@ -241,7 +287,7 @@ class AppPopup {
                       backgroundColor: backgroundColor,
                       borderColor: borderColor,
                       useExploreBackground: useExploreBackground,
-                    ),
+                    )),
                   ),
                 ),
               ),
@@ -264,7 +310,8 @@ class AppPopup {
 
   /// Shows a centered glass dialog with arbitrary [body] content.
   /// Use for selection popups (e.g., Wunschlisten) that need custom widgets.
-  static Future<T?> showCustom<T>(BuildContext context, {
+  static Future<T?> showCustom<T>(
+    BuildContext context, {
     required IconData icon,
     required String title,
     required Widget body,
@@ -279,9 +326,12 @@ class AppPopup {
     bool showAccentLine = false,
     // New: customize the glass card background color
     Color? cardBackgroundColor,
+    TrackedDialogRouteHandle<T>? routeHandle,
   }) async {
-    return showGeneralDialog<T>(
+    final handle = routeHandle ?? TrackedDialogRouteHandle<T>();
+    return showTrackedGeneralDialog<T>(
       context: context,
+      handle: handle,
       barrierDismissible: barrierDismissible,
       barrierLabel: title,
       barrierColor: Colors.transparent,
@@ -306,19 +356,22 @@ class AppPopup {
                   constraints: const BoxConstraints(maxWidth: 720),
                   child: Material(
                     color: Colors.transparent,
-                    child: _GlassCard(
+                    child: _scrollableGlassCard(_GlassCard(
                       leadingIcon: icon,
                       leadingWidget: leadingWidget,
                       title: title,
                       // Inject custom body
                       body: body,
-                      onClose: () => Navigator.of(ctx).maybePop(),
+                      onClose: handle.dismiss,
                       showClose: showCloseIcon,
                       // Add subtle brand accent to the leading badge (can be hidden via showAccentLine)
                       accentGradient: showAccentLine
                           ? LinearGradient(colors: [
                               Theme.of(ctx).colorScheme.primary,
-                              Theme.of(ctx).colorScheme.primary.withValues(alpha: 0.85),
+                              Theme.of(ctx)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.85),
                             ])
                           : null,
                       // Default custom dialogs to light surfaces in light theme and dark glass in dark theme
@@ -327,7 +380,7 @@ class AppPopup {
                               ? Colors.black.withValues(alpha: 0.60)
                               : AppTheme.surfacePrimary(ctx)),
                       showLeading: showLeading,
-                    ),
+                    )),
                   ),
                 ),
               ),
@@ -349,38 +402,10 @@ class AppPopup {
   }
 }
 
-class _GlassActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final Gradient? gradient;
-
-  const _GlassActionButton({required this.icon, required this.label, required this.onTap, this.gradient});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        height: 48,
-        decoration: BoxDecoration(
-          gradient: gradient,
-          color: gradient == null ? Colors.white.withValues(alpha: 0.06) : null,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, size: 18, color: Colors.white),
-          const SizedBox(width: 8),
-          Flexible(child: Text(label, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w900))),
-        ]),
-      ),
+Widget _scrollableGlassCard(Widget child) => SingleChildScrollView(
+      primary: false,
+      child: child,
     );
-  }
-}
 
 class _GlassCard extends StatelessWidget {
   final IconData? leadingIcon;
@@ -419,10 +444,16 @@ class _GlassCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(20);
     // Make the glass card itself more opaque for better readability on busy backdrops
-    final baseColor = backgroundColor ?? (useExploreBackground ? Colors.black.withValues(alpha: 0.28) : Colors.black.withValues(alpha: 0.58));
-    final isLightCard = ThemeData.estimateBrightnessForColor(baseColor) == Brightness.light;
-    final titleColor = isLightCard ? AppTheme.textPrimary(context) : Colors.white;
-    final secondaryColor = isLightCard ? AppTheme.textSecondary(context) : Colors.white70;
+    final baseColor = backgroundColor ??
+        (useExploreBackground
+            ? Colors.black.withValues(alpha: 0.28)
+            : Colors.black.withValues(alpha: 0.58));
+    final isLightCard =
+        ThemeData.estimateBrightnessForColor(baseColor) == Brightness.light;
+    final titleColor =
+        isLightCard ? AppTheme.textPrimary(context) : Colors.white;
+    final secondaryColor =
+        isLightCard ? AppTheme.textSecondary(context) : Colors.white70;
     final borderClr = borderColor ??
         (isLightCard
             ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.10)
@@ -435,7 +466,8 @@ class _GlassCard extends StatelessWidget {
           Positioned.fill(
             child: ImageFiltered(
               imageFilter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-              child: Image.asset('assets/images/fulllogo.jpg', fit: BoxFit.cover),
+              child:
+                  Image.asset('assets/images/fulllogo.jpg', fit: BoxFit.cover),
             ),
           ),
           // Keep light cards bright; only darken dark cards for contrast
@@ -467,7 +499,10 @@ class _GlassCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      style: TextStyle(color: titleColor, fontWeight: FontWeight.w800, fontSize: 16),
+                      style: TextStyle(
+                          color: titleColor,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -475,29 +510,36 @@ class _GlassCard extends StatelessWidget {
                     (plainCloseIcon
                         ? IconButton(
                             onPressed: onClose,
-                            icon: Icon(Icons.close, size: 20, color: secondaryColor),
+                            tooltip: 'Schließen',
+                            icon: Icon(Icons.close,
+                                size: 20, color: secondaryColor),
                             padding: const EdgeInsets.all(4),
                             splashRadius: 18,
                           )
-                        : InkResponse(
-                            onTap: onClose,
-                            radius: 18,
-                            child: Container(
-                              width: 30,
-                              height: 30,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: danger,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: danger.withValues(alpha: 0.35),
-                                    blurRadius: 12,
-                                    spreadRadius: 0,
-                                  ),
-                                ],
-                              ),
-                              child: const Center(
-                                child: Icon(Icons.close, color: Colors.white, size: 16),
+                        : Semantics(
+                            button: true,
+                            label: 'Schließen',
+                            child: InkResponse(
+                              onTap: onClose,
+                              radius: 18,
+                              child: Container(
+                                width: 30,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: danger,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: danger.withValues(alpha: 0.35),
+                                      blurRadius: 12,
+                                      spreadRadius: 0,
+                                    ),
+                                  ],
+                                ),
+                                child: const Center(
+                                  child: Icon(Icons.close,
+                                      color: Colors.white, size: 16),
+                                ),
                               ),
                             ),
                           )),
@@ -515,7 +557,8 @@ class _GlassCard extends StatelessWidget {
               ],
               if (message != null) ...[
                 const SizedBox(height: 6),
-                Text(message!, style: TextStyle(color: secondaryColor, fontSize: 13)),
+                Text(message!,
+                    style: TextStyle(color: secondaryColor, fontSize: 13)),
               ],
               if (body != null) ...[
                 const SizedBox(height: 12),
@@ -538,12 +581,17 @@ class _GlassCard extends StatelessWidget {
   }
 
   Widget _buildLeading(BuildContext context) {
-    final baseColor = backgroundColor ?? (useExploreBackground ? Colors.black.withValues(alpha: 0.28) : Colors.black.withValues(alpha: 0.58));
-    final isLightCard = ThemeData.estimateBrightnessForColor(baseColor) == Brightness.light;
+    final baseColor = backgroundColor ??
+        (useExploreBackground
+            ? Colors.black.withValues(alpha: 0.28)
+            : Colors.black.withValues(alpha: 0.58));
+    final isLightCard =
+        ThemeData.estimateBrightnessForColor(baseColor) == Brightness.light;
     final leadingBg = isLightCard
         ? AppTheme.surfaceSecondary(context)
         : Colors.white.withValues(alpha: 0.10);
-    final leadingFg = isLightCard ? AppTheme.textPrimary(context) : Colors.white;
+    final leadingFg =
+        isLightCard ? AppTheme.textPrimary(context) : Colors.white;
     if (leadingWidget != null) return leadingWidget!;
     return Container(
       width: 36,

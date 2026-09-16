@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "status": "LOCAL_FOCUSED_FULL_NORMAL_AND_EXACT_CLEAN_PASS",
+  "executionBase": "ebd0520dfbc1dd9526c721334db5ed99b223dabc",
+  "observedOn": "2026-09-04",
+  "installedCandidate": {
+    "source": "55a1aa5a11a53151ee6740785eb1e25b79f6b06e",
+    "build": "2026090404",
+    "containsCorrection": false
+  },
+  "runtime": {
+    "source": "5d88295fa7fe313b83936783a0582a505b2ba486",
+    "environment": "staging",
+    "paymentTransport": "memory",
+    "livemode": false
+  },
+  "physicalBaseline": {
+    "knownSyntheticOwnerContactMatchedPrivately": true,
+    "ownerProjects": 0,
+    "ownerItems": 0,
+    "renterProjects": 0,
+    "renterItems": 0,
+    "apiStatus": 200,
+    "privateNoStore": true,
+    "revision": 0,
+    "reservationCreated": false,
+    "uiExplicitEmptyAndNonReservationDisclosure": true,
+    "cartMutated": false,
+    "probeSessionsRevokedAndRejected": true,
+    "ownerRoleUnchanged": true,
+    "navigationRestored": "Entdecken"
+  },
+  "reproduction": {
+    "source": "ebd0520dfbc1dd9526c721334db5ed99b223dabc",
+    "stableControlPassed": 1,
+    "desiredInvariantsFailed": 2,
+    "findings": [
+      "A project dialog survives a switch to B",
+      "Confirming the delayed A draft persists its title under B"
+    ],
+    "environment": "isolated Flutter widget and local preference fixtures; no device write"
+  },
+  "verification": {
+    "focusedDefaultTests": 40,
+    "enabledBackendHttpMocks": 8,
+    "wiringGuards": 6,
+    "allToolTests": 2216,
+    "retentionValidatorTests": 46,
+    "analyzerIssues": 0,
+    "fullNormalRegression": "PASS",
+    "fullNormalDefaultFlutterPasses": 735,
+    "fullNormalDefaultExplicitProfileSkips": 33,
+    "allMandatoryProfilesPassed": true,
+    "webBuildAndWasmDryRun": "PASS_NOT_STANDALONE_WASM_RUNTIME",
+    "loopbackSmoke": "PASS",
+    "androidDebugBuildSeconds": 41,
+    "androidDebugApkSha256": "11fd8c47cf105b011364f2d582558bc75f158945da89fbcd9a0e8c7bcbb6d264",
+    "androidSurface": {"minSdk": 24, "permissions": 14, "exportedComponents": 8},
+    "exactCleanSource": "PASS_b748e3befcef7b0af0efe93135a510a98b56ba16",
+    "exactCleanEvidence": "docs/evidence/release-readiness/wp05-cart-project-principal-clean-20260904.json",
+    "exactCleanEvidenceSha256": "3f0da093aafb6c6b149a988b896f2d33337031a6d4af96f8d787e5ca2259e83d",
+    "exactCleanLogSha256": "513995842797bfee5c94d43b7e53207eb81ce989ba218e023919d69a49960630",
+    "exactCleanFullRegressionSeconds": 668,
+    "exactCleanSecondAndroidSeconds": 45,
+    "exactCleanDebugSha256": "9c930d7546cca3d5c0d51b4f1552734e344efe4c6881e55ae6f4113ef350389b",
+    "exactCleanByteAndExtractedEntryIdentity": true,
+    "successorDevice": "OPEN",
+    "github": "OWNER_DEFERRED"
+  },
+  "preservedDiagnostics": {
+    "originalRed": true,
+    "initialFocused": "31 passed; previous immediate-project-completion expectation now requires explicit cancellation",
+    "nativeCleanupFixtureRun": "Explicitly terminated while stalled; runner exit zero is NOT a pass",
+    "firstFullRun": "Tool stage: 2181 pass / 35 fail; omitted retention source binding",
+    "secondFullRun": "Tool stage: 2166 pass / 50 fail; resumed intermediate graph and retention ratchets incomplete",
+    "intermediateToolRun": "2194 pass / 22 fail; retention ratchet mapping still incomplete",
+    "finalToolRun": "2216 pass / 0 fail",
+    "repeatRefresh": "NO_OP"
+  },
+  "technicalDebt": {
+    "fixtureLogout": {
+      "status": "CLOSED_FOR_ISOLATED_PROJECT_TEST",
+      "resolution": "Use existing serialized exact session-clear fixture with native cleanup disabled, assert receipt and actual epoch; full native logout not claimed"
+    },
+    "bindingRefresh": {
+      "status": "CLOSED_FOR_THIS_REFRESH",
+      "resolution": "Include changed intermediates and exact retention mapping; unchanged non-hash assertions, all2216 tests and deterministic no-op verification"
+    }
+  },
+  "sourceHashes": {
+    "lib/screens/wishlists_screen.dart": "cb64ca5670af401b7259e3d226cdde54047891c842abcf5287522528590f4bba",
+    "lib/services/local_principal_scope.dart": "7bc2b1254651b1cca95059ef99de2fe4b9027bb7ebbd3cea88777f3db33e2218",
+    "lib/services/backend_repository.dart": "07d0d99b361211104af647518a1204e1e8871732170d0fce9bf7b628e0794d83",
+    "lib/services/data_service.dart": "85f8d2f2b658d308e6ebec61f6eec39551daaa9c8f3c18269ed6f30862c49bbf",
+    "scripts/technical_regression_check.sh": "34270a229093d27eaf9b70ea4c9a0937897a6cdf335730c7f1b390b406dbfd6d",
+    "test/reduced_wave0_local_principal_isolation_test.dart": "68d82e3a6c2cbb5bbc6bb60db675f1dbbb76610e5b35f616036f72abb7444907",
+    "test/rental_cart_project_principal_test.dart": "589540c4a715816484b8ec2d5e3dad9076f94642e7dd41e5b7a9cba944c5ceaa",
+    "test/rental_cart_project_backend_owner_test.dart": "5c651dd9ab55a3d7a5694a0696d9d0b09a1349df0e6dc2a0753a3930a51014b1",
+    "test/tool/rental_cart_project_principal_wiring.test.mjs": "896ff2eb0c2ad063bfb81bf9c936f629b702f9ab8597cea7d13180e1cf0cc22c"
+  },
+  "proofHashes": {
+    "cart-project-full-regression-final.log": "b6fde15614efb4292df2f87bb44cc721e9adc897f74c8075d3cf0010da63c16a",
+    "cart-baseline.w2uoU5/api.json": "68605cc9307db3959d2d64443734933680bbfccbb56c3c9a94412a93645c9b4e",
+    "cart-baseline.w2uoU5/pixel.json": "3235ebf18495e014bae7185133eecd7e6e53b3a6f8d0d7795021d484219a0842",
+    "cart-baseline.w2uoU5/result.json": "7b6bab053cd66828419ee15faa139b936497574590183e5b5abd03e3985b8610",
+    "cart-baseline.w2uoU5/probe-session-cleanup.json": "5f302ac204b1942e4099c7e44f527419a32969683b6444bde3b55f0da2c39fe2",
+    "cart-project-red.log": "b1c8d6fb2dcdaeaaebf6bdfea125212e1ba06ce77dc1284a48ee043c9e2bc421",
+    "cart-project-focused-initial.log": "7a265d45bcc7b102053fae433d7e58599d2063cc0cd9b7e78a5eb4b1d0e79144",
+    "cart-project-focused.log": "827146ba662507fab77a631c6b7f612b88ab213122c48a5c9e063a04ef8dbff5",
+    "cart-project-focused-isolated.log": "89c3433bc3a0676f442124b4348a0762dd164b09ff695483e4bb73b9528397e7",
+    "cart-project-backend-owner.log": "9c8213d98699a8909a42e95158748564d621389be6d7a4edb3c8a1725610b743",
+    "cart-project-analyzer.log": "1fa31485216eb0c043a3aa33555ab71a01168a6e13aff75967770883728e8c94",
+    "cart-project-full-regression.log": "729b8eaf798a5270728bd7f723090c24db873428f2959b9f00febe90d66c3cd5",
+    "cart-project-full-regression-bound.log": "7c086ed510edf816dabbd0803a56bbfd7b14565d25503e0da3d486f50e145c70",
+    "cart-project-all-tool-bindings.log": "3f64643b22b580e11219226a185705189774fa74fd8a3b626b41c3d76d736ff6",
+    "cart-project-all-tool-bindings-final.log": "963bbdd23006c92f6ba440201aa4ad25989a510c32debcdff866663063d35c32",
+    "cart-project-retention-bindings.log": "63398921acbcd2dad811fdd6155909b4be36345302420263bd94acfaf86b112e"
+  },
+  "boundaries": {
+    "nonHashLegalPrivacyProviderClaimsUnchanged": true,
+    "validatorAssertionsUnchanged": true,
+    "noRuntimeProviderOrSchemaChange": true,
+    "noNewPixelCartOrBookingMutation": true,
+    "noNewSignedCandidate": true,
+    "onePlusTouched": false,
+    "storeProductionRealMoneyOrSmsAction": false,
+    "githubAction": false,
+    "fullCartAcceptance": false,
+    "fullGoalComplete": false
+  }
+}

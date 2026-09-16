@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "kind": "store-platform-account-readiness-observation",
+  "status": "setup-required",
+  "capturedAt": "2026-08-12T07:25:00Z",
+  "googlePlay": {
+    "source": "signed-in-console-ui",
+    "observation": "developer-account-created-fee-paid-all-account-verifications-complete-app-record-created",
+    "accountType": "personal",
+    "accountTypeSelected": true,
+    "developerAccountCreated": true,
+    "registrationFeePaid": true,
+    "identityVerified": true,
+    "deviceVerified": true,
+    "phoneVerified": true,
+    "appRecordCreated": true
+  },
+  "apple": {
+    "source": "product-owner-statement",
+    "observation": "developer-membership-not-created",
+    "developerAccountCreated": false,
+    "membershipActive": false,
+    "identityVerified": false,
+    "agreementsAccepted": false,
+    "signingTeamAvailable": false,
+    "appRecordCreated": false
+  },
+  "boundaries": {
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false,
+    "containsSecrets": false,
+    "purchaseMade": true,
+    "agreementAccepted": true,
+    "storeSubmissionChanged": false
+  }
+}

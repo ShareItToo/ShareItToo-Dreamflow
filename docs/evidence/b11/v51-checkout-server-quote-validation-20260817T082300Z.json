@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-checkout-server-quote-validation",
+  "status": "passed-source-and-regression",
+  "capturedAt": "2026-08-17T08:23:00Z",
+  "sourceCommit": "5abc212b760a55c71dfc5ee337abef614b67c2f7",
+  "checks": {
+    "bindingResponseUsesStrictParser": true,
+    "currencyMustBeEur": true,
+    "daysWithinLaunchRange": true,
+    "dailyTimesDaysEqualsBase": true,
+    "baseMinusDiscountEqualsRentalSubtotal": true,
+    "platformFeeEqualsTenPercentRule": true,
+    "rentalSubtotalPlusFeeEqualsTotal": true,
+    "invalidQuoteNeverEntersCheckoutState": true
+  },
+  "verification": {
+    "priceSourceWiringTestsPassed": 13,
+    "targetedFlutterTestsPassed": 10,
+    "targetedAnalyzerFindings": 0,
+    "fullFlutterTestsPassed": 270,
+    "intentionalFlutterTestsSkipped": 1,
+    "fullAnalyzerFindings": 229,
+    "fullAnalyzerErrors": 0,
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "technicalRegression": "passed"
+  },
+  "privacy": {
+    "dataCollectionChanged": false,
+    "dataStorageChanged": false,
+    "dataTransportChanged": false,
+    "providerChanged": false,
+    "permissionChanged": false,
+    "privacyInventoryChangeRequired": false
+  },
+  "boundaries": {
+    "backendDeployed": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "storeSubmissionPerformed": false,
+    "realPaymentPerformed": false,
+    "candidateBuiltOrRelabeled": false,
+    "pushRetainedDefaultOff": true,
+    "crashRetainedDefaultOff": true,
+    "pushEnablesCrash": false,
+    "crashDataTransferred": false
+  },
+  "conclusion": {
+    "checkoutBindingPrice": "strict-self-consistent-server-quote-only",
+    "invalidQuoteBehavior": "fail-closed-without-binding-state",
+    "officialPlayInternalCandidate": "1.0.0+2026081509",
+    "localSignedCandidate": "1.0.0+2026081510-built-local-not-uploaded"
+  }
+}

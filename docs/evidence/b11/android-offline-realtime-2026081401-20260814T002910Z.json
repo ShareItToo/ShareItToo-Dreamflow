@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-offline-realtime-diagnostic",
+  "status": "passed-bounded-offline-realtime-diagnostic",
+  "capturedAt": "2026-08-14T00:29:10.368Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081401",
+    "commit": "5518040d63b72c08d8cd2f72d76d802023b7b055",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "installed": {
+    "packageIdentityVerified": true,
+    "versionName": "1.0.0",
+    "buildNumber": "2026081401",
+    "delivery": "direct-apk",
+    "apkSha256": "788f15e1f160ec1e27f2529b34f90061fdef46c82197af93a8cabd9bd085b299"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "authenticatedChatPreloaded": {
+      "status": "passed",
+      "result": "chat-visible-before-offline-window"
+    },
+    "messageHiddenWhileOffline": {
+      "status": "passed",
+      "result": "new-message-absent-during-15-second-offline-window"
+    },
+    "sameProcessRealtimeRecovery": {
+      "status": "passed",
+      "result": "new-message-visible-after-network-restoration"
+    },
+    "originalNetworkRestored": {
+      "status": "passed",
+      "result": "wifi-and-mobile-data-restored-to-original-state"
+    }
+  },
+  "diagnostic": {
+    "offlineWindowSeconds": 15,
+    "appProcessSurvived": true,
+    "processIdentityStable": true,
+    "appForegroundAfterRecovery": true,
+    "packageCrashBufferEntries": 0,
+    "networkRestored": true
+  },
+  "boundaries": {
+    "syntheticAccountsOnly": true,
+    "directDiagnosticOnly": true,
+    "storeInstallationGateSatisfied": false,
+    "fullDeviceMatrixPassed": false,
+    "wifiOnlyDiagnostic": true,
+    "hotspotPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "iosTestFlightPassed": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "messageSent": true,
+    "lockCodeUsed": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  },
+  "isolation": {
+    "protectedReviewFixtureUnchanged": true,
+    "temporaryVaultRemovedAfterProbe": true,
+    "temporaryBookingCompleted": true,
+    "temporaryListingPaused": true,
+    "listingDeleted": false,
+    "containsReviewCredentials": false
+  }
+}

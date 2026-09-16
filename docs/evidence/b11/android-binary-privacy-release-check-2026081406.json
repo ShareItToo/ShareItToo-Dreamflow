@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "kind": "release-check",
+  "status": "passed",
+  "capturedAt": "2026-08-14T15:58:29.062Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081406",
+    "commit": "8583ecd40c06df6d8fa7246e931ef5f2ef3ccfd4",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "releaseCheck": {
+    "id": "binaryPrivacyAndNetwork",
+    "status": "passed",
+    "verifications": [
+      {
+        "id": "signed-apk-and-aab-scan",
+        "status": "passed",
+        "checkedAt": "2026-08-14T15:58:29.062Z",
+        "summary": "Exact signed APK and AAB passed the extended privacy, permission, SDK and runtime-origin scan with no findings."
+      },
+      {
+        "id": "offline-recovery-source-regression",
+        "status": "passed",
+        "checkedAt": "2026-08-14T15:58:29.062Z",
+        "summary": "The candidate includes the bounded stale-socket recycle and one delayed persistence catch-up retry covered by regression tests."
+      }
+    ]
+  },
+  "boundaries": {
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

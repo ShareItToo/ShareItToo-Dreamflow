@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-fresh-install-diagnostic",
+  "status": "passed-play-install-fresh-app-data-and-session-restore",
+  "capturedAt": "2026-08-15T05:47:42.597Z",
+  "scenario": "freshInstall",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081505",
+    "commit": "3908f5a3c300c1125c120c832f3050eea7a0a762"
+  },
+  "installed": {
+    "delivery": "google-play-split",
+    "installerPackageName": "com.android.vending",
+    "packageIdentityVerifiedBeforeAndAfterReset": true
+  },
+  "checks": {
+    "isolatedAppDataResetConfirmed": true,
+    "signedOutFirstStartConfirmed": true,
+    "syntheticReviewLoginRestored": true,
+    "authenticatedProfileConfirmed": true,
+    "coldStartSessionRestoreConfirmed": true
+  },
+  "environment": {
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "paymentEndpointCalled": false
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "boundaries": {
+    "appPackageUninstalled": false,
+    "playTrackChanged": false,
+    "publicStoreChanged": false,
+    "productionChanged": false,
+    "syntheticAccountsOnly": true,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsTokens": false,
+    "containsAccountIdentifiers": false,
+    "containsFixtureIdentifiers": false,
+    "rawDeviceIdentifierPrinted": false,
+    "lockCodeUsed": false
+  }
+}

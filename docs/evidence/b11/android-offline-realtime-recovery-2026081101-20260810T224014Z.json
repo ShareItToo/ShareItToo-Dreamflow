@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-offline-realtime-diagnostic",
+  "status": "passed",
+  "capturedAt": "2026-08-10T22:40:14Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081101",
+    "commit": "3f28e43a18b3733e617b695f9dbc794370f6e05b",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "diagnostic": {
+    "offlineWindowSeconds": 15,
+    "recoveryWindowSeconds": 12,
+    "appProcessSurvived": true,
+    "processIdentityStable": true,
+    "appForegroundAfterRecovery": true,
+    "packageCrashBufferEntries": 0,
+    "networkRestored": true
+  },
+  "initialCrashlyticsObservation": {
+    "capturedAt": "2026-08-10T22:43:55Z",
+    "openFatalGroups": 2,
+    "historicalWebSocketFatalEvents": 342,
+    "historicalLogoutContextFatalEvents": 5,
+    "countsChangedAfterDiagnostic": false,
+    "exactCandidateReleaseAssignmentFinalized": false
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "containsRawDeviceIdentifier": false
+  },
+  "boundaries": {
+    "crashlyticsIngestionWindowAndExactReleaseAssignmentPending": true,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

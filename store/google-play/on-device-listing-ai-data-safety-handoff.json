@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-on-device-listing-ai-data-safety-handoff",
+  "status": "prepared-console-unchanged",
+  "provider": {
+    "name": "Google ML Kit",
+    "libraries": [
+      "com.google.mlkit:image-labeling:17.0.9",
+      "com.google.mlkit:text-recognition:16.0.1"
+    ],
+    "executionLocation": "android_on_device",
+    "modelDelivery": "bundled",
+    "inputOrOutputSentToGoogle": false,
+    "externalImageAiProviderEnabled": false,
+    "apiBillingRequired": false
+  },
+  "sitTransmission": {
+    "selectedListingPhotosSentToSit": true,
+    "normalizedLabelsAndRecognizedTextSentToSit": true,
+    "purpose": "owner-initiated-editable-listing-draft",
+    "automaticPublicationAllowed": false,
+    "ownerReviewRequired": true
+  },
+  "googleSdkTechnicalData": {
+    "encryptedInTransit": true,
+    "sharedByMlKitWithThirdParties": false,
+    "purposes": [
+      "diagnostics",
+      "usage_analytics"
+    ],
+    "types": [
+      "device_information",
+      "application_information",
+      "per_installation_identifier_not_intended_to_identify_user_or_device",
+      "performance_metrics",
+      "api_configuration",
+      "feature_input_and_output_size",
+      "feature_version",
+      "event_type",
+      "error_codes"
+    ]
+  },
+  "userDisclosure": {
+    "version": "listing-ai-on-device-disclosure-v1",
+    "explicitActionRequired": true,
+    "acceptedBeforeAnalysis": true,
+    "automaticAnalysis": false
+  },
+  "sources": [
+    "https://developers.google.com/ml-kit/terms",
+    "https://developers.google.com/ml-kit/android-data-disclosure",
+    "https://developers.google.com/ml-kit/vision/image-labeling/android",
+    "https://developers.google.com/ml-kit/vision/text-recognition/v2/android"
+  ],
+  "playConsole": {
+    "changed": false,
+    "requiredBeforeAnyCandidateContainingMlKitIsUploaded": true,
+    "action": "Reconcile the existing Data safety answers with the SDK technical-data inventory and the SIT photo/derived-label transmission, save evidence, then upload only under a separate exact candidate gate."
+  }
+}

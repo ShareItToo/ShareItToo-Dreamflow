@@ -260,7 +260,11 @@ class _SwitchRow extends StatelessWidget {
             Text(subtitle, style: TextStyle(color: isDark ? Colors.white.withValues(alpha: enabled ? 0.72 : 0.45) : (enabled ? AppTheme.textSecondary(context) : AppTheme.textDisabled(context)), fontSize: 12)),
           ]),
         ),
-        Switch.adaptive(value: value, onChanged: onChanged, activeColor: theme.colorScheme.primary),
+        Switch.adaptive(
+          value: value,
+          onChanged: onChanged,
+          activeThumbColor: theme.colorScheme.primary,
+        ),
       ]),
     );
   }

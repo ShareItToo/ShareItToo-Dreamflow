@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp12-google-signin-current-candidate-acceptance",
+  "status": "complete-current-candidate-physical-google-acceptance",
+  "observedOn": "2026-09-05",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationHead": "4237cbd7a98148c15e35c7bd52ea2f31b3438239",
+    "candidateSourceHead": "96b97b55983111d9e0ae8d8fcc91e9e241a2cb6f",
+    "candidateVersionName": "1.0.0",
+    "candidateVersionCode": "2026090503",
+    "applicationId": "com.shareittoo.app",
+    "channel": "internal",
+    "apiEnvironment": "staging"
+  },
+  "physicalAcceptance": {
+    "deviceModel": "Pixel 7 Pro",
+    "androidVersion": 17,
+    "apiLevel": 37,
+    "installedCandidateExactlyVerified": true,
+    "installedApkSha256": "ff9f0527c73cc7ba7abf31c1fa478c061f292e7b7cd485500959dfe12205ef57",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "googleProviderEnabled": true,
+    "appleProviderEnabled": false,
+    "facebookProviderEnabled": false,
+    "exactPrivateGoogleAccountSelected": true,
+    "firstLogin": "passed",
+    "coldStartPersistence": "passed",
+    "repeatLogin": "passed",
+    "sameProfileFingerprintAcrossRuns": true,
+    "duplicateAccountCreated": false,
+    "protectedOwnerSessionRestored": true,
+    "privateEvidenceStoredOutsideGit": true,
+    "privateEvidenceModeOwnerOnly": true
+  },
+  "diagnosticCorrection": {
+    "runtimeApplicationCodeChanged": false,
+    "initialAttemptResult": "failed-safely-before-success-claim-at-main-navigation-detection",
+    "initialAttemptOwnerRestoration": "passed",
+    "cause": "The maintained diagnostic collapsed distinct post-provider UI outcomes into one generic main-navigation timeout.",
+    "correction": "Classify authenticated, chooser, login, consent, unavailable, provider-or-backend-error and unclassified surfaces; retain raw failure UI only in protected local evidence and emit sanitized classifications.",
+    "originalFailurePreservedAcrossOwnerRestoration": true,
+    "focusedToolTests": {
+      "passed": 4,
+      "failed": 0
+    }
+  },
+  "verification": {
+    "firebaseAndOauthConfigurationTests": "passed",
+    "googleOnlyFlutterProfile": {
+      "passed": 3,
+      "failed": 0
+    },
+    "firebaseSocialAuthBackendProfile": {
+      "passed": 4,
+      "failed": 0
+    },
+    "providerSdkOwnershipProfile": "passed",
+    "providerSdkInitializationProfile": "passed",
+    "nativeProviderProfile": "passed",
+    "fullLocalRegression": {
+      "status": "passed",
+      "toolTestsPassed": 2252,
+      "backendTestsPassed": 836,
+      "defaultFlutterTestsPassed": 859,
+      "defaultFlutterTestsSkipped": 33,
+      "analyzerIssues": 0,
+      "webWasm": "passed",
+      "loopbackSmoke": "passed",
+      "androidMinSdkBuild": "passed"
+    },
+    "cleanCheckout": {
+      "status": "passed",
+      "implementationHead": "4237cbd7a98148c15e35c7bd52ea2f31b3438239",
+      "fullTechnicalRegressionSeconds": 624,
+      "secondAndroidBuildSeconds": 31,
+      "apkClassification": "byte-identical",
+      "apkBytes": 231344595,
+      "apkSha256": "d6db11703cb3378f186b01e9c2db2c40acaee0357b56596d915ede11d9b6461c",
+      "apkEntries": 794,
+      "isolatedCheckoutInitiallyClean": true,
+      "isolatedCheckoutFinallyClean": true,
+      "generatedFootprintWithinBounds": true,
+      "temporaryDataRemoved": true,
+      "privateReportSha256": "8bb661e616d7ec3f389b65a868d48ddcc2e4554df54f0f8dbc3d6f65ff625fcd"
+    },
+    "github": {
+      "regressionRun": 33958820805,
+      "regressionStatus": "passed-all-required-jobs",
+      "codeqlRun": 33958820859,
+      "codeqlStatus": "passed",
+      "openCodeScanningAlerts": 0,
+      "prNumber": 7,
+      "prDraft": true,
+      "prOpen": true,
+      "prMergeable": true,
+      "prMerged": false
+    }
+  },
+  "retainedTruth": {
+    "historicalPrivatePlayArchiveVersionCode": "2026090204",
+    "historicalPrivatePlayArchiveLocallyAvailable": false,
+    "strictHistoricalArtifactLane": "fails-closed-without-recreating-or-relabeling-the-missing-private-artifact",
+    "supportedCandidateRolloverCiMetadataLane": "passed",
+    "currentPrivateCandidateAndPhysicalAcceptanceVerifiedSeparately": true,
+    "temporaryWorkaroundIntroduced": false
+  },
+  "boundaries": {
+    "runtimeApplicationChanged": false,
+    "firebaseConfigurationChanged": false,
+    "providerConfigurationChanged": false,
+    "stagingDeploymentChanged": false,
+    "googlePlayChanged": false,
+    "stripeChanged": false,
+    "paymentChanged": false,
+    "productionChanged": false,
+    "onePlusContacted": false,
+    "credentialsReadOrExtracted": false,
+    "accountIdentityStoredInGit": false,
+    "pullRequestMerged": false
+  },
+  "remainingGates": {
+    "externalListingAi": "owner-auth-and-dedicated-staging-credential-required",
+    "stripeTestMode": "owner-business-profile-and-terms-required",
+    "v52BindingLegal": "draft-blocked-professional-approval-required",
+    "facebookAndApple": "separate-provider-owner-setup-required",
+    "productionStoreAndLiveMoney": "closed"
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-analysis-dead-ui-components",
+  "capturedAt": "2026-08-16T08:20:04Z",
+  "status": "passed-dead-ui-component-reduction",
+  "baseline": {
+    "totalDiagnostics": 352,
+    "errors": 0,
+    "warnings": 184,
+    "infos": 168,
+    "unusedElements": 116,
+    "unusedElementParameters": 52
+  },
+  "result": {
+    "totalDiagnostics": 333,
+    "errors": 0,
+    "warnings": 165,
+    "infos": 168,
+    "diagnosticsRemovedThisBatch": 19,
+    "diagnosticsRemovedFromOriginal611": 278,
+    "unusedElements": 105,
+    "unusedElementParameters": 44,
+    "runtimeSourceFilesChanged": 7,
+    "sourceLinesRemoved": 375,
+    "sourceLinesAdded": 4,
+    "ciAnalyzerBaseline": 333
+  },
+  "safeRemovalScope": {
+    "removedUnusedElements": 11,
+    "removedUnusedElementParameters": 8,
+    "newAnalyzerDiagnosticsIntroduced": 0,
+    "reachableWidgetBranchesRemoved": 0,
+    "privacyBoundSourceFilesChanged": 0,
+    "displayedUiChanged": false,
+    "persistedDataChanged": false
+  },
+  "removedRegions": [
+    "unreferenced popup action button",
+    "unreferenced search see-all screen and its permanently disabled controls",
+    "unreferenced filter icon and sort helpers",
+    "five unreferenced legacy filter widgets",
+    "unreferenced profile statistic and review-context helpers",
+    "never-supplied settings tint and review initial-star parameters"
+  ],
+  "permanentlyForbiddenAnalyzerCodes": [
+    "dead_code",
+    "empty_catches",
+    "equal_keys_in_map",
+    "unreachable_switch_default",
+    "unused_import",
+    "unused_local_variable"
+  ],
+  "remainingDiagnostics": {
+    "unused_element": 105,
+    "use_build_context_synchronously": 107,
+    "deprecated_member_use": 60,
+    "unused_element_parameter": 44,
+    "unused_field": 16,
+    "avoid_web_libraries_in_flutter": 1
+  },
+  "remainingScopeBoundary": {
+    "p1_01Complete": false,
+    "reason": "large booking and messaging regions remain protected pending product-flow review; async context and deprecated API findings require targeted UI migrations"
+  },
+  "verification": {
+    "flutterAnalyze": "passed-with-zero-errors-and-333-non-error-diagnostics",
+    "analyzerBaselineWiringTests": "passed-2",
+    "flutterTests": "passed-268-one-skipped",
+    "technicalRegression": "passed-with-bounded-internal-candidate-rollover",
+    "webBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "boundaries": {
+    "newAppCandidateBuilt": false,
+    "existingAppCandidateChanged": false,
+    "productionChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "testAccountsMutated": false,
+    "realMoneyUsed": false
+  }
+}

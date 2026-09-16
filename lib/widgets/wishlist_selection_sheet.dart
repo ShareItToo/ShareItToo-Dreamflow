@@ -2,22 +2,64 @@ import 'package:flutter/material.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/widgets/wishlist_folder.dart';
 import 'package:lendify/widgets/app_popup.dart';
+import 'package:lendify/widgets/saved_cart_action_scope.dart';
 import 'package:lendify/theme.dart';
 
 class WishlistSelectionSheet {
+  static Future<bool> _current(SavedCartActionScope? scope) async =>
+      scope == null || await scope.isCurrent();
+
+  static Future<String?> _show(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required Widget Function(ValueChanged<String?> complete) body,
+    SavedCartActionScope? scope,
+    Color? cardBackgroundColor,
+  }) {
+    if (scope != null) {
+      return scope.dialog<String>(context,
+          icon: icon,
+          title: title,
+          body: body,
+          cardBackgroundColor: cardBackgroundColor);
+    }
+    return AppPopup.showCustom<String>(context,
+        icon: icon,
+        title: title,
+        body: body((value) => Navigator.of(context).pop(value)),
+        showCloseIcon: false,
+        showLeading: false,
+        showAccentLine: false,
+        cardBackgroundColor: cardBackgroundColor);
+  }
+
   /// Shows the first-time add sheet with the three predefined lists only.
-  static Future<String?> showAdd(BuildContext context) async {
-    final lists = await DataService.getWishlists();
-    final itemsBy = await DataService.getItemsByWishlist();
+  static Future<String?> showAdd(BuildContext context,
+      {SavedCartActionScope? scope}) async {
+    if (!await _current(scope) || !context.mounted) {
+      return null;
+    }
+    final lists = await DataService.getWishlists(expectedOwner: scope?.owner);
+    if (!await _current(scope) || !context.mounted) {
+      return null;
+    }
+    final itemsBy =
+        await DataService.getItemsByWishlist(expectedOwner: scope?.owner);
+    if (!await _current(scope) || !context.mounted) {
+      return null;
+    }
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final system = lists.where((e) => e['system'] == true).toList();
     final custom = lists.where((e) => e['system'] != true).toList();
-    return AppPopup.showCustom<String>(
+    return _show(
       context,
+      scope: scope,
       icon: Icons.favorite,
-      title: 'Zu welcher Wunschliste hinzufügen?',
-      body: _SelectorContent(
-        title: 'Zu welcher Wunschliste hinzufügen?',
+      title: 'In welcher Merkliste speichern?',
+      body: (complete) => _SelectorContent(
+        scope: scope,
+        title: 'In welcher Merkliste speichern?',
         options: [
           // System lists first
           for (final e in system)
@@ -44,20 +86,27 @@ class WishlistSelectionSheet {
         onDark: isDark,
         hideIcons: false,
         allowCreate: true,
-        popWith: (id) => Navigator.of(context).pop(id),
+        popWith: complete,
       ),
-      showCloseIcon: false,
-      showLeading: false,
-      showAccentLine: false,
       cardBackgroundColor: isDark ? null : AppTheme.surfacePrimary(context),
     );
   }
 
   /// Shows a move-to sheet across all lists except the current.
   static Future<String?> showMove(BuildContext context,
-      {required String currentListId}) async {
-    final lists = await DataService.getWishlists();
-    final itemsBy = await DataService.getItemsByWishlist();
+      {required String currentListId, SavedCartActionScope? scope}) async {
+    if (!await _current(scope) || !context.mounted) {
+      return null;
+    }
+    final lists = await DataService.getWishlists(expectedOwner: scope?.owner);
+    if (!await _current(scope) || !context.mounted) {
+      return null;
+    }
+    final itemsBy =
+        await DataService.getItemsByWishlist(expectedOwner: scope?.owner);
+    if (!await _current(scope) || !context.mounted) {
+      return null;
+    }
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final options = lists
         .where((e) => (e['id'] ?? '').toString() != currentListId)
@@ -72,22 +121,21 @@ class WishlistSelectionSheet {
               count: itemsBy[(e['id'] ?? '').toString()]?.length ?? 0,
               system: e['system'] == true,
             ));
-    return AppPopup.showCustom<String>(
+    return _show(
       context,
+      scope: scope,
       icon: Icons.drive_file_move_rtl,
-      title: 'In andere Wunschliste verschieben',
-      body: _SelectorContent(
-        title: 'In andere Wunschliste verschieben',
+      title: 'In andere Merkliste verschieben',
+      body: (complete) => _SelectorContent(
+        scope: scope,
+        title: 'In andere Merkliste verschieben',
         options: options.toList(),
         grid: false,
         onDark: isDark,
         hideIcons: false,
         allowCreate: true,
-        popWith: (id) => Navigator.of(context).pop(id),
+        popWith: complete,
       ),
-      showCloseIcon: false,
-      showLeading: false,
-      showAccentLine: false,
       cardBackgroundColor: isDark ? null : AppTheme.surfacePrimary(context),
     );
   }
@@ -95,15 +143,20 @@ class WishlistSelectionSheet {
   /// Shows the small management popup with two actions for an item already
   /// saved in a wishlist: move to another list or remove from wishlist.
   /// Returns 'move' | 'remove' or null when dismissed.
-  static Future<String?> showManageOptions(BuildContext context) async {
+  static Future<String?> showManageOptions(BuildContext context,
+      {SavedCartActionScope? scope}) async {
+    if (!await _current(scope) || !context.mounted) {
+      return null;
+    }
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    return AppPopup.showCustom<String>(
+    return _show(
       context,
+      scope: scope,
       icon: Icons.favorite,
-      title: 'Wunschliste',
-      body: Padding(
+      title: 'Gemerkt',
+      body: (complete) => Padding(
         padding: const EdgeInsets.only(left: 6, right: 6, bottom: 2),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -111,9 +164,9 @@ class WishlistSelectionSheet {
             _CompactActionRow(
               icon: Icons.swap_horiz,
               iconColor: cs.primary,
-              label: 'In andere Wunschliste verschieben',
+              label: 'In andere Merkliste verschieben',
               onDark: isDark,
-              onTap: () => Navigator.of(context).pop('move'),
+              onTap: () => complete('move'),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -128,23 +181,21 @@ class WishlistSelectionSheet {
             _CompactActionRow(
               icon: Icons.delete_outline,
               iconColor: cs.error,
-              label: 'Aus Wunschliste entfernen',
+              label: 'Aus Gemerkt entfernen',
               onDark: isDark,
-              onTap: () => Navigator.of(context).pop('remove'),
+              onTap: () => complete('remove'),
             ),
           ],
         ),
       ),
-      showCloseIcon: false,
-      showLeading: false,
-      showAccentLine: false,
       cardBackgroundColor: isDark ? null : AppTheme.surfacePrimary(context),
     );
   }
 
   static String _subtitleForSystem(String id) {
-    if (id == DataService.wlSoonId)
+    if (id == DataService.wlSoonId) {
       return 'Ich plane, diesen Artikel bald zu mieten';
+    }
     if (id == DataService.wlLaterId) return 'Interessant, aber nicht jetzt';
     if (id == DataService.wlAgainId) return 'Diesen Artikel hatte ich schon';
     return '';
@@ -152,6 +203,7 @@ class WishlistSelectionSheet {
 }
 
 class _SelectorContent extends StatelessWidget {
+  final SavedCartActionScope? scope;
   final String title;
   final List<_SheetOption> options;
   final bool grid;
@@ -163,6 +215,7 @@ class _SelectorContent extends StatelessWidget {
   const _SelectorContent(
       {required this.title,
       required this.options,
+      this.scope,
       this.grid = false,
       this.onDark = false,
       this.hideIcons = false,
@@ -208,6 +261,7 @@ class _SelectorContent extends StatelessWidget {
                     ]),
                   if (allowCreate)
                     _CreateListCard(
+                      scope: scope,
                       onDark: onDark,
                       onCreated: (id) => (popWith ?? (s) {})(id),
                     ),
@@ -334,10 +388,12 @@ class _OptionCard extends StatelessWidget {
 IconData _iconForListId(String id, {required bool system}) {
   if (system) {
     // Deutlich unterschiedliche Icons fuer "Demnächst benötigt" und "Für später"
-    if (id == DataService.wlSoonId)
+    if (id == DataService.wlSoonId) {
       return Icons.watch_later_outlined; // bald/zeitnah
-    if (id == DataService.wlLaterId)
+    }
+    if (id == DataService.wlLaterId) {
       return Icons.event_available_outlined; // für später
+    }
     if (id == DataService.wlAgainId) return Icons.repeat_outlined;
   }
   // Für vom Nutzer erstellte Wunschlisten ein persönliches Icon anzeigen
@@ -345,9 +401,11 @@ IconData _iconForListId(String id, {required bool system}) {
 }
 
 class _CreateListCard extends StatelessWidget {
+  final SavedCartActionScope? scope;
   final bool onDark;
   final ValueChanged<String> onCreated;
-  const _CreateListCard({required this.onDark, required this.onCreated});
+  const _CreateListCard(
+      {required this.onDark, required this.onCreated, this.scope});
 
   @override
   Widget build(BuildContext context) {
@@ -364,23 +422,55 @@ class _CreateListCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: InkWell(
         onTap: () async {
-          final controller = TextEditingController();
+          if (!await WishlistSelectionSheet._current(scope) ||
+              !context.mounted) {
+            return;
+          }
+          if (!context.mounted) return;
           final isDark = Theme.of(context).brightness == Brightness.dark;
-          final name = await AppPopup.showCustom<String>(
+          final name = await WishlistSelectionSheet._show(
             context,
+            scope: scope,
             icon: Icons.favorite_border,
-            title: 'Neue Wunschliste erstellen',
-            showCloseIcon: false,
-            showLeading: false,
-            showAccentLine: false,
+            title: 'Neue Merkliste erstellen',
             cardBackgroundColor:
                 isDark ? null : AppTheme.surfacePrimary(context),
-            body: _CreateListForm(controller: controller),
+            body: (complete) => _CreateListForm(onComplete: complete),
           );
+          if (!await WishlistSelectionSheet._current(scope) ||
+              !context.mounted) {
+            return;
+          }
           if (name != null && name.trim().isNotEmpty) {
-            final id = await DataService.addCustomWishlist(name.trim());
-            // Return the new id to the parent selector so it can immediately select it
-            onCreated(id);
+            try {
+              final id = await DataService.addCustomWishlist(name.trim(),
+                  expectedOwner: scope?.owner);
+              if (!await WishlistSelectionSheet._current(scope) ||
+                  !context.mounted) {
+                return;
+              }
+              // Return the new id only after persistence has been verified.
+              onCreated(id);
+            } catch (error) {
+              if (!await WishlistSelectionSheet._current(scope) ||
+                  !context.mounted) {
+                return;
+              }
+              if (!context.mounted) return;
+              if (scope != null) {
+                await scope!.notice(context,
+                    icon: Icons.error_outline,
+                    title: 'Speichern konnte nicht bestätigt werden',
+                    message: 'Bitte lade die Merklisten erneut.');
+                return;
+              }
+              await AppPopup.toast(
+                context,
+                icon: Icons.error_outline,
+                title: 'Merkliste wurde nicht gespeichert',
+                message: 'Deine vorhandenen Daten bleiben unverändert.',
+              );
+            }
           }
         },
         borderRadius: BorderRadius.circular(14),
@@ -404,7 +494,7 @@ class _CreateListCard extends StatelessWidget {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Neue Wunschliste erstellen',
+                        Text('Neue Merkliste erstellen',
                             style: Theme.of(context)
                                 .textTheme
                                 .titleMedium
@@ -433,9 +523,22 @@ class _CreateListCard extends StatelessWidget {
   }
 }
 
-class _CreateListForm extends StatelessWidget {
-  final TextEditingController controller;
-  const _CreateListForm({required this.controller});
+class _CreateListForm extends StatefulWidget {
+  final ValueChanged<String?> onComplete;
+  const _CreateListForm({required this.onComplete});
+
+  @override
+  State<_CreateListForm> createState() => _CreateListFormState();
+}
+
+class _CreateListFormState extends State<_CreateListForm> {
+  final TextEditingController controller = TextEditingController();
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -464,7 +567,7 @@ class _CreateListForm extends StatelessWidget {
                   color: isDark ? Colors.white : AppTheme.textPrimary(context)),
               cursorColor: cs.primary,
               decoration: InputDecoration(
-                hintText: 'Name der Wunschliste',
+                hintText: 'Name der Merkliste',
                 hintStyle: TextStyle(
                     color: isDark
                         ? Colors.white70
@@ -484,7 +587,7 @@ class _CreateListForm extends StatelessWidget {
             Row(children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).maybePop(),
+                  onPressed: () => widget.onComplete(null),
                   style: OutlinedButton.styleFrom(
                       foregroundColor: isDark
                           ? Colors.white70
@@ -501,8 +604,7 @@ class _CreateListForm extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: FilledButton(
-                  onPressed: () =>
-                      Navigator.of(context).maybePop(controller.text.trim()),
+                  onPressed: () => widget.onComplete(controller.text.trim()),
                   style: FilledButton.styleFrom(
                       backgroundColor: cs.primary,
                       foregroundColor: Colors.white,

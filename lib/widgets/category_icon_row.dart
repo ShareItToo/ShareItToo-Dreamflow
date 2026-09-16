@@ -48,22 +48,39 @@ class _CategoryIconRowState extends State<CategoryIconRow> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
+    final textScaler = MediaQuery.textScalerOf(context);
+    final textScale = (textScaler.scale(10.5) / 10.5).clamp(1.0, 3.0);
     // Match page horizontal padding (aligns with "Neue Anzeige" button in SearchHeader)
     const horizontalPadding = 16.0;
-    // Exactly 5 visible at once
-    final itemWidth = (width - (horizontalPadding * 2)) / 5;
+    // Keep five tiles visible at normal text size; large-text layouts trade
+    // density for complete labels and remain horizontally scrollable.
+    final baseItemWidth = (width - (horizontalPadding * 2)) / 5;
+    final labelWidth = 66.0 * (1 + (textScale - 1) * 1.8);
+    final itemWidth = math.max(baseItemWidth, labelWidth);
+    final rowHeight = 84.0 + ((textScale - 1) * 72.0);
+    final labelMaxLines = textScale > 1.3 ? 4 : 2;
+    final centerLargeTextContent = textScale > 1.3;
     // Increase spacing between circles by ~0.3mm total (previous +0.2mm, now +0.1mm more)
     const baseSpacing = 6.0;
     const extraMm = 0.3; // mm
     final spacing = baseSpacing + (extraMm * 160 / 25.4);
 
     final tiles = <Widget>[];
-    tiles.add(_AllTile(width: itemWidth, onTap: widget.onAllCategoriesTap));
+    tiles.add(_AllTile(
+      width: itemWidth,
+      labelWidth: labelWidth,
+      labelMaxLines: labelMaxLines,
+      centerContent: centerLargeTextContent,
+      onTap: widget.onAllCategoriesTap,
+    ));
     for (int i = 0; i < widget.categories.length; i++) {
       final c = widget.categories[i];
       final isSelected = i == _selectedIndex;
       tiles.add(_CategoryTile(
           width: itemWidth,
+          labelWidth: labelWidth,
+          labelMaxLines: labelMaxLines,
+          centerContent: centerLargeTextContent,
           label: c.label,
           icon: c.icon,
           isSelected: isSelected,
@@ -87,11 +104,17 @@ class _CategoryIconRowState extends State<CategoryIconRow> {
     //     zu können. Das erreichen wir mit rechter Innen‑Padding: rightPad = 60 - itemWidth.
     //
     // Diese Kombination garantiert die exakte Ausrichtung über alle Displaybreiten.
-    final double cutoffPx = math.max(0.0, itemWidth - 60.0);
-    final double rightPadPx = math.max(0.0, 60.0 - itemWidth);
+    final circleCenterInItem = centerLargeTextContent ? itemWidth / 2 : 22.0;
+    final trailingCircleDistance = itemWidth - circleCenterInItem;
+    final double cutoffPx = centerLargeTextContent
+        ? 0
+        : math.max(0.0, trailingCircleDistance - 38.0);
+    final double rightPadPx = centerLargeTextContent
+        ? horizontalPadding
+        : math.max(0.0, 38.0 - trailingCircleDistance);
 
     return SizedBox(
-      height: 90,
+      height: rowHeight,
       child: ScrollEdgeIndicators.list(
         controller: _scrollController,
         showLeft: false,
@@ -124,8 +147,17 @@ class _CategoryIconRowState extends State<CategoryIconRow> {
 
 class _AllTile extends StatefulWidget {
   final double width;
+  final double labelWidth;
+  final int labelMaxLines;
+  final bool centerContent;
   final VoidCallback? onTap;
-  const _AllTile({required this.width, this.onTap});
+  const _AllTile({
+    required this.width,
+    required this.labelWidth,
+    required this.labelMaxLines,
+    required this.centerContent,
+    this.onTap,
+  });
   @override
   State<_AllTile> createState() => _AllTileState();
 }
@@ -149,26 +181,30 @@ class _AllTileState extends State<_AllTile> {
             width: widget.width,
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  color:
-                      AppTheme.categoryCircleFill(context, active: _hovering),
-                  border: Border.all(
-                      color: AppTheme.categoryCircleBorder(context,
-                          active: _hovering),
-                      width: 1.5),
-                  boxShadow: AppTheme.cardShadow(context),
-                ),
-                child: Center(
-                  child: AnimatedScale(
-                    scale: _hovering ? 1.33 : 1.0,
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOut,
-                    child: MaterialOutlineIcon(
-                        icon: Icons.apps, color: color, size: 20),
+              Padding(
+                padding: EdgeInsets.only(
+                    left: widget.centerContent ? (widget.width - 44) / 2 : 0),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    color:
+                        AppTheme.categoryCircleFill(context, active: _hovering),
+                    border: Border.all(
+                        color: AppTheme.categoryCircleBorder(context,
+                            active: _hovering),
+                        width: 1.5),
+                    boxShadow: AppTheme.cardShadow(context),
+                  ),
+                  child: Center(
+                    child: AnimatedScale(
+                      scale: _hovering ? 1.33 : 1.0,
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      child: MaterialOutlineIcon(
+                          icon: Icons.apps, color: color, size: 20),
+                    ),
                   ),
                 ),
               ),
@@ -176,16 +212,16 @@ class _AllTileState extends State<_AllTile> {
               Builder(builder: (context) {
                 final l10n = context.watch<LocalizationController>();
                 // Widen label to avoid truncation; keep visual center under the 44px circle
-                const labelWidth =
-                    66.0; // wider than 44 to show full text on 2 lines
-                final dx = -((labelWidth - 44) / 2);
+                final dx = widget.centerContent
+                    ? 0.0
+                    : -((widget.labelWidth - 44) / 2);
                 return Transform.translate(
                   offset: Offset(dx, 0),
                   child: SizedBox(
-                    width: labelWidth,
+                    width: widget.labelWidth,
                     child: Text(
                       stackCategoryLabel(l10n.t('Alle Kategorien')),
-                      maxLines: 2,
+                      maxLines: widget.labelMaxLines,
                       softWrap: true,
                       overflow: TextOverflow.visible, // keine „…“
                       textAlign: TextAlign.center,
@@ -248,12 +284,18 @@ class TrailingCutoffScrollPhysics extends ScrollPhysics {
 
 class _CategoryTile extends StatefulWidget {
   final double width;
+  final double labelWidth;
+  final int labelMaxLines;
+  final bool centerContent;
   final String label;
   final IconData icon;
   final bool isSelected;
   final VoidCallback onTap;
   const _CategoryTile(
       {required this.width,
+      required this.labelWidth,
+      required this.labelMaxLines,
+      required this.centerContent,
       required this.label,
       required this.icon,
       required this.isSelected,
@@ -282,29 +324,33 @@ class _CategoryTileState extends State<_CategoryTile> {
             width: widget.width,
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  color: AppTheme.categoryCircleFill(context, active: active),
-                  border: Border.all(
-                      color: AppTheme.categoryCircleBorder(context,
-                          active: active),
-                      width: 1.5),
-                  boxShadow: AppTheme.cardShadow(context),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
-                  child: Center(
-                    child: AnimatedScale(
-                      scale: _hovering ? 1.33 : 1.0,
-                      duration: const Duration(milliseconds: 180),
-                      curve: Curves.easeOut,
-                      child: MaterialOutlineIcon(
-                          icon: widget.icon, size: 22, color: color),
+              Padding(
+                padding: EdgeInsets.only(
+                    left: widget.centerContent ? (widget.width - 44) / 2 : 0),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    color: AppTheme.categoryCircleFill(context, active: active),
+                    border: Border.all(
+                        color: AppTheme.categoryCircleBorder(context,
+                            active: active),
+                        width: 1.5),
+                    boxShadow: AppTheme.cardShadow(context),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: Center(
+                      child: AnimatedScale(
+                        scale: _hovering ? 1.33 : 1.0,
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOut,
+                        child: MaterialOutlineIcon(
+                            icon: widget.icon, size: 22, color: color),
+                      ),
                     ),
                   ),
                 ),
@@ -312,21 +358,23 @@ class _CategoryTileState extends State<_CategoryTile> {
               const SizedBox(height: 6),
               // Widen label to avoid truncation; keep visual center under the 44px circle
               Builder(builder: (_) {
-                const labelWidth = 66.0;
-                final dx = -((labelWidth - 44) / 2);
+                final dx = widget.centerContent
+                    ? 0.0
+                    : -((widget.labelWidth - 44) / 2);
                 return Transform.translate(
                   offset: Offset(dx, 0),
                   child: SizedBox(
-                    width: labelWidth,
+                    width: widget.labelWidth,
                     child: Text(
                       stackCategoryLabel(widget.label),
-                      maxLines: 2,
+                      maxLines: widget.labelMaxLines,
                       softWrap: true,
                       overflow: TextOverflow.visible, // keine „…“
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           fontSize: 10.5,
-                          fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                          fontWeight:
+                              active ? FontWeight.w600 : FontWeight.w500,
                           color: color,
                           height: 1.12),
                     ),

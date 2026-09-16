@@ -3,14 +3,18 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:crypto/crypto.dart' as dart_crypto;
 import 'package:lendify/screens/message_thread_screen.dart';
 import 'package:lendify/screens/bookings_screen.dart';
 import 'package:lendify/screens/public_profile_screen.dart';
-import 'package:lendify/widgets/return_reminder_picker_sheet.dart';
 import 'package:lendify/services/data_service.dart';
+import 'package:lendify/services/backend_config.dart';
+import 'package:lendify/services/backend_http.dart';
+import 'package:lendify/services/backend_repository.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/models/invoice.dart';
 import 'package:lendify/services/invoice_pdf_service.dart';
+import 'package:lendify/services/invoices_service.dart';
 import 'package:lendify/services/local_artifact_storage_service.dart';
 import 'package:printing/printing.dart';
 import 'package:lendify/services/file_download_stub.dart'
@@ -21,7 +25,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
-import 'dart:convert';
 import 'package:lendify/widgets/return_handover_stepper_sheet.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/rental_request.dart';
@@ -32,11 +35,16 @@ import 'package:lendify/widgets/review_prompt_sheet.dart';
 import 'package:lendify/services/address_privacy.dart';
 import 'package:lendify/widgets/approx_location_map.dart';
 import 'package:lendify/screens/support_flow_screen.dart';
+import 'package:lendify/screens/report_issue_screen.dart';
+import 'package:lendify/services/return_case_entry_point_policy.dart';
+import 'package:lendify/widgets/support_principal_controller.dart';
+import 'package:lendify/screens/payment_checkout_screen.dart';
+import 'package:lendify/screens/platform_withdrawal_screen.dart';
 import 'package:lendify/widgets/sit_glass_time_picker.dart';
 import 'package:lendify/widgets/sit_overflow_menu.dart';
 import 'package:lendify/services/handover_code.dart';
-import 'package:lendify/utils/total_subtitle.dart';
 import 'package:lendify/utils/cancellation_policy_text.dart';
+import 'package:share_plus/share_plus.dart';
 
 class BookingDetailScreen extends StatefulWidget {
   final Map<String, dynamic> booking;
@@ -52,17 +60,33 @@ class BookingDetailScreen extends StatefulWidget {
   State<BookingDetailScreen> createState() => _BookingDetailScreenState();
 }
 
+class _SimulationPaymentNotice extends StatelessWidget {
+  const _SimulationPaymentNotice();
+
+  @override
+  Widget build(BuildContext context) => const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Unverbindliche Pilot-Simulation',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          SizedBox(height: 6),
+          Text(
+            'Zahlung entfällt. Dieser Test erzeugt keinen Vertrag, keine Reservierung, keine Auszahlung und keine Erstattung.',
+            style: TextStyle(color: Colors.white70),
+          ),
+        ],
+      );
+}
+
 class _BookingDetailScreenState extends State<BookingDetailScreen> {
+  final _supportPrincipal = SupportPrincipalController();
   late final PageController _pageController;
   int _page = 0;
-  int? _returnReminderMinutes; // e.g., 2880, 1440, 720, 360, 120
-  int _ownerPickupFailCount = 0;
-  bool _manualPickupAllowed = false;
-  bool _pickupHintOpen = false; // collapsible hint under Abholung
-  bool _upcomingPrivacyOpen = false; // collapsible privacy hint for upcoming
-  // Renter upcoming: manual code entry toggle + controller
-  bool _showManualPickupEntry = false;
-  final TextEditingController _manualPickupCodeCtrl = TextEditingController();
   // Owner laufend (Rückgabe bestätigen): manueller Code-Eingabe-Toggle + Controller
   bool _showManualReturnEntry = false;
   final TextEditingController _manualReturnCodeCtrl = TextEditingController();
@@ -75,6 +99,200 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   final SharedPersistenceRefreshCoordinator _sharedPersistenceRefresh =
       SharedPersistenceRefreshCoordinator();
 
+  bool get _simulationOnly => widget.booking['simulationOnly'] == true;
+
+  Map<String, dynamic>? get _platformContract {
+    if (widget.viewerIsOwner) return null;
+    final raw = widget.booking['platformContract'];
+    return raw is Map ? Map<String, dynamic>.from(raw) : null;
+  }
+
+  bool get _v52WithdrawalWindowOpen {
+    final contract = _platformContract;
+    if (!(contract?['contractVersion']?.toString() ?? '').startsWith('V5.2-')) {
+      return false;
+    }
+    final acceptedAt = DateTime.tryParse(
+      contract?['acceptedAt']?.toString() ?? '',
+    );
+    return acceptedAt != null &&
+        !DateTime.now().isAfter(acceptedAt.add(const Duration(days: 14)));
+  }
+
+  Future<void> _sharePlatformContractReceipt() async {
+    final contract = _platformContract;
+    final contractId = contract?['id']?.toString() ?? '';
+    final receiptRaw = contract?['receipt'];
+    final receipt = receiptRaw is Map
+        ? Map<String, dynamic>.from(receiptRaw)
+        : const <String, dynamic>{};
+    final expectedHash = receipt['artifactSha256']?.toString() ?? '';
+    if (contractId.isEmpty || expectedHash.length != 64) {
+      await AppPopup.error(
+        context,
+        title: 'Vertragsbestätigung nicht verfügbar',
+        message:
+            'Der unveränderliche Vertragsbezug ist unvollständig. Es wurde kein Beleg geöffnet.',
+      );
+      return;
+    }
+    try {
+      final downloaded =
+          await BackendRepository.downloadPlatformContractReceipt(contractId);
+      final observedHash =
+          downloaded.headers['x-sit-artifact-sha256']?.trim() ?? '';
+      final contentHash =
+          dart_crypto.sha256.convert(downloaded.bytes).toString();
+      if (observedHash != expectedHash || contentHash != expectedHash) {
+        throw const BackendException(
+          409,
+          'v52_contract_receipt_integrity_failed',
+        );
+      }
+      const filename = 'shareittoo-plattformvertrag.html';
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile.fromData(
+              downloaded.bytes,
+              name: filename,
+              mimeType: 'text/html',
+            ),
+          ],
+          fileNameOverrides: const [filename],
+          subject: 'ShareItToo Vertragsbestätigung',
+          text: 'Dauerhafte Bestätigung deines SIT-Plattformvertrags.',
+          downloadFallbackEnabled: true,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      await AppPopup.error(
+        context,
+        title: 'Vertragsbestätigung nicht geladen',
+        message:
+            'Authentifizierung oder Integritätsprüfung ist fehlgeschlagen. Es wurde kein ungeprüfter Beleg geöffnet.',
+      );
+    }
+  }
+
+  Future<void> _shareActualLossReceipt(
+    Map<String, dynamic> cancellationOutcome,
+  ) async {
+    final resolutionId =
+        cancellationOutcome['actualLossResolutionId']?.toString() ?? '';
+    final receiptRaw = cancellationOutcome['receipt'];
+    final receipt = receiptRaw is Map
+        ? Map<String, dynamic>.from(receiptRaw)
+        : const <String, dynamic>{};
+    final expectedHash = receipt['artifactSha256']?.toString() ?? '';
+    if (resolutionId.isEmpty || expectedHash.length != 64) {
+      await AppPopup.error(
+        context,
+        title: 'Stornoabrechnung nicht verfügbar',
+        message:
+            'Der unveränderliche Abrechnungsbezug ist unvollständig. Es wurde kein Beleg geöffnet.',
+      );
+      return;
+    }
+    try {
+      final downloaded =
+          await BackendRepository.downloadActualLossReceipt(resolutionId);
+      final observedHash =
+          downloaded.headers['x-sit-artifact-sha256']?.trim() ?? '';
+      final contentHash =
+          dart_crypto.sha256.convert(downloaded.bytes).toString();
+      if (observedHash != expectedHash || contentHash != expectedHash) {
+        throw const BackendException(
+          409,
+          'v52_actual_loss_receipt_integrity_failed',
+        );
+      }
+      const filename = 'shareittoo-stornoabrechnung.html';
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile.fromData(
+              downloaded.bytes,
+              name: filename,
+              mimeType: 'text/html',
+            ),
+          ],
+          fileNameOverrides: const [filename],
+          subject: 'ShareItToo Stornoabrechnung',
+          text: 'Dauerhafte Abrechnung zu Stornierung oder Nicht-Erscheinen.',
+          downloadFallbackEnabled: true,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      await AppPopup.error(
+        context,
+        title: 'Stornoabrechnung nicht geladen',
+        message:
+            'Authentifizierung oder Integritätsprüfung ist fehlgeschlagen. Es wurde kein ungeprüfter Beleg geöffnet.',
+      );
+    }
+  }
+
+  Widget _buildPlatformContractCard(ThemeData theme) {
+    final contract = _platformContract;
+    if (contract == null ||
+        contract['state'] != 'platformContractAccepted' ||
+        contract['sitAcceptance'] is! Map ||
+        contract['receipt'] is! Map) {
+      return const SizedBox.shrink();
+    }
+    final acceptance =
+        Map<String, dynamic>.from(contract['sitAcceptance'] as Map);
+    final acceptedAt = DateTime.tryParse(
+      contract['acceptedAt']?.toString() ?? '',
+    )?.toLocal();
+    return Card(
+      key: const ValueKey('platform-contract-receipt-card'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'SIT-Plattformvertrag angenommen',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(acceptance['wording']?.toString() ?? ''),
+            const SizedBox(height: 6),
+            Text(
+              [
+                contract['contractVersion']?.toString(),
+                if (acceptedAt != null) _dateTimeLabel(acceptedAt),
+              ]
+                  .whereType<String>()
+                  .where((value) => value.isNotEmpty)
+                  .join(' · '),
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              key: const ValueKey('platform-contract-receipt-download'),
+              onPressed: _sharePlatformContractReceipt,
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('Vertragsbestätigung speichern oder teilen'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _dateTimeLabel(DateTime value) {
+    String two(int part) => part.toString().padLeft(2, '0');
+    return '${two(value.day)}.${two(value.month)}.${value.year}, '
+        '${two(value.hour)}:${two(value.minute)} Uhr';
+  }
+
   List<String> get _photos {
     final b = widget.booking;
     final list = (b['images'] as List?)?.cast<String>();
@@ -83,9 +301,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     return single.isNotEmpty ? [single] : <String>[];
   }
 
-  bool get _canCancel =>
-      widget.booking['category'] == 'upcoming' ||
-      widget.booking['category'] == 'pending';
   bool get _isCompletedState {
     final cat = (widget.booking['category'] as String?) ?? '';
     final status = (widget.booking['status'] as String?) ?? '';
@@ -100,19 +315,34 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     return _effectiveCategory() == 'ongoing';
   }
 
-  bool get _canMessage =>
-      (widget.booking['status'] == 'Akzeptiert') ||
-      (widget.booking['status'] == 'Laufend');
-
-  bool get _canStartBookingHandover {
-    final status = ((widget.booking['status'] as String?) ?? '').trim();
-    return status == 'Akzeptiert' && !_isCompletedState && !_isOngoing;
-  }
-
   bool get _canCompleteBookingReturn {
     final status = ((widget.booking['status'] as String?) ?? '').trim();
     return status == 'Laufend' && _isOngoing;
   }
+
+  DateTime? _bookingInstant(String key) {
+    final value = widget.booking[key];
+    if (value is DateTime) return value;
+    return DateTime.tryParse(value?.toString() ?? '');
+  }
+
+  bool get _returnCaseEntryPointEligible =>
+      ReturnCaseEntryPointPolicy.isEligible(
+        bookingStatus: (widget.booking['rawStatus'] ??
+                widget.booking['workflowStatus'] ??
+                widget.booking['status'] ??
+                '')
+            .toString(),
+        simulationOnly: _simulationOnly,
+        needsReview: widget.booking['needsReview'] == true,
+        platformContract: _platformContract,
+        returnT0: _bookingInstant('returnT0'),
+        reportDeadline: _bookingInstant('returnReportDeadline'),
+        returnCaseOpenedAt: _bookingInstant('returnCaseOpenedAt'),
+      );
+
+  _BoundBookingPriceSnapshot? get _boundPriceSnapshot =>
+      _BoundBookingPriceSnapshot.fromBooking(widget.booking);
 
   String get _listerName =>
       (widget.booking['listerName'] as String?) ?? 'Vermieter';
@@ -212,18 +442,12 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         _sharedPersistenceRefresh.schedule(_reloadFromSharedPersistence),
       );
     });
-    // Load owner-side failed confirmations to decide when to show manual pickup confirmation for renter
+    // Show one-time banner if a handover confirmation happened on the other side.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final id = _computeBookingId();
-      final fails = await DataService.getPickupFailCountForBooking(id);
-      if (mounted) {
-        setState(() {
-          _ownerPickupFailCount = fails;
-          _manualPickupAllowed = fails >= 3;
-        });
-      }
-      // Show one-time banner if a handover confirmation happened on the other side
-      final msg = await DataService.takeHandoverBanner(id);
+      final requestId = (widget.booking['requestId'] as String?)?.trim() ?? '';
+      final msg = requestId.isEmpty
+          ? null
+          : await DataService.takeHandoverBanner(requestId);
       if (msg != null && msg.isNotEmpty && mounted) {
         AppPopup.toast(context, icon: Icons.check_circle_outline, title: msg);
       }
@@ -260,7 +484,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           }
         }
       } catch (e) {
-        debugPrint('[booking_detail] load item coords failed: ' + e.toString());
+        debugPrint('[booking_detail] load item coords failed: $e');
       }
     });
   }
@@ -288,6 +512,15 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       if (request != null) {
         widget.booking['startIso'] = request.start.toIso8601String();
         widget.booking['endIso'] = request.end.toIso8601String();
+        widget.booking['rawStatus'] = request.status;
+        widget.booking['workflowStatus'] = request.workflowStatus;
+        widget.booking['platformContract'] = request.platformContract;
+        widget.booking['needsReview'] = request.needsReview;
+        widget.booking['returnT0'] = request.returnT0?.toIso8601String();
+        widget.booking['returnReportDeadline'] =
+            request.returnReportDeadline?.toIso8601String();
+        widget.booking['returnCaseOpenedAt'] =
+            request.returnCaseOpenedAt?.toIso8601String();
       }
     });
     await _syncBookingLifecycleFromRequest(requestId);
@@ -295,10 +528,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
 
   @override
   void dispose() {
+    _supportPrincipal.dispose();
     _sharedPersistenceSub?.cancel();
     _sharedPersistenceRefresh.dispose();
     _pageController.dispose();
-    _manualPickupCodeCtrl.dispose();
     _manualReturnCodeCtrl.dispose();
     super.dispose();
   }
@@ -307,8 +540,19 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     required String requestId,
     required String itemTitle,
   }) async {
+    final owner = _supportPrincipal.capture();
+    if (owner == null ||
+        !await _supportPrincipal.isCurrent(owner) ||
+        !mounted) {
+      return;
+    }
     final current = await DataService.getCurrentUser();
-    if (!mounted || current == null) return;
+    if (current == null ||
+        current.id != owner.userId ||
+        !await _supportPrincipal.isCurrent(owner) ||
+        !mounted) {
+      return;
+    }
     final flowContext = SupportFlowContext.fromBookingDetail(
       itemTitle: itemTitle,
       itemId: (widget.booking['itemId'] as String?) ?? '',
@@ -323,20 +567,28 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           ? (widget.booking['renterAvatar'] as String?)
           : _listerAvatar,
     );
-    final result = await Navigator.of(context).push<SupportFlowResult?>(
-      MaterialPageRoute(
-        builder: (_) => SupportFlowScreen(context: flowContext),
+    final result = await _supportPrincipal.pushOwnedRoute<SupportFlowResult?>(
+      context: context,
+      owner: owner,
+      route: MaterialPageRoute(
+        builder: (_) => SupportFlowScreen(context: flowContext, owner: owner),
       ),
     );
-    if (result == null || !mounted) return;
+    if (result == null ||
+        !await _supportPrincipal.isCurrent(owner) ||
+        !mounted) {
+      return;
+    }
     final supportThread = await DataService.createSupportThread(
       userId: current.id,
+      canonicalCaseNumber: result.canonicalCaseNumber,
     );
+    if (!await _supportPrincipal.isCurrent(owner) || !mounted) return;
     if (supportThread == null) {
-      AppPopup.toast(
-        context,
-        icon: Icons.error_outline,
-        title: 'Support nicht verfügbar',
+      await _supportPrincipal.showNotice(
+        context: context,
+        owner: owner,
+        title: 'Fall ${result.canonicalCaseNumber} ist eingegangen',
       );
       return;
     }
@@ -346,18 +598,45 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     await DataService.addSystemMessageToThread(
       threadId: supportThread.id,
       text:
-          "Support-Fall eröffnet: ${result.mainCategoryLabel} · ${itemTitle.isNotEmpty ? itemTitle : 'Buchung'}\n📋 Support-Anfrage zu: ${itemTitle.isNotEmpty ? itemTitle : 'Buchung'}\nBuchung: $requestId\nKategorie: ${result.mainCategoryLabel}\nUnterkategorie: ${result.subCategory}$descText",
+          "${result.canonicalReceiptMessage}\n\n📋 Support-Anfrage zu: ${itemTitle.isNotEmpty ? itemTitle : 'Buchung'}\nBuchung: $requestId\nKategorie: ${result.mainCategoryLabel}\nUnterkategorie: ${result.subCategory}$descText",
     );
-    if (!mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
+    if (!await _supportPrincipal.isCurrent(owner) || !mounted) return;
+    _supportPrincipal.pushOwnedRoute<void>(
+      context: context,
+      owner: owner,
+      route: MaterialPageRoute(
         builder: (_) => MessageThreadScreen(
-          threadId: supportThread!.id,
+          threadId: supportThread.id,
           participantName: 'SIT Support',
           itemTitle: 'Support',
         ),
       ),
     );
+  }
+
+  Future<void> _openReturnCase({
+    required String requestId,
+    required String itemTitle,
+  }) async {
+    final owner = _supportPrincipal.capture();
+    if (owner == null || !_returnCaseEntryPointEligible) return;
+    if (!await _supportPrincipal.isCurrent(owner) || !mounted) return;
+    final result = await _supportPrincipal.pushOwnedRoute<bool?>(
+      context: context,
+      owner: owner,
+      route: MaterialPageRoute(
+        builder: (_) => ReportIssueScreen(
+          requestId: requestId,
+          itemTitle: itemTitle,
+        ),
+      ),
+    );
+    if (result != true ||
+        !await _supportPrincipal.isCurrent(owner) ||
+        !mounted) {
+      return;
+    }
+    await _reloadFromSharedPersistence();
   }
 
   Future<void> _manageBookingTime({required bool isReturn}) async {
@@ -366,6 +645,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final current = await DataService.getCurrentUser();
     if (current == null) return;
     final thread = await DataService.createOrGetThreadForRequest(requestId);
+    if (!mounted) return;
     if (thread == null) {
       AppPopup.toast(
         context,
@@ -374,7 +654,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       );
       return;
     }
+    final request = await DataService.getRentalRequestById(requestId);
+    if (!mounted) return;
     final state = await DataService.getHandoverReturnState(requestId);
+    if (!mounted) return;
     final key = isReturn ? 'return' : 'handover';
     final requestedLabel =
         ((state['${key}TimeRequested'] as String?) ?? '').trim();
@@ -425,6 +708,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           text:
               '${isReturn ? '🔄' : '📦'} $flowLabel bestätigt: $requestedLabel Uhr',
         );
+        if (!mounted) return;
         AppPopup.toast(
           context,
           icon: Icons.check_circle_outline,
@@ -433,23 +717,31 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         return;
       }
     }
+    if (!mounted) return;
     final (start, end) = _parseDateRange();
-    final initial = isReturn
-        ? (end ?? DateTime.now().add(const Duration(days: 1)))
-        : (start ?? DateTime.now().add(const Duration(hours: 2)));
+    final initial = request == null
+        ? (isReturn
+            ? (end ?? DateTime.now().add(const Duration(days: 1)))
+            : (start ?? DateTime.now().add(const Duration(hours: 2))))
+        : (isReturn ? request.end : request.start).toLocal();
     final picked = await SitGlassTimePicker.show(
       context,
       title: isReturn ? 'Rückgabezeit wählen' : 'Übergabezeit wählen',
       initialTime: TimeOfDay.fromDateTime(initial),
     );
     if (picked == null || !mounted) return;
-    final proposed = DateTime(
-      initial.year,
-      initial.month,
-      initial.day,
-      picked.hour,
-      picked.minute,
-    );
+    final proposed = request?.flowTimeAt(
+          isReturn: isReturn,
+          hour: picked.hour,
+          minute: picked.minute,
+        ) ??
+        DateTime(
+          initial.year,
+          initial.month,
+          initial.day,
+          picked.hour,
+          picked.minute,
+        );
     const days = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
     final label =
         '${days[(proposed.weekday - 1) % 7]}, ${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
@@ -531,7 +823,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   }
 
   Future<void> _viewListing() async {
-    final ctx = context;
     final title = (widget.booking['title'] as String?)?.toLowerCase() ?? '';
     final tokens = title
         .split(RegExp(r'[^a-z0-9äöüß]+'))
@@ -539,7 +830,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         .toSet();
     final items = await DataService.getPublicItems();
     int bestScore = 0;
-    var bestItem = null;
+    Item? bestItem;
     for (final it in items) {
       final t = it.title.toLowerCase();
       int s = 0;
@@ -552,9 +843,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       }
     }
     if (!mounted) return;
-    if (bestItem == null || bestScore == 0) {
+    if (bestItem == null) {
       await showDialog<void>(
-        context: ctx,
+        context: context,
         builder: (dCtx) => AlertDialog(
           title: const Text('Hinweis'),
           content: const Text('Anzeige wurde gelöscht'),
@@ -568,7 +859,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       );
       return;
     }
-    await ItemDetailsOverlay.showFullPage(ctx, item: bestItem);
+    await ItemDetailsOverlay.showFullPage(context, item: bestItem);
   }
 
   String _pageTitle() {
@@ -657,7 +948,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         var page = startIndex;
         final size = MediaQuery.of(ctx).size;
 
-        Future<void> _shift(int delta) async {
+        Future<void> shift(int delta) async {
           final target = (page + delta).clamp(0, images.length - 1);
           if (target != page) {
             page = target;
@@ -706,10 +997,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                                 if (signal is PointerScrollEvent) {
                                   if (signal.scrollDelta.dy > 0 ||
                                       signal.scrollDelta.dx > 0) {
-                                    _shift(1);
+                                    shift(1);
                                   } else if (signal.scrollDelta.dy < 0 ||
                                       signal.scrollDelta.dx < 0) {
-                                    _shift(-1);
+                                    shift(-1);
                                   }
                                 }
                               },
@@ -809,7 +1100,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_pageTitle()),
+        title: Text(
+          _simulationOnly ? 'Pilot-Simulation · ${_pageTitle()}' : _pageTitle(),
+        ),
         centerTitle: true,
         actions: [
           IconButton(
@@ -835,16 +1128,31 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                     label: 'Anfrage zurückziehen',
                     value: 'withdraw',
                   ),
+                if (!_simulationOnly &&
+                    !_isViewerOwnerSync() &&
+                    ((widget.booking['requestId'] as String?) ?? '').isNotEmpty)
+                  const SitMenuOption(
+                    icon: Icons.lock_outline,
+                    label: 'Zahlungsstatus',
+                    value: 'payment',
+                  ),
                 const SitMenuOption(
                   icon: Icons.error_outline,
                   label: 'Problem melden',
                   value: 'issue',
                 ),
+                if (_returnCaseEntryPointEligible)
+                  const SitMenuOption(
+                    icon: Icons.fact_check_outlined,
+                    label: 'Rückgabe-Prüffall eröffnen',
+                    value: 'return_case',
+                  ),
               ];
               final picked = await showSITOverflowMenu<String>(
                 context,
                 options: opts,
               );
+              if (!context.mounted) return;
               switch (picked) {
                 case 'view':
                   await _viewListing();
@@ -867,6 +1175,28 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                         itemTitle: title,
                       );
                     }
+                  }
+                  break;
+                case 'return_case':
+                  final requestId = widget.booking['requestId'] as String?;
+                  final title = (widget.booking['title'] as String?) ?? '-';
+                  if (requestId != null && requestId.isNotEmpty) {
+                    await _openReturnCase(
+                      requestId: requestId,
+                      itemTitle: title,
+                    );
+                  }
+                  break;
+                case 'payment':
+                  final requestId =
+                      (widget.booking['requestId'] as String?) ?? '';
+                  if (requestId.isNotEmpty) {
+                    await Navigator.of(context).push<void>(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            PaymentCheckoutScreen(bookingId: requestId),
+                      ),
+                    );
                   }
                   break;
                 default:
@@ -908,6 +1238,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                             listerId == null) {
                           return;
                         }
+                        if (!mounted || !context.mounted) return;
                         final ok = await ReviewPromptSheet.show(
                           context,
                           requestId: requestId,
@@ -916,7 +1247,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                           reviewedUserId: listerId,
                           direction: 'renter_to_owner',
                         );
-                        if (ok == true && mounted) {
+                        if (!mounted || !context.mounted) return;
+                        if (ok == true) {
                           setState(() => _reviewAlreadySubmitted = true);
                           await AppPopup.toast(
                             context,
@@ -924,7 +1256,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                             title: 'Danke für deine Bewertung!',
                           );
                           await _viewListing();
-                        } else if (ok == false && mounted) {
+                        } else if (ok == false) {
                           setState(() => _reviewAlreadySubmitted = true);
                           await AppPopup.toast(
                             context,
@@ -982,25 +1314,37 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
 
     final title = (widget.booking['title'] as String?) ?? '-';
     final location = (widget.booking['location'] as String?) ?? '';
-    final pricePaidStr = (widget.booking['pricePaid'] as String?) ?? '';
     final bookingId = _computeBookingId();
-
-    final days = (start != null && end != null)
-        ? end.difference(start).inDays.clamp(1, 365)
-        : 1;
-    final totalPaid = _parseEuro(pricePaidStr);
-    final discounts = _discountsFromBooking();
-    final providedBasePerDay =
-        (widget.booking['basePerDay'] as num?)?.toDouble();
-    final baseTotal =
-        providedBasePerDay != null ? (providedBasePerDay * days) : totalPaid;
-    final rentalSubtotal = (baseTotal - discounts).clamp(0.0, baseTotal);
-    final fee = DataService.platformContributionForRental(rentalSubtotal);
-    final daily = days > 0 ? (rentalSubtotal / days) : rentalSubtotal;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (widget.booking['workflowStatus'] == 'withdrawalReturnRequired') ...[
+          Card(
+            color: theme.colorScheme.errorContainer,
+            child: const Padding(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Widerruf: Rückgabe jetzt erforderlich',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    'Die Nutzung ist beendet. Bitte schließe die dokumentierte Rückgabe mit Fotos und QR- oder Sicherheitscode ab. Erst danach wird der zeitanteilige Mietpreis-Erstattungsbetrag fest berechnet.',
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (_platformContract != null) ...[
+          _buildPlatformContractCard(theme),
+          const SizedBox(height: 12),
+        ],
         // Image carousel
         if (_photos.isNotEmpty)
           ClipRRect(
@@ -1231,59 +1575,27 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           // Locations moved out of the info card in all sections
           showLocations: false,
           transportInfo: () {
-            // For laufend we show return side, for others pickup side
-            final renterPicksUpSelf =
-                (widget.booking['ownerDeliversAtDropoffChosen'] == true)
-                    ? false
-                    : true;
-            final renterReturnsSelf =
-                (widget.booking['ownerPicksUpAtReturnChosen'] == true)
-                    ? false
-                    : true;
-            try {
-              final (s, e) = _parseDateRange();
-              final eff = _effectiveCategory(start: s, end: e);
-              debugPrint(
-                '[BookingDetail] transportInfo A: requestId=' +
-                    ((widget.booking['requestId'] ?? '')).toString() +
-                    ' ownerDeliversAtDropoffChosen=' +
-                    ((widget.booking['ownerDeliversAtDropoffChosen'] == true)
-                        .toString()) +
-                    ' ownerPicksUpAtReturnChosen=' +
-                    ((widget.booking['ownerPicksUpAtReturnChosen'] == true)
-                        .toString()) +
-                    ' effective=' +
-                    eff,
-              );
-            } catch (_) {}
             if (_isOngoing) {
-              return renterReturnsSelf
-                  ? 'Du bringst den Artikel selbst zurück.'
-                  : 'Der Vermieter holt den Artikel wieder ab.';
-            } else {
-              final (s, e) = _parseDateRange();
-              final eff = _effectiveCategory(start: s, end: e);
-              if (renterPicksUpSelf) {
-                return eff == 'pending'
-                    ? 'Du holst den Artikel selbst ab, wenn deine Anfrage akzeptiert wird.'
-                    : 'Du holst den Artikel selbst ab.';
-              } else {
-                return eff == 'pending'
-                    ? 'Wenn ${_listerName} deine Anfrage annimmt, bringt er dir den Artikel vorbei.'
-                    : 'Der Vermieter bringt dir den Artikel.';
-              }
+              return 'Du bringst den Artikel selbst zurück.';
             }
+            final (s, e) = _parseDateRange();
+            final eff = _effectiveCategory(start: s, end: e);
+            return eff == 'pending'
+                ? 'Du holst den Artikel selbst ab, wenn deine Anfrage akzeptiert wird.'
+                : 'Du holst den Artikel selbst ab.';
           }(),
         ),
 
-        if (_confirmedLocationText(false) != null) ...[
+        if (widget.booking['exactAddressRevealed'] == true &&
+            _confirmedLocationText(false) != null) ...[
           const SizedBox(height: 12),
           _AddressInfoCard(
             icon: Icons.place_outlined,
             text: _confirmedLocationText(false)!,
           ),
         ],
-        if (_confirmedLocationMapsUrl(false).isNotEmpty) ...[
+        if (widget.booking['exactAddressRevealed'] == true &&
+            _confirmedLocationMapsUrl(false).isNotEmpty) ...[
           const SizedBox(height: 6),
           Align(
             alignment: Alignment.centerLeft,
@@ -1311,18 +1623,13 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           ),
         ],
 
-        // Ongoing (Laufend): Karte für Rückgabe, falls der Mieter selbst zurückbringt –
-        // identisches Verhalten wie die Abhol‑Karte in „Kommende Buchung"
+        // Ongoing: self-return map mirrors the pickup map.
         Builder(
           builder: (context) {
-            final renterReturnsSelf =
-                (widget.booking['ownerPicksUpAtReturnChosen'] == true)
-                    ? false
-                    : true;
-            if (!renterReturnsSelf) return const SizedBox.shrink();
             final label = AddressPrivacy.nearbyShort(kindLabel: 'Rückgabe');
             final fullAddress = (widget.booking['location'] as String?) ?? '';
-            // For ongoing bookings, always show the exact address
+            final exactAddressRevealed =
+                widget.booking['exactAddressRevealed'] == true;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -1336,8 +1643,12 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                 ),
                 const SizedBox(height: 8),
                 _AddressInfoCard(
-                  icon: Icons.place_outlined,
-                  text: 'Rückgabeort: $fullAddress',
+                  icon: exactAddressRevealed
+                      ? Icons.place_outlined
+                      : Icons.lock_outline,
+                  text: exactAddressRevealed && fullAddress.isNotEmpty
+                      ? 'Rückgabeort: $fullAddress'
+                      : 'Die genaue Adresse ist nur im serverseitig freigegebenen Zeitfenster sichtbar.',
                 ),
               ],
             );
@@ -1349,8 +1660,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         // (moved later) Next steps for laufend
         const SizedBox(height: 16),
         // Cancellation policy must appear directly above the payment summary
-        _CancellationPolicyCard(booking: widget.booking),
-        const SizedBox(height: 12),
+        if (!_simulationOnly) ...[
+          _CancellationPolicyCard(booking: widget.booking),
+          const SizedBox(height: 12),
+        ],
         // Payment summary
         Container(
           decoration: BoxDecoration(
@@ -1361,105 +1674,32 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           padding: const EdgeInsets.all(12),
           child: Builder(
             builder: (context) {
-              final pricePaidStr =
-                  (widget.booking['pricePaid'] as String?) ?? '';
-              final totalPaidLegacy = _parseEuro(pricePaidStr);
+              if (_simulationOnly) {
+                return const _SimulationPaymentNotice();
+              }
               final daysLocal = (start != null && end != null)
                   ? end.difference(start).inDays.clamp(1, 365)
                   : 1;
+              final boundPrice = _boundPriceSnapshot;
               final providedBasePerDay =
                   (widget.booking['basePerDay'] as num?)?.toDouble();
               final discountAmountProvided = _discountsFromBooking();
-              final baseTotal = (providedBasePerDay ?? 0.0) * daysLocal;
-              final rentalSubtotalLocal =
-                  (baseTotal - discountAmountProvided).clamp(0.0, baseTotal);
-              final feeLocal = DataService.platformContributionForRental(
-                rentalSubtotalLocal,
-              );
-              // Delivery/return/express fees derived from stored selection + item coords
-              final bool ownerDelivers =
-                  (widget.booking['ownerDeliversAtDropoffChosen'] == true) ||
-                      (widget.booking['expressRequested'] == true) ||
-                      (widget.booking['expressStatus'] != null) ||
-                      ((widget.booking['deliveryAddressLine'] ?? '')
-                          .toString()
-                          .trim()
-                          .isNotEmpty) ||
-                      ((widget.booking['deliveryCity'] ?? '')
-                          .toString()
-                          .trim()
-                          .isNotEmpty);
-              final bool ownerPicks =
-                  (widget.booking['ownerPicksUpAtReturnChosen'] == true);
-              double km = 0.0;
-              final double? dLat =
-                  (widget.booking['deliveryLat'] as num?)?.toDouble();
-              final double? dLng =
-                  (widget.booking['deliveryLng'] as num?)?.toDouble();
-              if (_itemLat != null &&
-                  _itemLng != null &&
-                  dLat != null &&
-                  dLng != null) {
-                km = DataService.estimateDistanceKm(
-                  _itemLat!,
-                  _itemLng!,
-                  dLat,
-                  dLng,
-                );
-              } else if (_itemLat != null &&
-                  _itemLng != null &&
-                  ((widget.booking['deliveryAddressLine'] ?? '')
-                      .toString()
-                      .trim()
-                      .isNotEmpty)) {
-                km = DataService.estimateDistanceKmFromAddressLine(
-                  _itemLat!,
-                  _itemLng!,
-                  (widget.booking['deliveryAddressLine'] as String).trim(),
-                );
-              } else if (_itemLat != null &&
-                  _itemLng != null &&
-                  ((widget.booking['deliveryCity'] ?? '')
-                      .toString()
-                      .trim()
-                      .isNotEmpty)) {
-                km = DataService.estimateDistanceKmToCity(
-                  _itemLat!,
-                  _itemLng!,
-                  (widget.booking['deliveryCity'] as String).trim(),
-                );
-              }
-              final double dropFee = ownerDelivers
-                  ? double.parse((km * 0.30).toStringAsFixed(2))
-                  : 0.0;
-              final double retFee = ownerPicks
-                  ? double.parse((km * 0.30).toStringAsFixed(2))
-                  : 0.0;
-              final bool expressSelected =
-                  (widget.booking['expressRequested'] == true) ||
-                      (widget.booking['expressStatus'] == 'accepted');
-              final bool expressAccepted =
-                  (widget.booking['expressStatus'] == 'accepted');
-              final double expressFee = expressSelected ? 5.0 : 0.0;
-              final double expressFeePlatform = expressFee > 0
-                  ? double.parse((expressFee * 0.10).toStringAsFixed(2))
-                  : 0.0;
-              final double totalPaid = double.parse(
-                (rentalSubtotalLocal +
-                        feeLocal +
-                        dropFee +
-                        retFee +
-                        expressFee +
-                        expressFeePlatform)
-                    .toStringAsFixed(2),
-              );
-              final payoutEst = double.parse(
-                (rentalSubtotalLocal +
-                        dropFee +
-                        retFee +
-                        (expressAccepted ? 5.0 : 0.0))
-                    .toStringAsFixed(2),
-              );
+              final baseTotal = boundPrice?.baseRental ??
+                  (providedBasePerDay ?? 0.0) * daysLocal;
+              final exactDiscount =
+                  boundPrice?.discount ?? discountAmountProvided;
+              final rentalSubtotalLocal = boundPrice?.rentalSubtotal ??
+                  (baseTotal - exactDiscount).clamp(0.0, baseTotal);
+              final feeLocal = boundPrice?.platformFee ??
+                  DataService.platformContributionForRental(
+                    rentalSubtotalLocal,
+                  );
+              final double totalPaid = boundPrice?.total ??
+                  double.parse(
+                    (rentalSubtotalLocal + feeLocal).toStringAsFixed(2),
+                  );
+              final payoutEst = boundPrice?.ownerPayout ??
+                  double.parse(rentalSubtotalLocal.toStringAsFixed(2));
               if (_isViewerOwnerSync()) {
                 final isHeldForReview = widget.booking['needsReview'] == true;
                 // Owner view: show only payout, no details
@@ -1522,7 +1762,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  if (discountAmountProvided > 0)
+                  if (exactDiscount > 0)
                     Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.symmetric(
@@ -1553,41 +1793,37 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                         ],
                       ),
                     ),
-                  if (providedBasePerDay != null)
+                  if (boundPrice?.pricePerDay != null ||
+                      providedBasePerDay != null)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Preisaufschlüsselung',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (boundPrice?.pricePerDay != null ||
+                      providedBasePerDay != null)
                     _AmountRow(
                       label:
-                          'Grundpreis: ${_formatEuro(providedBasePerDay)} × $daysLocal',
+                          'Grundpreis: ${_formatEuro(boundPrice?.pricePerDay ?? providedBasePerDay!)} × ${boundPrice?.days ?? daysLocal}',
                       value: _formatEuro(baseTotal),
                     ),
-                  if (discountAmountProvided > 0)
+                  if (exactDiscount > 0)
                     _AmountRow(
-                      label: 'Rabatt',
-                      value: '-${_formatEuro(discountAmountProvided)}',
+                      label: boundPrice?.discountLabel ?? 'Rabatt',
+                      value: '-${_formatEuro(exactDiscount)}',
                     ),
                   _AmountRow(
                     label: 'Zwischensumme (Mietpreis)',
                     value: _formatEuro(rentalSubtotalLocal),
                   ),
-                  if (dropFee > 0)
-                    _AmountRow(
-                      label: 'Lieferung (Abgabe)',
-                      value: _formatEuro(dropFee),
-                    ),
-                  if (retFee > 0)
-                    _AmountRow(
-                      label: 'Abholung (Rückgabe)',
-                      value: _formatEuro(retFee),
-                    ),
-                  if (expressFee > 0)
-                    _AmountRow(
-                      label: 'Prioritätszuschlag',
-                      value: _formatEuro(expressFee),
-                    ),
-                  if (expressFeePlatform > 0)
-                    _AmountRow(
-                      label: 'Plattformbeitrag auf Priorität (10%)',
-                      value: _formatEuro(expressFeePlatform),
-                    ),
                   _AmountRow(
                     label: 'Plattformbeitrag',
                     value: _formatEuro(feeLocal),
@@ -1607,7 +1843,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         const SizedBox(height: 16),
         // Übergabe-Karte (mit Code + QR) nur zeigen, wenn der Viewer Vermieter ist.
         // Dieser Block befindet sich im laufenden View.
-        if (_isViewerOwnerSync())
+        if (_isViewerOwnerSync() && !BackendConfig.enabled)
           Container(
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.20),
@@ -1952,7 +2188,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     String returnText,
   ) {
     final (start, end) = _parseDateRange();
-    final now = DateTime.now();
     final effective = _effectiveCategory(start: start, end: end);
     final isUpcoming = effective == 'upcoming';
     final isPending = effective == 'pending';
@@ -1962,19 +2197,21 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final isDeclined = status == 'Abgelehnt';
 
     // Derive pricing breakdown
+    final boundPrice = _boundPriceSnapshot;
     final pricePaidStr = (widget.booking['pricePaid'] as String?) ?? '';
-    final totalPaid = _parseEuro(pricePaidStr);
+    final totalPaid = boundPrice?.total ?? _parseEuro(pricePaidStr);
     final days = (start != null && end != null)
         ? end.difference(start).inDays.clamp(1, 365)
         : 1;
     final providedBasePerDay =
         (widget.booking['basePerDay'] as num?)?.toDouble();
-    final discountPercentProvided =
-        (widget.booking['discountPercentApplied'] as num?)?.toDouble() ?? 0.0;
     final discountAmountProvided = _discountsFromBooking();
     double baseTotal;
     double discountAmount;
-    if (providedBasePerDay != null) {
+    if (boundPrice != null) {
+      baseTotal = boundPrice.baseRental ?? boundPrice.rentalSubtotal;
+      discountAmount = boundPrice.discount ?? 0;
+    } else if (providedBasePerDay != null) {
       baseTotal = (providedBasePerDay * days);
       discountAmount = discountAmountProvided;
     } else {
@@ -1985,13 +2222,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       baseTotal = rentalSubtotalTmp;
       discountAmount = discountAmountProvided;
     }
-    final fee = _serviceFee(totalPaid);
-    final rentalSubtotal = (baseTotal - discountAmount).clamp(0.0, totalPaid);
-    final daily = days > 0 ? (rentalSubtotal / days) : rentalSubtotal;
-
-    // Unified policy uses calendar days only; no specific deadline label shown here
-    final DateTime? cancellationDeadline = null;
-    final canStillCancel = _canCancel && (start == null || now.isBefore(start));
+    final fee = boundPrice?.platformFee ?? _serviceFee(totalPaid);
+    final rentalSubtotal = boundPrice?.rentalSubtotal ??
+        (baseTotal - discountAmount).clamp(0.0, totalPaid);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -2112,16 +2345,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                         builder: (context) {
                           final now = DateTime.now();
                           final diff = start.difference(now);
-                          final ownerDeliversAtDropoff = (widget.booking[
-                                      'ownerDeliversAtDropoffChosen'] ==
-                                  true) ||
-                              (widget.booking['expressRequested'] == true) ||
-                              (widget.booking['expressStatus'] == 'accepted');
-                          final modeLabel =
-                              ownerDeliversAtDropoff ? 'Lieferung' : 'Abholung';
                           final text = _formatPickupCountdown(
                             diff,
-                            modeLabel: modeLabel,
+                            modeLabel: 'Abholung',
                           );
                           return Container(
                             padding: const EdgeInsets.symmetric(
@@ -2178,9 +2404,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           height:
               (isCancelled || isDeclined || isPending || isUpcoming) ? 6 : 12,
         ),
-        // Header chip row removed (status chip now overlays the image)
-        if (false) const SizedBox.shrink(),
-
         SizedBox(height: isCancelled ? 8 : 12),
         Text(
           (widget.booking['title'] as String?) ?? '-',
@@ -2245,57 +2468,25 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           // Locations moved out of the info card for all sections
           showLocations: false,
           transportInfo: () {
-            final renterPicksUpSelf =
-                (widget.booking['ownerDeliversAtDropoffChosen'] == true)
-                    ? false
-                    : true;
-            final renterReturnsSelf =
-                (widget.booking['ownerPicksUpAtReturnChosen'] == true)
-                    ? false
-                    : true;
             if (_isOngoing) {
-              // Laufend: Rückgabe-Info abhängig von der gewählten Rückgabeart
-              return renterReturnsSelf
-                  ? 'Du bringst den Artikel selbst zurück.'
-                  : 'Der Vermieter holt den Artikel wieder ab.';
+              return 'Du bringst den Artikel selbst zurück.';
             } else if (isPending || isUpcoming) {
-              if (renterPicksUpSelf) {
-                return isPending
-                    ? 'Du holst den Artikel selbst ab, wenn deine Anfrage akzeptiert wird.'
-                    : 'Du holst den Artikel selbst ab.';
-              }
-              // Lieferung gewählt: In Ausstehend klarstellen, dass erst nach Annahme geliefert wird
               return isPending
-                  ? 'Wenn ${_listerName} deine Anfrage annimmt, bringt er dir den Artikel vorbei.'
-                  : 'Der Vermieter bringt dir den Artikel.';
+                  ? 'Du holst den Artikel selbst ab, wenn deine Anfrage akzeptiert wird.'
+                  : 'Du holst den Artikel selbst ab.';
             }
             return null;
           }(),
         ),
 
-        // Approximate pickup map directly under the info card (only for the traveler)
+        // Approximate pickup map directly under the info card.
         if (isUpcoming)
           Builder(
             builder: (context) {
-              final renterPicksUpSelf =
-                  (widget.booking['ownerDeliversAtDropoffChosen'] == true)
-                      ? false
-                      : true;
-              if (!renterPicksUpSelf) return const SizedBox.shrink();
               final label = AddressPrivacy.nearbyShort(kindLabel: 'Abholung');
               final fullAddress = (widget.booking['location'] as String?) ?? '';
-              final requestStatus = ((widget.booking['statusRaw'] as String?) ??
-                      (widget.booking['status'] as String?) ??
-                      '')
-                  .trim()
-                  .toLowerCase();
-              final isAccepted = requestStatus == 'accepted' ||
-                  requestStatus.contains('akzeptiert');
               final revealExactAddress =
-                  AddressPrivacy.shouldRevealExactAddress(
-                handoverAt: start,
-                isAccepted: isAccepted,
-              );
+                  widget.booking['exactAddressRevealed'] == true;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -2321,26 +2512,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
             },
           ),
 
-        // Pending (Ausstehend): gleiche Kartenlogik wie Kommend, falls der Mieter selbst abholt
+        // Pending: same self-pickup privacy map as upcoming.
         if (isPending)
           Builder(
             builder: (context) {
-              final renterPicksUpSelf =
-                  (widget.booking['ownerDeliversAtDropoffChosen'] == true)
-                      ? false
-                      : true;
-              try {
-                debugPrint(
-                  '[BookingDetail] pending map visibility: requestId=' +
-                      ((widget.booking['requestId'] ?? '')).toString() +
-                      ' ownerDeliversAtDropoffChosen=' +
-                      ((widget.booking['ownerDeliversAtDropoffChosen'] == true)
-                          .toString()) +
-                      ' showMap=' +
-                      (renterPicksUpSelf).toString(),
-                );
-              } catch (_) {}
-              if (!renterPicksUpSelf) return const SizedBox.shrink();
               final label = AddressPrivacy.nearbyShort(kindLabel: 'Abholung');
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2363,18 +2538,14 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
             },
           ),
 
-        // Ongoing (Laufend): Karte für Rückgabe, falls der Mieter selbst zurückbringt
+        // Ongoing: self-return map.
         if (_isOngoing && widget.booking['needsReview'] != true)
           Builder(
             builder: (context) {
-              final renterReturnsSelf =
-                  (widget.booking['ownerPicksUpAtReturnChosen'] == true)
-                      ? false
-                      : true;
-              if (!renterReturnsSelf) return const SizedBox.shrink();
               final label = AddressPrivacy.nearbyShort(kindLabel: 'Rückgabe');
               final fullAddress = (widget.booking['location'] as String?) ?? '';
-              // For ongoing bookings, always show the exact address
+              final exactAddressRevealed =
+                  widget.booking['exactAddressRevealed'] == true;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -2388,8 +2559,12 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                   ),
                   const SizedBox(height: 8),
                   _AddressInfoCard(
-                    icon: Icons.place_outlined,
-                    text: 'Rückgabeort: $fullAddress',
+                    icon: exactAddressRevealed
+                        ? Icons.place_outlined
+                        : Icons.lock_outline,
+                    text: exactAddressRevealed && fullAddress.isNotEmpty
+                        ? 'Rückgabeort: $fullAddress'
+                        : 'Die genaue Adresse ist nur im serverseitig freigegebenen Zeitfenster sichtbar.',
                   ),
                 ],
               );
@@ -2407,7 +2582,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         // Removed separate top-level Übergabe-Button to avoid duplication.
         const SizedBox(height: 16),
         // Show cancellation policy above the payment summary, except for truly completed (Abgeschlossen)
-        if (status != 'Abgeschlossen') ...[
+        if (!_simulationOnly && status != 'Abgeschlossen') ...[
           _CancellationPolicyCard(booking: widget.booking),
           const SizedBox(height: 12),
         ],
@@ -2421,91 +2596,15 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           padding: const EdgeInsets.all(12),
           child: Builder(
             builder: (context) {
-              // Delivery/return/express fees for total computation (align with ongoing logic)
-              final bool ownerDelivers =
-                  (widget.booking['ownerDeliversAtDropoffChosen'] == true) ||
-                      (widget.booking['expressRequested'] == true) ||
-                      (widget.booking['expressStatus'] != null) ||
-                      ((widget.booking['deliveryAddressLine'] ?? '')
-                          .toString()
-                          .trim()
-                          .isNotEmpty) ||
-                      ((widget.booking['deliveryCity'] ?? '')
-                          .toString()
-                          .trim()
-                          .isNotEmpty);
-              final bool ownerPicks =
-                  (widget.booking['ownerPicksUpAtReturnChosen'] == true);
-              double km = 0.0;
-              final double? dLat =
-                  (widget.booking['deliveryLat'] as num?)?.toDouble();
-              final double? dLng =
-                  (widget.booking['deliveryLng'] as num?)?.toDouble();
-              if (_itemLat != null &&
-                  _itemLng != null &&
-                  dLat != null &&
-                  dLng != null) {
-                km = DataService.estimateDistanceKm(
-                  _itemLat!,
-                  _itemLng!,
-                  dLat,
-                  dLng,
-                );
-              } else if (_itemLat != null &&
-                  _itemLng != null &&
-                  ((widget.booking['deliveryAddressLine'] ?? '')
-                      .toString()
-                      .trim()
-                      .isNotEmpty)) {
-                km = DataService.estimateDistanceKmFromAddressLine(
-                  _itemLat!,
-                  _itemLng!,
-                  (widget.booking['deliveryAddressLine'] as String).trim(),
-                );
-              } else if (_itemLat != null &&
-                  _itemLng != null &&
-                  ((widget.booking['deliveryCity'] ?? '')
-                      .toString()
-                      .trim()
-                      .isNotEmpty)) {
-                km = DataService.estimateDistanceKmToCity(
-                  _itemLat!,
-                  _itemLng!,
-                  (widget.booking['deliveryCity'] as String).trim(),
-                );
+              if (_simulationOnly) {
+                return const _SimulationPaymentNotice();
               }
-              final double dropFee = ownerDelivers
-                  ? double.parse((km * 0.30).toStringAsFixed(2))
-                  : 0.0;
-              final double retFee = ownerPicks
-                  ? double.parse((km * 0.30).toStringAsFixed(2))
-                  : 0.0;
-              final bool expressSelected =
-                  (widget.booking['expressRequested'] == true) ||
-                      (widget.booking['expressStatus'] == 'accepted');
-              final bool expressAccepted =
-                  (widget.booking['expressStatus'] == 'accepted');
-              final double expressFee = expressSelected ? 5.0 : 0.0;
-              final double expressFeePlatform = expressFee > 0
-                  ? double.parse((expressFee * 0.10).toStringAsFixed(2))
-                  : 0.0;
-              final totalRenter = (rentalSubtotal +
-                      fee +
-                      dropFee +
-                      retFee +
-                      expressFee +
-                      expressFeePlatform)
-                  .clamp(0.0, double.infinity);
+              final totalRenter = boundPrice?.total ??
+                  (rentalSubtotal + fee).clamp(0.0, double.infinity);
               if (_isViewerOwnerSync()) {
                 final isHeldForReview = widget.booking['needsReview'] == true;
-                // Owner view: payout berücksichtigt Lieferung/Abholung/Priorität (keine Plattformgebühr)
-                final payoutOwner = double.parse(
-                  (rentalSubtotal +
-                          dropFee +
-                          retFee +
-                          (expressAccepted ? 5.0 : 0.0))
-                      .toStringAsFixed(2),
-                );
+                final payoutOwner = boundPrice?.ownerPayout ??
+                    double.parse(rentalSubtotal.toStringAsFixed(2));
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2555,16 +2654,12 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
               }
               if (isPending || isUpcoming) {
                 // Renter view – show the exact quoted total & subtitle captured at booking time
-                final double shownTotal =
+                final double shownTotal = boundPrice?.total ??
                     (widget.booking['quotedTotalRenter'] as num?)?.toDouble() ??
-                        totalRenter;
+                    totalRenter;
                 final String subtitle =
                     (widget.booking['quotedSubtitle'] as String?) ??
-                        TotalSubtitleHelper.build(
-                          delivery: ownerDelivers,
-                          pickup: ownerPicks,
-                          priority: expressSelected,
-                        );
+                        'Inkl. Plattformbeitrag.';
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -2617,26 +2712,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                     label: 'Mietpreis (Tagespreis × Tage)',
                     value: _formatEuro(rentalSubtotal),
                   ),
-                  if (dropFee > 0)
-                    _AmountRow(
-                      label: 'Lieferung (Abgabe)',
-                      value: _formatEuro(dropFee),
-                    ),
-                  if (retFee > 0)
-                    _AmountRow(
-                      label: 'Abholung (Rückgabe)',
-                      value: _formatEuro(retFee),
-                    ),
-                  if (expressFee > 0)
-                    _AmountRow(
-                      label: 'Prioritätszuschlag',
-                      value: _formatEuro(expressFee),
-                    ),
-                  if (expressFeePlatform > 0)
-                    _AmountRow(
-                      label: 'Plattformbeitrag auf Priorität (10%)',
-                      value: _formatEuro(expressFeePlatform),
-                    ),
                   _AmountRow(
                     label: 'Plattformbeitrag',
                     value: _formatEuro(fee),
@@ -2645,14 +2720,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                     const Divider(height: 16, color: Colors.white24),
                     _AmountRow(
                       label: 'Gesamt bezahlt (Mieter)',
-                      value: _formatEuro(
-                        (rentalSubtotal +
-                            fee +
-                            dropFee +
-                            retFee +
-                            expressFee +
-                            expressFeePlatform),
-                      ),
+                      value: _formatEuro(totalRenter),
                       strong: true,
                     ),
                   ],
@@ -2661,128 +2729,81 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
             },
           ),
         ),
+        if (_platformContract != null) ...[
+          const SizedBox(height: 12),
+          _buildPlatformContractCard(theme),
+        ],
         // Refund info (only relevant for Storniert)
         if (isCancelled) ...[
           const SizedBox(height: 8),
           Builder(
             builder: (context) {
-              // Unified refund logic with Master‑Regel
-              final now = DateTime.now();
-              double ratio = 0.0;
-              if (start != null) {
-                ratio = DataService.refundRatio(
-                  policy: 'unified',
-                  start: start,
-                  cancelAt: now,
-                );
+              final outcomeRaw = widget.booking['cancellationOutcome'];
+              final outcome = outcomeRaw is Map
+                  ? Map<String, dynamic>.from(outcomeRaw)
+                  : const <String, dynamic>{};
+              Map<String, dynamic> refundObject(String key) {
+                final value = outcome[key];
+                return value is Map
+                    ? Map<String, dynamic>.from(value)
+                    : const <String, dynamic>{};
               }
-              final cancelledBy =
-                  (widget.booking['cancelledBy'] as String?) ?? '';
-              double totalRefund;
-              String note;
-              if (cancelledBy == 'owner') {
-                totalRefund = totalPaid; // 100% aller gezahlten Beträge
-                note =
-                    'Erstattung 100% aller gezahlten Beträge (Stornierung durch Vermieter).';
-              } else {
-                // Recompute fee and extras for proportional refund
-                final fee = DataService.platformContributionForRental(
-                  rentalSubtotal,
-                );
-                final bool ownerDelivers =
-                    (widget.booking['ownerDeliversAtDropoffChosen'] == true) ||
-                        (widget.booking['expressRequested'] == true) ||
-                        (widget.booking['expressStatus'] != null) ||
-                        ((widget.booking['deliveryAddressLine'] ?? '')
-                            .toString()
-                            .trim()
-                            .isNotEmpty) ||
-                        ((widget.booking['deliveryCity'] ?? '')
-                            .toString()
-                            .trim()
-                            .isNotEmpty);
-                final bool ownerPicks =
-                    (widget.booking['ownerPicksUpAtReturnChosen'] == true);
-                double km = 0.0;
-                final double? dLat =
-                    (widget.booking['deliveryLat'] as num?)?.toDouble();
-                final double? dLng =
-                    (widget.booking['deliveryLng'] as num?)?.toDouble();
-                if (_itemLat != null &&
-                    _itemLng != null &&
-                    dLat != null &&
-                    dLng != null) {
-                  km = DataService.estimateDistanceKm(
-                    _itemLat!,
-                    _itemLng!,
-                    dLat,
-                    dLng,
-                  );
-                } else if (_itemLat != null &&
-                    _itemLng != null &&
-                    ((widget.booking['deliveryAddressLine'] ?? '')
-                        .toString()
-                        .trim()
-                        .isNotEmpty)) {
-                  km = DataService.estimateDistanceKmFromAddressLine(
-                    _itemLat!,
-                    _itemLng!,
-                    (widget.booking['deliveryAddressLine'] as String).trim(),
-                  );
-                } else if (_itemLat != null &&
-                    _itemLng != null &&
-                    ((widget.booking['deliveryCity'] ?? '')
-                        .toString()
-                        .trim()
-                        .isNotEmpty)) {
-                  km = DataService.estimateDistanceKmToCity(
-                    _itemLat!,
-                    _itemLng!,
-                    (widget.booking['deliveryCity'] as String).trim(),
-                  );
-                }
-                final double dropFee = ownerDelivers
-                    ? double.parse((km * 0.30).toStringAsFixed(2))
-                    : 0.0;
-                final double retFee = ownerPicks
-                    ? double.parse((km * 0.30).toStringAsFixed(2))
-                    : 0.0;
-                final bool expressSelected =
-                    (widget.booking['expressRequested'] == true) ||
-                        (widget.booking['expressStatus'] == 'accepted');
-                final double expressFee = expressSelected ? 5.0 : 0.0;
-                final double expressFeePlatform = expressFee > 0
-                    ? double.parse((expressFee * 0.10).toStringAsFixed(2))
-                    : 0.0;
-                final feesTotal =
-                    fee + dropFee + retFee + expressFee + expressFeePlatform;
-                final refundableTotal = (rentalSubtotal + feesTotal).clamp(
-                  0.0,
-                  totalPaid,
-                );
-                totalRefund = double.parse(
-                  (refundableTotal * ratio).toStringAsFixed(2),
-                );
-                note = ratio >= 1.0
-                    ? 'Kostenlose Stornierung – 100% Erstattung aller Beträge.'
-                    : (ratio > 0.0
-                        ? '50% Rückerstattung von Mietpreis und allen Gebühren.'
-                        : 'Keine Rückerstattung (Mietbeginn erreicht oder Nicht‑Erscheinen).');
-              }
+
+              final rentRefund = refundObject('rentRefund');
+              final sitFeeRefund = refundObject('sitFeeRefund');
+              final rentMinor = (rentRefund['amountMinor'] as num?)?.toInt();
+              final feeMinor = (sitFeeRefund['amountMinor'] as num?)?.toInt();
+              final pending = outcome['calculationStatus'] ==
+                      'pending_actual_loss_assessment' ||
+                  outcome['requiresActualLossAssessment'] == true;
+              final storedTotalRefundMinor =
+                  rentMinor != null && feeMinor != null
+                      ? rentMinor + feeMinor
+                      : (outcome['refundMinor'] as num?)?.toInt();
+              final totalRefundMinor = storedTotalRefundMinor ??
+                  (widget.booking['cancelledBy'] == 'owner'
+                      ? (totalPaid * 100).round()
+                      : null);
+              final note = pending
+                  ? 'Der Betrag ist noch offen. Ersatzvermietung, ersparte Aufwendungen und ein nachgewiesener geringerer oder fehlender Schaden müssen zuerst berücksichtigt werden.'
+                  : (totalRefundMinor == null
+                      ? 'Für diese ältere Buchung ist kein unveränderlich gespeicherter Erstattungsbetrag vorhanden. Es wird nichts anhand der aktuellen Uhrzeit neu berechnet.'
+                      : 'Mietpreis und SIT-Plattformgebühr sind getrennt gespeichert; Echtgeld bleibt bis zur PSP-Freigabe deaktiviert.');
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _AmountRow(
-                    label: 'Rückerstattung (gesamt)',
-                    value: _formatEuro(totalRefund),
-                    strong: true,
-                  ),
+                  if (rentMinor != null)
+                    _AmountRow(
+                      label: 'Mietpreis-Erstattung · Vermieter',
+                      value: _formatEuro(rentMinor / 100),
+                    ),
+                  if (feeMinor != null)
+                    _AmountRow(
+                      label: 'SIT-Gebühren-Erstattung · SIT',
+                      value: _formatEuro(feeMinor / 100),
+                    ),
+                  if (totalRefundMinor != null)
+                    _AmountRow(
+                      label: 'Rückerstattung (gesamt)',
+                      value: _formatEuro(totalRefundMinor / 100),
+                      strong: true,
+                    ),
                   Text(
                     note,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: Colors.white70,
                     ),
                   ),
+                  if (outcome['receipt'] is Map &&
+                      (outcome['actualLossResolutionId']?.toString() ?? '')
+                          .isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    FilledButton.tonalIcon(
+                      onPressed: () => _shareActualLossReceipt(outcome),
+                      icon: const Icon(Icons.receipt_long_outlined),
+                      label: const Text('Stornoabrechnung herunterladen'),
+                    ),
+                  ],
                 ],
               );
             },
@@ -2829,19 +2850,34 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                   right: 0,
                   bottom: 12,
                 ),
-                children: const [
-                  _Bullet(
-                    text: 'Warte, bis der Vermieter die Anfrage annimmt.',
-                  ),
-                  _Bullet(
-                    text:
-                        'Sobald deine Anfrage akzeptiert wird, erscheint sie unter Kommende Buchungen.',
-                  ),
-                  _Bullet(
-                    text:
-                        'Vereinbare mit dem Vermieter einen konkreten Zeitpunkt für Übergabe und Rückgabe.',
-                  ),
-                ],
+                children: _simulationOnly
+                    ? const [
+                        _Bullet(
+                          text:
+                              'Warte, bis der Vermieter die unverbindliche Testanfrage annimmt.',
+                        ),
+                        _Bullet(
+                          text:
+                              'Danach könnt ihr Sichtbarkeit, Benachrichtigungen und den Chat testen.',
+                        ),
+                        _Bullet(
+                          text:
+                              'Übergabe, Rückgabe, Vertrag, Reservierung und Zahlung bleiben in dieser Simulation gesperrt.',
+                        ),
+                      ]
+                    : const [
+                        _Bullet(
+                          text: 'Warte, bis der Vermieter die Anfrage annimmt.',
+                        ),
+                        _Bullet(
+                          text:
+                              'Sobald deine Anfrage akzeptiert wird, erscheint sie unter Kommende Buchungen.',
+                        ),
+                        _Bullet(
+                          text:
+                              'Vereinbare mit dem Vermieter einen konkreten Zeitpunkt für Übergabe und Rückgabe.',
+                        ),
+                      ],
               ),
             ),
           ),
@@ -2849,7 +2885,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           // Button wurde an die feste Fußleiste (bottomNavigationBar) verschoben
         ],
 
-        if (isUpcoming && _isViewerOwnerSync()) ...[
+        if (isUpcoming && _isViewerOwnerSync() && !_simulationOnly) ...[
           const SizedBox(height: 16),
           // Pickup code & QR
           Container(
@@ -2944,7 +2980,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           ),
         ],
 
-        if (isUpcoming && !_isViewerOwnerSync()) ...[
+        if (isUpcoming && !_isViewerOwnerSync() && !_simulationOnly) ...[
           const SizedBox(height: 16),
           // Button moved to the page bottom per request
           // Next steps (collapsible) for upcoming (renter)
@@ -3018,7 +3054,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
 
         const SizedBox(height: 16),
         // Bottom primary action for upcoming bookings: move here per request
-        if (isUpcoming && widget.booking['needsReview'] != true) ...[
+        if (isUpcoming &&
+            !_simulationOnly &&
+            widget.booking['needsReview'] != true) ...[
           _InlineTimeActionButton(
             icon: Icons.inventory_2_rounded,
             label: 'Übergabezeit',
@@ -3037,18 +3075,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         // Removed bottom "Anzeige ansehen" per request
       ],
     );
-  }
-
-  String _humanizeReminder(int? minutes) {
-    if (minutes == null || minutes <= 0) return '—';
-    final d = minutes ~/ (60 * 24);
-    final h = (minutes % (60 * 24)) ~/ 60;
-    final m = minutes % 60;
-    final parts = <String>[];
-    if (d > 0) parts.add(d == 1 ? '1 Tag' : '$d Tage');
-    if (h > 0) parts.add(h == 1 ? '1 Stunde' : '$h Stunden');
-    if (m > 0) parts.add('$m Min');
-    return parts.isEmpty ? '—' : parts.join(' ');
   }
 
   Color _statusColor(String? status) {
@@ -3102,65 +3128,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     }
   }
 
-  void _call(String phone) async {
-    final tel = Uri.parse('tel:$phone');
-    try {
-      await launchUrl(tel, mode: LaunchMode.platformDefault);
-    } catch (_) {
-      _toast('Anruf nicht möglich');
-    }
-  }
-
-  Future<void> _addToCalendar({required bool isPickup}) async {
-    final (start, end) = _parseDateRange();
-    final when = isPickup ? start : end;
-    if (when == null) {
-      _toast('Termin fehlt');
-      return;
-    }
-    final title = (widget.booking['title'] as String?) ?? 'ShareItToo Buchung';
-    final location = (widget.booking['location'] as String?) ?? '';
-    final summary = isPickup ? 'Abholung: $title' : 'Rückgabe: $title';
-    final uid =
-        '${_computeBookingId()}-${isPickup ? 'pickup' : 'return'}@shareittoo';
-
-    String fmt(DateTime dt) {
-      final z = dt.toUtc();
-      String two(int x) => x.toString().padLeft(2, '0');
-      return '${z.year}${two(z.month)}${two(z.day)}T${two(z.hour)}${two(z.minute)}${two(z.second)}Z';
-    }
-
-    final ics = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//ShareItToo//Booking//DE',
-      'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH',
-      'BEGIN:VEVENT',
-      'UID:$uid',
-      'DTSTAMP:${fmt(DateTime.now())}',
-      'SUMMARY:$summary',
-      if (location.isNotEmpty) 'LOCATION:$location',
-      'DTSTART:${fmt(when)}',
-      // Use 1-hour default duration
-      'DTEND:${fmt(when.add(const Duration(hours: 1)))}',
-      'DESCRIPTION:Buchungs-ID ${_computeBookingId()}',
-      'END:VEVENT',
-      'END:VCALENDAR',
-    ].join('\n');
-
-    final dataUri = Uri.dataFromString(
-      ics,
-      mimeType: 'text/calendar',
-      encoding: utf8,
-    );
-    try {
-      await launchUrl(dataUri, mode: LaunchMode.platformDefault);
-    } catch (_) {
-      _toast('Kalendereintrag konnte nicht erstellt werden');
-    }
-  }
-
   String _computeBookingId() {
     final itemId = (widget.booking['itemId'] as String?) ?? '';
     final requestId = (widget.booking['requestId'] as String?) ?? '';
@@ -3211,17 +3178,44 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         presenterRole: HandoverCodeService.presenterOwner,
       );
 
-  String _returnRenterCode() => _confirmationCode(
-        segment: HandoverCodeService.segmentReturn,
-        presenterRole: HandoverCodeService.presenterRenter,
+  Future<Map<String, dynamic>?> _issueSecureChallenge(String segment) async {
+    final requestId = (widget.booking['requestId'] as String?)?.trim();
+    if (requestId == null || requestId.isEmpty) return null;
+    try {
+      return await DataService.issueBookingConfirmationChallenge(
+        requestId: requestId,
+        segment: segment,
       );
+    } catch (_) {
+      if (!mounted) return null;
+      AppPopup.toast(
+        context,
+        icon: Icons.lock_outline,
+        title: 'Sicherer Bestätigungscode konnte nicht erstellt werden.',
+      );
+      return null;
+    }
+  }
 
-  String _handoverCode() {
-    final title = (widget.booking['title'] as String?) ?? '';
-    return HandoverCodeService.codeFromTitleAndStart(
-      title: title,
-      start: _handoverCodeStart(),
-    );
+  Future<bool> _verifySecureChallenge({
+    required String segment,
+    required String presenterRole,
+    String? qrPayload,
+    String? code,
+  }) async {
+    final requestId = (widget.booking['requestId'] as String?)?.trim();
+    if (requestId == null || requestId.isEmpty) return false;
+    try {
+      return await DataService.verifyBookingConfirmationChallenge(
+        requestId: requestId,
+        segment: segment,
+        presenterRole: presenterRole,
+        qrPayload: qrPayload,
+        code: code,
+      );
+    } catch (_) {
+      return false;
+    }
   }
 
   double _parseEuro(String s) {
@@ -3283,26 +3277,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     }
     if (d.inDays == 1) return '$modeLabel in 1 Tag';
     return '$modeLabel in ${d.inDays} Tagen';
-  }
-
-  String _formatDeadline(DateTime dt) {
-    final months = [
-      'Jan',
-      'Feb',
-      'Mär',
-      'Apr',
-      'Mai',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Okt',
-      'Nov',
-      'Dez',
-    ];
-    final m = months[(dt.month - 1).clamp(0, 11)];
-    final dd = dt.day.toString().padLeft(2, '0');
-    return '$dd. $m';
   }
 
   void _showQrOverlay(BuildContext context, String data) {
@@ -3416,23 +3390,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       status: 'active',
       endedAt: null,
       timesLent: 0,
-      deposit: totalPaid > 100
-          ? math.min(200.0, totalPaid * 0.25)
-          : (totalPaid > 0 ? 50.0 : 0.0),
     );
-
-    // Carry through transport selections so the stepper can show the
-    // "Fahrtvergütung bestätigen" step when zutreffend (Abholung bei Rückgabe).
-    final bool ownerPicksUpChosen =
-        (widget.booking['ownerPicksUpAtReturnChosen'] == true);
-    final bool ownerDeliversChosen =
-        (widget.booking['ownerDeliversAtDropoffChosen'] == true);
-    final String? delLine = widget.booking['deliveryAddressLine'] as String?;
-    final String? delCity = widget.booking['deliveryCity'] as String?;
-    final double? delLat = (widget.booking['deliveryLat'] as num?)?.toDouble();
-    final double? delLng = (widget.booking['deliveryLng'] as num?)?.toDouble();
-    final bool expressRequested = (widget.booking['expressRequested'] == true);
-    final String? expressStatus = widget.booking['expressStatus'] as String?;
 
     final req = RentalRequest(
       id: 'req_$reqIdSeed',
@@ -3443,18 +3401,19 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       end: end ?? DateTime.now().add(const Duration(days: 1)),
       status: 'running',
       message: null,
-      ownerPicksUpAtReturnChosen: ownerPicksUpChosen,
-      ownerDeliversAtDropoffChosen: ownerDeliversChosen,
-      deliveryAddressLine: delLine,
-      deliveryCity: delCity,
-      deliveryLat: delLat,
-      deliveryLng: delLng,
-      expressRequested: expressRequested,
-      expressStatus: expressStatus,
     );
 
     final renterName = widget.viewerIsOwner ? _listerName : 'Mieter';
     final ownerName = widget.viewerIsOwner ? 'Vermieter' : _listerName;
+
+    Map<String, dynamic>? challenge;
+    if (!widget.viewerIsOwner) {
+      challenge = await _issueSecureChallenge(
+        HandoverCodeService.segmentReturn,
+      );
+      if (challenge == null) return;
+    }
+    if (!mounted) return;
 
     final ok = await ReturnHandoverStepperSheet.push(
       context,
@@ -3462,7 +3421,16 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       request: req,
       renterName: renterName,
       ownerName: ownerName,
-      handoverCode: _returnRenterCode(),
+      handoverCode: challenge?['code']?.toString() ?? '',
+      qrPayload: challenge?['qrPayload']?.toString(),
+      confirmationVerifier: widget.viewerIsOwner
+          ? ({qrPayload, code}) => _verifySecureChallenge(
+                segment: HandoverCodeService.segmentReturn,
+                presenterRole: HandoverCodeService.presenterRenter,
+                qrPayload: qrPayload,
+                code: code,
+              )
+          : null,
       viewerIsOwner: widget.viewerIsOwner,
       mode: ReturnFlowMode.returnFlow,
     );
@@ -3470,6 +3438,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final counterpartyConfirmed = ok?.confirmed == true;
     if (counterpartyConfirmed && mounted) {
       final ownerUserId = await DataService.getCurrentUser();
+      if (!mounted) return;
       final expectedOwnerId = (widget.booking['ownerId'] as String?)?.trim();
       if (ownerUserId == null ||
           expectedOwnerId == null ||
@@ -3498,38 +3467,14 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         );
         if (!transitioned) return;
       }
-      // Release/cancel ride compensation automatically if a decision was made for return segment
-      try {
-        if (requestId != null && requestId.isNotEmpty) {
-          final grant = await DataService.getRideCompensationDecision(
-            requestId: requestId,
-            segment: 'return',
-            consume: true,
-          );
-          if (grant != null) {
-            await DataService.addTimelineEvent(
-              requestId: requestId,
-              type: grant
-                  ? 'ride_comp_release_return'
-                  : 'ride_comp_cancel_return',
-              note: grant
-                  ? 'Fahrtvergütung freigegeben (Rückgabe)'
-                  : 'Fahrtvergütung nicht ausgezahlt (Rückgabe)',
-            );
-          }
-        }
-      } catch (_) {}
       if (requestId != null && requestId.isNotEmpty) {
-        await _syncBookingLifecycleFromRequest(requestId!);
+        await _syncBookingLifecycleFromRequest(requestId);
       }
+      if (!mounted) return;
       final titleTxt = (widget.booking['title'] as String?) ?? '';
       final listerId = widget.booking['listerId'] as String?;
       final itemId = widget.booking['itemId'] as String?;
       final viewerIsOwner = widget.viewerIsOwner;
-      final whoToRateName = viewerIsOwner
-          ? (widget.booking['renterName'] as String? ?? 'Mieter')
-          : _listerName;
-
       await AppPopup.show(
         context,
         icon: Icons.check_circle_outline,
@@ -3611,31 +3556,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       status: 'active',
       endedAt: null,
       timesLent: 0,
-      deposit: null,
     );
-
-    // Carry through transport selections so the stepper can show the
-    // "Fahrtvergütung bestätigen" step when Lieferung bei Abgabe gewählt wurde.
-    final bool ownerDeliversChosenPickup =
-        (widget.booking['ownerDeliversAtDropoffChosen'] == true) ||
-            (widget.booking['expressRequested'] == true) ||
-            (widget.booking['expressStatus'] != null) ||
-            ((widget.booking['deliveryAddressLine'] ?? '')
-                .toString()
-                .trim()
-                .isNotEmpty) ||
-            ((widget.booking['deliveryCity'] ?? '')
-                .toString()
-                .trim()
-                .isNotEmpty);
-    final bool ownerPicksChosenPickup =
-        (widget.booking['ownerPicksUpAtReturnChosen'] == true);
-    final String? pDelLine = widget.booking['deliveryAddressLine'] as String?;
-    final String? pDelCity = widget.booking['deliveryCity'] as String?;
-    final double? pDelLat = (widget.booking['deliveryLat'] as num?)?.toDouble();
-    final double? pDelLng = (widget.booking['deliveryLng'] as num?)?.toDouble();
-    final bool pExpressRequested = (widget.booking['expressRequested'] == true);
-    final String? pExpressStatus = widget.booking['expressStatus'] as String?;
 
     final req = RentalRequest(
       id: 'req_$reqIdSeed',
@@ -3646,18 +3567,19 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       end: end ?? DateTime.now().add(const Duration(days: 1)),
       status: 'accepted',
       message: null,
-      ownerDeliversAtDropoffChosen: ownerDeliversChosenPickup,
-      ownerPicksUpAtReturnChosen: ownerPicksChosenPickup,
-      deliveryAddressLine: pDelLine,
-      deliveryCity: pDelCity,
-      deliveryLat: pDelLat,
-      deliveryLng: pDelLng,
-      expressRequested: pExpressRequested,
-      expressStatus: pExpressStatus,
     );
 
     final renterName = widget.viewerIsOwner ? _listerName : 'Mieter';
     final ownerName = widget.viewerIsOwner ? 'Vermieter' : _listerName;
+
+    Map<String, dynamic>? challenge;
+    if (widget.viewerIsOwner) {
+      challenge = await _issueSecureChallenge(
+        HandoverCodeService.segmentPickup,
+      );
+      if (challenge == null) return;
+    }
+    if (!mounted) return;
 
     final ok = await ReturnHandoverStepperSheet.push(
       context,
@@ -3665,7 +3587,16 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       request: req,
       renterName: renterName,
       ownerName: ownerName,
-      handoverCode: _pickupOwnerCode(),
+      handoverCode: challenge?['code']?.toString() ?? '',
+      qrPayload: challenge?['qrPayload']?.toString(),
+      confirmationVerifier: widget.viewerIsOwner
+          ? null
+          : ({qrPayload, code}) => _verifySecureChallenge(
+                segment: HandoverCodeService.segmentPickup,
+                presenterRole: HandoverCodeService.presenterOwner,
+                qrPayload: qrPayload,
+                code: code,
+              ),
       viewerIsOwner: widget.viewerIsOwner,
       mode: ReturnFlowMode.pickupFlow,
     );
@@ -3674,8 +3605,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final counterpartyConfirmed = ok?.confirmed == true;
     if (counterpartyConfirmed) {
       try {
+        if (!mounted) return;
         final renterUserId = await _guardAuthenticatedRenter();
-        if (renterUserId == null) return;
+        if (renterUserId == null || !mounted) return;
         final requestId = widget.booking['requestId'] as String?;
         if (requestId != null && requestId.isNotEmpty) {
           final galleryAcknowledged = await _acknowledgeGalleryEvidenceIfNeeded(
@@ -3691,29 +3623,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
             galleryAcknowledged: galleryAcknowledged,
           );
           if (!transitioned) return;
-          // Release/cancel ride compensation for dropoff if decision exists
-          try {
-            final grant = await DataService.getRideCompensationDecision(
-              requestId: requestId,
-              segment: 'dropoff',
-              consume: true,
-            );
-            if (grant != null) {
-              await DataService.addTimelineEvent(
-                requestId: requestId,
-                type: grant
-                    ? 'ride_comp_release_dropoff'
-                    : 'ride_comp_cancel_dropoff',
-                note: grant
-                    ? 'Fahrtvergütung freigegeben (Übergabe)'
-                    : 'Fahrtvergütung nicht ausgezahlt (Übergabe)',
-              );
-            }
-          } catch (_) {}
         }
         if (!mounted) return;
         await _syncBookingLifecycleFromRequest(requestId!);
-        final bookingId = _computeBookingId();
         final title = (widget.booking['title'] as String?) ?? '';
         final message = 'Übergabe des Listings "$title" wurde bestätigt.';
         await DataService.addNotification(
@@ -3721,9 +3633,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           body: message,
         );
         await DataService.setHandoverBanner(
-          bookingId: bookingId,
+          requestId: requestId,
           message: message,
         );
+        if (!mounted) return;
         AppPopup.toast(
           context,
           icon: Icons.check_circle_outline,
@@ -3741,136 +3654,34 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   }
 
   Future<void> _downloadReceiptPdf() async {
-    if (widget.booking['needsReview'] == true) {
-      if (mounted) {
-        AppPopup.toast(
-          context,
-          icon: Icons.hourglass_top_outlined,
-          title: 'Beleg gesperrt, solange dieser Fall geprüft wird.',
-        );
-      }
-      return;
-    }
-    final title = (widget.booking['title'] as String?) ?? '-';
     final bookingId = _computeBookingId();
     final requestId = (widget.booking['requestId'] ?? '').toString();
-    final (start, end) = _parseDateRange();
-    final pricePaidStr = (widget.booking['pricePaid'] as String?) ?? '';
-    final totalPaidLegacy = _parseEuro(pricePaidStr);
-    final daysVal = (widget.booking['days'] as num?)?.toInt() ??
-        ((start != null && end != null)
-            ? end.difference(start).inDays.clamp(1, 365)
-            : 1);
-    final basePerDayProvided =
-        (widget.booking['basePerDay'] as num?)?.toDouble();
-    final double baseTotal = basePerDayProvided != null
-        ? (basePerDayProvided * daysVal)
-        : totalPaidLegacy;
-    final double discountAmount = _discountsFromBooking();
-    final rentalSubtotal = (baseTotal - discountAmount).clamp(0.0, baseTotal);
-    final fee = DataService.platformContributionForRental(rentalSubtotal);
-    final netAmount = (rentalSubtotal / 1.19);
-    final taxAmount = (rentalSubtotal - netAmount);
-
-    final bool ownerDelivers =
-        (widget.booking['ownerDeliversAtDropoffChosen'] == true) ||
-            (widget.booking['expressRequested'] == true) ||
-            (widget.booking['expressStatus'] != null) ||
-            ((widget.booking['deliveryAddressLine'] ?? '')
-                .toString()
-                .trim()
-                .isNotEmpty) ||
-            ((widget.booking['deliveryCity'] ?? '')
-                .toString()
-                .trim()
-                .isNotEmpty);
-    final bool ownerPicks =
-        (widget.booking['ownerPicksUpAtReturnChosen'] == true);
-    double km = 0.0;
-    final double? dLat = (widget.booking['deliveryLat'] as num?)?.toDouble();
-    final double? dLng = (widget.booking['deliveryLng'] as num?)?.toDouble();
-    if (_itemLat != null && _itemLng != null && dLat != null && dLng != null) {
-      km = DataService.estimateDistanceKm(_itemLat!, _itemLng!, dLat, dLng);
-    } else if (_itemLat != null &&
-        _itemLng != null &&
-        ((widget.booking['deliveryAddressLine'] ?? '')
-            .toString()
-            .trim()
-            .isNotEmpty)) {
-      km = DataService.estimateDistanceKmFromAddressLine(
-        _itemLat!,
-        _itemLng!,
-        (widget.booking['deliveryAddressLine'] as String).trim(),
-      );
-    } else if (_itemLat != null &&
-        _itemLng != null &&
-        ((widget.booking['deliveryCity'] ?? '').toString().trim().isNotEmpty)) {
-      km = DataService.estimateDistanceKmToCity(
-        _itemLat!,
-        _itemLng!,
-        (widget.booking['deliveryCity'] as String).trim(),
-      );
-    }
-    final double dropFee =
-        ownerDelivers ? double.parse((km * 0.30).toStringAsFixed(2)) : 0.0;
-    final double retFee =
-        ownerPicks ? double.parse((km * 0.30).toStringAsFixed(2)) : 0.0;
-    final bool expressSelected = (widget.booking['expressRequested'] == true) ||
-        (widget.booking['expressStatus'] == 'accepted');
-    final double expressFee = expressSelected ? 5.0 : 0.0;
-    final double expressFeePlatform = expressFee > 0
-        ? double.parse((expressFee * 0.10).toStringAsFixed(2))
-        : 0.0;
-    final double totalPaid = double.parse(
-      (rentalSubtotal +
-              fee +
-              dropFee +
-              retFee +
-              expressFee +
-              expressFeePlatform)
-          .toStringAsFixed(2),
-    );
-
-    final renterName = (widget.booking['renterName'] as String?)?.trim();
-    final ownerName = (widget.booking['listerName'] as String?)?.trim();
-    final invoice = Invoice(
-      id: 'receipt_${requestId.isNotEmpty ? requestId : bookingId}',
-      invoiceNumber:
-          'SIT-${bookingId.replaceAll(RegExp(r'[^A-Za-z0-9-]'), '')}',
-      bookingId: bookingId,
-      requestId: requestId.isNotEmpty ? requestId : bookingId,
-      type: InvoiceType.invoice,
-      date: DateTime.now(),
-      title: title,
-      amount: totalPaid,
-      booking: InvoiceBookingDetails(
-        itemTitle: title,
-        renterName: (renterName?.isNotEmpty == true ? renterName! : 'Mieter'),
-        ownerName: (ownerName?.isNotEmpty == true ? ownerName! : 'Vermieter'),
-        rentalDays: daysVal,
-      ),
-      pricing: InvoicePriceBreakdown(
-        vatRate: 0.19,
-        netAmount: double.parse(netAmount.toStringAsFixed(2)),
-        taxAmount: double.parse(taxAmount.toStringAsFixed(2)),
-        totalAfterTax: double.parse(rentalSubtotal.toStringAsFixed(2)),
-        platformFee: double.parse(fee.toStringAsFixed(2)),
-        payoutToOwner: double.parse(
-          (totalPaid - fee).clamp(0.0, totalPaid).toStringAsFixed(2),
-        ),
-      ),
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-
     try {
+      final documents = await InvoicesService.getInvoicesForCurrentUser();
+      final canonicalId = requestId.isNotEmpty ? requestId : bookingId;
+      final matching = documents.where((document) =>
+          document.bookingId == canonicalId &&
+          document.type == InvoiceType.bookingPaymentReceipt);
+      if (matching.isEmpty) {
+        if (mounted) {
+          await AppPopup.info(
+            context,
+            title: 'Noch kein Zahlungsbeleg',
+            message:
+                'Der Beleg wird erst nach einer erfolgreich erfassten Zahlung bereitgestellt.',
+          );
+        }
+        return;
+      }
+      final invoice = matching.first;
+      await InvoicesService.verifyDownloadArtifact(invoice);
       final bytes = await InvoicePdfService.buildPdf(invoice);
       final fileName =
-          'SIT_Buchungsbeleg_${bookingId}_${DateTime.now().toIso8601String().split('T').first}.pdf';
+          'SIT_Buchungsbeleg_${invoice.bookingId}_${invoice.issuedAt.toIso8601String().split('T').first}.pdf';
       final saveResult = await LocalArtifactStorageService.maybeSaveReceiptPdf(
         bytes: bytes,
         artifactKey:
-            'booking-receipt:${invoice.id}:${invoice.updatedAt.toIso8601String()}',
+            'financial-document:${invoice.id}:${invoice.artifactSha256}',
         filename: fileName,
       );
       if (!saveResult.handledPrimaryAction) {
@@ -3881,141 +3692,13 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       }
     } catch (e) {
       debugPrint('[BookingDetailScreen] receipt download failed: $e');
-      _toast('Beleg konnte nicht erstellt werden');
-    }
-  }
-
-  Future<void> _startScanOwnerQr() async {
-    String? scanned;
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.black,
-      barrierColor: Colors.black.withValues(alpha: 0.8),
-      builder: (ctx) {
-        return SizedBox(
-          height: MediaQuery.of(ctx).size.height * 0.86,
-          child: Stack(
-            children: [
-              MobileScanner(
-                controller: MobileScannerController(
-                  detectionSpeed: DetectionSpeed.normal,
-                  facing: CameraFacing.back,
-                  torchEnabled: false,
-                ),
-                onDetect: (capture) {
-                  final barcodes = capture.barcodes;
-                  if (barcodes.isEmpty) return;
-                  final value = barcodes.first.rawValue ?? '';
-                  if (value.isEmpty) return;
-                  scanned = value;
-                  Navigator.of(ctx).maybePop();
-                },
-              ),
-              Positioned(
-                left: 8,
-                top: 8,
-                child: IconButton(
-                  onPressed: () => Navigator.of(ctx).maybePop(),
-                  icon: const Icon(Icons.close, color: Colors.white),
-                ),
-              ),
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: const Text(
-                    'Scanne den QR‑Code des Vermieters',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (!mounted) return;
-    if (scanned == null || scanned!.isEmpty) {
-      AppPopup.toast(
-        context,
-        icon: Icons.qr_code_2,
-        title: 'Kein Code erkannt',
-      );
-      return;
-    }
-
-    try {
-      final raw = scanned!.trim();
-      final matches = HandoverCodeService.isExpectedQrPayload(
-        raw,
-        segment: HandoverCodeService.segmentPickup,
-        presenterRole: HandoverCodeService.presenterOwner,
-        code: _pickupOwnerCode(),
-        bookingId: _computeBookingId(),
-      );
-      if (!matches) {
-        AppPopup.toast(
+      if (mounted) {
+        await AppPopup.error(
           context,
-          icon: Icons.error_outline,
-          title:
-              'Dieser Code passt nicht zu diesem Übergabeschritt. Bitte den aktuellen Code erneut anzeigen oder scannen.',
+          title: 'Beleg konnte nicht geladen werden',
+          message: 'Bitte versuche es erneut.',
         );
-        return;
       }
-
-      if (!_canStartBookingHandover) {
-        AppPopup.toast(
-          context,
-          icon: Icons.info_outline,
-          title: 'Übergabe ist gerade nicht verfügbar',
-        );
-        return;
-      }
-
-      final renterUserId = await _guardAuthenticatedRenter();
-      if (renterUserId == null) return;
-      final requestId = widget.booking['requestId'] as String?;
-      if (requestId != null && requestId.isNotEmpty) {
-        final galleryAcknowledged = await _acknowledgeGalleryEvidenceIfNeeded(
-          requestId,
-          isReturn: false,
-        );
-        if (!galleryAcknowledged) return;
-        final transitioned = await _finalizePickupTransition(
-          requestId: requestId,
-          confirmedByUserId: renterUserId,
-          method: 'qr',
-          confirmationContextVerified: true,
-          galleryAcknowledged: galleryAcknowledged,
-        );
-        if (!transitioned) return;
-      }
-      if (!mounted) return;
-      if (requestId != null && requestId.isNotEmpty) {
-        await _syncBookingLifecycleFromRequest(requestId!);
-      }
-      final title = (widget.booking['title'] as String?) ?? '';
-      await DataService.addNotification(
-        title: 'Übergabe bestätigt',
-        body: 'Übergabe des Listings "$title" bestätigt.',
-      );
-      AppPopup.toast(
-        context,
-        icon: Icons.check_circle_outline,
-        title: 'Übergabe per QR bestätigt',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      AppPopup.toast(
-        context,
-        icon: Icons.error_outline,
-        title: 'Bestätigung fehlgeschlagen',
-      );
     }
   }
 
@@ -4084,24 +3767,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     }
 
     try {
-      final raw = scanned!.trim();
-      final matches = HandoverCodeService.isExpectedQrPayload(
-        raw,
-        segment: HandoverCodeService.segmentReturn,
-        presenterRole: HandoverCodeService.presenterRenter,
-        code: _returnRenterCode(),
-        bookingId: _computeBookingId(),
-      );
-      if (!matches) {
-        AppPopup.toast(
-          context,
-          icon: Icons.error_outline,
-          title:
-              'Dieser Code gehört nicht zu dieser Rückgabe. Bitte den aktuellen Rückgabe-Code verwenden.',
-        );
-        return;
-      }
-
       if (!_canCompleteBookingReturn) {
         AppPopup.toast(
           context,
@@ -4112,6 +3777,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       }
 
       final ownerUserId = await DataService.getCurrentUser();
+      if (!mounted) return;
       final expectedOwnerId = (widget.booking['ownerId'] as String?)?.trim();
       if (ownerUserId == null ||
           expectedOwnerId == null ||
@@ -4125,6 +3791,21 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       }
       final requestId = widget.booking['requestId'] as String?;
       if (requestId != null && requestId.isNotEmpty) {
+        final matches = await _verifySecureChallenge(
+          segment: HandoverCodeService.segmentReturn,
+          presenterRole: HandoverCodeService.presenterRenter,
+          qrPayload: scanned!.trim(),
+        );
+        if (!mounted) return;
+        if (!matches) {
+          AppPopup.toast(
+            context,
+            icon: Icons.error_outline,
+            title:
+                'Dieser Code gehört nicht zu dieser Rückgabe. Bitte den aktuellen Rückgabe-Code verwenden.',
+          );
+          return;
+        }
         final galleryAcknowledged = await _acknowledgeGalleryEvidenceIfNeeded(
           requestId,
           isReturn: true,
@@ -4142,13 +3823,14 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       }
       if (!mounted) return;
       if (requestId != null && requestId.isNotEmpty) {
-        await _syncBookingLifecycleFromRequest(requestId!);
+        await _syncBookingLifecycleFromRequest(requestId);
       }
       final title = (widget.booking['title'] as String?) ?? '';
       await DataService.addNotification(
         title: 'Buchung abgeschlossen',
         body: 'Die Rückgabe für "$title" wurde abgeschlossen. Beleg gesendet.',
       );
+      if (!mounted) return;
       AppPopup.toast(
         context,
         icon: Icons.check_circle_outline,
@@ -4194,15 +3876,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       );
       return;
     }
-    if (entered != _returnRenterCode()) {
-      AppPopup.toast(
-        context,
-        icon: Icons.error_outline,
-        title:
-            'Dieser Code gehört nicht zu dieser Rückgabe. Bitte den aktuellen Rückgabe-Code verwenden.',
-      );
-      return;
-    }
     try {
       if (!_canCompleteBookingReturn) {
         AppPopup.toast(
@@ -4214,6 +3887,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       }
 
       final ownerUserId = await DataService.getCurrentUser();
+      if (!mounted) return;
       final expectedOwnerId = (widget.booking['ownerId'] as String?)?.trim();
       if (ownerUserId == null ||
           expectedOwnerId == null ||
@@ -4228,6 +3902,21 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
 
       final requestId = widget.booking['requestId'] as String?;
       if (requestId != null && requestId.isNotEmpty) {
+        final matches = await _verifySecureChallenge(
+          segment: HandoverCodeService.segmentReturn,
+          presenterRole: HandoverCodeService.presenterRenter,
+          code: entered,
+        );
+        if (!mounted) return;
+        if (!matches) {
+          AppPopup.toast(
+            context,
+            icon: Icons.error_outline,
+            title:
+                'Dieser Code gehört nicht zu dieser Rückgabe. Bitte den aktuellen Rückgabe-Code verwenden.',
+          );
+          return;
+        }
         final galleryAcknowledged = await _acknowledgeGalleryEvidenceIfNeeded(
           requestId,
           isReturn: true,
@@ -4250,11 +3939,13 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         title: 'Buchung abgeschlossen',
         body: 'Die Rückgabe für "$title" wurde abgeschlossen. Beleg gesendet.',
       );
+      if (!mounted) return;
       AppPopup.toast(
         context,
         icon: Icons.check_circle_outline,
         title: 'Rückgabe per Code bestätigt',
       );
+      if (!mounted) return;
       setState(() {
         _showManualReturnEntry = false;
         _manualReturnCodeCtrl.clear();
@@ -4289,40 +3980,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     }
   }
 
-  Future<bool> _hasRequiredHandoverPhotos(String requestId) async {
-    final handoverPhotos = await DataService.getHandoverPhotoCount(requestId);
-    return handoverPhotos >= DataService.minimumRequiredPhotos;
-  }
-
-  Future<bool> _hasRequiredReturnPhotos(String requestId) async {
-    final returnPhotos = await DataService.getReturnPhotoCount(requestId);
-    return returnPhotos >= DataService.minimumRequiredPhotos;
-  }
-
-  Future<bool> _guardRequiredHandoverPhotos(String requestId) async {
-    final ok = await _hasRequiredHandoverPhotos(requestId);
-    if (!ok && mounted) {
-      AppPopup.toast(
-        context,
-        icon: Icons.photo_camera_back_outlined,
-        title: 'Bitte dokumentiere die Übergabe zuerst mit mindestens 4 Fotos.',
-      );
-    }
-    return ok;
-  }
-
-  Future<bool> _guardRequiredReturnPhotos(String requestId) async {
-    final ok = await _hasRequiredReturnPhotos(requestId);
-    if (!ok && mounted) {
-      AppPopup.toast(
-        context,
-        icon: Icons.photo_camera_back_outlined,
-        title: 'Bitte dokumentiere die Rückgabe zuerst mit mindestens 4 Fotos.',
-      );
-    }
-    return ok;
-  }
-
   Future<bool> _acknowledgeGalleryEvidenceIfNeeded(
     String requestId, {
     required bool isReturn,
@@ -4355,27 +4012,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       ],
     );
     return acknowledged;
-  }
-
-  Future<bool> _guardActiveFlow(
-    String requestId, {
-    required bool isReturn,
-  }) async {
-    final state = await DataService.getHandoverReturnState(requestId);
-    final isActive = isReturn
-        ? state['returnActive'] == true
-        : state['handoverActive'] == true;
-    if (isActive) return true;
-    if (mounted) {
-      AppPopup.toast(
-        context,
-        icon: Icons.info_outline,
-        title: isReturn
-            ? 'Bitte starte die Rückgabe zuerst im Chat.'
-            : 'Bitte starte die Übergabe zuerst im Chat.',
-      );
-    }
-    return false;
   }
 
   Future<void> _syncBookingLifecycleFromRequest(String requestId) async {
@@ -4422,7 +4058,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       }
       return false;
     }
-    await _syncBookingLifecycleFromRequest(requestId!);
+    await _syncBookingLifecycleFromRequest(requestId);
     return true;
   }
 
@@ -4453,7 +4089,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       }
       return false;
     }
-    await _syncBookingLifecycleFromRequest(requestId!);
+    await _syncBookingLifecycleFromRequest(requestId);
     return true;
   }
 
@@ -4483,97 +4119,18 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     return current.id;
   }
 
-  Future<void> _confirmManualPickupAsRenter() async {
-    await AppPopup.toast(
-      context,
-      icon: Icons.info_outline,
-      title:
-          'Eine Übergabe kann nur durch QR-Code oder den 6-stelligen Code der Gegenpartei bestätigt werden.',
-    );
-  }
-
-  Future<void> _confirmManualPickupByCode() async {
-    final entered = _manualPickupCodeCtrl.text.trim();
-    if (entered.isEmpty) {
-      AppPopup.toast(
-        context,
-        icon: Icons.error_outline,
-        title: 'Bitte Code eingeben',
-      );
-      return;
-    }
-    if (entered != _pickupOwnerCode()) {
-      AppPopup.toast(
-        context,
-        icon: Icons.error_outline,
-        title:
-            'Dieser Code passt nicht zu diesem Übergabeschritt. Bitte den aktuellen Code erneut anzeigen oder scannen.',
-      );
-      return;
-    }
-    try {
-      final renterUserId = await _guardAuthenticatedRenter();
-      if (renterUserId == null) return;
-      final requestId = widget.booking['requestId'] as String?;
-      if (requestId != null && requestId.isNotEmpty) {
-        if (!_canStartBookingHandover) {
-          AppPopup.toast(
-            context,
-            icon: Icons.info_outline,
-            title: 'Übergabe ist gerade nicht verfügbar',
-          );
-          return;
-        }
-        final galleryAcknowledged = await _acknowledgeGalleryEvidenceIfNeeded(
-          requestId,
-          isReturn: false,
-        );
-        if (!galleryAcknowledged) return;
-        final transitioned = await _finalizePickupTransition(
-          requestId: requestId,
-          confirmedByUserId: renterUserId,
-          method: 'manual',
-          confirmationContextVerified: true,
-          galleryAcknowledged: galleryAcknowledged,
-        );
-        if (!transitioned) return;
-      }
-      if (!mounted) return;
-      if (requestId != null && requestId.isNotEmpty) {
-        await _syncBookingLifecycleFromRequest(requestId!);
-      }
-      final bookingId = _computeBookingId();
-      final title = (widget.booking['title'] as String?) ?? '';
-      final message =
-          'Übergabe des Listings "$title" wurde vom Mieter bestätigt.';
-      await DataService.addNotification(
-        title: 'Übergabe bestätigt',
-        body: message,
-      );
-      await DataService.setHandoverBanner(
-        bookingId: bookingId,
-        message: message,
-      );
-      AppPopup.toast(
-        context,
-        icon: Icons.check_circle_outline,
-        title: 'Übergabe per Code bestätigt',
-      );
-      setState(() {
-        _showManualPickupEntry = false;
-        _manualPickupCodeCtrl.clear();
-      });
-    } catch (e) {
-      if (!mounted) return;
-      AppPopup.toast(
-        context,
-        icon: Icons.error_outline,
-        title: 'Bestätigung fehlgeschlagen',
-      );
-    }
-  }
-
   Future<void> _confirmCancelUpcoming() async {
+    if (_v52WithdrawalWindowOpen) {
+      final requestId = widget.booking['requestId']?.toString() ?? '';
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PlatformWithdrawalScreen(
+            initialBookingId: requestId.isEmpty ? null : requestId,
+          ),
+        ),
+      );
+      return;
+    }
     await AppPopup.show(
       context,
       icon: Icons.close,
@@ -4714,54 +4271,6 @@ class _AddressInfoCard extends StatelessWidget {
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Widget? trailing;
-  const _InfoRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.trailing,
-  });
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, color: Colors.white, size: 18),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (trailing != null) ...[const SizedBox(width: 8), trailing!],
-      ],
-    );
-  }
-}
-
 // A more modern, cleaner details card used on the booking page
 class _ModernDetailsCard extends StatelessWidget {
   final String? title;
@@ -4783,13 +4292,6 @@ class _ModernDetailsCard extends StatelessWidget {
   final int? counterpartyReviews;
   final VoidCallback? onMessage;
   final bool showLocations;
-  final bool? pickupVisible;
-  final bool? returnVisible;
-  final String? pickupAddress;
-  final String? returnAddress;
-  final bool enablePickupMapActions;
-  final bool enableReturnMapActions;
-  final bool showPickupRow;
   final String? transportInfo;
 
   const _ModernDetailsCard({
@@ -4812,13 +4314,6 @@ class _ModernDetailsCard extends StatelessWidget {
     this.counterpartyReviews,
     this.onMessage,
     this.showLocations = true,
-    this.pickupVisible,
-    this.returnVisible,
-    this.pickupAddress,
-    this.returnAddress,
-    this.enablePickupMapActions = true,
-    this.enableReturnMapActions = true,
-    this.showPickupRow = true,
     this.transportInfo,
   });
 
@@ -4891,28 +4386,20 @@ class _ModernDetailsCard extends StatelessWidget {
             const SizedBox(height: 4),
             Divider(height: 12, color: Colors.white.withValues(alpha: 0.08)),
             const SizedBox(height: 2),
-            if (pickupVisible != false && showPickupRow) ...[
-              _InfoRowModern(
-                icon: Icons.place_outlined,
-                label: 'Abholort',
-                value: (pickupAddress ?? location),
-                trailing: enablePickupMapActions
-                    ? _MapActions(onMap: onMap, onNav: onNav)
-                    : null,
-              ),
-              const SizedBox(height: 3),
-            ],
-            if (returnVisible != false) ...[
-              _InfoRowModern(
-                icon: Icons.place,
-                label: 'Rückgabeort',
-                value: (returnAddress ?? location),
-                trailing: enableReturnMapActions
-                    ? _MapActions(onMap: onMap, onNav: onNav)
-                    : null,
-              ),
-              const SizedBox(height: 4),
-            ],
+            _InfoRowModern(
+              icon: Icons.place_outlined,
+              label: 'Abholort',
+              value: location,
+              trailing: _MapActions(onMap: onMap, onNav: onNav),
+            ),
+            const SizedBox(height: 3),
+            _InfoRowModern(
+              icon: Icons.place,
+              label: 'Rückgabeort',
+              value: location,
+              trailing: _MapActions(onMap: onMap, onNav: onNav),
+            ),
+            const SizedBox(height: 4),
           ],
 
           if (bookingId.trim().isNotEmpty)
@@ -5016,24 +4503,6 @@ class _InfoRowModern extends StatelessWidget {
   }
 }
 
-class _MapLink extends StatelessWidget {
-  final VoidCallback onTap;
-  const _MapLink({required this.onTap});
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Text(
-        'Karte',
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.primary,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
 class _MapActions extends StatelessWidget {
   final VoidCallback onMap;
   final VoidCallback onNav;
@@ -5123,89 +4592,6 @@ class _CounterpartyInlineRow extends StatelessWidget {
   }
 }
 
-class _CounterpartyRow extends StatelessWidget {
-  final String name;
-  final String? avatarUrl;
-  final String role;
-  final VoidCallback? onProfile;
-  final double? rating;
-  final int? reviewsCount;
-  final int? trustPercent;
-  const _CounterpartyRow({
-    required this.name,
-    this.avatarUrl,
-    required this.role,
-    this.onProfile,
-    this.rating,
-    this.reviewsCount,
-    this.trustPercent,
-  });
-  @override
-  Widget build(BuildContext context) {
-    String? ratingText;
-    if (rating != null) {
-      final val = rating!.toStringAsFixed(1).replaceAll('.', ',');
-      final rc = reviewsCount ?? 0;
-      ratingText = '$val · ${rc > 0 ? '$rc Bewertungen' : 'Bewertung'}';
-    } else if (trustPercent != null) {
-      ratingText = '${trustPercent!.clamp(0, 100)}% Vertrauen';
-    }
-    return Row(
-      children: [
-        SitUserAvatar(
-          url: avatarUrl,
-          radius: 18,
-          borderColor: Colors.white.withValues(alpha: 0.12),
-          placeholderIcon: Icons.person_outline,
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Row(
-                children: [
-                  Text(
-                    role,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: Colors.white70),
-                  ),
-                  if (ratingText != null) ...[
-                    const SizedBox(width: 8),
-                    const Icon(
-                      Icons.star_rate_rounded,
-                      color: Colors.amber,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 2),
-                    Text(
-                      ratingText,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: Colors.white70),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ),
-        TextButton(onPressed: onProfile, child: const Text('Zum Profil')),
-      ],
-    );
-  }
-}
-
 class _AmountRow extends StatelessWidget {
   final String label;
   final String value;
@@ -5264,133 +4650,10 @@ class _Bullet extends StatelessWidget {
   }
 }
 
-class _PrimaryCTA extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-  const _PrimaryCTA({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 40,
-      child: FilledButton.icon(
-        style: FilledButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-        ),
-        onPressed: onPressed,
-        icon: Icon(icon, size: 18),
-        label: Text(label),
-      ),
-    );
-  }
-}
-
-class _SecondaryCTA extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _SecondaryCTA({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 36,
-      child: TextButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 18, color: Colors.white70),
-        label: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white70,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ListerCard extends StatelessWidget {
-  final String name;
-  final String? avatarUrl;
-  final VoidCallback? onMessage;
-  const _ListerCard({required this.name, this.avatarUrl, this.onMessage});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.20),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              SitUserAvatar(
-                url: avatarUrl,
-                radius: 22,
-                borderColor: Colors.white.withValues(alpha: 0.12),
-                placeholderIcon: Icons.person_outline,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Antwortet in der Regel schnell',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: Colors.white70),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (onMessage != null) ...[
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.center,
-              child: OutlinedButton.icon(
-                onPressed: onMessage,
-                icon: const Icon(Icons.chat_bubble_outline),
-                label: const Text('Nachricht schreiben'),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _CancellationPolicyCard extends StatefulWidget {
   final Map<String, dynamic> booking;
-  final bool initiallyOpen;
   const _CancellationPolicyCard({
     required this.booking,
-    this.initiallyOpen = false,
   });
   @override
   State<_CancellationPolicyCard> createState() =>
@@ -5399,32 +4662,6 @@ class _CancellationPolicyCard extends StatefulWidget {
 
 class _CancellationPolicyCardState extends State<_CancellationPolicyCard> {
   bool _open = false;
-  @override
-  void initState() {
-    super.initState();
-    // Default collapsed everywhere; only open when explicitly requested
-    _open = widget.initiallyOpen;
-  }
-
-  String _formatDeadline(DateTime dt) {
-    final months = [
-      'Jan',
-      'Feb',
-      'Mär',
-      'Apr',
-      'Mai',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Okt',
-      'Nov',
-      'Dez',
-    ];
-    final m = months[(dt.month - 1).clamp(0, 11)];
-    final dd = dt.day.toString().padLeft(2, '0');
-    return '$dd. $m';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -5486,6 +4723,159 @@ class _CancellationPolicyCardState extends State<_CancellationPolicyCard> {
   }
 }
 
+/// Exact immutable V5.1 price values propagated from the server quote.
+///
+/// The snapshot is accepted only when the launch invariant holds: renter
+/// total equals discounted private rent plus the SIT platform fee. Legacy and
+/// QA bookings without a complete, self-consistent snapshot keep using their
+/// existing fallback presentation.
+class _BoundBookingPriceSnapshot {
+  final int rentalSubtotalMinor;
+  final int platformFeeMinor;
+  final int totalMinor;
+  final int ownerPayoutMinor;
+  final int? daysValue;
+  final int? pricePerDayMinor;
+  final int? baseRentalMinor;
+  final int? discountMinor;
+  final double? discountPercent;
+  final String? boundDiscountLabel;
+
+  const _BoundBookingPriceSnapshot({
+    required this.rentalSubtotalMinor,
+    required this.platformFeeMinor,
+    required this.totalMinor,
+    required this.ownerPayoutMinor,
+    required this.daysValue,
+    required this.pricePerDayMinor,
+    required this.baseRentalMinor,
+    required this.discountMinor,
+    required this.discountPercent,
+    required this.boundDiscountLabel,
+  });
+
+  static _BoundBookingPriceSnapshot? fromBooking(
+    Map<String, dynamic> booking,
+  ) {
+    int? readInt(String key) {
+      final value = booking[key];
+      if (value is! num || !value.isFinite || value.toInt() != value) {
+        return null;
+      }
+      return value.toInt();
+    }
+
+    final currency = booking['quotedCurrency']?.toString().trim();
+    if (currency != null && currency.isNotEmpty && currency != 'EUR') {
+      return null;
+    }
+
+    final rental = readInt('quotedRentalSubtotalMinor');
+    final fee = readInt('quotedPlatformFeeMinor');
+    final total = readInt('quotedTotalMinor');
+    if (rental == null || fee == null || total == null) return null;
+    if (rental < 0 || fee < 0 || total <= 0 || rental + fee != total) {
+      return null;
+    }
+
+    final rawOwnerPayout = readInt('quotedOwnerPayoutMinor');
+    if (rawOwnerPayout != null && rawOwnerPayout != rental) return null;
+
+    final rawBase = readInt('quotedBaseRentalMinor');
+    final rawDiscount = readInt('quotedDiscountMinor');
+    final hasExactDiscount = rawBase != null &&
+        rawDiscount != null &&
+        rawBase >= 0 &&
+        rawDiscount >= 0 &&
+        rawBase - rawDiscount == rental;
+
+    final rawDays = readInt('quotedDays');
+    final rawDaily = readInt('quotedPricePerDayMinor');
+    final hasExactDaily = hasExactDiscount &&
+        rawDays != null &&
+        rawDays > 0 &&
+        rawDaily != null &&
+        rawDaily >= 0 &&
+        rawDaily * rawDays == rawBase;
+
+    final rawPercent = (booking['quotedDiscountPercent'] as num?)?.toDouble();
+    final exactPercent = rawPercent != null &&
+            rawPercent.isFinite &&
+            rawPercent >= 0 &&
+            rawPercent <= 90
+        ? rawPercent
+        : null;
+
+    final rawQuoteVersion = readInt('quotedQuoteVersion');
+    final rawDiscountId = booking['quotedDiscountId']?.toString().trim();
+    final rawDiscountLabel = booking['quotedDiscountLabel']?.toString().trim();
+    final rawFundingSource =
+        booking['quotedDiscountFundingSource']?.toString().trim();
+    final rawThresholdDays = readInt('quotedDiscountThresholdDays');
+    if (rawQuoteVersion == 3) {
+      if (!hasExactDaily || exactPercent == null) return null;
+      final discountBasisPoints = (exactPercent * 100).round();
+      final expectedDiscount =
+          ((rawBase * discountBasisPoints) + 5000) ~/ 10000;
+      if (rawDiscount != expectedDiscount) return null;
+      final hasDiscount = discountBasisPoints > 0;
+      final metadataValid = hasDiscount
+          ? rawDiscountId != null &&
+              rawDiscountId ==
+                  'listing_long_rental_${rawThresholdDays}d_${discountBasisPoints}bp' &&
+              rawDiscountLabel != null &&
+              rawDiscountLabel.isNotEmpty &&
+              rawFundingSource == 'owner' &&
+              rawThresholdDays != null &&
+              rawThresholdDays >= 2 &&
+              rawThresholdDays <= rawDays
+          : (rawDiscountId == null || rawDiscountId.isEmpty) &&
+              (rawDiscountLabel == null || rawDiscountLabel.isEmpty) &&
+              (rawFundingSource == null || rawFundingSource.isEmpty) &&
+              rawThresholdDays == null;
+      if (!metadataValid) return null;
+    }
+
+    return _BoundBookingPriceSnapshot(
+      rentalSubtotalMinor: rental,
+      platformFeeMinor: fee,
+      totalMinor: total,
+      ownerPayoutMinor: rawOwnerPayout ?? rental,
+      daysValue: hasExactDaily ? rawDays : null,
+      pricePerDayMinor: hasExactDaily ? rawDaily : null,
+      baseRentalMinor: hasExactDiscount ? rawBase : null,
+      discountMinor: hasExactDiscount ? rawDiscount : null,
+      discountPercent: hasExactDiscount ? exactPercent : null,
+      boundDiscountLabel: rawQuoteVersion == 3 ? rawDiscountLabel : null,
+    );
+  }
+
+  double get rentalSubtotal => rentalSubtotalMinor / 100;
+  double get platformFee => platformFeeMinor / 100;
+  double get total => totalMinor / 100;
+  double get ownerPayout => ownerPayoutMinor / 100;
+  int? get days => daysValue;
+  double? get pricePerDay =>
+      pricePerDayMinor == null ? null : pricePerDayMinor! / 100;
+  double? get baseRental =>
+      baseRentalMinor == null ? null : baseRentalMinor! / 100;
+  double? get discount => discountMinor == null ? null : discountMinor! / 100;
+
+  String get discountLabel {
+    final stored = boundDiscountLabel;
+    if (stored != null && stored.isNotEmpty) return stored;
+    final percent = discountPercent;
+    if (percent == null || percent <= 0) return 'Rabatt';
+    final text = percent == percent.roundToDouble()
+        ? percent.toStringAsFixed(0)
+        : percent
+            .toStringAsFixed(2)
+            .replaceFirst(RegExp(r'0+$'), '')
+            .replaceFirst(RegExp(r'\.$'), '');
+    return 'Rabatt $text %';
+  }
+}
+
 // Summary card for completed/cancelled bookings with key facts
 class _CompletionSummaryCard extends StatelessWidget {
   final Map<String, dynamic> booking;
@@ -5509,20 +4899,16 @@ class _CompletionSummaryCard extends StatelessWidget {
     final theme = Theme.of(context);
     final status = (booking['status'] as String?) ?? 'Abgeschlossen';
     final (start, end) = _parseStaticDateRange(booking);
-    final totalPaid = _parseStaticEuro((booking['pricePaid'] as String?) ?? '');
-    final fee = serviceFee(totalPaid);
+    final boundPrice = _BoundBookingPriceSnapshot.fromBooking(booking);
+    final totalPaid = boundPrice?.total ??
+        _parseStaticEuro((booking['pricePaid'] as String?) ?? '');
+    final fee = boundPrice?.platformFee ?? serviceFee(totalPaid);
+    final ownerPayout =
+        boundPrice?.ownerPayout ?? (totalPaid - fee).clamp(0.0, totalPaid);
 
     // Dates: use end as return date fallback
     final returnedAt = end;
-    final payoutAt = end != null ? end.add(const Duration(days: 1)) : null;
-
-    Text _line(String label, String value, {IconData? icon}) => Text(
-          value.isEmpty ? '' : value,
-          style:
-              const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        );
+    final payoutAt = end?.add(const Duration(days: 1));
 
     List<Widget> rows = [];
     if (status == 'Storniert') {
@@ -5572,7 +4958,7 @@ class _CompletionSummaryCard extends StatelessWidget {
           _FactRow(
             icon: Icons.payments_outlined,
             label: 'Auszahlung',
-            value: euroFormatter((totalPaid - fee).clamp(0.0, totalPaid)),
+            value: euroFormatter(ownerPayout),
           ),
         if (isOwnerView && !needsReview && payoutAt != null)
           _FactRow(
@@ -5766,188 +5152,6 @@ class _FactRow extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ReturnReminderCard extends StatelessWidget {
-  final int? valueMinutes;
-  final ValueChanged<int?> onChanged;
-  const _ReturnReminderCard({
-    required this.valueMinutes,
-    required this.onChanged,
-  });
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () async {
-        final selected = await ReturnReminderPickerSheet.show(
-          context,
-          initialMinutes: valueMinutes ?? 120,
-          maxDays: 30,
-          minuteStep: 5,
-        );
-        if (selected != null) {
-          onChanged(selected == 0 ? null : selected);
-        }
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.20),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.12),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            const Icon(Icons.alarm, color: Colors.white70),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Erinnerung zur Rückgabe',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _humanize(valueMinutes),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.white70,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: Colors.white38),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _humanize(int? minutes) {
-    if (minutes == null || minutes <= 0) {
-      return 'Tippen, um eine Erinnerung vor dem Rückgabetermin zu setzen.';
-    }
-    final d = minutes ~/ (60 * 24);
-    final h = (minutes % (60 * 24)) ~/ 60;
-    final m = minutes % 60;
-    final parts = <String>[];
-    if (d > 0) parts.add(d == 1 ? '1 Tag' : '$d Tage');
-    if (h > 0) parts.add(h == 1 ? '1 Std' : '$h Std');
-    if (m > 0) parts.add('$m Min');
-    return parts.isEmpty ? '—' : parts.join(' ');
-  }
-}
-
-class _Timeline extends StatelessWidget {
-  final String
-      current; // one of Requested, Accepted, Paid, Picked up, Laufend, Due, Completed, Überfällig
-  const _Timeline({required this.current});
-
-  @override
-  Widget build(BuildContext context) {
-    final steps = [
-      'Requested',
-      'Accepted',
-      'Paid',
-      'Picked up',
-      'Laufend',
-      'Due',
-      'Completed',
-    ];
-    final isOverdue = current == 'Überfällig';
-    final currentIndex = isOverdue ? 5 : steps.indexOf(current);
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (int i = 0; i < steps.length; i++)
-          _StepChip(
-            label: steps[i],
-            state: i < currentIndex
-                ? _StepState.done
-                : (i == currentIndex
-                    ? (isOverdue ? _StepState.overdue : _StepState.current)
-                    : _StepState.todo),
-          ),
-        if (isOverdue)
-          _StepChip(label: 'Überfällig', state: _StepState.overdue),
-      ],
-    );
-  }
-}
-
-enum _StepState { done, current, todo, overdue }
-
-class _StepChip extends StatelessWidget {
-  final String label;
-  final _StepState state;
-  const _StepChip({required this.label, required this.state});
-  @override
-  Widget build(BuildContext context) {
-    Color border;
-    Color fg;
-    Color bg;
-    IconData? icon;
-    switch (state) {
-      case _StepState.done:
-        border = Colors.white24;
-        fg = Colors.white;
-        bg = Colors.white.withValues(alpha: 0.08);
-        icon = Icons.check_circle_outline;
-        break;
-      case _StepState.current:
-        border = Theme.of(context).colorScheme.primary.withValues(alpha: 0.40);
-        fg = Theme.of(context).colorScheme.primary;
-        bg = Theme.of(context).colorScheme.primary.withValues(alpha: 0.12);
-        icon = Icons.radio_button_checked;
-        break;
-      case _StepState.overdue:
-        border = const Color(0xFFF43F5E).withValues(alpha: 0.40);
-        fg = const Color(0xFFF43F5E);
-        bg = const Color(0xFFF43F5E).withValues(alpha: 0.12);
-        icon = Icons.error_outline;
-        break;
-      case _StepState.todo:
-      default:
-        border = Colors.white12;
-        fg = Colors.white70;
-        bg = Colors.white.withValues(alpha: 0.05);
-        icon = Icons.radio_button_unchecked;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: fg),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(color: fg, fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
     );
   }
 }

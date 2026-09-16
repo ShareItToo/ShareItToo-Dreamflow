@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "built-scanned-direct-device-chat-loop-passed-keyboard-regression",
+  "generatedAt": "2026-08-15T01:59:00Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081503",
+    "commit": "9ad8b46c3a79d144ddf7cd317c150b4e604f836f",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "direct-apk-physical-device-precheck",
+    "aabSha256": "db7850f438bcb1a109bc580667a147960bc4c768d6924bb528ac8f8f0e2f9963",
+    "apkSha256": "92e594c50db0c4c21f71d8d902665cb46d4fda94df6c53806dd71001239343dc",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true,
+    "privateArchivePermissionsVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "9655ba34b9c455da82364efc1c351ef6bc704091acc0be0524a5d0f271bbd3a2",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "permissionInventoryStatus": "passed",
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "directInstallAndLaunch": "passed",
+    "authenticatedSyntheticSession": "passed-fresh-login",
+    "stagingFeedLoaded": "passed",
+    "acceptedBookingVisible": "passed",
+    "acceptedBookingSharedChat": "passed-stable-after-22-seconds",
+    "chatPersistenceSelfRefreshLoop": "passed-bounded-server-requests",
+    "messageComposerKeyboard": "failed-focus-received-text-input-connection-not-opened",
+    "replacementBuildNumber": "2026081504",
+    "twoDevicePrivatePilotAcceptance": "pending"
+  },
+  "staging": {
+    "serverVersion": "1.0.0-2026081502-v4-owner-acceptance",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "productionInvariant": "passed",
+    "productionVersion": "1.0.0-2026081403"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "installedOnPhysicalDevice": true,
+    "productionChanged": false,
+    "productionPushSent": false,
+    "productionCrashGenerated": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

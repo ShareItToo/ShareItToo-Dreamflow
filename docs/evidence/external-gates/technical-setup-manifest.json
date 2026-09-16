@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-external-gate-technical-setup",
+  "preparedOn": "2026-08-23",
+  "reconciledThrough": "2026-08-27",
+  "state": "technically-prepared-external-inputs-required",
+  "releaseDecision": "hold-no-go",
+  "supportMatrixTraceability": {
+    "ref": "docs/evidence/support/support-test-matrix-v1-traceability.json",
+    "scenarioCount": 167,
+    "externalEvidenceRequiredCount": 47,
+    "externalEvidencePresentCount": 0,
+    "strictReleaseReady": false
+  },
+  "activeProviderReadiness": {
+    "ref": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+    "classifiedActiveProcessorCount": 5,
+    "newlyExplicitActiveProcessorCount": 2,
+    "requiredDecisionCount": 10,
+    "completedDecisionCount": 0,
+    "strictReady": false
+  },
+  "setupOrder": [
+    "legal_and_operator_approval",
+    "operations_roles_and_absence",
+    "ios_apple_signing_and_device",
+    "firebase_owner_terms_and_controls",
+    "support_evidence_scanner_and_upload_policy",
+    "psp_contract_and_sandbox_e2e",
+    "privacy_retention_and_legal_hold",
+    "store_submission_and_closed_testing",
+    "economics_and_cost_inputs",
+    "pilot_region_roster_and_scope",
+    "explicit_activation_decision"
+  ],
+  "gates": [
+    {
+      "id": "legal_and_operator_approval",
+      "state": "prepared-external-review-required",
+      "technicalPreparation": "complete",
+      "ready": false,
+      "externalEvidenceRef": null,
+      "currentEvidenceRefs": [
+        "assets/legal/de/legal_review_intake_p0b_20260821.json",
+        "assets/legal/de/legal_manifest_v52.json",
+        "docs/compliance/p0b-l1-v52-g3-professional-review-intake-2026-08-21.md",
+        "docs/evidence/b11/google-play-service-provider-sharing-classification-2026081505-20260815.json",
+        "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+        "docs/operations/ACTIVE_INFRASTRUCTURE_AND_MAIL_PROVIDER_RUNBOOK.md",
+        "docs/evidence/support/support-test-matrix-v1-traceability.json",
+        "store/legal-readiness.json"
+      ]
+    },
+    {
+      "id": "operations_roles_and_absence",
+      "state": "prepared-external-assignments-required",
+      "technicalPreparation": "complete",
+      "ready": false,
+      "externalEvidenceRef": null,
+      "currentEvidenceRefs": [
+        "docs/operations/p0b-ops-role-delegate-absence-gate.json",
+        "docs/operations/P0B_OPS_ASSIGNMENT_AND_ABSENCE_RUNBOOK.md"
+      ]
+    },
+    {
+      "id": "ios_apple_signing_and_device",
+      "state": "android-ready-ios-external-setup-required",
+      "technicalPreparation": "complete",
+      "ready": false,
+      "externalEvidenceRef": null,
+      "currentEvidenceRefs": [
+        "docs/evidence/p0b-next/signed-device-evidence.json",
+        "store/platform-account-readiness.json",
+        "docs/operations/B11_APPLE_DEVELOPER_AND_TESTFLIGHT_WORKSHEET_2026-08-12.md"
+      ]
+    },
+    {
+      "id": "firebase_owner_terms_and_controls",
+      "state": "owner-console-confirmation-required",
+      "technicalPreparation": "complete",
+      "ready": false,
+      "externalEvidenceRef": null,
+      "currentEvidenceRefs": [
+        "store/platform-account-readiness.json",
+        "store/privacy-disclosures.json",
+        "store/phone-verification-readiness.json",
+        "store/google-play/rw20-current-internal-candidate-manifest.json",
+        "store/google-play/rw20d-play-draft-truth-reconciliation.json"
+      ],
+      "historicalPhysicalEvidenceRefs": [
+        "docs/evidence/external-gates/current-candidate-firebase-device-services-opt-in-2026082302.json"
+      ]
+    },
+    {
+      "id": "support_evidence_scanner_and_upload_policy",
+      "state": "intake-disabled-external-scanner-and-policy-required",
+      "technicalPreparation": "complete",
+      "ready": false,
+      "externalEvidenceRef": null,
+      "currentEvidenceRefs": [
+        "docs/evidence/external-gates/support-evidence-scanner-readiness.json",
+        "docs/architecture/s4a-private-support-evidence-security-2026-08-22.md",
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "docs/operations/SUPPORT_EVIDENCE_SCANNER_AND_UPLOAD_POLICY_RUNBOOK.md"
+      ]
+    },
+    {
+      "id": "psp_contract_and_sandbox_e2e",
+      "state": "provider-contract-and-sandbox-required",
+      "technicalPreparation": "complete",
+      "ready": false,
+      "externalEvidenceRef": null,
+      "currentEvidenceRefs": [
+        "docs/evidence/p0b-next/psp-sandbox-e2e-evidence.json",
+        "docs/evidence/support/support-test-matrix-v1-traceability.json",
+        "docs/operations/P0B_PSP_SANDBOX_E2E_RUNBOOK.md"
+      ]
+    },
+    {
+      "id": "privacy_retention_and_legal_hold",
+      "state": "prepared-owner-and-legal-decisions-required",
+      "technicalPreparation": "complete",
+      "ready": false,
+      "externalEvidenceRef": null,
+      "currentEvidenceRefs": [
+        "store/privacy-disclosures.json",
+        "store/retention-deletion-readiness.json",
+        "docs/evidence/b11/google-play-service-provider-sharing-classification-2026081505-20260815.json",
+        "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+        "docs/operations/ACTIVE_INFRASTRUCTURE_AND_MAIL_PROVIDER_RUNBOOK.md",
+        "docs/evidence/support/support-test-matrix-v1-traceability.json",
+        "docs/compliance/retention-deletion-decision-matrix.md"
+      ]
+    },
+    {
+      "id": "store_submission_and_closed_testing",
+      "state": "exact-internal-draft-uploaded-release-and-device-evidence-open",
+      "technicalPreparation": "complete",
+      "ready": false,
+      "externalEvidenceRef": null,
+      "currentEvidenceRefs": [
+        "store/submission.json",
+        "store/platform-account-readiness.json",
+        "store/google-play/closed-testing-readiness.json",
+        "store/review-access.json",
+        "docs/evidence/support/support-test-matrix-v1-traceability.json",
+        "store/device-validation.json",
+        "store/google-play/rw20-current-internal-candidate-manifest.json",
+        "store/google-play/rw20-current-internal-upload-handoff.json",
+        "store/google-play/rw20b-oneplus-remote-test-plan.json",
+        "store/google-play/rw20c-oneplus-owner-smoke-readiness.json",
+        "store/google-play/rw20d-play-draft-truth-reconciliation.json"
+      ],
+      "historicalPhysicalEvidenceRefs": [
+        "docs/evidence/external-gates/current-head-android-touch-target-remediation-2026082302.json",
+        "docs/evidence/external-gates/current-candidate-read-only-regression-2026082302.json",
+        "docs/evidence/external-gates/current-candidate-authenticated-safe-links-2026082302.json",
+        "docs/evidence/external-gates/current-candidate-talkback-preflight-2026082302.json",
+        "docs/evidence/external-gates/current-candidate-talkback-settings-preflight-2026082302.json"
+      ],
+      "currentCandidateTruth": {
+        "versionCode": "2026082601",
+        "playState": "uploaded-inactive-internal-draft",
+        "activeInternalVersionCode": "2026081509",
+        "candidateExpectedInstalledOnOnePlus": false,
+        "candidateDeviceResults": "NOT_RUN",
+        "nextRequiredGate": "GOOGLE_PLAY_INTERNAL_RELEASE_GO"
+      },
+      "historicalPhysicalCandidateBoundary": {
+        "versionCode": "2026082302",
+        "evidenceTransfersToCurrentCandidate": false
+      }
+    },
+    {
+      "id": "economics_and_cost_inputs",
+      "state": "external-cost-inputs-required",
+      "technicalPreparation": "complete",
+      "ready": false,
+      "externalEvidenceRef": null,
+      "currentEvidenceRefs": [
+        "docs/evidence/p0b/pilot-go-no-go-dossier.json",
+        "docs/compliance/u0-pilot-cockpit-unit-economics-2026-08-20.md"
+      ]
+    },
+    {
+      "id": "pilot_region_roster_and_scope",
+      "state": "prepared-prerequisites-open",
+      "technicalPreparation": "complete",
+      "ready": false,
+      "externalEvidenceRef": null,
+      "currentEvidenceRefs": [
+        "docs/evidence/p0b-next/invited-synthetic-pilot-spiegelberg-cat8-readiness.json",
+        "docs/operations/P0B_INVITED_SYNTHETIC_PILOT_SPIEGELBERG_CAT8_RUNBOOK.md"
+      ]
+    },
+    {
+      "id": "explicit_activation_decision",
+      "state": "hold-explicit-decision-required",
+      "technicalPreparation": "complete",
+      "ready": false,
+      "externalEvidenceRef": null,
+      "currentEvidenceRefs": [
+        "docs/evidence/p0b/pilot-go-no-go-dossier.json",
+        "docs/evidence/support/support-test-matrix-v1-traceability.json",
+        "docs/SIT_PENDING_GATE_P0B_NEXT_RUNWAY.md"
+      ]
+    }
+  ],
+  "summary": {
+    "requiredGateCount": 11,
+    "technicallyPreparedGateCount": 11,
+    "externallyReadyGateCount": 0,
+    "openGateCount": 11,
+    "supportScenarioCount": 167,
+    "supportExternalEvidenceRequiredCount": 47,
+    "supportExternalEvidencePresentCount": 0,
+    "supportEvidenceRequiredDecisionCount": 8,
+    "supportEvidenceCompletedDecisionCount": 0,
+    "classifiedActiveProcessorCount": 5,
+    "newlyExplicitActiveProcessorCount": 2,
+    "activeProviderRequiredDecisionCount": 10,
+    "activeProviderCompletedDecisionCount": 0,
+    "strictReady": false
+  },
+  "boundaries": {
+    "containsPersonalData": false,
+    "containsAccountIdentifiers": false,
+    "containsCredentials": false,
+    "containsSecrets": false,
+    "paidServiceStarted": false,
+    "contractAccepted": false,
+    "accountPermissionChanged": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "paymentProviderChanged": false,
+    "storeChanged": false,
+    "pilotChanged": false,
+    "publicActivationChanged": false,
+    "realMoneyUsed": false
+  }
+}

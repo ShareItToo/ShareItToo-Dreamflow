@@ -1,0 +1,263 @@
+{
+  "schemaVersion": 2,
+  "version": "V5.2-2026-08-16",
+  "status": "draft-blocked",
+  "activationAllowed": false,
+  "productionProvisioningAllowed": false,
+  "effectiveDate": null,
+  "source": {
+    "title": "ShareItToo Rechtsmappe Privat-Launch V5.2",
+    "fileName": "02_V5.2_RECHTSMAPPE_PRIVATLAUNCH.pdf",
+    "date": "2026-08-16",
+    "driveFileId": "1kKuZl9OJ4nb9F02E8fepTxY8O-GZBkn2",
+    "driveUrl": "https://drive.google.com/file/d/1kKuZl9OJ4nb9F02E8fepTxY8O-GZBkn2/view",
+    "createdTime": "2026-08-18T17:23:13.235Z",
+    "modifiedTime": "2026-08-18T17:51:36.056Z",
+    "mediaType": "application/pdf",
+    "bytes": 285180,
+    "pages": 55,
+    "sha256": "aa6f631457c9b73fdae3c5d4415ba6681b86f63b51df3fd5937c50f80a27b8a8"
+  },
+  "sourceTopology": {
+    "userParts": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "I"
+    ],
+    "internalPartsExcluded": [
+      "J",
+      "K",
+      "L"
+    ]
+  },
+  "documents": [
+    {
+      "part": "A",
+      "type": "platform_terms",
+      "path": "assets/legal/de/v52/part_a_platform_terms.html",
+      "title": "Teil A - Plattform-Nutzungsbedingungen",
+      "version": "V5.2-2026-08-16",
+      "contractRole": "platform-contract",
+      "sourcePages": [
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "sha256": "58fc3bcd3422081e157a941e1851fb31c0442df8d55f4fde84e693e2d6f3009a",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    },
+    {
+      "part": "B",
+      "type": "private_rental_terms",
+      "path": "assets/legal/de/v52/part_b_private_rental_terms.html",
+      "title": "Teil B - Privat-Mietbedingungen zwischen Nutzern",
+      "version": "V5.2-2026-08-16",
+      "contractRole": "private-rental-contract",
+      "sourcePages": [
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "sha256": "b71af619bf2db2172dfdb95cf2c2f6f113533939dc2c702ab3b00897d86e3483",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    },
+    {
+      "part": "C",
+      "type": "cancellation_refund",
+      "path": "assets/legal/de/v52/part_c_cancellation_refund.html",
+      "title": "Teil C - Storno-, No-Show- und Refund-Regelwerk",
+      "version": "V5.2-2026-08-16",
+      "contractRole": "private-rental-contract",
+      "sourcePages": [
+        24,
+        25
+      ],
+      "sha256": "dcfa17dfd8e2fec5ecb17a2a30f5cce4af1d5a62233a2208289d826d89b82349",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    },
+    {
+      "part": "D",
+      "type": "handover_return_damage",
+      "path": "assets/legal/de/v52/part_d_handover_return_damage.html",
+      "title": "Teil D - Übergabe-, Rückgabe- und Schadenregeln",
+      "version": "V5.2-2026-08-16",
+      "contractRole": "private-rental-contract",
+      "sourcePages": [
+        26,
+        27,
+        28
+      ],
+      "sha256": "5a73e7b92c73810c8cb3eb9532a88bc7a73aa817afe017bc29595709ddfd3a91",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    },
+    {
+      "part": "E",
+      "type": "payment_payout",
+      "path": "assets/legal/de/v52/part_e_payment_payout.html",
+      "title": "Teil E - Zahlungs- und Auszahlungsbedingungen",
+      "version": "V5.2-2026-08-16",
+      "contractRole": "platform-contract",
+      "sourcePages": [
+        29,
+        30,
+        31
+      ],
+      "sha256": "145258409f65e555d139fd2d808e060734a75e6304a202481005f5fc61ef9a2e",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    },
+    {
+      "part": "F",
+      "type": "community_safety",
+      "path": "assets/legal/de/v52/part_f_community_safety.html",
+      "title": "Teil F - Community-, Sicherheits- und Verbotsregeln",
+      "version": "V5.2-2026-08-16",
+      "contractRole": "platform-contract",
+      "sourcePages": [
+        32
+      ],
+      "sha256": "d40168ccea475696b8384f2806dccd77ac54934d4499368fee7cf21fe7b46e59",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    },
+    {
+      "part": "G",
+      "type": "reporting_moderation_review",
+      "path": "assets/legal/de/v52/part_g_reporting_moderation_review.html",
+      "title": "Teil G - Melde-, Moderations- und Überprüfungsverfahren",
+      "version": "V5.2-2026-08-16",
+      "contractRole": "platform-contract",
+      "sourcePages": [
+        33,
+        34
+      ],
+      "sha256": "3e74628b6835cbfe4893eed8569648373364a344e3414abc500a35ae9b2625b1",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    },
+    {
+      "part": "H",
+      "type": "privacy",
+      "path": "assets/legal/de/v52/part_h_privacy.html",
+      "title": "Teil H - Datenschutzerklärung für ShareItToo",
+      "version": "V5.2-2026-08-16",
+      "contractRole": "statutory-information",
+      "sourcePages": [
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41
+      ],
+      "sha256": "632a5a58f7aa8ab0e91c30f722228593ea3ce40db4672139ce47fdea666d304c",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    },
+    {
+      "part": "I",
+      "type": "imprint_withdrawal_shorttexts",
+      "path": "assets/legal/de/v52/part_i_imprint_withdrawal_shorttexts.html",
+      "title": "Teil I - Impressum, Widerruf und In-App-Kurztexte",
+      "version": "V5.2-2026-08-16",
+      "contractRole": "statutory-information",
+      "sourcePages": [
+        42,
+        43,
+        44,
+        45
+      ],
+      "sha256": "0b1bc9913d8c56088796497014946da32d7ec881f340a4765397ea53a505a460",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    }
+  ],
+  "openFacts": [
+    "exactRegisteredCompany",
+    "registryCourt",
+    "registryNumber",
+    "registeredBusinessAddressAndContact",
+    "authorizedLegalRepresentative",
+    "vatIdIfIssuedOrLineRemoved",
+    "economicIdentificationNumberIfIssuedOrLineRemoved",
+    "editorialResponsiblePersonIfApplicableOrLineRemoved",
+    "withdrawalPublicUrlOrExactInAppPlacement",
+    "marketplacePspNameAddressAndTermsLink",
+    "marketplacePspContractRegionAndActivationEvidence",
+    "smtpProviderSeatPrivacyNoticeAndSendingRegion",
+    "hostingDatabaseStorageProviderSeatAndRegion",
+    "googlePlacesActivationProviderAndTransferConfiguration",
+    "mapsProviderDpaRegionAndTransferEvidence",
+    "firebaseAuthenticationContractEntityDpaRegionAndTransferEvidence",
+    "firebaseCloudMessagingContractEntityDpaRegionTransferAndRetentionEvidence",
+    "firebaseCrashlyticsContractEntityDpaRegionTransferAndRetentionEvidence",
+    "privacySupervisoryAuthorityConfirmedAgainstRegisteredSeat",
+    "dsaContactPointOperationalEvidence",
+    "publicLegalUrlsAndDownloadDelivery"
+  ],
+  "productDecisions": {
+    "firebaseCloudMessaging": {
+      "decision": "retained-transactional-only",
+      "defaultEnabled": false,
+      "devicePermissionRequired": true,
+      "marketingPushAllowed": false,
+      "shortestEventRelatedTtlRequired": true,
+      "independentFromCrashlytics": true
+    },
+    "firebaseCrashlytics": {
+      "decision": "retained-voluntary",
+      "defaultEnabled": false,
+      "requiresSeparateVoluntaryOptIn": true,
+      "independentFromPush": true,
+      "userIdAllowed": false
+    },
+    "adsMarketingAnalyticsAndExternalGenAi": {
+      "decision": "disabled-unless-separately-approved"
+    }
+  },
+  "legalReview": {
+    "status": "not-professionally-reviewed",
+    "professionalApprovalClaimAllowed": false,
+    "preLaunchReviewRequiredBySource": false,
+    "futureTriggerImplementationStatus": "open-c1h",
+    "sourceDisclosure": "Entschiedene Launchfassung - keine anwaltliche Freigabe"
+  },
+  "boundaries": {
+    "containsLivePlaceholders": true,
+    "sourcePartsJToLInternalOnly": true,
+    "databaseProvisioned": false,
+    "publiclyPublished": false,
+    "storeActivated": false,
+    "realPaymentsEnabled": false
+  }
+}

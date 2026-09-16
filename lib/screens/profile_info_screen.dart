@@ -1,18 +1,27 @@
+import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/localization_service.dart';
-import 'package:lendify/widgets/app_popup.dart';
+import 'package:lendify/services/profile_mutation_service.dart';
+import 'package:lendify/services/shared_persistence_sync.dart';
+import 'package:lendify/widgets/profile_mutation_interaction.dart';
 import 'package:lendify/widgets/profile_header_card.dart';
 import 'package:lendify/widgets/user_avatar.dart';
 import 'package:provider/provider.dart';
 
+enum _ProfilePhotoChoice { camera, gallery, remove }
+
 class ProfileInfoScreen extends StatefulWidget {
-  const ProfileInfoScreen({super.key});
+  final ProfileMutationService profileMutationService;
+
+  const ProfileInfoScreen({
+    super.key,
+    this.profileMutationService = const ProfileMutationService(),
+  });
   @override
   State<ProfileInfoScreen> createState() => _ProfileInfoScreenState();
 }
@@ -124,33 +133,65 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
 
   int _bookingsCount = 0;
   int _rentalsCount = 0;
+  final _profileActions = ProfileMutationInteractionController();
+  StreamSubscription<String>? _persistenceSubscription;
+  int _loadRevision = 0;
+
+  ProfileMutationService get _profileMutationService =>
+      widget.profileMutationService;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _persistenceSubscription = SharedPersistenceSync.changes.listen((key) {
+      if (key != SharedPersistenceSync.accountSecurityStateKey) return;
+      _profileActions.invalidate();
+      _loadRevision += 1;
+      if (mounted) {
+        setState(() {
+          _user = null;
+          _loading = true;
+          _saving = false;
+          _clearDraft();
+        });
+      }
+      unawaited(_load());
+    });
+    unawaited(_load());
   }
 
   Future<void> _load() async {
+    final revision = ++_loadRevision;
     try {
-      final u = await DataService.getCurrentUser();
+      final profileContext = await _profileMutationService.loadCurrentContext();
+      if (!mounted || revision != _loadRevision) return;
+      final u = profileContext?.user;
       int bookings = 0;
       int rentals = 0;
-      if (u != null) {
+      if (u != null && profileContext != null) {
         try {
           final renter = await DataService.getRentalRequestsForRenter(u.id);
+          if (revision != _loadRevision ||
+              !await _profileMutationService.isContextCurrent(profileContext)) {
+            return;
+          }
           bookings = renter.length;
         } catch (e) {
           debugPrint('[ProfileInfo] load bookings failed: $e');
         }
         try {
           final owner = await DataService.getRentalRequestsForOwner(u.id);
+          if (revision != _loadRevision ||
+              !await _profileMutationService.isContextCurrent(profileContext)) {
+            return;
+          }
           rentals = owner.length;
         } catch (e) {
           debugPrint('[ProfileInfo] load rentals failed: $e');
         }
       }
-      if (!mounted) return;
+      if (!mounted || revision != _loadRevision) return;
+      _profileActions.replaceContext(profileContext);
       setState(() {
         _user = u;
         _loading = false;
@@ -163,7 +204,9 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
           _birthYearCtrl.text = u.birthDate?.year.toString() ?? '';
           _cityCtrl.text = u.city ?? '';
           _bioCtrl.text = u.bio ?? '';
-          _photoDraft = (u.photoURL != null && u.photoURL!.trim().isNotEmpty) ? u.photoURL : null;
+          _photoDraft = (u.photoURL != null && u.photoURL!.trim().isNotEmpty)
+              ? u.photoURL
+              : null;
           _languages
             ..clear()
             ..addAll(u.languages);
@@ -174,6 +217,7 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
       });
     } catch (e) {
       // just fallback to empty; DataService already logs critical errors when needed
+      if (!mounted || revision != _loadRevision) return;
       setState(() {
         _loading = false;
       });
@@ -182,6 +226,8 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
 
   @override
   void dispose() {
+    _persistenceSubscription?.cancel();
+    _profileActions.dispose();
     _firstNameCtrl.dispose();
     _lastNameCtrl.dispose();
     _birthYearCtrl.dispose();
@@ -190,10 +236,25 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     super.dispose();
   }
 
+  void _clearDraft() {
+    _firstNameCtrl.clear();
+    _lastNameCtrl.clear();
+    _birthYearCtrl.clear();
+    _cityCtrl.clear();
+    _bioCtrl.clear();
+    _photoDraft = null;
+    _languages.clear();
+    _interests.clear();
+    _bookingsCount = 0;
+    _rentalsCount = 0;
+  }
+
   Future<void> _save() async {
     final l10n = context.read<LocalizationController>();
     final u = _user;
-    if (u == null) return;
+    final owner = _profileActions.capture();
+    final screenRoute = ModalRoute.of(context);
+    if (u == null || owner == null) return;
 
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) return;
@@ -201,40 +262,110 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     final birthYear = int.tryParse(_birthYearCtrl.text.trim());
     final birthDate = (birthYear == null) ? null : DateTime(birthYear, 1, 1);
 
-    final displayName = '${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}'.trim();
-    final updated = u.copyWith(
-      displayName: displayName,
-      bio: _bioCtrl.text.trim().isEmpty ? null : _bioCtrl.text.trim(),
-      birthDate: birthDate,
-      city: _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
-      // We store the selected avatar locally (data:image...) so it renders across the app.
-      photoURL: _photoDraft?.trim().isEmpty ?? true ? null : _photoDraft,
-      languages: _languages.toList(),
-      interests: _interests.toList(),
-      // Ensure we don't accidentally store a full address in the public override.
-      homeLocation: null,
-    );
+    final displayName =
+        '${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}'.trim();
     setState(() => _saving = true);
     try {
-      await DataService.setCurrentUser(updated);
-      if (!mounted) return;
-      await AppPopup.toast(context, icon: Icons.check_circle_outline, title: l10n.t('Gespeichert'));
-      Navigator.of(context).maybePop();
+      final result = await _profileMutationService.updateProfile(
+        context: owner.context,
+        updates: {
+          CurrentUserProfileField.displayName: displayName,
+          CurrentUserProfileField.bio:
+              _bioCtrl.text.trim().isEmpty ? null : _bioCtrl.text.trim(),
+          CurrentUserProfileField.birthDate: birthDate,
+          CurrentUserProfileField.city:
+              _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
+          CurrentUserProfileField.photoURL:
+              _photoDraft?.trim().isEmpty ?? true ? null : _photoDraft,
+          CurrentUserProfileField.languages: _languages.toList(),
+          CurrentUserProfileField.interests: _interests.toList(),
+          CurrentUserProfileField.homeLocation: null,
+        },
+      );
+      if (!await _profileActions.isCurrent(
+        _profileMutationService,
+        owner,
+      )) {
+        return;
+      }
+      setState(() => _user = result.user);
+      _profileActions.replaceContext(ProfileMutationContext(
+        user: result.user,
+        owner: owner.context.owner,
+      ));
+      final refreshedOwner = _profileActions.capture();
+      if (refreshedOwner == null) return;
+      await _showOwnedStatus(
+        refreshedOwner,
+        title: l10n.t('Gespeichert'),
+      );
+      if (!await _profileActions.isCurrent(
+        _profileMutationService,
+        refreshedOwner,
+      )) {
+        return;
+      }
+      _profileActions.removeOwnedNavigationRoute(screenRoute);
+    } on ProfileMutationFailure catch (failure) {
+      if (failure.kind == ProfileMutationFailureKind.principalChanged ||
+          !await _profileActions.isCurrent(
+            _profileMutationService,
+            owner,
+          )) {
+        return;
+      }
+      await _showOwnedStatus(
+        owner,
+        title: failure.remoteAccepted
+            ? 'Serverseitig gespeichert'
+            : failure.kind == ProfileMutationFailureKind.outcomeUnknown
+                ? 'Speicherstatus unklar'
+                : 'Speichern fehlgeschlagen',
+        message: failure.remoteAccepted
+            ? 'Die Änderung wurde serverseitig verarbeitet, aber der lokale Profilstand konnte noch nicht aktualisiert werden.'
+            : failure.kind == ProfileMutationFailureKind.outcomeUnknown
+                ? 'Die Änderung könnte verarbeitet worden sein. Lade dein Profil neu, bevor du erneut speicherst.'
+                : 'Die Profiländerung wurde nicht bestätigt.',
+      );
     } catch (e) {
       debugPrint('[ProfileInfo] save failed: $e');
-      if (!mounted) return;
-      await AppPopup.toast(context, icon: Icons.error_outline, title: 'Speichern fehlgeschlagen');
+      if (await _profileActions.isCurrent(_profileMutationService, owner)) {
+        await _showOwnedStatus(owner, title: 'Speichern fehlgeschlagen');
+      }
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted && _profileActions.isSynchronouslyCurrent(owner)) {
+        setState(() => _saving = false);
+      }
     }
   }
+
+  Future<void> _showOwnedStatus(
+    ProfileMutationActionOwner owner, {
+    required String title,
+    String? message,
+  }) =>
+      _profileActions.showOwnedDialog<void>(
+        context: context,
+        owner: owner,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(title),
+          content: message == null ? null : Text(message),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
 
   User? _buildDraftUser() {
     final u = _user;
     if (u == null) return null;
     final birthYear = int.tryParse(_birthYearCtrl.text.trim());
     final birthDate = (birthYear == null) ? null : DateTime(birthYear, 1, 1);
-    final displayName = '${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}'.trim();
+    final displayName =
+        '${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}'.trim();
     return u.copyWith(
       displayName: displayName,
       bio: _bioCtrl.text.trim().isEmpty ? null : _bioCtrl.text.trim(),
@@ -248,26 +379,40 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
   }
 
   Future<void> _preview() async {
+    final owner = _profileActions.capture();
+    if (owner == null) return;
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) return;
     final draft = _buildDraftUser();
     if (draft == null) return;
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => _ProfilePreviewScreen(user: draft)));
+    if (!await _profileActions.isCurrent(_profileMutationService, owner)) {
+      return;
+    }
+    if (!mounted) return;
+    await _profileActions.pushOwnedRoute<void>(
+      context: context,
+      owner: owner,
+      route: MaterialPageRoute<void>(
+        builder: (_) => _ProfilePreviewScreen(user: draft),
+      ),
+    );
   }
 
   static (String first, String last) _splitDisplayName(String name) {
-    final parts = name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    final parts =
+        name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
     if (parts.isEmpty) return ('', '');
     if (parts.length == 1) return (parts.first, '');
     return (parts.first, parts.sublist(1).join(' '));
   }
 
   Future<void> _changePhoto() async {
-    await showModalBottomSheet<void>(
+    final owner = _profileActions.capture();
+    if (owner == null) return;
+    final choice = await _profileActions.showOwnedSheet<_ProfilePhotoChoice>(
       context: context,
-      showDragHandle: true,
+      owner: owner,
       backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         return SafeArea(
           child: Padding(
@@ -278,29 +423,23 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                 _SheetAction(
                   icon: Icons.photo_camera_outlined,
                   title: 'Foto aufnehmen',
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    await _pickPhoto(ImageSource.camera);
-                  },
+                  onTap: () =>
+                      Navigator.of(context).pop(_ProfilePhotoChoice.camera),
                 ),
                 const SizedBox(height: 10),
                 _SheetAction(
                   icon: Icons.photo_library_outlined,
                   title: 'Foto aus Galerie wählen',
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    await _pickPhoto(ImageSource.gallery);
-                  },
+                  onTap: () =>
+                      Navigator.of(context).pop(_ProfilePhotoChoice.gallery),
                 ),
                 const SizedBox(height: 10),
                 _SheetAction(
                   icon: Icons.delete_outline,
                   title: 'Foto entfernen',
                   isDestructive: true,
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    setState(() => _photoDraft = null);
-                  },
+                  onTap: () =>
+                      Navigator.of(context).pop(_ProfilePhotoChoice.remove),
                 ),
               ],
             ),
@@ -308,22 +447,80 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
         );
       },
     );
+    if (choice == null ||
+        !await _profileActions.isCurrent(_profileMutationService, owner)) {
+      return;
+    }
+    switch (choice) {
+      case _ProfilePhotoChoice.camera:
+        await _pickPhoto(ImageSource.camera, owner);
+        break;
+      case _ProfilePhotoChoice.gallery:
+        await _pickPhoto(ImageSource.gallery, owner);
+        break;
+      case _ProfilePhotoChoice.remove:
+        if (_profileActions.isSynchronouslyCurrent(owner)) {
+          setState(() => _photoDraft = null);
+        }
+        break;
+    }
   }
 
-  Future<void> _pickPhoto(ImageSource source) async {
+  Future<void> _pickPhoto(
+    ImageSource source,
+    ProfileMutationActionOwner owner,
+  ) async {
     try {
+      if (!await _profileActions.isCurrent(_profileMutationService, owner)) {
+        return;
+      }
       final picker = ImagePicker();
-      final XFile? shot = await picker.pickImage(source: source, imageQuality: 85);
-      if (shot == null) return;
+      final XFile? shot =
+          await picker.pickImage(source: source, imageQuality: 85);
+      if (shot == null ||
+          !await _profileActions.isCurrent(_profileMutationService, owner)) {
+        return;
+      }
       final bytes = await shot.readAsBytes();
+      if (!await _profileActions.isCurrent(_profileMutationService, owner)) {
+        return;
+      }
       final b64 = base64Encode(bytes);
       final mime = _guessImageMime(shot.name);
       setState(() => _photoDraft = 'data:$mime;base64,$b64');
     } catch (e) {
       debugPrint('[ProfileInfo] pick photo failed: $e');
-      if (!mounted) return;
-      await AppPopup.toast(context, icon: Icons.error_outline, title: 'Foto konnte nicht geladen werden');
+      if (await _profileActions.isCurrent(_profileMutationService, owner)) {
+        await _showOwnedStatus(
+          owner,
+          title: 'Foto konnte nicht geladen werden',
+        );
+      }
     }
+  }
+
+  Future<Set<String>?> _showMultiSelect({
+    required String title,
+    required List<String> options,
+    required Set<String> selection,
+  }) async {
+    final owner = _profileActions.capture();
+    if (owner == null) return null;
+    final picked = await _profileActions.showOwnedSheet<Set<String>>(
+      context: context,
+      owner: owner,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (_) => _SimpleMultiSelectBottomSheet(
+        title: title,
+        options: options,
+        initialSelection: selection,
+      ),
+    );
+    if (!await _profileActions.isCurrent(_profileMutationService, owner)) {
+      return null;
+    }
+    return picked;
   }
 
   static String _guessImageMime(String filename) {
@@ -340,7 +537,9 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
-        title: const SizedBox(width: double.infinity, child: Text('Profilinformationen', textAlign: TextAlign.center)),
+        title: const SizedBox(
+            width: double.infinity,
+            child: Text('Profilinformationen', textAlign: TextAlign.center)),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -353,14 +552,15 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Profilinformationen', style: theme.textTheme.titleLarge),
+                        Text('Profilinformationen',
+                            style: theme.textTheme.titleLarge),
                         const SizedBox(height: 6),
                         Text(
                           'Diese Informationen werden in deinem öffentlichen Profil angezeigt und helfen anderen Nutzern, Vertrauen aufzubauen.',
-                          style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70, height: 1.45),
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: Colors.white70, height: 1.45),
                         ),
                         const SizedBox(height: 18),
-
                         _GroupTitle(title: 'Profilbild'),
                         _ProfilePhotoCard(
                           photoUrl: _photoDraft,
@@ -369,10 +569,10 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                         const SizedBox(height: 10),
                         Text(
                           'Ein Profilbild erhöht das Vertrauen zwischen Mietern und Vermietern.',
-                          style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70, height: 1.45),
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: Colors.white70, height: 1.45),
                         ),
                         const SizedBox(height: 22),
-
                         _GroupTitle(title: 'Grunddaten'),
                         _FormTile(
                           icon: Icons.person_outline,
@@ -380,7 +580,9 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                           controller: _firstNameCtrl,
                           requiredField: true,
                           textInputAction: TextInputAction.next,
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Pflichtfeld' : null,
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? 'Pflichtfeld'
+                              : null,
                         ),
                         const SizedBox(height: 12),
                         _FormTile(
@@ -389,7 +591,9 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                           controller: _lastNameCtrl,
                           requiredField: true,
                           textInputAction: TextInputAction.next,
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Pflichtfeld' : null,
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? 'Pflichtfeld'
+                              : null,
                         ),
                         const SizedBox(height: 12),
                         _FormTile(
@@ -404,7 +608,9 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                             final year = int.tryParse(raw);
                             final now = DateTime.now().year;
                             if (year == null) return 'Ungültiges Jahr';
-                            if (year < 1900 || year > now - 14) return 'Bitte korrektes Jahr eingeben';
+                            if (year < 1900 || year > now - 14) {
+                              return 'Bitte korrektes Jahr eingeben';
+                            }
                             return null;
                           },
                           textInputAction: TextInputAction.next,
@@ -418,25 +624,40 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                           textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 22),
-
                         _GroupTitle(title: 'Über mich'),
                         _TextAreaCard(
                           icon: Icons.edit_note_outlined,
                           label: 'Bio / Kurzbeschreibung',
                           controller: _bioCtrl,
-                          hint: 'Erzähle kurz etwas über dich, z. B. warum du Dinge vermietest oder mietest.',
+                          hint:
+                              'Erzähle kurz etwas über dich, z. B. warum du Dinge vermietest oder mietest.',
                           maxChars: 500,
                         ),
                         const SizedBox(height: 22),
-
                         _GroupTitle(title: 'Sprachen'),
-                        _BottomSheetMultiSelectField(icon: Icons.translate, title: 'Sprachen', options: _languageOptions, selection: _languages, emptyHint: 'Wähle eine oder mehrere Sprachen aus'),
+                        _BottomSheetMultiSelectField(
+                            icon: Icons.translate,
+                            title: 'Sprachen',
+                            options: _languageOptions,
+                            selection: _languages,
+                            emptyHint: 'Wähle eine oder mehrere Sprachen aus',
+                            onOpen: () => _showMultiSelect(
+                                title: 'Sprachen',
+                                options: _languageOptions,
+                                selection: _languages)),
                         const SizedBox(height: 22),
-
                         _GroupTitle(title: 'Interessen'),
-                        _BottomSheetMultiSelectField(icon: Icons.interests_outlined, title: 'Interessen', options: _interestOptions, selection: _interests, emptyHint: 'Wähle ein oder mehrere Interessen aus'),
+                        _BottomSheetMultiSelectField(
+                            icon: Icons.interests_outlined,
+                            title: 'Interessen',
+                            options: _interestOptions,
+                            selection: _interests,
+                            emptyHint: 'Wähle ein oder mehrere Interessen aus',
+                            onOpen: () => _showMultiSelect(
+                                title: 'Interessen',
+                                options: _interestOptions,
+                                selection: _interests)),
                         const SizedBox(height: 22),
-
                         _GroupTitle(title: 'Mitgliedschaft'),
                         _MembershipCard(
                           joinedAt: _user!.createdAt,
@@ -472,7 +693,10 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                   child: FilledButton.icon(
                     onPressed: (_loading || _saving) ? null : _save,
                     icon: _saving
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.check_circle_outline),
                     label: Text(_saving ? l10n.t('Speichern…') : 'Speichern'),
                   ),
@@ -492,7 +716,11 @@ class _GroupTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
-        child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+        child: Text(title,
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w800)),
       );
 }
 
@@ -528,7 +756,8 @@ class _ProfilePhotoCard extends StatelessWidget {
             child: SitUserAvatar(
               url: photoUrl,
               radius: 56,
-              borderColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.55),
+              borderColor:
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.55),
             ),
           ),
           const SizedBox(height: 12),
@@ -588,10 +817,15 @@ class _FormTile extends StatelessWidget {
           decoration: InputDecoration(
             border: InputBorder.none,
             hintText: hint ?? label,
-            hintStyle: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
+            hintStyle:
+                theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
           ),
         ),
-        trailing: requiredField ? Text('*', style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.primary)) : null,
+        trailing: requiredField
+            ? Text('*',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(color: theme.colorScheme.primary))
+            : null,
       ),
     );
   }
@@ -604,7 +838,12 @@ class _TextAreaCard extends StatefulWidget {
   final String hint;
   final int maxChars;
 
-  const _TextAreaCard({required this.icon, required this.label, required this.controller, required this.hint, required this.maxChars});
+  const _TextAreaCard(
+      {required this.icon,
+      required this.label,
+      required this.controller,
+      required this.hint,
+      required this.maxChars});
 
   @override
   State<_TextAreaCard> createState() => _TextAreaCardState();
@@ -637,8 +876,13 @@ class _TextAreaCardState extends State<_TextAreaCard> {
             children: [
               Icon(widget.icon, color: Colors.white.withValues(alpha: 0.85)),
               const SizedBox(width: 10),
-              Expanded(child: Text(widget.label, style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w700))),
-              Text('$count/${widget.maxChars}', style: theme.textTheme.labelSmall?.copyWith(color: Colors.white70)),
+              Expanded(
+                  child: Text(widget.label,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.white, fontWeight: FontWeight.w700))),
+              Text('$count/${widget.maxChars}',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: Colors.white70)),
             ],
           ),
           const SizedBox(height: 10),
@@ -656,7 +900,8 @@ class _TextAreaCardState extends State<_TextAreaCard> {
               decoration: InputDecoration(
                 counterText: '',
                 hintText: widget.hint,
-                hintStyle: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                hintStyle:
+                    theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.all(12),
               ),
@@ -674,32 +919,35 @@ class _BottomSheetMultiSelectField extends StatefulWidget {
   final List<String> options;
   final Set<String> selection;
   final String emptyHint;
+  final Future<Set<String>?> Function() onOpen;
 
-  const _BottomSheetMultiSelectField({required this.icon, required this.title, required this.options, required this.selection, required this.emptyHint});
+  const _BottomSheetMultiSelectField(
+      {required this.icon,
+      required this.title,
+      required this.options,
+      required this.selection,
+      required this.emptyHint,
+      required this.onOpen});
 
   @override
-  State<_BottomSheetMultiSelectField> createState() => _BottomSheetMultiSelectFieldState();
+  State<_BottomSheetMultiSelectField> createState() =>
+      _BottomSheetMultiSelectFieldState();
 }
 
-class _BottomSheetMultiSelectFieldState extends State<_BottomSheetMultiSelectField> {
+class _BottomSheetMultiSelectFieldState
+    extends State<_BottomSheetMultiSelectField> {
   String _summary() {
     if (widget.selection.isEmpty) return widget.emptyHint;
-    final sorted = widget.selection.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final sorted = widget.selection.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     if (sorted.length <= 3) return sorted.join(', ');
     return '${sorted.take(3).join(', ')} +${sorted.length - 3}';
   }
 
   Future<void> _open() async {
-    final picked = await showModalBottomSheet<Set<String>>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => _SimpleMultiSelectBottomSheet(title: widget.title, options: widget.options, initialSelection: widget.selection),
-    );
+    final picked = await widget.onOpen();
 
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
     setState(() {
       widget.selection
         ..clear()
@@ -725,16 +973,27 @@ class _BottomSheetMultiSelectFieldState extends State<_BottomSheetMultiSelectFie
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_summary(), maxLines: 2, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+                    Text(_summary(),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                            color: Colors.white, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 2),
-                    Text(selectedCount == 0 ? 'Tippe zum Auswählen' : '$selectedCount ausgewählt', style: theme.textTheme.labelSmall?.copyWith(color: Colors.white70)),
+                    Text(
+                        selectedCount == 0
+                            ? 'Tippe zum Auswählen'
+                            : '$selectedCount ausgewählt',
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(color: Colors.white70)),
                   ],
                 ),
               ),
               if (selectedCount > 0)
                 TextButton(
                   onPressed: () => setState(widget.selection.clear),
-                  child: Text('Zurücksetzen', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary)),
+                  child: Text('Zurücksetzen',
+                      style: theme.textTheme.labelSmall
+                          ?.copyWith(color: theme.colorScheme.primary)),
                 ),
               const SizedBox(width: 4),
               Icon(Icons.expand_more, color: Colors.white70),
@@ -751,13 +1010,18 @@ class _SimpleMultiSelectBottomSheet extends StatefulWidget {
   final List<String> options;
   final Set<String> initialSelection;
 
-  const _SimpleMultiSelectBottomSheet({required this.title, required this.options, required this.initialSelection});
+  const _SimpleMultiSelectBottomSheet(
+      {required this.title,
+      required this.options,
+      required this.initialSelection});
 
   @override
-  State<_SimpleMultiSelectBottomSheet> createState() => _SimpleMultiSelectBottomSheetState();
+  State<_SimpleMultiSelectBottomSheet> createState() =>
+      _SimpleMultiSelectBottomSheetState();
 }
 
-class _SimpleMultiSelectBottomSheetState extends State<_SimpleMultiSelectBottomSheet> {
+class _SimpleMultiSelectBottomSheetState
+    extends State<_SimpleMultiSelectBottomSheet> {
   final _searchCtrl = TextEditingController();
   late Set<String> _draft;
   bool _showSelected = true;
@@ -785,8 +1049,13 @@ class _SimpleMultiSelectBottomSheetState extends State<_SimpleMultiSelectBottomS
 
   List<_GroupedEntry> _buildEntries() {
     final query = _searchCtrl.text.trim().toLowerCase();
-    final filtered = query.isEmpty ? widget.options : widget.options.where((e) => e.toLowerCase().contains(query)).toList(growable: false);
-    final sorted = [...filtered]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final filtered = query.isEmpty
+        ? widget.options
+        : widget.options
+            .where((e) => e.toLowerCase().contains(query))
+            .toList(growable: false);
+    final sorted = [...filtered]
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
     final out = <_GroupedEntry>[];
     String? current;
@@ -820,10 +1089,16 @@ class _SimpleMultiSelectBottomSheetState extends State<_SimpleMultiSelectBottomS
                 padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
                 child: Row(
                   children: [
-                    Expanded(child: Text(widget.title, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
-                    Text('${_draft.length}', style: theme.textTheme.labelSmall?.copyWith(color: Colors.white70)),
+                    Expanded(
+                        child: Text(widget.title,
+                            style: theme.textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w900))),
+                    Text('${_draft.length}',
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(color: Colors.white70)),
                     const SizedBox(width: 6),
-                    Icon(Icons.checklist_outlined, size: 18, color: Colors.white70),
+                    Icon(Icons.checklist_outlined,
+                        size: 18, color: Colors.white70),
                   ],
                 ),
               ),
@@ -832,7 +1107,8 @@ class _SimpleMultiSelectBottomSheetState extends State<_SimpleMultiSelectBottomS
                 child: TextField(
                   controller: _searchCtrl,
                   textInputAction: TextInputAction.search,
-                  style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
+                  style:
+                      theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.search),
                     hintText: 'Suchen',
@@ -845,9 +1121,19 @@ class _SimpleMultiSelectBottomSheetState extends State<_SimpleMultiSelectBottomS
                           ),
                     filled: true,
                     fillColor: Colors.white.withValues(alpha: 0.06),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.10))),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.10))),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: theme.colorScheme.primary.withValues(alpha: 0.60))),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.10))),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.10))),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                            color: theme.colorScheme.primary
+                                .withValues(alpha: 0.60))),
                   ),
                 ),
               ),
@@ -858,34 +1144,46 @@ class _SimpleMultiSelectBottomSheetState extends State<_SimpleMultiSelectBottomS
                     decoration: BoxDecoration(
                       color: Colors.black.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.08)),
                     ),
                     child: Column(
                       children: [
                         InkWell(
                           borderRadius: BorderRadius.circular(16),
-                          onTap: () => setState(() => _showSelected = !_showSelected),
+                          onTap: () =>
+                              setState(() => _showSelected = !_showSelected),
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                             child: Row(
                               children: [
-                                Icon(Icons.check_rounded, size: 18, color: theme.colorScheme.primary.withValues(alpha: 0.9)),
+                                Icon(Icons.check_rounded,
+                                    size: 18,
+                                    color: theme.colorScheme.primary
+                                        .withValues(alpha: 0.9)),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     'Ausgewählt (${_draft.length})',
-                                    style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900),
                                   ),
                                 ),
                                 TextButton(
                                   onPressed: () => setState(_draft.clear),
-                                  child: Text('Alles löschen', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary)),
+                                  child: Text('Alles löschen',
+                                      style: theme.textTheme.labelSmall
+                                          ?.copyWith(
+                                              color:
+                                                  theme.colorScheme.primary)),
                                 ),
                                 const SizedBox(width: 4),
                                 AnimatedRotation(
                                   duration: const Duration(milliseconds: 180),
                                   turns: _showSelected ? 0.0 : 0.5,
-                                  child: const Icon(Icons.expand_more, color: Colors.white70),
+                                  child: const Icon(Icons.expand_more,
+                                      color: Colors.white70),
                                 ),
                               ],
                             ),
@@ -897,10 +1195,15 @@ class _SimpleMultiSelectBottomSheetState extends State<_SimpleMultiSelectBottomS
                           alignment: Alignment.topCenter,
                           child: _showSelected
                               ? Padding(
-                                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                                  padding:
+                                      const EdgeInsets.fromLTRB(10, 0, 10, 10),
                                   child: _SelectedList(
-                                    items: _draft.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase())),
-                                    onRemove: (v) => setState(() => _draft.remove(v)),
+                                    items: _draft.toList()
+                                      ..sort((a, b) => a
+                                          .toLowerCase()
+                                          .compareTo(b.toLowerCase())),
+                                    onRemove: (v) =>
+                                        setState(() => _draft.remove(v)),
                                   ),
                                 )
                               : const SizedBox.shrink(),
@@ -911,7 +1214,10 @@ class _SimpleMultiSelectBottomSheetState extends State<_SimpleMultiSelectBottomS
                 ),
               Expanded(
                 child: (entries.isEmpty)
-                    ? Center(child: Text('Keine Treffer', style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70)))
+                    ? Center(
+                        child: Text('Keine Treffer',
+                            style: theme.textTheme.bodyMedium
+                                ?.copyWith(color: Colors.white70)))
                     : Scrollbar(
                         child: ListView.builder(
                           padding: const EdgeInsets.fromLTRB(16, 2, 16, 16),
@@ -928,17 +1234,27 @@ class _SimpleMultiSelectBottomSheetState extends State<_SimpleMultiSelectBottomS
                                       height: 30,
                                       alignment: Alignment.center,
                                       decoration: BoxDecoration(
-                                        color: theme.colorScheme.primary.withValues(alpha: 0.18),
+                                        color: theme.colorScheme.primary
+                                            .withValues(alpha: 0.18),
                                         borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.35)),
+                                        border: Border.all(
+                                            color: theme.colorScheme.primary
+                                                .withValues(alpha: 0.35)),
                                       ),
-                                      child: Text(e.value, style: theme.textTheme.bodySmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w900)),
+                                      child: Text(e.value,
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w900)),
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Text(
-                                        queryActive ? 'Suchergebnisse' : 'Optionen',
-                                        style: theme.textTheme.labelSmall?.copyWith(color: Colors.white70),
+                                        queryActive
+                                            ? 'Suchergebnisse'
+                                            : 'Optionen',
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(color: Colors.white70),
                                       ),
                                     ),
                                   ],
@@ -953,7 +1269,9 @@ class _SimpleMultiSelectBottomSheetState extends State<_SimpleMultiSelectBottomS
                               decoration: BoxDecoration(
                                 color: Colors.black.withValues(alpha: 0.18),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                                border: Border.all(
+                                    color:
+                                        Colors.white.withValues(alpha: 0.08)),
                               ),
                               child: ListTile(
                                 onTap: () => setState(() {
@@ -964,15 +1282,23 @@ class _SimpleMultiSelectBottomSheetState extends State<_SimpleMultiSelectBottomS
                                   }
                                 }),
                                 dense: true,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                                title: Text(option, style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white)),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 2),
+                                title: Text(option,
+                                    style: theme.textTheme.bodyMedium
+                                        ?.copyWith(color: Colors.white)),
                                 trailing: AnimatedSwitcher(
                                   duration: const Duration(milliseconds: 160),
                                   switchInCurve: Curves.easeOutCubic,
                                   switchOutCurve: Curves.easeOutCubic,
                                   child: selected
-                                      ? Icon(Icons.check_rounded, key: const ValueKey('on'), color: theme.colorScheme.primary)
-                                      : const SizedBox(key: ValueKey('off'), width: 22, height: 22),
+                                      ? Icon(Icons.check_rounded,
+                                          key: const ValueKey('on'),
+                                          color: theme.colorScheme.primary)
+                                      : const SizedBox(
+                                          key: ValueKey('off'),
+                                          width: 22,
+                                          height: 22),
                                 ),
                               ),
                             );
@@ -988,7 +1314,8 @@ class _SimpleMultiSelectBottomSheetState extends State<_SimpleMultiSelectBottomS
                       child: SizedBox(
                         height: 52,
                         child: OutlinedButton.icon(
-                          onPressed: () => Navigator.of(context).pop<Set<String>>(null),
+                          onPressed: () =>
+                              Navigator.of(context).pop<Set<String>>(null),
                           icon: const Icon(Icons.close),
                           label: const Text('Abbrechen'),
                         ),
@@ -999,7 +1326,8 @@ class _SimpleMultiSelectBottomSheetState extends State<_SimpleMultiSelectBottomS
                       child: SizedBox(
                         height: 52,
                         child: FilledButton.icon(
-                          onPressed: () => Navigator.of(context).pop<Set<String>>(_draft),
+                          onPressed: () =>
+                              Navigator.of(context).pop<Set<String>>(_draft),
                           icon: const Icon(Icons.check_circle_outline),
                           label: const Text('Übernehmen'),
                         ),
@@ -1020,8 +1348,10 @@ class _GroupedEntry {
   final bool isHeader;
   final String value;
   const _GroupedEntry._({required this.isHeader, required this.value});
-  const _GroupedEntry.header(String letter) : this._(isHeader: true, value: letter);
-  const _GroupedEntry.option(String option) : this._(isHeader: false, value: option);
+  const _GroupedEntry.header(String letter)
+      : this._(isHeader: true, value: letter);
+  const _GroupedEntry.option(String option)
+      : this._(isHeader: false, value: option);
 }
 
 class _SelectedList extends StatelessWidget {
@@ -1032,7 +1362,8 @@ class _SelectedList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final shown = items.length <= 6 ? items : items.take(6).toList(growable: false);
+    final shown =
+        items.length <= 6 ? items : items.take(6).toList(growable: false);
     final remaining = items.length - shown.length;
 
     return Column(
@@ -1048,12 +1379,16 @@ class _SelectedList extends StatelessWidget {
               ),
               child: ListTile(
                 dense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                title: Text(v, style: theme.textTheme.bodySmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                title: Text(v,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.white, fontWeight: FontWeight.w700)),
                 trailing: IconButton(
                   tooltip: 'Entfernen',
                   onPressed: () => onRemove(v),
-                  icon: Icon(Icons.close, color: theme.colorScheme.primary.withValues(alpha: 0.95)),
+                  icon: Icon(Icons.close,
+                      color: theme.colorScheme.primary.withValues(alpha: 0.95)),
                 ),
               ),
             ),
@@ -1066,7 +1401,8 @@ class _SelectedList extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 '+$remaining weitere ausgewählt',
-                style: theme.textTheme.labelSmall?.copyWith(color: Colors.white70),
+                style:
+                    theme.textTheme.labelSmall?.copyWith(color: Colors.white70),
               ),
             ),
           ),
@@ -1083,7 +1419,11 @@ class _ProfilePreviewScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(centerTitle: true, title: const SizedBox(width: double.infinity, child: Text('Vorschau', textAlign: TextAlign.center))),
+      appBar: AppBar(
+          centerTitle: true,
+          title: const SizedBox(
+              width: double.infinity,
+              child: Text('Vorschau', textAlign: TextAlign.center))),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -1094,24 +1434,43 @@ class _ProfilePreviewScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('So sehen andere dein Profil', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  Text('So sehen andere dein Profil',
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 10),
                   if ((user.city ?? '').trim().isNotEmpty)
-                    _PreviewLine(icon: Icons.home_outlined, label: 'Wohnort', value: user.city ?? '-'),
+                    _PreviewLine(
+                        icon: Icons.home_outlined,
+                        label: 'Wohnort',
+                        value: user.city ?? '-'),
                   if ((user.bio ?? '').trim().isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    _PreviewLine(icon: Icons.info_outline, label: 'Über mich', value: user.bio ?? '-'),
+                    _PreviewLine(
+                        icon: Icons.info_outline,
+                        label: 'Über mich',
+                        value: user.bio ?? '-'),
                   ],
                   if (user.languages.isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    _PreviewLine(icon: Icons.translate, label: 'Sprachen', value: user.languages.join(', ')),
+                    _PreviewLine(
+                        icon: Icons.translate,
+                        label: 'Sprachen',
+                        value: user.languages.join(', ')),
                   ],
                   if (user.interests.isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    _PreviewLine(icon: Icons.interests_outlined, label: 'Interessen', value: user.interests.join(', ')),
+                    _PreviewLine(
+                        icon: Icons.interests_outlined,
+                        label: 'Interessen',
+                        value: user.interests.join(', ')),
                   ],
-                  if ((user.city ?? '').trim().isEmpty && (user.bio ?? '').trim().isEmpty && user.languages.isEmpty && user.interests.isEmpty)
-                    Text('Noch keine öffentlichen Angaben ausgefüllt.', style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70, height: 1.45)),
+                  if ((user.city ?? '').trim().isEmpty &&
+                      (user.bio ?? '').trim().isEmpty &&
+                      user.languages.isEmpty &&
+                      user.interests.isEmpty)
+                    Text('Noch keine öffentlichen Angaben ausgefüllt.',
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(color: Colors.white70, height: 1.45)),
                 ],
               ),
             ),
@@ -1126,7 +1485,8 @@ class _PreviewLine extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _PreviewLine({required this.icon, required this.label, required this.value});
+  const _PreviewLine(
+      {required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -1140,9 +1500,13 @@ class _PreviewLine extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: theme.textTheme.labelSmall?.copyWith(color: Colors.white70)),
+              Text(label,
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: Colors.white70)),
               const SizedBox(height: 2),
-              Text(value, style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white, height: 1.45)),
+              Text(value,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: Colors.white, height: 1.45)),
             ],
           ),
         ),
@@ -1158,7 +1522,12 @@ class _MembershipCard extends StatelessWidget {
   final double avgRating;
   final int reviewCount;
 
-  const _MembershipCard({required this.joinedAt, required this.bookingsCount, required this.rentalsCount, required this.avgRating, required this.reviewCount});
+  const _MembershipCard(
+      {required this.joinedAt,
+      required this.bookingsCount,
+      required this.rentalsCount,
+      required this.avgRating,
+      required this.reviewCount});
 
   @override
   Widget build(BuildContext context) {
@@ -1166,20 +1535,37 @@ class _MembershipCard extends StatelessWidget {
     return _GlassCard(
       child: Column(
         children: [
-          _InfoLine(icon: Icons.calendar_month_outlined, label: 'Dabei seit', value: _formatJoined(joinedAt)),
+          _InfoLine(
+              icon: Icons.calendar_month_outlined,
+              label: 'Dabei seit',
+              value: _formatJoined(joinedAt)),
           const SizedBox(height: 10),
-          _InfoLine(icon: Icons.shopping_bag_outlined, label: 'Anzahl Buchungen', value: bookingsCount.toString()),
+          _InfoLine(
+              icon: Icons.shopping_bag_outlined,
+              label: 'Anzahl Buchungen',
+              value: bookingsCount.toString()),
           const SizedBox(height: 10),
-          _InfoLine(icon: Icons.storefront_outlined, label: 'Anzahl Vermietungen', value: rentalsCount.toString()),
+          _InfoLine(
+              icon: Icons.storefront_outlined,
+              label: 'Anzahl Vermietungen',
+              value: rentalsCount.toString()),
           const SizedBox(height: 10),
           Row(
             children: [
-              Icon(Icons.star_outline, color: Colors.white.withValues(alpha: 0.85)),
+              Icon(Icons.star_outline,
+                  color: Colors.white.withValues(alpha: 0.85)),
               const SizedBox(width: 10),
-              Expanded(child: Text('Durchschnittliche Bewertung', style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70))),
-              Text('${avgRating.toStringAsFixed(1)} ★', style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+              Expanded(
+                  child: Text('Durchschnittliche Bewertung',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: Colors.white70))),
+              Text('${avgRating.toStringAsFixed(1)} ★',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                      color: Colors.white, fontWeight: FontWeight.w800)),
               const SizedBox(width: 8),
-              Text('($reviewCount)', style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70)),
+              Text('($reviewCount)',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: Colors.white70)),
             ],
           ),
         ],
@@ -1188,7 +1574,20 @@ class _MembershipCard extends StatelessWidget {
   }
 
   static String _formatJoined(DateTime dt) {
-    const monthsDe = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+    const monthsDe = [
+      'Januar',
+      'Februar',
+      'März',
+      'April',
+      'Mai',
+      'Juni',
+      'Juli',
+      'August',
+      'September',
+      'Oktober',
+      'November',
+      'Dezember'
+    ];
     return '${monthsDe[dt.month - 1]} ${dt.year}';
   }
 }
@@ -1197,7 +1596,8 @@ class _InfoLine extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _InfoLine({required this.icon, required this.label, required this.value});
+  const _InfoLine(
+      {required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -1206,8 +1606,13 @@ class _InfoLine extends StatelessWidget {
       children: [
         Icon(icon, color: Colors.white.withValues(alpha: 0.85)),
         const SizedBox(width: 10),
-        Expanded(child: Text(label, style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70))),
-        Text(value, style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+        Expanded(
+            child: Text(label,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: Colors.white70))),
+        Text(value,
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
       ],
     );
   }
@@ -1218,7 +1623,11 @@ class _SheetAction extends StatelessWidget {
   final String title;
   final VoidCallback onTap;
   final bool isDestructive;
-  const _SheetAction({required this.icon, required this.title, required this.onTap, this.isDestructive = false});
+  const _SheetAction(
+      {required this.icon,
+      required this.title,
+      required this.onTap,
+      this.isDestructive = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1230,7 +1639,9 @@ class _SheetAction extends StatelessWidget {
       child: OutlinedButton.icon(
         onPressed: onTap,
         icon: Icon(icon, color: fg),
-        label: Text(title, style: theme.textTheme.bodyMedium?.copyWith(color: fg, fontWeight: FontWeight.w700)),
+        label: Text(title,
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: fg, fontWeight: FontWeight.w700)),
       ),
     );
   }

@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-app-content-progress",
+  "capturedAt": "2026-08-13T08:30:00Z",
+  "status": "ten-of-twelve-saved-two-open",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081302",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "counts": {
+    "totalTasks": 12,
+    "savedTasks": 10,
+    "openTasks": 2
+  },
+  "savedTasks": [
+    "appAccess",
+    "ads",
+    "targetAudience",
+    "governmentApps",
+    "financialFeatures",
+    "health",
+    "categoryAndContact",
+    "advertisingId",
+    "contentRating",
+    "storeListing"
+  ],
+  "openTasks": {
+    "privacyPolicy": "public-privacy-page-not-release-ready",
+    "dataSafety": "all-data-type-answers-prepared-provider-roles-technically-classified-contract-retention-public-route-and-legal-pending"
+  },
+  "storeDraft": {
+    "germanCopySaved": true,
+    "phoneScreenshotsValidatedLocal": 4,
+    "phoneScreenshotsUploaded": true,
+    "appIconUploaded": true,
+    "featureGraphicUploaded": true,
+    "storeListingTaskCompleted": true,
+    "consoleSaveEvidenceRef": "docs/evidence/b11/google-play-store-listing-saved-20260813.json",
+    "appBundleUploaded": true,
+    "internalReleaseActive": true,
+    "internalReleaseEvidenceRef": "docs/evidence/b11/google-play-internal-release-active-20260813.json"
+  },
+  "dataSafetyDraft": {
+    "collectsOrSharesRequiredData": true,
+    "encryptedInTransit": true,
+    "accountCreationMethod": "username-and-password",
+    "oauthPreparedButUnavailable": true,
+    "deleteAccountUrlSaved": false,
+    "partialDataDeletionAnswerSaved": false,
+    "preparedPartialDataDeletionAnswer": false,
+    "dataTypesSaved": false,
+    "dataTypesPrepared": 16,
+    "dataTypesEvidenceRef": "docs/evidence/b11/google-play-data-safety-datatypes-20260812.json",
+    "answerMatrixEvidenceRef": "docs/evidence/b11/google-play-data-safety-answer-matrix-2026081505-20260815.json",
+    "providerClassificationEvidenceRef": "docs/evidence/b11/google-play-service-provider-sharing-classification-2026081505-20260815.json",
+    "submitted": false,
+    "stepTwoEvidenceRef": "docs/evidence/b11/google-play-data-safety-step2-20260812.json"
+  },
+  "advertisingIdDraft": {
+    "usesAdvertisingId": false,
+    "answerSaved": true,
+    "evidenceRef": "docs/evidence/b11/google-play-advertising-id-declaration-20260812.json"
+  },
+  "contentRatingDraft": {
+    "questionnaireInProgress": false,
+    "category": "all-other-app-types",
+    "userGeneratedContent": true,
+    "directUserCommunication": true,
+    "preciseDeviceLocationSharedByUser": true,
+    "protectedContactAddressEntered": true,
+    "iarcTermsAccepted": true,
+    "submitted": true,
+    "germanyRating": "usk-12-plus",
+    "sentForReview": false,
+    "evidenceRef": "docs/evidence/b11/google-play-iarc-content-rating-completion-20260813.json"
+  },
+  "boundaries": {
+    "sentForReview": false,
+    "internalRolloutStarted": false,
+    "closedTestingStarted": false,
+    "productionChanged": false,
+    "paymentEndpointCalled": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false,
+    "containsReviewCredentials": false,
+    "storeListingChanged": true,
+    "storeListingAssetsUploaded": true
+  }
+}

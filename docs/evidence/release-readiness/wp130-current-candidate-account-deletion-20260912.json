@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp130-current-candidate-account-deletion",
+  "status": "complete-exact-current-account-deletion",
+  "capturedOn": "2026-09-12",
+  "workPackage": "WP130",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "wp129ClosureHead": "341fdf48d8c4161a84c8dd6eb9c290eea97b80b4",
+    "diagnosticHead": "a6b6f309b37c67b110f1704dc19032ecee2a7b53",
+    "candidateSourceHead": "1546812f625b4e8f1e700bf976410097cd45ac2f",
+    "applicationRuntimePathsChangedAfterCandidateSource": []
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091201",
+    "releaseChannel": "internal",
+    "environment": "staging",
+    "delivery": "direct-apk",
+    "apkSha256": "a8bfda4c1a0e7302b2528db8edfbe1318e88322023f65588da032220a24badd4",
+    "aabSha256": "81c204fd65d83a0403d203b606328880acb0787d076093240efab87d00575399",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "physicalPixelPackageMatched": true
+  },
+  "stagingBackend": {
+    "releaseCommit": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "environment": "staging",
+    "databaseReady": true,
+    "mailReady": true,
+    "supportDeadlineDegradationIndependent": true,
+    "supportMutationPerformed": false
+  },
+  "pixelProof": {
+    "device": {
+      "manufacturer": "Google",
+      "model": "Pixel 7 Pro",
+      "osVersion": "17",
+      "apiLevel": 37,
+      "securityPatch": "2026-07-05",
+      "containsRawDeviceIdentifier": false
+    },
+    "preflight": {
+      "targetCredentialActive": true,
+      "protectedRecoveryCredentialActive": true,
+      "deletionPreflightClear": true,
+      "targetDistinctFromProtectedAccounts": true,
+      "durableJournalPreparedBeforeDeletion": true,
+      "journalOwnerOnly": true
+    },
+    "definiteRejection": {
+      "wrongPasswordStructuredRejection": "401:invalid_credentials",
+      "accountRemainedActiveAfterRejection": true,
+      "timeoutOrUnstructuredErrorAcceptedAsRejection": false
+    },
+    "confirmedDeletion": {
+      "uiConfirmed": true,
+      "deletedCredentialStructuredRejection": "401:invalid_credentials",
+      "timeoutOrUnstructuredErrorAcceptedAsDeletion": false,
+      "terminatedProcessGuestStatePassed": true,
+      "accountAToBIsolationPassed": true,
+      "protectedOwnerSessionRestored": true,
+      "privateTargetCredentialsScrubbed": true,
+      "recoveryRequired": false,
+      "targetCredentialState": "deleted"
+    },
+    "privateJournal": {
+      "status": "completed-account-deletion",
+      "sha256": "58f41b3c7fea09d54ccb3c0136dabafde9acc52a762635fbcc9b17e775fefc48",
+      "containsPrivatePath": false,
+      "containsCredential": false,
+      "containsAccountIdentifier": false
+    }
+  },
+  "portfolioEffect": {
+    "promotedRequirement": "privacy-export-and-account-deletion",
+    "passCount": 15,
+    "partialCount": 9,
+    "openCount": 8,
+    "totalCount": 32,
+    "releaseDecision": "hold-not-production-ready"
+  },
+  "verification": {
+    "focusedTestsPassed": 19,
+    "fullLocalRegression": "success",
+    "webWasmLoopbackAndroidBuildPassed": true,
+    "exactHeadGithubRegressionRequired": true,
+    "exactHeadCodeqlRequired": true
+  },
+  "sourceInventory": [
+    {
+      "path": "docs/evidence/release-readiness/wp129-current-candidate-email-registration-recovery-20260912.json",
+      "sha256": "586e200a8d272a36aacde3fe48e5f7d864375b0790c5a6917a73b8df3fd2013c"
+    },
+    {
+      "path": "tool/diagnose_android_account_deletion.mjs",
+      "sha256": "24cd43502de7db755801a46230223c092c1f2f1d5b659290e0265ec761da95da"
+    },
+    {
+      "path": "test/tool/diagnose_android_account_deletion.test.mjs",
+      "sha256": "b15b99dd4337d770f631d35934178bb420b63efc1d700eeacf06a856a4cb07a0"
+    }
+  ],
+  "technicalDebt": [
+    "The protected owner vault had advanced to the valid non-binding-simulation-retired lifecycle state; WP130 added this exact state to the recovery validator, retained live credential preflight before arming deletion, and made WP71 validate its historical diagnostic blob instead of the mutable current file.",
+    "The disposable account deletion is intentionally irreversible; exact target binding, definite credential truth, protected-owner recovery and terminal private-journal recovery are therefore mandatory before public closure."
+  ],
+  "boundaries": {
+    "applicationRuntimeChanged": false,
+    "backendChanged": false,
+    "stagingDisposableAccountDeleted": true,
+    "protectedOwnerDeleted": false,
+    "listingMutated": false,
+    "bookingMutated": false,
+    "messageSentByOperator": false,
+    "paymentEndpointCalled": false,
+    "realMoneyUsed": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "firebaseProjectChanged": false,
+    "cloudOrVpsChanged": false,
+    "dnsChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "credentialRecorded": false,
+    "accountIdentityRecorded": false,
+    "privateFilesystemPathRecorded": false,
+    "rawDeviceIdentifierRecorded": false
+  }
+}

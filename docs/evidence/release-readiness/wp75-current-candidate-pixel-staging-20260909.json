@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp75-current-candidate-pixel-staging",
+  "status": "complete-functional-private-notification-icon-review-pending",
+  "capturedAt": "2026-09-09T19:12:00.000Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "candidateSourceHead": "e1c182ea496f013989863155c13bfda649255a7e",
+    "stagingRuntimeHead": "baf9267c8bff7533230f3234c1f543649df6e4aa",
+    "candidateToRuntimeMobileOrBackendDrift": false,
+    "pullRequest7": "draft-open-clean-unmerged"
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090905",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkSha256": "1864b9c17e7813df887fb1e9961a1746665b4b57b6dbd831526e1c3a2f58eaa6",
+    "aabSha256": "ed3d5e5af99a6577e09afc96a880ac4ca7c9c0bd86c54bcaa3f5a07fd6255295",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "firebaseConfigured": true,
+    "privacyScan": "passed"
+  },
+  "staging": {
+    "version": "0.1.0-baf9267c8bff",
+    "runtimeHealthy": true,
+    "database": "ok",
+    "mail": "ok",
+    "fcm": "enabled-staging-only",
+    "paymentTransport": "memory",
+    "stripeLivemode": false,
+    "externalListingAiExecutionAllowed": false,
+    "listingAiProvider": "mock",
+    "readiness": "degraded-only-by-two-noncritical-support-deadlines",
+    "criticalOrPrivacyDeadlineOverdue": 0
+  },
+  "pixel": {
+    "physical": true,
+    "model": "Pixel 7 Pro",
+    "installedCandidate": "1.0.0+2026090905",
+    "directApkBytesMatch": true,
+    "dataPreservingUpdate": true,
+    "pushConsent": "enabled-for-this-device",
+    "androidNotificationPermission": "allowed",
+    "crashDiagnosticsConsent": "disabled",
+    "twoRoleJourney": {
+      "distinctEmailVerifiedSyntheticPrincipals": "passed",
+      "ownerPublish": "passed-server-confirmed-active",
+      "renterDiscovery": "passed",
+      "requestAndAcceptance": "passed-non-binding-simulation",
+      "foregroundFcm": "passed",
+      "backgroundFcm": "passed",
+      "terminatedProcessFcm": "passed",
+      "ownerRenterIsolation": "passed",
+      "chatVisibility": "passed",
+      "cleanup": "passed-booking-cancelled-listing-ended",
+      "protectedOwnerSessionRestored": true
+    },
+    "notificationIconVisual": "private-owner-only-review-pending"
+  },
+  "verification": {
+    "fullLocalRegression": "passed-before-runtime-deployment",
+    "localToolTestsPassed": 2542,
+    "githubRegressionRun": 34387992280,
+    "githubRegression": "success",
+    "githubCodeqlRun": 34387992392,
+    "githubCodeql": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "boundaries": {
+    "syntheticStagingAccountsOnly": true,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "realMoneyUsed": false,
+    "contractCreated": false,
+    "reservationCreated": false,
+    "testListingLeftActive": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "publicRegistrationChanged": false,
+    "externalListingAiEnabled": false,
+    "providerCredentialsReadOrCommitted": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsAccountIdentity": false,
+    "containsTokens": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateScreenshot": false
+  },
+  "remainingHolds": {
+    "privateNotificationIconVisualReview": "open",
+    "supportDeadlines": "two-noncritical-next-update-overdue",
+    "bindingContractAndReservation": "closed-by-v52-legal-approval-gate",
+    "paymentAndPayoutProvider": "memory-mode-and-provider-gates-closed",
+    "externalListingAi": "mock-only-with-zero-external-budget"
+  }
+}

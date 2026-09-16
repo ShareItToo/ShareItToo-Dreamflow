@@ -1,0 +1,48 @@
+{
+  "package": "WP77_PUBLIC_LEGAL_STAGING_SOURCE_MISMATCH",
+  "date": "2026-09-09",
+  "status": "blocked-fail-closed-no-remote-mutation",
+  "sourceCommitBeforeEvidence": "c20368a615b0e47694a58c686c0dc062ebeaf3fd",
+  "publicReadback": {
+    "rootImprintStatus": 200,
+    "rootPrivacyStatus": 200,
+    "rootApiHealthStatus": 500,
+    "legacyOperatorFactsPresent": true,
+    "desiredOperatorFactsPresent": false
+  },
+  "stagingReadback": {
+    "apiHealthStatus": 200,
+    "pageRouteStatus": 503,
+    "sameProvenRuntimeAsPublicRoot": false
+  },
+  "stagingInventory": {
+    "apiHealthy": true,
+    "postgresHealthy": true,
+    "restartCount": 0,
+    "currentAndPreviousImagesAvailable": true,
+    "postgresDataVolumePreserved": true,
+    "allThreeLegalRuntimeValuesMatchDesired": false
+  },
+  "sourceProof": {
+    "ephemeralComposeReferenceStillPresent": true,
+    "persistentActiveSourceEnvProven": false,
+    "safeDocumentedRecreatePathProven": false
+  },
+  "residualContainer": {
+    "differentComposeProject": true,
+    "separateDataVolume": true,
+    "removed": false
+  },
+  "mutations": {
+    "environment": false,
+    "container": false,
+    "database": false,
+    "caddy": false,
+    "dns": false,
+    "provider": false,
+    "payment": false,
+    "store": false,
+    "production": false
+  },
+  "blocker": "WP77_PUBLIC_LEGAL_RUNTIME_TARGET_AND_SOURCE_MISMATCH"
+}

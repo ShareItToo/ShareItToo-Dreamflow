@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "kind": "store-review-access-diagnostic",
+  "status": "review-fixture-refresh-pending",
+  "capturedAt": "2026-08-14T23:44:06.000Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081411",
+    "commit": "7f86ffd1a2c18a41a8b0479c5deba5251fb3a911"
+  },
+  "roles": [
+    "owner",
+    "renter"
+  ],
+  "checks": {
+    "privateVaultCreated": true,
+    "registrationsAccepted": true,
+    "priorVerificationEvidenceAvailable": true,
+    "ownerLoginPassed": true,
+    "renterLoginPassed": true,
+    "stagingHealthPassed": true,
+    "listingGuardrailsPassed": true,
+    "bookingQuotePassed": true,
+    "bookingCreationPassed": false,
+    "partialSyntheticListingPrepared": true,
+    "partialSyntheticListingReusedWithoutNewUpload": true,
+    "safeFailureCorrelationCaptured": true,
+    "liveAccessPassed": false,
+    "fixtureRefreshRequired": true
+  },
+  "latestBookingFailure": {
+    "observedAt": "2026-08-15T00:01:59.000Z",
+    "error": "internal_error",
+    "requestId": "cacd5a0f-f85f-4c92-9dc9-af2497186f6c",
+    "reusedExistingListing": true,
+    "newUploadCreated": false,
+    "newListingCreated": false,
+    "paymentEndpointCalled": false
+  },
+  "environment": {
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "paymentEndpointCalled": false
+  },
+  "boundaries": {
+    "productDataReadOnly": false,
+    "businessDataMutations": true,
+    "boundedSyntheticFixtureMutations": true,
+    "priorTerminalFixtureArchived": true,
+    "syntheticListingCreated": true,
+    "syntheticBookingCreated": false,
+    "authenticationSessionsCreated": true,
+    "syntheticAccountRegistrationsCreated": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsTokens": false,
+    "containsAccountIdentifiers": false,
+    "containsFixtureIdentifiers": false,
+    "syntheticAccountsOnly": true,
+    "publicStoreChanged": false,
+    "productionChanged": false
+  }
+}

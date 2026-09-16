@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp148-android-social-provider-activation-guard",
+  "status": "technical-closure-provider-gates-hold",
+  "capturedAt": "2026-09-14T03:40:00Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "baselineHead": "7f9ae2c438494da0a25cafdb39ca8d3892f21a8e",
+    "remoteAhead": 0,
+    "remoteBehind": 0
+  },
+  "pilotAuthentication": {
+    "platform": "android",
+    "provenPaths": ["email", "google"],
+    "facebook": "OPEN",
+    "apple": "OPEN_OPTIONAL_FOR_ANDROID_PILOT",
+    "candidateChanged": false,
+    "providerEnabled": false
+  },
+  "facebook": {
+    "localImplementationPrepared": true,
+    "privacyHardeningPrepared": true,
+    "buildActivationGuarded": true,
+    "metaAndFirebaseConfigurationEvidencePresent": false,
+    "uploadAndPlayKeyHashesVerified": false,
+    "exactCandidateAcceptancePassed": false,
+    "activationReady": false
+  },
+  "apple": {
+    "androidImplementationPrepared": true,
+    "requiredForAndroidPilot": false,
+    "buildActivationGuarded": true,
+    "developerMembershipAndServiceConfigurationEvidencePresent": false,
+    "privateRelayAndConsentRequirementsResolved": false,
+    "tokenRevocationImplemented": false,
+    "exactCandidateAcceptancePassed": false,
+    "activationReady": false
+  },
+  "implementation": {
+    "readinessManifest": "store/social-auth-provider-readiness.json",
+    "readinessValidator": "tool/validate_android_social_auth_provider_readiness.mjs",
+    "releaseBuildGate": "scripts/build_android_release_candidate.sh",
+    "facebookFlagRequiresExactProviderReadiness": true,
+    "appleFlagRequiresExactProviderReadiness": true,
+    "invalidFlagValuesFailClosed": true,
+    "credentialsRemainOutsideGit": true
+  },
+  "verification": {
+    "readinessValidator": "success",
+    "providerNegativeGates": "success",
+    "nodeFocusedTestsPassed": 8,
+    "flutterReleaseGatingTestsPassed": 1,
+    "flutterGoogleProfileTestsPassed": 3,
+    "flutterProviderOwnershipPassed": 17,
+    "flutterProviderOwnershipSkipped": 11,
+    "flutterInitializationPassed": 1,
+    "flutterInitializationSkipped": 27,
+    "flutterNativeProviderPassed": 10,
+    "flutterNativeProviderSkipped": 18,
+    "backendFocusedTestsPassed": 9,
+    "shellSyntax": "success",
+    "diffCheck": "success",
+    "fullTechnicalRegressionCiMetadataMode": "success",
+    "localRetainedCandidateArtifactGate": "expected-hold-runtime-drift-after-artifact-source",
+    "candidateRefreshRequiredBeforeNextReleaseArtifact": true
+  },
+  "officialSources": [
+    "https://firebase.google.com/docs/auth/flutter/federated-auth",
+    "https://firebase.google.com/docs/auth/android/apple",
+    "https://developers.facebook.com/documentation/facebook-login/android"
+  ],
+  "portfolio": {
+    "pass": 22,
+    "partial": 5,
+    "open": 5
+  },
+  "remainingPilotBlockers": [
+    "professional-v52-approval-and-approved-immutable-snapshots",
+    "stripe-connect-sandbox-provider-setup-and-eight-scenario-evidence",
+    "facebook-provider-configuration-and-exact-candidate-acceptance-if-retained",
+    "manual-talkback-traversal",
+    "durable-private-registry-pull"
+  ],
+  "nextIndependentLane": "durable-private-registry-pull-readiness",
+  "boundaries": {
+    "providerConsoleChanged": false,
+    "firebaseConsoleChanged": false,
+    "developerAccountCreated": false,
+    "membershipPurchased": false,
+    "agreementAccepted": false,
+    "credentialReadOrRecorded": false,
+    "candidateBuilt": false,
+    "candidateInstalled": false,
+    "deploymentChanged": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "paymentPerformed": false,
+    "pullRequestMerged": false
+  },
+  "sourceInventory": {
+    "scripts/build_android_release_candidate.sh": "c9d34d53e6d06544f48fde6d47a8e4a0a2f8dadcb244c6585aad71a37c7f44ef",
+    "test/tool/facebook_android_config_wiring.test.mjs": "f12cdee9496a3846fcd5ce8dd29fd635937e47de30088cb1c74b0e9b1df69a7b",
+    "store/social-auth-provider-readiness.json": "7f3289d4e6ab420250b9de178d707b8ee852f7c52e444c00d35fd2ee192b87f9",
+    "tool/validate_android_social_auth_provider_readiness.mjs": "bedeb53f48d0c0da56fc4dfa0bf60dba521bb45bb3dd8af33f1522fce1aba903",
+    "test/tool/validate_android_social_auth_provider_readiness.test.mjs": "abded6c54bbd19faab8f47f77af7590ab025281d647522bb9a23850b47e9726a",
+    "lib/services/auth_service.dart": "43e6e8be75c6cb4f2cb662bfdc5674c71ec6549047be6d84830595f261884cdb",
+    "backend/src/firebase_social_auth.js": "eb94da31526a69226e5cc4081f05b80b2504114aa557c3de3fad63cfb84559c6",
+    "backend/src/firebase_identity_cleanup.js": "3dc65da07da53276c5759f86856f91a87360c55ee77defed88ecc6510e2561e0"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "kind": "store-review-access-diagnostic",
+  "status": "review-fixture-refresh-pending",
+  "capturedAt": "2026-08-11T09:45:00Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081105",
+    "commit": "de8e668e09fbd7ba2a03c0a3dd29214e5c47c9b5"
+  },
+  "checks": {
+    "privateVaultCreated": true,
+    "registrationsAccepted": true,
+    "priorVerificationEvidenceAvailable": true,
+    "ownerLoginPassed": true,
+    "renterLoginPassed": false,
+    "liveAccessPassed": false,
+    "fixtureRefreshRequired": true
+  },
+  "environment": {
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "paymentEndpointCalled": false
+  },
+  "boundaries": {
+    "productDataReadOnly": true,
+    "businessDataMutations": false,
+    "authenticationSessionsCreated": true,
+    "syntheticAccountRegistrationsCreated": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsTokens": false,
+    "containsAccountIdentifiers": false,
+    "containsFixtureIdentifiers": false,
+    "syntheticAccountsOnly": true,
+    "publicStoreChanged": false,
+    "productionChanged": false
+  }
+}

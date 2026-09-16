@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "package": "WP161-CURRENT-CONSUMER-CLOSURE-20260916",
+  "status": "technical-closure-full-regression-passed-external-gates-hold",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "baselineHead": "f2b6a32c387d43b93c137ce2217ba30dd6da4562",
+    "sourceHead": "038b38d3eb797b31b742424b639cfbf8b5d7c001"
+  },
+  "sourceInventory": [
+    {
+      "path": "scripts/release_host_capacity_guard.sh",
+      "sha256": "020d82dbd91ce89b26b7d16f0c38100c4725cc790b6c21dedd0507881751c4a2"
+    },
+    {
+      "path": "tool/check_current_consumer_closure.mjs",
+      "sha256": "4e82122d0e4b8b655f991752a6a787a1c12b9e0bf48ef5c717073743f8448664"
+    },
+    {
+      "path": "test/tool/check_current_consumer_closure.test.mjs",
+      "sha256": "542f4c10f9578fd99a475b6009b49ca07c31599b849eb92a932594cc037e07e9"
+    },
+    {
+      "path": "docs/operations/WP161_CURRENT_CONSUMER_CLOSURE_RULES_2026-09-16.md",
+      "sha256": "6cbd644ed378d6dd4943711245eab4b02c3ad77a7f54fe48aa706c30fe5c0b1b"
+    },
+    {
+      "path": "tool/validate_wp160_special_category_health_data_intake.mjs",
+      "sha256": "fa40dcd81a21eecd4207793f79e2806aa8c5d3e8da5a07d5afacf1c3cbe41056"
+    }
+  ],
+  "closure": {
+    "changedPathCount": 5,
+    "currentMutableManifestCount": 3,
+    "currentCodeConsumerCount": 1,
+    "directTestConsumerCount": 4,
+    "consumerTestCount": 4,
+    "preflightDurationMs": 168,
+    "historicalEvidenceRewritten": false
+  },
+  "verification": {
+    "focusedWp161Tests": "passed-17-of-17",
+    "consumerMatrix": "passed-32-of-32",
+    "closureChecker": "passed-manifests-3-code-1-tests-4-migrations-79",
+    "localFullRegression": {
+      "status": "passed",
+      "exitCode": 0,
+      "tests": 3107,
+      "passed": 3106,
+      "failed": 0,
+      "intentionalSkipped": 1
+    },
+    "githubRegression": {
+      "runId": 35030524809,
+      "verifiedHead": "9abacd615fbe7333f436038e862f608da01315fb",
+      "status": "completed",
+      "conclusion": "success",
+      "requiredJobs": [
+        "postgres-runner-proof",
+        "backend-regression",
+        "flutter-regression",
+        "r10-clean-reproducibility"
+      ],
+      "publishApiImage": "skipped"
+    },
+    "githubCodeql": {
+      "runId": 35030524869,
+      "verifiedHead": "9abacd615fbe7333f436038e862f608da01315fb",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    "externalEvidencePrecedesSourceCommit": true
+  },
+  "consumerTests": [
+    "test/tool/check_current_consumer_closure.test.mjs",
+    "test/tool/release_host_capacity_guard_wiring.test.mjs",
+    "test/tool/validate_wp160_source_binding_reverse_index.test.mjs",
+    "test/tool/validate_wp160_special_category_health_data_intake.test.mjs"
+  ],
+  "migrationInventory": {
+    "count": 79,
+    "last": "079_special_category_intake_minimization.up.sql",
+    "runner": "tool/run_r9_database_recovery.mjs",
+    "test": "test/tool/run_r9_database_recovery.test.mjs"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "vpsChanged": false,
+    "cloudChanged": false,
+    "paymentChanged": false,
+    "storeChanged": false,
+    "deviceChanged": false,
+    "historicalEvidenceRewritten": false,
+    "credentialsExtracted": false
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-controlled-fcm-diagnostic",
+  "status": "passed-bounded-full-fcm-diagnostic",
+  "capturedAt": "2026-08-15T03:44:12.858Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081505",
+    "commit": "3908f5a3c300c1125c120c832f3050eea7a0a762",
+    "apkSha256": "0e701dbca162c764cdcdf79e4d1c70eb8d18e97d06e155cfe787bc5164323f69",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "stripeLivemode": false
+  },
+  "installed": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081505",
+    "delivery": "google-play-split",
+    "installerPackageName": "com.android.vending",
+    "splitCount": 4
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "foregroundPushDelivery": {
+      "status": "passed",
+      "result": "foreground-fcm-banner-visible"
+    },
+    "backgroundPushDelivery": {
+      "status": "passed",
+      "result": "android-system-notification-visible",
+      "observedNotificationRecordsBefore": 0,
+      "observedNotificationRecordsAfter": 1
+    },
+    "terminatedProcessPushDelivery": {
+      "status": "passed",
+      "result": "process-absent-before-send-and-android-system-notification-visible-after-send",
+      "observedNotificationRecordsBefore": 1,
+      "observedNotificationRecordsAfter": 3
+    },
+    "notificationIconVisual": {
+      "status": "passed",
+      "result": "brand-glyph-centered-and-fully-contained-within-system-circle-with-even-visible-safety-margin",
+      "privateDiagnosticScreenshotSha256": "74988f286e01c4d54592a2431c84bc7a2e52b13c3a1a2ec142e6a33a92329321",
+      "privateDiagnosticScreenshotCommitted": false
+    }
+  },
+  "boundaries": {
+    "directDiagnosticOnly": false,
+    "storeInstallationGateSatisfied": true,
+    "fullFcmMatrixPassed": true,
+    "productionPushSent": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "syntheticAccountsOnly": true,
+    "lockCodeUsed": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  },
+  "isolation": {
+    "mode": "existing-protected-synthetic-fixture",
+    "protectedReviewFixturePreserved": true,
+    "fixtureReconciledActiveAfterProbe": true,
+    "diagnosticMessagesOnly": true,
+    "temporaryVaultCreated": false,
+    "listingCreatedDuringProbe": false,
+    "listingDeleted": false,
+    "containsReviewCredentials": false
+  }
+}

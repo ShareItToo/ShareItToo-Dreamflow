@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-only-next-consolidated-candidate",
+  "state": "built-local-not-uploaded",
+  "baselineCandidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "commit": "3fa045b98897f9551f91da932136c2b100b2d700",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "builtCandidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081510",
+    "commit": "4cb004641391efe40fa2bf89f62da11bc1f71291",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "aabSha256": "ad6ede96f47c7d5a9b1af000c6a51b4e1c8090729ff9801f29f8fe43ebeb75e4",
+    "apkSha256": "ebc8810e591e564733807605ac6291e8d752e8b69ae66da0f748d3f3f73856cc",
+    "archivedAndVerified": true,
+    "installedDirectOnPhysicalAndroid": true,
+    "externalUploadPerformed": false
+  },
+  "nextCandidatePolicy": {
+    "versionName": "1.0.0",
+    "buildNumberRule": "strictly-higher-than-baseline",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "googleLoginEnabled": true,
+    "appleLoginEnabled": false,
+    "facebookLoginEnabled": false,
+    "providerEvidenceRef": "docs/evidence/b11/firebase-google-signin-provider-20260815.json",
+    "firebaseCloudMessagingRetained": true,
+    "firebaseCrashlyticsRetained": true,
+    "independentDeviceServiceOptIns": true,
+    "deviceServicesDefaultOff": true,
+    "controlledCrashDiagnosticRequired": true,
+    "controlledCrashDiagnosticRunIdRule": "b11-android-<buildNumber>",
+    "largeTextRemediationRequired": true,
+    "v51LegalAssetsActivation": "draft-blocked"
+  },
+  "requiredBeforeBuild": [
+    "all intended source changes are consolidated and committed",
+    "pubspec build number is strictly higher than 2026081509",
+    "Google-only release profile test passes",
+    "Firebase upload and Play App Signing OAuth clients validate",
+    "release preflight passes against internal Staging",
+    "large-text wishlist and profile remediation is included",
+    "Push and Crashlytics remain separate voluntary default-off choices",
+    "exactly one sanitized internal Crashlytics run id is compiled",
+    "V5.1 legal assets remain draft-blocked"
+  ],
+  "hardStops": {
+    "sameOrOlderBuildNumber": true,
+    "appleWithoutAppleDeveloperConfiguration": true,
+    "facebookWithoutMetaConfiguration": true,
+    "productionApi": true,
+    "storeSubmission": true,
+    "realPayments": true,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false
+  }
+}

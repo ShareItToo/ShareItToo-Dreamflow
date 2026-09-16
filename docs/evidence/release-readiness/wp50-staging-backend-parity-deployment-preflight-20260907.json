@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp50-staging-backend-parity-deployment-preflight",
+  "status": "prepared-read-only-external-deployment-not-started",
+  "capturedAt": "2026-09-07T14:59:22Z",
+  "workPackage": "WP50",
+  "repository": {
+    "worktree": "/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808",
+    "branch": "codex/master-workflow-20260808",
+    "preflightBaseHead": "265e39d9c773eb265002c84db498b14931702a81",
+    "proposedDeploymentTargetHead": "9de283ab0d5386f054606ac615a52ff05059f4db",
+    "targetBackendMatchesPreflightBase": true,
+    "cleanAtStart": true,
+    "remoteDivergenceAtStart": "0/0",
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "currentStagingReadback": {
+    "mode": "public-read-only",
+    "environment": "staging",
+    "versionEndpointHttpStatus": 200,
+    "readinessEndpointHttpStatus": 503,
+    "deployedCommit": "68c97a437969dc98f17eb151da3e006259ffbafa",
+    "version": "0.1.0-68c97a437969",
+    "buildTime": "2026-09-06T05:48:02.000Z",
+    "readiness": "degraded-only-noncritical-support-next-update-overdue",
+    "database": "ok",
+    "mail": "ok",
+    "notificationPending": 0,
+    "notificationDead": 0,
+    "paymentTransport": "memory",
+    "paymentLiveMode": false,
+    "paymentProvider": "disabled",
+    "listingAiProvider": "mock",
+    "listingAiBudgetCents": 0,
+    "listingAiExternalExecutionAllowed": false,
+    "listingAiAutomaticPublicationAllowed": false,
+    "supportDeadlineWatchdogStale": false,
+    "supportP0WithoutOwner": 0,
+    "supportNextUpdateOverdue": 1,
+    "supportCriticalNextUpdateOverdue": 0,
+    "privacyDeadlineOverdue": 0,
+    "privacyIncidentDeadlineOverdue": 0
+  },
+  "sourceDelta": {
+    "deployedHead": "68c97a437969dc98f17eb151da3e006259ffbafa",
+    "targetHead": "9de283ab0d5386f054606ac615a52ff05059f4db",
+    "sessionLimitImplementationHead": "146e0d29b81089768959ee8473ac73ac3f63e627",
+    "changedBackendFiles": [
+      "backend/ops/secret_scan_history_baseline.json",
+      "backend/ops/validate_stripe_staging_secrets.mjs",
+      "backend/src/app.js",
+      "backend/src/auth_session_actions.js",
+      "backend/src/config.js",
+      "backend/src/openai_listing_ai_provider.js",
+      "backend/test/auth_session_actions.test.js",
+      "backend/test/v52_handover_return_workflow.test.js"
+    ],
+    "functionalRuntimeFiles": [
+      "backend/src/app.js",
+      "backend/src/auth_session_actions.js",
+      "backend/src/config.js"
+    ],
+    "nonfunctionalRuntimeCommentFiles": [
+      "backend/src/openai_listing_ai_provider.js"
+    ],
+    "deploymentPreflightHardeningFiles": [
+      "backend/ops/validate_stripe_staging_secrets.mjs"
+    ],
+    "testAndScannerFiles": [
+      "backend/ops/secret_scan_history_baseline.json",
+      "backend/test/auth_session_actions.test.js",
+      "backend/test/v52_handover_return_workflow.test.js"
+    ],
+    "sqlFilesChanged": 0,
+    "schemaMigrationRequired": false,
+    "deployHarnessChanged": false,
+    "stagingComposeChanged": false,
+    "maximumActiveSessionsPerUser": 100,
+    "accountRowLockBeforeIssue": true,
+    "oldestExcessSessionsRevoked": true,
+    "associatedRefreshTokensRevoked": true,
+    "associatedPushDevicesRemoved": true,
+    "refreshRotationReusesExistingSession": true,
+    "dataEffect": "A successful new login may revoke only that account's oldest excess active sessions, refresh tokens and session-bound push devices.",
+    "rollbackDataSemantics": "Image rollback does not and must not reactivate sessions already revoked by the security limit. Before any post-deploy login, image rollback is runtime-only and data-neutral."
+  },
+  "sourceInventory": [
+    {
+      "path": "docs/evidence/release-readiness/wp40-current-candidate-password-change-session-bound-20260907.json",
+      "sha256": "ef47266c266cefa73dd17ad1b915f05dd554118d7443f4dca4f706dfd26ca424"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp45-current-candidate-acceptance-convergence-20260907.json",
+      "sha256": "f15d5311ce277ef4eb9a0091adc26a628579033a53d95e57b38a07edd1feafdb"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp49-current-candidate-external-intervention-map-20260907.json",
+      "sha256": "c4bd823442ef30d924220a9b76bc3e6d9afdcbbe40969f07c56835e3aac6dd3c"
+    },
+    {
+      "path": "docs/evidence/release-readiness/staging-runtime-configuration-readonly-20260904.json",
+      "sha256": "147431674bdd328d4af37201633c968a33ce7827c081917b58a74802d2ee6970"
+    }
+  ],
+  "targetVerification": {
+    "githubRegressionRun": 34132354257,
+    "githubRegression": "passed-all-required-jobs",
+    "githubCodeqlRun": 34132354214,
+    "githubCodeql": "passed",
+    "openCodeScanningAlerts": 0,
+    "cleanCheckoutReproducibility": "passed",
+    "apiImagePublicationJob": "skipped",
+    "exactTargetImagePublished": "not-proven",
+    "localFullRegression": "passed",
+    "toolTests": "passed-2429",
+    "backendTests": "passed-850-with-2-declared-skips"
+  },
+  "protectedRuntimeConfiguration": {
+    "lastSanitizedReadback": "2026-09-04T03:28:11.668Z",
+    "currentReadbackRequired": true,
+    "historicallyVerifiedExpectedShape": {
+      "deploymentEnvironment": "staging",
+      "firebaseAuthEnabled": true,
+      "firebasePhoneVerificationEnabled": true,
+      "mailTransport": "smtp",
+      "pushTransport": "fcm",
+      "paymentTransport": "memory",
+      "stripeLiveMode": false,
+      "listingAiProvider": "mock",
+      "listingAiBudgetCents": 0
+    },
+    "requiredDeploymentOverlaysInOrder": [
+      "compose.staging.yml",
+      "compose.staging.pilot.yml",
+      "compose.staging.fcm.yml",
+      "compose.staging.smtp.yml"
+    ],
+    "forbiddenDeploymentOverlays": [
+      "compose.staging.listing-ai.yml",
+      "compose.staging.stripe.yml"
+    ],
+    "credentialContentsRead": false,
+    "credentialPathsRecorded": false
+  },
+  "deploymentRunway": [
+    {
+      "order": 1,
+      "id": "current-vps-read-only-inventory",
+      "state": "external-readback-required",
+      "mutationAllowed": false,
+      "completion": "Confirm current commit, running image identity, exact non-secret runtime shape, latest release record, container health, restart count and resource headroom without reading credential contents."
+    },
+    {
+      "order": 2,
+      "id": "exact-target-image-build",
+      "state": "not-started",
+      "mutationAllowed": false,
+      "completion": "After a separate deployment gate, build the exact target from a clean detached checkout and verify its OCI revision, version and build-time labels before deployment."
+    },
+    {
+      "order": 3,
+      "id": "pre-deploy-integrity-and-rollback-capture",
+      "state": "not-started",
+      "mutationAllowed": false,
+      "completion": "Capture the current image ID and release record, verify the current image remains locally available, run the read-only foreign-key check and confirm no SQL delta."
+    },
+    {
+      "order": 4,
+      "id": "bounded-staging-rollout",
+      "state": "gate-closed",
+      "mutationAllowed": false,
+      "completion": "Use only the current deploy harness, exact target image and preserved pilot plus FCM plus SMTP overlays; keep Listing AI mock-only and payment memory-only."
+    },
+    {
+      "order": 5,
+      "id": "post-deploy-readback-and-session-limit-smoke",
+      "state": "gate-closed",
+      "mutationAllowed": false,
+      "completion": "Verify exact version, liveness, permitted readiness state, runtime shape, database integrity and the 100-session bound with an isolated disposable Staging identity; clean the fixture and retain security revocations."
+    },
+    {
+      "order": 6,
+      "id": "automatic-rollback-on-gate-failure",
+      "state": "armed-by-existing-harness-not-executed",
+      "mutationAllowed": false,
+      "completion": "Restore and verify the exact previously running image. Never reactivate legitimately revoked sessions and never use a historical deploy harness."
+    }
+  ],
+  "externalGate": {
+    "name": "STAGING_BACKEND_PARITY_DEPLOYMENT_GO",
+    "state": "closed",
+    "deploymentReady": false,
+    "blockingFacts": [
+      "No current authenticated VPS readback is available in this worktree.",
+      "The exact target image is not proven built or published.",
+      "The protected Staging runtime configuration was last sanitized on 4 September and must be re-read immediately before deployment.",
+      "The current release record, rollback image identity and server resource headroom have not been re-read for this target."
+    ],
+    "ownerPresenceRequired": "only-if-the-existing-Hostinger-session-requires-reauthentication-or-2fa",
+    "maximusEscalation": "only-for-a-real-nondelegable-owner-authentication-step"
+  },
+  "boundaries": {
+    "applicationRuntimeChanged": false,
+    "backendRuntimeChanged": false,
+    "backendDeploymentChanged": false,
+    "stagingDataChanged": false,
+    "productionChanged": false,
+    "cloudVpsDnsChanged": false,
+    "firebaseConsoleChanged": false,
+    "providerConfigurationChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "googlePlayChanged": false,
+    "deviceChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsAccountIdentity": false,
+    "containsRawDeviceIdentifier": false
+  }
+}

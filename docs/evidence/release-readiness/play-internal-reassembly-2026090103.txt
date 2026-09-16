@@ -1,0 +1,34 @@
+PRIVATE GOOGLE PLAY INTERNAL CANDIDATE - REASSEMBLY AND VERIFICATION
+
+Candidate: ShareItToo 1.0.0+2026090103
+Package: com.shareittoo.app
+Source commit: 0c0624c9f1a76c886112a15c41564d6375b69238
+Track boundary: Google Play Internal testing only
+API boundary: https://staging.shareittoo.com/api/v1
+Payment boundary: memory/test only; Stripe livemode false
+
+Required parts, in this exact order:
+1. shareittoo-1.0.0-2026090103-0c0624c9f1a76c886112a15c41564d6375b69238.aab.part-00
+   Bytes: 60000000
+   SHA-256: 5ce2c44ab4bccc6c98b922276d3ca61d1e6fcdafcacda2a80443d64eed41e09b
+2. shareittoo-1.0.0-2026090103-0c0624c9f1a76c886112a15c41564d6375b69238.aab.part-01
+   Bytes: 48946726
+   SHA-256: 431abd89d76606d6670e30856d995459bacbac14cc659dd9da8cb4d41024fe15
+
+Reassemble on macOS from the folder containing both parts:
+  cat shareittoo-1.0.0-2026090103-0c0624c9f1a76c886112a15c41564d6375b69238.aab.part-00 shareittoo-1.0.0-2026090103-0c0624c9f1a76c886112a15c41564d6375b69238.aab.part-01 > shareittoo-1.0.0-2026090103-0c0624c9f1a76c886112a15c41564d6375b69238.aab
+
+Expected reassembled file:
+  Bytes: 108946726
+  SHA-256: b6fac301b932b024014fdadbe5e8a01f545ddad50815f8e9f53df0045afe39bc
+
+Verify:
+  shasum -a 256 shareittoo-1.0.0-2026090103-0c0624c9f1a76c886112a15c41564d6375b69238.aab
+  unzip -t shareittoo-1.0.0-2026090103-0c0624c9f1a76c886112a15c41564d6375b69238.aab
+
+Do not upload a part file. Upload only the reassembled AAB after both checks
+match exactly. Do not use the replaced 2026090102 folder or candidate.
+
+No Production, Open testing, Closed testing, public release, tester-list,
+Firebase, payment, VPS, Cloud, DNS or PR-merge permission is granted by this
+handoff.

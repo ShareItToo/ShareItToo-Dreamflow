@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-owner-request-overview-live-expiry",
+  "status": "passed-source-and-regression",
+  "capturedAt": "2026-08-17T10:12:58Z",
+  "sourceCommit": "81024fd24dcc3c3b4a5ea595f20bb4f3f0988330",
+  "checks": {
+    "remoteMissingDeadlineIsVisiblyBlocked": true,
+    "remoteExpiredDeadlineIsVisiblyExpired": true,
+    "nextPendingDeadlineSchedulesRefresh": true,
+    "deadlineRefreshReschedulesFollowingDeadline": true,
+    "deadlineTimerCancelsOnReload": true,
+    "deadlineTimerCancelsOnDispose": true,
+    "localQaDoesNotClaimRemoteDeadline": true,
+    "sharedDialogDeadlineGatePreserved": true,
+    "backendExpiryGatePreserved": true
+  },
+  "verification": {
+    "targetedNodeTestsPassed": 11,
+    "targetedFlutterTestsPassed": 53,
+    "targetedAnalyzerFindings": 2,
+    "targetedAnalyzerNewFindings": 0,
+    "fullFlutterTestsPassed": 282,
+    "intentionalFlutterTestsSkipped": 1,
+    "fullAnalyzerFindings": 229,
+    "fullAnalyzerErrors": 0,
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "technicalRegression": "passed-with-documented-candidate-rollover-boundary"
+  },
+  "privacy": {
+    "dataCollectionChanged": false,
+    "dataStorageChanged": false,
+    "dataTransportChanged": false,
+    "providerChanged": false,
+    "permissionChanged": false,
+    "privacyInventoryChangeRequired": false
+  },
+  "boundaries": {
+    "backendDeployed": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "storeSubmissionPerformed": false,
+    "realPaymentPerformed": false,
+    "candidateBuiltOrRelabeled": false,
+    "pushRetainedDefaultOff": true,
+    "crashRetainedDefaultOff": true,
+    "pushEnablesCrash": false,
+    "crashDataTransferred": false
+  },
+  "conclusion": {
+    "ownerRequestOverviewAtDeadline": "refreshes-and-shows-expired",
+    "missingRemoteDeadline": "visibly-blocked",
+    "serverAuthority": "booking_request_expired-preserved",
+    "officialPlayInternalCandidate": "1.0.0+2026081509",
+    "localSignedCandidate": "1.0.0+2026081510-built-local-not-uploaded"
+  }
+}

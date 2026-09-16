@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r13-codex-auth-local-dev",
+  "status": "verified-local-evaluation-regression-and-codeql-passed",
+  "classification": "CODEX_AUTH_LOCAL_DEV_SUPPORTED",
+  "implementationBaseHead": "e64defd0df62fb047c6fbc90733e4caf318ac7c4",
+  "officialSupport": {
+    "authenticationDocumentation": "https://learn.chatgpt.com/docs/auth",
+    "nonInteractiveDocumentation": "https://learn.chatgpt.com/docs/non-interactive-mode",
+    "chatgptSubscriptionSignInForCodex": true,
+    "codexExecReusesSavedCliAuthentication": true,
+    "apiKeyUsesUsageBasedBilling": true,
+    "sitRuntimeEntitlement": false
+  },
+  "observedLocalAuth": {
+    "cliVersion": "codex-cli 0.149.0-alpha.4.1",
+    "loginStatus": "chatgpt",
+    "apiBillingEnvironmentPresent": false,
+    "credentialFileRead": false,
+    "oauthTokenReadOrCopied": false,
+    "browserCookieRead": false,
+    "accountMutationPerformed": false
+  },
+  "implementation": {
+    "adapter": "tool/codex_local_dev.mjs",
+    "mode": "codex_local_dev",
+    "architecture": "docs/architecture/r13-codex-auth-local-dev-2026-08-24.md",
+    "enabledByDefault": false,
+    "persistentProfileCreated": false,
+    "userConfigChanged": false,
+    "syntheticFixtureOnly": true,
+    "ephemeralSession": true,
+    "readOnlySandbox": true,
+    "modelToolsEnabled": false,
+    "strictN2N3Validation": true,
+    "runtimeProviderEligible": false
+  },
+  "verifiedEvaluation": {
+    "fixture": "cordless-drill.png",
+    "synthetic": true,
+    "status": "local-evaluation-complete",
+    "category": "cat8",
+    "subcategory": "Bohrmaschinen",
+    "clarificationQuestionCount": 3,
+    "ownerConfirmationsTrue": 0,
+    "replacementValuePresent": false,
+    "pickupRegionPresent": false,
+    "authoritativePriceCreated": false,
+    "publicationAllowed": false,
+    "apiBilling": false,
+    "credentialsExtracted": false,
+    "payloadSha256": "2926f2e3d1a5a2ccebc90c8a78bb80389c7d7ca1c28d5830ce874bba566e2c49"
+  },
+  "focusedVerification": {
+    "adapterTests": "passed-8",
+    "statusCheck": "passed-chatgpt-no-api-billing",
+    "actualSyntheticEvaluation": "passed",
+    "artifactValidatorTests": "passed-6",
+    "artifactValidator": "passed",
+    "fullTechnicalRegression": "passed-candidate-rollover-ci-metadata-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "githubVerification": {
+    "implementationCommit": "b504bbb3a5ab97dbf2b162b13061e35400fa640d",
+    "regression": {
+      "runId": 32717658624,
+      "conclusion": "success",
+      "backendRegression": "success",
+      "postgresRunnerProof": "success",
+      "flutterRegression": "success",
+      "signedCandidateBuilt": false,
+      "apiImagePublished": false
+    },
+    "codeql": {
+      "workflowRunId": 32717658646,
+      "workflowConclusion": "success",
+      "advancedSecurityCheckId": 97402679227,
+      "advancedSecurityConclusion": "success",
+      "newAlerts": 0
+    },
+    "preExistingExternalHistoryCheck": {
+      "provider": "GitGuardian",
+      "baseCheckId": 97395091283,
+      "baseCommit": "e64defd0df62fb047c6fbc90733e4caf318ac7c4",
+      "baseConclusion": "failure",
+      "currentCheckId": 97402213592,
+      "currentConclusion": "failure",
+      "reportedPullRequestCommitScope": 250,
+      "credentialDetailsInspected": false,
+      "classifiedAsR13Regression": false
+    }
+  },
+  "boundaries": {
+    "apiBillingEnabled": false,
+    "credentialExtractionPerformed": false,
+    "sitRuntimeProviderEnabled": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "storeChanged": false,
+    "firebaseChanged": false,
+    "cloudChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false
+  },
+  "next48hPackage": "R3"
+}

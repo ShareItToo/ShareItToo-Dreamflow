@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "built-scanned-play-internal-installed",
+  "generatedAt": "2026-08-14T06:39:59Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081403",
+    "commit": "09c9211e41da75969b9ee59e9954ac7465250e80",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "play-internal",
+    "aabSha256": "c933d642cc02417e655d8e7f60960508a0a6ff271e7a684429c14492286b7f0c",
+    "apkSha256": "29386ee981dd895bd2bfa70d4dd4564a1237141dce38a4f33e0f2994c975755b",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true,
+    "privateArchivePermissionsVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "5126240c706a9ff4f0067adcc7b11a7b4a52d3eeac1f74af3113b81fb9b8cbf5",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "permissionInventoryStatus": "passed",
+    "permissionInventoryEvidenceRef": "docs/evidence/b11/android-release-permissions-2026081403.json",
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics",
+      "Firebase Authentication",
+      "Facebook Login",
+      "Google Maps Platform"
+    ],
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "playInternalInstallAndLaunch": "passed",
+    "playInstallerVerified": "passed",
+    "stagingSessionPreserved": "passed",
+    "phoneAppVerification": "passed-play-signing-allowlist",
+    "phoneRealSms": "passed-real-sms-and-invalid-code-rejection",
+    "searchOverlayAsyncLifecycle": "passed-source-regression",
+    "listingSignalTruthfulness": "pending",
+    "authenticatedDeepLinks": "pending-exact-build",
+    "foregroundFcm": "passed",
+    "backgroundFcm": "passed",
+    "terminatedProcessFcm": "passed",
+    "notificationIconVisualFit": "passed",
+    "logoutColdStartGuestPersistence": "passed",
+    "postLogoutPushSuppression": "passed",
+    "offlineRealtimeRecovery": "passed"
+  },
+  "googlePlayInternalRelease": {
+    "status": "store-install-verified",
+    "evidenceRef": "docs/evidence/b11/google-play-internal-release-active-2026081403-20260814.json"
+  },
+  "phoneVerification": {
+    "status": "passed-real-device",
+    "evidenceRef": "docs/evidence/b11/firebase-phone-real-sms-verification-2026081403-20260814.json",
+    "installedCandidateUiFinding": "invalid-code-was-rejected-but-not-visibly-explained",
+    "nextSourceCandidateFix": "centered-sit-popup-with-specific-error-reason"
+  },
+  "controlledFcm": {
+    "status": "passed",
+    "installation": "google-play-split",
+    "foreground": "passed",
+    "background": "passed",
+    "terminatedProcess": "passed",
+    "notificationIconVisualFit": "passed-centered-and-contained",
+    "evidenceRef": "docs/evidence/b11/android-controlled-fcm-2026081403-20260814T111938Z.json"
+  },
+  "logoutLifecycle": {
+    "status": "passed",
+    "installation": "google-play-split",
+    "coldStartGuestPersistence": "passed",
+    "postLogoutPushSuppression": "passed",
+    "protectedChatAfterLogout": "passed",
+    "evidenceRef": "docs/evidence/b11/android-logout-lifecycle-2026081403-20260814T114551Z.json"
+  },
+  "offlineRealtime": {
+    "status": "passed",
+    "installation": "google-play-split",
+    "sameProcessRecovery": "passed",
+    "networkRestoredAfterProbe": true,
+    "evidenceRef": "docs/evidence/b11/android-offline-realtime-2026081403-20260814T115006Z.json"
+  },
+  "staging": {
+    "serverCommit": "09c9211e41da75969b9ee59e9954ac7465250e80",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "googleCredentialValidation": "passed-existing-staging-deployment-gate",
+    "productionInvariant": "passed",
+    "productionServerCommit": "09c9211e41da75969b9ee59e9954ac7465250e80",
+    "productionDockerHealth": "healthy",
+    "productionLiveHttpStatus": 200,
+    "productionReadyHttpStatus": 200,
+    "productionReadyRouteAvailable": true
+  },
+  "boundaries": {
+    "uploadedToStore": true,
+    "installedOnPhysicalDevice": true,
+    "controlledFcmSentToSyntheticAccount": true,
+    "controlledCrashDiagnosticSent": false,
+    "productionPushSent": false,
+    "productionCrashGenerated": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

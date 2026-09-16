@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-full-pilot-candidate-evidence",
+  "status": "technical-candidate-ready-pilot-blocked-v52-legal",
+  "recordedAt": "2026-09-02T02:42:00.000Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "artifactSourceHead": "e7b76f9e5d787e88fb46b6ad5a777d54f8066d63",
+    "workingTreeAtBuild": "clean",
+    "remoteDivergenceAtBuild": "0/0"
+  },
+  "android": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090202",
+    "minSdk": 24,
+    "targetSdk": 35,
+    "aabBytes": 108946667,
+    "aabSha256": "fa1105a630e5c2c050a61a1baa05bce0d0d102bfd711d057a2048709546a1a1b",
+    "apkBytes": 135647551,
+    "apkSha256": "8e82cda66a80f98b69dfb395bdea27322ae61f12a70abcf43d91a8a24e8bfa94",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "zipStructureValidation": "passed",
+    "bundletoolVersion": "1.18.1",
+    "bundletoolValidation": "passed",
+    "privacyReportSha256": "d467f9ff7c7f897846d8caa8946ad0c3a464911a104855d757269d20ca6f4b36",
+    "binaryPrivacyScan": "passed",
+    "ownerOnlyArchive": true
+  },
+  "staging": {
+    "sourceHead": "e7b76f9e5d787e88fb46b6ad5a777d54f8066d63",
+    "apiImage": "shareittoo-api:e7b76f9e5d787e88fb46b6ad5a777d54f8066d63",
+    "clientBuild": "1.0.0+2026090202",
+    "deploymentEvidence": "/docker/shareittoo/releases/staging-20260902T023654Z-e7b76f9e5d78.json",
+    "health": "passed",
+    "readiness": "passed",
+    "foreignKeyConstraintsVerified": 354,
+    "paymentTransport": "memory",
+    "paymentLivemode": false,
+    "listingAiProvider": "mock",
+    "externalListingAiEnabled": false
+  },
+  "legalGate": {
+    "manifestVersion": "V5.2-2026-08-16",
+    "manifestStatus": "draft-blocked",
+    "activationAllowed": false,
+    "effectiveDate": null,
+    "professionallyReviewed": false,
+    "professionalApprovalClaimAllowed": false,
+    "approvedSnapshotsProvisioned": false,
+    "acceptancePreflightError": "closed_pilot_v52_legal_snapshots_not_ready",
+    "activeFixturesAfterPreflight": 0,
+    "result": "PILOT_BLOCKED_LEGAL_GATE"
+  },
+  "verification": {
+    "focusedAcceptanceTests": "passed",
+    "fullLocalRegression": "passed",
+    "cleanCheckoutReproducibility": "passed",
+    "flutterTests": "passed-634-with-3-documented-skips",
+    "flutterAnalyzer": "passed-zero-issues",
+    "webWasm": "passed",
+    "loopbackSmoke": "passed",
+    "androidDebugBuild": "passed-448-tasks",
+    "githubVerifiedHead": null,
+    "githubRegressionRunId": null,
+    "githubRegressionConclusion": "pending",
+    "githubRegressionJobs": null,
+    "githubCodeqlRunId": null,
+    "githubCodeqlConclusion": "pending",
+    "openCodeScanningAlerts": null
+  },
+  "device": {
+    "model": "Pixel 7 Pro",
+    "installedVersion": "1.0.0+2026090202",
+    "installation": "passed-data-preserving-direct-update",
+    "installedApkHashMatched": true,
+    "candidateSignatureMatched": true,
+    "existingDataPreserved": true,
+    "signedOutGuestSession": "passed",
+    "guestCatalogOnline": "passed-server-confirmed-empty-state",
+    "offlineTruthfulError": "passed",
+    "onlineRecovery": "passed-after-validated-staging-reachability",
+    "processRestart": "passed-data-container-preserved",
+    "googlePlaySplitDelivery": "not-run-direct-apk-only",
+    "authenticatedPilotMatrix": "blocked-until-approved-v52-snapshots-exist",
+    "evidenceRef": "docs/evidence/release-readiness/pixel-direct-diagnostic-2026090202.json"
+  },
+  "play": {
+    "track": "internal",
+    "candidateUploaded": false,
+    "candidateActivated": false,
+    "activeInternalVersionCode": "2026082601",
+    "testerListCount": 2,
+    "testerListChanged": false
+  },
+  "repository": {
+    "pullRequest": 7,
+    "pullRequestDraft": true,
+    "pullRequestMerged": false
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "realMoneyEnabled": false,
+    "publicRegistrationEnabled": false,
+    "firebaseChanged": false,
+    "cloudVpsDnsChanged": false,
+    "externalProviderEnabled": false,
+    "playReleaseActivated": false
+  },
+  "containsSecrets": false,
+  "containsTesterIdentity": false
+}

@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "kind": "device-matrix-cell-progress",
+  "status": "testing",
+  "capturedAt": "2026-08-15T06:18:31.000Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081505",
+    "commit": "3908f5a3c300c1125c120c832f3050eea7a0a762",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "cell": {
+    "id": "android-wifi-owner",
+    "platform": "android",
+    "network": "wifi",
+    "role": "owner",
+    "deviceType": "physical",
+    "deviceModel": "Pixel 7 Pro",
+    "osVersion": "Android 16",
+    "storeInstall": "play-internal",
+    "screenReader": "talkback",
+    "tests": {
+      "installAndFirstStart": {
+        "status": "passed",
+        "checkedAt": "2026-08-15T05:47:42.597Z",
+        "summary": "Exakter Play-Split-Kandidat startete nach isoliertem App-Datenreset korrekt abgemeldet und stellte danach die synthetische Testsitzung wieder her.",
+        "evidenceRefs": [
+          "docs/evidence/b11/android-fresh-install-2026081505-20260815T054742Z.json"
+        ]
+      },
+      "authenticationAndSession": {
+        "status": "passed",
+        "checkedAt": "2026-08-15T04:08:08.258Z",
+        "summary": "Anmeldung, Profilzugriff und Kaltstart-Wiederherstellung bestanden auf der Play-Installation.",
+        "evidenceRefs": [
+          "docs/evidence/b11/android-authenticated-session-2026081505-20260815T040808Z.json"
+        ]
+      },
+      "listingAndBooking": {
+        "status": "passed",
+        "checkedAt": "2026-08-15T04:22:14.347Z",
+        "summary": "Synthetische Rollenbuchung durchlief Anfrage, Annahme, aktive Miete und Abschluss.",
+        "evidenceRefs": [
+          "docs/evidence/b11/android-synthetic-role-booking-2026081505-20260815T042214Z.json"
+        ]
+      },
+      "chatAndDeepLink": {
+        "status": "passed",
+        "checkedAt": "2026-08-15T04:22:14.347Z",
+        "summary": "Gemeinsamer Buchungschat und authentifizierte Inserat-, Buchungs- und Chat-Deep-Links bestanden.",
+        "evidenceRefs": [
+          "docs/evidence/b11/android-synthetic-role-booking-2026081505-20260815T042214Z.json",
+          "docs/evidence/b11/android-authenticated-deep-links-2026081505-20260815T040158Z.json"
+        ]
+      },
+      "pushForeground": {
+        "status": "passed",
+        "checkedAt": "2026-08-15T03:44:12.858Z",
+        "summary": "Kontrollierte FCM-Nachricht erschien bei geöffneter App.",
+        "evidenceRefs": [
+          "docs/evidence/b11/android-controlled-fcm-2026081505-20260815T034412Z.json"
+        ]
+      },
+      "pushBackground": {
+        "status": "passed",
+        "checkedAt": "2026-08-15T03:44:12.858Z",
+        "summary": "Kontrollierte FCM-Nachricht erschien im Android-Hintergrund als Systembenachrichtigung.",
+        "evidenceRefs": [
+          "docs/evidence/b11/android-controlled-fcm-2026081505-20260815T034412Z.json"
+        ]
+      },
+      "pushTerminated": {
+        "status": "passed",
+        "checkedAt": "2026-08-15T03:44:12.858Z",
+        "summary": "Kontrollierte FCM-Nachricht erschien nach vollständig beendetem App-Prozess.",
+        "evidenceRefs": [
+          "docs/evidence/b11/android-controlled-fcm-2026081505-20260815T034412Z.json"
+        ]
+      },
+      "handoverAndReturn": {
+        "status": "passed",
+        "checkedAt": "2026-08-15T04:22:14.347Z",
+        "summary": "Versionierte Übergabe- und Rückgabe-Gegenbestätigung bestanden für beide synthetischen Rollen.",
+        "evidenceRefs": [
+          "docs/evidence/b11/android-synthetic-role-booking-2026081505-20260815T042214Z.json"
+        ]
+      },
+      "moderationAndAccount": {
+        "status": "testing",
+        "checkedAt": "2026-08-15T04:38:57.166Z",
+        "summary": "Melden, Blockieren, Datenexport und sichere Abmeldung bestanden; die irreversible Löschung eines gesonderten Wegwerf-Testkontos bleibt offen.",
+        "evidenceRefs": [
+          "docs/evidence/b11/store-review-safety-actions-2026081505-20260815T043857Z.json",
+          "docs/evidence/b11/android-logout-lifecycle-2026081505-20260815T035502Z.json"
+        ]
+      },
+      "offlineRecovery": {
+        "status": "passed",
+        "checkedAt": "2026-08-15T04:05:14.223Z",
+        "summary": "Nachricht blieb offline verborgen und erschien nach Netzrückkehr im selben laufenden Prozess.",
+        "evidenceRefs": [
+          "docs/evidence/b11/android-offline-realtime-2026081505-20260815T040514Z.json"
+        ]
+      },
+      "largeTextAndScreenReader": {
+        "status": "testing",
+        "checkedAt": "2026-08-15T06:22:45.000Z",
+        "summary": "TalkBack und 200-Prozent-Schrift wurden auf dem exakten Play-Build gleichzeitig erkannt; die eigentliche App-Traversierung bleibt nach dem erstmaligen Android-TalkBack-Einführungsbildschirm offen.",
+        "evidenceRefs": [
+          "docs/evidence/b11/android-accessibility-preflight-2026081505-20260815T062245Z.json"
+        ]
+      }
+    }
+  },
+  "boundaries": {
+    "fullCellPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "largeTextPassed": false,
+    "disposableAccountDeleted": false,
+    "hotspotPassed": false,
+    "iosValidated": false,
+    "productionChanged": false,
+    "paymentEndpointCalled": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

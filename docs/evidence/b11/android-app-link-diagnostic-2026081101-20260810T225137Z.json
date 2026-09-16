@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-direct-app-link-diagnostic",
+  "status": "passed-bounded-app-link-diagnostic",
+  "capturedAt": "2026-08-10T22:51:37.037Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081101",
+    "commit": "3f28e43a18b3733e617b695f9dbc794370f6e05b",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "installed": {
+    "packageIdentityVerified": true,
+    "versionName": "1.0.0",
+    "buildNumber": "2026081101",
+    "apkSha256": "eb87f839e1c8d169f3e9e774e3d0261f3d1196481d0d4ecdc97f65700247601d"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "verifiedHttpsMissingListing": {
+      "status": "passed",
+      "result": "safe-listing-unavailable-surface"
+    },
+    "customSchemeGuestChat": {
+      "status": "passed",
+      "result": "authentication-required-surface"
+    },
+    "unsafeIdentifierRejected": {
+      "status": "passed",
+      "result": "guest-start-preserved"
+    },
+    "foreignHostNotAssociated": {
+      "status": "passed",
+      "result": "shareittoo-package-absent"
+    }
+  },
+  "boundaries": {
+    "directDiagnosticOnly": true,
+    "storeInstallationGateSatisfied": false,
+    "manualFunctionalMatrixPassed": false,
+    "authenticatedDeepLinksPassed": false,
+    "realPushPassed": false,
+    "lockCodeUsed": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-stage-a-blue-ocean-n2-listing-ai-foundation",
+  "status": "verified-ready-for-n3",
+  "capturedAt": "2026-08-23T21:14:06Z",
+  "implementationBaseHead": "fc09e238b4d07e9c4d6aab1cf27fac865cf5087a",
+  "exactGitHubVerification": {
+    "headSha": "8bbef0bcc118ac8b1bf8b606c0795cbf16ba2e90",
+    "regressionRunId": 32666454117,
+    "regressionConclusion": "success",
+    "codeqlRunId": 32666454108,
+    "codeqlConclusion": "success"
+  },
+  "domain": {
+    "domainVersion": "N2-2026-08-23.1",
+    "schemaVersion": "listing-ai-draft-v1",
+    "promptVersion": "listing-ai-prompt-v1",
+    "priceEngineAuthority": "SIT_REGIONAL_PRICE_ENGINE_V2",
+    "generatedFieldCount": 13,
+    "ownerConfirmationCount": 11,
+    "maximumImageCount": 4,
+    "maximumClarificationCount": 3,
+    "lowConfidenceValueBlank": true,
+    "mediumConfidenceReviewRequired": true,
+    "functionalityConfirmationBlocksReadiness": true,
+    "explicitOwnerPublicationRequired": true,
+    "autoPublishAllowed": false
+  },
+  "storageFoundations": [
+    "listing_ai_drafts",
+    "listing_ai_draft_versions",
+    "listing_ai_analysis_derivatives",
+    "regional_market_observations",
+    "regional_price_engine_snapshots",
+    "listing_ai_cost_ledger",
+    "listing_ai_budget_aggregates"
+  ],
+  "preservedInvariants": {
+    "manualListingCreationPreserved": true,
+    "historicalListingsRewritten": false,
+    "existingListingSchemaAltered": false,
+    "existingPhotosChanged": false,
+    "exactAddressInMarketObservationAllowed": false,
+    "providerPriceAuthoritative": false,
+    "paidCallPerformed": false,
+    "applicationWriterEnabled": false,
+    "publicRouteEnabled": false
+  },
+  "lifecycle": {
+    "draftRevisionsAppendOnly": true,
+    "derivativeTransitionsForwardOnly": true,
+    "derivativePurgeTerminal": true,
+    "privacyErasureCascadePreserved": true,
+    "rollbackBlockedWhenDataExists": true,
+    "privacyExportIntegrationRequiredBeforeActivation": true,
+    "retentionInventoryIntegrationRequiredBeforeActivation": true,
+    "accountErasureIntegrationRequiredBeforeActivation": true,
+    "integrationPackage": "N8"
+  },
+  "targetedVerification": {
+    "domainSyntax": "passed",
+    "domainTests": "passed-9",
+    "artifactValidatorTests": "passed-6",
+    "artifactValidator": "passed",
+    "backendSuite": "passed-614-one-documented-skip",
+    "postgres16MigrationIntegration": "passed",
+    "flutterSuite": "passed-387-one-documented-skip",
+    "webDebugAndSmoke": "passed",
+    "androidDebugAndMinSdk24": "passed",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed"
+  },
+  "nextPackage": "N3",
+  "boundaries": {
+    "providerCallPerformed": false,
+    "billingActivated": false,
+    "realPersonDataUsed": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "appleChanged": false,
+    "realMoneyEnabled": false,
+    "publicReleasePerformed": false,
+    "listingAutoPublished": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false
+  }
+}

@@ -1,6 +1,5 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:lendify/models/category.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:provider/provider.dart';
 import 'package:lendify/widgets/selection_controls.dart';
@@ -58,55 +57,6 @@ class _FiltersSheet extends StatefulWidget {
 }
 
 class _FiltersSheetState extends State<_FiltersSheet> {
-  IconData _iconFromName(String name) {
-    switch (name) {
-      case 'devices':
-        return Icons.devices;
-      case 'computer':
-        return Icons.computer;
-      case 'camera_alt':
-        return Icons.camera_alt;
-      case 'sports_esports':
-        return Icons.sports_esports;
-      case 'kitchen':
-        return Icons.kitchen;
-      case 'weekend':
-        return Icons.weekend;
-      case 'grass':
-        return Icons.grass;
-      case 'construction':
-        return Icons.construction;
-      case 'pedal_bike':
-        return Icons.pedal_bike;
-      case 'directions_car':
-        return Icons.directions_car;
-      case 'sports_soccer':
-        return Icons.sports_soccer;
-      case 'checkroom':
-        return Icons.checkroom;
-      case 'child_friendly':
-        return Icons.child_friendly;
-      case 'music_note':
-        return Icons.music_note;
-      case 'menu_book':
-        return Icons.menu_book;
-      case 'watch':
-        return Icons.watch;
-      case 'palette':
-        return Icons.palette;
-      case 'spa':
-        return Icons.spa;
-      case 'pets':
-        return Icons.pets;
-      case 'business_center':
-        return Icons.business_center;
-      case 'more_horiz':
-        return Icons.more_horiz;
-      default:
-        return Icons.category;
-    }
-  }
-
   RangeValues _price = const RangeValues(0, 500);
   String _priceUnit = 'day'; // 'hour' | 'day' | 'week'
   double _distance = 25;
@@ -140,10 +90,10 @@ class _FiltersSheetState extends State<_FiltersSheet> {
   bool _minCleared = false;
   bool _maxCleared = false;
   // Ort
-  String _locationMode = 'registered'; // 'gps' | 'address' | 'registered'
+  final String _locationMode = 'registered'; // 'gps' | 'address' | 'registered'
   final TextEditingController _addressCtrl = TextEditingController();
   String? _registeredCity;
-  String _distanceBias = 'near'; // 'near' | 'far'
+  final String _distanceBias = 'near'; // 'near' | 'far'
 
   @override
   void initState() {
@@ -208,17 +158,22 @@ class _FiltersSheetState extends State<_FiltersSheet> {
     final g = group.toLowerCase();
     if (g.contains('technik')) return Icons.devices;
     if (g.contains('haushalt') || g.contains('wohnen')) return Icons.weekend;
-    if (g.contains('fahrzeuge') || g.contains('mobil'))
+    if (g.contains('fahrzeuge') || g.contains('mobil')) {
       return Icons.directions_car;
+    }
     if (g.contains('mode') || g.contains('lifestyle')) return Icons.checkroom;
-    if (g.contains('sport') || g.contains('hobby') || g.contains('hobb'))
+    if (g.contains('sport') || g.contains('hobby') || g.contains('hobb')) {
       return Icons.sports_soccer;
+    }
     if (g.contains('werkzeuge') ||
         g.contains('geräte') ||
-        g.contains('geraete')) return Icons.construction;
+        g.contains('geraete')) {
+      return Icons.construction;
+    }
     if (g.contains('garten') || g.contains('hof')) return Icons.grass;
-    if (g.contains('büro') || g.contains('buero') || g.contains('gewerbe'))
+    if (g.contains('büro') || g.contains('buero') || g.contains('gewerbe')) {
       return Icons.business_center;
+    }
     if (g.contains('baby') || g.contains('kinder')) return Icons.child_friendly;
     if (g.contains('haustier')) return Icons.pets;
     return Icons.category;
@@ -243,51 +198,6 @@ class _FiltersSheetState extends State<_FiltersSheet> {
     });
   }
 
-  Future<void> _pickSort() async {
-    final l10n = context.read<LocalizationController>();
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final sel = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: isDark ? Colors.black : AppTheme.surfacePrimary(context),
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => SafeArea(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const SizedBox(height: 12),
-        Container(
-            width: 44,
-            height: 4,
-            decoration: BoxDecoration(
-                color: AppTheme.textDisabled(context), borderRadius: BorderRadius.circular(2))),
-        // Preis first as default/primary choice
-        ListTile(
-            leading: Icon(Icons.euro, color: AppTheme.textSecondary(context)),
-            title: Text(l10n.t('Preis'),
-                style: TextStyle(color: AppTheme.textPrimary(context), fontWeight: FontWeight.w600)),
-            onTap: () => Navigator.pop(context, 'Preis')),
-        ListTile(
-            leading: Icon(Icons.place, color: AppTheme.textSecondary(context)),
-            title: Text(l10n.t('Entfernung'),
-                style: TextStyle(color: AppTheme.textPrimary(context), fontWeight: FontWeight.w600)),
-            onTap: () => Navigator.pop(context, 'Entfernung')),
-        ListTile(
-            leading: Icon(Icons.star, color: AppTheme.textSecondary(context)),
-            title: Text(l10n.t('Bewertung'),
-                style: TextStyle(color: AppTheme.textPrimary(context), fontWeight: FontWeight.w600)),
-            onTap: () => Navigator.pop(context, 'Bewertung')),
-        ListTile(
-            leading: Icon(Icons.schedule, color: AppTheme.textSecondary(context)),
-            title: Text(l10n.t('Neueste'),
-                style: TextStyle(color: AppTheme.textPrimary(context), fontWeight: FontWeight.w600)),
-            onTap: () => Navigator.pop(context, 'Neueste')),
-        const SizedBox(height: 8),
-      ])),
-    );
-    if (sel == null) return;
-    setState(() => _sort = sel);
-  }
-
   void _syncPriceFromText() {
     final min =
         double.tryParse(_minCtrl.text.replaceAll(',', '.')) ?? _price.start;
@@ -299,20 +209,6 @@ class _FiltersSheetState extends State<_FiltersSheet> {
     final orderedMax = clampedMax >= clampedMin ? clampedMax : clampedMin;
     setState(() =>
         _price = RangeValues(orderedMin.toDouble(), orderedMax.toDouble()));
-  }
-
-  IconData _sortIcon(String s) {
-    switch (s) {
-      case 'Preis':
-        return Icons.euro;
-      case 'Bewertung':
-        return Icons.star;
-      case 'Neueste':
-        return Icons.schedule;
-      case 'Entfernung':
-      default:
-        return Icons.place;
-    }
   }
 
   @override
@@ -866,191 +762,6 @@ class _Section extends StatelessWidget {
         const SizedBox(height: 6),
         child,
       ]),
-    );
-  }
-}
-
-class _FieldButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  const _FieldButton(
-      {required this.label, required this.icon, required this.onTap});
-  @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            child: Row(children: [
-              Icon(icon, size: 18, color: primary),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: Text(label,
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: primary),
-                      overflow: TextOverflow.ellipsis)),
-            ])));
-  }
-}
-
-class _ChoiceChip extends StatelessWidget {
-  final String value;
-  final String label;
-  final String group;
-  final ValueChanged<String> onChanged;
-  const _ChoiceChip(
-      {required this.value,
-      required this.label,
-      required this.group,
-      required this.onChanged});
-  @override
-  Widget build(BuildContext context) {
-    final selected = value == group;
-    return ChoiceChip(
-      label: Text(label,
-          style: TextStyle(color: selected ? Colors.black : AppTheme.textBody(context))),
-      selected: selected,
-      showCheckmark: false,
-      onSelected: (_) => onChanged(value),
-      selectedColor: Theme.of(context).colorScheme.primary,
-      backgroundColor: AppTheme.surfaceMuted(context),
-      shape: StadiumBorder(
-          side: BorderSide(color: AppTheme.glassStroke(context))),
-    );
-  }
-}
-
-class _FilterToggleChip extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  final IconData? icon;
-  final bool dense;
-  const _FilterToggleChip(
-      {required this.label,
-      required this.value,
-      required this.onChanged,
-      this.icon,
-      this.dense = false});
-  @override
-  Widget build(BuildContext context) {
-    final selected = value;
-    final primary = Theme.of(context).colorScheme.primary;
-    final iconSize = dense ? 12.0 : 14.0;
-    final fontSize = dense ? 11.0 : 14.0;
-    final hPad = dense ? 8.0 : 12.0;
-    final vPad = dense ? 4.0 : 6.0;
-    return FilterChip(
-      label: Padding(
-        padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (icon != null) ...[
-            Icon(icon,
-                size: iconSize, color: selected ? Colors.black : AppTheme.textBody(context)),
-            const SizedBox(width: 6),
-          ],
-          Text(label,
-              style: TextStyle(
-                  color: selected ? Colors.black : AppTheme.textBody(context),
-                  fontSize: fontSize,
-                  fontWeight: FontWeight.w600)),
-        ]),
-      ),
-      visualDensity: dense
-          ? const VisualDensity(horizontal: -3, vertical: -3)
-          : VisualDensity.standard,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      selected: selected,
-      onSelected: (v) => onChanged(v),
-      selectedColor: primary,
-      backgroundColor: AppTheme.surfaceMuted(context),
-      showCheckmark: false,
-      shape: StadiumBorder(
-          side: BorderSide(color: AppTheme.glassStroke(context))),
-    );
-  }
-}
-
-class _ClearPill extends StatelessWidget {
-  final bool active;
-  final VoidCallback onTap;
-  final String label;
-  const _ClearPill(
-      {required this.active, required this.onTap, required this.label});
-  @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    final bg = active ? primary : AppTheme.surfaceMuted(context);
-    final fg = active ? Colors.black : AppTheme.textBody(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppTheme.glassStroke(context)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.clear_all, size: 14, color: fg),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(color: fg, fontWeight: FontWeight.w600)),
-        ]),
-      ),
-    );
-  }
-}
-
-class _RoundCheckboxRow extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  final bool small;
-  const _RoundCheckboxRow(
-      {required this.label,
-      required this.value,
-      required this.onChanged,
-      this.small = false});
-  @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    final textStyle = TextStyle(
-      color: AppTheme.textBody(context),
-      fontWeight: FontWeight.w600,
-      fontSize: small ? 12 : 14,
-      height: 1.25,
-    );
-    return InkWell(
-      onTap: () => onChanged(!value),
-      borderRadius: BorderRadius.circular(10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          Transform.scale(
-            scale: small ? 0.85 : 1.0,
-            child: Checkbox(
-              value: value,
-              onChanged: (v) => onChanged(v ?? false),
-              shape: const CircleBorder(),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              visualDensity: const VisualDensity(horizontal: -3, vertical: -3),
-              side: BorderSide(color: AppTheme.glassStroke(context)),
-              activeColor: primary,
-              checkColor: Colors.black,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-              child: Text(label,
-                  style: textStyle, overflow: TextOverflow.ellipsis)),
-        ]),
-      ),
     );
   }
 }

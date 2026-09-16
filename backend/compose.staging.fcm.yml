@@ -1,0 +1,15 @@
+services:
+  api:
+    environment:
+      PUSH_TRANSPORT: fcm
+      FIREBASE_AUTH_ENABLED: ${FIREBASE_AUTH_ENABLED:-false}
+      FIREBASE_PHONE_VERIFICATION_ENABLED: ${FIREBASE_PHONE_VERIFICATION_ENABLED:-false}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:?FIREBASE_PROJECT_ID must be set for the staging FCM override}
+      FIREBASE_SERVICE_ACCOUNT_FILE: /run/secrets/firebase-service-account.json
+    volumes:
+      - type: bind
+        source: ${FIREBASE_SERVICE_ACCOUNT_HOST_FILE:?FIREBASE_SERVICE_ACCOUNT_HOST_FILE must be set for the staging FCM override}
+        target: /run/secrets/firebase-service-account.json
+        read_only: true
+        bind:
+          create_host_path: false

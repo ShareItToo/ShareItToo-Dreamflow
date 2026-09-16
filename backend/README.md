@@ -16,10 +16,25 @@ The API is exposed through the existing Caddy instance at `/api`.
 
 ## Local checks
 
+From the repository root on macOS, install or verify the repository-pinned
+free Backend toolchain first:
+
 ```sh
+bash scripts/bootstrap_macos_backend_toolchain.sh
+bash scripts/bootstrap_macos_backend_toolchain.sh --check
+```
+
+The script installs Homebrew Node 22 when missing and activates exactly
+`pnpm@11.16.0` through Corepack. It does not configure or contact any SIT
+environment.
+
+```sh
+cd backend
 pnpm install
 pnpm test
 pnpm run check
+pnpm run security:secrets
+pnpm run test:postgres:local
 ```
 
 ## Required production secrets

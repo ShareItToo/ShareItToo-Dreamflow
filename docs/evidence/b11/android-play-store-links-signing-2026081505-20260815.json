@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "kind": "release-check",
+  "status": "passed",
+  "capturedAt": "2026-08-15T03:34:51Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081505",
+    "commit": "3908f5a3c300c1125c120c832f3050eea7a0a762",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "releaseCheck": {
+    "id": "storeWarningsLinksAndSigning",
+    "status": "passed",
+    "verifications": [
+      {
+        "id": "google-play-internal-release",
+        "status": "passed",
+        "checkedAt": "2026-08-15T03:34:51Z",
+        "summary": "Google Play exposes the exact candidate to internal testers without a technical release blocker. The app remains explicitly unreviewed and uses its temporary name."
+      },
+      {
+        "id": "google-play-installed-candidate-identity",
+        "status": "passed",
+        "checkedAt": "2026-08-15T03:34:51Z",
+        "summary": "The physical Android device runs version 1.0.0 build 2026081505 as a com.android.vending installation."
+      },
+      {
+        "id": "play-app-signing-certificate",
+        "status": "passed",
+        "checkedAt": "2026-08-15T03:34:51Z",
+        "summary": "Android reports the expected Google Play App Signing certificate for the installed package."
+      },
+      {
+        "id": "public-android-asset-links",
+        "status": "passed",
+        "checkedAt": "2026-08-15T03:34:51Z",
+        "summary": "Production, www and staging publish the same valid asset-links document for both required signing certificates."
+      },
+      {
+        "id": "android-domain-verification",
+        "status": "passed",
+        "checkedAt": "2026-08-15T03:34:51Z",
+        "summary": "Android reports shareittoo.com, www.shareittoo.com and staging.shareittoo.com as verified for the Store-installed package."
+      },
+      {
+        "id": "public-support-privacy-deletion-routes",
+        "status": "passed",
+        "checkedAt": "2026-08-15T03:34:51Z",
+        "summary": "Support, privacy and account-deletion routes return their intended public SIT pages with restrictive response headers."
+      }
+    ]
+  },
+  "artifacts": {
+    "aabSha256": "28fe6751ab928bbb2a52aa93239deabbefec25b7c209b67a75d5cb33123a2191",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "playAppSigningCertificateSha256": "36488abf86c51da07ab2258f31b00e2f1ba8a36d076107b9f006376ade80b956",
+    "assetLinksSha256": "f2067fe785d96cc9b7c177d005eeb6a0654b8763bb4ca9ddfcb64557062666a7",
+    "supportPageSha256": "49a0ee56511eb7b8cefdea9cedc503f865a4a6313697db1dae531792ad71c854",
+    "privacyPageSha256": "627b395562ea5e4711d697e19d0d65616304367dbc7b04424b1ca15349654ed1",
+    "accountDeletionPageSha256": "177e0e2de4c2d9b024ad1b6cc9c4dd35ae18a62a3fb131ea82185bc13ddc1b6f"
+  },
+  "playConsoleObservation": {
+    "source": "signed-in-console-read-only",
+    "latestRelease": "1.0.0-internal-2026081505",
+    "availableToInternalTesters": true,
+    "technicalReleaseBlockerVisible": false,
+    "temporaryAppNameVisible": true,
+    "releaseReviewed": false,
+    "productionSubmissionClaimed": false
+  },
+  "boundaries": {
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true,
+    "productionBackendChanged": false,
+    "stagingBackendChanged": false,
+    "appBinaryChanged": false,
+    "paymentsChanged": false,
+    "dnsChanged": false,
+    "mailChanged": false,
+    "storeSettingsChanged": false,
+    "publicReleaseClaimed": false,
+    "legalReviewComplete": false
+  }
+}

@@ -1,0 +1,478 @@
+{
+  "schemaVersion": 1,
+  "kind": "p0b-pilot-go-no-go-dossier",
+  "state": "hold-hard-gates",
+  "decision": "no_go_now",
+  "observedOn": "2026-08-21",
+  "source": {
+    "drivePackage": {
+      "id": "1d3JJLq-X36u9IwfhyhtNm1QYH38urVEq",
+      "title": "02_CODEX_WORK_PACKAGES_SIT_V2.4.md",
+      "modifiedAt": "2026-08-20T19:13:40.661Z"
+    },
+    "driveDocuments": [
+      {
+        "id": "1HQR2EWJg6FUcU41l5uwditfFzNoCe6Zx",
+        "title": "01_V5.2_CORE_SPECIFICATION.md",
+        "modifiedAt": "2026-08-18T17:51:27.257Z"
+      },
+      {
+        "id": "1kKuZl9OJ4nb9F02E8fepTxY8O-GZBkn2",
+        "title": "02_V5.2_RECHTSMAPPE_PRIVATLAUNCH.pdf",
+        "modifiedAt": "2026-08-18T17:51:36.056Z"
+      },
+      {
+        "id": "1z9GdNlilUrpq1P34lrXdqv6RmJHYSQfJ",
+        "title": "01_SIT_MASTER_V2_DEUTSCHLAND_ZU_GLOBAL.pdf",
+        "modifiedAt": "2026-08-18T17:52:13.985Z"
+      },
+      {
+        "id": "1R_JeRkFXTsFVusKlqeM5wS2-MZAV0fdx",
+        "title": "02_SIT_Growth_Product_Projektkorb_und_SIT_Planer.docx",
+        "modifiedAt": "2026-08-18T13:41:16.606Z"
+      },
+      {
+        "id": "1UdwK9GB79Zlt1jIKcWoG43J8LQezJDdE",
+        "title": "04_SIT_BUSINESS_PRODUKTSTRATEGIE_UND_WACHSTUMSGATE.pdf",
+        "modifiedAt": "2026-08-18T17:53:25.006Z"
+      }
+    ],
+    "p0aImplementationCommit": "540583829361a402066f85c81716ba60d7d475cc",
+    "p0aCiRun": "32433274526",
+    "p0aSyntheticMerge": "6bff2509868afd3be4f5ac8ad3829d589e7f186d",
+    "repoEvidenceRefs": [
+      "docs/current_state.md",
+      "docs/evidence/p0a/closed-pilot-readiness-matrix.json",
+      "store/legal-readiness.json",
+      "store/privacy-disclosures.json",
+      "store/retention-deletion-readiness.json",
+      "docs/operations/founder-independence-guardrails.json",
+      "docs/operations/fi1-operational-delegation.json",
+      "docs/compliance/u0-pilot-cockpit-unit-economics-2026-08-20.md"
+    ]
+  },
+  "constraints": {
+    "pilotActivationAllowed": false,
+    "publicRegistrationAllowed": false,
+    "realMoneyAllowed": false,
+    "liveProviderTrafficAllowed": false,
+    "productionMutationAllowed": false,
+    "storeSubmissionAllowed": false,
+    "signedCandidateAllowed": false,
+    "accountPermissionChangeAllowed": false,
+    "autoContinueAllowed": false
+  },
+  "featureMatrix": [
+    {
+      "id": "v52_single_item_core",
+      "implementationState": "implemented",
+      "runtimeState": "hold-not-activated",
+      "productionDefault": "off",
+      "publicReleaseAllowed": false,
+      "readiness": "hold",
+      "reason": "technical regression is green but legal, payment, operations, signed-device and activation gates remain open",
+      "evidenceRefs": [
+        "backend/src/v52_contract_workflow.js",
+        "backend/src/booking_workflow.js",
+        "backend/src/v52_handover_return_workflow.js"
+      ]
+    },
+    {
+      "id": "g2_navigation_cart_and_gemerkt",
+      "implementationState": "implemented",
+      "runtimeState": "technical-product-surface",
+      "productionDefault": "unchanged-no-pilot-activation",
+      "publicReleaseAllowed": false,
+      "readiness": "hold",
+      "reason": "navigation and non-reserving cart are technically complete but inherit the core pilot gates",
+      "evidenceRefs": [
+        "backend/src/rental_cart_workflow.js",
+        "store/g2-data-lifecycle.json"
+      ]
+    },
+    {
+      "id": "g3_same_owner_booking_groups",
+      "implementationState": "implemented-technical",
+      "runtimeState": "disabled",
+      "productionDefault": "off",
+      "publicReleaseAllowed": false,
+      "readiness": "hold",
+      "reason": "professional G3 legal delta review and public release gate are open",
+      "evidenceRefs": [
+        "backend/src/booking_group_workflow.js",
+        "assets/legal/de/legal_manifest_g3l_draft.json"
+      ]
+    },
+    {
+      "id": "g4_deterministic_planner_and_inventory",
+      "implementationState": "implemented-technical",
+      "runtimeState": "disabled",
+      "productionDefault": "off",
+      "publicReleaseAllowed": false,
+      "readiness": "hold",
+      "reason": "planner and inventory resolution remain internal, non-reserving and production-rejected",
+      "evidenceRefs": [
+        "backend/src/planner_core.js",
+        "backend/src/planner_inventory_workflow.js"
+      ]
+    },
+    {
+      "id": "g5_supply_enrichment",
+      "implementationState": "implemented-technical",
+      "runtimeState": "disabled",
+      "productionDefault": "off",
+      "publicReleaseAllowed": false,
+      "readiness": "hold",
+      "reason": "deterministic enrichment is fail-open for listings but is not authorized for public release",
+      "evidenceRefs": [
+        "backend/src/listing_supply_enrichment.js"
+      ]
+    },
+    {
+      "id": "g5_listing_sets",
+      "implementationState": "implemented-technical",
+      "runtimeState": "disabled",
+      "productionDefault": "off",
+      "publicReleaseAllowed": false,
+      "readiness": "hold",
+      "reason": "sets remain individually bookable technical structures and have no public activation",
+      "evidenceRefs": [
+        "backend/src/listing_set_workflow.js"
+      ]
+    },
+    {
+      "id": "u0_pilot_cockpit",
+      "implementationState": "implemented-read-only",
+      "runtimeState": "admin-step-up-only",
+      "productionDefault": "no-public-ui",
+      "publicReleaseAllowed": false,
+      "readiness": "hold",
+      "reason": "cockpit is technically available but the required economics and founder aggregates are unavailable",
+      "evidenceRefs": [
+        "backend/src/pilot_cockpit.js"
+      ]
+    },
+    {
+      "id": "fi1_operational_delegation",
+      "implementationState": "role-model-and-runbooks-only",
+      "runtimeState": "hold",
+      "productionDefault": "no-assignments",
+      "publicReleaseAllowed": false,
+      "readiness": "blocked",
+      "reason": "real owner/delegate assignments, company RBAC and absence tests are missing",
+      "evidenceRefs": [
+        "docs/operations/fi1-operational-delegation.json"
+      ]
+    },
+    {
+      "id": "p0a_technical_readiness",
+      "implementationState": "implemented-and-ci-verified",
+      "runtimeState": "hold",
+      "productionDefault": "no-activation",
+      "publicReleaseAllowed": false,
+      "readiness": "hold",
+      "reason": "thirteen cells passed but current-source physical-device evidence remains blocked",
+      "evidenceRefs": [
+        "docs/evidence/p0a/closed-pilot-readiness-matrix.json"
+      ]
+    },
+    {
+      "id": "sit_business",
+      "implementationState": "strategy-only",
+      "runtimeState": "not-implemented",
+      "productionDefault": "off",
+      "publicReleaseAllowed": false,
+      "readiness": "not_authorized",
+      "reason": "C2C success, B2C legal, KYC, tax, payment and business workspace gates are unmet",
+      "evidenceRefs": [
+        "runtime:drive-04-sit-business-growth-gate"
+      ]
+    },
+    {
+      "id": "multi_provider_projects",
+      "implementationState": "not-implemented",
+      "runtimeState": "not-available",
+      "productionDefault": "off",
+      "publicReleaseAllowed": false,
+      "readiness": "not_authorized",
+      "reason": "separate contracts, handovers, recipients, refunds and ledger paths require a later G6 gate",
+      "evidenceRefs": [
+        "runtime:drive-growth-product-multi-provider-later-stage"
+      ]
+    },
+    {
+      "id": "external_ai_and_control_tower",
+      "implementationState": "not-implemented-for-production",
+      "runtimeState": "disabled",
+      "productionDefault": "off",
+      "publicReleaseAllowed": false,
+      "readiness": "not_authorized",
+      "reason": "external AI, support pilot and regional orchestration require later privacy, eval and kill-switch gates",
+      "evidenceRefs": [
+        "runtime:drive-master-g9-g10"
+      ]
+    },
+    {
+      "id": "global_country_launch",
+      "implementationState": "strategy-only",
+      "runtimeState": "not-available",
+      "productionDefault": "off",
+      "publicReleaseAllowed": false,
+      "readiness": "not_authorized",
+      "reason": "Germany PMF, positive unit economics, stable automation and country-specific legal/payment/tax gates are absent",
+      "evidenceRefs": [
+        "runtime:drive-master-country-readiness"
+      ]
+    }
+  ],
+  "legalReview": {
+    "required": true,
+    "state": "open-hard-gate",
+    "sourceStatus": "V5.2-decision-draft-not-professionally-approved",
+    "runtimeManifestState": "draft-active-v51-interim-with-v52-machinery-present",
+    "reviewScopes": [
+      "operator-ug-registration-imprint-and-provider-identity",
+      "v52-parts-a-through-i-public-texts-and-durable-confirmation",
+      "quote-checkout-button-acceptance-and-contract-sequence",
+      "withdrawal-cancellation-no-show-and-actual-loss",
+      "marketplace-psp-payment-payout-refund-and-chargeback-model",
+      "handover-return-damage-and-needs-review",
+      "privacy-processors-transfers-firebase-maps-smtp-hosting-and-psp",
+      "retention-erasure-legal-holds-and-incident-process",
+      "dsa-community-moderation-ranking-and-review-process",
+      "g3-same-owner-multi-item-document-delta",
+      "future-business-b2c-and-country-specific-global-variants"
+    ],
+    "approvedContentHashesAvailable": false,
+    "approvedPublicUrlsAvailable": false,
+    "professionalApprovalEvidenceAvailable": false,
+    "mayBeInferredFromTechnicalTests": false
+  },
+  "paymentAndProvider": {
+    "state": "blocked",
+    "productionDefault": "disabled",
+    "stagingDefault": "memory",
+    "stripeLivemode": false,
+    "realMoneyAuthorized": false,
+    "liveProviderTrafficExecuted": false,
+    "marketplacePspContract": "open",
+    "providerLegalAndDpaFacts": "open",
+    "ownerOnboardingAndKyc": "open",
+    "sandboxEndToEnd": "not-started",
+    "captureRefundPayoutChargebackEvidence": "not-available",
+    "rentMoneyToSitAccountAllowed": false,
+    "damageCaptureAllowed": false
+  },
+  "operations": {
+    "state": "blocked",
+    "functionalRoleCount": 6,
+    "assignedRoleCount": 0,
+    "assignedDelegateCount": 0,
+    "delegatedProcessCount": 4,
+    "readyProcessCount": 0,
+    "absenceTestsPassed": 0,
+    "minimumBusFactorTarget": 2,
+    "minimumBusFactorEvidenced": false,
+    "companySystemOwnership": "open",
+    "companyAccountRbac": "open",
+    "namedPersonDependencyAllowed": false,
+    "founderAutomaticEscalationAllowed": false
+  },
+  "economicsAndFounderIndependence": {
+    "state": "unavailable",
+    "profitability": "undetermined",
+    "positiveUnitEconomicsEvidenced": false,
+    "actualPilotPeriodAvailable": false,
+    "providerFees": "unavailable",
+    "vatComponent": "unavailable",
+    "cloudCosts": "unavailable",
+    "founderHours": "unavailable",
+    "founderReplacementRate": "unavailable",
+    "cartToBookingAttribution": "unavailable",
+    "disabledConfiguredCostClasses": [
+      "kyc",
+      "fraud",
+      "external-ai",
+      "marketing"
+    ],
+    "disabledConfiguredZeroIsActualCostEvidence": false,
+    "planningTargets": {
+      "aovEurBand": [
+        45,
+        55
+      ],
+      "successfulHandoverRateMinimumPercent": 95,
+      "severeDisputeRateMaximumPercent": 2,
+      "repeatBooking90DayMinimumPercent": 25,
+      "targetsAreObservedResults": false
+    }
+  },
+  "knownDefectsAndResidualRisk": [
+    {
+      "id": "legal_manifest_interim_drift",
+      "class": "blocker",
+      "state": "open",
+      "detail": "store legal readiness remains a draft with active V5.1 interim metadata while V5.2 contract machinery exists"
+    },
+    {
+      "id": "professional_legal_review_missing",
+      "class": "blocker",
+      "state": "open",
+      "detail": "V5.2 and G3 legal deltas have no professional approval evidence"
+    },
+    {
+      "id": "operator_and_provider_facts_incomplete",
+      "class": "blocker",
+      "state": "open",
+      "detail": "registered operator, public legal URLs, hosting, SMTP, PSP and related contract facts are incomplete or unapproved"
+    },
+    {
+      "id": "payment_provider_not_ready",
+      "class": "blocker",
+      "state": "open",
+      "detail": "no authorized licensed marketplace PSP contract, onboarding, sandbox E2E or real-money evidence"
+    },
+    {
+      "id": "pilot_region_not_configured",
+      "class": "blocker",
+      "state": "open",
+      "detail": "PRIVATE_PILOT_ALLOWED_REGIONS defaults empty in both Compose profiles"
+    },
+    {
+      "id": "current_source_physical_device_unbound",
+      "class": "blocker",
+      "state": "open",
+      "detail": "Pixel is reachable but installed data preservation prevents replacing the different-signature historical app"
+    },
+    {
+      "id": "signed_candidate_and_ios_matrix_missing",
+      "class": "blocker",
+      "state": "open",
+      "detail": "no signed current candidate, final-binary binding or complete current physical Android/iOS matrix exists"
+    },
+    {
+      "id": "operations_assignments_missing",
+      "class": "blocker",
+      "state": "open",
+      "detail": "functional owners, delegates, company RBAC and absence tests are not evidenced"
+    },
+    {
+      "id": "unit_economics_unavailable",
+      "class": "blocker",
+      "state": "open",
+      "detail": "provider fees, VAT, cloud costs, founder hours and replacement rate prevent a profitability conclusion"
+    },
+    {
+      "id": "privacy_retention_store_drafts",
+      "class": "blocker",
+      "state": "open",
+      "detail": "privacy, retention, deletion and Store manifests remain draft or fail-closed"
+    },
+    {
+      "id": "moderate_transitive_advisory",
+      "class": "residual",
+      "state": "accepted-for-current-technical-runway",
+      "detail": "one transitive moderate advisory remains; no high or critical advisory is present"
+    },
+    {
+      "id": "analyzer_legacy_backlog",
+      "class": "residual",
+      "state": "bounded-baseline",
+      "detail": "222 analyzer findings remain under a fail-on-regression baseline"
+    }
+  ],
+  "recommendedFuturePilot": {
+    "recommendationState": "conditional-after-separate-gates",
+    "pilotType": "invited-private-synthetic-payment-flow-pilot",
+    "publicRegistration": false,
+    "realMoney": false,
+    "liveProviderTraffic": false,
+    "cohort": {
+      "invitedAdultPrivateUsers": 30,
+      "minimumAge": 18,
+      "privateUseOnly": true,
+      "targetCompleteFlowRunsMinimum": 30,
+      "targetCompleteFlowRunsMaximum": 50
+    },
+    "region": {
+      "countryCode": "DE",
+      "label": "Spiegelberg, Rems-Murr-Kreis",
+      "recommendedAllowedRegionCode": "spiegelberg",
+      "currentlyConfigured": false,
+      "rationale": "one exact municipality inside the Growth Master start corridor; density and operations must be proven before expansion"
+    },
+    "catalog": [
+      {
+        "categoryId": "cat8",
+        "subcategory": "Elektrowerkzeuge"
+      },
+      {
+        "categoryId": "cat8",
+        "subcategory": "Bohrmaschinen"
+      },
+      {
+        "categoryId": "cat8",
+        "subcategory": "Schleifer"
+      }
+    ],
+    "enabledProductScope": [
+      "v52-single-item-only",
+      "g2-navigation-cart-and-gemerkt-non-reserving"
+    ],
+    "disabledProductScope": [
+      "g3-booking-groups",
+      "g4-planner-inventory",
+      "g5-supply-enrichment",
+      "g5-listing-sets",
+      "sit-business",
+      "multi-provider-projects",
+      "external-ai",
+      "public-registration",
+      "real-money"
+    ]
+  },
+  "recommendedAuthorizationTokens": [
+    {
+      "order": 1,
+      "token": "P0B_NEXT_LEGAL_V52_REVIEW_ONLY",
+      "purpose": "commission and ingest bounded professional V5.2 and G3 legal review evidence",
+      "autoExecute": false
+    },
+    {
+      "order": 2,
+      "token": "P0B_NEXT_OPS_ROLES_BACKUP_ABSENCE_ONLY",
+      "purpose": "record company-system role and delegate assignments and run absence tests without production activation",
+      "autoExecute": false
+    },
+    {
+      "order": 3,
+      "token": "P0B_NEXT_SIGNED_DEVICE_EVIDENCE_ONLY",
+      "purpose": "create an explicitly authorized current-source signed candidate and collect bounded Android and iOS physical evidence without Store submission",
+      "autoExecute": false
+    },
+    {
+      "order": 4,
+      "token": "P0B_NEXT_PSP_SANDBOX_E2E_ONLY",
+      "purpose": "after contract and provider facts exist, test authorization capture refund payout and chargeback in provider sandbox only",
+      "autoExecute": false
+    },
+    {
+      "order": 5,
+      "token": "P0B_NEXT_INVITED_SYNTHETIC_PILOT_SPIEGELBERG_CAT8_30",
+      "purpose": "after gates one through four are green, separately decide the exact invited synthetic-payment pilot scope",
+      "autoExecute": false
+    }
+  ],
+  "finalGate": {
+    "goNow": false,
+    "recommendedNextState": "hold-for-walid-decision",
+    "autoContinue": false,
+    "runwayEnded": true,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "providerChanged": false,
+    "storeChanged": false,
+    "cloudChanged": false,
+    "publicActivationChanged": false
+  }
+}
