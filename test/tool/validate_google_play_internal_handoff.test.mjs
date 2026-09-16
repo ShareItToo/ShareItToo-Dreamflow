@@ -6,6 +6,9 @@ import test from 'node:test';
 
 import {
   candidateRolloverRuntimeDrift,
+  explicitCurrentRolloverCandidatePath,
+  explicitCurrentRolloverStatus,
+  validateExplicitCurrentRolloverCandidate,
   validateGooglePlayInternalHandoff,
 } from '../../tool/validate_google_play_internal_handoff.mjs';
 
@@ -19,6 +22,9 @@ const canonicalLiveReadiness = JSON.parse(await readFile(
   'utf8'));
 const canonicalInternalRelease = JSON.parse(await readFile(
   new URL(`../../${canonicalHandoff.internalReleaseEvidenceRef}`, import.meta.url),
+  'utf8'));
+const explicitRollover = JSON.parse(await readFile(
+  new URL('../../store/google-play/rollover-candidate-2026091601.json', import.meta.url),
   'utf8'));
 
 test('candidate rollover ignores test-only drift but retains runtime drift', () => {
@@ -44,6 +50,45 @@ test('candidate rollover ignores test-only drift but retains runtime drift', () 
     'backend/ops/secret_scan_history_baseline.json.backup',
     'android/app/build.gradle',
   ]);
+});
+
+test('validates the explicitly named current rollover candidate and zero runtime drift', async () => {
+  const result = await validateExplicitCurrentRolloverCandidate({ repositoryRoot });
+  assert.equal(explicitCurrentRolloverCandidatePath,
+    'store/google-play/rollover-candidate-2026091601.json');
+  assert.equal(explicitCurrentRolloverStatus,
+    'build-ready-github-verified-play-internal-upload-pending');
+  assert.equal(result.buildNumber, explicitRollover.candidate.versionCode);
+  assert.equal(result.candidate.artifactSourceHead, explicitRollover.candidate.artifactSourceHead);
+  assert.deepEqual(result.runtimeDrift, []);
+  assert.equal(result.artifact.aabSha256, explicitRollover.artifact.aabSha256);
+  assert.equal(result.artifact.apkSha256, explicitRollover.artifact.apkSha256);
+  assert.equal(result.artifact.uploadCertificateSha256,
+    explicitRollover.artifact.uploadCertificateSha256);
+});
+
+test('rejects a missing or wrong explicit rollover successor', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'sit-explicit-rollover-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const wrong = structuredClone(explicitRollover);
+  wrong.candidate.versionCode = '2026091602';
+  const wrongPath = join(root, 'wrong.json');
+  await writeFile(wrongPath, JSON.stringify(wrong));
+  await assert.rejects(() => validateExplicitCurrentRolloverCandidate({
+    repositoryRoot,
+    rolloverPath: wrongPath,
+  }), /Candidate archive|identity|filename|bytes/u);
+  await assert.rejects(() => validateExplicitCurrentRolloverCandidate({
+    repositoryRoot,
+    rolloverPath: join(root, 'missing.json'),
+  }), /could not be read as JSON/u);
+});
+
+test('rejects runtime drift in explicit rollover mode', async () => {
+  await assert.rejects(() => validateExplicitCurrentRolloverCandidate({
+    repositoryRoot,
+    changedPaths: ['lib/main.dart'],
+  }), /Runtime-affecting files changed/u);
 });
 
 async function fixture() {

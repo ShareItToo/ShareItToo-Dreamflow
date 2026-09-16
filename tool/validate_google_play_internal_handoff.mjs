@@ -2,7 +2,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -99,10 +99,154 @@ export const candidateRolloverNonRuntimeExactPaths = Object.freeze([
   'backend/ops/secret_scan_history_baseline.json',
 ]);
 
+export const explicitCurrentRolloverCandidatePath =
+  'store/google-play/rollover-candidate-2026091601.json';
+export const explicitCurrentRolloverStatus =
+  'build-ready-github-verified-play-internal-upload-pending';
+
 export function candidateRolloverRuntimeDrift(changedPaths) {
   return [...changedPaths].filter((path) =>
     !candidateRolloverNonRuntimeExactPaths.includes(path)
     && !candidateRolloverNonRuntimePrefixes.some((prefix) => path.startsWith(prefix)));
+}
+
+function git(repositoryRoot, args) {
+  return String(execFileSync('git', args, {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  })).trim();
+}
+
+function changedPathsSince(repositoryRoot, sourceCommit) {
+  return [...new Set([
+    ...git(repositoryRoot, ['diff', '--name-only', `${sourceCommit}..HEAD`]).split('\n'),
+    ...git(repositoryRoot, ['diff', '--name-only']).split('\n'),
+    ...git(repositoryRoot, ['diff', '--cached', '--name-only']).split('\n'),
+  ].filter(Boolean))];
+}
+
+/**
+ * Validate the one explicitly named current Android rollover candidate.
+ * This path is intentionally separate from the historical Play handoff so a
+ * missing historical private artifact can only be tolerated in this explicit
+ * mode, never as a CI or implicit fallback.
+ */
+export async function validateExplicitCurrentRolloverCandidate({
+  repositoryRoot,
+  archiveRoot = resolve(homedir(), 'Library', 'Application Support', 'ShareItToo', 'release', 'android'),
+  rolloverPath = null,
+  changedPaths = null,
+} = {}) {
+  const root = resolve(repositoryRoot ?? fileURLToPath(new URL('../', import.meta.url)));
+  const path = rolloverPath ?? resolve(root, explicitCurrentRolloverCandidatePath);
+  const rollover = object(readJson(path, 'explicit current rollover candidate'),
+    'explicit current rollover candidate');
+  assertNoCredentials(rollover, 'explicit current rollover candidate');
+  same(rollover.schemaVersion, 1, 'explicit rollover schemaVersion');
+  same(rollover.kind, 'android-current-rollover-candidate', 'explicit rollover kind');
+  same(rollover.status, explicitCurrentRolloverStatus, 'explicit rollover status');
+  for (const key of [
+    'containsSecrets', 'containsTesterIdentity', 'containsOptInUrl',
+    'containsPrivateFilesystemPath',
+  ]) {
+    same(rollover[key], false, `explicit rollover.${key}`);
+  }
+
+  const candidate = object(rollover.candidate, 'explicit rollover.candidate');
+  const expectedIdentity = {
+    versionName: candidate.versionName,
+    buildNumber: candidate.versionCode,
+    commit: candidate.artifactSourceHead,
+  };
+  if (candidate.applicationId !== 'com.shareittoo.app'
+      || candidate.releaseChannel !== 'internal'
+      || candidate.apiBaseUrl !== 'https://staging.shareittoo.com/api/v1'
+      || candidate.compileSdkVersion !== 36
+      || candidate.minSdkVersion !== 24
+      || candidate.targetSdkVersion !== 36
+      || candidate.firebaseAndroidConfigured !== true
+      || candidate.listingAiExternalImageProviderEnabled !== false) {
+    fail('Explicit rollover candidate is not the canonical signed internal Staging configuration.');
+  }
+  if (!/^\d+\.\d+\.\d+$/u.test(expectedIdentity.versionName ?? '')
+      || !/^\d{10}$/u.test(expectedIdentity.buildNumber ?? '')
+      || !/^[a-f0-9]{40}$/u.test(expectedIdentity.commit ?? '')) {
+    fail('Explicit rollover candidate identity is invalid.');
+  }
+
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', expectedIdentity.commit, 'HEAD'], {
+      cwd: root,
+      stdio: 'ignore',
+    });
+  } catch {
+    fail('The explicit rollover artifact source is not an ancestor of the current repository HEAD.');
+  }
+  const paths = changedPaths ?? changedPathsSince(root, expectedIdentity.commit);
+  const runtimeDrift = candidateRolloverRuntimeDrift(paths);
+  if (runtimeDrift.length > 0) {
+    fail(`Runtime-affecting files changed after the rollover artifact source commit: ${runtimeDrift[0]}.`);
+  }
+
+  const artifact = object(rollover.artifact, 'explicit rollover.artifact');
+  const archiveDirectoryName = artifact.archiveDirectoryName;
+  const aabFileName = artifact.aabFileName;
+  const apkFileName = artifact.apkFileName;
+  if (!/^[a-zA-Z0-9._-]+$/u.test(archiveDirectoryName ?? '')
+      || !/^[a-zA-Z0-9._-]+\.aab$/u.test(aabFileName ?? '')
+      || !/^[a-zA-Z0-9._-]+\.apk$/u.test(apkFileName ?? '')) {
+    fail('Explicit rollover artifact location must use safe fixed names.');
+  }
+  const archiveDirectory = resolve(archiveRoot, archiveDirectoryName);
+  const archive = await validateCurrentHeadAndroidReleaseArchive({
+    root,
+    candidateDirectory: archiveDirectory,
+    expectedIdentity,
+  });
+  same(archive.aabPath.endsWith(`/${aabFileName}`), true,
+    'explicit rollover AAB filename');
+  same(archive.apkPath.endsWith(`/${apkFileName}`), true,
+    'explicit rollover APK filename');
+  same(statSync(archive.aabPath).size, artifact.aabBytes, 'explicit rollover AAB bytes');
+  same(statSync(archive.apkPath).size, artifact.apkBytes, 'explicit rollover APK bytes');
+  same(archive.aabSha256, artifact.aabSha256, 'explicit rollover AAB SHA-256');
+  same(archive.apkSha256, artifact.apkSha256, 'explicit rollover APK SHA-256');
+  same(archive.privacyReportSha256, artifact.privacyReportSha256,
+    'explicit rollover privacy report SHA-256');
+  same(archive.signingCertificateSha256, artifact.uploadCertificateSha256,
+    'explicit rollover upload certificate SHA-256');
+  same(artifact.signatureVerified, true, 'explicit rollover signatureVerified');
+  same(artifact.zipStructureValidation, 'passed',
+    'explicit rollover zipStructureValidation');
+  same(artifact.binaryPrivacyScan, 'passed', 'explicit rollover binaryPrivacyScan');
+  same(artifact.ownerOnlyPermissionsVerified, true,
+    'explicit rollover ownerOnlyPermissionsVerified');
+  same(artifact.nonOverwritingArchive, true, 'explicit rollover nonOverwritingArchive');
+
+  return Object.freeze({
+    buildNumber: candidate.versionCode,
+    candidate: Object.freeze({
+      applicationId: candidate.applicationId,
+      versionName: candidate.versionName,
+      versionCode: candidate.versionCode,
+      artifactSourceHead: candidate.artifactSourceHead,
+      apiBaseUrl: candidate.apiBaseUrl,
+      releaseChannel: candidate.releaseChannel,
+    }),
+    artifact: Object.freeze({
+      aabFileName,
+      apkFileName,
+      aabBytes: artifact.aabBytes,
+      apkBytes: artifact.apkBytes,
+      aabSha256: artifact.aabSha256,
+      apkSha256: artifact.apkSha256,
+      privacyReportSha256: artifact.privacyReportSha256,
+      uploadCertificateSha256: artifact.uploadCertificateSha256,
+    }),
+    runtimeDrift: Object.freeze([...runtimeDrift]),
+    archive,
+  });
 }
 
 export const playApi36ReplacementRuntimePaths = Object.freeze([
@@ -777,69 +921,10 @@ async function runCli() {
   let rolloverCandidate = null;
   let rolloverMode = null;
   if (candidateRollover) {
-    const rollover = object(readJson(
-      resolve(repositoryRoot, 'store', 'google-play', 'current-rollover-candidate.json'),
-      'current rollover candidate',
-    ), 'current rollover candidate');
-    const candidate = object(rollover.candidate, 'current rollover candidate.candidate');
-    const artifact = object(rollover.artifact, 'current rollover candidate.artifact');
-    same(rollover.schemaVersion, 1, 'current rollover candidate.schemaVersion');
-    const allowedRolloverStatuses = new Set([
-      'build-ready-play-internal-upload-pending',
-      'build-ready-play-internal-activation-pending',
-      'play-internal-active-device-verification-pending',
-      playApi36ReplacementStatus,
-    ]);
-    if (!allowedRolloverStatuses.has(rollover.status)) {
-      fail('current rollover candidate.status is not an allowed fail-closed Play state.');
-    }
-    const expectedIdentity = {
-      versionName: candidate.versionName,
-      buildNumber: candidate.versionCode,
-      commit: candidate.artifactSourceHead,
-    };
-    rolloverCandidate = await validateCurrentHeadAndroidReleaseArchive({
-      root: repositoryRoot,
-      expectedIdentity,
+    rolloverCandidate = await validateExplicitCurrentRolloverCandidate({
+      repositoryRoot,
     });
-    same(rolloverCandidate.aabSha256, artifact.aabSha256,
-      'current rollover candidate.artifact.aabSha256');
-    same(rolloverCandidate.apkSha256, artifact.apkSha256,
-      'current rollover candidate.artifact.apkSha256');
-    same(rolloverCandidate.signingCertificateSha256, artifact.uploadCertificateSha256,
-      'current rollover candidate.artifact.uploadCertificateSha256');
-    const git = (args) => String(execFileSync('git', args, {
-      cwd: repositoryRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })).trim();
-    try {
-      execFileSync('git', ['merge-base', '--is-ancestor', expectedIdentity.commit, 'HEAD'], {
-        cwd: repositoryRoot,
-        stdio: 'ignore',
-      });
-    } catch {
-      fail('The rollover artifact source is not an ancestor of the current repository HEAD.');
-    }
-    const changedPaths = new Set([
-      ...git(['diff', '--name-only', `${expectedIdentity.commit}..HEAD`]).split('\n'),
-      ...git(['diff', '--name-only']).split('\n'),
-      ...git(['diff', '--cached', '--name-only']).split('\n'),
-    ].filter(Boolean));
-    if (rollover.status === playApi36ReplacementStatus) {
-      validatePlayApi36ReplacementTransition({
-        repositoryRoot,
-        rollover,
-        changedPaths: [...changedPaths],
-      });
-      rolloverMode = 'api36-replacement-transition-verified';
-    } else {
-      const runtimeDrift = candidateRolloverRuntimeDrift(changedPaths);
-      if (runtimeDrift.length > 0) {
-        fail('Runtime-affecting files changed after the rollover artifact source commit.');
-      }
-      rolloverMode = 'historical-metadata-with-newer-rollover-artifact-verified';
-    }
+    rolloverMode = 'explicit-current-rollover-verified';
   }
   const result = validateGooglePlayInternalHandoff({
     repositoryRoot,
@@ -850,10 +935,12 @@ async function runCli() {
     fail('The verified rollover candidate must be newer than the historical Play handoff.');
   }
   process.stdout.write(
-    `Google Play internal handoff: PASS (build ${result.buildNumber}; `
-      + `privateArtifact=${result.artifactVerified ? 'verified' :
-        candidateRollover ? rolloverMode :
-          'CI-unavailable-metadata-validated'})\n`,
+    `Google Play internal handoff: PASS (historicalBuild=${result.buildNumber}`
+      + `${rolloverCandidate ? `; rolloverBuild=${rolloverCandidate.buildNumber}` : ''}; `
+      + `privateArtifact=${rolloverCandidate ? 'currentCandidateVerified' :
+        result.artifactVerified ? 'verified' : 'CI-unavailable-metadata-validated'}`
+      + `${rolloverCandidate ? `; historicalArtifactVerified=${result.artifactVerified}` : ''}`
+      + `${rolloverCandidate ? `; mode=${rolloverMode}` : ''})\n`,
   );
 }
 
