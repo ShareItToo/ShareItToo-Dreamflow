@@ -7,7 +7,9 @@ unless a strict server-owned, case-bound authorization is supplied. No current
 route issues such authorization and no Article 9 basis is selected, so client
 warnings, checkboxes, role labels and claimed approvals cannot open the gate.
 Sensitive evidence is rejected before file persistence, inserts, audit or
-workflow forwarding; historical rows remain readable/exportable. Neutral
+workflow forwarding; every new product-safety upload is also rejected even
+when a historical row contains `specialCategoryHandling`, which is never a
+current authorization. Historical rows remain readable/exportable. Neutral
 product-safety reports with explicit `injuryOccurred: false` remain recordable.
 Focused WP162 tests pass. No production, provider, payment, Store, cloud/VPS,
 DNS or device state changed. See

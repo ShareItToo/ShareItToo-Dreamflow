@@ -343,17 +343,19 @@ export async function createSupportEvidence(client, {
   if (!activeSubmissionStatuses.has(supportCase.status)) {
     throw new SupportCaseError(409, 'support_evidence_case_not_accepting_files');
   }
+  const isArticle9ProductSafetyCase = supportCase.case_type === 'trust_safety'
+    && supportCase.case_subtype === 'dangerous_item_or_injury';
   const caseSpecialCategoryHandling = supportCase.intake_scope_evidence
     ?.specialCategoryHandling ?? null;
   // Article 9 authorization is intentionally not issued by any current route.
-  // Historical rows remain readable, but new sensitive uploads fail before
-  // persistFiles can write bytes or emit workflow/audit events.
+  // Historical rows remain readable, but they are never authorization for a
+  // new upload. Until a future server-owned grant is read from trusted
+  // storage and passed through this boundary, every product-safety upload
+  // fails before persistFiles can write bytes or emit workflow/audit events.
   // The former support_evidence_special_category_case_binding_required code
   // is retained only as historical evidence; it is no longer sufficient.
   if (metadata.specialCategoryClassification === 'possible_special_category'
-      || (supportCase.case_type === 'trust_safety'
-        && supportCase.case_subtype === 'dangerous_item_or_injury'
-        && caseSpecialCategoryHandling == null)) {
+      || isArticle9ProductSafetyCase) {
     throw new SupportCaseError(
       409,
       'support_evidence_article9_server_authorization_required',

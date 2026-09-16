@@ -241,7 +241,11 @@ function requestHash(argumentsValue) {
   })).digest('hex');
 }
 
-function caseLookupSteps(intakeScopeEvidence = {}) {
+function caseLookupSteps(
+  intakeScopeEvidence = {},
+  caseType = null,
+  caseSubtype = null,
+) {
   return [
     { match: /pg_advisory_xact_lock/u },
     { match: /SELECT evidence\.id AS evidence_id/u, result: { rowCount: 0, rows: [] } },
@@ -257,6 +261,8 @@ function caseLookupSteps(intakeScopeEvidence = {}) {
           linked_booking_id: null,
           linked_listing_id: null,
           status: 'received',
+          case_type: caseType,
+          case_subtype: caseSubtype,
           intake_scope_evidence: intakeScopeEvidence,
         }],
       },
@@ -297,6 +303,30 @@ test('evidence persistence starts only after case and classification gates', asy
   );
   assert.equal(fileWrites, 0);
   assert.equal(unboundSpecial.calls.some(({ sql }) => /INSERT INTO/u.test(sql)), false);
+
+  const historicalProductSafety = new EvidenceScriptedClient(caseLookupSteps(
+    { specialCategoryHandling: { legacy: true } },
+    'trust_safety',
+    'dangerous_item_or_injury',
+  ));
+  await assert.rejects(
+    () => createSupportEvidence(historicalProductSafety, {
+      ...evidenceArguments,
+      rawMetadata: {
+        ...evidenceArguments.rawMetadata,
+        description: 'Beschädigte Verpackung ohne Verletzung.',
+        purpose: 'Nachweis des Produktzustands.',
+        specialCategoryClassification: 'not_indicated',
+      },
+      persistFiles: async () => { fileWrites += 1; },
+    }),
+    /support_evidence_article9_server_authorization_required/u,
+  );
+  assert.equal(fileWrites, 0);
+  assert.equal(
+    historicalProductSafety.calls.some(({ sql }) => /INSERT INTO/u.test(sql)),
+    false,
+  );
 });
 
 test('evidence bytes are persisted after validation and before database inserts', async () => {

@@ -15,10 +15,11 @@ workflow forwarding. Neutral product-safety reports with an explicit
 “ohne Verletzung” is not classified as an injury.
 
 Evidence uploads are also fail-closed: a possible-special-category
-classification, or a new upload on the product-safety route without a trusted
-server authorization, is rejected before `persistFiles`, database inserts,
-audit rows or workflow delivery. Existing rows remain readable/exportable and
-are not deleted or rewritten.
+classification and every new upload on the product-safety route are rejected
+before `persistFiles`, database inserts, audit rows or workflow delivery.
+Historical `specialCategoryHandling` is never treated as authorization for a
+new upload. Existing rows remain readable/exportable and are not deleted or
+rewritten.
 
 Focused backend tests cover client spoof rejection, sensitive text rejection,
 neutral accident reporting, explicit-negation handling and the no-persistence
