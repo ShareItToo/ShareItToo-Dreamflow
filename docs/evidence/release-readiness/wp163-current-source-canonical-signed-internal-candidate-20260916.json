@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP163_CURRENT_SOURCE_CANONICAL_SIGNED_INTERNAL_CANDIDATE",
+  "status": "build-ready-github-verification-pending",
+  "recordedAt": "2026-09-16T01:17:35Z",
+  "source": {
+    "worktree": "/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808",
+    "branch": "codex/master-workflow-20260808",
+    "artifactSourceHead": "707d95e93c463ad4bbb0adbf382526d8869992c5",
+    "predecessorCandidateVersionCode": "2026091312",
+    "candidateVersionCode": "2026091601"
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091601",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "compileSdkVersion": 36,
+    "targetSdkVersion": 36,
+    "minSdkVersion": 24,
+    "firebaseAndroidConfigured": true,
+    "listingAiExecutionLocation": "android_on_device",
+    "listingAiExternalImageProviderEnabled": false,
+    "closedPilotEnvelopeEnabled": true,
+    "stageAPilotId": "heilbronn_wave0"
+  },
+  "artifacts": {
+    "aabBytes": 138844325,
+    "aabSha256": "c5cc29eea8d5cccdb1913e9247528a784d945010c433d0125b3e39bdf563da7c",
+    "apkBytes": 199976443,
+    "apkSha256": "32e2e28008e19e11d1fc00497c3f7f08f60eb42c48c0dea93878f8ae6670e464",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "zipStructureValidation": "passed",
+    "binaryPrivacyScan": "passed",
+    "binaryPrivacyReportSha256": "2fa95150f403ce78a5be94764bd4df69654972973e521a60d394e8732153166c",
+    "bundletoolValidation": "not-run-tool-unavailable",
+    "archivePermissions": "owner-only-non-overwriting"
+  },
+  "verification": {
+    "releasePreflight": "passed",
+    "currentConsumerClosure": "passed",
+    "fullTechnicalRegression": "passed-isolated-local-profile",
+    "flutterAnalyzer": "passed-zero-issues",
+    "webWasmLoopbackSmoke": "passed",
+    "androidDebugBuildAndSurfaceAudit": "passed",
+    "canonicalReleaseBuild": "passed-with-isolated-cli19-sdk",
+    "deviceInstallOrContact": "not-performed",
+    "playUploadOrActivation": "not-performed",
+    "githubRegression": "pending",
+    "githubCodeql": "pending"
+  },
+  "boundaries": {
+    "storeUploadPerformed": false,
+    "storeActivationPerformed": false,
+    "testerListChanged": false,
+    "deviceInstalledOrContacted": false,
+    "stagingChanged": false,
+    "providerChanged": false,
+    "paymentChanged": false,
+    "firebaseChanged": false,
+    "cloudVpsDnsChanged": false,
+    "productionChanged": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false,
+    "containsTesterIdentity": false,
+    "containsPrivateFilesystemPath": false
+  },
+  "next": "push evidence commit, verify exact-head GitHub Regression and CodeQL, then stop at BUILD_READY"
+}
