@@ -8348,3 +8348,25 @@ CodeQL are also green on implementation HEAD
 `11c2bc91eb9f6e9b3fae14423f710b8868c42352`: Regression `34185296223`,
 including clean checkout, and CodeQL `34185296219`. Open code-scanning alerts
 are zero; PR #7 remains Draft, open, mergeable and unmerged.
+
+## WP163/WP164 current signed candidate and Pixel update (2026-09-16)
+
+The canonical signed Internal/Staging candidate is `com.shareittoo.app`
+`1.0.0+2026091601`, source `707d95e93c463ad4bbb0adbf382526d8869992c5`.
+Its AAB/APK hashes, Firebase binding, package identity and upload certificate
+are recorded in the WP163 evidence. GitHub Regression `35044499740` and CodeQL
+`35044499754` passed on the exact candidate verification head; open scanning
+alerts are zero. The historical rollover pointer remains intentionally
+unchanged so older ratchets retain their immutable source contract.
+
+WP164 installed the exact APK on the connected Pixel by update-only
+`adb install -r`. VersionCode `2026091601` and the pulled-back APK hash match;
+first-install time and Android app-data identity were preserved. No uninstall,
+reset, Store, backend, Firebase Console, payment, Production, OnePlus or
+real-money state changed. Evidence:
+`docs/evidence/release-readiness/wp164-current-candidate-pixel-update-20260916.json`.
+
+The current Staging `/api/version` readback is healthy at runtime commit
+`df39a14b7a19afe467842461a28f1e77fec8445e`; `/api/health/live` is 200. Readiness
+is currently 503 only because one noncritical Support next-update is overdue;
+database, mail, notifications and memory-only payment checks remain healthy.

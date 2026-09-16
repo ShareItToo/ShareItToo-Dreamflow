@@ -8402,3 +8402,24 @@ Regression `34185296223`, including clean checkout, and CodeQL `34185296219`
 pass on implementation HEAD `11c2bc91eb9f6e9b3fae14423f710b8868c42352`;
 open code-scanning alerts are zero. PR #7 remains Draft and unmerged. Pixel
 WP57 resumes when the physical phone is unlocked.
+
+## Current package: WP163/WP164 signed candidate and Pixel update
+
+WP163 prepared the reproducible signed Internal/Staging candidate
+`1.0.0+2026091601` from source `707d95e93c463ad4bbb0adbf382526d8869992c5`.
+The owner-only AAB/APK archive, hashes, certificate, Firebase configuration,
+on-device Listing AI and staging-only payment boundary are recorded in the
+WP163 evidence. Exact GitHub Regression `35044499740` and CodeQL `35044499754`
+passed; the historical current-candidate pointer was deliberately preserved.
+
+WP164 then installed the exact APK on the connected Pixel with a data-preserving
+update. The device now reports VersionCode `2026091601`; the pulled-back APK
+matches the archived bytes and first-install/app-data identity is unchanged.
+No Store, backend, Firebase Console, payment, Production, OnePlus or real-money
+change occurred.
+
+The next bounded work is a read-only Staging runtime/FCM reconciliation followed
+by the payment-free two-role Pixel journey. The public Staging readiness check is
+currently degraded only by one noncritical overdue Support follow-up; this must
+not be misreported as a client-install failure or silently repaired by direct
+database mutation.
