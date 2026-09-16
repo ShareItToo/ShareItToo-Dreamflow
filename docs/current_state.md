@@ -1,5 +1,30 @@
 # ShareItToo Current State
 
+## WP172 Google Play Internal release 2026091605 — COMPLETE; device testing pending
+
+The exact signed candidate `1.0.0+2026091605` from source commit
+`261f05e262fa5aad2238527505cf09319146d583` is active in the **Internal
+testing** track for `com.shareittoo.app` under the authenticated
+`contact@shareittoo.com` profile. Play shows release
+`1.0.0-internal-2026091605`, VersionCode `2026091605`, full rollout and
+“Available to internal testers”; it is not reviewed and was not submitted for
+review. The AAB is bound to SHA-256
+`d33a37c501d2cb08c5c56a30629b8f031dd2ccccbb87bc8a97c5250ed34392d8` and the
+verified upload certificate remains
+`098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4`.
+
+Read-only pre/post checks show the tester list `SIT interner Test` unchanged
+at 2 users, Managed publishing OFF, exactly 14 changes still not submitted
+for review, Closed testing - Alpha unchanged at `2026081506`, and no Open
+testing or Production change. No metadata, Data Safety, Firebase, payment,
+provider, cloud/VPS/DNS, device or PR-merge action occurred. Evidence is in
+`docs/evidence/release-readiness/wp172-google-play-internal-2026091605-release-20260916.json`
+and the operator handover in
+`docs/operations/GOOGLE_PLAY_INTERNAL_RELEASE_2026091605_HANDOVER.md`.
+
+The next bounded action is owner/device installation and functional testing;
+no device access was performed here.
+
 ## WP162 Article 9 server-side default deny — TECHNICAL CLOSURE; LEGAL GATE OPEN
 
 New possible special-category/health inputs are now rejected server-side

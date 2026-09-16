@@ -8434,7 +8434,7 @@ state changed. Legal, Privacy, Retention, Operations, Store and Pilot holds
 remain unchanged; the last documented WP165 readback reported HTTP 503 only
 for the noncritical overdue Support follow-up documented by WP165.
 
-## WP171 current candidate: 2026091605
+## WP172 completed: Google Play Internal release 2026091605
 
 The next reproducible signed Internal/Staging candidate is `1.0.0+2026091605`
 from source `261f05e262fa5aad2238527505cf09319146d583`. The protected archive
@@ -8448,7 +8448,14 @@ Privacy-report SHA-256 is
 verified upload certificate is
 `098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4`.
 The candidate is staging-only with on-device Listing AI and no external AI,
-real payments or production activation. Play readback/upload/activation and
-device installation have not been performed. Full local regression and exact-
-head GitHub checks remain the next bounded verification step; historical
-1604 evidence is immutable.
+real payments or production activation. The exact AAB is now active in the
+Google Play **Internal testing** track as
+`1.0.0-internal-2026091605`, VersionCode `2026091605`, full rollout and
+“Available to internal testers”. It remains unreviewed and was not submitted
+for review. Pre/post readback verified Managed publishing OFF, exactly 14 old
+changes still unsubmitted, unchanged tester list `SIT interner Test` with 2
+users, unchanged Closed testing - Alpha `2026081506`, and no Open testing or
+Production change. No device installation or functional test was performed.
+Evidence: `docs/evidence/release-readiness/wp172-google-play-internal-2026091605-release-20260916.json`;
+handover: `docs/operations/GOOGLE_PLAY_INTERNAL_RELEASE_2026091605_HANDOVER.md`.
+Historical 1604 evidence remains immutable.
