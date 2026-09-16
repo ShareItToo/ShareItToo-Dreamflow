@@ -5,7 +5,7 @@
   "recordedAt": "2026-09-16T22:47:00+02:00",
   "source": {
     "classification": "direct-authenticated-google-play-console-readback",
-    "account": "contact@shareittoo.com",
+    "account": "authenticated-owner-console-session",
     "applicationId": "com.shareittoo.app",
     "developerAccountLabel": "ShareItToo"
   },

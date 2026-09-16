@@ -5,8 +5,8 @@ Date: 2026-09-16 22:47 (Europe/Berlin)
 ## Result
 
 The exact prepared candidate was activated in **Internal testing** for
-`com.shareittoo.app` under the authenticated `contact@shareittoo.com` Play
-Console profile. The release is a full rollout and is available to internal
+`com.shareittoo.app` under the authenticated owner Play Console session. The
+release is a full rollout and is available to internal
 testers. It is not reviewed and was not submitted for review.
 
 | Field | Verified value |
@@ -41,4 +41,3 @@ The release is ready for the owner’s device installation and functional
 testing. Device installation, sign-in, listing, booking, payment, push and
 cross-account flows remain separate test evidence and were not performed by
 this Store action.
-

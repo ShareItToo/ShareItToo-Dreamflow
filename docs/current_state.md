@@ -21,6 +21,9 @@ provider, cloud/VPS/DNS, device or PR-merge action occurred. Evidence is in
 `docs/evidence/release-readiness/wp172-google-play-internal-2026091605-release-20260916.json`
 and the operator handover in
 `docs/operations/GOOGLE_PLAY_INTERNAL_RELEASE_2026091605_HANDOVER.md`.
+The candidate manifest is intentionally retained as the immutable pre-action
+handoff; the authenticated post-activation state is represented only by the
+dedicated readback evidence.
 
 The next bounded action is owner/device installation and functional testing;
 no device access was performed here.

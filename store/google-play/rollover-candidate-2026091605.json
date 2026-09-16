@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "android-current-rollover-candidate",
-  "status": "built-and-archived-internal-staging-release-active",
+  "status": "built-and-archived-internal-staging-upload-pending",
   "generatedAt": "2026-09-16T14:50:48Z",
   "candidate": {
     "applicationId": "com.shareittoo.app",
@@ -57,31 +57,13 @@
     "githubRegression": "not-run-in-this-package",
     "githubCodeql": "not-run-in-this-package"
   },
-  "playConsoleReadback": {
-    "performedAt": "2026-09-16T22:47:00+02:00",
-    "account": "contact@shareittoo.com",
-    "track": "internal-testing",
-    "releaseName": "1.0.0-internal-2026091605",
-    "versionCode": "2026091605",
-    "status": "available-to-internal-testers",
-    "rollout": "full-rollout",
-    "reviewed": false,
-    "sentForReview": false,
-    "testerListName": "SIT interner Test",
-    "testerCount": 2,
-    "testerListUnchanged": true,
-    "pendingChangesNotSubmittedForReview": 14,
-    "managedPublishing": "off",
-    "otherTracksUnchanged": true,
-    "deviceInstallation": "not-performed",
-    "evidenceRef": "docs/evidence/release-readiness/wp172-google-play-internal-2026091605-release-20260916.json"
-  },
+  "playConsoleReadback": "not-performed",
   "playStateAtLastReadback": {
-    "readbackPerformed": true,
-    "candidateUploaded": true,
-    "candidateActivated": true,
+    "readbackPerformed": false,
+    "candidateUploaded": false,
+    "candidateActivated": false,
     "testerListChanged": false,
-    "consoleActionPerformed": true
+    "consoleActionPerformed": false
   },
   "providerAndLiveHolds": {
     "externalListingAiEnabled": false,

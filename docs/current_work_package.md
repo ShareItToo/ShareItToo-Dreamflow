@@ -8458,4 +8458,6 @@ users, unchanged Closed testing - Alpha `2026081506`, and no Open testing or
 Production change. No device installation or functional test was performed.
 Evidence: `docs/evidence/release-readiness/wp172-google-play-internal-2026091605-release-20260916.json`;
 handover: `docs/operations/GOOGLE_PLAY_INTERNAL_RELEASE_2026091605_HANDOVER.md`.
-Historical 1604 evidence remains immutable.
+The candidate manifest remains the immutable pre-action handoff (`playConsoleReadback:
+not-performed`); the post-activation truth is recorded only in the dedicated
+readback evidence above. Historical 1604 evidence remains immutable.
