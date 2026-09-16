@@ -348,6 +348,8 @@ export async function createSupportEvidence(client, {
   // Article 9 authorization is intentionally not issued by any current route.
   // Historical rows remain readable, but new sensitive uploads fail before
   // persistFiles can write bytes or emit workflow/audit events.
+  // The former support_evidence_special_category_case_binding_required code
+  // is retained only as historical evidence; it is no longer sufficient.
   if (metadata.specialCategoryClassification === 'possible_special_category'
       || (supportCase.case_type === 'trust_safety'
         && supportCase.case_subtype === 'dangerous_item_or_injury'

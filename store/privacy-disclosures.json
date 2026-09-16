@@ -108,15 +108,15 @@
     },
     {
       "path": "backend/src/support_case_domain.js",
-      "sha256": "3316f17d244ff44a5e4c17afbb9fb7f0a6d46850e3a36879ec9f8a7b8adbfc4b"
+      "sha256": "1ed0004dd5bd320e4d30308fa5faf577e747652c58c789f7f8c5b272e4dcb96b"
     },
     {
       "path": "backend/src/special_category_data_guard.js",
-      "sha256": "d2e53b65e6c0b95784efc49b65720ad08fb41c24a352dd75aadde3733dda90ff"
+      "sha256": "ec2772a3c3c9eacc51536e1e89e9bc2ec13a4199e3bb93f22a2b915386a4e5e2"
     },
     {
       "path": "backend/src/support_case_workflow.js",
-      "sha256": "799a5b834d468cc39fe93f37578565760ca87cfd3cc98085ce1e6642dade9ae8"
+      "sha256": "8a935a9c786a3469a3c350cc9a7164130a46be499dda1a1d4871b8afa49b72de"
     },
     {
       "path": "backend/src/handover_exception_domain.js",
@@ -224,7 +224,7 @@
     },
     {
       "path": "backend/src/support_evidence_workflow.js",
-      "sha256": "540e389d9e54c07b42797bade21daa52ecb80671bf77098f707e648893e9a5d3"
+      "sha256": "219d1c2c90b03e219ff9d1cc62eda704d96faef36741a3425d156fa3d723ab7a"
     },
     {
       "path": "backend/src/support_safety_impact_domain.js",
