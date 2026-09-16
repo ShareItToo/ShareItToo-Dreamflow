@@ -8403,23 +8403,33 @@ pass on implementation HEAD `11c2bc91eb9f6e9b3fae14423f710b8868c42352`;
 open code-scanning alerts are zero. PR #7 remains Draft and unmerged. Pixel
 WP57 resumes when the physical phone is unlocked.
 
-## Current package: WP163/WP164 signed candidate and Pixel update
+## Current package: WP168 current-head candidate/evidence/state reconciliation
 
-WP163 prepared the reproducible signed Internal/Staging candidate
-`1.0.0+2026091601` from source `707d95e93c463ad4bbb0adbf382526d8869992c5`.
-The owner-only AAB/APK archive, hashes, certificate, Firebase configuration,
-on-device Listing AI and staging-only payment boundary are recorded in the
-WP163 evidence. Exact GitHub Regression `35044499740` and CodeQL `35044499754`
-passed; the historical current-candidate pointer was deliberately preserved.
+The canonical current Internal/Staging candidate is
+`1.0.0+2026091604` from source
+`427506132a2d9a85ba28f3fc9f5482c2b219b1e9`. Its protected archive is bound to
+AAB SHA-256 `17790b7c75770df2342ec182c3291ea5c4b5da2d0c2ddfcc3b09f4ac9a1edee3`,
+APK SHA-256 `281e460c50f4984bddc126c533935b63d38ce3eaaee79beabd1032af01c1b1e9`,
+privacy-report SHA-256 `595d313094f5bc2b45aca2a1d7511bf6d1704e23c766196f696dbaf4b1750bcd`
+and upload-certificate SHA-256
+`098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4`.
+The candidate remains Internal/Staging, Firebase-configured, with on-device
+Listing AI enabled; external Listing AI, real payments and production disabled.
 
-WP164 then installed the exact APK on the connected Pixel with a data-preserving
-update. The device now reports VersionCode `2026091601`; the pulled-back APK
-matches the archived bytes and first-install/app-data identity is unchanged.
-No Store, backend, Firebase Console, payment, Production, OnePlus or real-money
-change occurred.
+The verified implementation/CI snapshot is
+`2854412d49123ebeffb2167b0e3363cdb1f83a79`; R10 checked directly at this exact
+HEAD. GitHub Regression run `35077814133` passed all four required jobs,
+including R10 clean reproducibility; `publish-api-image` remained skipped.
+Separately, CodeQL run `35077813772` succeeded as a `pull_request` check; its
+merge-provenance SHA was
+`380e965d9368a68669393ba7e89e31a77352bf8f`, with zero file changes relative
+to `2854412d`. PR #7 is verified OPEN, Draft and MERGEABLE, remains unmerged,
+and no merge is claimed. Commit `2854412d` is fixture-only test coverage for
+the owner-only rollover archive and introduces no runtime drift.
 
-The next bounded work is a read-only Staging runtime/FCM reconciliation followed
-by the payment-free two-role Pixel journey. The public Staging readiness check is
-currently degraded only by one noncritical overdue Support follow-up; this must
-not be misreported as a client-install failure or silently repaired by direct
-database mutation.
+WP163/WP164 candidate `2026091601` and its Pixel update remain immutable
+historical evidence and do not transfer to candidate `2026091604`. No Store,
+device, backend, Firebase Console, payment, Production, OnePlus or real-money
+state changed. Legal, Privacy, Retention, Operations, Store and Pilot holds
+remain unchanged; the last documented WP165 readback reported HTTP 503 only
+for the noncritical overdue Support follow-up documented by WP165.

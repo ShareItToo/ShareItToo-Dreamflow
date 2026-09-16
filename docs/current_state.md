@@ -8349,24 +8349,35 @@ CodeQL are also green on implementation HEAD
 including clean checkout, and CodeQL `34185296219`. Open code-scanning alerts
 are zero; PR #7 remains Draft, open, mergeable and unmerged.
 
-## WP163/WP164 current signed candidate and Pixel update (2026-09-16)
+## WP168 current-head candidate/evidence/state reconciliation (2026-09-16)
 
-The canonical signed Internal/Staging candidate is `com.shareittoo.app`
-`1.0.0+2026091601`, source `707d95e93c463ad4bbb0adbf382526d8869992c5`.
-Its AAB/APK hashes, Firebase binding, package identity and upload certificate
-are recorded in the WP163 evidence. GitHub Regression `35044499740` and CodeQL
-`35044499754` passed on the exact candidate verification head; open scanning
-alerts are zero. The historical rollover pointer remains intentionally
-unchanged so older ratchets retain their immutable source contract.
+The canonical current signed Internal/Staging candidate is `com.shareittoo.app`
+`1.0.0+2026091604`, source
+`427506132a2d9a85ba28f3fc9f5482c2b219b1e9`, with Firebase configured,
+on-device Listing AI enabled; external Listing AI, real payments and Production
+disabled. The protected archive binds AAB SHA-256
+`17790b7c75770df2342ec182c3291ea5c4b5da2d0c2ddfcc3b09f4ac9a1edee3`, APK
+SHA-256 `281e460c50f4984bddc126c533935b63d38ce3eaaee79beabd1032af01c1b1e9`,
+privacy-report SHA-256
+`595d313094f5bc2b45aca2a1d7511bf6d1704e23c766196f696dbaf4b1750bcd` and
+upload certificate SHA-256
+`098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4`.
 
-WP164 installed the exact APK on the connected Pixel by update-only
-`adb install -r`. VersionCode `2026091601` and the pulled-back APK hash match;
-first-install time and Android app-data identity were preserved. No uninstall,
-reset, Store, backend, Firebase Console, payment, Production, OnePlus or
-real-money state changed. Evidence:
-`docs/evidence/release-readiness/wp164-current-candidate-pixel-update-20260916.json`.
+The exact current implementation/CI snapshot is
+`2854412d49123ebeffb2167b0e3363cdb1f83a79`; R10 checked directly at this
+exact HEAD. GitHub Regression run `35077814133` passed all four required jobs,
+including R10 clean reproducibility; the image-publish job was skipped.
+Separately, CodeQL run `35077813772` succeeded as a `pull_request` check; its
+merge-provenance SHA was
+`380e965d9368a68669393ba7e89e31a77352bf8f`, with zero file changes relative
+to `2854412d`. PR #7 is verified OPEN, Draft and MERGEABLE, remains unmerged,
+and no merge is claimed. Commit `2854412d` is fixture-only test coverage for
+the owner-only rollover archive and has no runtime drift.
 
-The current Staging `/api/version` readback is healthy at runtime commit
-`df39a14b7a19afe467842461a28f1e77fec8445e`; `/api/health/live` is 200. Readiness
-is currently 503 only because one noncritical Support next-update is overdue;
-database, mail, notifications and memory-only payment checks remain healthy.
+WP163/WP164 candidate `2026091601` and the connected-Pixel update remain
+immutable historical evidence and do not transfer to `2026091604`. No Store,
+device, backend, Firebase Console, payment, Production, OnePlus or real-money
+state changed. Legal, Privacy, Retention, Operations, Store and Pilot remain
+open external gates. The last documented WP165 readback reported HTTP 503 only
+because one noncritical Support next-update was overdue; database, mail,
+notifications and memory-only payment checks were healthy in that readback.
