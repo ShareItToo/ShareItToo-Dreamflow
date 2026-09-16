@@ -105,7 +105,7 @@
     },
     {
       "path": "backend/src/support_case_domain.js",
-      "sha256": "1ed0004dd5bd320e4d30308fa5faf577e747652c58c789f7f8c5b272e4dcb96b"
+      "sha256": "13d5cacc95eb8dbd51c8a7212422b2827f9898dc18b6df77cc21a26188660657"
     },
     {
       "path": "backend/src/special_category_data_guard.js",
