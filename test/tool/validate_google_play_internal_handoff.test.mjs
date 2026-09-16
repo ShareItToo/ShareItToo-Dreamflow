@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
@@ -52,35 +53,115 @@ test('candidate rollover ignores test-only drift but retains runtime drift', () 
   ]);
 });
 
-test('validates the explicitly named current rollover candidate and zero runtime drift', async () => {
-  const result = await validateExplicitCurrentRolloverCandidate({ repositoryRoot });
+async function explicitRolloverFixture() {
+  const root = await mkdtemp(join(tmpdir(), 'sit-explicit-rollover-fixture-'));
+  const archiveRoot = join(root, 'archive');
+  const archiveDirectory = join(archiveRoot, explicitRollover.artifact.archiveDirectoryName);
+  const rolloverPath = join(root, 'rollover.json');
+  await mkdir(archiveDirectory, { recursive: true, mode: 0o700 });
+  await chmod(archiveDirectory, 0o700);
+
+  const candidate = explicitRollover.candidate;
+  const apkName = `shareittoo-${candidate.versionName}-${candidate.versionCode}-${candidate.artifactSourceHead}.apk`;
+  const aabName = `shareittoo-${candidate.versionName}-${candidate.versionCode}-${candidate.artifactSourceHead}.aab`;
+  const apk = Buffer.from('synthetic explicit rollover APK fixture');
+  const aab = Buffer.from('synthetic explicit rollover AAB fixture');
+  const sha256 = (value) => createHash('sha256').update(value).digest('hex');
+  const privacy = {
+    schemaVersion: 1,
+    platform: 'android',
+    status: 'passed',
+    identity: {
+      applicationId: candidate.applicationId,
+      versionName: candidate.versionName,
+      versionCode: candidate.versionCode,
+      commit: candidate.artifactSourceHead,
+      apiBaseUrl: candidate.apiBaseUrl,
+    },
+    artifacts: {
+      apk: { sha256: sha256(apk) },
+      aab: { sha256: sha256(aab) },
+    },
+    findings: [],
+  };
+  const privacyBytes = Buffer.from(`${JSON.stringify(privacy)}\n`);
+  const manifest = {
+    platform: 'android',
+    applicationId: candidate.applicationId,
+    versionName: candidate.versionName,
+    versionCode: candidate.versionCode,
+    commit: candidate.artifactSourceHead,
+    channel: 'internal',
+    apiBaseUrl: candidate.apiBaseUrl,
+    socialAuth: candidate.socialAuth,
+    firebaseConfigured: candidate.firebaseAndroidConfigured,
+    signingCertificateSha256: '098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4',
+    androidBinaryPrivacyScan: 'passed',
+    androidBinaryPrivacyReport: 'privacy-scan.json',
+    androidBinaryPrivacyReportSha256: sha256(privacyBytes),
+    apkSha256: sha256(apk),
+    aabSha256: sha256(aab),
+  };
+  for (const [name, value] of [
+    [aabName, aab],
+    [apkName, apk],
+    ['manifest.json', Buffer.from(`${JSON.stringify(manifest)}\n`)],
+    ['privacy-scan.json', privacyBytes],
+  ]) {
+    const path = join(archiveDirectory, name);
+    await writeFile(path, value, { mode: 0o600 });
+    await chmod(path, 0o600);
+  }
+  const rollover = structuredClone(explicitRollover);
+  rollover.artifact = {
+    ...rollover.artifact,
+    aabBytes: aab.byteLength,
+    aabSha256: sha256(aab),
+    apkBytes: apk.byteLength,
+    apkSha256: sha256(apk),
+    privacyReportSha256: sha256(privacyBytes),
+  };
+  await writeFile(rolloverPath, `${JSON.stringify(rollover)}\n`);
+  return { root, archiveRoot, rolloverPath, rollover };
+}
+
+test('validates the explicitly named current rollover candidate and zero runtime drift', async (t) => {
+  const data = await explicitRolloverFixture();
+  t.after(() => rm(data.root, { recursive: true, force: true }));
+  const result = await validateExplicitCurrentRolloverCandidate({
+    repositoryRoot,
+    archiveRoot: data.archiveRoot,
+    rolloverPath: data.rolloverPath,
+  });
   assert.equal(explicitCurrentRolloverCandidatePath,
     'store/google-play/rollover-candidate-2026091604.json');
   assert.equal(explicitCurrentRolloverStatus,
     'built-and-archived-internal-staging-upload-pending');
-  assert.equal(result.buildNumber, explicitRollover.candidate.versionCode);
-  assert.equal(result.candidate.artifactSourceHead, explicitRollover.candidate.artifactSourceHead);
+  assert.equal(result.buildNumber, data.rollover.candidate.versionCode);
+  assert.equal(result.candidate.artifactSourceHead, data.rollover.candidate.artifactSourceHead);
   assert.deepEqual(result.runtimeDrift, []);
-  assert.equal(result.artifact.aabSha256, explicitRollover.artifact.aabSha256);
-  assert.equal(result.artifact.apkSha256, explicitRollover.artifact.apkSha256);
+  assert.equal(result.artifact.aabSha256, data.rollover.artifact.aabSha256);
+  assert.equal(result.artifact.apkSha256, data.rollover.artifact.apkSha256);
   assert.equal(result.artifact.uploadCertificateSha256,
-    explicitRollover.artifact.uploadCertificateSha256);
+    data.rollover.artifact.uploadCertificateSha256);
 });
 
 test('rejects a missing or wrong explicit rollover successor', async (t) => {
-  const root = await mkdtemp(join(tmpdir(), 'sit-explicit-rollover-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
-  const wrong = structuredClone(explicitRollover);
-  wrong.candidate.versionCode = '2026091603';
-  const wrongPath = join(root, 'wrong.json');
+  const data = await explicitRolloverFixture();
+  t.after(() => rm(data.root, { recursive: true, force: true }));
+  const wrong = structuredClone(data.rollover);
+  wrong.candidate.applicationId = 'com.example.wrong';
+  const wrongPath = join(data.root, 'wrong.json');
   await writeFile(wrongPath, JSON.stringify(wrong));
   await assert.rejects(() => validateExplicitCurrentRolloverCandidate({
     repositoryRoot,
+    archiveRoot: data.archiveRoot,
     rolloverPath: wrongPath,
-  }), /Candidate archive|identity|filename|bytes/u);
+  }), /canonical signed internal Staging configuration|identity/u);
   await assert.rejects(() => validateExplicitCurrentRolloverCandidate({
     repositoryRoot,
-    rolloverPath: join(root, 'missing.json'),
+    archiveRoot: data.archiveRoot,
+    rolloverPath: join(data.root, 'missing.json'),
   }), /could not be read as JSON/u);
 });
 
