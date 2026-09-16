@@ -100,7 +100,7 @@ export const candidateRolloverNonRuntimeExactPaths = Object.freeze([
 ]);
 
 export const explicitCurrentRolloverCandidatePath =
-  'store/google-play/rollover-candidate-2026091604.json';
+  'store/google-play/rollover-candidate-2026091605.json';
 export const explicitCurrentRolloverStatus =
   'built-and-archived-internal-staging-upload-pending';
 
@@ -146,6 +146,20 @@ export async function validateExplicitCurrentRolloverCandidate({
   same(rollover.schemaVersion, 1, 'explicit rollover schemaVersion');
   same(rollover.kind, 'android-current-rollover-candidate', 'explicit rollover kind');
   same(rollover.status, explicitCurrentRolloverStatus, 'explicit rollover status');
+  same(rollover.playConsoleReadback, 'not-performed',
+    'explicit rollover.playConsoleReadback');
+  const playState = object(rollover.playStateAtLastReadback,
+    'explicit rollover.playStateAtLastReadback');
+  same(playState.readbackPerformed, false,
+    'explicit rollover.playStateAtLastReadback.readbackPerformed');
+  same(playState.candidateUploaded, false,
+    'explicit rollover.playStateAtLastReadback.candidateUploaded');
+  same(playState.candidateActivated, false,
+    'explicit rollover.playStateAtLastReadback.candidateActivated');
+  same(playState.testerListChanged, false,
+    'explicit rollover.playStateAtLastReadback.testerListChanged');
+  same(playState.consoleActionPerformed, false,
+    'explicit rollover.playStateAtLastReadback.consoleActionPerformed');
   for (const key of [
     'containsSecrets', 'containsTesterIdentity', 'containsOptInUrl',
     'containsPrivateFilesystemPath',

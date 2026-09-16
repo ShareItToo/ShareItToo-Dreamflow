@@ -8381,3 +8381,24 @@ state changed. Legal, Privacy, Retention, Operations, Store and Pilot remain
 open external gates. The last documented WP165 readback reported HTTP 503 only
 because one noncritical Support next-update was overdue; database, mail,
 notifications and memory-only payment checks were healthy in that readback.
+
+## WP171 current-head Android candidate 2026091605 (2026-09-16)
+
+The current signed Internal/Staging candidate is `com.shareittoo.app`
+`1.0.0+2026091605`, sourced from
+`261f05e262fa5aad2238527505cf09319146d583`. Its protected archive is
+`2026091605-261f05e262fa5aad2238527505cf09319146d583` with AAB
+`138844509` bytes / SHA-256
+`d33a37c501d2cb08c5c56a30629b8f031dd2ccccbb87bc8a97c5250ed34392d8`, APK
+`199976443` bytes / SHA-256
+`de9361e780acfb6431a33254a96a2f56d55fc1bc05035e6902e415e3cfa6ed1c`,
+privacy-report SHA-256
+`2ff96fd5abdbd7ce0367d0598a3a9db3eda714f43fa2fe9b3f9632db0710e34d` and
+upload-certificate SHA-256
+`098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4`.
+The archive, signing certificate, ZIP structure and binary privacy scan were
+verified locally. Play Console readback/upload/activation was not performed;
+the candidate remains reserved for a later owner-authorized action. No device,
+backend, Firebase Console, payment, Provider, Production, VPS/DNS or PR
+merge state changed. Full regression and GitHub checks are intentionally
+recorded only after the clean E gate.

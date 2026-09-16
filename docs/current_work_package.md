@@ -8433,3 +8433,22 @@ device, backend, Firebase Console, payment, Production, OnePlus or real-money
 state changed. Legal, Privacy, Retention, Operations, Store and Pilot holds
 remain unchanged; the last documented WP165 readback reported HTTP 503 only
 for the noncritical overdue Support follow-up documented by WP165.
+
+## WP171 current candidate: 2026091605
+
+The next reproducible signed Internal/Staging candidate is `1.0.0+2026091605`
+from source `261f05e262fa5aad2238527505cf09319146d583`. The protected archive
+is `2026091605-261f05e262fa5aad2238527505cf09319146d583`; its AAB is
+`138844509` bytes with SHA-256
+`d33a37c501d2cb08c5c56a30629b8f031dd2ccccbb87bc8a97c5250ed34392d8`, and
+its APK is `199976443` bytes with SHA-256
+`de9361e780acfb6431a33254a96a2f56d55fc1bc05035e6902e415e3cfa6ed1c`.
+Privacy-report SHA-256 is
+`2ff96fd5abdbd7ce0367d0598a3a9db3eda714f43fa2fe9b3f9632db0710e34d`; the
+verified upload certificate is
+`098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4`.
+The candidate is staging-only with on-device Listing AI and no external AI,
+real payments or production activation. Play readback/upload/activation and
+device installation have not been performed. Full local regression and exact-
+head GitHub checks remain the next bounded verification step; historical
+1604 evidence is immutable.

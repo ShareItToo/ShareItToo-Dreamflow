@@ -25,7 +25,7 @@ const canonicalInternalRelease = JSON.parse(await readFile(
   new URL(`../../${canonicalHandoff.internalReleaseEvidenceRef}`, import.meta.url),
   'utf8'));
 const explicitRollover = JSON.parse(await readFile(
-  new URL('../../store/google-play/rollover-candidate-2026091604.json', import.meta.url),
+  new URL('../../store/google-play/rollover-candidate-2026091605.json', import.meta.url),
   'utf8'));
 
 test('candidate rollover ignores test-only drift but retains runtime drift', () => {
@@ -134,7 +134,7 @@ test('validates the explicitly named current rollover candidate and zero runtime
     rolloverPath: data.rolloverPath,
   });
   assert.equal(explicitCurrentRolloverCandidatePath,
-    'store/google-play/rollover-candidate-2026091604.json');
+    'store/google-play/rollover-candidate-2026091605.json');
   assert.equal(explicitCurrentRolloverStatus,
     'built-and-archived-internal-staging-upload-pending');
   assert.equal(result.buildNumber, data.rollover.candidate.versionCode);
@@ -144,6 +144,8 @@ test('validates the explicitly named current rollover candidate and zero runtime
   assert.equal(result.artifact.apkSha256, data.rollover.artifact.apkSha256);
   assert.equal(result.artifact.uploadCertificateSha256,
     data.rollover.artifact.uploadCertificateSha256);
+  assert.equal(data.rollover.playConsoleReadback, 'not-performed');
+  assert.equal(data.rollover.playStateAtLastReadback.readbackPerformed, false);
 });
 
 test('rejects a missing or wrong explicit rollover successor', async (t) => {
