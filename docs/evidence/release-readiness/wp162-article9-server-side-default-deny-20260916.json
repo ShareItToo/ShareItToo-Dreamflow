@@ -41,6 +41,8 @@
   },
   "verification": {
     "focusedBackendTests": "passed-73-of-73",
+    "fullTechnicalRegression": "passed-ci-equivalent-3107-of-3107",
+    "auxiliaryRegression": "passed-145-of-145",
     "syntaxAndDiffCheck": "passed",
     "persistFilesBoundary": "sensitive-classification-and-all-product-safety-uploads-rejected-before-persistence",
     "historicalHandlingBypassRegression": "passed-existing-product-safety-case-with-legacy-handling-and-not-indicated-upload-rejected-before-persistence",
