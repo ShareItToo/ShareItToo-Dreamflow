@@ -1,6 +1,6 @@
 # WP163 — Current-source canonical signed Internal candidate
 
-Status: **BUILD READY LOCALLY / EXACT GITHUB VERIFICATION PENDING**.
+Status: **BUILD READY / EXACT GITHUB REGRESSION AND CODEQL VERIFIED**.
 
 The current source candidate is bound to branch `codex/master-workflow-20260808`
 and source commit `707d95e93c463ad4bbb0adbf382526d8869992c5`. The strictly newer
@@ -28,7 +28,8 @@ Flutter tests/analyzer, Web/Wasm dry run, loopback smoke, Android debug build
 and Android surface audit. No device was contacted and no Play upload or
 activation occurred.
 
-The remaining bounded action is exact-head GitHub Regression and CodeQL after
-the evidence commit is pushed. Store, tester, production, provider, payment,
+Exact-head GitHub Regression `35044499740` and CodeQL `35044499754` both passed
+on `e7153a06198e2b51df51b1fdcaa73d27267c2c1c`; the PR-head code-scanning
+readback has zero open alerts. Store, tester, production, provider, payment,
 Firebase Console, cloud/VPS/DNS, device and PR-merge changes remain out of
 scope. Stop at `BUILD_READY` after the GitHub readback.

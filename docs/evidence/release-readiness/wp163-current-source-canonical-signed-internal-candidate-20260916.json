@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "workPackage": "WP163_CURRENT_SOURCE_CANONICAL_SIGNED_INTERNAL_CANDIDATE",
-  "status": "build-ready-github-verification-pending",
+  "status": "build-ready-github-verified-play-internal-upload-pending",
   "recordedAt": "2026-09-16T01:17:35Z",
   "source": {
     "worktree": "/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808",
@@ -48,8 +48,17 @@
     "canonicalReleaseBuild": "passed-with-isolated-cli19-sdk",
     "deviceInstallOrContact": "not-performed",
     "playUploadOrActivation": "not-performed",
-    "githubRegression": "pending",
-    "githubCodeql": "pending"
+    "githubRegression": {
+      "runId": 35044499740,
+      "head": "e7153a06198e2b51df51b1fdcaa73d27267c2c1c",
+      "conclusion": "success"
+    },
+    "githubCodeql": {
+      "runId": 35044499754,
+      "head": "e7153a06198e2b51df51b1fdcaa73d27267c2c1c",
+      "conclusion": "success",
+      "openCodeScanningAlertsPrHead": 0
+    }
   },
   "boundaries": {
     "storeUploadPerformed": false,

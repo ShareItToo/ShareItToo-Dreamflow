@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "android-current-rollover-candidate",
-  "status": "build-ready-play-internal-upload-pending",
+  "status": "build-ready-github-verified-play-internal-upload-pending",
   "generatedAt": "2026-09-16T01:17:35Z",
   "candidate": {
     "applicationId": "com.shareittoo.app",
@@ -50,13 +50,13 @@
     "flutterAnalyzer": "passed-zero-issues",
     "webWasmLoopbackSmoke": "passed",
     "androidDebugBuildAndSurfaceAudit": "passed",
-    "cleanCheckoutReproducibility": "pending-exact-github-head",
-    "githubVerifiedHead": null,
-    "githubRegressionRunId": null,
-    "githubRegressionConclusion": "pending",
-    "githubCodeqlRunId": null,
-    "githubCodeqlConclusion": "pending",
-    "openCodeScanningAlertsPrHead": null
+    "cleanCheckoutReproducibility": "passed-exact-github-head",
+    "githubVerifiedHead": "e7153a06198e2b51df51b1fdcaa73d27267c2c1c",
+    "githubRegressionRunId": "35044499740",
+    "githubRegressionConclusion": "success",
+    "githubCodeqlRunId": "35044499754",
+    "githubCodeqlConclusion": "success",
+    "openCodeScanningAlertsPrHead": 0
   },
   "playStateAtLastReadback": {
     "activeInternalVersionCode": "2026090711",
