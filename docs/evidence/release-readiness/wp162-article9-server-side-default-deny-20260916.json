@@ -4,7 +4,7 @@
   "status": "technical-closure-article9-gate-open",
   "repository": {
     "branch": "codex/master-workflow-20260808",
-    "sourceHead": "0012ecf417c9d1af70c1d95169622185545085de"
+    "sourceHead": "e1b83086c80f99cd4baa3f3dcfed6a68b3cb5a0c"
   },
   "technicalBoundary": {
     "article9BasisSelected": false,
