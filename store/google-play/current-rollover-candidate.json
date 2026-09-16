@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "kind": "android-current-rollover-candidate",
   "status": "build-ready-play-internal-upload-pending",
-  "generatedAt": "2026-09-16T01:17:35Z",
+  "generatedAt": "2026-09-13T08:54:11Z",
   "candidate": {
     "applicationId": "com.shareittoo.app",
     "versionName": "1.0.0",
-    "versionCode": "2026091601",
-    "artifactSourceHead": "707d95e93c463ad4bbb0adbf382526d8869992c5",
+    "versionCode": "2026091311",
+    "artifactSourceHead": "7b0479c8ee679c3e428f5aad9999d582c1c8455f",
     "releaseChannel": "internal",
     "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
     "compileSdkVersion": 36,
@@ -27,14 +27,14 @@
     "g5ListingSetsTechnicalUiEnabled": true
   },
   "artifact": {
-    "archiveDirectoryName": "2026091601-707d95e93c463ad4bbb0adbf382526d8869992c5",
-    "aabFileName": "shareittoo-1.0.0-2026091601-707d95e93c463ad4bbb0adbf382526d8869992c5.aab",
-    "aabBytes": 138844325,
-    "aabSha256": "c5cc29eea8d5cccdb1913e9247528a784d945010c433d0125b3e39bdf563da7c",
-    "apkFileName": "shareittoo-1.0.0-2026091601-707d95e93c463ad4bbb0adbf382526d8869992c5.apk",
-    "apkBytes": 199976443,
-    "apkSha256": "32e2e28008e19e11d1fc00497c3f7f08f60eb42c48c0dea93878f8ae6670e464",
-    "privacyReportSha256": "2fa95150f403ce78a5be94764bd4df69654972973e521a60d394e8732153166c",
+    "archiveDirectoryName": "2026091311-7b0479c8ee679c3e428f5aad9999d582c1c8455f",
+    "aabFileName": "shareittoo-1.0.0-2026091311-7b0479c8ee679c3e428f5aad9999d582c1c8455f.aab",
+    "aabBytes": 138790969,
+    "aabSha256": "59df237569ac71b226b3199a33d3b01b946359f894f5c9ddf09c1e7063ce1cc6",
+    "apkFileName": "shareittoo-1.0.0-2026091311-7b0479c8ee679c3e428f5aad9999d582c1c8455f.apk",
+    "apkBytes": 199739653,
+    "apkSha256": "0488a10dd0aab85cf18ba4ea8c37193b1fdc2334bb7092efb9c0d23311a3da88",
+    "privacyReportSha256": "e17e8960f25fad762eaf8f63d95f37da569e471deaafe71e09a7880fabed0503",
     "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
     "signatureVerified": true,
     "zipStructureValidation": "passed",
@@ -45,26 +45,41 @@
     "nonOverwritingArchive": true
   },
   "sourceVerification": {
-    "releasePreflight": "passed",
-    "fullTechnicalRegression": "passed-isolated-local-profile",
+    "closedPilotFocusedTests": "passed-release-preflight",
+    "privacyAndPackageRatchets": "passed",
+    "fullToolInventory": "passed",
+    "backendSuite": "passed",
     "flutterAnalyzer": "passed-zero-issues",
-    "webWasmLoopbackSmoke": "passed",
-    "androidDebugBuildAndSurfaceAudit": "passed",
-    "cleanCheckoutReproducibility": "pending-exact-github-head",
-    "githubVerifiedHead": null,
-    "githubRegressionRunId": null,
-    "githubRegressionConclusion": "pending",
-    "githubCodeqlRunId": null,
-    "githubCodeqlConclusion": "pending",
-    "openCodeScanningAlertsPrHead": null
+    "fullTechnicalRegression": "passed",
+    "cleanCheckoutReproducibility": "passed",
+    "githubVerifiedHead": "7b0479c8ee679c3e428f5aad9999d582c1c8455f",
+    "githubRegressionRunId": "34748319125",
+    "githubRegressionConclusion": "success",
+    "githubCodeqlRunId": "34748319084",
+    "githubCodeqlConclusion": "success",
+    "githubApiImagePublishRunId": null,
+    "githubApiImagePublishConclusion": "not-required-client-only-source-change",
+    "openCodeScanningAlertsPrHead": 0
   },
-  "playStateAtLastReadback": {
+  "stagingStateAtReadback": {
+    "sourceHead": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "clientBuild": "1.0.0+2026091110",
+    "health": "passed-api-and-database-healthy-restart-zero",
+    "readiness": "degraded-only-known-noncritical-support-followups",
+    "paymentTransport": "memory",
+    "paymentLivemode": false,
+    "listingAiProvider": "on_device",
+    "externalListingAiEnabled": false,
+    "currentCandidateDeployment": "not-required-client-only-source-change",
+    "imageDigest": "sha256:4d440d9481369b477b9495f5cefa419783f974ff35438c3490e54b42322ddfd6",
+    "releaseEvidenceBasename": "staging-20260911T174950Z-df39a14b7a19.json"
+  },
+  "playStateAtReadback": {
     "activeInternalVersionCode": "2026090711",
-    "readbackSource": "previous-owner-readback",
-    "currentCandidateUploaded": false,
-    "currentCandidateActivated": false,
-    "testerListChanged": false,
-    "currentConsoleReadbackPerformed": false
+    "candidateVersionCodeStrictlyHigher": true,
+    "candidateUploaded": false,
+    "candidateActivated": false,
+    "testerListChanged": false
   },
   "providerAndLiveHolds": {
     "externalListingAiEnabled": false,
@@ -72,14 +87,15 @@
     "productionChanged": false,
     "firebaseProjectChanged": false,
     "cloudVpsDnsChanged": false,
-    "pullRequestMerged": false,
-    "deviceInstalledOrContacted": false
+    "pullRequestMerged": false
   },
   "legalAndPilotHold": {
     "legalManifestVersion": "V5.2-2026-08-16",
     "legalManifestStatus": "draft-blocked",
     "legalActivationAllowed": false,
     "professionallyReviewed": false,
+    "approvedV52SnapshotsProvisioned": false,
+    "acceptancePreflightResult": "closed_pilot_v52_legal_snapshots_not_ready",
     "pilotActivationAllowed": false
   },
   "dataSafetyHold": {
@@ -88,8 +104,20 @@
     "reconciliationRequiredBeforePlayUpload": true,
     "handoffRef": "store/google-play/on-device-listing-ai-data-safety-handoff.json"
   },
-  "evidenceRef": "docs/evidence/release-readiness/wp163-current-source-canonical-signed-internal-candidate-20260916.json",
-  "handoverRef": "docs/operations/WP163_CURRENT_SOURCE_CANONICAL_SIGNED_INTERNAL_CANDIDATE_2026-09-16.md",
+  "deviceVerification": {
+    "preferredDeviceExactApkInstalled": true,
+    "preferredDeviceDataPreserved": true,
+    "onDeviceListingAiPhysicalInference": "not-replayed-on-2026091311",
+    "authenticatedPilotMatrix": "passed-pixel-email-verified-two-role-product-journey",
+    "secondaryDevice": "not-required-while-oneplus-disconnected"
+  },
+  "privateDriveHandoff": {
+    "status": "not-required-for-current-mac-mini-session",
+    "shared": false
+  },
+  "evidenceRef": "docs/evidence/release-readiness/wp136-bookings-unread-snapshot-pixel-closure-20260913.json",
+  "playCompletionEvidenceRef": null,
+  "handoverRef": null,
   "releaseNotesRef": "store/google-play/de-DE/internal_release_notes.txt",
   "containsSecrets": false,
   "containsTesterIdentity": false,
