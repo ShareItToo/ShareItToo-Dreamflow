@@ -775,6 +775,53 @@ test('structured injury requires handling and server-derived owner role', () => 
   );
 });
 
+test('product-safety Article 9 guard covers every free-text field and injury flag', () => {
+  const base = {
+    caseType: 'trust_safety',
+    caseSubType: 'dangerous_item_or_injury',
+    summary: 'Defektes Produkt ohne Verletzung gesondert melden.',
+    safetyTriage: safetyTriage(),
+    issueScope: issueScope(),
+    productSafetyNotice: {
+      version: 'sit_product_safety_intake_v1',
+      contactPointVersion: 'sit_product_safety_contact_point_v1',
+      issueKind: 'dangerous_product',
+      productIdentification: 'Bohrmaschine Modell X',
+      riskDescription: 'Beim Einschalten trat Rauch aus, ohne Verletzung.',
+      injuryOccurred: false,
+      safetyGuidanceAcknowledged: true,
+    },
+  };
+  const variants = [
+    ['summary', { summary: 'Medizinische Behandlung ist erforderlich.' }],
+    ['productIdentification', {
+      productSafetyNotice: {
+        ...base.productSafetyNotice,
+        productIdentification: 'Medizinisches Gerät Modell X',
+      },
+    }],
+    ['riskDescription', {
+      productSafetyNotice: {
+        ...base.productSafetyNotice,
+        riskDescription: 'Bei der Nutzung wurde eine medizinische Verletzung festgestellt.',
+      },
+    }],
+    ['injuryOccurred', {
+      productSafetyNotice: { ...base.productSafetyNotice, injuryOccurred: true },
+    }],
+  ];
+  for (const [field, patch] of variants) {
+    assert.throws(
+      () => normalizeSupportCaseInput({ ...base, ...patch }, { now }),
+      /support_article9_server_authorization_required/u,
+      `${field} must use the server Article 9 guard`,
+    );
+  }
+  const neutral = normalizeSupportCaseInput(base, { now });
+  assert.equal(neutral.productSafetyNotice.injuryOccurred, false);
+  assert.equal(neutral.specialCategoryHandling, undefined);
+});
+
 test('transition graph is explicit and rejects skips, paused and stale versions', () => {
   assert.equal(canTransitionSupportCase('received', 'acknowledged'), true);
   assert.equal(canTransitionSupportCase('received', 'resolved'), false);

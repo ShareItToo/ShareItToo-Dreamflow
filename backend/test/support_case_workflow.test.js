@@ -496,6 +496,39 @@ test('neutral product-safety creation remains recordable without Article 9 data'
   client.done();
 });
 
+test('product-safety Article 9 rejection happens before any database write', async () => {
+  const client = new ScriptedClient([
+    { match: /FROM support_cases/, result: noRows },
+  ]);
+  await assert.rejects(
+    createSupportCase(client, {
+      actor: { id: 'user-1', role: 'user' },
+      raw: {
+        caseType: 'trust_safety',
+        caseSubType: 'dangerous_item_or_injury',
+        summary: 'Medizinische Behandlung ist erforderlich.',
+        safetyTriage: safetyTriage(),
+        issueScope: issueScope(),
+        productSafetyNotice: {
+          version: 'sit_product_safety_intake_v1',
+          contactPointVersion: 'sit_product_safety_contact_point_v1',
+          issueKind: 'dangerous_product',
+          productIdentification: 'Bohrmaschine Modell X',
+          riskDescription: 'Beim Einschalten trat Rauch aus, ohne Verletzung.',
+          injuryOccurred: false,
+          safetyGuidanceAcknowledged: true,
+        },
+      },
+      idempotencyKey: 'product-safety-article9-summary',
+      now,
+    }),
+    (error) => error.code === 'support_article9_server_authorization_required',
+  );
+  assert.equal(client.calls.length, 1, 'only the idempotency read may precede normalization');
+  assert.doesNotMatch(client.calls[0].sql, /INSERT INTO/u);
+  client.done();
+});
+
 test('DSA notice creation snapshots server-side reporter identity and exposes only its Notice ID', async () => {
   const client = new ScriptedClient([
     { match: /FROM support_cases/, result: noRows },

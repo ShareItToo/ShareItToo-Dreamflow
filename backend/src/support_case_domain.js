@@ -851,6 +851,8 @@ export function normalizeSupportCaseInput(raw, {
   const specialCategoryDetection = detectPossibleSpecialCategoryFields(
     productSafetyNotice
       ? {
+        summary: userFacingSummary,
+        productIdentification: productSafetyNotice.productIdentification,
         productSafetyRiskDescription: productSafetyNotice.riskDescription,
         productSafetyInjuryOccurred: productSafetyNotice.injuryOccurred === true,
       }
