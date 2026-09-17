@@ -41,8 +41,13 @@ plan before rotation.
 `ensure_mfa_staging_secret.mjs` first reuses and validates an existing file. It
 can create a missing file only with an explicit exact-commit confirmation,
 atomic `O_EXCL` creation and mode `0600`; it never overwrites or rotates an
-existing key and never prints its value. The normal deploy gate does not create
-keys. Creation is a separate preparation action and was not executed here.
+existing key and never prints its value. For a root-created runtime key, set
+`MFA_ENCRYPTION_KEY_RUNTIME_READABLE=1` so creation ends as `root:65532`/`0640`.
+An existing owner-only key can be changed to that runtime form only through
+`MFA_ENCRYPTION_KEY_PREPARE_RUNTIME=1` and a second exact confirmation; this
+changes metadata only and preserves the inode and content. Re-running that
+preparation is idempotent. The normal deploy gate does not create or prepare
+keys.
 
 ```sh
 ENABLE_STAGING_MFA=1 \
@@ -52,7 +57,8 @@ MFA_ENCRYPTION_KEY_HOST_FILE=/absolute/private/path/mfa-encryption-key \
   ./ops/deploy_release.sh staging FULL_40_CHARACTER_COMMIT
 ```
 
-The preflight validates only path safety, owner-only permissions, bounded size
+The storage preflight validates owner-only `0600` permissions; the controlled
+acceptance preflight requires runtime-readable `root:65532`/`0640`, bounded size
 and strict 32-byte key shape. It never prints the key. The overlay clears the
 direct environment value and mounts the file read-only as
 `MFA_ENCRYPTION_KEY_FILE`. A successful health readback exposes only
@@ -104,12 +110,13 @@ required evidence.
 ## Controlled Staging acceptance and explicit promotion
 
 The shared Staging public port is never used as the acceptance target. The
-controlled candidate runs from the exact immutable image on loopback port
-`18081`, while the reverse proxy remains bound to the normal Staging port
-`18080`. The controlled Compose file deliberately does not use `env_file`:
-only the selected database/JWT values and the owner-only MFA key mount are
-interpolated. Payment is hard-pinned to memory, Stripe live mode is false,
-Identity is disabled and Listing AI is the zero-budget mock.
+controlled candidate runs from the exact immutable image on the immediately
+preflighted free loopback port `18082`, while the reverse proxy remains bound
+to the normal Staging port `18080`; a foreign listener is never stopped. The
+controlled Compose file deliberately does not use `env_file`: only the selected
+database/JWT values and the runtime-readable MFA key mount are interpolated.
+Payment is hard-pinned to memory, Stripe live mode is false, Identity is
+disabled and Listing AI is the zero-budget mock.
 
 The acceptance runner verifies the image label and `/version` commit, readiness,
 an authenticated synthetic MFA enroll -> pending -> cancel flow, and that the
@@ -123,20 +130,26 @@ promotion and no `df39` fallback.
 SIT_STAGING_REHEARSAL_OPS_COMMIT=FULL_40_CHARACTER_OPS_COMMIT \
 SIT_STAGING_CONTROLLED_ACCEPTANCE_EXECUTE=1 \
 SIT_STAGING_ACCEPTANCE_CONFIRM=FULL_40_CHARACTER_COMMIT \
+STAGING_ACCEPTANCE_PORT=18082 \
 SIT_STAGING_PUBLIC_BASE_URL=https://staging.shareittoo.com \
 SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE=/absolute/private/path/acceptance.json \
 MFA_ENCRYPTION_KEY_HOST_FILE=/absolute/private/path/mfa-encryption-key \
-  node ops/staging_controlled_acceptance.mjs start FULL_40_CHARACTER_COMMIT
+  node ops/staging_controlled_acceptance.mjs run FULL_40_CHARACTER_COMMIT
 
 SIT_STAGING_REHEARSAL_OPS_COMMIT=FULL_40_CHARACTER_OPS_COMMIT \
 SIT_STAGING_PUBLIC_BASE_URL=https://staging.shareittoo.com \
+STAGING_ACCEPTANCE_PORT=18082 \
 SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE=/absolute/private/path/acceptance.json \
+MFA_ENCRYPTION_KEY_HOST_FILE=/absolute/private/path/mfa-encryption-key \
   node ops/staging_controlled_acceptance.mjs verify FULL_40_CHARACTER_COMMIT
 ```
 
-Only after the evidence is reviewed may the explicit `release` mode stop the
-loopback container and invoke the guarded public Staging deploy. This package
-does not execute either mode against live infrastructure.
+The preferred `run` mode performs start, readiness/MFA verification, complete
+identity-bound cleanup and only then writes evidence; cleanup failure overrides
+PASS. Standalone `verify` follows the same verify→cleanup→evidence ordering.
+Only after the evidence is reviewed may the explicit `release` mode invoke the
+guarded public Staging deploy. Historical attempts remain recorded in the
+bound plan; this runbook does not erase or reinterpret them.
 
 FCM is opt-in for staging and cannot be activated for production through this
 path. Before the first FCM-enabled staging rollout, create only the dedicated

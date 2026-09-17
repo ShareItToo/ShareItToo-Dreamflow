@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { chmod, lstat, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import {
@@ -121,6 +123,32 @@ test('new runtime-readable MFA keys are created ready for the acceptance contain
     const metadata = await lstat(file);
     assert.equal(metadata.mode & 0o777, 0o640);
     assert.equal(metadata.gid, 65532);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('CLI runtime preparation is idempotent after the first metadata transition', { skip: process.getuid?.() !== 0 }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'sit-mfa-runtime-cli-'));
+  try {
+    const file = join(root, 'mfa-key');
+    const script = fileURLToPath(new URL('../ops/ensure_mfa_staging_secret.mjs', import.meta.url));
+    const env = {
+      ...process.env,
+      MFA_ENCRYPTION_KEY_HOST_FILE: file,
+      MFA_ENCRYPTION_KEY_CREATE_IF_ABSENT: '1',
+      MFA_ENCRYPTION_KEY_CREATE_CONFIRM: 'candidate-cli',
+      MFA_ENCRYPTION_KEY_CREATE_COMMIT: 'candidate-cli',
+      MFA_ENCRYPTION_KEY_PREPARE_RUNTIME: '1',
+      MFA_ENCRYPTION_KEY_RUNTIME_CONFIRM: 'candidate-cli-runtime',
+      MFA_ENCRYPTION_KEY_RUNTIME_COMMIT: 'candidate-cli-runtime',
+    };
+    const first = spawnSync(process.execPath, [script], { env, encoding: 'utf8' });
+    assert.equal(first.status, 0, first.stderr);
+    const before = await readFile(file);
+    const second = spawnSync(process.execPath, [script], { env, encoding: 'utf8' });
+    assert.equal(second.status, 0, second.stderr);
+    assert.deepEqual(await readFile(file), before);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

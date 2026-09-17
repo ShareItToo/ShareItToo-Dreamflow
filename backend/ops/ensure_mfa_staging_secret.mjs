@@ -192,20 +192,40 @@ export function prepareMfaStagingRuntimePermissions({
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   try {
-    const result = ensureMfaStagingSecret({
-      filePath: process.env.MFA_ENCRYPTION_KEY_HOST_FILE ?? '',
-      createIfAbsent: process.env.MFA_ENCRYPTION_KEY_CREATE_IF_ABSENT === '1',
-      runtimeReadable: process.env.MFA_ENCRYPTION_KEY_RUNTIME_READABLE === '1',
-      confirmation: process.env.MFA_ENCRYPTION_KEY_CREATE_CONFIRM ?? '',
-      expectedConfirmation: process.env.MFA_ENCRYPTION_KEY_CREATE_COMMIT ?? '',
-    });
-    const prepared = process.env.MFA_ENCRYPTION_KEY_PREPARE_RUNTIME === '1'
-      ? prepareMfaStagingRuntimePermissions({
-        filePath: process.env.MFA_ENCRYPTION_KEY_HOST_FILE ?? '',
-        confirmation: process.env.MFA_ENCRYPTION_KEY_RUNTIME_CONFIRM ?? '',
-        expectedConfirmation: process.env.MFA_ENCRYPTION_KEY_RUNTIME_COMMIT ?? '',
-      })
-      : result;
+    const filePath = process.env.MFA_ENCRYPTION_KEY_HOST_FILE ?? '';
+    const createIfAbsent = process.env.MFA_ENCRYPTION_KEY_CREATE_IF_ABSENT === '1';
+    const createConfirmation = process.env.MFA_ENCRYPTION_KEY_CREATE_CONFIRM ?? '';
+    const createCommit = process.env.MFA_ENCRYPTION_KEY_CREATE_COMMIT ?? '';
+    const prepareRuntime = process.env.MFA_ENCRYPTION_KEY_PREPARE_RUNTIME === '1';
+    let prepared;
+    if (prepareRuntime) {
+      let exists = true;
+      try { lstatSync(filePath); } catch (error) {
+        if (error?.code === 'ENOENT') exists = false;
+        else throw error;
+      }
+      prepared = exists
+        ? prepareMfaStagingRuntimePermissions({
+          filePath,
+          confirmation: process.env.MFA_ENCRYPTION_KEY_RUNTIME_CONFIRM ?? '',
+          expectedConfirmation: process.env.MFA_ENCRYPTION_KEY_RUNTIME_COMMIT ?? '',
+        })
+        : ensureMfaStagingSecret({
+          filePath,
+          createIfAbsent,
+          runtimeReadable: true,
+          confirmation: createConfirmation,
+          expectedConfirmation: createCommit,
+        });
+    } else {
+      prepared = ensureMfaStagingSecret({
+        filePath,
+        createIfAbsent,
+        runtimeReadable: process.env.MFA_ENCRYPTION_KEY_RUNTIME_READABLE === '1',
+        confirmation: createConfirmation,
+        expectedConfirmation: createCommit,
+      });
+    }
     process.stdout.write(`MFA Staging key ${prepared.status}; source=file; length=${prepared.keyLength}\n`);
   } catch (error) {
     process.stderr.write(`${error?.message ?? 'MFA Staging key lifecycle gate failed.'}\n`);
