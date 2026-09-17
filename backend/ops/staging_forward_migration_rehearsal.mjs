@@ -103,22 +103,32 @@ export function buildStagingRehearsalPlan({ targetCommit, appliedRange = '001-07
       'verify aggregate table/data presence without emitting row or identity data',
       'apply migrations 075-087 forward-only and verify the complete 001-087 ledger',
       'run foreign-key and 075-087 structural/functional contract probes',
-      'resume only the services that were quiesced after success; clean temporary restore resources',
+      'clean temporary restore resources, verify their absence, and leave all quiesced services stopped for controlled acceptance',
     ]),
     boundaries: Object.freeze({
       liveDatabaseMutation: false,
       productionTargetAllowed: false,
       automaticDownMigration: false,
       oldImageRollbackProof: false,
+      servicesRemainQuiesced: true,
+      apiResumed: false,
     }),
   });
 }
 
-function compact(value) {
-  return value.trim().split(/\r?\n/u).slice(-30).join('\n').slice(0, 6000);
+function commandFailure(phase) {
+  const error = new Error(`staging_rehearsal_${phase}_failed`);
+  error.code = `staging_rehearsal_${phase}_failed`;
+  return error;
 }
 
-function runCommand(command, args, { input, cwd = repositoryRoot, env = process.env } = {}) {
+export function runCommand(command, args, {
+  input,
+  cwd = repositoryRoot,
+  env = process.env,
+  phase = 'command',
+  allowFailure = false,
+} = {}) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
@@ -127,17 +137,21 @@ function runCommand(command, args, { input, cwd = repositoryRoot, env = process.
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
-    child.once('error', reject);
+    child.once('error', () => reject(commandFailure(phase)));
     child.once('close', (code) => {
-      if (code === 0) resolvePromise({ stdout, stderr });
-      else reject(new Error(`${command} exited ${code}: ${compact(stderr || stdout)}`));
+      if (code === 0 || allowFailure) resolvePromise({ stdout, stderr, code });
+      else reject(commandFailure(phase));
     });
     if (input !== undefined) child.stdin.end(input);
     else child.stdin.end();
   });
 }
 
-function runCommandWithFileInput(command, args, filePath, { cwd = repositoryRoot, env = process.env } = {}) {
+export function runCommandWithFileInput(command, args, filePath, {
+  cwd = repositoryRoot,
+  env = process.env,
+  phase = 'command_file_input',
+} = {}) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     const inputStream = createReadStream(filePath);
@@ -150,13 +164,13 @@ function runCommandWithFileInput(command, args, filePath, { cwd = repositoryRoot
     const failInput = (error) => {
       inputStream.destroy();
       child.kill('SIGTERM');
-      reject(error);
+      reject(commandFailure(`${phase}_input`));
     };
     inputStream.once('error', failInput);
-    child.once('error', reject);
+    child.once('error', () => reject(commandFailure(phase)));
     child.once('close', (code) => {
       if (code === 0) resolvePromise({ stdout, stderr });
-      else reject(new Error(`${command} exited ${code}: ${compact(stderr || stdout)}`));
+      else reject(commandFailure(phase));
     });
     inputStream.pipe(child.stdin);
   });
@@ -262,16 +276,14 @@ async function writeDatabaseBackup({ databaseContainer, databaseUser, databaseNa
     'exec', databaseContainer, 'pg_dump', '-U', databaseUser, '-d', databaseName,
     '--format=custom', '--no-owner', '--no-acl',
   ], { cwd: repositoryRoot, stdio: ['ignore', output, 'pipe'] });
-  let stderr = '';
   child.stderr.setEncoding('utf8');
-  child.stderr.on('data', (chunk) => { stderr += chunk; });
   const code = await new Promise((resolvePromise, reject) => {
     child.once('error', reject);
     child.once('close', resolvePromise);
   });
   if (code !== 0) {
     output.destroy();
-    throw new Error(`pg_dump failed: ${compact(stderr)}`);
+    throw commandFailure('pg_dump');
   }
   await outputClosed;
   const metadata = await stat(backupPath);
@@ -501,6 +513,32 @@ async function applyMigrationsWithApplicationRunner({ container, database, user,
   }
 }
 
+export async function removeAndVerifyDockerResource(kind, name, { env = process.env } = {}) {
+  const removeArgs = kind === 'container' ? ['rm', '-f', name] : ['volume', 'rm', name];
+  const inspectArgs = kind === 'container' ? ['inspect', name] : ['volume', 'inspect', name];
+  let removalError = null;
+  try {
+    await runCommand('docker', removeArgs, {
+      phase: `cleanup_${kind}_remove`,
+      env,
+    });
+  } catch {
+    removalError = `cleanup_${kind}_remove_failed`;
+  }
+  try {
+    const result = await runCommand('docker', inspectArgs, {
+      phase: `cleanup_${kind}_verify`,
+      allowFailure: true,
+      env,
+    });
+    if (result.code === 0) return `cleanup_${kind}_still_present`;
+    if (result.code !== 1) return `cleanup_${kind}_verify_failed`;
+  } catch {
+    return `cleanup_${kind}_verify_failed`;
+  }
+  return removalError;
+}
+
 export async function runStagingForwardMigrationRehearsal({
   targetCommit,
   environment = process.env,
@@ -526,6 +564,9 @@ export async function runStagingForwardMigrationRehearsal({
   const databaseName = environment.STAGING_DATABASE_NAME ?? 'shareittoo_staging';
   const requestedBackupDirectory = environment.STAGING_REHEARSAL_BACKUP_DIR ?? '/docker/shareittoo/backups/rehearsals';
   const backupDirectory = await safeExternalDirectory(requestedBackupDirectory);
+  const opsCommit = fullCommit(environment.SIT_STAGING_REHEARSAL_OPS_COMMIT, 'opsCommit');
+  const runningOpsCommit = (await runCommand('git', ['rev-parse', 'HEAD'], { phase: 'ops_commit_read' })).stdout.trim();
+  if (runningOpsCommit !== opsCommit) fail('ops_commit_mismatch');
   const apiLabels = await dockerInspectJson(apiContainer, '{{json .Config.Labels}}');
   const databaseLabels = await dockerInspectJson(databaseContainer, '{{json .Config.Labels}}');
   const volumeLabels = await dockerInspectJson(databaseVolume, '{{json .Labels}}');
@@ -550,6 +591,7 @@ export async function runStagingForwardMigrationRehearsal({
   let succeeded = false;
   let backup;
   let failureCode = null;
+  let result;
   try {
     const running = (await runCommand('docker', [
       'ps', '--filter', `label=com.docker.compose.project=${stagingProjectName}`,
@@ -648,9 +690,9 @@ export async function runStagingForwardMigrationRehearsal({
     if (ledger !== '87|87|1|87') fail('rehearsal_migration_ledger_invalid');
     await runCommand('docker', ['exec', '-i', isolatedContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], { input: await readFile(join(repositoryRoot, 'backend/ops/check_foreign_key_integrity.sql')) });
     await runFunctionalProbes({ container: isolatedContainer, user: 'shareittoo_rehearsal', database: 'shareittoo_rehearsal' });
-    succeeded = true;
-    return Object.freeze({
+    result = Object.freeze({
       status: 'passed',
+      opsCommit,
       targetCommit,
       currentAppliedRange: '001-074',
       forwardAppliedRange: '075-087',
@@ -661,31 +703,50 @@ export async function runStagingForwardMigrationRehearsal({
         forwardMigrationFiles: forwardMigrations.length,
         functionalProbes: 'passed',
       }),
-      apiResumed: true,
+      servicesRemainQuiesced: true,
+      apiResumed: false,
     });
+    succeeded = true;
   } catch (error) {
     failureCode = error?.code ?? 'rehearsal_failed';
-    throw error;
   } finally {
-    if (isolatedContainer) await runCommand('docker', ['rm', '-f', isolatedContainer]).catch(() => {});
-    if (isolatedVolume) await runCommand('docker', ['volume', 'rm', isolatedVolume]).catch(() => {});
-    if (succeeded) {
-      for (const name of quiesced) await runCommand('docker', ['start', name]).catch(() => {});
-    } else if (quiesced.length > 0) {
+    const cleanupFailures = [];
+    if (isolatedContainer) {
+      const cleanupFailure = await removeAndVerifyDockerResource('container', isolatedContainer);
+      if (cleanupFailure) cleanupFailures.push(cleanupFailure);
+    }
+    if (isolatedVolume) {
+      const cleanupFailure = await removeAndVerifyDockerResource('volume', isolatedVolume);
+      if (cleanupFailure) cleanupFailures.push(cleanupFailure);
+    }
+    if (cleanupFailures.length > 0) {
+      succeeded = false;
+      failureCode = 'cleanup_required';
+    }
+    if (!succeeded) {
       const failureReportPath = join(backupDirectory, `staging-${runId}-failure.json`);
-      await writeFile(failureReportPath, `${JSON.stringify({
-        status: 'fail-closed',
-        targetCommit,
-        currentAppliedRange: '001-074',
-        forwardAppliedRange: 'not-applied-or-unverified',
-        failureCode: failureCode ?? 'rehearsal_failed',
-        quiescedServices: quiesced,
-        servicesResumed: false,
-        databaseRollback: 'not-attempted',
-        mfaOverlay: 'not-touched',
-      }, null, 2)}\n`, { flag: 'wx', mode: 0o600 }).catch(() => {});
+      try {
+        await writeFile(failureReportPath, `${JSON.stringify({
+          status: 'fail-closed',
+          opsCommit,
+          targetCommit,
+          currentAppliedRange: '001-074',
+          forwardAppliedRange: 'not-applied-or-unverified',
+          failureCode: failureCode ?? 'rehearsal_failed',
+          cleanupFailures,
+          quiescedServices: quiesced,
+          servicesRemainQuiesced: true,
+          servicesResumed: false,
+          databaseRollback: 'not-attempted',
+          mfaOverlay: 'not-touched',
+        }, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+      } catch {
+        failureCode = 'recovery_evidence_write_failed';
+      }
     }
   }
+  if (!succeeded) fail(failureCode ?? 'rehearsal_failed');
+  return result;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

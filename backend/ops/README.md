@@ -85,13 +85,15 @@ legal holds, special-category intake, MFA and Identity must all pass.
 ```sh
 SIT_STAGING_REHEARSAL_EXECUTE=1 \
 SIT_STAGING_REHEARSAL_CONFIRM=FULL_40_CHARACTER_COMMIT \
+SIT_STAGING_REHEARSAL_OPS_COMMIT=FULL_40_CHARACTER_OPS_COMMIT \
   node ops/staging_forward_migration_rehearsal.mjs FULL_40_CHARACTER_COMMIT
 ```
 
 The operation never targets Production, never runs down migrations and removes
-temporary restore containers/volumes. It resumes only services that it
-quiesced after a complete pass; a failed rehearsal leaves Staging isolated for
-forward recovery. A `/health` result is not rollback compatibility proof.
+temporary restore containers/volumes, verifying their absence. It leaves every
+service it quiesced stopped after both a successful rehearsal and a failure;
+only a later controlled acceptance/release step may start the exact new API.
+A `/health` result is not rollback compatibility proof.
 After a forward migration begins, `deploy_release.sh` never boots the prior
 unproven image: it stops the Staging API and records sanitized
 `forward-recovery-required` evidence. A future recovery image must be bound to

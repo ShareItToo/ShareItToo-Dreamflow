@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { chmod, mkdir, mkdtemp, rm, symlink } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { chmodSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -9,6 +10,9 @@ import {
   assertStagingTarget,
   buildStagingRehearsalPlan,
   runStagingForwardMigrationRehearsal,
+  removeAndVerifyDockerResource,
+  runCommand,
+  runCommandWithFileInput,
   safeExternalDirectory,
   validateStagingRunningSet,
 } from '../ops/staging_forward_migration_rehearsal.mjs';
@@ -128,4 +132,72 @@ test('rehearsal execution requires explicit exact confirmation before any Docker
     () => runStagingForwardMigrationRehearsal({ targetCommit: commit, execute: false }),
     (error) => error.code === 'explicit_execute_flag_required',
   );
+});
+
+test('command failures and file-input failures never expose command output', async () => {
+  await assert.rejects(
+    () => runCommand(process.execPath, ['-e', 'console.error("SENSITIVE_STDERR"); process.exit(7)'], {
+      phase: 'sanitization_probe',
+    }),
+    (error) => error.code === 'staging_rehearsal_sanitization_probe_failed'
+      && !error.message.includes('SENSITIVE_STDERR'),
+  );
+  const root = await mkdtemp(join(tmpdir(), 'sit-rehearsal-input-'));
+  try {
+    const inputPath = join(root, 'input.txt');
+    await writeFile(inputPath, 'SENSITIVE_INPUT');
+    await assert.rejects(
+      () => runCommandWithFileInput(
+        process.execPath,
+        ['-e', 'process.stderr.write("SENSITIVE_FILE_STDERR"); process.exit(8)'],
+        inputPath,
+        { phase: 'file_sanitization_probe' },
+      ),
+      (error) => error.code === 'staging_rehearsal_file_sanitization_probe_failed'
+        && !error.message.includes('SENSITIVE_FILE_STDERR'),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('cleanup must prove absence and never resume services implicitly', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'sit-rehearsal-docker-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const bin = join(root, 'bin');
+  const argsLog = join(root, 'docker-args.log');
+  await mkdir(bin, { mode: 0o700 });
+  const docker = join(bin, 'docker');
+  await writeFile(docker, `#!/bin/sh
+if [ -n "$DOCKER_ARGS_LOG" ]; then printf '%s\\n' "$*" >> "$DOCKER_ARGS_LOG"; fi
+if [ "$1" = "rm" ]; then exit "${'${DOCKER_RM_EXIT:-0}'}"; fi
+if [ "$1" = "inspect" ]; then exit "${'${DOCKER_INSPECT_EXIT:-1}'}"; fi
+if [ "$1" = "volume" ] && [ "$2" = "rm" ]; then exit "${'${DOCKER_RM_EXIT:-0}'}"; fi
+if [ "$1" = "volume" ] && [ "$2" = "inspect" ]; then exit "${'${DOCKER_INSPECT_EXIT:-1}'}"; fi
+exit 1
+`);
+  chmodSync(docker, 0o700);
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, DOCKER_ARGS_LOG: argsLog };
+  assert.equal(await removeAndVerifyDockerResource('container', 'rehearsal-c', { env }), null);
+  assert.equal(
+    await removeAndVerifyDockerResource('container', 'rehearsal-c', {
+      env: { ...env, DOCKER_RM_EXIT: '42' },
+    }),
+    'cleanup_container_remove_failed',
+  );
+  assert.equal(
+    await removeAndVerifyDockerResource('volume', 'rehearsal-v', {
+      env: { ...env, DOCKER_INSPECT_EXIT: '0' },
+    }),
+    'cleanup_volume_still_present',
+  );
+  const args = await readFile(argsLog, 'utf8');
+  assert.match(args, /rm -f rehearsal-c/u);
+  assert.match(args, /inspect rehearsal-c/u);
+  assert.match(args, /volume rm rehearsal-v/u);
+  assert.match(args, /volume inspect rehearsal-v/u);
+  const plan = buildStagingRehearsalPlan({ targetCommit: commit });
+  assert.equal(plan.boundaries.servicesRemainQuiesced, true);
+  assert.equal(plan.boundaries.apiResumed, false);
+  assert.doesNotMatch(plan.steps.join(' '), /resume/u);
 });

@@ -280,4 +280,7 @@ Staging after the forward attempt; never boot an observed old image or run an
 automatic down migration/database restore. Filesystem safety checks must finish
 before any backup-directory mutation, and the complete Staging container target
 set must be label-validated before any partial quiesce; check for foreign DB
-writers immediately before and after the protected backup.
+writers immediately before and after the protected backup. A successful
+protected rehearsal leaves all quiesced services stopped; cleanup must be
+verified and any cleanup failure overrides PASS. Runtime source and Ops
+orchestration commits are pinned separately and must be recorded at invocation.
