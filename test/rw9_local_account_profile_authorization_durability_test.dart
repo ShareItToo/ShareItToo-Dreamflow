@@ -195,6 +195,41 @@ void main() {
     expect(changes, contains(SharedPersistenceSync.accountSecurityStateKey));
   });
 
+  test(
+      'profile avatar removal propagates to both documents and emits a refresh',
+      () async {
+    SharedPreferences.setMockInitialValues(state());
+    final changes = <String>[];
+    final subscription = SharedPersistenceSync.changes.listen(changes.add);
+    addTearDown(subscription.cancel);
+
+    const avatar =
+        'https://shareittoo.com/api/v1/uploads/33333333-3333-4333-8333-333333333333-full.webp';
+    await update(<CurrentUserProfileField, Object?>{
+      CurrentUserProfileField.photoURL: avatar,
+    });
+    changes.clear();
+
+    final cleared = await update(<CurrentUserProfileField, Object?>{
+      CurrentUserProfileField.photoURL: null,
+    });
+
+    expect(cleared.photoURL, isNull);
+    final prefs = await SharedPreferences.getInstance();
+    final current = User.fromJson(
+      jsonDecode(prefs.getString('currentUser')!) as Map<String, dynamic>,
+    );
+    final users = (jsonDecode(prefs.getString('users')!) as List)
+        .map((entry) => User.fromJson(Map<String, dynamic>.from(entry as Map)))
+        .toList();
+    expect(current.photoURL, isNull);
+    expect(
+      users.singleWhere((entry) => entry.id == accountA.id).photoURL,
+      isNull,
+    );
+    expect(changes, contains(SharedPersistenceSync.accountSecurityStateKey));
+  });
+
   test('parallel disjoint patches serialize without lost updates', () async {
     SharedPreferences.setMockInitialValues(state());
 

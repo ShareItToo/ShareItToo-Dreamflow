@@ -15,6 +15,7 @@ const profileService = read('lib/services/profile_mutation_service.dart');
 const repository = read('lib/services/backend_repository.dart');
 const data = read('lib/services/data_service.dart');
 const navigation = read('lib/navigation/main_navigation.dart');
+const publicProfile = read('lib/screens/public_profile_screen.dart');
 
 test('WP189 subcategory fallback is canonical, bounded and readable', () => {
   assert.match(categories, /result\.add\('Sonstiges'\)/u);
@@ -37,4 +38,11 @@ test('WP189 profile avatar uses managed upload, durable profile state and fanout
   assert.match(data, /SharedPersistenceSync\.accountSecurityStateKey/u);
   assert.match(navigation, /SharedPersistenceSync\.changes\.listen/u);
   assert.match(navigation, /_loadUser\(\)/u);
+  assert.match(navigation, /ValueKey\(keySuffix\)/u);
+  assert.match(navigation, /_ProfileNavIcon\(photoUrl: photoUrl/u);
+  assert.match(publicProfile, /ProfileHeaderCard\(user: u/u);
+  assert.doesNotMatch(
+    publicProfile,
+    /user\.photoURL\s*\?\?\s*['"]https:\/\/images\.unsplash\.com/u,
+  );
 });
