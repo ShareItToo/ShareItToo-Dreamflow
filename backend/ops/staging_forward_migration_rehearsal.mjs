@@ -64,7 +64,7 @@ export function assertStagingLabels({ labels, expectedService, expectedVolume = 
   return true;
 }
 
-export function validateStagingRunningSet(entries, {
+export function validateStagingContainerInventory(entries, {
   apiContainer,
   databaseContainer,
 } = {}) {
@@ -73,16 +73,32 @@ export function validateStagingRunningSet(entries, {
     [databaseContainer, 'postgres'],
   ]);
   const seenServices = new Set();
+  let databaseState = null;
+  let apiState = null;
   for (const entry of entries ?? []) {
     const expectedService = allowedServices.get(entry.name);
     if (!expectedService) fail('unexpected_staging_container_before_quiesce');
     assertStagingLabels({ labels: entry.labels, expectedService });
     if (seenServices.has(expectedService)) fail('duplicate_staging_service_before_quiesce');
     seenServices.add(expectedService);
+    const state = entry.state ?? 'running';
+    if (expectedService === 'postgres') databaseState = state;
+    if (expectedService === 'api') apiState = state;
   }
   if (!seenServices.has('postgres')) fail('staging_database_not_running');
   if (!seenServices.has('api')) fail('staging_api_not_running');
-  return Object.freeze(entries.filter((entry) => entry.name !== databaseContainer).map((entry) => entry.name));
+  if (databaseState !== 'running') fail('staging_database_not_running');
+  if (!['running', 'exited'].includes(apiState)) {
+    fail('staging_api_state_unexpected');
+  }
+  return Object.freeze(apiState === 'running' ? [apiContainer] : []);
+}
+
+export function validateStagingRunningSet(entries, options = {}) {
+  return validateStagingContainerInventory(
+    (entries ?? []).map((entry) => ({ ...entry, state: entry.state ?? 'running' })),
+    options,
+  );
 }
 
 export function buildStagingRehearsalPlan({ targetCommit, appliedRange = '001-074' } = {}) {
@@ -423,30 +439,26 @@ BEGIN
     'rehearsal', 'record-' || gen_random_uuid()::text,
     now() + interval '1 hour', now() + interval '2 hours');
 
-  SELECT s.id INTO v_support_case_id
-    FROM support_cases AS s
-   WHERE s.intake_scope_evidence IS NULL
-   ORDER BY s.created_at
-   LIMIT 1;
-  IF v_support_case_id IS NULL THEN
-    INSERT INTO support_cases (
+  INSERT INTO support_cases (
       schema_version, human_readable_case_number, case_type, case_subtype,
       priority, severity, source_channel, operating_mode, reporter_user_id,
       reporter_role, current_owner_id, current_owner_role, approval_level,
-      waiting_on, next_action, next_update_at, user_facing_summary, idempotency_key
+      waiting_on, next_action, next_update_at, user_facing_summary,
+      idempotency_key, intake_scope_evidence
     ) VALUES (
-      1, 'SIT-REHEARSAL123', 'general_help', 'app_error_or_display',
+      1,
+      'SIT-' || substr(regexp_replace(upper(encode(gen_random_bytes(16), 'hex')), '[01]', 'A', 'g'), 1, 12),
+      'general_help', 'app_error_or_display',
       'p3', 'low', 'internal', 'simulation', v_user_id,
       'user', v_user_id, 'triage_owner', 'green_automatic',
       'none', 'rehearsal probe', now() + interval '1 hour',
-      'Rehearsal support case', 'rehearsal-case-' || gen_random_uuid()::text
+      'Rehearsal support case', 'rehearsal-case-' || gen_random_uuid()::text,
+      jsonb_build_object(
+        'version', 'sit_support_single_issue_scope_v1',
+        'singleIssueConfirmed', true,
+        'separationGuidanceShown', true
+      )
     ) RETURNING id INTO v_support_case_id;
-  END IF;
-  UPDATE support_cases SET intake_scope_evidence = jsonb_build_object(
-    'version', 'sit_support_single_issue_scope_v1',
-    'singleIssueConfirmed', true,
-    'separationGuidanceShown', true
-  ) WHERE id = v_support_case_id;
   BEGIN
     UPDATE support_cases SET intake_scope_evidence = '{"unexpected":true}'::jsonb
       WHERE id = v_support_case_id;
@@ -634,18 +646,20 @@ export async function runStagingForwardMigrationRehearsal({
   let failureCode = null;
   let result;
   try {
-    const running = (await runCommand('docker', [
-      'ps', '--filter', `label=com.docker.compose.project=${stagingProjectName}`,
+    const inventory = (await runCommand('docker', [
+      'ps', '-a', '--filter', `label=com.docker.compose.project=${stagingProjectName}`,
       '--format', '{{.Names}}',
     ], { phase: 'pre_quiesce_inventory' })).stdout.trim().split(/\r?\n/u).filter(Boolean);
-    const runningEntries = [];
-    for (const name of running) {
-      runningEntries.push({
+    const inventoryEntries = [];
+    for (const name of inventory) {
+      const inspected = await dockerInspectJson(name, '{{json .}}', 'pre_quiesce_container_inspect');
+      inventoryEntries.push({
         name,
-        labels: await dockerInspectJson(name, '{{json .Config.Labels}}', 'pre_quiesce_label_inspect'),
+        state: inspected?.State?.Status,
+        labels: inspected?.Config?.Labels,
       });
     }
-    const toQuiesce = validateStagingRunningSet(runningEntries, { apiContainer, databaseContainer });
+    const toQuiesce = validateStagingContainerInventory(inventoryEntries, { apiContainer, databaseContainer });
     for (const name of toQuiesce) {
       await runCommand('docker', ['stop', name], { phase: `quiesce_${name.replaceAll(/[^a-z0-9]+/giu, '_')}` });
       quiesced.push(name);

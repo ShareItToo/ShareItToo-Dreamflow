@@ -17,6 +17,7 @@ import {
   runCommandWithFileInput,
   safeExternalDirectory,
   validateStagingRunningSet,
+  validateStagingContainerInventory,
 } from '../ops/staging_forward_migration_rehearsal.mjs';
 
 const commit = '1'.repeat(40);
@@ -129,6 +130,61 @@ test('quiesce target set is fully validated before any container stop', () => {
   );
 });
 
+test('inventory accepts only an already-stopped API with a running database', () => {
+  const labels = (service) => ({
+    'com.docker.compose.project': 'sit-staging',
+    'com.docker.compose.service': service,
+  });
+  const base = [
+    { name: 'shareittoo-staging-api', state: 'exited', labels: labels('api') },
+    { name: 'shareittoo-staging-postgres', state: 'running', labels: labels('postgres') },
+  ];
+  assert.deepEqual(
+    validateStagingContainerInventory(base, {
+      apiContainer: 'shareittoo-staging-api',
+      databaseContainer: 'shareittoo-staging-postgres',
+    }),
+    [],
+  );
+  for (const state of ['created', 'dead']) {
+    assert.throws(
+      () => validateStagingContainerInventory(
+        base.map((entry) => entry.name.endsWith('api') ? { ...entry, state } : entry),
+        { apiContainer: 'shareittoo-staging-api', databaseContainer: 'shareittoo-staging-postgres' },
+      ),
+      (error) => error.code === 'staging_api_state_unexpected',
+    );
+  }
+  assert.deepEqual(
+    validateStagingContainerInventory(base.map((entry) => ({ ...entry, state: 'running' })), {
+      apiContainer: 'shareittoo-staging-api',
+      databaseContainer: 'shareittoo-staging-postgres',
+    }),
+    ['shareittoo-staging-api'],
+  );
+  assert.throws(
+    () => validateStagingContainerInventory(
+      base.map((entry) => entry.name.endsWith('postgres') ? { ...entry, state: 'exited' } : entry),
+      { apiContainer: 'shareittoo-staging-api', databaseContainer: 'shareittoo-staging-postgres' },
+    ),
+    (error) => error.code === 'staging_database_not_running',
+  );
+  assert.throws(
+    () => validateStagingContainerInventory(
+      base.filter((entry) => entry.name !== 'shareittoo-staging-api'),
+      { apiContainer: 'shareittoo-staging-api', databaseContainer: 'shareittoo-staging-postgres' },
+    ),
+    (error) => error.code === 'staging_api_not_running',
+  );
+  assert.throws(
+    () => validateStagingContainerInventory(
+      [...base, { name: 'unexpected-worker', state: 'exited', labels: labels('worker') }],
+      { apiContainer: 'shareittoo-staging-api', databaseContainer: 'shareittoo-staging-postgres' },
+    ),
+    (error) => error.code === 'unexpected_staging_container_before_quiesce',
+  );
+});
+
 test('rehearsal execution requires explicit exact confirmation before any Docker call', async () => {
   await assert.rejects(
     () => runStagingForwardMigrationRehearsal({ targetCommit: commit, execute: false }),
@@ -202,7 +258,10 @@ test('functional probe supplies the current refund amount breakdown contract', (
   const sql = buildFunctionalProbeSql();
   assert.match(sql, /owner_share_minor, platform_share_minor,/u);
   assert.match(sql, /\n    1, 0, 'separate_charge_manual_transfer_reversal_v1'/u);
-  assert.match(sql, /FROM support_cases AS s[\s\S]*WHERE s\.intake_scope_evidence IS NULL/u);
+  assert.match(sql, /idempotency_key, intake_scope_evidence[\s\S]*jsonb_build_object\(/u);
+  assert.match(sql, /SIT-' \|\| substr\(regexp_replace\(/u);
+  assert.doesNotMatch(sql, /FROM support_cases AS s/u);
+  assert.doesNotMatch(sql, /UPDATE support_cases SET intake_scope_evidence = jsonb_build_object/u);
   assert.match(sql, /UPDATE support_cases[\s\S]*EXCEPTION WHEN SQLSTATE '55000' THEN NULL;/u);
 });
 
