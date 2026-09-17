@@ -305,6 +305,10 @@ cause/status and coarse time classes. Re-read after candidate migrations/start
 and continue technical probes only when the canonical sets are byte-for-byte
 identical; missing, new, removed, changed or unreadable findings fail closed.
 This fingerprint never heals or suppresses a readiness=503 release blocker.
+Safety helpers are not considered implemented until the real orchestrated
+runner calls them; focused tests must exercise configured resource names and
+the baseline-versus-post-start branch, including negative drift and cleanup
+failures.
 The only acceptance target after that rehearsal is the exact candidate image on
 an immediately preflighted free dedicated loopback port (the current reserved
 port is `18082`); the public Staging proxy port and any foreign listener must

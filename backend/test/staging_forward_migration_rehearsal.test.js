@@ -71,10 +71,10 @@ test('isolated rehearsal resources require disposable run labels and reject look
     'com.shareittoo.staging.rehearsal': 'true',
     'com.shareittoo.staging.rehearsal_run_id': runId,
   };
-  for (const resourceType of ['container', 'network', 'volume']) {
+  for (const [resourceType, name] of [['container', `sit-staging-rehearsal-pg-${runId}`], ['container', `sit-staging-rehearsal-api-${runId}`], ['network', `sit-staging-rehearsal-network-${runId}`], ['volume', `sit-staging-rehearsal-volume-${runId}`]]) {
     assert.equal(assertDisposableResourceIdentity({
       resourceType,
-      name: `sit-staging-rehearsal-${resourceType}-${runId}`,
+      name,
       labels,
       runId,
     }), true);
@@ -101,12 +101,12 @@ test('isolated rehearsal resources require disposable run labels and reject look
 
 test('readiness findings are canonical, hashed-ID shaped and drift fail closed', () => {
   const before = normalizeReadinessFindings({
-    paymentRecoveryNeedsReview: [{ source: 'payout', id_hash: 'b', cause: 'payout_failed', status: 'failed', time_class: '>24h' }],
-    supportNextUpdateOverdue: [{ id_hash: 'a', cause: 'next_update_overdue', status: 'open', priority: 'p1', time_class: '1-24h' }],
+    paymentRecoveryNeedsReview: [{ source: 'payout', id_hash: 'b'.repeat(64), cause: 'payout_failed', status: 'failed', time_class: '>24h' }],
+    supportNextUpdateOverdue: [{ id_hash: 'a'.repeat(64), cause: 'next_update_overdue', status: 'open', priority: 'p1', time_class: '1-24h' }],
   });
   const reordered = normalizeReadinessFindings({
-    paymentRecoveryNeedsReview: [{ source: 'payout', id_hash: 'b', cause: 'payout_failed', status: 'failed', time_class: '>24h' }],
-    supportNextUpdateOverdue: [{ id_hash: 'a', cause: 'next_update_overdue', status: 'open', priority: 'p1', time_class: '1-24h' }],
+    paymentRecoveryNeedsReview: [{ source: 'payout', id_hash: 'b'.repeat(64), cause: 'payout_failed', status: 'failed', time_class: '>24h' }],
+    supportNextUpdateOverdue: [{ id_hash: 'a'.repeat(64), cause: 'next_update_overdue', status: 'open', priority: 'p1', time_class: '1-24h' }],
   });
   assert.equal(assertReadinessFindingsUnchanged(before, reordered), true);
   assert.throws(
@@ -125,6 +125,13 @@ test('readiness findings are canonical, hashed-ID shaped and drift fail closed',
   assert.throws(
     () => buildReadinessFindingSql({ payoutHoldHours: 721 }),
     (error) => error.code === 'readiness_payout_hold_hours_invalid',
+  );
+  assert.throws(
+    () => normalizeReadinessFindings({
+      paymentRecoveryNeedsReview: [{ source: 'payout', id_hash: 'a'.repeat(64), cause: 'payout_failed', status: 'failed', time_class: '>24h', secret: 'x' }],
+      supportNextUpdateOverdue: [],
+    }),
+    (error) => error.code === 'readiness_fingerprint_extra_field',
   );
 });
 

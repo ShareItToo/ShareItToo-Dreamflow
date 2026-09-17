@@ -79,7 +79,9 @@ export function assertDisposableResourceIdentity({
     fail('disposable_run_id_invalid');
   }
   const expectedName = `sit-staging-rehearsal-${resourceType}-${runId}`;
-  if (typeof name !== 'string' || name !== expectedName) {
+  const validContainerName = resourceType === 'container'
+    && new RegExp(`^sit-staging-rehearsal-(?:pg|api)-${runId}$`, 'u').test(name ?? '');
+  if (typeof name !== 'string' || (resourceType === 'container' ? !validContainerName : name !== expectedName)) {
     fail('disposable_resource_name_mismatch');
   }
   if (labels?.[disposableRehearsalLabel] !== 'true'
@@ -98,11 +100,44 @@ export function normalizeReadinessFindings(value) {
       || !Array.isArray(value.supportNextUpdateOverdue)) {
     fail('readiness_fingerprint_shape_invalid');
   }
-  const sortFindings = (findings) => findings.map((finding) => ({ ...finding }))
+  const paymentSources = new Set(['dispute', 'refund_transfer_reversal', 'payout', 'payment_refund_truth', 'contract_blocked']);
+  const paymentCauses = new Set([
+    'transfer_recovery_needs_review', 'refund_transfer_reversal_needs_review',
+    'payout_failed', 'refund_truth_needs_review', 'contract_blocked',
+  ]);
+  const supportCauses = new Set(['next_update_overdue']);
+  const timeClasses = new Set(['<1h', '1-24h', '>24h', 'derived']);
+  const textField = (value, field) => {
+    if (typeof value !== 'string' || value.length === 0 || value.length > 96 || /[\u0000-\u001f]/u.test(value)) {
+      fail(`readiness_fingerprint_${field}_invalid`);
+    }
+    return value;
+  };
+  const strictFinding = (finding, { payment }) => {
+    if (!finding || typeof finding !== 'object' || Array.isArray(finding)) fail('readiness_fingerprint_entry_invalid');
+    const expectedKeys = payment
+      ? ['source', 'id_hash', 'cause', 'status', 'time_class']
+      : ['id_hash', 'cause', 'status', 'priority', 'time_class'];
+    const actualKeys = Object.keys(finding).sort();
+    if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== [...expectedKeys].sort()[index])) {
+      fail('readiness_fingerprint_extra_field');
+    }
+    if (typeof finding.id_hash !== 'string' || !/^[0-9a-f]{64}$/u.test(finding.id_hash)) {
+      fail('readiness_fingerprint_id_hash_invalid');
+    }
+    if (payment && !paymentSources.has(finding.source)) fail('readiness_fingerprint_source_invalid');
+    if (!payment && !/^p[0-3]$/u.test(finding.priority)) fail('readiness_fingerprint_priority_invalid');
+    if (!(payment ? paymentCauses : supportCauses).has(finding.cause) || !timeClasses.has(finding.time_class)) {
+      fail('readiness_fingerprint_enum_invalid');
+    }
+    textField(finding.status, 'status');
+    return { ...finding };
+  };
+  const sortFindings = (findings, options) => findings.map((finding) => strictFinding(finding, options))
     .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
   return Object.freeze({
-    paymentRecoveryNeedsReview: sortFindings(value.paymentRecoveryNeedsReview),
-    supportNextUpdateOverdue: sortFindings(value.supportNextUpdateOverdue),
+    paymentRecoveryNeedsReview: sortFindings(value.paymentRecoveryNeedsReview, { payment: true }),
+    supportNextUpdateOverdue: sortFindings(value.supportNextUpdateOverdue, { payment: false }),
   });
 }
 
@@ -699,7 +734,7 @@ async function psqlScript({ container, user, database, sql, phase = 'psql_script
   ], { input: sql, phase });
 }
 
-async function applyMigrationsWithApplicationRunner({ container, database, user, password }) {
+export async function applyMigrationsWithApplicationRunner({ container, database, user, password }) {
   const port = await runCommand('docker', [
     'inspect', '--format', '{{(index (index .NetworkSettings.Ports "5432/tcp") 0).HostPort}}', container,
   ], { phase: 'temp_db_port' });
