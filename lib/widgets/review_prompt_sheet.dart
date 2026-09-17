@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lendify/models/multi_criteria_review.dart';
 import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/backend_repository.dart';
+import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/services/review_metrics_service.dart';
@@ -58,6 +59,7 @@ class ReviewPromptSheet extends StatefulWidget {
   final String reviewerId;
   final String reviewedUserId;
   final String direction;
+  final AuthSessionOwner? sessionOwner;
 
   const ReviewPromptSheet({
     super.key,
@@ -66,6 +68,7 @@ class ReviewPromptSheet extends StatefulWidget {
     required this.reviewerId,
     required this.reviewedUserId,
     required this.direction,
+    this.sessionOwner,
   });
 
   static Future<bool?> show(
@@ -75,6 +78,7 @@ class ReviewPromptSheet extends StatefulWidget {
     required String reviewerId,
     required String reviewedUserId,
     required String direction,
+    AuthSessionOwner? sessionOwner,
   }) async {
     final isDark = AppTheme.isDark(context);
     if (!BackendConfig.enabled || QaRuntimeService.isEnabled) {
@@ -108,6 +112,46 @@ class ReviewPromptSheet extends StatefulWidget {
       }
       return false;
     }
+    if (sessionOwner != null &&
+        BackendConfig.enabled &&
+        !QaRuntimeService.isEnabled) {
+      try {
+        if (!await AuthService.isSessionOwnerDefinitelyCurrent(sessionOwner)) {
+          return false;
+        }
+        final existing = await BackendRepository.getBookingReviewsForOwner(
+          owner: sessionOwner,
+          bookingId: requestId,
+        );
+        final alreadySubmitted = existing.any(
+          (entry) => entry['reviewerId']?.toString() == reviewerId,
+        );
+        if (alreadySubmitted) {
+          if (context.mounted) {
+            AppPopup.info(
+              context,
+              title: 'Bewertung bereits abgegeben',
+              message: 'Für diese Buchung liegt bereits deine Bewertung vor.',
+            );
+          }
+          return false;
+        }
+      } catch (error) {
+        debugPrint('[reviews] confirmed review read failed: $error');
+        if (context.mounted) {
+          AppPopup.error(
+            context,
+            title: 'Bewertung nicht verfügbar',
+            message: 'Der Bewertungsstatus konnte nicht sicher geprüft werden.',
+          );
+        }
+        return false;
+      }
+    }
+    if (sessionOwner != null &&
+        !await AuthService.isSessionOwnerDefinitelyCurrent(sessionOwner)) {
+      return false;
+    }
     if (!context.mounted) return false;
     return showBlurBottomSheet<bool>(
       context,
@@ -120,6 +164,7 @@ class ReviewPromptSheet extends StatefulWidget {
         reviewerId: reviewerId,
         reviewedUserId: reviewedUserId,
         direction: direction,
+        sessionOwner: sessionOwner,
       ),
     );
   }
@@ -181,6 +226,11 @@ class _ReviewPromptSheetState extends State<ReviewPromptSheet> {
       _submitError = null;
     });
     try {
+      final capturedOwner = widget.sessionOwner;
+      if (capturedOwner != null &&
+          !await AuthService.isSessionOwnerDefinitelyCurrent(capturedOwner)) {
+        throw StateError('Die Sitzung wurde während der Bewertung geändert.');
+      }
       final list = _criteria
           .map(
             (c) => ReviewCriterion(
@@ -191,11 +241,22 @@ class _ReviewPromptSheetState extends State<ReviewPromptSheet> {
           )
           .toList();
       if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-        await BackendRepository.createBookingReview(
-          bookingId: widget.requestId,
-          direction: widget.direction,
-          criteria: list.map((criterion) => criterion.toJson()).toList(),
-        );
+        final review = capturedOwner == null
+            ? await BackendRepository.createBookingReview(
+                bookingId: widget.requestId,
+                direction: widget.direction,
+                criteria: list.map((criterion) => criterion.toJson()).toList(),
+              )
+            : await BackendRepository.createBookingReviewForOwner(
+                owner: capturedOwner,
+                bookingId: widget.requestId,
+                direction: widget.direction,
+                criteria: list.map((criterion) => criterion.toJson()).toList(),
+              );
+        if (review['id']?.toString().trim().isEmpty ?? true) {
+          throw StateError(
+              'Die Bewertung wurde ohne Bestätigung zurückgegeben.');
+        }
       } else {
         await DataService.addMultiReview(
           requestId: widget.requestId,

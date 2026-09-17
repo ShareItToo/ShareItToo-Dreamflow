@@ -2070,6 +2070,43 @@ class BackendRepository {
     return Map<String, dynamic>.from(response['review'] as Map);
   }
 
+  static Future<Map<String, dynamic>> createBookingReviewForOwner({
+    required AuthSessionOwner owner,
+    required String bookingId,
+    required String direction,
+    required List<Map<String, dynamic>> criteria,
+  }) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'POST',
+      path: '/bookings/${Uri.encodeComponent(bookingId)}/reviews',
+      body: {'direction': direction, 'criteria': criteria},
+    );
+    final review = response['review'];
+    if (review is! Map) {
+      throw const BackendException(502, 'invalid_server_response');
+    }
+    return Map<String, dynamic>.from(review);
+  }
+
+  static Future<List<Map<String, dynamic>>> getBookingReviewsForOwner({
+    required AuthSessionOwner owner,
+    required String bookingId,
+  }) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'GET',
+      path: '/bookings/${Uri.encodeComponent(bookingId)}/reviews',
+    );
+    final raw = response['reviews'];
+    if (raw is! List || raw.any((entry) => entry is! Map)) {
+      throw const BackendException(200, 'invalid_server_response');
+    }
+    return raw
+        .map((entry) => Map<String, dynamic>.from(entry as Map))
+        .toList(growable: false);
+  }
+
   static Future<List<Map<String, dynamic>>> getUserReviews(
     String userId,
   ) async {

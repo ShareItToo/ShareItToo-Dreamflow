@@ -33,6 +33,7 @@ import 'package:lendify/widgets/return_handover_stepper_sheet.dart';
 import 'package:lendify/widgets/sit_glass_time_picker.dart';
 import 'package:lendify/widgets/user_avatar.dart';
 import 'package:lendify/widgets/translation_language_dialog.dart';
+import 'package:lendify/widgets/review_prompt_sheet.dart';
 import 'package:lendify/screens/booking_detail_screen.dart';
 import 'package:lendify/screens/ongoing_owner_detail_screen.dart';
 import 'package:lendify/screens/public_profile_screen.dart';
@@ -1390,13 +1391,56 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
           }
           break;
         case _ChatState.completed:
-          // Bewertung abgeben (demo flow)
-          await AppPopup.toast(
+          final reviewRequest = _request;
+          final reviewOwner = _safetyActions.capture();
+          final currentUser = _currentUser;
+          final otherUser = _otherUser;
+          if (reviewRequest == null ||
+              reviewOwner == null ||
+              currentUser == null ||
+              otherUser == null ||
+              reviewRequest.status != 'completed' ||
+              reviewOwner.context.user.id.trim() != currentUser.id.trim()) {
+            if (mounted) {
+              AppPopup.error(
+                context,
+                title: 'Bewertung nicht verfügbar',
+                message:
+                    'Der abgeschlossene Buchungskontext ist nicht mehr gültig.',
+              );
+            }
+            break;
+          }
+          final direction = currentUser.id == reviewRequest.renterId
+              ? 'renter_to_owner'
+              : currentUser.id == reviewRequest.ownerId
+                  ? 'owner_to_renter'
+                  : null;
+          final reviewedUserId = direction == 'renter_to_owner'
+              ? reviewRequest.ownerId
+              : direction == 'owner_to_renter'
+                  ? reviewRequest.renterId
+                  : null;
+          if (direction == null || reviewedUserId == null) break;
+          if (!await _safetyActions.isCurrent(_safetyService, reviewOwner)) {
+            break;
+          }
+          if (!mounted) break;
+          final reviewResult = await ReviewPromptSheet.show(
             context,
-            icon: Icons.star_outline,
-            title: 'Bewertung (Demo)',
-            message: 'Bewertungs-Flow ist als nächster Schritt vorgesehen.',
+            requestId: reviewRequest.id,
+            itemId: reviewRequest.itemId,
+            reviewerId: currentUser.id,
+            reviewedUserId: reviewedUserId,
+            direction: direction,
+            sessionOwner: reviewOwner.context.owner.authOwner,
           );
+          if (reviewResult == true &&
+              mounted &&
+              await _safetyActions.isCurrent(_safetyService, reviewOwner) &&
+              _sameMessageContext(currentUser.id, t.id)) {
+            await _load();
+          }
           break;
         case _ChatState.support:
           return;

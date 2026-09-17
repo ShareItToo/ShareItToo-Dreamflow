@@ -184,6 +184,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   placeholder or silent no-op any reachable control merely to close a finding.
 - Every reachable function must have a real persisted or server-authoritative
   effect with explicit success, failure, retry and stale-owner/session proof.
+- A confirmed account-bound write is not retroactively a failed write because
+  the session or UI context drifts afterwards. After the server/local write is
+  confirmed, close or report success truthfully; session drift may suppress
+  only later UI refresh, navigation, or readback and must never invite a retry.
 - While a review has known FIX items, run only the focused checks that exercise
   the changed invariant. Run a package or repository full regression exactly
   once after the implementation, review fixes and required real-infrastructure
