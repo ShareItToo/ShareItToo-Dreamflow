@@ -21,13 +21,18 @@ test('deploy gate binds MFA to exact commit and fail-safe rollback/readiness', a
     'MFA_ENCRYPTION_KEY_HOST_FILE',
     'validate_mfa_staging_secret.mjs',
     'compose.staging.mfa.yml',
-    'MFA_ENCRYPTION_KEY_FILE: ""',
     'credentialSource === "file"',
     'stagingMfa',
   ]) {
     assert.match(deploy, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
   }
   assert.match(deploy, /task_enable_staging_mfa.*== 1.*task_environment.*production/su);
+  assert.doesNotMatch(deploy, /MFA_ENCRYPTION_KEY_FILE:\s*""/u);
+  const rollbackFilter = deploy.slice(
+    deploy.indexOf('# Rollback must never inherit'),
+    deploy.indexOf('DATABASE_CONTAINER=', deploy.indexOf('# Rollback must never inherit')),
+  );
+  assert.doesNotMatch(rollbackFilter, /compose\.staging\.mfa\.yml/u);
 });
 
 test('health exposes only MFA configured/source metadata', async () => {

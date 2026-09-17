@@ -77,8 +77,7 @@ rollback_failed_deployment() {
       "$task_previous_image_id" > "$task_rollback_override"
     if [[ "$task_staging_listing_ai_enabled" == true ||
           "$task_staging_stripe_enabled" == true ||
-          "$task_staging_identity_enabled" == true ||
-          "$task_staging_mfa_enabled" == true ]]; then
+          "$task_staging_identity_enabled" == true ]]; then
       printf '    environment:\n' >> "$task_rollback_override"
     fi
     if [[ "$task_staging_listing_ai_enabled" == true ]]; then
@@ -93,11 +92,6 @@ rollback_failed_deployment() {
       printf '      IDENTITY_VERIFICATION_TRANSPORT: disabled\n      IDENTITY_STRIPE_SECRET_KEY: ""\n      IDENTITY_VERIFICATION_WEBHOOK_SECRET: ""\n      IDENTITY_STRIPE_SECRET_KEY_FILE: ""\n      IDENTITY_VERIFICATION_WEBHOOK_SECRET_FILE: ""\n' \
         >> "$task_rollback_override"
     fi
-    if [[ "$task_staging_mfa_enabled" == true ]]; then
-      printf '      MFA_ENCRYPTION_KEY: ""\n      MFA_ENCRYPTION_KEY_FILE: ""\n' \
-        >> "$task_rollback_override"
-    fi
-
     task_rollback_commit="${task_previous_commit:-unknown}"
     APP_VERSION="$task_previous_version" \
     APP_COMMIT="$task_rollback_commit" \
@@ -113,12 +107,30 @@ rollback_failed_deployment() {
     task_restored_health="$(docker inspect \
       --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
       "$task_api_container" 2>/dev/null)"
-    curl --fail --silent --show-error --max-time 20 \
-      "$task_health_url/health" >/dev/null
+    task_rollback_health_payload="$(curl --fail --silent --show-error --max-time 20 \
+      "$task_health_url/health" 2>/dev/null)"
     task_rollback_health_status=$?
+    task_rollback_mfa_health_status=0
+    if [[ "$task_staging_mfa_enabled" == true && "$task_rollback_health_status" == 0 ]]; then
+      if ! printf '%s' "$task_rollback_health_payload" | "$task_node_binary" -e '
+        const { readFileSync } = require("node:fs");
+        const payload = JSON.parse(readFileSync(0, "utf8"));
+        const boundary = payload?.checks?.mfa;
+        process.exitCode = boundary?.configured === true
+          && boundary.credentialSource === "file" ? 0 : 1;
+      '; then
+        # A pre-MFA image may not expose the new health field. In that case,
+        # prove the retained external file still passes the same non-secret
+        # validator instead of dropping the durable key overlay.
+        MFA_ENCRYPTION_KEY_HOST_FILE="${MFA_ENCRYPTION_KEY_HOST_FILE:-}" \
+          "$task_node_binary" "$task_backend_root/ops/validate_mfa_staging_secret.mjs" \
+          >/dev/null 2>&1 || task_rollback_mfa_health_status=$?
+      fi
+    fi
 
     if [[ "$task_rollback_compose_status" == 0 &&
           "$task_rollback_health_status" == 0 &&
+          "$task_rollback_mfa_health_status" == 0 &&
           "$task_restored_health" == healthy &&
           "$task_restored_image_id" == "$task_previous_image_id" ]]; then
       task_rollback_override_retained=true
@@ -401,8 +413,7 @@ for ((task_compose_index = 0; task_compose_index < ${#task_compose_args[@]}; tas
   if [[ "${task_compose_args[$task_compose_index]}" == -f &&
         ( "${task_compose_args[$((task_compose_index + 1))]:-}" == "$task_backend_root/compose.staging.listing-ai.yml" ||
           "${task_compose_args[$((task_compose_index + 1))]:-}" == "$task_backend_root/compose.staging.stripe.yml" ||
-          "${task_compose_args[$((task_compose_index + 1))]:-}" == "$task_backend_root/compose.staging.identity.yml" ||
-          "${task_compose_args[$((task_compose_index + 1))]:-}" == "$task_backend_root/compose.staging.mfa.yml" ) ]]; then
+          "${task_compose_args[$((task_compose_index + 1))]:-}" == "$task_backend_root/compose.staging.identity.yml" ) ]]; then
       task_compose_index=$((task_compose_index + 1))
       continue
   fi

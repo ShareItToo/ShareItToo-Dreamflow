@@ -52,8 +52,14 @@ direct environment value and mounts the file read-only as
 `MFA_ENCRYPTION_KEY_FILE`. A successful health readback exposes only
 `configured=true` and `credentialSource=file`; an authenticated synthetic
 enroll/status/cancel test is still required before MFA is considered ready.
-Rollback clears both MFA sources and restores the prior image. The flag is
-staging-only and rejects Production.
+MFA is a durable encryption dependency: rollback retains this overlay and the
+validated stable key file while restoring the prior application image. It must
+not clear or drop the key, because existing TOTP ciphertext would otherwise be
+undecryptable. Rollback restores application/image/config state only; database
+migrations remain forward-applied. Before applying migrations `075-087`, take
+a protected Staging database backup and pass an isolated restore or equivalent
+forward-compatibility verification gate. The flag is staging-only and rejects
+Production.
 
 FCM is opt-in for staging and cannot be activated for production through this
 path. Before the first FCM-enabled staging rollout, create only the dedicated
