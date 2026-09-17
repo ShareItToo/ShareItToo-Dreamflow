@@ -5,11 +5,12 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   disposableCandidateCommit,
-  disposableCandidateOpsCommit,
   disposablePostgresImage,
   pollVersion,
   runDisposableCandidateAcceptance,
 } from '../ops/staging_disposable_candidate_acceptance.mjs';
+
+const testOpsCommit = '1'.repeat(40);
 
 test('disposable candidate runner orchestrates isolated restore, candidate checks and cleanup', async () => {
   const root = await mkdtemp(join(tmpdir(), 'sit-disposable-candidate-'));
@@ -26,11 +27,11 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
     let driftMode = false;
     const command = async (_command, args, options = {}) => {
       calls.push({ args, phase: options.phase });
-      if (options.phase === 'ops_head_read') return '7ccf56ccf7caf335c93c0bd7ed36d0fa2c5bb926';
+      if (options.phase === 'ops_head_read') return testOpsCommit;
       if (options.phase === 'candidate_image_identity') return 'sha256:38be66d170746b20bfc4c08c70655a72f9a6ce9eb700278a129d5acdedc22620|f0bb868a8a487cbf33ae67a555946fb9c67f4e9f';
       if (options.phase === 'bootstrap_wait') return '0';
       if (options.phase === 'fk_count') return '367';
-      if (options.phase?.endsWith('_identity')) return JSON.stringify({
+      if (options.phase?.endsWith('_identity') || options.phase === 'cleanup_identity') return JSON.stringify({
         'com.shareittoo.staging.rehearsal': 'true',
         'com.shareittoo.staging.rehearsal_run_id': (args.find((arg) => /-(\d{14}-[0-9a-f]{8})$/u.test(arg)) ?? '').match(/-(\d{14}-[0-9a-f]{8})$/u)?.[1] ?? 'ignored',
       });
@@ -39,8 +40,8 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
       if (options.phase === 'readiness_fingerprint') {
         fingerprintReads += 1;
         return JSON.stringify(driftMode && fingerprintReads === 2
-          ? { paymentRecoveryNeedsReview: [{ source: 'payout', id_hash: 'a'.repeat(64), cause: 'payout_failed', status: 'failed', time_class: '>24h' }], supportNextUpdateOverdue: [] }
-          : { paymentRecoveryNeedsReview: [], supportNextUpdateOverdue: [] });
+          ? { paymentRecoveryNeedsReview: [{ source: 'payout', id_hash: 'c'.repeat(64), cause: 'payout_failed', status: 'failed', time_class: '>24h' }, { source: 'dispute', id_hash: 'd'.repeat(64), cause: 'transfer_recovery_needs_review', status: 'open', time_class: '1-24h' }], supportNextUpdateOverdue: [{ id_hash: 'e'.repeat(64), cause: 'next_update_overdue', status: 'open', priority: 'p1', time_class: '<1h' }] }
+          : { paymentRecoveryNeedsReview: [{ source: 'payout', id_hash: 'a'.repeat(64), cause: 'payout_failed', status: 'failed', time_class: '>24h' }, { source: 'dispute', id_hash: 'b'.repeat(64), cause: 'transfer_recovery_needs_review', status: 'open', time_class: '1-24h' }], supportNextUpdateOverdue: [{ id_hash: 'e'.repeat(64), cause: 'next_update_overdue', status: 'open', priority: 'p1', time_class: '<1h' }] });
       }
       return '';
     };
@@ -50,8 +51,9 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
       if (url.endsWith('/health/live')) return { ok: true, status: 200 };
       return { ok: false, status: 503, json: async () => ({ status: 'degraded', checks: {
         mail: 'disabled', notifications: { dead: 0 },
-        payments: { recoveryNeedsReview: 0, failedEvents: 0, unbalanced: 0, recoveryPending: 0 },
-        supportDeadlines: { nextUpdateOverdue: 0, stale: false, lastErrorCode: null, p0WithoutOwner: 0, criticalNextUpdateOverdue: 0, privacyDeadlineNear: 0, privacyDeadlineOverdue: 0, privacyIncidentDeadlineNear: 0, privacyIncidentDeadlineOverdue: 0 },
+        database: 'ok',
+        payments: { recoveryNeedsReview: 2, failedEvents: 0, unbalanced: 0, recoveryPending: 0 },
+        supportDeadlines: { status: 'degraded', nextUpdateOverdue: 1, stale: false, lastErrorCode: null, p0WithoutOwner: 0, criticalNextUpdateOverdue: 0, privacyDeadlineNear: 0, privacyDeadlineOverdue: 0, privacyIncidentDeadlineNear: 0, privacyIncidentDeadlineOverdue: 0 },
       } }) };
     };
     const result = await runDisposableCandidateAcceptance({
@@ -59,7 +61,7 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
       manifestPath,
       execute: true,
       confirmation: disposableCandidateCommit,
-      opsCommit: disposableCandidateOpsCommit,
+      opsCommit: testOpsCommit,
       command,
       commandWithFileInput: async (_command, args, _file, options = {}) => { calls.push({ args, phase: options.phase }); },
       removeResource: async (kind, name) => { cleanup.push([kind, name]); return null; },
@@ -91,7 +93,7 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
         manifestPath,
         execute: true,
         confirmation: disposableCandidateCommit,
-        opsCommit: disposableCandidateOpsCommit,
+        opsCommit: testOpsCommit,
         command,
         commandWithFileInput: async () => {},
         removeResource: async () => null,
@@ -115,13 +117,13 @@ test('candidate version polling is bounded and times out deterministically', asy
 });
 
 test('candidate runner fails closed on Ops mismatch and unsafe evidence path before Docker', async () => {
-  const command = async (_command, _args, options = {}) => (options.phase === 'ops_head_read' ? disposableCandidateOpsCommit : '');
+  const command = async (_command, _args, options = {}) => (options.phase === 'ops_head_read' ? testOpsCommit : '');
   await assert.rejects(
-    () => runDisposableCandidateAcceptance({ targetCommit: disposableCandidateCommit, execute: true, confirmation: disposableCandidateCommit, opsCommit: '1'.repeat(40), command, evidencePath: '/tmp/unused-evidence.json' }),
+    () => runDisposableCandidateAcceptance({ targetCommit: disposableCandidateCommit, execute: true, confirmation: disposableCandidateCommit, opsCommit: '2'.repeat(40), command, evidencePath: '/tmp/unused-evidence.json' }),
     (error) => error.code === 'ops_checkout_commit_mismatch',
   );
   await assert.rejects(
-    () => runDisposableCandidateAcceptance({ targetCommit: disposableCandidateCommit, execute: true, confirmation: disposableCandidateCommit, opsCommit: disposableCandidateOpsCommit, command, evidencePath: '/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808/evidence.json' }),
+    () => runDisposableCandidateAcceptance({ targetCommit: disposableCandidateCommit, execute: true, confirmation: disposableCandidateCommit, opsCommit: testOpsCommit, command, evidencePath: '/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808/evidence.json' }),
     (error) => error.code === 'evidence_path_inside_repository',
   );
 });

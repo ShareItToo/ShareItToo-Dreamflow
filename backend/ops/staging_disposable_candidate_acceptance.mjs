@@ -18,7 +18,6 @@ import { validateMfaStagingSecret } from './validate_mfa_staging_secret.mjs';
 export const disposableCandidateCommit = 'f0bb868a8a487cbf33ae67a555946fb9c67f4e9f';
 export const disposableCandidateImage = `shareittoo-api-wp244:${disposableCandidateCommit}`;
 export const disposableCandidateImageDigest = 'sha256:38be66d170746b20bfc4c08c70655a72f9a6ce9eb700278a129d5acdedc22620';
-export const disposableCandidateOpsCommit = '7ccf56ccf7caf335c93c0bd7ed36d0fa2c5bb926';
 export const disposablePostgresImage = 'postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777';
 
 const repositoryRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
@@ -114,8 +113,12 @@ async function verifyBackup({ backupPath, manifestPath, hashFile: suppliedHashFi
   if (resolve(backupPath).startsWith(`${repositoryRoot}/`) || resolve(manifestPath).startsWith(`${repositoryRoot}/`)) {
     fail('backup_manifest_inside_repository');
   }
+  const backupLinkMetadata = await lstat(backupPath);
+  if (backupLinkMetadata.isSymbolicLink() || !backupLinkMetadata.isFile()) fail('backup_not_regular_file');
   const metadata = await stat(backupPath);
   if (metadata.size <= 0 || (metadata.mode & 0o077) !== 0) fail('backup_not_private_or_empty');
+  const manifestMetadata = await lstat(manifestPath);
+  if (manifestMetadata.isSymbolicLink() || !manifestMetadata.isFile() || (manifestMetadata.mode & 0o777) !== 0o600) fail('backup_manifest_not_private');
   const manifest = (await readFile(manifestPath, 'utf8')).trim();
   const match = manifest.match(/^([0-9a-f]{64})\s+(.+)$/u);
   if (!match || resolve(match[2]) !== resolve(backupPath)) fail('backup_manifest_binding_invalid');
@@ -194,7 +197,7 @@ export async function runDisposableCandidateAcceptance({
   let cleanup = { removed: false };
   let evidence;
   let mfaKey;
-  const attestedResources = [];
+  const createdResources = [];
   try {
     assertSafeDisposableTarget({ ...resources, runId });
     mfaKey = await prepareMfaKey();
@@ -205,39 +208,39 @@ export async function runDisposableCandidateAcceptance({
     if (imageRevision !== targetCommit) fail('candidate_image_revision_mismatch');
     if (imageId !== disposableCandidateImageDigest) fail('candidate_image_digest_mismatch');
     await command('docker', ['network', 'create', '--internal', ...labels, network], { phase: 'network_create' });
+    createdResources.push(['network', network]);
     for (const [resourceType, name] of [['network', network]]) {
       const inspected = await inspectLabels(command, name, resourceType === 'container' ? '{{json .Config.Labels}}' : '{{json .Labels}}', `${resourceType}_identity`);
       assertDisposableResourceIdentity({ resourceType, name, labels: inspected, runId });
-      attestedResources.push([resourceType, name]);
     }
     await command('docker', ['volume', 'create', ...labels, volume], { phase: 'volume_create' });
+    createdResources.push(['volume', volume]);
     for (const [resourceType, name] of [['volume', volume]]) {
       const inspected = await inspectLabels(command, name, '{{json .Labels}}', `${resourceType}_identity`);
       assertDisposableResourceIdentity({ resourceType, name, labels: inspected, runId });
-      attestedResources.push([resourceType, name]);
     }
     await command('docker', ['create', '--name', database, ...labels, '--network', network, '--network-alias', 'db', '--mount', `type=volume,src=${volume},dst=/var/lib/postgresql/data`, '-p', '127.0.0.1::5432', '-e', 'POSTGRES_DB=shareittoo_rehearsal', '-e', 'POSTGRES_USER=shareittoo_rehearsal', '-e', `POSTGRES_PASSWORD=${databasePassword}`, disposablePostgresImage], { phase: 'database_create' });
+    createdResources.push(['container', database]);
     for (const [resourceType, name] of [['container', database]]) {
       const inspected = await inspectLabels(command, name, '{{json .Config.Labels}}', 'database_identity');
       assertDisposableResourceIdentity({ resourceType, name, labels: inspected, runId });
-      attestedResources.push([resourceType, name]);
     }
-    await command('docker', ['create', '--name', api, ...labels, '--network', network, '--network-alias', 'api', '-p', '127.0.0.1::8080', '-e', 'NODE_ENV=production', '-e', 'DEPLOYMENT_ENVIRONMENT=staging', '-e', 'PORT=8080', '-e', 'BIND_HOST=0.0.0.0', '-e', `APP_COMMIT=${targetCommit}`, '-e', 'JWT_SECRET=disposable-jwt-secret-not-persisted', '-e', `DATABASE_URL=postgres://shareittoo_rehearsal:${databasePassword}@db:5432/shareittoo_rehearsal`, '-e', 'MFA_ENCRYPTION_KEY_FILE=/run/secrets/mfa-encryption-key', '-e', 'PAYMENT_TRANSPORT=memory', '-e', 'STRIPE_LIVEMODE=false', '-e', 'IDENTITY_VERIFICATION_TRANSPORT=disabled', '-e', 'SIT_LISTING_AI_PROVIDER=mock', '-e', 'PUSH_TRANSPORT=memory', '-e', 'MAIL_TRANSPORT=disabled', '--mount', `type=bind,src=${mfaKey.filePath},dst=/run/secrets/mfa-encryption-key,readonly`, disposableCandidateImageDigest], { phase: 'candidate_create' });
+    await command('docker', ['create', '--name', api, ...labels, '--network', network, '--network-alias', 'api', '--group-add', '65532', '-p', '127.0.0.1::8080', '-e', 'NODE_ENV=production', '-e', 'DEPLOYMENT_ENVIRONMENT=staging', '-e', 'PORT=8080', '-e', 'BIND_HOST=0.0.0.0', '-e', `APP_COMMIT=${targetCommit}`, '-e', 'JWT_SECRET=disposable-jwt-secret-not-persisted', '-e', `DATABASE_URL=postgres://shareittoo_rehearsal:${databasePassword}@db:5432/shareittoo_rehearsal`, '-e', 'MFA_ENCRYPTION_KEY_FILE=/run/secrets/mfa-encryption-key', '-e', 'PAYMENT_TRANSPORT=memory', '-e', 'STRIPE_LIVEMODE=false', '-e', 'IDENTITY_VERIFICATION_TRANSPORT=disabled', '-e', 'SIT_LISTING_AI_PROVIDER=mock', '-e', 'PUSH_TRANSPORT=memory', '-e', 'MAIL_TRANSPORT=disabled', '--mount', `type=bind,src=${mfaKey.filePath},dst=/run/secrets/mfa-encryption-key,readonly`, disposableCandidateImageDigest], { phase: 'candidate_create' });
+    createdResources.push(['container', api]);
     for (const [resourceType, name] of [['container', api]]) {
       const inspected = await inspectLabels(command, name, '{{json .Config.Labels}}', 'api_identity');
       assertDisposableResourceIdentity({ resourceType, name, labels: inspected, runId });
-      attestedResources.push([resourceType, name]);
     }
     await command('docker', ['start', database], { phase: 'database_start' });
     for (let attempt = 0; attempt < 60; attempt += 1) {
       try { await command('docker', ['exec', database, 'pg_isready', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], { phase: 'database_ready' }); break; } catch { if (attempt === 59) fail('database_not_ready'); }
     }
     await commandWithFileInput('docker', ['exec', '-i', database, 'pg_restore', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal', '--no-owner', '--no-acl'], backupPath, { phase: 'restore' });
-    const bootstrapScript = "import { pool } from '/app/src/db.js'; import { runMigrations } from '/app/src/migrations.js'; await runMigrations(pool); await pool.end();";
+    const bootstrapScript = "import { initializeDatabase, pool } from '/app/src/db.js'; await initializeDatabase(); await pool.end();";
     await command('docker', ['create', '--name', bootstrap, ...labels, '--network', network, '-e', 'NODE_ENV=production', '-e', 'DEPLOYMENT_ENVIRONMENT=staging', '-e', `DATABASE_URL=postgres://shareittoo_rehearsal:${databasePassword}@db:5432/shareittoo_rehearsal`, '-e', 'MFA_ENCRYPTION_KEY_FILE=/run/secrets/mfa-encryption-key', '--mount', `type=bind,src=${mfaKey.filePath},dst=/run/secrets/mfa-encryption-key,readonly`, disposableCandidateImageDigest, 'node', '--input-type=module', '-e', bootstrapScript], { phase: 'bootstrap_create' });
     const bootstrapLabels = await inspectLabels(command, bootstrap, '{{json .Config.Labels}}', 'bootstrap_identity');
     assertDisposableResourceIdentity({ resourceType: 'container', name: bootstrap, labels: bootstrapLabels, runId });
-    attestedResources.push(['container', bootstrap]);
+    createdResources.push(['container', bootstrap]);
     await command('docker', ['start', bootstrap], { phase: 'bootstrap_start' });
     const bootstrapWait = await command('docker', ['wait', bootstrap], { phase: 'bootstrap_wait' });
     if (String(typeof bootstrapWait === 'string' ? bootstrapWait : bootstrapWait.stdout).trim() !== '0') fail('bootstrap_migrations_failed');
@@ -258,8 +261,12 @@ export async function runDisposableCandidateAcceptance({
     const checks = readinessPayload.checks ?? {};
     const payments = checks.payments ?? {};
     const support = checks.supportDeadlines ?? {};
+    if (postFingerprint.paymentRecoveryNeedsReview.length !== 2 || postFingerprint.supportNextUpdateOverdue.length !== 1) {
+      fail('readiness_baseline_count_unexpected');
+    }
     const notifications = checks.notifications ?? {};
-    if (payments.recoveryNeedsReview !== postFingerprint.paymentRecoveryNeedsReview.length
+    if (checks.database !== 'ok' || support.status !== 'degraded'
+        || payments.recoveryNeedsReview !== postFingerprint.paymentRecoveryNeedsReview.length
         || payments.failedEvents !== 0 || payments.unbalanced !== 0 || payments.recoveryPending !== 0
         || support.nextUpdateOverdue !== postFingerprint.supportNextUpdateOverdue.length
         || support.stale !== false || support.lastErrorCode != null || support.p0WithoutOwner !== 0
@@ -279,7 +286,14 @@ export async function runDisposableCandidateAcceptance({
     return evidence;
   } finally {
     const errors = [];
-    for (const [kind, name] of [...attestedResources].reverse()) { try { const error = await removeResource(kind, name); if (error) errors.push(error); } catch { errors.push(`cleanup_${kind}_failed`); } }
+    for (const [kind, name] of [...createdResources].reverse()) {
+      try {
+        const inspected = await inspectLabels(command, name, kind === 'container' ? '{{json .Config.Labels}}' : '{{json .Labels}}', 'cleanup_identity');
+        assertDisposableResourceIdentity({ resourceType: kind, name, labels: inspected, runId });
+        const error = await removeResource(kind, name);
+        if (error) errors.push(error);
+      } catch { errors.push(`cleanup_${kind}_identity_failed`); }
+    }
     try { await cleanupMfaKey(mfaKey); } catch { errors.push('mfa_key_cleanup_failed'); }
     cleanup = { removed: errors.length === 0, errors };
     if (errors.length > 0) fail('cleanup_required');
