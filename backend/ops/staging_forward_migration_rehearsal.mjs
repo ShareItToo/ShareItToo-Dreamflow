@@ -25,6 +25,8 @@ export const rehearsalMigrationLast = 87;
 export const rehearsalMigrationUpCount = 13;
 export const rehearsalMigrationFileCount = 26;
 export const stagingProjectName = 'sit-staging';
+export const disposableRehearsalLabel = 'com.shareittoo.staging.rehearsal';
+export const disposableRehearsalRunLabel = 'com.shareittoo.staging.rehearsal_run_id';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const postgresImage = 'postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777';
@@ -62,6 +64,147 @@ export function assertStagingLabels({ labels, expectedService, expectedVolume = 
     fail(`docker_service_label_unexpected_${expectedService}`);
   }
   return true;
+}
+
+export function assertDisposableResourceIdentity({
+  resourceType,
+  name,
+  labels,
+  runId,
+} = {}) {
+  if (!['container', 'network', 'volume'].includes(resourceType)) {
+    fail('disposable_resource_type_invalid');
+  }
+  if (typeof runId !== 'string' || !/^[0-9]{14}-[0-9a-f]{8}$/u.test(runId)) {
+    fail('disposable_run_id_invalid');
+  }
+  const expectedName = `sit-staging-rehearsal-${resourceType}-${runId}`;
+  if (typeof name !== 'string' || name !== expectedName) {
+    fail('disposable_resource_name_mismatch');
+  }
+  if (labels?.[disposableRehearsalLabel] !== 'true'
+      || labels?.[disposableRehearsalRunLabel] !== runId) {
+    fail('disposable_resource_labels_missing');
+  }
+  if (Object.entries(labels).some(([key, value]) => /prod|production/i.test(`${key}=${value}`))) {
+    fail('disposable_resource_label_unsafe');
+  }
+  return true;
+}
+
+export function normalizeReadinessFindings(value) {
+  if (!value || typeof value !== 'object'
+      || !Array.isArray(value.paymentRecoveryNeedsReview)
+      || !Array.isArray(value.supportNextUpdateOverdue)) {
+    fail('readiness_fingerprint_shape_invalid');
+  }
+  const sortFindings = (findings) => findings.map((finding) => ({ ...finding }))
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  return Object.freeze({
+    paymentRecoveryNeedsReview: sortFindings(value.paymentRecoveryNeedsReview),
+    supportNextUpdateOverdue: sortFindings(value.supportNextUpdateOverdue),
+  });
+}
+
+export function assertReadinessFindingsUnchanged(before, after) {
+  const expected = JSON.stringify(normalizeReadinessFindings(before));
+  const actual = JSON.stringify(normalizeReadinessFindings(after));
+  if (expected !== actual) fail('readiness_fingerprint_drift');
+  return true;
+}
+
+export function buildReadinessFindingSql({ contractVersion = 'V5.2-2026-08-16', payoutHoldHours = 48 } = {}) {
+  if (!/^[A-Za-z0-9._-]{1,120}$/u.test(contractVersion)) fail('readiness_contract_version_invalid');
+  if (!Number.isInteger(payoutHoldHours) || payoutHoldHours < 0 || payoutHoldHours > 720) {
+    fail('readiness_payout_hold_hours_invalid');
+  }
+  return `
+WITH contract_blocked AS (
+  SELECT DISTINCT ON (payment.id)
+         encode(digest(payment.id::text, 'sha256'), 'hex') AS id_hash,
+         'contract_blocked' AS cause, payment.status,
+         CASE WHEN COALESCE(booking.payout_instruction_due_at, booking.completed_at, booking.ends_at)
+                    <= now() - interval '24 hours' THEN '>24h'
+              WHEN COALESCE(booking.payout_instruction_due_at, booking.completed_at, booking.ends_at)
+                    <= now() - interval '1 hour' THEN '1-24h'
+              ELSE '<1h' END AS time_class
+    FROM payments AS payment
+    JOIN bookings AS booking ON booking.id = payment.booking_id
+    LEFT JOIN platform_contracts AS contract ON contract.booking_id = booking.id
+    LEFT JOIN LATERAL (
+      SELECT payout.status
+        FROM payouts AS payout
+       WHERE payout.payment_id = payment.id
+         AND payout.status IN ('scheduled', 'pending', 'failed')
+       ORDER BY payout.created_at DESC, payout.id DESC
+       LIMIT 1
+    ) AS active_payout ON true
+    JOIN sit_payment_refund_truth AS refund_truth ON refund_truth.payment_id = payment.id
+   WHERE booking.workflow_status IN ('completed', 'cancelled')
+     AND payment.status IN ('captured', 'partially_refunded')
+     AND payment.transferred_minor < payment.owner_payout_minor - refund_truth.settled_owner_refund_minor
+     AND active_payout.status IS DISTINCT FROM 'failed'
+     AND refund_truth.refund_truth_status IN ('none', 'providerBound')
+     AND ((booking.workflow_status = 'completed' AND (
+            booking.payout_instruction_due_at <= now()
+            OR (booking.payout_instruction_due_at IS NULL
+                AND booking.completed_at <= now() - (${payoutHoldHours} * interval '1 hour'))
+          )) OR (booking.workflow_status = 'cancelled'
+            AND booking.ends_at <= now() - (${payoutHoldHours} * interval '1 hour')))
+     AND (contract.id IS NULL
+       OR contract.contract_version IS DISTINCT FROM '${contractVersion}'
+       OR contract.user_id IS DISTINCT FROM booking.renter_id
+       OR contract.accepted_at IS NULL OR NOT isfinite(contract.accepted_at)
+       OR contract.created_at IS NULL OR NOT isfinite(contract.created_at)
+       OR date_trunc('milliseconds', contract.accepted_at)
+            < date_trunc('milliseconds', contract.created_at) - interval '5 minutes'
+       OR date_trunc('milliseconds', contract.accepted_at)
+            > date_trunc('milliseconds', contract.created_at) + interval '5 minutes')
+), payment_findings AS (
+  SELECT 'dispute' AS source, encode(digest(id::text, 'sha256'), 'hex') AS id_hash,
+         'transfer_recovery_needs_review' AS cause, status,
+         CASE WHEN updated_at <= now() - interval '24 hours' THEN '>24h'
+              WHEN updated_at <= now() - interval '1 hour' THEN '1-24h'
+              ELSE '<1h' END AS time_class
+    FROM disputes WHERE transfer_recovery_needs_review = true
+  UNION ALL
+  SELECT 'refund_transfer_reversal', encode(digest(id::text, 'sha256'), 'hex'),
+         'refund_transfer_reversal_needs_review', status,
+         CASE WHEN updated_at <= now() - interval '24 hours' THEN '>24h'
+              WHEN updated_at <= now() - interval '1 hour' THEN '1-24h'
+              ELSE '<1h' END
+    FROM refund_transfer_reversals WHERE needs_review = true OR status = 'manual_review'
+  UNION ALL
+  SELECT 'payout', encode(digest(id::text, 'sha256'), 'hex'),
+         'payout_failed', status,
+         CASE WHEN updated_at <= now() - interval '24 hours' THEN '>24h'
+              WHEN updated_at <= now() - interval '1 hour' THEN '1-24h'
+              ELSE '<1h' END
+    FROM payouts WHERE status = 'failed'
+  UNION ALL
+  SELECT 'payment_refund_truth', encode(digest(payment_id::text, 'sha256'), 'hex'),
+         'refund_truth_needs_review', refund_truth_status,
+         'derived'
+    FROM sit_payment_refund_truth WHERE refund_truth_status = 'needsReview'
+  UNION ALL
+  SELECT 'contract_blocked', id_hash, cause, status, time_class FROM contract_blocked
+), support_findings AS (
+  SELECT encode(digest(id::text, 'sha256'), 'hex') AS id_hash,
+         'next_update_overdue' AS cause, status, priority,
+         CASE WHEN next_update_at <= now() - interval '24 hours' THEN '>24h'
+              WHEN next_update_at <= now() - interval '1 hour' THEN '1-24h'
+              ELSE '<1h' END AS time_class
+    FROM support_cases
+   WHERE operating_mode IN ('simulation', 'internal_testing')
+     AND status NOT IN ('resolved', 'closed')
+     AND next_update_at <= now()
+)
+SELECT jsonb_build_object(
+  'paymentRecoveryNeedsReview', COALESCE((SELECT jsonb_agg(to_jsonb(payment_findings)
+    ORDER BY source, id_hash, cause, status, time_class) FROM payment_findings), '[]'::jsonb),
+  'supportNextUpdateOverdue', COALESCE((SELECT jsonb_agg(to_jsonb(support_findings)
+    ORDER BY id_hash, cause, status, priority, time_class) FROM support_findings), '[]'::jsonb)
+)::text;`;
 }
 
 export function validateStagingContainerInventory(entries, {
@@ -212,6 +355,27 @@ async function psql({ container, user, database, sql, phase = 'psql_query' }) {
     '-U', user, '-d', database, '-Atc', sql,
   ], { phase });
   return result.stdout.trim();
+}
+
+export async function readReadinessFindingFingerprint({
+  container,
+  user,
+  database,
+  contractVersion = 'V5.2-2026-08-16',
+  payoutHoldHours = 48,
+}) {
+  const raw = await psql({
+    container,
+    user,
+    database,
+    sql: buildReadinessFindingSql({ contractVersion, payoutHoldHours }),
+    phase: 'readiness_fingerprint',
+  });
+  try {
+    return normalizeReadinessFindings(JSON.parse(raw));
+  } catch {
+    fail('readiness_fingerprint_invalid');
+  }
 }
 
 async function sha256File(filePath) {
@@ -562,10 +726,14 @@ async function applyMigrationsWithApplicationRunner({ container, database, user,
 }
 
 export async function removeAndVerifyDockerResource(kind, name, { env = process.env } = {}) {
-  const removeArgs = kind === 'container' ? ['rm', '-f', name] : ['volume', 'rm', name];
+  const removeArgs = kind === 'container'
+    ? ['rm', '-f', name]
+    : kind === 'volume' ? ['volume', 'rm', name] : ['network', 'rm', name];
   const verifyArgs = kind === 'container'
     ? ['ps', '-a', '--filter', `name=^/${name}$`, '--format', '{{.Names}}']
-    : ['volume', 'ls', '--filter', `name=^${name}$`, '--format', '{{.Name}}'];
+    : kind === 'volume'
+      ? ['volume', 'ls', '--filter', `name=^${name}$`, '--format', '{{.Name}}']
+      : ['network', 'ls', '--filter', `name=^${name}$`, '--format', '{{.Name}}'];
   let removalError = null;
   try {
     await runCommand('docker', removeArgs, {
@@ -614,6 +782,8 @@ export async function runStagingForwardMigrationRehearsal({
   assertStagingTarget({ project, apiContainer, databaseContainer, databaseVolume });
   const databaseUser = environment.STAGING_DATABASE_USER ?? 'shareittoo_staging';
   const databaseName = environment.STAGING_DATABASE_NAME ?? 'shareittoo_staging';
+  const readinessPayoutHoldHours = Number.parseInt(environment.PAYOUT_HOLD_HOURS ?? '48', 10);
+  const readinessContractVersion = environment.SIT_CONTRACT_VERSION ?? 'V5.2-2026-08-16';
   const requestedBackupDirectory = environment.STAGING_REHEARSAL_BACKUP_DIR ?? '/docker/shareittoo/backups/rehearsals';
   const backupDirectory = await safeExternalDirectory(requestedBackupDirectory);
   const opsCommit = fullCommit(environment.SIT_STAGING_REHEARSAL_OPS_COMMIT, 'opsCommit');
@@ -641,6 +811,7 @@ export async function runStagingForwardMigrationRehearsal({
   const quiesced = [];
   let isolatedContainer = '';
   let isolatedVolume = '';
+  let isolatedNetwork = '';
   let succeeded = false;
   let backup;
   let failureCode = null;
@@ -682,13 +853,27 @@ export async function runStagingForwardMigrationRehearsal({
     });
     if (writersAfterBackup !== '0') fail('foreign_database_writers_after_backup');
 
-    isolatedVolume = `sit-staging-rehearsal-${runId}`;
+    isolatedVolume = `sit-staging-rehearsal-volume-${runId}`;
+    isolatedNetwork = `sit-staging-rehearsal-network-${runId}`;
     isolatedContainer = `sit-staging-rehearsal-pg-${runId}`;
-    await runCommand('docker', ['volume', 'create', '--label', 'com.shareittoo.staging.rehearsal=true', isolatedVolume], { phase: 'temp_volume_create' });
+    await runCommand('docker', [
+      'network', 'create', '--internal',
+      '--label', disposableRehearsalLabel + '=true',
+      '--label', `${disposableRehearsalRunLabel}=${runId}`,
+      isolatedNetwork,
+    ], { phase: 'temp_network_create' });
+    await runCommand('docker', [
+      'volume', 'create',
+      '--label', disposableRehearsalLabel + '=true',
+      '--label', `${disposableRehearsalRunLabel}=${runId}`,
+      isolatedVolume,
+    ], { phase: 'temp_volume_create' });
     const isolatedPassword = crypto.randomBytes(32).toString('base64url');
     await runCommand('docker', [
-      'run', '-d', '--name', isolatedContainer,
-      '--label', 'com.shareittoo.staging.rehearsal=true',
+      'create', '--name', isolatedContainer,
+      '--label', disposableRehearsalLabel + '=true',
+      '--label', `${disposableRehearsalRunLabel}=${runId}`,
+      '--network', isolatedNetwork,
       '--mount', `type=volume,src=${isolatedVolume},dst=/var/lib/postgresql/data`,
       '-p', '127.0.0.1::5432',
       '-e', 'POSTGRES_DB=shareittoo_rehearsal',
@@ -696,6 +881,31 @@ export async function runStagingForwardMigrationRehearsal({
       '-e', `POSTGRES_PASSWORD=${isolatedPassword}`,
       postgresImage,
     ], { phase: 'temp_db_start' });
+    const isolatedNetworkLabels = await dockerInspectJson(
+      isolatedNetwork,
+      '{{json .Labels}}',
+      'temp_network_identity',
+    );
+    const isolatedVolumeLabels = await dockerInspectJson(
+      isolatedVolume,
+      '{{json .Labels}}',
+      'temp_volume_identity',
+    );
+    const isolatedContainerLabels = await dockerInspectJson(
+      isolatedContainer,
+      '{{json .Config.Labels}}',
+      'temp_container_identity',
+    );
+    assertDisposableResourceIdentity({
+      resourceType: 'network', name: isolatedNetwork, labels: isolatedNetworkLabels, runId,
+    });
+    assertDisposableResourceIdentity({
+      resourceType: 'volume', name: isolatedVolume, labels: isolatedVolumeLabels, runId,
+    });
+    assertDisposableResourceIdentity({
+      resourceType: 'container', name: isolatedContainer, labels: isolatedContainerLabels, runId,
+    });
+    await runCommand('docker', ['start', isolatedContainer], { phase: 'temp_db_start' });
     for (let attempt = 0; attempt < 60; attempt += 1) {
       try {
         await runCommand('docker', ['exec', isolatedContainer, 'pg_isready', '-h', '127.0.0.1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], { phase: 'temp_db_readiness' });
@@ -747,6 +957,13 @@ export async function runStagingForwardMigrationRehearsal({
       phase: 'isolated_migration_ledger',
     });
     if (ledger !== '87|87|1|87') fail('rehearsal_migration_ledger_invalid');
+    const readinessBaseline = await readReadinessFindingFingerprint({
+      container: isolatedContainer,
+      user: 'shareittoo_rehearsal',
+      database: 'shareittoo_rehearsal',
+      contractVersion: readinessContractVersion,
+      payoutHoldHours: readinessPayoutHoldHours,
+    });
     await runCommand('docker', ['exec', '-i', isolatedContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], { input: await readFile(join(repositoryRoot, 'backend/ops/check_foreign_key_integrity.sql')), phase: 'isolated_fk_integrity' });
     await runFunctionalProbes({ container: isolatedContainer, user: 'shareittoo_rehearsal', database: 'shareittoo_rehearsal' });
     result = Object.freeze({
@@ -761,6 +978,7 @@ export async function runStagingForwardMigrationRehearsal({
         migrations: '001-087',
         forwardMigrationFiles: forwardMigrations.length,
         functionalProbes: 'passed',
+        readinessBaseline,
       }),
       servicesRemainQuiesced: true,
       apiResumed: false,
@@ -770,12 +988,16 @@ export async function runStagingForwardMigrationRehearsal({
     failureCode = error?.code ?? 'rehearsal_failed';
   } finally {
     const cleanupFailures = [];
-    if (isolatedContainer) {
+  if (isolatedContainer) {
       const cleanupFailure = await removeAndVerifyDockerResource('container', isolatedContainer);
       if (cleanupFailure) cleanupFailures.push(cleanupFailure);
     }
     if (isolatedVolume) {
       const cleanupFailure = await removeAndVerifyDockerResource('volume', isolatedVolume);
+      if (cleanupFailure) cleanupFailures.push(cleanupFailure);
+    }
+    if (isolatedNetwork) {
+      const cleanupFailure = await removeAndVerifyDockerResource('network', isolatedNetwork);
       if (cleanupFailure) cleanupFailures.push(cleanupFailure);
     }
     if (cleanupFailures.length > 0) {

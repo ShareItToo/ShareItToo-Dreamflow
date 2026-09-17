@@ -18,6 +18,10 @@ import {
   safeExternalDirectory,
   validateStagingRunningSet,
   validateStagingContainerInventory,
+  assertDisposableResourceIdentity,
+  normalizeReadinessFindings,
+  assertReadinessFindingsUnchanged,
+  buildReadinessFindingSql,
 } from '../ops/staging_forward_migration_rehearsal.mjs';
 
 const commit = '1'.repeat(40);
@@ -58,6 +62,69 @@ test('rehearsal target labels reject production and mismatched containers/volume
       expectedService: 'postgres',
     }),
     (error) => error.code === 'docker_project_label_not_staging',
+  );
+});
+
+test('isolated rehearsal resources require disposable run labels and reject lookalikes', () => {
+  const runId = '20260918010000-abcdef12';
+  const labels = {
+    'com.shareittoo.staging.rehearsal': 'true',
+    'com.shareittoo.staging.rehearsal_run_id': runId,
+  };
+  for (const resourceType of ['container', 'network', 'volume']) {
+    assert.equal(assertDisposableResourceIdentity({
+      resourceType,
+      name: `sit-staging-rehearsal-${resourceType}-${runId}`,
+      labels,
+      runId,
+    }), true);
+  }
+  assert.throws(
+    () => assertDisposableResourceIdentity({
+      resourceType: 'network',
+      name: 'shareittoo_staging_backend',
+      labels,
+      runId,
+    }),
+    (error) => error.code === 'disposable_resource_name_mismatch',
+  );
+  assert.throws(
+    () => assertDisposableResourceIdentity({
+      resourceType: 'volume',
+      name: `sit-staging-rehearsal-volume-${runId}`,
+      labels: { ...labels, 'com.shareittoo.staging.rehearsal_run_id': 'other' },
+      runId,
+    }),
+    (error) => error.code === 'disposable_resource_labels_missing',
+  );
+});
+
+test('readiness findings are canonical, hashed-ID shaped and drift fail closed', () => {
+  const before = normalizeReadinessFindings({
+    paymentRecoveryNeedsReview: [{ source: 'payout', id_hash: 'b', cause: 'payout_failed', status: 'failed', time_class: '>24h' }],
+    supportNextUpdateOverdue: [{ id_hash: 'a', cause: 'next_update_overdue', status: 'open', priority: 'p1', time_class: '1-24h' }],
+  });
+  const reordered = normalizeReadinessFindings({
+    paymentRecoveryNeedsReview: [{ source: 'payout', id_hash: 'b', cause: 'payout_failed', status: 'failed', time_class: '>24h' }],
+    supportNextUpdateOverdue: [{ id_hash: 'a', cause: 'next_update_overdue', status: 'open', priority: 'p1', time_class: '1-24h' }],
+  });
+  assert.equal(assertReadinessFindingsUnchanged(before, reordered), true);
+  assert.throws(
+    () => assertReadinessFindingsUnchanged(before, {
+      paymentRecoveryNeedsReview: [],
+      supportNextUpdateOverdue: reordered.supportNextUpdateOverdue,
+    }),
+    (error) => error.code === 'readiness_fingerprint_drift',
+  );
+  const sql = buildReadinessFindingSql();
+  assert.match(sql, /digest\(id::text, 'sha256'\)/u);
+  assert.match(sql, /paymentRecoveryNeedsReview/u);
+  assert.match(sql, /supportNextUpdateOverdue/u);
+  assert.match(sql, /contract_blocked/u);
+  assert.doesNotMatch(sql, /email|profile|summary/u);
+  assert.throws(
+    () => buildReadinessFindingSql({ payoutHoldHours: 721 }),
+    (error) => error.code === 'readiness_payout_hold_hours_invalid',
   );
 });
 

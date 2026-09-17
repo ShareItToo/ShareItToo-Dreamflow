@@ -295,6 +295,16 @@ writers immediately before and after the protected backup. A successful
 protected rehearsal leaves all quiesced services stopped; cleanup must be
 verified and any cleanup failure overrides PASS. Runtime source and Ops
 orchestration commits are pinned separately and must be recorded at invocation.
+Every disposable rehearsal container, network and volume must be created with
+an exact run-scoped name plus matching disposable labels, and those identities
+must be inspected and attested before the first start; a loopback port or
+container name alone is never sufficient. Before any candidate start, capture
+the complete sanitized payment-recovery-needs-review and support-next-update-
+overdue finding sets from that same restore using only stable hashed IDs,
+cause/status and coarse time classes. Re-read after candidate migrations/start
+and continue technical probes only when the canonical sets are byte-for-byte
+identical; missing, new, removed, changed or unreadable findings fail closed.
+This fingerprint never heals or suppresses a readiness=503 release blocker.
 The only acceptance target after that rehearsal is the exact candidate image on
 an immediately preflighted free dedicated loopback port (the current reserved
 port is `18082`); the public Staging proxy port and any foreign listener must
