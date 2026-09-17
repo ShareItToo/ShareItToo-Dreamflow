@@ -9,6 +9,7 @@ import {
   diagnoseCurrentHeadAndroidMainNavigation,
   canonicalPlayAppSigningCertificateSha256,
   launchCurrentHeadAndroidCandidateExplicitly,
+  normalizeCurrentHeadAndroidCommandOptions,
   parseMainNavigationArguments,
   verifyCurrentHeadAndroidInstalledCandidate,
   waitForCurrentHeadAndroidMainNavigation,
@@ -134,6 +135,24 @@ test('proves five authenticated read-only destinations and returns sanitized evi
   assert.equal(evidence.boundaries.bookingFlowPassed, false);
   assert.equal(evidence.boundaries.accountMutationPerformed, false);
   assert.equal(JSON.stringify(evidence).includes('PRIVATE-SERIAL'), false);
+});
+
+test('normalizes runner input, timeout, buffer and stdio for execFileSync', () => {
+  assert.deepEqual(
+    normalizeCurrentHeadAndroidCommandOptions({
+      input: 'sanitized-sql',
+      timeoutMs: 15000,
+      maxBuffer: 4096,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }),
+    {
+      encoding: 'utf8',
+      input: 'sanitized-sql',
+      timeout: 15000,
+      maxBuffer: 4096,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    },
+  );
 });
 
 function splitCandidateRunner({ wrongCertificate = false, paths = null } = {}) {

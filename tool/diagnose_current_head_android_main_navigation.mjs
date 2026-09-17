@@ -69,24 +69,24 @@ function fail(message) {
   throw new Error(message);
 }
 
-export function defaultCurrentHeadAndroidCommandRunner(
-  file,
-  args,
-  {
-    binary = false,
-    timeoutMs = 0,
-    input,
-    stdio = ['ignore', 'pipe', 'pipe'],
-    maxBuffer = 512 * 1024 * 1024,
-  } = {},
-) {
-  return execFileSync(file, args, {
+export function normalizeCurrentHeadAndroidCommandOptions({
+  binary = false,
+  timeoutMs = 0,
+  input,
+  stdio = ['ignore', 'pipe', 'pipe'],
+  maxBuffer = 512 * 1024 * 1024,
+} = {}) {
+  return Object.freeze({
     encoding: binary ? null : 'utf8',
     maxBuffer,
     ...(timeoutMs > 0 ? { timeout: timeoutMs } : {}),
     ...(input === undefined ? {} : { input }),
     stdio,
   });
+}
+
+export function defaultCurrentHeadAndroidCommandRunner(file, args, options = {}) {
+  return execFileSync(file, args, normalizeCurrentHeadAndroidCommandOptions(options));
 }
 
 export function currentHeadAndroidAdb(commandRunner, adbPath, device, args, { binary = false } = {}) {

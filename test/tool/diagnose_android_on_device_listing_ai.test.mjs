@@ -5,6 +5,8 @@ import {
   controlledMediaRow,
   newestPhotoPickerTile,
   onDeviceListingAiUiProof,
+  onDeviceListingAiViewportAttemptLimit,
+  observedListingAiSignals,
   runAndroidOnDeviceListingAiAcceptance,
 } from '../../tool/diagnose_android_on_device_listing_ai.mjs';
 
@@ -122,6 +124,58 @@ test('accepts only a meaningful editable local-analysis UI result', () => {
     () => onDeviceListingAiUiProof('<hierarchy>' + node('Manueller Fallback aktiv.') + '</hierarchy>'),
     /result is incomplete/u,
   );
+});
+
+test('reports only sanitized field-language signals when chips are outside the viewport', () => {
+  const signals = observedListingAiSignals(
+    '<hierarchy><node text="Bearbeitbarer KI-Entwurf" content-desc=""/></hierarchy>',
+  );
+  assert.equal(signals.title, false);
+  assert.equal(signals.category, false);
+  assert.equal(signals.titel, false);
+  assert.equal(Object.keys(signals).includes('account'), false);
+});
+
+test('keeps a staged physical-diagnostic failure intact for the CLI boundary', async () => {
+  const staged = Object.assign(new Error('field collection failed'), {
+    sitStage: 'collect-fields',
+  });
+  await assert.rejects(
+    () => runAndroidOnDeviceListingAiAcceptance({
+      candidate,
+      deviceSummary: device,
+      operations: {
+        perform: async () => { throw staged; },
+        verifyServer: async () => server,
+        cleanup: async () => ({ localRecoveryCleared: true, controlledMediaRemoved: true }),
+        restoreOwner: async () => true,
+      },
+    }),
+    (error) => error === staged && error.sitStage === 'collect-fields',
+  );
+});
+
+test('preserves the primary stage when cleanup and restore also run', async () => {
+  const calls = [];
+  await assert.rejects(
+    () => runAndroidOnDeviceListingAiAcceptance({
+      candidate,
+      deviceSummary: device,
+      operations: {
+        currentStage: () => 'collect-fields',
+        perform: async () => { throw new Error('unmarked field failure'); },
+        verifyServer: async () => server,
+        cleanup: async () => { calls.push('cleanup'); return { localRecoveryCleared: true, controlledMediaRemoved: true }; },
+        restoreOwner: async () => { calls.push('restore'); return true; },
+      },
+    }),
+    (error) => error?.sitStage === 'collect-fields',
+  );
+  assert.deepEqual(calls, ['cleanup', 'restore']);
+});
+
+test('uses a bounded viewport collection budget', () => {
+  assert.equal(onDeviceListingAiViewportAttemptLimit, 24);
 });
 
 test('closes physical on-device Listing-AI with zero-cost non-public evidence', async () => {

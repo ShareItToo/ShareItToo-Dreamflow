@@ -35,9 +35,21 @@ const remoteFixture = '/sdcard/Download/SIT_WP112_CONTROLLED_DRILL.png';
 const fixtureDisplayName = 'SIT_WP112_CONTROLLED_DRILL.png';
 const providerModel = 'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1';
 const disclosureVersion = 'listing-ai-on-device-disclosure-v1';
+const allowedStages = new Set([
+  'load-vault', 'verify-play-install', 'bind-owner', 'prepare-fixture',
+  'open-listing', 'photo-picker', 'consent', 'analyze', 'wait-draft',
+  'collect-fields', 'server-readback', 'cleanup', 'restore-owner',
+]);
+export const onDeviceListingAiViewportAttemptLimit = 24;
+let activeStage = 'load-vault';
 
 function fail(message) {
   throw new Error(message);
+}
+
+function setStage(stage) {
+  if (!allowedStages.has(stage)) fail('The Listing-AI diagnostic stage is invalid.');
+  activeStage = stage;
 }
 
 function sha256(value) {
@@ -101,6 +113,27 @@ export function controlledMediaRow(output) {
   return exact[0];
 }
 
+export function observedListingAiSignals(hierarchy) {
+  const nodes = allNodes(hierarchy);
+  const text = nodes.map((node) => [
+    currentHeadAndroidNodeAttribute(node, 'text') ?? '',
+    currentHeadAndroidNodeAttribute(node, 'content-desc') ?? '',
+  ].join(' ')).join(' ').toLowerCase();
+  const keys = Object.freeze([
+    'title',
+    'category',
+    'subcategory',
+    'description',
+    'projecttags',
+    'usecases',
+    'titel',
+    'kategorie',
+    'unterkategorie',
+    'beschreibung',
+  ]);
+  return Object.freeze(Object.fromEntries(keys.map((key) => [key, text.includes(key)])));
+}
+
 export function onDeviceListingAiUiProof(hierarchy) {
   const count = (label) => currentHeadAndroidNamedNodes(hierarchy, label).length;
   const proof = {
@@ -124,7 +157,10 @@ export function onDeviceListingAiUiProof(hierarchy) {
       .filter(([, value]) => value !== true)
       .map(([key]) => key)
       .join(',');
-    fail(`The sanitized on-device Listing-AI result is incomplete: ${missing}.`);
+    const signals = Object.entries(observedListingAiSignals(hierarchy))
+      .map(([key, present]) => `${key}:${present ? 1 : 0}`)
+      .join(',');
+    fail(`The sanitized on-device Listing-AI result is incomplete: ${missing}; signals=${signals}.`);
   }
   return Object.freeze(proof);
 }
@@ -137,7 +173,9 @@ async function collectOnDeviceListingAiUiProof({
   wait,
 }) {
   let combined = String(initialHierarchy);
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  // The result is a scrollable Flutter form; ten viewport captures were not
+  // enough to distinguish a missing field from a field below the fold.
+  for (let attempt = 0; attempt < onDeviceListingAiViewportAttemptLimit; attempt += 1) {
     try {
       onDeviceListingAiUiProof(combined);
       return combined;
@@ -195,12 +233,22 @@ export async function runAndroidOnDeviceListingAiAcceptance({
   let server = null;
   let cleanup = null;
   let primaryFailure = null;
+  let primaryStage = null;
   let cleanupFailure = null;
   try {
     performed = await operations.perform();
     server = exactServerProof(await operations.verifyServer(performed));
   } catch (error) {
     primaryFailure = error;
+    const operationStage = typeof operations.currentStage === 'function'
+      ? operations.currentStage()
+      : activeStage;
+    primaryStage = typeof error?.sitStage === 'string' && allowedStages.has(error.sitStage)
+      ? error.sitStage
+      : (allowedStages.has(operationStage) ? operationStage : activeStage);
+    if (typeof primaryFailure.sitStage !== 'string') {
+      primaryFailure.sitStage = primaryStage;
+    }
   } finally {
     try {
       cleanup = await operations.cleanup(performed);
@@ -442,6 +490,7 @@ async function main() {
   const adbPath = argumentValue(args, '--adb') ?? 'adb';
   const commandRunner = defaultCurrentHeadAndroidCommandRunner;
   const wait = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
+  setStage('load-vault');
   const candidate = await validatePrivateAndroidReleaseArchive({
     root: repositoryRoot,
     candidateDirectory,
@@ -450,14 +499,17 @@ async function main() {
   const device = selectSinglePhysicalDevice(devices);
   const deviceSummary = inspectPhysicalDevice({ commandRunner, adbPath, device });
   if (deviceSummary.model !== 'Pixel 7 Pro') fail('The physical Pixel 7 Pro is required.');
+  setStage('verify-play-install');
   assertCurrentHeadAndroidDeviceAlreadyUnlocked(commandRunner, adbPath, device);
   verifyCurrentHeadAndroidInstalledCandidate(commandRunner, adbPath, device, candidate);
   const vault = readEmailVerifiedJourneyVault(sourceVaultFile).vault;
   let mediaRow = null;
   let createSurfaceOpened = false;
   const operations = {
+    currentStage: () => activeStage,
     perform: async () => {
       const startedAt = new Date().toISOString();
+      setStage('prepare-fixture');
       const localFixture = resolve(repositoryRoot, fixtureRelativePath);
       if (sha256(readFileSync(localFixture)) !== fixtureSha256) {
         fail('The controlled Listing-AI image hash does not match.');
@@ -470,7 +522,9 @@ async function main() {
       ]);
       await wait(800);
       mediaRow = controlledMediaRow(mediaInventory(commandRunner, adbPath, device));
+      setStage('bind-owner');
       await bindExactRole({ vault, role: 'owner', commandRunner, adbPath, device, wait });
+      setStage('open-listing');
       let hierarchy = await openMainDestination({
         commandRunner, adbPath, device, wait, label: 'Entdecken',
       });
@@ -485,6 +539,7 @@ async function main() {
           && currentHeadAndroidNamedNodes(value, 'Foto hinzufügen').length === 1,
       });
       createSurfaceOpened = true;
+      setStage('photo-picker');
       tapLabel(commandRunner, adbPath, device, hierarchy, 'Foto hinzufügen');
       hierarchy = await waitForHierarchy({
         commandRunner,
@@ -542,9 +597,11 @@ async function main() {
         hierarchy,
         'SIT wertet deine ausgewählten Bilder direkt auf diesem Android-Gerät aus.',
       );
+      setStage('consent');
       await wait(350);
       hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
       tapLabel(commandRunner, adbPath, device, hierarchy, 'Ausgewählte Fotos analysieren');
+      setStage('analyze');
       hierarchy = await waitForHierarchy({
         commandRunner,
         adbPath,
@@ -557,6 +614,7 @@ async function main() {
           'Bearbeitbarer Entwurf ist bereit.',
         ).length === 1,
       });
+      setStage('collect-fields');
       hierarchy = await collectOnDeviceListingAiUiProof({
         commandRunner,
         adbPath,
@@ -566,8 +624,12 @@ async function main() {
       });
       return { startedAt, ui: hierarchy, fixtureSelected: true };
     },
-    verifyServer: async ({ startedAt }) => verifyStaging(commandRunner, startedAt),
+    verifyServer: async ({ startedAt }) => {
+      setStage('server-readback');
+      return verifyStaging(commandRunner, startedAt);
+    },
     cleanup: async (performed) => {
+      setStage('cleanup');
       let localRecoveryCleared = performed === null;
       if (createSurfaceOpened && performed !== null) {
         await removeControlledThumbnail(commandRunner, adbPath, device);
@@ -589,6 +651,7 @@ async function main() {
       };
     },
     restoreOwner: async () => {
+      setStage('restore-owner');
       const bound = await bindExactRole({
         vault, role: 'owner', commandRunner, adbPath, device, wait,
       });
@@ -606,7 +669,11 @@ async function main() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   main().catch((error) => {
-    process.stderr.write(`ERROR: ${sanitizedFailure(error)}\n`);
+    const stage = typeof error?.sitStage === 'string'
+      && allowedStages.has(error.sitStage)
+      ? error.sitStage
+      : activeStage;
+    process.stderr.write(`ERROR: SIT stage ${stage}: ${sanitizedFailure(error)}\n`);
     process.exitCode = 1;
   });
 }
