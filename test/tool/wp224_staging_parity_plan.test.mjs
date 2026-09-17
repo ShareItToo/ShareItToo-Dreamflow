@@ -55,7 +55,7 @@ test('WP224 staging parity plan is bound and fail-closed', async () => {
   assert.equal(plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.status, 'failed-start-stopped');
   assert.equal(
     plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.exactOpsCommit,
-    '1315d595785a349b159a5f9fc27a86bf5809caf1',
+    '8781a780e0275c03bcf246c1157966edea225097',
   );
   assert.equal(plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.priorFailedAttempt.phase, 'start_input');
   assert.equal(plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.priorFailedAttempt.cleanup, 'passed');

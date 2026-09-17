@@ -111,7 +111,7 @@
         "acceptancePort": 18082,
       "publicStagingPort": 18080,
       "exactRuntimeCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
-        "exactOpsCommit": "1315d595785a349b159a5f9fc27a86bf5809caf1",
+        "exactOpsCommit": "8781a780e0275c03bcf246c1157966edea225097",
         "target": "loopback-only",
         "publicCandidateServing": false,
         "syntheticMfaFlow": "enroll-pending-cancel",
