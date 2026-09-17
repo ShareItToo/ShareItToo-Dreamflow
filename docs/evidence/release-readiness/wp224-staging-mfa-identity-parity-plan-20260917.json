@@ -121,7 +121,7 @@
       },
       "wp245Implementation": {
         "status": "implemented-not-executed",
-        "sourceCommit": "363ab666ba1b17eaefcbf5246f57e08a09b1af47",
+        "sourceCommit": "84b7b0daac83174424a24de0642783a8fe8109a5",
         "operation": "backend/ops/staging_forward_migration_rehearsal.mjs",
         "candidateAcceptanceRunner": "backend/ops/staging_disposable_candidate_acceptance.mjs",
         "disposableIdentity": {
@@ -171,6 +171,24 @@
           "deviceOrPlayMutation": false
         },
         "executionGate": "requires a separately authorized disposable rehearsal; no execution proof is claimed here"
+      },
+      "wp246RestoreRace": {
+        "status": "implemented-not-retried",
+        "fixCommit": "84b7b0daac83174424a24de0642783a8fe8109a5",
+        "observedAttempt": {
+          "opsCommit": "928ebf0b358c2f4744f8afcaee406bd73ded3cfc",
+          "failureCode": "staging_rehearsal_restore_failed",
+          "cleanup": "passed",
+          "evidence": "absent",
+          "mfaTemporaryFile": "absent",
+          "liveDatabaseMutated": false,
+          "liveSchema": "001-074",
+          "api": "exited"
+        },
+        "rootCauseHypothesis": "fresh PostgreSQL volume can report transient pg_isready success before final init-server start; same backup and helper pass in a fresh isolated restore",
+        "fix": "official PostgreSQL init-complete log marker, then two bounded stable SELECT 1 successes before pg_restore",
+        "verification": "deterministic race test covers transient ready/restart/final marker/two SQL successes and timeout fail-closed",
+        "execution": "no retry by Luna; Sol must run exactly once after review"
       },
       "priorImageSqlContractComparison": {
         "status": "required-not-executed",
