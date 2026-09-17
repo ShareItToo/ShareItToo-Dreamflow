@@ -7,7 +7,7 @@
     "applicationId": "com.shareittoo.app",
     "versionName": "1.0.0",
     "versionCode": "2026091701",
-    "artifactSourceHead": "ad5521165e6b27fc1ed6cdf4806f292568cf66c6",
+    "artifactSourceHead": "776ca5b783a9c867e091bce53be5568afcf3f014",
     "releaseChannel": "internal",
     "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
     "compileSdkVersion": 36,
@@ -32,11 +32,11 @@
     }
   },
   "artifact": {
-    "archiveDirectoryName": "2026091701-ad5521165e6b27fc1ed6cdf4806f292568cf66c6",
-    "aabFileName": "shareittoo-1.0.0-2026091701-ad5521165e6b27fc1ed6cdf4806f292568cf66c6.aab",
+    "archiveDirectoryName": "2026091701-776ca5b783a9c867e091bce53be5568afcf3f014",
+    "aabFileName": "shareittoo-1.0.0-2026091701-776ca5b783a9c867e091bce53be5568afcf3f014.aab",
     "aabBytes": 0,
     "aabSha256": "0000000000000000000000000000000000000000000000000000000000000000",
-    "apkFileName": "shareittoo-1.0.0-2026091701-ad5521165e6b27fc1ed6cdf4806f292568cf66c6.apk",
+    "apkFileName": "shareittoo-1.0.0-2026091701-776ca5b783a9c867e091bce53be5568afcf3f014.apk",
     "apkBytes": 0,
     "apkSha256": "0000000000000000000000000000000000000000000000000000000000000000",
     "privacyReportSha256": "0000000000000000000000000000000000000000000000000000000000000000",
@@ -74,7 +74,7 @@
     "pullRequestMerged": false,
     "deviceInstalledOrContacted": false
   },
-  "evidenceRef": "owner-only-private-archive/2026091701-ad5521165e6b27fc1ed6cdf4806f292568cf66c6",
+  "evidenceRef": "owner-only-private-archive/2026091701-776ca5b783a9c867e091bce53be5568afcf3f014",
   "containsSecrets": false,
   "containsTesterIdentity": false,
   "containsOptInUrl": false,
