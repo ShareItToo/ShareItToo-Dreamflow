@@ -52,13 +52,15 @@ test('WP224 staging parity plan is bound and fail-closed', async () => {
   assert.equal(plan.sourceToStagingDelta.protectedRehearsal.executionEvidence.status, 'passed');
   assert.equal(plan.sourceToStagingDelta.protectedRehearsal.executionEvidence.backup.bytes, 3855507);
   assert.equal(plan.sourceToStagingDelta.protectedRehearsal.executionEvidence.liveStaging.databaseMutated, false);
-  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.status, 'prepared-not-executed');
+  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.status, 'failed-start-stopped');
   assert.equal(
     plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.exactOpsCommit,
-    'aae3fc48824ecb67c9c69aa1e32877bd934b7d89',
+    '1315d595785a349b159a5f9fc27a86bf5809caf1',
   );
-  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.failedAttempt.phase, 'start_input');
-  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.failedAttempt.cleanup, 'passed');
+  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.priorFailedAttempt.phase, 'start_input');
+  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.priorFailedAttempt.cleanup, 'passed');
+  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.failedAttempt.phase, 'acceptance_start');
+  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.failedAttempt.cleanup, 'passed-after-acceptance-only-cleanup');
   assert.equal(plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.failedAttempt.liveSchema, '001-074');
   assert.notEqual(
     plan.sourceToStagingDelta.protectedRehearsal.exactOpsCommit,
