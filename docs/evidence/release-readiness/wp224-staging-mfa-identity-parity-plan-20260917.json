@@ -149,6 +149,19 @@
           "liveDatabaseMutated": false,
           "liveSchema": "001-074",
           "apiResumed": false
+        },
+        "isolatedFailedAttempt": {
+          "status": "failed",
+          "phase": "isolated_candidate_startup",
+          "code": "postgres_sqlstate_42703",
+          "target": "disposable-internal-network",
+          "acceptancePort": 18083,
+          "migrations": "protected backup restored at 001-074; candidate exited before /version proof",
+          "cleanup": "passed",
+          "evidenceWritten": false,
+          "liveDatabaseMutated": false,
+          "liveSchema": "001-074",
+          "apiResumed": false
         }
       }
     },
