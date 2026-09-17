@@ -80,7 +80,7 @@ export function assertDisposableResourceIdentity({
   }
   const expectedName = `sit-staging-rehearsal-${resourceType}-${runId}`;
   const validContainerName = resourceType === 'container'
-    && new RegExp(`^sit-staging-rehearsal-(?:pg|api)-${runId}$`, 'u').test(name ?? '');
+    && new RegExp(`^sit-staging-rehearsal-(?:pg|api|bootstrap)-${runId}$`, 'u').test(name ?? '');
   if (typeof name !== 'string' || (resourceType === 'container' ? !validContainerName : name !== expectedName)) {
     fail('disposable_resource_name_mismatch');
   }

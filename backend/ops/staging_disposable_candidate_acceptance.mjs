@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import crypto from 'node:crypto';
-import { chmod, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { chmod, chown, lstat, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   assertDisposableResourceIdentity,
@@ -13,11 +13,13 @@ import {
   runCommand,
   runCommandWithFileInput,
 } from './staging_forward_migration_rehearsal.mjs';
+import { validateMfaStagingSecret } from './validate_mfa_staging_secret.mjs';
 
 export const disposableCandidateCommit = 'f0bb868a8a487cbf33ae67a555946fb9c67f4e9f';
 export const disposableCandidateImage = `shareittoo-api-wp244:${disposableCandidateCommit}`;
 export const disposableCandidateImageDigest = 'sha256:38be66d170746b20bfc4c08c70655a72f9a6ce9eb700278a129d5acdedc22620';
 export const disposableCandidateOpsCommit = '7ccf56ccf7caf335c93c0bd7ed36d0fa2c5bb926';
+export const disposablePostgresImage = 'postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777';
 
 const repositoryRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const readinessContractVersion = 'V5.2-2026-08-16';
@@ -31,6 +33,55 @@ function fail(code) {
 function fullCommit(value, name) {
   if (!/^[0-9a-f]{40}$/u.test(value ?? '')) fail(`${name}_must_be_full_commit`);
   return value;
+}
+
+async function createEphemeralMfaKey() {
+  const root = await (await import('node:fs/promises')).mkdtemp(join('/tmp', 'sit-disposable-mfa-'));
+  const filePath = join(root, 'mfa-key');
+  const bytes = crypto.randomBytes(32);
+  await writeFile(filePath, `${bytes.toString('base64url')}\n`, { mode: 0o640 });
+  bytes.fill(0);
+  await chmod(filePath, 0o640);
+  const ownerUid = typeof process.getuid === 'function' ? process.getuid() : 0;
+  await chown(filePath, ownerUid, 65532);
+  validateMfaStagingSecret({ filePath, runtimeReadable: true, runtimeGroup: 65532 });
+  return Object.freeze({ filePath, root });
+}
+
+async function removeEphemeralMfaKey(key) {
+  if (!key?.filePath) return;
+  try { await (await import('node:fs/promises')).rm(key.root, { recursive: true, force: false }); } catch { fail('mfa_key_cleanup_failed'); }
+  try { await stat(key.filePath); fail('mfa_key_still_present'); } catch (error) { if (error?.code !== 'ENOENT') throw error; }
+}
+
+async function assertSafeEvidencePath(evidencePath) {
+  if (typeof evidencePath !== 'string' || !evidencePath.startsWith('/')) fail('evidence_path_required');
+  const absolute = resolve(evidencePath);
+  if (absolute === repositoryRoot || absolute.startsWith(`${repositoryRoot}/`)) fail('evidence_path_inside_repository');
+  const parent = dirname(absolute);
+  await mkdir(parent, { recursive: true, mode: 0o700 });
+  const parentMeta = await lstat(parent);
+  const ownerUid = typeof process.getuid === 'function' ? process.getuid() : parentMeta.uid;
+  if (parentMeta.isSymbolicLink() || !parentMeta.isDirectory() || (parentMeta.mode & 0o777) !== 0o700 || parentMeta.uid !== ownerUid) fail('evidence_directory_unsafe');
+  const parentReal = await realpath(parent);
+  if (parentReal === repositoryRoot || parentReal.startsWith(`${repositoryRoot}/`)) fail('evidence_directory_inside_repository');
+  try { const existing = await lstat(absolute); if (existing.isSymbolicLink() || !existing.isFile()) fail('evidence_path_exists'); fail('evidence_path_exists'); } catch (error) { if (error?.code !== 'ENOENT') throw error; }
+  return absolute;
+}
+
+async function boundedFetch(fetchImpl, url, { timeoutMs = 5000 } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try { return await fetchImpl(url, { signal: controller.signal }); } catch { return null; } finally { clearTimeout(timer); }
+}
+
+export async function pollVersion(fetchImpl, url, { attempts = 60, intervalMs = 250 } = {}) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const response = await boundedFetch(fetchImpl, url);
+    if (response?.ok) return response;
+    if (attempt < attempts - 1) await new Promise((resolvePromise) => setTimeout(resolvePromise, intervalMs));
+  }
+  fail('candidate_version_timeout');
 }
 
 function assertSafeDisposableTarget({ network, volume, database, api, runId }) {
@@ -71,35 +122,6 @@ async function verifyBackup({ backupPath, manifestPath, hashFile: suppliedHashFi
   const actual = await hashFile(backupPath);
   if (actual !== match[1]) fail('backup_sha256_mismatch');
   return Object.freeze({ bytes: metadata.size, sha256: actual });
-}
-
-function compatibilityReadinessSql() {
-  return `
-WITH payment_findings AS (
-  SELECT 'dispute' AS source, encode(digest(id::text, 'sha256'), 'hex') AS id_hash,
-         'transfer_recovery_needs_review' AS cause, status,
-         CASE WHEN updated_at <= now() - interval '24 hours' THEN '>24h'
-              WHEN updated_at <= now() - interval '1 hour' THEN '1-24h' ELSE '<1h' END AS time_class
-    FROM disputes WHERE transfer_recovery_needs_review = true
-  UNION ALL
-  SELECT 'payout', encode(digest(id::text, 'sha256'), 'hex'), 'payout_failed', status,
-         CASE WHEN updated_at <= now() - interval '24 hours' THEN '>24h'
-              WHEN updated_at <= now() - interval '1 hour' THEN '1-24h' ELSE '<1h' END
-    FROM payouts WHERE status = 'failed'
-), support_findings AS (
-  SELECT encode(digest(id::text, 'sha256'), 'hex') AS id_hash,
-         'next_update_overdue' AS cause, status, priority,
-         CASE WHEN next_update_at <= now() - interval '24 hours' THEN '>24h'
-              WHEN next_update_at <= now() - interval '1 hour' THEN '1-24h' ELSE '<1h' END AS time_class
-    FROM support_cases WHERE operating_mode IN ('simulation', 'internal_testing')
-      AND status NOT IN ('resolved', 'closed') AND next_update_at <= now()
-)
-SELECT jsonb_build_object(
-  'paymentRecoveryNeedsReview', COALESCE((SELECT jsonb_agg(to_jsonb(payment_findings)
-    ORDER BY source, id_hash, cause, status, time_class) FROM payment_findings), '[]'::jsonb),
-  'supportNextUpdateOverdue', COALESCE((SELECT jsonb_agg(to_jsonb(support_findings)
-    ORDER BY id_hash, cause, status, priority, time_class) FROM support_findings), '[]'::jsonb)
-)::text;`;
 }
 
 async function queryFingerprint({ command, container, user, database, sql }) {
@@ -148,74 +170,124 @@ export async function runDisposableCandidateAcceptance({
   hashFile,
   evidencePath = environment.SIT_DISPOSABLE_CANDIDATE_EVIDENCE_PATH,
   removeResource = removeAndVerifyDockerResource,
+  opsCommit = environment.SIT_STAGING_REHEARSAL_OPS_COMMIT,
+  prepareMfaKey = createEphemeralMfaKey,
+  cleanupMfaKey = removeEphemeralMfaKey,
 } = {}) {
   fullCommit(targetCommit, 'targetCommit');
   if (targetCommit !== disposableCandidateCommit) fail('candidate_commit_mismatch');
   if (!execute) fail('explicit_execute_required');
   if (confirmation !== targetCommit) fail('exact_candidate_confirmation_required');
+  fullCommit(opsCommit, 'opsCommit');
+  const opsHead = await command('git', ['rev-parse', 'HEAD'], { phase: 'ops_head_read' });
+  if (String(typeof opsHead === 'string' ? opsHead : opsHead.stdout).trim() !== opsCommit) fail('ops_checkout_commit_mismatch');
+  const safeEvidencePath = await assertSafeEvidencePath(evidencePath);
   const backup = await verifyBackup({ backupPath, manifestPath, hashFile });
   const runId = `${new Date().toISOString().replace(/[^0-9]/gu, '').slice(0, 14)}-${crypto.randomUUID().slice(0, 8)}`;
   const network = `sit-staging-rehearsal-network-${runId}`;
   const volume = `sit-staging-rehearsal-volume-${runId}`;
   const database = `sit-staging-rehearsal-pg-${runId}`;
   const api = `sit-staging-rehearsal-api-${runId}`;
+  const bootstrap = `sit-staging-rehearsal-bootstrap-${runId}`;
   const labels = ['--label', 'com.shareittoo.staging.rehearsal=true', '--label', `com.shareittoo.staging.rehearsal_run_id=${runId}`];
-  const resources = { network, volume, database, api };
+  const resources = { network, volume, database, bootstrap, api };
   let cleanup = { removed: false };
   let evidence;
+  let mfaKey;
+  const attestedResources = [];
   try {
     assertSafeDisposableTarget({ ...resources, runId });
+    mfaKey = await prepareMfaKey();
     const databasePassword = `disposable-${crypto.randomBytes(18).toString('base64url')}`;
-    const imageMeta = await command('docker', ['image', 'inspect', disposableCandidateImage, '--format', '{{index .Config.Labels "org.opencontainers.image.revision"}}|{{json .RepoDigests}}'], { phase: 'candidate_image_identity' });
+    const imageMeta = await command('docker', ['image', 'inspect', disposableCandidateImage, '--format', '{{.Id}}|{{index .Config.Labels "org.opencontainers.image.revision"}}'], { phase: 'candidate_image_identity' });
     const imageMetaText = String(typeof imageMeta === 'string' ? imageMeta : imageMeta.stdout).trim();
-    const [imageRevision, repoDigestsJson] = imageMetaText.split('|', 2);
+    const [imageId, imageRevision] = imageMetaText.split('|', 2);
     if (imageRevision !== targetCommit) fail('candidate_image_revision_mismatch');
-    let repoDigests;
-    try { repoDigests = JSON.parse(repoDigestsJson); } catch { fail('candidate_image_digest_unreadable'); }
-    if (!Array.isArray(repoDigests) || !repoDigests.some((digest) => digest.endsWith(`@${disposableCandidateImageDigest}`))) {
-      fail('candidate_image_digest_mismatch');
-    }
+    if (imageId !== disposableCandidateImageDigest) fail('candidate_image_digest_mismatch');
     await command('docker', ['network', 'create', '--internal', ...labels, network], { phase: 'network_create' });
-    await command('docker', ['volume', 'create', ...labels, volume], { phase: 'volume_create' });
-    await command('docker', ['create', '--name', database, ...labels, '--network', network, '--network-alias', 'db', '--mount', `type=volume,src=${volume},dst=/var/lib/postgresql/data`, '-p', '127.0.0.1::5432', '-e', 'POSTGRES_DB=shareittoo_rehearsal', '-e', 'POSTGRES_USER=shareittoo_rehearsal', '-e', `POSTGRES_PASSWORD=${databasePassword}`, 'postgres:16-alpine'], { phase: 'database_create' });
-    await command('docker', ['create', '--name', api, ...labels, '--network', network, '--network-alias', 'api', '-p', '127.0.0.1::8080', '-e', 'NODE_ENV=production', '-e', 'DEPLOYMENT_ENVIRONMENT=staging', '-e', 'PORT=8080', '-e', 'BIND_HOST=0.0.0.0', '-e', `APP_COMMIT=${targetCommit}`, '-e', 'JWT_SECRET=disposable-jwt-secret-not-persisted', '-e', `DATABASE_URL=postgres://shareittoo_rehearsal:${databasePassword}@db:5432/shareittoo_rehearsal`, '-e', 'MFA_ENCRYPTION_KEY=disposable-mfa-key-not-persisted', '-e', 'PAYMENT_TRANSPORT=memory', '-e', 'STRIPE_LIVEMODE=false', '-e', 'IDENTITY_VERIFICATION_TRANSPORT=disabled', '-e', 'SIT_LISTING_AI_PROVIDER=mock', '-e', 'PUSH_TRANSPORT=memory', '-e', 'MAIL_TRANSPORT=disabled', disposableCandidateImage], { phase: 'candidate_create' });
-    for (const [resourceType, name] of [['network', network], ['volume', volume], ['container', database], ['container', api]]) {
+    for (const [resourceType, name] of [['network', network]]) {
       const inspected = await inspectLabels(command, name, resourceType === 'container' ? '{{json .Config.Labels}}' : '{{json .Labels}}', `${resourceType}_identity`);
       assertDisposableResourceIdentity({ resourceType, name, labels: inspected, runId });
+      attestedResources.push([resourceType, name]);
+    }
+    await command('docker', ['volume', 'create', ...labels, volume], { phase: 'volume_create' });
+    for (const [resourceType, name] of [['volume', volume]]) {
+      const inspected = await inspectLabels(command, name, '{{json .Labels}}', `${resourceType}_identity`);
+      assertDisposableResourceIdentity({ resourceType, name, labels: inspected, runId });
+      attestedResources.push([resourceType, name]);
+    }
+    await command('docker', ['create', '--name', database, ...labels, '--network', network, '--network-alias', 'db', '--mount', `type=volume,src=${volume},dst=/var/lib/postgresql/data`, '-p', '127.0.0.1::5432', '-e', 'POSTGRES_DB=shareittoo_rehearsal', '-e', 'POSTGRES_USER=shareittoo_rehearsal', '-e', `POSTGRES_PASSWORD=${databasePassword}`, disposablePostgresImage], { phase: 'database_create' });
+    for (const [resourceType, name] of [['container', database]]) {
+      const inspected = await inspectLabels(command, name, '{{json .Config.Labels}}', 'database_identity');
+      assertDisposableResourceIdentity({ resourceType, name, labels: inspected, runId });
+      attestedResources.push([resourceType, name]);
+    }
+    await command('docker', ['create', '--name', api, ...labels, '--network', network, '--network-alias', 'api', '-p', '127.0.0.1::8080', '-e', 'NODE_ENV=production', '-e', 'DEPLOYMENT_ENVIRONMENT=staging', '-e', 'PORT=8080', '-e', 'BIND_HOST=0.0.0.0', '-e', `APP_COMMIT=${targetCommit}`, '-e', 'JWT_SECRET=disposable-jwt-secret-not-persisted', '-e', `DATABASE_URL=postgres://shareittoo_rehearsal:${databasePassword}@db:5432/shareittoo_rehearsal`, '-e', 'MFA_ENCRYPTION_KEY_FILE=/run/secrets/mfa-encryption-key', '-e', 'PAYMENT_TRANSPORT=memory', '-e', 'STRIPE_LIVEMODE=false', '-e', 'IDENTITY_VERIFICATION_TRANSPORT=disabled', '-e', 'SIT_LISTING_AI_PROVIDER=mock', '-e', 'PUSH_TRANSPORT=memory', '-e', 'MAIL_TRANSPORT=disabled', '--mount', `type=bind,src=${mfaKey.filePath},dst=/run/secrets/mfa-encryption-key,readonly`, disposableCandidateImageDigest], { phase: 'candidate_create' });
+    for (const [resourceType, name] of [['container', api]]) {
+      const inspected = await inspectLabels(command, name, '{{json .Config.Labels}}', 'api_identity');
+      assertDisposableResourceIdentity({ resourceType, name, labels: inspected, runId });
+      attestedResources.push([resourceType, name]);
     }
     await command('docker', ['start', database], { phase: 'database_start' });
     for (let attempt = 0; attempt < 60; attempt += 1) {
       try { await command('docker', ['exec', database, 'pg_isready', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], { phase: 'database_ready' }); break; } catch { if (attempt === 59) fail('database_not_ready'); }
     }
     await commandWithFileInput('docker', ['exec', '-i', database, 'pg_restore', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal', '--no-owner', '--no-acl'], backupPath, { phase: 'restore' });
-    const preFingerprint = await queryFingerprint({ command, container: database, user: 'shareittoo_rehearsal', database: 'shareittoo_rehearsal', sql: compatibilityReadinessSql() });
+    const bootstrapScript = "import { pool } from '/app/src/db.js'; import { runMigrations } from '/app/src/migrations.js'; await runMigrations(pool); await pool.end();";
+    await command('docker', ['create', '--name', bootstrap, ...labels, '--network', network, '-e', 'NODE_ENV=production', '-e', 'DEPLOYMENT_ENVIRONMENT=staging', '-e', `DATABASE_URL=postgres://shareittoo_rehearsal:${databasePassword}@db:5432/shareittoo_rehearsal`, '-e', 'MFA_ENCRYPTION_KEY_FILE=/run/secrets/mfa-encryption-key', '--mount', `type=bind,src=${mfaKey.filePath},dst=/run/secrets/mfa-encryption-key,readonly`, disposableCandidateImageDigest, 'node', '--input-type=module', '-e', bootstrapScript], { phase: 'bootstrap_create' });
+    const bootstrapLabels = await inspectLabels(command, bootstrap, '{{json .Config.Labels}}', 'bootstrap_identity');
+    assertDisposableResourceIdentity({ resourceType: 'container', name: bootstrap, labels: bootstrapLabels, runId });
+    attestedResources.push(['container', bootstrap]);
+    await command('docker', ['start', bootstrap], { phase: 'bootstrap_start' });
+    const bootstrapWait = await command('docker', ['wait', bootstrap], { phase: 'bootstrap_wait' });
+    if (String(typeof bootstrapWait === 'string' ? bootstrapWait : bootstrapWait.stdout).trim() !== '0') fail('bootstrap_migrations_failed');
+    const preFingerprint = await queryFingerprint({ command, container: database, user: 'shareittoo_rehearsal', database: 'shareittoo_rehearsal', sql: buildReadinessFindingSql({ contractVersion: readinessContractVersion, payoutHoldHours: 48 }) });
     await command('docker', ['start', api], { phase: 'candidate_start' });
     const apiPort = await hostPort(command, api, 8080);
+    const versionResponse = await pollVersion(fetchImpl, `http://127.0.0.1:${apiPort}/version`);
     let version;
-    for (let attempt = 0; attempt < 60; attempt += 1) { try { const response = await fetchImpl(`http://127.0.0.1:${apiPort}/version`); if (response.ok) { version = await response.json(); break; } } catch {} if (attempt === 59) fail('candidate_version_timeout'); }
+    try { version = await versionResponse.json(); } catch { fail('candidate_version_payload_invalid'); }
     if (version?.commit !== targetCommit) fail('candidate_version_commit_mismatch');
-    const live = await fetchImpl(`http://127.0.0.1:${apiPort}/health/live`); if (!live.ok) fail('candidate_live_failed');
-    const ready = await fetchImpl(`http://127.0.0.1:${apiPort}/health/ready`); if (ready.status !== 503) fail('readiness_blocker_not_observed');
+    const live = await boundedFetch(fetchImpl, `http://127.0.0.1:${apiPort}/health/live`); if (!live?.ok) fail('candidate_live_failed');
+    const ready = await boundedFetch(fetchImpl, `http://127.0.0.1:${apiPort}/health/ready`); if (ready?.status !== 503) fail('readiness_blocker_not_observed');
     let readinessPayload;
     try { readinessPayload = await ready.json(); } catch { fail('readiness_payload_unreadable'); }
     if (readinessPayload?.status !== 'degraded') fail('readiness_status_not_degraded');
     const postFingerprint = await queryFingerprint({ command, container: database, user: 'shareittoo_rehearsal', database: 'shareittoo_rehearsal', sql: buildReadinessFindingSql({ contractVersion: readinessContractVersion, payoutHoldHours: 48 }) });
     assertReadinessFindingsUnchanged(preFingerprint, postFingerprint);
+    const checks = readinessPayload.checks ?? {};
+    const payments = checks.payments ?? {};
+    const support = checks.supportDeadlines ?? {};
+    const notifications = checks.notifications ?? {};
+    if (payments.recoveryNeedsReview !== postFingerprint.paymentRecoveryNeedsReview.length
+        || payments.failedEvents !== 0 || payments.unbalanced !== 0 || payments.recoveryPending !== 0
+        || support.nextUpdateOverdue !== postFingerprint.supportNextUpdateOverdue.length
+        || support.stale !== false || support.lastErrorCode != null || support.p0WithoutOwner !== 0
+        || support.criticalNextUpdateOverdue !== 0 || support.privacyDeadlineNear !== 0
+        || support.privacyDeadlineOverdue !== 0 || support.privacyIncidentDeadlineNear !== 0
+        || support.privacyIncidentDeadlineOverdue !== 0 || notifications.dead !== 0
+        || ['error', 'unverified'].includes(checks.mail)) {
+      fail('readiness_degradation_not_fingerprint_bound');
+    }
     const ledger = await queryText({ command, container: database, user: 'shareittoo_rehearsal', database: 'shareittoo_rehearsal', sql: "SELECT count(*), count(DISTINCT (regexp_match(name, '^([0-9]+)_'))[1]::int), min((regexp_match(name, '^([0-9]+)_'))[1]::int), max((regexp_match(name, '^([0-9]+)_'))[1]::int) FROM schema_migrations", phase: 'ledger' });
     if (ledger !== '87|87|1|87') fail('ledger_invalid');
+    const fkCount = await queryText({ command, container: database, user: 'shareittoo_rehearsal', database: 'shareittoo_rehearsal', sql: "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND convalidated", phase: 'fk_count' });
+    if (fkCount !== '367') fail('fk_count_invalid');
+    await commandWithFileInput('docker', ['exec', '-i', database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], join(repositoryRoot, 'backend/ops/check_foreign_key_integrity.sql'), { phase: 'fk_integrity' });
     await command('docker', ['exec', '-i', api, 'node', '--input-type=module'], { input: mfaProbe, phase: 'mfa_probe' }).catch(() => fail('mfa_probe_failed'));
-    evidence = { status: 'technical-probes-passed-operational-release-blocked', runtimeCommit: targetCommit, image: disposableCandidateImage, imageDigest: disposableCandidateImageDigest, backup, runId, resources, readiness: { http: 503, status: readinessPayload.status, preFingerprint, postFingerprint }, providerTraffic: false, liveDatabaseMutated: false };
+    evidence = { status: 'technical-probes-passed-operational-release-blocked', runtimeCommit: targetCommit, image: disposableCandidateImageDigest, imageDigest: disposableCandidateImageDigest, postgresImage: disposablePostgresImage, backup, runId, resources, ledger, foreignKeys: fkCount, readiness: { http: 503, status: readinessPayload.status, preFingerprint, postFingerprint }, providerTraffic: false, liveDatabaseMutated: false };
     return evidence;
   } finally {
     const errors = [];
-    for (const [kind, name] of [['container', api], ['container', database], ['volume', volume], ['network', network]]) { try { const error = await removeResource(kind, name); if (error) errors.push(error); } catch { errors.push(`cleanup_${kind}_failed`); } }
+    for (const [kind, name] of [...attestedResources].reverse()) { try { const error = await removeResource(kind, name); if (error) errors.push(error); } catch { errors.push(`cleanup_${kind}_failed`); } }
+    try { await cleanupMfaKey(mfaKey); } catch { errors.push('mfa_key_cleanup_failed'); }
     cleanup = { removed: errors.length === 0, errors };
     if (errors.length > 0) fail('cleanup_required');
     if (evidence) evidence.cleanup = cleanup;
     if (evidence && evidencePath) {
       await mkdir(resolve(evidencePath, '..'), { recursive: true, mode: 0o700 });
-      await writeFile(evidencePath, `${JSON.stringify({ ...evidence, cleanup }, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
-      await chmod(evidencePath, 0o600);
+      await writeFile(safeEvidencePath, `${JSON.stringify({ ...evidence, cleanup }, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+      await chmod(safeEvidencePath, 0o600);
     }
   }
 }
