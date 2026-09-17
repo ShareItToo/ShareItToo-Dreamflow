@@ -6,7 +6,7 @@ import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/screens/my_listings_screen.dart';
 import 'package:lendify/screens/owner_requests_screen.dart';
-import 'package:lendify/screens/placeholder_screen.dart';
+import 'package:lendify/screens/contacts_screen.dart';
 import 'package:lendify/screens/public_profile_screen.dart';
 import 'package:lendify/screens/account_settings_screen.dart';
 import 'package:lendify/screens/bookings_screen.dart';
@@ -992,11 +992,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             break;
           case 'Kontakte':
           case 'Contacts':
-            Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => PlaceholderScreen(
-                    title: l10n.t('Kontakte'),
-                    description:
-                        l10n.t('Verwalte deine Kontakte und Vermieter.'))));
+            Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ContactsScreen()));
             break;
           case 'Kontoeinstellungen':
           case 'Account settings':
