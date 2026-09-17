@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp187-current-candidate-play-pixel-closure",
+  "status": "passed-manual-pilot-play-device-closure-listing-ai-open-failed",
+  "capturedOn": "2026-09-17",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "artifactClosureHead": "f83158c36754c9d3d4fa37574e55b797518a77d0",
+    "artifactSourceHead": "085e1e9869abb255767e0eaefd29315cb9cdadf8",
+    "githubRegression": {
+      "runId": 35174721577,
+      "conclusion": "success",
+      "requiredJobs": "all-success"
+    },
+    "githubCodeql": {
+      "runId": 35174721574,
+      "conclusion": "success"
+    }
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091702",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "minSdkVersion": 24,
+    "targetSdkVersion": 36,
+    "compileSdkVersion": 36,
+    "manifest": "store/google-play/rollover-candidate-2026091702.json",
+    "manifestRole": "immutable-pre-action-snapshot"
+  },
+  "artifacts": {
+    "aabBytes": 138841007,
+    "aabSha256": "c684cebfe2bca5e15cb59ae440421f96f3d20821a0b052d91f7d9d12b2877b79",
+    "apkBytes": 199976443,
+    "apkSha256": "20daaeb8994b7962b5d9ea5f4ea4e18866a33fb49962a64ccd17345294e12f3d",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a",
+    "signatureVerified": true
+  },
+  "timeoutParity": {
+    "1701To1702ByteIdentical": true,
+    "timeoutImplementationSha256": "8a19926b82f0126a568061bf8a061cd57433d24360b32721af3ff794f9c81beb",
+    "timeoutTestSha256": "9dcdcc4926485868c527e364d84d11e89dce5ac7d8a2d1f905929864ce4b68d1",
+    "1701PhysicalProof": "passed-40-second-timeout-fallback-input-preservation",
+    "1702PhysicalObservation": "returned-about-0.30-seconds-visible-empty-ai-suggestions-manual-editor",
+    "unitAndLateResponseCoverage": "passed",
+    "lateResponseOverwrite": false,
+    "automaticRetry": false
+  },
+  "wp185ManualPilot": {
+    "controlledImageCount": 1,
+    "manualListing": "published-and-server-read-back",
+    "marker": "WP185-VC2026091702",
+    "city": "Heilbronn",
+    "ownerProfileCity": null,
+    "cleanup": "exact-listing-removed-controlled-media-removed-owner-restored",
+    "paymentEffect": false,
+    "providerEffect": false
+  },
+  "playInternal": {
+    "track": "internal-testing",
+    "releaseName": "1.0.0-internal-2026091702",
+    "versionCode": "2026091702",
+    "status": "available-to-internal-testers",
+    "active": true,
+    "testerCount": 2,
+    "testerListUnchanged": true,
+    "pendingChangesNotSubmittedForReview": 14,
+    "managedPublishing": "off",
+    "otherTracksUnchanged": true,
+    "reviewSubmission": false
+  },
+  "pixelPlaySource": {
+    "physical": true,
+    "model": "Pixel 7 Pro",
+    "versionCode": "2026091702",
+    "installer": "com.android.vending",
+    "splitCount": 4,
+    "coldLaunch": true,
+    "sessionSmoke": true,
+    "manualEditorSmoke": true,
+    "ownerProfileCity": null,
+    "additionalListingCreated": false,
+    "temporaryCapturesRemoved": true
+  },
+  "listingAi": {
+    "functionalAcceptance": "OPEN/FAILED",
+    "reason": "1702 native pipeline returned in about 0.30 seconds with visible empty AI suggestions and manual editor; deterministic 40-second timeout was not observed on 1702.",
+    "manualPilotPath": "PASS-under-prior-Astra-decision",
+    "manualFallbackDisclosureVisible": true,
+    "automaticPublication": false,
+    "externalImageProvider": false,
+    "nextExactGate": "No manual-Pilot blocker; retain OPEN/FAILED as residual AI limitation/debt. Next repository gate is exact-head docs/evidence CI validation."
+  },
+  "boundaries": {
+    "paymentEffect": false,
+    "providerEffect": false,
+    "productionChanged": false,
+    "firebaseChanged": false,
+    "cloudVpsDnsChanged": false,
+    "storeTracksOtherThanInternalChanged": false,
+    "prMerged": false
+  },
+  "remainingGateAudit": {
+    "currentManualPilotOpenGates": [
+      "exact-head-docs-and-evidence-validation"
+    ],
+    "currentManualPilotClosedGates": [
+      "exact-head-github-regression-and-codeql",
+      "play-internal-activation",
+      "play-source-pixel-install-and-smoke",
+      "manual-listing-heilbronn-server-readback-cleanup"
+    ],
+    "listingAiResidualLimitation": "OPEN/FAILED-1702-timeout-not-observed-not-a-manual-Pilot-blocker",
+    "oldProductWideOrExternalHoldsNotCurrentManualPilotGates": true
+  },
+  "containsSecrets": false,
+  "containsTesterIdentity": false,
+  "containsOptInUrl": false,
+  "containsPrivateFilesystemPath": false,
+  "containsRawDeviceIdentifier": false,
+  "containsFullListingIdentifier": false
+}

@@ -1,4 +1,28 @@
-# Current Work Package: WP184 Heilbronn city successor — TECHNICAL FIX COMPLETE; PLAY/DEVICE GATES HOLD
+# Current Work Package: WP187 Play/Pixel manual-Pilot closure — PLAY/DEVICE PASS; Listing-AI OPEN/FAILED
+
+WP187 records the exact post-action closure for candidate `1.0.0+2026091702`
+(`com.shareittoo.app`), source-bound to
+`085e1e9869abb255767e0eaefd29315cb9cdadf8`. Exact-head GitHub Regression
+`35174721577` and CodeQL `35174721574` passed at `f83158c3`. Play Internal is
+active as `1.0.0-internal-2026091702`, available to tester count 2; pending
+changes remain 14, Managed publishing is OFF and other tracks are unchanged.
+The Play-source Pixel smoke passed with installer `com.android.vending`, four
+expected splits, cold launch, session and manual editor. WP185's one manual
+listing read back as Heilbronn with owner profile city null and was cleaned up.
+
+The manual Pilot path is **PASS** under the prior Astra decision. Listing-AI
+functional acceptance is **OPEN/FAILED as residual limitation/debt** for 1702
+because the native pipeline returned in about 0.30 seconds with visible empty
+AI suggestions/manual editor; the 1702 40-second timeout was not observed. The
+identical timeout implementation/test paths, green unit/late-response coverage
+and safe editable return make this no manual-Pilot blocker. The only remaining
+enforced gate is exact-head Docs/Evidence CI validation. No payment, provider,
+production, Firebase, cloud/DNS, other-track, review or PR-merge effect
+occurred. The rollover manifest remains an immutable pre-action snapshot; see
+`docs/evidence/release-readiness/wp187-current-candidate-play-pixel-closure-20260917.json`
+and `docs/operations/WP187_PLAY_PIXEL_MANUAL_PILOT_CLOSURE_20260917.md`.
+
+## Historical WP184 technical-fix handover
 
 WP184 fixes the evidenced city-payload mismatch from WP183. Heilbronn is now a
 single entry in the central `DataService._cities` truth, and city derivation,
