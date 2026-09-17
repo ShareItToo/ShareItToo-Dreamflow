@@ -166,7 +166,16 @@ export function runCommandWithFileInput(command, args, filePath, {
       child.kill('SIGTERM');
       reject(commandFailure(`${phase}_input`));
     };
-    inputStream.once('error', failInput);
+    const handleInputError = (error) => {
+      // pg_restore may stop reading after its archive header/list; the pipe
+      // then reports EPIPE even though the child exits successfully. Treat
+      // only that expected early-close as benign and preserve all real I/O
+      // failures as sanitized command errors.
+      if (error?.code === 'EPIPE') return;
+      failInput(error);
+    };
+    inputStream.once('error', handleInputError);
+    child.stdin.once('error', handleInputError);
     child.once('error', () => reject(commandFailure(phase)));
     child.once('close', (code) => {
       if (code === 0) resolvePromise({ stdout, stderr });
