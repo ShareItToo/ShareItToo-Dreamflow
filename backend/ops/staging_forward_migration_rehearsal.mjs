@@ -456,8 +456,12 @@ export async function runStagingForwardMigrationRehearsal({
   if (environment.SIT_STAGING_REHEARSAL_CONFIRM !== targetCommit) {
     fail('exact_rehearsal_confirmation_required');
   }
-  const repositoryHead = (await runCommand('git', ['rev-parse', 'HEAD'])).stdout.trim();
-  if (repositoryHead !== targetCommit) fail('repository_head_target_mismatch');
+  await runCommand('git', ['cat-file', '-e', `${targetCommit}^{commit}`]);
+  try {
+    await runCommand('git', ['diff', '--quiet', targetCommit, '--', 'backend/src', 'backend/sql']);
+  } catch {
+    fail('runtime_source_differs_from_target_commit');
+  }
   const project = environment.STAGING_COMPOSE_PROJECT ?? stagingProjectName;
   const apiContainer = environment.STAGING_API_CONTAINER ?? 'shareittoo-staging-api';
   const databaseContainer = environment.STAGING_DATABASE_CONTAINER ?? 'shareittoo-staging-postgres';
