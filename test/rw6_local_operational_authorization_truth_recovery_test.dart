@@ -788,6 +788,13 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Synthetic RW6 message'), findsOneWidget);
+    final composer = find.byType(TextField);
+    expect(composer, findsOneWidget);
+    await tester.enterText(composer, 'Draft only for account A');
+    expect(find.text('Draft only for account A'), findsOneWidget);
+    // Let the composer focus animation's scheduled scroll complete before the
+    // principal transition; the assertion below is about draft isolation.
+    await tester.pump(const Duration(milliseconds: 200));
 
     await useAccount(outsider);
     SharedPersistenceSync.notify(SharedPersistenceSync.messageThreadsKey);
@@ -797,6 +804,7 @@ void main() {
     expect(find.byKey(const ValueKey('message-thread-unavailable')),
         findsOneWidget);
     expect(find.text('Synthetic RW6 message'), findsNothing);
+    expect(find.text('Draft only for account A'), findsNothing);
     expect(find.byKey(const ValueKey('message-composer-input')), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });

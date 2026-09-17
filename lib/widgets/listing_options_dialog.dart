@@ -5,9 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/screens/public_profile_screen.dart';
 import 'package:lendify/screens/report_user_screen.dart';
+import 'package:lendify/screens/search_results_screen.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/app_link_service.dart';
 import 'package:lendify/services/listing_feedback_service.dart';
+import 'package:lendify/services/similar_listings_service.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/item_details_overlay.dart';
 import 'package:lendify/widgets/wishlist_selection_sheet.dart';
@@ -504,6 +506,28 @@ Future<List<_ListingOption>> _buildOptions(
     );
   }
 
+  Future<void> showSimilarListings() async {
+    try {
+      final results = await SimilarListingsService.load(current: item);
+      if (!context.mounted) return;
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => SearchResultsScreen(
+          queryText: 'Ähnliche Anzeigen für ${item.title}',
+          results: results,
+        ),
+      ));
+    } catch (error) {
+      if (!context.mounted) return;
+      await AppPopup.toast(
+        context,
+        icon: Icons.error_outline,
+        title: 'Ähnliche Anzeigen konnten nicht geladen werden',
+        message:
+            'Der aktuelle Katalog blieb unverändert. Bitte versuche es erneut.',
+      );
+    }
+  }
+
   Future<void> openOwnerProfile() async {
     if (!context.mounted) return;
     await Navigator.of(context).push(MaterialPageRoute(
@@ -520,12 +544,6 @@ Future<List<_ListingOption>> _buildOptions(
         reference: 'listing_options',
       ),
     ));
-  }
-
-  Future<void> placeholder(String title,
-      {IconData icon = Icons.info_outline}) async {
-    if (!context.mounted) return;
-    await AppPopup.toast(context, icon: icon, title: title);
   }
 
   if (contextType == ListingOptionsContext.wishlist) {
@@ -571,7 +589,7 @@ Future<List<_ListingOption>> _buildOptions(
     _ListingOption(
         icon: Icons.auto_awesome_outlined,
         label: 'Ähnliche Anzeigen anzeigen',
-        onTap: () => placeholder('Ähnliche Anzeigen folgen bald')),
+        onTap: showSimilarListings),
     _ListingOption(
         icon: Icons.visibility_off_outlined,
         label: 'Ausblenden / Weniger davon anzeigen',

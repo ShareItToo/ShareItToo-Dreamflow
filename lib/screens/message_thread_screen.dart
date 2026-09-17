@@ -20,6 +20,7 @@ import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/services/messages_settings_service.dart';
+import 'package:lendify/services/message_send_coordinator.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/services/rental_request_decision_service.dart';
 import 'package:lendify/services/local_artifact_storage_service.dart';
@@ -209,6 +210,8 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       SafetyActionInteractionController();
   final _requestDecisionService = const RentalRequestDecisionService();
   final TextEditingController _controller = TextEditingController();
+  final MessageSendCoordinator _messageSendCoordinator =
+      MessageSendCoordinator();
   final FocusNode _inputFocus = FocusNode();
   final ScrollController _listController = ScrollController();
 
@@ -527,6 +530,11 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
   void _clearSensitiveThreadState() {
     _safetyActions.invalidate();
     if (!mounted) return;
+    // This path is reserved for an account/security boundary or an
+    // authorization failure. Never carry the previous principal's draft into
+    // a newly loaded thread/account. Ordinary background refresh failures do
+    // not call this method and therefore retain the user's draft.
+    _controller.clear();
     setState(() {
       _isLoading = false;
       _loadFailed = false;
@@ -1568,7 +1576,8 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
   Future<void> _sendText() async {
     final me = _currentUser;
     final t = _thread;
-    final text = _controller.text.trim();
+    final submittedDraft = _controller.text;
+    final text = submittedDraft.trim();
     if (me == null || t == null || text.isEmpty) return;
     if (_deriveChatState() == _ChatState.support) {
       if (mounted) {
@@ -1582,43 +1591,88 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       }
       return;
     }
-    _controller.clear();
     if (t.id == _translationDemoThreadId) {
-      final msg = Message(
-        id: 'demo_local_${DateTime.now().millisecondsSinceEpoch}',
-        senderId: me.id,
-        text: text,
-        timestamp: DateTime.now(),
-        isRead: true,
+      final sent = await _messageSendCoordinator.send(
+        submittedDraft: submittedDraft,
+        persist: (_) async {
+          final msg = Message(
+            id: 'demo_local_${DateTime.now().millisecondsSinceEpoch}',
+            senderId: me.id,
+            text: text,
+            timestamp: DateTime.now(),
+            isRead: true,
+          );
+          if (!mounted) return;
+          setState(() {
+            _thread = t.copyWith(
+              messages: [...t.messages, msg],
+              lastMessageAt: msg.timestamp,
+            );
+          });
+        },
+        readDraft: () =>
+            _sameMessageContext(me.id, t.id) ? _controller.text : '\u0000',
+        clearDraft: _controller.clear,
       );
-      setState(() {
-        _thread = t.copyWith(
-          messages: [...t.messages, msg],
-          lastMessageAt: msg.timestamp,
-        );
-      });
-      _scrollToBottom(animate: true);
+      if (sent && _sameMessageContext(me.id, t.id)) {
+        _scrollToBottom(animate: true);
+      }
       return;
     }
+    bool sent;
     try {
-      await DataService.addMessageToThread(
-        threadId: t.id,
-        senderId: me.id,
-        text: text,
+      sent = await _messageSendCoordinator.send(
+        submittedDraft: submittedDraft,
+        persist: (persistedText) => DataService.addMessageToThread(
+          threadId: t.id,
+          senderId: me.id,
+          text: persistedText,
+        ),
+        readDraft: () =>
+            _sameMessageContext(me.id, t.id) ? _controller.text : '\u0000',
+        clearDraft: _controller.clear,
       );
-      await _load();
-      _scrollToBottom(animate: true);
     } catch (e) {
       debugPrint('[MessageThreadScreen] _sendText failed: $e');
-      if (mounted) {
+      if (mounted && _sameMessageContext(me.id, t.id)) {
         AppPopup.toast(
           context,
           icon: Icons.error_outline,
           title: 'Fehler beim Senden',
         );
       }
+      return;
+    }
+    if (!sent || !_sameMessageContext(me.id, t.id)) return;
+    try {
+      await _load();
+      if (_sameMessageContext(me.id, t.id)) {
+        _scrollToBottom(animate: true);
+      }
+    } catch (e) {
+      debugPrint(
+          '[MessageThreadScreen] message persisted but reload failed: $e');
+      if (mounted && _sameMessageContext(me.id, t.id)) {
+        final outcome = classifyMessageSendRefreshOutcome(
+          persistenceConfirmed: true,
+          refreshSucceeded: false,
+        );
+        AppPopup.toast(
+          context,
+          icon: Icons.sync_problem_outlined,
+          title: outcome == MessageSendRefreshOutcome.persistedRefreshFailed
+              ? 'Nachricht gespeichert'
+              : 'Nachricht konnte nicht bestätigt werden',
+          message: outcome == MessageSendRefreshOutcome.persistedRefreshFailed
+              ? 'Der Verlauf konnte noch nicht aktualisiert werden.'
+              : 'Bitte versuche es erneut.',
+        );
+      }
     }
   }
+
+  bool _sameMessageContext(String userId, String threadId) =>
+      mounted && _currentUser?.id == userId && _thread?.id == threadId;
 
   Future<void> _pickCamera() async {
     final t = _thread;
