@@ -1,5 +1,18 @@
 # ShareItToo Current State
 
+## WP182 successor 2026091701 — LOCAL BUILD READY; PLAY/DEVICE GATES HOLD
+
+The bounded successor `1.0.0+2026091701` is prepared locally for
+Internal/Staging only and is bound to source commit
+`578c5a42a6397ed472aaaa76f724fca9bb43f74c`. The signed AAB/APK are retained
+in the owner-only archive and their package, version, SDK levels, upload
+certificate, SHA-256, byte size, privacy scan and ZIP structure were verified.
+Focused tests and the one required full local technical regression passed.
+GitHub exact-head read-back and successor physical-device acceptance remain
+open because no push, Play upload, install or sideload was authorized in WP182.
+See `docs/operations/WP182_SUCCESSOR_CANDIDATE_HANDOVER_20260917.md` and
+`store/google-play/rollover-candidate-2026091701.json`.
+
 ## WP172 Google Play Internal release 2026091605 — COMPLETE; device testing pending
 
 The exact signed candidate `1.0.0+2026091605` from source commit

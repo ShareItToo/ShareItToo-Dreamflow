@@ -1,4 +1,18 @@
-# Current Work Package: WP160 Special-Category / Health-Data Intake Minimization Safety — TECHNICAL CLOSURE; LEGAL GATE OPEN
+# Current Work Package: WP182 Android successor candidate — LOCAL BUILD READY; PLAY/DEVICE GATES HOLD
+
+WP182 prepared the strictly higher Internal/Staging successor
+`1.0.0+2026091701`. The Listing-AI watchdog fix is bound to the exact local
+source candidate and preserves the manual fallback after a typed timeout.
+Focused service/UI/rollover tests and one full local clean-repro regression
+passed. The signed AAB/APK and privacy report are retained only in the
+owner-only archive and are recorded by hash in the rollover manifest.
+
+GitHub exact-head Regression/CodeQL, Play upload/activation and successor
+physical-device acceptance remain open by design. No Store, provider, payment,
+production, device or PR-merge action occurred. See
+`docs/operations/WP182_SUCCESSOR_CANDIDATE_HANDOVER_20260917.md`.
+
+## Previous Work Package: WP160 Special-Category / Health-Data Intake Minimization Safety — TECHNICAL CLOSURE; LEGAL GATE OPEN
 
 ## WP162 Article 9 server-side default deny — technical closure; legal gate open
 
