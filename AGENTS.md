@@ -35,6 +35,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   retries. Reproduce the defect in an isolated deterministic test, review the
   fix and re-gate it with Sol/Astra before re-execution; never chain unreviewed
   live hotfix retries.
+- Missing operational config or a project secret is not an owner blocker when
+  authorized runtime state can be reconstructed server-side or a missing key
+  can be atomically generated in the approved external directory; exhaust that
+  safe path without exposing values, escalating only an unavoidable physical act.
 - A visible-function P0/P1 requires proven reachability from a current route or
   configuration. Unreachable legacy/dead code is tracked separately and is
   not itself a release blocker until reachability is demonstrated.
