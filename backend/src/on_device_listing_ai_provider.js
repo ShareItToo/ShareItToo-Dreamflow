@@ -82,13 +82,20 @@ function normalizedText(value) {
     .trim();
 }
 
+function containsCatalogTerm(value, term) {
+  const normalizedValue = normalizedText(value);
+  const normalizedTerm = normalizedText(term);
+  if (!normalizedValue || !normalizedTerm) return false;
+  if (normalizedValue === normalizedTerm) return true;
+  return ` ${normalizedValue} `.includes(` ${normalizedTerm} `);
+}
+
 function chooseCatalog(observations) {
   const scores = new Map(catalogRules.map((entry) => [entry, 0]));
   for (const observation of observations) {
     for (const label of observation.labels) {
-      const text = normalizedText(label.text);
       for (const entry of catalogRules) {
-        if (entry.terms.some((term) => text === normalizedText(term))) {
+        if (entry.terms.some((term) => containsCatalogTerm(label.text, term))) {
           scores.set(entry, scores.get(entry) + label.confidence);
         }
       }

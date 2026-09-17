@@ -66,6 +66,30 @@ test('real on-device observations create only an editable zero-cost draft', asyn
   assert.doesNotMatch(JSON.stringify(events), /Bosch|GSR18V|Power drill/u);
 });
 
+test('compound ML Kit labels retain the controlled cordless-drill signal', async () => {
+  const gateway = createListingAiGateway({ configuration: configuration() });
+  const result = await gateway.generate(input({
+    generationKey: crypto.createHash('sha256').update('compound-label').digest('hex'),
+    untrustedOcr: [],
+    onDeviceObservations: [{
+      imageReference,
+      modelVersion: listingAiOnDeviceModel,
+      labels: [{ text: 'Cordless drill', confidence: 0.82, index: 17 }],
+      ocrText: '',
+    }],
+  }));
+
+  assert.equal(result.status, 'draft_ready');
+  assert.equal(result.revision.fields.title.value, 'Bohrmaschine');
+  assert.equal(result.revision.fields.category.value, 'cat8');
+  assert.equal(result.revision.fields.subcategory.value, 'Bohrmaschinen');
+  assert.deepEqual(result.revision.fields.projectTags.value, ['bohren', 'renovation']);
+  assert.deepEqual(result.revision.fields.useCases.value, ['bohren', 'renovation']);
+  assert.notEqual(result.revision.fields.title.value, null);
+  assert.notEqual(result.revision.fields.category.value, null);
+  assert.notEqual(result.revision.fields.description.value, null);
+});
+
 test('unknown images ask for owner input instead of inventing identity or price', async () => {
   const gateway = createListingAiGateway({ configuration: configuration() });
   const result = await gateway.generate(input({
