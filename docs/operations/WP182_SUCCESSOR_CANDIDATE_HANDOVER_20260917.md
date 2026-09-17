@@ -15,8 +15,9 @@ runtime source commit recorded in
 
 The successor keeps the canonical package, API target, Firebase configuration,
 upload certificate binding, on-device Listing-AI location, external-image-
-provider hold, and social-auth hold. The candidate manifest is fail-closed
-until the signed archive and all required local gates are populated.
+provider hold, and social-auth hold. The signed archive and required local
+gates are populated; external actions remain fail-closed until their separate
+CI, Store and device gates are closed.
 
 ## WP176-WP181 evidence boundary
 
@@ -63,8 +64,9 @@ candidate remains historical and is not evidence for the successor fix.
 
 ## Open items and holds
 
-The successor archive, final regression result, GitHub read-back, and physical
-successor proof are pending. Play Console remains unchanged; tester groups and
-all other Store settings remain untouched. Production, payment, provider,
+The local signed successor archive and full local regression are complete.
+GitHub exact-head Regression/CodeQL read-back and physical successor
+timeout/manual-listing proof remain pending. Play Console remains unchanged;
+tester groups and all other Store settings remain untouched. Production, payment, provider,
 Firebase, cloud/VPS/DNS, PR merge, and device-install actions remain out of
 scope for this package.
