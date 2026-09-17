@@ -228,8 +228,9 @@ class PrivatePilotConfig {
       'ShareItToo prueft Gegenstand, Eigentum, Sicherheit, Zeitwert und Versicherungsschutz nicht. ShareItToo bietet keine Kaution, Versicherung oder Schadengarantie. Vermieter und Mieter pruefen ihr Risiko und ihren Versicherungsschutz selbst.';
 
   /// Technical positive list for the first private pilot. Broad categories
-  /// containing vehicles, medical goods, living things or an unrestricted
-  /// "other" escape hatch are intentionally excluded fail-closed.
+  /// containing vehicles, medical goods or living things remain excluded
+  /// fail-closed. `Sonstiges` is only a bounded fallback inside an already
+  /// allowed category; it is not a free-standing category escape hatch.
   static const Set<String> allowedCategoryIds = {
     'cat1', // Elektronik
     'cat2', // Computer & IT
@@ -250,24 +251,40 @@ class PrivatePilotConfig {
   };
 
   static const Map<String, Set<String>> allowedSubcategories = {
-    'cat1': {'Smartphones', 'Tablets', 'Wearables', 'Audio', 'Zubehör'},
-    'cat2': {'Laptops', 'Desktops', 'Monitore', 'Drucker', 'Netzwerk'},
-    'cat3': {'Kameras', 'Objektive', 'Stative', 'Licht'},
-    'cat4': {'Konsolen', 'Gaming-PC', 'VR', 'Lenkräder', 'Retro'},
+    'cat1': {
+      'Smartphones',
+      'Tablets',
+      'Wearables',
+      'Audio',
+      'Zubehör',
+      'Sonstiges'
+    },
+    'cat2': {
+      'Laptops',
+      'Desktops',
+      'Monitore',
+      'Drucker',
+      'Netzwerk',
+      'Sonstiges'
+    },
+    'cat3': {'Kameras', 'Objektive', 'Stative', 'Licht', 'Sonstiges'},
+    'cat4': {'Konsolen', 'Gaming-PC', 'VR', 'Lenkräder', 'Retro', 'Sonstiges'},
     'cat5': {
       'Staubsauger',
       'Mixer',
       'Kaffeemaschinen',
       'Waschmaschinen',
       'Trockner',
+      'Sonstiges',
     },
-    'cat6': {'Sofas', 'Tische', 'Stühle', 'Beleuchtung', 'Deko'},
+    'cat6': {'Sofas', 'Tische', 'Stühle', 'Beleuchtung', 'Deko', 'Sonstiges'},
     'cat7': {
       'Rasenmäher',
       'Heckenscheren',
       'Gartengeräte',
       'Bewässerung',
       'Pflanzkisten',
+      'Sonstiges',
     },
     'cat8': {
       'Handwerkzeuge',
@@ -275,25 +292,49 @@ class PrivatePilotConfig {
       'Bohrmaschinen',
       'Sägen',
       'Schleifer',
+      'Sonstiges',
     },
-    'cat12': {'Kleidung', 'Taschen', 'Schuhe', 'Schmuck', 'Uhren'},
+    'cat12': {'Kleidung', 'Taschen', 'Schuhe', 'Schmuck', 'Uhren', 'Sonstiges'},
     'cat14': {
       'Gitarren',
       'Tastaturen',
       'Schlagzeug',
       'Blasinstrumente',
       'Studio',
+      'Sonstiges',
     },
-    'cat15': {'Bücher', 'Filme', 'Spiele', 'Hörbücher', 'Magazine'},
-    'cat16': {'Ringe', 'Ketten', 'Uhren', 'Ohrringe', 'Sets'},
-    'cat17': {'Gemälde', 'Skulpturen', 'Drucke', 'Figuren', 'Seltenes'},
-    'cat20': {'Bürotechnik', 'Präsentation', 'Werkstatt', 'Lager', 'Zubehör'},
+    'cat15': {
+      'Bücher',
+      'Filme',
+      'Spiele',
+      'Hörbücher',
+      'Magazine',
+      'Sonstiges'
+    },
+    'cat16': {'Ringe', 'Ketten', 'Uhren', 'Ohrringe', 'Sets', 'Sonstiges'},
+    'cat17': {
+      'Gemälde',
+      'Skulpturen',
+      'Drucke',
+      'Figuren',
+      'Seltenes',
+      'Sonstiges'
+    },
+    'cat20': {
+      'Bürotechnik',
+      'Präsentation',
+      'Werkstatt',
+      'Lager',
+      'Zubehör',
+      'Sonstiges'
+    },
     'cat22': {
       'Party-Deko',
       'Eventtechnik',
       'Tische & Stühle',
       'Pavillons',
       'Buffet & Catering',
+      'Sonstiges',
     },
     'cat23': {
       'Zelte',
@@ -301,6 +342,7 @@ class PrivatePilotConfig {
       'Rucksäcke & Koffer',
       'Campingküche',
       'Outdoor-Zubehör',
+      'Sonstiges',
     },
   };
 

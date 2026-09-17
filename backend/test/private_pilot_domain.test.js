@@ -10,6 +10,8 @@ import {
   privatePilotCheckoutDocument,
   privatePilotOpenDecisions,
   privatePilotRequiredCheckoutDeclarations,
+  privatePilotAllowedCategoryIds,
+  privatePilotAllowedSubcategories,
   PrivatePilotValidationError,
 } from '../src/private_pilot_domain.js';
 import {
@@ -127,6 +129,19 @@ test('private pilot allowlist binds exact subcategories, Germany and configured 
     categoryId: 'cat3',
     regionCode: 'berlin',
   });
+  assert.deepEqual(assertPrivatePilotCatalogEntry({
+    categoryId: 'cat3',
+    subcategory: 'Sonstiges',
+    country: 'Deutschland',
+    city: 'Berlin',
+  }, { allowedRegions: ['berlin'] }), {
+    categoryId: 'cat3',
+    regionCode: 'berlin',
+  });
+  assert.equal(
+    privatePilotAllowedSubcategories.cat3.filter((entry) => entry === 'Sonstiges').length,
+    1,
+  );
   for (const [override, code] of [
     [{ subcategory: 'Drohnen' }, 'private_pilot_subcategory_not_allowed'],
     [{ city: 'Hamburg' }, 'private_pilot_region_not_allowed'],
@@ -141,6 +156,50 @@ test('private pilot allowlist binds exact subcategories, Germany and configured 
         ...override,
       }, { allowedRegions: ['berlin'] }),
       (error) => error instanceof PrivatePilotValidationError && error.code === code,
+    );
+  }
+  assert.throws(
+    () => assertPrivatePilotCatalogEntry({
+      categoryId: 'cat10',
+      subcategory: 'Sonstiges',
+      country: 'Deutschland',
+      city: 'Berlin',
+    }, { allowedRegions: ['berlin'] }),
+    (error) => error instanceof PrivatePilotValidationError
+      && error.code === 'private_pilot_category_not_allowed',
+  );
+});
+
+test('every allowed server category has exactly one Sonstiges fallback', () => {
+  for (const categoryId of privatePilotAllowedCategoryIds) {
+    const subcategories = privatePilotAllowedSubcategories[categoryId];
+    assert.ok(subcategories, `missing subcategories for ${categoryId}`);
+    assert.equal(
+      subcategories.filter((entry) => entry === 'Sonstiges').length,
+      1,
+      `${categoryId} must contain one Sonstiges entry`,
+    );
+    assert.deepEqual(
+      assertPrivatePilotCatalogEntry({
+        categoryId,
+        subcategory: 'Sonstiges',
+        country: 'Deutschland',
+        city: 'Berlin',
+      }, { allowedRegions: ['berlin'] }),
+      { categoryId, regionCode: 'berlin' },
+    );
+  }
+  for (const categoryId of ['cat9', 'cat10', 'cat11', 'cat13', 'cat18', 'cat19', 'cat21']) {
+    assert.throws(
+      () => assertPrivatePilotCatalogEntry({
+        categoryId,
+        subcategory: 'Sonstiges',
+        country: 'Deutschland',
+        city: 'Berlin',
+      }, { allowedRegions: ['berlin'] }),
+      (error) => error instanceof PrivatePilotValidationError
+        && error.code === 'private_pilot_category_not_allowed',
+      `${categoryId} must remain forbidden`,
     );
   }
 });

@@ -91,22 +91,22 @@ export const privatePilotAllowedCategoryIds = Object.freeze(new Set([
 ]));
 
 export const privatePilotAllowedSubcategories = Object.freeze({
-  cat1: Object.freeze(['Smartphones', 'Tablets', 'Wearables', 'Audio', 'Zubehör']),
-  cat2: Object.freeze(['Laptops', 'Desktops', 'Monitore', 'Drucker', 'Netzwerk']),
-  cat3: Object.freeze(['Kameras', 'Objektive', 'Stative', 'Licht']),
-  cat4: Object.freeze(['Konsolen', 'Gaming-PC', 'VR', 'Lenkräder', 'Retro']),
-  cat5: Object.freeze(['Staubsauger', 'Mixer', 'Kaffeemaschinen', 'Waschmaschinen', 'Trockner']),
-  cat6: Object.freeze(['Sofas', 'Tische', 'Stühle', 'Beleuchtung', 'Deko']),
-  cat7: Object.freeze(['Rasenmäher', 'Heckenscheren', 'Gartengeräte', 'Bewässerung', 'Pflanzkisten']),
-  cat8: Object.freeze(['Handwerkzeuge', 'Elektrowerkzeuge', 'Bohrmaschinen', 'Sägen', 'Schleifer']),
-  cat12: Object.freeze(['Kleidung', 'Taschen', 'Schuhe', 'Schmuck', 'Uhren']),
-  cat14: Object.freeze(['Gitarren', 'Tastaturen', 'Schlagzeug', 'Blasinstrumente', 'Studio']),
-  cat15: Object.freeze(['Bücher', 'Filme', 'Spiele', 'Hörbücher', 'Magazine']),
-  cat16: Object.freeze(['Ringe', 'Ketten', 'Uhren', 'Ohrringe', 'Sets']),
-  cat17: Object.freeze(['Gemälde', 'Skulpturen', 'Drucke', 'Figuren', 'Seltenes']),
-  cat20: Object.freeze(['Bürotechnik', 'Präsentation', 'Werkstatt', 'Lager', 'Zubehör']),
-  cat22: Object.freeze(['Party-Deko', 'Eventtechnik', 'Tische & Stühle', 'Pavillons', 'Buffet & Catering']),
-  cat23: Object.freeze(['Zelte', 'Schlafsäcke', 'Rucksäcke & Koffer', 'Campingküche', 'Outdoor-Zubehör']),
+  cat1: Object.freeze(['Smartphones', 'Tablets', 'Wearables', 'Audio', 'Zubehör', 'Sonstiges']),
+  cat2: Object.freeze(['Laptops', 'Desktops', 'Monitore', 'Drucker', 'Netzwerk', 'Sonstiges']),
+  cat3: Object.freeze(['Kameras', 'Objektive', 'Stative', 'Licht', 'Sonstiges']),
+  cat4: Object.freeze(['Konsolen', 'Gaming-PC', 'VR', 'Lenkräder', 'Retro', 'Sonstiges']),
+  cat5: Object.freeze(['Staubsauger', 'Mixer', 'Kaffeemaschinen', 'Waschmaschinen', 'Trockner', 'Sonstiges']),
+  cat6: Object.freeze(['Sofas', 'Tische', 'Stühle', 'Beleuchtung', 'Deko', 'Sonstiges']),
+  cat7: Object.freeze(['Rasenmäher', 'Heckenscheren', 'Gartengeräte', 'Bewässerung', 'Pflanzkisten', 'Sonstiges']),
+  cat8: Object.freeze(['Handwerkzeuge', 'Elektrowerkzeuge', 'Bohrmaschinen', 'Sägen', 'Schleifer', 'Sonstiges']),
+  cat12: Object.freeze(['Kleidung', 'Taschen', 'Schuhe', 'Schmuck', 'Uhren', 'Sonstiges']),
+  cat14: Object.freeze(['Gitarren', 'Tastaturen', 'Schlagzeug', 'Blasinstrumente', 'Studio', 'Sonstiges']),
+  cat15: Object.freeze(['Bücher', 'Filme', 'Spiele', 'Hörbücher', 'Magazine', 'Sonstiges']),
+  cat16: Object.freeze(['Ringe', 'Ketten', 'Uhren', 'Ohrringe', 'Sets', 'Sonstiges']),
+  cat17: Object.freeze(['Gemälde', 'Skulpturen', 'Drucke', 'Figuren', 'Seltenes', 'Sonstiges']),
+  cat20: Object.freeze(['Bürotechnik', 'Präsentation', 'Werkstatt', 'Lager', 'Zubehör', 'Sonstiges']),
+  cat22: Object.freeze(['Party-Deko', 'Eventtechnik', 'Tische & Stühle', 'Pavillons', 'Buffet & Catering', 'Sonstiges']),
+  cat23: Object.freeze(['Zelte', 'Schlafsäcke', 'Rucksäcke & Koffer', 'Campingküche', 'Outdoor-Zubehör', 'Sonstiges']),
 });
 
 export const privatePilotAllowedCatalogKeys = Object.freeze(

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
+import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/test_builders.dart';
@@ -163,6 +164,35 @@ void main() {
       users.singleWhere((entry) => entry.id == accountB.id).toJson(),
       accountB.toJson(),
     );
+  });
+
+  test('profile avatar URL persists in both documents and emits a refresh',
+      () async {
+    SharedPreferences.setMockInitialValues(state());
+    final changes = <String>[];
+    final subscription = SharedPersistenceSync.changes.listen(changes.add);
+    addTearDown(subscription.cancel);
+
+    const avatar =
+        'https://shareittoo.com/api/v1/uploads/11111111-1111-4111-8111-111111111111-full.webp';
+    final updated = await update(<CurrentUserProfileField, Object?>{
+      CurrentUserProfileField.photoURL: avatar,
+    });
+
+    expect(updated.photoURL, avatar);
+    final prefs = await SharedPreferences.getInstance();
+    final current = User.fromJson(
+      jsonDecode(prefs.getString('currentUser')!) as Map<String, dynamic>,
+    );
+    final users = (jsonDecode(prefs.getString('users')!) as List)
+        .map((entry) => User.fromJson(Map<String, dynamic>.from(entry as Map)))
+        .toList();
+    expect(current.photoURL, avatar);
+    expect(
+      users.singleWhere((entry) => entry.id == accountA.id).photoURL,
+      avatar,
+    );
+    expect(changes, contains(SharedPersistenceSync.accountSecurityStateKey));
   });
 
   test('parallel disjoint patches serialize without lost updates', () async {
@@ -378,6 +408,13 @@ void main() {
     });
     expect(updatedAfterRestart.city, 'Düsseldorf');
     expect(updatedAfterRestart.addressExtra, 'Hinterhof');
+
+    final avatarAfterRestart = await update(<CurrentUserProfileField, Object?>{
+      CurrentUserProfileField.photoURL:
+          'https://shareittoo.com/api/v1/uploads/22222222-2222-4222-8222-222222222222-full.webp',
+    });
+    expect(avatarAfterRestart.photoURL,
+        contains('/uploads/22222222-2222-4222-8222-222222222222-full.webp'));
   });
 
   test('privacy export is exact-current-account and excludes cache/session',

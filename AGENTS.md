@@ -31,6 +31,13 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   nearest authoritative instruction. Add a deterministic test, validator or
   fail-closed guard when the pattern is technically enforceable. Duplicate UI
   output or repeated reporting of one still-open incident remains one finding.
+- A visible-function P0/P1 requires proven reachability from a current route or
+  configuration. Unreachable legacy/dead code is tracked separately and is
+  not itself a release blocker until reachability is demonstrated.
+- Any persisted media URL must be server-bound to an owned, approved upload
+  row (including purpose, visibility and content-scan status). Client-side URL
+  validation is never authorization; reject unowned, malformed, thumbnail,
+  wrong-purpose or unapproved references before persistence.
 - After every review, Sol assigns Luna the next bounded task. A `FIX` must name
   the failed assertion and expected proof; it must not request a broad restart.
 - Escalate to Astra only at a named gate involving contradictory evidence or a
@@ -114,6 +121,11 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
    chasing hashes across commits.
 5. Run focused checks first. Run the complete technical regression at package
    and release gates.
+   Focused regression tests must exercise their intended branch under the
+   repository's standard runner; do not rely on an unrecorded dart-define,
+   environment flag or local-only invocation. Test-only seams may inject a
+   deterministic dependency, but the default command must pass and prove the
+   behavior it names.
 6. Use `git add -- <confirmed paths>` only. Review the staged diff and never use
    add-all. Push only fast-forward to the intended branch; do not merge PR #7
    unless separately authorized.

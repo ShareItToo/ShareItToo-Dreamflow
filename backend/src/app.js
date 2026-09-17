@@ -362,6 +362,7 @@ import {
   shapePublicListing,
   storageNameFromListingPhoto,
 } from './listing_catalog.js';
+import { authorizeProfilePhoto } from './profile_media_authorization.js';
 import {
   assertBlueOceanExplicitPublication,
   BlueOceanListingWorkflowError,
@@ -3246,6 +3247,26 @@ export function createApp({
   app.patch('/v1/profile', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
     const update = sanitizeProfileUpdate(req.body?.profile ?? req.body);
     if (!isValidBirthDate(update.birthDate)) throw new HttpError(400, 'minimum_age_required');
+    if (Object.hasOwn(update, 'photoURL')) {
+      const photoAuthorization = await authorizeProfilePhoto({
+        photoUrl: update.photoURL,
+        ownerId: req.auth.userId,
+        publicBaseUrl: config.publicBaseUrl,
+        findUpload: async (storageName) => {
+          const result = await pool.query(
+            `SELECT owner_id, storage_name, purpose, visibility, content_scan_status
+               FROM uploads
+              WHERE storage_name = $1`,
+            [storageName],
+          );
+          return result.rows[0] ?? null;
+        },
+      });
+      if (!photoAuthorization.accepted) {
+        throw new HttpError(photoAuthorization.status, photoAuthorization.code);
+      }
+      if (photoAuthorization.clear) update.photoURL = null;
+    }
     const updatesPhone = Object.hasOwn(update, 'phone');
     const normalizedPhone = updatesPhone ? normalizePhoneE164(update.phone) : null;
     if (normalizedPhone === undefined) throw new HttpError(400, 'invalid_phone');

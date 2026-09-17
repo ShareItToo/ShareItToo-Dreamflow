@@ -2314,6 +2314,8 @@ class BackendRepository {
     required AuthSessionOwner owner,
     required Uint8List bytes,
     required String filename,
+    String purpose = 'listing_image',
+    String? listingId,
   }) async {
     final token = await AuthService.accessTokenForOwner(owner);
     if (token == null ||
@@ -2326,9 +2328,11 @@ class BackendRepository {
       BackendConfig.uri('/uploads'),
     )
       ..headers['Authorization'] = 'Bearer $token'
+      ..fields['purpose'] = purpose
       ..files.add(
         http.MultipartFile.fromBytes('file', bytes, filename: filename),
       );
+    if (listingId != null) request.fields['listingId'] = listingId;
     final response = await request.send().timeout(const Duration(seconds: 45));
     final body = await response.stream.bytesToString();
     if (response.statusCode < 200 || response.statusCode >= 300) {

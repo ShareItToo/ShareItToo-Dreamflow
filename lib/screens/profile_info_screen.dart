@@ -266,6 +266,16 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
         '${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}'.trim();
     setState(() => _saving = true);
     try {
+      final persistedPhotoUrl = await _profileMutationService.persistPhotoDraft(
+        context: owner.context,
+        photoDraft: _photoDraft,
+      );
+      if (!await _profileActions.isCurrent(
+        _profileMutationService,
+        owner,
+      )) {
+        return;
+      }
       final result = await _profileMutationService.updateProfile(
         context: owner.context,
         updates: {
@@ -276,7 +286,9 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
           CurrentUserProfileField.city:
               _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
           CurrentUserProfileField.photoURL:
-              _photoDraft?.trim().isEmpty ?? true ? null : _photoDraft,
+              persistedPhotoUrl?.trim().isEmpty ?? true
+                  ? null
+                  : persistedPhotoUrl,
           CurrentUserProfileField.languages: _languages.toList(),
           CurrentUserProfileField.interests: _interests.toList(),
           CurrentUserProfileField.homeLocation: null,
@@ -288,7 +300,10 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
       )) {
         return;
       }
-      setState(() => _user = result.user);
+      setState(() {
+        _user = result.user;
+        _photoDraft = result.user.photoURL;
+      });
       _profileActions.replaceContext(ProfileMutationContext(
         user: result.user,
         owner: owner.context.owner,
@@ -314,6 +329,9 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
           )) {
         return;
       }
+      if (mounted && _profileActions.isSynchronouslyCurrent(owner)) {
+        setState(() => _photoDraft = u.photoURL);
+      }
       await _showOwnedStatus(
         owner,
         title: failure.remoteAccepted
@@ -330,6 +348,7 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     } catch (e) {
       debugPrint('[ProfileInfo] save failed: $e');
       if (await _profileActions.isCurrent(_profileMutationService, owner)) {
+        if (mounted) setState(() => _photoDraft = u.photoURL);
         await _showOwnedStatus(owner, title: 'Speichern fehlgeschlagen');
       }
     } finally {

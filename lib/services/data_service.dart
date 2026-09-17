@@ -2569,6 +2569,9 @@ class DataService {
         throw StateError('Das lokale Kontoprofil ist nicht konsistent.');
       }
       await verifyAuthorization?.call();
+      SharedPersistenceSync.notify(
+        SharedPersistenceSync.accountSecurityStateKey,
+      );
     } catch (error) {
       final usersRestored = await _restorePreferenceString(
         prefs,
@@ -7619,6 +7622,14 @@ class DataService {
 
   static List<Category> _buildDemoCategories() {
     final now = DateTime.now();
+    List<String> withSafeFallback(List<String> values) {
+      final result = List<String>.of(values);
+      if (!result.any((value) => value.trim().toLowerCase() == 'sonstiges')) {
+        result.add('Sonstiges');
+      }
+      return List<String>.unmodifiable(result);
+    }
+
     final List<
         (
           String id,
@@ -7820,7 +7831,7 @@ class DataService {
           name: d.$2,
           slug: d.$3,
           iconName: d.$4,
-          subcategories: d.$5,
+          subcategories: withSafeFallback(d.$5),
           createdAt: now,
         ),
     ];
@@ -9867,9 +9878,8 @@ class DataService {
 
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_readRequestsKey);
-      final map = raw == null
-          ? <String, dynamic>{}
-          : _decodeReadRequestsStrict(raw);
+      final map =
+          raw == null ? <String, dynamic>{} : _decodeReadRequestsStrict(raw);
       final readRaw = map[current.id];
       if (readRaw != null && readRaw is! List) {
         throw const FormatException('Ungültige lokale Lesemarker.');

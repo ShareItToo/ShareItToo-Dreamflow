@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kReleaseMode, visibleForTesting;
 import 'dart:math' as math;
@@ -16,6 +18,7 @@ import 'package:lendify/navigation/main_nav_controller.dart';
 import 'package:lendify/services/developer_preview_service.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/backend_config.dart';
+import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/widgets/login_nudge_sheet.dart';
 
 bool shouldGateAccountTab({
@@ -61,6 +64,7 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
   model.User? _currentUser;
+  StreamSubscription<String>? _profileSubscription;
 
   @override
   void initState() {
@@ -71,6 +75,18 @@ class _MainNavigationState extends State<MainNavigation> {
       context.read<MainNavController>().setIndex(_currentIndex);
     });
     _loadUser();
+    _profileSubscription = SharedPersistenceSync.changes.listen((key) {
+      if (!mounted || key != SharedPersistenceSync.accountSecurityStateKey) {
+        return;
+      }
+      _loadUser();
+    });
+  }
+
+  @override
+  void dispose() {
+    _profileSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadUser() async {

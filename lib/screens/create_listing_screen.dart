@@ -2603,10 +2603,17 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                             items: _availableSubcategories()
                                 .map((subcategory) => DropdownMenuItem(
                                       value: subcategory,
-                                      child: Text(
-                                        subcategory,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                      child: SizedBox(
+                                        height: kMinInteractiveDimension,
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            subcategory,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontSize: 15),
+                                          ),
+                                        ),
                                       ),
                                     ))
                                 .toList(growable: false),
