@@ -199,6 +199,7 @@ export async function runLocalPostgresIntegration({
   let primaryError = null;
   let port = null;
   const focusedIdentity = environment.SIT_POSTGRES_FOCUSED_IDENTITY === '1';
+  const focusedLegacySchema = environment.SIT_POSTGRES_FOCUSED_LEGACY === '1';
 
   const onSignal = (signal) => {
     receivedSignal = signal;
@@ -265,7 +266,9 @@ export async function runLocalPostgresIntegration({
       '--test',
       ...files,
     ], { env: testEnvironment, inherit: inheritTestOutput });
-    if (focusedIdentity) {
+    if (focusedLegacySchema) {
+      await runTests(['backend/test/schema_legacy_startup.integration.test.js']);
+    } else if (focusedIdentity) {
       await runTests(['backend/test/identity_verification_postgres.integration.test.js']);
     } else {
       // These suites initialize the same isolated database. Keep each group
@@ -351,7 +354,9 @@ export async function runLocalPostgresIntegration({
     host: '127.0.0.1',
     database: integrationDatabaseName,
     integrationTests: [
-      ...(focusedIdentity
+      ...(focusedLegacySchema
+        ? ['backend/test/schema_legacy_startup.integration.test.js']
+        : focusedIdentity
         ? ['backend/test/identity_verification_postgres.integration.test.js']
         : [
           'backend/test/postgres_foundation.integration.test.js',

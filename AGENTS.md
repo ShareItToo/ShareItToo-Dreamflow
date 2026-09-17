@@ -314,3 +314,9 @@ complete identity-validated acceptance inventory, and write PASS evidence only
 after cleanup is proven. `deploy_release.sh staging` remains blocked
 until that evidence and an exact public-release confirmation validate; no
 automatic promotion or observed-old-image fallback is allowed.
+Application bootstrap must also remain backward-compatible with the currently
+deployed migration boundary: `schema.sql` may add nullable forward-compatibility
+columns before planning dependent indexes, while the numbered migration owns
+validation/backfill and constraint tightening. A legacy 001-074 restore must
+have a deterministic real-PostgreSQL startup test before any new acceptance
+attempt.

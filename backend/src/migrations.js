@@ -9,12 +9,16 @@ function checksum(contents) {
   return crypto.createHash('sha256').update(contents).digest('hex');
 }
 
-export async function runMigrations(databasePool) {
+export async function runMigrations(databasePool, { through = null } = {}) {
+  if (through !== null && (!Number.isInteger(through) || through < 1 || through > 999)) {
+    throw new Error('migration_through_invalid');
+  }
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
   const migrationsDir = path.resolve(currentDir, '../sql/migrations');
   const entries = await fs.readdir(migrationsDir, { withFileTypes: true });
   const filenames = entries
     .filter((entry) => entry.isFile() && entry.name.endsWith('.up.sql'))
+    .filter((entry) => through === null || Number.parseInt(entry.name.slice(0, 3), 10) <= through)
     .map((entry) => entry.name)
     .sort((left, right) => left.localeCompare(right));
 

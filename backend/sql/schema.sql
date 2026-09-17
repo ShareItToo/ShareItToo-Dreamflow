@@ -84,6 +84,15 @@ CREATE TABLE IF NOT EXISTS account_legal_holds (
   ),
   CHECK (review_due_at >= created_at AND hold_ends_at >= review_due_at)
 );
+-- Existing databases are upgraded by the numbered migrations below.  Keep
+-- startup idempotent while an older (001-074) schema is still in place: the
+-- scoped columns must exist before their index is planned, while migration
+-- 078 remains responsible for validating and tightening their values.
+ALTER TABLE account_legal_holds
+  ADD COLUMN IF NOT EXISTS dataset_key TEXT,
+  ADD COLUMN IF NOT EXISTS record_key TEXT,
+  ADD COLUMN IF NOT EXISTS review_due_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS hold_ends_at TIMESTAMPTZ;
 CREATE UNIQUE INDEX IF NOT EXISTS account_legal_holds_one_active_per_record_idx
   ON account_legal_holds(user_id, dataset_key, record_key) WHERE released_at IS NULL;
 CREATE INDEX IF NOT EXISTS account_legal_holds_created_idx

@@ -25,7 +25,7 @@ test('the canonical PostgreSQL integrations turn deprecations into failures', as
   );
   assert.match(
     runner,
-    /await checkedRun\(nodeBin, \[\s*'--throw-deprecation',\s*'--import'/u,
+    /const runTests = async \(files\) => checkedRun\(nodeBin, \[\s*'--throw-deprecation',\s*'--import'/u,
   );
-  assert.equal(runner.match(/'--throw-deprecation'/gu)?.length, 2);
+  assert.equal(runner.match(/'--throw-deprecation'/gu)?.length, 1);
 });
