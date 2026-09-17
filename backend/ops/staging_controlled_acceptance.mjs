@@ -39,14 +39,14 @@ function runCommandWithInput(command, args, input, { env = process.env, phase = 
   });
 }
 
-function runCommandStatus(command, args, { env = process.env } = {}) {
+export function runCommandStatus(command, args, { env = process.env } = {}) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, { cwd: backendRoot, env, stdio: ['ignore', 'pipe', 'ignore'] });
     let stdout = '';
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.once('error', () => reject(new Error('controlled_acceptance_status_failed')));
-    child.once('close', (code) => resolve({ code, stdout: stdout.trim() }));
+    child.once('close', (code) => resolvePromise({ code, stdout: stdout.trim() }));
   });
 }
 

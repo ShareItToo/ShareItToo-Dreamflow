@@ -515,7 +515,9 @@ async function applyMigrationsWithApplicationRunner({ container, database, user,
 
 export async function removeAndVerifyDockerResource(kind, name, { env = process.env } = {}) {
   const removeArgs = kind === 'container' ? ['rm', '-f', name] : ['volume', 'rm', name];
-  const inspectArgs = kind === 'container' ? ['inspect', name] : ['volume', 'inspect', name];
+  const verifyArgs = kind === 'container'
+    ? ['ps', '-a', '--filter', `name=^/${name}$`, '--format', '{{.Names}}']
+    : ['volume', 'ls', '--filter', `name=^${name}$`, '--format', '{{.Name}}'];
   let removalError = null;
   try {
     await runCommand('docker', removeArgs, {
@@ -526,13 +528,15 @@ export async function removeAndVerifyDockerResource(kind, name, { env = process.
     removalError = `cleanup_${kind}_remove_failed`;
   }
   try {
-    const result = await runCommand('docker', inspectArgs, {
+    const result = await runCommand('docker', verifyArgs, {
       phase: `cleanup_${kind}_verify`,
       allowFailure: true,
       env,
     });
-    if (result.code === 0) return `cleanup_${kind}_still_present`;
-    if (result.code !== 1) return `cleanup_${kind}_verify_failed`;
+    if (result.code !== 0) return `cleanup_${kind}_verify_failed`;
+    const listed = result.stdout.split(/\r?\n/u).map((entry) => entry.trim()).filter(Boolean);
+    if (listed.some((entry) => entry === name)) return `cleanup_${kind}_still_present`;
+    if (listed.length > 0) return `cleanup_${kind}_still_present`;
   } catch {
     return `cleanup_${kind}_verify_failed`;
   }

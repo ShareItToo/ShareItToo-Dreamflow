@@ -171,13 +171,21 @@ test('cleanup must prove absence and never resume services implicitly', async (t
   await writeFile(docker, `#!/bin/sh
 if [ -n "$DOCKER_ARGS_LOG" ]; then printf '%s\\n' "$*" >> "$DOCKER_ARGS_LOG"; fi
 if [ "$1" = "rm" ]; then exit "${'${DOCKER_RM_EXIT:-0}'}"; fi
-if [ "$1" = "inspect" ]; then exit "${'${DOCKER_INSPECT_EXIT:-1}'}"; fi
 if [ "$1" = "volume" ] && [ "$2" = "rm" ]; then exit "${'${DOCKER_RM_EXIT:-0}'}"; fi
-if [ "$1" = "volume" ] && [ "$2" = "inspect" ]; then exit "${'${DOCKER_INSPECT_EXIT:-1}'}"; fi
+if [ "$1" = "ps" ] || { [ "$1" = "volume" ] && [ "$2" = "ls" ]; }; then
+  [ -n "${'${DOCKER_LIST_OUTPUT:-}'}" ] && printf '%s\\n' "${'${DOCKER_LIST_OUTPUT}'}"
+  exit "${'${DOCKER_LIST_EXIT:-0}'}"
+fi
 exit 1
 `);
   chmodSync(docker, 0o700);
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, DOCKER_ARGS_LOG: argsLog };
+  assert.equal(
+    await removeAndVerifyDockerResource('container', 'rehearsal-c', {
+      env: { ...env, DOCKER_LIST_EXIT: '1' },
+    }),
+    'cleanup_container_verify_failed',
+  );
   assert.equal(await removeAndVerifyDockerResource('container', 'rehearsal-c', { env }), null);
   assert.equal(
     await removeAndVerifyDockerResource('container', 'rehearsal-c', {
@@ -187,15 +195,21 @@ exit 1
   );
   assert.equal(
     await removeAndVerifyDockerResource('volume', 'rehearsal-v', {
-      env: { ...env, DOCKER_INSPECT_EXIT: '0' },
+      env: { ...env, DOCKER_LIST_OUTPUT: 'rehearsal-v' },
     }),
     'cleanup_volume_still_present',
   );
+  assert.equal(
+    await removeAndVerifyDockerResource('container', 'rehearsal-c', {
+      env: { ...env, DOCKER_LIST_OUTPUT: 'other-resource' },
+    }),
+    'cleanup_container_still_present',
+  );
   const args = await readFile(argsLog, 'utf8');
   assert.match(args, /rm -f rehearsal-c/u);
-  assert.match(args, /inspect rehearsal-c/u);
   assert.match(args, /volume rm rehearsal-v/u);
-  assert.match(args, /volume inspect rehearsal-v/u);
+  assert.match(args, /ps -a --filter name=\^\/rehearsal-c\$ --format \{\{\.Names\}\}/u);
+  assert.match(args, /volume ls --filter name=\^rehearsal-v\$ --format \{\{\.Name\}\}/u);
   const plan = buildStagingRehearsalPlan({ targetCommit: commit });
   assert.equal(plan.boundaries.servicesRemainQuiesced, true);
   assert.equal(plan.boundaries.apiResumed, false);

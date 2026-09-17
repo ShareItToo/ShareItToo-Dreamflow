@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 import { validateEvidence } from '../../backend/ops/validate_staging_controlled_acceptance.mjs';
-import { assertPublicCandidateNotServed } from '../../backend/ops/staging_controlled_acceptance.mjs';
+import { assertPublicCandidateNotServed, runCommandStatus } from '../../backend/ops/staging_controlled_acceptance.mjs';
 
 const runtimeCommit = '8'.repeat(40);
 const opsCommit = '9'.repeat(40);
@@ -55,6 +55,18 @@ test('public candidate exposure is a hard failure, not a transport fallback', ()
     (error) => error?.code === 'public_proxy_serves_candidate',
   );
   assert.equal(assertPublicCandidateNotServed({ commit: 'a'.repeat(40) }, runtimeCommit), true);
+});
+
+test('status runner preserves exit status and sanitizes spawn errors', async () => {
+  const ok = await runCommandStatus(process.execPath, ['-e', 'process.stdout.write("ok")']);
+  assert.deepEqual(ok, { code: 0, stdout: 'ok' });
+  const failed = await runCommandStatus(process.execPath, ['-e', 'process.stdout.write("failed"); process.exit(1)']);
+  assert.deepEqual(failed, { code: 1, stdout: 'failed' });
+  await assert.rejects(
+    runCommandStatus('/definitely/missing/sit-command', []),
+    (error) => error?.message === 'controlled_acceptance_status_failed'
+      && !error.message.includes('definitely/missing'),
+  );
 });
 
 test('controlled acceptance compose is loopback-only and provider-neutral', async () => {
