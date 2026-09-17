@@ -35,10 +35,20 @@ test('WP224 staging parity plan is bound and fail-closed', async () => {
   );
   assert.equal(plan.rollback.previousImageAndCommitCapturedBeforeDeploy, false);
   assert.equal(plan.rollback.requiredAtExecution, true);
+  assert.equal(plan.rollback.automaticRollback, false);
+  assert.equal(plan.rollback.automaticRollbackStrategy, 'staging_isolation_only');
+  assert.equal(plan.rollback.oldImageAutoRollback, false);
+  assert.equal(plan.rollback.backupRestoreGateRequired, true);
   assert.equal(plan.rollback.restoredBoundary.mfaOverlay, 'retained');
   assert.equal(plan.rollback.migrationRollback.automaticDownMigration, false);
   assert.equal(plan.sourceToStagingDelta.candidateMigrationRange.files, 26);
   assert.equal(plan.sourceToStagingDelta.candidateMigrationRange.upMigrations, 13);
+  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.status, 'prepared-not-executed');
+  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.exactTargetCommit, plan.repository.deployableSourceCommit);
+  assert.equal(
+    plan.sourceToStagingDelta.protectedRehearsal.priorImageSqlContractComparison.status,
+    'required-not-executed',
+  );
   assert.match(plan.sourceToStagingDelta.requiredSourceConfig.mfaConfigPlan.injection, /MFA_ENCRYPTION_KEY_FILE/u);
   assert.doesNotMatch(plan.sourceToStagingDelta.requiredSourceConfig.mfaConfigPlan.injection, /MFA_ENCRYPTION_KEY:\s*\$\{/u);
   assert.equal(plan.providerReadinessReadOnly.providerActivationProven, false);
