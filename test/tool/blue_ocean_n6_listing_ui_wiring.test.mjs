@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const screen = readFileSync('lib/screens/create_listing_screen.dart', 'utf8');
+const analysisService = readFileSync(
+  'lib/services/on_device_listing_analysis_service.dart',
+  'utf8',
+);
 const config = readFileSync('lib/config/private_pilot_config.dart', 'utf8');
 const repository = readFileSync('lib/services/backend_repository.dart', 'utf8');
 const dataService = readFileSync('lib/services/data_service.dart', 'utf8');
@@ -45,6 +49,34 @@ test('UI exposes progress, editable fields, confidence text and at most three cl
   ]) {
     assert.match(screen, new RegExp(label, 'u'));
   }
+});
+
+test('one-image timeout fails closed into a manual fallback without losing inputs', () => {
+  assert.match(
+    analysisService,
+    /timeoutForImageCount\(int imageCount\)[\s\S]*?Duration\(seconds: imageCount \* 30 \+ 10\)/u,
+  );
+  assert.match(
+    analysisService,
+    /onTimeout:\s*\(\) => throw const OnDeviceListingAnalysisException\([\s\S]*?on_device_listing_analysis_timeout/u,
+  );
+  const assistantStart = screen.slice(
+    screen.indexOf('Future<void> _startBlueOceanAssistant()'),
+    screen.indexOf('List<String> _commaSeparated', screen.indexOf('Future<void> _startBlueOceanAssistant()')),
+  );
+  assert.match(assistantStart, /on OnDeviceListingAnalysisException catch \(failure\)/u);
+  const timeoutCatch = assistantStart.slice(
+    assistantStart.indexOf('on OnDeviceListingAnalysisException catch (failure)'),
+    assistantStart.indexOf('on ListingMutationFailure catch (failure)'),
+  );
+  assert.doesNotMatch(timeoutCatch, /uploadImage|analyzeBlueOceanDraft|_startBlueOceanAssistant|_submit/u);
+  assert.doesNotMatch(timeoutCatch, /_pickedImages\s*=|_blueOceanPhotoUrls\s*=|_blueOceanAssistant\s*=/u);
+  assert.match(assistantStart, /Fotos und Eingaben bleiben erhalten; arbeite manuell weiter/u);
+  assert.match(assistantStart, /_blueOceanProgress = 'Manueller Fallback aktiv\.'/u);
+  assert.match(assistantStart, /finally \{[\s\S]*_blueOceanBusy = false\);/u);
+  assert.doesNotMatch(assistantStart, /_submit\s*\(/u);
+  assert.doesNotMatch(assistantStart, /OpenAI/u);
+  assert.match(screen, /_submitBusy \|\| _blueOceanBusy \? null : _submit/u);
 });
 
 test('all eleven owner confirmations and hard functionality/final gates are visible', () => {

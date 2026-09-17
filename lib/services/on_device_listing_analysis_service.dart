@@ -14,10 +14,27 @@ class OnDeviceListingAnalysisException implements Exception {
 }
 
 class OnDeviceListingAnalysisService {
-  const OnDeviceListingAnalysisService({this.platformOverride});
+  const OnDeviceListingAnalysisService({
+    this.platformOverride,
+    this.timeoutOverride,
+  });
 
   @visibleForTesting
   final TargetPlatform? platformOverride;
+
+  /// Test-only override for the cross-isolate watchdog.
+  @visibleForTesting
+  final Duration? timeoutOverride;
+
+  @visibleForTesting
+  static Duration timeoutForImageCount(int imageCount) {
+    if (imageCount < 1 || imageCount > 4) {
+      throw ArgumentError.value(imageCount, 'imageCount');
+    }
+    // Native ML Kit processes images sequentially with a 30-second bound per
+    // image. The extra ten seconds covers the final callback handoff.
+    return Duration(seconds: imageCount * 30 + 10);
+  }
 
   static const MethodChannel _channel =
       MethodChannel('com.shareittoo.app/on_device_listing_ai');
@@ -45,7 +62,14 @@ class OnDeviceListingAnalysisService {
     try {
       raw = await _channel.invokeMethod<Object?>(
         'analyzeImages',
-        <String, Object>{'imagePaths': List<String>.unmodifiable(imagePaths)},
+        <String, Object>{
+          'imagePaths': List<String>.unmodifiable(imagePaths),
+        },
+      ).timeout(
+        timeoutOverride ?? timeoutForImageCount(imagePaths.length),
+        onTimeout: () => throw const OnDeviceListingAnalysisException(
+          'on_device_listing_analysis_timeout',
+        ),
       );
     } on PlatformException catch (failure) {
       final code = failure.code.startsWith('on_device_listing_')

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/services/on_device_listing_analysis_service.dart';
@@ -105,6 +107,75 @@ void main() {
           'on_device_listing_analysis_failed',
         ),
       ),
+    );
+  });
+
+  test('fails closed when the native method never returns', () async {
+    final never = Completer<Object?>().future;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (_) => never);
+
+    await expectLater(
+      const OnDeviceListingAnalysisService(
+        platformOverride: TargetPlatform.android,
+        timeoutOverride: Duration(milliseconds: 5),
+      ).analyzeImagePaths(<String>['/private/app/cache/drill.jpg']),
+      throwsA(
+        isA<OnDeviceListingAnalysisException>().having(
+          (failure) => failure.code,
+          'code',
+          'on_device_listing_analysis_timeout',
+        ),
+      ),
+    );
+  });
+
+  test('late native response cannot replace the typed timeout', () async {
+    final late = Completer<Object?>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (_) => late.future);
+
+    final outcome = const OnDeviceListingAnalysisService(
+      platformOverride: TargetPlatform.android,
+      timeoutOverride: Duration(milliseconds: 5),
+    ).analyzeImagePaths(<String>['/private/app/cache/drill.jpg']);
+    await expectLater(
+      outcome,
+      throwsA(
+        isA<OnDeviceListingAnalysisException>().having(
+          (failure) => failure.code,
+          'code',
+          'on_device_listing_analysis_timeout',
+        ),
+      ),
+    );
+
+    late.complete(<Object?>[
+      <String, Object?>{
+        'modelVersion': onDeviceListingAnalysisModelVersion,
+        'labels': <Object?>[],
+        'ocrText': '',
+      },
+    ]);
+    await Future<void>.delayed(Duration.zero);
+  });
+
+  test('maps the native sequential bound plus callback margin by image count',
+      () {
+    expect(
+      <int>[1, 2, 3, 4]
+          .map(OnDeviceListingAnalysisService.timeoutForImageCount)
+          .map((duration) => duration.inSeconds)
+          .toList(),
+      <int>[40, 70, 100, 130],
+    );
+    expect(
+      () => OnDeviceListingAnalysisService.timeoutForImageCount(0),
+      throwsArgumentError,
+    );
+    expect(
+      () => OnDeviceListingAnalysisService.timeoutForImageCount(5),
+      throwsArgumentError,
     );
   });
 }
