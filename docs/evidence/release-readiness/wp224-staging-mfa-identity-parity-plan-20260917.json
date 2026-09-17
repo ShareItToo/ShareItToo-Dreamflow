@@ -121,7 +121,7 @@
       },
       "wp245Implementation": {
         "status": "implemented-not-executed",
-        "sourceCommit": "27f6c3afe701a5e2216cd1093e9b4b53be8de560",
+        "sourceCommit": "363ab666ba1b17eaefcbf5246f57e08a09b1af47",
         "operation": "backend/ops/staging_forward_migration_rehearsal.mjs",
         "candidateAcceptanceRunner": "backend/ops/staging_disposable_candidate_acceptance.mjs",
         "disposableIdentity": {
@@ -135,14 +135,16 @@
           "candidateImageId": "sha256:38be66d170746b20bfc4c08c70655a72f9a6ce9eb700278a129d5acdedc22620",
           "candidateRevision": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
           "postgresImage": "postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
-          "runtimeRule": "inspect .Id and OCI revision before create; run only by immutable image ID"
+          "runtimeRule": "inspect .Id and OCI revision before create; run only by immutable image ID",
+          "apiGroup": "--group-add 65532 for read-only root:65532 MFA key access"
         },
         "mfaKey": {
           "source": "ephemeral external file",
           "validator": "backend/ops/validate_mfa_staging_secret.mjs",
           "runtimeMount": "read-only MFA_ENCRYPTION_KEY_FILE",
           "shape": "32-byte encoded key, runtime mode 0640/root:65532",
-          "cleanup": "delete and verify absence; never reuse live key"
+          "cleanup": "delete and verify absence; never reuse live key",
+          "validatorContract": "production validate_mfa_staging_secret import is invoked by runner"
         },
         "readinessFingerprint": {
           "sources": ["payment recoveryNeedsReview including contract_blocked causes", "support nextUpdateOverdue"],
@@ -152,7 +154,7 @@
           "readiness503": "remains an operational release blocker; fingerprint never heals or suppresses it",
           "contractVersion": "V5.2-2026-08-16",
           "payoutHoldHours": 48,
-          "readinessPayloadRule": "503 degraded is accepted only when payment recoveryNeedsReview and support nextUpdateOverdue counts equal fingerprint lengths and all other critical checks are healthy"
+          "readinessPayloadRule": "503 degraded is accepted only when database=ok, support.status=degraded, payment recoveryNeedsReview=2 and support nextUpdateOverdue=1 equal fingerprint lengths, and all other critical checks are healthy"
         },
         "verification": {
           "focusedTests": "38 tests, 37 pass, 1 environment-gated skip",
@@ -163,6 +165,8 @@
           "fkIntegrity": "runner invokes check_foreign_key_integrity.sql and binds count=367",
           "opsBinding": "explicit 40-char Ops commit must equal git HEAD before Docker",
           "evidencePath": "required absolute owner-only 0700 parent outside repository; evidence mode 0600",
+          "bootstrap": "candidate image initializeDatabase() runs schema.sql plus migrations before full baseline; no runMigrations-only shortcut",
+          "postgres": "FK integrity SQL invoked and validated constraint count bound to 367",
           "providerTraffic": false,
           "deviceOrPlayMutation": false
         },
