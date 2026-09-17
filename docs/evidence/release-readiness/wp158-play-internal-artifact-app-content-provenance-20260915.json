@@ -94,7 +94,7 @@
     "privateFilesystemPathRecorded": false
   },
   "sourceInventory": {
-    "AGENTS.md": "8bcf2e35a478492fdc19c482dc8687404d064ce787a2390d6dc798a9dce5549d",
+    "AGENTS.md": "8b89cc6e4c99654d93cee05d257afd8d91ebecf28d32b6a2eddbabf7198c2498",
     "scripts/technical_regression_check.sh": "e73d88d86981fd41ba36d403723c3ba5fad6dba1d15ac8f7cc5b6098adf1f896",
     "store/google-play/current-rollover-candidate.json": "4661f0780be26910e549658c59786cb6a2abaafe5b3042489ca1154cbe51f10b",
     "store/google-play/app-content-handoff.json": "9af78ea3f4cc0199269eb1b7410e5dd574350bc7ca8eef9f3d220269a276cd76",

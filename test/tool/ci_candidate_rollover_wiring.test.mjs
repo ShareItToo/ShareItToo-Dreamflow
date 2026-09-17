@@ -144,6 +144,20 @@ test('Android packaging exposes a preflight-only path before either binary build
   assert.ok(preflightOnly < androidBuild.indexOf('node tool/run_checked_android_build.mjs apk'));
 });
 
+test('candidate preflight fails fast on V5.2 fallback version drift', () => {
+  assert.ok(releasePreflight.includes('version="$(awk'));
+  assert.match(releasePreflight, /v52_client_build_fallback=/u);
+  assert.match(releasePreflight, /V5\.2 client-build fallback \$v52_client_build_fallback drifts from pubspec \$version/u);
+  const parityCheck = releasePreflight.indexOf('v52_client_build_fallback=');
+  const firstToolchainCheck = releasePreflight.indexOf('node tool/validate_android_toolchain.mjs');
+  assert.ok(parityCheck > 0);
+  assert.ok(parityCheck < firstToolchainCheck);
+  const preflightInvocation = androidBuild.indexOf('SIT_FIREBASE_VALIDATION_PLATFORM=android bash scripts/release_candidate_preflight.sh');
+  const firstBinaryBuild = androidBuild.indexOf('node tool/run_checked_android_build.mjs appbundle');
+  assert.ok(preflightInvocation > 0);
+  assert.ok(preflightInvocation < firstBinaryBuild);
+});
+
 test('CI validates the cached checksum-bound Gradle wrapper once before Flutter builds', () => {
   assert.match(workflow, /uses: gradle\/actions\/setup-gradle@v6/);
   assert.match(workflow, /cache-provider: basic/);

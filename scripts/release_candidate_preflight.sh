@@ -11,6 +11,27 @@ fail() {
   exit 1
 }
 
+# Parse and validate the candidate version before any toolchain or binary work.
+# The V5.2 client-build fallback must move atomically with pubspec; release
+# builds still override it through SIT_CLIENT_BUILD, but a stale fallback would
+# make source-level contract evidence disagree with the candidate.
+version="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+[0-9]{10}$ ]] || \
+  fail "pubspec version must use semantic version plus YYYYMMDDNN build number."
+build_number="${version##*+}"
+(( 10#$build_number <= 2100000000 )) || fail "Android versionCode exceeds the Play limit."
+
+v52_client_build_fallback="$(
+  grep -A4 -F 'v52ClientBuild = String.fromEnvironment' \
+    lib/config/private_pilot_config.dart \
+    | grep -m1 -oE "defaultValue: '[^']+'" \
+    | cut -d"'" -f2
+)"
+[[ -n "$v52_client_build_fallback" ]] || \
+  fail "V5.2 client-build fallback is missing or unreadable."
+[[ "$v52_client_build_fallback" == "$version" ]] || \
+  fail "V5.2 client-build fallback $v52_client_build_fallback drifts from pubspec $version."
+
 command -v dart >/dev/null 2>&1 || fail "dart is required for store metadata validation."
 command -v node >/dev/null 2>&1 || fail "node is required for public store page validation."
 node tool/validate_android_toolchain.mjs
@@ -207,13 +228,6 @@ if [[ "${SIT_REQUIRE_STORE_SUBMISSION:-0}" == "1" ]]; then
   dart run tool/validate_store_metadata.dart --require-submittable
   node tool/verify_public_store_pages.mjs
 fi
-
-version="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+[0-9]{10}$ ]] || \
-  fail "pubspec version must use semantic version plus YYYYMMDDNN build number."
-
-build_number="${version##*+}"
-(( 10#$build_number <= 2100000000 )) || fail "Android versionCode exceeds the Play limit."
 
 grep -Fq "applicationId = \"$EXPECTED_ID\"" android/app/build.gradle || \
   fail "Android applicationId does not match $EXPECTED_ID."

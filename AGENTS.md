@@ -128,6 +128,13 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 - Local rule output is always labelled as rule-based orientation. It is not a
   market-price estimate and never proves provider execution.
 
+### Candidate version binding
+
+- Every Android candidate bump updates `pubspec.yaml` and the V5.2
+  `PrivatePilotConfig.v52ClientBuild` fallback atomically. Release preflight
+  must fail before any binary build when those values drift; never repair the
+  mismatch by reusing or rebinding an already archived candidate.
+
 ### Fail-closed validator complements
 
 - When a fail-closed validator gains a newly allowed exception, it must still
