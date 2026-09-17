@@ -1,5 +1,30 @@
 # ShareItToo Current State
 
+## WP187 1702 manual-Pilot closure — PLAY/DEVICE PASS; Listing-AI OPEN/FAILED
+
+WP187 closes the exact-head technical, Play Internal, Play-source Pixel and
+manual-Pilot gates for `1.0.0+2026091702` (`com.shareittoo.app`), bound to
+source `085e1e9869abb255767e0eaefd29315cb9cdadf8`. GitHub Regression
+`35174721577` and CodeQL `35174721574` passed at closure head `f83158c3`.
+Play Internal is active as `1.0.0-internal-2026091702`, available to the
+unchanged tester count 2; pending changes remain 14 and Managed publishing is
+OFF. Play-source Pixel smoke passed with installer `com.android.vending`, four
+expected splits, cold launch, session and manual editor. WP185's single manual
+listing was read back as Heilbronn while owner profile city stayed null, then
+the exact listing and controlled artifacts were cleaned up.
+
+Listing-AI functional acceptance remains **OPEN/FAILED as residual
+limitation/debt** for 1702: the native pipeline returned in about 0.30 seconds
+with visible empty AI suggestions and the manual editor, so the 1702 40-second
+timeout was not observed. The identical timeout implementation/test paths,
+green unit/late-response coverage, safe return to editable UI and prior Astra
+decision mean this is not a manual-Pilot blocker. The only remaining enforced
+gate is exact-head Docs/Evidence CI validation. No payment, provider, production, Firebase, cloud/DNS, other-track,
+review-submission or PR-merge effect occurred. The rollover manifest remains
+the immutable pre-action snapshot; post-action truth is in
+`docs/evidence/release-readiness/wp187-current-candidate-play-pixel-closure-20260917.json`
+and `docs/operations/WP187_PLAY_PIXEL_MANUAL_PILOT_CLOSURE_20260917.md`.
+
 ## WP184 Heilbronn city successor 2026091702 — TECHNICAL FIX COMPLETE; PLAY/DEVICE GATES HOLD
 
 The bounded successor `1.0.0+2026091702` is prepared locally for

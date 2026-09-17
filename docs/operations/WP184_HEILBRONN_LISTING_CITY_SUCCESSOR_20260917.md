@@ -1,5 +1,27 @@
 # WP184 Heilbronn listing-city successor handover (2026-09-17)
 
+## Superseding WP187 closure status (2026-09-17)
+
+The historical WP184 successor `1.0.0+2026091702` is now Play Internal active
+and Play-source Pixel verified. GitHub Regression `35174721577` and CodeQL
+`35174721574` passed at exact head `f83158c3`; the manual Pilot path passed,
+including the Heilbronn server read-back with owner city null and exact
+cleanup. Listing-AI functional acceptance remains **OPEN/FAILED as residual
+limitation/debt** because the 1702 native path returned in about 0.30 seconds
+with visible empty suggestions and manual editor rather than demonstrating the
+40-second timeout. Identical timeout implementation/test paths, green
+unit/late-response coverage, safe editable return and the prior Astra decision
+make this no manual-Pilot blocker; the only remaining enforced gate is
+exact-head Docs/Evidence CI validation. See the sanitized WP187 evidence and
+handover:
+
+`docs/evidence/release-readiness/wp187-current-candidate-play-pixel-closure-20260917.json`
+
+`docs/operations/WP187_PLAY_PIXEL_MANUAL_PILOT_CLOSURE_20260917.md`
+
+The pre-action statements below are historical WP184 state, not a claim that
+Play or device actions are still pending.
+
 Status: technical fix complete; local signed successor archived. No Play
 upload/activation, device installation, provider, payment, production or PR
 merge action occurred.
