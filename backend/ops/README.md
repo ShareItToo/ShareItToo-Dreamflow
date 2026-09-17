@@ -38,6 +38,12 @@ file, logs, chat or release evidence. Do not rotate this key by replacement:
 existing TOTP ciphertext requires a separately reviewed versioned re-encryption
 plan before rotation.
 
+`ensure_mfa_staging_secret.mjs` first reuses and validates an existing file. It
+can create a missing file only with an explicit exact-commit confirmation,
+atomic `O_EXCL` creation and mode `0600`; it never overwrites or rotates an
+existing key and never prints its value. The normal deploy gate does not create
+keys. Creation is a separate preparation action and was not executed here.
+
 ```sh
 ENABLE_STAGING_MFA=1 \
 SIT_STAGING_PILOT_ID=heilbronn_wave0 \
@@ -52,14 +58,46 @@ direct environment value and mounts the file read-only as
 `MFA_ENCRYPTION_KEY_FILE`. A successful health readback exposes only
 `configured=true` and `credentialSource=file`; an authenticated synthetic
 enroll/status/cancel test is still required before MFA is considered ready.
-MFA is a durable encryption dependency: rollback retains this overlay and the
-validated stable key file while restoring the prior application image. It must
-not clear or drop the key, because existing TOTP ciphertext would otherwise be
-undecryptable. Rollback restores application/image/config state only; database
+MFA is a durable encryption dependency: any recovery path retains this overlay
+and the validated stable key file; it must not clear or drop the key, because
+existing TOTP ciphertext would otherwise be undecryptable. After a forward
+schema attempt, the deploy runbook does not boot the observed old image: it
+isolates/stops the Staging API and records sanitized forward-recovery evidence
+until a separately proven compatible recovery image exists. Database
 migrations remain forward-applied. Before applying migrations `075-087`, take
 a protected Staging database backup and pass an isolated restore or equivalent
 forward-compatibility verification gate. The flag is staging-only and rejects
 Production.
+
+## Protected Staging forward-migration rehearsal
+
+Before applying migrations `075-087` to the shared Staging database, run the
+exact-target-bound rehearsal operation. It verifies the Compose project,
+container and volume labels are Staging-only, repeats the `001-074`
+`schema_migrations` readback, quiesces only running Staging API/mutating
+services, proves there are no foreign database writers, and writes a non-empty
+mode-`0600` custom-format dump plus checksum. That actual dump is restored into
+an isolated pinned PostgreSQL 16 target; aggregate-only non-empty data checks,
+forward migrations `075-087`, foreign-key integrity and focused contract probes
+for refund recovery, command immutability, refund truth/rename compatibility,
+legal holds, special-category intake, MFA and Identity must all pass.
+
+```sh
+SIT_STAGING_REHEARSAL_EXECUTE=1 \
+SIT_STAGING_REHEARSAL_CONFIRM=FULL_40_CHARACTER_COMMIT \
+  node ops/staging_forward_migration_rehearsal.mjs FULL_40_CHARACTER_COMMIT
+```
+
+The operation never targets Production, never runs down migrations and removes
+temporary restore containers/volumes. It resumes only services that it
+quiesced after a complete pass; a failed rehearsal leaves Staging isolated for
+forward recovery. A `/health` result is not rollback compatibility proof.
+After a forward migration begins, `deploy_release.sh` never boots the prior
+unproven image: it stops the Staging API and records sanitized
+`forward-recovery-required` evidence. A future recovery image must be bound to
+this rehearsal by a separate reviewed gate. Database rollback is not automatic;
+the protected backup and isolated restore/forward-compatibility result remain
+required evidence.
 
 FCM is opt-in for staging and cannot be activated for production through this
 path. Before the first FCM-enabled staging rollout, create only the dedicated

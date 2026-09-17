@@ -70,6 +70,36 @@ rollback_failed_deployment() {
   trap - ERR
   set +e
 
+  # Once a Staging deployment has started, the API may have applied forward
+  # migrations before readiness failed. Never boot the previously observed
+  # image against that schema unless a separate rehearsal-bound recovery image
+  # is approved. Isolate Staging instead and leave forward recovery to the
+  # explicit migration/recovery gate. The durable MFA overlay is untouched.
+  if [[ "$task_environment" == staging && "$task_deployment_started" == true ]]; then
+    task_isolation_status=1
+    if docker stop "$task_api_container" >/dev/null 2>&1; then
+      task_isolation_status=0
+    fi
+    install -d -m 700 "$task_release_dir"
+    task_recovery_timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+    task_recovery_report="$task_release_dir/${task_environment}-forward-recovery-required-${task_recovery_timestamp}-${task_commit:0:12}.json"
+    if [[ "$task_isolation_status" == 0 ]]; then
+      printf '{"environment":"staging","failedCommit":"%s","previousCommit":"%s","status":"forward-recovery-required","apiIsolated":true,"mfaOverlay":"retained","databaseRollback":"not_attempted","recordedAt":"%s"}\n' \
+        "$task_commit" "${task_previous_commit:-unknown}" "$task_recovery_timestamp" > "$task_recovery_report"
+      chmod 600 "$task_recovery_report"
+      printf 'Staging API isolated; forward recovery is required. Evidence: %s\n' \
+        "$task_recovery_report" >&2
+    else
+      printf '{"environment":"staging","failedCommit":"%s","previousCommit":"%s","status":"critical-isolation-failed","apiIsolated":false,"mfaOverlay":"retained","databaseRollback":"not_attempted","recordedAt":"%s"}\n' \
+        "$task_commit" "${task_previous_commit:-unknown}" "$task_recovery_timestamp" > "$task_recovery_report"
+      chmod 600 "$task_recovery_report"
+      printf 'CRITICAL: Staging API isolation failed; no image rollback was attempted. Evidence: %s\n' \
+        "$task_recovery_report" >&2
+    fi
+    cleanup
+    exit "$task_failed_status"
+  fi
+
   if [[ "$task_deployment_started" == true && -n "$task_previous_image_id" ]]; then
     task_rollback_override="$(create_runtime_override rollback)"
     chmod 600 "$task_rollback_override"

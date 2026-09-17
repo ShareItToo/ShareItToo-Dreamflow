@@ -271,3 +271,10 @@ Release feature-scope classifications must bind current source reachability to
 current runtime evidence. A stale audit, historical candidate or source-only
 contract cannot close a live-scope finding; a missing runtime route or provider
 activation remains an explicit fail-closed blocker.
+
+Before any forward schema deployment, compare the prior image's SQL contract
+with the exact migration delta and record a protected backup/restore rehearsal
+against the bound source commit. Health and readiness prove liveness only, not
+rollback compatibility. If no compatible recovery image is proven, isolate
+Staging after the forward attempt; never boot an observed old image or run an
+automatic down migration/database restore.

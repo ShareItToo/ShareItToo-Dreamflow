@@ -62,6 +62,10 @@ if [[ "$1" == inspect ]]; then
   if [[ "$*" == *State.Health* ]]; then printf 'healthy\n'; else printf 'sha256:previous-image\n'; fi
   exit 0
 fi
+if [[ "$1" == stop ]]; then
+  printf 'STOP:%s\n' "$2" >> "\${DOCKER_LOG}"
+  exit 0
+fi
 if [[ "$1" == compose ]]; then
   previous=''
   for argument in "$@"; do
@@ -100,11 +104,17 @@ exit 1
   });
 
   assert.equal(result.status, 42);
-  assert.match(result.stderr, /previous image restored and verified/u);
+  assert.match(result.stderr, /Staging API isolated; forward recovery is required/u);
   const composeFileContents = await readFile(composeFiles, 'utf8');
-  assert.ok((composeFileContents.match(/MFA_ENCRYPTION_KEY_FILE:\s*\/run\/secrets\/mfa-encryption-key/gu) ?? []).length >= 2);
+  assert.equal((composeFileContents.match(/MFA_ENCRYPTION_KEY_FILE:\s*\/run\/secrets\/mfa-encryption-key/gu) ?? []).length, 1);
   assert.doesNotMatch(composeFileContents, /MFA_ENCRYPTION_KEY_FILE:\s*""/u);
+  const dockerLog = await readFile(log, 'utf8');
+  assert.match(dockerLog, /STOP:shareittoo-staging-api/u);
+  assert.doesNotMatch(dockerLog, /sha256:previous-image.*compose/u);
   const reports = await readdir(releases);
   assert.equal(reports.length, 1);
-  assert.equal(JSON.parse(await readFile(join(releases, reports[0]), 'utf8')).status, 'passed');
+  const report = JSON.parse(await readFile(join(releases, reports[0]), 'utf8'));
+  assert.equal(report.status, 'forward-recovery-required');
+  assert.equal(report.apiIsolated, true);
+  assert.equal(report.mfaOverlay, 'retained');
 });
