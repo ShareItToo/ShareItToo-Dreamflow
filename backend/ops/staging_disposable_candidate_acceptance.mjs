@@ -34,6 +34,31 @@ function fullCommit(value, name) {
   return value;
 }
 
+export function buildCandidateRuntimeEnv({ databasePassword, mfaPath, targetCommit, api = false, jwtSecret = 'disposable-jwt-secret-32-characters-minimum' } = {}) {
+  if (typeof databasePassword !== 'string' || typeof mfaPath !== 'string' || typeof targetCommit !== 'string' || jwtSecret.length < 32) {
+    fail('candidate_runtime_env_invalid');
+  }
+  const env = {
+    NODE_ENV: 'production', DEPLOYMENT_ENVIRONMENT: 'staging',
+    APP_COMMIT: targetCommit, JWT_SECRET: jwtSecret,
+    DATABASE_URL: `postgres://shareittoo_rehearsal:${databasePassword}@db:5432/shareittoo_rehearsal`,
+    MFA_ENCRYPTION_KEY_FILE: '/run/secrets/mfa-encryption-key',
+    PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
+    IDENTITY_VERIFICATION_TRANSPORT: 'disabled', SIT_LISTING_AI_PROVIDER: 'mock',
+    PUSH_TRANSPORT: 'memory', MAIL_TRANSPORT: 'disabled',
+  };
+  if (api) Object.assign(env, { PORT: '8080', BIND_HOST: '0.0.0.0' });
+  return Object.freeze({ env: Object.freeze(env), mfaPath, groupAdd: '65532' });
+}
+
+function runtimeEnvArgs(runtime) {
+  return [
+    '--group-add', runtime.groupAdd,
+    ...Object.entries(runtime.env).flatMap(([key, value]) => ['-e', `${key}=${value}`]),
+    '--mount', `type=bind,src=${runtime.mfaPath},dst=/run/secrets/mfa-encryption-key,readonly`,
+  ];
+}
+
 async function createEphemeralMfaKey() {
   const root = await (await import('node:fs/promises')).mkdtemp(join('/tmp', 'sit-disposable-mfa-'));
   const filePath = join(root, 'mfa-key');
@@ -225,6 +250,7 @@ export async function runDisposableCandidateAcceptance({
   try {
     assertSafeDisposableTarget({ ...resources, runId });
     mfaKey = await prepareMfaKey();
+    const jwtSecret = `disposable-${crypto.randomBytes(32).toString('base64url')}`;
     const databasePassword = `disposable-${crypto.randomBytes(18).toString('base64url')}`;
     const imageMeta = await command('docker', ['image', 'inspect', disposableCandidateImage, '--format', '{{.Id}}|{{index .Config.Labels "org.opencontainers.image.revision"}}'], { phase: 'candidate_image_identity' });
     const imageMetaText = String(typeof imageMeta === 'string' ? imageMeta : imageMeta.stdout).trim();
@@ -249,7 +275,9 @@ export async function runDisposableCandidateAcceptance({
       const inspected = await inspectLabels(command, name, '{{json .Config.Labels}}', 'database_identity');
       assertDisposableResourceIdentity({ resourceType, name, labels: inspected, runId });
     }
-    await command('docker', ['create', '--name', api, ...labels, '--network', network, '--network-alias', 'api', '--group-add', '65532', '-p', '127.0.0.1::8080', '-e', 'NODE_ENV=production', '-e', 'DEPLOYMENT_ENVIRONMENT=staging', '-e', 'PORT=8080', '-e', 'BIND_HOST=0.0.0.0', '-e', `APP_COMMIT=${targetCommit}`, '-e', 'JWT_SECRET=disposable-jwt-secret-not-persisted', '-e', `DATABASE_URL=postgres://shareittoo_rehearsal:${databasePassword}@db:5432/shareittoo_rehearsal`, '-e', 'MFA_ENCRYPTION_KEY_FILE=/run/secrets/mfa-encryption-key', '-e', 'PAYMENT_TRANSPORT=memory', '-e', 'STRIPE_LIVEMODE=false', '-e', 'IDENTITY_VERIFICATION_TRANSPORT=disabled', '-e', 'SIT_LISTING_AI_PROVIDER=mock', '-e', 'PUSH_TRANSPORT=memory', '-e', 'MAIL_TRANSPORT=disabled', '--mount', `type=bind,src=${mfaKey.filePath},dst=/run/secrets/mfa-encryption-key,readonly`, disposableCandidateImageDigest], { phase: 'candidate_create' });
+    const apiRuntime = buildCandidateRuntimeEnv({ databasePassword, mfaPath: mfaKey.filePath, targetCommit, api: true, jwtSecret });
+    const bootstrapRuntime = buildCandidateRuntimeEnv({ databasePassword, mfaPath: mfaKey.filePath, targetCommit, jwtSecret });
+    await command('docker', ['create', '--name', api, ...labels, '--network', network, '--network-alias', 'api', ...runtimeEnvArgs(apiRuntime), '-p', '127.0.0.1::8080', disposableCandidateImageDigest], { phase: 'candidate_create' });
     createdResources.push(['container', api]);
     for (const [resourceType, name] of [['container', api]]) {
       const inspected = await inspectLabels(command, name, '{{json .Config.Labels}}', 'api_identity');
@@ -259,7 +287,7 @@ export async function runDisposableCandidateAcceptance({
     await waitForPostgres({ command, container: database });
     await commandWithFileInput('docker', ['exec', '-i', database, 'pg_restore', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal', '--no-owner', '--no-acl'], backupPath, { phase: 'restore' });
     const bootstrapScript = "import { initializeDatabase, pool } from '/app/src/db.js'; await initializeDatabase(); await pool.end();";
-    await command('docker', ['create', '--name', bootstrap, ...labels, '--network', network, '-e', 'NODE_ENV=production', '-e', 'DEPLOYMENT_ENVIRONMENT=staging', '-e', `DATABASE_URL=postgres://shareittoo_rehearsal:${databasePassword}@db:5432/shareittoo_rehearsal`, '-e', 'MFA_ENCRYPTION_KEY_FILE=/run/secrets/mfa-encryption-key', '--mount', `type=bind,src=${mfaKey.filePath},dst=/run/secrets/mfa-encryption-key,readonly`, disposableCandidateImageDigest, 'node', '--input-type=module', '-e', bootstrapScript], { phase: 'bootstrap_create' });
+    await command('docker', ['create', '--name', bootstrap, ...labels, '--network', network, ...runtimeEnvArgs(bootstrapRuntime), disposableCandidateImageDigest, 'node', '--input-type=module', '-e', bootstrapScript], { phase: 'bootstrap_create' });
     const bootstrapLabels = await inspectLabels(command, bootstrap, '{{json .Config.Labels}}', 'bootstrap_identity');
     assertDisposableResourceIdentity({ resourceType: 'container', name: bootstrap, labels: bootstrapLabels, runId });
     createdResources.push(['container', bootstrap]);

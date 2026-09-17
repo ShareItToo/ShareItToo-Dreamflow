@@ -190,6 +190,22 @@
         "verification": "deterministic race test covers transient ready/restart/final marker in stderr/two SQL successes and timeout fail-closed",
         "execution": "no retry by Luna; Sol must run exactly once after review"
       },
+      "wp247BootstrapConfigParity": {
+        "status": "implemented-not-retried",
+        "observedAttempt": {
+          "opsCommit": "8852ec38bdf23ebd4d793e3ae03875eba03defb8",
+          "failureCode": "bootstrap_migrations_failed",
+          "restore": "passed",
+          "cleanup": "passed",
+          "evidence": "absent",
+          "mfaTemporaryFile": "absent",
+          "liveDatabaseMutated": false,
+          "liveSchema": "001-074",
+          "api": "exited-before-start"
+        },
+        "fix": "shared candidate runtime env/secret/group contract for API and bootstrap; bootstrap uses initializeDatabase() with JWT and read-only MFA file mount",
+        "execution": "no retry by Luna; Sol must run exactly once after review"
+      },
       "priorImageSqlContractComparison": {
         "status": "required-not-executed",
         "observedPriorStagingCommit": "df39a14b7a19afe467842461a28f1e77fec8445e",

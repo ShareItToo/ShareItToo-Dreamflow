@@ -7,6 +7,7 @@ import {
   disposableCandidateCommit,
   disposablePostgresImage,
   pollVersion,
+  buildCandidateRuntimeEnv,
   waitForFinalPostgresReady,
   runDisposableCandidateAcceptance,
 } from '../ops/staging_disposable_candidate_acceptance.mjs';
@@ -82,12 +83,16 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
     assert.ok(calls.every(({ args }) => !args.includes('shareittoo_staging_backend')));
     const apiCreate = calls.find(({ phase }) => phase === 'candidate_create');
     const dbCreate = calls.find(({ phase }) => phase === 'database_create');
+    const bootstrapCreate = calls.find(({ phase }) => phase === 'bootstrap_create');
     assert.ok(apiCreate.args.includes('MFA_ENCRYPTION_KEY_FILE=/run/secrets/mfa-encryption-key'));
     assert.ok(apiCreate.args.includes('--group-add'));
     assert.ok(apiCreate.args.includes('65532'));
     assert.ok(!apiCreate.args.some((arg) => arg.startsWith('MFA_ENCRYPTION_KEY=')));
     assert.equal(apiCreate.args.at(-1), 'sha256:38be66d170746b20bfc4c08c70655a72f9a6ce9eb700278a129d5acdedc22620');
     assert.equal(dbCreate.args.at(-1), disposablePostgresImage);
+    const envValues = (call) => call.args.filter((arg) => arg.startsWith('DATABASE_URL=') || arg.startsWith('JWT_SECRET=') || arg.startsWith('MFA_ENCRYPTION_KEY_FILE=') || arg.startsWith('PAYMENT_TRANSPORT=') || arg.startsWith('DEPLOYMENT_ENVIRONMENT=')).sort();
+    assert.deepEqual(envValues(apiCreate), envValues(bootstrapCreate));
+    assert.ok(bootstrapCreate.args.includes('--group-add') && bootstrapCreate.args.includes('65532'));
     const evidenceMode = (await stat(join(root, 'evidence.json'))).mode & 0o777;
     assert.equal(evidenceMode, 0o600);
     fingerprintReads = 0;
@@ -113,6 +118,14 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('candidate runtime env contract is shared and rejects short JWT secrets', () => {
+  const runtime = buildCandidateRuntimeEnv({ databasePassword: 'db', mfaPath: '/tmp/key', targetCommit: 'a'.repeat(40), api: true });
+  assert.equal(runtime.env.DEPLOYMENT_ENVIRONMENT, 'staging');
+  assert.equal(runtime.env.MFA_ENCRYPTION_KEY_FILE, '/run/secrets/mfa-encryption-key');
+  assert.equal(runtime.groupAdd, '65532');
+  assert.throws(() => buildCandidateRuntimeEnv({ databasePassword: 'db', mfaPath: '/tmp/key', targetCommit: 'a'.repeat(40), jwtSecret: 'short' }), /candidate_runtime_env_invalid/u);
 });
 
 test('fresh PostgreSQL readiness requires init marker and two stable SQL successes before restore', async () => {
