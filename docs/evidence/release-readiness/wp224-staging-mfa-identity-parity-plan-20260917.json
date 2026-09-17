@@ -207,6 +207,23 @@
         "fix": "shared candidate runtime env/secret/group contract for API and bootstrap; bootstrap uses initializeDatabase() with JWT and read-only MFA file mount",
         "execution": "no retry by Luna; Sol must run exactly once after review"
       },
+      "wp248InternalNetworkProbe": {
+        "status": "implemented-not-retried",
+        "observedAttempt": {
+          "opsCommit": "decb00e7674efe2487e6a5f5d8b0a3c2e6b5e394",
+          "restore": "passed",
+          "bootstrap": "passed",
+          "failureCode": "staging_rehearsal_candidate_port_failed",
+          "diagnosis": "Docker --internal Network has no host PortBindings; candidate remained listening internally",
+          "cleanup": "passed",
+          "evidence": "absent",
+          "liveDatabaseMutated": false,
+          "liveSchema": "001-074",
+          "api": "stopped"
+        },
+        "fix": "remove host-port publishing/host fetch; bounded docker-exec probes against 127.0.0.1:8080 inside attested API container",
+        "execution": "no retry by Luna; Sol must run exactly once after review"
+      },
       "priorImageSqlContractComparison": {
         "status": "required-not-executed",
         "observedPriorStagingCommit": "df39a14b7a19afe467842461a28f1e77fec8445e",

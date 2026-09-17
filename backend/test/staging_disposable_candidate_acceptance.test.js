@@ -6,7 +6,7 @@ import test from 'node:test';
 import {
   disposableCandidateCommit,
   disposablePostgresImage,
-  pollVersion,
+  probeInternalEndpoint,
   buildCandidateRuntimeEnv,
   waitForFinalPostgresReady,
   runDisposableCandidateAcceptance,
@@ -33,6 +33,9 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
       if (options.phase === 'candidate_image_identity') return 'sha256:38be66d170746b20bfc4c08c70655a72f9a6ce9eb700278a129d5acdedc22620|f0bb868a8a487cbf33ae67a555946fb9c67f4e9f';
       if (options.phase === 'bootstrap_wait') return '0';
       if (options.phase === 'fk_count') return '367';
+      if (options.phase === 'internal_probe_version') return JSON.stringify({ status: 200, payload: { commit: disposableCandidateCommit } });
+      if (options.phase === 'internal_probe_health_live') return JSON.stringify({ status: 200, payload: { status: 'ok' } });
+      if (options.phase === 'internal_probe_health_ready') return JSON.stringify({ status: 503, payload: { status: 'degraded', checks: { mail: 'disabled', notifications: { dead: 0 }, database: 'ok', payments: { recoveryNeedsReview: 2, failedEvents: 0, unbalanced: 0, recoveryPending: 0 }, supportDeadlines: { status: 'degraded', nextUpdateOverdue: 1, stale: false, lastErrorCode: null, p0WithoutOwner: 0, criticalNextUpdateOverdue: 0, privacyDeadlineNear: 0, privacyDeadlineOverdue: 0, privacyIncidentDeadlineNear: 0, privacyIncidentDeadlineOverdue: 0 } } } });
       if (options.phase?.endsWith('_identity') || options.phase === 'cleanup_identity') return JSON.stringify({
         'com.shareittoo.staging.rehearsal': 'true',
         'com.shareittoo.staging.rehearsal_run_id': (args.find((arg) => /-(\d{14}-[0-9a-f]{8})$/u.test(arg)) ?? '').match(/-(\d{14}-[0-9a-f]{8})$/u)?.[1] ?? 'ignored',
@@ -80,6 +83,9 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
     assert.deepEqual(cleanup.map(([kind]) => kind), ['container', 'container', 'container', 'volume', 'network']);
     assert.ok(calls.some(({ phase }) => phase === 'candidate_start'));
     assert.ok(calls.some(({ phase }) => phase === 'mfa_probe'));
+    assert.ok(calls.some(({ phase }) => phase === 'internal_probe_version'));
+    assert.ok(calls.some(({ phase }) => phase === 'internal_probe_health_live'));
+    assert.ok(calls.some(({ phase }) => phase === 'internal_probe_health_ready'));
     assert.ok(calls.every(({ args }) => !args.includes('shareittoo_staging_backend')));
     const apiCreate = calls.find(({ phase }) => phase === 'candidate_create');
     const dbCreate = calls.find(({ phase }) => phase === 'database_create');
@@ -88,6 +94,7 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
     assert.ok(apiCreate.args.includes('--group-add'));
     assert.ok(apiCreate.args.includes('65532'));
     assert.ok(!apiCreate.args.some((arg) => arg.startsWith('MFA_ENCRYPTION_KEY=')));
+    assert.ok(!apiCreate.args.includes('-p'));
     assert.equal(apiCreate.args.at(-1), 'sha256:38be66d170746b20bfc4c08c70655a72f9a6ce9eb700278a129d5acdedc22620');
     assert.equal(dbCreate.args.at(-1), disposablePostgresImage);
     const envValues = (call) => call.args.filter((arg) => arg.startsWith('DATABASE_URL=') || arg.startsWith('JWT_SECRET=') || arg.startsWith('MFA_ENCRYPTION_KEY_FILE=') || arg.startsWith('PAYMENT_TRANSPORT=') || arg.startsWith('DEPLOYMENT_ENVIRONMENT=')).sort();
@@ -156,10 +163,10 @@ test('fresh PostgreSQL readiness requires init marker and two stable SQL success
   );
 });
 
-test('candidate version polling is bounded and times out deterministically', async () => {
+test('internal endpoint polling is bounded and times out deterministically', async () => {
   await assert.rejects(
-    () => pollVersion(async () => null, 'http://127.0.0.1:1/version', { attempts: 2, intervalMs: 0 }),
-    (error) => error.code === 'candidate_version_timeout',
+    () => probeInternalEndpoint(async () => '', { container: 'api', path: '/version', expectedStatus: 200, attempts: 2, intervalMs: 0 }),
+    (error) => error.code === 'internal_probe_version_timeout',
   );
 });
 

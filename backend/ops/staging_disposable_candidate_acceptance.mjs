@@ -93,21 +93,6 @@ async function assertSafeEvidencePath(evidencePath) {
   return absolute;
 }
 
-async function boundedFetch(fetchImpl, url, { timeoutMs = 5000 } = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try { return await fetchImpl(url, { signal: controller.signal }); } catch { return null; } finally { clearTimeout(timer); }
-}
-
-export async function pollVersion(fetchImpl, url, { attempts = 60, intervalMs = 250 } = {}) {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const response = await boundedFetch(fetchImpl, url);
-    if (response?.ok) return response;
-    if (attempt < attempts - 1) await new Promise((resolvePromise) => setTimeout(resolvePromise, intervalMs));
-  }
-  fail('candidate_version_timeout');
-}
-
 export async function waitForFinalPostgresReady({ command, container, attempts = 60, intervalMs = 500 } = {}) {
   let markerSeen = false;
   let stableSqlSuccesses = 0;
@@ -195,11 +180,19 @@ async function inspectLabels(command, name, format, phase) {
   try { return JSON.parse(value.trim()); } catch { fail('disposable_identity_unreadable'); }
 }
 
-async function hostPort(command, container, port) {
-  const output = await command('docker', ['inspect', '--format', `{{(index (index .NetworkSettings.Ports "${port}/tcp") 0).HostPort}}`, container], { phase: 'candidate_port' });
-  const value = String(typeof output === 'string' ? output : output.stdout).trim();
-  if (!/^\d+$/u.test(value)) fail('candidate_port_invalid');
-  return Number(value);
+export async function probeInternalEndpoint(command, { container, path, expectedStatus, attempts = 60, intervalMs = 250 } = {}) {
+  if (!/^\/(?:version|health\/live|health\/ready)$/u.test(path) || !Number.isInteger(expectedStatus)) fail('internal_probe_arguments_invalid');
+  const script = `const c=new AbortController();setTimeout(()=>c.abort(),5000);try{const r=await fetch('http://127.0.0.1:8080${path}',{signal:c.signal});const t=await r.text();let p=null;try{p=t?JSON.parse(t):null}catch{};console.log(JSON.stringify({status:r.status,payload:p}));}catch{console.log(JSON.stringify({status:0,payload:null}));}`;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const output = await command('docker', ['exec', container, 'node', '--input-type=module', '-e', script], { phase: `internal_probe_${path.slice(1).replaceAll('/', '_')}` }).catch(() => ({ stdout: '' }));
+    try {
+      const raw = String(typeof output === 'string' ? output : output.stdout).trim();
+      const observed = JSON.parse(raw);
+      if (observed.status === expectedStatus) return observed;
+    } catch { /* bounded retry; raw output is never surfaced */ }
+    if (attempt < attempts - 1) await new Promise((resolvePromise) => setTimeout(resolvePromise, intervalMs));
+  }
+  fail(`internal_probe_${path.slice(1).replaceAll('/', '_')}_timeout`);
 }
 
 const mfaProbe = `import crypto from 'node:crypto';
@@ -217,7 +210,6 @@ export async function runDisposableCandidateAcceptance({
   environment = process.env,
   command = runCommand,
   commandWithFileInput = runCommandWithFileInput,
-  fetchImpl = fetch,
   hashFile,
   evidencePath = environment.SIT_DISPOSABLE_CANDIDATE_EVIDENCE_PATH,
   removeResource = removeAndVerifyDockerResource,
@@ -277,7 +269,7 @@ export async function runDisposableCandidateAcceptance({
     }
     const apiRuntime = buildCandidateRuntimeEnv({ databasePassword, mfaPath: mfaKey.filePath, targetCommit, api: true, jwtSecret });
     const bootstrapRuntime = buildCandidateRuntimeEnv({ databasePassword, mfaPath: mfaKey.filePath, targetCommit, jwtSecret });
-    await command('docker', ['create', '--name', api, ...labels, '--network', network, '--network-alias', 'api', ...runtimeEnvArgs(apiRuntime), '-p', '127.0.0.1::8080', disposableCandidateImageDigest], { phase: 'candidate_create' });
+    await command('docker', ['create', '--name', api, ...labels, '--network', network, '--network-alias', 'api', ...runtimeEnvArgs(apiRuntime), disposableCandidateImageDigest], { phase: 'candidate_create' });
     createdResources.push(['container', api]);
     for (const [resourceType, name] of [['container', api]]) {
       const inspected = await inspectLabels(command, name, '{{json .Config.Labels}}', 'api_identity');
@@ -296,15 +288,13 @@ export async function runDisposableCandidateAcceptance({
     if (String(typeof bootstrapWait === 'string' ? bootstrapWait : bootstrapWait.stdout).trim() !== '0') fail('bootstrap_migrations_failed');
     const preFingerprint = await queryFingerprint({ command, container: database, user: 'shareittoo_rehearsal', database: 'shareittoo_rehearsal', sql: buildReadinessFindingSql({ contractVersion: readinessContractVersion, payoutHoldHours: 48 }) });
     await command('docker', ['start', api], { phase: 'candidate_start' });
-    const apiPort = await hostPort(command, api, 8080);
-    const versionResponse = await pollVersion(fetchImpl, `http://127.0.0.1:${apiPort}/version`);
-    let version;
-    try { version = await versionResponse.json(); } catch { fail('candidate_version_payload_invalid'); }
+    const versionProbe = await probeInternalEndpoint(command, { container: api, path: '/version', expectedStatus: 200 });
+    const version = versionProbe.payload;
     if (version?.commit !== targetCommit) fail('candidate_version_commit_mismatch');
-    const live = await boundedFetch(fetchImpl, `http://127.0.0.1:${apiPort}/health/live`); if (!live?.ok) fail('candidate_live_failed');
-    const ready = await boundedFetch(fetchImpl, `http://127.0.0.1:${apiPort}/health/ready`); if (ready?.status !== 503) fail('readiness_blocker_not_observed');
-    let readinessPayload;
-    try { readinessPayload = await ready.json(); } catch { fail('readiness_payload_unreadable'); }
+    const liveProbe = await probeInternalEndpoint(command, { container: api, path: '/health/live', expectedStatus: 200 });
+    if (!liveProbe.payload || liveProbe.payload.status !== 'ok') fail('candidate_live_failed');
+    const readyProbe = await probeInternalEndpoint(command, { container: api, path: '/health/ready', expectedStatus: 503 });
+    const readinessPayload = readyProbe.payload;
     if (readinessPayload?.status !== 'degraded') fail('readiness_status_not_degraded');
     const postFingerprint = await queryFingerprint({ command, container: database, user: 'shareittoo_rehearsal', database: 'shareittoo_rehearsal', sql: buildReadinessFindingSql({ contractVersion: readinessContractVersion, payoutHoldHours: 48 }) });
     assertReadinessFindingsUnchanged(preFingerprint, postFingerprint);
