@@ -129,11 +129,16 @@ export async function pollAcceptanceEndpoint(path, {
   }
   const deadline = nowImpl() + timeoutMs;
   while (nowImpl() <= deadline) {
+    const controller = new AbortController();
+    const remaining = Math.max(1, deadline - nowImpl());
+    const timer = setTimeout(() => controller.abort(), remaining);
     try {
-      const response = await fetchImpl(`http://127.0.0.1:${port}${path}`);
+      const response = await fetchImpl(`http://127.0.0.1:${port}${path}`, { signal: controller.signal });
       if (response?.ok) return response;
     } catch {
       // Transport/readiness races are retried only within the bounded deadline.
+    } finally {
+      clearTimeout(timer);
     }
     if (nowImpl() >= deadline) break;
     await sleepImpl(Math.min(intervalMs, Math.max(0, deadline - nowImpl())));

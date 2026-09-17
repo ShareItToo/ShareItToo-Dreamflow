@@ -187,6 +187,23 @@ test('application readiness polling times out with a stable code and hides raw e
   );
 });
 
+test('hung readiness fetch is aborted by the per-attempt deadline', async () => {
+  const started = Date.now();
+  await assert.rejects(
+    pollAcceptanceEndpoint('/version', {
+      port: 18082,
+      phase: 'acceptance_version',
+      timeoutMs: 20,
+      intervalMs: 1,
+      fetchImpl: async (_url, { signal }) => new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('hung fetch aborted')), { once: true });
+      }),
+    }),
+    (error) => error?.code === 'acceptance_version_timeout',
+  );
+  assert.ok(Date.now() - started < 500);
+});
+
 test('cleanup is identity-bound and never requires Compose secret interpolation', async () => {
   const runner = await readFile(new URL('../../backend/ops/staging_controlled_acceptance.mjs', import.meta.url), 'utf8');
   assert.match(runner, /'ps', '-aq', '--filter', 'label=com\.shareittoo\.staging\.controlled_acceptance=true'/u);
