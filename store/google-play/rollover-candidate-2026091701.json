@@ -54,8 +54,8 @@
     "runtimeDrift": 0,
     "runtimeDriftBasis": "manifest-and-privacy-identities-match-source-commit",
     "fullTechnicalRegression": "passed",
-    "githubRegression": "pending",
-    "githubCodeql": "pending"
+    "githubRegression": "passed",
+    "githubCodeql": "passed"
   },
   "playConsoleReadback": "not-performed",
   "playStateAtLastReadback": {
