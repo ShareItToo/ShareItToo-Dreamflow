@@ -266,3 +266,8 @@ trust/verified state, eligibility, ranking, booking benefit, fraud protection,
 or completed real-world verification. Every reachable copy and action must name
 the test boundary and preserve the server-authoritative no-confirmation
 disclosure.
+
+Release feature-scope classifications must bind current source reachability to
+current runtime evidence. A stale audit, historical candidate or source-only
+contract cannot close a live-scope finding; a missing runtime route or provider
+activation remains an explicit fail-closed blocker.

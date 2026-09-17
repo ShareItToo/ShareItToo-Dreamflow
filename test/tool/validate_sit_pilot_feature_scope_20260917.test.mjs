@@ -21,6 +21,8 @@ test('accepts a complete private-pilot inventory when every path is allowed', ()
   allowed.reachablePaths = allowed.reachablePaths
     .filter((entry) => entry.pilot === 'allowed')
     .map((entry) => ({ ...entry }));
+  allowed.expectedReachableGroups = allowed.expectedReachableGroups
+    .filter((id) => allowed.reachablePaths.some((entry) => entry.id === id));
   const result = validateManifest(allowed, { repositoryRoot: root });
   assert.equal(result.status, 'PASS');
   assert.equal(result.blockerCount, 0);
@@ -30,7 +32,7 @@ test('accepts a complete private-pilot inventory when every path is allowed', ()
 test('blocks every reachable excluded path instead of hiding or reclassifying it', () => {
   assert.throws(
     () => validateManifest(manifest, { repositoryRoot: root }),
-    /BLOCK:SIT-PILOT-FEATURE-SCOPE-20260917:reachable_excluded_paths=binding_checkout,payment_methods,identity_verification,two_factor_auth/u,
+    /BLOCK:SIT-PILOT-FEATURE-SCOPE-20260917:reachable_excluded_paths=identity_verification,mfa/u,
   );
 });
 
@@ -57,4 +59,22 @@ test('rejects missing focused proof or reachability markers', () => {
 test('runs the feature-scope gate in the release candidate preflight', () => {
   assert.match(releasePreflight, /node --check tool\/validate_sit_pilot_feature_scope_20260917\.mjs/u);
   assert.match(releasePreflight, /node tool\/validate_sit_pilot_feature_scope_20260917\.mjs/u);
+});
+
+test('rejects stale or optimistic runtime parity claims', () => {
+  const changed = structuredClone(manifest);
+  changed.runtimeEvidence.mfa.statusHttp = 200;
+  assert.throws(
+    () => validateManifest(changed, { repositoryRoot: root }),
+    /runtime_evidence_manifest_drift/u,
+  );
+});
+
+test('rejects runtime evidence drift from the bound readback artifact', () => {
+  const changed = structuredClone(manifest);
+  changed.runtimeEvidence.payment.mode = 'test';
+  assert.throws(
+    () => validateManifest(changed, { repositoryRoot: root }),
+    /runtime_evidence_manifest_drift/u,
+  );
 });
