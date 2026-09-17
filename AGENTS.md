@@ -223,6 +223,13 @@ Validate their presence through repository tooling without printing values.
 Release-candidate, Store, live-provider and production commands are separate
 gated actions and are never implied by a normal build or regression task.
 
+For local Android QA login, use only `tool/login_android_local_qa.mjs`. It must
+read the current synthetic session manifest, perform one status-only API sanity
+login and immediately revoke that temporary session, then use a bounds-based
+UI dump with `input keycombination` to clear and fill the current login form.
+Never use ad-hoc repeated login taps, print credentials/tokens, or retain a UI
+dump after success or failure; its fake-ADB contract test must remain green.
+
 ## External-create recovery invariant
 
 When an external provider create can succeed before its response reaches SIT,

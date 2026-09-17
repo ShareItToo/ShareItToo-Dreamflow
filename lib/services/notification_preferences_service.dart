@@ -9,6 +9,7 @@ import 'package:lendify/services/local_safety_privacy_service.dart';
 class NotificationPreferences {
   final bool showImportant;
   final bool showBookings;
+  final bool showHandover;
   final bool showMessages;
   final bool showSupport;
   final bool showPayments;
@@ -21,6 +22,7 @@ class NotificationPreferences {
   const NotificationPreferences({
     required this.showImportant,
     required this.showBookings,
+    required this.showHandover,
     required this.showMessages,
     required this.showSupport,
     required this.showPayments,
@@ -34,6 +36,7 @@ class NotificationPreferences {
   factory NotificationPreferences.defaults() => const NotificationPreferences(
         showImportant: true,
         showBookings: true,
+        showHandover: true,
         showMessages: true,
         showSupport: true,
         showPayments: true,
@@ -47,6 +50,7 @@ class NotificationPreferences {
   NotificationPreferences copyWith({
     bool? showImportant,
     bool? showBookings,
+    bool? showHandover,
     bool? showMessages,
     bool? showSupport,
     bool? showPayments,
@@ -60,6 +64,7 @@ class NotificationPreferences {
         // Locked categories: always true.
         showImportant: true,
         showBookings: showBookings ?? this.showBookings,
+        showHandover: showHandover ?? this.showHandover,
         showMessages: showMessages ?? this.showMessages,
         showSupport: showSupport ?? this.showSupport,
         showPayments: showPayments ?? this.showPayments,
@@ -74,6 +79,7 @@ class NotificationPreferences {
   Map<String, dynamic> toJson() => {
         'showImportant': showImportant,
         'showBookings': showBookings,
+        'showHandover': showHandover,
         'showMessages': showMessages,
         'showSupport': showSupport,
         'showPayments': showPayments,
@@ -96,6 +102,7 @@ class NotificationPreferences {
       // Locked categories: always enabled.
       showImportant: true,
       showBookings: b('showBookings', d.showBookings),
+      showHandover: b('showHandover', d.showHandover),
       showMessages: b('showMessages', d.showMessages),
       showSupport: b('showSupport', d.showSupport),
       showPayments: b('showPayments', d.showPayments),

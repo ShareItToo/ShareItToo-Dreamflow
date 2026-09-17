@@ -172,6 +172,29 @@ class FirebaseRuntimeConfig {
   }
 }
 
+/// Truthful outcome of a device-service consent change. A persisted consent
+/// decision is not treated as active delivery until the provider registration
+/// has been confirmed.
+enum FirebaseServiceToggleState {
+  disabled,
+  disabledCleanupPending,
+  active,
+  consentSavedRegistrationPending,
+  unavailable,
+}
+
+class FirebaseServiceToggleResult {
+  final FirebaseServiceToggleState state;
+  final bool persistedEnabled;
+
+  const FirebaseServiceToggleResult({
+    required this.state,
+    required this.persistedEnabled,
+  });
+
+  bool get isConfirmedActive => state == FirebaseServiceToggleState.active;
+}
+
 class ForegroundPushMessage {
   final String title;
   final String body;
@@ -370,8 +393,18 @@ class FirebaseRuntime {
       if (preferences.pushLocalCleanupPending) {
         await _retryPendingPushLocalCleanup();
       }
+      if (preferences.crashDiagnosticsCleanupPending) {
+        await _retryPendingCrashCleanup();
+      }
       _pushEnabled = preferences.pushEnabled;
-      _crashDiagnosticsEnabled = preferences.crashDiagnosticsEnabled;
+      _crashDiagnosticsEnabled = preferences.crashDiagnosticsEnabled &&
+          crashDiagnosticsCollectionAllowed(
+            releaseMode: kReleaseMode,
+            userEnabled: true,
+          );
+      if (preferences.crashDiagnosticsEnabled && !_crashDiagnosticsEnabled) {
+        await FirebaseServicePreferencesStore.setCrashDiagnosticsEnabled(false);
+      }
       await FirebaseMessaging.instance
           .setDeliveryMetricsExportToBigQuery(false);
       await FirebaseMessaging.instance.setAutoInitEnabled(_pushEnabled);
@@ -640,32 +673,72 @@ class FirebaseRuntime {
     );
   }
 
+  /// Applies the push decision and classifies the observed persisted/provider
+  /// state. `true` from the legacy method alone is not enough to claim active
+  /// delivery; the registration gate must also have opened.
+  static Future<FirebaseServiceToggleResult> setPushEnabledResult(
+    bool enabled, {
+    int? expectedSessionEpoch,
+  }) async {
+    final success = await setPushEnabled(
+      enabled,
+      expectedSessionEpoch: expectedSessionEpoch,
+    );
+    final persisted =
+        (await FirebaseServicePreferencesStore.read()).pushEnabled;
+    if (!enabled) {
+      return FirebaseServiceToggleResult(
+        state: !persisted
+            ? (success
+                ? FirebaseServiceToggleState.disabled
+                : FirebaseServiceToggleState.disabledCleanupPending)
+            : FirebaseServiceToggleState.unavailable,
+        persistedEnabled: persisted,
+      );
+    }
+    if (success && persisted) {
+      return const FirebaseServiceToggleResult(
+        state: FirebaseServiceToggleState.active,
+        persistedEnabled: true,
+      );
+    }
+    return FirebaseServiceToggleResult(
+      state: persisted
+          ? FirebaseServiceToggleState.consentSavedRegistrationPending
+          : FirebaseServiceToggleState.unavailable,
+      persistedEnabled: persisted,
+    );
+  }
+
   static Future<bool> _setPushEnabledOnce(
     bool enabled,
     int requestedEpoch,
   ) async {
     if (requestedEpoch != BackendRepository.authSessionEpoch) return false;
-    if (!await initialize()) return false;
-    if (requestedEpoch != BackendRepository.authSessionEpoch) return false;
     if (!enabled) {
       final cleanupOwnerToken =
           await _captureCurrentPushCleanupOwnerToken(requestedEpoch);
-      if (cleanupOwnerToken == null) return false;
       closeAuthenticatedPushSessionForLogout();
       await FirebaseServicePreferencesStore.setPushEnabled(false);
-      await FirebaseServicePreferencesStore.setPushBackendCleanupPending(
-        true,
-        ownerToken: cleanupOwnerToken,
-      );
+      if (cleanupOwnerToken != null) {
+        await FirebaseServicePreferencesStore.setPushBackendCleanupPending(
+          true,
+          ownerToken: cleanupOwnerToken,
+        );
+      }
       await FirebaseServicePreferencesStore.setPushLocalCleanupPending(true);
       _pushEnabled = false;
       await _tokenRefreshSubscription?.cancel();
       _tokenRefreshSubscription = null;
       if (requestedEpoch != BackendRepository.authSessionEpoch) return false;
-      await _retryPendingPushLocalCleanup();
-      await _retryPendingPushBackendCleanup(requestedEpoch);
-      return true;
+      final localClean = await _retryPendingPushLocalCleanup();
+      final backendClean =
+          await _retryPendingPushBackendCleanup(requestedEpoch);
+      return localClean && backendClean;
     }
+
+    if (!await initialize()) return false;
+    if (requestedEpoch != BackendRepository.authSessionEpoch) return false;
 
     if (!await _retryPendingPushLocalCleanup()) return false;
     if (!await _retryPendingPushBackendCleanup(requestedEpoch)) return false;
@@ -708,10 +781,44 @@ class FirebaseRuntime {
     }
   }
 
-  static Future<void> setCrashDiagnosticsEnabled(bool enabled) async {
-    if (!await initialize()) return;
+  static Future<FirebaseServiceToggleResult> setCrashDiagnosticsResult(
+    bool enabled,
+  ) async {
+    final existing = await FirebaseServicePreferencesStore.read();
+    if (!enabled) {
+      _crashDiagnosticsEnabled = false;
+      await FirebaseServicePreferencesStore.setCrashDiagnosticsEnabled(false);
+      await FirebaseServicePreferencesStore.setCrashDiagnosticsCleanupPending(
+        true,
+      );
+      final cleaned = await _retryPendingCrashCleanup();
+      return FirebaseServiceToggleResult(
+        state: cleaned
+            ? FirebaseServiceToggleState.disabled
+            : FirebaseServiceToggleState.disabledCleanupPending,
+        persistedEnabled: false,
+      );
+    }
+    if (!crashDiagnosticsCollectionAllowed(
+      releaseMode: kReleaseMode,
+      userEnabled: true,
+    )) {
+      _crashDiagnosticsEnabled = false;
+      if (existing.crashDiagnosticsEnabled) {
+        await FirebaseServicePreferencesStore.setCrashDiagnosticsEnabled(false);
+      }
+      return const FirebaseServiceToggleResult(
+        state: FirebaseServiceToggleState.unavailable,
+        persistedEnabled: false,
+      );
+    }
+    if (!await initialize()) {
+      return FirebaseServiceToggleResult(
+        state: FirebaseServiceToggleState.unavailable,
+        persistedEnabled: existing.crashDiagnosticsEnabled,
+      );
+    }
     _crashDiagnosticsEnabled = enabled;
-    await FirebaseServicePreferencesStore.setCrashDiagnosticsEnabled(enabled);
     try {
       await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
         crashDiagnosticsCollectionAllowed(
@@ -719,22 +826,51 @@ class FirebaseRuntime {
           userEnabled: enabled,
         ),
       );
-      if (!enabled) {
-        await FirebaseCrashlytics.instance.deleteUnsentReports();
-      }
+      await FirebaseServicePreferencesStore.setCrashDiagnosticsEnabled(enabled);
+      await FirebaseServicePreferencesStore.setCrashDiagnosticsCleanupPending(
+        false,
+      );
+      final persisted = (await FirebaseServicePreferencesStore.read())
+          .crashDiagnosticsEnabled;
+      return FirebaseServiceToggleResult(
+        state: persisted == enabled
+            ? (enabled
+                ? FirebaseServiceToggleState.active
+                : FirebaseServiceToggleState.disabled)
+            : FirebaseServiceToggleState.unavailable,
+        persistedEnabled: persisted,
+      );
     } catch (error) {
+      _crashDiagnosticsEnabled = existing.crashDiagnosticsEnabled;
       debugPrint(
           '[FirebaseRuntime] crash diagnostics update unavailable: $error');
+      return FirebaseServiceToggleResult(
+        state: FirebaseServiceToggleState.unavailable,
+        persistedEnabled: existing.crashDiagnosticsEnabled,
+      );
     }
   }
 
+  /// Compatibility wrapper for callers that only need completion semantics.
+  static Future<void> setCrashDiagnosticsEnabled(bool enabled) async {
+    await setCrashDiagnosticsResult(enabled);
+  }
+
   static Future<void> deleteInstallationForAccountDeletion() async {
+    final expectedEpoch = BackendRepository.authSessionEpoch;
+    final deletedOwnerToken =
+        await _captureCurrentPushCleanupOwnerToken(expectedEpoch);
     closeAuthenticatedPushSessionForLogout();
     _pushEnabled = false;
     _crashDiagnosticsEnabled = false;
     await FirebaseServicePreferencesStore.setPushEnabled(false);
     await FirebaseServicePreferencesStore.setCrashDiagnosticsEnabled(false);
-    await FirebaseServicePreferencesStore.setPushBackendCleanupPending(false);
+    if (deletedOwnerToken != null) {
+      await FirebaseServicePreferencesStore.setPushBackendCleanupPending(
+        false,
+        ownerToken: deletedOwnerToken,
+      );
+    }
     await FirebaseServicePreferencesStore.setInstallationCleanupPending(true);
     await _tokenRefreshSubscription?.cancel();
     _tokenRefreshSubscription = null;
@@ -753,6 +889,9 @@ class FirebaseRuntime {
       await FirebaseServicePreferencesStore.setPushLocalCleanupPending(false);
       await FirebaseServicePreferencesStore.setInstallationCleanupPending(
           false);
+      await FirebaseServicePreferencesStore.setCrashDiagnosticsCleanupPending(
+        false,
+      );
       return true;
     } catch (error) {
       debugPrint('[FirebaseRuntime] installation deletion unavailable: $error');
@@ -770,6 +909,24 @@ class FirebaseRuntime {
       return true;
     } catch (error) {
       debugPrint('[FirebaseRuntime] local push cleanup pending: $error');
+      return false;
+    }
+  }
+
+  static Future<bool> _retryPendingCrashCleanup() async {
+    final preferences = await FirebaseServicePreferencesStore.read();
+    if (!preferences.crashDiagnosticsCleanupPending) return true;
+    try {
+      await ensureFirebaseApp();
+      if (Firebase.apps.isEmpty) return false;
+      await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(false);
+      await FirebaseCrashlytics.instance.deleteUnsentReports();
+      await FirebaseServicePreferencesStore.setCrashDiagnosticsCleanupPending(
+        false,
+      );
+      return true;
+    } catch (error) {
+      debugPrint('[FirebaseRuntime] crash diagnostics cleanup pending: $error');
       return false;
     }
   }
@@ -803,7 +960,8 @@ class FirebaseRuntime {
     final currentOwnerToken =
         await _captureCurrentPushCleanupOwnerToken(expectedSessionEpoch);
     if (currentOwnerToken == null) return false;
-    if (preferences.pushBackendCleanupOwnerToken != currentOwnerToken) {
+    if (!preferences.pushBackendCleanupOwnerTokens
+        .contains(currentOwnerToken)) {
       // A pending cleanup from A must never target the current session B.
       // Keep the opaque marker so it can be retried if A's exact session
       // becomes current again, but do not block B's own registration.
@@ -817,7 +975,10 @@ class FirebaseRuntime {
           expectedSessionEpoch != BackendRepository.authSessionEpoch) {
         return false;
       }
-      await FirebaseServicePreferencesStore.setPushBackendCleanupPending(false);
+      await FirebaseServicePreferencesStore.setPushBackendCleanupPending(
+        false,
+        ownerToken: currentOwnerToken,
+      );
       return true;
     } catch (error) {
       debugPrint('[FirebaseRuntime] push backend cleanup pending: $error');

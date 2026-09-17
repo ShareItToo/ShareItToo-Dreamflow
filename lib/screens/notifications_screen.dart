@@ -130,6 +130,33 @@ String _deriveSitCategory(Map<String, dynamic> notification) {
   return 'system';
 }
 
+@visibleForTesting
+bool notificationAllowedByPreferences(
+  Map<String, dynamic> notification,
+  NotificationPreferences prefs,
+) {
+  switch (_deriveSitCategory(notification)) {
+    case 'important':
+      return prefs.showImportant || prefs.showSecurity;
+    case 'bookings':
+    case 'rentals':
+      return prefs.showBookings;
+    case 'handover':
+      return prefs.showHandover;
+    case 'messages':
+      return prefs.showMessages;
+    case 'support':
+      return prefs.showSupport;
+    case 'payments':
+      return prefs.showPayments;
+    case 'reviews':
+      return prefs.showReviews;
+    case 'system':
+    default:
+      return prefs.showSystem;
+  }
+}
+
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final _supportPrincipal = SupportPrincipalController();
   _NotifFilter _filter = _NotifFilter.all;
@@ -268,25 +295,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         _filter == _NotifFilter.all ? null : _categoryKeyForFilter(_filter);
 
     bool allowedByPrefs(Map<String, dynamic> entry) {
-      final cat = _deriveSitCategory(entry);
-      switch (cat) {
-        case 'important':
-          return _prefs.showImportant || _prefs.showSecurity;
-        case 'bookings':
-        case 'handover':
-          return _prefs.showBookings;
-        case 'messages':
-          return _prefs.showMessages;
-        case 'support':
-          return _prefs.showSupport;
-        case 'payments':
-          return _prefs.showPayments;
-        case 'reviews':
-          return _prefs.showReviews;
-        case 'system':
-        default:
-          return _prefs.showSystem;
-      }
+      return notificationAllowedByPreferences(entry, _prefs);
     }
 
     var base = _feed.where(allowedByPrefs).toList();

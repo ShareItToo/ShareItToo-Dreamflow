@@ -85,7 +85,7 @@ test('push registration is exact-session bound and retries on authenticated reco
 
 test('push cleanup is exact-session owned and cannot drift to a successor account', () => {
   assert.match(runtime, /setPushBackendCleanupPending\([\s\S]*?ownerToken: cleanupOwnerToken/u);
-  assert.match(runtime, /preferences\.pushBackendCleanupOwnerToken != currentOwnerToken/u);
+  assert.match(runtime, /preferences\.pushBackendCleanupOwnerTokens[\s\S]*?contains\(currentOwnerToken\)/u);
   assert.match(runtime, /deleteCurrentSessionPushDevices\([\s\S]*?expectedSessionEpoch: expectedSessionEpoch/u);
   assert.match(runtime, /return _pushOperationQueue\.run\([\s\S]*?_setPushEnabledOnce/u);
 });

@@ -11,6 +11,17 @@ import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/tracked_dialog_route.dart';
 
+@visibleForTesting
+class NotificationPreferencesWriteQueue {
+  Future<void> _tail = Future<void>.value();
+
+  Future<void> add(Future<void> Function() write) {
+    final run = _tail.then<void>((_) => write());
+    _tail = run.catchError((_) {});
+    return run;
+  }
+}
+
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
 
@@ -24,6 +35,9 @@ class _NotificationSettingsScreenState
   bool _loading = true;
   bool _loadFailed = false;
   bool _serviceBusy = false;
+  int _preferenceWriteGeneration = 0;
+  final NotificationPreferencesWriteQueue _preferenceWriteQueue =
+      NotificationPreferencesWriteQueue();
   NotificationPreferences _prefs = NotificationPreferences.defaults();
   FirebaseServicePreferences _servicePrefs =
       FirebaseServicePreferences.defaults;
@@ -83,8 +97,46 @@ class _NotificationSettingsScreenState
   }
 
   Future<void> _save(NotificationPreferences next) async {
+    final writeGeneration = ++_preferenceWriteGeneration;
     setState(() => _prefs = next);
-    await NotificationPreferencesService.set(next);
+    await _preferenceWriteQueue.add(() async {
+      try {
+        await NotificationPreferencesService.set(next);
+        final confirmed = await NotificationPreferencesService.get();
+        if (!mounted || writeGeneration != _preferenceWriteGeneration) return;
+        setState(() => _prefs = confirmed);
+      } catch (error) {
+        debugPrint(
+            '[NotificationSettingsScreen] preference write failed: $error');
+        if (!mounted || writeGeneration != _preferenceWriteGeneration) return;
+        NotificationPreferences? persisted;
+        try {
+          persisted = await NotificationPreferencesService.get();
+        } catch (readError) {
+          debugPrint(
+              '[NotificationSettingsScreen] preference readback failed: $readError');
+          if (!mounted || writeGeneration != _preferenceWriteGeneration) {
+            return;
+          }
+          setState(() => _loadFailed = true);
+          await _showServiceError(
+            title: 'Einstellung nicht verifiziert',
+            message:
+                'Die Änderung konnte nicht gespeichert und der gespeicherte Stand nicht sicher gelesen werden. Bitte lade die Einstellungen neu und versuche es erneut.',
+            interactionEpoch: AuthService.sessionEpoch,
+          );
+          return;
+        }
+        if (!mounted || writeGeneration != _preferenceWriteGeneration) return;
+        setState(() => _prefs = persisted!);
+        await _showServiceError(
+          title: 'Einstellung nicht gespeichert',
+          message:
+              'Die Änderung konnte nicht sicher gespeichert werden. Der zuletzt gespeicherte Stand wurde wiederhergestellt. Bitte versuche es erneut.',
+          interactionEpoch: AuthService.sessionEpoch,
+        );
+      }
+    });
   }
 
   Future<bool> _confirmService({
@@ -151,6 +203,30 @@ class _NotificationSettingsScreenState
     }
   }
 
+  Future<void> _showServiceInfo({
+    required String title,
+    required String message,
+    required int interactionEpoch,
+  }) async {
+    if (_activeServiceDialog != null ||
+        interactionEpoch != AuthService.sessionEpoch) {
+      return;
+    }
+    final handle = TrackedDialogRouteHandle<void>();
+    _activeServiceDialog = handle;
+    _serviceDialogEpoch = interactionEpoch;
+    await AppPopup.info(
+      context,
+      title: title,
+      message: message,
+      routeHandle: handle,
+    );
+    if (identical(_activeServiceDialog, handle)) {
+      _activeServiceDialog = null;
+      _serviceDialogEpoch = null;
+    }
+  }
+
   Future<void> _setPushEnabled(bool enabled) async {
     if (_serviceBusy) return;
     final interactionEpoch = AuthService.sessionEpoch;
@@ -167,7 +243,7 @@ class _NotificationSettingsScreenState
     }
     if (interactionEpoch != AuthService.sessionEpoch) return;
     setState(() => _serviceBusy = true);
-    final success = await FirebaseRuntime.setPushEnabled(
+    final result = await FirebaseRuntime.setPushEnabledResult(
       enabled,
       expectedSessionEpoch: interactionEpoch,
     );
@@ -176,11 +252,36 @@ class _NotificationSettingsScreenState
       setState(() => _serviceBusy = false);
       return;
     }
-    if (enabled && !success) {
+    if (enabled && result.state == FirebaseServiceToggleState.unavailable) {
       await _showServiceError(
         title: 'Push noch nicht verbunden',
         message:
-            'Deine Einwilligung ist gespeichert. Die Zustellung konnte noch nicht sicher eingerichtet werden. ShareItToo versucht es bei einer bestätigten Verbindung oder beim nächsten Öffnen der App erneut.',
+            'Push konnte auf diesem Gerät noch nicht aktiviert werden. Die Einstellung bleibt deaktiviert, bis Firebase, die Betriebssystem-Berechtigung und die Registrierung bestätigt sind. ShareItToo prüft dies bei einer bestätigten Verbindung oder beim nächsten Öffnen erneut.',
+        interactionEpoch: interactionEpoch,
+      );
+    } else if (enabled &&
+        result.state ==
+            FirebaseServiceToggleState.consentSavedRegistrationPending) {
+      await _showServiceInfo(
+        title: 'Push-Mitteilungen',
+        message:
+            'Deine Einwilligung ist gespeichert, aber die Push-Registrierung ist noch nicht bestätigt. ShareItToo versucht es bei der nächsten bestätigten Verbindung erneut.',
+        interactionEpoch: interactionEpoch,
+      );
+    } else if (!enabled &&
+        result.state == FirebaseServiceToggleState.unavailable) {
+      await _showServiceError(
+        title: 'Push nicht vollständig deaktiviert',
+        message:
+            'Die lokale Einstellung wurde nicht als vollständig deaktiviert bestätigt. Bitte versuche es bei bestehender Verbindung erneut.',
+        interactionEpoch: interactionEpoch,
+      );
+    } else if (!enabled &&
+        result.state == FirebaseServiceToggleState.disabledCleanupPending) {
+      await _showServiceInfo(
+        title: 'Push-Mitteilungen',
+        message:
+            'Push ist lokal deaktiviert. Die technische Geräte-/Backend-Bereinigung ist noch ausstehend und wird bei der nächsten verfügbaren Verbindung sicher nachgeholt.',
         interactionEpoch: interactionEpoch,
       );
     }
@@ -209,8 +310,25 @@ class _NotificationSettingsScreenState
     }
     if (interactionEpoch != AuthService.sessionEpoch) return;
     setState(() => _serviceBusy = true);
-    await FirebaseRuntime.setCrashDiagnosticsEnabled(enabled);
+    final result = await FirebaseRuntime.setCrashDiagnosticsResult(enabled);
     if (!mounted) return;
+    if (result.state == FirebaseServiceToggleState.unavailable) {
+      await _showServiceError(
+        title: 'Crashdiagnose nicht bestätigt',
+        message: enabled
+            ? 'Die Crashdiagnose konnte auf diesem Gerät noch nicht aktiviert werden. Die Einstellung bleibt deaktiviert, bis der Dienst die Änderung bestätigt.'
+            : 'Das Ausschalten der Crashdiagnose konnte noch nicht bestätigt werden. Bitte versuche es bei bestehender Verbindung erneut.',
+        interactionEpoch: interactionEpoch,
+      );
+    } else if (!enabled &&
+        result.state == FirebaseServiceToggleState.disabledCleanupPending) {
+      await _showServiceInfo(
+        title: 'Crashdiagnose',
+        message:
+            'Crashdiagnose ist lokal deaktiviert. Ungesendete technische Berichte konnten noch nicht vollständig bereinigt werden und werden sicher nachgeholt.',
+        interactionEpoch: interactionEpoch,
+      );
+    }
     await _load();
     if (mounted) setState(() => _serviceBusy = false);
   }
@@ -311,7 +429,7 @@ class _NotificationSettingsScreenState
                                   style: bodyStyle),
                               const SizedBox(height: 8),
                               Text(
-                                  'Wichtig/Sicherheit bleiben immer sichtbar. Buchungen filtern Anfragen, Annahmen sowie Übergabe- und Rückgabe-Updates. Nachrichten filtern normale Chats, Support-Fälle nur Support-Updates, Zahlungen Zahlungs-/Erstattungsinfos, Bewertungen Review-Updates und System Produkt-/Wartungshinweise.',
+                                  'Wichtig/Sicherheit bleiben immer sichtbar. Buchungen filtern Anfragen, Annahmen und Buchungsstatus; Übergabe & Rückgabe haben einen eigenen Filter. Nachrichten filtern normale Chats, Support-Fälle nur Support-Updates, Zahlungen Zahlungs-/Erstattungsinfos, Bewertungen Review-Updates und Sonstiges & System nicht zuordenbare sowie Plattform-/Wartungshinweise.',
                                   style: captionStyle),
                             ],
                           ),
@@ -350,10 +468,10 @@ class _NotificationSettingsScreenState
                                 title: 'Übergabe & Rückgabe',
                                 description:
                                     'Erinnerungen, Zeitbestätigungen, QR-Code und Rückgabehinweise.',
-                                value: _prefs.showBookings,
+                                value: _prefs.showHandover,
                                 enabled: true,
                                 onChanged: (v) =>
-                                    _save(_prefs.copyWith(showBookings: v)),
+                                    _save(_prefs.copyWith(showHandover: v)),
                                 accent: accent,
                               ),
                               const _Divider(),
@@ -418,9 +536,9 @@ class _NotificationSettingsScreenState
                               const _Divider(),
                               _SettingToggleTile(
                                 icon: Icons.info_outline,
-                                title: 'System',
+                                title: 'Sonstiges & System',
                                 description:
-                                    'Plattform-Updates und Wartungshinweise.',
+                                    'Nicht zuordenbare Hinweise, Plattform-Updates und Wartungshinweise.',
                                 value: _prefs.showSystem,
                                 enabled: true,
                                 onChanged: (v) =>
