@@ -418,6 +418,16 @@ import {
   verifyAccessToken,
   verifyPassword,
 } from './security.js';
+import {
+  beginTotpEnrollment,
+  confirmTotpEnrollment,
+  createLoginChallenge,
+  disableTotp,
+  getMfaStatus,
+  isMfaEnabled,
+  MfaWorkflowError,
+  verifyLoginChallenge,
+} from './mfa_workflow.js';
 
 class HttpError extends Error {
   constructor(status, code, details = undefined) {
@@ -523,16 +533,21 @@ function ensureObject(value, code = 'invalid_payload') {
 const requireActiveAccount = asyncRoute(async (req, _res, next) => {
   const result = await pool.query(
     `SELECT u.id, u.email, u.role, u.account_status, u.deactivated_at,
-            session.id AS session_id, session.revoked_at AS session_revoked_at
+            session.id AS session_id, session.revoked_at AS session_revoked_at,
+            session.mfa_verified_at,
+            factor.status AS mfa_status, factor.enabled_at AS mfa_enabled_at
      FROM users AS u
      LEFT JOIN auth_sessions AS session
        ON session.id = $2 AND session.user_id = u.id
+     LEFT JOIN mfa_totp_factors AS factor
+       ON factor.user_id = u.id AND factor.status = 'enabled'
      WHERE u.id = $1`,
     [req.auth.userId, req.auth.sessionId],
   );
   const user = result.rows[0];
   if (!user || user.deactivated_at || user.account_status !== 'active'
-      || !user.session_id || user.session_revoked_at) {
+      || !user.session_id || user.session_revoked_at
+      || (user.mfa_status === 'enabled' && user.mfa_enabled_at && !user.mfa_verified_at)) {
     throw new HttpError(401, 'account_not_active');
   }
   req.actor = {
@@ -1218,6 +1233,7 @@ async function issueSession(client, user, {
   ipAddress,
   sessionId = null,
   familyId = null,
+  mfaVerified = false,
 } = {}) {
   const normalizedAgent = safeText(userAgent, 500) || null;
   const normalizedIp = safeText(ipAddress, 64) || null;
@@ -1230,18 +1246,19 @@ async function issueSession(client, user, {
     });
     await client.query(
       `INSERT INTO auth_sessions (
-         id, user_id, device_label, user_agent, ip_address
-       ) VALUES ($1, $2, $3, $4, $5::inet)`,
-      [activeSessionId, user.id, deviceLabel(normalizedAgent), normalizedAgent, normalizedIp],
+         id, user_id, device_label, user_agent, ip_address, mfa_verified_at
+       ) VALUES ($1, $2, $3, $4, $5::inet, CASE WHEN $6::boolean THEN now() ELSE NULL END)`,
+      [activeSessionId, user.id, deviceLabel(normalizedAgent), normalizedAgent, normalizedIp, mfaVerified],
     );
   } else {
     await client.query(
       `UPDATE auth_sessions
        SET last_seen_at = now(), user_agent = COALESCE($2, user_agent),
            device_label = CASE WHEN $2 IS NULL THEN device_label ELSE $3 END,
-           ip_address = COALESCE($4::inet, ip_address)
+           ip_address = COALESCE($4::inet, ip_address),
+           mfa_verified_at = CASE WHEN $5::boolean THEN now() ELSE mfa_verified_at END
        WHERE id = $1 AND revoked_at IS NULL`,
-      [activeSessionId, normalizedAgent, deviceLabel(normalizedAgent), normalizedIp],
+      [activeSessionId, normalizedAgent, deviceLabel(normalizedAgent), normalizedIp, mfaVerified],
     );
   }
   const refreshToken = newRefreshToken();
@@ -1260,6 +1277,43 @@ async function issueSession(client, user, {
     sessionId: activeSessionId,
     user: shapeUser(user),
   };
+}
+
+async function requireFreshMfaReauthentication(client, {
+  userId,
+  currentPassword,
+  socialIdToken,
+  verifySocialToken,
+}) {
+  if (typeof currentPassword === 'string' && currentPassword.length > 0) {
+    const account = await client.query(
+      `SELECT password_hash FROM users WHERE id = $1 AND deactivated_at IS NULL
+         AND account_status = 'active' FOR UPDATE`,
+      [userId],
+    );
+    const passwordMatches = account.rows[0]?.password_hash
+      ? await verifyPassword(currentPassword, account.rows[0].password_hash)
+      : false;
+    if (passwordMatches) {
+      return 'password';
+    }
+  }
+  if (typeof socialIdToken === 'string' && socialIdToken.trim()) {
+    let identity;
+    try {
+      identity = await verifySocialToken(socialIdToken);
+    } catch {
+      throw new HttpError(401, 'mfa_reauthentication_required');
+    }
+    const linked = await client.query(
+      `SELECT 1 FROM auth_identities
+        WHERE user_id = $1 AND provider = $2 AND provider_subject = $3
+        LIMIT 1`,
+      [userId, identity.provider, identity.subject],
+    );
+    if (linked.rowCount === 1) return `social:${identity.provider}`;
+  }
+  throw new HttpError(401, 'mfa_reauthentication_required');
 }
 
 async function createAndSendVerification(user) {
@@ -1812,6 +1866,8 @@ export function createApp({
   const registrationLimiter = rateLimit({ windowMs: 60 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const loginLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false, skipSuccessfulRequests: true, handler: limitHandler });
   const socialAuthLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 12, standardHeaders: 'draft-8', legacyHeaders: false, skipSuccessfulRequests: true, handler: limitHandler });
+  const mfaManageLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false, skipSuccessfulRequests: true, handler: limitHandler });
+  const mfaChallengeLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false, skipSuccessfulRequests: true, handler: limitHandler });
   const refreshLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const actionLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const harassmentBlockReportLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
@@ -2212,6 +2268,22 @@ export function createApp({
       if (!user.email_verified_at) {
         return { verificationUser: user, session: null };
       }
+      if (await isMfaEnabled(client, user.id)) {
+        const challenge = await createLoginChallenge(client, {
+          userId: user.id,
+          userAgent: req.get('user-agent'),
+          ipAddress: requestIp(req),
+        });
+        await writeAudit(client, {
+          actor: { id: user.id, role: user.role ?? 'user' },
+          action: 'auth.mfa_challenge_issued',
+          resourceType: 'user',
+          resourceId: user.id,
+          requestId: req.requestId,
+          metadata: { provider: identity.provider },
+        });
+        return { verificationUser: null, session: null, mfaRequired: true, ...challenge };
+      }
       const issued = await issueSession(client, user, {
         userAgent: req.get('user-agent'),
         ipAddress: requestIp(req),
@@ -2228,7 +2300,7 @@ export function createApp({
           linkedExistingAccount,
         },
       });
-      return { verificationUser: null, session: issued };
+      return { verificationUser: null, session: issued, mfaRequired: false };
     });
     if (outcome.verificationUser) {
       try {
@@ -2243,6 +2315,11 @@ export function createApp({
         email: outcome.verificationUser.email,
       });
     }
+    if (outcome.mfaRequired) return res.set('Cache-Control', 'private, no-store').status(202).json({
+      mfaRequired: true,
+      mfaChallenge: outcome.challenge,
+      expiresAt: outcome.expiresAt,
+    });
     return res.json(outcome.session);
   }));
 
@@ -2347,6 +2424,124 @@ export function createApp({
     res.status(result.replayed ? 200 : 201).json(result);
   }));
 
+  app.get('/v1/auth/mfa/status', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
+    const status = await getMfaStatus(pool, req.auth.userId);
+    res.set('Cache-Control', 'private, no-store').json(status);
+  }));
+
+  app.post('/v1/auth/mfa/enroll', requireAuth, requireActiveAccount, mfaManageLimiter, asyncRoute(async (req, res) => {
+    const idempotencyKey = safeText(req.get('Idempotency-Key') || req.body?.idempotencyKey, 160);
+    const outcome = await inTransaction(async (client) => {
+      await requireFreshMfaReauthentication(client, {
+        userId: req.auth.userId,
+        currentPassword: req.body?.currentPassword,
+        socialIdToken: req.body?.reauthSocialIdToken,
+        verifySocialToken,
+      });
+      const user = await client.query('SELECT email FROM users WHERE id = $1', [req.auth.userId]);
+      const result = await beginTotpEnrollment(client, {
+        userId: req.auth.userId,
+        email: user.rows[0]?.email ?? req.actor.email,
+        idempotencyKey,
+      });
+      await writeAudit(client, {
+        actor: req.actor,
+        action: 'auth.mfa_enrollment_started',
+        resourceType: 'user',
+        resourceId: req.auth.userId,
+        requestId: req.requestId,
+        metadata: { replayed: result.replayed === true },
+      });
+      return result;
+    });
+    res.set('Cache-Control', 'private, no-store').status(201).json(outcome);
+  }));
+
+  app.post('/v1/auth/mfa/confirm', requireAuth, requireActiveAccount, mfaManageLimiter, asyncRoute(async (req, res) => {
+    const outcome = await inTransaction(async (client) => {
+      await requireFreshMfaReauthentication(client, {
+        userId: req.auth.userId,
+        currentPassword: req.body?.currentPassword,
+        socialIdToken: req.body?.reauthSocialIdToken,
+        verifySocialToken,
+      });
+      const result = await confirmTotpEnrollment(client, {
+        userId: req.auth.userId,
+        code: req.body?.code,
+      });
+      await writeAudit(client, {
+        actor: req.actor,
+        action: 'auth.mfa_enabled',
+        resourceType: 'user',
+        resourceId: req.auth.userId,
+        requestId: req.requestId,
+        metadata: { recoveryCodeCount: result.recoveryCodes.length },
+      });
+      return result;
+    });
+    if (outcome.ok === false) throw outcome.error;
+    res.set('Cache-Control', 'private, no-store').status(200).json(outcome);
+  }));
+
+  app.post('/v1/auth/mfa/disable', requireAuth, requireActiveAccount, mfaManageLimiter, asyncRoute(async (req, res) => {
+    const outcome = await inTransaction(async (client) => {
+      await requireFreshMfaReauthentication(client, {
+        userId: req.auth.userId,
+        currentPassword: req.body?.currentPassword,
+        socialIdToken: req.body?.reauthSocialIdToken,
+        verifySocialToken,
+      });
+      const result = await disableTotp(client, { userId: req.auth.userId, code: req.body?.code });
+      if (result.ok !== false) {
+        await writeAudit(client, {
+          actor: req.actor,
+          action: 'auth.mfa_disabled',
+          resourceType: 'user',
+          resourceId: req.auth.userId,
+          requestId: req.requestId,
+          metadata: {},
+        });
+      }
+      return result;
+    });
+    if (outcome.ok === false) throw outcome.error;
+    res.set('Cache-Control', 'private, no-store').status(200).json(outcome);
+  }));
+
+  app.post('/v1/auth/mfa/challenge', mfaChallengeLimiter, asyncRoute(async (req, res) => {
+    const outcome = await inTransaction(async (client) => {
+      const verified = await verifyLoginChallenge(client, {
+        challenge: req.body?.mfaChallenge ?? req.body?.challenge,
+        code: req.body?.code,
+      });
+      if (verified.ok === false) return verified;
+      const userResult = await client.query(
+        `SELECT * FROM users
+          WHERE id = $1 AND deactivated_at IS NULL AND account_status = 'active'
+          FOR UPDATE`,
+        [verified.userId],
+      );
+      const user = userResult.rows[0];
+      if (!user || !user.email_verified_at) throw new HttpError(401, 'mfa_challenge_invalid');
+      const session = await issueSession(client, user, {
+        userAgent: req.get('user-agent'),
+        ipAddress: requestIp(req),
+        mfaVerified: true,
+      });
+      await writeAudit(client, {
+        actor: { id: user.id, role: user.role ?? 'user' },
+        action: 'auth.mfa_challenge_succeeded',
+        resourceType: 'auth_session',
+        resourceId: session.sessionId,
+        requestId: req.requestId,
+        metadata: { method: verified.method },
+      });
+      return session;
+    });
+    if (outcome.ok === false) throw outcome.error;
+    res.set('Cache-Control', 'private, no-store').json(outcome);
+  }));
+
   app.post('/v1/auth/login', loginLimiter, asyncRoute(async (req, res) => {
     const email = normalizeEmail(req.body?.email);
     const password = req.body?.password;
@@ -2382,13 +2577,28 @@ export function createApp({
       throw new HttpError(401, 'invalid_credentials');
     }
     if (!user.email_verified_at) throw new HttpError(403, 'email_verification_required');
-    const session = await inTransaction(async (client) => {
+    const outcome = await inTransaction(async (client) => {
       await client.query(
         `UPDATE users
          SET failed_login_attempts = 0, login_locked_until = NULL
          WHERE id = $1`,
         [user.id],
       );
+      if (await isMfaEnabled(client, user.id)) {
+        const challenge = await createLoginChallenge(client, {
+          userId: user.id,
+          userAgent: req.get('user-agent'),
+          ipAddress: requestIp(req),
+        });
+        await writeAudit(client, {
+          actor: { id: user.id, role: user.role ?? 'user' },
+          action: 'auth.mfa_challenge_issued',
+          resourceType: 'user',
+          resourceId: user.id,
+          requestId: req.requestId,
+        });
+        return { mfaRequired: true, ...challenge };
+      }
       const issued = await issueSession(client, user, {
         userAgent: req.get('user-agent'),
         ipAddress: requestIp(req),
@@ -2399,9 +2609,14 @@ export function createApp({
         resourceType: 'auth_session',
         resourceId: issued.sessionId,
       });
-      return issued;
+      return { session: issued };
     });
-    res.json(session);
+    if (outcome.mfaRequired) return res.set('Cache-Control', 'private, no-store').status(202).json({
+      mfaRequired: true,
+      mfaChallenge: outcome.challenge,
+      expiresAt: outcome.expiresAt,
+    });
+    res.json(outcome.session);
   }));
 
   app.post('/v1/auth/refresh', refreshLimiter, asyncRoute(async (req, res) => {
@@ -2418,11 +2633,15 @@ export function createApp({
                 rt.id AS refresh_id, rt.user_id AS refresh_user_id,
                 rt.expires_at AS refresh_expires_at, rt.revoked_at AS refresh_revoked_at,
                 rt.replaced_by_hash, rt.session_id, rt.family_id,
-                session.revoked_at AS session_revoked_at
+                session.revoked_at AS session_revoked_at,
+                session.mfa_verified_at,
+                factor.user_id AS mfa_user_id
          FROM refresh_tokens AS rt
          JOIN users AS u ON u.id = rt.user_id
          JOIN auth_sessions AS session ON session.id = rt.session_id
-         WHERE rt.token_hash = $1 FOR UPDATE`,
+         LEFT JOIN mfa_totp_factors AS factor
+           ON factor.user_id = u.id AND factor.status = 'enabled'
+         WHERE rt.token_hash = $1 FOR UPDATE OF rt, u, session`,
         [currentHash],
       );
       const row = result.rows[0];
@@ -2449,6 +2668,7 @@ export function createApp({
         return { reuseDetected: true };
       }
       if (row.refresh_revoked_at || row.session_revoked_at
+          || (row.mfa_user_id && !row.mfa_verified_at)
           || new Date(row.refresh_expires_at) <= new Date()
           || row.deactivated_at || row.account_status !== 'active') {
         return { invalid: true };
@@ -2458,6 +2678,7 @@ export function createApp({
         ipAddress: requestIp(req),
         sessionId: row.session_id,
         familyId: row.family_id,
+        mfaVerified: Boolean(row.mfa_user_id && row.mfa_verified_at),
       });
       await client.query(
         `UPDATE refresh_tokens
@@ -6279,6 +6500,7 @@ export function createApp({
     const retentionInventoryError = error instanceof RetentionInventoryError;
     const supportCaseError = error instanceof SupportCaseError;
     const handoverExceptionError = error instanceof HandoverExceptionError;
+    const mfaWorkflowError = error instanceof MfaWorkflowError;
     const pilotCockpitError = error instanceof PilotCockpitError;
     const mapsProxyError = error instanceof MapsProxyError;
     const bookingConfirmationError = error instanceof BookingConfirmationError;
@@ -6291,7 +6513,7 @@ export function createApp({
           ? 413
           : (uploadFieldsExceeded
               ? 400
-              : (invalidProcessedImage ? 422 : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || pilotCockpitError || mapsProxyError || bookingConfirmationError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.status : (error?.status ?? 500)))));
+              : (invalidProcessedImage ? 422 : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.status : (error?.status ?? 500)))));
     const code = uploadTooLarge
       ? 'image_too_large'
       : (uploadFieldsExceeded
@@ -6300,7 +6522,7 @@ export function createApp({
               ? error.code
               : (bookingConflict
               ? 'booking_period_unavailable'
-              : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || pilotCockpitError || mapsProxyError || bookingConfirmationError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.code : (status === 500 ? 'internal_error' : 'request_failed')))));
+              : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.code : (status === 500 ? 'internal_error' : 'request_failed')))));
     if (status >= 500) console.error(safeErrorLog(req, status, code, error));
     res.status(status).json(errorPayload(req, code, error?.details));
   });

@@ -40,6 +40,11 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   wrong-purpose or unapproved references before persistence.
 - After every review, Sol assigns Luna the next bounded task. A `FIX` must name
   the failed assertion and expected proof; it must not request a broad restart.
+- Authentication failure counters and lockouts must be proven committed even
+  when the HTTP response is an error; never rely on a rolled-back exception
+  path. Critical authentication changes require HTTP contract coverage plus
+  real PostgreSQL transaction/integration coverage; mocked query tests alone
+  are insufficient.
 - Escalate to Astra only at a named gate involving contradictory evidence or a
   material decision in money, contract, privacy, security, release truth or
   user data. Astra is an AI reviewer and cannot replace professional or owner

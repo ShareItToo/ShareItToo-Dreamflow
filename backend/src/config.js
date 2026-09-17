@@ -9,6 +9,7 @@ import { readListingAiGatewayConfiguration } from './listing_ai_gateway_config.j
 import { evaluateOperatorReadiness } from './operator_readiness.js';
 import { normalizePrivatePilotRegion } from './private_pilot_domain.js';
 import { readStripeSecretConfiguration } from './stripe_secret_files.js';
+import { decodeMfaEncryptionKey } from './mfa_totp.js';
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -27,6 +28,7 @@ const jwtSecret = required('JWT_SECRET');
 if (jwtSecret.length < 32) {
   throw new Error('JWT_SECRET must contain at least 32 characters');
 }
+const mfaEncryptionKey = decodeMfaEncryptionKey(process.env.MFA_ENCRYPTION_KEY);
 
 const deploymentEnvironment = (process.env.DEPLOYMENT_ENVIRONMENT ?? process.env.NODE_ENV ?? 'development')
   .trim()
@@ -343,6 +345,10 @@ export const config = Object.freeze({
   bindHost,
   databaseUrl: required('DATABASE_URL'),
   jwtSecret,
+  mfa: Object.freeze({
+    encryptionKey: mfaEncryptionKey,
+    configured: mfaEncryptionKey != null,
+  }),
   corsOrigins: csv(process.env.CORS_ORIGINS),
   publicBaseUrl: (process.env.PUBLIC_BASE_URL ?? 'https://shareittoo.com/api/v1').replace(/\/$/, ''),
   uploadDir: path.resolve(process.env.UPLOAD_DIR ?? '/data/uploads'),

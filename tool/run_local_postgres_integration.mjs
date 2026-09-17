@@ -264,6 +264,12 @@ export async function runLocalPostgresIntegration({
       'backend/test/postgres_foundation.integration.test.js',
       'backend/test/foreign_key_integrity.integration.test.js',
     ], { env: testEnvironment, inherit: inheritTestOutput });
+    await checkedRun(nodeBin, [
+      '--throw-deprecation',
+      '--import', './backend/test_setup.js',
+      '--test',
+      'backend/test/mfa_postgres.integration.test.js',
+    ], { env: testEnvironment, inherit: inheritTestOutput });
   } catch (error) {
     let postgresDetail = '';
     try {
@@ -337,7 +343,11 @@ export async function runLocalPostgresIntegration({
     postgresMajor,
     host: '127.0.0.1',
     database: integrationDatabaseName,
-    integrationTest: 'backend/test/postgres_foundation.integration.test.js',
+    integrationTests: [
+      'backend/test/postgres_foundation.integration.test.js',
+      'backend/test/foreign_key_integrity.integration.test.js',
+      'backend/test/mfa_postgres.integration.test.js',
+    ],
   });
 }
 

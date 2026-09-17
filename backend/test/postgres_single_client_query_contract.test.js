@@ -18,7 +18,7 @@ test('single-client transactional workflows never start Promise.all query batche
   }
 });
 
-test('the canonical PostgreSQL integration turns deprecations into failures', async () => {
+test('the canonical PostgreSQL integrations turn deprecations into failures', async () => {
   const runner = await readFile(
     new URL('../../tool/run_local_postgres_integration.mjs', import.meta.url),
     'utf8',
@@ -27,5 +27,5 @@ test('the canonical PostgreSQL integration turns deprecations into failures', as
     runner,
     /await checkedRun\(nodeBin, \[\s*'--throw-deprecation',\s*'--import'/u,
   );
-  assert.equal(runner.match(/'--throw-deprecation'/gu)?.length, 1);
+  assert.equal(runner.match(/'--throw-deprecation'/gu)?.length, 2);
 });
