@@ -6,7 +6,8 @@
   "scope": "staging-backend-reconciliation-only",
   "repository": {
     "branch": "codex/master-workflow-20260808",
-    "sourceCommit": "7d9fef6efcb65b3613c91d01ad5ca76f87c99d2c",
+    "deployableSourceCommit": "7d9fef6efcb65b3613c91d01ad5ca76f87c99d2c",
+    "planEvidenceCommit": "c93664d2d90649b914f257c43ce0acf8a0e0970e",
     "immutableImage": "shareittoo-api:7d9fef6efcb65b3613c91d01ad5ca76f87c99d2c",
     "workingTreeAtCapture": "clean"
   },
@@ -30,20 +31,41 @@
     "readbackMutations": false
   },
   "sourceToStagingDelta": {
-    "classification": "backend-image-and-schema-parity-missing",
+    "classification": "backend-image-parity-missing; database-migration-parity-unproven",
     "missingSourceRevision": true,
+    "sourceCommitDeltaFromObservedStaging": {
+      "from": "df39a14b7a19afe467842461a28f1e77fec8445e",
+      "to": "7d9fef6efcb65b3613c91d01ad5ca76f87c99d2c",
+      "migrationFilesInSourceDelta": "075-087",
+      "interpretation": "This is a source/Git delta only; it does not prove which migrations are applied in Staging."
+    },
+    "stagingSchemaMigrationReadback": {
+      "status": "unavailable-through-existing-authorized-tooling",
+      "rowsRead": false,
+      "exactAppliedRange": "unknown",
+      "requiredBeforeDeploy": true,
+      "rule": "Do not infer database parity from a route 404 or from the Git delta."
+    },
     "missingRoutesAtStaging": [
       "/v1/auth/mfa/status",
       "/v1/identity-verification/status"
     ],
-    "migrationRange": {
+    "candidateMigrationRange": {
       "first": "080_mfa_totp",
       "last": "087_identity_verification_pilot_gate",
       "files": 16,
-      "direction": "forward-only-reconciliation; do not run down migrations"
+      "direction": "forward-only reconciliation; do not run down migrations",
+      "stagingAppliedState": "unknown until read-only schema_migrations readback"
     },
     "requiredSourceConfig": {
       "mfa": "server-side MFA encryption/secret configuration must already be present; values are not recorded",
+      "mfaComposeGap": "compose.staging.yml currently does not inject MFA_ENCRYPTION_KEY into the API container; status-route parity alone cannot close MFA readiness",
+      "mfaConfigPlan": {
+        "requiredBeforeDeploy": true,
+        "injection": "add MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY} to the staging API environment, sourced from an owner-only host secret outside Git",
+        "preflight": "presence and strict 32-byte base64url/hex shape only; never print, persist, or include the value in evidence",
+        "rotation": "keep the key stable for existing TOTP ciphertext; rotate only through a versioned re-encryption/migration plan, never by replacement during parity deploy"
+      },
       "identity": "keep IDENTITY_VERIFICATION_TRANSPORT=disabled for parity-only deployment"
     }
   },
@@ -80,6 +102,12 @@
       "IDENTITY_STRIPE_SECRET_KEY_HOST_FILE": false,
       "IDENTITY_VERIFICATION_WEBHOOK_SECRET_HOST_FILE": false
     },
+    "mfaSecretPresence": {
+      "localEnvironmentMFA_ENCRYPTION_KEY": false,
+      "stagingPresence": "unknown; no authorized secret readback performed",
+      "secretValuesRead": false,
+      "shapeValidated": false
+    },
     "secretValuesRead": false,
     "providerTrafficPerformed": false,
     "providerActivationProven": false,
@@ -93,6 +121,17 @@
       "GET /v1/auth/mfa/status (authenticated)",
       "GET /v1/identity-verification/status (authenticated)"
     ],
+    "mfaFunctionalE2E": {
+      "required": true,
+      "sequence": [
+        "authenticated synthetic pilot account enrolls MFA",
+        "read status and confirm server-authoritative pending state",
+        "cancel enrollment",
+        "read status and confirm no secret material is returned"
+      ],
+      "evidence": "record status codes and typed outcomes only; no TOTP seed, recovery code, token or secret",
+      "failureRule": "status 200 without successful enroll/cancel is not MFA readiness"
+    },
     "mustMatch": {
       "versionCommit": "7d9fef6efcb65b3613c91d01ad5ca76f87c99d2c",
       "paymentTransport": "memory",
@@ -104,7 +143,9 @@
   },
   "rollback": {
     "runbook": "backend/ops/deploy_release.sh",
-    "previousImageAndCommitCapturedBeforeDeploy": true,
+    "previousImageAndCommitCapturedBeforeDeploy": false,
+    "previousImageAndCommitCapture": "unknown; no deployment was executed in WP224",
+    "requiredAtExecution": true,
     "automaticRollback": true,
     "restoredBoundary": {
       "identityVerificationTransport": "disabled",
@@ -123,6 +164,23 @@
     "prepAndParityEstimateEur": 0,
     "providerActivationSpend": "not scheduled; separate owner/Astra gate required",
     "maximumUserAuthorizedBudgetEur": 100
+  },
+  "focusedVerification": {
+    "backendUnitSuites": {
+      "tests": 27,
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0
+    },
+    "postgresql": {
+      "major": 16,
+      "foundationAndForeignKey": "2/2",
+      "identity": "10/10",
+      "mfa": "1/1",
+      "temporaryDatabaseCleaned": true
+    },
+    "planJsonParse": "pass",
+    "gitDiffCheck": "pass"
   },
   "boundaries": {
     "deployPerformed": false,
