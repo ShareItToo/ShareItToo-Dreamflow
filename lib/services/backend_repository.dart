@@ -787,6 +787,35 @@ class BackendRepository {
     return Map<String, dynamic>.from(response['listing'] as Map);
   }
 
+  static Future<Map<String, dynamic>> requestListingAiPriceForOwner({
+    required AuthSessionOwner owner,
+    required String title,
+    required String description,
+    required String category,
+    required String condition,
+    required String location,
+    required String strategy,
+  }) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'POST',
+      path: '/listing-ai/assist/owner',
+      body: <String, dynamic>{
+        'title': title,
+        'description': description,
+        'category': category,
+        'condition': condition,
+        'location': location,
+        'strategy': strategy,
+      },
+    );
+    final assistant = response['assistant'];
+    if (assistant is! Map) {
+      throw const FormatException('Expected a listing price assistant result.');
+    }
+    return Map<String, dynamic>.from(assistant);
+  }
+
   static Future<Map<String, dynamic>> updateListingForOwner({
     required AuthSessionOwner owner,
     required Map<String, dynamic> listing,

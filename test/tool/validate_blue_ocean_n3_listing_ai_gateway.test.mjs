@@ -12,8 +12,12 @@ const evidence = JSON.parse(readFileSync(resolve(
   'docs/evidence/blue-ocean/n3-listing-ai-gateway-20260823.json',
 ), 'utf8'));
 
-function validate(changed = evidence) {
-  return validateBlueOceanN3ListingAiGateway({ repositoryRoot: root, evidence: changed });
+function validate(changed = evidence, sourceOverrides = {}) {
+  return validateBlueOceanN3ListingAiGateway({
+    repositoryRoot: root,
+    evidence: changed,
+    sourceOverrides,
+  });
 }
 
 test('accepts the exact non-live N3 gateway', () => {
@@ -65,6 +69,19 @@ test('rejects invented regression completion and forbidden mutation', () => {
   const mutation = structuredClone(evidence);
   mutation.boundaries.billingActivated = true;
   assert.throws(() => validate(mutation), /mutation boundary/u);
+});
+
+test('rejects every additional application listing-AI route', () => {
+  const appPath = 'backend/src/app.js';
+  const app = readFileSync(resolve(root, appPath), 'utf8');
+  for (const route of ['/v1/listing-ai/legacy', '/v1/ai-listing/legacy']) {
+    assert.throws(
+      () => validate(evidence, {
+        [appPath]: `${app}\napp.post('${route}', handler);\n`,
+      }),
+      /route inventory/u,
+    );
+  }
 });
 
 test('rejects an invalid exact GitHub verification binding', () => {

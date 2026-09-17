@@ -517,9 +517,9 @@ async function runtimeConfiguration(checkout, manifest, compiledPayload) {
   requireSourceContract(backend, /'SIT_BACKEND_ENABLED',[\s\S]{0,100}defaultValue: kReleaseMode/u, 'backend-debug-disabled');
   requireSourceContract(backend, /defaultValue: 'https:\/\/shareittoo\.com\/api\/v1'/u, 'backend-default-origin');
   requireSourceContract(openAi, /externalAiNetworkAllowed = false/u, 'external-ai-network-disabled');
-  requireSourceContract(openAi, /static bool get isAvailable => false/u, 'external-ai-unavailable');
+  requireSourceContract(openAi, /static bool get isAvailable => true/u, 'local-ai-helper-available');
   requireSourceContract(privatePilot, /realPaymentsEnabled = false/u, 'real-payments-disabled');
-  requireSourceContract(privatePilot, /aiFeaturesEnabled = false/u, 'pilot-ai-disabled');
+  requireSourceContract(privatePilot, /aiFeaturesEnabled = true/u, 'listing-helper-enabled');
   for (const provider of ['GOOGLE', 'APPLE', 'FACEBOOK']) {
     requireSourceContract(
       auth,

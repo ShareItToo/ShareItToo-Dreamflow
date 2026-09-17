@@ -211,7 +211,8 @@ void main() {
     );
   });
 
-  test('release client contains no AI proxy secret and all helpers fail closed',
+  test(
+      'release client contains no provider secret and keeps local helpers available',
       () async {
     final source = await File('lib/openai/openai_config.dart').readAsString();
 
@@ -221,7 +222,7 @@ void main() {
     expect(source, isNot(contains('http.post')));
     expect(source, contains('externalAiNetworkAllowed = false'));
     expect(source, contains('directAiChatEnabled = false'));
-    expect(source, contains('static bool get isAvailable => false'));
+    expect(source, contains('static bool get isAvailable => true'));
   });
 
   test('account security copy does not present demo 2FA as real protection',

@@ -23,7 +23,7 @@ test('WP189 subcategory fallback is canonical, bounded and readable', () => {
   assert.match(pilot, /allowedCategoryIds = \{/u);
   assert.doesNotMatch(pilot, /'cat10'[\s\S]*'Sonstiges'/u);
   assert.match(editor, /height: kMinInteractiveDimension/u);
-  assert.match(editor, /style: const TextStyle\(fontSize: 15\)/u);
+  assert.match(editor, /style:\s*const TextStyle\(fontSize: 15\)/u);
 });
 
 test('WP189 profile avatar uses managed upload, durable profile state and fanout', () => {

@@ -23,7 +23,11 @@ class PrivatePilotConfig {
 
   static const bool enabled = true;
   static const bool deliveryEnabled = false;
-  static const bool aiFeaturesEnabled = false;
+
+  /// The reachable listing helpers are now available as bounded local rules
+  /// plus an explicit authenticated server price action. This does not enable
+  /// direct client provider traffic, auto-publication or live money.
+  static const bool aiFeaturesEnabled = true;
 
   /// N6 technical pilot gate. It is false in every ordinary build and must
   /// only be enabled together with the non-production backend mock lane.

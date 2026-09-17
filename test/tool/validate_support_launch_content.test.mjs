@@ -19,7 +19,7 @@ const approvedEnvironment = Object.freeze({
     'not_willing_or_obliged_except_mandatory_case',
 });
 
-test('keeps external AI absent and consumer-dispute release configuration closed by default', () => {
+test('keeps direct provider execution absent while local helpers remain available', () => {
   assert.deepEqual(validateSupportLaunchContent({ root, environment: {} }), {
     externalAiEnabled: false,
     directAiChatEnabled: false,
@@ -52,13 +52,13 @@ test('accepts only a complete explicitly approved VSBG configuration for release
   );
 });
 
-test('rejects reintroducing an external-AI switch or dormant client transport', () => {
+test('rejects weakening the local/provider boundary or adding dormant client transport', () => {
   const path = 'lib/openai/openai_config.dart';
   const original = read(path);
   assert.throws(
     () => validateSupportLaunchContent({
       root,
-      sourceOverrides: { [path]: original.replace('aiHelpersEnabled = false', 'aiHelpersEnabled = true') },
+      sourceOverrides: { [path]: original.replace('externalAiNetworkAllowed = false', 'externalAiNetworkAllowed = true') },
       environment: {},
     }),
     /fail-closed contract/u,

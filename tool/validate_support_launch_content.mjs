@@ -47,11 +47,12 @@ function filesBelow(root, relativePath) {
 function assertExternalAiFailClosed(root, overrides) {
   const ai = source(root, 'lib/openai/openai_config.dart', overrides);
   for (const marker of [
-    'static const bool aiHelpersEnabled = false',
+    'static const bool aiHelpersEnabled = true',
     'static const bool externalAiNetworkAllowed = false',
     'static const bool directAiChatEnabled = false',
     'static const bool directAiTransparencyReady = false',
-    'static bool get isAvailable => false',
+    'static bool get isAvailable => true',
+    'ListingAiLocalRules',
     'parseSearchQuery',
     'suggestPrice',
     'suggestDiscountTiers',
@@ -228,6 +229,8 @@ export function validateSupportLaunchContent({
     fail('Store/public release requires a complete approved VSBG configuration.');
   }
   return Object.freeze({
+    // Local helpers are enabled; this field describes external provider
+    // execution from the client, which remains disabled.
     externalAiEnabled: false,
     directAiChatEnabled: false,
     consumerDisputeConfigurationReady: dispute.isComplete,

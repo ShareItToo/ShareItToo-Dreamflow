@@ -97,6 +97,23 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 - FCM is transactional only. Crashlytics requires its own voluntary choice.
   General Firebase Analytics remains off.
 
+### Listing helper truthfulness (WP195)
+
+- Automatic listing paths (typing, debounce, widget initialization and rebuild)
+  use bounded local rules or cached data only; they must not call an external
+  provider or claim model/market evidence.
+- A provider-backed listing action is allowed only after an explicit user
+  action, through one authenticated server endpoint with typed fields,
+  in-flight deduplication/idempotency and server-side budget/rate limiting.
+- Local rule output is always labelled as rule-based orientation. It is not a
+  market-price estimate and never proves provider execution.
+
+### Fail-closed validator complements
+
+- When a fail-closed validator gains a newly allowed exception, it must still
+  inspect the complete relevant inventory and include a deterministic negative
+  complement test that rejects an additional non-allowed path or case.
+
 ## Repository map
 
 - `lib/`, `test/`: Flutter client and tests.

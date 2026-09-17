@@ -310,7 +310,7 @@
         },
         {
           "path": "test/external_ai_consumer_dispute_gate_test.dart",
-          "anchor": "all former external-AI helpers use deterministic local fallbacks"
+          "anchor": "automatic helpers are local and explicit price action is typed"
         },
         {
           "path": "test/tool/validate_support_launch_content.test.mjs",

@@ -389,6 +389,10 @@ import {
 import { createListingAiGateway } from './listing_ai_gateway.js';
 import { createPostgresListingAiBudgetGuard } from './listing_ai_budget_guard.js';
 import {
+  createListingAiAssistService,
+  ListingAiAssistError,
+} from './listing_ai_assist.js';
+import {
   BlueOceanListingStoreError,
   loadBlueOceanDraft,
   markBlueOceanDraftPublished,
@@ -1799,6 +1803,9 @@ export function createApp({
       ? {}
       : { screenImage: screenBlueOceanListingImage }),
   });
+  const listingAiAssist = createListingAiAssistService({
+    configuration: config.listingAi,
+  });
   const listingAiHealth = Object.freeze({
     status: config.listingAi.enabled ? 'enabled' : 'disabled',
     provider: config.listingAi.provider,
@@ -1953,6 +1960,7 @@ export function createApp({
   const supportMessageReviewLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const supportMessagePublishLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const blueOceanListingMutationLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
+  const listingAiAssistLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const supportEvidenceUpload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: config.supportEvidence.maxFileBytes, files: 1, fields: 5 },
@@ -1980,6 +1988,19 @@ export function createApp({
       language: req.query.language,
     });
     res.json({ place });
+  }));
+
+  app.post('/v1/listing-ai/assist/owner', listingAiAssistLimiter, requireAuth, requireActiveAccount, requireUnsuspendedScope('listing'), asyncRoute(async (req, res) => {
+    let result;
+    try {
+      result = await listingAiAssist.price(req.body ?? {}, { ownerId: req.auth.userId });
+    } catch (error) {
+      if (error instanceof ListingAiAssistError) {
+        throw new HttpError(error.status, error.code);
+      }
+      throw error;
+    }
+    res.set('Cache-Control', 'private, no-store').json({ assistant: result });
   }));
 
   app.get('/health', asyncRoute(async (_req, res) => {

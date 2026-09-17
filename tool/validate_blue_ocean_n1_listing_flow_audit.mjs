@@ -97,7 +97,7 @@ export function validateBlueOceanN1ListingFlowAudit({
     'final owner = _listingActions.capture();',
   ]);
   requireMarkers(repositoryRoot, 'lib/config/private_pilot_config.dart', [
-    'static const bool aiFeaturesEnabled = false;',
+    'static const bool aiFeaturesEnabled = true;',
     'static const bool realPaymentsEnabled = false;',
     'static bool categoryAllowed(',
     'static bool subcategoryAllowed(',

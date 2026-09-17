@@ -21,7 +21,6 @@ import 'package:lendify/services/maps_service.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/services/on_device_listing_analysis_service.dart';
 import 'package:lendify/navigation/main_navigation.dart';
-import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/app_image.dart';
 import 'package:lendify/widgets/all_categories_overlay.dart';
 import 'package:lendify/services/ai_price_calculator_service.dart';
@@ -138,9 +137,11 @@ class _CreateListingScreenState extends State<CreateListingScreen>
 
   // AI Price Calculator
   PriceSuggestion? _priceSuggestion;
+  bool _priceSuggestionBusy = false;
+  String? _priceSuggestionError;
   String _priceStrategy = 'quick'; // 'quick' | 'premium'
   bool _hasCalculatedPrice = false;
-  // Stable market-price truth (independent of mode)
+  // Stable rule-orientation range (never a market-price claim)
   double? _marketPriceMin;
   double? _marketPriceMax;
   // Debounce for live AI recalculation
@@ -153,7 +154,6 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   double _tier2Pct = 20;
   int _tier3Days = 8;
   double _tier3Pct = 30;
-  bool _hasCalculatedDiscounts = false;
   bool _discountsTouched =
       false; // if user edits any tier, avoid overwriting with AI
   // If user manually edits the price, we stop all auto-adjustments
@@ -1717,7 +1717,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     if (!PrivatePilotConfig.aiFeaturesEnabled) return;
     _priceRecalcDebounce?.cancel();
     _priceRecalcDebounce = Timer(const Duration(milliseconds: 450), () async {
-      await _calculatePriceSuggestion();
+      _calculateLocalPriceOrientation();
       if (!_discountsTouched) {
         _applyModeDiscountPreset();
       }
@@ -1831,60 +1831,75 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         orElse: () => _categories.first);
     final categoryName = DataService.coarseCategoryFor(cat.name);
 
-    if (!OpenAIConfig.isAvailable) {
-      await AppPopup.toast(
-        context,
-        icon: Icons.info_outline,
-        title: 'KI-Hilfe ist vorübergehend deaktiviert',
-        message: 'Bitte gib die Details manuell ein.',
+    if (_priceSuggestionBusy) return;
+    setState(() {
+      _priceSuggestionBusy = true;
+      _priceSuggestionError = null;
+    });
+    try {
+      final result = await OpenAIConfig.suggestPrice(
+        title: _titleCtrl.text.trim(),
+        description: _descCtrl.text.trim(),
+        category: categoryName,
+        condition: _condition,
+        location: _addressCtrl.text.trim(),
+        strategy: _priceStrategy,
       );
+      if (!mounted) return;
+      final mMin = (result['dailyPriceMin'] as num).toDouble();
+      final mMax = (result['dailyPriceMax'] as num).toDouble();
+      final weeklyMin = (result['weeklyPriceMin'] as num).toDouble();
+      final weeklyMax = (result['weeklyPriceMax'] as num).toDouble();
+      final reasoning =
+          (result['reasoning'] as String?) ?? 'Serverseitiger Vorschlag.';
+      setState(() {
+        _marketPriceMin = mMin;
+        _marketPriceMax = mMax;
+        _priceSuggestion = PriceSuggestion(
+          dailyPriceMin: mMin,
+          dailyPriceMax: mMax,
+          weeklyPriceMin: weeklyMin,
+          weeklyPriceMax: weeklyMax,
+          reasoning: reasoning,
+          optimizationTip:
+              'Bearbeite den Orientierungsrahmen und bestätige deinen eigenen Mietpreis.',
+        );
+        _hasCalculatedPrice = true;
+      });
+      if (!_priceTouched) _autofillPriceFromMarket();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _priceSuggestionError =
+          'Serverseitiger Preisassistent nicht verfügbar. Du kannst den Preis manuell eingeben.');
+    } finally {
+      if (mounted) setState(() => _priceSuggestionBusy = false);
+    }
+  }
+
+  void _calculateLocalPriceOrientation() {
+    if (_titleCtrl.text.trim().isEmpty ||
+        _categoryId == null ||
+        _addressCtrl.text.trim().isEmpty) {
       return;
     }
-
-    // The compatibility helper is fail-closed and currently returns only a
-    // deterministic local fallback; no listing content leaves the device.
-    final result = await OpenAIConfig.suggestPrice(
+    final cat = _categories.firstWhere((c) => c.id == _categoryId,
+        orElse: () => _categories.first);
+    final suggestion = AIPriceCalculatorService.calculate(
       title: _titleCtrl.text.trim(),
-      description: _descCtrl.text.trim(),
-      category: categoryName,
+      categoryId: DataService.coarseCategoryFor(cat.name),
       condition: _condition,
-      location: _addressCtrl.text.trim(),
+      address: _addressCtrl.text.trim(),
+      strategy: _priceStrategy,
     );
-
+    if (!mounted) return;
     setState(() {
-      // Be defensive: values may come back as int on web → cast via num
-      final dailyPrice = (result['dailyPrice'] as num).toDouble();
-      final weeklyPrice = (result['weeklyPrice'] as num).toDouble();
-      final reasoning = (result['reasoning'] as String);
-
-      // IMPORTANT: One market-price truth (independent of mode)
-      final mMin = (dailyPrice * 0.9);
-      final mMax = (dailyPrice * 1.1);
-      _marketPriceMin = mMin;
-      _marketPriceMax = mMax;
-
-      _priceSuggestion = PriceSuggestion(
-        dailyPriceMin: mMin,
-        dailyPriceMax: mMax,
-        weeklyPriceMin: weeklyPrice * 0.9,
-        weeklyPriceMax: weeklyPrice * 1.1,
-        reasoning: reasoning,
-        // Keep messaging neutral and factual – no % promises
-        optimizationTip:
-            'Richte den Preis an der Marktspanne aus und nutze Rabatte sinnvoll.',
-      );
+      _priceSuggestion = suggestion;
+      _marketPriceMin = suggestion.dailyPriceMin;
+      _marketPriceMax = suggestion.dailyPriceMax;
       _hasCalculatedPrice = true;
+      _priceSuggestionError = null;
     });
-
-    // Auto-fill the price field based on selected mode unless user has manually edited
-    if (!_priceTouched) {
-      _autofillPriceFromMarket();
-    }
-
-    // Also set discount presets based on mode unless manually edited
-    if (!_hasCalculatedDiscounts || !_discountsTouched) {
-      _applyModeDiscountPreset();
-    }
+    if (!_priceTouched) _autofillPriceFromMarket();
   }
 
   // Apply fixed, mode-based discount presets unless user touched them
@@ -1908,14 +1923,13 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         _tier3Days = 8;
         _tier3Pct = 25;
       }
-      _hasCalculatedDiscounts = true;
       _invalidateBlueOceanReviewState(
         confirmations: const <String>['duration_discounts'],
       );
     });
   }
 
-  // Compute price from market range according to current mode
+  // Compute a local rule orientation according to the selected mode.
   void _autofillPriceFromMarket() {
     final min = _marketPriceMin;
     final max = _marketPriceMax;
@@ -2490,7 +2504,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         _categoryId != null &&
         _addressCtrl.text.trim().isNotEmpty) {
       WidgetsBinding.instance
-          .addPostFrameCallback((_) => _calculatePriceSuggestion());
+          .addPostFrameCallback((_) => _calculateLocalPriceOrientation());
     }
     return Scaffold(
       appBar: AppBar(
@@ -2611,7 +2625,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                             subcategory,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontSize: 15),
+                                            style:
+                                                const TextStyle(fontSize: 15),
                                           ),
                                         ),
                                       ),
@@ -3001,6 +3016,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                             canCalculate: _titleCtrl.text.trim().isNotEmpty &&
                                 _categoryId != null &&
                                 _addressCtrl.text.trim().isNotEmpty,
+                            busy: _priceSuggestionBusy,
+                            error: _priceSuggestionError,
                           )
                         else
                           Container(
@@ -3013,8 +3030,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                             ),
                             child: Text(
                               'Der Vermieter legt den Mietpreis selbst fest. Die '
-                              'KI-Preisberechnung bleibt im Privat-Pilot deaktiviert, '
-                              'bis Transparenz, Anbieter und Datenfluss freigegeben sind.',
+                              'regelbasierte Orientierung ist nur ein Vorschlag und '
+                              'ersetzt keine Marktpreisprüfung.',
                               style: TextStyle(
                                 color: isDark
                                     ? Colors.white70
@@ -4331,12 +4348,16 @@ class _AIPriceCalculatorCard extends StatelessWidget {
   final ValueChanged<String> onStrategyChanged;
   final VoidCallback onRecalculate;
   final bool canCalculate;
+  final bool busy;
+  final String? error;
   const _AIPriceCalculatorCard({
     required this.suggestion,
     required this.strategy,
     required this.onStrategyChanged,
     required this.onRecalculate,
     required this.canCalculate,
+    required this.busy,
+    required this.error,
   });
   @override
   Widget build(BuildContext context) {
@@ -4379,7 +4400,7 @@ class _AIPriceCalculatorCard extends StatelessWidget {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                Text('KI-Preisberechnung',
+                Text('Preis-Orientierung',
                     style: TextStyle(
                         color: Theme.of(context).brightness == Brightness.dark
                             ? Colors.white
@@ -4388,7 +4409,7 @@ class _AIPriceCalculatorCard extends StatelessWidget {
                         fontSize: 15)),
                 SizedBox(height: 4),
                 Text(
-                    'Bitte fülle Titel, Kategorie und Übergabeort aus, um eine Preisempfehlung zu erhalten.',
+                    'Die automatische Vorschau ist regelbasiert. Nur „Neu berechnen“ fragt den serverseitigen Assistenten an.',
                     style: TextStyle(
                         color: Theme.of(context).brightness == Brightness.dark
                             ? Colors.white70
@@ -4397,7 +4418,18 @@ class _AIPriceCalculatorCard extends StatelessWidget {
                         height: 1.35))
               ])),
         ]),
-        if (canCalculate && suggestion == null) ...[
+        if (busy) ...[
+          const SizedBox(height: 8),
+          const Row(children: [
+            SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2)),
+            SizedBox(width: 8),
+            Text('Serverseitige Orientierung wird berechnet…'),
+          ]),
+        ],
+        if (!busy && canCalculate && suggestion == null) ...[
           const SizedBox(height: 8),
           Text('Berechne Preisvorschlag…',
               style: TextStyle(
@@ -4405,6 +4437,12 @@ class _AIPriceCalculatorCard extends StatelessWidget {
                       ? Colors.white70
                       : AppTheme.textSecondary(context),
                   fontSize: 13)),
+        ],
+        if (error != null && suggestion == null) ...[
+          const SizedBox(height: 8),
+          Text(error!,
+              style: const TextStyle(
+                  color: Colors.redAccent, fontSize: 12.5, height: 1.35)),
         ],
         if (suggestion != null) ...[
           const SizedBox(height: 9),
@@ -4451,7 +4489,7 @@ class _AIPriceCalculatorCard extends StatelessWidget {
                         : AppTheme.textSecondary(context),
                     size: 14),
                 const SizedBox(width: 4),
-                Text('Aktueller Marktpreis (€/Tag):',
+                Text('Orientierungsrahmen (€/Tag):',
                     style: TextStyle(
                         color: Theme.of(context).brightness == Brightness.dark
                             ? Colors.white70
@@ -4474,8 +4512,8 @@ class _AIPriceCalculatorCard extends StatelessWidget {
           // Mode-specific helper text
           Builder(builder: (context) {
             final help = strategy == 'quick'
-                ? 'Preis im unteren Marktbereich – erhöht die Buchungswahrscheinlichkeit.'
-                : 'Preis im oberen Marktbereich – optimiert Ertrag pro Vermietung.';
+                ? 'Der untere Bereich folgt der lokalen Regel für „Schnell vermieten“.'
+                : 'Der obere Bereich folgt der lokalen Regel für „Maximaler Gewinn“.';
             return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Icon(Icons.info_outline,
                   color:
@@ -4532,6 +4570,15 @@ class _AIPriceCalculatorCard extends StatelessWidget {
                           fontSize: 13,
                           height: 1.35))),
             ]),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: busy || !canCalculate ? null : onRecalculate,
+              icon: Icon(busy ? Icons.hourglass_top : Icons.refresh, size: 16),
+              label: Text(busy ? 'Berechnung läuft…' : 'Neu berechnen'),
+            ),
           ),
         ],
       ]),

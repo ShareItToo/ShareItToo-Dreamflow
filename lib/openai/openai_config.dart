@@ -1,28 +1,28 @@
-/// Compatibility surface for the previously prototyped external-AI helpers.
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
+import 'package:lendify/services/auth_service.dart';
+import 'package:lendify/services/backend_repository.dart';
+import 'package:lendify/services/backend_http.dart';
+import 'package:lendify/services/listing_ai_local_rules.dart';
+
+/// Consumer compatibility surface.
 ///
-/// The current pilot and release candidate contain no external-AI transport,
-/// endpoint, prompt, model, credential or direct user chat. Callers keep their
-/// existing method signatures and receive deterministic local fallbacks. A
-/// future AI feature requires a separately reviewed provider/data-flow design,
-/// a user-visible transparency surface and a new build gate.
+/// Automatic search/category/range helpers are bounded local rules and are
+/// labelled accordingly. The only network-backed helper is the explicit owner
+/// price action; it crosses the server boundary and never carries a client
+/// provider key. No method claims model output unless a server response says
+/// that a provider actually executed.
 abstract final class OpenAIConfig {
-  static const bool aiHelpersEnabled = false;
+  static const bool aiHelpersEnabled = true;
   static const bool externalAiNetworkAllowed = false;
   static const bool directAiChatEnabled = false;
   static const bool directAiTransparencyReady = false;
 
-  static bool get isAvailable => false;
+  /// Local rules are always available; provider health is a server concern.
+  static bool get isAvailable => true;
 
   static Future<Map<String, dynamic>> parseSearchQuery(String userInput) async {
-    return const {
-      'what': null,
-      'where': null,
-      'whenStart': null,
-      'whenEnd': null,
-      'priceMin': null,
-      'priceMax': null,
-      'category': null,
-    };
+    return ListingAiLocalRules.parseSearchQuery(userInput);
   }
 
   static Future<Map<String, dynamic>> suggestPrice({
@@ -31,14 +31,32 @@ abstract final class OpenAIConfig {
     required String category,
     required String condition,
     required String location,
+    String strategy = 'quick',
   }) async {
-    return {
-      'dailyPrice': 10.0,
-      'weeklyPrice': 50.0,
-      'reasoning': title.trim().isEmpty
-          ? 'Bitte Titel eingeben für Preisvorschlag'
-          : 'KI nicht konfiguriert',
+    final request = <String, dynamic>{
+      'title': title,
+      'description': description,
+      'category': category,
+      'condition': condition,
+      'location': location,
+      'strategy': strategy,
     };
+    final testRequester = _priceRequesterForTesting;
+    if (testRequester != null) return testRequester(request);
+    final session = await AuthService.readSession();
+    if (session == null) {
+      throw const BackendException(401, 'authentication_required');
+    }
+    final owner = AuthService.captureSessionOwner(session);
+    return BackendRepository.requestListingAiPriceForOwner(
+      owner: owner,
+      title: title,
+      description: description,
+      category: category,
+      condition: condition,
+      location: location,
+      strategy: strategy,
+    );
   }
 
   static Future<Map<String, dynamic>> suggestDiscountTiers({
@@ -49,13 +67,8 @@ abstract final class OpenAIConfig {
     required String location,
     required String strategy,
   }) async {
-    return const {
-      'tiers': [
-        {'days': 3, 'discount': 10},
-        {'days': 5, 'discount': 20},
-        {'days': 8, 'discount': 30},
-      ],
-    };
+    // Discount presets are deterministic product rules, not model output.
+    return ListingAiLocalRules.discountTiers(strategy: strategy);
   }
 
   static Future<String> availabilityDiscountTip({
@@ -64,8 +77,10 @@ abstract final class OpenAIConfig {
     required double pricePerDay,
     required List<Map<String, dynamic>> tiers,
   }) async {
-    return 'Tipp 💡: Länger mieten = günstiger. '
-        'Z.B. ab 3/5/8 Tagen: -10/-20/-30%';
+    return ListingAiLocalRules.availabilityTip(
+      pricePerDay: pricePerDay,
+      tiers: tiers,
+    );
   }
 
   static Future<List<String>> suggestCategories({
@@ -73,6 +88,21 @@ abstract final class OpenAIConfig {
     required List<String> availableCategories,
     int maxResults = 5,
   }) async {
-    return const [];
+    return ListingAiLocalRules.suggestCategories(
+      userInput: userInput,
+      availableCategories: availableCategories,
+      maxResults: maxResults,
+    );
+  }
+
+  static Future<Map<String, dynamic>> Function(Map<String, dynamic> request)?
+      _priceRequesterForTesting;
+
+  @visibleForTesting
+  static void setPriceRequesterForTesting(
+    Future<Map<String, dynamic>> Function(Map<String, dynamic> request)?
+        requester,
+  ) {
+    _priceRequesterForTesting = requester;
   }
 }

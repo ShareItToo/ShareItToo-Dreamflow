@@ -152,7 +152,7 @@ export function validateBlueOceanN0Baseline({
   const privatePilot = readFileSync(resolve(repositoryRoot, 'lib/config/private_pilot_config.dart'), 'utf8');
   requireMarkers(privatePilot, [
     'static const bool enabled = true;',
-    'static const bool aiFeaturesEnabled = false;',
+    'static const bool aiFeaturesEnabled = true;',
     'static const bool realPaymentsEnabled = false;',
   ], 'private-pilot');
   const staging = readFileSync(resolve(repositoryRoot, 'backend/.env.staging.example'), 'utf8');

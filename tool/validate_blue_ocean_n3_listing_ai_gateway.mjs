@@ -20,7 +20,8 @@ function allFalse(value) {
     && Object.values(value).every((entry) => entry === false);
 }
 
-function source(repositoryRoot, path) {
+function source(repositoryRoot, path, overrides = {}) {
+  if (Object.hasOwn(overrides, path)) return String(overrides[path]);
   return readRepositoryFile(repositoryRoot, path, { label: `N3 source ${path}` });
 }
 
@@ -33,8 +34,9 @@ function requireMarkers(content, path, markers) {
 export function validateBlueOceanN3ListingAiGateway({
   repositoryRoot = root,
   evidence,
+  sourceOverrides = {},
 } = {}) {
-  const value = evidence ?? JSON.parse(source(repositoryRoot, evidencePath));
+  const value = evidence ?? JSON.parse(source(repositoryRoot, evidencePath, sourceOverrides));
   if (value.schemaVersion !== 1
       || value.kind !== 'sit-stage-a-blue-ocean-n3-listing-ai-gateway'
       || ![
@@ -121,7 +123,7 @@ export function validateBlueOceanN3ListingAiGateway({
   }
 
   const configPath = 'backend/src/listing_ai_gateway_config.js';
-  const config = source(repositoryRoot, configPath);
+  const config = source(repositoryRoot, configPath, sourceOverrides);
   requireMarkers(config, configPath, [
     "listingAiGatewayVersion = 'N3-2026-08-23.1'",
     "SIT_LISTING_AI_PROVIDER ?? 'disabled'",
@@ -139,7 +141,7 @@ export function validateBlueOceanN3ListingAiGateway({
   }
 
   const gatewayPath = 'backend/src/listing_ai_gateway.js';
-  const gateway = source(repositoryRoot, gatewayPath);
+  const gateway = source(repositoryRoot, gatewayPath, sourceOverrides);
   requireMarkers(gateway, gatewayPath, [
     "name: 'sit_listing_ai_draft_v1'",
     'strict: true',
@@ -164,24 +166,42 @@ export function validateBlueOceanN3ListingAiGateway({
   }
 
   const n2MigrationPath = 'backend/sql/migrations/066_blue_ocean_listing_ai_foundation.up.sql';
-  const n2Migration = source(repositoryRoot, n2MigrationPath);
+  const n2Migration = source(repositoryRoot, n2MigrationPath, sourceOverrides);
   requireMarkers(n2Migration, n2MigrationPath, [
     'UNIQUE (draft_id, generation_key)',
     "provider IN ('disabled', 'mock', 'openai')",
     "provider = 'openai' OR billed_cost_cents = 0",
   ]);
 
-  const applicationConfig = source(repositoryRoot, 'backend/src/config.js');
+  const applicationConfig = source(repositoryRoot, 'backend/src/config.js', sourceOverrides);
   requireMarkers(applicationConfig, 'backend/src/config.js', [
     'readListingAiGatewayConfiguration(process.env',
     'listingAi: listingAiGateway',
   ]);
-  const app = source(repositoryRoot, 'backend/src/app.js');
-  if (/\/v1\/(?:listing-ai|listing_ai|ai-listing)/iu.test(app)) {
-    fail('N3 must not expose an application listing-AI route.');
+  const app = source(repositoryRoot, 'backend/src/app.js', sourceOverrides);
+  const ownerAssistRoute = "/v1/listing-ai/assist/owner";
+  const listingAiRoutes = [...app.matchAll(/\/v1\/(?:listing-ai|listing_ai|ai-listing)(?:\/[A-Za-z0-9_-]+)+/gu)]
+    .map(([route]) => route);
+  if (listingAiRoutes.length !== 1 || listingAiRoutes[0] !== ownerAssistRoute) {
+    fail('N3 owner listing-AI route inventory is invalid.');
+  }
+  requireMarkers(app, 'backend/src/app.js', [
+    `app.post('${ownerAssistRoute}', listingAiAssistLimiter, requireAuth, requireActiveAccount, requireUnsuspendedScope('listing'`,
+    "listingAiAssist.price(req.body ?? {}, { ownerId: req.auth.userId })",
+    'error instanceof ListingAiAssistError',
+  ]);
+  const ownerAssist = source(repositoryRoot, 'backend/src/listing_ai_assist.js', sourceOverrides);
+  requireMarkers(ownerAssist, 'backend/src/listing_ai_assist.js', [
+    "exactKeys(raw, [",
+    "'title', 'description', 'category', 'condition', 'location', 'strategy'",
+    "source: 'server_rules'",
+    'providerExecuted: false',
+  ]);
+  if (/\bfetch\s*\(|OPENAI_(?:PROXY|API|ENDPOINT|MODEL|KEY)|api\.openai\.com|process\.env|authoritative/iu.test(ownerAssist)) {
+    fail('N3 owner listing-AI assist must remain local server rules without provider or price authority.');
   }
 
-  const regression = source(repositoryRoot, 'scripts/technical_regression_check.sh');
+  const regression = source(repositoryRoot, 'scripts/technical_regression_check.sh', sourceOverrides);
   requireMarkers(regression, 'scripts/technical_regression_check.sh', [
     'node --check tool/validate_blue_ocean_n3_listing_ai_gateway.mjs',
     'node --test test/tool/validate_blue_ocean_n3_listing_ai_gateway.test.mjs',

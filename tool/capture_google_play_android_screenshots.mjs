@@ -274,7 +274,7 @@ export async function captureGooglePlayAndroidScreenshots({
   hierarchy = await waitForUi(
     adbPath,
     device,
-    (value) => value.includes('KI-Suche')
+    (value) => value.includes('Smarte Suche')
       && value.includes('Zurücksetzen')
       && value.includes(screenshotListingTitle),
     wait,

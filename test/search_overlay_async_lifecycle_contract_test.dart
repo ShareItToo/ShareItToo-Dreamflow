@@ -19,11 +19,11 @@ void main() {
         r'if \(!mounted\) return;',
       )),
     );
-    expect(
-      source,
-      contains('''final result = await OpenAIConfig.parseSearchQuery(prompt);
-    if (!mounted) return;'''),
-    );
+    expect(source,
+        contains('result = await OpenAIConfig.parseSearchQuery(prompt);'));
+    expect(source, contains('if (!mounted) return;'));
+    expect(source, contains('Suchen und übernehmen'));
+    expect(source, contains('_parsingSmartSearch'));
     expect(source, contains('final LatestSearchRecompute _nearbyRecompute'));
     expect(
       source,

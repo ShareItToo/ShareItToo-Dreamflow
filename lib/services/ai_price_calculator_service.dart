@@ -1,8 +1,9 @@
 import 'dart:math';
 
-/// AI-based price calculator using heuristics (category, condition, location)
+/// Deterministic local price orientation using bounded product rules.
+/// It is not a market-price estimate and never calls a provider.
 class AIPriceCalculatorService {
-  /// Strategy toggle: 'quick' (lower prices, faster bookings) or 'premium' (higher prices, max profit)
+  /// Strategy toggle: 'quick' (lower orientation) or 'premium' (higher orientation).
   static PriceSuggestion calculate({
     required String title,
     required String categoryId,
@@ -10,37 +11,32 @@ class AIPriceCalculatorService {
     required String address,
     String strategy = 'quick', // 'quick' | 'premium'
   }) {
-    // Base price heuristics by category (rough averages in €/day)
+    // Bounded product baseline in €/day; this is not observed market data.
     final basePricePerDay = _basePriceForCategory(categoryId);
-    
+
     // Adjust by condition
     final conditionMultiplier = _conditionMultiplier(condition);
-    
-    // Adjust by location (city vs. rural)
-    final locationMultiplier = _locationMultiplier(address);
-    
-    // Strategy multiplier
-    final strategyMultiplier = strategy == 'premium' ? 1.25 : 0.85;
-    
-    // Calculate adjusted base price
-    final adjustedBase = basePricePerDay * conditionMultiplier * locationMultiplier * strategyMultiplier;
-    
+
+    // Strategy selects a point inside this stable range; it does not change
+    // the range itself or multiply the same price twice.
+    final adjustedBase = basePricePerDay * conditionMultiplier;
+
     // Generate range (±20%)
     final dailyMin = max(1.0, (adjustedBase * 0.8).roundToDouble());
     final dailyMax = (adjustedBase * 1.2).roundToDouble();
-    
-    // Weekly price: typically ~6.5 days worth (discount for week-long rental)
+
+    // Weekly orientation: bounded product rule, not a market claim.
     final weeklyMin = (dailyMin * 6.5).roundToDouble();
     final weeklyMax = (dailyMax * 6.5).roundToDouble();
-    
+
     // Reasoning
-    final reasoning = _buildReasoning(categoryId, condition, address, strategy);
-    
+    final reasoning = _buildReasoning(categoryId, condition, address);
+
     // Optimization tip
     final optimizationTip = strategy == 'premium'
-        ? 'Höhere Preise können zu selteneren Buchungen führen. Erwäge die "Schnell vermieten"-Strategie für mehr Auslastung.'
-        : 'Niedrigere Preise erhöhen oft die Buchungsrate. Lieber häufiger vermietet als selten teuer.';
-    
+        ? 'Der obere Orientierungsbereich folgt der gewählten Strategie; bestätige deinen eigenen Mietpreis.'
+        : 'Der untere Orientierungsbereich folgt der gewählten Strategie; bestätige deinen eigenen Mietpreis.';
+
     return PriceSuggestion(
       dailyPriceMin: dailyMin,
       dailyPriceMax: dailyMax,
@@ -50,36 +46,56 @@ class AIPriceCalculatorService {
       optimizationTip: optimizationTip,
     );
   }
-  
+
   static double _basePriceForCategory(String categoryId) {
     // Rough heuristics based on typical rental categories
     final catLower = categoryId.toLowerCase();
-    if (catLower.contains('elektronik') || catLower.contains('kamera') || catLower.contains('drohne')) {
+    if (catLower.contains('elektronik') ||
+        catLower.contains('kamera') ||
+        catLower.contains('drohne')) {
       return 15.0;
-    } else if (catLower.contains('werkzeug') || catLower.contains('bohrer') || catLower.contains('säge')) {
+    } else if (catLower.contains('werkzeug') ||
+        catLower.contains('bohrer') ||
+        catLower.contains('säge')) {
       return 8.0;
-    } else if (catLower.contains('transport') || catLower.contains('anhänger') || catLower.contains('fahrrad')) {
+    } else if (catLower.contains('transport') ||
+        catLower.contains('anhänger') ||
+        catLower.contains('fahrrad')) {
       return 12.0;
-    } else if (catLower.contains('sport') || catLower.contains('ski') || catLower.contains('surfbrett')) {
+    } else if (catLower.contains('sport') ||
+        catLower.contains('ski') ||
+        catLower.contains('surfbrett')) {
       return 10.0;
-    } else if (catLower.contains('möbel') || catLower.contains('tisch') || catLower.contains('stuhl')) {
+    } else if (catLower.contains('möbel') ||
+        catLower.contains('tisch') ||
+        catLower.contains('stuhl')) {
       return 5.0;
-    } else if (catLower.contains('party') || catLower.contains('event') || catLower.contains('zelt')) {
+    } else if (catLower.contains('party') ||
+        catLower.contains('event') ||
+        catLower.contains('zelt')) {
       return 7.0;
-    } else if (catLower.contains('outdoor') || catLower.contains('camping') || catLower.contains('grill')) {
+    } else if (catLower.contains('outdoor') ||
+        catLower.contains('camping') ||
+        catLower.contains('grill')) {
       return 6.0;
-    } else if (catLower.contains('mode') || catLower.contains('kleidung') || catLower.contains('anzug')) {
+    } else if (catLower.contains('mode') ||
+        catLower.contains('kleidung') ||
+        catLower.contains('anzug')) {
       return 9.0;
-    } else if (catLower.contains('haushalt') || catLower.contains('küche') || catLower.contains('mixer')) {
+    } else if (catLower.contains('haushalt') ||
+        catLower.contains('küche') ||
+        catLower.contains('mixer')) {
       return 4.0;
-    } else if (catLower.contains('garten') || catLower.contains('rasenmäher') || catLower.contains('heckenschere')) {
+    } else if (catLower.contains('garten') ||
+        catLower.contains('rasenmäher') ||
+        catLower.contains('heckenschere')) {
       return 8.0;
     } else {
       // Default fallback
       return 7.0;
     }
   }
-  
+
   static double _conditionMultiplier(String condition) {
     switch (condition) {
       case 'new':
@@ -96,28 +112,15 @@ class AIPriceCalculatorService {
         return 1.0;
     }
   }
-  
-  static double _locationMultiplier(String address) {
-    // Simple heuristic: detect major German cities
-    final addrLower = address.toLowerCase();
-    final majorCities = ['berlin', 'münchen', 'hamburg', 'köln', 'frankfurt', 'stuttgart', 'düsseldorf', 'leipzig', 'dortmund'];
-    for (final city in majorCities) {
-      if (addrLower.contains(city)) {
-        return 1.2; // Higher demand in cities
-      }
-    }
-    return 1.0; // Rural/smaller towns
-  }
-  
-  static String _buildReasoning(String categoryId, String condition, String address, String strategy) {
+
+  static String _buildReasoning(
+      String categoryId, String condition, String address) {
     final catLabel = _categoryLabel(categoryId);
     final condLabel = _conditionLabel(condition);
     final locLabel = _locationLabel(address);
-    final stratLabel = strategy == 'premium' ? 'Maximaler Gewinn' : 'Schnell vermieten';
-    
-    return 'Basierend auf $catLabel in Zustand "$condLabel" für $locLabel. Strategie: $stratLabel.';
+    return 'Regelbasierte Orientierung für $catLabel in Zustand "$condLabel" ($locLabel). Die Strategie wählt nur einen Punkt im Rahmen. Keine Marktpreisermittlung.';
   }
-  
+
   static String _categoryLabel(String categoryId) {
     final catLower = categoryId.toLowerCase();
     if (catLower.contains('elektronik')) return 'Elektronik';
@@ -132,7 +135,7 @@ class AIPriceCalculatorService {
     if (catLower.contains('garten')) return 'Garten';
     return 'diese Kategorie';
   }
-  
+
   static String _conditionLabel(String condition) {
     switch (condition) {
       case 'new':
@@ -149,10 +152,20 @@ class AIPriceCalculatorService {
         return condition;
     }
   }
-  
+
   static String _locationLabel(String address) {
     final addrLower = address.toLowerCase();
-    final majorCities = ['berlin', 'münchen', 'hamburg', 'köln', 'frankfurt', 'stuttgart', 'düsseldorf', 'leipzig', 'dortmund'];
+    final majorCities = [
+      'berlin',
+      'münchen',
+      'hamburg',
+      'köln',
+      'frankfurt',
+      'stuttgart',
+      'düsseldorf',
+      'leipzig',
+      'dortmund'
+    ];
     for (final city in majorCities) {
       if (addrLower.contains(city)) {
         return city[0].toUpperCase() + city.substring(1);
@@ -169,7 +182,7 @@ class PriceSuggestion {
   final double weeklyPriceMax;
   final String reasoning;
   final String optimizationTip;
-  
+
   const PriceSuggestion({
     required this.dailyPriceMin,
     required this.dailyPriceMax,

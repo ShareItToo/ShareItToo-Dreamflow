@@ -69,7 +69,6 @@ class _SearchSheetState extends State<_SearchSheet> {
   DateTime? _pickup;
   DateTime? _return;
 
-  Timer? _aiDebounce;
   Timer? _categoryDebounce;
   final LatestSearchRecompute _nearbyRecompute = LatestSearchRecompute();
 
@@ -111,7 +110,7 @@ class _SearchSheetState extends State<_SearchSheet> {
   List<Item> _displayNearby = [];
   List<app_category.Category> _categories = [];
 
-  // Multiple possible categories inferred from "Was" or "KI-Suche".
+  // Multiple possible categories inferred from "Was" or the smart-search field.
   // NOTE: In Suche we only allow the 11 coarse categories (same as "Neue Anzeige").
   // We keep this list for internal/AI logic, but we intentionally do not render
   // live suggestion chips in the UI (per previous request).
@@ -123,6 +122,7 @@ class _SearchSheetState extends State<_SearchSheet> {
   List<String> _recent = [];
   bool _loading = true;
   bool _recomputing = false;
+  bool _parsingSmartSearch = false;
 
   @override
   void initState() {
@@ -198,7 +198,6 @@ class _SearchSheetState extends State<_SearchSheet> {
   void dispose() {
     _hideWhatOverlay();
     _hideWhereOverlay();
-    _aiDebounce?.cancel();
     _categoryDebounce?.cancel();
     _nearbyRecompute.dispose();
     _aiCtrl.dispose();
@@ -353,21 +352,23 @@ class _SearchSheetState extends State<_SearchSheet> {
   }
 
   Future<void> _parseAIPrompt(String prompt) async {
-    if (prompt.trim().isEmpty) return;
-    if (!OpenAIConfig.isAvailable) {
+    if (prompt.trim().isEmpty || _parsingSmartSearch) return;
+    setState(() => _parsingSmartSearch = true);
+    late final Map<String, dynamic> result;
+    try {
+      // Explicit submit only. Automatic typing remains local taxonomy logic.
+      result = await OpenAIConfig.parseSearchQuery(prompt);
+    } catch (_) {
       if (mounted) {
+        setState(() => _parsingSmartSearch = false);
         AppPopup.info(
           context,
-          title: 'KI-Hilfe vorübergehend nicht verfügbar',
-          message: 'Bitte suche in der Zwischenzeit manuell weiter.',
+          title: 'Suche konnte nicht verarbeitet werden',
+          message: 'Bitte prüfe den Text oder suche manuell weiter.',
         );
       }
       return;
     }
-
-    // The compatibility helper is fail-closed and currently returns only an
-    // empty local parse result; no search text leaves the device.
-    final result = await OpenAIConfig.parseSearchQuery(prompt);
     if (!mounted) return;
 
     setState(() {
@@ -432,6 +433,7 @@ class _SearchSheetState extends State<_SearchSheet> {
       if (!mounted) return;
       _suggestCategoriesFromText(basis);
     });
+    if (mounted) setState(() => _parsingSmartSearch = false);
   }
 
   void _onQueryChangedWhat(String v) {
@@ -661,7 +663,7 @@ class _SearchSheetState extends State<_SearchSheet> {
 
     final query = buildQueryText();
     final date = buildDateText();
-    // Push results as a full screen above the overlay so Back returns to KI-Suche
+    // Push results as a full screen above the overlay so Back returns to smart search
     if (!mounted) return;
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
@@ -910,7 +912,7 @@ class _SearchSheetState extends State<_SearchSheet> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        // KI-Suche Feld (ganz oben)
+        // Smart-search field (at the top)
         Container(
           decoration: BoxDecoration(
             color: primary.withValues(alpha: 0.08),
@@ -924,7 +926,7 @@ class _SearchSheetState extends State<_SearchSheet> {
               Row(children: [
                 Icon(Icons.auto_awesome, color: primary, size: 16),
                 const SizedBox(width: 6),
-                Text('KI-Suche',
+                Text('Smarte Suche',
                     style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -949,9 +951,7 @@ class _SearchSheetState extends State<_SearchSheet> {
                       fontSize: 12),
                 ),
                 onChanged: (v) {
-                  // Debounce to avoid firing an OpenAI request on every keystroke.
-                  _aiDebounce?.cancel();
-
+                  setState(() {});
                   // Debounce category suggestions too (separate from the structured parse).
                   _categoryDebounce?.cancel();
                   _categoryDebounce =
@@ -966,19 +966,31 @@ class _SearchSheetState extends State<_SearchSheet> {
                     _setSelectedCoarseCategory(inferred);
                     _recomputeNearbySuggestions();
                   }
-
-                  _aiDebounce = Timer(const Duration(milliseconds: 650), () {
-                    if (!mounted) return;
-                    _parseAIPrompt(v);
-                  });
                 },
                 onSubmitted: (v) {
-                  _aiDebounce?.cancel();
                   _parseAIPrompt(v);
                   _aiFocus.unfocus();
                 },
               ),
-              // Beispieltext entfernt – bewusst minimaler Platz unter dem Feld
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _parsingSmartSearch || _aiCtrl.text.trim().isEmpty
+                      ? null
+                      : () {
+                          _parseAIPrompt(_aiCtrl.text);
+                          _aiFocus.unfocus();
+                        },
+                  icon: Icon(
+                    _parsingSmartSearch ? Icons.hourglass_top : Icons.tune,
+                    size: 16,
+                  ),
+                  label: Text(_parsingSmartSearch
+                      ? 'Übernahme läuft…'
+                      : 'Suchen und übernehmen'),
+                ),
+              ),
             ],
           ),
         ),
