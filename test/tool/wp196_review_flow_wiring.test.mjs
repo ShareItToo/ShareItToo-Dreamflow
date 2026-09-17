@@ -22,6 +22,9 @@ assert.doesNotMatch(
 // The legacy express countdown is currently not reachable from any widget
 // constructor. Its fallback must not be treated as a live mutation surface.
 const expressReferences = itemDetails.match(/_ExpressCountdownSheet\s*\(/g) ?? [];
-assert.equal(expressReferences.length, 1);
+assert.equal(expressReferences.length, 0);
+assert.doesNotMatch(itemDetails, /class _ExpressCountdownSheet/u);
+assert.doesNotMatch(itemDetails, /class _ExpressFallbackSheet/u);
+assert.doesNotMatch(itemDetails, /ExpressFallbackSheet/u);
 
 console.log('WP196 review-flow wiring: PASS');

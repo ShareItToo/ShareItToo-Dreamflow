@@ -56,21 +56,16 @@ function constructorBlocks(text, token) {
 const radioTiles = constructorBlocks(source, 'RadioListTile<');
 const dropoffGroups = constructorBlocks(source, 'RadioGroup<_DropoffOption>');
 const returnGroups = constructorBlocks(source, 'RadioGroup<_ReturnOption>');
-const fallbackState = source.match(
-  /class _ExpressFallbackSheetState[\s\S]*?\nextension on /u,
-)?.[0];
-
-assert.ok(fallbackState, 'expected express fallback State');
 
 test('every item-details radio tile delegates ownership to RadioGroup', () => {
-  assert.equal(radioTiles.length, 18);
+  assert.equal(radioTiles.length, 12);
   for (const tile of radioTiles) {
     assert.doesNotMatch(tile, /\bgroupValue\s*:/u);
     assert.doesNotMatch(tile, /\bonChanged\s*:/u);
   }
-  assert.equal(dropoffGroups.length, 3);
-  assert.equal(returnGroups.length, 3);
-  assert.equal(source.match(/RadioGroup<bool>\(/gu)?.length, 1);
+  assert.equal(dropoffGroups.length, 2);
+  assert.equal(returnGroups.length, 2);
+  assert.equal(source.match(/RadioGroup<bool>\(/gu)?.length ?? 0, 0);
 });
 
 test('delivery groups retain selection persistence in both layouts', () => {
@@ -90,17 +85,6 @@ test('unavailable landlord delivery choices stay explicitly disabled', () => {
     assert.match(tile, /value:\s*_(?:Dropoff|Return)Option\.landlord/u);
     assert.match(tile, /secondary:\s*Icon\(Icons\.lock_outline/u);
   }
-});
-
-test('fallback owns rebook, dropoff and return selection independently', () => {
-  assert.match(
-    fallbackState,
-    /groupValue:\s*_rebook,[\s\S]*?onChanged:\s*\(value\)[\s\S]*?setState\(\(\) => _rebook = value\)/u,
-  );
-  assert.match(fallbackState, /RadioListTile<bool>\([\s\S]*?value:\s*true/u);
-  assert.match(fallbackState, /RadioListTile<bool>\([\s\S]*?value:\s*false/u);
-  assert.match(fallbackState, /RadioGroup<_DropoffOption>\([\s\S]*?groupValue:\s*_drop/u);
-  assert.match(fallbackState, /RadioGroup<_ReturnOption>\([\s\S]*?groupValue:\s*_ret/u);
 });
 
 test('radio migration is permanent and adds no analyzer accommodation', () => {
