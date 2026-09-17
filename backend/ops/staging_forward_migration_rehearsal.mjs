@@ -3,6 +3,7 @@
 import crypto from 'node:crypto';
 import {
   chmod,
+  lstat,
   mkdir,
   readFile,
   readdir,
@@ -61,6 +62,27 @@ export function assertStagingLabels({ labels, expectedService, expectedVolume = 
     fail(`docker_service_label_unexpected_${expectedService}`);
   }
   return true;
+}
+
+export function validateStagingRunningSet(entries, {
+  apiContainer,
+  databaseContainer,
+} = {}) {
+  const allowedServices = new Map([
+    [apiContainer, 'api'],
+    [databaseContainer, 'postgres'],
+  ]);
+  const seenServices = new Set();
+  for (const entry of entries ?? []) {
+    const expectedService = allowedServices.get(entry.name);
+    if (!expectedService) fail('unexpected_staging_container_before_quiesce');
+    assertStagingLabels({ labels: entry.labels, expectedService });
+    if (seenServices.has(expectedService)) fail('duplicate_staging_service_before_quiesce');
+    seenServices.add(expectedService);
+  }
+  if (!seenServices.has('postgres')) fail('staging_database_not_running');
+  if (!seenServices.has('api')) fail('staging_api_not_running');
+  return Object.freeze(entries.filter((entry) => entry.name !== databaseContainer).map((entry) => entry.name));
 }
 
 export function buildStagingRehearsalPlan({ targetCommit, appliedRange = '001-074' } = {}) {
@@ -164,19 +186,52 @@ async function sha256File(filePath) {
   return hash.digest('hex');
 }
 
-async function safeExternalDirectory(directory) {
+function currentUid() {
+  return typeof process.getuid === 'function' ? process.getuid() : null;
+}
+
+async function validateExistingDirectoryComponent(pathValue, { final = false } = {}) {
+  const metadata = await lstat(pathValue);
+  if (metadata.isSymbolicLink()) {
+    const uid = currentUid();
+    // macOS commonly exposes /var as a root-owned, non-writable system link.
+    // User-owned or writable links remain fail-closed.
+    if (uid === null || metadata.uid !== 0 || (metadata.mode & 0o022) !== 0 || final) {
+      fail('rehearsal_backup_directory_symlink');
+    }
+    return metadata;
+  }
+  if (!metadata.isDirectory()) fail('rehearsal_backup_directory_component_not_directory');
+  if ((metadata.mode & 0o022) !== 0) fail('rehearsal_backup_directory_component_group_world_writable');
+  const uid = currentUid();
+  if (uid !== null && metadata.uid !== uid && (final || metadata.uid !== 0)) {
+    fail(final ? 'rehearsal_backup_directory_owner_invalid' : 'rehearsal_backup_directory_ancestor_owner_invalid');
+  }
+  return metadata;
+}
+
+export async function safeExternalDirectory(directory, { repository = repositoryRoot } = {}) {
   if (!isAbsolute(directory)) fail('rehearsal_backup_directory_not_absolute');
   const requested = resolve(directory);
-  const relativePath = relative(repositoryRoot, requested);
+  const resolvedRepository = resolve(repository);
+  const relativePath = relative(resolvedRepository, requested);
   if (relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))) {
     fail('rehearsal_backup_directory_inside_repository');
   }
-  await mkdir(requested, { recursive: true, mode: 0o700 });
-  await chmod(requested, 0o700);
-  const metadata = await stat(requested);
-  if (!metadata.isDirectory()) fail('rehearsal_backup_directory_not_directory');
+  const parts = requested.split('/').filter(Boolean);
+  let current = requested.startsWith('/') ? '/' : '';
+  for (const part of parts) {
+    current = current === '/' ? `/${part}` : join(current, part);
+    try {
+      await validateExistingDirectoryComponent(current, { final: current === requested });
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      await mkdir(current, { mode: 0o700 });
+      await validateExistingDirectoryComponent(current, { final: current === requested });
+    }
+  }
   const canonical = await realpath(requested);
-  const canonicalRelative = relative(repositoryRoot, canonical);
+  const canonicalRelative = relative(resolvedRepository, canonical);
   if (canonicalRelative === ''
     || (!canonicalRelative.startsWith('..') && !isAbsolute(canonicalRelative))) {
     fail('rehearsal_backup_directory_resolves_inside_repository');
@@ -500,20 +555,33 @@ export async function runStagingForwardMigrationRehearsal({
       'ps', '--filter', `label=com.docker.compose.project=${stagingProjectName}`,
       '--format', '{{.Names}}',
     ])).stdout.trim().split(/\r?\n/u).filter(Boolean);
+    const runningEntries = [];
     for (const name of running) {
-      if (name !== databaseContainer) {
-        await runCommand('docker', ['stop', name]);
-        quiesced.push(name);
-      }
+      runningEntries.push({
+        name,
+        labels: await dockerInspectJson(name, '{{json .Config.Labels}}'),
+      });
     }
-    const writers = await psql({
+    const toQuiesce = validateStagingRunningSet(runningEntries, { apiContainer, databaseContainer });
+    for (const name of toQuiesce) {
+      await runCommand('docker', ['stop', name]);
+      quiesced.push(name);
+    }
+    const writersBeforeBackup = await psql({
       container: databaseContainer,
       user: databaseUser,
       database: databaseName,
       sql: `SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()`,
     });
-    if (writers !== '0') fail('foreign_database_writers_present');
+    if (writersBeforeBackup !== '0') fail('foreign_database_writers_before_backup');
     backup = await writeDatabaseBackup({ databaseContainer, databaseUser, databaseName, backupDirectory, runId });
+    const writersAfterBackup = await psql({
+      container: databaseContainer,
+      user: databaseUser,
+      database: databaseName,
+      sql: `SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()`,
+    });
+    if (writersAfterBackup !== '0') fail('foreign_database_writers_after_backup');
 
     isolatedVolume = `sit-staging-rehearsal-${runId}`;
     isolatedContainer = `sit-staging-rehearsal-pg-${runId}`;

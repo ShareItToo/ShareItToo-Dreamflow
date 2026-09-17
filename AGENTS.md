@@ -277,4 +277,7 @@ with the exact migration delta and record a protected backup/restore rehearsal
 against the bound source commit. Health and readiness prove liveness only, not
 rollback compatibility. If no compatible recovery image is proven, isolate
 Staging after the forward attempt; never boot an observed old image or run an
-automatic down migration/database restore.
+automatic down migration/database restore. Filesystem safety checks must finish
+before any backup-directory mutation, and the complete Staging container target
+set must be label-validated before any partial quiesce; check for foreign DB
+writers immediately before and after the protected backup.
