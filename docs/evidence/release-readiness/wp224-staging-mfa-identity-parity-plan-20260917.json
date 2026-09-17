@@ -97,6 +97,28 @@
           "databaseMutated": false
         }
       },
+      "wp244RuntimeProof": {
+        "status": "failed-readiness-stopped",
+        "runtimeCommit": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+        "opsCommit": "7ccf56ccf7caf335c93c0bd7ed36d0fa2c5bb926",
+        "image": "shareittoo-api-wp244:f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+        "imageDigest": "sha256:38be66d170746b20bfc4c08c70655a72f9a6ce9eb700278a129d5acdedc22620",
+        "target": "disposable-internal-network",
+        "startup": "passed; API listening on 0.0.0.0:8080",
+        "migrations": "001-087 ledger confirmed",
+        "phase": "health_readiness",
+        "code": "health_degraded_existing_review_state",
+        "degradedChecks": {
+          "paymentRecoveryNeedsReview": 2,
+          "supportNextUpdateOverdue": 1
+        },
+        "cleanup": "passed",
+        "evidenceWritten": false,
+        "liveDatabaseMutated": false,
+        "liveSchema": "001-074",
+        "apiResumed": false,
+        "note": "Readiness remained 503 on restored non-empty data; no MFA HTTP flow was claimed."
+      },
       "priorImageSqlContractComparison": {
         "status": "required-not-executed",
         "observedPriorStagingCommit": "df39a14b7a19afe467842461a28f1e77fec8445e",
