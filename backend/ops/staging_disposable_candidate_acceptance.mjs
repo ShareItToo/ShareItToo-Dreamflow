@@ -87,8 +87,10 @@ export async function waitForFinalPostgresReady({ command, container, attempts =
   let markerSeen = false;
   let stableSqlSuccesses = 0;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const logsResult = await command('docker', ['logs', container], { phase: 'database_init_logs' }).catch(() => ({ stdout: '' }));
-    const logs = String(typeof logsResult === 'string' ? logsResult : logsResult.stdout ?? '');
+    const logsResult = await command('docker', ['logs', container], { phase: 'database_init_logs' }).catch(() => ({ stdout: '', stderr: '' }));
+    const logs = typeof logsResult === 'string'
+      ? logsResult
+      : `${logsResult.stdout ?? ''}\n${logsResult.stderr ?? ''}`;
     if (logs.includes('PostgreSQL init process complete; ready for start up.')) markerSeen = true;
     if (markerSeen) {
       try {

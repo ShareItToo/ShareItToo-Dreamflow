@@ -123,7 +123,9 @@ test('fresh PostgreSQL readiness requires init marker and two stable SQL success
     events.push(options.phase);
     if (options.phase === 'database_init_logs') {
       logReads += 1;
-      return logReads < 3 ? 'database system is ready to accept connections' : 'PostgreSQL init process complete; ready for start up.';
+      return logReads < 3
+        ? { stdout: 'database system is ready to accept connections', stderr: '' }
+        : { stdout: '', stderr: 'PostgreSQL init process complete; ready for start up.' };
     }
     if (options.phase === 'database_stable_sql') {
       sqlReads += 1;
