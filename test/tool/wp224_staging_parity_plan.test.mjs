@@ -47,7 +47,7 @@ test('WP224 staging parity plan is bound and fail-closed', async () => {
   assert.equal(plan.sourceToStagingDelta.protectedRehearsal.exactTargetCommit, plan.repository.deployableSourceCommit);
   assert.equal(
     plan.sourceToStagingDelta.protectedRehearsal.exactOpsCommit,
-    '1139fd699835f914dbdcfe346331df73df0477b0',
+    'd42d692cfda6fef4c17093631820274547e5bd37',
   );
   assert.equal(
     plan.sourceToStagingDelta.protectedRehearsal.priorImageSqlContractComparison.status,

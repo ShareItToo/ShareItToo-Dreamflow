@@ -65,7 +65,7 @@
       "operation": "backend/ops/staging_forward_migration_rehearsal.mjs",
       "status": "prepared-not-executed",
       "exactTargetCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
-      "exactOpsCommit": "1139fd699835f914dbdcfe346331df73df0477b0",
+      "exactOpsCommit": "d42d692cfda6fef4c17093631820274547e5bd37",
       "invocationBinding": "SIT_STAGING_REHEARSAL_OPS_COMMIT must equal exactOpsCommit; runtime source remains exactTargetCommit",
       "currentAppliedRange": "001-074",
       "forwardRange": "075-087",
@@ -82,7 +82,22 @@
         "rule": "compare the prior image SQL/runtime contract with migrations 075-087 before any shared Staging forward attempt; health/readiness cannot substitute"
       },
       "filesystemAndQuiesceInvariant": "validate every existing backup path component (lstat/realpath/owner/mode, no symlink or repository escape) before creating anything; validate the complete Staging container/service label set before stopping any container; check foreign writers immediately before and after pg_dump",
-      "failureEvidence": "sanitized mode-0600 fail-closed report retains quiesced service state; services are not resumed after an unsuccessful rehearsal"
+      "failureEvidence": "sanitized mode-0600 fail-closed report retains quiesced service state; services are not resumed after an unsuccessful rehearsal",
+      "controlledAcceptance": {
+        "compose": "backend/compose.staging.acceptance.yml",
+        "status": "prepared-not-executed",
+        "acceptancePort": 18081,
+        "publicStagingPort": 18080,
+        "exactRuntimeCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
+        "exactOpsCommit": "d42d692cfda6fef4c17093631820274547e5bd37",
+        "target": "loopback-only",
+        "publicCandidateServing": false,
+        "syntheticMfaFlow": "enroll-pending-cancel",
+        "providerMode": "payment-memory-stripe-false-identity-disabled-listing-ai-mock",
+        "promotion": "explicit-only-after-loopback-acceptance",
+        "defaultDeploy": "blocked-until-evidence-and-confirmation",
+        "execution": "not-executed-in-this-package"
+      }
     },
     "riskDomainsInOpenRange": [
       "refund transfer reversal recovery",
