@@ -11,6 +11,7 @@ import {
   assertPublicCandidateNotServed,
   assertLoopbackPortAvailable,
   cleanupAcceptance,
+  validateAcceptanceInventory,
   runCommand,
   runCommandStatus,
   runCommandWithInput,
@@ -138,8 +139,45 @@ test('loopback port preflight rejects an occupied listener and accepts a free on
 test('cleanup is identity-bound and never requires Compose secret interpolation', async () => {
   const runner = await readFile(new URL('../../backend/ops/staging_controlled_acceptance.mjs', import.meta.url), 'utf8');
   assert.match(runner, /'ps', '-aq', '--filter', 'label=com\.shareittoo\.staging\.controlled_acceptance=true'/u);
-  assert.match(runner, /docker', \['rm', '-f', id\]/u);
+  assert.match(runner, /command\('docker', \['rm', '-f', entry\.id\]/u);
   assert.match(runner, /return writeAcceptanceEvidence\(evidenceFile, evidence\)/u);
+});
+
+test('cleanup validates the complete inventory before any removal', async () => {
+  const removed = [];
+  let ids = ['one', 'two'];
+  const statusCommand = async () => ({ code: 0, stdout: ids.join('\n') });
+  const command = async (_binary, args) => {
+    if (args[0] === 'inspect') {
+      return args[1] === 'one'
+        ? '/shareittoo-staging-acceptance-api|true|' + runtimeCommit
+        : '/other|true|' + runtimeCommit;
+    }
+    if (args[0] === 'rm') { removed.push(args[2]); ids = []; return ''; }
+    throw new Error('unexpected_fake_docker_command');
+  };
+  await assert.rejects(
+    cleanupAcceptance({ runtimeCommit, command, statusCommand }),
+    (error) => error?.code === 'acceptance_cleanup_duplicate',
+  );
+  assert.deepEqual(removed, []);
+
+  ids = ['one'];
+  await assert.rejects(
+    cleanupAcceptance({ runtimeCommit, command: async (_binary, args) => {
+      if (args[0] === 'inspect') return '/other|true|' + runtimeCommit;
+      if (args[0] === 'rm') { removed.push(args[2]); ids = []; return ''; }
+      throw new Error('unexpected_fake_docker_command');
+    }, statusCommand }),
+    (error) => error?.code === 'acceptance_cleanup_identity_failed',
+  );
+  assert.deepEqual(removed, []);
+
+  ids = ['one'];
+  const valid = await cleanupAcceptance({ runtimeCommit, command, statusCommand });
+  assert.deepEqual(valid, { removed: 1 });
+  assert.deepEqual(removed, ['one']);
+  assert.deepEqual(validateAcceptanceInventory([], runtimeCommit), []);
 });
 
 test('ordinary staging deployment cannot bypass controlled acceptance', async (t) => {

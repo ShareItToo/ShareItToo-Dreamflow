@@ -117,27 +117,40 @@ export function assertLoopbackPortAvailable(port) {
   });
 }
 
-async function acceptanceContainerIds() {
-  const result = await runCommandStatus('docker', [
+async function acceptanceContainerIds(statusCommand = runCommandStatus) {
+  const result = await statusCommand('docker', [
     'ps', '-aq', '--filter', 'label=com.shareittoo.staging.controlled_acceptance=true',
   ]);
   if (result.code !== 0) fail('acceptance_inventory_failed');
   return result.stdout.split(/\s+/u).filter(Boolean);
 }
 
-export async function cleanupAcceptance({ runtimeCommit }) {
-  const ids = await acceptanceContainerIds();
+export function validateAcceptanceInventory(inventory, runtimeCommit) {
+  if (!Array.isArray(inventory) || inventory.length > 1) fail('acceptance_cleanup_duplicate');
+  for (const entry of inventory) {
+    if (entry?.name !== 'shareittoo-staging-acceptance-api'
+        || entry?.controlled !== 'true' || entry?.commit !== runtimeCommit) {
+      fail('acceptance_cleanup_identity_failed');
+    }
+  }
+  return inventory;
+}
+
+export async function cleanupAcceptance({ runtimeCommit, command = runCommand, statusCommand = runCommandStatus }) {
+  const ids = await acceptanceContainerIds(statusCommand);
+  const inventory = [];
   for (const id of ids) {
-    const identity = await runCommand('docker', [
+    const identity = await command('docker', [
       'inspect', id, '--format', '{{.Name}}|{{index .Config.Labels "com.shareittoo.staging.controlled_acceptance"}}|{{index .Config.Labels "com.shareittoo.staging.runtime_commit"}}',
     ], { phase: 'cleanup_identity' });
     const [name, controlled, commit] = identity.replace(/^\//u, '').split('|');
-    if (name !== 'shareittoo-staging-acceptance-api' || controlled !== 'true' || commit !== runtimeCommit) {
-      fail('acceptance_cleanup_identity_failed');
-    }
-    await runCommand('docker', ['rm', '-f', id], { phase: 'cleanup_remove' });
+    inventory.push({ id, name, controlled, commit });
   }
-  const remaining = await acceptanceContainerIds();
+  validateAcceptanceInventory(inventory, runtimeCommit);
+  for (const entry of inventory) {
+    await command('docker', ['rm', '-f', entry.id], { phase: 'cleanup_remove' });
+  }
+  const remaining = await acceptanceContainerIds(statusCommand);
   if (remaining.length > 0) fail('acceptance_cleanup_incomplete');
   return Object.freeze({ removed: ids.length });
 }
@@ -293,7 +306,7 @@ async function writeAcceptanceEvidence(evidenceFile, evidence) {
   return evidence;
 }
 
-async function verifyAcceptance({ runtimeCommit, opsCommit, port, evidenceFile, writeEvidence = true }) {
+async function verifyAcceptance({ runtimeCommit, opsCommit, port }) {
   const response = await fetch(`http://127.0.0.1:${port}/version`);
   if (!response.ok) fail('acceptance_version_unreachable');
   const version = await response.json();
@@ -315,15 +328,14 @@ async function verifyAcceptance({ runtimeCommit, opsCommit, port, evidenceFile, 
     providerTraffic: false,
     createdAt: new Date().toISOString(),
   };
-  return writeEvidence ? writeAcceptanceEvidence(evidenceFile, evidence) : evidence;
+  return evidence;
 }
 
-async function runAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }) {
+async function verifyAndCleanupAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }) {
   let evidence;
   let operationError;
   try {
-    await startAcceptance({ runtimeCommit, opsCommit, port });
-    evidence = await verifyAcceptance({ runtimeCommit, opsCommit, port, evidenceFile, writeEvidence: false });
+    evidence = await verifyAcceptance({ runtimeCommit, opsCommit, port });
   } catch (error) {
     operationError = error;
   }
@@ -336,6 +348,22 @@ async function runAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }) {
   if (cleanupError) throw cleanupError;
   if (operationError) throw operationError;
   return writeAcceptanceEvidence(evidenceFile, evidence);
+}
+
+async function runAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }) {
+  let startError;
+  try {
+    await startAcceptance({ runtimeCommit, opsCommit, port });
+  } catch (error) {
+    startError = error;
+  }
+  if (startError) {
+    let cleanupError;
+    try { await cleanupAcceptance({ runtimeCommit }); } catch (error) { cleanupError = error; }
+    if (cleanupError) throw cleanupError;
+    throw startError;
+  }
+  return verifyAndCleanupAcceptance({ runtimeCommit, opsCommit, port, evidenceFile });
 }
 
 async function promotePublic({ runtimeCommit, opsCommit, evidenceFile }) {
@@ -352,10 +380,7 @@ async function promotePublic({ runtimeCommit, opsCommit, evidenceFile }) {
     phase: 'acceptance_validation',
   });
   if (process.env.SIT_STAGING_PUBLIC_RELEASE_CONFIRM !== runtimeCommit) fail('public_release_confirmation_required');
-  await runCommand('docker', [
-    'compose', '--project-name', 'sit-staging-acceptance', '--env-file', join(backendRoot, '.env.staging'),
-    '-f', composeFile, 'down', '--remove-orphans',
-  ], { phase: 'acceptance_stop' });
+  await cleanupAcceptance({ runtimeCommit });
   await runCommand(join(backendRoot, 'ops', 'deploy_release.sh'), ['staging', runtimeCommit], {
     env: {
       ...process.env,
@@ -377,7 +402,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const port = Number(process.env.STAGING_ACCEPTANCE_PORT ?? '18082');
     const evidenceFile = process.env.SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE ?? '';
     if (mode === 'start') process.stdout.write(`${JSON.stringify(await startAcceptance({ runtimeCommit, opsCommit, port }))}\n`);
-    else if (mode === 'verify') process.stdout.write(`${JSON.stringify(await verifyAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }))}\n`);
+        else if (mode === 'verify') process.stdout.write(`${JSON.stringify(await verifyAndCleanupAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }))}\n`);
     else if (mode === 'run') process.stdout.write(`${JSON.stringify(await runAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }))}\n`);
     else if (mode === 'release') process.stdout.write(`${JSON.stringify(await promotePublic({ runtimeCommit, opsCommit, evidenceFile }))}\n`);
     else fail('mode_invalid');

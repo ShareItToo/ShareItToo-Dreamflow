@@ -73,7 +73,7 @@ test('MFA key lifecycle requires exact creation confirmation and never writes in
   }
 });
 
-test('runtime permission preparation changes metadata only and requires exact confirmation', async () => {
+test('runtime permission preparation changes metadata only and requires exact confirmation', { skip: process.getuid?.() !== 0 }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'sit-mfa-runtime-'));
   try {
     const file = join(root, 'mfa-key');
@@ -106,7 +106,7 @@ test('runtime permission preparation changes metadata only and requires exact co
   }
 });
 
-test('new runtime-readable MFA keys are created ready for the acceptance container', async () => {
+test('new runtime-readable MFA keys are created ready for the acceptance container', { skip: process.getuid?.() !== 0 }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'sit-mfa-runtime-create-'));
   try {
     const file = join(root, 'mfa-key');

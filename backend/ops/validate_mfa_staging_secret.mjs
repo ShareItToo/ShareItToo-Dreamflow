@@ -27,6 +27,20 @@ function inside(parent, candidate) {
   return path === '' || (!path.startsWith('..') && !isAbsolute(path));
 }
 
+export function isMfaStagingSecretPermissionsSafe({
+  mode,
+  uid,
+  gid,
+  runtimeReadable = false,
+  ownerUid = 0,
+  runtimeGroup = 65532,
+} = {}) {
+  const expectedMode = runtimeReadable ? 0o640 : 0o600;
+  return (mode & 0o777) === expectedMode
+    && uid === ownerUid
+    && (!runtimeReadable || gid === runtimeGroup);
+}
+
 export function validateMfaStagingSecret({
   filePath,
   repository = repositoryRoot,
@@ -52,10 +66,15 @@ export function validateMfaStagingSecret({
       fail('mfa_staging_secret_type_invalid');
     }
     if (inside(resolvedRepository, resolvedFile)) fail('mfa_staging_secret_inside_repository');
-    const expectedMode = runtimeReadable ? 0o640 : 0o600;
-    const ownerMatches = typeof process.getuid !== 'function' || metadata.uid === process.getuid();
-    const groupMatches = !runtimeReadable || metadata.gid === runtimeGroup;
-    if ((metadata.mode & 0o777) !== expectedMode || !ownerMatches || !groupMatches) {
+    const ownerUid = typeof process.getuid === 'function' ? process.getuid() : metadata.uid;
+    if (!isMfaStagingSecretPermissionsSafe({
+      mode: metadata.mode,
+      uid: metadata.uid,
+      gid: metadata.gid,
+      runtimeReadable,
+      ownerUid,
+      runtimeGroup,
+    })) {
       fail('mfa_staging_secret_permissions_invalid');
     }
     if (metadata.size < 16 || metadata.size > 128) fail('mfa_staging_secret_size_invalid');

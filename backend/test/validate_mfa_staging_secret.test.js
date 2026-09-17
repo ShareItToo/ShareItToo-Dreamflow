@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
 
-import { validateMfaStagingSecret } from '../ops/validate_mfa_staging_secret.mjs';
+import {
+  isMfaStagingSecretPermissionsSafe,
+  validateMfaStagingSecret,
+} from '../ops/validate_mfa_staging_secret.mjs';
 
 const encodedKey = Buffer.alloc(32, 8).toString('base64url');
 
@@ -63,7 +66,14 @@ test('MFA staging secret gate rejects a key file inside the repository', async (
   }
 });
 
-test('MFA runtime gate requires root:65532 mode 0640 while storage gate stays owner-only', async () => {
+test('MFA permission predicate covers portable storage/runtime modes', () => {
+  assert.equal(isMfaStagingSecretPermissionsSafe({ mode: 0o600, uid: 0, gid: 0 }), true);
+  assert.equal(isMfaStagingSecretPermissionsSafe({ mode: 0o640, uid: 0, gid: 65532, runtimeReadable: true }), true);
+  assert.equal(isMfaStagingSecretPermissionsSafe({ mode: 0o640, uid: 501, gid: 65532, runtimeReadable: true }), false);
+  assert.equal(isMfaStagingSecretPermissionsSafe({ mode: 0o644, uid: 0, gid: 65532, runtimeReadable: true }), false);
+});
+
+test('MFA runtime gate requires root:65532 mode 0640 while storage gate stays owner-only', { skip: process.getuid?.() !== 0 }, async () => {
   const files = await fixture();
   try {
     await chown(files.file, 0, 65532);
