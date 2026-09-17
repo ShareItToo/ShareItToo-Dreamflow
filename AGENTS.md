@@ -64,6 +64,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   example active listings versus drafts) and prove the expected tab, route and
   post-restart value. Evidence from a neighboring tab or a backend-only write
   cannot close an explicitly required app projection or edit gate.
+- Bind every package command to the repository root verified in its preflight.
+  After any missing-workdir or wrong-worktree error, discard that stale path
+  immediately and use only the verified root for the rest of the package; do
+  not retry a path inherited from an older task or chat.
 
 ## Project-safe handoffs
 
