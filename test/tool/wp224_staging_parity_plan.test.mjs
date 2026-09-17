@@ -43,11 +43,23 @@ test('WP224 staging parity plan is bound and fail-closed', async () => {
   assert.equal(plan.rollback.migrationRollback.automaticDownMigration, false);
   assert.equal(plan.sourceToStagingDelta.candidateMigrationRange.files, 26);
   assert.equal(plan.sourceToStagingDelta.candidateMigrationRange.upMigrations, 13);
-  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.status, 'prepared-not-executed');
+  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.status, 'passed-executed');
   assert.equal(plan.sourceToStagingDelta.protectedRehearsal.exactTargetCommit, plan.repository.deployableSourceCommit);
   assert.equal(
     plan.sourceToStagingDelta.protectedRehearsal.exactOpsCommit,
+    '06dce07a048e7ed2aebd41961be8a346092a4add',
+  );
+  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.executionEvidence.status, 'passed');
+  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.executionEvidence.backup.bytes, 3855507);
+  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.executionEvidence.liveStaging.databaseMutated, false);
+  assert.equal(plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.status, 'prepared-not-executed');
+  assert.equal(
+    plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.exactOpsCommit,
     '6151e940d2599ec11b308d18d73a1e759d2c9186',
+  );
+  assert.notEqual(
+    plan.sourceToStagingDelta.protectedRehearsal.exactOpsCommit,
+    plan.sourceToStagingDelta.protectedRehearsal.controlledAcceptance.exactOpsCommit,
   );
   assert.equal(
     plan.sourceToStagingDelta.protectedRehearsal.priorImageSqlContractComparison.status,

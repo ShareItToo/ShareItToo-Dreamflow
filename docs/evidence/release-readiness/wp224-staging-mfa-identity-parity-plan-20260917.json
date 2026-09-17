@@ -63,18 +63,40 @@
     },
     "protectedRehearsal": {
       "operation": "backend/ops/staging_forward_migration_rehearsal.mjs",
-      "status": "prepared-not-executed",
+      "status": "passed-executed",
       "exactTargetCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
-      "exactOpsCommit": "6151e940d2599ec11b308d18d73a1e759d2c9186",
+      "exactOpsCommit": "06dce07a048e7ed2aebd41961be8a346092a4add",
       "invocationBinding": "SIT_STAGING_REHEARSAL_OPS_COMMIT must equal exactOpsCommit; runtime source remains exactTargetCommit",
       "currentAppliedRange": "001-074",
       "forwardRange": "075-087",
       "upMigrations": 13,
       "migrationFiles": 26,
-      "backupRestore": "required-before-shared-Staging-forward-migration; no live backup created in this package",
+      "backupRestore": "protected non-empty Staging backup created and isolated restore passed; live database was not migrated",
       "functionalProbes": "required on the restored non-empty application data; transactional synthetic probes only, no provider traffic",
       "servicesAfterPass": "all quiesced services remain stopped; controlled synthetic acceptance must pass before an explicit exact-new-API release step",
       "cleanup": "isolated container and volume removal is verified; any removal/absence-check failure overrides PASS and requires recovery",
+      "executionEvidence": {
+        "status": "passed",
+        "runtimeCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
+        "opsCommit": "06dce07a048e7ed2aebd41961be8a346092a4add",
+        "backup": {
+          "basename": "staging-20260917211705-4e345294.dump",
+          "bytes": 3855507,
+          "sha256": "0fb025cad33f9ca9642603e0239103d85368996456af540de3d394c2bd64e193",
+          "mode": "0600"
+        },
+        "isolatedRestore": {
+          "migrations": "001-087",
+          "foreignKeyConstraints": 367,
+          "functionalProbes": "passed",
+          "temporaryResourcesRemoved": true
+        },
+        "liveStaging": {
+          "schema": "001-074",
+          "apiResumed": false,
+          "databaseMutated": false
+        }
+      },
       "priorImageSqlContractComparison": {
         "status": "required-not-executed",
         "observedPriorStagingCommit": "df39a14b7a19afe467842461a28f1e77fec8445e",
@@ -270,5 +292,5 @@
     "playStoreChanged": false,
     "deviceAccessed": false
   },
-  "next": "Execute the protected rehearsal only under its exact target/confirmation gate, then re-read Staging and await a separately authorized phase-1 deployment gate; keep Identity and Payment provider activation closed."
+  "next": "Execute controlled loopback acceptance only under its exact runtime/Ops/key gate, then re-read Staging and await a separately authorized phase-1 deployment gate; keep Identity and Payment provider activation closed."
 }
