@@ -64,6 +64,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   example active listings versus drafts) and prove the expected tab, route and
   post-restart value. Evidence from a neighboring tab or a backend-only write
   cannot close an explicitly required app projection or edit gate.
+- Any client-source change invalidates previously built or installed APK
+  evidence. Before the next device assertion, build once from the current
+  source, assign a distinct local-QA version, verify package and SHA-256, and
+  install that artifact; never continue runtime proof with a stale binary.
 - Bind every package command to the repository root verified in its preflight.
   After any missing-workdir or wrong-worktree error, discard that stale path
   immediately and use only the verified root for the rest of the package; do
