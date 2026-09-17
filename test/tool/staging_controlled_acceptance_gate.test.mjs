@@ -6,7 +6,12 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 import { validateEvidence } from '../../backend/ops/validate_staging_controlled_acceptance.mjs';
-import { assertPublicCandidateNotServed, runCommandStatus } from '../../backend/ops/staging_controlled_acceptance.mjs';
+import {
+  assertPublicCandidateNotServed,
+  runCommand,
+  runCommandStatus,
+  runCommandWithInput,
+} from '../../backend/ops/staging_controlled_acceptance.mjs';
 
 const runtimeCommit = '8'.repeat(40);
 const opsCommit = '9'.repeat(40);
@@ -66,6 +71,25 @@ test('status runner preserves exit status and sanitizes spawn errors', async () 
     runCommandStatus('/definitely/missing/sit-command', []),
     (error) => error?.message === 'controlled_acceptance_status_failed'
       && !error.message.includes('definitely/missing'),
+  );
+});
+
+test('acceptance command stdin is ignored when empty and safely handles input close races', async () => {
+  const noInput = await runCommand(process.execPath, [
+    '-e', 'process.stdin.destroy(); process.stdout.write("ok")',
+  ], { phase: 'no_input_close' });
+  assert.equal(noInput, 'ok');
+
+  const echoed = await runCommandWithInput(process.execPath, [
+    '-e', 'let value=""; process.stdin.on("data", chunk => { value += chunk; }); process.stdin.on("end", () => process.stdout.write(value));',
+  ], 'payload', { phase: 'input_consumer' });
+  assert.equal(echoed, 'payload');
+
+  await assert.rejects(
+    () => runCommandWithInput(process.execPath, [
+      '-e', 'process.stdin.destroy(); setTimeout(() => process.exit(0), 50)',
+    ], 'payload'.repeat(2_000_000), { phase: 'early_close' }),
+    (error) => error?.message === 'controlled_acceptance_early_close_input_failed',
   );
 });
 

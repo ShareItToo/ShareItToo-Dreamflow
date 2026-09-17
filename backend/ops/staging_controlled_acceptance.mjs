@@ -20,22 +20,50 @@ function fullCommit(value, name) {
   return value;
 }
 
-function runCommand(command, args, { env = process.env, phase = 'command' } = {}) {
-  return runCommandWithInput(command, args, '', { env, phase });
+export function runCommand(command, args, { env = process.env, phase = 'command' } = {}) {
+  return runCommandWithInput(command, args, undefined, { env, phase });
 }
 
-function runCommandWithInput(command, args, input, { env = process.env, phase = 'command' } = {}) {
+export function runCommandWithInput(command, args, input, { env = process.env, phase = 'command' } = {}) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd: backendRoot, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const hasInput = input !== undefined && input !== '';
+    let settled = false;
+    let inputFinished = !hasInput;
+    const failure = (suffix = '') => new Error(`controlled_acceptance_${phase}${suffix}_failed`);
+    const settleFailure = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+    const child = spawn(command, args, {
+      cwd: backendRoot,
+      env,
+      stdio: [hasInput ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+    });
     let stdout = '';
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { stdout += chunk; });
-    child.once('error', () => reject(new Error(`controlled_acceptance_${phase}_failed`)));
+    child.once('error', () => settleFailure(failure()));
     child.once('close', (code) => {
-      if (code === 0) resolvePromise(stdout.trim());
-      else reject(new Error(`controlled_acceptance_${phase}_failed`));
+      if (settled) return;
+      if (hasInput && !inputFinished) {
+        settleFailure(failure('_input'));
+      } else if (code === 0) {
+        settled = true;
+        resolvePromise(stdout.trim());
+      } else {
+        settleFailure(failure());
+      }
     });
-    child.stdin.end(input);
+    if (hasInput) {
+      child.stdin.once('error', () => settleFailure(failure('_input')));
+      child.stdin.once('finish', () => { inputFinished = true; });
+      try {
+        child.stdin.end(input);
+      } catch {
+        settleFailure(failure('_input'));
+      }
+    }
   });
 }
 

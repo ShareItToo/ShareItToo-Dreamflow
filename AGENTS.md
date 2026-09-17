@@ -39,6 +39,9 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   authorized runtime state can be reconstructed server-side or a missing key
   can be atomically generated in the approved external directory; exhaust that
   safe path without exposing values, escalating only an unavoidable physical act.
+- Acceptance runner stdin invariant: commands without input use ignored stdin;
+  every piped-input command installs stdin error/close handling before writing,
+  and a deterministic early-close regression is required before live use.
 - A visible-function P0/P1 requires proven reachability from a current route or
   configuration. Unreachable legacy/dead code is tracked separately and is
   not itself a release blocker until reachability is demonstrated.
