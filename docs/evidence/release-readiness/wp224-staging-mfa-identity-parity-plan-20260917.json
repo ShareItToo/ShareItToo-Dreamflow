@@ -108,17 +108,27 @@
       "controlledAcceptance": {
         "compose": "backend/compose.staging.acceptance.yml",
         "status": "prepared-not-executed",
-        "acceptancePort": 18081,
-        "publicStagingPort": 18080,
-        "exactRuntimeCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
-        "exactOpsCommit": "6151e940d2599ec11b308d18d73a1e759d2c9186",
+      "acceptancePort": 18081,
+      "publicStagingPort": 18080,
+      "exactRuntimeCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
+        "exactOpsCommit": "aae3fc48824ecb67c9c69aa1e32877bd934b7d89",
         "target": "loopback-only",
         "publicCandidateServing": false,
         "syntheticMfaFlow": "enroll-pending-cancel",
         "providerMode": "payment-memory-stripe-false-identity-disabled-listing-ai-mock",
         "promotion": "explicit-only-after-loopback-acceptance",
-        "defaultDeploy": "blocked-until-evidence-and-confirmation",
-        "execution": "not-executed-in-this-package"
+      "defaultDeploy": "blocked-until-evidence-and-confirmation",
+        "execution": "not-executed-in-this-package",
+        "failedAttempt": {
+          "status": "failed",
+          "phase": "start_input",
+          "code": "controlled_acceptance_start_input_failed",
+          "cleanup": "passed",
+          "evidenceWritten": false,
+          "liveDatabaseMutated": false,
+          "liveSchema": "001-074",
+          "apiResumed": false
+        }
       }
     },
     "riskDomainsInOpenRange": [
