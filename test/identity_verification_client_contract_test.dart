@@ -101,6 +101,49 @@ void main() {
     }
   });
 
+  test('start parser accepts only the explicit local fixture without a URL', () {
+    const service = IdentityVerificationService();
+    final base = <String, dynamic>{
+      'sessionId': 'local-session',
+      'status': 'requires_input',
+      'livemode': false,
+      'updatedAt': '2026-01-01T00:00:00Z',
+    };
+    expect(
+      service.parseStartResponse({...base, 'testFixture': true}).url,
+      isNull,
+    );
+    for (final response in [
+      base,
+      {...base, 'testFixture': false},
+    ]) {
+      expect(
+        () => service.parseStartResponse(response),
+        throwsA(
+          isA<IdentityVerificationException>().having(
+            (error) => error.code,
+            'code',
+            'identity_verification_entrypoint_missing',
+          ),
+        ),
+      );
+    }
+    expect(
+      () => service.parseStartResponse({
+        ...base,
+        'testFixture': true,
+        'url': 'https://evil.example/test/session',
+      }),
+      throwsA(
+        isA<IdentityVerificationException>().having(
+          (error) => error.code,
+          'code',
+          'invalid_identity_verification_url',
+        ),
+      ),
+    );
+  });
+
   testWidgets('requires_input offers separate resume and status actions', (tester) async {
     final service = _FakeIdentityService(IdentityVerificationState(
       sessionId: 'local-session',

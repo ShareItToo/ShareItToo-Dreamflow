@@ -140,6 +140,15 @@ class IdentityVerificationService {
       },
       headers: {'Idempotency-Key': idempotencyKey},
     );
+    return parseStartResponse(response);
+  }
+
+  /// Parses the server-authoritative start response, including the explicit
+  /// local test-fixture exception for an in-app requires_input state without
+  /// a provider URL. Production/provider responses must always carry a safe
+  /// hosted entrypoint for requires_input.
+  IdentityVerificationSession parseStartResponse(
+      Map<String, dynamic> response) {
     final state = _state(response);
     final url = response['url'];
     if (url != null && (url is! String || !isSafeEntrypoint(url))) {
@@ -147,7 +156,8 @@ class IdentityVerificationService {
           502, 'invalid_identity_verification_url');
     }
     if (url == null &&
-        state.status == IdentityVerificationStatus.requiresInput) {
+        state.status == IdentityVerificationStatus.requiresInput &&
+        response['testFixture'] != true) {
       throw const IdentityVerificationException(
           502, 'identity_verification_entrypoint_missing');
     }

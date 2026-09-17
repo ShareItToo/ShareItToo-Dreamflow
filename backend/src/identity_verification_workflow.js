@@ -268,7 +268,7 @@ export async function startIdentityVerification({
     entry = providerPublicResult(await provider.createIdentityVerificationSession({
       idempotencyKey: key,
       providerIdempotencyKey: providerKey,
-    }));
+    }), { requireEntrypoint: provider.mode !== 'memory' });
     const reconciled = await finalizeCreatedSession(client, {
       rowId: row.id,
       expectedPendingProviderId: row.provider_session_id,
@@ -397,7 +397,12 @@ export async function startIdentityVerification({
       ? publicEntrypoint(entry)
       : {}),
   });
-  return { ...fresh, replayed: Boolean(existing.rowCount), resumed: Boolean(existing.rowCount) };
+  return {
+    ...fresh,
+    testFixture: provider.mode === 'memory',
+    replayed: Boolean(existing.rowCount),
+    resumed: Boolean(existing.rowCount),
+  };
 }
 
 export async function refreshIdentityVerification({ client, actor, provider, requestId = null, audit }) {

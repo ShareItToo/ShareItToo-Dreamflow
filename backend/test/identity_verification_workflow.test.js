@@ -112,7 +112,9 @@ test('test-mode identity start is idempotent and never exposes client_secret', a
     client, actor, provider, idempotencyKey: 'identity-key-12345678', consentVersion: IDENTITY_CONSENT_VERSION,
   });
   assert.equal(first.status, 'requires_input');
-  assert.match(first.url, /^https:\/\/verify\.stripe\.com\/test\//u);
+  assert.equal(first.url, undefined);
+  assert.equal(first.testFixture, true);
+  assert.equal(JSON.stringify(first).includes('verify.stripe.com'), false);
   assert.equal('clientSecret' in first, false);
   const replay = await startIdentityVerification({
     client, actor, provider, idempotencyKey: 'identity-key-12345678', consentVersion: IDENTITY_CONSENT_VERSION,
@@ -120,6 +122,32 @@ test('test-mode identity start is idempotent and never exposes client_secret', a
   assert.equal(replay.replayed, true);
   assert.equal('clientSecret' in replay, false);
   assert.equal(client.rows.length, 1);
+});
+
+test('non-memory identity providers fail closed when the hosted entrypoint is absent', async () => {
+  const client = fakeClient();
+  const provider = {
+    mode: 'stripe',
+    enabled: true,
+    async createIdentityVerificationSession() {
+      return {
+        id: 'vs_missing_entrypoint_123456',
+        status: 'requires_input',
+        livemode: false,
+        url: null,
+      };
+    },
+  };
+  await assert.rejects(
+    startIdentityVerification({
+      client,
+      actor,
+      provider,
+      idempotencyKey: 'identity-key-42345678',
+      consentVersion: IDENTITY_CONSENT_VERSION,
+    }),
+    (error) => error?.code === 'identity_verification_provider_entrypoint_missing',
+  );
 });
 
 test('unknown webhook is retryable and ordered terminal status cannot regress', async () => {

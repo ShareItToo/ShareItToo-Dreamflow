@@ -245,7 +245,10 @@ export class StripeProvider {
         object: 'identity.verification_session',
         status: 'requires_input',
         livemode: false,
-        url: `https://verify.stripe.com/test/${digest.slice(0, 24)}`,
+        // The memory provider is a local deterministic fixture. It must not
+        // manufacture a real Stripe-hosted URL or cause provider interaction;
+        // only the Stripe transport may return that entrypoint.
+        url: null,
       };
       this.memory.set(providerIdempotencyKey, session);
       this.memory.set(id, session);

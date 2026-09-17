@@ -312,6 +312,11 @@ async function main() {
       FIREBASE_PHONE_VERIFICATION_ENABLED: 'false',
       PUBLIC_COMPLIANCE_APPROVED: 'false',
       FINANCIAL_DOCUMENTS_LIVE_ISSUANCE_APPROVED: 'false',
+      // Local QA must exercise the server-authoritative MFA and identity
+      // flows without relying on a developer shell's ambient configuration.
+      // The key is generated per process, never logged or persisted.
+      MFA_ENCRYPTION_KEY: crypto.randomBytes(32).toString('base64url'),
+      IDENTITY_VERIFICATION_TRANSPORT: 'memory',
     };
     logDescriptor = openSync(backendLog, 'a', 0o600);
     backendChild = spawn(process.execPath, ['src/server.js'], {

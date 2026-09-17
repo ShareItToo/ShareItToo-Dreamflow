@@ -31,9 +31,12 @@ test('local QA harness stays ephemeral, mock-only and zero-billing', () => {
     "STRIPE_LIVEMODE: 'false'",
     "FIREBASE_AUTH_ENABLED: 'false'",
     "PUBLIC_COMPLIANCE_APPROVED: 'false'",
+    "IDENTITY_VERIFICATION_TRANSPORT: 'memory'",
   ]) {
     assert.match(runner, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
   }
+  assert.match(runner, /MFA_ENCRYPTION_KEY:\s*crypto\.randomBytes\(32\)\.toString\('base64url'\)/u);
+  assert.match(runner, /never logged or persisted/u);
   assert.match(runner, /mkdtempSync\(join\(tmpdir\(\), tempPrefix\)\)/u);
   assert.match(runner, /rmSync\(runRoot, \{ recursive: true, force: true \}\)/u);
   assert.match(runner, /transientCredentialsOwnerOnly: true/u);
