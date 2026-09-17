@@ -6,9 +6,9 @@
   "scope": "staging-backend-reconciliation-only",
   "repository": {
     "branch": "codex/master-workflow-20260808",
-    "deployableSourceCommit": "bddc3b59b3adfcba8e7e532718625ebadc60070a",
-    "planEvidenceCommit": "bddc3b59b3adfcba8e7e532718625ebadc60070a",
-    "immutableImage": "shareittoo-api:bddc3b59b3adfcba8e7e532718625ebadc60070a",
+    "deployableSourceCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
+    "planEvidenceRevision": "d27324f2004458db5255276ec70e382f5518ae5a",
+    "immutableImage": "shareittoo-api:82221caa2b0fb58e701ded35198bf65e80ac9d03",
     "workingTreeAtCapture": "clean"
   },
   "currentStagingReadback": {
@@ -31,11 +31,11 @@
     "readbackMutations": false
   },
   "sourceToStagingDelta": {
-    "classification": "backend-image-parity-missing; database-migration-parity-reconciled-read-only",
+    "classification": "current-Staging-schema-read-back; candidate-image-and-database-parity-not-deployed",
     "missingSourceRevision": true,
     "sourceCommitDeltaFromObservedStaging": {
       "from": "df39a14b7a19afe467842461a28f1e77fec8445e",
-      "to": "bddc3b59b3adfcba8e7e532718625ebadc60070a",
+      "to": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
       "migrationFilesInSourceDelta": "075-087",
       "interpretation": "This is a source/Git delta only; it does not prove which migrations are applied in Staging."
     },
@@ -54,9 +54,10 @@
       "/v1/identity-verification/status"
     ],
     "candidateMigrationRange": {
-      "first": "080_mfa_totp",
+      "first": "075_refund_transfer_reversal_recovery",
       "last": "087_identity_verification_pilot_gate",
-      "files": 16,
+      "upMigrations": 13,
+      "files": 26,
       "direction": "forward-only reconciliation; do not run down migrations",
       "stagingAppliedState": "001-074 applied; 075-087 open for the current source"
     },
@@ -71,11 +72,11 @@
     ],
     "requiredSourceConfig": {
       "mfa": "server-side MFA encryption/secret configuration must already be present; values are not recorded",
-      "mfaComposeGap": "compose.staging.yml currently does not inject MFA_ENCRYPTION_KEY into the API container; status-route parity alone cannot close MFA readiness",
+      "mfaComposeGap": "resolved in the Staging MFA overlay; base compose remains provider-neutral and never receives a raw key",
       "mfaConfigPlan": {
         "requiredBeforeDeploy": true,
-        "injection": "add MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY} to the staging API environment, sourced from an owner-only host secret outside Git",
-        "preflight": "presence and strict 32-byte base64url/hex shape only; never print, persist, or include the value in evidence",
+        "injection": "MFA_ENCRYPTION_KEY_FILE is supplied by compose.staging.mfa.yml from an owner-only external file; direct raw environment injection is forbidden",
+        "preflight": "validate_mfa_staging_secret.mjs checks presence, path, permissions and strict 32-byte shape without printing or persisting the value",
         "rotation": "keep the key stable for existing TOTP ciphertext; rotate only through a versioned re-encryption/migration plan, never by replacement during parity deploy"
       },
       "identity": "keep IDENTITY_VERIFICATION_TRANSPORT=disabled for parity-only deployment"
@@ -83,8 +84,10 @@
   },
   "reconciliationPlan": {
     "phase1ParityOnly": [
-      "Build and publish an immutable image labelled with sourceCommit",
-      "Deploy staging with the exact sourceCommit and run the migration runner",
+      "Build and publish one immutable image labelled with deployableSourceCommit",
+      "Take a protected Staging database backup and pass isolated restore or equivalent forward-compatibility verification",
+      "Deploy staging with the exact deployableSourceCommit and run migrations 075-087 forward-only",
+      "Retain the validated MFA overlay/key across any application-image rollback",
       "Keep PAYMENT_TRANSPORT=memory and STRIPE_LIVEMODE=false",
       "Keep IDENTITY_VERIFICATION_TRANSPORT=disabled; do not mount provider secrets",
       "Read back /version, /health and /health/ready plus authenticated MFA and identity status",
@@ -145,7 +148,7 @@
       "failureRule": "status 200 without successful enroll/cancel is not MFA readiness"
     },
     "mustMatch": {
-      "versionCommit": "bddc3b59b3adfcba8e7e532718625ebadc60070a",
+      "versionCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
       "paymentTransport": "memory",
       "paymentLivemode": false,
       "identityProvider": "disabled",
@@ -164,15 +167,23 @@
     "restoredBoundary": {
       "identityVerificationTransport": "disabled",
       "paymentTransport": "memory",
-      "stripeLivemode": false
+      "stripeLivemode": false,
+      "mfaOverlay": "retained",
+      "mfaCredentialSource": "file"
     },
     "verification": [
       "previous image id restored",
       "container health is healthy",
       "/health succeeds",
+      "MFA configured/file-source health remains valid when exposed by the restored image; otherwise the retained key file passes the non-secret validator",
       "rollback evidence is written with restricted permissions"
     ],
-    "migrationRollback": "do not down-migrate a shared staging database; use backup/restore or a forward-compatible corrective migration"
+    "migrationRollback": {
+      "automaticDownMigration": false,
+      "databaseBackupRequiredBeforeDeploy": true,
+      "isolatedRestoreOrForwardCompatibilityGateRequired": true,
+      "truth": "application/image/config rollback does not reverse forward-applied migrations 075-087"
+    }
   },
   "budget": {
     "prepAndParityEstimateEur": 0,
@@ -186,6 +197,9 @@
       "failed": 0,
       "skipped": 0
     },
+    "mfaSecretAndDeployGateTests": "10/10",
+    "mfaRollbackRetentionTest": "1/1",
+    "existingStripeAndLocalQaGates": "8/8",
     "postgresql": {
       "major": 16,
       "foundationAndForeignKey": "2/2",
@@ -205,5 +219,5 @@
     "playStoreChanged": false,
     "deviceAccessed": false
   },
-    "next": "Repeat schema_migrations readback, build the immutable image for deployableSourceCommit, and await a separately authorized phase-1 Staging deployment gate; keep Identity and Payment provider activation closed."
+  "next": "Repeat schema_migrations readback, take the protected backup/restore gate, build one immutable image for deployableSourceCommit, and await a separately authorized phase-1 Staging deployment gate; keep Identity and Payment provider activation closed."
 }

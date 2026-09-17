@@ -11,7 +11,7 @@ test('WP224 staging parity plan is bound and fail-closed', async () => {
   const plan = JSON.parse(await readFile(planPath, 'utf8'));
   assert.equal(
     plan.repository.deployableSourceCommit,
-    'bddc3b59b3adfcba8e7e532718625ebadc60070a',
+    '82221caa2b0fb58e701ded35198bf65e80ac9d03',
   );
   assert.equal(
     plan.sourceToStagingDelta.sourceCommitDeltaFromObservedStaging.migrationFilesInSourceDelta,
@@ -31,6 +31,12 @@ test('WP224 staging parity plan is bound and fail-closed', async () => {
   );
   assert.equal(plan.rollback.previousImageAndCommitCapturedBeforeDeploy, false);
   assert.equal(plan.rollback.requiredAtExecution, true);
+  assert.equal(plan.rollback.restoredBoundary.mfaOverlay, 'retained');
+  assert.equal(plan.rollback.migrationRollback.automaticDownMigration, false);
+  assert.equal(plan.sourceToStagingDelta.candidateMigrationRange.files, 26);
+  assert.equal(plan.sourceToStagingDelta.candidateMigrationRange.upMigrations, 13);
+  assert.match(plan.sourceToStagingDelta.requiredSourceConfig.mfaConfigPlan.injection, /MFA_ENCRYPTION_KEY_FILE/u);
+  assert.doesNotMatch(plan.sourceToStagingDelta.requiredSourceConfig.mfaConfigPlan.injection, /MFA_ENCRYPTION_KEY:\s*\$\{/u);
   assert.equal(plan.providerReadinessReadOnly.providerActivationProven, false);
   assert.equal(plan.providerReadinessReadOnly.mfaSecretPresence.stagingPresence, 'unknown; no authorized secret readback performed');
   assert.equal(plan.postDeployReadback.mfaFunctionalE2E.required, true);
