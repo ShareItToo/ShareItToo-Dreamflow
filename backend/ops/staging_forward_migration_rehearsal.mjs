@@ -292,6 +292,10 @@ async function writeDatabaseBackup({ databaseContainer, databaseUser, databaseNa
     output.destroy();
     throw commandFailure('pg_dump');
   }
+  // The child inherits the stream's descriptor but does not end the parent
+  // WriteStream. Close it explicitly after pg_dump exits so the dump is fully
+  // flushed before size, restore-list and checksum verification.
+  output.end();
   await outputClosed;
   const metadata = await stat(backupPath);
   if (metadata.size <= 0) fail('staging_backup_empty');
