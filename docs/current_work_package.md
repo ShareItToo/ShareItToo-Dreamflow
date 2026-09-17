@@ -3,7 +3,8 @@
 WP184 fixes the evidenced city-payload mismatch from WP183. Heilbronn is now a
 single entry in the central `DataService._cities` truth, and city derivation,
 autocomplete and create-listing payload wiring share that source. Focused
-deterministic tests pass **7/7**. Successor `1.0.0+2026091702` is bound to
+deterministic Flutter tests pass **6/6** and the rollover validator passes
+**23/23**. Successor `1.0.0+2026091702` is bound to
 source head `085e1e9869abb255767e0eaefd29315cb9cdadf8`; its signed AAB/APK,
 privacy report and exact package/SDK/signing/ZIP evidence are retained in the
 owner-only archive and bound by

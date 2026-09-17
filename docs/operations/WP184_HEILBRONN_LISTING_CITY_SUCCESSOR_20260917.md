@@ -38,9 +38,9 @@ Android SDK profile produced the verified artifact.
 
 ## Verification and holds
 
-Focused WP184 tests pass **7/7**. The canonical scoped CI-equivalent local
-technical regression completed with **exit 0**, including the repository tool
-inventory (`3126/3126`), Flutter/analyzer, Web/Wasm, loopback smoke, Android
+Focused Flutter tests pass **6/6**. The rollover validator passes **23/23**.
+The canonical scoped CI-equivalent local technical regression completed with
+**exit 0**, including the repository tool inventory (`3126/3126`), Flutter/analyzer, Web/Wasm, loopback smoke, Android
 debug/minSdk and release-host capacity checks. Privacy and rollover validators
 pass; GitHub Regression/CodeQL remain pending. The historical 1701 manifest is
 unchanged.
@@ -48,3 +48,9 @@ unchanged.
 Next action is Sol review, followed by the separately gated exact-head GitHub,
 Play and physical-device acceptance steps. This handover authorizes none of
 those external actions itself.
+
+## Counting rule
+
+Mentor rule: test totals may only be copied from the direct runner summary.
+Command-level validator checks are reported separately and must never be added
+to a Flutter or other test total.

@@ -7,8 +7,9 @@ Internal/Staging only and is bound to source head
 `085e1e9869abb255767e0eaefd29315cb9cdadf8`. WP183 found a real mismatch where
 the listing UI showed Heilbronn but the request payload fell back to Berlin;
 WP184 adds Heilbronn once to the central `DataService._cities` truth and wires
-the derived city into the payload. Focused tests pass **7/7** and the complete
-scoped CI-equivalent local regression exits **0** (`3126/3126` tool tests,
+the derived city into the payload. Focused Flutter tests pass **6/6** and the
+rollover validator passes **23/23**; the complete scoped CI-equivalent local
+regression exits **0** (`3126/3126` tool tests,
 Flutter/analyzer, Web/Wasm, loopback smoke, Android debug/minSdk and capacity).
 The signed AAB/APK, signing, SDK, privacy and ZIP checks passed and are
 retained in the owner-only archive. GitHub exact-head Regression/CodeQL,
