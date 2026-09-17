@@ -7,6 +7,7 @@ import {
   disposableCandidateCommit,
   disposablePostgresImage,
   pollVersion,
+  waitForFinalPostgresReady,
   runDisposableCandidateAcceptance,
 } from '../ops/staging_disposable_candidate_acceptance.mjs';
 
@@ -67,6 +68,7 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
       removeResource: async (kind, name) => { cleanup.push([kind, name]); return null; },
       prepareMfaKey: async () => ({ filePath: '/tmp/disposable-mfa-test-key', root: '/tmp' }),
       cleanupMfaKey: async () => {},
+      waitForPostgres: async () => { calls.push({ args: [], phase: 'final_init_gate' }); },
       fetchImpl,
       evidencePath: join(root, 'evidence.json'),
     });
@@ -102,6 +104,7 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
         removeResource: async () => null,
         prepareMfaKey: async () => ({ filePath: '/tmp/disposable-mfa-test-key', root: '/tmp' }),
         cleanupMfaKey: async () => {},
+        waitForPostgres: async () => {},
         fetchImpl,
         evidencePath: join(root, 'drift-evidence.json'),
       }),
@@ -110,6 +113,32 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('fresh PostgreSQL readiness requires init marker and two stable SQL successes before restore', async () => {
+  const events = [];
+  let logReads = 0;
+  let sqlReads = 0;
+  const command = async (_command, args, options = {}) => {
+    events.push(options.phase);
+    if (options.phase === 'database_init_logs') {
+      logReads += 1;
+      return logReads < 3 ? 'database system is ready to accept connections' : 'PostgreSQL init process complete; ready for start up.';
+    }
+    if (options.phase === 'database_stable_sql') {
+      sqlReads += 1;
+      if (sqlReads === 1) throw new Error('temporary restart');
+      return '1';
+    }
+    return '';
+  };
+  assert.equal(await waitForFinalPostgresReady({ command, container: 'sit-staging-rehearsal-pg-test', attempts: 6, intervalMs: 0 }), true);
+  assert.deepEqual(events.slice(0, 5), ['database_init_logs', 'database_init_logs', 'database_init_logs', 'database_stable_sql', 'database_init_logs']);
+  assert.equal(sqlReads, 3);
+  await assert.rejects(
+    () => waitForFinalPostgresReady({ command: async () => '', container: 'pg', attempts: 1, intervalMs: 0 }),
+    (error) => error.code === 'database_final_init_timeout',
+  );
 });
 
 test('candidate version polling is bounded and times out deterministically', async () => {

@@ -309,6 +309,9 @@ Safety helpers are not considered implemented until the real orchestrated
 runner calls them; focused tests must exercise configured resource names and
 the baseline-versus-post-start branch, including negative drift and cleanup
 failures.
+For a fresh official PostgreSQL volume, an initial `pg_isready` is not a final
+startup proof: require the official init-complete log marker followed by two
+stable `SELECT 1` successes before any restore operation.
 The only acceptance target after that rehearsal is the exact candidate image on
 an immediately preflighted free dedicated loopback port (the current reserved
 port is `18082`); the public Staging proxy port and any foreign listener must

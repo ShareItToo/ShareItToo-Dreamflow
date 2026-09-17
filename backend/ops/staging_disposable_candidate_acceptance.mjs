@@ -83,6 +83,27 @@ export async function pollVersion(fetchImpl, url, { attempts = 60, intervalMs = 
   fail('candidate_version_timeout');
 }
 
+export async function waitForFinalPostgresReady({ command, container, attempts = 60, intervalMs = 500 } = {}) {
+  let markerSeen = false;
+  let stableSqlSuccesses = 0;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const logsResult = await command('docker', ['logs', container], { phase: 'database_init_logs' }).catch(() => ({ stdout: '' }));
+    const logs = String(typeof logsResult === 'string' ? logsResult : logsResult.stdout ?? '');
+    if (logs.includes('PostgreSQL init process complete; ready for start up.')) markerSeen = true;
+    if (markerSeen) {
+      try {
+        await command('docker', ['exec', container, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal', '-Atc', 'SELECT 1'], { phase: 'database_stable_sql' });
+        stableSqlSuccesses += 1;
+        if (stableSqlSuccesses >= 2) return true;
+      } catch {
+        stableSqlSuccesses = 0;
+      }
+    }
+    if (attempt < attempts - 1) await new Promise((resolvePromise) => setTimeout(resolvePromise, intervalMs));
+  }
+  fail('database_final_init_timeout');
+}
+
 function assertSafeDisposableTarget({ network, volume, database, api, runId }) {
   if (network.includes('shareittoo_staging_backend') || volume.includes('shareittoo_staging_backend')) {
     fail('live_staging_resource_forbidden');
@@ -176,6 +197,7 @@ export async function runDisposableCandidateAcceptance({
   opsCommit = environment.SIT_STAGING_REHEARSAL_OPS_COMMIT,
   prepareMfaKey = createEphemeralMfaKey,
   cleanupMfaKey = removeEphemeralMfaKey,
+  waitForPostgres = waitForFinalPostgresReady,
 } = {}) {
   fullCommit(targetCommit, 'targetCommit');
   if (targetCommit !== disposableCandidateCommit) fail('candidate_commit_mismatch');
@@ -232,9 +254,7 @@ export async function runDisposableCandidateAcceptance({
       assertDisposableResourceIdentity({ resourceType, name, labels: inspected, runId });
     }
     await command('docker', ['start', database], { phase: 'database_start' });
-    for (let attempt = 0; attempt < 60; attempt += 1) {
-      try { await command('docker', ['exec', database, 'pg_isready', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], { phase: 'database_ready' }); break; } catch { if (attempt === 59) fail('database_not_ready'); }
-    }
+    await waitForPostgres({ command, container: database });
     await commandWithFileInput('docker', ['exec', '-i', database, 'pg_restore', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal', '--no-owner', '--no-acl'], backupPath, { phase: 'restore' });
     const bootstrapScript = "import { initializeDatabase, pool } from '/app/src/db.js'; await initializeDatabase(); await pool.end();";
     await command('docker', ['create', '--name', bootstrap, ...labels, '--network', network, '-e', 'NODE_ENV=production', '-e', 'DEPLOYMENT_ENVIRONMENT=staging', '-e', `DATABASE_URL=postgres://shareittoo_rehearsal:${databasePassword}@db:5432/shareittoo_rehearsal`, '-e', 'MFA_ENCRYPTION_KEY_FILE=/run/secrets/mfa-encryption-key', '--mount', `type=bind,src=${mfaKey.filePath},dst=/run/secrets/mfa-encryption-key,readonly`, disposableCandidateImageDigest, 'node', '--input-type=module', '-e', bootstrapScript], { phase: 'bootstrap_create' });
