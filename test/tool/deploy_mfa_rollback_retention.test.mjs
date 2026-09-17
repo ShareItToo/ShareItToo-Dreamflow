@@ -39,6 +39,7 @@ test('failed MFA-enabled Staging rollout retains the MFA overlay during image ro
   await executable(join(ops, 'check_foreign_key_integrity.sh'), '#!/usr/bin/env bash\nexit 0\n');
   await executable(join(ops, 'validate_mfa_staging_secret.mjs'), '#!/usr/bin/env node\nprocess.stdout.write("MFA Staging secret gate: PASS\\n");\n');
   await executable(join(ops, 'validate_staging_deployment_readiness.mjs'), '#!/usr/bin/env node\nprocess.stdin.resume(); process.stdin.on("end", () => process.stdout.write("{\\"status\\":\\"ok\\"}\\n"));\n');
+  await executable(join(ops, 'validate_staging_controlled_acceptance.mjs'), '#!/usr/bin/env node\nprocess.exit(0);\n');
   await executable(join(fakeBin, 'curl'), `#!/usr/bin/env bash
 url="\${*: -1}"
 if [[ "$url" == */version ]]; then
@@ -100,6 +101,10 @@ exit 1
       DEPLOYED_STATE: join(root, 'deployed-state'),
       DOCKER_LOG: log,
       COMPOSE_FILES: composeFiles,
+      SIT_STAGING_CONTROLLED_RELEASE: '1',
+      SIT_STAGING_PUBLIC_RELEASE_CONFIRM: targetCommit,
+      SIT_STAGING_REHEARSAL_OPS_COMMIT: targetCommit,
+      SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE: keyFile,
     },
   });
 

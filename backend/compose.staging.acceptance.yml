@@ -1,0 +1,55 @@
+services:
+  api_acceptance:
+    image: ${ACCEPTANCE_IMAGE:?ACCEPTANCE_IMAGE must be set}
+    container_name: shareittoo-staging-acceptance-api
+    restart: "no"
+    group_add:
+      - "65532"
+    environment:
+      NODE_ENV: production
+      DEPLOYMENT_ENVIRONMENT: staging
+      PORT: 8080
+      BIND_HOST: 0.0.0.0
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      APP_COMMIT: ${APP_COMMIT:?APP_COMMIT must be set}
+      APP_VERSION: ${APP_VERSION:-controlled-acceptance}
+      APP_BUILD_TIME: ${APP_BUILD_TIME:-controlled-acceptance}
+      DATABASE_URL: postgres://shareittoo_staging:${POSTGRES_PASSWORD}@shareittoo-staging-postgres:5432/shareittoo_staging
+      MFA_ENCRYPTION_KEY: ""
+      MFA_ENCRYPTION_KEY_FILE: /run/secrets/mfa-encryption-key
+      PAYMENT_TRANSPORT: memory
+      STRIPE_LIVEMODE: "false"
+      STRIPE_SECRET_KEY: ""
+      STRIPE_WEBHOOK_SECRET: ""
+      STRIPE_CONNECT_WEBHOOK_SECRET: ""
+      IDENTITY_VERIFICATION_TRANSPORT: disabled
+      IDENTITY_STRIPE_SECRET_KEY: ""
+      IDENTITY_VERIFICATION_WEBHOOK_SECRET: ""
+      SIT_LISTING_AI_PROVIDER: mock
+      SIT_LISTING_AI_MODEL: listing-ai-mock-v1
+      SIT_LISTING_AI_BUDGET_CENTS: "0"
+      SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: "0"
+      PUSH_TRANSPORT: memory
+      MAIL_TRANSPORT: disabled
+      CORS_ORIGINS: http://127.0.0.1:${STAGING_ACCEPTANCE_PORT:-18081}
+      PUBLIC_BASE_URL: http://127.0.0.1:${STAGING_ACCEPTANCE_PORT:-18081}/api/v1
+      APP_PUBLIC_URL: http://127.0.0.1:${STAGING_ACCEPTANCE_PORT:-18081}
+    ports:
+      - "127.0.0.1:${STAGING_ACCEPTANCE_PORT:-18081}:8080"
+    volumes:
+      - type: bind
+        source: ${MFA_ENCRYPTION_KEY_HOST_FILE:?MFA_ENCRYPTION_KEY_HOST_FILE must be set for controlled acceptance}
+        target: /run/secrets/mfa-encryption-key
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - staging_backend
+    labels:
+      com.shareittoo.staging.controlled_acceptance: "true"
+      com.shareittoo.staging.runtime_commit: ${APP_COMMIT:?APP_COMMIT must be set}
+
+networks:
+  staging_backend:
+    external: true
+    name: shareittoo_staging_backend

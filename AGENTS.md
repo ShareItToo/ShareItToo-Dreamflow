@@ -284,3 +284,13 @@ writers immediately before and after the protected backup. A successful
 protected rehearsal leaves all quiesced services stopped; cleanup must be
 verified and any cleanup failure overrides PASS. Runtime source and Ops
 orchestration commits are pinned separately and must be recorded at invocation.
+The only acceptance target after that rehearsal is the exact candidate image on
+the dedicated loopback port `18081`; the public Staging proxy port must never
+serve the candidate during acceptance. The controlled Compose file must use an
+explicit minimal environment (no `env_file` secret injection), hard-pin
+provider-neutral test modes, and mount only the validated owner-only MFA key.
+The runner must prove readiness and an authenticated synthetic MFA
+enroll/pending/cancel flow, then write owner-only external evidence bound to the
+exact runtime and Ops commits. `deploy_release.sh staging` remains blocked
+until that evidence and an exact public-release confirmation validate; no
+automatic promotion or observed-old-image fallback is allowed.

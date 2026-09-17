@@ -10,6 +10,9 @@ task_enable_staging_listing_ai="${ENABLE_STAGING_LISTING_AI:-0}"
 task_enable_staging_stripe="${ENABLE_STAGING_STRIPE:-0}"
 task_enable_staging_identity="${ENABLE_STAGING_IDENTITY:-0}"
 task_enable_staging_mfa="${ENABLE_STAGING_MFA:-0}"
+task_staging_controlled_release="${SIT_STAGING_CONTROLLED_RELEASE:-0}"
+task_staging_acceptance_evidence="${SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE:-}"
+task_staging_rehearsal_ops_commit="${SIT_STAGING_REHEARSAL_OPS_COMMIT:-}"
 task_node_binary="${NODE_BINARY:-node}"
 task_deployment_started=false
 task_previous_image_id=''
@@ -218,6 +221,25 @@ fi
 if [[ "$task_enable_staging_mfa" != 0 && "$task_enable_staging_mfa" != 1 ]]; then
   echo "ENABLE_STAGING_MFA must be 0 or 1." >&2
   exit 1
+fi
+if [[ "$task_environment" == staging ]]; then
+  if [[ "$task_staging_controlled_release" != 1 ]]; then
+    echo "Staging public deployment is blocked until loopback controlled acceptance passes." >&2
+    exit 1
+  fi
+  if [[ ! "$task_staging_rehearsal_ops_commit" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "SIT_STAGING_REHEARSAL_OPS_COMMIT must bind the exact Ops checkout." >&2
+    exit 1
+  fi
+  if [[ "${SIT_STAGING_PUBLIC_RELEASE_CONFIRM:-}" != "$task_commit" ]]; then
+    echo "SIT_STAGING_PUBLIC_RELEASE_CONFIRM must equal the exact runtime commit." >&2
+    exit 1
+  fi
+  SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE="$task_staging_acceptance_evidence" \
+  SIT_EXPECTED_RUNTIME_COMMIT="$task_commit" \
+  SIT_EXPECTED_OPS_COMMIT="$task_staging_rehearsal_ops_commit" \
+    "$task_node_binary" "$task_backend_root/ops/validate_staging_controlled_acceptance.mjs" \
+      >/dev/null
 fi
 if [[ "$task_environment" == production && "$task_enable_staging_fcm" == 1 ]]; then
   echo "The staging FCM override is forbidden for production deployments." >&2

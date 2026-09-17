@@ -153,6 +153,7 @@ test('a Staging rollout records but does not hide a noncritical synthetic suppor
       'validate_staging_deployment_readiness.mjs',
     )),
   ]);
+  await executable(join(ops, 'validate_staging_controlled_acceptance.mjs'), '#!/usr/bin/env node\nprocess.exit(0);\n');
   await chmod(join(ops, 'deploy_release.sh'), 0o755);
   await writeFile(join(backend, 'compose.staging.yml'), 'services:\n  api:\n    image: placeholder\n');
   await writeFile(join(backend, '.env.staging'), 'POSTGRES_PASSWORD=test\nJWT_SECRET=test\n');
@@ -218,6 +219,10 @@ exit 1
         HEALTH_URL: 'https://example.invalid/api',
         RELEASE_LOG_DIR: releases,
         DEPLOYED_STATE: deployedState,
+        SIT_STAGING_CONTROLLED_RELEASE: '1',
+        SIT_STAGING_PUBLIC_RELEASE_CONFIRM: targetCommit,
+        SIT_STAGING_REHEARSAL_OPS_COMMIT: targetCommit,
+        SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE: join(root, 'controlled-acceptance.json'),
       },
     });
 
@@ -263,6 +268,7 @@ test('an on-device Staging rollout reads the nested readiness boundary and rolls
     writeFile(join(backend, 'compose.staging.pilot.yml'), 'services:\n  api:\n    environment:\n      SIT_LISTING_AI_PROVIDER: on_device\n'),
     writeFile(join(backend, '.env.staging'), 'POSTGRES_PASSWORD=test\nJWT_SECRET=test\n'),
   ]);
+  await executable(join(ops, 'validate_staging_controlled_acceptance.mjs'), '#!/usr/bin/env node\nprocess.exit(0);\n');
   await executable(
     join(ops, 'check_foreign_key_integrity.sh'),
     '#!/usr/bin/env bash\nexit 0\n',
@@ -285,7 +291,9 @@ if [[ "$url" == */health/ready ]]; then
     if [[ "$previous" == --output ]]; then output="$argument"; fi
     previous="$argument"
   done
-  printf '{"status":"ok","service":"shareittoo-api","checks":{"database":"ok","mail":"ok","notifications":{"pending":0,"dead":0},"payments":{"failedEvents":0,"unbalanced":0,"recoveryPending":0,"recoveryNeedsReview":0},"supportDeadlines":{"status":"ok","stale":false,"lastErrorCode":null,"p0WithoutOwner":0,"nextUpdateOverdue":0,"criticalNextUpdateOverdue":0,"privacyDeadlineNear":0,"privacyDeadlineOverdue":0,"privacyIncidentDeadlineNear":0,"privacyIncidentDeadlineOverdue":0},"listingAi":{"status":"enabled","provider":"%s","model":"mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1","promptVersion":"listing-ai-prompt-v1","schemaVersion":"listing-ai-draft-v1","budgetCents":0,"externalProviderExecutionAllowed":false,"automaticPublicationAllowed":false}}}\\n' "\${LISTING_AI_PROVIDER:-on_device}" > "$output"
+  provider='on_device'
+  [[ "\${FORCE_HEALTH_MISMATCH:-0}" == 1 ]] && provider='mock'
+  printf '{"status":"ok","service":"shareittoo-api","checks":{"database":"ok","mail":"ok","notifications":{"pending":0,"dead":0},"payments":{"failedEvents":0,"unbalanced":0,"recoveryPending":0,"recoveryNeedsReview":0},"supportDeadlines":{"status":"ok","stale":false,"lastErrorCode":null,"p0WithoutOwner":0,"nextUpdateOverdue":0,"criticalNextUpdateOverdue":0,"privacyDeadlineNear":0,"privacyDeadlineOverdue":0,"privacyIncidentDeadlineNear":0,"privacyIncidentDeadlineOverdue":0},"listingAi":{"status":"enabled","provider":"%s","model":"mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1","promptVersion":"listing-ai-prompt-v1","schemaVersion":"listing-ai-draft-v1","budgetCents":0,"externalProviderExecutionAllowed":false,"automaticPublicationAllowed":false}}}\\n' "$provider" > "$output"
   printf '200'
   exit 0
 fi
@@ -309,6 +317,7 @@ if [[ "$1" == inspect ]]; then
   fi
   exit 0
 fi
+if [[ "$1" == stop ]]; then exit 0; fi
 if [[ "$1" == compose ]]; then
   count=0
   [[ -f "\${COMPOSE_COUNT}" ]] && count=$(<"\${COMPOSE_COUNT}")
@@ -334,6 +343,11 @@ exit 1
         DEPLOYED_STATE: deployedState,
         COMPOSE_COUNT: composeCount,
         SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
+        SIT_STAGING_CONTROLLED_RELEASE: '1',
+        SIT_STAGING_PUBLIC_RELEASE_CONFIRM: targetCommit,
+        SIT_STAGING_REHEARSAL_OPS_COMMIT: targetCommit,
+        SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE: join(root, 'controlled-acceptance.json'),
+        LISTING_AI_PROVIDER: 'on_device',
       },
     });
 
@@ -363,18 +377,22 @@ exit 1
         DEPLOYED_STATE: deployedState,
         COMPOSE_COUNT: composeCount,
         SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
-        LISTING_AI_PROVIDER: 'mock',
+        FORCE_HEALTH_MISMATCH: '1',
+        SIT_STAGING_CONTROLLED_RELEASE: '1',
+        SIT_STAGING_PUBLIC_RELEASE_CONFIRM: targetCommit,
+        SIT_STAGING_REHEARSAL_OPS_COMMIT: targetCommit,
+        SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE: join(root, 'controlled-acceptance.json'),
       },
     });
 
   assert.equal(mismatch.status, 1);
-  assert.match(mismatch.stderr, /previous image restored and verified/u);
-  assert.equal(await readFile(composeCount, 'utf8'), '2');
+  assert.match(mismatch.stderr, /Staging API isolated; forward recovery is required/u);
+  assert.equal(await readFile(composeCount, 'utf8'), '1');
   const reportsAfterMismatch = await readdir(releases);
   assert.equal(reportsAfterMismatch.length, 2);
-  const rollbackName = reportsAfterMismatch.find((name) => name.includes('-rollback-'));
-  assert.ok(rollbackName);
-  const rollback = JSON.parse(await readFile(join(releases, rollbackName), 'utf8'));
-  assert.equal(rollback.status, 'passed');
-  assert.equal(rollback.failedCommit, targetCommit);
+  const recoveryName = reportsAfterMismatch.find((name) => name.includes('-forward-recovery-required-'));
+  assert.ok(recoveryName);
+  const recovery = JSON.parse(await readFile(join(releases, recoveryName), 'utf8'));
+  assert.equal(recovery.status, 'forward-recovery-required');
+  assert.equal(recovery.failedCommit, targetCommit);
 });

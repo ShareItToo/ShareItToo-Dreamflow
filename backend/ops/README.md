@@ -101,6 +101,43 @@ this rehearsal by a separate reviewed gate. Database rollback is not automatic;
 the protected backup and isolated restore/forward-compatibility result remain
 required evidence.
 
+## Controlled Staging acceptance and explicit promotion
+
+The shared Staging public port is never used as the acceptance target. The
+controlled candidate runs from the exact immutable image on loopback port
+`18081`, while the reverse proxy remains bound to the normal Staging port
+`18080`. The controlled Compose file deliberately does not use `env_file`:
+only the selected database/JWT values and the owner-only MFA key mount are
+interpolated. Payment is hard-pinned to memory, Stripe live mode is false,
+Identity is disabled and Listing AI is the zero-budget mock.
+
+The acceptance runner verifies the image label and `/version` commit, readiness,
+an authenticated synthetic MFA enroll -> pending -> cancel flow, and that the
+public Staging endpoint does not serve the candidate. It then writes only
+owner-readable, external evidence. A normal `deploy_release.sh staging` call
+fails closed until that evidence is bound to the exact runtime and Ops commits
+and an explicit public-release confirmation is supplied. There is no automatic
+promotion and no `df39` fallback.
+
+```sh
+SIT_STAGING_REHEARSAL_OPS_COMMIT=FULL_40_CHARACTER_OPS_COMMIT \
+SIT_STAGING_CONTROLLED_ACCEPTANCE_EXECUTE=1 \
+SIT_STAGING_ACCEPTANCE_CONFIRM=FULL_40_CHARACTER_COMMIT \
+SIT_STAGING_PUBLIC_BASE_URL=https://staging.shareittoo.com \
+SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE=/absolute/private/path/acceptance.json \
+MFA_ENCRYPTION_KEY_HOST_FILE=/absolute/private/path/mfa-encryption-key \
+  node ops/staging_controlled_acceptance.mjs start FULL_40_CHARACTER_COMMIT
+
+SIT_STAGING_REHEARSAL_OPS_COMMIT=FULL_40_CHARACTER_OPS_COMMIT \
+SIT_STAGING_PUBLIC_BASE_URL=https://staging.shareittoo.com \
+SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE=/absolute/private/path/acceptance.json \
+  node ops/staging_controlled_acceptance.mjs verify FULL_40_CHARACTER_COMMIT
+```
+
+Only after the evidence is reviewed may the explicit `release` mode stop the
+loopback container and invoke the guarded public Staging deploy. This package
+does not execute either mode against live infrastructure.
+
 FCM is opt-in for staging and cannot be activated for production through this
 path. Before the first FCM-enabled staging rollout, create only the dedicated
 service account `sit-fcm-staging` with the Google role
