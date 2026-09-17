@@ -68,6 +68,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   evidence. Before the next device assertion, build once from the current
   source, assign a distinct local-QA version, verify package and SHA-256, and
   install that artifact; never continue runtime proof with a stale binary.
+- A QA package name and version do not prove its compile-time configuration.
+  Build through the canonical lane or record every required Dart define, then
+  prove the running app reached the intended local API before using feature
+  evidence. A debug build with default backend flags is not local-QA proof.
 - Bind every package command to the repository root verified in its preflight.
   After any missing-workdir or wrong-worktree error, discard that stale path
   immediately and use only the verified root for the rest of the package; do
