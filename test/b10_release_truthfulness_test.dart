@@ -239,15 +239,15 @@ void main() {
 
     expect(account, contains('TwoFactorAuthScreen'));
     expect(account, isNot(contains('VerificationIntroScreen')));
-    expect(account, isNot(contains('VerificationScreen')));
-    expect(account, contains('Noch nicht verfügbar'));
-    expect(help, contains('Identitätsprüfung ist noch nicht verfügbar'));
-    expect(help, contains('noch nicht verfügbar'));
+    expect(account, contains('VerificationScreen'));
+    expect(account, contains('Serverstatus und Prüfung öffnen'));
+    expect(help, contains('Pilot-Testmodus'));
+    expect(help, contains('serverseitig'));
     for (final source in [profile, security, notifications]) {
       expect(source, isNot(contains('VerificationIntroScreen')));
-      expect(source, isNot(contains('VerificationScreen')));
+      expect(source, contains('VerificationScreen'));
     }
-    expect(security, contains('Keine lokale Demo-Verifizierung'));
+    expect(security, contains('Serverstatus und Prüfung öffnen'));
     expect(security, contains('AccountSecurityService'));
     expect(security, contains('_securityService.isAvailable'));
     expect(

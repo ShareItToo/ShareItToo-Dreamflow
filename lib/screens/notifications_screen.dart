@@ -11,6 +11,7 @@ import 'package:lendify/screens/notification_detail_screen.dart';
 import 'package:lendify/screens/notification_settings_screen.dart';
 import 'package:lendify/screens/payment_methods_screen.dart';
 import 'package:lendify/screens/support_cases_screen.dart';
+import 'package:lendify/screens/verification_screen.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/models/user.dart';
@@ -21,7 +22,6 @@ import 'package:lendify/services/notification_preferences_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/theme.dart';
 import 'package:provider/provider.dart';
-import 'package:lendify/widgets/identity_verification_unavailable.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/support_principal_controller.dart';
 
@@ -473,7 +473,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           category == 'security' ||
           sitCategory == 'important') {
         if (!mounted) return;
-        await showIdentityVerificationUnavailable(context);
+        await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const VerificationScreen()));
         return;
       }
 

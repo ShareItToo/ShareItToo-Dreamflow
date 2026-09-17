@@ -234,6 +234,49 @@ export class StripeProvider {
     ));
   }
 
+  async createIdentityVerificationSession({ idempotencyKey, providerIdempotencyKey = idempotencyKey }) {
+    if (this.mode === 'memory') {
+      const digest = crypto.createHash('sha256')
+        .update(String(providerIdempotencyKey))
+        .digest('hex');
+      const id = `vs_test_sit_${digest.slice(0, 24)}`;
+      const session = {
+        id,
+        object: 'identity.verification_session',
+        status: 'requires_input',
+        livemode: false,
+        url: `https://verify.stripe.com/test/${digest.slice(0, 24)}`,
+      };
+      this.memory.set(providerIdempotencyKey, session);
+      this.memory.set(id, session);
+      return session;
+    }
+    return this.call((client) => client.identity.verificationSessions.create({
+      type: 'document',
+      metadata: { sit_flow: 'identity_verification' },
+    }, { idempotencyKey: providerIdempotencyKey }));
+  }
+
+  async retrieveIdentityVerificationSession(providerSessionId) {
+    if (this.mode === 'memory') {
+      const session = this.memory.get(providerSessionId);
+      if (!session) throw new PaymentDomainError(404, 'identity_verification_session_not_found');
+      return session;
+    }
+    return this.call((client) => client.identity.verificationSessions.retrieve(providerSessionId));
+  }
+
+  async redactIdentityVerificationSession(providerSessionId) {
+    if (this.mode === 'memory') {
+      const session = this.memory.get(providerSessionId);
+      if (!session) throw new PaymentDomainError(404, 'identity_verification_session_not_found');
+      session.redaction = { status: 'redacted' };
+      session.status = session.status === 'canceled' ? 'canceled' : session.status;
+      return { id: providerSessionId, status: session.status, redaction: { status: 'redacted' }, livemode: false };
+    }
+    return this.call((client) => client.identity.verificationSessions.redact(providerSessionId));
+  }
+
   async createPaymentCheckout({
     paymentId,
     bookingId,

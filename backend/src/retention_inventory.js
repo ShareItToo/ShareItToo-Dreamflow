@@ -170,6 +170,10 @@ export async function inspectRetentionInventory(client, { actor }) {
          FROM notification_delivery_attempts
        UNION ALL SELECT 'securityAudit', 'auth_action_tokens', count(*)::bigint, min(created_at), max(COALESCE(consumed_at, expires_at, created_at)) FROM auth_action_tokens
        UNION ALL SELECT 'securityAudit', 'auth_sessions', count(*)::bigint, min(created_at), max(last_seen_at) FROM auth_sessions
+       UNION ALL SELECT 'securityAudit', 'identity_verification_sessions', count(*)::bigint, min(created_at), max(updated_at) FROM identity_verification_sessions
+       UNION ALL SELECT 'securityAudit', 'identity_verification_webhook_events', count(*)::bigint, min(event_created_at), max(event_created_at) FROM identity_verification_webhook_events
+       UNION ALL SELECT 'securityAudit', 'identity_verification_redaction_outbox', count(*)::bigint, min(created_at), max(updated_at) FROM identity_verification_redaction_outbox
+       UNION ALL SELECT 'securityAudit', 'identity_verification_provider_tombstones', count(*)::bigint, min(created_at), max(expires_at) FROM identity_verification_provider_tombstones
        UNION ALL SELECT 'securityAudit', 'compliance_reserve_attestations', count(*)::bigint, min(recorded_at), max(recorded_at) FROM compliance_reserve_attestations
        UNION ALL SELECT 'securityAudit', 'compliance_professional_review_incidents', count(*)::bigint, min(recorded_at), max(recorded_at) FROM compliance_professional_review_incidents
        UNION ALL SELECT 'legalHold', 'account_legal_holds', count(*)::bigint, min(created_at), max(COALESCE(released_at, created_at))

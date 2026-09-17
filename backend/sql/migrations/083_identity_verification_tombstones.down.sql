@@ -1,0 +1,29 @@
+DROP TABLE IF EXISTS identity_verification_provider_tombstones;
+DELETE FROM identity_verification_redaction_outbox WHERE provider_session_id IS NULL;
+DELETE FROM identity_verification_sessions WHERE provider_session_id IS NULL;
+DELETE FROM identity_verification_webhook_events WHERE provider_session_id IS NULL;
+
+ALTER TABLE identity_verification_webhook_events
+  DROP CONSTRAINT IF EXISTS identity_verification_webhook_events_provider_redaction_pair_chk;
+ALTER TABLE identity_verification_webhook_events
+  DROP COLUMN IF EXISTS provider_session_hash;
+ALTER TABLE identity_verification_webhook_events
+  ALTER COLUMN provider_session_id SET NOT NULL;
+
+ALTER TABLE identity_verification_redaction_outbox
+  DROP CONSTRAINT IF EXISTS identity_verification_redaction_outbox_provider_redaction_pair_chk;
+ALTER TABLE identity_verification_redaction_outbox
+  DROP CONSTRAINT IF EXISTS identity_verification_redaction_outbox_provider_session_hash_chk;
+ALTER TABLE identity_verification_redaction_outbox
+  DROP COLUMN IF EXISTS provider_session_hash;
+ALTER TABLE identity_verification_redaction_outbox
+  ALTER COLUMN provider_session_id SET NOT NULL;
+
+ALTER TABLE identity_verification_sessions
+  DROP CONSTRAINT IF EXISTS identity_verification_sessions_provider_redaction_pair_chk;
+ALTER TABLE identity_verification_sessions
+  DROP CONSTRAINT IF EXISTS identity_verification_sessions_provider_session_hash_chk;
+ALTER TABLE identity_verification_sessions
+  DROP COLUMN IF EXISTS provider_session_hash;
+ALTER TABLE identity_verification_sessions
+  ALTER COLUMN provider_session_id SET NOT NULL;

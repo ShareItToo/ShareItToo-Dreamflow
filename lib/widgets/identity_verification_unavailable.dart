@@ -1,19 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:lendify/screens/verification_screen.dart';
 
+@Deprecated('Use VerificationScreen directly.')
 Future<void> showIdentityVerificationUnavailable(BuildContext context) {
-  return showDialog<void>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('Identitätsprüfung noch nicht verfügbar'),
-      content: const Text(
-        'ShareItToo bindet vor dem Produktionsstart einen geprüften Identitätsanbieter an. Bis dahin werden keine Ausweise oder Selfies entgegengenommen und keine Demo als echte Prüfung angezeigt.',
-      ),
-      actions: [
-        FilledButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Verstanden'),
-        ),
-      ],
-    ),
+  return Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => const VerificationScreen()),
   );
 }

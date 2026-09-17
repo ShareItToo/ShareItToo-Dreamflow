@@ -198,6 +198,7 @@ export async function runLocalPostgresIntegration({
   let receivedSignal = null;
   let primaryError = null;
   let port = null;
+  const focusedIdentity = environment.SIT_POSTGRES_FOCUSED_IDENTITY === '1';
 
   const onSignal = (signal) => {
     receivedSignal = signal;
@@ -257,19 +258,25 @@ export async function runLocalPostgresIntegration({
         `postgresql://${integrationDatabaseUser}@127.0.0.1:${port}/` +
         integrationDatabaseName,
     };
-    await checkedRun(nodeBin, [
+    const runTests = async (files) => checkedRun(nodeBin, [
       '--throw-deprecation',
       '--import', './backend/test_setup.js',
+      '--test-concurrency=1',
       '--test',
-      'backend/test/postgres_foundation.integration.test.js',
-      'backend/test/foreign_key_integrity.integration.test.js',
+      ...files,
     ], { env: testEnvironment, inherit: inheritTestOutput });
-    await checkedRun(nodeBin, [
-      '--throw-deprecation',
-      '--import', './backend/test_setup.js',
-      '--test',
-      'backend/test/mfa_postgres.integration.test.js',
-    ], { env: testEnvironment, inherit: inheritTestOutput });
+    if (focusedIdentity) {
+      await runTests(['backend/test/identity_verification_postgres.integration.test.js']);
+    } else {
+      // These suites initialize the same isolated database. Keep each group
+      // sequential so CREATE EXTENSION/migration setup cannot race itself.
+      await runTests([
+        'backend/test/postgres_foundation.integration.test.js',
+        'backend/test/foreign_key_integrity.integration.test.js',
+      ]);
+      await runTests(['backend/test/identity_verification_postgres.integration.test.js']);
+      await runTests(['backend/test/mfa_postgres.integration.test.js']);
+    }
   } catch (error) {
     let postgresDetail = '';
     try {
@@ -344,9 +351,14 @@ export async function runLocalPostgresIntegration({
     host: '127.0.0.1',
     database: integrationDatabaseName,
     integrationTests: [
-      'backend/test/postgres_foundation.integration.test.js',
-      'backend/test/foreign_key_integrity.integration.test.js',
-      'backend/test/mfa_postgres.integration.test.js',
+      ...(focusedIdentity
+        ? ['backend/test/identity_verification_postgres.integration.test.js']
+        : [
+          'backend/test/postgres_foundation.integration.test.js',
+          'backend/test/foreign_key_integrity.integration.test.js',
+          'backend/test/identity_verification_postgres.integration.test.js',
+          'backend/test/mfa_postgres.integration.test.js',
+        ]),
     ],
   });
 }

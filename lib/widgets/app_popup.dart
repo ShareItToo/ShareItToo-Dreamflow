@@ -27,15 +27,17 @@ class AppPopup {
     BuildContext context, {
     required String title,
     String? message,
+    List<Widget>? actions,
     TrackedDialogRouteHandle<void>? routeHandle,
   }) =>
-      show(
-        context,
-        icon: Icons.error_outline_rounded,
-        title: title,
-        message: message,
-        routeHandle: routeHandle,
-      );
+    show(
+      context,
+      icon: Icons.error_outline_rounded,
+      title: title,
+      message: message,
+      actions: actions,
+      routeHandle: routeHandle,
+    );
 
   /// Centered informational feedback for blocked or unavailable actions.
   static Future<void> info(

@@ -11,6 +11,8 @@
     "start": "node src/server.js",
     "test": "node --import ./test_setup.js --test",
     "test:postgres:local": "node ../tool/run_local_postgres_integration.mjs",
+    "test:postgres:identity": "SIT_POSTGRES_FOCUSED_IDENTITY=1 node ../tool/run_local_postgres_integration.mjs",
+    "identity:pilot-end": "node ops/close_identity_verification_pilot.mjs",
     "check": "for file in src/*.js ops/*.mjs; do node --check \"$file\"; done && for file in ops/*.sh; do bash -n \"$file\"; done",
     "security:audit": "pnpm audit --prod --audit-level=moderate",
     "security:secrets": "node ops/scan_git_secrets.mjs"

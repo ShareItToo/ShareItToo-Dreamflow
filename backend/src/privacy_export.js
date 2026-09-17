@@ -49,6 +49,36 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
 
   const account = accountResult.rows[0];
   if (!account) return null;
+  const identityVerificationSessions = await rows(client,
+    `SELECT status, livemode, created_at, updated_at
+       FROM identity_verification_sessions WHERE user_id = $1 ORDER BY created_at`, userId)();
+  const identityVerificationWebhookEvents = await rows(client,
+    `SELECT event_type, event_created_at, received_at
+       FROM identity_verification_webhook_events AS event
+       JOIN identity_verification_sessions AS session
+         ON session.id = event.identity_session_id
+      WHERE session.user_id = $1 ORDER BY event.received_at`, userId)();
+  const identityVerificationRedactionOutbox = await rows(client,
+    `SELECT outbox.status, outbox.attempts, outbox.last_error_code, outbox.created_at, outbox.updated_at
+       FROM identity_verification_redaction_outbox AS outbox
+       JOIN identity_verification_sessions AS session
+         ON session.id = outbox.identity_session_id
+      WHERE session.user_id = $1 ORDER BY outbox.created_at`, userId)();
+  const identityVerificationAudit = await rows(client,
+    `SELECT audit.action, audit.resource_type, audit.resource_id, audit.created_at
+       FROM audit_log AS audit
+       LEFT JOIN identity_verification_sessions AS session
+         ON session.id = audit.resource_id
+      WHERE audit.resource_type = 'identity_verification_session'
+        AND (audit.actor_id = $1 OR session.user_id = $1)
+      ORDER BY audit.created_at`, userId)();
+  const identityVerificationTombstones = await rows(client,
+    `SELECT tombstone.expires_at
+       FROM identity_verification_provider_tombstones AS tombstone
+       JOIN identity_verification_sessions AS session
+         ON session.provider_session_hash = tombstone.provider_session_hash
+      WHERE session.user_id = $1 AND session.status = 'redacted'
+      ORDER BY tombstone.expires_at`, userId)();
 
   const [
     sessions,
@@ -1213,6 +1243,11 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
       history: notifications,
     },
     trustAndSafety: {
+      identityVerificationSessions,
+      identityVerificationWebhookEvents,
+      identityVerificationRedactionOutbox,
+      identityVerificationAudit,
+      identityVerificationTombstones,
       reviews,
       reports,
       privateMarketplaceReviewEvents,

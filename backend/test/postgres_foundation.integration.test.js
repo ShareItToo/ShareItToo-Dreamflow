@@ -16,6 +16,7 @@ import {
   r8MaximumConcurrentWorkers,
   r8SyntheticAccountCount,
 } from '../../tool/r8_bounded_concurrency_contract.mjs';
+import { pruneIdentityVerificationRecords } from '../src/identity_verification_cleanup.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL?.trim();
 
@@ -218,10 +219,108 @@ if (!databaseUrl) {
         '078_retention_legal_hold_scope.up.sql',
         '079_special_category_intake_minimization.up.sql',
         '080_mfa_totp.up.sql',
+        '081_identity_verification_sessions.up.sql',
+        '082_identity_verification_redaction_outbox.up.sql',
+        '083_identity_verification_tombstones.up.sql',
+        '084_identity_verification_evidence_links.up.sql',
+        '085_identity_verification_consent.up.sql',
+        '086_identity_verification_audit_retention.up.sql',
+        '087_identity_verification_pilot_gate.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows.at(-1).checksum, /^[0-9a-f]{64}$/);
+
+      // WP194 retention is exercised against real PostgreSQL (not a fake
+      // client): original timestamps govern the 30-day boundary, every
+      // category is bounded, attribution survives until child rows are gone,
+      // and the narrowly scoped append-only exception deletes only old,
+      // redacted identity audit rows.
+      const wp194RetentionProbe = await setupPool.connect();
+      try {
+        await wp194RetentionProbe.query('BEGIN');
+        const suffix = crypto.randomUUID().replaceAll('-', '');
+        const sessionId = `wp194-session-${suffix}`;
+        const providerHash = 'a'.repeat(64);
+        await wp194RetentionProbe.query(
+          `INSERT INTO users (id, email, profile)
+           VALUES ($1, $2, '{}'::jsonb)`,
+          [`wp194-user-${suffix}`, `wp194-${suffix}@example.invalid`],
+        );
+        await wp194RetentionProbe.query(
+          `INSERT INTO identity_verification_sessions
+             (id, user_id, provider, provider_session_id, provider_session_hash,
+              status, livemode, idempotency_key, request_hash, created_at, updated_at)
+           VALUES ($1, $2, 'stripe_identity', NULL, $3, 'redacted', false,
+                   $4, $5, now() - interval '31 days', now() - interval '31 days')`,
+          [sessionId, `wp194-user-${suffix}`, providerHash,
+            `wp194-key-${suffix}`, 'b'.repeat(64)],
+        );
+        await wp194RetentionProbe.query(
+          `INSERT INTO identity_verification_redaction_outbox
+             (provider_session_id, provider_session_hash, identity_session_id,
+              status, created_at, updated_at)
+           VALUES (NULL, $1, $2, 'redacted', now() - interval '31 days', now() - interval '31 days')`,
+          [providerHash, sessionId],
+        );
+        await wp194RetentionProbe.query(
+          `INSERT INTO identity_verification_webhook_events
+             (provider_event_id, provider_session_id, provider_session_hash,
+              identity_session_id, event_type, event_created_at, received_at)
+           VALUES ($1, NULL, $2, $3, 'identity.verification_session.redacted',
+                   now() - interval '31 days', now() - interval '31 days')`,
+          [`wp194-event-${suffix}`, providerHash, sessionId],
+        );
+        await wp194RetentionProbe.query(
+          `INSERT INTO identity_verification_webhook_events
+             (provider_event_id, provider_session_id, provider_session_hash,
+              identity_session_id, event_type, event_created_at, received_at)
+           VALUES ($1, NULL, $2, $3, 'identity.verification_session.redacted',
+                   now() - interval '31 days', now() - interval '31 days')`,
+          [`wp194-event-2-${suffix}`, providerHash, sessionId],
+        );
+        await wp194RetentionProbe.query(
+          `INSERT INTO audit_log (actor_id, actor_role, action, resource_type, resource_id, metadata, created_at)
+           VALUES (NULL, 'system', 'identity_verification.redacted',
+                   'identity_verification_session', $1, '{}'::jsonb, now() - interval '31 days')`,
+          [sessionId],
+        );
+        await wp194RetentionProbe.query(
+          `INSERT INTO audit_log (actor_id, actor_role, action, resource_type, resource_id, metadata, created_at)
+           VALUES (NULL, 'system', 'identity_verification.redacted_again',
+                   'identity_verification_session', $1, '{}'::jsonb, now() - interval '31 days')`,
+          [sessionId],
+        );
+        await wp194RetentionProbe.query(
+          `SELECT set_config('sit.identity_audit_retention', '1', true)`,
+        );
+        await wp194RetentionProbe.query('SAVEPOINT wp194_identity_audit_update');
+        await assert.rejects(
+          wp194RetentionProbe.query(
+            `UPDATE audit_log SET action = 'identity_verification.tampered' WHERE resource_id = $1`,
+            [sessionId],
+          ),
+          /append-only/u,
+        );
+        await wp194RetentionProbe.query('ROLLBACK TO SAVEPOINT wp194_identity_audit_update');
+        const bounded = await pruneIdentityVerificationRecords(wp194RetentionProbe, { limit: 1 });
+        assert.ok(bounded.outbox <= 1 && bounded.events <= 1 && bounded.audit <= 1);
+        assert.equal((await wp194RetentionProbe.query(
+          `SELECT count(*)::int AS count FROM identity_verification_sessions WHERE id = $1`,
+          [sessionId],
+        )).rows[0].count, 1, 'parent remains while an attributable child remains');
+        const complete = await pruneIdentityVerificationRecords(wp194RetentionProbe, { limit: 50 });
+        assert.equal(complete.outbox, 0);
+        assert.equal(complete.events, 1);
+        assert.equal(complete.audit, 1);
+        assert.equal(complete.sessions, 1);
+        await wp194RetentionProbe.query('ROLLBACK');
+      } catch (error) {
+        await wp194RetentionProbe.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        wp194RetentionProbe.release();
+      }
 
       const wp150MigrationUp = await fs.readFile(
         path.resolve(
@@ -11473,7 +11572,10 @@ if (!databaseUrl) {
         body: JSON.stringify({ currentPassword: nextPassword }),
       });
       assert.equal(deletion.status, 200);
-      assert.deepEqual(await deletion.json(), { deleted: true });
+      assert.deepEqual(await deletion.json(), {
+        deleted: true,
+        identityVerificationCleanup: 'not_required',
+      });
       assert.equal((await login(nextPassword)).status, 401);
       const erasedUser = await setupPool.query(
         `SELECT email, password_hash, account_status, deactivated_at, personal_data_erased_at, profile

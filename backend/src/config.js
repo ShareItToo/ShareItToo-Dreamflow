@@ -8,7 +8,10 @@ import { evaluateGoogleMapsActivation } from './google_maps_activation.js';
 import { readListingAiGatewayConfiguration } from './listing_ai_gateway_config.js';
 import { evaluateOperatorReadiness } from './operator_readiness.js';
 import { normalizePrivatePilotRegion } from './private_pilot_domain.js';
-import { readStripeSecretConfiguration } from './stripe_secret_files.js';
+import {
+  readStripeIdentitySecretConfiguration,
+  readStripeSecretConfiguration,
+} from './stripe_secret_files.js';
 import { decodeMfaEncryptionKey } from './mfa_totp.js';
 
 function required(name) {
@@ -227,6 +230,29 @@ if (paymentTransport === 'stripe' && !stripeLivemode) {
       || expiresAt <= now
       || expiresAt.getTime() - issuedAt.getTime() > 24 * 60 * 60 * 1000) {
     throw new Error('Stripe sandbox transport requires a current bounded execution authorization');
+  }
+}
+
+const identityVerificationTransport = (process.env.IDENTITY_VERIFICATION_TRANSPORT ?? 'disabled')
+  .trim().toLowerCase();
+if (!['disabled', 'memory', 'stripe'].includes(identityVerificationTransport)) {
+  throw new Error('IDENTITY_VERIFICATION_TRANSPORT must be disabled, memory, or stripe');
+}
+const identitySecrets = readStripeIdentitySecretConfiguration(process.env, {
+  deploymentEnvironment,
+  identityTransport: identityVerificationTransport,
+});
+const identityVerificationWebhookSecret = identitySecrets.webhookSecret;
+if (identityVerificationTransport === 'stripe') {
+  if (deploymentEnvironment === 'production') {
+    throw new Error('Stripe Identity test flow is forbidden in production');
+  }
+  if (!/^rk_test_[A-Za-z0-9]+$/.test(identitySecrets.secretKey)) {
+    throw new Error('Stripe Identity test transport requires a separate Stripe restricted test key');
+  }
+  if (stripeLivemode) throw new Error('Stripe Identity test transport cannot use live mode');
+  if (!/^whsec_[A-Za-z0-9]+$/.test(identityVerificationWebhookSecret)) {
+    throw new Error('IDENTITY_VERIFICATION_WEBHOOK_SECRET must be configured for Stripe Identity');
   }
 }
 
@@ -512,5 +538,16 @@ export const config = Object.freeze({
       expiresAt: paymentSandboxAuthorizationExpiresAt,
     }),
     payoutHoldHours: Math.min(24 * 30, Math.max(0, Number.parseInt(process.env.PAYOUT_HOLD_HOURS ?? '48', 10))),
+  }),
+  identityVerification: Object.freeze({
+    transport: identityVerificationTransport,
+    enabled: identityVerificationTransport !== 'disabled',
+    livemode: false,
+    webhookSecret: identityVerificationWebhookSecret,
+    secretKey: identitySecrets.secretKey,
+    credentialSource: identityVerificationTransport === 'stripe'
+      ? identitySecrets.credentialSource
+      : 'none',
+    apiVersion: process.env.STRIPE_API_VERSION?.trim() || '2026-08-26.dahlia',
   }),
 });

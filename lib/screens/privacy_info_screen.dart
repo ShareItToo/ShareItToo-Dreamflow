@@ -412,7 +412,25 @@ class _PrivacyInfoScreenState extends State<PrivacyInfoScreen> {
           'Vertrauen zwischen Nutzern aufzubauen',
         ],
         note:
-            'Der aktuelle Store-Kandidat bietet keine Ausweisprüfung und keinen Upload von Identitätsdokumenten an. Die SMS-Verifizierung der Telefonnummer bleibt bis zu einem gesondert geprüften Nachfolger deaktiviert.',
+            'Freiwilliger technischer Pilot-Test über Stripe Identity: Zweck ist nur '
+            'die technische Ablaufprüfung, nicht die Bestätigung einer realen '
+            'Identität. Rechtsgrundlage ist die widerrufliche Einwilligung nach '
+            'Art. 6 Abs. 1 lit. a DSGVO; der Widerruf ist ohne Nachteil möglich. '
+            'SIT speichert keine Ausweis- oder Selfie-Dateien und keine Schlüssel, '
+            'sondern nur technische Zuordnung, Status, Zeitpunkte und minimierte '
+            'Audit-/Löschdaten. Nach Ende oder Widerruf wird Provider-Redaktion '
+            'angefordert; bis zur bestätigten Provider-Redaktion gilt „Löschung '
+            'läuft“. Eine vollständige Löschung bei Stripe wird nicht behauptet; '
+            'Stripe kann je nach Zweck eigener Verantwortlicher oder Dienstleister '
+            'sein. Rollen, Verarbeitungsorte und Transfermechanismen richten sich '
+            'nach dem konkreten Ablauf; mögliche USA-Übermittlungen und '
+            'Schutzmechanismen stehen in den offiziellen Hinweisen: '
+            'https://stripe.com/de/legal/privacy-center und '
+            'https://stripe.com/de/legal/dpa. '
+            'Unvollständige Eingaben laufen nach 24 Stunden aus; technische Daten '
+            'höchstens nach 30 Tagen, offene Löschaufträge bis zur Bestätigung. '
+            'Stripe-Kontakt und Betroffenenrechte: offizielles Stripe Privacy Center; '
+            'SIT-Kontakt: Impressum.',
       ),
       const _PrivacySectionData(
         icon: Icons.storage_outlined,

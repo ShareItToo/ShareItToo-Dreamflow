@@ -165,10 +165,36 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 
 - Never hide, remove, permanently disable, downgrade to toast-only, demo-only,
   placeholder or silent no-op any reachable control merely to close a finding.
-  Every reachable function must have a real persisted or server-authoritative
+- Every reachable function must have a real persisted or server-authoritative
   effect with explicit success, failure, retry and stale-owner/session proof.
+- While a review has known FIX items, run only the focused checks that exercise
+  the changed invariant. Run a package or repository full regression exactly
+  once after the implementation, review fixes and required real-infrastructure
+  tests are stable; an earlier full run is diagnostic only and is never reused
+  as closure evidence.
+
+Tests and scanners must be made precise rather than bypassed: never obfuscate
+production code or use semantically irrelevant spelling solely to evade a
+source check.
 
 Protected Android signing and Firebase files are local, Git-ignored inputs.
 Validate their presence through repository tooling without printing values.
 Release-candidate, Store, live-provider and production commands are separate
 gated actions and are never implied by a normal build or regression task.
+
+## External-create recovery invariant
+
+When an external provider create can succeed before its response reaches SIT,
+persist a durable local placeholder claim first, use a deterministic
+provider-idempotency key and provider request body, and reconcile pending claims
+in a bounded background worker. A user retry or account-deletion path is never
+the only recovery mechanism; provider/session and cleanup state changes use
+compare-and-set transactions and sanitized operational errors.
+
+## Technical-provider test boundary
+
+A technical or synthetic provider test must never change or imply a production
+trust/verified state, eligibility, ranking, booking benefit, fraud protection,
+or completed real-world verification. Every reachable copy and action must name
+the test boundary and preserve the server-authoritative no-confirmation
+disclosure.

@@ -8,6 +8,7 @@ import 'login_screen.dart';
 import 'package:lendify/models/mfa.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/mfa_service.dart';
+import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/tracked_dialog_route.dart';
 
 class TwoFactorAuthScreen extends StatefulWidget {
@@ -177,18 +178,20 @@ class _TwoFactorAuthScreenState extends State<TwoFactorAuthScreen> {
                               if (token != null && handle.isActive) {
                                 handle.dismiss((null, token));
                               } else if (mounted && _current()) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text(
-                                          'Erneute Bestätigung wurde abgebrochen.')),
+                                AppPopup.info(
+                                  context,
+                                  title: 'Bestätigung abgebrochen',
+                                  message:
+                                      'Erneute Bestätigung wurde abgebrochen.',
                                 );
                               }
                             } catch (_) {
                               if (mounted && _current()) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text(
-                                          'Erneute Bestätigung konnte nicht abgeschlossen werden.')),
+                                AppPopup.error(
+                                  context,
+                                  title: 'Bestätigung fehlgeschlagen',
+                                  message:
+                                      'Erneute Bestätigung konnte nicht abgeschlossen werden.',
                                 );
                               }
                             } finally {
@@ -443,8 +446,11 @@ class _TwoFactorAuthScreenState extends State<TwoFactorAuthScreen> {
     }
     await Clipboard.setData(ClipboardData(text: codes.join('\n')));
     if (mounted && _current()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Wiederherstellungscodes kopiert.')));
+      AppPopup.success(
+        context,
+        title: 'Codes kopiert',
+        message: 'Wiederherstellungscodes wurden kopiert.',
+      );
     }
   }
 
@@ -476,10 +482,11 @@ class _TwoFactorAuthScreenState extends State<TwoFactorAuthScreen> {
       canPop: _recoveryCodes == null && !_routeReplacementPending,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && _recoveryCodes != null && !_acknowledged) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text(
-                    'Bestätige zuerst, dass du die Wiederherstellungscodes sicher gespeichert hast.')),
+          AppPopup.info(
+            context,
+            title: 'Codes zuerst sichern',
+            message:
+                'Bestätige zuerst, dass du die Wiederherstellungscodes sicher gespeichert hast.',
           );
         }
       },

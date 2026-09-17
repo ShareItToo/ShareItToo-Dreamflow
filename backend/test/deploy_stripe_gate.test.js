@@ -285,9 +285,17 @@ test('deployment source keeps Stripe Staging opt-in, file-only, test-only and sa
   assert.match(app, /const paymentProviderHealth = Object\.freeze\(\{/u);
   assert.equal((app.match(/paymentProvider: paymentProviderHealth/gu) ?? []).length, 2);
   assert.doesNotMatch(
-    app.slice(app.indexOf('const paymentProviderHealth'), app.indexOf('const attemptFirebaseIdentityDeletion')),
+    app.slice(app.indexOf('const paymentProviderHealth'), app.indexOf('const identityVerificationHealth')),
     /(?:secretKey|webhookSecret|credentialPresent)/u,
   );
+  const identityHealth = app.slice(
+    app.indexOf('const identityVerificationHealth'),
+    app.indexOf('const attemptFirebaseIdentityDeletion'),
+  );
+  assert.match(identityHealth, /credentialSource/u);
+  assert.match(identityHealth, /webhookConfigured: Boolean/u);
+  assert.doesNotMatch(identityHealth, /(?:sk|rk)_(?:test|live)_[A-Za-z0-9]+|whsec_[A-Za-z0-9]+/u);
+  assert.doesNotMatch(identityHealth, /secretKey:/u);
   assert.match(workflow, /-f compose\.staging\.stripe\.yml/u);
   for (const name of [
     'STRIPE_SECRET_KEY_HOST_FILE',

@@ -10,6 +10,7 @@ import 'package:lendify/services/account_security_service.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/models/mfa.dart';
 import 'package:lendify/screens/two_factor_auth_screen.dart';
+import 'package:lendify/screens/verification_screen.dart';
 import 'package:lendify/services/mfa_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/theme.dart';
@@ -646,12 +647,16 @@ class _SecurityScreenState extends State<SecurityScreen> {
                 icon: Icons.verified_user_outlined,
               ),
               const SizedBox(height: 10),
-              const _UnavailableCard(
-                title: 'Noch nicht verfügbar',
-                message: 'Keine lokale Demo-Verifizierung. Bis ein geprüfter '
-                    'Anbieter angebunden und '
-                    'freigegeben ist, nimmt ShareItToo keine Ausweise oder '
-                    'Selfies entgegen.',
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.badge_outlined),
+                  title: const Text('Serverstatus und Prüfung öffnen'),
+                  subtitle: const Text(
+                      'Der Status wird ausschließlich vom Backend bestätigt.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const VerificationScreen())),
+                ),
               ),
               const SizedBox(height: 18),
               const _SectionHeader(title: 'Passwort', icon: Icons.lock_outline),

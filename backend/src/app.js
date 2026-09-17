@@ -135,6 +135,15 @@ import {
   PaymentDomainError,
   trustedRefundProviderModel,
 } from './payment_domain.js';
+import { StripeProvider } from './stripe_provider.js';
+import {
+  IdentityVerificationError,
+  applyIdentityVerificationWebhook,
+  getIdentityVerificationStatus,
+  revokeIdentityVerification,
+  refreshIdentityVerification,
+  startIdentityVerification,
+} from './identity_verification_workflow.js';
 import { accountOpenRefundObligationCount } from './payment_refund_obligations.js';
 import { stripeSandboxExecutionActive } from './payment_execution_guard.js';
 import { ModerationDomainError } from './moderation_domain.js';
@@ -348,6 +357,10 @@ import {
   drainFirebaseIdentityDeletionOutbox,
   enqueueFirebaseIdentityDeletions,
 } from './firebase_identity_cleanup.js';
+import {
+  drainIdentityVerificationRedactions,
+  enqueueIdentityVerificationRedactions,
+} from './identity_verification_cleanup.js';
 import {
   createCrashlyticsReportDeleteClient,
   drainCrashlyticsReportDeletionOutbox,
@@ -1475,7 +1488,7 @@ async function reconcileExpiredAccountSuspension(email) {
   });
 }
 
-async function eraseAccount(client, user, { actorRole = 'user', source = 'app' } = {}) {
+export async function eraseAccount(client, user, { actorRole = 'user', source = 'app' } = {}) {
   await lockFinancialPrincipals(client, [user.id]);
   const lockedAccount = await client.query(
     `SELECT id
@@ -1574,6 +1587,9 @@ async function eraseAccount(client, user, { actorRole = 'user', source = 'app' }
   const crashlyticsReportDeletionIds = await enqueueCrashlyticsReportDeletions(client, {
     userId: user.id,
   });
+  const identityVerificationRedactionIds = await enqueueIdentityVerificationRedactions(client, {
+    userId: user.id,
+  });
   await client.query('DELETE FROM auth_identities WHERE user_id = $1', [user.id]);
   await client.query('DELETE FROM auth_action_tokens WHERE user_id = $1', [user.id]);
   await client.query('DELETE FROM refresh_tokens WHERE user_id = $1', [user.id]);
@@ -1621,6 +1637,7 @@ async function eraseAccount(client, user, { actorRole = 'user', source = 'app' }
     ]).filter(Boolean),
     firebaseIdentityDeletionIds,
     crashlyticsReportDeletionIds,
+    identityVerificationRedactionIds,
   };
 }
 
@@ -1728,6 +1745,8 @@ export function createApp({
     client: pool,
     ids,
   }),
+  drainIdentityVerificationRedactionsNow = null,
+  identityVerificationProvider: identityVerificationProviderOverride = null,
   drainCrashlyticsReportDeletions = (ids) => {
     if (!crashlyticsReportDeleteClient) {
       return Promise.resolve({ accepted: 0, retried: 0 });
@@ -1743,6 +1762,18 @@ export function createApp({
   openAiListingAiProvider,
 } = {}) {
   const app = express();
+  const identityVerificationProvider = identityVerificationProviderOverride ?? new StripeProvider({
+      mode: config.identityVerification.transport,
+      secretKey: config.identityVerification.secretKey,
+      apiVersion: config.identityVerification.apiVersion,
+      livemode: false,
+    });
+  const runIdentityVerificationRedactions = drainIdentityVerificationRedactionsNow
+    ?? ((ids) => drainIdentityVerificationRedactions({
+      client: pool,
+      provider: identityVerificationProvider,
+      ids,
+    }));
   const listingAiProvider = config.listingAi.provider === 'openai'
     ? (openAiListingAiProvider ?? createOpenAiListingAiProvider({
       configuration: config.listingAi,
@@ -1790,6 +1821,18 @@ export function createApp({
     credentialSource: config.payments.transport === 'stripe'
       ? config.payments.credentialSource
       : 'none',
+  });
+  const identityVerificationHealth = Object.freeze({
+    status: config.identityVerification.transport === 'stripe'
+      ? 'enabled'
+      : (config.identityVerification.transport === 'memory' ? 'test_fixture' : 'disabled'),
+    provider: config.identityVerification.transport,
+    mode: config.identityVerification.enabled ? 'test' : 'unavailable',
+    credentialSource: config.identityVerification.transport === 'stripe'
+      ? config.identityVerification.credentialSource
+      : 'none',
+    webhookConfigured: Boolean(config.identityVerification.webhookSecret),
+    livemode: false,
   });
   const attemptFirebaseIdentityDeletion = async (ids) => {
     try {
@@ -1856,6 +1899,20 @@ export function createApp({
     kickNotificationWorker();
     res.json({ received: true, ...result });
   }));
+  app.post('/v1/identity-verification/webhook', webhookLimiter, express.raw({ type: 'application/json', limit: '2mb' }), asyncRoute(async (req, res) => {
+    const event = identityVerificationProvider.parseWebhookEvent({
+      rawBody: req.body,
+      signatureHeader: req.get('Stripe-Signature'),
+      webhookSecret: config.identityVerification.webhookSecret,
+    });
+    const result = await inTransaction(async (client) => applyIdentityVerificationWebhook({
+      client,
+      event,
+      audit: (entry) => writeAudit(client, entry),
+    }));
+    if (result.pending) throw new IdentityVerificationError(409, 'identity_verification_session_pending_reconcile');
+    res.set('Cache-Control', 'no-store').json({ received: true, ...result });
+  }));
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: false, limit: '20kb' }));
 
@@ -1869,6 +1926,7 @@ export function createApp({
   const socialAuthLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 12, standardHeaders: 'draft-8', legacyHeaders: false, skipSuccessfulRequests: true, handler: limitHandler });
   const mfaManageLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false, skipSuccessfulRequests: true, handler: limitHandler });
   const mfaChallengeLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false, skipSuccessfulRequests: true, handler: limitHandler });
+  const identityVerificationLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false, skipSuccessfulRequests: true, handler: limitHandler });
   const refreshLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const actionLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const harassmentBlockReportLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
@@ -1945,6 +2003,7 @@ export function createApp({
         notifications,
         payments,
         paymentProvider: paymentProviderHealth,
+        identityVerification: identityVerificationHealth,
         supportDeadlines,
         listingAi: listingAiHealth,
       },
@@ -1979,6 +2038,7 @@ export function createApp({
         notifications,
         payments,
         paymentProvider: paymentProviderHealth,
+        identityVerification: identityVerificationHealth,
         supportDeadlines,
         listingAi: listingAiHealth,
       },
@@ -2423,6 +2483,45 @@ export function createApp({
     });
     kickNotificationWorker();
     res.status(result.replayed ? 200 : 201).json(result);
+  }));
+
+  app.get('/v1/identity-verification/status', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
+    const status = await getIdentityVerificationStatus(pool, { actor: req.actor });
+    res.set('Cache-Control', 'private, no-store').json(status);
+  }));
+
+  app.post('/v1/identity-verification/session', requireAuth, requireActiveAccount, identityVerificationLimiter, asyncRoute(async (req, res) => {
+    const result = await startIdentityVerification({
+      client: pool,
+      actor: req.actor,
+      provider: identityVerificationProvider,
+      idempotencyKey: req.get('Idempotency-Key') || req.body?.idempotencyKey,
+      consentVersion: req.body?.consentVersion,
+      requestId: req.requestId,
+      audit: (entry) => writeAudit(entry.client ?? pool, entry),
+    });
+    res.set('Cache-Control', 'private, no-store').status(result.replayed || result.resumed ? 200 : 201).json(result);
+  }));
+
+  app.post('/v1/identity-verification/refresh', requireAuth, requireActiveAccount, identityVerificationLimiter, asyncRoute(async (req, res) => {
+    const result = await refreshIdentityVerification({
+      client: pool,
+      actor: req.actor,
+      provider: identityVerificationProvider,
+      requestId: req.requestId,
+      audit: (entry) => writeAudit(entry.client ?? pool, entry),
+    });
+    res.set('Cache-Control', 'private, no-store').json(result);
+  }));
+
+  app.post('/v1/identity-verification/revoke', requireAuth, requireActiveAccount, identityVerificationLimiter, asyncRoute(async (req, res) => {
+    const result = await inTransaction(async (client) => revokeIdentityVerification({
+      client,
+      actor: req.actor,
+      requestId: req.requestId,
+      audit: (entry) => writeAudit(client, entry),
+    }));
+    res.set('Cache-Control', 'private, no-store').json({ ...result, redaction: 'queued' });
   }));
 
   app.get('/v1/auth/mfa/status', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
@@ -3376,7 +3475,11 @@ export function createApp({
     await removeErasedUploadFiles(outcome.erasedUploadStorageNames);
     await attemptFirebaseIdentityDeletion(outcome.firebaseIdentityDeletionIds);
     await attemptCrashlyticsReportDeletion(outcome.crashlyticsReportDeletionIds);
-    res.json({ deleted: true });
+    await runIdentityVerificationRedactions(outcome.identityVerificationRedactionIds);
+    res.json({
+      deleted: true,
+      identityVerificationCleanup: outcome.identityVerificationRedactionIds.length ? 'queued' : 'not_required',
+    });
   }));
 
   // The public store-facing information page is read-only and already covered
@@ -3467,10 +3570,11 @@ export function createApp({
       await removeErasedUploadFiles(outcome.erasedUploadStorageNames);
       await attemptFirebaseIdentityDeletion(outcome.firebaseIdentityDeletionIds);
       await attemptCrashlyticsReportDeletion(outcome.crashlyticsReportDeletionIds);
+      await runIdentityVerificationRedactions(outcome.identityVerificationRedactionIds);
       return sendHtml(res, 200, resultPage({
         success: true,
         title: 'Konto gelöscht',
-        message: 'Dein ShareItToo-Konto wurde geschlossen und deine personenbezogenen Daten wurden gelöscht oder anonymisiert.',
+        message: 'Dein ShareItToo-Konto wurde geschlossen. Personenbezogene Daten wurden gelöscht oder anonymisiert; die bestätigte Löschung beim Identitätsprovider läuft gegebenenfalls noch und wird nicht vorweggenommen.',
       }));
     } catch (error) {
       if (error instanceof HttpError && error.code === 'account_deletion_blocked') {

@@ -26,7 +26,7 @@ import 'package:lendify/widgets/login_nudge_sheet.dart';
 import 'package:lendify/navigation/main_navigation.dart';
 import 'package:lendify/navigation/main_nav_controller.dart';
 import 'package:lendify/screens/notifications_screen.dart';
-import 'package:lendify/widgets/identity_verification_unavailable.dart';
+import 'package:lendify/screens/verification_screen.dart';
 import 'package:lendify/widgets/tracked_dialog_route.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -558,11 +558,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'primaryActions': [
         {
           'id': 'verify_now',
-          'labelKey': 'profile.action.verificationUnavailable',
+          'labelKey': 'profile.action.verifyNow',
           'icon': 'badge-check',
           'route': '/verify',
           'visibleWhen': !verified,
-          'enabled': false,
+          'enabled': true,
         },
         {
           'id': 'view_public_profile',
@@ -1147,7 +1147,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _handleRoute(String route) {
     switch (route) {
       case '/verify':
-        showIdentityVerificationUnavailable(context);
+        Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const VerificationScreen()));
         break;
       case '/myProfilePublic':
         Navigator.of(context).push(

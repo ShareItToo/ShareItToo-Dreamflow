@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lendify/screens/moderation_decisions_screen.dart';
 import 'package:lendify/screens/support_cases_screen.dart';
 import 'package:lendify/screens/support_flow_screen.dart';
+import 'package:lendify/screens/verification_screen.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/login_nudge_sheet.dart';
@@ -182,10 +183,10 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
               steps: [
                 'Öffne „Mein SIT“ und wähle „Anmelden“ oder „Konto erstellen“.',
                 'Vervollständige Profilangaben (Name, Stadt).',
-                'Optional: Verifizierung durchführen, um Vertrauen zu erhöhen.',
+                'Optional: den technischen Identity-Test öffnen; er ändert keinen Verifizierungsstatus.',
               ],
               tips: [
-                'Verifiziere dich frühzeitig – das erhöht die Chance auf Buchungen.'
+                'Der technische Test ist freiwillig und hat keinen Einfluss auf Buchungen.'
               ],
             ),
           ),
@@ -208,17 +209,18 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
           ),
           _HelpArticle(
             id: 'verifizierung',
-            title: 'Verifizierung durchführen',
-            short: 'Geplante geprüfte Identitätsbestätigung.',
+            title: 'Technischen Identity-Test öffnen',
+            short:
+                'Freiwilligen, test-only Ablauf starten oder fortsetzen.',
             body: _HelpBody(
               intro:
-                  'Die Identitätsprüfung ist noch nicht verfügbar. ShareItToo zeigt deshalb keinen lokalen Demo-Ablauf als echte Prüfung an.',
+                  'Pilot-Testmodus: Der serverseitige Stripe-Testanbieter prüft nur den technischen Ablauf. Es wird keine reale Identität bestätigt und kein Produktionsstatus gesetzt.',
               steps: [
-                'Bestätige deine E-Mail-Adresse über den zugesandten Link.',
-                'Nutze bis zur Anbieteranbindung ausschließlich korrekte Profildaten.',
+                'Öffne den Prüfablauf über diesen Artikel oder die Kontoeinstellungen.',
+                'Schließe den vorgesehenen Testablauf ab und aktualisiere anschließend den Status.',
               ],
               tips: [
-                'Sobald ein geprüfter Identitätsanbieter angebunden ist, wird der Einstieg in den Kontoeinstellungen freigeschaltet.'
+                'Dokumente und Selfie-Daten werden nicht von ShareItToo gespeichert.'
               ],
             ),
           ),
@@ -591,17 +593,17 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
         articles: [
           _HelpArticle(
             id: 'verifizierung-2',
-            title: 'Verifizierung',
+            title: 'Technischer Identity-Test',
             short:
-                'Warum Verifizierung wichtig ist – und wie sie funktioniert.',
+                'Testgrenze, Datenschutz und Ablauf des technischen Tests.',
             body: _HelpBody(
-              intro: 'Verifizierung ist ein wichtiger Baustein gegen Betrug.',
+              intro: 'Dieser Ablauf ist ein freiwilliger technischer Test und kein Vertrauens-, Ranking- oder Buchungssignal.',
               steps: [
-                'Mein SIT → Kontoeinstellungen → Verifizierung öffnen.',
+                'Mein SIT → Kontoeinstellungen → technischen Identity-Test öffnen.',
                 'Schritte in der App folgen.'
               ],
               tips: [
-                'Verifizierte Profile erhalten mehr Vertrauen und Anfragen.'
+                'Der Test zeigt „Technischer Test erfolgreich – keine Identitätsbestätigung“ und ändert keine Profil- oder Berechtigungsdaten.'
               ],
             ),
           ),
@@ -805,6 +807,11 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
       _HelpCategory category, _HelpArticle article) async {
     if (!mounted) return;
     _searchFocus.unfocus();
+    if (article.id == 'verifizierung' || article.id == 'verifizierung-2') {
+      await Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const VerificationScreen()));
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -924,7 +931,9 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
       );
       return;
     }
-    if (owner == null || !await _supportPrincipal.isCurrent(owner) || !mounted) {
+    if (owner == null ||
+        !await _supportPrincipal.isCurrent(owner) ||
+        !mounted) {
       return;
     }
     await _supportPrincipal.pushOwnedRoute<void>(

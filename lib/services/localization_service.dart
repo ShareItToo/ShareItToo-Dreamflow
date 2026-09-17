@@ -214,9 +214,9 @@ class LocalizationController extends ChangeNotifier {
         'Hier siehst du künftig deine Benachrichtigungen.',
     'Mein Profil anzeigen': 'Mein Profil anzeigen',
     // New i18n namespaced keys
-    'profile.action.verifyNow': 'Jetzt verifizieren',
+    'profile.action.verifyNow': 'Technischen Identity-Test öffnen',
     'profile.action.verificationUnavailable':
-        'Identitätsprüfung noch nicht verfügbar',
+        'Identitätsprüfung im Pilot-Testmodus',
     'profile.action.viewMyProfile': 'Mein Profil anzeigen',
     'profile.menu.myListings': 'Meine Anzeigen',
     'profile.menu.rentalRequests': 'Mietanfragen',
@@ -441,9 +441,9 @@ class LocalizationController extends ChangeNotifier {
         'You will see your notifications here.',
     'Mein Profil anzeigen': 'View my profile',
     // New i18n namespaced keys
-    'profile.action.verifyNow': 'Verify now',
+    'profile.action.verifyNow': 'Open technical identity test',
     'profile.action.verificationUnavailable':
-        'Identity verification not yet available',
+        'Identity verification in pilot test mode',
     'profile.action.viewMyProfile': 'View my profile',
     'profile.menu.myListings': 'My listings',
     'profile.menu.rentalRequests': 'Rental requests',

@@ -86,3 +86,24 @@ export function readStripeSecretConfiguration(env, {
     credentialSource: sources.size === 1 ? [...sources][0] : 'mixed',
   });
 }
+
+export function readStripeIdentitySecretConfiguration(env, {
+  deploymentEnvironment,
+  identityTransport,
+}) {
+  if (identityTransport !== 'stripe') {
+    return Object.freeze({ secretKey: '', webhookSecret: '', credentialSource: 'none' });
+  }
+  const secretKey = readCredential(env, 'IDENTITY_STRIPE_SECRET_KEY', 'IDENTITY_STRIPE_SECRET_KEY_FILE');
+  const webhookSecret = readCredential(env, 'IDENTITY_VERIFICATION_WEBHOOK_SECRET', 'IDENTITY_VERIFICATION_WEBHOOK_SECRET_FILE');
+  const credentials = [secretKey, webhookSecret];
+  const sources = new Set(credentials.map((credential) => credential.source));
+  if (deploymentEnvironment === 'staging' && (sources.size !== 1 || !sources.has('file'))) {
+    fail('Stripe Identity Staging transport requires file credentials');
+  }
+  return Object.freeze({
+    secretKey: secretKey.value,
+    webhookSecret: webhookSecret.value,
+    credentialSource: sources.size === 1 ? [...sources][0] : 'mixed',
+  });
+}

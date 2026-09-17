@@ -114,6 +114,7 @@ test('runs readiness, isolated database and integration before guaranteed cleanu
     integrationTests: [
       'backend/test/postgres_foundation.integration.test.js',
       'backend/test/foreign_key_integrity.integration.test.js',
+      'backend/test/identity_verification_postgres.integration.test.js',
       'backend/test/mfa_postgres.integration.test.js',
     ],
   });
@@ -127,8 +128,9 @@ test('runs readiness, isolated database and integration before guaranteed cleanu
   );
   assert.match(log, /pg_isready\|-h 127\.0\.0\.1 .* -d postgres/u);
   assert.match(log, /createdb\|-h 127\.0\.0\.1 .* sit_integration/u);
-  assert.match(log, /node\|--throw-deprecation --import \.\/backend\/test_setup\.js --test backend\/test\/postgres_foundation\.integration\.test\.js backend\/test\/foreign_key_integrity\.integration\.test\.js\|postgresql:\/\/sit_runner@127\.0\.0\.1:/u);
-  assert.match(log, /node\|--throw-deprecation --import \.\/backend\/test_setup\.js --test backend\/test\/mfa_postgres\.integration\.test\.js\|postgresql:\/\/sit_runner@127\.0\.0\.1:/u);
+  assert.match(log, /node\|--throw-deprecation --import \.\/backend\/test_setup\.js --test-concurrency=1 --test backend\/test\/postgres_foundation\.integration\.test\.js backend\/test\/foreign_key_integrity\.integration\.test\.js\|postgresql:\/\/sit_runner@127\.0\.0\.1:/u);
+  assert.match(log, /node\|--throw-deprecation --import \.\/backend\/test_setup\.js --test-concurrency=1 --test backend\/test\/identity_verification_postgres\.integration\.test\.js\|postgresql:\/\/sit_runner@127\.0\.0\.1:/u);
+  assert.match(log, /node\|--throw-deprecation --import \.\/backend\/test_setup\.js --test-concurrency=1 --test backend\/test\/mfa_postgres\.integration\.test\.js\|postgresql:\/\/sit_runner@127\.0\.0\.1:/u);
   assert.match(log, /pg_ctl\|.* -m fast stop\|/u);
 });
 

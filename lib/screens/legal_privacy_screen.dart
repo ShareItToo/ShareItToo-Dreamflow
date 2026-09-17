@@ -20,9 +20,11 @@ class LegalPrivacyScreen extends StatelessWidget {
             LegalParagraph(DraftOperatorConfig.readinessText),
             SizedBox(height: 10),
             LegalParagraph(
-              'Die Angaben gelten nur für die interne Entwurfsvorbereitung. '
-              'Rechtsgrundlagen, Empfänger, Aufbewahrung, DPA/Transfers und '
-              'DSA-Pflichten bleiben bis zur unabhängigen Prüfung offen.',
+              'Für diesen gesperrten technischen Pilot gelten die im Impressum '
+              'genannten Betreiber- und Kontaktangaben. Diese Fassung ist nur '
+              'für den nicht öffentlichen Test bestimmt; vor einem öffentlichen '
+              'Start müssen Betreiberangaben, Empfänger, Aufbewahrung, Transfers '
+              'und weitere Pflichtinformationen abschließend geprüft werden.',
             ),
           ],
         ),
@@ -39,7 +41,31 @@ class LegalPrivacyScreen extends StatelessWidget {
             ]),
             SizedBox(height: 10),
             LegalParagraph(
-              'Der aktuelle Store-Kandidat bietet keine Ausweisprüfung und keinen Upload von Identitätsdokumenten an. Eine Telefonnummer kann freiwillig per SMS-Verifizierung über Firebase Authentication bestätigt werden. ShareItToo erhält und speichert den SMS-Code nicht; der Versand ist auf deutsche Rufnummern beschränkt.',
+              'Freiwilliger technischer Pilot-Test über Stripe Identity: Zweck ist '
+              'nur die Prüfung des SIT-Ablaufs, nicht die Bestätigung einer realen '
+              'Identität. Rechtsgrundlage ist die widerrufliche Einwilligung nach '
+              'Art. 6 Abs. 1 lit. a DSGVO; ein Widerruf ist ohne Nachteil über '
+              '„Löschung anfordern“ möglich. SIT speichert keine Ausweis- oder '
+              'Selfie-Dateien und keine Zugangsschlüssel, sondern nur eine '
+              'temporäre technische Zuordnung, Status, Zeitpunkte sowie minimierte '
+              'Audit-/Löschdaten. Nach Statusende oder Widerruf wird die Provider-'
+              'Redaktion angefordert; die App zeigt bis zur bestätigten Provider-'
+              'Redaktion „Löschung läuft“ und behauptet keine vollständige '
+              'Löschung bei Stripe. Stripe kann als eigener Verantwortlicher oder '
+              'für einen einzelnen Zweck als Dienstleister tätig sein; die Rolle, '
+              'Verarbeitungsorte und Transfermechanismen sind vom konkreten Stripe-'
+              'Ablauf abhängig; mögliche Übermittlungen in die USA oder an weitere '
+              'Unterauftragnehmer und die Schutzmechanismen (einschließlich SCC '
+              'oder EU-US DPF, soweit anwendbar) richten sich nach dem konkreten '
+              'Fall. Maßgeblich sind Stripes offizielle Hinweise: '
+              'https://stripe.com/de/legal/privacy-center und '
+              'https://stripe.com/de/legal/dpa. '
+              'SIT lässt unvollständige Eingaben nach 24 Stunden auslaufen; '
+              'technische Zuordnungen, Ereignisse und Lösch-Tombstones werden '
+              'höchstens 30 Tage aufbewahrt, offene Löschaufträge bis zur '
+              'Bestätigung. Betroffenenrechte und der SIT-Kontakt stehen im '
+              'Impressum; Stripe-Kontakt und Betroffenenrechte stehen im offiziellen '
+              'Stripe Privacy Center.',
             ),
           ],
         ),

@@ -5,6 +5,11 @@ import { config } from './config.js';
 import { startCredentialCleanupWorker } from './credential_cleanup.js';
 import { startFirebaseIdentityCleanupWorker } from './firebase_identity_cleanup.js';
 import {
+  startIdentityVerificationReconciliationWorker,
+  startIdentityVerificationRedactionWorker,
+} from './identity_verification_cleanup.js';
+import { StripeProvider } from './stripe_provider.js';
+import {
   createCrashlyticsReportDeleteClient,
   startCrashlyticsCleanupWorker,
 } from './crashlytics_cleanup.js';
@@ -18,13 +23,37 @@ import { reconcilePaymentLifecycle } from './payment_workflow.js';
 import { reconcileReturnLifecycle } from './return_lifecycle_workflow.js';
 import { reconcileSupportDeadlines } from './support_deadline_watchdog.js';
 
+async function writeIdentityVerificationWorkerAudit(client, {
+  actor = null,
+  action,
+  resourceType,
+  resourceId,
+  metadata = {},
+}) {
+  await client.query(
+    `INSERT INTO audit_log (actor_id, actor_role, action, resource_type, resource_id, metadata)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+    [actor?.id ?? null, actor?.role ?? 'system', action, resourceType, resourceId, JSON.stringify(metadata)],
+  );
+}
+
 async function main() {
   await initializeDatabase();
   await verifyMailer();
 
-  const app = createApp(createLocalQaSyntheticImageScreeningOptions({
+  const identityProvider = new StripeProvider({
+    mode: config.identityVerification.transport,
+    secretKey: config.identityVerification.secretKey,
+    apiVersion: config.identityVerification.apiVersion,
+    livemode: false,
+  });
+
+  const app = createApp({
+    ...createLocalQaSyntheticImageScreeningOptions({
     configuration: config,
-  }));
+    }),
+    identityVerificationProvider: identityProvider,
+  });
   const server = http.createServer(app);
   attachRealtime(server);
 
@@ -80,6 +109,28 @@ async function main() {
       }),
     })
     : () => {};
+  const identityAudit = (entry) => writeIdentityVerificationWorkerAudit(entry.client, entry);
+  const stopIdentityVerificationReconciliation = config.identityVerification.enabled
+    ? startIdentityVerificationReconciliationWorker({
+      client: pool,
+      provider: identityProvider,
+      audit: identityAudit,
+      onError: (error) => console.error(
+        '[identity-verification] reconciliation worker failed',
+        safeOperationalErrorCode(error, 'identity_reconciliation_worker_failed'),
+      ),
+    })
+    : () => {};
+  const stopIdentityVerificationRedaction = config.identityVerification.enabled
+    ? startIdentityVerificationRedactionWorker({
+      client: pool,
+      provider: identityProvider,
+      onError: (error) => console.error(
+        '[identity-verification] redaction worker failed',
+        safeOperationalErrorCode(error, 'identity_redaction_worker_failed'),
+      ),
+    })
+    : () => {};
 
   const shutdown = async (signal) => {
     console.log(`[shareittoo-api] ${signal}, shutting down`);
@@ -90,6 +141,8 @@ async function main() {
     stopCredentialCleanup();
     stopFirebaseIdentityCleanup();
     stopCrashlyticsCleanup();
+    stopIdentityVerificationReconciliation();
+    stopIdentityVerificationRedaction();
     server.close(async () => {
       await pool.end();
       process.exit(0);

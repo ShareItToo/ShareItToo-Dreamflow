@@ -93,7 +93,7 @@ class GuestRestrictionSheet extends StatelessWidget {
           benefits: [
             'Dein Profil & deine Daten verwalten',
             'Anzeigen, Buchungen & Nachrichten an einem Ort',
-            'Mehr Vertrauen durch Verifizierung & Bewertungen'
+            'Technische Tests und Bewertungen getrennt prüfen'
           ],
         );
       case GuestGateContext.accountSettings:
@@ -112,13 +112,13 @@ class GuestRestrictionSheet extends StatelessWidget {
         return const GuestGateContent(
           // Match iconography used across profile/menu for verification.
           icon: Icons.verified_user_outlined,
-          title: 'Verifizierung freischalten',
+          title: 'Technischen Test öffnen',
           description:
-              'Mit einem Konto kannst du deine Identität verifizieren und schneller buchen.',
+              'Mit einem Konto kannst du den freiwilligen technischen Identity-Test öffnen.',
           benefits: [
-            'Mehr Vertrauen',
-            'Schnellere Zusagen',
-            'Bessere Sichtbarkeit'
+            'Teststatus serverseitig prüfen',
+            'Datenschutzhinweise vorab lesen',
+            'Kein Einfluss auf Ranking oder Buchungen'
           ],
         );
       case GuestGateContext.messages:
@@ -208,7 +208,7 @@ class GuestRestrictionSheet extends StatelessWidget {
           benefits: [
             'Sicher buchen & kommunizieren',
             'Gemerktes & Buchungen verwalten',
-            'Verifizierungen nutzen'
+            'Technische Testabläufe nutzen'
           ],
         );
     }
