@@ -9,7 +9,9 @@ import {
   assertStagingLabels,
   assertStagingTarget,
   buildStagingRehearsalPlan,
+  buildFunctionalProbeSql,
   runStagingForwardMigrationRehearsal,
+  writeDatabaseBackup,
   removeAndVerifyDockerResource,
   runCommand,
   runCommandWithFileInput,
@@ -159,6 +161,49 @@ test('command failures and file-input failures never expose command output', asy
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('backup stream opens and flushes before archive verification; expected list EPIPE is benign', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'sit-rehearsal-backup-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const bin = join(root, 'bin');
+  const backupDirectory = join(root, 'backups');
+  await mkdir(bin, { mode: 0o700 });
+  await mkdir(backupDirectory, { mode: 0o700 });
+  const docker = join(bin, 'docker');
+  await writeFile(docker, `#!/bin/sh
+if [ "$1" = "exec" ]; then
+  dd if=/dev/zero bs=1024 count=16 2>/dev/null
+  exit 0
+fi
+if [ "$1" = "run" ]; then
+  dd if=/dev/stdin bs=1 count=1 of=/dev/null 2>/dev/null
+  exit 0
+fi
+exit 42
+`);
+  chmodSync(docker, 0o700);
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}` };
+  const result = await writeDatabaseBackup({
+    databaseContainer: 'staging-db',
+    databaseUser: 'staging-user',
+    databaseName: 'staging-db',
+    backupDirectory,
+    runId: 'test-stream-open-flush',
+    env,
+  });
+  assert.equal(result.bytes, 16 * 1024);
+  assert.match(result.checksum, /^[0-9a-f]{64}$/u);
+  const manifest = await readFile(result.manifestPath, 'utf8');
+  assert.match(manifest, new RegExp(`^${result.checksum}  `, 'u'));
+});
+
+test('functional probe supplies the current refund amount breakdown contract', () => {
+  const sql = buildFunctionalProbeSql();
+  assert.match(sql, /owner_share_minor, platform_share_minor,/u);
+  assert.match(sql, /\n    1, 0, 'separate_charge_manual_transfer_reversal_v1'/u);
+  assert.match(sql, /FROM support_cases AS s[\s\S]*WHERE s\.intake_scope_evidence IS NULL/u);
+  assert.match(sql, /UPDATE support_cases[\s\S]*EXCEPTION WHEN SQLSTATE '55000' THEN NULL;/u);
 });
 
 test('cleanup must prove absence and never resume services implicitly', async (t) => {

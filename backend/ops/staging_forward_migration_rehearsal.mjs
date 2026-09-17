@@ -185,16 +185,16 @@ export function runCommandWithFileInput(command, args, filePath, {
   });
 }
 
-async function dockerInspectJson(name, format) {
-  const result = await runCommand('docker', ['inspect', '--format', format, name]);
+async function dockerInspectJson(name, format, phase = 'docker_inspect') {
+  const result = await runCommand('docker', ['inspect', '--format', format, name], { phase });
   try { return JSON.parse(result.stdout.trim()); } catch { fail('docker_inspect_json_invalid'); }
 }
 
-async function psql({ container, user, database, sql }) {
+async function psql({ container, user, database, sql, phase = 'psql_query' }) {
   const result = await runCommand('docker', [
     'exec', container, 'psql', '-X', '--set', 'ON_ERROR_STOP=1',
     '-U', user, '-d', database, '-Atc', sql,
-  ]);
+  ], { phase });
   return result.stdout.trim();
 }
 
@@ -274,7 +274,7 @@ async function migrationPlan() {
   return selected.map((name) => ({ name, path: join(repositoryRoot, 'backend/sql/migrations', name) }));
 }
 
-async function writeDatabaseBackup({ databaseContainer, databaseUser, databaseName, backupDirectory, runId }) {
+export async function writeDatabaseBackup({ databaseContainer, databaseUser, databaseName, backupDirectory, runId, env = process.env }) {
   const backupPath = join(backupDirectory, `staging-${runId}.dump`);
   const output = createWriteStream(backupPath, { flags: 'wx', mode: 0o600 });
   const outputClosed = new Promise((resolvePromise, reject) => {
@@ -291,7 +291,7 @@ async function writeDatabaseBackup({ databaseContainer, databaseUser, databaseNa
   const child = spawn('docker', [
     'exec', databaseContainer, 'pg_dump', '-U', databaseUser, '-d', databaseName,
     '--format=custom', '--no-owner', '--no-acl',
-  ], { cwd: repositoryRoot, stdio: ['ignore', output, 'pipe'] });
+  ], { cwd: repositoryRoot, env, stdio: ['ignore', output, 'pipe'] });
   child.stderr.setEncoding('utf8');
   const code = await new Promise((resolvePromise, reject) => {
     child.once('error', reject);
@@ -308,7 +308,10 @@ async function writeDatabaseBackup({ databaseContainer, databaseUser, databaseNa
   await outputClosed;
   const metadata = await stat(backupPath);
   if (metadata.size <= 0) fail('staging_backup_empty');
-  await runCommandWithFileInput('docker', ['run', '--rm', '-i', postgresImage, 'pg_restore', '-l'], backupPath);
+  await runCommandWithFileInput('docker', ['run', '--rm', '-i', postgresImage, 'pg_restore', '-l'], backupPath, {
+    env,
+    phase: 'archive_list',
+  });
   const checksum = await sha256File(backupPath);
   const manifestPath = `${backupPath}.sha256`;
   await writeFile(manifestPath, `${checksum}  ${backupPath}\n`, { flag: 'wx', mode: 0o600 });
@@ -316,8 +319,8 @@ async function writeDatabaseBackup({ databaseContainer, databaseUser, databaseNa
   return { backupPath, manifestPath, checksum, bytes: metadata.size };
 }
 
-async function runFunctionalProbes({ container, user, database }) {
-  const probeSql = `
+export function buildFunctionalProbeSql() {
+  return `
 BEGIN;
 DO $$
 DECLARE
@@ -387,10 +390,11 @@ BEGIN
   END;
   INSERT INTO refunds (
     payment_id, idempotency_key, status, amount_minor, currency,
+    owner_share_minor, platform_share_minor,
     provider_refund_model, local_settlement_status, provider_observation_status
   ) VALUES (
     v_payment_id, 'rehearsal-current-refund-' || gen_random_uuid()::text, 'created', 1, 'EUR',
-    'separate_charge_manual_transfer_reversal_v1', 'pending', 'none'
+    1, 0, 'separate_charge_manual_transfer_reversal_v1', 'pending', 'none'
   ) RETURNING id INTO v_refund_id;
 
   INSERT INTO refund_transfer_reversals (
@@ -419,7 +423,11 @@ BEGIN
     'rehearsal', 'record-' || gen_random_uuid()::text,
     now() + interval '1 hour', now() + interval '2 hours');
 
-  SELECT s.id INTO v_support_case_id FROM support_cases AS s ORDER BY s.created_at LIMIT 1;
+  SELECT s.id INTO v_support_case_id
+    FROM support_cases AS s
+   WHERE s.intake_scope_evidence IS NULL
+   ORDER BY s.created_at
+   LIMIT 1;
   IF v_support_case_id IS NULL THEN
     INSERT INTO support_cases (
       schema_version, human_readable_case_number, case_type, case_subtype,
@@ -443,7 +451,7 @@ BEGIN
     UPDATE support_cases SET intake_scope_evidence = '{"unexpected":true}'::jsonb
       WHERE id = v_support_case_id;
     RAISE EXCEPTION 'rehearsal_special_intake_invalid_was_accepted';
-  EXCEPTION WHEN check_violation THEN NULL;
+  EXCEPTION WHEN SQLSTATE '55000' THEN NULL;
   END;
 
   INSERT INTO mfa_totp_factors (user_id, encrypted_secret, status)
@@ -501,20 +509,24 @@ BEGIN
   IF observed IS NULL OR observed THEN RAISE EXCEPTION 'rehearsal_identity_pilot_control_invalid'; END IF;
 END $$;
 ROLLBACK;`;
-  await psqlScript({ container, user, database, sql: probeSql });
+}
+
+async function runFunctionalProbes({ container, user, database }) {
+  const probeSql = buildFunctionalProbeSql();
+  await psqlScript({ container, user, database, sql: probeSql, phase: 'functional_probes' });
   return true;
 }
 
-async function psqlScript({ container, user, database, sql }) {
+async function psqlScript({ container, user, database, sql, phase = 'psql_script' }) {
   return runCommand('docker', [
     'exec', '-i', container, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', user, '-d', database,
-  ], { input: sql });
+  ], { input: sql, phase });
 }
 
 async function applyMigrationsWithApplicationRunner({ container, database, user, password }) {
   const port = await runCommand('docker', [
     'inspect', '--format', '{{(index (index .NetworkSettings.Ports "5432/tcp") 0).HostPort}}', container,
-  ]);
+  ], { phase: 'temp_db_port' });
   const hostPort = port.stdout.trim();
   if (!/^\d+$/u.test(hostPort)) fail('isolated_postgres_host_port_invalid');
   const pool = new Pool({
@@ -527,7 +539,11 @@ async function applyMigrationsWithApplicationRunner({ container, database, user,
   });
   try {
     const { runMigrations } = await import('../src/migrations.js');
-    await runMigrations(pool);
+    try {
+      await runMigrations(pool);
+    } catch {
+      throw commandFailure('application_migration_runner');
+    }
   } finally {
     await pool.end();
   }
@@ -573,9 +589,9 @@ export async function runStagingForwardMigrationRehearsal({
   if (environment.SIT_STAGING_REHEARSAL_CONFIRM !== targetCommit) {
     fail('exact_rehearsal_confirmation_required');
   }
-  await runCommand('git', ['cat-file', '-e', `${targetCommit}^{commit}`]);
+  await runCommand('git', ['cat-file', '-e', `${targetCommit}^{commit}`], { phase: 'target_commit_exists' });
   try {
-    await runCommand('git', ['diff', '--quiet', targetCommit, '--', 'backend/src', 'backend/sql']);
+    await runCommand('git', ['diff', '--quiet', targetCommit, '--', 'backend/src', 'backend/sql'], { phase: 'target_runtime_source_match' });
   } catch {
     fail('runtime_source_differs_from_target_commit');
   }
@@ -591,9 +607,9 @@ export async function runStagingForwardMigrationRehearsal({
   const opsCommit = fullCommit(environment.SIT_STAGING_REHEARSAL_OPS_COMMIT, 'opsCommit');
   const runningOpsCommit = (await runCommand('git', ['rev-parse', 'HEAD'], { phase: 'ops_commit_read' })).stdout.trim();
   if (runningOpsCommit !== opsCommit) fail('ops_commit_mismatch');
-  const apiLabels = await dockerInspectJson(apiContainer, '{{json .Config.Labels}}');
-  const databaseLabels = await dockerInspectJson(databaseContainer, '{{json .Config.Labels}}');
-  const volumeLabels = await dockerInspectJson(databaseVolume, '{{json .Labels}}');
+  const apiLabels = await dockerInspectJson(apiContainer, '{{json .Config.Labels}}', 'staging_api_label_inspect');
+  const databaseLabels = await dockerInspectJson(databaseContainer, '{{json .Config.Labels}}', 'staging_database_label_inspect');
+  const volumeLabels = await dockerInspectJson(databaseVolume, '{{json .Labels}}', 'staging_volume_label_inspect');
   assertStagingLabels({ labels: apiLabels, expectedService: 'api' });
   assertStagingLabels({ labels: databaseLabels, expectedService: 'postgres' });
   assertStagingLabels({ labels: volumeLabels, expectedVolume: true });
@@ -604,6 +620,7 @@ export async function runStagingForwardMigrationRehearsal({
     sql: `SELECT count(*) FILTER (WHERE n BETWEEN 1 AND 74) || '|' ||
       count(*) FILTER (WHERE n BETWEEN 75 AND 87) || '|' || count(DISTINCT n)
       FROM (SELECT (regexp_match(name, '^([0-9]+)_'))[1]::int AS n FROM schema_migrations) AS rows`,
+    phase: 'current_schema_inventory',
   });
   if (currentRange !== '74|0|74') fail('current_schema_migration_range_not_001_074');
   const forwardMigrations = await migrationPlan();
@@ -620,17 +637,17 @@ export async function runStagingForwardMigrationRehearsal({
     const running = (await runCommand('docker', [
       'ps', '--filter', `label=com.docker.compose.project=${stagingProjectName}`,
       '--format', '{{.Names}}',
-    ])).stdout.trim().split(/\r?\n/u).filter(Boolean);
+    ], { phase: 'pre_quiesce_inventory' })).stdout.trim().split(/\r?\n/u).filter(Boolean);
     const runningEntries = [];
     for (const name of running) {
       runningEntries.push({
         name,
-        labels: await dockerInspectJson(name, '{{json .Config.Labels}}'),
+        labels: await dockerInspectJson(name, '{{json .Config.Labels}}', 'pre_quiesce_label_inspect'),
       });
     }
     const toQuiesce = validateStagingRunningSet(runningEntries, { apiContainer, databaseContainer });
     for (const name of toQuiesce) {
-      await runCommand('docker', ['stop', name]);
+      await runCommand('docker', ['stop', name], { phase: `quiesce_${name.replaceAll(/[^a-z0-9]+/giu, '_')}` });
       quiesced.push(name);
     }
     const writersBeforeBackup = await psql({
@@ -638,20 +655,22 @@ export async function runStagingForwardMigrationRehearsal({
       user: databaseUser,
       database: databaseName,
       sql: `SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()`,
+      phase: 'pre_backup_writer_check',
     });
     if (writersBeforeBackup !== '0') fail('foreign_database_writers_before_backup');
-    backup = await writeDatabaseBackup({ databaseContainer, databaseUser, databaseName, backupDirectory, runId });
+    backup = await writeDatabaseBackup({ databaseContainer, databaseUser, databaseName, backupDirectory, runId, env: environment });
     const writersAfterBackup = await psql({
       container: databaseContainer,
       user: databaseUser,
       database: databaseName,
       sql: `SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()`,
+      phase: 'post_backup_writer_check',
     });
     if (writersAfterBackup !== '0') fail('foreign_database_writers_after_backup');
 
     isolatedVolume = `sit-staging-rehearsal-${runId}`;
     isolatedContainer = `sit-staging-rehearsal-pg-${runId}`;
-    await runCommand('docker', ['volume', 'create', '--label', 'com.shareittoo.staging.rehearsal=true', isolatedVolume]);
+    await runCommand('docker', ['volume', 'create', '--label', 'com.shareittoo.staging.rehearsal=true', isolatedVolume], { phase: 'temp_volume_create' });
     const isolatedPassword = crypto.randomBytes(32).toString('base64url');
     await runCommand('docker', [
       'run', '-d', '--name', isolatedContainer,
@@ -662,10 +681,10 @@ export async function runStagingForwardMigrationRehearsal({
       '-e', 'POSTGRES_USER=shareittoo_rehearsal',
       '-e', `POSTGRES_PASSWORD=${isolatedPassword}`,
       postgresImage,
-    ]);
+    ], { phase: 'temp_db_start' });
     for (let attempt = 0; attempt < 60; attempt += 1) {
       try {
-        await runCommand('docker', ['exec', isolatedContainer, 'pg_isready', '-h', '127.0.0.1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal']);
+        await runCommand('docker', ['exec', isolatedContainer, 'pg_isready', '-h', '127.0.0.1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], { phase: 'temp_db_readiness' });
         break;
       } catch {
         if (attempt === 59) fail('isolated_postgres_not_ready');
@@ -675,7 +694,7 @@ export async function runStagingForwardMigrationRehearsal({
     await runCommandWithFileInput('docker', [
       'exec', '-i', isolatedContainer, 'pg_restore', '-U', 'shareittoo_rehearsal',
       '-d', 'shareittoo_rehearsal', '--no-owner', '--no-acl',
-    ], backup.backupPath);
+    ], backup.backupPath, { env: environment, phase: 'isolated_restore' });
     const aggregate = await psql({
       container: isolatedContainer,
       user: 'shareittoo_rehearsal',
@@ -692,6 +711,7 @@ export async function runStagingForwardMigrationRehearsal({
           UNION ALL SELECT count(*) FROM support_cases
           UNION ALL SELECT count(*) FROM account_legal_holds
         ) AS exact_counts)`,
+      phase: 'isolated_restore_inventory',
     });
     const [tableCount, restoredRows] = aggregate.split('|').map(Number);
     if (!Number.isFinite(tableCount) || tableCount < 1 || !Number.isFinite(restoredRows) || restoredRows <= 0) {
@@ -710,9 +730,10 @@ export async function runStagingForwardMigrationRehearsal({
       sql: `SELECT count(*), count(DISTINCT (regexp_match(name, '^([0-9]+)_'))[1]::int),
         min((regexp_match(name, '^([0-9]+)_'))[1]::int), max((regexp_match(name, '^([0-9]+)_'))[1]::int)
         FROM schema_migrations`,
+      phase: 'isolated_migration_ledger',
     });
     if (ledger !== '87|87|1|87') fail('rehearsal_migration_ledger_invalid');
-    await runCommand('docker', ['exec', '-i', isolatedContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], { input: await readFile(join(repositoryRoot, 'backend/ops/check_foreign_key_integrity.sql')) });
+    await runCommand('docker', ['exec', '-i', isolatedContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], { input: await readFile(join(repositoryRoot, 'backend/ops/check_foreign_key_integrity.sql')), phase: 'isolated_fk_integrity' });
     await runFunctionalProbes({ container: isolatedContainer, user: 'shareittoo_rehearsal', database: 'shareittoo_rehearsal' });
     result = Object.freeze({
       status: 'passed',

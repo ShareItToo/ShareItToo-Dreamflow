@@ -31,6 +31,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   nearest authoritative instruction. Add a deterministic test, validator or
   fail-closed guard when the pattern is technically enforceable. Duplicate UI
   output or repeated reporting of one still-open incident remains one finding.
+- Live-tool mentor invariant: after the first live tool defect, stop all live
+  retries. Reproduce the defect in an isolated deterministic test, review the
+  fix and re-gate it with Sol/Astra before re-execution; never chain unreviewed
+  live hotfix retries.
 - A visible-function P0/P1 requires proven reachability from a current route or
   configuration. Unreachable legacy/dead code is tracked separately and is
   not itself a release blocker until reachability is demonstrated.
