@@ -53,7 +53,7 @@
     "scopedAndroidSdkProfile": "passed",
     "runtimeDrift": 0,
     "runtimeDriftBasis": "manifest-and-privacy-identities-match-source-commit",
-    "fullTechnicalRegression": "pending",
+    "fullTechnicalRegression": "passed",
     "githubRegression": "pending",
     "githubCodeql": "pending"
   },
