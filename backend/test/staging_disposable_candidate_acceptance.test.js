@@ -72,6 +72,7 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
     });
     assert.equal(result.status, 'technical-probes-passed-operational-release-blocked');
     assert.equal(result.image, 'sha256:38be66d170746b20bfc4c08c70655a72f9a6ce9eb700278a129d5acdedc22620');
+    assert.equal(result.opsCommit, testOpsCommit);
     assert.equal(result.readiness.http, 503);
     assert.deepEqual(cleanup.map(([kind]) => kind), ['container', 'container', 'container', 'volume', 'network']);
     assert.ok(calls.some(({ phase }) => phase === 'candidate_start'));
@@ -80,6 +81,8 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
     const apiCreate = calls.find(({ phase }) => phase === 'candidate_create');
     const dbCreate = calls.find(({ phase }) => phase === 'database_create');
     assert.ok(apiCreate.args.includes('MFA_ENCRYPTION_KEY_FILE=/run/secrets/mfa-encryption-key'));
+    assert.ok(apiCreate.args.includes('--group-add'));
+    assert.ok(apiCreate.args.includes('65532'));
     assert.ok(!apiCreate.args.some((arg) => arg.startsWith('MFA_ENCRYPTION_KEY=')));
     assert.equal(apiCreate.args.at(-1), 'sha256:38be66d170746b20bfc4c08c70655a72f9a6ce9eb700278a129d5acdedc22620');
     assert.equal(dbCreate.args.at(-1), disposablePostgresImage);

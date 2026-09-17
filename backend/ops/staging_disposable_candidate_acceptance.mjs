@@ -282,7 +282,7 @@ export async function runDisposableCandidateAcceptance({
     if (fkCount !== '367') fail('fk_count_invalid');
     await commandWithFileInput('docker', ['exec', '-i', database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], join(repositoryRoot, 'backend/ops/check_foreign_key_integrity.sql'), { phase: 'fk_integrity' });
     await command('docker', ['exec', '-i', api, 'node', '--input-type=module'], { input: mfaProbe, phase: 'mfa_probe' }).catch(() => fail('mfa_probe_failed'));
-    evidence = { status: 'technical-probes-passed-operational-release-blocked', runtimeCommit: targetCommit, image: disposableCandidateImageDigest, imageDigest: disposableCandidateImageDigest, postgresImage: disposablePostgresImage, backup, runId, resources, ledger, foreignKeys: fkCount, readiness: { http: 503, status: readinessPayload.status, preFingerprint, postFingerprint }, providerTraffic: false, liveDatabaseMutated: false };
+    evidence = { status: 'technical-probes-passed-operational-release-blocked', runtimeCommit: targetCommit, opsCommit, image: disposableCandidateImageDigest, imageDigest: disposableCandidateImageDigest, postgresImage: disposablePostgresImage, backup, runId, resources, ledger, foreignKeys: fkCount, readiness: { http: 503, status: readinessPayload.status, preFingerprint, postFingerprint }, providerTraffic: false, liveDatabaseMutated: false };
     return evidence;
   } finally {
     const errors = [];
