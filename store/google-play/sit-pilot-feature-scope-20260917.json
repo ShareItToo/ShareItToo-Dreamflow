@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-pilot-feature-scope-20260917",
+  "pilot": {
+    "region": "Germany",
+    "mode": "private-adult-staging",
+    "applicationId": "com.shareittoo.app",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "realMoney": false,
+    "paidDelivery": false,
+    "shipping": false,
+    "express": false,
+    "vehicles": false,
+    "deposit": false,
+    "insurance": false
+  },
+  "candidate": {
+    "versionName": "1.0.0",
+    "versionCode": "2026091705"
+  },
+  "reachablePaths": [
+    {
+      "id": "discover",
+      "route": "MainNavigation[0] -> ExploreScreen",
+      "source": "lib/navigation/main_navigation.dart",
+      "reachabilityMarker": "const ExploreScreen()",
+      "effect": "search-and-view-catalog-listings",
+      "pilot": "allowed",
+      "proof": [
+        "test/listing_catalog_flow_test.dart",
+        "test/listing_display_truth_test.dart"
+      ]
+    },
+    {
+      "id": "non_reserving_saved_cart",
+      "route": "MainNavigation[1] -> RentalCartScreen",
+      "source": "lib/navigation/main_navigation.dart",
+      "reachabilityMarker": "const RentalCartScreen()",
+      "effect": "persisted-non-reserving-cart",
+      "pilot": "allowed",
+      "proof": [
+        "test/g2b_rental_cart_persistence_test.dart",
+        "test/rental_cart_surface_principal_http_test.dart"
+      ]
+    },
+    {
+      "id": "single_item_rental_core",
+      "route": "ExploreScreen -> ItemDetailsOverlay",
+      "source": "lib/screens/explore_screen.dart",
+      "reachabilityMarker": "ItemDetailsOverlay.showFullPage",
+      "effect": "server-authoritative-quote-request-and-item-lifecycle",
+      "pilot": "allowed",
+      "proof": [
+        "test/secure_booking_confirmation_test.dart",
+        "test/booking_flow_policy_test.dart"
+      ]
+    },
+    {
+      "id": "closed_staging_listing_creation",
+      "route": "ProfileScreen -> MyListingsScreen -> CreateListingScreen",
+      "source": "lib/screens/my_listings_screen.dart",
+      "reachabilityMarker": "CreateListingScreen",
+      "effect": "persisted-draft-or-explicit-closed-staging-listing",
+      "pilot": "allowed",
+      "proof": [
+        "test/listing_catalog_flow_test.dart",
+        "test/rw20_listing_mutation_principal_epoch_transaction_test.dart"
+      ]
+    },
+    {
+      "id": "messages",
+      "route": "MainNavigation[3] -> MessagesScreen -> MessageThreadScreen",
+      "source": "lib/navigation/main_navigation.dart",
+      "reachabilityMarker": "const MessagesScreen()",
+      "effect": "server-backed-thread-and-message-persistence",
+      "pilot": "allowed",
+      "proof": [
+        "test/message_thread_screen_logic_test.dart",
+        "test/message_send_coordinator_test.dart"
+      ]
+    },
+    {
+      "id": "profile_and_account_security",
+      "route": "MainNavigation[4] -> ProfileScreen",
+      "source": "lib/navigation/main_navigation.dart",
+      "reachabilityMarker": "const ProfileScreen()",
+      "effect": "owner-bound-profile-and-account-security-persistence",
+      "pilot": "allowed",
+      "proof": [
+        "test/rw9_local_account_profile_authorization_durability_test.dart",
+        "test/rw10_local_security_control_truthfulness_test.dart"
+      ]
+    },
+    {
+      "id": "support_intake",
+      "route": "ProfileScreen -> HelpCenterScreen -> SupportCasesScreen",
+      "source": "lib/screens/help_center_screen.dart",
+      "reachabilityMarker": "SupportCasesScreen",
+      "effect": "server-backed-scoped-support-case-intake",
+      "pilot": "allowed",
+      "proof": [
+        "test/support_case_backend_owner_test.dart",
+        "test/support_intake_principal_epoch_test.dart"
+      ]
+    },
+    {
+      "id": "binding_checkout",
+      "route": "BookingDetailScreen -> PaymentCheckoutScreen",
+      "source": "lib/screens/booking_detail_screen.dart",
+      "reachabilityMarker": "PaymentCheckoutScreen",
+      "effect": "binding-payment-checkout-and-provider-charge",
+      "pilot": "excluded",
+      "blocker": "reachable binding payment path; real-money/live-PSP gate is closed",
+      "proof": [
+        "test/payment_provider_truthfulness_test.dart",
+        "test/tool/payment_provider_truthfulness_wiring.test.mjs"
+      ]
+    },
+    {
+      "id": "payment_methods",
+      "route": "AccountSettingsScreen -> PaymentMethodsScreen",
+      "source": "lib/screens/account_settings_screen.dart",
+      "reachabilityMarker": "PaymentMethodsScreen",
+      "effect": "payment-method-management",
+      "pilot": "excluded",
+      "blocker": "reachable surface is explanatory-only; no authenticated add/list/remove/default mutation contract",
+      "proof": [
+        "test/tool/payment_provider_truthfulness_wiring.test.mjs",
+        "test/payment_provider_truthfulness_test.dart"
+      ]
+    },
+    {
+      "id": "identity_verification",
+      "route": "ProfileScreen -> VerificationScreen",
+      "source": "lib/screens/profile_screen.dart",
+      "reachabilityMarker": "'/verify'",
+      "effect": "end-user-identity-verification",
+      "pilot": "excluded",
+      "blocker": "reachable verification path reports unavailable; no end-user provider/session/status contract",
+      "proof": [
+        "test/identity_verification_client_contract_test.dart",
+        "test/tool/diagnose_n28_current_candidate_android_account_support_surfaces.test.mjs"
+      ]
+    },
+    {
+      "id": "two_factor_auth",
+      "route": "AccountSettingsScreen -> TwoFactorAuthScreen row",
+      "source": "lib/screens/account_settings_screen.dart",
+      "reachabilityMarker": "TwoFactorAuthScreen",
+      "effect": "login-mfa-enrollment-and-step-up-challenge",
+      "pilot": "excluded",
+      "blocker": "visible account-security control is not actionable; no enrollment/challenge/recovery contract",
+      "proof": [
+        "test/rw10_local_security_control_truthfulness_test.dart",
+        "test/tool/rw10_local_security_control_truthfulness_wiring.test.mjs"
+      ]
+    }
+  ]
+}

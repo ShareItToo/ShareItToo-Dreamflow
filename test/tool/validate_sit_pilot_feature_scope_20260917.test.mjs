@@ -1,0 +1,60 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+
+import { validateManifest } from '../../tool/validate_sit_pilot_feature_scope_20260917.mjs';
+
+const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const manifest = JSON.parse(readFileSync(resolve(
+  root,
+  'store/google-play/sit-pilot-feature-scope-20260917.json',
+), 'utf8'));
+const releasePreflight = readFileSync(resolve(
+  root,
+  'scripts/release_candidate_preflight.sh',
+), 'utf8');
+
+test('accepts a complete private-pilot inventory when every path is allowed', () => {
+  const allowed = structuredClone(manifest);
+  allowed.reachablePaths = allowed.reachablePaths
+    .filter((entry) => entry.pilot === 'allowed')
+    .map((entry) => ({ ...entry }));
+  const result = validateManifest(allowed, { repositoryRoot: root });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.blockerCount, 0);
+  assert.equal(result.inventoryCount, result.allowedCount);
+});
+
+test('blocks every reachable excluded path instead of hiding or reclassifying it', () => {
+  assert.throws(
+    () => validateManifest(manifest, { repositoryRoot: root }),
+    /BLOCK:SIT-PILOT-FEATURE-SCOPE-20260917:reachable_excluded_paths=binding_checkout,payment_methods,identity_verification,two_factor_auth/u,
+  );
+});
+
+test('rejects deceptive placeholder or no-op effects even on an otherwise allowed path', () => {
+  const changed = structuredClone(manifest);
+  changed.reachablePaths = changed.reachablePaths.filter((entry) => entry.id === 'discover');
+  changed.reachablePaths[0].effect = 'toast-only-placeholder';
+  assert.throws(
+    () => validateManifest(changed, { repositoryRoot: root }),
+    /unsafe_or_deceptive_effect:discover/u,
+  );
+});
+
+test('rejects missing focused proof or reachability markers', () => {
+  const changed = structuredClone(manifest);
+  changed.reachablePaths = changed.reachablePaths.filter((entry) => entry.id === 'discover');
+  changed.reachablePaths[0].proof = [];
+  assert.throws(
+    () => validateManifest(changed, { repositoryRoot: root }),
+    /proof_missing:discover/u,
+  );
+});
+
+test('runs the feature-scope gate in the release candidate preflight', () => {
+  assert.match(releasePreflight, /node --check tool\/validate_sit_pilot_feature_scope_20260917\.mjs/u);
+  assert.match(releasePreflight, /node tool\/validate_sit_pilot_feature_scope_20260917\.mjs/u);
+});

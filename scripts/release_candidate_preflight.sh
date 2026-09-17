@@ -66,6 +66,8 @@ node --check tool/prepare_store_screenshot_fixture.mjs
 node --check tool/validate_firebase_release_config.mjs
 node --check tool/validate_phone_verification_readiness.mjs
 node --check tool/validate_android_signing_config.mjs
+node --check tool/validate_sit_pilot_feature_scope_20260917.mjs
+node tool/validate_sit_pilot_feature_scope_20260917.mjs
 node tool/verify_brand_assets.mjs
 if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" ]]; then
   dart run tool/validate_store_metadata.dart --allow-candidate-rollover
