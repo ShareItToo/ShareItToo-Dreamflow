@@ -12,7 +12,7 @@ import {
   readStripeIdentitySecretConfiguration,
   readStripeSecretConfiguration,
 } from './stripe_secret_files.js';
-import { decodeMfaEncryptionKey } from './mfa_totp.js';
+import { readMfaEncryptionKeyConfiguration } from './mfa_secret_files.js';
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -31,11 +31,13 @@ const jwtSecret = required('JWT_SECRET');
 if (jwtSecret.length < 32) {
   throw new Error('JWT_SECRET must contain at least 32 characters');
 }
-const mfaEncryptionKey = decodeMfaEncryptionKey(process.env.MFA_ENCRYPTION_KEY);
-
 const deploymentEnvironment = (process.env.DEPLOYMENT_ENVIRONMENT ?? process.env.NODE_ENV ?? 'development')
   .trim()
   .toLowerCase();
+const mfaSecretConfiguration = readMfaEncryptionKeyConfiguration(process.env, {
+  deploymentEnvironment,
+});
+const mfaEncryptionKey = mfaSecretConfiguration.key;
 const bindHost = (process.env.BIND_HOST ?? '0.0.0.0').trim();
 if (!['0.0.0.0', '127.0.0.1', '::1'].includes(bindHost)) {
   throw new Error('BIND_HOST must be an explicit supported bind address');
@@ -373,7 +375,8 @@ export const config = Object.freeze({
   jwtSecret,
   mfa: Object.freeze({
     encryptionKey: mfaEncryptionKey,
-    configured: mfaEncryptionKey != null,
+    configured: mfaSecretConfiguration.configured,
+    credentialSource: mfaSecretConfiguration.credentialSource,
   }),
   corsOrigins: csv(process.env.CORS_ORIGINS),
   publicBaseUrl: (process.env.PUBLIC_BASE_URL ?? 'https://shareittoo.com/api/v1').replace(/\/$/, ''),

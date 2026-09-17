@@ -29,6 +29,32 @@ Each successful deployment writes a mode-`0600` JSON record under
 `/docker/shareittoo/releases`. Rollback uses the same script with the previous
 commit recorded in that release evidence; no floating `latest` image is used.
 
+## Optional Staging MFA activation
+
+MFA remains functionally unavailable until a stable 32-byte encryption key is
+provided through the staging-only file overlay. Keep the key in an owner-only
+regular file outside the repository (mode `0600`), never in Git, an environment
+file, logs, chat or release evidence. Do not rotate this key by replacement:
+existing TOTP ciphertext requires a separately reviewed versioned re-encryption
+plan before rotation.
+
+```sh
+ENABLE_STAGING_MFA=1 \
+SIT_STAGING_PILOT_ID=heilbronn_wave0 \
+CONFIRM_STAGING_MFA=FULL_40_CHARACTER_COMMIT \
+MFA_ENCRYPTION_KEY_HOST_FILE=/absolute/private/path/mfa-encryption-key \
+  ./ops/deploy_release.sh staging FULL_40_CHARACTER_COMMIT
+```
+
+The preflight validates only path safety, owner-only permissions, bounded size
+and strict 32-byte key shape. It never prints the key. The overlay clears the
+direct environment value and mounts the file read-only as
+`MFA_ENCRYPTION_KEY_FILE`. A successful health readback exposes only
+`configured=true` and `credentialSource=file`; an authenticated synthetic
+enroll/status/cancel test is still required before MFA is considered ready.
+Rollback clears both MFA sources and restores the prior image. The flag is
+staging-only and rejects Production.
+
 FCM is opt-in for staging and cannot be activated for production through this
 path. Before the first FCM-enabled staging rollout, create only the dedicated
 service account `sit-fcm-staging` with the Google role

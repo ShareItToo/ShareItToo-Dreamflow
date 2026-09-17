@@ -1841,6 +1841,10 @@ export function createApp({
     webhookConfigured: Boolean(config.identityVerification.webhookSecret),
     livemode: false,
   });
+  const mfaHealth = Object.freeze({
+    configured: config.mfa.configured,
+    credentialSource: config.mfa.credentialSource,
+  });
   const attemptFirebaseIdentityDeletion = async (ids) => {
     try {
       await drainFirebaseIdentityDeletions(ids);
@@ -2024,6 +2028,7 @@ export function createApp({
         notifications,
         payments,
         paymentProvider: paymentProviderHealth,
+        mfa: mfaHealth,
         identityVerification: identityVerificationHealth,
         supportDeadlines,
         listingAi: listingAiHealth,
@@ -2059,6 +2064,7 @@ export function createApp({
         notifications,
         payments,
         paymentProvider: paymentProviderHealth,
+        mfa: mfaHealth,
         identityVerification: identityVerificationHealth,
         supportDeadlines,
         listingAi: listingAiHealth,
