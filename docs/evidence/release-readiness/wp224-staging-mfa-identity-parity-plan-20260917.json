@@ -119,6 +119,36 @@
         "apiResumed": false,
         "note": "Readiness remained 503 on restored non-empty data; no MFA HTTP flow was claimed."
       },
+      "wp245Implementation": {
+        "status": "implemented-not-executed",
+        "sourceCommit": "c23cc30d0aae6959e98618c9fa14cafe5b2e0f2e",
+        "operation": "backend/ops/staging_forward_migration_rehearsal.mjs",
+        "disposableIdentity": {
+          "resourceTypes": ["container", "network", "volume"],
+          "namePattern": "sit-staging-rehearsal-{container|network|volume}-{runId}",
+          "labels": ["com.shareittoo.staging.rehearsal=true", "com.shareittoo.staging.rehearsal_run_id={runId}"],
+          "attestation": "inspect and exact-match labels/name before first container start; production-labelled or lookalike resources fail closed",
+          "cleanup": "container, volume and internal network removal plus absence verification"
+        },
+        "readinessFingerprint": {
+          "sources": ["payment recoveryNeedsReview including contract_blocked causes", "support nextUpdateOverdue"],
+          "fields": ["stable sha256 ID", "cause", "status", "coarse time class", "priority for support"],
+          "pii": "excluded",
+          "driftRule": "canonical finding sets must match exactly; missing/new/changed/unreadable findings fail closed",
+          "readiness503": "remains an operational release blocker; fingerprint never heals or suppresses it",
+          "contractVersion": "V5.2-2026-08-16",
+          "payoutHoldHours": 48
+        },
+        "verification": {
+          "focusedTests": "26/26",
+          "syntax": "pass",
+          "diffCheck": "pass",
+          "liveRetry": false,
+          "providerTraffic": false,
+          "deviceOrPlayMutation": false
+        },
+        "executionGate": "requires a separately authorized disposable rehearsal; no execution proof is claimed here"
+      },
       "priorImageSqlContractComparison": {
         "status": "required-not-executed",
         "observedPriorStagingCommit": "df39a14b7a19afe467842461a28f1e77fec8445e",
