@@ -8,6 +8,7 @@ import 'package:lendify/models/item.dart';
 import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/models/user.dart' as model;
 import 'package:lendify/services/data_service.dart';
+import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/services/app_link_service.dart';
 import 'package:lendify/models/category.dart';
@@ -3750,7 +3751,7 @@ class _ExpressCountdownSheetState extends State<_ExpressCountdownSheet> {
       isScrollControlled: false,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.60),
-      builder: (_) => const _ExpressFallbackSheet(),
+      builder: (_) => _ExpressFallbackSheet(requestId: widget.requestId),
     );
     if (mounted) Navigator.of(context).maybePop();
   }
@@ -3807,7 +3808,9 @@ class _ExpressCountdownSheetState extends State<_ExpressCountdownSheet> {
 }
 
 class _ExpressFallbackSheet extends StatefulWidget {
-  const _ExpressFallbackSheet();
+  final String requestId;
+
+  const _ExpressFallbackSheet({required this.requestId});
   @override
   State<_ExpressFallbackSheet> createState() => _ExpressFallbackSheetState();
 }
@@ -3816,6 +3819,95 @@ class _ExpressFallbackSheetState extends State<_ExpressFallbackSheet> {
   bool _rebook = true; // or cancel
   _DropoffOption _drop = _DropoffOption.self;
   _ReturnOption _ret = _ReturnOption.self;
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _confirmAuthoritativeMutation() async {
+    if (_busy) return;
+    final actionEpoch = AuthService.sessionEpoch;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    try {
+      final userBefore = await DataService.getCurrentUser();
+      if (actionEpoch != AuthService.sessionEpoch || userBefore == null) {
+        return;
+      }
+      final current = await DataService.getRentalRequestById(widget.requestId);
+      if (actionEpoch != AuthService.sessionEpoch) return;
+      if (current == null) {
+        throw StateError('Die Mietanfrage ist nicht mehr verfügbar.');
+      }
+      if (userBefore.id.trim() != current.renterId.trim()) {
+        throw StateError('Die Anfrage gehört nicht zum aktuellen Konto.');
+      }
+
+      if (_rebook) {
+        if (current.status != 'pending') {
+          throw StateError('Diese Anfrage kann nicht erneut angefragt werden.');
+        }
+        await DataService.updateRentalRequestTimes(
+          requestId: current.id,
+          start: current.start,
+          end: current.end,
+          expressRequested: false,
+        );
+      } else {
+        await DataService.updateRentalRequestStatusWithActor(
+          requestId: current.id,
+          status: 'cancelled',
+          cancelledBy: 'renter',
+        );
+      }
+
+      if (actionEpoch != AuthService.sessionEpoch) return;
+      final userAfter = await DataService.getCurrentUser();
+      if (actionEpoch != AuthService.sessionEpoch ||
+          userAfter == null ||
+          userAfter.id.trim() != userBefore.id.trim()) {
+        throw StateError('Das Konto hat während der Anfrage gewechselt.');
+      }
+      final verified = await DataService.getRentalRequestById(widget.requestId);
+      if (actionEpoch != AuthService.sessionEpoch) return;
+      final mutationVerified = _rebook
+          ? verified != null &&
+              verified.id == current.id &&
+              verified.renterId == userBefore.id &&
+              verified.status == 'pending' &&
+              !verified.expressRequested &&
+              verified.expressStatus == null
+          : verified != null &&
+              verified.id == current.id &&
+              verified.renterId == userBefore.id &&
+              verified.status == 'cancelled';
+      if (!mutationVerified) {
+        throw StateError('Die Serverbestätigung der Anfrage fehlt.');
+      }
+
+      if (!mounted) return;
+      await AppPopup.toast(
+        context,
+        icon: _rebook ? Icons.edit_outlined : Icons.cancel_outlined,
+        title: _rebook
+            ? 'Anfrage aktualisiert (ohne Priorität).'
+            : 'Anfrage storniert.',
+      );
+      if (!mounted) return;
+      Navigator.of(context).maybePop();
+    } catch (error) {
+      f.debugPrint('[ExpressFallbackSheet] mutation failed: $error');
+      if (actionEpoch != AuthService.sessionEpoch) return;
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = _rebook
+            ? 'Die Anfrage konnte nicht aktualisiert werden. Sie bleibt offen.'
+            : 'Die Anfrage konnte nicht storniert werden. Sie bleibt offen.';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -3922,37 +4014,36 @@ class _ExpressFallbackSheetState extends State<_ExpressFallbackSheet> {
                         style: TextStyle(color: Colors.white)),
                     contentPadding: EdgeInsets.zero,
                   ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _error!,
+                      style: const TextStyle(color: Colors.orangeAccent),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Row(children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).maybePop(),
+                        onPressed: _busy
+                            ? null
+                            : () => Navigator.of(context).maybePop(),
                         child: const Text('Abbrechen'),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton(
-                        onPressed: () async {
-                          if (_rebook) {
-                            // Persist new local preference without express
-                            // Note: In this demo we do not update the existing request payload beyond express flags
-                            await AppPopup.toast(context,
-                                icon: Icons.edit_outlined,
-                                title:
-                                    'Anfrage aktualisiert (ohne Priorität).');
-                          } else {
-                            // Mark as declined locally (demo)
-                            // We don't have the request id here; renter can manage from requests list in a full app
-                            await AppPopup.toast(context,
-                                icon: Icons.cancel_outlined,
-                                title: 'Anfrage storniert.');
-                          }
-                          if (context.mounted) {
-                            Navigator.of(context).maybePop();
-                          }
-                        },
-                        child: const Text('Bestätigen'),
+                        onPressed: _busy ? null : _confirmAuthoritativeMutation,
+                        child: _busy
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Bestätigen'),
                       ),
                     ),
                   ])

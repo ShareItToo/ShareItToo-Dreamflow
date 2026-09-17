@@ -25,8 +25,8 @@ const countdown = source.match(
 const fallbackState = source.match(
   /class _ExpressFallbackSheetState[\s\S]*?\nextension on /u,
 )?.[0];
-const fallbackAction = fallbackState?.match(
-  /onPressed: \(\) async \{[\s\S]*?\n\s+\},/u,
+const fallbackMutation = fallbackState?.match(
+  /Future<void> _confirmAuthoritativeMutation\(\) async \{[\s\S]*?\n  \}/u,
 )?.[0];
 
 assert.ok(sheetState, 'expected item-details sheet State');
@@ -34,7 +34,7 @@ assert.ok(pageOverflow, 'expected item-details overflow action');
 assert.ok(pageShare, 'expected owner-bound share helper');
 assert.ok(pageNotice, 'expected owner-bound notice helper');
 assert.ok(countdown, 'expected express countdown callback');
-assert.ok(fallbackAction, 'expected express fallback action');
+assert.ok(fallbackMutation, 'expected express fallback mutation');
 
 test('sheet share and range selection recheck their owning State', () => {
   assert.match(
@@ -107,10 +107,9 @@ test('express feedback proves its owning or exact callback context', () => {
     countdown,
     /await AppPopup\.toast\(context,[\s\S]*?if \(!mounted\) return;\s+Navigator\.of\(context\)\.maybePop\(\);/u,
   );
-  assert.match(
-    fallbackAction,
-    /if \(context\.mounted\) \{\s+Navigator\.of\(context\)\.maybePop\(\);\s+\}/u,
-  );
+  assert.match(fallbackMutation, /if \(!mounted\) return;[\s\S]*?AppPopup\.toast\(\s*context,/u);
+  assert.match(fallbackMutation, /if \(!mounted\) return;\s+Navigator\.of\(context\)\.maybePop\(\);/u);
+  assert.match(fallbackMutation, /final verified = await DataService\.getRentalRequestById\(widget\.requestId\);/u);
 });
 
 test('secondary context fixes are permanent and add no accommodation', () => {
@@ -118,7 +117,7 @@ test('secondary context fixes are permanent and add no accommodation', () => {
     regression,
     /node --test test\/tool\/item_details_secondary_async_context_wiring\.test\.mjs/u,
   );
-  for (const value of [sheetState, pageOverflow, pageShare, pageNotice, countdown, fallbackAction]) {
+  for (const value of [sheetState, pageOverflow, pageShare, pageNotice, countdown, fallbackMutation]) {
     assert.doesNotMatch(value, /ignore:\s*use_build_context_synchronously/u);
     assert.doesNotMatch(value, /Future(?:<void>)?\.delayed|Timer\s*\(/u);
   }
