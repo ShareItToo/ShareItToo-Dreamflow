@@ -11,7 +11,7 @@ test('WP224 staging parity plan is bound and fail-closed', async () => {
   const plan = JSON.parse(await readFile(planPath, 'utf8'));
   assert.equal(
     plan.repository.deployableSourceCommit,
-    '7d9fef6efcb65b3613c91d01ad5ca76f87c99d2c',
+    'bddc3b59b3adfcba8e7e532718625ebadc60070a',
   );
   assert.equal(
     plan.sourceToStagingDelta.sourceCommitDeltaFromObservedStaging.migrationFilesInSourceDelta,
@@ -19,7 +19,11 @@ test('WP224 staging parity plan is bound and fail-closed', async () => {
   );
   assert.equal(
     plan.sourceToStagingDelta.stagingSchemaMigrationReadback.exactAppliedRange,
-    'unknown',
+    '001-074',
+  );
+  assert.equal(
+    plan.sourceToStagingDelta.stagingSchemaMigrationReadback.exactUnappliedCurrentSourceRange,
+    '075-087',
   );
   assert.equal(
     plan.sourceToStagingDelta.stagingSchemaMigrationReadback.requiredBeforeDeploy,

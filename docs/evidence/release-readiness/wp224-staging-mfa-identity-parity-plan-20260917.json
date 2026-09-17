@@ -6,9 +6,9 @@
   "scope": "staging-backend-reconciliation-only",
   "repository": {
     "branch": "codex/master-workflow-20260808",
-    "deployableSourceCommit": "7d9fef6efcb65b3613c91d01ad5ca76f87c99d2c",
-    "planEvidenceCommit": "c93664d2d90649b914f257c43ce0acf8a0e0970e",
-    "immutableImage": "shareittoo-api:7d9fef6efcb65b3613c91d01ad5ca76f87c99d2c",
+    "deployableSourceCommit": "bddc3b59b3adfcba8e7e532718625ebadc60070a",
+    "planEvidenceCommit": "bddc3b59b3adfcba8e7e532718625ebadc60070a",
+    "immutableImage": "shareittoo-api:bddc3b59b3adfcba8e7e532718625ebadc60070a",
     "workingTreeAtCapture": "clean"
   },
   "currentStagingReadback": {
@@ -31,20 +31,23 @@
     "readbackMutations": false
   },
   "sourceToStagingDelta": {
-    "classification": "backend-image-parity-missing; database-migration-parity-unproven",
+    "classification": "backend-image-parity-missing; database-migration-parity-reconciled-read-only",
     "missingSourceRevision": true,
     "sourceCommitDeltaFromObservedStaging": {
       "from": "df39a14b7a19afe467842461a28f1e77fec8445e",
-      "to": "7d9fef6efcb65b3613c91d01ad5ca76f87c99d2c",
+      "to": "bddc3b59b3adfcba8e7e532718625ebadc60070a",
       "migrationFilesInSourceDelta": "075-087",
       "interpretation": "This is a source/Git delta only; it does not prove which migrations are applied in Staging."
     },
     "stagingSchemaMigrationReadback": {
-      "status": "unavailable-through-existing-authorized-tooling",
-      "rowsRead": false,
-      "exactAppliedRange": "unknown",
+      "status": "authorized-read-only",
+      "scope": "migration names/range/count only; no host, user or secret data",
+      "rowsRead": true,
+      "exactAppliedRange": "001-074",
+      "appliedCount": 74,
+      "exactUnappliedCurrentSourceRange": "075-087",
       "requiredBeforeDeploy": true,
-      "rule": "Do not infer database parity from a route 404 or from the Git delta."
+      "rule": "The readback is authoritative for the captured moment; repeat it before deployment and do not infer parity from a route 404 or Git delta."
     },
     "missingRoutesAtStaging": [
       "/v1/auth/mfa/status",
@@ -55,8 +58,17 @@
       "last": "087_identity_verification_pilot_gate",
       "files": 16,
       "direction": "forward-only reconciliation; do not run down migrations",
-      "stagingAppliedState": "unknown until read-only schema_migrations readback"
+      "stagingAppliedState": "001-074 applied; 075-087 open for the current source"
     },
+    "riskDomainsInOpenRange": [
+      "refund transfer reversal recovery",
+      "payment command result immutability",
+      "refund provider truth parity",
+      "retention legal hold scope",
+      "special-category intake minimization",
+      "MFA TOTP",
+      "Identity Verification sessions, redaction, consent, retention and pilot gate"
+    ],
     "requiredSourceConfig": {
       "mfa": "server-side MFA encryption/secret configuration must already be present; values are not recorded",
       "mfaComposeGap": "compose.staging.yml currently does not inject MFA_ENCRYPTION_KEY into the API container; status-route parity alone cannot close MFA readiness",
@@ -133,10 +145,12 @@
       "failureRule": "status 200 without successful enroll/cancel is not MFA readiness"
     },
     "mustMatch": {
-      "versionCommit": "7d9fef6efcb65b3613c91d01ad5ca76f87c99d2c",
+      "versionCommit": "bddc3b59b3adfcba8e7e532718625ebadc60070a",
       "paymentTransport": "memory",
       "paymentLivemode": false,
       "identityProvider": "disabled",
+      "mfaConfigured": true,
+      "mfaCredentialSource": "file",
       "identityLivemode": false
     },
     "failureRule": "any commit/image/migration/health/status mismatch blocks the next gate"
@@ -191,5 +205,5 @@
     "playStoreChanged": false,
     "deviceAccessed": false
   },
-  "next": "Await a separately authorized staging deployment gate for phase 1; keep Identity and Payment provider activation closed."
+    "next": "Repeat schema_migrations readback, build the immutable image for deployableSourceCommit, and await a separately authorized phase-1 Staging deployment gate; keep Identity and Payment provider activation closed."
 }
