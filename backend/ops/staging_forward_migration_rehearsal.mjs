@@ -272,6 +272,13 @@ async function writeDatabaseBackup({ databaseContainer, databaseUser, databaseNa
     output.once('close', resolvePromise);
     output.once('error', reject);
   });
+  // Node rejects an unopened fs.WriteStream when it is passed directly as a
+  // child-process stdio target. Wait for its file descriptor before spawn so
+  // the backup path is deterministic on every supported Node runtime.
+  await new Promise((resolvePromise, reject) => {
+    output.once('open', resolvePromise);
+    output.once('error', reject);
+  });
   const child = spawn('docker', [
     'exec', databaseContainer, 'pg_dump', '-U', databaseUser, '-d', databaseName,
     '--format=custom', '--no-owner', '--no-acl',
