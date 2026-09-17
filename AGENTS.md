@@ -135,6 +135,11 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   must fail before any binary build when those values drift; never repair the
   mismatch by reusing or rebinding an already archived candidate.
 
+- Play-delivered Android installations may contain bounded base/split APK sets;
+  device-update preflight must inspect every installed split signer before a
+  data-preserving direct update. Never assume a single APK, and fail closed if
+  PackageManager cannot replace a split install with the exact candidate.
+
 ### Fail-closed validator complements
 
 - When a fail-closed validator gains a newly allowed exception, it must still

@@ -28,9 +28,12 @@ import {
 import {
   validateCurrentHeadAndroidReleaseArchive,
 } from './validate_current_head_android_release_archive.mjs';
+import {
+  explicitCurrentRolloverCandidatePath,
+} from './validate_google_play_internal_handoff.mjs';
 
-const rolloverManifestPath = 'store/google-play/current-rollover-candidate.json';
 const rolloverInstallStatuses = new Set([
+  'built-and-archived-internal-staging-upload-pending',
   'build-ready-play-internal-upload-pending',
   'build-ready-play-internal-activation-pending',
   'play-internal-active-device-verification-pending',
@@ -44,6 +47,7 @@ const postCandidateEvidencePrefixes = [
   'test/',
   'tool/',
 ];
+const postCandidateEvidenceExactPaths = ['AGENTS.md'];
 
 function fail(message) {
   throw new Error(message);
@@ -89,7 +93,8 @@ export function validateRolloverAndroidInstallBinding({
     }
   }
   const runtimeDrift = changedPaths.filter((path) =>
-    !postCandidateEvidencePrefixes.some((prefix) => path.startsWith(prefix)));
+    !postCandidateEvidenceExactPaths.includes(path)
+      && !postCandidateEvidencePrefixes.some((prefix) => path.startsWith(prefix)));
   if (runtimeDrift.length > 0) {
     fail('Runtime-affecting files changed after the rollover candidate was built.');
   }
@@ -101,7 +106,7 @@ async function validateCurrentRolloverAndroidReleaseArchive({
   candidateDirectory,
   commandRunner = execFileSync,
 } = {}) {
-  const rollover = JSON.parse(readFileSync(resolve(root, rolloverManifestPath), 'utf8'));
+  const rollover = JSON.parse(readFileSync(resolve(root, explicitCurrentRolloverCandidatePath), 'utf8'));
   const identity = rollover?.candidate ?? {};
   const candidate = await validateCurrentHeadAndroidReleaseArchive({
     root,
@@ -170,26 +175,44 @@ export function parseAndroidInstalledPackageSnapshot(output, userId = '0') {
   return { versionName, buildNumber, firstInstallTime, ceDataInode };
 }
 
-function installedApkBytes(commandRunner, adbPath, device, applicationId) {
-  const paths = currentHeadAndroidAdb(
+const installedApkPathPattern = /^\/data\/app\/(?:[A-Za-z0-9._~=-]+\/)+(?:base\.apk|split_[A-Za-z0-9._~=-]+\.apk)$/u;
+
+export function parseInstalledApkPaths(output) {
+  const lines = String(output).split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 1 || lines.length > 32) {
+    fail('Installed ShareItToo APK split set is missing or too large.');
+  }
+  const paths = lines.map((line) => {
+    if (!line.startsWith('package:')) {
+      fail('Installed ShareItToo APK paths could not be safely verified.');
+    }
+    return line.slice('package:'.length).trim();
+  });
+  if (paths.some((path) => !installedApkPathPattern.test(path))
+      || new Set(paths).size !== paths.length
+      || paths.filter((path) => path.endsWith('/base.apk')).length !== 1) {
+    fail('Installed ShareItToo APK split set is missing or ambiguous.');
+  }
+  return paths;
+}
+
+function installedApkPaths(commandRunner, adbPath, device, applicationId) {
+  return parseInstalledApkPaths(currentHeadAndroidAdb(
     commandRunner,
     adbPath,
     device,
     ['shell', 'pm', 'path', applicationId],
-  )
-    .split(/\r?\n/u)
-    .map((line) => line.replace(/^package:/u, '').trim())
-    .filter(Boolean);
-  if (paths.length !== 1 || !paths[0].startsWith('/data/app/')) {
-    fail('Installed ShareItToo package is not a single direct APK.');
-  }
-  return Buffer.from(currentHeadAndroidAdb(
+  ));
+}
+
+function installedApkBytes(commandRunner, adbPath, device, paths) {
+  return paths.map((path) => Buffer.from(currentHeadAndroidAdb(
     commandRunner,
     adbPath,
     device,
-    ['exec-out', 'cat', paths[0]],
+    ['exec-out', 'cat', path],
     { binary: true },
-  ));
+  )));
 }
 
 function readInstalledSnapshot(commandRunner, adbPath, device, applicationId) {
@@ -265,20 +288,22 @@ function verifyCurrentHeadAndroidCandidateUpdatePrerequisites({
   if (BigInt(candidate.buildNumber) <= BigInt(before.buildNumber)) {
     fail('Candidate build must be strictly newer; downgrade or reinstall is forbidden.');
   }
-  const installedBeforeBytes = installedApkBytes(
+  const installedBeforePaths = installedApkPaths(
     commandRunner,
     adbPath,
     device,
     candidate.applicationId,
   );
-  const installedBeforeCertificate = inspectBytesCertificate({
-    bytes: installedBeforeBytes,
-    certificateInspector,
-  });
-  if (installedBeforeCertificate !== candidateCertificate) {
+  const installedBeforeCertificates = installedApkBytes(
+    commandRunner,
+    adbPath,
+    device,
+    installedBeforePaths,
+  ).map((bytes) => inspectBytesCertificate({ bytes, certificateInspector }));
+  if (installedBeforeCertificates.some((value) => value !== candidateCertificate)) {
     fail('Candidate certificate does not match the currently installed app.');
   }
-  return { before, candidateCertificate };
+  return { before, candidateCertificate, installedBeforePaths };
 }
 
 export function preflightCurrentHeadAndroidCandidateUpdate({
@@ -392,12 +417,21 @@ export function installCurrentHeadAndroidCandidateUpdate({
       || after.ceDataInode !== before.ceDataInode) {
     fail('Android app data identity changed during the update; preservation is unverified.');
   }
-  const installedAfterBytes = installedApkBytes(
+  const installedAfterPaths = installedApkPaths(
     commandRunner,
     adbPath,
     device,
     candidate.applicationId,
   );
+  if (installedAfterPaths.length !== 1 || !installedAfterPaths[0].endsWith('/base.apk')) {
+    fail('PackageManager did not replace the Play split installation with a single base APK.');
+  }
+  const installedAfterBytes = installedApkBytes(
+    commandRunner,
+    adbPath,
+    device,
+    installedAfterPaths,
+  )[0];
   if (sha256Bytes(installedAfterBytes) !== candidate.apkSha256) {
     fail('Installed APK bytes do not match the verified current-head candidate.');
   }

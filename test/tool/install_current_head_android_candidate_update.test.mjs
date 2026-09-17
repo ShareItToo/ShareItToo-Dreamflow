@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
   installCurrentHeadAndroidCandidateUpdate,
   parseCurrentHeadAndroidCandidateUpdateArguments,
   parseAndroidInstalledPackageSnapshot,
+  parseInstalledApkPaths,
   preflightCurrentHeadAndroidCandidateUpdate,
   validateRolloverAndroidInstallBinding,
 } from '../../tool/install_current_head_android_candidate_update.mjs';
@@ -48,6 +50,8 @@ function fixture({
   beforeBuild = '2026082301',
   afterInode = '4242',
   installResult = 'Success',
+  installedPaths = ['/data/app/shareittoo/base.apk'],
+  beforeApkByPath = new Map(),
 } = {}) {
   let installed = false;
   const commands = [];
@@ -62,10 +66,11 @@ function fixture({
         : packageDump(beforeBuild);
     }
     if (adbArgs.join(' ') === 'shell pm path com.shareittoo.app') {
-      return 'package:/data/app/shareittoo/base.apk';
+      return installedPaths.map((path) => `package:${path}`).join('\n');
     }
-    if (adbArgs.join(' ') === 'exec-out cat /data/app/shareittoo/base.apk') {
-      return installed ? afterApk : beforeApk;
+    if (adbArgs[0] === 'exec-out' && adbArgs[1] === 'cat') {
+      const path = adbArgs[2];
+      return installed ? afterApk : (beforeApkByPath.get(path) ?? beforeApk);
     }
     if (adbArgs[0] === 'install') {
       installed = true;
@@ -112,6 +117,28 @@ test('parses the exact package facts required to prove update preservation', () 
   );
 });
 
+test('accepts bounded Play split paths and rejects unsafe or oversized sets', () => {
+  const paths = parseInstalledApkPaths([
+    'package:/data/app/~~safe==/com.shareittoo.app-safe/base.apk',
+    'package:/data/app/~~safe==/com.shareittoo.app-safe/split_config.arm64_v8a.apk',
+    'package:/data/app/~~safe==/com.shareittoo.app-safe/split_config.de.apk',
+  ].join('\n'));
+  assert.equal(paths.length, 3);
+  assert.throws(
+    () => parseInstalledApkPaths([
+      'package:/data/app/shareittoo/base.apk',
+      'package:/tmp/shareittoo/split_config.de.apk',
+    ].join('\n')),
+    /safely verified|ambiguous/u,
+  );
+  assert.throws(
+    () => parseInstalledApkPaths(Array.from({ length: 33 }, (_, index) => (
+      `package:/data/app/shareittoo/split_config.${index}.apk`
+    )).join('\n')),
+    /too large/u,
+  );
+});
+
 test('requires an explicit read-only preflight or install mode for the device CLI', () => {
   assert.deepEqual(
     parseCurrentHeadAndroidCandidateUpdateArguments(['--preflight-only']),
@@ -139,6 +166,15 @@ test('requires an explicit read-only preflight or install mode for the device CL
     () => parseCurrentHeadAndroidCandidateUpdateArguments(['--preflight-only', '--install']),
     /exactly one/u,
   );
+});
+
+test('uses the central explicit current rollover pointer', () => {
+  const source = readFileSync(
+    new URL('../../tool/install_current_head_android_candidate_update.mjs', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /explicitCurrentRolloverCandidatePath/u);
+  assert.doesNotMatch(source, /current-rollover-candidate\.json/u);
 });
 
 test('installs only a strictly newer signed candidate and proves app data identity', () => {
@@ -180,6 +216,77 @@ test('preflight proves update eligibility without writing to the device', () => 
   assert.equal(data.commands.some((args) => args[0] === 'install'), false);
   assert.equal(JSON.stringify(evidence).includes(device.serial), false);
   assert.equal(JSON.stringify(evidence).includes(certificate), false);
+});
+
+test('preflight checks every installed Play split certificate', () => {
+  const splitPaths = [
+    '/data/app/shareittoo/base.apk',
+    '/data/app/shareittoo/split_config.arm64_v8a.apk',
+    '/data/app/shareittoo/split_config.de.apk',
+  ];
+  const data = fixture({
+    installedPaths: splitPaths,
+    beforeApkByPath: new Map([
+      [splitPaths[1], Buffer.from('previous-signed-split-arm')],
+      [splitPaths[2], Buffer.from('previous-signed-split-de')],
+    ]),
+  });
+  let certificateCalls = 0;
+  const evidence = preflightCurrentHeadAndroidCandidateUpdate({
+    commandRunner: data.commandRunner,
+    device,
+    candidate,
+    certificateInspector: () => {
+      certificateCalls += 1;
+      return certificate;
+    },
+  });
+  assert.equal(evidence.conditions.candidateSignatureMatchesArchiveAndInstalledApp, true);
+  assert.equal(certificateCalls, 4);
+  assert.equal(data.commands.some((args) => args[0] === 'install'), false);
+});
+
+test('fails closed when one installed Play split has a different certificate', () => {
+  const splitPaths = [
+    '/data/app/shareittoo/base.apk',
+    '/data/app/shareittoo/split_config.arm64_v8a.apk',
+  ];
+  const wrongBytes = Buffer.from('wrong-signed-split');
+  const data = fixture({
+    installedPaths: splitPaths,
+    beforeApkByPath: new Map([[splitPaths[1], wrongBytes]]),
+  });
+  assert.throws(
+    () => preflightCurrentHeadAndroidCandidateUpdate({
+      commandRunner: data.commandRunner,
+      device,
+      candidate,
+      certificateInspector: (path) => {
+        if (path === candidate.apkPath) return certificate;
+        return readFileSync(path).equals?.(wrongBytes) ? 'f'.repeat(64) : certificate;
+      },
+    }),
+    /currently installed app/u,
+  );
+});
+
+test('rejects a split-to-monolithic update when PackageManager leaves splits', () => {
+  const data = fixture({
+    installedPaths: [
+      '/data/app/shareittoo/base.apk',
+      '/data/app/shareittoo/split_config.de.apk',
+    ],
+  });
+  assert.throws(
+    () => installCurrentHeadAndroidCandidateUpdate({
+      commandRunner: data.commandRunner,
+      device,
+      deviceSummary,
+      candidate,
+      certificateInspector: () => certificate,
+    }),
+    /single base APK/u,
+  );
 });
 
 test('rejects a non-newer build before any install command', () => {
@@ -254,6 +361,7 @@ test('accepts the exact current rollover archive after evidence-only commits', (
     candidate: archive,
     sourceIsAncestor: true,
     changedPaths: [
+      'AGENTS.md',
       'backend/test/postgres_foundation.integration.test.js',
       'docs/current_state.md',
       'store/google-play/current-rollover-candidate.json',
@@ -278,5 +386,11 @@ test('rejects superseded bytes, non-ancestor sources and post-build runtime drif
     candidate: archive,
     sourceIsAncestor: true,
     changedPaths: ['lib/main.dart'],
+  }), /Runtime-affecting/u);
+  assert.throws(() => validateRolloverAndroidInstallBinding({
+    rollover: rolloverFixture(),
+    candidate: archive,
+    sourceIsAncestor: true,
+    changedPaths: ['AGENTS.md.backup'],
   }), /Runtime-affecting/u);
 });
