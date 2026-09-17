@@ -800,7 +800,7 @@
     },
     {
       "path": "lib/config/private_pilot_config.dart",
-      "sha256": "f1d8cfb583edf7d0c1ed6de956bbb08020465b3566e03fe9ebc2e67ef1914857"
+      "sha256": "69ef7c10bb548e298925023d280586a8a7368f8455ddf42d6f8e045b9656d9ee"
     },
     {
       "path": "lib/config/supply_enrichment_technical_config.dart",
