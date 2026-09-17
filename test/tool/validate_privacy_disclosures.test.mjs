@@ -76,6 +76,32 @@ test('accepts the honest fail-closed privacy disclosure draft', () => {
   assert.equal(result.storeGate, 'open');
 });
 
+test('keeps local helpers available while rejecting external AI activation', () => {
+  const path = 'lib/openai/openai_config.dart';
+  const original = readFileSync(resolve(repositoryRoot, path), 'utf8');
+  for (const [from, to, expected] of [
+    ['aiHelpersEnabled = true', 'aiHelpersEnabled = false', /local helper capability contract/],
+    ['externalAiNetworkAllowed = false', 'externalAiNetworkAllowed = true', /external AI network contract/],
+    ['directAiChatEnabled = false', 'directAiChatEnabled = true', /direct AI chat contract/],
+    ['directAiTransparencyReady = false', 'directAiTransparencyReady = true', /direct AI transparency contract/],
+  ]) {
+    const changed = original.replace(from, to);
+    const privacyManifest = clone(basePrivacyManifest);
+    privacyManifest.sourceInventory.find((entry) => entry.path === path).sha256 = sha256(changed);
+    assert.throws(
+      () => validate({ privacyManifest, sourceTexts: { [path]: changed } }),
+      expected,
+    );
+  }
+
+  const enabled = clone(basePrivacyManifest);
+  enabled.externalServices.openAiHelpers.enabledInCandidate = true;
+  assert.throws(
+    () => validate({ privacyManifest: enabled }),
+    /OpenAI helpers must remain disabled and absent/u,
+  );
+});
+
 test('rejects an incomplete purpose-basis-recipient activity inventory', () => {
   const privacyManifest = clone(basePrivacyManifest);
   privacyManifest.processingTransparency.activities.pop();
@@ -174,6 +200,26 @@ test('rejects source drift after the inventory was reviewed', () => {
     () => validate({ sourceTexts: { [path]: changed } }),
     /sourceInventory hash is stale: lib\/services\/maps_service.dart/,
   );
+});
+
+test('requires the current truthful identity-pilot disclosure markers', () => {
+  const path = 'lib/screens/legal_privacy_screen.dart';
+  const original = readFileSync(resolve(repositoryRoot, path), 'utf8');
+  for (const [sourceFragment, replacement] of [
+    ['Freiwilliger technischer Pilot-Test über Stripe Identity', 'redacted identity pilot'],
+    ['nicht die Bestätigung einer realen ', 'nicht die Bestätigung einer echten '],
+    ['keine Ausweis- oder ', 'keine Dokumente oder '],
+    ['Löschung läuft', 'Löschung wird später'],
+    ['SMS-Bestätigung', 'SMS-Nachweis'],
+  ]) {
+    const changed = original.replaceAll(sourceFragment, replacement);
+    const privacyManifest = clone(basePrivacyManifest);
+    privacyManifest.sourceInventory.find((entry) => entry.path === path).sha256 = sha256(changed);
+    assert.throws(
+      () => validate({ privacyManifest, sourceTexts: { [path]: changed } }),
+      /truthful disclosure marker/u,
+    );
+  }
 });
 
 test('rejects drift in immutable support principal and draft ownership', () => {

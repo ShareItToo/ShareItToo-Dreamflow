@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 
 import { validateWp147CurrentExternalPilotGateRefresh } from
@@ -47,4 +50,53 @@ test('rejects source-integrity drift', () => {
     () => validateWp147CurrentExternalPilotGateRefresh({ evidence: value }),
     /source inventory/u,
   );
+});
+
+test('rejects a different valid ancestor instead of silently rebinding history', () => {
+  const value = fixture();
+  value.repository.baselineHead = 'f2b6a32c387d43b93c137ce2217ba30dd6da4562';
+  assert.throws(
+    () => validateWp147CurrentExternalPilotGateRefresh({ evidence: value }),
+    /repository is invalid/u,
+  );
+});
+
+test('rejects a missing historical blob without a worktree fallback', () => {
+  const value = fixture();
+  const existing = 'docs/evidence/support/support-test-matrix-v1-traceability.json';
+  delete value.sourceInventory[existing];
+  value.sourceInventory['docs/evidence/support/missing-historical-source.json'] = '0'.repeat(64);
+  assert.throws(
+    () => validateWp147CurrentExternalPilotGateRefresh({ evidence: value }),
+    /source inventory .* is unavailable at exact revision/u,
+  );
+});
+
+test('ignores current worktree drift and hashes only the exact baseline blobs', (t) => {
+  const value = fixture();
+  const directory = mkdtempSync(join(tmpdir(), 'sit-wp147-exact-pin-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const handoverPath = 'docs/operations/WP147_CURRENT_EXTERNAL_PILOT_GATE_REFRESH_2026-09-14.md';
+  const handover = readFileSync(new URL('../../docs/operations/WP147_CURRENT_EXTERNAL_PILOT_GATE_REFRESH_2026-09-14.md', import.meta.url));
+  mkdirSync(dirname(join(directory, handoverPath)), { recursive: true });
+  writeFileSync(join(directory, handoverPath), handover);
+
+  const baseline = value.repository.baselineHead;
+  const blobs = new Map(Object.keys(value.sourceInventory).map((path) => [
+    path,
+    execFileSync('git', ['show', `${baseline}:${path}`]),
+  ]));
+  const driftedPath = Object.keys(value.sourceInventory)[0];
+  mkdirSync(dirname(join(directory, driftedPath)), { recursive: true });
+  writeFileSync(join(directory, driftedPath), 'current worktree drift must be ignored\n');
+
+  const result = validateWp147CurrentExternalPilotGateRefresh({
+    evidence: value,
+    repositoryRoot: directory,
+    gitShow: (_repositoryRoot, revision, path) => {
+      assert.equal(revision, baseline);
+      return blobs.get(path);
+    },
+  });
+  assert.equal(result.status, 'verified-external-gates-still-fail-closed');
 });

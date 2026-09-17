@@ -6,7 +6,7 @@
   "state": "technically-prepared-external-inputs-required",
   "releaseDecision": "hold-no-go",
   "supportMatrixTraceability": {
-    "ref": "docs/evidence/support/support-test-matrix-v1-traceability.json",
+    "ref": "docs/evidence/external-gates/support-test-matrix-v2-traceability.json",
     "scenarioCount": 167,
     "externalEvidenceRequiredCount": 47,
     "externalEvidencePresentCount": 0,
@@ -47,7 +47,7 @@
         "docs/evidence/b11/google-play-service-provider-sharing-classification-2026081505-20260815.json",
         "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
         "docs/operations/ACTIVE_INFRASTRUCTURE_AND_MAIL_PROVIDER_RUNBOOK.md",
-        "docs/evidence/support/support-test-matrix-v1-traceability.json",
+        "docs/evidence/external-gates/support-test-matrix-v2-traceability.json",
         "store/legal-readiness.json"
       ]
     },
@@ -113,7 +113,7 @@
       "externalEvidenceRef": null,
       "currentEvidenceRefs": [
         "docs/evidence/p0b-next/psp-sandbox-e2e-evidence.json",
-        "docs/evidence/support/support-test-matrix-v1-traceability.json",
+        "docs/evidence/external-gates/support-test-matrix-v2-traceability.json",
         "docs/operations/P0B_PSP_SANDBOX_E2E_RUNBOOK.md"
       ]
     },
@@ -129,7 +129,7 @@
         "docs/evidence/b11/google-play-service-provider-sharing-classification-2026081505-20260815.json",
         "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
         "docs/operations/ACTIVE_INFRASTRUCTURE_AND_MAIL_PROVIDER_RUNBOOK.md",
-        "docs/evidence/support/support-test-matrix-v1-traceability.json",
+        "docs/evidence/external-gates/support-test-matrix-v2-traceability.json",
         "docs/compliance/retention-deletion-decision-matrix.md"
       ]
     },
@@ -144,7 +144,7 @@
         "store/platform-account-readiness.json",
         "store/google-play/closed-testing-readiness.json",
         "store/review-access.json",
-        "docs/evidence/support/support-test-matrix-v1-traceability.json",
+        "docs/evidence/external-gates/support-test-matrix-v2-traceability.json",
         "store/device-validation.json",
         "store/google-play/rw20-current-internal-candidate-manifest.json",
         "store/google-play/rw20-current-internal-upload-handoff.json",
@@ -202,7 +202,7 @@
       "externalEvidenceRef": null,
       "currentEvidenceRefs": [
         "docs/evidence/p0b/pilot-go-no-go-dossier.json",
-        "docs/evidence/support/support-test-matrix-v1-traceability.json",
+        "docs/evidence/external-gates/support-test-matrix-v2-traceability.json",
         "docs/SIT_PENDING_GATE_P0B_NEXT_RUNWAY.md"
       ]
     }

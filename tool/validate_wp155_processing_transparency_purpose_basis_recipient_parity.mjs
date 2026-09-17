@@ -10,6 +10,7 @@ import {
   boundDigest,
   deriveBoundSnapshotAttestation,
   materializeBoundSourceTexts,
+  readBoundSource,
   resolveBoundSnapshot,
 } from './read_bound_source.mjs';
 
@@ -214,6 +215,13 @@ export function validateWp155ProcessingTransparency({
     }),
     ...sourceTexts,
   };
+  if (!Object.hasOwn(sourceTexts, 'lib/openai/openai_config.dart')) {
+    sourceTexts['lib/openai/openai_config.dart'] = readBoundSource({
+      repositoryRoot,
+      revision: privacySnapshot.revision,
+      path: 'lib/openai/openai_config.dart',
+    }).toString('utf8');
+  }
   const decisions = privacy.processingTransparency?.requiredDecisions;
   exact(Object.keys(decisions ?? {}).sort(), [...decisionKeys].sort(), 'processing decisions');
   for (const key of decisionKeys) assertOpenDecision(decisions[key], `processing decision ${key}`);

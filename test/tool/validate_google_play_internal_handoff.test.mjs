@@ -132,6 +132,7 @@ test('validates the explicitly named current rollover candidate and zero runtime
     repositoryRoot,
     archiveRoot: data.archiveRoot,
     rolloverPath: data.rolloverPath,
+    changedPaths: [],
   });
   assert.equal(explicitCurrentRolloverCandidatePath,
     'store/google-play/rollover-candidate-2026091702.json');

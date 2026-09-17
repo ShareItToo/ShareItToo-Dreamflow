@@ -17,7 +17,15 @@ test('late profile-load failure cannot update disposed state', () => {
 test('successful profile patch rechecks exact owner and refreshes local state', () => {
   assert.match(
     source,
-    /final owner = _profileActions\.capture\(\);[\s\S]*?final result = await _profileMutationService\.updateProfile\([\s\S]*?context: owner\.context,[\s\S]*?if \(!await _profileActions\.isCurrent\([\s\S]*?owner,[\s\S]*?\)\) \{\s+return;\s+\}[\s\S]*?setState\(\(\) => _user = result\.user\);[\s\S]*?_profileActions\.removeOwnedNavigationRoute\(screenRoute\);/u,
+    /final owner = _profileActions\.capture\(\);[\s\S]*?persistPhotoDraft\([\s\S]*?context: owner\.context,[\s\S]*?if \(!await _profileActions\.isCurrent\([\s\S]*?owner,[\s\S]*?\)\) \{\s+return;\s+\}[\s\S]*?final result = await _profileMutationService\.updateProfile\([\s\S]*?context: owner\.context,/u,
+  );
+  assert.match(
+    source,
+    /final result = await _profileMutationService\.updateProfile\([\s\S]*?\}[\s\S]*?if \(!await _profileActions\.isCurrent\([\s\S]*?owner,[\s\S]*?\)\) \{\s+return;\s+\}[\s\S]*?setState\(\(\) \{\s+_user = result\.user;\s+_photoDraft = result\.user\.photoURL;/u,
+  );
+  assert.match(
+    source,
+    /_profileActions\.replaceContext\(ProfileMutationContext\([\s\S]*?owner: owner\.context\.owner,[\s\S]*?final refreshedOwner = _profileActions\.capture\(\);[\s\S]*?await _showOwnedStatus\([\s\S]*?refreshedOwner,[\s\S]*?if \(!await _profileActions\.isCurrent\([\s\S]*?refreshedOwner,[\s\S]*?\)\) \{\s+return;\s+\}[\s\S]*?_profileActions\.removeOwnedNavigationRoute\(screenRoute\);/u,
   );
   assert.match(source, /on ProfileMutationFailure catch \(failure\)/u);
   assert.doesNotMatch(source, /DataService\.updateCurrentUserProfile\(/u);

@@ -71,14 +71,15 @@ test('data-layer profile mutation rechecks exact owner around remote and local c
 
 test('profile result semantics use an exact rejection allowlist and preserve accepted truth', () => {
   for (const marker of [
-    "400: <String>{'minimum_age_required', 'invalid_phone'}",
+    /400:\s*<String>\{\s*'minimum_age_required',\s*'invalid_phone',\s*'profile_photo_must_be_uploaded',\s*'profile_photo_not_found',\s*'profile_photo_not_approved',\s*\}/u,
+    /403:\s*<String>\{'profile_photo_forbidden'\}/u,
     "'authentication_required'",
     "'invalid_or_expired_session'",
     "'account_not_active'",
     "404: <String>{'user_not_found'}",
     'ProfileMutationFailureKind.outcomeUnknown',
     'remoteAccepted: failure.remoteAccepted',
-  ]) assert.match(coordinator, new RegExp(escaped(marker), 'u'));
+  ]) assert.match(coordinator, marker instanceof RegExp ? marker : new RegExp(escaped(marker), 'u'));
   assert.doesNotMatch(coordinator, /408:\s*<String>/u);
   assert.match(dataService, /AccountProfileMutationFailureKind\.outcomeUnknown/u);
   assert.doesNotMatch(dataService, /408:\s*<String>/u);

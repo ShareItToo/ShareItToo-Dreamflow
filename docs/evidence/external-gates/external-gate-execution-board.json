@@ -26,7 +26,7 @@
         "assets/legal/de/legal_review_intake_p0b_20260821.json",
         "assets/legal/de/legal_manifest_v52.json",
         "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
-        "docs/evidence/support/support-test-matrix-v1-traceability.json"
+        "docs/evidence/external-gates/support-test-matrix-v2-traceability.json"
       ],
       "technicalEvidenceSummary": "The source-bound 18-decision V5.2/G3 review intake, legal manifests, provider inventory and Support traceability are prepared.",
       "missingExternalEvidence": [
@@ -208,7 +208,7 @@
       "currentStatus": "provider-contract-and-sandbox-required",
       "technicalEvidenceRefs": [
         "docs/evidence/p0b-next/psp-sandbox-e2e-evidence.json",
-        "docs/evidence/support/support-test-matrix-v1-traceability.json",
+        "docs/evidence/external-gates/support-test-matrix-v2-traceability.json",
         "docs/operations/P0B_PSP_SANDBOX_E2E_RUNBOOK.md"
       ],
       "technicalEvidenceSummary": "Eight sandbox scenarios and fail-closed payment boundaries are prepared; provider facts, environment and authentic passes remain absent.",
@@ -415,7 +415,7 @@
       "currentStatus": "hold-explicit-decision-required",
       "technicalEvidenceRefs": [
         "docs/evidence/p0b/pilot-go-no-go-dossier.json",
-        "docs/evidence/support/support-test-matrix-v1-traceability.json",
+        "docs/evidence/external-gates/support-test-matrix-v2-traceability.json",
         "docs/operations/PILOT_FREEZE_BASELINE.md",
         "docs/evidence/external-gates/pilot-launch-tier-matrix.json"
       ],

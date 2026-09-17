@@ -161,6 +161,11 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
    never authorizes changing legal/privacy claims or approval state. If the
    closure is cyclic or self-referential, redesign the binding instead of
    chasing hashes across commits.
+   Mentor/source-binding ratchet: mutable current inventories may be refreshed
+   only against the current source they intentionally bind; historical evidence
+   snapshots are immutable and must never be rewritten or rebound. Historical
+   source hashes must be verified from the exact recorded Git commit/blob, with
+   no worktree fallback, and a missing commit/blob is a hard failure.
 5. Run focused checks first. Run the complete technical regression at package
    and release gates.
    Focused regression tests must exercise their intended branch under the

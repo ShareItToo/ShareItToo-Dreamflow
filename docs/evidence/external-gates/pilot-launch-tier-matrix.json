@@ -163,7 +163,7 @@
     "docs/evidence/p0b/pilot-go-no-go-dossier.json",
     "docs/evidence/p0b-next/invited-synthetic-pilot-spiegelberg-cat8-readiness.json",
     "docs/evidence/p0b-next/psp-sandbox-e2e-evidence.json",
-    "docs/evidence/support/support-test-matrix-v1-traceability.json",
+    "docs/evidence/external-gates/support-test-matrix-v2-traceability.json",
     "store/platform-account-readiness.json",
     "store/privacy-disclosures.json",
     "store/retention-deletion-readiness.json",

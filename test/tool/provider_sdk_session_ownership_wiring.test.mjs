@@ -25,26 +25,33 @@ test('all provider SDK imports and mutations remain in the reviewed auth facade'
   };
   walk('lib');
   assert.deepEqual(found.sort(), ['lib/services/auth_service.dart']);
-  assert.equal([...auth.matchAll(/FirebaseAuth\.instance\.signOut\(/gu)].length, 2);
+  assert.equal([...auth.matchAll(/FirebaseAuth\.instance\.signOut\(/gu)].length, 3);
   assert.equal([...auth.matchAll(/FirebaseAuth\.instance\.signInWith(?:Credential|Provider)\(/gu)].length, 4);
 });
 
 test('social and phone acquire the same queue and retain it through awaited cleanup', () => {
   const social = section('static Future<AuthResult> signInWithSocialProvider(', 'static Future<String> _firebaseSocialIdToken(');
   const phone = section('static Future<void> _confirmPhoneCredential(', 'static Future<void> _requirePhoneVerificationOwner(');
+  const socialConnect = section('static Future<String?> reauthenticateSocialProvider(', 'static Future<void> _requireMfaOwner(');
   assert.match(social, /final capturedEpoch = expectedSessionEpoch \?\? _sessionGeneration/u);
   assert.match(social, /_providerSdkMutationQueue\.run\(\(\) => _signInWithSocialProviderOwned/u);
   assert.match(phone, /_providerSdkMutationQueue\.run\(\(\) => _confirmPhoneCredentialOwned/u);
-  for (const value of [social, phone]) {
+  assert.match(socialConnect, /_providerSdkMutationQueue\.run\(\(\) async/u);
+  assert.match(socialConnect, /final sdkEpoch = \+\+_providerSdkOperationGeneration/u);
+  for (const value of [social, phone, socialConnect]) {
     assert.match(value, /\+\+_providerSdkOperationGeneration/u);
-    assert.match(value, /currentAttemptEpoch: _providerSdkOperationGeneration/u);
     assert.match(value, /finally[\s\S]*?await FirebaseAuth\.instance\.signOut\(\)/u);
     assert.doesNotMatch(value, /signOut\([^)]*\)\.timeout|_providerSdkMutationQueue[^;]*\.timeout/u);
   }
+  assert.match(social, /currentAttemptEpoch: _providerSdkOperationGeneration/u);
+  assert.match(phone, /currentAttemptEpoch: _providerSdkOperationGeneration/u);
   assert.match(social, /acquisition\.firebaseUid != null/u);
   assert.match(social, /if \(acquisition\.googleAcquired\)/u);
   assert.match(social, /if \(acquisition\.facebookAcquired\)/u);
   assert.match(phone, /sdkOperationEpoch != null &&\s*signedInUid != null/u);
+  assert.match(socialConnect, /owner\.epoch != _sessionGeneration/u);
+  assert.match(socialConnect, /acquisition\.googleAcquired/u);
+  assert.match(socialConnect, /acquisition\.facebookAcquired/u);
 });
 
 test('three isolated mock profiles are permanent full-regression requirements', () => {

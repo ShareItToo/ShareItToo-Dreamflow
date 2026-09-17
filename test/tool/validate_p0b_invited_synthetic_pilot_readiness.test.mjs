@@ -74,6 +74,21 @@ test('rejects source drift in any prerequisite artifact', () => {
   );
 });
 
+test('rejects drift in the current manifest instead of silently substituting the pinned blob', () => {
+  const changed = structuredClone(manifest);
+  changed.execution.invitesSent = true;
+  assert.throws(
+    () => validateP0BInvitedSyntheticPilotReadiness({
+      root,
+      sourceOverrides: {
+        'docs/evidence/p0b-next/invited-synthetic-pilot-spiegelberg-cat8-readiness.json':
+          JSON.stringify(changed),
+      },
+    }),
+    /manifest source drift/u,
+  );
+});
+
 test('rejects participant data, account mutation or real-money boundary changes', () => {
   const changed = structuredClone(manifest);
   changed.boundaries.containsPersonalData = true;

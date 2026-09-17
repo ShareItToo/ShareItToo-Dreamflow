@@ -8,7 +8,7 @@ import {
 
 const manifest = JSON.parse(readFileSync(
   new URL(
-    '../../docs/evidence/support/support-test-matrix-v1-traceability.json',
+    '../../docs/evidence/external-gates/support-test-matrix-v2-traceability.json',
     import.meta.url,
   ),
   'utf8',

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -10,6 +11,7 @@ const evidencePath =
   'docs/evidence/release-readiness/wp148-android-social-provider-activation-guard-20260914.json';
 const handoverPath =
   'docs/operations/WP148_ANDROID_SOCIAL_PROVIDER_ACTIVATION_GUARD_2026-09-14.md';
+const sourceBindingHead = '66a9c7a8b645fc8c01c2eaffb841e895adbbe3a5';
 
 function fail(message) {
   throw new Error(`WP148 ${message}`);
@@ -20,9 +22,16 @@ function exact(actual, expected, label) {
 }
 
 function digest(repositoryRoot, path) {
-  return createHash('sha256')
-    .update(readFileSync(resolve(repositoryRoot, path)))
-    .digest('hex');
+  try {
+    return createHash('sha256')
+      .update(execFileSync('git', ['show', `${sourceBindingHead}:${path}`], {
+        cwd: repositoryRoot,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }))
+      .digest('hex');
+  } catch {
+    fail(`source binding snapshot is unavailable: ${path}`);
+  }
 }
 
 export function validateWp148AndroidSocialProviderActivationGuard({

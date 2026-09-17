@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const manifestPath =
-  'docs/evidence/support/support-test-matrix-v1-traceability.json';
+  'docs/evidence/external-gates/support-test-matrix-v2-traceability.json';
 
 const expectedAreaIds = Object.freeze([
   'case_status',
@@ -60,9 +60,9 @@ export function validateSupportTestMatrixTraceability({
   requireReleaseReady = false,
 } = {}) {
   const manifest = loadManifest(manifestOverride);
-  assertCondition(manifest.schemaVersion === 1, 'schema_version_invalid');
+  assertCondition(manifest.schemaVersion === 2, 'schema_version_invalid');
   assertCondition(
-    manifest.kind === 'sit-support-test-matrix-v1-traceability',
+    manifest.kind === 'sit-support-test-matrix-v2-traceability',
     'kind_invalid',
   );
   assertCondition(

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -12,6 +13,7 @@ import {
 
 const defaultRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const manifestPath = 'docs/evidence/p0b-next/invited-synthetic-pilot-spiegelberg-cat8-readiness.json';
+const sourceBindingHead = '7123d4ec05145a0fdd048bdfb598b144df72d505';
 
 const expectedRepoSources = Object.freeze([
   Object.freeze(['docs/evidence/p0b/pilot-go-no-go-dossier.json', '3566a46c018b7685adfe0f9df296c2060294f811deb5b61dd79ec818c25f27dd']),
@@ -71,7 +73,35 @@ function exact(actual, expected) {
 
 function source(root, path, overrides) {
   if (Object.hasOwn(overrides, path)) return Buffer.from(String(overrides[path]), 'utf8');
-  return readFileSync(resolve(root, path));
+  try {
+    return execFileSync('git', ['show', `${sourceBindingHead}:${path}`], {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    throw new Error(`P0B source-binding snapshot is unavailable: ${path}`);
+  }
+}
+
+function currentManifestBytes(root, overrides) {
+  if (Object.hasOwn(overrides, manifestPath)) {
+    return Buffer.from(String(overrides[manifestPath]), 'utf8');
+  }
+  return readFileSync(resolve(root, manifestPath));
+}
+
+function assertManifestBoundToPinnedSnapshot(root, overrides) {
+  const current = currentManifestBytes(root, overrides);
+  let pinned;
+  try {
+    pinned = execFileSync('git', ['show', `${sourceBindingHead}:${manifestPath}`], {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    fail('P0B manifest source-binding snapshot is unavailable.');
+  }
+  if (!current.equals(pinned)) fail('P0B manifest source drift from pinned snapshot.');
 }
 
 function jsonSource(root, path, overrides) {
@@ -247,7 +277,8 @@ export function validateP0BInvitedSyntheticPilotReadiness({
   manifest = undefined,
   sourceOverrides = {},
 } = {}) {
-  const value = manifest ?? JSON.parse(source(root, manifestPath, sourceOverrides));
+  if (manifest === undefined) assertManifestBoundToPinnedSnapshot(root, sourceOverrides);
+  const value = manifest ?? JSON.parse(currentManifestBytes(root, sourceOverrides));
   assertIdentity(value);
   assertSourceBindings(root, value, sourceOverrides);
   assertPrerequisiteTruth(root, value, sourceOverrides);

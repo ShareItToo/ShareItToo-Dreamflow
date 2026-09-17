@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -19,15 +20,32 @@ function exact(actual, expected, label) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${label} is invalid.`);
 }
 
-function digest(repositoryRoot, path) {
+function defaultGitShow(repositoryRoot, revision, path) {
+  return execFileSync('git', ['-C', repositoryRoot, 'show', `${revision}:${path}`], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+function digestAtExactRevision(repositoryRoot, revision, path, gitShow = defaultGitShow) {
+  if (!/^[A-Za-z0-9._/-]+$/u.test(path)) {
+    fail(`source inventory path ${path} is invalid.`);
+  }
+  let bytes;
+  try {
+    bytes = gitShow(repositoryRoot, revision, path);
+  } catch {
+    fail(`source inventory ${path} is unavailable at exact revision ${revision}.`);
+  }
+  if (!Buffer.isBuffer(bytes)) fail(`source inventory ${path} did not return Git blob bytes.`);
   return createHash('sha256')
-    .update(readFileSync(resolve(repositoryRoot, path)))
+    .update(bytes)
     .digest('hex');
 }
 
 export function validateWp147CurrentExternalPilotGateRefresh({
   evidence,
   repositoryRoot = root,
+  gitShow = defaultGitShow,
 } = {}) {
   const value = evidence
     ?? JSON.parse(readFileSync(resolve(repositoryRoot, evidencePath), 'utf8'));
@@ -103,7 +121,11 @@ export function validateWp147CurrentExternalPilotGateRefresh({
     fail('source inventory is incomplete.');
   }
   for (const [path, expected] of Object.entries(value.sourceInventory)) {
-    exact(digest(repositoryRoot, path), expected, `source inventory ${path}`);
+    exact(
+      digestAtExactRevision(repositoryRoot, value.repository.baselineHead, path, gitShow),
+      expected,
+      `source inventory ${path}`,
+    );
   }
 
   const serialized = JSON.stringify(value);

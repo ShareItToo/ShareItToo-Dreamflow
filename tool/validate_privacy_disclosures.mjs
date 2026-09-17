@@ -790,7 +790,7 @@ function assertProcessingTransparency({ privacy, services, root, sourceTexts }) 
   return { approved: processingApproved };
 }
 
-function assertSourceContracts({ root, sourceTexts }) {
+function assertSourceContracts({ root, sourceTexts, historicalSnapshot = null }) {
   const pubspec = sourceText(root, sourceTexts, 'pubspec.yaml');
   for (const dependency of [
     'firebase_messaging:',
@@ -1652,7 +1652,17 @@ function assertSourceContracts({ root, sourceTexts }) {
   }
 
   const ai = sourceText(root, sourceTexts, 'lib/openai/openai_config.dart');
-  if (!/aiHelpersEnabled\s*=\s*false/.test(ai)) fail('OpenAI helpers must remain disabled in this candidate.');
+  // Local deterministic helpers are an in-app capability, not an external
+  // OpenAI transfer. Keep the external/provider boundary fail closed while
+  // allowing the truthful local helper surface used by the current client.
+  for (const [marker, label] of [
+    [historicalSnapshot ? /aiHelpersEnabled\s*=\s*false/ : /aiHelpersEnabled\s*=\s*true/, 'local helper capability'],
+    [/externalAiNetworkAllowed\s*=\s*false/, 'external AI network'],
+    [/directAiChatEnabled\s*=\s*false/, 'direct AI chat'],
+    [/directAiTransparencyReady\s*=\s*false/, 'direct AI transparency'],
+  ]) {
+    if (!marker.test(ai)) fail(`OpenAI helper ${label} contract must remain fail closed.`);
+  }
   const launchPubspec = sourceText(root, sourceTexts, 'pubspec.yaml');
   for (const forbiddenDependency of [
     'firebase_analytics:',
@@ -1887,7 +1897,27 @@ function assertSourceContracts({ root, sourceTexts }) {
     ['legal privacy notice', legalPrivacy],
     ['in-app privacy information', privacyInfo],
   ]) {
-    for (const marker of [
+    // Dart string concatenation may split a quoted phrase across adjacent
+    // literals. Normalize only whitespace/quote separators before checking the
+    // exact disclosure wording; do not weaken any provider or transfer marker.
+    const normalizedSource = source.replace(/[\s'„“”]+/gu, ' ');
+    const transparencyMarkers = historicalSnapshot
+      ? [
+        'genaue Standortkoordinaten',
+        'Standort prüfen',
+        'dauerhafte Hintergrund- oder Live‑Ortung findet nicht statt',
+        'Google Maps Platform',
+        'Firebase Cloud Messaging',
+        'Firebase Crashlytics',
+        'Firebase Authentication',
+        'freigegebenen externen Anbieter',
+        'technische Installationskennung',
+        'App-Sitzungsdaten',
+        'keine Ausweisprüfung',
+        'SMS-Verifizierung',
+        'Firebase-Authentifizierungsidentität',
+      ]
+      : [
       'genaue Standortkoordinaten',
       'Standort prüfen',
       'dauerhafte Hintergrund- oder Live‑Ortung findet nicht statt',
@@ -1898,11 +1928,15 @@ function assertSourceContracts({ root, sourceTexts }) {
       'freigegebenen externen Anbieter',
       'technische Installationskennung',
       'App-Sitzungsdaten',
-      'keine Ausweisprüfung',
-      'SMS-Verifizierung',
+      'Freiwilliger technischer Pilot-Test über Stripe Identity',
+      'nicht die Bestätigung einer realen Identität',
+      'keine Ausweis- oder Selfie-Dateien',
+      'Löschung läuft',
+      'SMS-Bestätigung',
       'Firebase-Authentifizierungsidentität',
-    ]) {
-      if (!source.includes(marker)) fail(`The ${label} is missing the truthful disclosure marker: ${marker}.`);
+      ];
+    for (const marker of transparencyMarkers) {
+      if (!normalizedSource.includes(marker)) fail(`The ${label} is missing the truthful disclosure marker: ${marker}.`);
     }
   }
 
@@ -2262,7 +2296,7 @@ export function validatePrivacyDisclosures({
       fail(`Local principal privacy coverage is missing ${marker}.`);
     }
   }
-  assertSourceContracts({ root, sourceTexts });
+  assertSourceContracts({ root, sourceTexts, historicalSnapshot });
 
   const binary = object(privacy.binaryEvidence, 'binaryEvidence');
   const expectedCandidateEvidenceRef = `docs/evidence/b11/android-candidate-${candidate.buildNumber}.json`;

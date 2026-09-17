@@ -90,7 +90,7 @@
     "privacy": {
       "status": "draft",
       "sourceFile": "lib/screens/legal_privacy_screen.dart",
-      "currentContentSha256": "05183e2623c3012e3c5dca7e73e40173ca3c70e006138fe735f364cdd706620d",
+      "currentContentSha256": "f396a83fa1c665f65f6a69dd9a7b7e9485182dfd42db9680bd408bab03e6fb16",
       "approvedContentSha256": null,
       "publicUrl": null,
       "approvalEvidenceRef": null

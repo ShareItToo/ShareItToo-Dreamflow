@@ -2,8 +2,7 @@
 
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { readRepositoryFile } from './read_repository_file.mjs';
@@ -55,28 +54,23 @@ function sourceAtImplementationHead(repositoryRoot, value, path, sourceTexts) {
 const escapeRegExp = (value) =>
   value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 
-function repositoryDartPaths(repositoryRoot) {
-  const paths = [];
-  const visit = (directory) => {
-    for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      const absolute = join(directory, entry.name);
-      if (entry.isDirectory()) visit(absolute);
-      if (entry.isFile() && entry.name.endsWith('.dart')) {
-        paths.push(relative(repositoryRoot, absolute).replaceAll('\\', '/'));
-      }
-    }
-  };
-  visit(join(repositoryRoot, 'lib'));
-  return paths.sort();
+function repositoryDartPathsAtImplementationHead(repositoryRoot) {
+  try {
+    return execFileSync(
+      'git',
+      ['ls-tree', '-r', '--name-only', sourceBindingHead, '--', 'lib'],
+      { cwd: repositoryRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    ).split('\n').filter((path) => path.endsWith('.dart')).sort();
+  } catch {
+    fail('RW18 source-binding tree is unavailable.');
+  }
 }
 
 function countCallSites({ repositoryRoot, sourceTexts, symbol }) {
   const matcher = new RegExp(`${escapeRegExp(symbol)}\\s*\\(`, 'gu');
   const counts = {};
-  for (const path of repositoryDartPaths(repositoryRoot)) {
-    const content = Object.hasOwn(sourceTexts, path)
-      ? sourceTexts[path]
-      : readFileSync(join(repositoryRoot, path), 'utf8');
+  for (const path of repositoryDartPathsAtImplementationHead(repositoryRoot)) {
+    const content = sourceAtImplementationHead(repositoryRoot, null, path, sourceTexts);
     const count = [...content.matchAll(matcher)].length;
     if (count > 0) counts[path] = count;
   }

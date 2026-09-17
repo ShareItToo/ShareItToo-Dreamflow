@@ -85,7 +85,7 @@ test('server session envelope rejects malformed entries instead of filtering', (
   );
 });
 
-test('retired local security stores and two-factor controls stay absent', () => {
+test('retired local security stores stay absent and two-factor uses server authority', () => {
   const data = read('lib/services/data_service.dart');
   const twoFactor = read('lib/screens/two_factor_auth_screen.dart');
   for (const forbidden of [
@@ -94,8 +94,12 @@ test('retired local security stores and two-factor controls stay absent', () => 
     'getSignedInDevices',
     'setSignedInDevices',
   ]) assert.doesNotMatch(data, new RegExp(escaped(forbidden), 'u'));
-  assert.match(twoFactor, /Zwei-Faktor-Schutz ist noch nicht verfügbar/u);
-  assert.doesNotMatch(twoFactor, /Switch|setSecuritySettings|_openMethodPicker/u);
+  assert.match(twoFactor, /MfaService/u);
+  assert.match(twoFactor, /_service\.isAvailable/u);
+  assert.match(twoFactor, /getStatus\(/u);
+  assert.match(twoFactor, /AuthService\.captureSessionOwner/u);
+  assert.doesNotMatch(twoFactor, /Zwei-Faktor-Schutz ist noch nicht verfügbar/u);
+  assert.doesNotMatch(twoFactor, /SharedPreferences|setSecuritySettings|signed_in_devices_v1/u);
 });
 
 test('RW10 deterministic matrix covers identity drift and recovery', () => {

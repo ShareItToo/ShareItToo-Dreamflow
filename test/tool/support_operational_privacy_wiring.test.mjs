@@ -26,7 +26,16 @@ test('SUP-165 exposes only elevated admin aggregate support metrics', () => {
 test('SUP-166 keeps Crashlytics collection behind release plus user opt-in', () => {
   assert.match(firebase, /releaseMode && userEnabled/u);
   assert.doesNotMatch(firebase, /setCrashlyticsCollectionEnabled\(\s*true/u);
-  assert.match(firebase, /if \(!enabled\) \{\s*await FirebaseCrashlytics\.instance\.deleteUnsentReports\(\)/u);
+  const toggle = firebase.match(/static Future<FirebaseServiceToggleResult> setCrashDiagnosticsResult\([\s\S]*?\n  \}\n\n  \/\/\//u)?.[0] ?? '';
+  const cleanup = firebase.match(/static Future<bool> _retryPendingCrashCleanup\([\s\S]*?\n  \}\n\n  static Future<String\?>/u)?.[0] ?? '';
+  assert.match(toggle, /if \(!enabled\)/u);
+  assert.match(toggle, /setCrashDiagnosticsEnabled\(false\)/u);
+  assert.match(toggle, /setCrashDiagnosticsCleanupPending\(\s*true\s*,/u);
+  assert.match(toggle, /final cleaned = await _retryPendingCrashCleanup\(\)/u);
+  assert.match(toggle, /disabledCleanupPending/u);
+  assert.match(cleanup, /setCrashlyticsCollectionEnabled\(false\)/u);
+  assert.match(cleanup, /setCrashlyticsCollectionEnabled\(false\)[\s\S]*deleteUnsentReports\(\)/u);
+  assert.match(cleanup, /deleteUnsentReports\(\)[\s\S]*setCrashDiagnosticsCleanupPending\(\s*false\s*,/u);
 });
 
 test('SUP-167 blocks user identifiers and direct unguarded custom keys', () => {

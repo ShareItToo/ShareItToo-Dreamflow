@@ -7,7 +7,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { validateLegalReadiness } from './validate_legal_readiness.mjs';
 import { validateV54LegalAssets } from './validate_v54_legal_assets.mjs';
-import { boundDigest, materializeBoundSourceTexts, resolveBoundSnapshot } from './read_bound_source.mjs';
+import {
+  boundDigest,
+  materializeBoundSourceTexts,
+  readBoundSource,
+  resolveBoundSnapshot,
+} from './read_bound_source.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const evidencePath =
@@ -47,6 +52,15 @@ export const wp152SourcePaths = Object.freeze([
   'tool/validate_legal_readiness.mjs',
   'tool/validate_v54_legal_assets.mjs',
   'tool/validate_wp152_v54_contract_draft.mjs',
+]);
+
+const legalDocumentSourcePaths = Object.freeze([
+  'lib/screens/legal_terms_screen.dart',
+  'lib/screens/legal_community_rules_screen.dart',
+  'lib/screens/legal_cancellation_policy_screen.dart',
+  'lib/screens/legal_fees_payments_screen.dart',
+  'lib/screens/legal_privacy_screen.dart',
+  'lib/screens/legal_imprint_screen.dart',
 ]);
 
 const addressedCorrections = Object.freeze([
@@ -129,6 +143,15 @@ export function validateWp152V54ContractDraft({
     }),
     ...sourceTexts,
   };
+  for (const path of legalDocumentSourcePaths) {
+    if (!Object.hasOwn(sourceTexts, path)) {
+      sourceTexts[path] = readBoundSource({
+        repositoryRoot,
+        revision: boundRevision,
+        path,
+      }).toString('utf8');
+    }
+  }
   exact(value?.schemaVersion, 1, 'schema version');
   exact(value?.package, 'WP152-V54-CONTRACT-DRAFT-20260915', 'package');
   exact(value?.status, 'technical-draft-closure-v54-inactive-external-gates-hold', 'status');

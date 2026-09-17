@@ -44,7 +44,7 @@ import {
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const manifestPath = 'docs/evidence/external-gates/technical-setup-manifest.json';
 const supportTraceabilityPath =
-  'docs/evidence/support/support-test-matrix-v1-traceability.json';
+  'docs/evidence/external-gates/support-test-matrix-v2-traceability.json';
 const supportEvidenceReadinessPath =
   'docs/evidence/external-gates/support-evidence-scanner-readiness.json';
 const activeProviderReadinessPath =

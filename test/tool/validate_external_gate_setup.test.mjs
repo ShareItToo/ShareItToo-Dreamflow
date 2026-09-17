@@ -18,7 +18,7 @@ const storeReadme = readFileSync(
 );
 const supportTraceability = JSON.parse(readFileSync(
   new URL(
-    '../../docs/evidence/support/support-test-matrix-v1-traceability.json',
+    '../../docs/evidence/external-gates/support-test-matrix-v2-traceability.json',
     import.meta.url,
   ),
   'utf8',
@@ -128,7 +128,7 @@ test('external setup is bound to the exact support matrix hold', () => {
   assert.throws(
     () => validateExternalGateSetup({
       sourceOverrides: {
-        'docs/evidence/support/support-test-matrix-v1-traceability.json': changed,
+        'docs/evidence/external-gates/support-test-matrix-v2-traceability.json': changed,
       },
     }),
     /summary_invalid/u,
@@ -139,7 +139,7 @@ test('every support-matrix consumer retains the common evidence reference', () =
   const changed = copy(manifest);
   const pspGate = changed.gates.find(({ id }) => id === 'psp_contract_and_sandbox_e2e');
   pspGate.currentEvidenceRefs = pspGate.currentEvidenceRefs.filter(
-    (reference) => !reference.includes('support-test-matrix-v1-traceability'),
+    (reference) => !reference.includes('support-test-matrix-v2-traceability'),
   );
   assert.throws(
     () => validateExternalGateSetup({ manifestOverride: changed }),
