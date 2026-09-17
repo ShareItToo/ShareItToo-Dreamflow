@@ -2,6 +2,7 @@
 
 import { chmod, lstat, mkdir, realpath, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -99,6 +100,48 @@ async function imageRevision(image) {
   return label;
 }
 
+export function assertLoopbackPortAvailable(port) {
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) fail('acceptance_port_invalid');
+  return new Promise((resolvePromise, reject) => {
+    const server = createServer();
+    server.once('error', (error) => {
+      if (error?.code === 'EADDRINUSE') reject(Object.assign(new Error('acceptance_port_occupied'), { code: 'acceptance_port_occupied' }));
+      else reject(Object.assign(new Error('acceptance_port_probe_failed'), { code: 'acceptance_port_probe_failed' }));
+    });
+    server.listen({ host: '127.0.0.1', port }, () => {
+      server.close((error) => {
+        if (error) reject(Object.assign(new Error('acceptance_port_probe_failed'), { code: 'acceptance_port_probe_failed' }));
+        else resolvePromise(true);
+      });
+    });
+  });
+}
+
+async function acceptanceContainerIds() {
+  const result = await runCommandStatus('docker', [
+    'ps', '-aq', '--filter', 'label=com.shareittoo.staging.controlled_acceptance=true',
+  ]);
+  if (result.code !== 0) fail('acceptance_inventory_failed');
+  return result.stdout.split(/\s+/u).filter(Boolean);
+}
+
+export async function cleanupAcceptance({ runtimeCommit }) {
+  const ids = await acceptanceContainerIds();
+  for (const id of ids) {
+    const identity = await runCommand('docker', [
+      'inspect', id, '--format', '{{.Name}}|{{index .Config.Labels "com.shareittoo.staging.controlled_acceptance"}}|{{index .Config.Labels "com.shareittoo.staging.runtime_commit"}}',
+    ], { phase: 'cleanup_identity' });
+    const [name, controlled, commit] = identity.replace(/^\//u, '').split('|');
+    if (name !== 'shareittoo-staging-acceptance-api' || controlled !== 'true' || commit !== runtimeCommit) {
+      fail('acceptance_cleanup_identity_failed');
+    }
+    await runCommand('docker', ['rm', '-f', id], { phase: 'cleanup_remove' });
+  }
+  const remaining = await acceptanceContainerIds();
+  if (remaining.length > 0) fail('acceptance_cleanup_incomplete');
+  return Object.freeze({ removed: ids.length });
+}
+
 async function startAcceptance({ runtimeCommit, opsCommit, port }) {
   if (process.env.SIT_STAGING_CONTROLLED_ACCEPTANCE_EXECUTE !== '1') fail('explicit_execute_required');
   if (process.env.SIT_STAGING_ACCEPTANCE_CONFIRM !== runtimeCommit) fail('exact_runtime_confirmation_required');
@@ -110,14 +153,20 @@ async function startAcceptance({ runtimeCommit, opsCommit, port }) {
   ]);
   if (publicService.code === 0 && publicService.stdout === 'true') fail('public_staging_service_running');
   if (publicService.code !== 0 && publicService.code !== 1) fail('public_staging_service_status_failed');
+  if ((await acceptanceContainerIds()).length > 0) fail('acceptance_resources_present');
+  await assertLoopbackPortAvailable(port);
   await runCommand(process.env.NODE_BINARY ?? 'node', [
     join(backendRoot, 'ops', 'validate_mfa_staging_secret.mjs'),
   ], {
-    env: { ...process.env, MFA_ENCRYPTION_KEY_HOST_FILE: process.env.MFA_ENCRYPTION_KEY_HOST_FILE ?? '' },
+    env: {
+      ...process.env,
+      MFA_ENCRYPTION_KEY_HOST_FILE: process.env.MFA_ENCRYPTION_KEY_HOST_FILE ?? '',
+      MFA_ENCRYPTION_KEY_RUNTIME_READABLE: '1',
+    },
     phase: 'mfa_secret_validation',
   });
   const publicPort = Number(process.env.STAGING_API_PORT ?? '18080');
-  if (!Number.isInteger(port) || port < 1024 || port > 65535 || port === publicPort) fail('acceptance_port_not_distinct');
+  if (port === publicPort) fail('acceptance_port_not_distinct');
   const image = `${process.env.IMAGE_REPOSITORY ?? 'shareittoo-api'}:${runtimeCommit}`;
   if (await imageRevision(image) !== runtimeCommit) fail('acceptance_image_revision_mismatch');
   await runCommand('docker', [
@@ -237,7 +286,14 @@ export function assertPublicCandidateNotServed(payload, runtimeCommit) {
   return true;
 }
 
-async function verifyAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }) {
+async function writeAcceptanceEvidence(evidenceFile, evidence) {
+  await assertEvidenceDirectory(evidenceFile);
+  await writeFile(evidenceFile, `${JSON.stringify(evidence, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+  await chmod(evidenceFile, 0o600);
+  return evidence;
+}
+
+async function verifyAcceptance({ runtimeCommit, opsCommit, port, evidenceFile, writeEvidence = true }) {
   const response = await fetch(`http://127.0.0.1:${port}/version`);
   if (!response.ok) fail('acceptance_version_unreachable');
   const version = await response.json();
@@ -246,7 +302,6 @@ async function verifyAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }
   if (!health.ok) fail('acceptance_readiness_failed');
   await runMfaProbe();
   const publicProbe = await publicCandidateProbe(runtimeCommit);
-  await assertEvidenceDirectory(evidenceFile);
   const evidence = {
     kind: 'sit-staging-controlled-acceptance',
     status: 'passed',
@@ -260,9 +315,27 @@ async function verifyAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }
     providerTraffic: false,
     createdAt: new Date().toISOString(),
   };
-  await writeFile(evidenceFile, `${JSON.stringify(evidence, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
-  await chmod(evidenceFile, 0o600);
-  return evidence;
+  return writeEvidence ? writeAcceptanceEvidence(evidenceFile, evidence) : evidence;
+}
+
+async function runAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }) {
+  let evidence;
+  let operationError;
+  try {
+    await startAcceptance({ runtimeCommit, opsCommit, port });
+    evidence = await verifyAcceptance({ runtimeCommit, opsCommit, port, evidenceFile, writeEvidence: false });
+  } catch (error) {
+    operationError = error;
+  }
+  let cleanupError;
+  try {
+    await cleanupAcceptance({ runtimeCommit });
+  } catch (error) {
+    cleanupError = error;
+  }
+  if (cleanupError) throw cleanupError;
+  if (operationError) throw operationError;
+  return writeAcceptanceEvidence(evidenceFile, evidence);
 }
 
 async function promotePublic({ runtimeCommit, opsCommit, evidenceFile }) {
@@ -301,10 +374,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     const runtimeCommit = fullCommit(process.argv[3], 'runtimeCommit');
     const opsCommit = fullCommit(process.env.SIT_STAGING_REHEARSAL_OPS_COMMIT, 'opsCommit');
-    const port = Number(process.env.STAGING_ACCEPTANCE_PORT ?? '18081');
+    const port = Number(process.env.STAGING_ACCEPTANCE_PORT ?? '18082');
     const evidenceFile = process.env.SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE ?? '';
     if (mode === 'start') process.stdout.write(`${JSON.stringify(await startAcceptance({ runtimeCommit, opsCommit, port }))}\n`);
     else if (mode === 'verify') process.stdout.write(`${JSON.stringify(await verifyAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }))}\n`);
+    else if (mode === 'run') process.stdout.write(`${JSON.stringify(await runAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }))}\n`);
     else if (mode === 'release') process.stdout.write(`${JSON.stringify(await promotePublic({ runtimeCommit, opsCommit, evidenceFile }))}\n`);
     else fail('mode_invalid');
   } catch (error) {

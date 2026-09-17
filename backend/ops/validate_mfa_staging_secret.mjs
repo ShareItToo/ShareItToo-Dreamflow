@@ -27,7 +27,12 @@ function inside(parent, candidate) {
   return path === '' || (!path.startsWith('..') && !isAbsolute(path));
 }
 
-export function validateMfaStagingSecret({ filePath, repository = repositoryRoot } = {}) {
+export function validateMfaStagingSecret({
+  filePath,
+  repository = repositoryRoot,
+  runtimeReadable = false,
+  runtimeGroup = 65532,
+} = {}) {
   if (typeof filePath !== 'string' || !isAbsolute(filePath)) {
     fail('mfa_staging_secret_path_invalid');
   }
@@ -47,8 +52,10 @@ export function validateMfaStagingSecret({ filePath, repository = repositoryRoot
       fail('mfa_staging_secret_type_invalid');
     }
     if (inside(resolvedRepository, resolvedFile)) fail('mfa_staging_secret_inside_repository');
-    if ((metadata.mode & 0o777) !== 0o600
-        || (typeof process.getuid === 'function' && metadata.uid !== process.getuid())) {
+    const expectedMode = runtimeReadable ? 0o640 : 0o600;
+    const ownerMatches = typeof process.getuid !== 'function' || metadata.uid === process.getuid();
+    const groupMatches = !runtimeReadable || metadata.gid === runtimeGroup;
+    if ((metadata.mode & 0o777) !== expectedMode || !ownerMatches || !groupMatches) {
       fail('mfa_staging_secret_permissions_invalid');
     }
     if (metadata.size < 16 || metadata.size > 128) fail('mfa_staging_secret_size_invalid');
@@ -77,6 +84,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   try {
     validateMfaStagingSecret({
       filePath: process.env.MFA_ENCRYPTION_KEY_HOST_FILE ?? '',
+      runtimeReadable: process.env.MFA_ENCRYPTION_KEY_RUNTIME_READABLE === '1',
     });
     process.stdout.write('MFA Staging secret gate: PASS\n');
   } catch (error) {

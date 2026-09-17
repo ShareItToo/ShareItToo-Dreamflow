@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmod, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, chown, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
@@ -57,6 +57,22 @@ test('MFA staging secret gate rejects a key file inside the repository', async (
     assert.throws(
       () => validateMfaStagingSecret({ filePath: files.file, repository: files.root }),
       (error) => error.code === 'mfa_staging_secret_inside_repository',
+    );
+  } finally {
+    await rm(files.root, { recursive: true, force: true });
+  }
+});
+
+test('MFA runtime gate requires root:65532 mode 0640 while storage gate stays owner-only', async () => {
+  const files = await fixture();
+  try {
+    await chown(files.file, 0, 65532);
+    await chmod(files.file, 0o640);
+    assert.equal(validateMfaStagingSecret({ filePath: files.file, runtimeReadable: true }).keyLength, 32);
+    await chmod(files.file, 0o600);
+    assert.throws(
+      () => validateMfaStagingSecret({ filePath: files.file, runtimeReadable: true }),
+      (error) => error.code === 'mfa_staging_secret_permissions_invalid',
     );
   } finally {
     await rm(files.root, { recursive: true, force: true });

@@ -296,10 +296,14 @@ protected rehearsal leaves all quiesced services stopped; cleanup must be
 verified and any cleanup failure overrides PASS. Runtime source and Ops
 orchestration commits are pinned separately and must be recorded at invocation.
 The only acceptance target after that rehearsal is the exact candidate image on
-the dedicated loopback port `18081`; the public Staging proxy port must never
-serve the candidate during acceptance. The controlled Compose file must use an
-explicit minimal environment (no `env_file` secret injection), hard-pin
-provider-neutral test modes, and mount only the validated owner-only MFA key.
+an immediately preflighted free dedicated loopback port (the current reserved
+port is `18082`); the public Staging proxy port and any foreign listener must
+never serve or be stopped for the candidate. The controlled Compose file must
+use an explicit minimal environment (no `env_file` secret injection), hard-pin
+provider-neutral test modes, and mount only the validated runtime-readable MFA
+key (`root:65532`, mode `0640`). Storage/preparation may remain owner-only
+(`0600`); metadata-only preparation requires exact confirmation and must never
+rotate or print key material. New root-created keys must end runtime-ready.
 The runner must prove readiness and an authenticated synthetic MFA
 enroll/pending/cancel flow, then write owner-only external evidence bound to the
 exact runtime and Ops commits. `deploy_release.sh staging` remains blocked

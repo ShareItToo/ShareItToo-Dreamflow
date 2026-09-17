@@ -3,11 +3,14 @@ import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/prom
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createServer } from 'node:net';
 import test from 'node:test';
 
 import { validateEvidence } from '../../backend/ops/validate_staging_controlled_acceptance.mjs';
 import {
   assertPublicCandidateNotServed,
+  assertLoopbackPortAvailable,
+  cleanupAcceptance,
   runCommand,
   runCommandStatus,
   runCommandWithInput,
@@ -95,7 +98,7 @@ test('acceptance command stdin is ignored when empty and safely handles input cl
 
 test('controlled acceptance compose is loopback-only and provider-neutral', async () => {
   const compose = await readFile(new URL('../../backend/compose.staging.acceptance.yml', import.meta.url), 'utf8');
-  assert.match(compose, /127\.0\.0\.1:\$\{STAGING_ACCEPTANCE_PORT:-18081\}:8080/u);
+  assert.match(compose, /127\.0\.0\.1:\$\{STAGING_ACCEPTANCE_PORT:-18082\}:8080/u);
   assert.match(compose, /MFA_ENCRYPTION_KEY_FILE: \/run\/secrets\/mfa-encryption-key/u);
   assert.doesNotMatch(compose, /env_file:/u);
   assert.match(compose, /PAYMENT_TRANSPORT: memory/u);
@@ -111,9 +114,32 @@ test('acceptance runner binds the Ops checkout and keeps the public service stop
   assert.match(runner, /shareittoo-staging-api/u);
   assert.match(runner, /public_staging_service_running/u);
   assert.match(runner, /validate_mfa_staging_secret\.mjs/u);
+  assert.match(runner, /MFA_ENCRYPTION_KEY_RUNTIME_READABLE: '1'/u);
+  assert.match(runner, /acceptance_port_occupied/u);
+  assert.match(runner, /acceptance_cleanup_identity_failed/u);
+  assert.match(runner, /mode === 'run'/u);
   assert.match(runner, /pending !== true/u);
   assert.match(runner, /pending !== false/u);
   assert.match(runner, /mfa_probe_http_/u);
+});
+
+test('loopback port preflight rejects an occupied listener and accepts a free one', async () => {
+  const server = createServer();
+  await new Promise((resolve) => server.listen({ host: '127.0.0.1', port: 0 }, resolve));
+  const occupied = server.address().port;
+  await assert.rejects(
+    assertLoopbackPortAvailable(occupied),
+    (error) => error?.code === 'acceptance_port_occupied',
+  );
+  await new Promise((resolve) => server.close(resolve));
+  assert.equal(await assertLoopbackPortAvailable(occupied), true);
+});
+
+test('cleanup is identity-bound and never requires Compose secret interpolation', async () => {
+  const runner = await readFile(new URL('../../backend/ops/staging_controlled_acceptance.mjs', import.meta.url), 'utf8');
+  assert.match(runner, /'ps', '-aq', '--filter', 'label=com\.shareittoo\.staging\.controlled_acceptance=true'/u);
+  assert.match(runner, /docker', \['rm', '-f', id\]/u);
+  assert.match(runner, /return writeAcceptanceEvidence\(evidenceFile, evidence\)/u);
 });
 
 test('ordinary staging deployment cannot bypass controlled acceptance', async (t) => {

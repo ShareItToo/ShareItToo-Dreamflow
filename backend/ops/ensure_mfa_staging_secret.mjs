@@ -4,9 +4,14 @@ import crypto from 'node:crypto';
 import {
   closeSync,
   constants,
+  fchmodSync,
+  fchownSync,
+  fstatSync,
   fsyncSync,
   lstatSync,
   openSync,
+  readSync,
+  realpathSync,
   unlinkSync,
   writeSync,
 } from 'node:fs';
@@ -21,6 +26,25 @@ function fail(code) {
   const error = new Error('MFA Staging key lifecycle gate failed.');
   error.code = code;
   throw error;
+}
+
+function inside(parent, candidate) {
+  const path = relative(parent, candidate);
+  return path === '' || (!path.startsWith('..') && !isAbsolute(path));
+}
+
+function digestDescriptor(descriptor, size) {
+  const hash = crypto.createHash('sha256');
+  const buffer = Buffer.alloc(4096);
+  let offset = 0;
+  while (offset < size) {
+    const read = readSync(descriptor, buffer, 0, Math.min(buffer.length, size - offset), offset);
+    if (read === 0) fail('mfa_staging_secret_read_failed');
+    hash.update(buffer.subarray(0, read));
+    offset += read;
+  }
+  buffer.fill(0);
+  return hash.digest('hex');
 }
 
 function assertExternalOwnerDirectory(filePath, repository = repositoryRoot) {
@@ -51,6 +75,7 @@ function assertExternalOwnerDirectory(filePath, repository = repositoryRoot) {
 export function ensureMfaStagingSecret({
   filePath,
   createIfAbsent = false,
+  runtimeReadable = false,
   confirmation,
   expectedConfirmation,
   repository = repositoryRoot,
@@ -58,7 +83,7 @@ export function ensureMfaStagingSecret({
   assertExternalOwnerDirectory(filePath, repository);
   try {
     return Object.freeze({
-      ...validateMfaStagingSecret({ filePath, repository }),
+      ...validateMfaStagingSecret({ filePath, repository, runtimeReadable }),
       status: 'reused',
     });
   } catch (error) {
@@ -83,6 +108,13 @@ export function ensureMfaStagingSecret({
     );
     created = true;
     writeSync(descriptor, encoded, 0, encoded.length, 0);
+    if (runtimeReadable) {
+      if (typeof process.getuid === 'function' && process.getuid() !== 0) {
+        fail('mfa_staging_runtime_owner_required');
+      }
+      fchownSync(descriptor, 0, 65532);
+      fchmodSync(descriptor, 0o640);
+    }
     fsyncSync(descriptor);
   } catch (error) {
     if (error?.code === 'EEXIST') fail('mfa_staging_secret_creation_race');
@@ -94,7 +126,7 @@ export function ensureMfaStagingSecret({
   }
   try {
     return Object.freeze({
-      ...validateMfaStagingSecret({ filePath, repository }),
+      ...validateMfaStagingSecret({ filePath, repository, runtimeReadable }),
       status: 'created',
     });
   } catch (error) {
@@ -105,15 +137,76 @@ export function ensureMfaStagingSecret({
   }
 }
 
+export function prepareMfaStagingRuntimePermissions({
+  filePath,
+  confirmation,
+  expectedConfirmation,
+  repository = repositoryRoot,
+  runtimeGroup = 65532,
+} = {}) {
+  assertExternalOwnerDirectory(filePath, repository);
+  if (typeof process.getuid === 'function' && process.getuid() !== 0) {
+    fail('mfa_staging_runtime_owner_required');
+  }
+  let descriptor;
+  try {
+    descriptor = openSync(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_CLOEXEC);
+    const before = fstatSync(descriptor);
+    const linkMetadata = lstatSync(filePath);
+    const resolvedFile = realpathSync(filePath);
+    const resolvedRepository = realpathSync(repository);
+    if (!before.isFile() || linkMetadata.isSymbolicLink()
+        || before.dev !== linkMetadata.dev || before.ino !== linkMetadata.ino) {
+      fail('mfa_staging_secret_type_invalid');
+    }
+    if (inside(resolvedRepository, resolvedFile)) fail('mfa_staging_secret_inside_repository');
+    if (before.uid !== 0 || before.size < 16 || before.size > 128) {
+      fail('mfa_staging_secret_permissions_invalid');
+    }
+    if ((before.mode & 0o777) === 0o640 && before.gid === runtimeGroup) {
+      validateMfaStagingSecret({ filePath, repository, runtimeReadable: true, runtimeGroup });
+      return Object.freeze({ status: 'runtime-ready', changed: false, keyLength: 32 });
+    }
+    if ((before.mode & 0o777) !== 0o600 || before.gid !== 0
+        || confirmation !== expectedConfirmation || !expectedConfirmation) {
+      fail('mfa_staging_runtime_confirmation_required');
+    }
+    const beforeDigest = digestDescriptor(descriptor, before.size);
+    fchownSync(descriptor, 0, runtimeGroup);
+    fchmodSync(descriptor, 0o640);
+    fsyncSync(descriptor);
+    const after = fstatSync(descriptor);
+    if (after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size
+        || digestDescriptor(descriptor, after.size) !== beforeDigest) {
+      fail('mfa_staging_runtime_content_changed');
+    }
+    validateMfaStagingSecret({ filePath, repository, runtimeReadable: true, runtimeGroup });
+    return Object.freeze({ status: 'prepared', changed: true, keyLength: 32 });
+  } catch (error) {
+    if (error instanceof Error && String(error.code ?? '').startsWith('mfa_staging_')) throw error;
+    fail('mfa_staging_runtime_prepare_failed');
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   try {
     const result = ensureMfaStagingSecret({
       filePath: process.env.MFA_ENCRYPTION_KEY_HOST_FILE ?? '',
       createIfAbsent: process.env.MFA_ENCRYPTION_KEY_CREATE_IF_ABSENT === '1',
+      runtimeReadable: process.env.MFA_ENCRYPTION_KEY_RUNTIME_READABLE === '1',
       confirmation: process.env.MFA_ENCRYPTION_KEY_CREATE_CONFIRM ?? '',
       expectedConfirmation: process.env.MFA_ENCRYPTION_KEY_CREATE_COMMIT ?? '',
     });
-    process.stdout.write(`MFA Staging key ${result.status}; source=file; length=${result.keyLength}\n`);
+    const prepared = process.env.MFA_ENCRYPTION_KEY_PREPARE_RUNTIME === '1'
+      ? prepareMfaStagingRuntimePermissions({
+        filePath: process.env.MFA_ENCRYPTION_KEY_HOST_FILE ?? '',
+        confirmation: process.env.MFA_ENCRYPTION_KEY_RUNTIME_CONFIRM ?? '',
+        expectedConfirmation: process.env.MFA_ENCRYPTION_KEY_RUNTIME_COMMIT ?? '',
+      })
+      : result;
+    process.stdout.write(`MFA Staging key ${prepared.status}; source=file; length=${prepared.keyLength}\n`);
   } catch (error) {
     process.stderr.write(`${error?.message ?? 'MFA Staging key lifecycle gate failed.'}\n`);
     process.exitCode = 1;
