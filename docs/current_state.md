@@ -1,17 +1,21 @@
 # ShareItToo Current State
 
-## WP182 successor 2026091701 — LOCAL BUILD READY; PLAY/DEVICE GATES HOLD
+## WP184 Heilbronn city successor 2026091702 — TECHNICAL FIX COMPLETE; PLAY/DEVICE GATES HOLD
 
-The bounded successor `1.0.0+2026091701` is prepared locally for
-Internal/Staging only and is bound to source commit
-`578c5a42a6397ed472aaaa76f724fca9bb43f74c`. The signed AAB/APK are retained
-in the owner-only archive and their package, version, SDK levels, upload
-certificate, SHA-256, byte size, privacy scan and ZIP structure were verified.
-Focused tests and the one required full local technical regression passed.
-GitHub exact-head read-back and successor physical-device acceptance remain
-open because no push, Play upload, install or sideload was authorized in WP182.
-See `docs/operations/WP182_SUCCESSOR_CANDIDATE_HANDOVER_20260917.md` and
-`store/google-play/rollover-candidate-2026091701.json`.
+The bounded successor `1.0.0+2026091702` is prepared locally for
+Internal/Staging only and is bound to source head
+`085e1e9869abb255767e0eaefd29315cb9cdadf8`. WP183 found a real mismatch where
+the listing UI showed Heilbronn but the request payload fell back to Berlin;
+WP184 adds Heilbronn once to the central `DataService._cities` truth and wires
+the derived city into the payload. Focused tests pass **7/7** and the complete
+scoped CI-equivalent local regression exits **0** (`3126/3126` tool tests,
+Flutter/analyzer, Web/Wasm, loopback smoke, Android debug/minSdk and capacity).
+The signed AAB/APK, signing, SDK, privacy and ZIP checks passed and are
+retained in the owner-only archive. GitHub exact-head Regression/CodeQL,
+Play upload/activation and successor physical-device acceptance remain open.
+No Store, provider, payment, production, device or PR-merge action occurred.
+See `docs/operations/WP184_HEILBRONN_LISTING_CITY_SUCCESSOR_20260917.md` and
+`store/google-play/rollover-candidate-2026091702.json`.
 
 ## WP172 Google Play Internal release 2026091605 — COMPLETE; device testing pending
 
