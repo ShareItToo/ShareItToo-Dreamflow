@@ -136,9 +136,12 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   mismatch by reusing or rebinding an already archived candidate.
 
 - Play-delivered Android installations may contain bounded base/split APK sets;
-  device-update preflight must inspect every installed split signer before a
-  data-preserving direct update. Never assume a single APK, and fail closed if
-  PackageManager cannot replace a split install with the exact candidate.
+  device-update and runtime-diagnostic preflight must inspect every installed
+  split signer before a data-preserving update or exact-candidate claim. Exact
+  Play-installed truth requires the version, Play installer, bounded split set,
+  and the canonical Play app-signing SHA-256 (never the upload certificate).
+  Never assume a single APK, and fail closed if PackageManager cannot replace
+  a split install with the exact candidate.
 
 ### Fail-closed validator complements
 

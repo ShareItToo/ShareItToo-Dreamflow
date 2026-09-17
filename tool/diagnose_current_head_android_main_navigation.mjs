@@ -2,8 +2,18 @@
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   inspectPhysicalDevice,
@@ -21,6 +31,8 @@ import {
 } from './run_n28_current_candidate_pixel_surface_matrix.mjs';
 
 export const currentHeadAndroidApplicationId = 'com.shareittoo.app';
+export const canonicalPlayAppSigningCertificateSha256 =
+  '36488abf86c51da07ab2258f31b00e2f1ba8a36d076107b9f006376ade80b956';
 const applicationId = currentHeadAndroidApplicationId;
 const remoteUiDump = '/sdcard/sit-main-navigation-diagnostic.xml';
 const navigationChecks = Object.freeze([
@@ -57,11 +69,23 @@ function fail(message) {
   throw new Error(message);
 }
 
-export function defaultCurrentHeadAndroidCommandRunner(file, args, { binary = false } = {}) {
+export function defaultCurrentHeadAndroidCommandRunner(
+  file,
+  args,
+  {
+    binary = false,
+    timeoutMs = 0,
+    input,
+    stdio = ['ignore', 'pipe', 'pipe'],
+    maxBuffer = 512 * 1024 * 1024,
+  } = {},
+) {
   return execFileSync(file, args, {
     encoding: binary ? null : 'utf8',
-    maxBuffer: 512 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    maxBuffer,
+    ...(timeoutMs > 0 ? { timeout: timeoutMs } : {}),
+    ...(input === undefined ? {} : { input }),
+    stdio,
   });
 }
 
@@ -108,6 +132,51 @@ function parseInstalledPackage(output) {
   return { versionName, buildNumber };
 }
 
+function resolveApksignerPath() {
+  const localProperties = resolve(fileURLToPath(new URL('../android/local.properties', import.meta.url)));
+  const configured = process.env.ANDROID_HOME
+    ?? process.env.ANDROID_SDK_ROOT
+    ?? (existsSync(localProperties)
+      ? /^sdk\.dir=(.+)$/mu.exec(readFileSync(localProperties, 'utf8'))?.[1]
+      : undefined)
+    ?? resolve(homedir(), 'Library', 'Android', 'sdk');
+  const buildTools = resolve(configured, 'build-tools');
+  if (!existsSync(buildTools)) fail('Android build-tools directory is unavailable.');
+  const versions = readdirSync(buildTools).sort((left, right) => (
+    left.localeCompare(right, undefined, { numeric: true })
+  ));
+  const path = resolve(buildTools, versions.at(-1) ?? '', 'apksigner');
+  if (!existsSync(path)) fail('Android apksigner is unavailable.');
+  return path;
+}
+
+function inspectInstalledCertificate(commandRunner, adbPath, device, packagePath) {
+  const directory = mkdtempSync(join(tmpdir(), 'sit-main-navigation-split-'));
+  chmodSync(directory, 0o700);
+  const apkPath = join(directory, 'installed.apk');
+  try {
+    const bytes = currentHeadAndroidAdb(
+      commandRunner,
+      adbPath,
+      device,
+      ['exec-out', 'cat', packagePath],
+      { binary: true },
+    );
+    writeFileSync(apkPath, bytes, { mode: 0o600 });
+    const output = String(commandRunner(resolveApksignerPath(), [
+      'verify', '--print-certs', apkPath,
+    ], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+    const certificate = /^(?:V\d+ Signer:|Signer #\d+) certificate SHA-256 digest:\s*([a-f0-9]{64})\s*$/imu
+      .exec(output)?.[1];
+    if (certificate !== canonicalPlayAppSigningCertificateSha256) {
+      fail('Installed ShareItToo Play split certificate does not match the canonical Play app-signing certificate.');
+    }
+    return certificate;
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
 export function assertCurrentHeadAndroidDeviceAlreadyUnlocked(commandRunner, adbPath, device) {
   const policy = currentHeadAndroidAdb(
     commandRunner,
@@ -135,18 +204,8 @@ export function verifyCurrentHeadAndroidInstalledCandidate(
     .split(/\r?\n/)
     .map((line) => line.replace(/^package:/, '').trim())
     .filter(Boolean);
-  if (packagePaths.length !== 1 || !packagePaths[0].startsWith('/data/app/')) {
-    fail('Installed ShareItToo package is not the exact direct-APK candidate.');
-  }
-  const installedSha256 = sha256Bytes(currentHeadAndroidAdb(
-    commandRunner,
-    adbPath,
-    device,
-    ['exec-out', 'cat', packagePaths[0]],
-    { binary: true },
-  ));
-  if (installedSha256 !== candidate.android.apkSha256) {
-    fail('Installed ShareItToo APK does not match the current-head candidate.');
+  if (packagePaths.length === 0 || packagePaths.some((value) => !value.startsWith('/data/app/'))) {
+    fail('Installed ShareItToo package path is missing or ambiguous.');
   }
   const installed = parseInstalledPackage(
     currentHeadAndroidAdb(
@@ -160,7 +219,44 @@ export function verifyCurrentHeadAndroidInstalledCandidate(
       || installed.buildNumber !== candidate.buildNumber) {
     fail('Installed ShareItToo version does not match the current-head candidate.');
   }
-  return { ...installed, delivery: 'direct-apk', apkSha256: installedSha256 };
+  if (packagePaths.length === 1) {
+    const installedSha256 = sha256Bytes(currentHeadAndroidAdb(
+      commandRunner,
+      adbPath,
+      device,
+      ['exec-out', 'cat', packagePaths[0]],
+      { binary: true },
+    ));
+    if (installedSha256 !== candidate.android.apkSha256) {
+      fail('Installed ShareItToo APK does not match the current-head candidate.');
+    }
+    return { ...installed, delivery: 'direct-apk', apkSha256: installedSha256 };
+  }
+  const basePackages = packagePaths.filter((value) => value.endsWith('/base.apk'));
+  const splitPackagesValid = packagePaths.every((value) => (
+    value.endsWith('/base.apk') || /\/split_[^/]+\.apk$/u.test(value)
+  ));
+  if (basePackages.length !== 1 || !splitPackagesValid) {
+    fail('Installed ShareItToo Play package split set is missing or ambiguous.');
+  }
+  const installerOutput = currentHeadAndroidAdb(
+    commandRunner,
+    adbPath,
+    device,
+    ['shell', 'pm', 'list', 'packages', '-i', applicationId],
+  );
+  if (!/\binstaller=com\.android\.vending\b/u.test(installerOutput)) {
+    fail('Installed ShareItToo split package was not delivered by Google Play.');
+  }
+  for (const packagePath of packagePaths) {
+    inspectInstalledCertificate(commandRunner, adbPath, device, packagePath);
+  }
+  return {
+    ...installed,
+    delivery: 'google-play-split',
+    installerPackageName: 'com.android.vending',
+    splitCount: packagePaths.length,
+  };
 }
 
 export function launchCurrentHeadAndroidCandidate(commandRunner, adbPath, device) {
@@ -416,7 +512,13 @@ export async function diagnoseCurrentHeadAndroidColdStartStability({
       versionName: installed.versionName,
       buildNumber: installed.buildNumber,
       delivery: installed.delivery,
-      apkSha256: installed.apkSha256,
+      ...(installed.apkSha256 === undefined ? {} : { apkSha256: installed.apkSha256 }),
+      ...(installed.installerPackageName === undefined
+        ? {}
+        : {
+            installerPackageName: installed.installerPackageName,
+            splitCount: installed.splitCount,
+          }),
     },
     device: deviceSummary,
     coldStarts: {
@@ -542,7 +644,13 @@ export async function diagnoseCurrentHeadAndroidMainNavigation({
       versionName: installed.versionName,
       buildNumber: installed.buildNumber,
       delivery: installed.delivery,
-      apkSha256: installed.apkSha256,
+      ...(installed.apkSha256 === undefined ? {} : { apkSha256: installed.apkSha256 }),
+      ...(installed.installerPackageName === undefined
+        ? {}
+        : {
+            installerPackageName: installed.installerPackageName,
+            splitCount: installed.splitCount,
+          }),
     },
     device: deviceSummary,
     tests: Object.fromEntries(selectedChecks.map((check) => [
@@ -550,8 +658,8 @@ export async function diagnoseCurrentHeadAndroidMainNavigation({
       { status: 'passed', result: 'authenticated-read-only-surface' },
     ])),
     boundaries: {
-      directDiagnosticOnly: true,
-      storeInstallationGateSatisfied: false,
+      directDiagnosticOnly: installed.delivery === 'direct-apk',
+      storeInstallationGateSatisfied: installed.delivery === 'google-play-split',
       authenticatedMainNavigationPassed: selectedChecks.length === navigationChecks.length,
       authenticatedNavigationLabelsTested: selectedChecks.map((check) => check.label),
       bookingFlowPassed: false,

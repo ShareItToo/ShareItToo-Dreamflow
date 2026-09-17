@@ -7,8 +7,10 @@ import {
   classifyCurrentHeadAndroidForegroundOwner,
   diagnoseCurrentHeadAndroidColdStartStability,
   diagnoseCurrentHeadAndroidMainNavigation,
+  canonicalPlayAppSigningCertificateSha256,
   launchCurrentHeadAndroidCandidateExplicitly,
   parseMainNavigationArguments,
+  verifyCurrentHeadAndroidInstalledCandidate,
   waitForCurrentHeadAndroidMainNavigation,
 } from '../../tool/diagnose_current_head_android_main_navigation.mjs';
 
@@ -132,6 +134,96 @@ test('proves five authenticated read-only destinations and returns sanitized evi
   assert.equal(evidence.boundaries.bookingFlowPassed, false);
   assert.equal(evidence.boundaries.accountMutationPerformed, false);
   assert.equal(JSON.stringify(evidence).includes('PRIVATE-SERIAL'), false);
+});
+
+function splitCandidateRunner({ wrongCertificate = false, paths = null } = {}) {
+  return (_file, args, options = {}) => {
+    const command = args.slice(2);
+    const joined = command.join(' ');
+    if (joined === 'shell pm path com.shareittoo.app') {
+      return (paths ?? [
+        'package:/data/app/sit/base.apk',
+        'package:/data/app/sit/split_config.arm64_v8a.apk',
+        'package:/data/app/sit/split_config.de.apk',
+        'package:/data/app/sit/split_config.xxhdpi.apk',
+      ]).join('\n');
+    }
+    if (joined === 'shell dumpsys package com.shareittoo.app') {
+      return 'versionCode=2026082301\nversionName=1.0.0\n';
+    }
+    if (joined === 'shell pm list packages -i com.shareittoo.app') {
+      return 'package:com.shareittoo.app installer=com.android.vending';
+    }
+    if (command[0] === 'exec-out' && command[1] === 'cat') {
+      return options.binary ? Buffer.from(command[2]) : command[2];
+    }
+    if (_file.endsWith('/apksigner') && args[0] === 'verify') {
+      return `Signer #1 certificate SHA-256 digest: ${wrongCertificate
+        ? '0'.repeat(64)
+        : canonicalPlayAppSigningCertificateSha256}`;
+    }
+    throw new Error(`unexpected split command: ${joined}`);
+  };
+}
+
+test('accepts a bounded Google Play split set only with the canonical Play signing certificate', () => {
+  const installed = verifyCurrentHeadAndroidInstalledCandidate(
+    splitCandidateRunner(),
+    'adb',
+    { serial: 'PRIVATE-SERIAL' },
+    candidate,
+  );
+  assert.equal(installed.delivery, 'google-play-split');
+  assert.equal(installed.splitCount, 4);
+});
+
+test('rejects a Google Play split set with a wrong app-signing certificate', () => {
+  assert.throws(
+    () => verifyCurrentHeadAndroidInstalledCandidate(
+      splitCandidateRunner({ wrongCertificate: true }),
+      'adb',
+      { serial: 'PRIVATE-SERIAL' },
+      candidate,
+    ),
+    /split certificate does not match/u,
+  );
+});
+
+test('rejects a Google Play split set without exactly one base APK', () => {
+  for (const paths of [
+    [
+      'package:/data/app/sit/split_config.arm64_v8a.apk',
+      'package:/data/app/sit/split_config.de.apk',
+    ],
+    ['package:/data/app/sit/base.apk', 'package:/data/app/sit/base.apk'],
+  ]) {
+    assert.throws(
+      () => verifyCurrentHeadAndroidInstalledCandidate(
+        splitCandidateRunner({ paths }),
+        'adb',
+        { serial: 'PRIVATE-SERIAL' },
+        candidate,
+      ),
+      /split set is missing or ambiguous/u,
+    );
+  }
+});
+
+test('rejects an unsafe installed split path before reading its bytes', () => {
+  assert.throws(
+    () => verifyCurrentHeadAndroidInstalledCandidate(
+      splitCandidateRunner({
+        paths: [
+          'package:/data/app/sit/base.apk',
+          'package:/data/app/sit/other.apk',
+        ],
+      }),
+      'adb',
+      { serial: 'PRIVATE-SERIAL' },
+      candidate,
+    ),
+    /split set is missing or ambiguous/u,
+  );
 });
 
 test('explicit activity launcher binds the restart to ShareItToo instead of an injected event', () => {

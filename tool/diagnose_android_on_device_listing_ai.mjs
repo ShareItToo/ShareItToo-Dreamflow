@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -121,7 +120,11 @@ export function onDeviceListingAiUiProof(hierarchy) {
       && count('Manueller Editor geöffnet.') === 0,
   };
   if (Object.values(proof).some((value) => value !== true)) {
-    fail('The sanitized on-device Listing-AI result is incomplete.');
+    const missing = Object.entries(proof)
+      .filter(([, value]) => value !== true)
+      .map(([key]) => key)
+      .join(',');
+    fail(`The sanitized on-device Listing-AI result is incomplete: ${missing}.`);
   }
   return Object.freeze(proof);
 }
@@ -414,6 +417,7 @@ function verifyStaging(commandRunner, startedAt) {
     input: stagingReadbackSql(startedAt),
     stdio: ['pipe', 'pipe', 'pipe'],
     maxBuffer: 1024 * 1024,
+    timeoutMs: 15000,
   });
   try {
     return JSON.parse(String(output).trim());
@@ -562,7 +566,7 @@ async function main() {
       });
       return { startedAt, ui: hierarchy, fixtureSelected: true };
     },
-    verifyServer: async ({ startedAt }) => verifyStaging(execFileSync, startedAt),
+    verifyServer: async ({ startedAt }) => verifyStaging(commandRunner, startedAt),
     cleanup: async (performed) => {
       let localRecoveryCleared = performed === null;
       if (createSurfaceOpened && performed !== null) {
