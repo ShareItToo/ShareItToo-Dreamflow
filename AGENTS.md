@@ -306,6 +306,11 @@ key (`root:65532`, mode `0640`). Storage/preparation may remain owner-only
 rotate or print key material. New root-created keys must end runtime-ready.
 The runner must prove readiness and an authenticated synthetic MFA
 enroll/pending/cancel flow, then write owner-only external evidence bound to the
-exact runtime and Ops commits. `deploy_release.sh staging` remains blocked
+exact runtime and Ops commits. Compose `--wait` without an explicit application
+healthcheck is not readiness proof; acceptance must also use bounded
+application-level polling and stable sanitized transport/timeout phases.
+On failure, capture only sanitized container state before cleanup, remove the
+complete identity-validated acceptance inventory, and write PASS evidence only
+after cleanup is proven. `deploy_release.sh staging` remains blocked
 until that evidence and an exact public-release confirmation validate; no
 automatic promotion or observed-old-image fallback is allowed.

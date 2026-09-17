@@ -11,6 +11,8 @@ import {
   assertPublicCandidateNotServed,
   assertLoopbackPortAvailable,
   cleanupAcceptance,
+  pollAcceptanceEndpoint,
+  sanitizeErrorCode,
   validateAcceptanceInventory,
   runCommand,
   runCommandStatus,
@@ -73,8 +75,12 @@ test('status runner preserves exit status and sanitizes spawn errors', async () 
   assert.deepEqual(failed, { code: 1, stdout: 'failed' });
   await assert.rejects(
     runCommandStatus('/definitely/missing/sit-command', []),
-    (error) => error?.message === 'controlled_acceptance_status_failed'
+    (error) => error?.code === 'controlled_acceptance_status_failed'
       && !error.message.includes('definitely/missing'),
+  );
+  await assert.rejects(
+    runCommand('/definitely/missing/sit-command', [], { phase: 'spawn' }),
+    (error) => error?.code === 'controlled_acceptance_spawn_failed',
   );
 });
 
@@ -100,6 +106,9 @@ test('acceptance command stdin is ignored when empty and safely handles input cl
 test('controlled acceptance compose is loopback-only and provider-neutral', async () => {
   const compose = await readFile(new URL('../../backend/compose.staging.acceptance.yml', import.meta.url), 'utf8');
   assert.match(compose, /127\.0\.0\.1:\$\{STAGING_ACCEPTANCE_PORT:-18082\}:8080/u);
+  assert.match(compose, /healthcheck:/u);
+  assert.match(compose, /health\/ready/u);
+  assert.match(compose, /start_period: 5s/u);
   assert.match(compose, /MFA_ENCRYPTION_KEY_FILE: \/run\/secrets\/mfa-encryption-key/u);
   assert.doesNotMatch(compose, /env_file:/u);
   assert.match(compose, /PAYMENT_TRANSPORT: memory/u);
@@ -119,6 +128,11 @@ test('acceptance runner binds the Ops checkout and keeps the public service stop
   assert.match(runner, /acceptance_port_occupied/u);
   assert.match(runner, /acceptance_cleanup_identity_failed/u);
   assert.match(runner, /mode === 'run'/u);
+  assert.match(runner, /pollAcceptanceEndpoint\('\/version'/u);
+  assert.match(runner, /writeFailureEvidence/u);
+  assert.match(runner, /phase: 'acceptance_readiness'/u);
+  assert.match(runner, /preCleanupState/u);
+  assert.match(runner, /cleanupErrorCode/u);
   assert.match(runner, /pending !== true/u);
   assert.match(runner, /pending !== false/u);
   assert.match(runner, /mfa_probe_http_/u);
@@ -134,6 +148,43 @@ test('loopback port preflight rejects an occupied listener and accepts a free on
   );
   await new Promise((resolve) => server.close(resolve));
   assert.equal(await assertLoopbackPortAvailable(occupied), true);
+});
+
+test('application readiness polling tolerates bounded startup delay', async () => {
+  let attempts = 0;
+  const response = await pollAcceptanceEndpoint('/health/ready', {
+    port: 18082,
+    phase: 'acceptance_readiness',
+    timeoutMs: 100,
+    intervalMs: 1,
+    fetchImpl: async () => ({ ok: ++attempts >= 3 }),
+    sleepImpl: async () => {},
+  });
+  assert.equal(response.ok, true);
+  assert.equal(attempts, 3);
+});
+
+test('application readiness polling times out with a stable code and hides raw errors', async () => {
+  let now = 0;
+  await assert.rejects(
+    pollAcceptanceEndpoint('/version', {
+      port: 18082,
+      phase: 'acceptance_version',
+      timeoutMs: 10,
+      intervalMs: 5,
+      fetchImpl: async () => { now += 6; throw new Error('secret transport detail'); },
+      sleepImpl: async () => { now += 5; },
+      nowImpl: () => now,
+    }),
+    (error) => error?.code === 'acceptance_version_timeout'
+      && !error.message.includes('secret transport detail'),
+  );
+  assert.equal(sanitizeErrorCode(new Error('raw system path')), 'controlled_acceptance_internal_failed');
+  assert.equal(sanitizeErrorCode({ code: 'acceptance_version_timeout' }), 'acceptance_version_timeout');
+  await assert.rejects(
+    pollAcceptanceEndpoint('/version', { port: 18082, phase: 'unsafe-phase!' }),
+    (error) => error?.code === 'acceptance_poll_arguments_invalid',
+  );
 });
 
 test('cleanup is identity-bound and never requires Compose secret interpolation', async () => {

@@ -21,6 +21,14 @@ function fullCommit(value, name) {
   return value;
 }
 
+export function sanitizeErrorCode(error) {
+  const code = typeof error?.code === 'string' ? error.code : '';
+  if (/^[a-z0-9_]+$/u.test(code) && (code.startsWith('controlled_acceptance_') || code.startsWith('acceptance_'))) {
+    return code;
+  }
+  return 'controlled_acceptance_internal_failed';
+}
+
 export function runCommand(command, args, { env = process.env, phase = 'command' } = {}) {
   return runCommandWithInput(command, args, undefined, { env, phase });
 }
@@ -30,7 +38,10 @@ export function runCommandWithInput(command, args, input, { env = process.env, p
     const hasInput = input !== undefined && input !== '';
     let settled = false;
     let inputFinished = !hasInput;
-    const failure = (suffix = '') => new Error(`controlled_acceptance_${phase}${suffix}_failed`);
+    const failure = (suffix = '') => Object.assign(
+      new Error(`controlled_acceptance_${phase}${suffix}_failed`),
+      { code: `controlled_acceptance_${phase}${suffix}_failed` },
+    );
     const settleFailure = (error) => {
       if (settled) return;
       settled = true;
@@ -74,7 +85,10 @@ export function runCommandStatus(command, args, { env = process.env } = {}) {
     let stdout = '';
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { stdout += chunk; });
-    child.once('error', () => reject(new Error('controlled_acceptance_status_failed')));
+    child.once('error', () => reject(Object.assign(
+      new Error('controlled_acceptance_status_failed'),
+      { code: 'controlled_acceptance_status_failed' },
+    )));
     child.once('close', (code) => resolvePromise({ code, stdout: stdout.trim() }));
   });
 }
@@ -100,6 +114,33 @@ async function imageRevision(image) {
   return label;
 }
 
+export async function pollAcceptanceEndpoint(path, {
+  port,
+  phase,
+  timeoutMs = 15_000,
+  intervalMs = 250,
+  fetchImpl = fetch,
+  sleepImpl = (delay) => new Promise((resolvePromise) => setTimeout(resolvePromise, delay)),
+  nowImpl = () => Date.now(),
+} = {}) {
+  if (!Number.isInteger(port) || typeof path !== 'string' || !/^\/(?:[A-Za-z0-9/_-]+)$/u.test(path)
+      || typeof phase !== 'string' || !/^[a-z0-9_]+$/u.test(phase)) {
+    fail('acceptance_poll_arguments_invalid');
+  }
+  const deadline = nowImpl() + timeoutMs;
+  while (nowImpl() <= deadline) {
+    try {
+      const response = await fetchImpl(`http://127.0.0.1:${port}${path}`);
+      if (response?.ok) return response;
+    } catch {
+      // Transport/readiness races are retried only within the bounded deadline.
+    }
+    if (nowImpl() >= deadline) break;
+    await sleepImpl(Math.min(intervalMs, Math.max(0, deadline - nowImpl())));
+  }
+  fail(`${phase}_timeout`);
+}
+
 export function assertLoopbackPortAvailable(port) {
   if (!Number.isInteger(port) || port < 1024 || port > 65535) fail('acceptance_port_invalid');
   return new Promise((resolvePromise, reject) => {
@@ -123,6 +164,29 @@ async function acceptanceContainerIds(statusCommand = runCommandStatus) {
   ]);
   if (result.code !== 0) fail('acceptance_inventory_failed');
   return result.stdout.split(/\s+/u).filter(Boolean);
+}
+
+async function captureAcceptanceFailureState(runtimeCommit) {
+  try {
+    const ids = await acceptanceContainerIds();
+    if (ids.length === 0) return Object.freeze({ container: 'absent' });
+    if (ids.length > 1) return Object.freeze({ container: 'multiple', count: ids.length });
+    const identity = await runCommandStatus('docker', [
+      'inspect', ids[0], '--format', '{{.Name}}|{{.State.Status}}|{{.State.ExitCode}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{index .Config.Labels "com.shareittoo.staging.runtime_commit"}}',
+    ]);
+    if (identity.code !== 0) return Object.freeze({ container: 'unavailable' });
+    const [name, status, exitCode, health, commit] = identity.stdout.replace(/^\//u, '').split('|');
+    const allowedStatus = new Set(['created', 'running', 'restarting', 'removing', 'paused', 'exited', 'dead']);
+    const allowedHealth = new Set(['starting', 'healthy', 'unhealthy', 'none']);
+    return Object.freeze({
+      container: name === 'shareittoo-staging-acceptance-api' && commit === runtimeCommit ? 'expected' : 'unexpected',
+      status: allowedStatus.has(status) ? status : 'unknown',
+      exitCode: /^\d+$/u.test(exitCode) ? Number(exitCode) : null,
+      health: allowedHealth.has(health) ? health : 'unknown',
+    });
+  } catch {
+    return Object.freeze({ container: 'unavailable' });
+  }
 }
 
 export function validateAcceptanceInventory(inventory, runtimeCommit) {
@@ -306,13 +370,49 @@ async function writeAcceptanceEvidence(evidenceFile, evidence) {
   return evidence;
 }
 
+async function writeFailureEvidence(evidenceFile, {
+  runtimeCommit,
+  opsCommit,
+  port,
+  errorCode,
+  preCleanupState,
+  cleanup,
+  cleanupErrorCode = null,
+}) {
+  if (!isAbsolute(evidenceFile)) return false;
+  const failureFile = /\.json$/u.test(evidenceFile)
+    ? evidenceFile.replace(/\.json$/u, '-failure.json')
+    : `${evidenceFile}.failure.json`;
+  try {
+    await assertEvidenceDirectory(failureFile);
+    await writeFile(failureFile, `${JSON.stringify({
+      kind: 'sit-staging-controlled-acceptance-failure',
+      status: 'failed',
+      runtimeCommit,
+      opsCommit,
+      acceptancePort: port,
+      errorCode,
+      preCleanupState,
+      cleanup,
+      cleanupErrorCode,
+      evidenceWritten: false,
+      publicReleaseComplete: false,
+      providerTraffic: false,
+      createdAt: new Date().toISOString(),
+    }, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+    await chmod(failureFile, 0o600);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function verifyAcceptance({ runtimeCommit, opsCommit, port }) {
-  const response = await fetch(`http://127.0.0.1:${port}/version`);
-  if (!response.ok) fail('acceptance_version_unreachable');
-  const version = await response.json();
+  const response = await pollAcceptanceEndpoint('/version', { port, phase: 'acceptance_version' });
+  let version;
+  try { version = await response.json(); } catch { fail('acceptance_version_payload_invalid'); }
   if (version?.commit !== runtimeCommit) fail('acceptance_version_commit_mismatch');
-  const health = await fetch(`http://127.0.0.1:${port}/health/ready`);
-  if (!health.ok) fail('acceptance_readiness_failed');
+  await pollAcceptanceEndpoint('/health/ready', { port, phase: 'acceptance_readiness' });
   await runMfaProbe();
   const publicProbe = await publicCandidateProbe(runtimeCommit);
   const evidence = {
@@ -334,16 +434,29 @@ async function verifyAcceptance({ runtimeCommit, opsCommit, port }) {
 async function verifyAndCleanupAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }) {
   let evidence;
   let operationError;
+  let preCleanupState = Object.freeze({ container: 'not-captured' });
   try {
     evidence = await verifyAcceptance({ runtimeCommit, opsCommit, port });
   } catch (error) {
     operationError = error;
+    preCleanupState = await captureAcceptanceFailureState(runtimeCommit);
   }
   let cleanupError;
   try {
     await cleanupAcceptance({ runtimeCommit });
   } catch (error) {
     cleanupError = error;
+  }
+  if (operationError) {
+    await writeFailureEvidence(evidenceFile, {
+      runtimeCommit,
+      opsCommit,
+      port,
+      errorCode: sanitizeErrorCode(operationError),
+      preCleanupState,
+      cleanup: cleanupError ? 'failed' : 'passed',
+      cleanupErrorCode: cleanupError ? sanitizeErrorCode(cleanupError) : null,
+    });
   }
   if (cleanupError) throw cleanupError;
   if (operationError) throw operationError;
@@ -359,7 +472,17 @@ async function runAcceptance({ runtimeCommit, opsCommit, port, evidenceFile }) {
   }
   if (startError) {
     let cleanupError;
+    const preCleanupState = await captureAcceptanceFailureState(runtimeCommit);
     try { await cleanupAcceptance({ runtimeCommit }); } catch (error) { cleanupError = error; }
+    await writeFailureEvidence(evidenceFile, {
+      runtimeCommit,
+      opsCommit,
+      port,
+      errorCode: sanitizeErrorCode(startError),
+      preCleanupState,
+      cleanup: cleanupError ? 'failed' : 'passed',
+      cleanupErrorCode: cleanupError ? sanitizeErrorCode(cleanupError) : null,
+    });
     if (cleanupError) throw cleanupError;
     throw startError;
   }
@@ -407,7 +530,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     else if (mode === 'release') process.stdout.write(`${JSON.stringify(await promotePublic({ runtimeCommit, opsCommit, evidenceFile }))}\n`);
     else fail('mode_invalid');
   } catch (error) {
-    process.stderr.write(`${error?.message ?? 'Controlled Staging acceptance failed.'}\n`);
+        process.stderr.write(`${sanitizeErrorCode(error)}\n`);
     process.exitCode = 1;
   }
 }
