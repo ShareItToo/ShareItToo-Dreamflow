@@ -100,7 +100,7 @@ export const candidateRolloverNonRuntimeExactPaths = Object.freeze([
 ]);
 
 export const explicitCurrentRolloverCandidatePath =
-  'store/google-play/rollover-candidate-2026091605.json';
+  'store/google-play/rollover-candidate-2026091701.json';
 export const explicitCurrentRolloverStatus =
   'built-and-archived-internal-staging-upload-pending';
 
