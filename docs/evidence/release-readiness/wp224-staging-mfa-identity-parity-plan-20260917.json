@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-staging-mfa-identity-parity-plan-20260917",
+  "capturedOn": "2026-09-17",
+  "status": "prepared-read-only-provider-gate-open",
+  "scope": "staging-backend-reconciliation-only",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "sourceCommit": "7d9fef6efcb65b3613c91d01ad5ca76f87c99d2c",
+    "immutableImage": "shareittoo-api:7d9fef6efcb65b3613c91d01ad5ca76f87c99d2c",
+    "workingTreeAtCapture": "clean"
+  },
+  "currentStagingReadback": {
+    "backendShortCommit": "df39a14b7a19",
+    "mfaStatus": {
+      "http": 404,
+      "code": "not_found"
+    },
+    "identityVerificationStatus": {
+      "http": 404,
+      "code": "not_found"
+    },
+    "paymentBoundary": {
+      "capabilitiesHttp": 200,
+      "transport": "memory",
+      "providerStatus": "disabled",
+      "mode": "unavailable",
+      "livemode": false
+    },
+    "readbackMutations": false
+  },
+  "sourceToStagingDelta": {
+    "classification": "backend-image-and-schema-parity-missing",
+    "missingSourceRevision": true,
+    "missingRoutesAtStaging": [
+      "/v1/auth/mfa/status",
+      "/v1/identity-verification/status"
+    ],
+    "migrationRange": {
+      "first": "080_mfa_totp",
+      "last": "087_identity_verification_pilot_gate",
+      "files": 16,
+      "direction": "forward-only-reconciliation; do not run down migrations"
+    },
+    "requiredSourceConfig": {
+      "mfa": "server-side MFA encryption/secret configuration must already be present; values are not recorded",
+      "identity": "keep IDENTITY_VERIFICATION_TRANSPORT=disabled for parity-only deployment"
+    }
+  },
+  "reconciliationPlan": {
+    "phase1ParityOnly": [
+      "Build and publish an immutable image labelled with sourceCommit",
+      "Deploy staging with the exact sourceCommit and run the migration runner",
+      "Keep PAYMENT_TRANSPORT=memory and STRIPE_LIVEMODE=false",
+      "Keep IDENTITY_VERIFICATION_TRANSPORT=disabled; do not mount provider secrets",
+      "Read back /version, /health and /health/ready plus authenticated MFA and identity status",
+      "Verify the returned status is truthful and no 404 remains for source routes"
+    ],
+    "phase2ProviderActivation": {
+      "status": "not_part_of_this_plan",
+      "requiresAstraGate": true,
+      "requiresFreshReadOnlyProof": [
+        "restricted Stripe Identity TEST key file with mode/ownership validation",
+        "Identity verification TEST webhook secret file and delivery/readback proof",
+        "fresh DE test-account evidence bound to sourceCommit and pilot heilbronn_wave0",
+        "privacy/legal retention and document-handling acceptance",
+        "explicit bounded pilot authorization"
+      ],
+      "realDocumentsAllowed": false,
+      "livemodeAllowed": false
+    }
+  },
+  "providerReadinessReadOnly": {
+    "composeAndValidatorsDeclareIdentityGate": true,
+    "localEnvironmentPresence": {
+      "ENABLE_STAGING_IDENTITY": false,
+      "SIT_STAGING_PILOT_ID": false,
+      "CONFIRM_STAGING_IDENTITY": false,
+      "IDENTITY_STAGING_EVIDENCE_FILE": false,
+      "IDENTITY_STRIPE_SECRET_KEY_HOST_FILE": false,
+      "IDENTITY_VERIFICATION_WEBHOOK_SECRET_HOST_FILE": false
+    },
+    "secretValuesRead": false,
+    "providerTrafficPerformed": false,
+    "providerActivationProven": false,
+    "paymentProviderChanged": false
+  },
+  "postDeployReadback": {
+    "requiredEndpoints": [
+      "/version",
+      "/health",
+      "/health/ready",
+      "GET /v1/auth/mfa/status (authenticated)",
+      "GET /v1/identity-verification/status (authenticated)"
+    ],
+    "mustMatch": {
+      "versionCommit": "7d9fef6efcb65b3613c91d01ad5ca76f87c99d2c",
+      "paymentTransport": "memory",
+      "paymentLivemode": false,
+      "identityProvider": "disabled",
+      "identityLivemode": false
+    },
+    "failureRule": "any commit/image/migration/health/status mismatch blocks the next gate"
+  },
+  "rollback": {
+    "runbook": "backend/ops/deploy_release.sh",
+    "previousImageAndCommitCapturedBeforeDeploy": true,
+    "automaticRollback": true,
+    "restoredBoundary": {
+      "identityVerificationTransport": "disabled",
+      "paymentTransport": "memory",
+      "stripeLivemode": false
+    },
+    "verification": [
+      "previous image id restored",
+      "container health is healthy",
+      "/health succeeds",
+      "rollback evidence is written with restricted permissions"
+    ],
+    "migrationRollback": "do not down-migrate a shared staging database; use backup/restore or a forward-compatible corrective migration"
+  },
+  "budget": {
+    "prepAndParityEstimateEur": 0,
+    "providerActivationSpend": "not scheduled; separate owner/Astra gate required",
+    "maximumUserAuthorizedBudgetEur": 100
+  },
+  "boundaries": {
+    "deployPerformed": false,
+    "providerSecretsMounted": false,
+    "providerMutated": false,
+    "paymentMutated": false,
+    "productionChanged": false,
+    "playStoreChanged": false,
+    "deviceAccessed": false
+  },
+  "next": "Await a separately authorized staging deployment gate for phase 1; keep Identity and Payment provider activation closed."
+}
