@@ -7252,6 +7252,7 @@ class DataService {
     'Solingen': (51.1652, 7.0671),
     'Heidelberg': (49.3988, 8.6724),
     'Herne': (51.5380, 7.2257),
+    'Heilbronn': (49.1427, 9.2109),
   };
 
   static Map<String, (double lat, double lng)> getCities() =>

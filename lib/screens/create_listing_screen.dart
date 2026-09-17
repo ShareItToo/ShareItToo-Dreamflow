@@ -54,6 +54,18 @@ String resolveListingEditorCity({
   throw StateError('Für den Anzeigeneditor ist keine Stadt verfügbar.');
 }
 
+@visibleForTesting
+String resolveListingPayloadCity({
+  required String locationText,
+  required String? registeredCity,
+  required Map<String, (double lat, double lng)> availableCities,
+}) {
+  var city = registeredCity ?? availableCities.keys.first;
+  final derived = DataService.deriveCityFromAddress(locationText);
+  if (derived.isNotEmpty) city = derived;
+  return city;
+}
+
 class CreateListingScreen extends StatefulWidget {
   final Item? existing; // when provided -> edit mode
   final SupplyEnrichmentPrefill? supplyPrefill;
@@ -1397,19 +1409,20 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     }
 
     final allCities = DataService.getCities();
-    String city = _registeredCity ?? allCities.keys.first;
+    final locationText = _addressCtrl.text.trim().isNotEmpty
+        ? _addressCtrl.text.trim()
+        : 'Übergabeort';
+    final city = resolveListingPayloadCity(
+      locationText: locationText,
+      registeredCity: _registeredCity,
+      availableCities: allCities,
+    );
     (double, double) pos = allCities[city] ?? (52.52, 13.405);
 
     // Always use address mode now
-    String locationText = _addressCtrl.text.trim().isNotEmpty
-        ? _addressCtrl.text.trim()
-        : 'Übergabeort';
     if (_selectedAddrLat != null && _selectedAddrLng != null) {
       pos = (_selectedAddrLat!, _selectedAddrLng!);
     }
-    // Try to derive city name from the typed address; fall back to registered city
-    final derived = DataService.deriveCityFromAddress(locationText);
-    if (derived.isNotEmpty) city = derived;
 
     final raw = double.tryParse(_priceCtrl.text.replaceAll(',', '.')) ?? 0.0;
     double pricePerDay;
