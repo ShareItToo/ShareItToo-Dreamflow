@@ -77,6 +77,7 @@
         "targetSourceCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
         "rule": "compare the prior image SQL/runtime contract with migrations 075-087 before any shared Staging forward attempt; health/readiness cannot substitute"
       },
+      "filesystemAndQuiesceInvariant": "validate every existing backup path component (lstat/realpath/owner/mode, no symlink or repository escape) before creating anything; validate the complete Staging container/service label set before stopping any container; check foreign writers immediately before and after pg_dump",
       "failureEvidence": "sanitized mode-0600 fail-closed report retains quiesced service state; services are not resumed after an unsuccessful rehearsal"
     },
     "riskDomainsInOpenRange": [

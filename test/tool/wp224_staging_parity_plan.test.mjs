@@ -49,6 +49,10 @@ test('WP224 staging parity plan is bound and fail-closed', async () => {
     plan.sourceToStagingDelta.protectedRehearsal.priorImageSqlContractComparison.status,
     'required-not-executed',
   );
+  assert.match(
+    plan.sourceToStagingDelta.protectedRehearsal.filesystemAndQuiesceInvariant,
+    /complete Staging container\/service label set/u,
+  );
   assert.match(plan.sourceToStagingDelta.requiredSourceConfig.mfaConfigPlan.injection, /MFA_ENCRYPTION_KEY_FILE/u);
   assert.doesNotMatch(plan.sourceToStagingDelta.requiredSourceConfig.mfaConfigPlan.injection, /MFA_ENCRYPTION_KEY:\s*\$\{/u);
   assert.equal(plan.providerReadinessReadOnly.providerActivationProven, false);
