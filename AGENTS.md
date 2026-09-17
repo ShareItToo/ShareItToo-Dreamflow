@@ -56,6 +56,14 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   no named gate blocks it, continue the same package. If execution must stop,
   return the four-field capsule with the exact preserved paths and next command;
   an idle/completed turn state alone is not a valid blocker or handoff.
+- Before coordinate-based device UI input, reread the current hierarchy and
+  bind the action to the target's current bounds and the active scrollable
+  viewport. After one no-op or unexpected screen, reread state and correct the
+  mechanism; never repeat unchanged blind taps or out-of-bounds swipes.
+- Runtime evidence must follow the product's actual state partition (for
+  example active listings versus drafts) and prove the expected tab, route and
+  post-restart value. Evidence from a neighboring tab or a backend-only write
+  cannot close an explicitly required app projection or edit gate.
 
 ## Project-safe handoffs
 
