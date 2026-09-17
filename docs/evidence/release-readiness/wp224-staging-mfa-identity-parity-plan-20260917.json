@@ -7,7 +7,7 @@
   "repository": {
     "branch": "codex/master-workflow-20260808",
     "deployableSourceCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
-    "planEvidenceRevision": "d27324f2004458db5255276ec70e382f5518ae5a",
+    "planPredecessorRevision": "d27324f2004458db5255276ec70e382f5518ae5a",
     "immutableImage": "shareittoo-api:82221caa2b0fb58e701ded35198bf65e80ac9d03",
     "workingTreeAtCapture": "clean"
   },

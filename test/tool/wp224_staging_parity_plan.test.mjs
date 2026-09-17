@@ -14,6 +14,10 @@ test('WP224 staging parity plan is bound and fail-closed', async () => {
     '82221caa2b0fb58e701ded35198bf65e80ac9d03',
   );
   assert.equal(
+    plan.repository.planPredecessorRevision,
+    'd27324f2004458db5255276ec70e382f5518ae5a',
+  );
+  assert.equal(
     plan.sourceToStagingDelta.sourceCommitDeltaFromObservedStaging.migrationFilesInSourceDelta,
     '075-087',
   );
