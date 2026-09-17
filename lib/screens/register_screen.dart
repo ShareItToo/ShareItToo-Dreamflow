@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:lendify/config/private_pilot_config.dart';
+import 'package:lendify/models/mfa.dart';
 import 'package:lendify/navigation/main_navigation.dart';
 import 'package:lendify/screens/legal_privacy_screen.dart';
 import 'package:lendify/screens/legal_terms_screen.dart';
@@ -11,10 +12,13 @@ import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/developer_preview_service.dart';
 import 'package:lendify/services/firebase_runtime.dart';
+import 'package:lendify/services/mfa_auth_flow.dart';
 import 'package:lendify/theme.dart';
 import 'package:lendify/utils/registration_input_policy.dart';
 import 'package:lendify/widgets/app_popup.dart';
+import 'package:lendify/widgets/mfa_challenge_dialog.dart';
 import 'package:lendify/widgets/social_auth_button.dart';
+import 'package:lendify/widgets/tracked_dialog_route.dart';
 import 'package:provider/provider.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -61,6 +65,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool _didInteract = false;
   int _socialActionEpoch = 0;
+  TrackedDialogRouteHandle<String>? _activeMfaRoute;
 
   @override
   void initState() {
@@ -89,6 +94,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void dispose() {
     _socialActionEpoch += 1;
+    _activeMfaRoute?.dismiss();
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _pwCtrl.dispose();
@@ -98,6 +104,64 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _pwFocus.dispose();
     _pw2Focus.dispose();
     super.dispose();
+  }
+
+  Future<String?> _showMfaCodeDialog(AuthMfaChallenge challenge) async {
+    final handle = TrackedDialogRouteHandle<String>();
+    _activeMfaRoute = handle;
+    try {
+      return await showMfaChallengeDialog(
+        context,
+        challenge: challenge,
+        handle: handle,
+      );
+    } finally {
+      if (identical(_activeMfaRoute, handle)) _activeMfaRoute = null;
+    }
+  }
+
+  Future<AuthResult?> _resolveMfaChallenge(
+    AuthResult initial, {
+    required int noSessionEpoch,
+    required int actionEpoch,
+  }) {
+    return resolveMfaChallenge(
+      initial: initial,
+      prompt: _showMfaCodeDialog,
+      submit: (challenge, code) => AuthService.completeMfaChallenge(
+        challenge: challenge,
+        code: code,
+        expectedSessionEpoch: noSessionEpoch,
+        isActionCurrent: () => _isSocialActionCurrent(actionEpoch),
+      ),
+      isCurrent: () => mounted && _isSocialActionCurrent(actionEpoch),
+      onExpired: () => AppPopup.toast(
+        context,
+        icon: Icons.timer_off_outlined,
+        title: 'Der Zwei-Faktor-Code ist abgelaufen.',
+      ),
+      onRejected: () => AppPopup.toast(
+        context,
+        icon: Icons.error_outline,
+        title: 'Code nicht akzeptiert. Versuche es erneut.',
+      ),
+      onLocked: () => AppPopup.toast(
+        context,
+        icon: Icons.lock_outline,
+        title: 'Zwei-Faktor-Schutz ist vorübergehend gesperrt.',
+      ),
+      onInvalid: () => AppPopup.toast(
+        context,
+        icon: Icons.refresh_outlined,
+        title:
+            'Die Sicherheitsanforderung ist nicht mehr gültig. Bitte neu anmelden.',
+      ),
+      onFailed: () => AppPopup.toast(
+        context,
+        icon: Icons.wifi_off_outlined,
+        title: 'Zwei-Faktor-Anmeldung konnte nicht abgeschlossen werden.',
+      ),
+    );
   }
 
   bool _isOutsideInteractiveArea(Offset globalPosition) {
@@ -295,7 +359,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           !definitelySignedOut) {
         return;
       }
-      final result = await AuthService.signInWithSocialProvider(
+      var result = await AuthService.signInWithSocialProvider(
         provider,
         termsAccepted: _termsAccepted,
         privacyAccepted: _privacyAccepted,
@@ -304,6 +368,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
         expectedSessionEpoch: noSessionEpoch,
         isActionCurrent: () => _isSocialActionCurrent(actionEpoch),
       );
+      final mfaResult = await _resolveMfaChallenge(
+        result,
+        noSessionEpoch: noSessionEpoch,
+        actionEpoch: actionEpoch,
+      );
+      if (mfaResult == null) return;
+      result = mfaResult;
       if (!_isSocialActionCurrent(actionEpoch)) {
         final staleSession = result.session;
         if (staleSession != null) {

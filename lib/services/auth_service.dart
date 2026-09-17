@@ -9,6 +9,7 @@ import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/mfa.dart';
 import 'backend_config.dart';
 import 'backend_http.dart';
 import 'backend_realtime_service.dart';
@@ -477,6 +478,13 @@ class AuthService {
             },
           ),
           persist: (response) async {
+            final challenge = _parseMfaChallenge(response);
+            if (response['mfaRequired'] == true) {
+              if (challenge == null) {
+                throw const BackendException(502, 'invalid_mfa_challenge');
+              }
+              return AuthResult.mfaRequired(challenge);
+            }
             final session = await _saveRemoteSession(
               response,
               expectedGeneration: expectedSessionEpoch,
@@ -1283,6 +1291,13 @@ class AuthService {
               pendingEmail: response['email']?.toString().trim().toLowerCase(),
             );
           }
+          final challenge = _parseMfaChallenge(response);
+          if (response['mfaRequired'] == true) {
+            if (challenge == null) {
+              throw const BackendException(502, 'invalid_mfa_challenge');
+            }
+            return AuthResult.mfaRequired(challenge);
+          }
           return AuthResult.success(
             session: await _saveRemoteSession(
               response,
@@ -1465,6 +1480,135 @@ class AuthService {
       throw _SocialProviderUnavailable(error);
     } on UnsupportedError catch (error) {
       throw _SocialProviderUnavailable(error);
+    }
+  }
+
+  static AuthMfaChallenge? _parseMfaChallenge(
+    Map<String, dynamic> response,
+  ) {
+    final raw = response['mfaChallenge']?.toString() ?? '';
+    final expiry = DateTime.tryParse(response['expiresAt']?.toString() ?? '');
+    if (raw.length < 32 ||
+        raw.length > 200 ||
+        expiry == null ||
+        !expiry.isAfter(DateTime.now())) {
+      return null;
+    }
+    return AuthMfaChallenge(challenge: raw, expiresAt: expiry);
+  }
+
+  /// Completes a server-issued login challenge without persisting the
+  /// challenge or factor code. The new session is persisted only after the
+  /// exact no-session epoch and UI action remain current.
+  static Future<AuthResult> completeMfaChallenge({
+    required AuthMfaChallenge challenge,
+    required String code,
+    required int expectedSessionEpoch,
+    bool Function()? isActionCurrent,
+  }) async {
+    if (!_authAttemptPreflightCurrent(expectedSessionEpoch, isActionCurrent)) {
+      return const AuthResult.failure(AuthFailure.principalChanged);
+    }
+    try {
+      final response = await BackendHttp.requestJson(
+        method: 'POST',
+        path: '/auth/mfa/challenge',
+        body: {'mfaChallenge': challenge.challenge, 'code': code},
+      );
+      if (!_authAttemptActionCurrent(isActionCurrent) ||
+          expectedSessionEpoch != _sessionGeneration) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      final session = await _saveRemoteSession(
+        response,
+        expectedGeneration: expectedSessionEpoch,
+      );
+      final result = AuthResult.success(session: session);
+      if (!_authAttemptActionCurrent(isActionCurrent) ||
+          !await _authResultSessionDefinitelyCurrent(result)) {
+        await _discardPersistedAuthResult(result);
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      return result;
+    } on BackendException catch (error) {
+      if (!_authAttemptPreflightCurrent(
+          expectedSessionEpoch, isActionCurrent)) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      if (error.statusCode == 429 || error.code == 'mfa_temporarily_locked') {
+        return const AuthResult.failure(AuthFailure.mfaLocked);
+      }
+      if (error.statusCode == 401 && error.code == 'mfa_code_invalid') {
+        return const AuthResult.failure(AuthFailure.mfaCodeRejected);
+      }
+      if (error.code == 'mfa_challenge_expired') {
+        return const AuthResult.failure(AuthFailure.mfaChallengeExpired);
+      }
+      if (error.code == 'mfa_challenge_invalid') {
+        return const AuthResult.failure(AuthFailure.mfaChallengeInvalid);
+      }
+      return const AuthResult.failure(AuthFailure.network);
+    } catch (_) {
+      if (!_authAttemptPreflightCurrent(
+          expectedSessionEpoch, isActionCurrent)) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      return const AuthResult.failure(AuthFailure.network);
+    }
+  }
+
+  /// Performs a fresh provider sign-in for MFA management and returns the
+  /// matching Firebase token only to the immediate caller. It is never stored
+  /// or logged and is cleaned up before returning.
+  static Future<String?> reauthenticateSocialProvider(
+    AuthSocialProvider provider, {
+    required AuthSessionOwner owner,
+  }) async {
+    if (!socialProviderEnabled(provider) ||
+        !await isSessionOwnerDefinitelyCurrent(owner)) {
+      return null;
+    }
+    return _providerSdkMutationQueue.run(() async {
+      final acquisition = _SocialSdkAcquisition();
+      final sdkEpoch = ++_providerSdkOperationGeneration;
+      try {
+        await _requireMfaOwner(owner);
+        final token = await _firebaseSocialIdToken(
+          provider,
+          acquisition: acquisition,
+          requireCurrent: () {
+            if (owner.epoch != _sessionGeneration) {
+              throw const RemoteAuthAttemptSuperseded();
+            }
+          },
+        );
+        await _requireMfaOwner(owner);
+        return token;
+      } finally {
+        try {
+          if (acquisition.firebaseUid != null &&
+              shouldCleanUpPhoneIdentity(
+                attemptEpoch: sdkEpoch,
+                currentAttemptEpoch: _providerSdkOperationGeneration,
+                signedInUid: acquisition.firebaseUid,
+                currentUid: FirebaseAuth.instance.currentUser?.uid,
+              )) {
+            await FirebaseAuth.instance.signOut();
+          }
+        } catch (_) {}
+        try {
+          if (acquisition.googleAcquired) await GoogleSignIn.instance.signOut();
+          if (acquisition.facebookAcquired) {
+            await FacebookAuth.instance.logOut();
+          }
+        } catch (_) {}
+      }
+    });
+  }
+
+  static Future<void> _requireMfaOwner(AuthSessionOwner owner) async {
+    if (!await isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const RemoteAuthAttemptSuperseded();
     }
   }
 
@@ -1749,6 +1893,11 @@ enum AuthFailure {
   consentRequired,
   verificationDeliveryUnavailable,
   network,
+  mfaCodeRejected,
+  mfaLocked,
+  mfaRequired,
+  mfaChallengeExpired,
+  mfaChallengeInvalid,
   emailInUse,
   notImplemented,
   socialCancelled,
@@ -1766,16 +1915,25 @@ class AuthResult {
   final AuthSession? session;
   final bool verificationEmailSent;
   final String? pendingEmail;
+  final AuthMfaChallenge? mfaChallenge;
 
   const AuthResult.success({
     this.session,
     this.verificationEmailSent = false,
     this.pendingEmail,
+    this.mfaChallenge,
   })  : ok = true,
         failure = null;
+  const AuthResult.mfaRequired(this.mfaChallenge)
+      : ok = false,
+        failure = AuthFailure.mfaRequired,
+        session = null,
+        verificationEmailSent = false,
+        pendingEmail = null;
   const AuthResult.failure(this.failure)
       : ok = false,
         session = null,
         verificationEmailSent = false,
-        pendingEmail = null;
+        pendingEmail = null,
+        mfaChallenge = null;
 }

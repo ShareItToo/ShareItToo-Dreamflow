@@ -7,6 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:lendify/models/security.dart';
 import 'package:lendify/screens/login_screen.dart';
 import 'package:lendify/services/account_security_service.dart';
+import 'package:lendify/services/auth_service.dart';
+import 'package:lendify/models/mfa.dart';
+import 'package:lendify/screens/two_factor_auth_screen.dart';
+import 'package:lendify/services/mfa_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/theme.dart';
 import 'package:lendify/widgets/app_popup.dart';
@@ -14,8 +18,9 @@ import 'package:lendify/widgets/tracked_dialog_route.dart';
 
 class SecurityScreen extends StatefulWidget {
   final AccountSecurityService? securityService;
+  final MfaService? mfaService;
 
-  const SecurityScreen({super.key, this.securityService});
+  const SecurityScreen({super.key, this.securityService, this.mfaService});
 
   @override
   State<SecurityScreen> createState() => _SecurityScreenState();
@@ -23,6 +28,7 @@ class SecurityScreen extends StatefulWidget {
 
 class _SecurityScreenState extends State<SecurityScreen> {
   late final AccountSecurityService _securityService;
+  late final MfaService _mfaService;
   StreamSubscription<String>? _securityStateSubscription;
   final _currentCtrl = TextEditingController();
   final _nextCtrl = TextEditingController();
@@ -40,20 +46,28 @@ class _SecurityScreenState extends State<SecurityScreen> {
   List<SecurityDevice> _devices = const [];
   int _loadRevision = 0;
   int _securityEpoch = 0;
+  MfaStatus? _mfaStatus;
+  AuthSessionOwner? _mfaOwner;
+  bool _mfaLoading = true;
+  String? _mfaError;
+  int _mfaEpoch = 0;
 
   @override
   void initState() {
     super.initState();
     _securityService = widget.securityService ?? const AccountSecurityService();
+    _mfaService = widget.mfaService ?? const MfaService();
     _securityStateSubscription =
         SharedPersistenceSync.changes.listen(_handleSecurityStateChange);
     unawaited(_load());
+    unawaited(_loadMfaStatus());
   }
 
   @override
   void dispose() {
     _loadRevision += 1;
     _securityEpoch += 1;
+    _mfaEpoch += 1;
     _securityStateSubscription?.cancel();
     _currentCtrl.dispose();
     _nextCtrl.dispose();
@@ -77,6 +91,57 @@ class _SecurityScreenState extends State<SecurityScreen> {
       _loading = _securityService.isAvailable;
     });
     if (_securityService.isAvailable) unawaited(_load());
+    unawaited(_loadMfaStatus());
+  }
+
+  Future<void> _loadMfaStatus() async {
+    final epoch = ++_mfaEpoch;
+    if (!_mfaService.isAvailable) {
+      if (!mounted || epoch != _mfaEpoch) return;
+      setState(() {
+        _mfaLoading = false;
+        _mfaStatus = null;
+        _mfaOwner = null;
+        _mfaError = 'Server-Konfiguration für MFA ist nicht erreichbar.';
+      });
+      return;
+    }
+    setState(() {
+      _mfaLoading = true;
+      _mfaError = null;
+    });
+    try {
+      final session = await AuthService.readSession();
+      if (session == null) {
+        throw const MfaException(401, 'authentication_required');
+      }
+      final owner = AuthService.captureSessionOwner(session);
+      final status = await _mfaService.getStatus(owner);
+      if (!mounted ||
+          epoch != _mfaEpoch ||
+          !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+        return;
+      }
+      setState(() {
+        _mfaOwner = owner;
+        _mfaStatus = status;
+        _mfaLoading = false;
+      });
+    } on MfaException catch (error) {
+      if (!mounted || epoch != _mfaEpoch) return;
+      setState(() {
+        _mfaLoading = false;
+        _mfaError = error.code == 'principal_changed'
+            ? 'Die Sitzung hat sich geändert. Bitte erneut laden.'
+            : 'Serverstatus konnte nicht geladen werden.';
+      });
+    } catch (_) {
+      if (!mounted || epoch != _mfaEpoch) return;
+      setState(() {
+        _mfaLoading = false;
+        _mfaError = 'Serverstatus konnte nicht geladen werden.';
+      });
+    }
   }
 
   void _clearPasswordFields() {
@@ -606,12 +671,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                 icon: Icons.phonelink_lock_outlined,
               ),
               const SizedBox(height: 10),
-              const _UnavailableCard(
-                title: 'Zwei-Faktor-Schutz ist noch nicht verfügbar.',
-                message: 'Eine lokale Einstellung schützt keine Anmeldung. '
-                    'Aktivierung und Codes bleiben bis zu einem '
-                    'serverautoritativen Flow deaktiviert.',
-              ),
+              _mfaCard(theme),
               const SizedBox(height: 18),
               const _SectionHeader(
                 title: 'Angemeldete Geräte',
@@ -764,6 +824,52 @@ class _SecurityScreenState extends State<SecurityScreen> {
           ],
         ),
       );
+
+  Widget _mfaCard(ThemeData theme) {
+    final status = _mfaStatus;
+    return _SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_mfaLoading)
+            const Center(child: CircularProgressIndicator())
+          else if (_mfaError != null) ...[
+            Text(_mfaError!, style: TextStyle(color: theme.colorScheme.error)),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _loadMfaStatus,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Serverstatus erneut laden'),
+            ),
+          ] else if (status != null) ...[
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                  status.enabled ? Icons.verified_user : Icons.shield_outlined),
+              title: Text(status.enabled ? 'Aktiviert' : 'Nicht aktiviert'),
+              subtitle: Text(status.enabled
+                  ? '${status.recoveryCodesRemaining} Wiederherstellungscodes verfügbar.'
+                  : 'Serverstatus bestätigt; Authenticator-App kann eingerichtet werden.'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _mfaOwner == null
+                  ? null
+                  : () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => TwoFactorAuthScreen(
+                            mfaService: _mfaService,
+                          ),
+                        ),
+                      ),
+              icon: const Icon(Icons.manage_accounts_outlined),
+              label: const Text('Zwei-Faktor-Schutz verwalten'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
   Widget _deviceCard(ThemeData theme) => _SectionCard(
         child: Column(

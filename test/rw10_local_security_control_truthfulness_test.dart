@@ -51,8 +51,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Zwei-Faktor-Schutz ist noch nicht verfügbar.'),
-        findsOneWidget);
+    expect(
+      find.text('Server-Konfiguration für Zwei-Faktor-Schutz ist nicht erreichbar.'),
+      findsOneWidget,
+    );
+    expect(find.text('Erneut prüfen'), findsOneWidget);
     expect(find.byType(Switch), findsNothing);
     expect(find.text('Aktiviert'), findsNothing);
     expect(find.text('SMS‑Code'), findsNothing);

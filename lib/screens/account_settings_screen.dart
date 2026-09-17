@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:lendify/screens/profile_info_screen.dart';
 import 'package:lendify/screens/contact_data_screen.dart';
 import 'package:lendify/screens/security_screen.dart';
+import 'package:lendify/screens/two_factor_auth_screen.dart';
 import 'package:lendify/screens/payment_methods_screen.dart';
 import 'package:lendify/screens/stripe_payout_account_screen.dart';
 import 'package:lendify/screens/invoices_screen.dart';
@@ -166,8 +167,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                       _RowTile(
                         icon: Icons.phonelink_lock_outlined,
                         label: 'Zwei‑Faktor‑Authentifizierung',
-                        subtitle:
-                            'Noch nicht verfügbar – die sichere Server-Anbindung folgt vor dem Produktionsstart.',
+                        subtitle: 'Serverstatus und Einrichtung öffnen',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const TwoFactorAuthScreen(),
+                          ),
+                        ),
                       ),
                     ]),
                     const SizedBox(height: 28),

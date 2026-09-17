@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:lendify/models/mfa.dart';
 import 'package:lendify/navigation/main_navigation.dart';
 import 'package:lendify/navigation/main_nav_controller.dart';
 import 'package:lendify/screens/register_screen.dart';
@@ -10,11 +11,13 @@ import 'package:lendify/services/contact_verification_service.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/developer_preview_service.dart';
 import 'package:lendify/services/firebase_runtime.dart';
+import 'package:lendify/services/mfa_auth_flow.dart';
 import 'package:lendify/services/session_transition_service.dart';
 import 'package:lendify/theme.dart';
 import 'package:lendify/widgets/sit_logo_header.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/blur_modal.dart';
+import 'package:lendify/widgets/mfa_challenge_dialog.dart';
 import 'package:lendify/widgets/social_auth_button.dart';
 import 'package:lendify/widgets/tracked_dialog_route.dart';
 import 'package:provider/provider.dart';
@@ -65,6 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _sessionTransitionInFlight = false;
   int _loginActionEpoch = 0;
   TrackedDialogRouteHandle<void>? _activeVerificationResultRoute;
+  TrackedDialogRouteHandle<String>? _activeMfaRoute;
 
   void _exitToExplore() {
     try {
@@ -210,6 +214,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _loginActionEpoch += 1;
     _emailCtrl.removeListener(_handleLoginEmailChanged);
     _activeVerificationResultRoute?.dismiss();
+    _activeMfaRoute?.dismiss();
     _emailCtrl.dispose();
     _pwCtrl.dispose();
     _emailFocus.dispose();
@@ -220,6 +225,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _handleLoginEmailChanged() {
     _loginActionEpoch += 1;
     _activeVerificationResultRoute?.dismiss();
+    _activeMfaRoute?.dismiss();
   }
 
   LoginEmailVerificationOwner _captureLoginEmailOwner() =>
@@ -297,6 +303,64 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<String?> _showMfaCodeDialog(AuthMfaChallenge challenge) async {
+    final handle = TrackedDialogRouteHandle<String>();
+    _activeMfaRoute = handle;
+    try {
+      return await showMfaChallengeDialog(
+        context,
+        challenge: challenge,
+        handle: handle,
+      );
+    } finally {
+      if (identical(_activeMfaRoute, handle)) _activeMfaRoute = null;
+    }
+  }
+
+  Future<AuthResult?> _resolveMfaChallenge(
+    AuthResult initial, {
+    required int noSessionEpoch,
+    required bool Function() isActionCurrent,
+  }) async {
+    return resolveMfaChallenge(
+      initial: initial,
+      prompt: _showMfaCodeDialog,
+      submit: (challenge, code) => AuthService.completeMfaChallenge(
+        challenge: challenge,
+        code: code,
+        expectedSessionEpoch: noSessionEpoch,
+        isActionCurrent: isActionCurrent,
+      ),
+      isCurrent: () => mounted && isActionCurrent(),
+      onExpired: () => AppPopup.toast(
+        context,
+        icon: Icons.timer_off_outlined,
+        title: 'Der Zwei-Faktor-Code ist abgelaufen.',
+      ),
+      onRejected: () => AppPopup.toast(
+        context,
+        icon: Icons.error_outline,
+        title: 'Code nicht akzeptiert. Versuche es erneut.',
+      ),
+      onLocked: () => AppPopup.toast(
+        context,
+        icon: Icons.lock_outline,
+        title: 'Zwei-Faktor-Schutz ist vorübergehend gesperrt.',
+      ),
+      onInvalid: () => AppPopup.toast(
+        context,
+        icon: Icons.refresh_outlined,
+        title:
+            'Die Sicherheitsanforderung ist nicht mehr gültig. Bitte neu anmelden.',
+      ),
+      onFailed: () => AppPopup.toast(
+        context,
+        icon: Icons.wifi_off_outlined,
+        title: 'Zwei-Faktor-Anmeldung konnte nicht abgeschlossen werden.',
+      ),
+    );
+  }
+
   bool _isOutsideCard(Offset globalPosition) {
     final ctx = _cardKey.currentContext;
     if (ctx == null) return true;
@@ -361,12 +425,19 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      final result = await AuthService.signInWithEmailPassword(
+      var result = await AuthService.signInWithEmailPassword(
         email: loginOwner.normalizedEmail,
         password: loginPassword,
         expectedSessionEpoch: noSessionEpoch,
         isActionCurrent: () => _isLoginEmailOwnerCurrent(loginOwner),
       );
+      final mfaResult = await _resolveMfaChallenge(
+        result,
+        noSessionEpoch: noSessionEpoch,
+        isActionCurrent: () => _isLoginEmailOwnerCurrent(loginOwner),
+      );
+      if (mfaResult == null) return;
+      result = mfaResult;
       if (!_isLoginEmailOwnerCurrent(loginOwner)) {
         final staleSession = result.session;
         if (staleSession != null) {
@@ -578,11 +649,18 @@ class _LoginScreenState extends State<LoginScreen> {
     AuthSessionOwner? successfulSessionOwner;
     setState(() => _busy = true);
     try {
-      final result = await AuthService.signInWithSocialProvider(
+      var result = await AuthService.signInWithSocialProvider(
         provider,
         expectedSessionEpoch: noSessionEpoch,
         isActionCurrent: () => _isLoginActionCurrent(actionEpoch),
       );
+      final mfaResult = await _resolveMfaChallenge(
+        result,
+        noSessionEpoch: noSessionEpoch,
+        isActionCurrent: () => _isLoginActionCurrent(actionEpoch),
+      );
+      if (mfaResult == null) return;
+      result = mfaResult;
       if (!_isLoginActionCurrent(actionEpoch)) {
         final staleSession = result.session;
         if (staleSession != null) {

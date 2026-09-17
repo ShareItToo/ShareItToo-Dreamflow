@@ -7,6 +7,7 @@ process.env.DATABASE_URL ??= 'postgresql://127.0.0.1:1/sit_test';
 
 const {
   beginTotpEnrollment,
+  cancelTotpEnrollment,
   confirmTotpEnrollment,
   createLoginChallenge,
   verifyLoginChallenge,
@@ -59,6 +60,23 @@ test('a disabled factor can be re-enrolled only after the route-level reauthenti
   });
   assert.match(result.secret, /^[A-Z2-7]+$/u);
   assert.equal(client.calls.filter(({ sql }) => /UPDATE mfa_totp_factors/u.test(sql)).length, 1);
+});
+
+test('pending enrollment can be cancelled without returning secret material', async () => {
+  const client = makeClient((sql) => {
+    if (/SELECT user_id, encrypted_secret/u.test(sql)) {
+      return {
+        rows: [{ user_id: 'user-1', status: 'pending', encrypted_secret: 'ciphertext' }],
+        rowCount: 1,
+      };
+    }
+    if (/UPDATE mfa_totp_factors/u.test(sql)) return { rows: [], rowCount: 1 };
+    throw new Error(`unexpected query: ${sql}`);
+  });
+  const result = await cancelTotpEnrollment(client, { userId: 'user-1' });
+  assert.deepEqual(result, { cancelled: true });
+  assert.equal(client.calls.some(({ parameters }) =>
+    parameters?.some((value) => value === 'ciphertext')), false);
 });
 
 test('confirm enables only after a valid first factor and returns recovery codes once', async () => {

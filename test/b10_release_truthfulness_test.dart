@@ -237,7 +237,7 @@ void main() {
     final notifications =
         await File('lib/screens/notifications_screen.dart').readAsString();
 
-    expect(account, isNot(contains('TwoFactorAuthScreen')));
+    expect(account, contains('TwoFactorAuthScreen'));
     expect(account, isNot(contains('VerificationIntroScreen')));
     expect(account, isNot(contains('VerificationScreen')));
     expect(account, contains('Noch nicht verfügbar'));

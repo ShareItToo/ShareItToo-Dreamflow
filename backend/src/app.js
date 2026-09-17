@@ -421,6 +421,7 @@ import {
 import {
   beginTotpEnrollment,
   confirmTotpEnrollment,
+  cancelTotpEnrollment,
   createLoginChallenge,
   disableTotp,
   getMfaStatus,
@@ -2455,6 +2456,28 @@ export function createApp({
       return result;
     });
     res.set('Cache-Control', 'private, no-store').status(201).json(outcome);
+  }));
+
+  app.post('/v1/auth/mfa/enroll/cancel', requireAuth, requireActiveAccount, mfaManageLimiter, asyncRoute(async (req, res) => {
+    const outcome = await inTransaction(async (client) => {
+      await requireFreshMfaReauthentication(client, {
+        userId: req.auth.userId,
+        currentPassword: req.body?.currentPassword,
+        socialIdToken: req.body?.reauthSocialIdToken,
+        verifySocialToken,
+      });
+      const result = await cancelTotpEnrollment(client, { userId: req.auth.userId });
+      await writeAudit(client, {
+        actor: req.actor,
+        action: 'auth.mfa_enrollment_cancelled',
+        resourceType: 'user',
+        resourceId: req.auth.userId,
+        requestId: req.requestId,
+        metadata: {},
+      });
+      return result;
+    });
+    res.set('Cache-Control', 'private, no-store').json(outcome);
   }));
 
   app.post('/v1/auth/mfa/confirm', requireAuth, requireActiveAccount, mfaManageLimiter, asyncRoute(async (req, res) => {

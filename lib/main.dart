@@ -155,7 +155,6 @@ class AppRoot extends StatefulWidget {
 }
 
 class _AppRootState extends State<AppRoot> {
-
   // Preview-only: auto sign-in with a local demo user in developer builds.
   static const bool _enableDeveloperPreviewDemoAuth = true;
 
@@ -168,8 +167,8 @@ class _AppRootState extends State<AppRoot> {
     // FutureBuilder on every inherited-widget rebuild. Restarting a pending
     // session read could otherwise put the visible startup surface back into
     // loading without a new process or principal transition.
-    _sessionFuture = widget.sessionLoader?.call() ??
-        _loadSessionWithPreviewFallback();
+    _sessionFuture =
+        widget.sessionLoader?.call() ?? _loadSessionWithPreviewFallback();
   }
 
   Future<AuthSession?> _loadSessionWithPreviewFallback() async {
@@ -193,7 +192,7 @@ class _AppRootState extends State<AppRoot> {
           email: AuthService.demoEmail,
           password: AuthService.demoPassword,
         );
-        if (result.ok) {
+        if (result.ok && result.session != null) {
           return await AuthService.readSession();
         }
       }

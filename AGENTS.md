@@ -161,6 +161,13 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 - Run `git diff --check` before staging. Preserve the analyzer baseline and do
   not suppress forbidden analyzer codes to make a check pass.
 
+## Pilot closure truthfulness
+
+- Never hide, remove, permanently disable, downgrade to toast-only, demo-only,
+  placeholder or silent no-op any reachable control merely to close a finding.
+  Every reachable function must have a real persisted or server-authoritative
+  effect with explicit success, failure, retry and stale-owner/session proof.
+
 Protected Android signing and Firebase files are local, Git-ignored inputs.
 Validate their presence through repository tooling without printing values.
 Release-candidate, Store, live-provider and production commands are separate

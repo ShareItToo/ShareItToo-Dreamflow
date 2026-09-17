@@ -150,6 +150,23 @@ export async function confirmTotpEnrollment(client, { userId, code }) {
   return Object.freeze({ recoveryCodes });
 }
 
+export async function cancelTotpEnrollment(client, { userId }) {
+  const factor = await factorForUser(client, userId, { forUpdate: true });
+  if (!factor || factor.status !== 'pending') {
+    throw new MfaWorkflowError(409, 'mfa_enrollment_not_pending');
+  }
+  await client.query(
+    `UPDATE mfa_totp_factors
+        SET status = 'disabled', encrypted_secret = NULL, enabled_at = NULL,
+            recovery_code_hashes = '[]'::jsonb, last_used_step = NULL,
+            failed_attempts = 0, locked_until = NULL,
+            enrollment_idempotency_key = NULL
+      WHERE user_id = $1 AND status = 'pending'`,
+    [userId],
+  );
+  return Object.freeze({ cancelled: true });
+}
+
 async function consumeFactorCode(client, factor, code) {
   const key = requireEncryptionKey();
   const now = new Date();

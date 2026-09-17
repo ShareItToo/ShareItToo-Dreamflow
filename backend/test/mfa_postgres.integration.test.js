@@ -112,7 +112,7 @@ if (!databaseUrl) {
       assertPrivateNoStore(concurrentEnrollments[0].response);
       assertPrivateNoStore(concurrentEnrollments[1].response);
       assert.equal(concurrentEnrollments[0].body.secret, concurrentEnrollments[1].body.secret);
-      const enroll = concurrentEnrollments[0];
+      let enroll = concurrentEnrollments[0];
       await assert.rejects(
         database.query(
           `UPDATE mfa_totp_factors SET encrypted_secret = NULL WHERE user_id = $1`,
@@ -131,6 +131,30 @@ if (!databaseUrl) {
         body: { currentPassword: credential },
       });
       assert.equal(conflict.response.status, 409);
+      const pendingStatus = await request('/v1/auth/mfa/status', { headers: auth });
+      assert.equal(pendingStatus.response.status, 200);
+      assert.equal(pendingStatus.body.pending, true);
+      const cancelPending = await request('/v1/auth/mfa/enroll/cancel', {
+        method: 'POST',
+        headers: auth,
+        body: { currentPassword: credential },
+      });
+      assert.equal(cancelPending.response.status, 200);
+      assertPrivateNoStore(cancelPending.response);
+      const cancelledFactor = await database.query(
+        'SELECT status, encrypted_secret FROM mfa_totp_factors WHERE user_id = $1',
+        [credentialUser],
+      );
+      assert.equal(cancelledFactor.rows[0].status, 'disabled');
+      assert.equal(cancelledFactor.rows[0].encrypted_secret, null);
+      const restartedEnrollment = await request('/v1/auth/mfa/enroll', {
+        method: 'POST',
+        headers: { ...auth, 'idempotency-key': 'mfa-integration-enroll-restarted' },
+        body: { currentPassword: credential },
+      });
+      assert.equal(restartedEnrollment.response.status, 201);
+      assertPrivateNoStore(restartedEnrollment.response);
+      enroll = restartedEnrollment;
 
       const confirm = await request('/v1/auth/mfa/confirm', {
         method: 'POST', headers: auth,
@@ -256,12 +280,14 @@ if (!databaseUrl) {
         `SELECT action, metadata
            FROM audit_log
           WHERE actor_id = $1 AND action IN (
-            'auth.mfa_enrollment_started', 'auth.mfa_enabled', 'auth.mfa_disabled'
+            'auth.mfa_enrollment_started', 'auth.mfa_enrollment_cancelled',
+            'auth.mfa_enabled', 'auth.mfa_disabled'
           )
           ORDER BY created_at ASC`,
         [credentialUser],
       );
       assert.ok(credentialMfaAudit.rows.some((row) => row.action === 'auth.mfa_enrollment_started'));
+      assert.ok(credentialMfaAudit.rows.some((row) => row.action === 'auth.mfa_enrollment_cancelled'));
       assert.ok(credentialMfaAudit.rows.some((row) => row.action === 'auth.mfa_enabled'));
       assert.ok(credentialMfaAudit.rows.some((row) => row.action === 'auth.mfa_disabled'));
       for (const row of credentialMfaAudit.rows) {
