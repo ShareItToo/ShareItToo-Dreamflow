@@ -192,6 +192,7 @@
       },
       "wp247BootstrapConfigParity": {
         "status": "implemented-not-retried",
+        "fixCommit": "1df258762c9a7823771957cdcac839c91ce2707e",
         "observedAttempt": {
           "opsCommit": "8852ec38bdf23ebd4d793e3ae03875eba03defb8",
           "failureCode": "bootstrap_migrations_failed",
