@@ -13,8 +13,8 @@ import {
 const validEnvironment = {
   DEPLOYMENT_ENVIRONMENT: 'test',
   SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
-  SIT_STAGING_ALLOWED_USER_IDS: 'wp254-green-owner,wp254-green-renter',
-  SIT_STAGING_PUBLIC_LISTING_IDS: 'wp254-green-listing-001',
+  SIT_STAGING_ALLOWED_USER_IDS: 'synthetic-owner-a,synthetic-renter-b',
+  SIT_STAGING_PUBLIC_LISTING_IDS: 'synthetic-listing-001',
   SIT_STAGING_PUBLIC_UPLOAD_NAMES: 'fixture-full.webp,fixture-thumb.webp',
 };
 
@@ -22,9 +22,9 @@ test('staging cohort configuration is exact and fail-closed', () => {
   const configuration = readStagingAccessConfiguration(validEnvironment);
   assert.equal(configuration.enabled, true);
   assert.equal(configuration.valid, true);
-  assert.equal(isStagingUserAllowed(configuration, 'wp254-green-owner'), true);
+  assert.equal(isStagingUserAllowed(configuration, 'synthetic-owner-a'), true);
   assert.equal(isStagingUserAllowed(configuration, 'foreign-user'), false);
-  assert.equal(stagingGuestListingAllowed(configuration, 'wp254-green-listing-001'), true);
+  assert.equal(stagingGuestListingAllowed(configuration, 'synthetic-listing-001'), true);
   assert.equal(stagingGuestListingAllowed(configuration, 'foreign-listing'), false);
   assert.equal(stagingGuestUploadAllowed(configuration, 'fixture-full.webp'), true);
   assert.equal(stagingGuestUploadAllowed(configuration, 'foreign.webp'), false);
@@ -36,7 +36,7 @@ test('empty, malformed and production configurations cannot open protected acces
     SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
   });
   assert.equal(empty.valid, false);
-  assert.equal(isStagingUserAllowed(empty, 'wp254-green-owner'), false);
+  assert.equal(isStagingUserAllowed(empty, 'synthetic-owner-a'), false);
   assert.equal(stagingAnonymousPathAllowed(empty, { method: 'GET', path: '/version' }), false);
 
   const malformed = readStagingAccessConfiguration({
@@ -44,7 +44,7 @@ test('empty, malformed and production configurations cannot open protected acces
     SIT_STAGING_ALLOWED_USER_IDS: 'owner with spaces',
   });
   assert.equal(malformed.valid, false);
-  assert.equal(isStagingUserAllowed(malformed, 'wp254-green-owner'), false);
+  assert.equal(isStagingUserAllowed(malformed, 'synthetic-owner-a'), false);
   assert.throws(
     () => readStagingAccessConfiguration({
       ...validEnvironment,
