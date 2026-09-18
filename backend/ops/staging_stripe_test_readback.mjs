@@ -85,6 +85,12 @@ try {
   await docker(['create','--name',resources.bootstrap,...labels,'--network',resources.network,...envArgs,CANDIDATE_IMAGE,'node','--input-type=module','-e',"import { initializeDatabase, pool } from '/app/src/db.js'; await initializeDatabase(); await pool.end();"]); created.push(['container',resources.bootstrap]);
   await docker(['start',resources.database]); await waitPg(resources.database); await docker(['exec','-i',resources.database,'pg_restore','-U','shareittoo_rehearsal','-d','shareittoo_rehearsal','--no-owner','--no-acl'], { input: createReadStream(DUMP) }); await docker(['start',resources.bootstrap]); const exit = text(await docker(['wait',resources.bootstrap])); if (exit !== '0') fail('bootstrap_migrations_failed');
   const mappings = await dbQuery(resources.database, mappingSql); const rows = Array.isArray(mappings) ? mappings : [];
+  const mappingPath = process.env.SIT_WP250_MAPPING_PATH;
+  if (mappingPath) {
+    if (!mappingPath.startsWith('/tmp/sit-wp250-map-')) fail('mapping_path_invalid');
+    await writeFile(mappingPath, `${JSON.stringify(rows)}\n`, { mode: 0o600 });
+    await chmod(mappingPath, 0o600);
+  }
   const reads = { objects: 0, objectExists: 0, testModeConfirmed: 0, amountCurrencyMatch: 0, chargeBindingMatch: 0, unknown: 0, blocked: 0, statusCounts: {} };
   for (const row of rows) {
     const refunds = Array.isArray(row.refunds) ? row.refunds : [];

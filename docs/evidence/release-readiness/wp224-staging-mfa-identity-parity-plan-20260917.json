@@ -284,7 +284,7 @@
         }
       },
       "wp250StripeTestProviderReadback": {
-        "status": "blocked-missing-test-credential",
+        "status": "connector-readback-operational-release-blocked",
         "executionTarget": "sit-staging-vps",
         "opsCheckout": "/docker/shareittoo/staging-builds/8e7283e69c4f052ac4357c9e496ceb5ece801c20",
         "opsCommit": "8e7283e69c4f052ac4357c9e496ceb5ece801c20",
@@ -297,24 +297,25 @@
         "stripe": {
           "accountContext": "ShareItToo Sandbox",
           "livemode": false,
-          "keyClass": "missing",
+          "keyClass": "connector-read-only",
           "readOnlyAllowlist": ["GET /v1/refunds/{id}", "GET /v1/charges/{id}"],
           "writes": false
         },
         "mapping": "disposable restore produced 2 affected payments and 4 refund references; provider IDs held only in temporary private mapping and deleted",
-        "providerReadback": "not attempted: staging STRIPE_SECRET_KEY is empty/missing; all 4 references remain UNKNOWN/BLOCKED",
+        "providerReadback": "official Stripe connector GETs attempted for all 4 deduplicated original references; all returned UNKNOWN/not-found (synthetic memory references are not Stripe evidence); no fallback listing/search used",
+        "providerCounts": "exists=0; testModeConfirmed=0; amountCurrencyMatch=0; chargeBindingMatch=0; unknown=4; blocked=0",
         "evidence": {
-          "path": "/docker/shareittoo/backups/rehearsals/staging-wp250-stripe-readback-20260918003300-de779560.json",
+          "path": "/docker/shareittoo/backups/rehearsals/staging-wp250-stripe-readback-20260918004800-connector.json",
           "mode": "0600",
-          "bytes": 1127,
-          "sha256": "fcd98aeae9bb078e5d707e5a3b6e27092b4caa53918e1d02f2487ea0b5fb4ede"
+          "bytes": 1488,
+          "sha256": "7b509988b85951d0cfce40e0bfe1b54f2828d1ccee917689ff4c22be75bfa2c5"
         },
         "cleanup": true,
         "disposableAbsent": true,
         "liveDatabaseMutated": false,
         "liveReadback": "staging API exited/0; staging PG schema 001-074",
         "providerTraffic": false,
-        "nextGate": "owner must provide/authorize an existing Stripe TEST restricted key or equivalent supported read-only access; then rerun GET-only readback"
+        "nextGate": "provider truth remains blocked: original references are synthetic/not-found in Stripe Sandbox; no remediation or release action permitted"
       },
       "priorImageSqlContractComparison": {
         "status": "required-not-executed",
