@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 import jwt from 'jsonwebtoken';
 
 import { config } from './config.js';
+import { isStagingUserAllowed } from './staging_access_gate.js';
 
 const scrypt = promisify(crypto.scrypt);
 export function normalizeEmail(value) {
@@ -107,6 +108,9 @@ export function requireAuth(req, res, next) {
   if (!token) return res.status(401).json({ error: 'authentication_required' });
   try {
     const payload = verifyAccessToken(token);
+    if (config.stagingAccess.enabled && !isStagingUserAllowed(config.stagingAccess, payload.sub)) {
+      return res.status(403).json({ error: 'staging_account_not_allowlisted' });
+    }
     req.auth = { userId: payload.sub, sessionId: payload.sid, email: payload.email };
     return next();
   } catch {

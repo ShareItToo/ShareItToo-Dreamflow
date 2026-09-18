@@ -33,6 +33,10 @@ function challengeHash(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
+export function hashLoginChallenge(value) {
+  return challengeHash(value);
+}
+
 async function factorForUser(client, userId, { forUpdate = false } = {}) {
   const result = await client.query(
     `SELECT user_id, encrypted_secret, status, recovery_code_hashes,

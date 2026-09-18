@@ -420,6 +420,7 @@ import {
   bearerToken,
   defaultProfile,
   hashPassword,
+  hashActionToken,
   hashRefreshToken,
   isValidBirthDate,
   isValidEmail,
@@ -436,12 +437,19 @@ import {
   verifyPassword,
 } from './security.js';
 import {
+  isStagingUserAllowed,
+  stagingAnonymousPathAllowed,
+  stagingGuestListingAllowed,
+  stagingGuestUploadAllowed,
+} from './staging_access_gate.js';
+import {
   beginTotpEnrollment,
   confirmTotpEnrollment,
   cancelTotpEnrollment,
   createLoginChallenge,
   disableTotp,
   getMfaStatus,
+  hashLoginChallenge,
   isMfaEnabled,
   MfaWorkflowError,
   verifyLoginChallenge,
@@ -546,6 +554,49 @@ function identifier(value, prefix) {
 function ensureObject(value, code = 'invalid_payload') {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new HttpError(400, code);
   return { ...value };
+}
+
+function stagingAccessMiddleware(req, res, next) {
+  if (!config.stagingAccess.enabled) return next();
+  if (!config.stagingAccess.valid) {
+    return res.status(503).json({ error: 'staging_access_configuration_invalid' });
+  }
+  if (req.method === 'OPTIONS') return next();
+  const token = bearerToken(req);
+  if (!token) {
+    if (stagingAnonymousPathAllowed(config.stagingAccess, req)) {
+      req.stagingAccess = { authenticated: false };
+      return next();
+    }
+    return res.status(401).json({ error: 'staging_access_required' });
+  }
+  let payload;
+  try {
+    payload = verifyAccessToken(token);
+  } catch {
+    return res.status(401).json({ error: 'invalid_or_expired_session' });
+  }
+  if (!isStagingUserAllowed(config.stagingAccess, payload.sub)) {
+    return res.status(403).json({ error: 'staging_account_not_allowlisted' });
+  }
+  req.stagingAccess = { authenticated: true, userId: payload.sub };
+  return next();
+}
+
+function assertStagingUserAllowed(userId) {
+  if (config.stagingAccess.enabled && !isStagingUserAllowed(config.stagingAccess, userId)) {
+    throw new HttpError(403, 'staging_account_not_allowlisted');
+  }
+}
+
+function assertStagingRegistrationClosed() {
+  if (config.stagingAccess.enabled) {
+    throw new HttpError(403, 'staging_registration_disabled');
+  }
+}
+
+function assertStagingActionTokenOwner(row) {
+  if (config.stagingAccess.enabled && row?.id) assertStagingUserAllowed(row.id);
 }
 
 const requireActiveAccount = asyncRoute(async (req, _res, next) => {
@@ -929,7 +980,7 @@ function assertBlueOceanListingTechnicalAccess() {
   }
 }
 
-function buildCatalogSearch(search) {
+function buildCatalogSearch(search, { publicListingIds = null } = {}) {
   const values = [];
   const bind = (value) => {
     values.push(value);
@@ -941,6 +992,9 @@ function buildCatalogSearch(search) {
     "listing.status = 'active'",
     "listing.moderation_status = 'active'",
   ];
+  if (Array.isArray(publicListingIds)) {
+    clauses.push(`listing.id = ANY(${bind(publicListingIds)}::text[])`);
+  }
   if (config.privatePilotV4Enabled) {
     clauses.push(
       'listing.private_status_confirmed_at IS NOT NULL',
@@ -1353,6 +1407,7 @@ async function resetPasswordWithToken(token, password) {
   return inTransaction(async (client) => {
     const row = await lockValidActionToken(client, { token, kind: 'reset_password' });
     if (!row) throw new HttpError(400, 'invalid_or_expired_reset_link');
+    assertStagingActionTokenOwner(row);
     await client.query(
       `UPDATE users
        SET password_hash = $2, password_changed_at = now(),
@@ -1898,6 +1953,7 @@ export function createApp({
       'X-SIT-Evidence-SHA256',
     ],
   }));
+  app.use(stagingAccessMiddleware);
   const webhookLimiter = rateLimit({
     windowMs: 60_000,
     limit: 600,
@@ -2092,6 +2148,7 @@ export function createApp({
   });
 
   app.post('/v1/auth/register', registrationLimiter, asyncRoute(async (req, res) => {
+    assertStagingRegistrationClosed();
     const email = normalizeEmail(req.body?.email);
     const password = req.body?.password;
     const displayName = safeText(req.body?.displayName, 80);
@@ -2163,6 +2220,14 @@ export function createApp({
         throw new HttpError(error.status, error.code);
       }
       throw error;
+    }
+    if (config.stagingAccess.enabled) {
+      const existing = await pool.query(
+        "SELECT id FROM users WHERE email = $1 AND deactivated_at IS NULL AND account_status = 'active'",
+        [identity.email],
+      );
+      if (!existing.rowCount) throw new HttpError(403, 'staging_registration_disabled');
+      assertStagingUserAllowed(existing.rows[0].id);
     }
     await reconcileExpiredAccountSuspension(identity.email);
     const consentsAccepted = req.body?.termsAccepted === true
@@ -2658,9 +2723,22 @@ export function createApp({
   }));
 
   app.post('/v1/auth/mfa/challenge', mfaChallengeLimiter, asyncRoute(async (req, res) => {
+    const loginChallenge = req.body?.mfaChallenge ?? req.body?.challenge;
+    if (config.stagingAccess.enabled) {
+      const challengeRow = await pool.query(
+        `SELECT user_id
+           FROM auth_mfa_challenges
+          WHERE challenge_hash = $1
+            AND purpose = 'login'
+            AND consumed_at IS NULL`,
+        [hashLoginChallenge(typeof loginChallenge === 'string' ? loginChallenge : '')],
+      );
+      if (!challengeRow.rowCount) throw new HttpError(401, 'mfa_challenge_invalid');
+      assertStagingUserAllowed(challengeRow.rows[0].user_id);
+    }
     const outcome = await inTransaction(async (client) => {
       const verified = await verifyLoginChallenge(client, {
-        challenge: req.body?.mfaChallenge ?? req.body?.challenge,
+        challenge: loginChallenge,
         code: req.body?.code,
       });
       if (verified.ok === false) return verified;
@@ -2702,6 +2780,7 @@ export function createApp({
       [email],
     );
     const user = result.rows[0];
+    if (user && config.stagingAccess.enabled) assertStagingUserAllowed(user.id);
     if (!user?.password_hash) {
       await hashPassword('invalid-login-candidate-12345');
       throw new HttpError(401, 'invalid_credentials');
@@ -2795,6 +2874,7 @@ export function createApp({
       );
       const row = result.rows[0];
       if (!row) return { invalid: true };
+      if (config.stagingAccess.enabled) assertStagingUserAllowed(row.id);
       if (row.refresh_revoked_at && row.replaced_by_hash) {
         await client.query(
           `UPDATE auth_sessions
@@ -2845,6 +2925,13 @@ export function createApp({
   app.post('/v1/auth/logout', asyncRoute(async (req, res) => {
     const refreshToken = safeText(req.body?.refreshToken, 500);
     if (refreshToken) {
+      if (config.stagingAccess.enabled) {
+        const owner = await pool.query(
+          'SELECT user_id FROM refresh_tokens WHERE token_hash = $1',
+          [hashRefreshToken(refreshToken)],
+        );
+        if (owner.rowCount) assertStagingUserAllowed(owner.rows[0].user_id);
+      }
       await inTransaction(async (client) => {
         await revokeSessionByRefreshToken(client, refreshToken);
       });
@@ -2860,6 +2947,7 @@ export function createApp({
       [email],
     );
     const user = result.rows[0];
+    if (user && config.stagingAccess.enabled) assertStagingUserAllowed(user.id);
     if (user && !user.email_verified_at) {
       try {
         await deliverVerification(user);
@@ -2873,6 +2961,7 @@ export function createApp({
   const confirmEmail = async (token) => inTransaction(async (client) => {
     const row = await lockValidActionToken(client, { token, kind: 'verify_email' });
     if (!row) throw new HttpError(400, 'invalid_or_expired_verification_link');
+    assertStagingActionTokenOwner(row);
     await client.query(
       `UPDATE users
        SET email_verified_at = COALESCE(email_verified_at, now()),
@@ -3034,6 +3123,7 @@ export function createApp({
     const row = await lockValidActionToken(client, { token, kind: 'change_email' });
     const nextEmail = normalizeEmail(row?.action_payload?.newEmail);
     if (!row || !isValidEmail(nextEmail)) throw new HttpError(400, 'invalid_or_expired_email_change_link');
+    assertStagingActionTokenOwner(row);
     const conflict = await client.query(
       'SELECT 1 FROM users WHERE email = $1 AND id <> $2',
       [nextEmail, row.id],
@@ -3121,6 +3211,7 @@ export function createApp({
           );
           const user = result.rows[0];
           if (!user?.password_hash) return null;
+          if (config.stagingAccess.enabled) assertStagingUserAllowed(user.id);
           try {
             const token = await createActionToken(client, {
               userId: user.id,
@@ -3164,9 +3255,11 @@ export function createApp({
 
   app.get('/v1/auth/password-reset/form', actionLimiter, asyncRoute(async (req, res) => {
     const token = safeText(req.query?.token, 500);
-    const valid = await inTransaction(async (client) => Boolean(
-      await lockValidActionToken(client, { token, kind: 'reset_password' }),
-    ));
+    const valid = await inTransaction(async (client) => {
+      const row = await lockValidActionToken(client, { token, kind: 'reset_password' });
+      if (row) assertStagingActionTokenOwner(row);
+      return Boolean(row);
+    });
     if (!valid) {
       return sendHtml(res, 400, resultPage({
         success: false,
@@ -3553,6 +3646,7 @@ export function createApp({
       [email],
     );
     const user = result.rows[0];
+    if (user && config.stagingAccess.enabled) assertStagingUserAllowed(user.id);
     if (user) {
       try {
         const token = await inTransaction((client) => createActionToken(client, {
@@ -3573,9 +3667,11 @@ export function createApp({
 
   app.get('/v1/account-deletion/confirm', deletionLimiter, asyncRoute(async (req, res) => {
     const token = safeText(req.query?.token, 500);
-    const valid = await inTransaction(async (client) => Boolean(
-      await lockValidActionToken(client, { token, kind: 'delete_account' }),
-    ));
+    const valid = await inTransaction(async (client) => {
+      const row = await lockValidActionToken(client, { token, kind: 'delete_account' });
+      if (row) assertStagingActionTokenOwner(row);
+      return Boolean(row);
+    });
     if (!valid) {
       return sendHtml(res, 400, resultPage({
         success: false,
@@ -3592,6 +3688,7 @@ export function createApp({
       const outcome = await inTransaction(async (client) => {
         const user = await lockValidActionToken(client, { token, kind: 'delete_account' });
         if (!user) throw new HttpError(400, 'invalid_or_expired_deletion_link');
+        assertStagingActionTokenOwner(user);
         return eraseAccount(client, user, { actorRole: user.role ?? 'user', source: 'web' });
       });
       await removeErasedUploadFiles(outcome.erasedUploadStorageNames);
@@ -3671,7 +3768,11 @@ export function createApp({
 
   app.get('/v1/listings', asyncRoute(async (req, res) => {
     const search = parseCatalogQuery(req.query);
-    const query = buildCatalogSearch(search);
+    const query = buildCatalogSearch(search, {
+      publicListingIds: config.stagingAccess.enabled && !req.stagingAccess?.authenticated
+        ? config.stagingAccess.publicListingIds
+        : null,
+    });
     const result = await pool.query(query.text, query.values);
     const hasMore = result.rows.length > search.limit;
     const rows = hasMore ? result.rows.slice(0, search.limit) : result.rows;
@@ -6568,6 +6669,11 @@ export function createApp({
 
   app.get('/v1/uploads/:storageName', asyncRoute(async (req, res) => {
     const storageName = safeText(req.params.storageName, 160);
+    if (config.stagingAccess.enabled
+        && !req.stagingAccess?.authenticated
+        && !stagingGuestUploadAllowed(config.stagingAccess, storageName)) {
+      throw new HttpError(404, 'upload_not_found');
+    }
     const result = await pool.query(
       `SELECT upload.*, thread.user1_id, thread.user2_id,
               listing.status AS listing_status,

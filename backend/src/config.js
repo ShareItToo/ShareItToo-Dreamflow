@@ -13,6 +13,7 @@ import {
   readStripeSecretConfiguration,
 } from './stripe_secret_files.js';
 import { readMfaEncryptionKeyConfiguration } from './mfa_secret_files.js';
+import { readStagingAccessConfiguration } from './staging_access_gate.js';
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -34,6 +35,7 @@ if (jwtSecret.length < 32) {
 const deploymentEnvironment = (process.env.DEPLOYMENT_ENVIRONMENT ?? process.env.NODE_ENV ?? 'development')
   .trim()
   .toLowerCase();
+const stagingAccess = readStagingAccessConfiguration(process.env);
 const mfaSecretConfiguration = readMfaEncryptionKeyConfiguration(process.env, {
   deploymentEnvironment,
 });
@@ -391,6 +393,7 @@ export const config = Object.freeze({
   staffElevationMinutes: Math.min(30, Math.max(5, Number.parseInt(process.env.STAFF_ELEVATION_MINUTES ?? '10', 10))),
   minimumAccountAge: 18,
   deploymentEnvironment,
+  stagingAccess,
   bookingPilotMode,
   bookingPilotEnabled: bookingPilotMode !== 'off',
   bookingPilotWithoutPayment: bookingPilotMode === 'pilot',
