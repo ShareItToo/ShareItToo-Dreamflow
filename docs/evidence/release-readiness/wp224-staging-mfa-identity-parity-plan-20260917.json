@@ -283,6 +283,39 @@
           "action": "diagnosis rerouted to sit-staging-vps; future missing-artifact checks must verify target host and exact backup before declaring a blocker"
         }
       },
+      "wp250StripeTestProviderReadback": {
+        "status": "blocked-missing-test-credential",
+        "executionTarget": "sit-staging-vps",
+        "opsCheckout": "/docker/shareittoo/staging-builds/8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+        "opsCommit": "8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+        "runtimeCommit": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+        "backup": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-20260917211705-4e345294.dump",
+          "bytes": 3855507,
+          "sha256": "0fb025cad33f9ca9642603e0239103d85368996456af540de3d394c2bd64e193"
+        },
+        "stripe": {
+          "accountContext": "ShareItToo Sandbox",
+          "livemode": false,
+          "keyClass": "missing",
+          "readOnlyAllowlist": ["GET /v1/refunds/{id}", "GET /v1/charges/{id}"],
+          "writes": false
+        },
+        "mapping": "disposable restore produced 2 affected payments and 4 refund references; provider IDs held only in temporary private mapping and deleted",
+        "providerReadback": "not attempted: staging STRIPE_SECRET_KEY is empty/missing; all 4 references remain UNKNOWN/BLOCKED",
+        "evidence": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-wp250-stripe-readback-20260918003300-de779560.json",
+          "mode": "0600",
+          "bytes": 1127,
+          "sha256": "fcd98aeae9bb078e5d707e5a3b6e27092b4caa53918e1d02f2487ea0b5fb4ede"
+        },
+        "cleanup": true,
+        "disposableAbsent": true,
+        "liveDatabaseMutated": false,
+        "liveReadback": "staging API exited/0; staging PG schema 001-074",
+        "providerTraffic": false,
+        "nextGate": "owner must provide/authorize an existing Stripe TEST restricted key or equivalent supported read-only access; then rerun GET-only readback"
+      },
       "priorImageSqlContractComparison": {
         "status": "required-not-executed",
         "observedPriorStagingCommit": "df39a14b7a19afe467842461a28f1e77fec8445e",
