@@ -6,6 +6,7 @@ import {
   assertSyntheticCloneTarget,
   assertSyntheticLegalSeedEnvironment,
   syntheticLegalContent,
+  assertSyntheticSnapshotRejected,
   sha256Text,
 } from '../ops/wp255_synthetic_technical_e2e.mjs';
 
@@ -98,4 +99,15 @@ test('synthetic legal content is visibly non-contractual and hashable', () => {
   assert.match(content, /SYNTHETIC_TEST_ONLY \/ NOT_FOR_CONTRACT_OR_RELEASE/u);
   assert.match(content, /dataset=wp255-green-clone-001/u);
   assert.equal(sha256Text(content).length, 64);
+});
+
+test('missing, wrong-hash and future snapshots are each rejected distinctly', () => {
+  assert.throws(() => assertSyntheticSnapshotRejected({ row: null }), (error) => error.code === 'synthetic_snapshot_missing');
+  assert.throws(() => assertSyntheticSnapshotRejected({
+    row: { content_text: 'x', content_sha256: '0'.repeat(64), effective_at: '2020-01-01T00:00:00Z' },
+  }), (error) => error.code === 'synthetic_snapshot_hash_invalid');
+  const content = '<html>synthetic</html>';
+  assert.throws(() => assertSyntheticSnapshotRejected({
+    row: { content_text: content, content_sha256: sha256Text(content), effective_at: '2099-01-01T00:00:00Z' },
+  }), (error) => error.code === 'synthetic_snapshot_future_effective_at');
 });

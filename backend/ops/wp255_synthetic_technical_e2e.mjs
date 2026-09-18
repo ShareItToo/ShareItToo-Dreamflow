@@ -108,6 +108,16 @@ export function syntheticLegalContent({ content, datasetId, runId, part }) {
   return `${marker}\n${content}`;
 }
 
+export function assertSyntheticSnapshotRejected({ row, now = new Date() } = {}) {
+  if (!row) fail('synthetic_snapshot_missing');
+  if (typeof row.content_text !== 'string' || sha256Text(row.content_text) !== row.content_sha256) {
+    fail('synthetic_snapshot_hash_invalid');
+  }
+  const effectiveAt = new Date(row.effective_at);
+  if (!Number.isFinite(effectiveAt.getTime()) || effectiveAt > now) fail('synthetic_snapshot_future_effective_at');
+  return true;
+}
+
 export async function seedSyntheticLegalSnapshots({
   databaseUrl = process.env.DATABASE_URL,
   repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..'),
