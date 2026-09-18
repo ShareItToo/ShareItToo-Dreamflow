@@ -487,6 +487,11 @@ class DataService {
   static final _LocalMutationQueue _reviewMutationQueue = _LocalMutationQueue();
   static final _LocalMutationQueue _accountProfileMutationQueue =
       _LocalMutationQueue();
+  // The backend profile is authoritative across process restarts, while the
+  // local profile remains a cache for offline rendering. Hydrate once per
+  // exact backend session so a profile photo or other remote edit made before
+  // restart cannot leave the navigation/profile surfaces permanently stale.
+  static String? _lastBackendProfileHydrationSessionKey;
   static bool _failNextListingPersistenceForTesting = false;
   static bool _clearSessionDuringNextListingPersistenceForTesting = false;
   static bool _failNextReviewPersistenceForTesting = false;
@@ -2670,6 +2675,24 @@ class DataService {
         return null;
       }
       if (session == null) return null;
+      final sessionKey = (session.sessionId ?? session.userId ?? session.email)
+          .trim()
+          .toLowerCase();
+      if (sessionKey.isNotEmpty &&
+          _lastBackendProfileHydrationSessionKey != sessionKey) {
+        try {
+          final hydrated = await syncCurrentUserForSessionOwner(
+            AuthService.captureSessionOwner(session),
+          );
+          if (hydrated != null) {
+            userJson = jsonEncode(hydrated.toJson());
+            _lastBackendProfileHydrationSessionKey = sessionKey;
+          }
+        } catch (_) {
+          // A stale cache may remain available while the backend is
+          // temporarily unreachable; the next session read retries.
+        }
+      }
       var localUserId = '';
       if (userJson != null && userJson.isNotEmpty) {
         try {
@@ -2684,7 +2707,14 @@ class DataService {
     if (userJson == null || userJson.isEmpty) {
       final session = backendSession ?? await AuthService.readSession();
       if (session != null) {
-        await syncCurrentUserForSessionEmail(session.email);
+        if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+          final hydrated = await syncCurrentUserForSessionOwner(
+            AuthService.captureSessionOwner(session),
+          );
+          if (hydrated != null) userJson = jsonEncode(hydrated.toJson());
+        } else {
+          await syncCurrentUserForSessionEmail(session.email);
+        }
         userJson = await safeReadCurrentUser();
       }
     }

@@ -1,4 +1,28 @@
-# Current Work Package: WP258-B Pixel functional smoke — PARTIAL; synthetic-login credential blocker
+# Current Work Package: WP259-A profile cache and Staging URL truth — SOURCE FIX; successor build required
+
+WP259-A corrected the source-side restart truth for backend profiles: one
+owner-bound, read-only hydration per exact backend session, retrying after
+transient failure while retaining the local cache for offline rendering. The
+source contract is 2/2, focused Flutter profile/session suites are 25/25,
+analyzer and diff-check pass. WP258-D also proved the runtime Staging URL
+correction on the real Pixel UI. The source change is not in immutable 1704;
+the next step is a strictly higher successor build. No Play/provider/
+production/payment action is implied.
+
+See `docs/operations/WP259_A_PROFILE_CACHE_AND_STAGING_URL_TRUTH_20260919.md`
+and its evidence JSON.
+
+# Completed Work Package: WP258-D Pixel owner/renter staging closure — TECHNICAL PASS
+
+WP258-D proved the two synthetic principals, A→B private-state isolation,
+public-read behavior, listing lifecycle, and real Pixel profile-image surfaces
+after restart and logout/login. Staging-only runtime URL/MFA mount corrections
+were applied without exposing secrets. OnePlus, payment/provider activation,
+push and message-surface parity remain separate. See
+`docs/operations/WP258_D_PIXEL_OWNER_RENTER_CLOSURE_20260919.md` and its
+evidence JSON.
+
+# Historical Work Package: WP258-B Pixel functional smoke — PARTIAL; synthetic-login credential blocker
 
 WP258-B hat den bereits installierten Kandidaten `1.0.0+2026091704` auf dem
 Pixel 7 Pro read-only funktional geprüft. Gastkatalog, `Sonstiges`-

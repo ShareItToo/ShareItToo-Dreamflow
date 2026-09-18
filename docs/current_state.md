@@ -1,5 +1,26 @@
 # ShareItToo Current State
 
+## WP259-A profile cache and Staging URL truth — SOURCE FIX; successor build required
+
+The source now performs one owner-bound, read-only backend profile hydration per
+exact session at startup/restart and retries after transient failure, preventing
+stale cached avatars from becoming permanent while preserving offline rendering.
+Static contract tests are 2/2, focused profile/session Flutter suites 25/25,
+analyzer and diff-check pass. This patch is not part of immutable candidate
+`1.0.0+2026091704`; a higher successor build is required before release.
+The Staging internal-host URL defect was corrected and real Pixel profile,
+navigation-avatar and public-profile surfaces passed after restart and
+logout/login. No Play, provider, payment or production action occurred.
+
+## WP258-D Pixel owner/renter staging closure — TECHNICAL PASS
+
+Exactly one synthetic renter was added to the private Staging allowlist beside
+the existing owner. Real app login, public-read/private-write isolation,
+foreign mutation rejection, listing lifecycle and Pixel avatar surfaces passed.
+Credentials remain owner-only outside Git. OnePlus, push/message parity and
+real booking/payment/provider activation remain open. See the WP258-D evidence
+and operations report.
+
 ## WP258-B Pixel functional smoke — PARTIAL; synthetic-login credential blocker
 
 Auf dem bereits installierten Play-Internal-Kandidaten `1.0.0+2026091704`
