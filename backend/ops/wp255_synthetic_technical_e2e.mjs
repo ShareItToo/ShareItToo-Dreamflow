@@ -158,3 +158,12 @@ export async function seedSyntheticLegalSnapshots({
     await pool.end();
   }
 }
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  seedSyntheticLegalSnapshots()
+    .then((result) => process.stdout.write(`${JSON.stringify(result)}\n`))
+    .catch((error) => {
+      process.stderr.write(`${error?.message ?? 'synthetic_legal_seed_failed'}\n`);
+      process.exitCode = 1;
+    });
+}
