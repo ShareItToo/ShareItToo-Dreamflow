@@ -225,6 +225,35 @@
         "fix": "remove host-port publishing/host fetch; bounded docker-exec probes against 127.0.0.1:8080 inside attested API container; evidence acceptanceTarget=docker-exec-internal and hostPortPublished=false",
         "execution": "no retry by Luna; Sol must run exactly once after review"
       },
+      "wp249DisposableSuccessAndFindingDiagnosis": {
+        "status": "technical-probes-passed-operational-release-blocked",
+        "executionEvidence": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-wp245-disposable-f0bb868a-20260918.json",
+          "mode": "0600",
+          "owner": "root:root",
+          "bytes": 3133,
+          "sha256": "450fb5427ebbf53e9c96e6f70a3cfa5f42eed130d4fe34bfd6fbc6012af7b224",
+          "runtimeCommit": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+          "opsCommit": "8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+          "acceptanceTarget": "docker-exec-internal",
+          "hostPortPublished": false,
+          "ledger": "87|87|1|87",
+          "foreignKeys": 367,
+          "readiness": "503; exact payment findings=2/support findings=1 unchanged",
+          "cleanup": true,
+          "providerTraffic": false,
+          "liveDatabaseMutated": false,
+          "nullEffect": "disposable resources/MFA absent; live PG schema 001-074 and API stopped"
+        },
+        "findingDiagnosis": {
+          "tool": "backend/ops/classify_readiness_findings.mjs",
+          "scope": "hashed IDs, cause/status/time classes only; no PII/provider IDs/row content",
+          "payment": "two refund_truth_needs_review findings require source classification and authorized reconciliation; no auto-resolution",
+          "support": "one P3 next_update_overdue finding requires governed progress update/closure; no auto-resolution",
+          "classification": "staging operation vs synthetic/legacy fixture remains source-readback dependent",
+          "liveRemediation": "blocked until source classification and expected-set match; no live execution"
+        }
+      },
       "priorImageSqlContractComparison": {
         "status": "required-not-executed",
         "observedPriorStagingCommit": "df39a14b7a19afe467842461a28f1e77fec8445e",
