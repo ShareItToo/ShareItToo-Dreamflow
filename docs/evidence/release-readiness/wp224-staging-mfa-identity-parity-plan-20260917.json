@@ -227,6 +227,7 @@
       },
       "wp249DisposableSuccessAndFindingDiagnosis": {
         "status": "technical-probes-passed-operational-release-blocked",
+        "fixCommit": "6c6da08c19514d9b8b7a58c6da2e3faae23da674",
         "executionEvidence": {
           "path": "/docker/shareittoo/backups/rehearsals/staging-wp245-disposable-f0bb868a-20260918.json",
           "mode": "0600",
