@@ -253,6 +253,14 @@
           "support": "one P3 next_update_overdue finding requires governed progress update/closure; no auto-resolution",
           "classification": "staging operation vs synthetic/legacy fixture remains source-readback dependent",
           "liveRemediation": "blocked until source classification and expected-set match; no live execution"
+        },
+        "disposableDiagnosisExecution": {
+          "status": "blocked-before-start",
+          "requiredBackup": "/docker/shareittoo/backups/rehearsals/staging-wp245-disposable-f0bb868a-20260918.json",
+          "observed": "path absent on current worker; Docker CLI unavailable",
+          "liveDatabaseMutated": false,
+          "providerTraffic": false,
+          "action": "no substitute fixture or live access used; rerun only on the host containing the protected backup and Docker"
         }
       },
       "priorImageSqlContractComparison": {
