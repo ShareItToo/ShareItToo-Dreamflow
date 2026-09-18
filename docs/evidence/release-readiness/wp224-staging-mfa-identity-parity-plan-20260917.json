@@ -209,7 +209,7 @@
       },
       "wp248InternalNetworkProbe": {
         "status": "implemented-not-retried",
-        "fixCommit": "9fbc066a6fe29c2e241ec9c5ea742051cb684cf2",
+        "fixCommit": "4da029a5de4e55cc5514cd2944e9b4fb03d46b19",
         "observedAttempt": {
           "opsCommit": "decb00e7674efe2487e6a5f5d8b0a3c2e6b5e394",
           "restore": "passed",
@@ -222,7 +222,7 @@
           "liveSchema": "001-074",
           "api": "stopped"
         },
-        "fix": "remove host-port publishing/host fetch; bounded docker-exec probes against 127.0.0.1:8080 inside attested API container",
+        "fix": "remove host-port publishing/host fetch; bounded docker-exec probes against 127.0.0.1:8080 inside attested API container; evidence acceptanceTarget=docker-exec-internal and hostPortPublished=false",
         "execution": "no retry by Luna; Sol must run exactly once after review"
       },
       "priorImageSqlContractComparison": {
