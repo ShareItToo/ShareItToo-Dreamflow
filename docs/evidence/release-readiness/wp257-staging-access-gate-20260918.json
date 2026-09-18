@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "package": "WP257-A",
+  "status": "TECHNICAL_COMPLETE_WITH_PREEXISTING_FULL_SUITE_BLOCKERS",
+  "verifiedAt": "2026-09-18",
+  "sourceHead": "beaf28c201cb926045b2a56bcecf7feea6b6d4c9",
+  "branch": "codex/master-workflow-20260808",
+  "runtimeImage": {
+    "tag": "shareittoo-api-wp257:beaf28c201cb926045b2a56bcecf7feea6b6d4c9",
+    "digest": "sha256:74f94a7ab6debf26b1f78df3118a04dfd61f14ca5c7e86f4312567f0203e088e",
+    "mode": "disposable acceptance artifact; not Green/canonical"
+  },
+  "allowlistBinding": "private staging runtime configuration; exact values redacted",
+  "enforcement": {
+    "protectedRoutes": "central middleware plus requireAuth and action-token ownership checks",
+    "cohort": "exact synthetic owner/renter cohort only; empty or malformed configuration fails closed",
+    "registration": "password and social unknown-account onboarding denied without account creation",
+    "anonymous": "only exact health/version, configured catalog listing and approved test-image GET/HEAD surfaces",
+    "providerEgress": "unchanged and blocked",
+    "schema": "unchanged; no migration"
+  },
+  "isolatedAcceptance": {
+    "inputBackup": {
+      "path": "/docker/shareittoo/backups/rehearsals/staging-wp254-green-20260918012350.dump",
+      "sha256": "79b1e739cac9d4e9a80a270aa111075840e01f7f8b9662347b37310eb0db75d9"
+    },
+    "network": "internal-only disposable network",
+    "hostPorts": false,
+    "health": {"live": 200, "ready": 200},
+    "matrix": {
+      "anonymousLive": 200,
+      "anonymousDeniedPrivateSurface": "401 staging_access_required",
+      "anonymousCatalog": 200,
+      "anonymousApprovedImage": 200,
+      "allowlistedOwner": 200,
+      "foreignPrincipal": "403 staging_account_not_allowlisted",
+      "revokedSession": "401 account_not_active",
+      "spoofedProxyIp": "401 staging_access_required",
+      "registration": "403 staging_registration_disabled",
+      "cohortCount": 2
+    },
+    "cleanup": "passed; disposable containers, network and volumes absent after run"
+  },
+  "verification": {
+    "focusedStagingAndSecurity": "12/12 passed",
+    "pnpmCheck": "passed",
+    "postgresIntegration": "passed-and-cleaned; MFA and identity suites included",
+    "fullBackend": "1099 passed, 6 unrelated pre-existing deploy-gate failures, 9 skipped of 1114",
+    "diffCheck": "passed",
+    "publicRoute": {"readback": 502, "changed": false},
+    "greenAndAlt": "unchanged"
+  },
+  "externalState": {
+    "greenSwitch": false,
+    "publicRouteActivation": false,
+    "paymentProvider": "unchanged",
+    "storePlay": "unchanged",
+    "device": "untouched",
+    "prMerge": false
+  },
+  "nextGate": "Sol review; keep Public/Green/device/provider gates closed"
+}

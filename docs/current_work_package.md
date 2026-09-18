@@ -1,4 +1,28 @@
-# Current Work Package: WP187 Play/Pixel manual-Pilot closure — PLAY/DEVICE PASS; Listing-AI OPEN/FAILED
+# Current Work Package: WP257-A staging access gate — TECHNICAL PASS; PRE-EXISTING DEPLOY GATES HOLD
+
+WP257-A binds the non-production staging runtime to a private, exact synthetic
+cohort. Empty or malformed protected configuration fails closed; production
+cannot bypass the gate. Central middleware and auth/action-token ownership
+checks cover login, MFA, refresh, protected routes, uploads and account-bound
+actions. Password/social registration outside the cohort cannot create an
+account. Anonymous access is limited to exact health/version and configured
+synthetic read-only surfaces. No schema, provider, payment, Green, Alt, Public,
+Store, device or PR state changed.
+
+The immutable source head is `beaf28c201cb926045b2a56bcecf7feea6b6d4c9`.
+The disposable acceptance image is
+`sha256:74f94a7ab6debf26b1f78df3118a04dfd61f14ca5c7e86f4312567f0203e088e`.
+Its internal-only acceptance passed health 200/200, allowlisted owner access,
+foreign/revoked/spoofed rejection, closed registration and cleanup with no
+host ports. Focused tests are 12/12, `pnpm run check`, PostgreSQL integration
+and diff-check pass. The complete backend suite has 1099 passes, 9 skips and
+six unrelated pre-existing FCM/Listing-AI/Stripe deploy-gate failures; those
+remain a separate blocker. Sol review is next; no Public/Green/device/provider
+gate may be opened by this package. See
+`docs/evidence/release-readiness/wp257-staging-access-gate-20260918.json` and
+`docs/operations/WP257_STAGING_ACCESS_GATE_20260918.md`.
+
+# Historical Work Package: WP187 Play/Pixel manual-Pilot closure — PLAY/DEVICE PASS; Listing-AI OPEN/FAILED
 
 WP187 records the exact post-action closure for candidate `1.0.0+2026091702`
 (`com.shareittoo.app`), source-bound to
