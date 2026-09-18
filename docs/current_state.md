@@ -1,5 +1,18 @@
 # ShareItToo Current State
 
+## WP258-B Pixel functional smoke — PARTIAL; login rate-limit blocker
+
+Auf dem bereits installierten Play-Internal-Kandidaten `1.0.0+2026091704`
+(Source `9cbac5be2e4702c6b11954bfcc935ca38fdb6aac`) sind der Gastkatalog, die
+Suche nach `Sonstiges` mit Auswahl und die explizite Offline-Fehleranzeige mit
+Online-Recovery auf dem Pixel 7 Pro bestätigt. Der einzige Login-Versuch wurde
+serverseitig mit `429 rate_limit_exceeded` beantwortet; es gab keinen Retry-
+Loop und keinen Limiter-Bypass. Deshalb sind die authentifizierten Listing-,
+Profilbild-, Logout/Login- und A→B-Isolationsflüsse noch nicht belegt. Keine
+Payment-, Provider-, Store-, Produktions- oder OnePlus-Aktion erfolgte. Siehe
+`docs/operations/WP258_B_PIXEL_FUNCTIONAL_SMOKE_20260918.md` und
+`docs/evidence/release-readiness/wp258-b-pixel-functional-smoke-20260918.json`.
+
 ## WP258-A Pixel/OnePlus Play-Internal preflight — PHYSICAL BLOCKER
 
 Der Pixel 7 Pro ist separat mit Play-Installer und Kandidat `1.0.0+2026091704`

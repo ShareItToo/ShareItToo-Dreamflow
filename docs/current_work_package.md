@@ -1,4 +1,17 @@
-# Current Work Package: WP258-A Pixel/OnePlus Play-Internal preflight — PHYSICAL BLOCKER
+# Current Work Package: WP258-B Pixel functional smoke — PARTIAL; login rate-limit blocker
+
+WP258-B hat den bereits installierten Kandidaten `1.0.0+2026091704` auf dem
+Pixel 7 Pro read-only funktional geprüft. Gastkatalog, `Sonstiges`-
+Kategorieauswahl sowie Offline-Fehler und Online-Recovery sind grün. Der
+begrenzte Login-Versuch wurde mit dem strukturierten Serverresultat
+`429 rate_limit_exceeded` beantwortet. Es wurde nicht wiederholt oder
+umgangen; Owner/Renter-, Listing-, Profilbild-, Logout/Login- und
+A→B-Isolationsprüfungen bleiben bis zum Ablauf des vorhandenen 15-Minuten-
+Fensters offen. OnePlus bleibt der separate physische Blocker aus WP258-A.
+Siehe `docs/operations/WP258_B_PIXEL_FUNCTIONAL_SMOKE_20260918.md` und
+`docs/evidence/release-readiness/wp258-b-pixel-functional-smoke-20260918.json`.
+
+# Previous Work Package: WP258-A Pixel/OnePlus Play-Internal preflight — PHYSICAL BLOCKER
 
 WP258-A hat den aktuellen Host read-only geprüft. Der Pixel 7 Pro ist mit
 Play-Installer und `1.0.0+2026091704` erreichbar; Start/Restart und
