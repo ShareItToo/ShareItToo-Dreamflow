@@ -1,4 +1,4 @@
-# Current Work Package: WP257-A staging access gate — TECHNICAL PASS; PRE-EXISTING DEPLOY GATES HOLD
+# Current Work Package: WP257-A staging access gate — TECHNICAL PASS
 
 WP257-A binds the non-production staging runtime to a private, exact synthetic
 cohort. Empty or malformed protected configuration fails closed; production
@@ -9,15 +9,15 @@ account. Anonymous access is limited to exact health/version and configured
 synthetic read-only surfaces. No schema, provider, payment, Green, Alt, Public,
 Store, device or PR state changed.
 
-The immutable source head is `beaf28c201cb926045b2a56bcecf7feea6b6d4c9`.
+The immutable source head is `7887c7c754b6e43434caf44ea3fbeed6e8a902ce`.
 The disposable acceptance image is
-`sha256:74f94a7ab6debf26b1f78df3118a04dfd61f14ca5c7e86f4312567f0203e088e`.
+`sha256:9d90eb91166770e0803bad40058233cfc086d8d2b50f9d4622c4fc4f39a7fcf6`.
 Its internal-only acceptance passed health 200/200, allowlisted owner access,
 foreign/revoked/spoofed rejection, closed registration and cleanup with no
-host ports. Focused tests are 12/12, `pnpm run check`, PostgreSQL integration
-and diff-check pass. The complete backend suite has 1099 passes, 9 skips and
-six unrelated pre-existing FCM/Listing-AI/Stripe deploy-gate failures; those
-remain a separate blocker. Sol review is next; no Public/Green/device/provider
+host ports. Focused tests are 13/13, deploy-gate fixtures 11/11, `pnpm run
+check`, PostgreSQL integration and diff-check pass. The complete backend suite
+has 1106 passes, 0 failures and 9 skips. Sol review is next; no
+Public/Green/device/provider
 gate may be opened by this package. See
 `docs/evidence/release-readiness/wp257-staging-access-gate-20260918.json` and
 `docs/operations/WP257_STAGING_ACCESS_GATE_20260918.md`.

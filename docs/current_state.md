@@ -1,16 +1,16 @@
 # ShareItToo Current State
 
-## WP257-A staging access gate — TECHNICAL PASS; pre-existing deploy gates HOLD
+## WP257-A staging access gate — TECHNICAL PASS
 
-At source head `beaf28c201cb926045b2a56bcecf7feea6b6d4c9`, staging access is
+At source head `7887c7c754b6e43434caf44ea3fbeed6e8a902ce`, staging access is
 server-enforced for a private synthetic cohort. Empty/malformed configuration,
 nonallowlisted principals, revoked/old/foreign sessions, public registration,
 social auto-onboarding and unapproved anonymous routes fail closed. A
 disposable internal-only successor image was accepted with no host ports and
 was cleaned up; Green, Alt, Public, providers, payment, Store and devices were
-untouched. Focused staging/security checks are 12/12, PostgreSQL integration,
-`pnpm run check` and diff-check pass. The full Backend suite remains
-1099/1114 with six unrelated pre-existing deploy-gate failures and nine skips.
+untouched. Focused staging/security checks are 13/13, deploy-gate fixtures
+11/11, PostgreSQL integration, `pnpm run check` and diff-check pass. The full
+Backend suite is 1106/1115 with zero failures and nine skips.
 See the WP257 evidence and operations report named in `current_work_package.md`.
 
 ## WP187 1702 manual-Pilot closure — PLAY/DEVICE PASS; Listing-AI OPEN/FAILED
