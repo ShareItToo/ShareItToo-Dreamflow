@@ -317,6 +317,37 @@
         "providerTraffic": false,
         "nextGate": "provider truth remains blocked: original references are synthetic/not-found in Stripe Sandbox; no remediation or release action permitted"
       },
+      "wp251RefundReferenceRemediation": {
+        "status": "dry-run-closed-live-unchanged",
+        "decision": "quarantine-plan-only-no-canonical-mutation",
+        "runner": "backend/ops/staging_refund_reference_remediation.mjs",
+        "sourceBackup": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-20260917211705-4e345294.dump",
+          "bytes": 3855507,
+          "sha256": "0fb025cad33f9ca9642603e0239103d85368996456af540de3d394c2bd64e193"
+        },
+        "disposableExecution": {
+          "targetHost": "sit-staging-vps",
+          "opsCommit": "8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+          "runtimeCommit": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+          "before": "4 references / 2 payments; exact-set SHA-256 8c761886396e29a14da9495ae1e47b2a689c3fb022424490b720e211d8e7e128",
+          "after": "4 references / 2 payments; exact-set SHA-256 unchanged",
+          "providerReferenceClass": "all four re_memory synthetic references",
+          "transaction": "temporary quarantine table insert rolled back; quarantinedCount=4; quarantine hash f2ee6bec4a3480e3e061fa66a628fa5155fbe74466cc2edf09f42d32351fe9f3",
+          "canonicalFinancialTruthPreserved": true,
+          "providerOutcomeFabricated": false,
+          "cleanup": true,
+          "disposableAbsent": true
+        },
+        "evidence": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-wp250-stripe-readback-20260918004851-c16d8905.json",
+          "mode": "0600",
+          "bytes": 1295,
+          "sha256": "e410ff8ac06a0740b22009ed58cbb7563b88629969b6bdff61d36febbf0145c"
+        },
+        "liveReadback": "staging API exited/0; staging PG schema 001-074; no live DB mutation; no provider traffic",
+        "nextGate": "no live cleanup; retain canonical review state until authoritative provider truth exists"
+      },
       "priorImageSqlContractComparison": {
         "status": "required-not-executed",
         "observedPriorStagingCommit": "df39a14b7a19afe467842461a28f1e77fec8445e",

@@ -73,6 +73,13 @@ SELECT jsonb_agg(jsonb_build_object(
 FROM payments p JOIN sit_payment_refund_truth t ON t.payment_id=p.id
 LEFT JOIN bookings b ON b.id=p.booking_id LEFT JOIN stripe_connect_accounts ca ON ca.user_id=b.owner_id
 WHERE t.refund_truth_status='needsReview';`;
+const syntheticFingerprintSql = `
+SELECT jsonb_build_object(
+  'count', count(*)::int,
+  'paymentCount', count(DISTINCT payment_id)::int,
+  'setHash', encode(digest(COALESCE(string_agg(id::text, ',' ORDER BY id), ''), 'sha256'), 'hex'),
+  'providerClass', COALESCE(bool_and(provider_refund_id LIKE 're_memory_%'), true)
+)::text FROM refunds WHERE provider_refund_id LIKE 're_memory_%';`;
 let mfaPath; let evidence; const created = [];
 try {
   if (text(await execFile('git', ['-C', OPS_CHECKOUT, 'rev-parse', 'HEAD'])) !== OPS_COMMIT) fail('ops_checkout_commit_mismatch');
@@ -91,6 +98,15 @@ try {
     await writeFile(mappingPath, `${JSON.stringify(rows)}\n`, { mode: 0o600 });
     await chmod(mappingPath, 0o600);
   }
+  if (process.env.SIT_WP251_DRY_RUN === '1') {
+    const before = await dbQuery(resources.database, syntheticFingerprintSql);
+    const txOutput = await dockerExec(resources.database, ['psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal', '-Atc', "BEGIN; CREATE TEMP TABLE wp251_refund_reference_quarantine (refund_hash TEXT PRIMARY KEY, reason TEXT NOT NULL) ON COMMIT DROP; INSERT INTO wp251_refund_reference_quarantine SELECT encode(digest(id::text,'sha256'),'hex'),'synthetic_provider_reference' FROM refunds WHERE provider_refund_id LIKE 're_memory_%'; SELECT jsonb_build_object('quarantinedCount',count(*)::int,'quarantineHash',encode(digest(COALESCE(string_agg(refund_hash,',' ORDER BY refund_hash),''),'sha256'),'hex'))::text FROM wp251_refund_reference_quarantine; ROLLBACK;"]);
+    const txJsonLine = txOutput.split('\n').find((line) => line.startsWith('{'));
+    let tx; try { tx = JSON.parse(txJsonLine); } catch { fail('dry_run_transaction_unreadable'); }
+    const after = await dbQuery(resources.database, syntheticFingerprintSql);
+    if (JSON.stringify(before) !== JSON.stringify(after)) fail('dry_run_exact_set_drift');
+    evidence = { status: 'dry-run-quarantine-plan-complete-operational-release-blocked', runId, opsCheckout: OPS_CHECKOUT, opsCommit: OPS_COMMIT, runtimeCommit: RUNTIME_COMMIT, backup, decision: 'quarantine-plan-only-no-canonical-mutation', before, after, transaction: 'rolled-back', quarantinedCount: tx.quarantinedCount, quarantineHash: tx.quarantineHash, canonicalFinancialTruthPreserved: true, providerOutcomeFabricated: false, providerTraffic: false, providerWrites: false, liveDatabaseMutated: false, acceptanceTarget: 'docker-exec-internal' };
+  } else {
   const reads = { objects: 0, objectExists: 0, testModeConfirmed: 0, amountCurrencyMatch: 0, chargeBindingMatch: 0, unknown: 0, blocked: 0, statusCounts: {} };
   for (const row of rows) {
     const refunds = Array.isArray(row.refunds) ? row.refunds : [];
@@ -106,6 +122,7 @@ try {
   }
   evidence = { status: ['restricted_test', 'secret_test'].includes(keyInfo.keyClass) ? 'provider-readback-complete-operational-release-blocked' : 'provider-readback-blocked-missing-test-credential', runId, opsCheckout: OPS_CHECKOUT, opsCommit: OPS_COMMIT, runtimeCommit: RUNTIME_COMMIT, backup, stripe: { accountContext: 'ShareItToo Sandbox', livemode: false, keyClass: keyInfo.keyClass, readOnlyMethods: ['GET /v1/refunds/{id}', 'GET /v1/charges/{id}'] }, mapping: { paymentCount: rows.length, refundReferenceCount: reads.objects }, reads: { objectExists: reads.objectExists, testModeConfirmed: reads.testModeConfirmed, amountCurrencyMatch: reads.amountCurrencyMatch, chargeBindingMatch: reads.chargeBindingMatch, unknown: reads.unknown, blocked: reads.blocked, statusCounts: reads.statusCounts }, providerTraffic: reads.objectExists > 0, providerWrites: false, liveDatabaseMutated: false, acceptanceTarget: 'docker-exec-internal' };
   if (!['restricted_test', 'secret_test'].includes(keyInfo.keyClass)) process.exitCode = 1;
+  }
 } catch (error) {
   evidence = { status: 'provider-readback-blocked', runId, opsCheckout: OPS_CHECKOUT, opsCommit: OPS_COMMIT, runtimeCommit: RUNTIME_COMMIT, errorCode: error?.code ?? 'readback_failed', detail: String(error?.message ?? '').replace(/Bearer\s+\S+/giu,'Bearer [redacted]').slice(0,900), providerTraffic: false, providerWrites: false, liveDatabaseMutated: false };
   process.exitCode = 1;
