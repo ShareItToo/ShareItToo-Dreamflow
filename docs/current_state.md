@@ -8510,3 +8510,17 @@ Legal booking/checkout acceptance remains open because V5.2 snapshots are
 still draft-blocked and were not fabricated. See the WP254 operation report
 and bound JSON evidence. No switch, Provider, Store, Play or Production action
 occurred.
+## WP256 Green internal switch (2026-09-18)
+
+The Green WP254 environment is now the canonical **internal technical staging
+basis only**. Source HEAD is `62a777ccaa9d360db8f3ebede41be27decc352f2`;
+runtime image commit is `338c7bc066f10b72b05f89a5485cb5f5204a8e25`.
+`shareittoo-staging-api` has no host ports, uses the internal Green network,
+Green DB and Green uploads volume, and returned live/readiness 200 after a
+restart. Green contains only the synthetic 2-user/1-listing/1-upload dataset.
+Payment is memory-only, Identity disabled, Listing AI mock/zero-budget and
+provider egress blocked. The previous Alt API is sealed and its volumes and
+backups are preserved. V5.2 remains draft-blocked with zero legal snapshots;
+no legal, pilot, Provider, Payment, Play, Production, DNS or public-release
+approval is implied. See `docs/evidence/release-readiness/wp256-green-internal-
+switch-20260918.json` and `docs/operations/WP256_GREEN_INTERNAL_SWITCH_20260918.md`.

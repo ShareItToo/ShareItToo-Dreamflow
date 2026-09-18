@@ -8540,3 +8540,19 @@ the return window. Clone cleanup and absence pass; Green, Alt and protected
 evidence remain unchanged. Status is
 `SYNTHETIC_TECHNICAL_PASS_WITH_PAYOUT_HOLD`; no switch, Provider, Store, Play
 or Production step is authorized.
+# Current Work Package: WP256 Green internal staging switch — TECHNICAL ONLY; LEGAL/PILOT/RELEASE HOLD
+
+WP256 completed the one-time Sol/Astra-approved internal switch from the
+previous canonical service to the isolated Green WP254 environment. The
+canonical service uses the Green database and uploads volume on an internal
+Docker network with no host port. After restart, live/readiness were both 200;
+the exact Green commit/image, schema 87, synthetic dataset and persistence
+checks are recorded in the bound WP256 evidence. The former Alt service is
+sealed, not deleted, with schema 74 and its volumes/backups preserved.
+
+This is a technical staging basis, not a legal, pilot, public, payment,
+provider, Store, Play or Production release. Payment is memory-only, Identity
+is disabled, Listing AI is mock/zero-budget, provider egress is blocked, and
+V5.2 remains `draft-blocked` with zero database snapshots. Stop for Sol review;
+do not perform another environment mutation or external activation. Evidence:
+`docs/evidence/release-readiness/wp256-green-internal-switch-20260918.json`.
