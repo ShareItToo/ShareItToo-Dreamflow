@@ -1,5 +1,14 @@
 # ShareItToo Current State
 
+## WP258-A Pixel/OnePlus Play-Internal preflight — PHYSICAL BLOCKER
+
+Der Pixel 7 Pro ist separat mit Play-Installer und Kandidat `1.0.0+2026091704`
+read-only verifiziert; Start/Restart und v2/v3-Signatur sind bestätigt. Ein
+OnePlus ist auf diesem Host nicht erreichbar/autorisiert. Kein Sideload,
+Downgrade, Store-, Backend- oder Produktionsschritt wurde ausgeführt. Pixel-
+Evidence ist nicht OnePlus-Evidence; genau ein physischer Restblocker bleibt.
+Siehe `docs/operations/WP258_PIXEL_ONEPLUS_PREFLIGHT_20260918.md`.
+
 ## WP257-C public staging route — TECHNICAL PASS
 
 `staging.shareittoo.com/api` now reaches only the WP257 candidate in the

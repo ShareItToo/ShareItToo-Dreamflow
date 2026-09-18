@@ -1,4 +1,15 @@
-# Current Work Package: WP257-C public staging route — TECHNICAL PASS
+# Current Work Package: WP258-A Pixel/OnePlus Play-Internal preflight — PHYSICAL BLOCKER
+
+WP258-A hat den aktuellen Host read-only geprüft. Der Pixel 7 Pro ist mit
+Play-Installer und `1.0.0+2026091704` erreichbar; Start/Restart und
+Signatur-/Installationsquellen-Nachweis sind getrennte optionale Evidence.
+Ein OnePlus ist nicht verbunden/autorisiert. Es wurde kein Sideload, Downgrade,
+Store- oder Geräte-Mutationsschritt ausgeführt. Der einzige Restblocker ist
+die physische OnePlus-Erreichbarkeit. Siehe
+`docs/operations/WP258_PIXEL_ONEPLUS_PREFLIGHT_20260918.md` und
+`docs/evidence/release-readiness/wp258-pixel-oneplus-preflight-20260918.json`.
+
+# Previous Work Package: WP257-C public staging route — TECHNICAL PASS
 
 WP257-C exposes only the existing `staging.shareittoo.com/api` route to the
 canonical internal Green WP257 candidate. HTTPS/TLS, health/version, exact

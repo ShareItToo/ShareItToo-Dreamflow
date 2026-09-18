@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "package": "WP258-A",
+  "status": "PHYSICAL_ONEPLUS_BLOCKER",
+  "verifiedAt": "2026-09-18",
+  "branch": "codex/master-workflow-20260808",
+  "sourceHead": "4c1fe861b1f0d94e27d3dd673608e3530d334ed0",
+  "devicePreflight": {
+    "onePlus": {
+      "adbReachable": false,
+      "authorized": false,
+      "model": "not observed",
+      "action": "no install, sideload, Play action or device mutation"
+    },
+    "pixelOptionalEvidence": {
+      "manufacturerModel": "Google Pixel 7 Pro",
+      "adbAuthorized": true,
+      "package": "com.shareittoo.app",
+      "versionName": "1.0.0",
+      "versionCode": "2026091704",
+      "minSdk": 24,
+      "targetSdk": 36,
+      "installer": "com.android.vending",
+      "apkSigningVersion": 3,
+      "deviceSignerSha256": "36488abf86c51da07ab2258f31b00e2f1ba8a36d076107b9f006376ade80b956",
+      "candidateUploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a",
+      "playInternalCandidate": "2026091704; not the requested 2026091605 smoke target",
+      "launchRestart": "passed; MainActivity foreground after force-stop/start",
+      "wifi": "validated; network identity not retained",
+      "rawArtifacts": "temporary APK extraction removed; no screenshots/UI dump persisted"
+    }
+  },
+  "candidateBinding": {
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "payment": "memory",
+    "providerHolds": "mail/push/identity/provider execution held",
+    "sourceManifest": "store/google-play/rollover-candidate-2026091704.json"
+  },
+  "scope": {
+    "playTrackChanged": false,
+    "installChanged": false,
+    "productionChanged": false,
+    "backendChanged": false,
+    "providerTraffic": false
+  },
+  "blocker": "OnePlus is not physically reachable/authorized on the current host; a real OnePlus Play-Internal smoke cannot be evidenced remotely.",
+  "nextStep": "Connect and authorize the OnePlus to the Mac mini (or run the same bounded test on the MacBook host), then repeat only the device smoke; do not treat Pixel evidence as OnePlus evidence."
+}
