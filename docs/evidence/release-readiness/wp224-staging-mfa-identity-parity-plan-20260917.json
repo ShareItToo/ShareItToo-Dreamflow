@@ -209,6 +209,7 @@
       },
       "wp248InternalNetworkProbe": {
         "status": "implemented-not-retried",
+        "fixCommit": "9fbc066a6fe29c2e241ec9c5ea742051cb684cf2",
         "observedAttempt": {
           "opsCommit": "decb00e7674efe2487e6a5f5d8b0a3c2e6b5e394",
           "restore": "passed",
