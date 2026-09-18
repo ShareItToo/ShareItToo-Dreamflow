@@ -1,5 +1,16 @@
 # ShareItToo Current State
 
+## WP257-C public staging route — TECHNICAL PASS
+
+`staging.shareittoo.com/api` now reaches only the WP257 candidate in the
+internal Green network. HTTPS/TLS, health/version, exact guest surfaces,
+Owner/Renter and stale-session isolation, Action-Token outcomes, API restart
+and Caddy reload persistence passed. The Caddyfile stayed unchanged and the
+network attachment is reversible. DB counts remain `2|1|1|2|0`; provider,
+payment, mail, AI, Store/Play and devices remain held or unchanged. See
+`docs/operations/WP257_PUBLIC_STAGING_ROUTE_20260918.md` and
+`docs/evidence/release-readiness/wp257-public-staging-route-20260918.json`.
+
 ## WP257-B canonical Green internal deploy — TECHNICAL PASS
 
 Der Kandidat aus Source `7887c7c754b6e43434caf44ea3fbeed6e8a902ce` mit Digest

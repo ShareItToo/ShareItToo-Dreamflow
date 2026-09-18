@@ -1,4 +1,16 @@
-# Current Work Package: WP257-B canonical Green internal deploy — TECHNICAL PASS
+# Current Work Package: WP257-C public staging route — TECHNICAL PASS
+
+WP257-C exposes only the existing `staging.shareittoo.com/api` route to the
+canonical internal Green WP257 candidate. HTTPS/TLS, health/version, exact
+guest listing/image, Owner/Renter isolation, revoked/expired/spoof denial,
+upload/auth boundaries, external action-token semantics, API restart and Caddy
+reload persistence all pass. The Caddyfile was unchanged; Caddy is attached to
+the internal Green network with a reversible backup. Production, other hosts,
+provider/payment/mail/AI, Store/Play and devices remain untouched. See
+`docs/operations/WP257_PUBLIC_STAGING_ROUTE_20260918.md` and
+`docs/evidence/release-readiness/wp257-public-staging-route-20260918.json`.
+
+# Previous Work Package: WP257-B canonical Green internal deploy — TECHNICAL PASS
 
 WP257-B aktiviert den exakt geprüften WP257-Kandidaten im kanonischen
 internen Green-Netz ohne Host-Port. Source-Commit, Image-Digest und die
