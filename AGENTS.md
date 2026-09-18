@@ -343,3 +343,7 @@ authoritative target host and exact artifact path first. A protected source
 backup and a previously written success-evidence file are different artifacts;
 never substitute one for the other or claim a run was blocked before start
 until the target-host readback is complete.
+
+An explicit apply/commit path must be executed before a work package is
+closed. A transaction ROLLBACK is not a COMMIT and must never be described as
+one; if the guarded commit path is blocked, record the exact blocker and stop.

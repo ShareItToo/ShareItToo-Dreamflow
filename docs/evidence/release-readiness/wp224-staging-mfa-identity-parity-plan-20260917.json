@@ -383,6 +383,40 @@
         "liveReadback": "staging API exited/0; PG schema 001-074; no live DB/provider mutation",
         "nextGate": "no live retirement; any future apply requires a separate owner-gated full backup and source-authorized archival design"
       },
+      "wp253RetirementGraphDecision": {
+        "status": "blocked-no-rule-compliant-retirement-mechanism",
+        "decision": "B-no-safe-canonical-retirement-under-current-guards",
+        "targetHost": "sit-staging-vps",
+        "opsCommit": "8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+        "runtimeCommit": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+        "backup": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-20260917211705-4e345294.dump",
+          "bytes": 3855507,
+          "sha256": "0fb025cad33f9ca9642603e0239103d85368996456af540de3d394c2bd64e193"
+        },
+        "provenance": "all 4 re_memory refs / 2 payments; linked charge and payment-intent classes ch_memory_/pi_memory_; source/test proof in stripe_provider.js + payment_domain.test.js",
+        "manifest": {
+          "payments": 2,
+          "refunds": 4,
+          "paymentRowHashes": ["e0d1dd643170766e0a388fd93b908f69a16d365828d37f0681a0c0bcc5ce37dc", "9fb150c4dc74402d750568cf4fd600b6ccae64eb0e60b8dca416e72ab4cf1d44"],
+          "refundRowHashes": ["7db15aaa9323d531ee5a83de84a149f135ca7e96deb09b933d74d559efca150e", "6a5bac48711df614c11855cf88e727f7d333e3e0f05498e3ff222ebdccf99583", "d8555600433102084860b2d9e03c655c7c28ca7e412035818bbe79cb85c3ffae", "90ddaecd95f664e0071bcfd2264df238539393ca435761f8732b0a6ac67be35b"]
+        },
+        "dependencyMatrix": "all FK dependents and row counts/hashes captured for deposit_mandates(2), ledger_transactions(18 payment/4 refund), payment_attempts(6), payment_commands(12), payouts(2), refunds(4); zero disputes/financial_documents/refund_transfer_reversals/support links; trigger/constraint definition hashes retained",
+        "guardedApplyProbe": {
+          "rollbackPath": "DELETE attempt caught by refunds_provider_truth_guard SQLSTATE 55000; rollback completed; exact graph unchanged",
+          "commitPath": "real BEGIN/DELETE/COMMIT attempt exited 1 with same guard; no rows committed",
+          "guard": "refunds_provider_record_delete_forbidden via refunds_provider_truth_guard; provider/preparation fields immutable; dependent ledger FKs also prevent deletion",
+          "readinessAndSupport": "no readiness exception; support P3 untouched"
+        },
+        "evidence": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-wp250-stripe-readback-20260918010444-9031aebe.json",
+          "mode": "0600",
+          "bytes": 15874,
+          "sha256": "b2a55bc18d9690a6f826a017878118185b2b3c2189bce39318429996285e01a7"
+        },
+        "liveReadback": "disposableAbsent=true; staging API exited/0; PG schema 001-074; no live DB/provider mutation",
+        "nextGate": "Sol must ask Astra for explicit rebaseline decision; no retirement implementation or live action"
+      },
       "priorImageSqlContractComparison": {
         "status": "required-not-executed",
         "observedPriorStagingCommit": "df39a14b7a19afe467842461a28f1e77fec8445e",
