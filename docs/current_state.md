@@ -1,5 +1,16 @@
 # ShareItToo Current State
 
+## WP257-B canonical Green internal deploy — TECHNICAL PASS
+
+Der Kandidat aus Source `7887c7c754b6e43434caf44ea3fbeed6e8a902ce` mit Digest
+`sha256:9d90eb91166770e0803bad40058233cfc086d8d2b50f9d4622c4fc4f39a7fcf6`
+läuft jetzt im kanonischen internen Green-Netz ohne Host-Port. Die interne
+Matrix, Action-Token-Eigentümerprüfung, Neustart-Persistenz und die unveränderte
+DB-Zählung `2|1|1|2|0` sind bestätigt. Die öffentliche Route bleibt `502`;
+Provider, Payment, Mail, Store/Play und Geräte bleiben unverändert.
+Siehe `docs/operations/WP257_GREEN_INTERNAL_DEPLOY_20260918.md` und
+`docs/evidence/release-readiness/wp257-green-internal-deploy-20260918.json`.
+
 ## WP257-A staging access gate — TECHNICAL PASS
 
 At source head `7887c7c754b6e43434caf44ea3fbeed6e8a902ce`, staging access is

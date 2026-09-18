@@ -1,4 +1,15 @@
-# Current Work Package: WP257-A staging access gate — TECHNICAL PASS
+# Current Work Package: WP257-B canonical Green internal deploy — TECHNICAL PASS
+
+WP257-B aktiviert den exakt geprüften WP257-Kandidaten im kanonischen
+internen Green-Netz ohne Host-Port. Source-Commit, Image-Digest und die
+private `SIT_STAGING_*`-Allowlist sind gebunden. Health live/ready, Guest-
+Listing/Upload, Owner/Renter-Isolation, Action-Token-Routen, Neustart-
+Persistenz und DB-Count-Erhaltung sind grün; die öffentliche Route bleibt
+`502`. Payment/Mail/Push/Identity/Listing-AI-Ausführung bleiben gehalten.
+Siehe `docs/operations/WP257_GREEN_INTERNAL_DEPLOY_20260918.md` und
+`docs/evidence/release-readiness/wp257-green-internal-deploy-20260918.json`.
+
+# Previous Work Package: WP257-A staging access gate — TECHNICAL PASS
 
 WP257-A binds the non-production staging runtime to a private, exact synthetic
 cohort. Empty or malformed protected configuration fails closed; production
