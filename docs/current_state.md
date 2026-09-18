@@ -5597,6 +5597,22 @@ Draft PR #7 remains unmerged. No production, real support action, external
 message, Payment, Store, signed candidate, deployment or public activation
 occurred.
 
+## WP255 synthetic technical E2E (2026-09-18)
+
+WP255 created a disposable clone from the bound Green backup with a separate
+internal network, database/upload volumes, credentials and no Provider egress.
+Fail-closed target, cleanup, runtime/schema-drift and legal-snapshot negative
+tests pass (9/9). Exactly nine A-I V5.2 technical fixtures were seeded with
+explicit `SYNTHETIC_TEST_ONLY / NOT_FOR_CONTRACT_OR_RELEASE` markers and a
+future `effective_at`; canonical legal assets, manifest and registry remain
+unchanged. Clone App checkout, idempotent replay, memory payment,
+requires-action/capture, duplicate suppression and restart persistence passed.
+Payout/Refund stopped truthfully at `payout_contract_binding_invalid`; no
+contract/provider bypass occurred. All clone resources, credentials, backups
+and jobs were removed and absence verified. Permanent Green and Alt artifacts
+remain unchanged. This is synthetic technical evidence only; V5.2 legal status
+remains BLOCKED. See WP255 JSON evidence and operations report.
+
 ## S4E reviewed support progress updates
 
 `S4E_SUPPORT_PROGRESS_UPDATES` is locally verified at exact implementation

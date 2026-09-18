@@ -8522,3 +8522,17 @@ protected WP249/WP253 artifacts are unchanged. Runner tests 6/6 and diff-check
 pass; unchanged full regression was not repeated. The next action is Sol review
 of the Green evidence plus the real V5.2 legal gate; no switch or Provider,
 Store or Play mutation is authorized.
+
+## WP255 synthetic technical E2E (2026-09-18)
+
+The disposable clone from Green was positively bound to runtime source
+`338c7bc066f10b72b05f89a5485cb5f5204a8e25` and the canonical schema digest.
+Target/cleanup/drift guards and missing/hash/future snapshot negatives pass;
+the focused suite is 9/9. Nine visibly synthetic A-I legal rows were created
+only in the clone with `effective_at=2099-01-01`; no canonical manifest, asset
+or registry changed. Checkout, replay, memory capture, duplicate suppression
+and restart readback pass. Payout/Refund correctly stop at
+`payout_contract_binding_invalid`, so no legal or provider truth is fabricated.
+Clone cleanup and absence pass; Green, Alt and protected evidence remain
+unchanged. Status is `SYNTHETIC_TECHNICAL_PARTIAL_LEGAL_BLOCKED`; no switch,
+Provider, Store, Play or Production step is authorized.

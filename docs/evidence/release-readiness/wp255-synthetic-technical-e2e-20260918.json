@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "package": "WP255",
+  "status": "SYNTHETIC_TECHNICAL_PARTIAL_LEGAL_BLOCKED",
+  "verifiedAt": "2026-09-18T01:50:00Z",
+  "sourceHead": "1e5846f5aae300d4c0fbc57af6e161078955319c",
+  "runtimeSourceCommit": "338c7bc066f10b72b05f89a5485cb5f5204a8e25",
+  "runtimeImageDigest": "sha256:43c3e62e47fd6b22ea5015a5a90003f48b6704066b490502466919a0e46e8c43",
+  "schemaSqlSha256": "fe2442a6fb2b2254df845ffbd0d405a6646569692a3b6fdb0f32eb3a678303f8",
+  "inputGreenBackup": {"path": "/docker/shareittoo/backups/rehearsals/staging-wp254-green-20260918012350.dump", "bytes": 1073299, "sha256": "79b1e739cac9d4e9a80a270aa111075840e01f7f8b9662347b37310eb0db75d9"},
+  "clone": {"runId": "wp255-20260918014500-1234abcd", "network": "sit-synthetic-clone-wp255-20260918014500-1234abcd-network", "databaseVolume": "sit-synthetic-clone-wp255-20260918014500-1234abcd-db", "uploadsVolume": "sit-synthetic-clone-wp255-20260918014500-1234abcd-uploads", "internalNetwork": true, "hostPorts": null, "providerEgress": "blocked", "targetAttestation": "passed", "initialInventory": {"users": 2, "listings": 1, "uploads": 1, "payments": 0, "refunds": 0, "payouts": 0, "supportCases": 0, "disputes": 0}},
+  "negativeTests": {"wrongTarget": "passed", "protectedCleanup": "passed", "runtimeDrift": "passed (runtime_source_drift)", "schemaDrift": "passed (schema_drift)", "missingSnapshot": "passed (synthetic_snapshot_missing)", "wrongHash": "passed (synthetic_snapshot_hash_invalid)", "futureEffectiveAt": "passed (synthetic_snapshot_future_effective_at)", "unitSuite": "9/9 passed"},
+  "syntheticLegalFixtures": {"datasetId": "wp255-green-clone-001", "runId": "wp255-20260918014500-1234abcd", "count": 9, "effectiveAt": "2099-01-01T00:00:00.000Z", "marker": "SYNTHETIC_TEST_ONLY / NOT_FOR_CONTRACT_OR_RELEASE", "hashes": {"platform_terms": "2b1c7efacd3b91f8027dd0cc52b0b6dbafccdce42125ee2c47456847cc00ce98", "private_rental_terms": "8866a6659537438b4c26247cb6d84f2ff70413cb0b0619f8ba68c44ca7264d4d", "cancellation_refund": "3ae777f552ae239e9ac1c95dea6b1e69074897cee248f546371f14db7d7b225c", "handover_return_damage": "e8596cbb77490c6d72bde68741040221991b09607cd2810b3ba04807f00f3263", "payment_payout": "f01d4f0f649c5a406cf84affaae3e7ec058dfcb428e03c5d813a751b68c665ae", "community_safety": "9325b877c21c86247221d5d94740aa5d36f8b62cfa66605318f32d3e31842a7e", "reporting_moderation_review": "b234d4c795eea7cadd883df102f8f5d9d5df45309fc9c8670c73f323bfba3172", "privacy": "65927fc3b6fdbe79724ecbe7fffaf2c2c8c550ccc35cd7ec7ad86f03689260d7", "imprint_withdrawal_shorttexts": "4f65ba8bc2c176b9b95bb7298dfb7ce789bfc8b27d1fc453785cf89e0bcc42d6"}},
+  "e2e": {"checkout": "passed", "checkoutReplay": "passed", "paymentRequiresActionAndCapture": "passed", "duplicateEventSuppression": "passed", "paymentAfterRestart": "captured/2500", "ledgerTransactionsAfterCapture": 1, "payout": "blocked_by_payout_contract_binding_invalid", "refund": "not_attempted_after_legal_block"},
+  "cleanup": {"resourceAttestation": "passed", "cloneContainersAbsent": true, "cloneVolumesAbsent": true, "cloneNetworkAbsent": true, "cloneCredentialAbsent": true, "cloneBackupsAbsent": true},
+  "greenUnchanged": {"apiRunning": true, "counts": {"users": 2, "listings": 1, "uploads": 1, "payments": 0, "legalDocumentSnapshots": 0}, "originalAltDumpSha256": "0fb025cad33f9ca9642603e0239103d85368996456af540de3d394c2bd64e193", "wp253EvidenceSha256": "b2a55bc18d9690a6f826a017878118185b2b3c2189bce39318429996285e01a7"},
+  "legalStatus": "BLOCKED; V5.2 remains draft-blocked, synthetic rows are future-dated and explicitly non-contractual",
+  "nextGate": "Sol review; no Green switch, Provider write, Store/Play or Production action"
+}
