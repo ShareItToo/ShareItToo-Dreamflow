@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "sit-wp258-b-pixel-functional-smoke",
-  "status": "partial-blocked-login-rate-limit",
+  "status": "partial-blocked-synthetic-login-credentials",
   "capturedAt": "2026-09-18T22:49:27.920Z",
   "candidate": {
     "applicationId": "com.shareittoo.app",
@@ -25,7 +25,7 @@
     "categorySonstigesDiscoverable": "passed",
     "categorySonstigesSelectable": "passed",
     "offlineTruthAndOnlineRecovery": "passed",
-    "ownerLogin": "blocked-rate-limit-429"
+    "ownerLogin": "blocked-invalid-credentials-after-natural-rate-limit-reset"
   },
   "notEvidenced": [
     "authenticated-login-logout-persistence",
@@ -48,8 +48,11 @@
     "containsRawDeviceIdentifier": false
   },
   "blocker": {
-    "code": "rate_limit_exceeded",
-    "httpStatus": 429,
-    "retryPolicy": "wait-for-existing-15-minute-login-window; do-not-bypass"
+    "initialCode": "rate_limit_exceeded",
+    "initialHttpStatus": 429,
+    "resetPolicy": "natural-existing-15-minute-login-window-plus-buffer",
+    "finalCode": "invalid_credentials",
+    "finalHttpStatus": 401,
+    "retryPolicy": "do-not-try-additional-accounts-or-bypass-credential-boundary"
   }
 }

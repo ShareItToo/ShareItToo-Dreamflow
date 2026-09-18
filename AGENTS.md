@@ -71,6 +71,11 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   bind the action to the target's current bounds and the active scrollable
   viewport. After one no-op or unexpected screen, reread state and correct the
   mechanism; never repeat unchanged blind taps or out-of-bounds swipes.
+- Negative authentication-matrix checks and physical-device smoke must not run
+  in the same login-limiter window for the same client class. Let the natural
+  window expire and use the server's existing reset semantics; never clear a
+  limiter through a restart, proxy/IP/authority change, bypass, or policy
+  relaxation.
 - Runtime evidence must follow the product's actual state partition (for
   example active listings versus drafts) and prove the expected tab, route and
   post-restart value. Evidence from a neighboring tab or a backend-only write

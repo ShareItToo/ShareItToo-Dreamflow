@@ -1,13 +1,15 @@
-# Current Work Package: WP258-B Pixel functional smoke — PARTIAL; login rate-limit blocker
+# Current Work Package: WP258-B Pixel functional smoke — PARTIAL; synthetic-login credential blocker
 
 WP258-B hat den bereits installierten Kandidaten `1.0.0+2026091704` auf dem
 Pixel 7 Pro read-only funktional geprüft. Gastkatalog, `Sonstiges`-
 Kategorieauswahl sowie Offline-Fehler und Online-Recovery sind grün. Der
 begrenzte Login-Versuch wurde mit dem strukturierten Serverresultat
-`429 rate_limit_exceeded` beantwortet. Es wurde nicht wiederholt oder
-umgangen; Owner/Renter-, Listing-, Profilbild-, Logout/Login- und
-A→B-Isolationsprüfungen bleiben bis zum Ablauf des vorhandenen 15-Minuten-
-Fensters offen. OnePlus bleibt der separate physische Blocker aus WP258-A.
+`429 rate_limit_exceeded` beantwortet. Nach natürlichem Ablauf des Fensters
+wurde genau ein korrekter Owner-Login ausgeführt und mit der serverseitigen
+401-Semantik `invalid_credentials` abgelehnt. Es wurde kein zweiter Account
+versucht und nichts umgangen; Owner/Renter-, Listing-, Profilbild-,
+Logout/Login- und A→B-Isolationsprüfungen bleiben deshalb offen. OnePlus
+bleibt der separate physische Blocker aus WP258-A.
 Siehe `docs/operations/WP258_B_PIXEL_FUNCTIONAL_SMOKE_20260918.md` und
 `docs/evidence/release-readiness/wp258-b-pixel-functional-smoke-20260918.json`.
 

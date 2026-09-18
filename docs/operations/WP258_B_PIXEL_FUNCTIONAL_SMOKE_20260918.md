@@ -33,19 +33,24 @@ screenshots, device identifiers, credentials or account data are retained.
 The first bounded owner-login attempt reached the Staging API and returned the
 structured server result `429 rate_limit_exceeded` (also visible in the
 ephemeral Android logcat). The login limiter is a 15-minute window; no retry
-loop or limiter workaround was used. Therefore the following items remain
-**not evidenced** in WP258-B: authenticated login/logout persistence, owner
-listing create/change/delete, renter-vs-owner denial, synthetic profile-image
-upload/readback/restart, and account A→B isolation.
+loop or limiter workaround was used. After the natural window plus buffer, one
+correct owner-login attempt was made through the current UI. It reached the
+backend but was rejected as `E-Mail oder Passwort ist nicht korrekt` (HTTP 401
+semantics); no additional account or credential was tried.
 
-This is a temporary external rate-limit blocker, not a functional PASS. It is
-recorded as technical debt and must be retried once the bounded server window
-has elapsed, without changing limiter policy or using a different authority.
-OnePlus remains a separate physical reachability blocker from WP258-A.
+Therefore the following items remain **not evidenced** in WP258-B:
+authenticated login/logout persistence, owner listing create/change/delete,
+renter-vs-owner denial, synthetic profile-image upload/readback/restart, and
+account A→B isolation.
+
+The 429 window reset naturally, so this is no longer a rate-limit blocker; the
+remaining blocker is the verified synthetic-login fixture/credential state.
+It is recorded without exposing or replacing credentials. OnePlus remains a
+separate physical reachability blocker from WP258-A.
 
 ## Boundaries
 
 - payment, mail, push, identity/KYC, 2FA, listing-AI provider: not called
 - production/VPS/DNS/cloud/Store/Play: unchanged
 - PR merge or history rewrite: none
-- result: `PARTIAL_BLOCKED_LOGIN_RATE_LIMIT`
+- result: `PARTIAL_BLOCKED_SYNTHETIC_LOGIN_CREDENTIALS`
