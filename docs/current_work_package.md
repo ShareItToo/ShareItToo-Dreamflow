@@ -8505,3 +8505,20 @@ handover: `docs/operations/GOOGLE_PLAY_INTERNAL_RELEASE_2026091605_HANDOVER.md`.
 The candidate manifest remains the immutable pre-action handoff (`playConsoleReadback:
 not-performed`); the post-activation truth is recorded only in the dedicated
 readback evidence above. Historical 1604 evidence remains immutable.
+
+## Current package: WP254-A Green acceptance (2026-09-18)
+
+Green is running isolated on `338c7bc066f10b72b05f89a5485cb5f5204a8e25` with
+internal Docker networking, no host port, separate database/uploads volumes,
+memory-only payments and blocked Provider egress. Dataset
+`wp254-green-dataset-001` has two synthetic users, one `Sonstiges` listing and
+one image; no financial/support graph was copied from Alt. Readiness, MFA,
+image persistence, owner/renter isolation and memory Connect onboarding pass;
+Green backup/restore also passes.
+
+Legal booking/checkout remains blocked honestly because V5.2 snapshots are
+draft-blocked and absent; no fake snapshots were inserted. Alt resources and
+protected WP249/WP253 artifacts are unchanged. Runner tests 6/6 and diff-check
+pass; unchanged full regression was not repeated. The next action is Sol review
+of the Green evidence plus the real V5.2 legal gate; no switch or Provider,
+Store or Play mutation is authorized.

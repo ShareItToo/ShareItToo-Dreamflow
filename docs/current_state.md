@@ -8473,3 +8473,22 @@ the candidate remains reserved for a later owner-authorized action. No device,
 backend, Firebase Console, payment, Provider, Production, VPS/DNS or PR
 merge state changed. Full regression and GitHub checks are intentionally
 recorded only after the clean E gate.
+
+## WP254-A Green acceptance (2026-09-18)
+
+An isolated Green environment now runs on source HEAD
+`338c7bc066f10b72b05f89a5485cb5f5204a8e25` with internal-only networking,
+no host port and separate database/upload volumes. Green live/readiness probes
+are 200; payment is memory-only, Identity is disabled, Listing AI is a
+zero-budget mock and Provider egress is blocked. Dataset
+`wp254-green-dataset-001` contains two synthetic users, one `Sonstiges`
+listing and one image; financial/support/dispute/payout tables are empty.
+MFA, image persistence over restart, owner/renter reads, renter mutation denial
+and memory Connect onboarding pass.
+
+The fresh Alt backup plus isolated Green backup/restore proofs are retained
+privately. Alt Staging and protected WP249/WP253 artifacts are hash unchanged.
+Legal booking/checkout acceptance remains open because V5.2 snapshots are
+still draft-blocked and were not fabricated. See the WP254 operation report
+and bound JSON evidence. No switch, Provider, Store, Play or Production action
+occurred.
