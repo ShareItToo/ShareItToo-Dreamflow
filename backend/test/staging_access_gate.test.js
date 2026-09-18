@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   isStagingUserAllowed,
   readStagingAccessConfiguration,
+  stagingActionTokenOwnerAllowed,
   stagingAnonymousPathAllowed,
   stagingGuestListingAllowed,
   stagingGuestUploadAllowed,
@@ -28,6 +29,30 @@ test('staging cohort configuration is exact and fail-closed', () => {
   assert.equal(stagingGuestListingAllowed(configuration, 'foreign-listing'), false);
   assert.equal(stagingGuestUploadAllowed(configuration, 'fixture-full.webp'), true);
   assert.equal(stagingGuestUploadAllowed(configuration, 'foreign.webp'), false);
+});
+
+test('HTML action-token owner check accepts only a live allowlisted owner', () => {
+  const configuration = readStagingAccessConfiguration(validEnvironment);
+  const now = new Date('2026-09-18T10:00:00.000Z');
+  const live = {
+    id: 'synthetic-owner-a',
+    expires_at: new Date('2026-09-18T10:30:00.000Z'),
+    consumed_at: null,
+  };
+  assert.equal(stagingActionTokenOwnerAllowed(configuration, live, { now }), true);
+  assert.equal(stagingActionTokenOwnerAllowed(configuration, {
+    ...live,
+    id: 'foreign-user',
+  }, { now }), false);
+  assert.equal(stagingActionTokenOwnerAllowed(configuration, {
+    ...live,
+    expires_at: new Date('2026-09-18T09:59:59.000Z'),
+  }, { now }), false);
+  assert.equal(stagingActionTokenOwnerAllowed(configuration, {
+    ...live,
+    consumed_at: new Date('2026-09-18T09:59:00.000Z'),
+  }, { now }), false);
+  assert.equal(stagingActionTokenOwnerAllowed(configuration, null, { now }), false);
 });
 
 test('empty, malformed and production configurations cannot open protected access', () => {
@@ -62,6 +87,10 @@ test('anonymous surface is a minimal exact route matrix', () => {
   }
   assert.equal(stagingAnonymousPathAllowed(configuration, { method: 'GET', path: '/v1/listings' }), true);
   assert.equal(stagingAnonymousPathAllowed(configuration, { method: 'GET', path: '/v1/uploads/fixture-full.webp' }), true);
+  for (const path of ['/v1/auth/password-reset/form', '/v1/account-deletion/confirm']) {
+    assert.equal(stagingAnonymousPathAllowed(configuration, { method: 'GET', path }), true);
+    assert.equal(stagingAnonymousPathAllowed(configuration, { method: 'POST', path }), true);
+  }
   for (const request of [
     { method: 'GET', path: '/v1/public/privacy' },
     { method: 'GET', path: '/v1/profiles/wp254-green-owner' },
@@ -80,4 +109,7 @@ test('implementation keeps the gate before webhook routes and on token auth', ()
   assert.match(securitySource, /config\.stagingAccess\.enabled && !isStagingUserAllowed\(config\.stagingAccess, payload\.sub\)/u);
   assert.match(source, /stagingGuestUploadAllowed\(config\.stagingAccess, storageName\)/u);
   assert.match(source, /publicListingIds: config\.stagingAccess\.enabled/u);
+  assert.match(source, /app\.post\('\/v1\/auth\/password-reset\/form'/u);
+  assert.match(source, /app\.post\('\/v1\/account-deletion\/confirm'/u);
+  assert.match(source, /stagingActionTokenOwnerAllowed\(config\.stagingAccess, row\)/u);
 });

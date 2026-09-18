@@ -13,6 +13,7 @@ async function dockerFixture() {
   const root = await mkdtemp(join(tmpdir(), 'sit-deploy-fcm-test-'));
   const docker = join(root, 'docker');
   const capture = join(root, 'docker-calls.txt');
+  const acceptanceEvidence = join(root, 'acceptance.json');
   await writeFile(docker, `#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\\n' "$*" >> "$DOCKER_CAPTURE"
@@ -27,7 +28,18 @@ else
 fi
 `, { mode: 0o700 });
   await chmod(docker, 0o700);
-  return { root, capture };
+  await writeFile(acceptanceEvidence, JSON.stringify({
+    kind: 'sit-staging-controlled-acceptance',
+    status: 'passed',
+    runtimeCommit: commit,
+    opsCommit: 'c'.repeat(40),
+    acceptanceTarget: 'loopback',
+    publicProxyReachable: false,
+    publicCandidateServed: false,
+    publicReleaseComplete: false,
+    servicesRemainQuiesced: true,
+  }), { mode: 0o600 });
+  return { root, capture, acceptanceEvidence };
 }
 
 test('production rejects the staging FCM flag before invoking Docker', async (t) => {
@@ -65,6 +77,10 @@ test('staging FCM validates the secret before Compose can run', async (t) => {
       DOCKER_CAPTURE: fixture.capture,
       MOCK_COMMIT: commit,
       NODE_BINARY: process.execPath,
+      SIT_STAGING_CONTROLLED_RELEASE: '1',
+      SIT_STAGING_REHEARSAL_OPS_COMMIT: 'c'.repeat(40),
+      SIT_STAGING_PUBLIC_RELEASE_CONFIRM: commit,
+      SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE: fixture.acceptanceEvidence,
       ENABLE_STAGING_FCM: '1',
       FIREBASE_PROJECT_ID: 'shareittoo-staging',
       FIREBASE_SERVICE_ACCOUNT_HOST_FILE: join(fixture.root, 'missing.json'),

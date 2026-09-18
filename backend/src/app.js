@@ -438,6 +438,7 @@ import {
 } from './security.js';
 import {
   isStagingUserAllowed,
+  stagingActionTokenOwnerAllowed,
   stagingAnonymousPathAllowed,
   stagingGuestListingAllowed,
   stagingGuestUploadAllowed,
@@ -596,7 +597,10 @@ function assertStagingRegistrationClosed() {
 }
 
 function assertStagingActionTokenOwner(row) {
-  if (config.stagingAccess.enabled && row?.id) assertStagingUserAllowed(row.id);
+  if (config.stagingAccess.enabled
+      && !stagingActionTokenOwnerAllowed(config.stagingAccess, row)) {
+    throw new HttpError(403, 'staging_account_not_allowlisted');
+  }
 }
 
 const requireActiveAccount = asyncRoute(async (req, _res, next) => {

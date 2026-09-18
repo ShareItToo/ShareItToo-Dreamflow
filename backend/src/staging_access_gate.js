@@ -73,6 +73,21 @@ export function isStagingUserAllowed(configuration, userId) {
     && configuration.allowedUserIds.includes(userId);
 }
 
+/**
+ * Action-token rows have already been looked up under a row lock by the
+ * caller. Keep the staging owner check fail-closed so a foreign, consumed or
+ * expired row cannot reach an HTML-form mutation.
+ */
+export function stagingActionTokenOwnerAllowed(configuration, row, { now = new Date() } = {}) {
+  if (!row || typeof row.id !== 'string') return false;
+  const consumedAt = row.consumed_at ?? row.consumedAt;
+  if (consumedAt !== null && consumedAt !== undefined) return false;
+  const expiresAt = row.expires_at ?? row.expiresAt;
+  if (!(expiresAt instanceof Date) || Number.isNaN(expiresAt.getTime())) return false;
+  if (!(now instanceof Date) || Number.isNaN(now.getTime()) || expiresAt <= now) return false;
+  return isStagingUserAllowed(configuration, row.id);
+}
+
 export function stagingGuestListingAllowed(configuration, listingId) {
   return configuration?.enabled === true
     && configuration.valid === true
@@ -108,6 +123,7 @@ const controlledPostPaths = new Set([
   '/v1/auth/password-reset/form',
   '/v1/auth/password-reset/confirm',
   '/v1/account-deletion/request',
+  '/v1/account-deletion/confirm',
 ]);
 const controlledReadPaths = new Set([
   '/v1/auth/email-verification/confirm',

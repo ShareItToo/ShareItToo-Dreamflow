@@ -96,6 +96,7 @@ async function dockerFixture() {
   const docker = join(root, 'docker');
   const git = join(root, 'git');
   const capture = join(root, 'docker-calls.txt');
+  const acceptanceEvidence = join(root, 'acceptance.json');
   const evidence = readyEvidence();
   const evidenceFile = join(root, 'readiness-evidence.json');
   await writeFile(evidenceFile, JSON.stringify(evidence), { mode: 0o600 });
@@ -127,6 +128,17 @@ fi
 exec /usr/bin/git "$@"
 `, { mode: 0o700 });
   await chmod(git, 0o700);
+  await writeFile(acceptanceEvidence, JSON.stringify({
+    kind: 'sit-staging-controlled-acceptance',
+    status: 'passed',
+    runtimeCommit: commit,
+    opsCommit: 'c'.repeat(40),
+    acceptanceTarget: 'loopback',
+    publicProxyReachable: false,
+    publicCandidateServed: false,
+    publicReleaseComplete: false,
+    servicesRemainQuiesced: true,
+  }), { mode: 0o600 });
   const executionGate = join(root, 'stripe-execution-gate.json');
   const gate = approvedExecutionGate(evidence);
   await writeFile(
@@ -135,7 +147,7 @@ exec /usr/bin/git "$@"
     { mode: 0o600 },
   );
   await chmod(executionGate, 0o600);
-  return { root, capture, executionGate, evidenceFile, gate };
+  return { root, capture, executionGate, evidenceFile, gate, acceptanceEvidence };
 }
 
 function stripeAuthorizationEnv(fixture) {
@@ -176,6 +188,10 @@ test('Staging Stripe requires the exact commit confirmation before Docker', asyn
     env: {
       ...process.env,
       PATH: `${fixture.root}:${process.env.PATH}`,
+      SIT_STAGING_CONTROLLED_RELEASE: '1',
+      SIT_STAGING_REHEARSAL_OPS_COMMIT: 'c'.repeat(40),
+      SIT_STAGING_PUBLIC_RELEASE_CONFIRM: commit,
+      SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE: fixture.acceptanceEvidence,
       ENABLE_STAGING_STRIPE: '1',
       SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
       CONFIRM_STAGING_STRIPE: 'b'.repeat(40),
@@ -198,6 +214,10 @@ test('Staging Stripe validates private files before Compose can run', async (t) 
       ...process.env,
       PATH: `${fixture.root}:${process.env.PATH}`,
       NODE_BINARY: process.execPath,
+      SIT_STAGING_CONTROLLED_RELEASE: '1',
+      SIT_STAGING_REHEARSAL_OPS_COMMIT: 'c'.repeat(40),
+      SIT_STAGING_PUBLIC_RELEASE_CONFIRM: commit,
+      SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE: fixture.acceptanceEvidence,
       ENABLE_STAGING_STRIPE: '1',
       SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
       CONFIRM_STAGING_STRIPE: commit,
@@ -227,6 +247,10 @@ test('Staging Stripe requires the private exact-commit execution gate before sec
       ...process.env,
       PATH: `${fixture.root}:${process.env.PATH}`,
       NODE_BINARY: process.execPath,
+      SIT_STAGING_CONTROLLED_RELEASE: '1',
+      SIT_STAGING_REHEARSAL_OPS_COMMIT: 'c'.repeat(40),
+      SIT_STAGING_PUBLIC_RELEASE_CONFIRM: commit,
+      SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE: fixture.acceptanceEvidence,
       ENABLE_STAGING_STRIPE: '1',
       SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
       CONFIRM_STAGING_STRIPE: commit,

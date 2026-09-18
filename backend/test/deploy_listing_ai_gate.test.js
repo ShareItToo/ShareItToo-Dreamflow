@@ -13,6 +13,7 @@ async function dockerFixture() {
   const root = await mkdtemp(join(tmpdir(), 'sit-deploy-listing-ai-test-'));
   const docker = join(root, 'docker');
   const capture = join(root, 'docker-calls.txt');
+  const acceptanceEvidence = join(root, 'acceptance.json');
   await writeFile(docker, `#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\\n' "$*" >> "$DOCKER_CAPTURE"
@@ -27,7 +28,18 @@ else
 fi
 `, { mode: 0o700 });
   await chmod(docker, 0o700);
-  return { root, capture };
+  await writeFile(acceptanceEvidence, JSON.stringify({
+    kind: 'sit-staging-controlled-acceptance',
+    status: 'passed',
+    runtimeCommit: commit,
+    opsCommit: 'c'.repeat(40),
+    acceptanceTarget: 'loopback',
+    publicProxyReachable: false,
+    publicCandidateServed: false,
+    publicReleaseComplete: false,
+    servicesRemainQuiesced: true,
+  }), { mode: 0o600 });
+  return { root, capture, acceptanceEvidence };
 }
 
 test('production rejects the Staging listing-AI flag before invoking Docker', async (t) => {
@@ -58,6 +70,10 @@ test('Staging listing-AI requires the exact commit confirmation before Docker', 
     env: {
       ...process.env,
       PATH: `${fixture.root}:${process.env.PATH}`,
+      SIT_STAGING_CONTROLLED_RELEASE: '1',
+      SIT_STAGING_REHEARSAL_OPS_COMMIT: 'c'.repeat(40),
+      SIT_STAGING_PUBLIC_RELEASE_CONFIRM: commit,
+      SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE: fixture.acceptanceEvidence,
       ENABLE_STAGING_LISTING_AI: '1',
       SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
       CONFIRM_STAGING_LISTING_AI: 'b'.repeat(40),
@@ -80,6 +96,10 @@ test('Staging listing-AI validates its private key before Compose can run', asyn
       ...process.env,
       PATH: `${fixture.root}:${process.env.PATH}`,
       NODE_BINARY: process.execPath,
+      SIT_STAGING_CONTROLLED_RELEASE: '1',
+      SIT_STAGING_REHEARSAL_OPS_COMMIT: 'c'.repeat(40),
+      SIT_STAGING_PUBLIC_RELEASE_CONFIRM: commit,
+      SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE: fixture.acceptanceEvidence,
       ENABLE_STAGING_LISTING_AI: '1',
       SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
       CONFIRM_STAGING_LISTING_AI: commit,
