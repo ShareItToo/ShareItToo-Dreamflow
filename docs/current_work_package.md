@@ -8525,14 +8525,18 @@ Store or Play mutation is authorized.
 
 ## WP255 synthetic technical E2E (2026-09-18)
 
-The disposable clone from Green was positively bound to runtime source
-`338c7bc066f10b72b05f89a5485cb5f5204a8e25` and the canonical schema digest.
-Target/cleanup/drift guards and missing/hash/future snapshot negatives pass;
-the focused suite is 9/9. Nine visibly synthetic A-I legal rows were created
-only in the clone with `effective_at=2099-01-01`; no canonical manifest, asset
-or registry changed. Checkout, replay, memory capture, duplicate suppression
-and restart readback pass. Payout/Refund correctly stop at
-`payout_contract_binding_invalid`, so no legal or provider truth is fabricated.
-Clone cleanup and absence pass; Green, Alt and protected evidence remain
-unchanged. Status is `SYNTHETIC_TECHNICAL_PARTIAL_LEGAL_BLOCKED`; no switch,
-Provider, Store, Play or Production step is authorized.
+The corrected positive disposable clone from Green was positively bound to
+runtime source `338c7bc066f10b72b05f89a5485cb5f5204a8e25` and the canonical
+schema digest. Target/cleanup/drift guards and missing/hash/future snapshot
+negatives pass; the focused suite is 10/10, with future-date rejection kept
+separate from the positive case. Nine visibly synthetic A-I legal rows were
+created only in the clone with `effective_at=2026-09-18T01:58:00Z`, one minute
+before the documented runtime; no canonical manifest, asset or registry
+changed. A persisted V5.2 platform contract with two declarations, checkout,
+replay, memory requires-action/capture, duplicate suppression, restart
+readback, full refund and refund replay pass; ledger truth is exact and
+`needsReview=false`. Payout is correctly held by `payout_hold_active` until
+the return window. Clone cleanup and absence pass; Green, Alt and protected
+evidence remain unchanged. Status is
+`SYNTHETIC_TECHNICAL_PASS_WITH_PAYOUT_HOLD`; no switch, Provider, Store, Play
+or Production step is authorized.

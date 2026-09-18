@@ -5599,19 +5599,21 @@ occurred.
 
 ## WP255 synthetic technical E2E (2026-09-18)
 
-WP255 created a disposable clone from the bound Green backup with a separate
-internal network, database/upload volumes, credentials and no Provider egress.
-Fail-closed target, cleanup, runtime/schema-drift and legal-snapshot negative
-tests pass (9/9). Exactly nine A-I V5.2 technical fixtures were seeded with
-explicit `SYNTHETIC_TEST_ONLY / NOT_FOR_CONTRACT_OR_RELEASE` markers and a
-future `effective_at`; canonical legal assets, manifest and registry remain
-unchanged. Clone App checkout, idempotent replay, memory payment,
-requires-action/capture, duplicate suppression and restart persistence passed.
-Payout/Refund stopped truthfully at `payout_contract_binding_invalid`; no
-contract/provider bypass occurred. All clone resources, credentials, backups
-and jobs were removed and absence verified. Permanent Green and Alt artifacts
-remain unchanged. This is synthetic technical evidence only; V5.2 legal status
-remains BLOCKED. See WP255 JSON evidence and operations report.
+WP255-B repeated the disposable clone from the bound Green backup with a
+separate internal network, database/upload volumes, credentials and no Provider
+egress. Target/cleanup/runtime-schema drift plus missing/hash/future-date
+negative cases remain fail-closed (10/10 focused tests); the future-date case
+is separate from the positive run. Exactly nine A-I V5.2 technical fixtures
+were seeded with explicit `SYNTHETIC_TEST_ONLY / NOT_FOR_CONTRACT_OR_RELEASE`
+markers and `effective_at=2026-09-18T01:58:00Z`, one minute before the
+documented runtime. A persisted V5.2 platform contract with two declarations,
+Booking → Checkout → Replay → Requires-Action → Capture, restart readback,
+duplicate suppression, full Memory refund and refund replay passed; ledger
+truth is two transactions and `needsReview=false`. Payout remains honestly
+held by `payout_hold_active` until the return window. All clone resources,
+credentials, backups and jobs were removed and absence verified. Permanent
+Green and Alt artifacts remain unchanged. Canonical V5.2 legal status remains
+BLOCKED; see WP255 JSON evidence and operations report.
 
 ## S4E reviewed support progress updates
 

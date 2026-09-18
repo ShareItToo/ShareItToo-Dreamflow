@@ -278,6 +278,12 @@ or completed real-world verification. Every reachable copy and action must name
 the test boundary and preserve the server-authoritative no-confirmation
 disclosure.
 
+Positive and negative synthetic fixture cases are permanently separate. A
+negative fixture intentionally made missing, future-dated, hash-invalid or
+otherwise unusable may prove fail-closed rejection only; it must never replace
+an explicitly required positive end-to-end fixture or be reported as the
+technical cause of a positive-path blocker.
+
 Release feature-scope classifications must bind current source reachability to
 current runtime evidence. A stale audit, historical candidate or source-only
 contract cannot close a live-scope finding; a missing runtime route or provider
