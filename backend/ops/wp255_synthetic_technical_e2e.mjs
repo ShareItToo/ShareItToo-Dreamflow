@@ -126,6 +126,15 @@ export async function seedSyntheticLegalSnapshots({
   effectiveAt = '2099-01-01T00:00:00.000Z',
 } = {}) {
   assertSyntheticLegalSeedEnvironment({ env });
+  assertSyntheticCloneTarget({
+    targetKind: 'clone',
+    targetName: env.SIT_SYNTHETIC_CLONE_TARGET_NAME,
+    expectedRunId: env.SIT_SYNTHETIC_CLONE_RUN_ID,
+    expectedSourceCommit: env.SIT_SYNTHETIC_SOURCE_COMMIT,
+    actualSourceCommit: env.SIT_SYNTHETIC_RUNTIME_COMMIT,
+    expectedSchemaDigest: env.SIT_SYNTHETIC_SCHEMA_DIGEST,
+    actualSchemaDigest: env.SIT_SYNTHETIC_SCHEMA_DIGEST,
+  });
   if (typeof databaseUrl !== 'string' || !databaseUrl.includes('shareittoo_clone')) fail('synthetic_legal_seed_database_invalid');
   if (!Number.isFinite(Date.parse(effectiveAt)) || new Date(effectiveAt) <= new Date()) fail('synthetic_legal_seed_effective_at_must_be_future');
   const manifestPath = resolve(repositoryRoot, 'assets/legal/de/legal_manifest_v52.json');
@@ -169,8 +178,47 @@ export async function seedSyntheticLegalSnapshots({
   }
 }
 
+export async function verifySyntheticLegalSnapshots({
+  databaseUrl = process.env.DATABASE_URL,
+  env = process.env,
+  PoolClass = Pool,
+} = {}) {
+  assertSyntheticLegalSeedEnvironment({ env });
+  assertSyntheticCloneTarget({
+    targetKind: 'clone',
+    targetName: env.SIT_SYNTHETIC_CLONE_TARGET_NAME,
+    expectedRunId: env.SIT_SYNTHETIC_CLONE_RUN_ID,
+    expectedSourceCommit: env.SIT_SYNTHETIC_SOURCE_COMMIT,
+    actualSourceCommit: env.SIT_SYNTHETIC_RUNTIME_COMMIT,
+    expectedSchemaDigest: env.SIT_SYNTHETIC_SCHEMA_DIGEST,
+    actualSchemaDigest: env.SIT_SYNTHETIC_SCHEMA_DIGEST,
+  });
+  const pool = new PoolClass({ connectionString: databaseUrl });
+  try {
+    const result = await pool.query(
+      `SELECT document_key, content_text, content_sha256, effective_at
+         FROM legal_document_snapshots
+        WHERE document_version = 'V5.2-2026-08-16' AND locale = 'de'
+        ORDER BY document_key`,
+    );
+    if (result.rows.length !== legalParts.length) fail('synthetic_legal_verify_count_invalid');
+    const inventory = result.rows.map((row) => {
+      if (!row.content_text.includes('SYNTHETIC_TEST_ONLY / NOT_FOR_CONTRACT_OR_RELEASE')) fail('synthetic_legal_verify_marker_missing');
+      assertSyntheticSnapshotRejected({ row: { ...row, effective_at: row.effective_at }, now: new Date('2100-01-01T00:00:00.000Z') });
+      if (new Date(row.effective_at) <= new Date('2098-01-01T00:00:00.000Z')) fail('synthetic_legal_verify_effective_at_not_future');
+      return { key: row.document_key, contentSha256: row.content_sha256, effectiveAt: row.effective_at };
+    });
+    return Object.freeze({ datasetId: env.SIT_SYNTHETIC_DATASET_ID, runId: env.SIT_SYNTHETIC_CLONE_RUN_ID, count: inventory.length, inventory: Object.freeze(inventory) });
+  } finally {
+    await pool.end();
+  }
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
-  seedSyntheticLegalSnapshots()
+  const action = process.env.SIT_SYNTHETIC_LEGAL_VERIFY === '1'
+    ? verifySyntheticLegalSnapshots()
+    : seedSyntheticLegalSnapshots();
+  action
     .then((result) => process.stdout.write(`${JSON.stringify(result)}\n`))
     .catch((error) => {
       process.stderr.write(`${error?.message ?? 'synthetic_legal_seed_failed'}\n`);
