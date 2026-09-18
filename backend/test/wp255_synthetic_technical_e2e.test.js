@@ -7,6 +7,7 @@ import {
   assertSyntheticLegalSeedEnvironment,
   syntheticLegalContent,
   assertSyntheticSnapshotRejected,
+  assertSyntheticEffectiveAt,
   sha256Text,
 } from '../ops/wp255_synthetic_technical_e2e.mjs';
 
@@ -110,4 +111,16 @@ test('missing, wrong-hash and future snapshots are each rejected distinctly', ()
   assert.throws(() => assertSyntheticSnapshotRejected({
     row: { content_text: content, content_sha256: sha256Text(content), effective_at: '2099-01-01T00:00:00Z' },
   }), (error) => error.code === 'synthetic_snapshot_future_effective_at');
+});
+
+test('positive legal fixture time is bound just before the documented runtime', () => {
+  const binding = assertSyntheticEffectiveAt({
+    effectiveAt: '2026-09-18T01:49:00.000Z',
+    runtimeAt: '2026-09-18T01:50:00.000Z',
+  });
+  assert.equal(binding.effectiveAt, '2026-09-18T01:49:00.000Z');
+  assert.throws(() => assertSyntheticEffectiveAt({
+    effectiveAt: '2026-09-18T01:51:00.000Z',
+    runtimeAt: '2026-09-18T01:50:00.000Z',
+  }), (error) => error.code === 'synthetic_legal_seed_effective_at_after_runtime');
 });

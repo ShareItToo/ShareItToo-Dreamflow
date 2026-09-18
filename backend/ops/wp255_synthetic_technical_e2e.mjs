@@ -118,12 +118,24 @@ export function assertSyntheticSnapshotRejected({ row, now = new Date() } = {}) 
   return true;
 }
 
+export function assertSyntheticEffectiveAt({ effectiveAt, runtimeAt } = {}) {
+  const effective = new Date(effectiveAt);
+  const runtime = new Date(runtimeAt);
+  if (!Number.isFinite(effective.getTime()) || !Number.isFinite(runtime.getTime())) {
+    fail('synthetic_legal_seed_effective_at_invalid');
+  }
+  if (effective > runtime) fail('synthetic_legal_seed_effective_at_after_runtime');
+  const ageMs = runtime.getTime() - effective.getTime();
+  if (ageMs > 24 * 60 * 60 * 1000) fail('synthetic_legal_seed_effective_at_too_old');
+  return Object.freeze({ effectiveAt: effective.toISOString(), runtimeAt: runtime.toISOString() });
+}
+
 export async function seedSyntheticLegalSnapshots({
   databaseUrl = process.env.DATABASE_URL,
   repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..'),
   env = process.env,
   PoolClass = Pool,
-  effectiveAt = '2099-01-01T00:00:00.000Z',
+  effectiveAt = env.SIT_SYNTHETIC_EFFECTIVE_AT,
 } = {}) {
   assertSyntheticLegalSeedEnvironment({ env });
   assertSyntheticCloneTarget({
@@ -136,7 +148,7 @@ export async function seedSyntheticLegalSnapshots({
     actualSchemaDigest: env.SIT_SYNTHETIC_SCHEMA_DIGEST,
   });
   if (typeof databaseUrl !== 'string' || !databaseUrl.includes('shareittoo_clone')) fail('synthetic_legal_seed_database_invalid');
-  if (!Number.isFinite(Date.parse(effectiveAt)) || new Date(effectiveAt) <= new Date()) fail('synthetic_legal_seed_effective_at_must_be_future');
+  const effectiveBinding = assertSyntheticEffectiveAt({ effectiveAt, runtimeAt: env.SIT_SYNTHETIC_RUNTIME_AT });
   const manifestPath = resolve(repositoryRoot, 'assets/legal/de/legal_manifest_v52.json');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   if (manifest.version !== 'V5.2-2026-08-16' || manifest.status !== 'draft-blocked'
@@ -168,7 +180,7 @@ export async function seedSyntheticLegalSnapshots({
       inserted.push({ part, key, id, contentSha256, effectiveAt, marker: 'SYNTHETIC_TEST_ONLY / NOT_FOR_CONTRACT_OR_RELEASE' });
     }
     await client.query('COMMIT');
-    return Object.freeze({ datasetId: env.SIT_SYNTHETIC_DATASET_ID, runId: env.SIT_SYNTHETIC_CLONE_RUN_ID, version: 'V5.2-2026-08-16', inserted: Object.freeze(inserted) });
+    return Object.freeze({ datasetId: env.SIT_SYNTHETIC_DATASET_ID, runId: env.SIT_SYNTHETIC_CLONE_RUN_ID, version: 'V5.2-2026-08-16', effectiveBinding, inserted: Object.freeze(inserted) });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     throw error;
@@ -194,6 +206,7 @@ export async function verifySyntheticLegalSnapshots({
     actualSchemaDigest: env.SIT_SYNTHETIC_SCHEMA_DIGEST,
   });
   const pool = new PoolClass({ connectionString: databaseUrl });
+  const effectiveBinding = assertSyntheticEffectiveAt({ effectiveAt: env.SIT_SYNTHETIC_EFFECTIVE_AT, runtimeAt: env.SIT_SYNTHETIC_RUNTIME_AT });
   try {
     const result = await pool.query(
       `SELECT document_key, content_text, content_sha256, effective_at
@@ -204,11 +217,11 @@ export async function verifySyntheticLegalSnapshots({
     if (result.rows.length !== legalParts.length) fail('synthetic_legal_verify_count_invalid');
     const inventory = result.rows.map((row) => {
       if (!row.content_text.includes('SYNTHETIC_TEST_ONLY / NOT_FOR_CONTRACT_OR_RELEASE')) fail('synthetic_legal_verify_marker_missing');
-      assertSyntheticSnapshotRejected({ row: { ...row, effective_at: row.effective_at }, now: new Date('2100-01-01T00:00:00.000Z') });
-      if (new Date(row.effective_at) <= new Date('2098-01-01T00:00:00.000Z')) fail('synthetic_legal_verify_effective_at_not_future');
+      assertSyntheticSnapshotRejected({ row: { ...row, effective_at: row.effective_at }, now: new Date(effectiveBinding.runtimeAt) });
+      if (new Date(row.effective_at).toISOString() !== effectiveBinding.effectiveAt) fail('synthetic_legal_verify_effective_at_mismatch');
       return { key: row.document_key, contentSha256: row.content_sha256, effectiveAt: row.effective_at };
     });
-    return Object.freeze({ datasetId: env.SIT_SYNTHETIC_DATASET_ID, runId: env.SIT_SYNTHETIC_CLONE_RUN_ID, count: inventory.length, inventory: Object.freeze(inventory) });
+    return Object.freeze({ datasetId: env.SIT_SYNTHETIC_DATASET_ID, runId: env.SIT_SYNTHETIC_CLONE_RUN_ID, count: inventory.length, effectiveBinding, inventory: Object.freeze(inventory) });
   } finally {
     await pool.end();
   }
