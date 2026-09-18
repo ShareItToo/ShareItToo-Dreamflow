@@ -337,3 +337,9 @@ columns before planning dependent indexes, while the numbered migration owns
 validation/backfill and constraint tightening. A legacy 001-074 restore must
 have a deterministic real-PostgreSQL startup test before any new acceptance
 attempt.
+
+Before declaring a missing-artifact or toolchain blocker, verify the
+authoritative target host and exact artifact path first. A protected source
+backup and a previously written success-evidence file are different artifacts;
+never substitute one for the other or claim a run was blocked before start
+until the target-host readback is complete.

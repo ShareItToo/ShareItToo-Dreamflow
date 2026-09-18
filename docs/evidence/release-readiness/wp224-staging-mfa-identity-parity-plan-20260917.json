@@ -255,12 +255,32 @@
           "liveRemediation": "blocked until source classification and expected-set match; no live execution"
         },
         "disposableDiagnosisExecution": {
-          "status": "blocked-before-start",
-          "requiredBackup": "/docker/shareittoo/backups/rehearsals/staging-wp245-disposable-f0bb868a-20260918.json",
-          "observed": "path absent on current worker; Docker CLI unavailable",
+          "status": "misrouted-local-preflight-no-run",
+          "requiredBackup": "/docker/shareittoo/backups/rehearsals/staging-20260917211705-4e345294.dump",
+          "requiredManifest": "/docker/shareittoo/backups/rehearsals/staging-20260917211705-4e345294.dump.sha256",
+          "observed": "prior local preflight looked for the success-evidence path and did not reach the verified target host; no substitute fixture or live access was used",
+          "correctedExecution": {
+            "targetHost": "sit-staging-vps",
+            "opsCheckout": "/docker/shareittoo/staging-builds/8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+            "opsCommit": "8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+            "runtimeCommit": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+            "evidencePath": "/docker/shareittoo/backups/rehearsals/staging-wp249-diagnosis-20260918002009-861c6459.json",
+            "evidenceBytes": 4487,
+            "evidenceSha256": "82454c99d957843435130f037b722fe05feb243b22b23d2b1f98b8c5991d234a",
+            "backupBytes": 3855507,
+            "backupSha256": "0fb025cad33f9ca9642603e0239103d85368996456af540de3d394c2bd64e193",
+            "status": "classified-source-readback-complete-operational-release-blocked",
+            "findings": "payment=2 refund_truth_needs_review; support=1 p3 next_update_overdue; all hashed IDs; classified as staging_operation",
+            "causes": "both payment findings: untrusted_refund_count=2, refund cache/status mismatch; support finding: received p3 overdue >24h",
+            "cleanup": true,
+            "disposableAbsent": true,
+            "providerTraffic": false,
+            "liveDatabaseMutated": false,
+            "hostPortPublished": false
+          },
           "liveDatabaseMutated": false,
           "providerTraffic": false,
-          "action": "no substitute fixture or live access used; rerun only on the host containing the protected backup and Docker"
+          "action": "diagnosis rerouted to sit-staging-vps; future missing-artifact checks must verify target host and exact backup before declaring a blocker"
         }
       },
       "priorImageSqlContractComparison": {
