@@ -4,6 +4,8 @@ import {
   assertCloneCleanupTarget,
   assertCloneFixtureMarker,
   assertSyntheticCloneTarget,
+  assertSyntheticLegalSeedEnvironment,
+  syntheticLegalContent,
   sha256Text,
 } from '../ops/wp255_synthetic_technical_e2e.mjs';
 
@@ -78,4 +80,22 @@ test('fixtures require explicit synthetic and non-release markers', () => {
   assert.throws(() => assertCloneFixtureMarker({
     datasetId: 'wp255-green-clone-001', syntheticTestOnly: true, releaseEligible: true, contractEligible: false,
   }), (error) => error.code === 'fixture_marker_invalid');
+});
+
+test('synthetic legal seed requires test-only clone environment', () => {
+  assert.equal(assertSyntheticLegalSeedEnvironment({ env: {
+    SIT_SYNTHETIC_LEGAL_SEED: '1', DEPLOYMENT_ENVIRONMENT: 'test',
+    SIT_SYNTHETIC_DATASET_ID: 'wp255-green-clone-001', SIT_SYNTHETIC_CLONE_RUN_ID: runId,
+  } }), true);
+  assert.throws(() => assertSyntheticLegalSeedEnvironment({ env: {
+    SIT_SYNTHETIC_LEGAL_SEED: '1', DEPLOYMENT_ENVIRONMENT: 'staging',
+    SIT_SYNTHETIC_DATASET_ID: 'wp255-green-clone-001', SIT_SYNTHETIC_CLONE_RUN_ID: runId,
+  } }), (error) => error.code === 'synthetic_legal_seed_test_environment_required');
+});
+
+test('synthetic legal content is visibly non-contractual and hashable', () => {
+  const content = syntheticLegalContent({ content: '<html>fixture</html>', datasetId: 'wp255-green-clone-001', runId, part: 'A' });
+  assert.match(content, /SYNTHETIC_TEST_ONLY \/ NOT_FOR_CONTRACT_OR_RELEASE/u);
+  assert.match(content, /dataset=wp255-green-clone-001/u);
+  assert.equal(sha256Text(content).length, 64);
 });
