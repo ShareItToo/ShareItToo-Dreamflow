@@ -78,7 +78,10 @@ SELECT jsonb_build_object(
   'count', count(*)::int,
   'paymentCount', count(DISTINCT payment_id)::int,
   'setHash', encode(digest(COALESCE(string_agg(id::text, ',' ORDER BY id), ''), 'sha256'), 'hex'),
-  'providerClass', COALESCE(bool_and(provider_refund_id LIKE 're_memory_%'), true)
+  'providerClass', COALESCE(bool_and(provider_refund_id LIKE 're_memory_%'), true),
+  'chargeClass', COALESCE(bool_and(provider_charge_id LIKE 'ch_memory_%'), true),
+  'paymentChargeClass', COALESCE((SELECT bool_and(p.provider_charge_id LIKE 'ch_memory_%') FROM payments p WHERE p.id IN (SELECT DISTINCT payment_id FROM refunds WHERE provider_refund_id LIKE 're_memory_%')), true),
+  'paymentIntentClass', COALESCE((SELECT bool_and(p.provider_payment_id LIKE 'pi_memory_%') FROM payments p WHERE p.id IN (SELECT DISTINCT payment_id FROM refunds WHERE provider_refund_id LIKE 're_memory_%')), true)
 )::text FROM refunds WHERE provider_refund_id LIKE 're_memory_%';`;
 let mfaPath; let evidence; const created = [];
 try {
@@ -105,7 +108,7 @@ try {
     let tx; try { tx = JSON.parse(txJsonLine); } catch { fail('dry_run_transaction_unreadable'); }
     const after = await dbQuery(resources.database, syntheticFingerprintSql);
     if (JSON.stringify(before) !== JSON.stringify(after)) fail('dry_run_exact_set_drift');
-    evidence = { status: 'dry-run-quarantine-plan-complete-operational-release-blocked', runId, opsCheckout: OPS_CHECKOUT, opsCommit: OPS_COMMIT, runtimeCommit: RUNTIME_COMMIT, backup, decision: 'quarantine-plan-only-no-canonical-mutation', before, after, transaction: 'rolled-back', quarantinedCount: tx.quarantinedCount, quarantineHash: tx.quarantineHash, canonicalFinancialTruthPreserved: true, providerOutcomeFabricated: false, providerTraffic: false, providerWrites: false, liveDatabaseMutated: false, acceptanceTarget: 'docker-exec-internal' };
+    evidence = { status: 'dry-run-quarantine-plan-complete-operational-release-blocked', runId, opsCheckout: OPS_CHECKOUT, opsCommit: OPS_COMMIT, runtimeCommit: RUNTIME_COMMIT, backup, provenance: { transport: 'memory', fixtureVerified: true, source: 'backend/src/stripe_provider.js', test: 'backend/test/payment_domain.test.js' }, decision: 'quarantine-plan-only-no-canonical-mutation', before, after, transaction: 'rolled-back', quarantinedCount: tx.quarantinedCount, quarantineHash: tx.quarantineHash, canonicalFinancialTruthPreserved: true, providerOutcomeFabricated: false, providerTraffic: false, providerWrites: false, liveDatabaseMutated: false, acceptanceTarget: 'docker-exec-internal' };
   } else {
   const reads = { objects: 0, objectExists: 0, testModeConfirmed: 0, amountCurrencyMatch: 0, chargeBindingMatch: 0, unknown: 0, blocked: 0, statusCounts: {} };
   for (const row of rows) {

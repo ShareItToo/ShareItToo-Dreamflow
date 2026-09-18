@@ -60,6 +60,18 @@ export function classifyRefundReferenceRemediation({ rows, expectedBackupSha256,
   });
 }
 
+export function assertSyntheticMemoryProvenance({ rows, provenance } = {}) {
+  const normalized = normalizeRows(rows);
+  if (!provenance || provenance.transport !== 'memory'
+      || provenance.fixtureVerified !== true
+      || provenance.source !== 'backend/src/stripe_provider.js'
+      || provenance.test !== 'backend/test/payment_domain.test.js') fail('synthetic_provenance_unproven');
+  if (normalized.length === 0 || normalized.some((row) => row.provider_reference_class !== 'synthetic_memory')) {
+    fail('synthetic_provenance_reference_mismatch');
+  }
+  return Object.freeze({ transport: 'memory', fixtureVerified: true, source: provenance.source, test: provenance.test });
+}
+
 export async function runDisposableRefundReferenceDryRun({ client, rows, expectedBackupSha256, actualBackupSha256 } = {}) {
   if (!client || typeof client.query !== 'function') fail('client_invalid');
   const before = buildExactSetFingerprint(rows);

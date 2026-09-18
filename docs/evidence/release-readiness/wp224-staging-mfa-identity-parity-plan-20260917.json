@@ -348,6 +348,41 @@
         "liveReadback": "staging API exited/0; staging PG schema 001-074; no live DB mutation; no provider traffic",
         "nextGate": "no live cleanup; retain canonical review state until authoritative provider truth exists"
       },
+      "wp252SyntheticRefundRetirement": {
+        "status": "dry-run-closed-live-unchanged",
+        "decision": "quarantine-plan-only-no-canonical-mutation",
+        "runner": "backend/ops/staging_refund_reference_remediation.mjs",
+        "provenance": {
+          "transport": "memory",
+          "fixtureVerified": true,
+          "source": "backend/src/stripe_provider.js",
+          "test": "backend/test/payment_domain.test.js",
+          "graphProof": "all 4 refund references re_memory_, all linked refund/payment charge refs ch_memory_, payment intent refs pi_memory_"
+        },
+        "manifest": "exactly 4 Refund rows / 2 Payments; full graph exact-set SHA-256 8c761886396e29a14da9495ae1e47b2a689c3fb022424490b720e211d8e7e128; no support-P3 rows selected",
+        "disposableExecution": {
+          "targetHost": "sit-staging-vps",
+          "opsCommit": "8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+          "runtimeCommit": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+          "backupSha256": "0fb025cad33f9ca9642603e0239103d85368996456af540de3d394c2bd64e193",
+          "before": "4 refs / 2 payments; providerClass=true; chargeClass=true; paymentChargeClass=true; paymentIntentClass=true",
+          "commitPath": "temporary quarantine table insert committed only inside disposable transaction then rolled back; quarantinedCount=4",
+          "rollbackPath": "PASS; after exact-set SHA unchanged; second-run decision is idempotent no-op/fail-closed",
+          "canonicalFinancialTruthPreserved": true,
+          "providerOutcomeFabricated": false,
+          "foreignKeysAndAppendOnlyGuards": "not disabled",
+          "cleanup": true,
+          "disposableAbsent": true
+        },
+        "evidence": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-wp250-stripe-readback-20260918005850-e05b71a3.json",
+          "mode": "0600",
+          "bytes": 1650,
+          "sha256": "58a2e04cd6c46a3e4153ac7e988e7ab72769cac990c9c4a49674517da6f67f6b"
+        },
+        "liveReadback": "staging API exited/0; PG schema 001-074; no live DB/provider mutation",
+        "nextGate": "no live retirement; any future apply requires a separate owner-gated full backup and source-authorized archival design"
+      },
       "priorImageSqlContractComparison": {
         "status": "required-not-executed",
         "observedPriorStagingCommit": "df39a14b7a19afe467842461a28f1e77fec8445e",
