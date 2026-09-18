@@ -182,7 +182,7 @@ async function inspectLabels(command, name, format, phase) {
 
 export async function probeInternalEndpoint(command, { container, path, expectedStatus, attempts = 60, intervalMs = 250 } = {}) {
   if (!/^\/(?:version|health\/live|health\/ready)$/u.test(path) || !Number.isInteger(expectedStatus)) fail('internal_probe_arguments_invalid');
-  const script = `const c=new AbortController();setTimeout(()=>c.abort(),5000);try{const r=await fetch('http://127.0.0.1:8080${path}',{signal:c.signal});const t=await r.text();let p=null;try{p=t?JSON.parse(t):null}catch{};console.log(JSON.stringify({status:r.status,payload:p}));}catch{console.log(JSON.stringify({status:0,payload:null}));}`;
+  const script = `const c=new AbortController();const timer=setTimeout(()=>c.abort(),5000);try{const r=await fetch('http://127.0.0.1:8080${path}',{signal:c.signal});const t=await r.text();let p=null;try{p=t?JSON.parse(t):null}catch{};console.log(JSON.stringify({status:r.status,payload:p}));}catch{console.log(JSON.stringify({status:0,payload:null}));}finally{clearTimeout(timer);}`;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const output = await command('docker', ['exec', container, 'node', '--input-type=module', '-e', script], { phase: `internal_probe_${path.slice(1).replaceAll('/', '_')}` }).catch(() => ({ stdout: '' }));
     try {
@@ -322,7 +322,7 @@ export async function runDisposableCandidateAcceptance({
     if (fkCount !== '367') fail('fk_count_invalid');
     await commandWithFileInput('docker', ['exec', '-i', database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], join(repositoryRoot, 'backend/ops/check_foreign_key_integrity.sql'), { phase: 'fk_integrity' });
     await command('docker', ['exec', '-i', api, 'node', '--input-type=module'], { input: mfaProbe, phase: 'mfa_probe' }).catch(() => fail('mfa_probe_failed'));
-    evidence = { status: 'technical-probes-passed-operational-release-blocked', runtimeCommit: targetCommit, opsCommit, image: disposableCandidateImageDigest, imageDigest: disposableCandidateImageDigest, postgresImage: disposablePostgresImage, backup, runId, resources, ledger, foreignKeys: fkCount, readiness: { http: 503, status: readinessPayload.status, preFingerprint, postFingerprint }, providerTraffic: false, liveDatabaseMutated: false };
+    evidence = { status: 'technical-probes-passed-operational-release-blocked', runtimeCommit: targetCommit, opsCommit, acceptanceTarget: 'docker-exec-internal', hostPortPublished: false, image: disposableCandidateImageDigest, imageDigest: disposableCandidateImageDigest, postgresImage: disposablePostgresImage, backup, runId, resources, ledger, foreignKeys: fkCount, readiness: { http: 503, status: readinessPayload.status, preFingerprint, postFingerprint }, providerTraffic: false, liveDatabaseMutated: false };
     return evidence;
   } finally {
     const errors = [];

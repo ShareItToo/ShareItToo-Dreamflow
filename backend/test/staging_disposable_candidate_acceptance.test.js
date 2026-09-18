@@ -79,6 +79,8 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
     assert.equal(result.status, 'technical-probes-passed-operational-release-blocked');
     assert.equal(result.image, 'sha256:38be66d170746b20bfc4c08c70655a72f9a6ce9eb700278a129d5acdedc22620');
     assert.equal(result.opsCommit, testOpsCommit);
+    assert.equal(result.acceptanceTarget, 'docker-exec-internal');
+    assert.equal(result.hostPortPublished, false);
     assert.equal(result.readiness.http, 503);
     assert.deepEqual(cleanup.map(([kind]) => kind), ['container', 'container', 'container', 'volume', 'network']);
     assert.ok(calls.some(({ phase }) => phase === 'candidate_start'));
