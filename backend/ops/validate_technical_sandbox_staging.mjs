@@ -9,21 +9,13 @@ import {
 } from 'node:fs';
 import { readTechnicalSandboxConfiguration, syntheticUserPattern } from '../src/technical_sandbox_config.js';
 
-export const technicalSandboxApiUid = 1000;
-export const technicalSandboxApiGid = 1000;
+export const technicalSandboxApiUid = 100;
+export const technicalSandboxApiGid = 101;
 
 function fail(code) {
   const error = new Error('Technical Sandbox Staging gate failed.');
   error.code = code;
   throw error;
-}
-
-function boundedNumeric(value, name, fallback) {
-  const raw = String(value ?? fallback).trim();
-  if (!/^[0-9]+$/u.test(raw)) fail(`${name}_invalid`);
-  const parsed = Number(raw);
-  if (!Number.isSafeInteger(parsed) || parsed < 0) fail(`${name}_invalid`);
-  return parsed;
 }
 
 function inspectSecretFile(filePath, name, { expectedUid, expectedGid } = {}) {
@@ -61,6 +53,8 @@ export function validateTechnicalSandboxStaging({
   env = process.env,
   deploymentEnvironment = env.SIT_DEPLOYMENT_ENVIRONMENT ?? 'staging',
   now = new Date(),
+  expectedUid = technicalSandboxApiUid,
+  expectedGid = technicalSandboxApiGid,
 } = {}) {
   if (!['staging', 'test'].includes(String(deploymentEnvironment).trim().toLowerCase())) {
     fail('technical_sandbox_environment_forbidden');
@@ -86,16 +80,6 @@ export function validateTechnicalSandboxStaging({
   if (!keyFile || !webhookFile || keyFile === webhookFile) {
     fail('technical_sandbox_secret_files_invalid');
   }
-  const expectedUid = boundedNumeric(
-    env.TECHNICAL_SANDBOX_API_UID,
-    'technical_sandbox_api_uid',
-    technicalSandboxApiUid,
-  );
-  const expectedGid = boundedNumeric(
-    env.TECHNICAL_SANDBOX_API_GID,
-    'technical_sandbox_api_gid',
-    technicalSandboxApiGid,
-  );
   const identities = [
     inspectSecretFile(keyFile, 'technical_sandbox_secret_key', { expectedUid, expectedGid }),
     inspectSecretFile(webhookFile, 'technical_sandbox_webhook_secret', { expectedUid, expectedGid }),

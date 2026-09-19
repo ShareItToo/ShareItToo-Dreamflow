@@ -11,7 +11,11 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { readFileSync } from 'node:fs';
-import { validateTechnicalSandboxStaging } from '../ops/validate_technical_sandbox_staging.mjs';
+import {
+  technicalSandboxApiGid,
+  technicalSandboxApiUid,
+  validateTechnicalSandboxStaging,
+} from '../ops/validate_technical_sandbox_staging.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '..', '..');
 
@@ -29,6 +33,8 @@ function fixture() {
     root,
     keyFile,
     webhookFile,
+    uid,
+    gid,
     env: {
       SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
       SIT_DEPLOYMENT_ENVIRONMENT: 'test',
@@ -36,8 +42,6 @@ function fixture() {
       TECHNICAL_SANDBOX_KILL_SWITCH: '0',
       TECHNICAL_SANDBOX_SECRET_KEY_HOST_FILE: keyFile,
       TECHNICAL_SANDBOX_WEBHOOK_SECRET_HOST_FILE: webhookFile,
-      TECHNICAL_SANDBOX_API_UID: String(uid),
-      TECHNICAL_SANDBOX_API_GID: String(gid),
       TECHNICAL_SANDBOX_SECRET_KEY_FILE: keyFile,
       TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: webhookFile,
       TECHNICAL_SANDBOX_ACCOUNT_ID: 'acct_synthetic1234',
@@ -57,7 +61,7 @@ test('technical sandbox overlay is isolated from the main payment lane', () => {
     path.join(repositoryRoot, 'backend/compose.staging.technical-sandbox.yml'),
     'utf8',
   );
-  assert.match(overlay, /user: "1000:1000"/u);
+  assert.doesNotMatch(overlay, /^\s+user:/mu);
   assert.match(overlay, /PAYMENT_TRANSPORT: memory/u);
   assert.match(overlay, /STRIPE_SECRET_KEY: ""/u);
   assert.match(overlay, /TECHNICAL_SANDBOX_SECRET_KEY_FILE/u);
@@ -75,6 +79,8 @@ test('runtime gate accepts only pilot-owned 0600 files and bounded synthetic con
       env: files.env,
       deploymentEnvironment: 'test',
       now: new Date('2026-09-19T10:00:00.000Z'),
+      expectedUid: files.uid,
+      expectedGid: files.gid,
     });
     assert.deepEqual(result, {
       available: true,
@@ -91,6 +97,8 @@ test('runtime gate accepts only pilot-owned 0600 files and bounded synthetic con
       () => validateTechnicalSandboxStaging({
         env: { ...files.env, SIT_STAGING_PILOT_ID: 'other_pilot' },
         deploymentEnvironment: 'test',
+        expectedUid: files.uid,
+        expectedGid: files.gid,
       }),
       (error) => error.code === 'technical_sandbox_pilot_required',
     );
@@ -98,6 +106,8 @@ test('runtime gate accepts only pilot-owned 0600 files and bounded synthetic con
       () => validateTechnicalSandboxStaging({
         env: { ...files.env, ENABLE_STAGING_STRIPE: '1' },
         deploymentEnvironment: 'test',
+        expectedUid: files.uid,
+        expectedGid: files.gid,
       }),
       (error) => error.code === 'technical_sandbox_main_payment_boundary_invalid',
     );
@@ -115,6 +125,8 @@ test('runtime gate rejects symlink and expired authorization without secret outp
       () => validateTechnicalSandboxStaging({
         env: { ...files.env, TECHNICAL_SANDBOX_SECRET_KEY_HOST_FILE: link },
         deploymentEnvironment: 'test',
+        expectedUid: files.uid,
+        expectedGid: files.gid,
       }),
       (error) => error.code === 'technical_sandbox_secret_key_symlink_forbidden'
         || error.code === 'technical_sandbox_secret_key_must_be_0600_api_owned_file',
@@ -127,6 +139,8 @@ test('runtime gate rejects symlink and expired authorization without secret outp
         },
         deploymentEnvironment: 'test',
         now: new Date('2026-09-19T10:00:00.000Z'),
+        expectedUid: files.uid,
+        expectedGid: files.gid,
       }),
       (error) => error.code === 'technical_sandbox_configuration_invalid',
     );
@@ -140,6 +154,42 @@ test('runtime gate rejects symlink and expired authorization without secret outp
   }
 });
 
+test('runtime ownership is exact and operator UID/GID env spoofing is ignored', () => {
+  const files = fixture();
+  try {
+    assert.equal(technicalSandboxApiUid, 100);
+    assert.equal(technicalSandboxApiGid, 101);
+    assert.throws(
+      () => validateTechnicalSandboxStaging({
+        env: {
+          ...files.env,
+          TECHNICAL_SANDBOX_API_UID: String(files.uid),
+          TECHNICAL_SANDBOX_API_GID: String(files.gid),
+        },
+        deploymentEnvironment: 'test',
+        now: new Date('2026-09-19T10:00:00.000Z'),
+      }),
+      (error) => error.code === 'technical_sandbox_secret_key_must_be_0600_api_owned_file',
+    );
+    assert.equal(
+      validateTechnicalSandboxStaging({
+        env: {
+          ...files.env,
+          TECHNICAL_SANDBOX_API_UID: '999',
+          TECHNICAL_SANDBOX_API_GID: '999',
+        },
+        deploymentEnvironment: 'test',
+        now: new Date('2026-09-19T10:00:00.000Z'),
+        expectedUid: files.uid,
+        expectedGid: files.gid,
+      }).available,
+      true,
+    );
+  } finally {
+    rmSync(files.root, { recursive: true, force: true });
+  }
+});
+
 test('deploy gate wires a technical-only flag and keeps Stripe activation separate', () => {
   const deploy = readFileSync(
     path.join(repositoryRoot, 'backend/ops/deploy_release.sh'),
@@ -148,5 +198,9 @@ test('deploy gate wires a technical-only flag and keeps Stripe activation separa
   assert.match(deploy, /ENABLE_STAGING_TECHNICAL_SANDBOX/u);
   assert.match(deploy, /compose\.staging\.technical-sandbox\.yml/u);
   assert.match(deploy, /technical Sandbox override is forbidden for production/u);
+  assert.match(deploy, /Config\.User/u);
+  assert.match(deploy, /id -u shareittoo/u);
+  assert.match(deploy, /id -g shareittoo/u);
+  assert.match(deploy, /100:101/u);
   assert.match(deploy, /ENABLE_STAGING_STRIPE.*task_enable_staging_stripe/u);
 });

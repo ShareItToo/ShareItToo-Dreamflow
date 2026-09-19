@@ -1,6 +1,5 @@
 services:
   api:
-    user: "1000:1000"
     environment:
       # This lane is deliberately separate from the real payment transport.
       PAYMENT_TRANSPORT: memory

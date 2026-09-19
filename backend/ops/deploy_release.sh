@@ -340,6 +340,24 @@ if [[ "$task_image_commit" != "$task_commit" ]]; then
   echo "Image revision label does not match $task_commit." >&2
   exit 1
 fi
+if [[ "$task_enable_staging_technical_sandbox" == 1 ]]; then
+  task_candidate_image_user="$(docker image inspect "$task_image" --format '{{.Config.User}}')"
+  if [[ "$task_candidate_image_user" != shareittoo ]]; then
+    echo "Technical Sandbox requires the candidate image USER shareittoo." >&2
+    exit 1
+  fi
+  if ! docker run --rm --network none --entrypoint /bin/sh "$task_image" -c \
+      'set -eu
+       test "$(id -u)" = 100
+       test "$(id -g)" = 101
+       test "$(id -u shareittoo)" = 100
+       test "$(id -g shareittoo)" = 101
+       test "$(stat -c "%u:%g" /app)" = 100:101
+       test "$(stat -c "%u:%g" /data/uploads)" = 100:101' >/dev/null 2>&1; then
+    echo "Technical Sandbox candidate image runtime ownership is not 100:101." >&2
+    exit 1
+  fi
+fi
 
 prepare_runtime_override_dir
 task_deployment_override="$(create_runtime_override deployment)"

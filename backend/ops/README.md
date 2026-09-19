@@ -215,7 +215,7 @@ not be combined with `ENABLE_STAGING_STRIPE=1`. The overlay does not touch
 bookings, the payment ledger, payouts, Connect or notifications.
 
 Prepare two distinct owner-controlled regular files outside the repository,
-both mode `0600` and owned by the API runtime UID/GID (`1000:1000` for the
+both mode `0600` and owned by the API runtime UID/GID (`100:101` for the
 current Node image): one restricted `rk_test_...` key and one independent
 `whsec_...` signing secret. Symlinks, live keys, reused files, permissive modes,
 missing allowlisted synthetic IDs, a future/overlong/expired authorization or
@@ -240,8 +240,11 @@ The deployment gate mounts only these two files read-only through
 `compose.staging.technical-sandbox.yml`. `/health` and `/health/ready` expose
 only the coarse `technicalSandbox` availability/provider/mode/amount/currency,
 limit, review and synthetic-only fields. Readback must confirm the exact
-coarse boundary. Rollback removes the technical overlay and clears only its
-environment; the main memory payment transport remains intact.
+coarse boundary. Before deployment the exact candidate image must declare
+`USER shareittoo` and resolve `100:101` for the process, `/app` and
+`/data/uploads`; the overlay deliberately has no numeric `user:` override.
+Rollback removes the technical overlay and clears only its environment; the
+main memory payment transport remains intact.
 
 Stripe remains on the in-memory provider unless an exact Staging deployment
 explicitly enables the test-only override. Prepare three distinct secret files

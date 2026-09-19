@@ -95,6 +95,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   example active listings versus drafts) and prove the expected tab, route and
   post-restart value. Evidence from a neighboring tab or a backend-only write
   cannot close an explicitly required app projection or edit gate.
+- Runtime ownership mentor invariant: never invent numeric UID/GID values for
+  overlays, secret files or persisted volumes; verify the exact candidate image
+  `USER` and resolved UID/GID, plus persisted-volume ownership, from readback
+  before deployment.
 - Authenticated capability handshakes are principal-bound state: bind every
   effective provider/disclosure/policy/config field into the request hash, make
   config revisions a digest of the effective configuration rather than a
