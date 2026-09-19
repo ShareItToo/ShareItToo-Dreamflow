@@ -1,0 +1,44 @@
+{
+  "package": "WP260-A",
+  "status": "BLOCKED_PRE_PROVIDER_ACTIVATION",
+  "source": {
+    "commit": "727faf9148aee6ac9c4f7667f675f65b83e48719",
+    "image": "shareittoo-api-wp260a:727faf9148aee6ac9c4f7667f675f65b83e48719",
+    "digest": "sha256:b8ee9e99e109abc923017fa8838b2942f4e7dde1a3e1bb37aa56082cbe4e6e60"
+  },
+  "sourceVerification": {
+    "focusedBackendTests": "10/10 PASS",
+    "staticAllowlistWiring": "2/2 PASS",
+    "diffCheck": "PASS"
+  },
+  "readOnlyInventory": {
+    "canonicalRuntime": "WP257",
+    "mailTransport": "disabled",
+    "pushTransport": "memory",
+    "paymentTransport": "memory",
+    "pendingRetryProcessingOutbox": 0,
+    "foreignPendingOutbox": 0,
+    "enabledPixelRegistration": 1,
+    "tokenContentRetained": false
+  },
+  "temporaryCandidate": {
+    "started": true,
+    "database": "ok",
+    "smtpVerification": "FAIL_EAI_AGAIN_GREEN_NETWORK_DNS",
+    "ready": false,
+    "removed": true,
+    "canonicalRuntimeChanged": false
+  },
+  "fcm": {
+    "serviceAccountFileAvailableOnGreenHost": false,
+    "providerTraffic": false,
+    "activation": "BLOCKED_MISSING_SUPPORTED_SECRET_FILE"
+  },
+  "next": "Resolve Green-network DNS/SMTP and provide the dedicated Staging FCM service-account file through the existing secret gate before real provider tests.",
+  "boundaries": [
+    "No SMTP message sent",
+    "No FCM notification sent",
+    "No Firebase Auth or Phone activation",
+    "No payment, Store, Production, DNS or OnePlus mutation"
+  ]
+}

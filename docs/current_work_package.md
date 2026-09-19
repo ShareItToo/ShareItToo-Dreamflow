@@ -1,4 +1,15 @@
-# Current Work Package: WP259-B message, booking and FCM truth — SOURCE FIX PENDING SUCCESSOR / PROVIDER HOLD
+# Current Work Package: WP260-A provider activation preflight — BLOCKED; no Green mutation
+
+WP260-A prepared the fail-closed Staging SMTP/FCM recipient gate and built an
+exact successor image, but stopped before canonical Green replacement. The
+Green network cannot resolve `smtp-relay.gmail.com` (`EAI_AGAIN`) and no
+dedicated Firebase service-account file is present on the host. The temporary
+candidate was removed; WP257 remains active. Stripe/Identity work is separate.
+
+See `docs/operations/WP260_A_PROVIDER_ACTIVATION_PREFLIGHT_20260919.md` and
+its evidence JSON.
+
+## Previous package: WP259-B message, booking and FCM truth — SOURCE FIX PENDING SUCCESSOR / PROVIDER HOLD
 
 WP259-B proved the Staging owner/renter booking and messaging lifecycle on the
 Pixel and prepared authoritative participant-profile and sender-name fixes.

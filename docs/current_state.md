@@ -1,5 +1,13 @@
 # ShareItToo Current State
 
+## WP260-A provider activation preflight — BLOCKED; no Green mutation
+
+WP260-A's exact successor source and image passed focused source verification,
+but canonical Green SMTP preflight failed closed on `EAI_AGAIN` DNS resolution
+for the relay. The Green host also lacks the dedicated Firebase service-account
+file, so FCM was not activated. Temporary runtime was removed and WP257 remains
+active; no provider traffic occurred.
+
 ## WP259-B message, booking and FCM truth — SOURCE FIX PENDING SUCCESSOR / PROVIDER HOLD
 
 WP259-B confirmed the owner/renter booking and real thread lifecycle against
