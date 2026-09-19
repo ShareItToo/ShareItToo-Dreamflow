@@ -31,6 +31,7 @@ import {
   revokeSessionByRefreshToken,
 } from './auth_session_actions.js';
 import { config } from './config.js';
+import { technicalSandboxHealthProjection } from './technical_sandbox_config.js';
 import {
   listingAiCapability,
   listingAiPerCallReservationCents,
@@ -605,6 +606,10 @@ function technicalSandboxLandingPage(kind) {
     ? 'Der technische Sandbox-Test wurde nicht abgeschlossen. Der verbindliche Status wird ausschließlich nach Anmeldung im Backend geprüft.'
     : 'Kehre zur ShareItToo-App zurück und lade den technischen Sandbox-Status dort erneut.';
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(title)}</title></head><body style="margin:0;background:#f3f6fb;font-family:Arial,sans-serif;color:#172033"><main style="max-width:560px;margin:12vh auto;padding:24px"><section style="background:#fff;border-radius:20px;padding:32px;box-shadow:0 10px 30px rgba(20,35,70,.08)"><div style="font-size:26px;font-weight:800;color:#2156d9">ShareItToo</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p><p style="font-size:13px;color:#5d6980">URL- oder Query-Parameter sind kein Zahlungsnachweis. Es wird kein echtes Geld bewegt und keine Buchung verändert.</p></section></main></body></html>`;
+}
+
+function technicalSandboxHealth() {
+  return technicalSandboxHealthProjection(config.technicalSandbox);
 }
 
 function identifier(value, prefix) {
@@ -2199,6 +2204,7 @@ export function createApp({
         identityVerification: identityVerificationHealth,
         supportDeadlines,
         listingAi: listingAiHealth,
+        technicalSandbox: technicalSandboxHealth(),
       },
       release: releaseMetadata,
       time: new Date().toISOString(),
@@ -2235,6 +2241,7 @@ export function createApp({
         identityVerification: identityVerificationHealth,
         supportDeadlines,
         listingAi: listingAiHealth,
+        technicalSandbox: technicalSandboxHealth(),
       },
       release: releaseMetadata,
     });

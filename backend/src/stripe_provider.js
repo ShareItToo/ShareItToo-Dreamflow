@@ -38,6 +38,10 @@ function integrationIdentifier(paymentId) {
   return `shareittoo_android_${suffix}`;
 }
 
+function technicalSandboxIntegrationIdentifier(runId, idempotencyKey) {
+  return integrationIdentifier(`technical-sandbox:${runId}:${idempotencyKey}`);
+}
+
 function memoryConnectedAccount({ userId, country, currency }) {
   const now = new Date().toISOString();
   return {
@@ -422,6 +426,7 @@ export class StripeProvider {
         currency: currency.toLowerCase(),
         expires_at: expiresAt,
         livemode: false,
+        integration_identifier: technicalSandboxIntegrationIdentifier(runId, idempotencyKey),
         metadata: {
           sit_flow: 'technical_sandbox',
           technical_sandbox_run_id: runId,
@@ -450,12 +455,12 @@ export class StripeProvider {
     }
     return this.call((client) => client.checkout.sessions.create({
       mode: 'payment',
-      payment_method_types: ['card'],
       customer_email: syntheticEmail,
       success_url: technicalSandboxRedirectUrl(successUrl, runId),
       cancel_url: technicalSandboxRedirectUrl(cancelUrl, runId),
       expires_at: Math.floor(new Date(expiresAt).getTime() / 1000),
       client_reference_id: runId,
+      integration_identifier: technicalSandboxIntegrationIdentifier(runId, idempotencyKey),
       line_items: [{
         quantity: 1,
         price_data: {

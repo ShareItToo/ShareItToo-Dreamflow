@@ -10,6 +10,7 @@ task_enable_staging_listing_ai="${ENABLE_STAGING_LISTING_AI:-0}"
 task_enable_staging_stripe="${ENABLE_STAGING_STRIPE:-0}"
 task_enable_staging_identity="${ENABLE_STAGING_IDENTITY:-0}"
 task_enable_staging_mfa="${ENABLE_STAGING_MFA:-0}"
+task_enable_staging_technical_sandbox="${ENABLE_STAGING_TECHNICAL_SANDBOX:-0}"
 task_staging_controlled_release="${SIT_STAGING_CONTROLLED_RELEASE:-0}"
 task_staging_acceptance_evidence="${SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE:-}"
 task_staging_rehearsal_ops_commit="${SIT_STAGING_REHEARSAL_OPS_COMMIT:-}"
@@ -34,6 +35,7 @@ task_staging_external_listing_ai_enabled=false
 task_staging_stripe_enabled=false
 task_staging_identity_enabled=false
 task_staging_mfa_enabled=false
+task_staging_technical_sandbox_enabled=false
 task_rollback_compose_args=()
 
 cleanup() {
@@ -110,7 +112,8 @@ rollback_failed_deployment() {
       "$task_previous_image_id" > "$task_rollback_override"
     if [[ "$task_staging_listing_ai_enabled" == true ||
           "$task_staging_stripe_enabled" == true ||
-          "$task_staging_identity_enabled" == true ]]; then
+          "$task_staging_identity_enabled" == true ||
+          "$task_staging_technical_sandbox_enabled" == true ]]; then
       printf '    environment:\n' >> "$task_rollback_override"
     fi
     if [[ "$task_staging_listing_ai_enabled" == true ]]; then
@@ -123,6 +126,10 @@ rollback_failed_deployment() {
     fi
     if [[ "$task_staging_identity_enabled" == true ]]; then
       printf '      IDENTITY_VERIFICATION_TRANSPORT: disabled\n      IDENTITY_STRIPE_SECRET_KEY: ""\n      IDENTITY_VERIFICATION_WEBHOOK_SECRET: ""\n      IDENTITY_STRIPE_SECRET_KEY_FILE: ""\n      IDENTITY_VERIFICATION_WEBHOOK_SECRET_FILE: ""\n' \
+        >> "$task_rollback_override"
+    fi
+    if [[ "$task_staging_technical_sandbox_enabled" == true ]]; then
+      printf '      TECHNICAL_SANDBOX_ENABLED: "0"\n      TECHNICAL_SANDBOX_KILL_SWITCH: "1"\n      TECHNICAL_SANDBOX_SECRET_KEY_FILE: ""\n      TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: ""\n      TECHNICAL_SANDBOX_ACCOUNT_ID: ""\n      TECHNICAL_SANDBOX_USER_IDS: ""\n      TECHNICAL_SANDBOX_AUTHORIZATION_ID: ""\n      TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT: ""\n      TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT: ""\n' \
         >> "$task_rollback_override"
     fi
     task_rollback_commit="${task_previous_commit:-unknown}"
@@ -222,6 +229,10 @@ if [[ "$task_enable_staging_mfa" != 0 && "$task_enable_staging_mfa" != 1 ]]; the
   echo "ENABLE_STAGING_MFA must be 0 or 1." >&2
   exit 1
 fi
+if [[ "$task_enable_staging_technical_sandbox" != 0 && "$task_enable_staging_technical_sandbox" != 1 ]]; then
+  echo "ENABLE_STAGING_TECHNICAL_SANDBOX must be 0 or 1." >&2
+  exit 1
+fi
 if [[ "$task_environment" == staging ]]; then
   if [[ "$task_staging_controlled_release" != 1 ]]; then
     echo "Staging public deployment is blocked until loopback controlled acceptance passes." >&2
@@ -259,6 +270,10 @@ if [[ "$task_environment" == production && "$task_enable_staging_stripe" == 1 ]]
 fi
 if [[ "$task_environment" == production && "$task_enable_staging_identity" == 1 ]]; then
   echo "The staging Identity override is forbidden for production deployments." >&2
+  exit 1
+fi
+if [[ "$task_environment" == production && "$task_enable_staging_technical_sandbox" == 1 ]]; then
+  echo "The technical Sandbox override is forbidden for production deployments." >&2
   exit 1
 fi
 if [[ "$task_environment" == production && "$task_enable_staging_mfa" == 1 ]]; then
@@ -394,6 +409,28 @@ else
     task_staging_listing_ai_enabled=true
     task_staging_external_listing_ai_enabled=true
   fi
+  if [[ "$task_enable_staging_technical_sandbox" == 1 ]]; then
+    if [[ "$task_staging_pilot_id" != heilbronn_wave0 ]]; then
+      echo "Technical Sandbox activation requires SIT_STAGING_PILOT_ID=heilbronn_wave0." >&2
+      exit 1
+    fi
+    SIT_STAGING_PILOT_ID="$task_staging_pilot_id" \
+    SIT_DEPLOYMENT_COMMIT="$task_commit" \
+    TECHNICAL_SANDBOX_SECRET_KEY_HOST_FILE="${TECHNICAL_SANDBOX_SECRET_KEY_HOST_FILE:-}" \
+    TECHNICAL_SANDBOX_WEBHOOK_SECRET_HOST_FILE="${TECHNICAL_SANDBOX_WEBHOOK_SECRET_HOST_FILE:-}" \
+    TECHNICAL_SANDBOX_ACCOUNT_ID="${TECHNICAL_SANDBOX_ACCOUNT_ID:-}" \
+    TECHNICAL_SANDBOX_USER_IDS="${TECHNICAL_SANDBOX_USER_IDS:-}" \
+    TECHNICAL_SANDBOX_AUTHORIZATION_ID="${TECHNICAL_SANDBOX_AUTHORIZATION_ID:-}" \
+    TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT="${TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT:-}" \
+    TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT="${TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT:-}" \
+    TECHNICAL_SANDBOX_KILL_SWITCH="${TECHNICAL_SANDBOX_KILL_SWITCH:-0}" \
+    ENABLE_STAGING_STRIPE="$task_enable_staging_stripe" \
+    PAYMENT_TRANSPORT="${PAYMENT_TRANSPORT:-memory}" \
+    STRIPE_LIVEMODE="${STRIPE_LIVEMODE:-false}" \
+      "$task_node_binary" "$task_backend_root/ops/validate_technical_sandbox_staging.mjs"
+    task_compose_args+=(-f "$task_backend_root/compose.staging.technical-sandbox.yml")
+    task_staging_technical_sandbox_enabled=true
+  fi
   if [[ "$task_enable_staging_stripe" == 1 ]]; then
     SIT_PSP_SANDBOX_EXECUTION_GATE_FILE="${SIT_PSP_SANDBOX_EXECUTION_GATE_FILE:-}" \
     SIT_DEPLOYMENT_COMMIT="$task_commit" \
@@ -465,7 +502,8 @@ for ((task_compose_index = 0; task_compose_index < ${#task_compose_args[@]}; tas
   if [[ "${task_compose_args[$task_compose_index]}" == -f &&
         ( "${task_compose_args[$((task_compose_index + 1))]:-}" == "$task_backend_root/compose.staging.listing-ai.yml" ||
           "${task_compose_args[$((task_compose_index + 1))]:-}" == "$task_backend_root/compose.staging.stripe.yml" ||
-          "${task_compose_args[$((task_compose_index + 1))]:-}" == "$task_backend_root/compose.staging.identity.yml" ) ]]; then
+          "${task_compose_args[$((task_compose_index + 1))]:-}" == "$task_backend_root/compose.staging.identity.yml" ||
+          "${task_compose_args[$((task_compose_index + 1))]:-}" == "$task_backend_root/compose.staging.technical-sandbox.yml" ) ]]; then
       task_compose_index=$((task_compose_index + 1))
       continue
   fi
@@ -598,14 +636,32 @@ if [[ "$task_staging_mfa_enabled" == true ]] &&
   echo "Staging MFA health does not confirm configured file credentials." >&2
   false
 fi
+if [[ "$task_staging_technical_sandbox_enabled" == true ]] &&
+   ! printf '%s' "$task_ready_payload" | "$task_node_binary" -e '
+     const { readFileSync } = require("node:fs");
+     const payload = JSON.parse(readFileSync(0, "utf8"));
+     const boundary = payload?.checks?.technicalSandbox;
+     const valid = boundary?.available === true
+       && boundary.provider === "stripe"
+       && boundary.mode === "test"
+       && boundary.amountMinor === 100
+       && boundary.currency === "EUR"
+       && boundary.maxRunsPerUser24h === 3
+       && boundary.professionalReview === false
+       && boundary.syntheticOnly === true;
+     process.exitCode = valid ? 0 : 1;
+   '; then
+  echo "Staging technical Sandbox health does not confirm the coarse test-only boundary." >&2
+  false
+fi
 
 install -d -m 700 "$task_release_dir"
 task_timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 task_report="$task_release_dir/${task_environment}-${task_timestamp}-${task_commit:0:12}.json"
-printf '{"environment":"%s","commit":"%s","previousCommit":"%s","version":"%s","buildTime":"%s","deployedAt":"%s","stagingFcm":%s,"stagingSmtp":%s,"stagingListingAi":%s,"stagingStripe":%s,"stagingIdentity":%s,"stagingMfa":%s,"stagingPilotId":"%s","stagingReadiness":%s}\n' \
+printf '{"environment":"%s","commit":"%s","previousCommit":"%s","version":"%s","buildTime":"%s","deployedAt":"%s","stagingFcm":%s,"stagingSmtp":%s,"stagingListingAi":%s,"stagingStripe":%s,"stagingIdentity":%s,"stagingMfa":%s,"stagingTechnicalSandbox":%s,"stagingPilotId":"%s","stagingReadiness":%s}\n' \
   "$task_environment" "$task_commit" "$task_previous_commit" "$task_version" \
   "$task_build_time" "$task_timestamp" "$task_fcm_enabled" "$task_staging_smtp_enabled" \
-  "$task_staging_listing_ai_enabled" "$task_staging_stripe_enabled" "$task_staging_identity_enabled" "$task_staging_mfa_enabled" \
+  "$task_staging_listing_ai_enabled" "$task_staging_stripe_enabled" "$task_staging_identity_enabled" "$task_staging_mfa_enabled" "$task_staging_technical_sandbox_enabled" \
   "$task_staging_pilot_id" "$task_staging_readiness" > "$task_report"
 chmod 600 "$task_report"
 task_deployment_override_retained=true

@@ -318,7 +318,7 @@ export async function runDisposableCandidateAcceptance({
       fail('readiness_degradation_not_fingerprint_bound');
     }
     const ledger = await queryText({ command, container: database, user: 'shareittoo_rehearsal', database: 'shareittoo_rehearsal', sql: "SELECT count(*), count(DISTINCT (regexp_match(name, '^([0-9]+)_'))[1]::int), min((regexp_match(name, '^([0-9]+)_'))[1]::int), max((regexp_match(name, '^([0-9]+)_'))[1]::int) FROM schema_migrations", phase: 'ledger' });
-    if (ledger !== '87|87|1|87') fail('ledger_invalid');
+    if (ledger !== '91|91|1|91') fail('ledger_invalid');
     const fkCount = await queryText({ command, container: database, user: 'shareittoo_rehearsal', database: 'shareittoo_rehearsal', sql: "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND convalidated", phase: 'fk_count' });
     if (fkCount !== '367') fail('fk_count_invalid');
     await commandWithFileInput('docker', ['exec', '-i', database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], join(repositoryRoot, 'backend/ops/check_foreign_key_integrity.sql'), { phase: 'fk_integrity' });

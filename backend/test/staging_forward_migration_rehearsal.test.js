@@ -29,9 +29,9 @@ const commit = '1'.repeat(40);
 test('forward-migration rehearsal is exact-target-bound and never treats health as rollback proof', () => {
   const plan = buildStagingRehearsalPlan({ targetCommit: commit });
   assert.equal(plan.currentAppliedRange, '001-074');
-  assert.equal(plan.forwardRange, '075-087');
-  assert.equal(plan.upMigrations, 13);
-  assert.equal(plan.migrationFiles, 26);
+  assert.equal(plan.forwardRange, '075-091');
+  assert.equal(plan.upMigrations, 17);
+  assert.equal(plan.migrationFiles, 34);
   assert.equal(plan.boundaries.automaticDownMigration, false);
   assert.equal(plan.boundaries.oldImageRollbackProof, false);
   assert.throws(

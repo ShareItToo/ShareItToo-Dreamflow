@@ -41,7 +41,7 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
         'com.shareittoo.staging.rehearsal_run_id': (args.find((arg) => /-(\d{14}-[0-9a-f]{8})$/u.test(arg)) ?? '').match(/-(\d{14}-[0-9a-f]{8})$/u)?.[1] ?? 'ignored',
       });
       if (options.phase === 'candidate_port') return '19090';
-      if (options.phase === 'ledger') return '87|87|1|87';
+      if (options.phase === 'ledger') return '91|91|1|91';
       if (options.phase === 'readiness_fingerprint') {
         fingerprintReads += 1;
         return JSON.stringify(driftMode && fingerprintReads === 2

@@ -70,21 +70,21 @@ existing TOTP ciphertext would otherwise be undecryptable. After a forward
 schema attempt, the deploy runbook does not boot the observed old image: it
 isolates/stops the Staging API and records sanitized forward-recovery evidence
 until a separately proven compatible recovery image exists. Database
-migrations remain forward-applied. Before applying migrations `075-087`, take
+migrations remain forward-applied. Before applying migrations `075-091`, take
 a protected Staging database backup and pass an isolated restore or equivalent
 forward-compatibility verification gate. The flag is staging-only and rejects
 Production.
 
 ## Protected Staging forward-migration rehearsal
 
-Before applying migrations `075-087` to the shared Staging database, run the
+Before applying migrations `075-091` to the shared Staging database, run the
 exact-target-bound rehearsal operation. It verifies the Compose project,
 container and volume labels are Staging-only, repeats the `001-074`
 `schema_migrations` readback, quiesces only running Staging API/mutating
 services, proves there are no foreign database writers, and writes a non-empty
 mode-`0600` custom-format dump plus checksum. That actual dump is restored into
 an isolated pinned PostgreSQL 16 target; aggregate-only non-empty data checks,
-forward migrations `075-087`, foreign-key integrity and focused contract probes
+forward migrations `075-091`, foreign-key integrity and focused contract probes
 for refund recovery, command immutability, refund truth/rename compatibility,
 legal holds, special-category intake, MFA and Identity must all pass.
 
@@ -204,6 +204,44 @@ Provider billing/project creation and the first real image evaluation remain
 separate owner actions; this procedure alone performs neither.
 
 ## Optional Staging Stripe test-mode activation
+
+## Optional Staging technical Stripe Sandbox
+
+The technical Sandbox is a separate, synthetic-only Checkout lane. It is
+disabled by default and may be enabled only for the `heilbronn_wave0` Staging
+pilot with `ENABLE_STAGING_TECHNICAL_SANDBOX=1`. It always keeps
+`PAYMENT_TRANSPORT=memory` and clears the main `STRIPE_*` credentials; it must
+not be combined with `ENABLE_STAGING_STRIPE=1`. The overlay does not touch
+bookings, the payment ledger, payouts, Connect or notifications.
+
+Prepare two distinct owner-controlled regular files outside the repository,
+both mode `0600` and owned by the API runtime UID/GID (`1000:1000` for the
+current Node image): one restricted `rk_test_...` key and one independent
+`whsec_...` signing secret. Symlinks, live keys, reused files, permissive modes,
+missing allowlisted synthetic IDs, a future/overlong/expired authorization or
+Production are rejected without printing secret/account/authorization values.
+The kill switch is `TECHNICAL_SANDBOX_KILL_SWITCH=1`; expiry disables only this
+optional lane and does not prevent API startup.
+
+```sh
+ENABLE_STAGING_TECHNICAL_SANDBOX=1 \
+SIT_STAGING_PILOT_ID=heilbronn_wave0 \
+TECHNICAL_SANDBOX_SECRET_KEY_HOST_FILE=/absolute/private/path/technical-rk-test \
+TECHNICAL_SANDBOX_WEBHOOK_SECRET_HOST_FILE=/absolute/private/path/technical-webhook-secret \
+TECHNICAL_SANDBOX_ACCOUNT_ID=acct_... \
+TECHNICAL_SANDBOX_USER_IDS=synthetic_sandbox_user_owner,synthetic_sandbox_user_renter \
+TECHNICAL_SANDBOX_AUTHORIZATION_ID=owner-approved-id \
+TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT=2026-09-19T09:00:00Z \
+TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT=2026-09-20T09:00:00Z \
+  ./ops/deploy_release.sh staging FULL_40_CHARACTER_COMMIT
+```
+
+The deployment gate mounts only these two files read-only through
+`compose.staging.technical-sandbox.yml`. `/health` and `/health/ready` expose
+only the coarse `technicalSandbox` availability/provider/mode/amount/currency,
+limit, review and synthetic-only fields. Readback must confirm the exact
+coarse boundary. Rollback removes the technical overlay and clears only its
+environment; the main memory payment transport remains intact.
 
 Stripe remains on the in-memory provider unless an exact Staging deployment
 explicitly enables the test-only override. Prepare three distinct secret files

@@ -1,0 +1,147 @@
+#!/usr/bin/env node
+
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  lstatSync,
+  openSync,
+} from 'node:fs';
+import { readTechnicalSandboxConfiguration, syntheticUserPattern } from '../src/technical_sandbox_config.js';
+
+export const technicalSandboxApiUid = 1000;
+export const technicalSandboxApiGid = 1000;
+
+function fail(code) {
+  const error = new Error('Technical Sandbox Staging gate failed.');
+  error.code = code;
+  throw error;
+}
+
+function boundedNumeric(value, name, fallback) {
+  const raw = String(value ?? fallback).trim();
+  if (!/^[0-9]+$/u.test(raw)) fail(`${name}_invalid`);
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) fail(`${name}_invalid`);
+  return parsed;
+}
+
+function inspectSecretFile(filePath, name, { expectedUid, expectedGid } = {}) {
+  if (typeof filePath !== 'string' || !filePath.startsWith('/')) {
+    fail(`${name}_path_invalid`);
+  }
+  let descriptor;
+  try {
+    const link = lstatSync(filePath);
+    if (!link.isFile() || link.isSymbolicLink()
+        || (link.mode & 0o777) !== 0o600
+        || link.uid !== expectedUid || link.gid !== expectedGid) {
+      fail(`${name}_must_be_0600_api_owned_file`);
+    }
+    descriptor = openSync(
+      filePath,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_CLOEXEC,
+    );
+    const metadata = fstatSync(descriptor);
+    if (!metadata.isFile() || (metadata.mode & 0o777) !== 0o600
+        || metadata.uid !== expectedUid || metadata.gid !== expectedGid) {
+      fail(`${name}_must_be_0600_api_owned_file`);
+    }
+    return `${metadata.dev}:${metadata.ino}`;
+  } catch (error) {
+    if (String(error?.code ?? '').startsWith(`${name}_`)) throw error;
+    if (error?.code === 'ELOOP') fail(`${name}_symlink_forbidden`);
+    fail(`${name}_unreadable`);
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+}
+
+export function validateTechnicalSandboxStaging({
+  env = process.env,
+  deploymentEnvironment = env.SIT_DEPLOYMENT_ENVIRONMENT ?? 'staging',
+  now = new Date(),
+} = {}) {
+  if (!['staging', 'test'].includes(String(deploymentEnvironment).trim().toLowerCase())) {
+    fail('technical_sandbox_environment_forbidden');
+  }
+  if (String(env.SIT_STAGING_PILOT_ID ?? '').trim() !== 'heilbronn_wave0') {
+    fail('technical_sandbox_pilot_required');
+  }
+  if (String(env.ENABLE_STAGING_STRIPE ?? '0').trim() === '1'
+      || String(env.PAYMENT_TRANSPORT ?? 'memory').trim().toLowerCase() !== 'memory'
+      || ['true', '1'].includes(String(env.STRIPE_LIVEMODE ?? 'false').trim().toLowerCase())
+      || [
+        'STRIPE_SECRET_KEY',
+        'STRIPE_WEBHOOK_SECRET',
+        'STRIPE_CONNECT_WEBHOOK_SECRET',
+        'STRIPE_SECRET_KEY_FILE',
+        'STRIPE_WEBHOOK_SECRET_FILE',
+        'STRIPE_CONNECT_WEBHOOK_SECRET_FILE',
+      ].some((name) => String(env[name] ?? '').trim() !== '')) {
+    fail('technical_sandbox_main_payment_boundary_invalid');
+  }
+  const keyFile = String(env.TECHNICAL_SANDBOX_SECRET_KEY_HOST_FILE ?? '').trim();
+  const webhookFile = String(env.TECHNICAL_SANDBOX_WEBHOOK_SECRET_HOST_FILE ?? '').trim();
+  if (!keyFile || !webhookFile || keyFile === webhookFile) {
+    fail('technical_sandbox_secret_files_invalid');
+  }
+  const expectedUid = boundedNumeric(
+    env.TECHNICAL_SANDBOX_API_UID,
+    'technical_sandbox_api_uid',
+    technicalSandboxApiUid,
+  );
+  const expectedGid = boundedNumeric(
+    env.TECHNICAL_SANDBOX_API_GID,
+    'technical_sandbox_api_gid',
+    technicalSandboxApiGid,
+  );
+  const identities = [
+    inspectSecretFile(keyFile, 'technical_sandbox_secret_key', { expectedUid, expectedGid }),
+    inspectSecretFile(webhookFile, 'technical_sandbox_webhook_secret', { expectedUid, expectedGid }),
+  ];
+  if (new Set(identities).size !== identities.length) {
+    fail('technical_sandbox_secret_files_not_distinct');
+  }
+
+  const configuration = readTechnicalSandboxConfiguration({
+    ...env,
+    TECHNICAL_SANDBOX_SECRET_KEY_FILE: keyFile,
+    TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: webhookFile,
+  }, { deploymentEnvironment, now });
+  if (configuration.available !== true || configuration.mode !== 'test'
+      || configuration.provider !== 'stripe'
+      || configuration.amountMinor !== 100 || configuration.currency !== 'EUR'
+      || configuration.maxRunsPerUser24h !== 3
+      || configuration.professionalReview !== false
+      || configuration.allowlistedUserIds.length === 0
+      || configuration.allowlistedUserIds.length > 24
+      || configuration.allowlistedUserIds.some((id) => !syntheticUserPattern.test(id))) {
+    fail('technical_sandbox_configuration_invalid');
+  }
+  return Object.freeze({
+    available: true,
+    provider: configuration.provider,
+    mode: configuration.mode,
+    amountMinor: configuration.amountMinor,
+    currency: configuration.currency,
+    maxRunsPerUser24h: configuration.maxRunsPerUser24h,
+    professionalReview: configuration.professionalReview,
+    syntheticOnly: true,
+    credentialSource: 'private_0600_file',
+  });
+}
+
+function runCli() {
+  validateTechnicalSandboxStaging();
+  process.stdout.write('Technical Sandbox Staging gate: PASS\n');
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  try {
+    runCli();
+  } catch (error) {
+    process.stderr.write(`${error?.message ?? 'Technical Sandbox Staging gate failed.'}\n`);
+    process.exitCode = 1;
+  }
+}

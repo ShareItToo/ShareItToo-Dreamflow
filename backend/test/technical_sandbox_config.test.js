@@ -11,7 +11,10 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { readTechnicalSandboxConfiguration } from '../src/technical_sandbox_config.js';
+import {
+  readTechnicalSandboxConfiguration,
+  technicalSandboxHealthProjection,
+} from '../src/technical_sandbox_config.js';
 
 const now = new Date('2026-09-19T10:00:00.000Z');
 
@@ -55,6 +58,40 @@ test('technical sandbox is default-off and unavailable in production', () => {
   } finally {
     rmSync(files.root, { recursive: true, force: true });
   }
+});
+
+test('health projection is coarse and optional-lane expiry stays non-fatal', () => {
+  const projection = technicalSandboxHealthProjection({
+    available: true,
+    killSwitch: false,
+    reason: 'available',
+    provider: 'stripe',
+    mode: 'test',
+    expectedAccountId: 'acct_must_not_escape',
+    authorizationId: 'auth_must_not_escape',
+    authorizationExpiresAt: now,
+    allowlistedUserIds: ['synthetic_sandbox_user_owner'],
+  });
+  assert.deepEqual(projection, {
+    available: true,
+    reason: 'available',
+    provider: 'stripe',
+    mode: 'test',
+    amountMinor: 100,
+    currency: 'EUR',
+    maxRunsPerUser24h: 3,
+    professionalReview: false,
+    syntheticOnly: true,
+  });
+  assert.doesNotMatch(JSON.stringify(projection), /acct_|auth_|synthetic_sandbox_user/u);
+  const expired = technicalSandboxHealthProjection({
+    available: false,
+    killSwitch: false,
+    reason: 'authorization_expired',
+  });
+  assert.equal(expired.available, false);
+  assert.equal(expired.mode, 'disabled');
+  assert.equal(expired.reason, 'authorization_expired');
 });
 
 test('enabled staging configuration requires private file secrets and bounded synthetic users', () => {

@@ -176,4 +176,19 @@ export function technicalSandboxUserAllowed(userId, configuration) {
     && configuration.allowlistedUserIds.includes(String(userId ?? '').trim());
 }
 
+export function technicalSandboxHealthProjection(configuration = {}) {
+  const available = configuration.available === true && configuration.killSwitch !== true;
+  return Object.freeze({
+    available,
+    reason: configuration.reason ?? (available ? 'available' : 'unavailable'),
+    provider: 'stripe',
+    mode: available ? 'test' : 'disabled',
+    amountMinor: 100,
+    currency: 'EUR',
+    maxRunsPerUser24h: 3,
+    professionalReview: false,
+    syntheticOnly: true,
+  });
+}
+
 export { syntheticUserPattern };

@@ -28,6 +28,8 @@ test('memory technical checkout is idempotent and visibly synthetic', async () =
   assert.equal(first.metadata.sit_flow, 'technical_sandbox');
   assert.match(first.customer_email, /@example\.invalid$/u);
   assert.match(first.url, /[?&]run_id=technical_sandbox_/u);
+  assert.match(first.integration_identifier, /^shareittoo_android_[a-z]{8}$/u);
+  assert.equal(replay.integration_identifier, first.integration_identifier);
   assert.equal(Object.hasOwn(first, 'transfer_group'), false);
   assert.equal(Object.hasOwn(first, 'transfer_data'), false);
   await assert.rejects(
@@ -58,12 +60,13 @@ test('stripe technical checkout request has no Connect or live-money fields', as
   assert.equal(calls.length, 1);
   const { params, options } = calls[0];
   assert.equal(params.mode, 'payment');
-  assert.deepEqual(params.payment_method_types, ['card']);
+  assert.equal(Object.hasOwn(params, 'payment_method_types'), false);
+  assert.match(params.integration_identifier, /^shareittoo_android_[a-z]{8}$/u);
   assert.equal(params.line_items[0].price_data.unit_amount, 100);
   assert.equal(params.line_items[0].price_data.currency, 'eur');
   assert.equal(params.metadata.sit_flow, 'technical_sandbox');
   assert.equal(params.customer_email.endsWith('@example.invalid'), true);
-  for (const forbidden of ['transfer_group', 'transfer_data', 'application_fee_amount', 'on_behalf_of', 'payment_method_configuration']) {
+  for (const forbidden of ['transfer_group', 'transfer_data', 'application_fee_amount', 'on_behalf_of', 'payment_method_configuration', 'automatic_tax']) {
     assert.equal(Object.hasOwn(params, forbidden), false, forbidden);
     assert.equal(Object.hasOwn(params.payment_intent_data, forbidden), false, forbidden);
   }
