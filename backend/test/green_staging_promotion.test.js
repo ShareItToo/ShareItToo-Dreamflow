@@ -313,6 +313,11 @@ test('command executor bindings keep isolated probes and canonical runtime disti
   assert.ok(commands.find((entry) => entry.phase === 'isolated_postgres_wait').args.join(' ').includes('pg_isready'));
   assert.ok(commands.find((entry) => entry.phase === 'candidate_health_and_feature_probes').args.includes('--retry'));
   assert.ok(commands.find((entry) => entry.phase === 'final_live_wait').args.includes('--retry'));
+  for (const entry of commands.filter(({ command, args }) => command === 'curl' && args.includes('--retry'))) {
+    assert.ok(entry.args.includes('--retry-all-errors'), `${entry.phase} must retry transient read errors`);
+    assert.equal(entry.args[entry.args.indexOf('--retry') + 1], '30');
+    assert.equal(entry.args[entry.args.indexOf('--retry-delay') + 1], '1');
+  }
 });
 
 test('pre-promotion inventory requires the exact Green DB host and protected mount cohort', () => {
