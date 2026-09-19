@@ -90,11 +90,13 @@ class SafetyReturnCaseIssueResult {
   final bool reviewOpened;
   final bool reportRecorded;
   final Map<String, dynamic>? receipt;
+  final bool serverConfirmed;
 
   const SafetyReturnCaseIssueResult({
     required this.reviewOpened,
     required this.reportRecorded,
     this.receipt,
+    this.serverConfirmed = false,
   });
 }
 
@@ -933,6 +935,7 @@ class SafetyActionService {
           reviewOpened: opensReview,
           reportRecorded: true,
           receipt: remoteReceipt,
+          serverConfirmed: opensReview,
         );
       }
 

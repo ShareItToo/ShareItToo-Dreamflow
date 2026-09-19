@@ -228,6 +228,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   final TextEditingController _damageAmountCtrl = TextEditingController();
   String _damageIdempotencyKey = '';
   Map<String, dynamic>? _damageReceipt;
+  bool _damageReceiptServerConfirmed = false;
   bool _savingDamageCase = false;
   bool _closing = false;
   late final SafetyActionService _safetyService;
@@ -457,12 +458,30 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
         opensReview: true,
         contestedAuthorizedMinor: contested,
       );
-      if (!mounted || !_safetyActions.isSynchronouslyCurrent(owner)) {
+      if (!mounted) {
+        return false;
+      }
+      bool stillCurrent = false;
+      try {
+        stillCurrent = await _safetyActions.isCurrent(_safetyService, owner);
+      } catch (_) {
+        stillCurrent = false;
+      }
+      if (!stillCurrent) {
+        _safetyActions.invalidate();
         return false;
       }
       if (!result.reportRecorded) return false;
-      setState(() => _damageReceipt = result.receipt ??
-          <String, dynamic>{'recorded': true, 'reasonCode': 'damage'});
+      setState(() {
+        _damageReceipt = result.receipt ??
+            <String, dynamic>{
+              'recorded': true,
+              'reasonCode': 'damage',
+              'provenance': 'local_qa_synthetic',
+            };
+        _damageReceiptServerConfirmed =
+            result.serverConfirmed && result.receipt != null;
+      });
       return true;
     } on SafetyActionFailure catch (failure) {
       debugPrint('[handover] damage case failed: ${failure.kind}');
@@ -790,7 +809,8 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                               },
                               child: Padding(
                                 key: ValueKey(_step),
-                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 8, 16, 12),
                                 child: _buildStep(),
                               ),
                             ),
@@ -1246,9 +1266,11 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
               ),
               if (_hasDamage) ...[
                 if (_damageReceipt != null)
-                  const Text(
-                    'Schadenmeldung serverseitig gespeichert. Die Angaben und Nachweise sind für diese Rückgabe gesperrt.',
-                    style: TextStyle(color: Colors.white70),
+                  Text(
+                    _damageReceiptServerConfirmed
+                        ? 'Schadenmeldung serverseitig gespeichert. Die Angaben und Nachweise sind für diese Rückgabe gesperrt.'
+                        : 'Schadenmeldung lokal/synthetisch vorgemerkt (kein Live-Servernachweis). Die Angaben und Nachweise sind für diese Rückgabe gesperrt.',
+                    style: const TextStyle(color: Colors.white70),
                   ),
                 const SizedBox(height: 8),
                 _photoGrid(

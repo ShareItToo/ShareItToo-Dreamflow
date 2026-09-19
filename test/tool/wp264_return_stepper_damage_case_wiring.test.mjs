@@ -52,7 +52,7 @@ test('code/completion cannot advance until the server receipt is recorded', () =
   assert.match(source, /final saved = await _saveDamageCaseStep\(\)/u);
   assert.match(source, /if \(!saved\) return;/u);
   assert.match(source, /if \(!result\.reportRecorded\) return false/u);
-  assert.match(source, /setState\(\(\) => _damageReceipt =/u);
+  assert.match(source, /_damageReceipt = result\.receipt \?\?/u);
 });
 
 test('damage action is bound to the captured principal and route state', () => {
@@ -92,5 +92,17 @@ test('confirmed remote return-case receipts are not downgraded by post-write pri
     submitReturnCaseSource,
     /remoteAccepted = true;\s*await _requireCurrent\(\s*context,\s*remoteAcceptedOrConfirmed: true,/su,
   );
-  assert.match(source, /!_safetyActions\.isSynchronouslyCurrent\(owner\)\) \{\s*return false;/su);
+  assert.match(
+    source,
+    /stillCurrent = await _safetyActions\.isCurrent\(_safetyService, owner\)/u,
+  );
+  assert.match(source, /if \(!stillCurrent\) \{\s*_safetyActions\.invalidate\(\)/su);
+});
+
+test('receipt provenance distinguishes validated server state from local QA fallback', () => {
+  assert.match(source, /_damageReceiptServerConfirmed/u);
+  assert.match(source, /result\.serverConfirmed && result\.receipt != null/u);
+  assert.match(source, /'provenance': 'local_qa_synthetic'/u);
+  assert.match(source, /kein Live-Servernachweis/u);
+  assert.match(submitReturnCaseSource, /serverConfirmed: opensReview/u);
 });
