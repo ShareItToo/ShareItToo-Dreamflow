@@ -26,6 +26,8 @@ export const greenTarget = Object.freeze({
   currentSchema: 92,
 });
 
+export const syntheticSandboxPasswordHostPath = '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password';
+
 export const greenAllowedEnvNames = Object.freeze([
   'NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'APP_COMMIT', 'APP_BUILD_TIMESTAMP',
   'PORT', 'BIND_HOST', 'DATABASE_URL', 'JWT_SECRET', 'JWT_ISSUER',
@@ -54,7 +56,7 @@ function isAllowedGreenEnvName(name) {
 const requiredConfigKeys = Object.freeze([
   'environment', 'envFile', 'envNames', 'mfaFile', 'firebaseFile',
   'technicalSandboxKeyFile', 'technicalSandboxWebhookFile',
-  'syntheticPasswordFile', 'syntheticUserId', 'paymentTransport', 'stripeLiveMode',
+  'syntheticUserId', 'paymentTransport', 'stripeLiveMode',
   'identityTransport', 'listingAiProvider', 'listingAiExternalAllowed',
   'accessGateDigest', 'providerConfigDigest', 'mounts',
 ]);
@@ -79,9 +81,9 @@ export function assertGreenProtectedEnvironment(values, config) {
       || values.SIT_STAGING_COMPOSE_PROJECT !== 'sit-green'
       || values.TECHNICAL_SANDBOX_SECRET_KEY_FILE !== '/run/secrets/technical-sandbox-key'
       || values.TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE !== '/run/secrets/technical-sandbox-webhook'
-      || values.SYNTHETIC_SANDBOX_PASSWORD_FILE !== '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password'
+      || values.SYNTHETIC_SANDBOX_PASSWORD_FILE !== syntheticSandboxPasswordHostPath
       || !String(values.SIT_STAGING_ALLOWED_USER_IDS ?? '').split(',').map((entry) => entry.trim()).includes('synthetic_sandbox_user_pilot_20260919')
-      || config?.mfaFile === undefined || config?.syntheticPasswordFile !== values.SYNTHETIC_SANDBOX_PASSWORD_FILE) fail('green_runtime_environment_boundary_invalid');
+      || config?.mfaFile === undefined) fail('green_runtime_environment_boundary_invalid');
   for (const name of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_CONNECT_WEBHOOK_SECRET', 'OPENAI_API_KEY']) {
     if (Object.hasOwn(values, name) && values[name] !== '') fail('green_main_provider_secret_forbidden');
   }
@@ -271,11 +273,10 @@ export async function assertGreenProtectedRuntimeFiles(config, protectedEnv) {
   await assertProtectedFile(config.firebaseFile, 0o640, 0, 65532, 'green_firebase_file');
   await assertProtectedFile(config.technicalSandboxKeyFile, 0o600, 100, 101, 'green_technical_key_file');
   await assertProtectedFile(config.technicalSandboxWebhookFile, 0o600, 100, 101, 'green_technical_webhook_file');
-  if (protectedEnv.SYNTHETIC_SANDBOX_PASSWORD_FILE !== '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password'
-      || config.syntheticPasswordFile !== protectedEnv.SYNTHETIC_SANDBOX_PASSWORD_FILE) {
+  if (protectedEnv.SYNTHETIC_SANDBOX_PASSWORD_FILE !== syntheticSandboxPasswordHostPath) {
     fail('green_synthetic_password_file_path_invalid');
   }
-  await assertProtectedFile(config.syntheticPasswordFile, 0o600, 100, 101, 'green_synthetic_password_file');
+  await assertProtectedFile(syntheticSandboxPasswordHostPath, 0o600, 100, 101, 'green_synthetic_password_file');
   return true;
 }
 
@@ -286,8 +287,6 @@ export function assertGreenRuntimeConfig(config) {
   safePath(config.firebaseFile, 'green_firebase_file_invalid');
   safePath(config.technicalSandboxKeyFile, 'green_technical_key_file_invalid');
   safePath(config.technicalSandboxWebhookFile, 'green_technical_webhook_file_invalid');
-  safePath(config.syntheticPasswordFile, 'green_synthetic_password_file_invalid');
-  if (config.syntheticPasswordFile !== '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password') fail('green_synthetic_password_file_invalid');
   if (!['staging', 'test'].includes(config.environment)
       || !Array.isArray(config.envNames) || config.envNames.length === 0
       || new Set(config.envNames).size !== config.envNames.length
@@ -483,7 +482,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     '--mount', `type=bind,src=${runtimeConfig.firebaseFile},dst=/run/secrets/firebase-service-account.json,readonly`,
     '--mount', `type=bind,src=${runtimeConfig.technicalSandboxKeyFile},dst=/run/secrets/technical-sandbox-key,readonly`,
     '--mount', `type=bind,src=${runtimeConfig.technicalSandboxWebhookFile},dst=/run/secrets/technical-sandbox-webhook,readonly`,
-    '--mount', `type=bind,src=${runtimeConfig.syntheticPasswordFile},dst=/run/secrets/synthetic-sandbox-user-password,readonly`,
+    '--mount', `type=bind,src=${syntheticSandboxPasswordHostPath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`,
   ];
   const provisionerPath = '/app/ops/provision_synthetic_sandbox_user.mjs';
   const commands = [
