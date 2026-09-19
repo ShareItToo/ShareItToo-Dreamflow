@@ -756,13 +756,14 @@ export async function runGreenEmergencyCleanup({ plan, command, commandEnv = {},
   return Object.freeze({ clean, schemaMutationStarted, restored, results: Object.freeze(results), restoreError });
 }
 
-export async function runGreenPromotion({ plan, config, configFile, environment = process.env, execute = false, command = runGreenCommand } = {}) {
+export async function runGreenPromotion({ plan, config, configFile, environment = process.env, execute = false, command = runGreenCommand, assertRuntimeFiles = assertGreenProtectedRuntimeFiles } = {}) {
   assertGreenPromotionExecutionAllowed({ environment, plan });
   if (!execute) fail('explicit_green_execute_flag_required');
   if (typeof command !== 'function') fail('green_command_runner_required');
+  if (typeof assertRuntimeFiles !== 'function') fail('green_runtime_file_assertion_required');
   const protectedEnv = await readProtectedEnv(configFile);
   assertGreenProtectedEnvironment(protectedEnv, config);
-  await assertGreenProtectedRuntimeFiles(config, protectedEnv);
+  await assertRuntimeFiles(config, protectedEnv);
   const isolatedPassword = crypto.randomBytes(32).toString('base64url');
   await mkdir(dirname(plan.isolated.envFile), { recursive: true, mode: 0o700 });
   await writeFile(plan.isolated.envFile, [

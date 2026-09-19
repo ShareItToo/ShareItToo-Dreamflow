@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { lstatSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { chmodSync, lstatSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -22,6 +22,7 @@ import {
   writeGreenEvidence,
   runGreenEmergencyCleanup,
   runGreenForwardRecovery,
+  runGreenPromotion,
 } from '../ops/green_staging_promotion.mjs';
 
 const runtimeCommit = '266f69c21dd61bfcdb212c24a0c8788b172bed9e';
@@ -175,10 +176,91 @@ test('every promotion command has an executable command and argv, including targ
   }
 });
 
-test('runtime inventory binds the pre-promotion image through the promotion plan', () => {
-  const source = readFileSync(new URL('../ops/green_staging_promotion.mjs', import.meta.url), 'utf8');
-  assert.match(source, /expectedPrePromotionImage:\s*plan\.target\.prePromotionImage/u);
-  assert.doesNotMatch(source, /expectedPrePromotionImage:\s*target\.prePromotionImage/u);
+test('executor drives production-shaped readbacks to quiesce and rejects a wrong pre-promotion image', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'sit-green-runner-'));
+  const configFile = path.join(root, 'green.env');
+  const evidenceFile = path.join(root, 'green-promotion.json');
+  const runtimeConfig = { ...config, envFile: configFile };
+  const envValues = {
+    DATABASE_URL: `postgres://shareittoo_green:fixture@${greenTarget.databaseContainer}:5432/shareittoo_green`,
+    JWT_SECRET: 'synthetic-fixture-jwt', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
+    IDENTITY_VERIFICATION_TRANSPORT: 'memory', SIT_LISTING_AI_PROVIDER: 'on_device',
+    SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
+    SIT_STAGING_ALLOWED_USER_IDS: 'synthetic_sandbox_user_pilot_20260919', SMTP_HOST: 'localhost',
+    SMTP_PORT: '2525', SMTP_USER: 'synthetic', SMTP_PASSWORD: 'synthetic', MAIL_FROM: 'synthetic@example.invalid',
+    FIREBASE_PROJECT_ID: 'synthetic', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false',
+    SIT_STAGING_COMPOSE_PROJECT: 'sit-green', SIT_LISTING_AI_BUDGET_CENTS: '0', ENABLE_STAGING_STRIPE: '0',
+    TECHNICAL_SANDBOX_ENABLED: '1', TECHNICAL_SANDBOX_KILL_SWITCH: '0', TECHNICAL_SANDBOX_ACCOUNT_ID: 'acct_fixture',
+    TECHNICAL_SANDBOX_AUTHORIZATION_ID: 'auth_fixture', TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT: '2026-09-19T00:00:00Z',
+    TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT: '2026-09-19T12:00:00Z', SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
+    TECHNICAL_SANDBOX_SECRET_KEY_FILE: '/run/secrets/technical-sandbox-key',
+    TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: '/run/secrets/technical-sandbox-webhook',
+    SYNTHETIC_SANDBOX_PASSWORD_FILE: '/run/secrets/synthetic-sandbox-user-password',
+  };
+  writeFileSync(configFile, `${Object.entries(envValues).map(([key, value]) => `${key}=${value}`).join('\n')}\n`, { mode: 0o600 });
+  chmodSync(configFile, 0o600);
+  const plan = buildGreenPromotionPlan({
+    targetManifest, config: runtimeConfig, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`,
+    opsCommit, evidenceFile,
+  });
+  const imageReadback = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`${plan.runtime.image}@${plan.runtime.digest}`] };
+  const payload = { checks: { technicalSandbox: { available: true, amountMinor: 100, currency: 'EUR' }, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
+  const prePromotionRecord = (image) => ({
+    Name: `/${greenTarget.apiContainer}`, State: { Running: true },
+    NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
+    Config: { Image: image, Labels: {}, Env: [`DATABASE_URL=${envValues.DATABASE_URL}`] },
+    HostConfig: { GroupAdd: ['65532'] }, Mounts: [
+      { Destination: '/run/secrets/mfa-encryption-key', RW: false },
+      { Destination: '/run/secrets/firebase-service-account.json', RW: false },
+      { Destination: '/data/uploads', Name: greenTarget.uploadsVolume, RW: true },
+    ],
+  });
+  const databaseRecord = { Name: `/${greenTarget.databaseContainer}`, State: { Running: true }, Config: { Labels: { 'com.shareittoo.sit.green': 'true' } } };
+  const fakeRun = async (image) => {
+    const calls = [];
+    const fake = async (command, args, options = {}) => {
+      calls.push({ command, args, phase: options.phase });
+      const phase = options.phase;
+      if (phase === 'target_inventory_api') return { stdout: JSON.stringify([prePromotionRecord(image)]) };
+      if (phase === 'target_inventory_database') return { stdout: JSON.stringify([databaseRecord]) };
+      if (phase === 'target_inventory_network') return { stdout: JSON.stringify([{ Name: greenTarget.network, Internal: true }]) };
+      if (phase === 'target_inventory_provider_network') return { stdout: JSON.stringify([{ Name: greenTarget.providerNetwork }]) };
+      if (phase === 'target_inventory_uploads') return { stdout: JSON.stringify([{ Name: greenTarget.uploadsVolume }]) };
+      if (phase === 'runtime_image_readback') return { stdout: JSON.stringify(imageReadback) };
+      if (phase === 'source_schema_readback') return { stdout: '087_identity_verification_pilot_gate.up.sql\n' };
+      if (phase === 'isolated_migration_readback') return { stdout: '092_listing_ai_mock_consent.up.sql\n' };
+      if (phase === 'candidate_health_and_feature_probes' || phase === 'candidate_ready_probe') return { stdout: JSON.stringify(payload) };
+      if (phase === 'candidate_version_probe') return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'staging' }) };
+      if (phase === 'fresh_protected_backup') return { stdout: 'synthetic protected backup' };
+      if (phase === 'quiesce_green_api') throw Object.assign(new Error('stop before irreversible phase'), { code: 'test_stop_before_quiesce' });
+      if (phase === 'failure_restore_green_api_verify') return { stdout: 'true\n' };
+      return { stdout: '' };
+    };
+    let result;
+    try {
+      await runGreenPromotion({
+        plan, config: runtimeConfig, configFile, environment: {
+          GREEN_STAGING_PROMOTION_EXECUTE: '1', GREEN_STAGING_PROMOTION_CONFIRM: runtimeCommit,
+        }, execute: true, command: fake, assertRuntimeFiles: async () => {},
+      });
+      assert.fail('promotion should stop before quiesce');
+    } catch (error) {
+      result = error;
+    }
+    return { calls, result };
+  };
+  const expectedReversible = buildGreenPromotionCommands({ plan, configFile, config: runtimeConfig })
+    .slice(0, buildGreenPromotionCommands({ plan, configFile, config: runtimeConfig }).findIndex((entry) => entry.phase === 'quiesce_green_api'))
+    .map((entry) => entry.phase);
+  const good = await fakeRun(targetManifest.prePromotionImage);
+  assert.equal(good.result.code, 'test_stop_before_quiesce');
+  const quiesceIndex = good.calls.findIndex((entry) => entry.phase === 'quiesce_green_api');
+  assert.ok(quiesceIndex > 0);
+  assert.deepEqual(good.calls.slice(0, quiesceIndex).map((entry) => entry.phase), expectedReversible);
+  const bad = await fakeRun('shareittoo-api-wrong:old');
+  assert.equal(bad.result.code, 'green_prepromotion_tuple_mismatch');
+  assert.equal(bad.calls.some((entry) => entry.phase === 'quiesce_green_api'), false);
+  rmSync(root, { recursive: true, force: true });
 });
 
 test('command executor bindings keep isolated probes and canonical runtime distinct', () => {
