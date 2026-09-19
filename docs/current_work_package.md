@@ -1,4 +1,16 @@
-# Current Work Package: WP259-A profile cache and Staging URL truth — SOURCE FIX; successor build required
+# Current Work Package: WP259-B message, booking and FCM truth — SOURCE FIX PENDING SUCCESSOR / PROVIDER HOLD
+
+WP259-B proved the Staging owner/renter booking and messaging lifecycle on the
+Pixel and prepared authoritative participant-profile and sender-name fixes.
+The installed 1704 candidate shows names and messages, but its generic avatar
+fallback does not contain the source fix. Staging push uses `memory`, so no real
+FCM delivery is claimed. Build a strictly higher successor, then continue with
+the WP260 provider lane. OnePlus is optional post-delivery evidence.
+
+See `docs/operations/WP259_B_MESSAGE_BOOKING_FCM_TRUTH_20260919.md` and its
+evidence JSON.
+
+## Previous package: WP259-A profile cache and Staging URL truth — SOURCE FIX; successor build required
 
 WP259-A corrected the source-side restart truth for backend profiles: one
 owner-bound, read-only hydration per exact backend session, retrying after

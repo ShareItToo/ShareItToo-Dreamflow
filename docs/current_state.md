@@ -1,5 +1,14 @@
 # ShareItToo Current State
 
+## WP259-B message, booking and FCM truth — SOURCE FIX PENDING SUCCESSOR / PROVIDER HOLD
+
+WP259-B confirmed the owner/renter booking and real thread lifecycle against
+non-production Staging and the Pixel UI. The 1704 UI shows participant names and
+message bubbles; authoritative participant-profile hydration and sender-name
+notification fixes are prepared in source and require a strictly higher
+successor. Staging push is `memory`, so real FCM display/tap evidence remains a
+WP260 provider gate. OnePlus is optional post-delivery evidence.
+
 ## WP259-A profile cache and Staging URL truth — SOURCE FIX; successor build required
 
 The source now performs one owner-bound, read-only backend profile hydration per

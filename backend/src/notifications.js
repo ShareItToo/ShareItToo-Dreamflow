@@ -417,7 +417,17 @@ export async function enqueueMessageNotification(client, {
   const title = itemTitle({ title: item });
   const actionUrl = chatActionUrl(threadId);
   const eventKey = `message:${messageId}`;
-  const body = `Du hast eine neue Nachricht zu „${title}“ erhalten.`;
+  const senderResult = await client.query(
+    `SELECT profile
+       FROM users
+      WHERE id = (
+        SELECT sender_id FROM messages
+         WHERE id = $1 AND sender_type = 'user'
+      )`,
+    [messageId],
+  );
+  const senderName = profileName(senderResult.rows[0]?.profile) || 'einem Teilnehmer';
+  const body = `Du hast eine neue Nachricht von „${senderName}“ zu „${title}“ erhalten.`;
   await enqueueForUser(client, {
     eventKey,
     userId: recipientId,
@@ -430,7 +440,7 @@ export async function enqueueMessageNotification(client, {
         category: 'messages',
         kind: 'message_received',
         priority: 2,
-        title: 'Neue Nachricht',
+        title: `Neue Nachricht von ${senderName}`,
         body,
         entityType: 'thread',
         entityId: threadId,
@@ -439,7 +449,7 @@ export async function enqueueMessageNotification(client, {
         threadId,
         actionUrl,
         ctaLabel: 'Chat öffnen',
-        payload: {},
+        payload: { participantName: senderName },
       },
     },
   });

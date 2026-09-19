@@ -9513,6 +9513,18 @@ class DataService {
   }
 
   static Future<User?> getUserById(String id) async {
+    // Public profiles are server-authoritative when the backend is enabled.
+    // The local users document is only an offline fallback; returning it first
+    // can keep an old avatar/name in thread lists after the other participant
+    // changed their profile or after this process restarted.
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      try {
+        final remote = await BackendRepository.getPublicProfile(id);
+        if (remote != null) return User.fromJson(remote);
+      } catch (error) {
+        debugPrint('[DataService] authoritative public profile load failed: $error');
+      }
+    }
     try {
       final users = await getUsers();
       return users.firstWhere((e) => e.id.toString() == id.toString());
@@ -9527,16 +9539,6 @@ class DataService {
     } on StateError {
       // No matching local public profile. The remote lookup below remains the
       // authoritative path when the backend is enabled.
-    }
-    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-      try {
-        final remote = await BackendRepository.getPublicProfile(id);
-        if (remote != null) {
-          return User.fromJson(remote);
-        }
-      } catch (error) {
-        debugPrint('[DataService] public profile load failed: $error');
-      }
     }
     return null;
   }

@@ -241,6 +241,26 @@ class _MessagesScreenState extends State<MessagesScreen> {
       final usersById = {for (final u in users) u.id: u};
       final itemsById = {for (final i in items) i.id: i};
 
+      // The local users document is an offline cache. Hydrate every visible
+      // counterparty from the public backend profile before rendering the list
+      // so participant names/avatars cannot remain decorative or stale after
+      // a remote profile change or process restart.
+      final participantIds = <String>{
+        for (final thread in [...threads, ...archived]) ...[
+          if (thread.user1Id != user.id) thread.user1Id,
+          if (thread.user2Id != user.id) thread.user2Id,
+        ],
+      }..removeWhere((id) => id.trim().isEmpty);
+      for (final participantId in participantIds) {
+        if (!mounted ||
+            revision != _loadRevision ||
+            !await _safetyService.isContextCurrent(actionContext)) {
+          return;
+        }
+        final participant = await DataService.getUserById(participantId);
+        if (participant != null) usersById[participant.id] = participant;
+      }
+
       if (!mounted ||
           revision != _loadRevision ||
           !await _safetyService.isContextCurrent(actionContext)) {
