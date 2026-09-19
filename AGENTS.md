@@ -39,6 +39,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   a deterministic command-executor test drives its generated plan with
   production-shaped readbacks through the point immediately before the first
   irreversible phase; helper- or plan-shape-only tests are insufficient.
+- Deployment executor context invariant: dependency-bearing steps must execute
+  in the declared runtime image, UID, network and mounted-file context; tests
+  must not mock away host/runtime/network assumptions that the live command
+  depends on.
 - Remote alias mentor invariant: after an alias or DNS failure, read the exact
   saved SSH configuration and authoritative project source before concluding
   that remote access is unavailable; test only the verified saved alias. A

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import crypto from 'node:crypto';
-import { isIP } from 'node:net';
 import { lstat, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,7 +54,7 @@ function isAllowedGreenEnvName(name) {
 const requiredConfigKeys = Object.freeze([
   'environment', 'envFile', 'envNames', 'mfaFile', 'firebaseFile',
   'technicalSandboxKeyFile', 'technicalSandboxWebhookFile',
-  'syntheticUserId', 'paymentTransport', 'stripeLiveMode',
+  'syntheticPasswordFile', 'syntheticUserId', 'paymentTransport', 'stripeLiveMode',
   'identityTransport', 'listingAiProvider', 'listingAiExternalAllowed',
   'accessGateDigest', 'providerConfigDigest', 'mounts',
 ]);
@@ -80,8 +79,9 @@ export function assertGreenProtectedEnvironment(values, config) {
       || values.SIT_STAGING_COMPOSE_PROJECT !== 'sit-green'
       || values.TECHNICAL_SANDBOX_SECRET_KEY_FILE !== '/run/secrets/technical-sandbox-key'
       || values.TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE !== '/run/secrets/technical-sandbox-webhook'
+      || values.SYNTHETIC_SANDBOX_PASSWORD_FILE !== '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password'
       || !String(values.SIT_STAGING_ALLOWED_USER_IDS ?? '').split(',').map((entry) => entry.trim()).includes('synthetic_sandbox_user_pilot_20260919')
-      || config?.mfaFile === undefined) fail('green_runtime_environment_boundary_invalid');
+      || config?.mfaFile === undefined || config?.syntheticPasswordFile !== values.SYNTHETIC_SANDBOX_PASSWORD_FILE) fail('green_runtime_environment_boundary_invalid');
   for (const name of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_CONNECT_WEBHOOK_SECRET', 'OPENAI_API_KEY']) {
     if (Object.hasOwn(values, name) && values[name] !== '') fail('green_main_provider_secret_forbidden');
   }
@@ -129,38 +129,6 @@ function schemaNumberFromName(value, code) {
   const match = /^(\d+)(?:_|$)/u.exec(String(value ?? '').trim());
   if (!match) fail(code);
   return Number(match[1]);
-}
-
-function isPrivateIpv4(value) {
-  if (isIP(value) !== 4) return false;
-  const octets = value.split('.').map(Number);
-  return octets[0] === 10
-    || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
-    || (octets[0] === 192 && octets[1] === 168);
-}
-
-function databaseIpFromReadback(value, network, code) {
-  let networks;
-  try { networks = JSON.parse(String(value ?? '')); } catch { fail(code); }
-  const binding = networks?.[network];
-  const ip = binding?.IPAddress;
-  if (!binding || typeof ip !== 'string' || !isPrivateIpv4(ip)) fail(code);
-  return ip;
-}
-
-export function databaseUrlForIp(databaseUrl, ip, { expectedHost, expectedUser, expectedDatabase, code } = {}) {
-  let parsed;
-  try { parsed = new URL(databaseUrl); } catch { fail(code); }
-  let username;
-  try { username = decodeURIComponent(parsed.username); } catch { fail(code); }
-  if (!['postgres:', 'postgresql:'].includes(parsed.protocol)
-      || parsed.hostname !== expectedHost
-      || username !== expectedUser
-      || parsed.pathname !== `/${expectedDatabase}`
-      || (parsed.port && parsed.port !== '5432')
-      || !isPrivateIpv4(ip)) fail(code);
-  parsed.hostname = ip;
-  return parsed.toString();
 }
 
 export function assertGreenRuntimeReadbacks({ version, health, ready, runtimeCommit } = {}) {
@@ -303,7 +271,11 @@ export async function assertGreenProtectedRuntimeFiles(config, protectedEnv) {
   await assertProtectedFile(config.firebaseFile, 0o640, 0, 65532, 'green_firebase_file');
   await assertProtectedFile(config.technicalSandboxKeyFile, 0o600, 100, 101, 'green_technical_key_file');
   await assertProtectedFile(config.technicalSandboxWebhookFile, 0o600, 100, 101, 'green_technical_webhook_file');
-  await assertProtectedFile(protectedEnv.SYNTHETIC_SANDBOX_PASSWORD_FILE, 0o600, 100, 101, 'green_synthetic_password_file');
+  if (protectedEnv.SYNTHETIC_SANDBOX_PASSWORD_FILE !== '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password'
+      || config.syntheticPasswordFile !== protectedEnv.SYNTHETIC_SANDBOX_PASSWORD_FILE) {
+    fail('green_synthetic_password_file_path_invalid');
+  }
+  await assertProtectedFile(config.syntheticPasswordFile, 0o600, 100, 101, 'green_synthetic_password_file');
   return true;
 }
 
@@ -314,6 +286,8 @@ export function assertGreenRuntimeConfig(config) {
   safePath(config.firebaseFile, 'green_firebase_file_invalid');
   safePath(config.technicalSandboxKeyFile, 'green_technical_key_file_invalid');
   safePath(config.technicalSandboxWebhookFile, 'green_technical_webhook_file_invalid');
+  safePath(config.syntheticPasswordFile, 'green_synthetic_password_file_invalid');
+  if (config.syntheticPasswordFile !== '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password') fail('green_synthetic_password_file_invalid');
   if (!['staging', 'test'].includes(config.environment)
       || !Array.isArray(config.envNames) || config.envNames.length === 0
       || new Set(config.envNames).size !== config.envNames.length
@@ -500,6 +474,18 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
   const runtimeConfig = assertGreenRuntimeConfig(config);
   const { target, runtime, isolated } = plan;
   const inspect = (name) => ({ command: 'docker', args: ['inspect', '--format', '{{json .}}', name] });
+  const provisionerSource = resolve(repositoryRoot, 'backend/ops/provision_synthetic_sandbox_user.mjs');
+  const stablePrivateFileSource = resolve(repositoryRoot, 'backend/ops/stable_private_file.mjs');
+  const provisionerMounts = [
+    '--mount', `type=bind,src=${provisionerSource},dst=/app/ops/provision_synthetic_sandbox_user.mjs,readonly`,
+    '--mount', `type=bind,src=${stablePrivateFileSource},dst=/app/ops/stable_private_file.mjs,readonly`,
+    '--mount', `type=bind,src=${runtimeConfig.mfaFile},dst=/run/secrets/mfa-encryption-key,readonly`,
+    '--mount', `type=bind,src=${runtimeConfig.firebaseFile},dst=/run/secrets/firebase-service-account.json,readonly`,
+    '--mount', `type=bind,src=${runtimeConfig.technicalSandboxKeyFile},dst=/run/secrets/technical-sandbox-key,readonly`,
+    '--mount', `type=bind,src=${runtimeConfig.technicalSandboxWebhookFile},dst=/run/secrets/technical-sandbox-webhook,readonly`,
+    '--mount', `type=bind,src=${runtimeConfig.syntheticPasswordFile},dst=/run/secrets/synthetic-sandbox-user-password,readonly`,
+  ];
+  const provisionerPath = '/app/ops/provision_synthetic_sandbox_user.mjs';
   const commands = [
     { phase: 'target_inventory_api', ...inspect(target.apiContainer) },
     { phase: 'target_inventory_database', ...inspect(target.databaseContainer) },
@@ -519,8 +505,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'isolated_migrate_87_to_92', command: 'docker', args: ['run', '--rm', '--network', isolated.network, '--env-file', isolated.envFile, '--entrypoint', 'node', runtime.image, '-e', "import('./src/migrations.js').then(async ({runMigrations})=>{const {Pool}=await import('pg');const pool=new Pool({connectionString:process.env.DATABASE_URL});await runMigrations(pool);await pool.end();})"] },
     { phase: 'isolated_migration_readback', command: 'docker', args: ['exec', isolated.database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', isolated.databaseUser, '-d', isolated.databaseName, '-Atc', "SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"] },
     { phase: 'isolated_integrity_and_functional_probes', command: 'bash', args: ['backend/ops/check_foreign_key_integrity.sh'], envFile: isolated.envFile, runtimeEnv: { DATABASE_CONTAINER: isolated.database, DATABASE_USER: isolated.databaseUser, DATABASE_NAME: isolated.databaseName }, redacted: true },
-    { phase: 'isolated_database_ip_readback', command: 'docker', args: ['inspect', '--format', '{{json .NetworkSettings.Networks}}', isolated.database] },
-    { phase: 'synthetic_sandbox_provision_isolated', command: 'node', args: ['backend/ops/provision_synthetic_sandbox_user.mjs'], envFile: isolated.envFile, runtimeEnv: { SIT_GREEN_REHEARSAL: '1' }, redacted: true },
+    { phase: 'synthetic_sandbox_provision_isolated', command: 'docker', args: ['run', '--rm', '--user', '100:101', '--group-add', '65532', '--network', isolated.network, '--env-file', configFile, '--env-file', isolated.envFile, '--env', 'DEPLOYMENT_ENVIRONMENT=test', '--env', 'SIT_GREEN_REHEARSAL=1', '--env', 'SYNTHETIC_SANDBOX_PASSWORD_FILE=/run/secrets/synthetic-sandbox-user-password', ...provisionerMounts, '--entrypoint', 'node', runtime.image, provisionerPath], envFile: isolated.envFile, redacted: true },
     { phase: 'candidate_acceptance_create', command: 'docker', args: [
       'create', '--name', `sit-green-acceptance-${runtime.runtimeCommit.slice(0, 12)}`, '--group-add', '65532',
       '--network', isolated.network, '--network-alias', 'sit-green-acceptance-api',
@@ -554,8 +539,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'seal_green_api', command: 'docker', args: ['rename', target.apiContainer, target.sealedApiContainer] },
     { phase: 'canonical_forward_migration_87_to_92', command: 'docker', args: ['run', '--rm', '--network', target.network, '--env-file', configFile, '--entrypoint', 'node', runtime.image, '-e', "import('./src/migrations.js').then(async ({runMigrations})=>{const {Pool}=await import('pg');const pool=new Pool({connectionString:process.env.DATABASE_URL});await runMigrations(pool);await pool.end();})"], envFile: configFile, redacted: true },
     { phase: 'canonical_schema_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', "SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"] },
-    { phase: 'canonical_database_ip_readback', command: 'docker', args: ['inspect', '--format', '{{json .NetworkSettings.Networks}}', target.databaseContainer] },
-    { phase: 'synthetic_sandbox_provision_canonical', command: 'node', args: ['backend/ops/provision_synthetic_sandbox_user.mjs'], envFile: configFile, redacted: true },
+    { phase: 'synthetic_sandbox_provision_canonical', command: 'docker', args: ['run', '--rm', '--user', '100:101', '--group-add', '65532', '--network', target.network, '--env-file', configFile, '--env', 'DEPLOYMENT_ENVIRONMENT=test', '--env', 'SYNTHETIC_SANDBOX_PASSWORD_FILE=/run/secrets/synthetic-sandbox-user-password', ...provisionerMounts, '--entrypoint', 'node', runtime.image, provisionerPath], envFile: configFile, redacted: true },
     { phase: 'final_create_no_host_port', command: 'docker', args: [
       'create', '--name', target.apiContainer, '--restart', 'no', '--group-add', '65532', '--network', target.network,
       '--label', 'com.shareittoo.sit.green=true', '--label', `com.shareittoo.sit.green.run_id=${target.runId}`,
@@ -601,7 +585,6 @@ export function assertGreenCommandBindings(commands, plan, configFile) {
   if (byPhase.get('canonical_forward_migration_87_to_92')?.envFile !== configFile
       || !byPhase.get('canonical_forward_migration_87_to_92')?.args?.includes(configFile)) fail('green_canonical_migration_binding_missing');
   if (byPhase.get('isolated_restore')?.inputFile !== `${plan.evidenceFile}.pgdump`) fail('green_restore_backup_binding_missing');
-  if (!byPhase.has('isolated_database_ip_readback') || !byPhase.has('canonical_database_ip_readback')) fail('green_database_ip_readback_missing');
   return true;
 }
 
@@ -813,7 +796,6 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
   const commands = buildGreenPromotionCommands({ plan, configFile, config });
   const completed = [];
   const readbacks = {};
-  const databaseHosts = { isolated: null, canonical: null };
   let backupDigest;
   let schemaMutationStarted = false;
   let phaseStarted;
@@ -821,27 +803,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
     for (const entry of commands) {
       phaseStarted = entry.phase;
       const entryEnv = entry.envFile === configFile ? protectedEnv : entry.envFile === plan.isolated.envFile ? isolatedEnv : {};
-      let env = { ...commandEnv, ...entryEnv, ...(entry.runtimeEnv ?? {}) };
-      if (entry.phase === 'synthetic_sandbox_provision_isolated') {
-        if (!databaseHosts.isolated) fail('green_isolated_database_ip_missing');
-        env = {
-          ...env,
-          DATABASE_URL: databaseUrlForIp(env.DATABASE_URL, databaseHosts.isolated, {
-            expectedHost: plan.isolated.database, expectedUser: plan.isolated.databaseUser,
-            expectedDatabase: plan.isolated.databaseName, code: 'green_isolated_database_identity_invalid',
-          }),
-        };
-      }
-      if (entry.phase === 'synthetic_sandbox_provision_canonical') {
-        if (!databaseHosts.canonical) fail('green_canonical_database_ip_missing');
-        env = {
-          ...env,
-          DATABASE_URL: databaseUrlForIp(env.DATABASE_URL, databaseHosts.canonical, {
-            expectedHost: plan.target.databaseContainer, expectedUser: greenTarget.databaseUser,
-            expectedDatabase: greenTarget.databaseName, code: 'green_canonical_database_identity_invalid',
-          }),
-        };
-      }
+      const env = { ...commandEnv, ...entryEnv, ...(entry.runtimeEnv ?? {}) };
       if (entry.phase === 'canonical_forward_migration_87_to_92') schemaMutationStarted = true;
       let result;
       if (entry.inputFile) {
@@ -888,12 +850,6 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
           database: { name: databaseRecord?.Name?.replace(/^\//u, ''), greenLabel: databaseRecord?.Config?.Labels?.['com.shareittoo.sit.green'] === 'true', running: databaseRecord?.State?.Running === true },
           network: { name: networkRecord?.Name, internal: networkRecord?.Internal === true }, providerNetwork: { name: providerRecord?.Name }, uploadsVolume: { name: volumeRecord?.Name }, schema: schemaNumberFromName(readbacks.source_schema_readback, 'green_source_schema_readback_invalid'),
         });
-      }
-      if (entry.phase === 'isolated_database_ip_readback') {
-        databaseHosts.isolated = databaseIpFromReadback(result.stdout, plan.isolated.network, 'green_isolated_database_ip_invalid');
-      }
-      if (entry.phase === 'canonical_database_ip_readback') {
-        databaseHosts.canonical = databaseIpFromReadback(result.stdout, plan.target.network, 'green_canonical_database_ip_invalid');
       }
       if (entry.phase === 'isolated_migration_readback' && schemaNumberFromName(result.stdout, 'green_isolated_schema_readback_invalid') !== greenTarget.currentSchema) fail('green_isolated_schema_not_current');
       if (entry.phase === 'canonical_schema_readback' && schemaNumberFromName(result.stdout, 'green_canonical_schema_readback_invalid') !== greenTarget.currentSchema) fail('green_canonical_schema_not_current');

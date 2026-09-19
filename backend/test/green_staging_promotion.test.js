@@ -15,7 +15,6 @@ import {
   assertGreenTargetManifest,
   buildGreenPromotionCommands,
   buildGreenPromotionPlan,
-  databaseUrlForIp,
   greenTarget,
   sanitizeGreenEvidence,
   normalizedGreenTargetDigest,
@@ -44,6 +43,7 @@ const config = {
   firebaseFile: '/docker/shareittoo/staging-secrets/firebase.json',
   technicalSandboxKeyFile: '/docker/shareittoo/staging-secrets/technical-sandbox-key',
   technicalSandboxWebhookFile: '/docker/shareittoo/staging-secrets/technical-sandbox-webhook',
+  syntheticPasswordFile: '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password',
   syntheticUserId: 'synthetic_sandbox_user_pilot_20260919', paymentTransport: 'memory',
   stripeLiveMode: false, identityTransport: 'memory', listingAiProvider: 'on_device',
   listingAiExternalAllowed: false, accessGateDigest: 'b'.repeat(64), providerConfigDigest: 'c'.repeat(64),
@@ -85,10 +85,12 @@ test('protected Green runtime environment binds memory payment, pilot, paths and
     SIT_STAGING_PILOT_ID: 'heilbronn_wave0', SIT_STAGING_COMPOSE_PROJECT: 'sit-green', SIT_STAGING_ALLOWED_USER_IDS: 'synthetic_sandbox_user_pilot_20260919',
     TECHNICAL_SANDBOX_SECRET_KEY_FILE: '/run/secrets/technical-sandbox-key',
     TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: '/run/secrets/technical-sandbox-webhook',
+    SYNTHETIC_SANDBOX_PASSWORD_FILE: '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password',
   };
   assert.equal(assertGreenProtectedEnvironment(values, config), true);
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, PAYMENT_TRANSPORT: 'stripe' }, config));
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, OPENAI_API_KEY: 'present' }, config));
+  assert.throws(() => assertGreenProtectedEnvironment({ ...values, SYNTHETIC_SANDBOX_PASSWORD_FILE: '/run/secrets/synthetic-sandbox-user-password' }, config));
 });
 
 test('runtime image must be immutable GHCR commit plus digest', () => {
@@ -177,7 +179,7 @@ test('every promotion command has an executable command and argv, including targ
   }
 });
 
-test('executor drives production-shaped readbacks to quiesce and rejects bad image or database IP', async () => {
+test('executor runs provisioners in the declared runtime image before quiesce', async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'sit-green-runner-'));
   const configFile = path.join(root, 'green.env');
   const evidenceFile = path.join(root, 'green-promotion.json');
@@ -196,7 +198,7 @@ test('executor drives production-shaped readbacks to quiesce and rejects bad ima
     TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT: '2026-09-19T12:00:00Z', SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
     TECHNICAL_SANDBOX_SECRET_KEY_FILE: '/run/secrets/technical-sandbox-key',
     TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: '/run/secrets/technical-sandbox-webhook',
-    SYNTHETIC_SANDBOX_PASSWORD_FILE: '/run/secrets/synthetic-sandbox-user-password',
+    SYNTHETIC_SANDBOX_PASSWORD_FILE: '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password',
   };
   writeFileSync(configFile, `${Object.entries(envValues).map(([key, value]) => `${key}=${value}`).join('\n')}\n`, { mode: 0o600 });
   chmodSync(configFile, 0o600);
@@ -217,7 +219,7 @@ test('executor drives production-shaped readbacks to quiesce and rejects bad ima
     ],
   });
   const databaseRecord = { Name: `/${greenTarget.databaseContainer}`, State: { Running: true }, Config: { Labels: { 'com.shareittoo.sit.green': 'true' } } };
-  const fakeRun = async (image, { isolatedIp = '172.31.0.2' } = {}) => {
+  const fakeRun = async (image) => {
     const calls = [];
     const fake = async (command, args, options = {}) => {
       calls.push({ command, args, phase: options.phase, env: options.env });
@@ -230,8 +232,6 @@ test('executor drives production-shaped readbacks to quiesce and rejects bad ima
       if (phase === 'runtime_image_readback') return { stdout: JSON.stringify(imageReadback) };
       if (phase === 'source_schema_readback') return { stdout: '087_identity_verification_pilot_gate.up.sql\n' };
       if (phase === 'isolated_migration_readback') return { stdout: '092_listing_ai_mock_consent.up.sql\n' };
-      if (phase === 'isolated_database_ip_readback') return { stdout: JSON.stringify({ [plan.isolated.network]: { IPAddress: isolatedIp } }) };
-      if (phase === 'canonical_database_ip_readback') return { stdout: JSON.stringify({ [plan.target.network]: { IPAddress: '172.31.0.3' } }) };
       if (phase === 'candidate_health_and_feature_probes' || phase === 'candidate_ready_probe') return { stdout: JSON.stringify(payload) };
       if (phase === 'candidate_version_probe') return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'staging' }) };
       if (phase === 'fresh_protected_backup') return { stdout: 'synthetic protected backup' };
@@ -260,21 +260,40 @@ test('executor drives production-shaped readbacks to quiesce and rejects bad ima
   const quiesceIndex = good.calls.findIndex((entry) => entry.phase === 'quiesce_green_api');
   assert.ok(quiesceIndex > 0);
   assert.deepEqual(good.calls.slice(0, quiesceIndex).map((entry) => entry.phase), expectedReversible);
-  const isolatedProvision = good.calls.find((entry) => entry.phase === 'synthetic_sandbox_provision_isolated');
-  const isolatedUrl = new URL(isolatedProvision.env.DATABASE_URL);
-  assert.equal(isolatedUrl.hostname, '172.31.0.2');
-  assert.equal(isolatedUrl.username, 'green_rehearsal');
-  assert.equal(isolatedUrl.port, '5432');
-  assert.equal(isolatedUrl.pathname, '/green_rehearsal');
+  const provisionEntries = buildGreenPromotionCommands({ plan, configFile, config: runtimeConfig })
+    .filter((entry) => entry.phase.startsWith('synthetic_sandbox_provision_'));
+  assert.equal(provisionEntries.length, 2);
+  for (const entry of provisionEntries) {
+    assert.equal(entry.command, 'docker');
+    assert.ok(entry.args.includes('--user') && entry.args.includes('100:101'));
+    assert.ok(entry.args.includes('--group-add') && entry.args.includes('65532'));
+    assert.ok(entry.args.includes('--entrypoint') && entry.args.includes('node'));
+    assert.ok(entry.args.includes(plan.runtime.image));
+    assert.ok(entry.args.includes('/app/ops/provision_synthetic_sandbox_user.mjs'));
+    assert.ok(entry.args.some((arg) => arg.endsWith('dst=/app/ops/provision_synthetic_sandbox_user.mjs,readonly')));
+    assert.ok(entry.args.some((arg) => arg.endsWith('dst=/app/ops/stable_private_file.mjs,readonly')));
+    assert.ok(entry.args.some((arg) => arg.endsWith('dst=/run/secrets/mfa-encryption-key,readonly')));
+    assert.ok(entry.args.some((arg) => arg.endsWith('dst=/run/secrets/firebase-service-account.json,readonly')));
+    assert.ok(entry.args.some((arg) => arg.endsWith('dst=/run/secrets/technical-sandbox-key,readonly')));
+    assert.ok(entry.args.some((arg) => arg.endsWith('dst=/run/secrets/technical-sandbox-webhook,readonly')));
+    assert.ok(entry.args.some((arg) => arg.endsWith('dst=/run/secrets/synthetic-sandbox-user-password,readonly')));
+    assert.ok(entry.args.includes('--env') && entry.args.includes('SYNTHETIC_SANDBOX_PASSWORD_FILE=/run/secrets/synthetic-sandbox-user-password'));
+    assert.ok(entry.args.includes('--network'));
+  }
+  const isolatedProvision = provisionEntries.find((entry) => entry.phase === 'synthetic_sandbox_provision_isolated');
+  const canonicalProvision = provisionEntries.find((entry) => entry.phase === 'synthetic_sandbox_provision_canonical');
+  assert.ok(isolatedProvision.args.includes(plan.isolated.network));
+  assert.ok(isolatedProvision.args.includes(configFile) && isolatedProvision.args.includes(plan.isolated.envFile));
+  assert.ok(isolatedProvision.args.includes('SIT_GREEN_REHEARSAL=1'));
+  assert.ok(canonicalProvision.args.includes(plan.target.network));
+  assert.ok(canonicalProvision.args.includes(configFile));
+  assert.equal(canonicalProvision.args.includes(plan.isolated.envFile), false);
+  assert.equal(good.calls.find((entry) => entry.phase === 'synthetic_sandbox_provision_isolated').command, 'docker');
+  assert.equal(good.calls.find((entry) => entry.phase === 'synthetic_sandbox_provision_canonical'), undefined);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
   const badImage = await fakeRun('shareittoo-api-wrong:old');
   assert.equal(badImage.result.code, 'green_prepromotion_tuple_mismatch');
   assert.equal(badImage.calls.some((entry) => entry.phase === 'quiesce_green_api'), false);
-  rmSync(`${evidenceFile}.pgdump`, { force: true });
-  const badIp = await fakeRun(targetManifest.prePromotionImage, { isolatedIp: '8.8.8.8' });
-  assert.equal(badIp.result.code, 'green_isolated_database_ip_invalid');
-  assert.equal(badIp.calls.some((entry) => entry.phase === 'synthetic_sandbox_provision_isolated'), false);
-  assert.equal(badIp.calls.some((entry) => entry.phase === 'quiesce_green_api'), false);
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -294,26 +313,6 @@ test('command executor bindings keep isolated probes and canonical runtime disti
   assert.ok(commands.find((entry) => entry.phase === 'isolated_postgres_wait').args.join(' ').includes('pg_isready'));
   assert.ok(commands.find((entry) => entry.phase === 'candidate_health_and_feature_probes').args.includes('--retry'));
   assert.ok(commands.find((entry) => entry.phase === 'final_live_wait').args.includes('--retry'));
-  assert.ok(commands.findIndex((entry) => entry.phase === 'isolated_database_ip_readback') < commands.findIndex((entry) => entry.phase === 'synthetic_sandbox_provision_isolated'));
-  assert.ok(commands.findIndex((entry) => entry.phase === 'canonical_database_ip_readback') < commands.findIndex((entry) => entry.phase === 'synthetic_sandbox_provision_canonical'));
-});
-
-test('database IP rebinding preserves canonical identity and changes only the private host', () => {
-  const rebound = databaseUrlForIp(
-    'postgres://shareittoo_green:synthetic@shareittoo-staging-api:5432/shareittoo_green',
-    '172.31.0.3',
-    { expectedHost: 'shareittoo-staging-api', expectedUser: 'shareittoo_green', expectedDatabase: 'shareittoo_green', code: 'fixture_database_identity_invalid' },
-  );
-  const parsed = new URL(rebound);
-  assert.equal(parsed.hostname, '172.31.0.3');
-  assert.equal(parsed.username, 'shareittoo_green');
-  assert.equal(parsed.port, '5432');
-  assert.equal(parsed.pathname, '/shareittoo_green');
-  assert.throws(() => databaseUrlForIp(
-    'postgres://shareittoo_green:synthetic@legacy-db:5432/shareittoo_green',
-    '172.31.0.3',
-    { expectedHost: 'shareittoo-staging-api', expectedUser: 'shareittoo_green', expectedDatabase: 'shareittoo_green', code: 'fixture_database_identity_invalid' },
-  ), /fixture_database_identity_invalid/u);
 });
 
 test('pre-promotion inventory requires the exact Green DB host and protected mount cohort', () => {
