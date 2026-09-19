@@ -25,6 +25,7 @@ import {
   runGreenPromotion,
   syntheticSandboxPasswordHostPath,
 } from '../ops/green_staging_promotion.mjs';
+import { readStagingAccessConfiguration, stagingAnonymousPathAllowed } from '../src/staging_access_gate.js';
 
 const runtimeCommit = '266f69c21dd61bfcdb212c24a0c8788b172bed9e';
 const opsCommit = '8fecd57018ab10a0c6733531539472e6179a02db';
@@ -313,6 +314,23 @@ test('command executor bindings keep isolated probes and canonical runtime disti
   assert.ok(commands.find((entry) => entry.phase === 'isolated_postgres_wait').args.join(' ').includes('pg_isready'));
   assert.ok(commands.find((entry) => entry.phase === 'candidate_health_and_feature_probes').args.includes('--retry'));
   assert.ok(commands.find((entry) => entry.phase === 'final_live_wait').args.includes('--retry'));
+  const candidateHealthProbe = commands.find((entry) => entry.phase === 'candidate_health_and_feature_probes');
+  const finalHealthProbe = commands.find((entry) => entry.phase === 'final_health_probe');
+  assert.equal(new URL(candidateHealthProbe.args.at(-1)).pathname, '/health/ready');
+  assert.equal(new URL(finalHealthProbe.args.at(-1)).pathname, '/api/health/ready');
+  const accessConfiguration = readStagingAccessConfiguration({
+    DEPLOYMENT_ENVIRONMENT: 'staging',
+    SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
+    SIT_STAGING_ALLOWED_USER_IDS: 'synthetic_sandbox_user_pilot_20260919',
+  });
+  for (const path of [
+    new URL(candidateHealthProbe.args.at(-1)).pathname,
+    new URL(finalHealthProbe.args.at(-1)).pathname.replace(/^\/api(?=\/)/u, ''),
+  ]) {
+    assert.equal(stagingAnonymousPathAllowed(accessConfiguration, { method: 'GET', path }), true, `${path} must be access-gate allowlisted`);
+    assert.equal(stagingAnonymousPathAllowed(accessConfiguration, { method: 'HEAD', path }), true, `${path} HEAD must be access-gate allowlisted`);
+  }
+  assert.equal(stagingAnonymousPathAllowed(accessConfiguration, { method: 'GET', path: '/health' }), false);
   for (const entry of commands.filter(({ command, args }) => command === 'curl' && args.includes('--retry'))) {
     assert.ok(entry.args.includes('--retry-all-errors'), `${entry.phase} must retry transient read errors`);
     assert.equal(entry.args[entry.args.indexOf('--retry') + 1], '30');

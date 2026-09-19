@@ -86,6 +86,8 @@ test('anonymous surface is a minimal exact route matrix', () => {
     assert.equal(stagingAnonymousPathAllowed(configuration, { method: 'GET', path }), true);
     assert.equal(stagingAnonymousPathAllowed(configuration, { method: 'HEAD', path }), true);
   }
+  assert.equal(stagingAnonymousPathAllowed(configuration, { method: 'GET', path: '/health' }), false);
+  assert.equal(stagingAnonymousPathAllowed(configuration, { method: 'HEAD', path: '/health' }), false);
   assert.equal(stagingAnonymousPathAllowed(configuration, { method: 'GET', path: '/v1/listings' }), true);
   assert.equal(stagingAnonymousPathAllowed(configuration, { method: 'GET', path: '/v1/uploads/fixture-full.webp' }), true);
   for (const path of [
