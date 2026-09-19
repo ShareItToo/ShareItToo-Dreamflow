@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
 
-import { bookingLocalDate } from './booking_address_reveal_domain.js';
+import {
+  bookingLocalDate,
+  evaluateBookingAddressReveal,
+} from './booking_address_reveal_domain.js';
 import { resolveZonedCalendarInstant } from './return_calendar_policy.js';
 
 const allowedWorkflowStatuses = Object.freeze([
@@ -8,7 +11,10 @@ const allowedWorkflowStatuses = Object.freeze([
   'payment_pending',
   'confirmed',
   'active',
+  'running',
   'returned',
+  'completed',
+  'withdrawalReturnRequired',
 ]);
 
 export class BookingFlowTimeError extends Error {
@@ -23,6 +29,21 @@ export class BookingFlowTimeError extends Error {
 function safeText(value, maxLength = 200) {
   const text = typeof value === 'string' ? value.trim() : '';
   return text.length <= maxLength ? text : '';
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return value.map((entry) => stableJson(entry));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort()
+      .map((key) => [key, stableJson(value[key])]));
+  }
+  return value;
+}
+
+function requestFingerprint(value) {
+  return crypto.createHash('sha256')
+    .update(JSON.stringify(stableJson(value ?? null)))
+    .digest('hex');
 }
 
 function prefixForSegment(segment) {
@@ -60,6 +81,49 @@ export function normalizeBookingFlowTimeState(payload) {
     returnTimeConfirmedByUserId: safeText(source.returnTimeConfirmedByUserId, 120),
     handoverTimeConfirmedAt: safeText(source.handoverTimeConfirmedAt, 80),
     returnTimeConfirmedAt: safeText(source.returnTimeConfirmedAt, 80),
+    handoverActive: source.handoverActive === true,
+    returnActive: source.returnActive === true,
+    handoverPhotos: Number.isSafeInteger(Number(source.handoverPhotos))
+      ? Number(source.handoverPhotos) : 0,
+    returnPhotos: Number.isSafeInteger(Number(source.returnPhotos))
+      ? Number(source.returnPhotos) : 0,
+    pickupPresenterPhotos: Number.isSafeInteger(Number(source.pickupPresenterPhotos))
+      ? Number(source.pickupPresenterPhotos) : 0,
+    pickupDeviationPhotos: Number.isSafeInteger(Number(source.pickupDeviationPhotos))
+      ? Number(source.pickupDeviationPhotos) : 0,
+    returnPresenterPhotos: Number.isSafeInteger(Number(source.returnPresenterPhotos))
+      ? Number(source.returnPresenterPhotos) : 0,
+    returnDeviationPhotos: Number.isSafeInteger(Number(source.returnDeviationPhotos))
+      ? Number(source.returnDeviationPhotos) : 0,
+    pickupPresenterNonCameraUsed: source.pickupPresenterNonCameraUsed === true,
+    returnPresenterNonCameraUsed: source.returnPresenterNonCameraUsed === true,
+    handoverLocation: source.handoverLocation && typeof source.handoverLocation === 'object'
+      ? source.handoverLocation : null,
+    returnLocation: source.returnLocation && typeof source.returnLocation === 'object'
+      ? source.returnLocation : null,
+    returnLocationReusePromptDismissed: source.returnLocationReusePromptDismissed === true,
+    handoverLocationLat: safeText(source.handoverLocationLat, 64),
+    handoverLocationLng: safeText(source.handoverLocationLng, 64),
+    handoverLocationLabel: safeText(source.handoverLocationLabel, 240),
+    handoverLocationMapsUrl: safeText(source.handoverLocationMapsUrl, 500),
+    handoverLocationSharedByUserId: safeText(source.handoverLocationSharedByUserId, 120),
+    handoverLocationSharedByName: safeText(source.handoverLocationSharedByName, 160),
+    handoverLocationSharedByRole: safeText(source.handoverLocationSharedByRole, 32),
+    handoverLocationAcceptedAs: safeText(source.handoverLocationAcceptedAs, 32),
+    returnLocationLat: safeText(source.returnLocationLat, 64),
+    returnLocationLng: safeText(source.returnLocationLng, 64),
+    returnLocationLabel: safeText(source.returnLocationLabel, 240),
+    returnLocationMapsUrl: safeText(source.returnLocationMapsUrl, 500),
+    returnLocationSharedByUserId: safeText(source.returnLocationSharedByUserId, 120),
+    returnLocationSharedByName: safeText(source.returnLocationSharedByName, 160),
+    returnLocationSharedByRole: safeText(source.returnLocationSharedByRole, 32),
+    returnLocationAcceptedAs: safeText(source.returnLocationAcceptedAs, 32),
+    pickupGalleryUsed: source.pickupGalleryUsed === true,
+    returnGalleryUsed: source.returnGalleryUsed === true,
+    pickupCounterpartyConfirmation: source.pickupCounterpartyConfirmation ?? null,
+    returnCounterpartyConfirmation: source.returnCounterpartyConfirmation ?? null,
+    flowStateRevision: Number.isSafeInteger(Number(source.flowStateRevision))
+      ? Number(source.flowStateRevision) : 0,
     flowTimeRevision: Number.isSafeInteger(Number(source.flowTimeRevision))
       ? Number(source.flowTimeRevision)
       : 0,
@@ -150,6 +214,18 @@ export function applyBookingFlowTimeAction({
   const prefix = prefixForSegment(segment);
   const state = normalizeBookingFlowTimeState(payload);
   const previousRequested = safeText(state[`${prefix}TimeRequested`], 120);
+  const expectedRevision = Number(input.expectedRevision);
+  const revisionKey = action === 'propose' || action === 'confirm'
+    ? 'flowTimeRevision'
+    : 'flowStateRevision';
+  if (Object.hasOwn(input, 'expectedRevision')
+      && (!Number.isSafeInteger(expectedRevision) || expectedRevision !== state[revisionKey])) {
+    throw new BookingFlowTimeError(409, 'flow_time_revision_stale', {
+      expectedRevision: Number.isSafeInteger(expectedRevision) ? expectedRevision : null,
+      actualRevision: state[revisionKey],
+      revisionKey,
+    });
+  }
 
   if (action === 'propose') {
     const label = safeText(input.label, 120);
@@ -181,29 +257,125 @@ export function applyBookingFlowTimeAction({
     state[`${prefix}TimeConfirmed`] = true;
     state[`${prefix}TimeConfirmedByUserId`] = actorId;
     state[`${prefix}TimeConfirmedAt`] = now.toISOString();
+  } else if (action === 'start' || action === 'clear') {
+    const activeKey = `${prefix}Active`;
+    const active = state[activeKey] === true;
+    const starting = action === 'start';
+    const ownerStartsPickup = segment === 'pickup' && actorId === ownerId;
+    const renterStartsReturn = segment === 'return' && actorId === renterId;
+    if (starting && !(ownerStartsPickup || renterStartsReturn)) {
+      throw new BookingFlowTimeError(403, 'flow_state_role_forbidden');
+    }
+    if (!starting) {
+      const counterpartyClearsPickup = segment === 'pickup' && actorId === renterId;
+      const ownerClearsReturn = segment === 'return' && actorId === ownerId;
+      if (!(counterpartyClearsPickup || ownerClearsReturn)) {
+        throw new BookingFlowTimeError(403, 'flow_state_clear_role_forbidden');
+      }
+    }
+    if (starting && active) {
+      throw new BookingFlowTimeError(409, 'flow_state_already_active');
+    }
+    if (!starting && !active) {
+      throw new BookingFlowTimeError(409, 'flow_state_not_active');
+    }
+    if (starting && state[`${prefix}TimeConfirmed`] !== true) {
+      throw new BookingFlowTimeError(409, 'flow_state_time_unconfirmed');
+    }
+    if (starting && payload?.needsReview === true) {
+      throw new BookingFlowTimeError(409, 'flow_state_needs_review');
+    }
+    const expectedStatuses = segment === 'pickup' ? ['accepted'] : ['active', 'running'];
+    if (starting && !expectedStatuses.includes(workflowStatus)) {
+      throw new BookingFlowTimeError(409, 'flow_state_wrong_booking_status', {
+        status: workflowStatus,
+      });
+    }
+    state[activeKey] = starting;
+  } else if (action === 'set_location') {
+    const location = input.serverLocation;
+    if (!location || typeof location !== 'object') {
+      throw new BookingFlowTimeError(400, 'flow_location_message_required');
+    }
+    const locationKey = segment === 'return' ? 'returnLocation' : 'handoverLocation';
+    state[locationKey] = {
+      ...location,
+      acceptedAs: locationKey,
+      sharedByUserId: safeText(location.sharedByUserId, 120),
+    };
+    const locationPrefix = segment === 'return' ? 'return' : 'handover';
+    state[`${locationPrefix}LocationLat`] = safeText(location.latitude, 64);
+    state[`${locationPrefix}LocationLng`] = safeText(location.longitude, 64);
+    state[`${locationPrefix}LocationLabel`] = safeText(location.label, 240);
+    state[`${locationPrefix}LocationMapsUrl`] = safeText(location.mapsUrl, 500);
+    state[`${locationPrefix}LocationSharedByUserId`] =
+      safeText(location.sharedByUserId, 120);
+    state[`${locationPrefix}LocationSharedByName`] =
+      safeText(location.sharedByName, 160);
+    state[`${locationPrefix}LocationSharedByRole`] =
+      location.sharedByUserId === ownerId ? 'owner' : 'renter';
+    state[`${locationPrefix}LocationAcceptedAs`] = locationKey;
+    if (segment === 'return') state.returnLocationReusePromptDismissed = false;
+  } else if (action === 'copy_location') {
+    if (!state.handoverLocation) {
+      throw new BookingFlowTimeError(409, 'flow_location_missing');
+    }
+    state.returnLocation = {
+      ...state.handoverLocation,
+      acceptedAs: 'returnLocation',
+    };
+    for (const suffix of [
+      'Lat', 'Lng', 'Label', 'MapsUrl', 'SharedByUserId', 'SharedByName', 'SharedByRole',
+    ]) {
+      state[`returnLocation${suffix}`] = state[`handoverLocation${suffix}`] ?? '';
+    }
+    state.returnLocationAcceptedAs = 'returnLocation';
+    state.returnLocationReusePromptDismissed = false;
+  } else if (action === 'dismiss_location') {
+    state.returnLocationReusePromptDismissed = true;
   } else {
     throw new BookingFlowTimeError(400, 'invalid_flow_time_action');
   }
 
-  state.flowTimeRevision += 1;
+  if (action === 'propose' || action === 'confirm') {
+    state.flowTimeRevision += 1;
+  } else {
+    state.flowStateRevision += 1;
+  }
+  const systemMessage = action === 'start'
+    ? `${segment === 'return' ? '🔄 Rückgabe' : '📦 Übergabe'} gestartet`
+    : action === 'clear'
+      ? `${segment === 'return' ? '🔄 Rückgabe' : '📦 Übergabe'} beendet`
+      : action === 'set_location'
+        ? `${segment === 'return' ? '📍 Rückgabeort' : '📍 Übergabeort'} bestätigt`
+        : action === 'copy_location'
+          ? '📍 Rückgabeort wie Übergabe übernommen'
+          : action === 'dismiss_location'
+            ? '📍 Rückgabeort nicht übernommen'
+            : bookingFlowTimeSystemMessage({
+              action,
+              segment,
+              state,
+              changed: action === 'propose' && previousRequested.length > 0,
+            });
   return {
     payload: { ...(payload ?? {}), ...state },
     state,
     eventType: `booking.flow_time.${action}`,
-    eventMetadata: { segment, action, flowTimeRevision: state.flowTimeRevision },
-    systemMessage: bookingFlowTimeSystemMessage({
-      action,
+    eventMetadata: {
       segment,
-      state,
-      changed: action === 'propose' && previousRequested.length > 0,
-    }),
+      action,
+      flowTimeRevision: state.flowTimeRevision,
+      flowStateRevision: state.flowStateRevision,
+    },
+    systemMessage,
   };
 }
 
 async function lockedBooking(client, bookingId) {
   const result = await client.query(
     `SELECT booking.id, booking.owner_id, booking.renter_id,
-            booking.workflow_status, booking.workflow_version,
+            booking.workflow_status, booking.workflow_version, booking.listing_id,
             booking.rental_start_date::text AS rental_start_date_text,
             booking.rental_end_date::text AS rental_end_date_text,
             booking.rental_timezone, request.payload
@@ -219,6 +391,42 @@ async function lockedBooking(client, bookingId) {
     throw new BookingFlowTimeError(409, 'booking_requires_b6_revalidation');
   }
   return row;
+}
+
+async function assertLocationRevealEligible(client, row, segment) {
+  const safety = await client.query(
+    `SELECT (
+       EXISTS (
+         SELECT 1 FROM support_cases AS support_case
+          WHERE support_case.status NOT IN ('resolved', 'closed')
+            AND support_case.safety_flag
+            AND (support_case.linked_booking_id = $1 OR support_case.linked_listing_id = $2)
+       ) OR EXISTS (
+         SELECT 1 FROM user_suspensions AS suspension
+          WHERE suspension.user_id = ANY($3::text[]) AND suspension.scope = 'account'
+            AND suspension.lifted_at IS NULL AND suspension.starts_at <= now()
+            AND (suspension.ends_at IS NULL OR suspension.ends_at > now())
+       )
+     ) AS held`,
+    [row.id, row.listing_id, [row.owner_id, row.renter_id]],
+  );
+  const visibility = evaluateBookingAddressReveal({
+    ownerId: row.owner_id,
+    renterId: row.renter_id,
+    workflowStatus: row.workflow_status,
+    rentalStartDate: row.rental_start_date_text,
+    rentalEndDate: row.rental_end_date_text,
+    rentalTimezone: row.rental_timezone,
+    flowTimePayload: row.payload,
+    segment,
+    safetyHold: safety.rows[0]?.held === true,
+    exactAddress: 'server-authorized-location',
+  });
+  if (visibility.result !== 'revealed') {
+    throw new BookingFlowTimeError(409, 'flow_location_reveal_unavailable', {
+      reason: visibility.reason,
+    });
+  }
 }
 
 export async function getBookingFlowTime(client, { actorId, bookingId }) {
@@ -237,7 +445,53 @@ export async function getBookingFlowTime(client, { actorId, bookingId }) {
     throw new BookingFlowTimeError(409, 'booking_requires_b6_revalidation');
   }
   assertWorkflowStatus(row.workflow_status);
-  return normalizeBookingFlowTimeState(row.payload);
+  const state = normalizeBookingFlowTimeState(row.payload);
+  const evidence = await client.query(
+    `SELECT segment, evidence_kind, count(*)::integer AS count,
+            bool_or(source <> 'camera') AS non_camera_used
+       FROM booking_condition_evidence
+      WHERE booking_id = $1
+      GROUP BY segment, evidence_kind`,
+    [bookingId],
+  );
+  for (const entry of evidence.rows) {
+    const prefix = entry.segment === 'return' ? 'return' : 'pickup';
+    if (entry.evidence_kind === 'presenter_photo') {
+      state[`${prefix}PresenterPhotos`] = Number(entry.count);
+      state[`${prefix}PresenterNonCameraUsed`] = entry.non_camera_used === true;
+      state[`${prefix}GalleryUsed`] = entry.non_camera_used === true;
+      state[prefix === 'pickup' ? 'handoverPhotos' : 'returnPhotos'] = Number(entry.count);
+    } else if (entry.evidence_kind === 'counterparty_deviation') {
+      state[`${prefix}DeviationPhotos`] = Number(entry.count);
+    }
+  }
+  const confirmations = await client.query(
+    `SELECT segment, verifier_role, verifier_user_id, decision,
+            presenter_photo_count, deviation_photo_count, created_at
+       FROM booking_condition_confirmations
+      WHERE booking_id = $1`,
+    [bookingId],
+  );
+  for (const entry of confirmations.rows) {
+    const prefix = entry.segment === 'return' ? 'return' : 'pickup';
+    state[`${prefix}CounterpartyConfirmation`] = {
+      verifierRole: entry.verifier_role,
+      verifierUserId: entry.verifier_user_id,
+      decision: entry.decision,
+      presenterPhotoCount: Number(entry.presenter_photo_count),
+      deviationPhotoCount: Number(entry.deviation_photo_count),
+      createdAt: new Date(entry.created_at).toISOString(),
+    };
+  }
+  state.galleryUsed = {
+    pickup: state.pickupGalleryUsed === true,
+    return: state.returnGalleryUsed === true,
+  };
+  state.confirmations = {
+    pickup: state.pickupCounterpartyConfirmation,
+    return: state.returnCounterpartyConfirmation,
+  };
+  return state;
 }
 
 export async function updateBookingFlowTime(client, {
@@ -262,7 +516,16 @@ export async function updateBookingFlowTime(client, {
     if (event.booking_id !== bookingId || event.actor_id !== actor.id) {
       throw new BookingFlowTimeError(409, 'idempotency_key_reused');
     }
-    return { state: normalizeBookingFlowTimeState(row.payload), replayed: true, participantUserIds: [row.owner_id, row.renter_id] };
+    const incomingFingerprint = requestFingerprint(raw);
+    if (event.metadata?.requestFingerprint
+        && event.metadata.requestFingerprint !== incomingFingerprint) {
+      throw new BookingFlowTimeError(409, 'idempotency_key_conflict');
+    }
+    return {
+      state: normalizeBookingFlowTimeState(event.metadata?.stateAfter ?? row.payload),
+      replayed: true,
+      participantUserIds: [row.owner_id, row.renter_id],
+    };
   }
 
   const threadResult = await client.query(
@@ -278,8 +541,69 @@ export async function updateBookingFlowTime(client, {
     throw new BookingFlowTimeError(409, 'booking_chat_unavailable');
   }
 
+  let actionRaw = raw;
+  if (safeText(raw?.action, 32) === 'set_location') {
+    const sourceMessageId = safeText(raw?.sourceMessageId, 160);
+    if (!sourceMessageId) {
+      throw new BookingFlowTimeError(400, 'flow_location_message_required');
+    }
+    const source = await client.query(
+      `SELECT message.sender_id, message.body
+         FROM messages AS message
+         JOIN message_threads AS thread ON thread.id = message.thread_id
+        WHERE message.id = $1
+          AND (thread.booking_id = $2 OR thread.request_id = $2)
+        FOR SHARE`,
+      [sourceMessageId, bookingId],
+    );
+    if (!source.rowCount || ![row.owner_id, row.renter_id].includes(source.rows[0].sender_id)
+        || source.rows[0].sender_id === 'system') {
+      throw new BookingFlowTimeError(403, 'flow_location_message_forbidden');
+    }
+    await assertLocationRevealEligible(client, row, safeText(raw?.segment, 16));
+    const marker = String(source.rows[0].body ?? '').indexOf('LOCATION_SHARE|');
+    if (marker < 0) throw new BookingFlowTimeError(400, 'flow_location_message_invalid');
+    const parts = String(source.rows[0].body ?? '').slice(marker).split('|');
+    if (parts.length !== 8 || parts[0] !== 'LOCATION_SHARE') {
+      throw new BookingFlowTimeError(400, 'flow_location_message_invalid');
+    }
+    const sourceSenderId = source.rows[0].sender_id;
+    const latitude = Number(parts[2]);
+    const longitude = Number(parts[3]);
+    const mapsUrl = safeText(parts[4], 500);
+    const shareKind = safeText(parts[5], 32).toLowerCase();
+    const addressText = safeText(parts[6], 500);
+    const hasLatitude = safeText(parts[2], 64).length > 0;
+    const hasLongitude = safeText(parts[3], 64).length > 0;
+    const hasCoordinates = hasLatitude && hasLongitude;
+    const validCoordinates = hasCoordinates
+      && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90
+      && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
+    const addressOnly = !hasLatitude && !hasLongitude && shareKind === 'address'
+      && addressText.length > 0;
+    if ((!validCoordinates && !addressOnly)
+        || (hasLatitude !== hasLongitude)
+        || !/^https:\/\//iu.test(mapsUrl)
+        || !['address', 'location'].includes(shareKind)) {
+      throw new BookingFlowTimeError(400, 'flow_location_message_invalid');
+    }
+    actionRaw = {
+      ...(raw ?? {}),
+      serverLocation: {
+        label: safeText(parts[1], 240),
+        latitude: hasCoordinates ? String(latitude) : '',
+        longitude: hasCoordinates ? String(longitude) : '',
+        mapsUrl,
+        shareKind,
+        addressText,
+        sharedByName: safeText(parts[7], 160),
+        sharedByUserId: sourceSenderId,
+        sourceMessageId,
+      },
+    };
+  }
   const normalizedRaw = normalizeBookingFlowTimeProposal({
-    raw,
+    raw: actionRaw,
     rentalStartDate: row.rental_start_date_text,
     rentalEndDate: row.rental_end_date_text,
     rentalTimezone: row.rental_timezone,
@@ -295,6 +619,8 @@ export async function updateBookingFlowTime(client, {
     rentalTimezone: row.rental_timezone,
     raw: normalizedRaw,
   });
+  applied.eventMetadata.requestFingerprint = requestFingerprint(raw);
+  applied.eventMetadata.stateAfter = applied.state;
   await client.query(
     'UPDATE rental_requests SET payload = $2::jsonb WHERE id = $1',
     [bookingId, JSON.stringify(applied.payload)],

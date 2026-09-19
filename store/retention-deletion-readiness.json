@@ -305,11 +305,11 @@
     },
     {
       "path": "backend/src/booking_workflow.js",
-      "sha256": "82e05e4aad77c50c9b8d26f0e2dd2e4e1887651348fd588eb90c8cebc088d688"
+      "sha256": "8ef52f6374739738cc1736ba62e209a7f03ce5ff34cb22ccb7e54c2b9feb3bd1"
     },
     {
       "path": "backend/src/booking_flow_time.js",
-      "sha256": "778d9bd326085b4ed06d1a5558157f9d9a1dc4a87289e7d89699dee1424668a0"
+      "sha256": "92c11810db672f1132e49632421c56b670f13bac209272f393393cd2f319aa43"
     },
     {
       "path": "backend/src/booking_address_reveal_domain.js",
@@ -379,14 +379,14 @@
       "path": "backend/sql/migrations/078_retention_legal_hold_scope.down.sql",
       "sha256": "d8094b0f8eefef1788697e3493fc469e68a453598ad3ec9b91605509ef735f53"
     },
-      {
-        "path": "backend/sql/migrations/079_special_category_intake_minimization.up.sql",
-        "sha256": "353d56b11eb16044a1adb9a70da3f1316e0d047d3fdbb95806b856dc727237dd"
-      },
-      {
-        "path": "backend/sql/migrations/079_special_category_intake_minimization.down.sql",
-        "sha256": "03314e09f068f32cf122fa6f440d1e5aaf164206b177f4c71031be9c83a169ff"
-      },
+    {
+      "path": "backend/sql/migrations/079_special_category_intake_minimization.up.sql",
+      "sha256": "353d56b11eb16044a1adb9a70da3f1316e0d047d3fdbb95806b856dc727237dd"
+    },
+    {
+      "path": "backend/sql/migrations/079_special_category_intake_minimization.down.sql",
+      "sha256": "03314e09f068f32cf122fa6f440d1e5aaf164206b177f4c71031be9c83a169ff"
+    },
     {
       "path": "backend/sql/migrations/078_retention_legal_hold_scope.up.sql",
       "sha256": "755fb77925500b6eef3b1a995358d8d473b0ef2f3e47753f5ff9f8064143989c"
@@ -709,7 +709,7 @@
     },
     {
       "path": "lib/services/data_service.dart",
-      "sha256": "6100aec9cdd9d51c1611a0b129ccaefc47fdaf2829d36c6d1f070ccc2f80a0c0"
+      "sha256": "88b5aa4b8d793ffd4181c687a03cda6271e9a44df4048fee1b16d627969b3169"
     },
     {
       "path": "lib/services/local_safety_privacy_service.dart",
@@ -721,7 +721,7 @@
     },
     {
       "path": "lib/services/backend_repository.dart",
-      "sha256": "0b246e206ec701b67d54fca265de104a485dab41141606310570f4b2a6c14316"
+      "sha256": "3aaa33dadbc83a6b6562179820eca5f867e443bd3ca93fc64d0a97571e2a9e3a"
     },
     {
       "path": "lib/screens/help_center_screen.dart",

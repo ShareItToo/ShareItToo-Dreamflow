@@ -46,10 +46,9 @@ test('active pickup and return keep server challenge and verification truth', ()
     'Future<void> _startPickupFlowOwner(',
     'Future<void> _showReviewSheet(',
   );
-  assert.match(pickup, /DataService\.issueBookingConfirmationChallenge\(/u);
+  assert.match(pickup, /confirmationChallengeLoader: \(\) =>[\s\S]*?DataService\.issueBookingConfirmationChallenge\(/u);
   assert.match(pickup, /segment: HandoverCodeService\.segmentPickup/u);
-  assert.match(pickup, /handoverCode: challenge\['code'\]/u);
-  assert.match(pickup, /qrPayload: challenge\['qrPayload'\]/u);
+  assert.match(pickup, /handoverCode: ''/u);
   assert.match(pickup, /mode: ReturnFlowMode\.pickupFlow/u);
 
   const returnFlow = between(

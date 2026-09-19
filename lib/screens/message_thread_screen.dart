@@ -24,6 +24,7 @@ import 'package:lendify/services/message_send_coordinator.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/services/rental_request_decision_service.dart';
 import 'package:lendify/services/local_artifact_storage_service.dart';
+import 'package:lendify/services/handover_code.dart';
 import 'package:lendify/services/safety_action_service.dart';
 import 'package:lendify/theme.dart';
 import 'package:lendify/widgets/app_image.dart';
@@ -331,12 +332,34 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
         return;
       }
 
+      // Messages alone are not sufficient for a two-device handover view.
+      // Refresh the request and the server projection (including evidence,
+      // gallery-use and confirmations) in the same pass.
+      final requestId = (_request?.id ?? refreshed.requestId).trim();
+      final refreshedRequest = requestId.isEmpty
+          ? null
+          : await DataService.getRentalRequestById(requestId);
+      final refreshedFlow = requestId.isEmpty
+          ? const <String, dynamic>{}
+          : await DataService.getHandoverReturnState(requestId);
+
       final current = _thread;
       final unchanged = current != null &&
           jsonEncode(current.toJson()) == jsonEncode(refreshed.toJson());
-      if (unchanged) return;
+      final requestUnchanged = (_request == null && refreshedRequest == null) ||
+          (_request != null &&
+              refreshedRequest != null &&
+              jsonEncode(_request!.toJson()) ==
+                  jsonEncode(refreshedRequest.toJson()));
+      final flowUnchanged =
+          jsonEncode(_handoverReturnState) == jsonEncode(refreshedFlow);
+      if (unchanged && requestUnchanged && flowUnchanged) return;
 
-      setState(() => _thread = refreshed);
+      setState(() {
+        _thread = refreshed;
+        _request = refreshedRequest;
+        _handoverReturnState = refreshedFlow;
+      });
       final userId = _currentUser?.id;
       if (userId != null &&
           shouldMarkThreadMessagesAsRead(
@@ -1876,28 +1899,90 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     final r = _request;
     if (r == null) return;
 
-    // If the full stepper is available (handover/return flow), prefer it.
     try {
       final item = _item;
       final other = _otherUser;
       final me = _currentUser;
       if (item != null && other != null && me != null) {
-        final mode = (_handoverReturnState['handoverActive'] == true)
-            ? ReturnFlowMode.pickupFlow
-            : ReturnFlowMode.returnFlow;
-        await ReturnHandoverStepperSheet.push(
+        final isPickup = _handoverReturnState['handoverActive'] == true;
+        final mode =
+            isPickup ? ReturnFlowMode.pickupFlow : ReturnFlowMode.returnFlow;
+        final viewerIsOwner = _viewerIsOwner();
+        final viewerIsPresenter = isPickup ? viewerIsOwner : !viewerIsOwner;
+        final segment = isPickup
+            ? HandoverCodeService.segmentPickup
+            : HandoverCodeService.segmentReturn;
+        final presenterRole = isPickup
+            ? HandoverCodeService.presenterOwner
+            : HandoverCodeService.presenterRenter;
+        final result = await ReturnHandoverStepperSheet.push(
           context,
           item: item,
           request: r,
           renterName: (_viewerIsOwner() ? other.displayName : me.displayName),
           ownerName: (_viewerIsOwner() ? me.displayName : other.displayName),
-          handoverCode: 'SIT-${r.id}',
-          viewerIsOwner: _viewerIsOwner(),
+          handoverCode: '',
+          confirmationChallengeLoader: viewerIsPresenter
+              ? () => DataService.issueBookingConfirmationChallenge(
+                    requestId: r.id,
+                    segment: segment,
+                  )
+              : null,
+          confirmationVerifier: viewerIsPresenter
+              ? null
+              : ({qrPayload, code}) =>
+                  DataService.verifyBookingConfirmationChallenge(
+                    requestId: r.id,
+                    segment: segment,
+                    presenterRole: presenterRole,
+                    qrPayload: qrPayload,
+                    code: code,
+                  ).then((verified) => verified),
+          viewerIsOwner: viewerIsOwner,
           mode: mode,
+        );
+        if (!mounted || result?.confirmed != true) return;
+        // The presenter only issues/displays the challenge. The counterparty
+        // is the sole actor allowed to complete the server transition.
+        if (viewerIsPresenter) return;
+        final transition = isPickup
+            ? await DataService.confirmPickupTransition(
+                requestId: r.id,
+                confirmedByUserId: me.id,
+                method: 'stepper',
+                confirmationContextVerified: true,
+                galleryAcknowledged: result!.galleryUsed,
+              )
+            : await DataService.confirmReturnTransition(
+                requestId: r.id,
+                confirmedByUserId: me.id,
+                method: 'stepper',
+                confirmationContextVerified: true,
+                galleryAcknowledged: result!.galleryUsed,
+                reviewPauseSource: 'message_thread_screen_stepper',
+              );
+        if (!mounted) return;
+        AppPopup.toast(
+          context,
+          icon: transition.success
+              ? Icons.check_circle_outline
+              : Icons.error_outline,
+          title: transition.success
+              ? (isPickup ? 'Übergabe abgeschlossen' : 'Rückgabe abgeschlossen')
+              : (transition.errorMessage ?? 'Serverbestätigung fehlt'),
         );
       }
     } catch (e) {
       debugPrint('[MessageThreadScreen] ReturnHandoverStepperSheet failed: $e');
+      if (mounted) {
+        AppPopup.toast(
+          context,
+          icon: Icons.error_outline,
+          title: 'Übergabe/Rückgabe konnte nicht abgeschlossen werden',
+          message:
+              'Der Server hat den Vorgang nicht bestätigt. Bitte erneut versuchen.',
+        );
+      }
     } finally {
       await _load();
     }
@@ -1996,6 +2081,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
 
   Future<void> _acceptSharedLocation({
     required _LocationShareData data,
+    String? sourceMessageId,
     required String sharedByUserId,
     required String sharedByName,
     required String sharedByRole,
@@ -2003,8 +2089,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     VoidCallback? onBackToPreview,
   }) async {
     final req = _request;
-    final t = _thread;
-    if (req == null || t == null) return;
+    if (req == null) return;
     var intent = forcedIntent ?? _locationIntentForCurrentContext();
     if (intent == _LocationIntent.unknown) return;
     final isReturn = intent == _LocationIntent.returnTrip;
@@ -2094,12 +2179,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       sharedByUserId: sharedByUserId,
       sharedByName: sharedByName,
       sharedByRole: sharedByRole,
-    );
-    final confirmationNoun = data.isAddressShare ? 'Adresse' : 'Standort';
-    await DataService.addSystemMessageToThread(
-      threadId: t.id,
-      text:
-          '${isReturn ? (hadSavedLocation ? 'Rückgabeort geändert' : 'Rückgabeort bestätigt') : (hadSavedLocation ? 'Übergabeort geändert' : 'Übergabeort bestätigt')}: $confirmationNoun von $sharedByName',
+      sourceMessageId: sourceMessageId,
     );
     await _load();
     _scrollToBottom(animate: true);
@@ -2140,10 +2220,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     );
     if (ok != true) return;
     await DataService.copyHandoverLocationToReturn(requestId: req.id);
-    await DataService.addSystemMessageToThread(
-      threadId: t.id,
-      text: 'Rückgabeort bestätigt: gleicher Ort wie Übergabe',
-    );
     await _load();
     _scrollToBottom(animate: true);
   }
@@ -2467,6 +2543,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
                                                   ) =>
                                                     _acceptSharedLocation(
                                                       data: locationShare,
+                                                      sourceMessageId: m.id,
                                                       sharedByUserId: legacyIsMe
                                                           ? (_currentUser?.id ??
                                                               '')
@@ -2556,6 +2633,8 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
                                                         ) =>
                                                           _acceptSharedLocation(
                                                             data: locationShare,
+                                                            sourceMessageId:
+                                                                m.id,
                                                             sharedByUserId:
                                                                 m.senderId,
                                                             sharedByName:
@@ -2930,11 +3009,11 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     );
   }
 
-  Future<void> _sendLocationShareData(_LocationShareData data) async {
+  Future<String?> _sendLocationShareData(_LocationShareData data) async {
     final t = _thread;
     final me = _currentUser;
-    if (t == null || me == null) return;
-    await DataService.addMessageToThread(
+    if (t == null || me == null) return null;
+    final messageId = await DataService.addMessageToThread(
       threadId: t.id,
       senderId: me.id,
       text:
@@ -2942,6 +3021,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     );
     await _load();
     _scrollToBottom(animate: true);
+    return messageId;
   }
 
   Future<void> _sharePreparedLocation(
@@ -2969,7 +3049,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       );
       return;
     }
-    await _sendLocationShareData(data);
+    final sourceMessageId = await _sendLocationShareData(data);
     if (setAs == null) return;
     await _acceptSharedLocation(
       data: data,
@@ -2977,6 +3057,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       sharedByName: me.displayName,
       sharedByRole: _roleKeyForUserId(me.id),
       forcedIntent: setAs,
+      sourceMessageId: sourceMessageId,
       onBackToPreview: onBackToPreview,
     );
   }

@@ -1229,6 +1229,9 @@ class BackendRepository {
     DateTime? time,
     String? localDate,
     String? localTime,
+    String? sourceMessageId,
+    int? expectedRevision,
+    String? idempotencyKey,
   }) async {
     final response = await _authorized(
       method: 'POST',
@@ -1240,9 +1243,11 @@ class BackendRepository {
         if (time != null) 'timeIso': time.toUtc().toIso8601String(),
         if (localDate != null) 'localDate': localDate,
         if (localTime != null) 'localTime': localTime,
+        if (sourceMessageId != null) 'sourceMessageId': sourceMessageId,
+        if (expectedRevision != null) 'expectedRevision': expectedRevision,
       },
       additionalHeaders: {
-        'Idempotency-Key':
+        'Idempotency-Key': idempotencyKey ??
             'flow_time_${bookingId}_${action}_${segment}_${DateTime.now().microsecondsSinceEpoch}',
       },
     );

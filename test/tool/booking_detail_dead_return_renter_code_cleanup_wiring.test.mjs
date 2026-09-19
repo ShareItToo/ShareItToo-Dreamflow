@@ -32,18 +32,14 @@ test('active pickup-owner code remains booking bound', () => {
   assert.ok((source.match(/_pickupOwnerCode\(\)/g) ?? []).length > 1);
 });
 
-test('owner return stepper uses the server challenge and verifier', () => {
+test('owner return stepper defers the challenge until evidence and verifies server-side', () => {
   const flow = between(
     'Future<void> _startOwnerReturnFlow() async',
     'Future<void> _startPickupFlow() async',
   );
-  assert.match(
-    flow,
-    /challenge = await _issueSecureChallenge\(\s*HandoverCodeService\.segmentReturn/,
-  );
   assert.match(flow, /ReturnHandoverStepperSheet\.push\(/);
-  assert.match(flow, /handoverCode: challenge\?\['code'\]/);
-  assert.match(flow, /qrPayload: challenge\?\['qrPayload'\]/);
+  assert.match(flow, /handoverCode: ''/);
+  assert.match(flow, /confirmationChallengeLoader: widget\.viewerIsOwner\s+\? null/);
   assert.match(flow, /_verifySecureChallenge\(/);
   assert.match(flow, /segment: HandoverCodeService\.segmentReturn/);
   assert.match(flow, /presenterRole: HandoverCodeService\.presenterRenter/);

@@ -1445,6 +1445,14 @@ export async function transitionBooking(client, { actor, bookingId, raw, key, co
       workflowVersion: 1,
       workflowRevision: Number(row.workflow_revision) + index + 1,
       holdExpiresAt: holdExpiresAt?.toISOString() ?? null,
+      ...(next === 'active' ? {
+        handoverActive: false,
+        flowStateRevision: Number(row.payload?.flowStateRevision ?? 0) + 1,
+      } : {}),
+      ...(next === 'completed' ? {
+        returnActive: false,
+        flowStateRevision: Number(row.payload?.flowStateRevision ?? 0) + 1,
+      } : {}),
       ...(next === 'cancelled' ? { cancelledBy: actorRole } : {}),
       simulationOnly,
       ...(simulationOnly ? {

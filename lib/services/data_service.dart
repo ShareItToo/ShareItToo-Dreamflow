@@ -4628,7 +4628,7 @@ class DataService {
 
   static Future<void> archiveAllMessageThreadsForUser(String userId) async {
     await _requireCurrentOperationalUser(requestedUserId: userId);
-    await _operationalMutationQueue.run(() async {
+    return _operationalMutationQueue.run(() async {
       await _assertCurrentOperationalUserId(userId);
       final prefs = await SharedPreferences.getInstance();
       final raw = BackendConfig.enabled && !QaRuntimeService.isEnabled
@@ -11114,7 +11114,9 @@ class DataService {
       confirmedByRole: 'renter',
       confirmedByUserId: userId,
     );
-    await clearHandoverActive(id);
+    if (!BackendConfig.enabled || QaRuntimeService.isEnabled) {
+      await clearHandoverActive(id);
+    }
     return const RentalRequestTransitionResult.success();
   }
 
@@ -11264,7 +11266,9 @@ class DataService {
         'Zu dieser Buchung liegt ein belegter Fall vor. Der Abschluss bleibt für die Prüfung markiert; unstrittige Beträge bleiben davon getrennt.',
       );
     }
-    await clearReturnActive(id);
+    if (!BackendConfig.enabled || QaRuntimeService.isEnabled) {
+      await clearReturnActive(id);
+    }
     await addTimelineEvent(
       requestId: id,
       type: 'completed',
@@ -12788,12 +12792,27 @@ class DataService {
     if (threadId.trim().isEmpty) return;
     final t = text.trim();
     if (t.isEmpty) return;
+    // Backend system messages must be authored by the transaction that owns
+    // the state change. Never masquerade as a server event from the client.
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) return;
     await addMessageToThread(threadId: threadId, senderId: 'system', text: t);
   }
 
   // ===== Handover/Return lightweight state (local) =====
 
   static const String _handoverReturnStateKey = 'handover_return_state_v1';
+
+  static String _flowIdempotencyKey({
+    required String requestId,
+    required String action,
+    required String segment,
+    required int revision,
+    String payload = '',
+  }) {
+    final canonical = '$requestId|$action|$segment|$revision|$payload';
+    final digest = crypto.sha256.convert(utf8.encode(canonical)).toString();
+    return 'flow_action_${digest.substring(0, 40)}';
+  }
 
   static Future<Map<String, dynamic>> _getHandoverReturnStateMap() async {
     final prefs = await SharedPreferences.getInstance();
@@ -12844,10 +12863,12 @@ class DataService {
         'pickupPresenterPhotos': 0,
         'pickupDeviationPhotos': 0,
         'pickupPresenterNonCameraUsed': false,
+        'pickupGalleryUsed': false,
         'pickupCounterpartyConfirmation': null,
         'returnPresenterPhotos': 0,
         'returnDeviationPhotos': 0,
         'returnPresenterNonCameraUsed': false,
+        'returnGalleryUsed': false,
         'returnCounterpartyConfirmation': null,
         'handoverTimeRequested': '',
         'returnTimeRequested': '',
@@ -12878,6 +12899,8 @@ class DataService {
         'returnLocationSharedByRole': '',
         'returnLocationAcceptedAs': 'returnLocation',
         'returnLocationReusePromptDismissed': false,
+        'flowTimeRevision': 0,
+        'flowStateRevision': 0,
       };
 
   /// Returns state for a request: {handoverActive, returnActive, handoverPhotos, returnPhotos}
@@ -12900,31 +12923,12 @@ class DataService {
           requestedUserId: currentUserId,
         );
         await _requireCurrentRequestParticipant(id);
-        map = await _handoverMutationQueue.run(() async {
-          await _assertCurrentOperationalUserId(currentUserId);
-          final latest = await _getHandoverReturnStateMap();
-          final existing = (latest[id] is Map)
-              ? Map<String, dynamic>.from(latest[id] as Map)
-              : <String, dynamic>{};
-          existing.addAll(remote);
-          latest[id] = existing;
-          await _setHandoverReturnStateMap(latest, announce: false);
-          return latest;
-        });
+        // Backend projection is authoritative; never merge or persist a
+        // stale device cache into a successful server read.
+        map = <String, dynamic>{id: remote};
       } catch (error) {
         debugPrint('[DataService] remote flow-time load failed: $error');
-        try {
-          await _requireCurrentOperationalUser(
-            requestedUserId: currentUserId,
-          );
-          await _requireCurrentRequestParticipant(id);
-        } on StateError {
-          return _emptyHandoverReturnState();
-        }
-        map = await _handoverMutationQueue.run(() async {
-          await _assertCurrentOperationalUserId(currentUserId);
-          return _getHandoverReturnStateMap();
-        });
+        throw StateError('server_authority_unavailable');
       }
     } else {
       map = await _handoverMutationQueue.run(() async {
@@ -12935,6 +12939,12 @@ class DataService {
     final entry = map[id];
     if (entry is Map) {
       final e = entry.map((k, v) => MapEntry(k.toString(), v));
+      final handoverLocation = e['handoverLocation'] is Map
+          ? Map<String, dynamic>.from(e['handoverLocation'] as Map)
+          : const <String, dynamic>{};
+      final returnLocation = e['returnLocation'] is Map
+          ? Map<String, dynamic>.from(e['returnLocation'] as Map)
+          : const <String, dynamic>{};
       return {
         'handoverActive': e['handoverActive'] == true,
         'returnActive': e['returnActive'] == true,
@@ -12949,6 +12959,9 @@ class DataService {
             (e['pickupDeviationPhotos'] as num?)?.toInt() ?? 0,
         'pickupPresenterNonCameraUsed':
             e['pickupPresenterNonCameraUsed'] == true,
+        'pickupGalleryUsed': e['pickupGalleryUsed'] == true ||
+            (e['galleryUsed'] is Map &&
+                (e['galleryUsed'] as Map)['pickup'] == true),
         'pickupCounterpartyConfirmation': e['pickupCounterpartyConfirmation'],
         'returnPresenterPhotos':
             (e['returnPresenterPhotos'] as num?)?.toInt() ?? 0,
@@ -12956,6 +12969,9 @@ class DataService {
             (e['returnDeviationPhotos'] as num?)?.toInt() ?? 0,
         'returnPresenterNonCameraUsed':
             e['returnPresenterNonCameraUsed'] == true,
+        'returnGalleryUsed': e['returnGalleryUsed'] == true ||
+            (e['galleryUsed'] is Map &&
+                (e['galleryUsed'] as Map)['return'] == true),
         'returnCounterpartyConfirmation': e['returnCounterpartyConfirmation'],
         'handoverTimeRequested': (e['handoverTimeRequested'] as String?) ?? '',
         'returnTimeRequested': (e['returnTimeRequested'] as String?) ?? '',
@@ -12974,33 +12990,58 @@ class DataService {
         'handoverTimeConfirmedAt':
             (e['handoverTimeConfirmedAt'] as String?) ?? '',
         'returnTimeConfirmedAt': (e['returnTimeConfirmedAt'] as String?) ?? '',
-        'handoverLocationLat': (e['handoverLocationLat'] as String?) ?? '',
-        'handoverLocationLng': (e['handoverLocationLng'] as String?) ?? '',
-        'handoverLocationLabel': (e['handoverLocationLabel'] as String?) ?? '',
-        'handoverLocationMapsUrl':
-            (e['handoverLocationMapsUrl'] as String?) ?? '',
+        'handoverLocationLat': (e['handoverLocationLat'] as String?) ??
+            handoverLocation['latitude']?.toString() ??
+            '',
+        'handoverLocationLng': (e['handoverLocationLng'] as String?) ??
+            handoverLocation['longitude']?.toString() ??
+            '',
+        'handoverLocationLabel': (e['handoverLocationLabel'] as String?) ??
+            handoverLocation['label']?.toString() ??
+            '',
+        'handoverLocationMapsUrl': (e['handoverLocationMapsUrl'] as String?) ??
+            handoverLocation['mapsUrl']?.toString() ??
+            '',
         'handoverLocationSharedByUserId':
-            (e['handoverLocationSharedByUserId'] as String?) ?? '',
+            (e['handoverLocationSharedByUserId'] as String?) ??
+                handoverLocation['sharedByUserId']?.toString() ??
+                '',
         'handoverLocationSharedByName':
-            (e['handoverLocationSharedByName'] as String?) ?? '',
+            (e['handoverLocationSharedByName'] as String?) ??
+                handoverLocation['sharedByName']?.toString() ??
+                '',
         'handoverLocationSharedByRole':
             (e['handoverLocationSharedByRole'] as String?) ?? '',
         'handoverLocationAcceptedAs':
             (e['handoverLocationAcceptedAs'] as String?) ?? 'handoverLocation',
-        'returnLocationLat': (e['returnLocationLat'] as String?) ?? '',
-        'returnLocationLng': (e['returnLocationLng'] as String?) ?? '',
-        'returnLocationLabel': (e['returnLocationLabel'] as String?) ?? '',
-        'returnLocationMapsUrl': (e['returnLocationMapsUrl'] as String?) ?? '',
+        'returnLocationLat': (e['returnLocationLat'] as String?) ??
+            returnLocation['latitude']?.toString() ??
+            '',
+        'returnLocationLng': (e['returnLocationLng'] as String?) ??
+            returnLocation['longitude']?.toString() ??
+            '',
+        'returnLocationLabel': (e['returnLocationLabel'] as String?) ??
+            returnLocation['label']?.toString() ??
+            '',
+        'returnLocationMapsUrl': (e['returnLocationMapsUrl'] as String?) ??
+            returnLocation['mapsUrl']?.toString() ??
+            '',
         'returnLocationSharedByUserId':
-            (e['returnLocationSharedByUserId'] as String?) ?? '',
+            (e['returnLocationSharedByUserId'] as String?) ??
+                returnLocation['sharedByUserId']?.toString() ??
+                '',
         'returnLocationSharedByName':
-            (e['returnLocationSharedByName'] as String?) ?? '',
+            (e['returnLocationSharedByName'] as String?) ??
+                returnLocation['sharedByName']?.toString() ??
+                '',
         'returnLocationSharedByRole':
             (e['returnLocationSharedByRole'] as String?) ?? '',
         'returnLocationAcceptedAs':
             (e['returnLocationAcceptedAs'] as String?) ?? 'returnLocation',
         'returnLocationReusePromptDismissed':
             e['returnLocationReusePromptDismissed'] == true,
+        'flowStateRevision': (e['flowStateRevision'] as num?)?.toInt() ?? 0,
+        'flowTimeRevision': (e['flowTimeRevision'] as num?)?.toInt() ?? 0,
       };
     }
     return _emptyHandoverReturnState();
@@ -13125,6 +13166,33 @@ class DataService {
     required User currentUser,
     required RentalRequest request,
   }) async {
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final server = await BackendRepository.getBookingFlowTime(id);
+      final remote = await BackendRepository.updateBookingFlowTime(
+        bookingId: id,
+        action: active ? 'start' : 'clear',
+        segment: 'pickup',
+        expectedRevision: (server['flowStateRevision'] as num?)?.toInt() ?? 0,
+        idempotencyKey: _flowIdempotencyKey(
+          requestId: id,
+          action: active ? 'start' : 'clear',
+          segment: 'pickup',
+          revision: (server['flowStateRevision'] as num?)?.toInt() ?? 0,
+        ),
+      );
+      try {
+        final map = await _getHandoverReturnStateMap();
+        final existing = (map[id] is Map)
+            ? Map<String, dynamic>.from(map[id] as Map)
+            : <String, dynamic>{};
+        existing.addAll(remote);
+        map[id] = existing;
+        await _setHandoverReturnStateMap(map);
+      } catch (error) {
+        debugPrint('[DataService] handover cache refresh failed: $error');
+      }
+      return remote['handoverActive'] == active;
+    }
     final map = await _getHandoverReturnStateMap();
     final existing = (map[id] is Map)
         ? Map<String, dynamic>.from(map[id] as Map)
@@ -13183,6 +13251,33 @@ class DataService {
     required User currentUser,
     required RentalRequest request,
   }) async {
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final server = await BackendRepository.getBookingFlowTime(id);
+      final remote = await BackendRepository.updateBookingFlowTime(
+        bookingId: id,
+        action: active ? 'start' : 'clear',
+        segment: 'return',
+        expectedRevision: (server['flowStateRevision'] as num?)?.toInt() ?? 0,
+        idempotencyKey: _flowIdempotencyKey(
+          requestId: id,
+          action: active ? 'start' : 'clear',
+          segment: 'return',
+          revision: (server['flowStateRevision'] as num?)?.toInt() ?? 0,
+        ),
+      );
+      try {
+        final map = await _getHandoverReturnStateMap();
+        final existing = (map[id] is Map)
+            ? Map<String, dynamic>.from(map[id] as Map)
+            : <String, dynamic>{};
+        existing.addAll(remote);
+        map[id] = existing;
+        await _setHandoverReturnStateMap(map);
+      } catch (error) {
+        debugPrint('[DataService] return cache refresh failed: $error');
+      }
+      return remote['returnActive'] == active;
+    }
     final map = await _getHandoverReturnStateMap();
     final existing = (map[id] is Map)
         ? Map<String, dynamic>.from(map[id] as Map)
@@ -13371,7 +13466,7 @@ class DataService {
             ? '${normalizedSegment == 'pickup' ? 'Übergabe' : 'Rückgabe'}-Zustandsfoto'
             : 'Abweichungsfoto der Gegenpartei',
         idempotencyKey:
-            'condition_${thread.id}_${DateTime.now().microsecondsSinceEpoch}',
+            'condition_${thread.id}_${normalizedSegment}_${normalizedKind}_${semanticSlot}_${crypto.sha256.convert(bytes).toString().substring(0, 24)}',
         attachmentIds: [upload['id'].toString()],
         conditionEvidence: <String, dynamic>{
           'segment': normalizedSegment,
@@ -13380,9 +13475,16 @@ class DataService {
           'semanticSlot': semanticSlot,
         },
       );
-      final prefs = await SharedPreferences.getInstance();
-      final remote = await BackendRepository.getMessageThreads();
-      await _persistMessageThreads(prefs, remote);
+      // The attachment/message transaction is the commit boundary. A cache
+      // refresh failure must not turn a committed evidence write into a
+      // retryable failure.
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final remote = await BackendRepository.getMessageThreads();
+        await _persistMessageThreads(prefs, remote);
+      } catch (error) {
+        debugPrint('[DataService] evidence cache refresh failed: $error');
+      }
       return;
     }
 
@@ -13490,6 +13592,7 @@ class DataService {
   static Future<void> markHandoverGalleryUsed(String requestId) async {
     final id = requestId.trim();
     if (id.isEmpty) return;
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) return;
     final participant = await _requireCurrentRequestParticipant(id);
     await _runHandoverForParticipant(participant, () async {
       final map = await _getHandoverReturnStateMap();
@@ -13505,6 +13608,7 @@ class DataService {
   static Future<void> markReturnGalleryUsed(String requestId) async {
     final id = requestId.trim();
     if (id.isEmpty) return;
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) return;
     final participant = await _requireCurrentRequestParticipant(id);
     await _runHandoverForParticipant(participant, () async {
       final map = await _getHandoverReturnStateMap();
@@ -13550,11 +13654,8 @@ class DataService {
       const weekdays = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
       final canonicalLabel =
           '${weekdays[canonicalTime.weekday - 1]}, $localTime';
-      final map = await _getHandoverReturnStateMap();
-      final existing = (map[id] is Map)
-          ? Map<String, dynamic>.from(map[id] as Map)
-          : <String, dynamic>{};
       if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final server = await BackendRepository.getBookingFlowTime(id);
         final remote = await BackendRepository.updateBookingFlowTime(
           bookingId: id,
           action: 'propose',
@@ -13563,12 +13664,32 @@ class DataService {
           time: canonicalTime,
           localDate: localDate,
           localTime: localTime,
+          expectedRevision: (server['flowTimeRevision'] as num?)?.toInt() ?? 0,
+          idempotencyKey: _flowIdempotencyKey(
+            requestId: id,
+            action: 'propose',
+            segment: isReturn ? 'return' : 'pickup',
+            revision: (server['flowTimeRevision'] as num?)?.toInt() ?? 0,
+            payload: '$localDate|$localTime|$canonicalLabel',
+          ),
         );
-        existing.addAll(remote);
-        map[id] = existing;
-        await _setHandoverReturnStateMap(map);
+        try {
+          final map = await _getHandoverReturnStateMap();
+          final existing = (map[id] is Map)
+              ? Map<String, dynamic>.from(map[id] as Map)
+              : <String, dynamic>{};
+          existing.addAll(remote);
+          map[id] = existing;
+          await _setHandoverReturnStateMap(map);
+        } catch (error) {
+          debugPrint('[DataService] flow-time cache refresh failed: $error');
+        }
         return;
       }
+      final map = await _getHandoverReturnStateMap();
+      final existing = (map[id] is Map)
+          ? Map<String, dynamic>.from(map[id] as Map)
+          : <String, dynamic>{};
       final prefix = isReturn ? 'return' : 'handover';
       existing['${prefix}TimeRequested'] =
           label == canonicalLabel ? label : canonicalLabel;
@@ -13590,12 +13711,50 @@ class DataService {
     required String sharedByUserId,
     required String sharedByName,
     required String sharedByRole,
+    String? sourceMessageId,
   }) async {
     final id = requestId.trim();
     if (id.isEmpty) return;
-    await _requireCurrentOperationalUser(requestedUserId: sharedByUserId);
+    final current = await _requireCurrentOperationalUser();
+    if ((!BackendConfig.enabled || QaRuntimeService.isEnabled) &&
+        current.id != sharedByUserId.trim()) {
+      throw StateError('flow_location_shared_by_mismatch');
+    }
     final participant = await _requireCurrentRequestParticipant(id);
     await _runHandoverForParticipant(participant, () async {
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final server = await BackendRepository.getBookingFlowTime(id);
+        if ((sourceMessageId ?? '').trim().isEmpty) {
+          throw StateError('flow_location_source_message_required');
+        }
+        final remote = await BackendRepository.updateBookingFlowTime(
+          bookingId: id,
+          action: 'set_location',
+          segment: isReturn ? 'return' : 'pickup',
+          sourceMessageId: sourceMessageId,
+          expectedRevision: (server['flowStateRevision'] as num?)?.toInt() ?? 0,
+          idempotencyKey: _flowIdempotencyKey(
+            requestId: id,
+            action: 'set_location',
+            segment: isReturn ? 'return' : 'pickup',
+            revision: (server['flowStateRevision'] as num?)?.toInt() ?? 0,
+            payload: (sourceMessageId ?? '').trim(),
+          ),
+        );
+        try {
+          final map = await _getHandoverReturnStateMap();
+          final existing = (map[id] is Map)
+              ? Map<String, dynamic>.from(map[id] as Map)
+              : <String, dynamic>{};
+          existing.addAll(remote);
+          map[id] = existing;
+          await _setHandoverReturnStateMap(map);
+        } catch (error) {
+          debugPrint(
+              '[DataService] flow location cache refresh failed: $error');
+        }
+        return;
+      }
       final map = await _getHandoverReturnStateMap();
       final existing = (map[id] is Map)
           ? Map<String, dynamic>.from(map[id] as Map)
@@ -13625,6 +13784,33 @@ class DataService {
     if (id.isEmpty) return;
     final participant = await _requireCurrentRequestParticipant(id);
     await _runHandoverForParticipant(participant, () async {
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final server = await BackendRepository.getBookingFlowTime(id);
+        final remote = await BackendRepository.updateBookingFlowTime(
+          bookingId: id,
+          action: 'copy_location',
+          segment: 'return',
+          expectedRevision: (server['flowStateRevision'] as num?)?.toInt() ?? 0,
+          idempotencyKey: _flowIdempotencyKey(
+            requestId: id,
+            action: 'copy_location',
+            segment: 'return',
+            revision: (server['flowStateRevision'] as num?)?.toInt() ?? 0,
+          ),
+        );
+        try {
+          final map = await _getHandoverReturnStateMap();
+          final existing = (map[id] is Map)
+              ? Map<String, dynamic>.from(map[id] as Map)
+              : <String, dynamic>{};
+          existing.addAll(remote);
+          map[id] = existing;
+          await _setHandoverReturnStateMap(map);
+        } catch (error) {
+          debugPrint('[DataService] flow-time cache refresh failed: $error');
+        }
+        return;
+      }
       final map = await _getHandoverReturnStateMap();
       final existing = (map[id] is Map)
           ? Map<String, dynamic>.from(map[id] as Map)
@@ -13661,6 +13847,29 @@ class DataService {
       final existing = (map[id] is Map)
           ? Map<String, dynamic>.from(map[id] as Map)
           : <String, dynamic>{};
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final server = await BackendRepository.getBookingFlowTime(id);
+        final remote = await BackendRepository.updateBookingFlowTime(
+          bookingId: id,
+          action: 'dismiss_location',
+          segment: 'return',
+          expectedRevision: (server['flowStateRevision'] as num?)?.toInt() ?? 0,
+          idempotencyKey: _flowIdempotencyKey(
+            requestId: id,
+            action: 'dismiss_location',
+            segment: 'return',
+            revision: (server['flowStateRevision'] as num?)?.toInt() ?? 0,
+          ),
+        );
+        try {
+          existing.addAll(remote);
+          map[id] = existing;
+          await _setHandoverReturnStateMap(map);
+        } catch (error) {
+          debugPrint('[DataService] flow-time cache refresh failed: $error');
+        }
+        return;
+      }
       existing['returnLocationReusePromptDismissed'] = true;
       map[id] = existing;
       await _setHandoverReturnStateMap(map);
@@ -13678,21 +13887,37 @@ class DataService {
     final participant = await _requireCurrentRequestParticipant(id);
     DateTime? parsed;
     await _runHandoverForParticipant(participant, () async {
-      final map = await _getHandoverReturnStateMap();
-      final existing = (map[id] is Map)
-          ? Map<String, dynamic>.from(map[id] as Map)
-          : <String, dynamic>{};
       if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        final server = await BackendRepository.getBookingFlowTime(id);
         final remote = await BackendRepository.updateBookingFlowTime(
           bookingId: id,
           action: 'confirm',
           segment: isReturn ? 'return' : 'pickup',
+          expectedRevision: (server['flowTimeRevision'] as num?)?.toInt() ?? 0,
+          idempotencyKey: _flowIdempotencyKey(
+            requestId: id,
+            action: 'confirm',
+            segment: isReturn ? 'return' : 'pickup',
+            revision: (server['flowTimeRevision'] as num?)?.toInt() ?? 0,
+          ),
         );
-        existing.addAll(remote);
-        map[id] = existing;
-        await _setHandoverReturnStateMap(map);
+        try {
+          final map = await _getHandoverReturnStateMap();
+          final existing = (map[id] is Map)
+              ? Map<String, dynamic>.from(map[id] as Map)
+              : <String, dynamic>{};
+          existing.addAll(remote);
+          map[id] = existing;
+          await _setHandoverReturnStateMap(map);
+        } catch (error) {
+          debugPrint('[DataService] flow-time cache refresh failed: $error');
+        }
         return;
       }
+      final map = await _getHandoverReturnStateMap();
+      final existing = (map[id] is Map)
+          ? Map<String, dynamic>.from(map[id] as Map)
+          : <String, dynamic>{};
       final prefix = isReturn ? 'return' : 'handover';
       final iso = (existing['${prefix}TimeIso'] as String?) ?? '';
       parsed = iso.isNotEmpty ? DateTime.tryParse(iso) : null;
@@ -14336,7 +14561,7 @@ class DataService {
   }
 
   /// Fügt eine Nachricht zu einem Thread hinzu
-  static Future<void> addMessageToThread({
+  static Future<String?> addMessageToThread({
     required String threadId,
     required String senderId,
     required String text,
@@ -14347,7 +14572,7 @@ class DataService {
     if (normalizedThreadId.isEmpty ||
         normalizedSenderId.isEmpty ||
         normalizedText.isEmpty) {
-      return;
+      return null;
     }
     if (normalizedText.length > 20000) {
       throw ArgumentError('Die Nachricht ist zu lang.');
@@ -14358,30 +14583,34 @@ class DataService {
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
       if (normalizedSenderId == 'system' ||
           normalizedSenderId != currentUser.id) {
-        return;
+        return null;
       }
-      await BackendRepository.sendThreadMessage(
+      final sent = await BackendRepository.sendThreadMessage(
         threadId: normalizedThreadId,
         text: normalizedText,
         idempotencyKey:
             'message_${normalizedThreadId}_${DateTime.now().microsecondsSinceEpoch}',
       );
-      final prefs = await SharedPreferences.getInstance();
-      final remote = await BackendRepository.getMessageThreads();
-      await _assertCurrentOperationalUserId(currentUser.id);
-      await _persistMessageThreads(prefs, remote);
-      return;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final remote = await BackendRepository.getMessageThreads();
+        await _assertCurrentOperationalUserId(currentUser.id);
+        await _persistMessageThreads(prefs, remote);
+      } catch (error) {
+        debugPrint('[DataService] message cache refresh failed: $error');
+      }
+      return sent['id']?.toString();
     }
 
-    await _operationalMutationQueue.run(() async {
+    return _operationalMutationQueue.run(() async {
       await _assertCurrentOperationalUserId(currentUser.id);
       final prefs = await SharedPreferences.getInstance();
       final raw = await _readMessageThreads(prefs);
-      if (raw == null) return;
+      if (raw == null) return null;
       final threads = _decodeMessageThreadsStrict(raw);
       final index =
           threads.indexWhere((thread) => thread.id == normalizedThreadId);
-      if (index < 0) return;
+      if (index < 0) return null;
       final thread = threads[index];
       final isParticipant = _isThreadParticipant(thread, currentUser.id);
       final senderIsAllowed = normalizedSenderId == 'system' ||
@@ -14389,7 +14618,7 @@ class DataService {
       if (!isParticipant ||
           !senderIsAllowed ||
           thread.deletedForUserIds.contains(currentUser.id)) {
-        return;
+        return null;
       }
       if (thread.messages.length >= _maxMessagesPerThread) {
         throw StateError('Der lokale Nachrichtenverlauf ist voll.');
@@ -14418,6 +14647,7 @@ class DataService {
         prefs,
         threads.map((entry) => entry.toJson()).toList(),
       );
+      return messageId;
     });
   }
 

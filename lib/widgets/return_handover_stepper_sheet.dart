@@ -18,6 +18,7 @@ typedef CounterpartyConfirmationVerifier = Future<bool> Function({
   String? qrPayload,
   String? code,
 });
+typedef ConfirmationChallengeLoader = Future<Map<String, dynamic>?> Function();
 
 class ReturnHandoverStepResult {
   final bool confirmed;
@@ -36,6 +37,7 @@ class ReturnHandoverStepperSheet {
     required String handoverCode,
     String? qrPayload,
     CounterpartyConfirmationVerifier? confirmationVerifier,
+    ConfirmationChallengeLoader? confirmationChallengeLoader,
     bool viewerIsOwner = false,
     ReturnFlowMode mode = ReturnFlowMode.returnFlow,
   }) async {
@@ -53,6 +55,7 @@ class ReturnHandoverStepperSheet {
         handoverCode: handoverCode,
         qrPayload: qrPayload,
         confirmationVerifier: confirmationVerifier,
+        confirmationChallengeLoader: confirmationChallengeLoader,
         viewerIsOwner: viewerIsOwner,
         mode: mode,
         fullScreen: false,
@@ -70,6 +73,7 @@ class ReturnHandoverStepperSheet {
     required String handoverCode,
     String? qrPayload,
     CounterpartyConfirmationVerifier? confirmationVerifier,
+    ConfirmationChallengeLoader? confirmationChallengeLoader,
     bool viewerIsOwner = false,
     ReturnFlowMode mode = ReturnFlowMode.returnFlow,
   }) async {
@@ -83,6 +87,7 @@ class ReturnHandoverStepperSheet {
           handoverCode: handoverCode,
           qrPayload: qrPayload,
           confirmationVerifier: confirmationVerifier,
+          confirmationChallengeLoader: confirmationChallengeLoader,
           viewerIsOwner: viewerIsOwner,
           mode: mode,
         ),
@@ -99,6 +104,7 @@ class ReturnHandoverStepperPage extends StatelessWidget {
   final String handoverCode;
   final String? qrPayload;
   final CounterpartyConfirmationVerifier? confirmationVerifier;
+  final ConfirmationChallengeLoader? confirmationChallengeLoader;
   final ReturnFlowMode mode;
   final bool viewerIsOwner;
   const ReturnHandoverStepperPage(
@@ -110,6 +116,7 @@ class ReturnHandoverStepperPage extends StatelessWidget {
       required this.handoverCode,
       this.qrPayload,
       this.confirmationVerifier,
+      this.confirmationChallengeLoader,
       this.mode = ReturnFlowMode.returnFlow,
       this.viewerIsOwner = false});
 
@@ -125,6 +132,7 @@ class ReturnHandoverStepperPage extends StatelessWidget {
         handoverCode: handoverCode,
         qrPayload: qrPayload,
         confirmationVerifier: confirmationVerifier,
+        confirmationChallengeLoader: confirmationChallengeLoader,
         viewerIsOwner: viewerIsOwner,
         mode: mode,
         fullScreen: true,
@@ -141,6 +149,7 @@ class _ReturnHandoverStepper extends StatefulWidget {
   final String handoverCode;
   final String? qrPayload;
   final CounterpartyConfirmationVerifier? confirmationVerifier;
+  final ConfirmationChallengeLoader? confirmationChallengeLoader;
   final bool
       fullScreen; // new: when true, fill the whole page instead of sheet height
   final ReturnFlowMode mode;
@@ -153,6 +162,7 @@ class _ReturnHandoverStepper extends StatefulWidget {
       required this.handoverCode,
       this.qrPayload,
       this.confirmationVerifier,
+      this.confirmationChallengeLoader,
       this.mode = ReturnFlowMode.returnFlow,
       this.fullScreen = false,
       this.viewerIsOwner = false});
@@ -206,10 +216,14 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
 
   // Step: code confirm (now display-only + manual confirm)
   bool _otherPartyConfirmed = false;
+  late String _handoverCode;
+  String? _qrPayload;
 
   @override
   void initState() {
     super.initState();
+    _handoverCode = widget.handoverCode;
+    _qrPayload = widget.qrPayload;
     unawaited(_loadConditionEvidence());
   }
 
@@ -309,6 +323,19 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
     if (_steps[_step] == _StepKind.photos && !_evidencePersisted) {
       final saved = await _saveConditionEvidenceStep();
       if (!saved) return;
+    }
+    if (_step < _steps.length - 1 &&
+        _steps[_step] == _StepKind.photos &&
+        _steps[_step + 1] == _StepKind.codes &&
+        widget.confirmationChallengeLoader != null) {
+      final challenge = await widget.confirmationChallengeLoader!();
+      if (!mounted || challenge == null) return;
+      final code = challenge['code']?.toString().trim() ?? '';
+      if (code.isEmpty) return;
+      setState(() {
+        _handoverCode = code;
+        _qrPayload = challenge['qrPayload']?.toString();
+      });
     }
     if (!mounted) return;
     if (_step < _steps.length - 1) {
@@ -1018,11 +1045,11 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
     final presenterRole = isReturn
         ? HandoverCodeService.presenterRenter
         : HandoverCodeService.presenterOwner;
-    final qrData = widget.qrPayload ??
+    final qrData = _qrPayload ??
         HandoverCodeService.qrPayload(
           segment: segment,
           presenterRole: presenterRole,
-          code: widget.handoverCode,
+          code: _handoverCode,
           bookingId: bookingSeed,
         );
 
@@ -1169,7 +1196,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                       decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(8)),
-                      child: Text(widget.handoverCode,
+                      child: Text(_handoverCode,
                           style: const TextStyle(
                               letterSpacing: 2,
                               fontWeight: FontWeight.w800,
@@ -1236,7 +1263,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                     decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(8)),
-                    child: Text(widget.handoverCode,
+                    child: Text(_handoverCode,
                         style: const TextStyle(
                             letterSpacing: 2,
                             fontWeight: FontWeight.w800,
@@ -1407,7 +1434,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
               raw,
               segment: expectedSegment,
               presenterRole: expectedPresenterRole,
-              code: widget.handoverCode,
+              code: _handoverCode,
               bookingId: _computeBookingSeed(widget.item, widget.request),
             );
       if (!mounted) return;
@@ -1436,7 +1463,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
     if (widget.confirmationVerifier != null) {
       return widget.confirmationVerifier!(code: code);
     }
-    return code == widget.handoverCode;
+    return code == _handoverCode;
   }
 
   void _showQrOverlay(BuildContext context, String data) {

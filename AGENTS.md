@@ -35,6 +35,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   retries. Reproduce the defect in an isolated deterministic test, review the
   fix and re-gate it with Sol/Astra before re-execution; never chain unreviewed
   live hotfix retries.
+- Remote alias mentor invariant: after an alias or DNS failure, read the exact
+  saved SSH configuration and authoritative project source before concluding
+  that remote access is unavailable; test only the verified saved alias. A
+  guessed alias is not a blocker.
 - Missing operational config or a project secret is not an owner blocker when
   authorized runtime state can be reconstructed server-side or a missing key
   can be atomically generated in the approved external directory; exhaust that
@@ -310,6 +314,10 @@ Release feature-scope classifications must bind current source reachability to
 current runtime evidence. A stale audit, historical candidate or source-only
 contract cannot close a live-scope finding; a missing runtime route or provider
 activation remains an explicit fail-closed blocker.
+
+After an alias or DNS error, read the exact stored SSH configuration and
+project source before declaring a remote unavailable; test only the verified
+target alias. A guessed alias is not a blocker.
 
 Before any forward schema deployment, compare the prior image's SQL contract
 with the exact migration delta and record a protected backup/restore rehearsal

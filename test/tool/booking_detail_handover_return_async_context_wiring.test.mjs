@@ -33,11 +33,10 @@ const manualReturn = section(
 );
 
 test('both steppers stop after challenge lookup when their State is gone', () => {
+  assert.match(ownerReturn, /handoverCode: ''[\s\S]*?confirmationChallengeLoader: widget\.viewerIsOwner\s+\? null/u);
+  assert.match(pickup, /handoverCode: ''[\s\S]*?confirmationChallengeLoader: widget\.viewerIsOwner\s+\? \(\) => _issueSecureChallenge/u);
   for (const value of [ownerReturn, pickup]) {
-    assert.match(
-      value,
-      /challenge = await _issueSecureChallenge\([\s\S]*?if \(challenge == null\) return;\s+\}\s+if \(!mounted\) return;\s+final ok = await ReturnHandoverStepperSheet\.push\(\s+context,/u,
-    );
+    assert.match(value, /if \(!mounted\) return;[\s\S]*?ReturnHandoverStepperSheet\.push\(\s+context,/u);
   }
 });
 

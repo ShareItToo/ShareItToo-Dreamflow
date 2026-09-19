@@ -3144,21 +3144,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   }
 
   String _computeBookingId() {
-    final itemId = (widget.booking['itemId'] as String?) ?? '';
-    final requestId = (widget.booking['requestId'] as String?) ?? '';
-    final title = (widget.booking['title'] as String?) ?? '';
-    if (itemId.isNotEmpty && requestId.isNotEmpty && title.isNotEmpty) {
-      final seed =
-          ((itemId.hashCode) ^ (requestId.hashCode) ^ (title.hashCode)).abs();
-      final s = seed.toString().padLeft(8, '0');
-      return 'BKG-${s.substring(0, 4)}-${s.substring(4, 8)}';
-    }
-    final fallbackSeed = ((widget.booking['title']?.hashCode ?? 0) ^
-            (widget.booking['dates']?.hashCode ?? 0) ^
-            (widget.booking['location']?.hashCode ?? 0))
-        .abs();
-    final s = fallbackSeed.toString().padLeft(8, '0');
-    return 'BKG-${s.substring(0, 4)}-${s.substring(4, 8)}';
+    // Booking-bound challenges must use the persisted request id. A display
+    // hash is not a booking identity and cannot be accepted by the backend.
+    return (widget.booking['requestId'] ?? '').toString().trim();
   }
 
   DateTime _handoverCodeStart() {
@@ -3362,6 +3350,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   }
 
   Future<void> _startOwnerReturnFlow() async {
+    final requestId = (widget.booking['requestId'] as String?)?.trim();
+    if (requestId == null || requestId.isEmpty) return;
     // Build lightweight Item and RentalRequest to drive the stepper
     final (start, end) = _parseDateRange();
     final days = (start != null && end != null)
@@ -3374,10 +3364,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
 
     final itemIdSeed = ((widget.booking['title']?.hashCode ?? 0) ^
             (widget.booking['location']?.hashCode ?? 0))
-        .abs()
-        .toString();
-    final reqIdSeed = ((widget.booking['dates']?.hashCode ?? 0) ^
-            (widget.booking['title']?.hashCode ?? 0))
         .abs()
         .toString();
 
@@ -3408,7 +3394,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     );
 
     final req = RentalRequest(
-      id: 'req_$reqIdSeed',
+      id: requestId,
       itemId: item.id,
       ownerId: item.ownerId,
       renterId: (widget.booking['listerId'] as String?) ?? 'renter_local',
@@ -3421,13 +3407,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final renterName = widget.viewerIsOwner ? _listerName : 'Mieter';
     final ownerName = widget.viewerIsOwner ? 'Vermieter' : _listerName;
 
-    Map<String, dynamic>? challenge;
-    if (!widget.viewerIsOwner) {
-      challenge = await _issueSecureChallenge(
-        HandoverCodeService.segmentReturn,
-      );
-      if (challenge == null) return;
-    }
     if (!mounted) return;
 
     final ok = await ReturnHandoverStepperSheet.push(
@@ -3436,8 +3415,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       request: req,
       renterName: renterName,
       ownerName: ownerName,
-      handoverCode: challenge?['code']?.toString() ?? '',
-      qrPayload: challenge?['qrPayload']?.toString(),
+      handoverCode: '',
+      confirmationChallengeLoader: widget.viewerIsOwner
+          ? null
+          : () => _issueSecureChallenge(HandoverCodeService.segmentReturn),
       confirmationVerifier: widget.viewerIsOwner
           ? ({qrPayload, code}) => _verifySecureChallenge(
                 segment: HandoverCodeService.segmentReturn,
@@ -3529,6 +3510,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   }
 
   Future<void> _startPickupFlow() async {
+    final requestId = (widget.booking['requestId'] as String?)?.trim();
+    if (requestId == null || requestId.isEmpty) return;
     final (start, end) = _parseDateRange();
     final days = (start != null && end != null)
         ? math.max(1, end.difference(start).inDays)
@@ -3540,10 +3523,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
 
     final itemIdSeed = ((widget.booking['title']?.hashCode ?? 0) ^
             (widget.booking['location']?.hashCode ?? 0))
-        .abs()
-        .toString();
-    final reqIdSeed = ((widget.booking['dates']?.hashCode ?? 0) ^
-            (widget.booking['title']?.hashCode ?? 0))
         .abs()
         .toString();
 
@@ -3574,7 +3553,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     );
 
     final req = RentalRequest(
-      id: 'req_$reqIdSeed',
+      id: requestId,
       itemId: item.id,
       ownerId: item.ownerId,
       renterId: (widget.booking['listerId'] as String?) ?? 'renter_local',
@@ -3587,13 +3566,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final renterName = widget.viewerIsOwner ? _listerName : 'Mieter';
     final ownerName = widget.viewerIsOwner ? 'Vermieter' : _listerName;
 
-    Map<String, dynamic>? challenge;
-    if (widget.viewerIsOwner) {
-      challenge = await _issueSecureChallenge(
-        HandoverCodeService.segmentPickup,
-      );
-      if (challenge == null) return;
-    }
     if (!mounted) return;
 
     final ok = await ReturnHandoverStepperSheet.push(
@@ -3602,8 +3574,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       request: req,
       renterName: renterName,
       ownerName: ownerName,
-      handoverCode: challenge?['code']?.toString() ?? '',
-      qrPayload: challenge?['qrPayload']?.toString(),
+      handoverCode: '',
+      confirmationChallengeLoader: widget.viewerIsOwner
+          ? () => _issueSecureChallenge(HandoverCodeService.segmentPickup)
+          : null,
       confirmationVerifier: widget.viewerIsOwner
           ? null
           : ({qrPayload, code}) => _verifySecureChallenge(

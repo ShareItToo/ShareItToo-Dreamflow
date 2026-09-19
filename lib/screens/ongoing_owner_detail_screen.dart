@@ -2147,19 +2147,6 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     Item item,
     User renter,
   ) async {
-    final challenge = await DataService.issueBookingConfirmationChallenge(
-      requestId: req.id,
-      segment: HandoverCodeService.segmentPickup,
-    );
-    if (challenge == null) {
-      if (!context.mounted) return;
-      AppPopup.toast(
-        context,
-        icon: Icons.lock_outline,
-        title: 'Sicherer Übergabe-Code konnte nicht erstellt werden.',
-      );
-      return;
-    }
     if (!context.mounted) return;
     await ReturnHandoverStepperSheet.push(
       context,
@@ -2167,8 +2154,12 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
       request: req,
       renterName: renter.displayName,
       ownerName: _owner?.displayName ?? 'Vermieter',
-      handoverCode: challenge['code']?.toString() ?? '',
-      qrPayload: challenge['qrPayload']?.toString(),
+      handoverCode: '',
+      confirmationChallengeLoader: () =>
+          DataService.issueBookingConfirmationChallenge(
+        requestId: req.id,
+        segment: HandoverCodeService.segmentPickup,
+      ),
       viewerIsOwner: true,
       mode: ReturnFlowMode.pickupFlow,
     );

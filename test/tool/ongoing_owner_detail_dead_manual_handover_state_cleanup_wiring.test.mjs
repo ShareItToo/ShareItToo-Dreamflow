@@ -56,8 +56,8 @@ test('pickup flow keeps secure challenge and pickup stepper wiring', () => {
   assert.match(pickup, /DataService\.issueBookingConfirmationChallenge\(/);
   assert.match(pickup, /segment: HandoverCodeService\.segmentPickup/);
   assert.match(pickup, /ReturnHandoverStepperSheet\.push\(/);
-  assert.match(pickup, /handoverCode: challenge\['code'\]/);
-  assert.match(pickup, /qrPayload: challenge\['qrPayload'\]/);
+  assert.match(pickup, /handoverCode: ''/);
+  assert.match(pickup, /confirmationChallengeLoader: \(\) =>/);
   assert.match(pickup, /mode: ReturnFlowMode\.pickupFlow/);
 });
 

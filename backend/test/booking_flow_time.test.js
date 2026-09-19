@@ -65,6 +65,59 @@ test('changed return proposal has an accurate server-authored message', () => {
   }), '🔄 Rückgabezeit geändert: Freitag, 10:00 Uhr');
 });
 
+test('pickup and return active state are participant- and status-bound', () => {
+  const pickupReady = applyBookingFlowTimeAction({
+    ...base,
+    payload: {
+      handoverTimeConfirmed: true,
+      handoverActive: false,
+      flowTimeRevision: 4,
+    },
+    actorId: 'owner-1',
+    raw: { action: 'start', segment: 'pickup' },
+  });
+  assert.equal(pickupReady.state.handoverActive, true);
+  assert.equal(pickupReady.state.flowStateRevision, 1);
+  assert.throws(
+    () => applyBookingFlowTimeAction({
+      ...base,
+      payload: pickupReady.payload,
+      actorId: 'owner-1',
+      raw: { action: 'start', segment: 'pickup' },
+    }),
+    (error) => error.code === 'flow_state_already_active',
+  );
+  assert.throws(
+    () => applyBookingFlowTimeAction({
+      ...base,
+      payload: { handoverTimeConfirmed: true },
+      actorId: 'renter-1',
+      raw: { action: 'start', segment: 'pickup' },
+    }),
+    (error) => error.code === 'flow_state_role_forbidden',
+  );
+  const returnReady = applyBookingFlowTimeAction({
+    ...base,
+    workflowStatus: 'running',
+    payload: { returnTimeConfirmed: true },
+    actorId: 'renter-1',
+    raw: { action: 'start', segment: 'return' },
+  });
+  assert.equal(returnReady.state.returnActive, true);
+});
+
+test('stale flow revision fails before state mutation', () => {
+  assert.throws(
+    () => applyBookingFlowTimeAction({
+      ...base,
+      payload: { flowTimeRevision: 3, handoverTimeConfirmed: true },
+      actorId: 'owner-1',
+      raw: { action: 'start', segment: 'pickup', expectedRevision: 2 },
+    }),
+    (error) => error.code === 'flow_time_revision_stale',
+  );
+});
+
 test('canonical local proposal survives UTC date rollover and authors its label', () => {
   const normalized = normalizeBookingFlowTimeProposal({
     rentalStartDate: '2026-11-20',
@@ -238,6 +291,27 @@ test('flow-time proposal must stay on the booking segment date', () => {
     (error) => error instanceof BookingFlowTimeError
       && error.code === 'flow_time_outside_booking_date',
   );
+});
+
+test('only the counterparty may clear the active flow segment', () => {
+  assert.throws(
+    () => applyBookingFlowTimeAction({
+      ...base,
+      payload: { handoverActive: true, flowStateRevision: 1 },
+      actorId: 'owner-1',
+      raw: { action: 'clear', segment: 'pickup', expectedRevision: 1 },
+    }),
+    (error) => error instanceof BookingFlowTimeError
+      && error.code === 'flow_state_clear_role_forbidden',
+  );
+  const cleared = applyBookingFlowTimeAction({
+    ...base,
+    payload: { handoverActive: true, flowStateRevision: 1 },
+    actorId: 'renter-1',
+    raw: { action: 'clear', segment: 'pickup', expectedRevision: 1 },
+  });
+  assert.equal(cleared.state.handoverActive, false);
+  assert.equal(cleared.state.flowStateRevision, 2);
 });
 
 test('outsiders cannot read or mutate normalized flow-time state', () => {

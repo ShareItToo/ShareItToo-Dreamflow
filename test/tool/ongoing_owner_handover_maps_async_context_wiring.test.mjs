@@ -53,7 +53,7 @@ test('owner return completion uses its owning State lifecycle', () => {
 test('pickup challenge proves its exact caller context before the stepper', () => {
   assert.match(
     pickup,
-    /if \(challenge == null\) \{\s+if \(!context\.mounted\) return;[\s\S]*?return;\s+\}\s+if \(!context\.mounted\) return;\s+await ReturnHandoverStepperSheet\.push\(\s+context,/u,
+    /if \(!context\.mounted\) return;\s+await ReturnHandoverStepperSheet\.push\(\s+context,[\s\S]*?handoverCode: '',[\s\S]*?confirmationChallengeLoader: \(\) =>[\s\S]*?DataService\.issueBookingConfirmationChallenge\(/u,
   );
 });
 
