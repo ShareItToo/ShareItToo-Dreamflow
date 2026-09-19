@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp134-current-candidate-staging-support-lifecycle",
+  "status": "passed-exact-current-candidate-staging-support-lifecycle",
+  "capturedAt": "2026-09-13T06:05:04.127Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "candidateSourceCommit": "abf911d1c944a4e5874269111985d0cc4736546e",
+    "stagingRuntimeHead": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "sourceInventory": {
+      "tool/run_wp68_staging_support_lifecycle.mjs": "6ef54ba3b3a8d0708ae8e1955f92c8dddc4ee709a3206f4fe32ec50eb7f0c9a6",
+      "tool/run_wp134_current_candidate_staging_support_lifecycle.mjs": "405892e15851d598fb96bbfe7657145ca4e9fac5e063ee24cbf6b3c81987bbaa",
+      "test/tool/run_wp134_current_candidate_staging_support_lifecycle.test.mjs": "5cb9f0a5739f8b42abb7e3506458be535c73dadbcde8de318bfd22021f0ced71"
+    }
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091309",
+    "releaseChannel": "internal",
+    "environment": "staging",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "apkSha256": "6f688e3641f54da91caf0e4f7c039f192a0c4e481b3ebb98ac3b2723cbe27ddf",
+    "aabSha256": "6fc8164cd7a941da83aa104e1a238c4b1725c983dab6bb7651fd3f9880bbcb04",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "privacyScan": "passed"
+  },
+  "staging": {
+    "runtimeImage": "ghcr.io/shareittoo/shareittoo-api:df39a14b7a19afe467842461a28f1e77fec8445e",
+    "runtimeHealthyBeforeExecution": true,
+    "runtimeRestartCountBeforeExecution": 0,
+    "runtimeHealthyAfterExecution": true,
+    "runtimeRestartCountAfterExecution": 0,
+    "apiLivenessAfterExecution": "http-200-ok",
+    "apiReadinessAfterExecution": "degraded-only-three-noncritical-historical-support-followups",
+    "databaseAfterExecution": "ok",
+    "mailAfterExecution": "ok",
+    "notificationPendingAfterExecution": 0,
+    "notificationDeadAfterExecution": 0,
+    "paymentTransportAfterExecution": "memory",
+    "paymentLivemodeAfterExecution": false,
+    "supportWatchdogStaleAfterExecution": false,
+    "supportP0WithoutOwnerAfterExecution": 0,
+    "supportNextUpdateOverdueAfterExecution": 3,
+    "supportCriticalNextUpdateOverdueAfterExecution": 0
+  },
+  "support": {
+    "intake": "passed",
+    "operatingMode": "simulation",
+    "independentReview": "approved-by-separate-admin",
+    "progressPublication": "passed",
+    "recipientReadback": "passed",
+    "externalMessageSent": false,
+    "futureDeadlineConfirmed": true,
+    "existingSupportCasesChanged": false
+  },
+  "cleanup": {
+    "temporaryAccountsDecommissioned": 3,
+    "credentialsRevoked": true,
+    "privateVaultDeleted": true,
+    "auditHistoryRetained": true
+  },
+  "portfolioEffect": {
+    "promotedRequirement": "staging-support-simulation-lifecycle",
+    "state": "PASS",
+    "totals": {
+      "pass": 18,
+      "partial": 6,
+      "open": 8
+    }
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "realUserChanged": false,
+    "existingSupportCasesChanged": false,
+    "externalEmailSent": false,
+    "externalMessageSent": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "googlePlayChanged": false,
+    "firebaseChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsAccountIdentity": false,
+    "containsCaseIdentity": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsPrivateFilesystemPath": false
+  }
+}

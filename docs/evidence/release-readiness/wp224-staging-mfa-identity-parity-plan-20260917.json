@@ -1,0 +1,660 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-staging-mfa-identity-parity-plan-20260917",
+  "capturedOn": "2026-09-17",
+  "status": "prepared-read-only-protected-rehearsal-pending",
+  "scope": "staging-backend-reconciliation-only",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "deployableSourceCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
+    "planPredecessorRevision": "d27324f2004458db5255276ec70e382f5518ae5a",
+    "immutableImage": "shareittoo-api:82221caa2b0fb58e701ded35198bf65e80ac9d03",
+    "workingTreeAtCapture": "clean"
+  },
+  "currentStagingReadback": {
+    "backendShortCommit": "df39a14b7a19",
+    "mfaStatus": {
+      "http": 404,
+      "code": "not_found"
+    },
+    "identityVerificationStatus": {
+      "http": 404,
+      "code": "not_found"
+    },
+    "paymentBoundary": {
+      "capabilitiesHttp": 200,
+      "transport": "memory",
+      "providerStatus": "disabled",
+      "mode": "unavailable",
+      "livemode": false
+    },
+    "readbackMutations": false
+  },
+  "sourceToStagingDelta": {
+    "classification": "current-Staging-schema-read-back; candidate-image-and-database-parity-not-deployed",
+    "missingSourceRevision": true,
+    "sourceCommitDeltaFromObservedStaging": {
+      "from": "df39a14b7a19afe467842461a28f1e77fec8445e",
+      "to": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
+      "migrationFilesInSourceDelta": "075-087",
+      "interpretation": "This is a source/Git delta only; it does not prove which migrations are applied in Staging."
+    },
+    "stagingSchemaMigrationReadback": {
+      "status": "authorized-read-only",
+      "scope": "migration names/range/count only; no host, user or secret data",
+      "rowsRead": true,
+      "exactAppliedRange": "001-074",
+      "appliedCount": 74,
+      "exactUnappliedCurrentSourceRange": "075-087",
+      "requiredBeforeDeploy": true,
+      "rule": "The readback is authoritative for the captured moment; repeat it before deployment and do not infer parity from a route 404 or Git delta."
+    },
+    "missingRoutesAtStaging": [
+      "/v1/auth/mfa/status",
+      "/v1/identity-verification/status"
+    ],
+    "candidateMigrationRange": {
+      "first": "075_refund_transfer_reversal_recovery",
+      "last": "087_identity_verification_pilot_gate",
+      "upMigrations": 13,
+      "files": 26,
+      "direction": "forward-only reconciliation; do not run down migrations",
+      "stagingAppliedState": "001-074 applied; 075-087 open for the current source"
+    },
+    "protectedRehearsal": {
+      "operation": "backend/ops/staging_forward_migration_rehearsal.mjs",
+      "status": "passed-executed",
+      "exactTargetCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
+      "exactOpsCommit": "06dce07a048e7ed2aebd41961be8a346092a4add",
+      "invocationBinding": "SIT_STAGING_REHEARSAL_OPS_COMMIT must equal exactOpsCommit; runtime source remains exactTargetCommit",
+      "currentAppliedRange": "001-074",
+      "forwardRange": "075-087",
+      "upMigrations": 13,
+      "migrationFiles": 26,
+      "backupRestore": "protected non-empty Staging backup created and isolated restore passed; live database was not migrated",
+      "functionalProbes": "required on the restored non-empty application data; transactional synthetic probes only, no provider traffic",
+      "servicesAfterPass": "all quiesced services remain stopped; controlled synthetic acceptance must pass before an explicit exact-new-API release step",
+      "cleanup": "isolated container and volume removal is verified; any removal/absence-check failure overrides PASS and requires recovery",
+      "executionEvidence": {
+        "status": "passed",
+        "runtimeCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
+        "opsCommit": "06dce07a048e7ed2aebd41961be8a346092a4add",
+        "backup": {
+          "basename": "staging-20260917211705-4e345294.dump",
+          "bytes": 3855507,
+          "sha256": "0fb025cad33f9ca9642603e0239103d85368996456af540de3d394c2bd64e193",
+          "mode": "0600"
+        },
+        "isolatedRestore": {
+          "migrations": "001-087",
+          "foreignKeyConstraints": 367,
+          "functionalProbes": "passed",
+          "temporaryResourcesRemoved": true
+        },
+        "liveStaging": {
+          "schema": "001-074",
+          "apiResumed": false,
+          "databaseMutated": false
+        }
+      },
+      "wp244RuntimeProof": {
+        "status": "failed-readiness-stopped",
+        "runtimeCommit": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+        "opsCommit": "7ccf56ccf7caf335c93c0bd7ed36d0fa2c5bb926",
+        "image": "shareittoo-api-wp244:f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+        "imageDigest": "sha256:38be66d170746b20bfc4c08c70655a72f9a6ce9eb700278a129d5acdedc22620",
+        "target": "disposable-internal-network",
+        "startup": "passed; API listening on 0.0.0.0:8080",
+        "migrations": "001-087 ledger confirmed",
+        "phase": "health_readiness",
+        "code": "health_degraded_existing_review_state",
+        "degradedChecks": {
+          "paymentRecoveryNeedsReview": 2,
+          "supportNextUpdateOverdue": 1
+        },
+        "cleanup": "passed",
+        "evidenceWritten": false,
+        "liveDatabaseMutated": false,
+        "liveSchema": "001-074",
+        "apiResumed": false,
+        "note": "Readiness remained 503 on restored non-empty data; no MFA HTTP flow was claimed."
+      },
+      "wp245Implementation": {
+        "status": "implemented-not-executed",
+        "sourceCommit": "4cd6cf38e435f5f2a30dd9be674c455c2574f54f",
+        "operation": "backend/ops/staging_forward_migration_rehearsal.mjs",
+        "candidateAcceptanceRunner": "backend/ops/staging_disposable_candidate_acceptance.mjs",
+        "disposableIdentity": {
+          "resourceTypes": ["container", "network", "volume"],
+          "namePattern": "sit-staging-rehearsal-{container|network|volume}-{runId}",
+          "labels": ["com.shareittoo.staging.rehearsal=true", "com.shareittoo.staging.rehearsal_run_id={runId}"],
+          "attestation": "inspect and exact-match labels/name before first start of PostgreSQL and candidate API; production-labelled or lookalike resources fail closed",
+          "cleanup": "container, volume and internal network removal plus absence verification"
+        },
+        "immutableImages": {
+          "candidateImageId": "sha256:38be66d170746b20bfc4c08c70655a72f9a6ce9eb700278a129d5acdedc22620",
+          "candidateRevision": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+          "postgresImage": "postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
+          "runtimeRule": "inspect .Id and OCI revision before create; run only by immutable image ID",
+          "apiGroup": "--group-add 65532 for read-only root:65532 MFA key access"
+        },
+        "mfaKey": {
+          "source": "ephemeral external file",
+          "validator": "backend/ops/validate_mfa_staging_secret.mjs",
+          "runtimeMount": "read-only MFA_ENCRYPTION_KEY_FILE",
+          "shape": "32-byte encoded key, runtime mode 0640/root:65532",
+          "cleanup": "delete and verify absence; never reuse live key",
+          "validatorContract": "production validate_mfa_staging_secret import is invoked by runner"
+        },
+        "readinessFingerprint": {
+          "sources": ["payment recoveryNeedsReview including contract_blocked causes", "support nextUpdateOverdue"],
+          "fields": ["stable sha256 ID", "cause", "status", "coarse time class", "priority for support"],
+          "pii": "excluded",
+          "driftRule": "compatibility baseline from restored 001-074 database is captured before candidate API start; post-migration fingerprint must match exactly; missing/new/changed/unreadable findings fail closed",
+          "readiness503": "remains an operational release blocker; fingerprint never heals or suppresses it",
+          "contractVersion": "V5.2-2026-08-16",
+          "payoutHoldHours": 48,
+          "readinessPayloadRule": "503 degraded is accepted only when database=ok, support.status=degraded, payment recoveryNeedsReview=2 and support nextUpdateOverdue=1 equal fingerprint lengths, and all other critical checks are healthy"
+        },
+        "verification": {
+          "focusedTests": "38 tests, 37 pass, 1 environment-gated skip",
+          "syntax": "pass",
+          "diffCheck": "pass",
+          "liveRetry": false,
+          "orchestratedNegativeDrift": "runner test proves post-fingerprint drift aborts before MFA probe and still performs complete cleanup",
+          "fkIntegrity": "runner invokes check_foreign_key_integrity.sql and binds count=367",
+          "opsBinding": "explicit 40-char Ops commit must equal git HEAD before Docker",
+          "evidencePath": "required absolute owner-only 0700 parent outside repository; evidence mode 0600",
+          "bootstrap": "candidate image initializeDatabase() runs schema.sql plus migrations before full baseline; no runMigrations-only shortcut",
+          "postgres": "FK integrity SQL invoked and validated constraint count bound to 367",
+          "providerTraffic": false,
+          "deviceOrPlayMutation": false
+        },
+        "executionGate": "requires a separately authorized disposable rehearsal; no execution proof is claimed here"
+      },
+      "wp246RestoreRace": {
+        "status": "implemented-not-retried",
+        "fixCommit": "4cd6cf38e435f5f2a30dd9be674c455c2574f54f",
+        "observedAttempt": {
+          "opsCommit": "928ebf0b358c2f4744f8afcaee406bd73ded3cfc",
+          "failureCode": "staging_rehearsal_restore_failed",
+          "cleanup": "passed",
+          "evidence": "absent",
+          "mfaTemporaryFile": "absent",
+          "liveDatabaseMutated": false,
+          "liveSchema": "001-074",
+          "api": "exited"
+        },
+        "rootCauseHypothesis": "fresh PostgreSQL volume can report transient pg_isready success before final init-server start; same backup and helper pass in a fresh isolated restore",
+        "fix": "official PostgreSQL init-complete log marker, then two bounded stable SELECT 1 successes before pg_restore",
+        "verification": "deterministic race test covers transient ready/restart/final marker in stderr/two SQL successes and timeout fail-closed",
+        "execution": "no retry by Luna; Sol must run exactly once after review"
+      },
+      "wp247BootstrapConfigParity": {
+        "status": "implemented-not-retried",
+        "fixCommit": "1df258762c9a7823771957cdcac839c91ce2707e",
+        "observedAttempt": {
+          "opsCommit": "8852ec38bdf23ebd4d793e3ae03875eba03defb8",
+          "failureCode": "bootstrap_migrations_failed",
+          "restore": "passed",
+          "cleanup": "passed",
+          "evidence": "absent",
+          "mfaTemporaryFile": "absent",
+          "liveDatabaseMutated": false,
+          "liveSchema": "001-074",
+          "api": "exited-before-start"
+        },
+        "fix": "shared candidate runtime env/secret/group contract for API and bootstrap; bootstrap uses initializeDatabase() with JWT and read-only MFA file mount",
+        "execution": "no retry by Luna; Sol must run exactly once after review"
+      },
+      "wp248InternalNetworkProbe": {
+        "status": "implemented-not-retried",
+        "fixCommit": "4da029a5de4e55cc5514cd2944e9b4fb03d46b19",
+        "observedAttempt": {
+          "opsCommit": "decb00e7674efe2487e6a5f5d8b0a3c2e6b5e394",
+          "restore": "passed",
+          "bootstrap": "passed",
+          "failureCode": "staging_rehearsal_candidate_port_failed",
+          "diagnosis": "Docker --internal Network has no host PortBindings; candidate remained listening internally",
+          "cleanup": "passed",
+          "evidence": "absent",
+          "liveDatabaseMutated": false,
+          "liveSchema": "001-074",
+          "api": "stopped"
+        },
+        "fix": "remove host-port publishing/host fetch; bounded docker-exec probes against 127.0.0.1:8080 inside attested API container; evidence acceptanceTarget=docker-exec-internal and hostPortPublished=false",
+        "execution": "no retry by Luna; Sol must run exactly once after review"
+      },
+      "wp249DisposableSuccessAndFindingDiagnosis": {
+        "status": "technical-probes-passed-operational-release-blocked",
+        "fixCommit": "6c6da08c19514d9b8b7a58c6da2e3faae23da674",
+        "executionEvidence": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-wp245-disposable-f0bb868a-20260918.json",
+          "mode": "0600",
+          "owner": "root:root",
+          "bytes": 3133,
+          "sha256": "450fb5427ebbf53e9c96e6f70a3cfa5f42eed130d4fe34bfd6fbc6012af7b224",
+          "runtimeCommit": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+          "opsCommit": "8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+          "acceptanceTarget": "docker-exec-internal",
+          "hostPortPublished": false,
+          "ledger": "87|87|1|87",
+          "foreignKeys": 367,
+          "readiness": "503; exact payment findings=2/support findings=1 unchanged",
+          "cleanup": true,
+          "providerTraffic": false,
+          "liveDatabaseMutated": false,
+          "nullEffect": "disposable resources/MFA absent; live PG schema 001-074 and API stopped"
+        },
+        "findingDiagnosis": {
+          "tool": "backend/ops/classify_readiness_findings.mjs",
+          "scope": "hashed IDs, cause/status/time classes only; no PII/provider IDs/row content",
+          "payment": "two refund_truth_needs_review findings require source classification and authorized reconciliation; no auto-resolution",
+          "support": "one P3 next_update_overdue finding requires governed progress update/closure; no auto-resolution",
+          "classification": "staging operation vs synthetic/legacy fixture remains source-readback dependent",
+          "liveRemediation": "blocked until source classification and expected-set match; no live execution"
+        },
+        "disposableDiagnosisExecution": {
+          "status": "misrouted-local-preflight-no-run",
+          "requiredBackup": "/docker/shareittoo/backups/rehearsals/staging-20260917211705-4e345294.dump",
+          "requiredManifest": "/docker/shareittoo/backups/rehearsals/staging-20260917211705-4e345294.dump.sha256",
+          "observed": "prior local preflight looked for the success-evidence path and did not reach the verified target host; no substitute fixture or live access was used",
+          "correctedExecution": {
+            "targetHost": "sit-staging-vps",
+            "opsCheckout": "/docker/shareittoo/staging-builds/8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+            "opsCommit": "8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+            "runtimeCommit": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+            "evidencePath": "/docker/shareittoo/backups/rehearsals/staging-wp249-diagnosis-20260918002009-861c6459.json",
+            "evidenceBytes": 4487,
+            "evidenceSha256": "82454c99d957843435130f037b722fe05feb243b22b23d2b1f98b8c5991d234a",
+            "backupBytes": 3855507,
+            "backupSha256": "0fb025cad33f9ca9642603e0239103d85368996456af540de3d394c2bd64e193",
+            "status": "classified-source-readback-complete-operational-release-blocked",
+            "findings": "payment=2 refund_truth_needs_review; support=1 p3 next_update_overdue; all hashed IDs; classified as staging_operation",
+            "causes": "both payment findings: untrusted_refund_count=2, refund cache/status mismatch; support finding: received p3 overdue >24h",
+            "cleanup": true,
+            "disposableAbsent": true,
+            "providerTraffic": false,
+            "liveDatabaseMutated": false,
+            "hostPortPublished": false
+          },
+          "liveDatabaseMutated": false,
+          "providerTraffic": false,
+          "action": "diagnosis rerouted to sit-staging-vps; future missing-artifact checks must verify target host and exact backup before declaring a blocker"
+        }
+      },
+      "wp250StripeTestProviderReadback": {
+        "status": "connector-readback-operational-release-blocked",
+        "executionTarget": "sit-staging-vps",
+        "opsCheckout": "/docker/shareittoo/staging-builds/8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+        "opsCommit": "8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+        "runtimeCommit": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+        "backup": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-20260917211705-4e345294.dump",
+          "bytes": 3855507,
+          "sha256": "0fb025cad33f9ca9642603e0239103d85368996456af540de3d394c2bd64e193"
+        },
+        "stripe": {
+          "accountContext": "ShareItToo Sandbox",
+          "livemode": false,
+          "keyClass": "connector-read-only",
+          "readOnlyAllowlist": ["GET /v1/refunds/{id}", "GET /v1/charges/{id}"],
+          "writes": false
+        },
+        "mapping": "disposable restore produced 2 affected payments and 4 refund references; provider IDs held only in temporary private mapping and deleted",
+        "providerReadback": "official Stripe connector GETs attempted for all 4 deduplicated original references; all returned UNKNOWN/not-found (synthetic memory references are not Stripe evidence); no fallback listing/search used",
+        "providerCounts": "exists=0; testModeConfirmed=0; amountCurrencyMatch=0; chargeBindingMatch=0; unknown=4; blocked=0",
+        "evidence": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-wp250-stripe-readback-20260918004800-connector.json",
+          "mode": "0600",
+          "bytes": 1488,
+          "sha256": "7b509988b85951d0cfce40e0bfe1b54f2828d1ccee917689ff4c22be75bfa2c5"
+        },
+        "cleanup": true,
+        "disposableAbsent": true,
+        "liveDatabaseMutated": false,
+        "liveReadback": "staging API exited/0; staging PG schema 001-074",
+        "providerTraffic": false,
+        "nextGate": "provider truth remains blocked: original references are synthetic/not-found in Stripe Sandbox; no remediation or release action permitted"
+      },
+      "wp251RefundReferenceRemediation": {
+        "status": "dry-run-closed-live-unchanged",
+        "decision": "quarantine-plan-only-no-canonical-mutation",
+        "runner": "backend/ops/staging_refund_reference_remediation.mjs",
+        "sourceBackup": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-20260917211705-4e345294.dump",
+          "bytes": 3855507,
+          "sha256": "0fb025cad33f9ca9642603e0239103d85368996456af540de3d394c2bd64e193"
+        },
+        "disposableExecution": {
+          "targetHost": "sit-staging-vps",
+          "opsCommit": "8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+          "runtimeCommit": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+          "before": "4 references / 2 payments; exact-set SHA-256 8c761886396e29a14da9495ae1e47b2a689c3fb022424490b720e211d8e7e128",
+          "after": "4 references / 2 payments; exact-set SHA-256 unchanged",
+          "providerReferenceClass": "all four re_memory synthetic references",
+          "transaction": "temporary quarantine table insert rolled back; quarantinedCount=4; quarantine hash f2ee6bec4a3480e3e061fa66a628fa5155fbe74466cc2edf09f42d32351fe9f3",
+          "canonicalFinancialTruthPreserved": true,
+          "providerOutcomeFabricated": false,
+          "cleanup": true,
+          "disposableAbsent": true
+        },
+        "evidence": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-wp250-stripe-readback-20260918004851-c16d8905.json",
+          "mode": "0600",
+          "bytes": 1295,
+          "sha256": "e410ff8ac06a0740b22009ed58cbb7563b88629969b6bdff61d36febbf0145c"
+        },
+        "liveReadback": "staging API exited/0; staging PG schema 001-074; no live DB mutation; no provider traffic",
+        "nextGate": "no live cleanup; retain canonical review state until authoritative provider truth exists"
+      },
+      "wp252SyntheticRefundRetirement": {
+        "status": "dry-run-closed-live-unchanged",
+        "decision": "quarantine-plan-only-no-canonical-mutation",
+        "runner": "backend/ops/staging_refund_reference_remediation.mjs",
+        "provenance": {
+          "transport": "memory",
+          "fixtureVerified": true,
+          "source": "backend/src/stripe_provider.js",
+          "test": "backend/test/payment_domain.test.js",
+          "graphProof": "all 4 refund references re_memory_, all linked refund/payment charge refs ch_memory_, payment intent refs pi_memory_"
+        },
+        "manifest": "exactly 4 Refund rows / 2 Payments; full graph exact-set SHA-256 8c761886396e29a14da9495ae1e47b2a689c3fb022424490b720e211d8e7e128; no support-P3 rows selected",
+        "disposableExecution": {
+          "targetHost": "sit-staging-vps",
+          "opsCommit": "8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+          "runtimeCommit": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+          "backupSha256": "0fb025cad33f9ca9642603e0239103d85368996456af540de3d394c2bd64e193",
+          "before": "4 refs / 2 payments; providerClass=true; chargeClass=true; paymentChargeClass=true; paymentIntentClass=true",
+          "commitPath": "temporary quarantine table insert committed only inside disposable transaction then rolled back; quarantinedCount=4",
+          "rollbackPath": "PASS; after exact-set SHA unchanged; second-run decision is idempotent no-op/fail-closed",
+          "canonicalFinancialTruthPreserved": true,
+          "providerOutcomeFabricated": false,
+          "foreignKeysAndAppendOnlyGuards": "not disabled",
+          "cleanup": true,
+          "disposableAbsent": true
+        },
+        "evidence": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-wp250-stripe-readback-20260918005850-e05b71a3.json",
+          "mode": "0600",
+          "bytes": 1650,
+          "sha256": "58a2e04cd6c46a3e4153ac7e988e7ab72769cac990c9c4a49674517da6f67f6b"
+        },
+        "liveReadback": "staging API exited/0; PG schema 001-074; no live DB/provider mutation",
+        "nextGate": "no live retirement; any future apply requires a separate owner-gated full backup and source-authorized archival design"
+      },
+      "wp253RetirementGraphDecision": {
+        "status": "blocked-no-rule-compliant-retirement-mechanism",
+        "decision": "B-no-safe-canonical-retirement-under-current-guards",
+        "targetHost": "sit-staging-vps",
+        "opsCommit": "8e7283e69c4f052ac4357c9e496ceb5ece801c20",
+        "runtimeCommit": "f0bb868a8a487cbf33ae67a555946fb9c67f4e9f",
+        "backup": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-20260917211705-4e345294.dump",
+          "bytes": 3855507,
+          "sha256": "0fb025cad33f9ca9642603e0239103d85368996456af540de3d394c2bd64e193"
+        },
+        "provenance": "all 4 re_memory refs / 2 payments; linked charge and payment-intent classes ch_memory_/pi_memory_; source/test proof in stripe_provider.js + payment_domain.test.js",
+        "manifest": {
+          "payments": 2,
+          "refunds": 4,
+          "paymentRowHashes": ["e0d1dd643170766e0a388fd93b908f69a16d365828d37f0681a0c0bcc5ce37dc", "9fb150c4dc74402d750568cf4fd600b6ccae64eb0e60b8dca416e72ab4cf1d44"],
+          "refundRowHashes": ["7db15aaa9323d531ee5a83de84a149f135ca7e96deb09b933d74d559efca150e", "6a5bac48711df614c11855cf88e727f7d333e3e0f05498e3ff222ebdccf99583", "d8555600433102084860b2d9e03c655c7c28ca7e412035818bbe79cb85c3ffae", "90ddaecd95f664e0071bcfd2264df238539393ca435761f8732b0a6ac67be35b"]
+        },
+        "dependencyMatrix": "all FK dependents and row counts/hashes captured for deposit_mandates(2), ledger_transactions(18 payment/4 refund), payment_attempts(6), payment_commands(12), payouts(2), refunds(4); zero disputes/financial_documents/refund_transfer_reversals/support links; trigger/constraint definition hashes retained",
+        "guardedApplyProbe": {
+          "rollbackPath": "DELETE attempt caught by refunds_provider_truth_guard SQLSTATE 55000; rollback completed; exact graph unchanged",
+          "commitPath": "real BEGIN/DELETE/COMMIT attempt exited 1 with same guard; no rows committed",
+          "guard": "refunds_provider_record_delete_forbidden via refunds_provider_truth_guard; provider/preparation fields immutable; dependent ledger FKs also prevent deletion",
+          "readinessAndSupport": "no readiness exception; support P3 untouched"
+        },
+        "evidence": {
+          "path": "/docker/shareittoo/backups/rehearsals/staging-wp250-stripe-readback-20260918010444-9031aebe.json",
+          "mode": "0600",
+          "bytes": 15874,
+          "sha256": "b2a55bc18d9690a6f826a017878118185b2b3c2189bce39318429996285e01a7"
+        },
+        "liveReadback": "disposableAbsent=true; staging API exited/0; PG schema 001-074; no live DB/provider mutation",
+        "nextGate": "Sol must ask Astra for explicit rebaseline decision; no retirement implementation or live action"
+      },
+      "priorImageSqlContractComparison": {
+        "status": "required-not-executed",
+        "observedPriorStagingCommit": "df39a14b7a19afe467842461a28f1e77fec8445e",
+        "targetSourceCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
+        "rule": "compare the prior image SQL/runtime contract with migrations 075-087 before any shared Staging forward attempt; health/readiness cannot substitute"
+      },
+      "filesystemAndQuiesceInvariant": "validate every existing backup path component (lstat/realpath/owner/mode, no symlink or repository escape) before creating anything; validate the complete Staging container/service label set before stopping any container; check foreign writers immediately before and after pg_dump",
+      "failureEvidence": "sanitized mode-0600 fail-closed report retains quiesced service state; services are not resumed after an unsuccessful rehearsal",
+      "controlledAcceptance": {
+        "compose": "backend/compose.staging.acceptance.yml",
+        "status": "failed-start-stopped",
+        "acceptancePort": 18082,
+      "publicStagingPort": 18080,
+      "exactRuntimeCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
+        "exactOpsCommit": "7ccf56ccf7caf335c93c0bd7ed36d0fa2c5bb926",
+        "target": "loopback-only",
+        "publicCandidateServing": false,
+        "syntheticMfaFlow": "enroll-pending-cancel",
+        "providerMode": "payment-memory-stripe-false-identity-disabled-listing-ai-mock",
+        "promotion": "explicit-only-after-loopback-acceptance",
+      "defaultDeploy": "blocked-until-evidence-and-confirmation",
+        "execution": "attempted-once-failed-at-start; no retry; no evidence",
+        "priorFailedAttempt": {
+          "status": "failed",
+          "phase": "start_input",
+          "code": "controlled_acceptance_start_input_failed",
+          "cleanup": "passed",
+          "evidenceWritten": false,
+          "liveDatabaseMutated": false,
+          "liveSchema": "001-074",
+          "apiResumed": false
+        },
+        "failedAttempt": {
+          "status": "failed",
+          "phase": "acceptance_start",
+          "code": "controlled_acceptance_acceptance_start_failed",
+          "foreignListener": "127.0.0.1:18081 (smartimise-radar-pilot-searxng-1); untouched",
+          "cleanup": "passed-after-acceptance-only-cleanup",
+          "evidenceWritten": false,
+          "liveDatabaseMutated": false,
+          "liveSchema": "001-074",
+          "apiResumed": false
+        },
+        "latestFailedAttempt": {
+          "status": "failed",
+          "phase": "verification_loopback_transport",
+          "code": "fetch_failed",
+          "cleanup": "passed",
+          "evidenceWritten": false,
+          "liveDatabaseMutated": false,
+          "liveSchema": "001-074",
+          "apiResumed": false
+        },
+        "isolatedFailedAttempt": {
+          "status": "failed",
+          "phase": "isolated_candidate_startup",
+          "code": "postgres_sqlstate_42703",
+          "target": "disposable-internal-network",
+          "acceptancePort": 18083,
+          "migrations": "protected backup restored at 001-074; candidate exited before /version proof",
+          "cleanup": "passed",
+          "evidenceWritten": false,
+          "liveDatabaseMutated": false,
+          "liveSchema": "001-074",
+          "apiResumed": false
+        }
+      }
+    },
+    "riskDomainsInOpenRange": [
+      "refund transfer reversal recovery",
+      "payment command result immutability",
+      "refund provider truth parity",
+      "retention legal hold scope",
+      "special-category intake minimization",
+      "MFA TOTP",
+      "Identity Verification sessions, redaction, consent, retention and pilot gate"
+    ],
+    "requiredSourceConfig": {
+      "mfa": "server-side MFA encryption/secret configuration must already be present; values are not recorded",
+      "mfaComposeGap": "resolved in the Staging MFA overlay; base compose remains provider-neutral and never receives a raw key",
+      "mfaConfigPlan": {
+        "requiredBeforeDeploy": true,
+        "injection": "MFA_ENCRYPTION_KEY_FILE is supplied by compose.staging.mfa.yml from an owner-only external file; direct raw environment injection is forbidden",
+        "preflight": "validate_mfa_staging_secret.mjs checks presence, path, permissions and strict 32-byte shape without printing or persisting the value",
+      "rotation": "keep the key stable for existing TOTP ciphertext; ensure_mfa_staging_secret.mjs reuses a valid external file and creates only with exact confirmation/O_EXCL when absence is proven; it never overwrites, rotates or prints the key"
+      },
+      "identity": "keep IDENTITY_VERIFICATION_TRANSPORT=disabled for parity-only deployment"
+    }
+  },
+  "reconciliationPlan": {
+    "phase1ParityOnly": [
+      "Build and publish one immutable image labelled with deployableSourceCommit",
+      "Take a protected Staging database backup and pass isolated restore or equivalent forward-compatibility verification",
+      "Run the protected isolated backup/restore and functional rehearsal before touching shared Staging",
+      "Deploy staging with the exact deployableSourceCommit and run migrations 075-087 forward-only",
+      "Keep every quiesced service stopped after rehearsal; expose only the exact new API through a controlled internal acceptance target, never the observed df39 image",
+      "If forward migration or readiness fails, isolate/stop only the Staging API and retain the MFA overlay; do not boot the observed old image or run down migrations",
+      "Keep PAYMENT_TRANSPORT=memory and STRIPE_LIVEMODE=false",
+      "Keep IDENTITY_VERIFICATION_TRANSPORT=disabled; do not mount provider secrets",
+      "Read back /version, /health and /health/ready plus authenticated MFA and identity status",
+      "Verify the returned status is truthful and no 404 remains for source routes"
+    ],
+    "phase2ProviderActivation": {
+      "status": "not_part_of_this_plan",
+      "requiresAstraGate": true,
+      "requiresFreshReadOnlyProof": [
+        "restricted Stripe Identity TEST key file with mode/ownership validation",
+        "Identity verification TEST webhook secret file and delivery/readback proof",
+        "fresh DE test-account evidence bound to sourceCommit and pilot heilbronn_wave0",
+        "privacy/legal retention and document-handling acceptance",
+        "explicit bounded pilot authorization"
+      ],
+      "realDocumentsAllowed": false,
+      "livemodeAllowed": false
+    }
+  },
+  "providerReadinessReadOnly": {
+    "composeAndValidatorsDeclareIdentityGate": true,
+    "localEnvironmentPresence": {
+      "ENABLE_STAGING_IDENTITY": false,
+      "SIT_STAGING_PILOT_ID": false,
+      "CONFIRM_STAGING_IDENTITY": false,
+      "IDENTITY_STAGING_EVIDENCE_FILE": false,
+      "IDENTITY_STRIPE_SECRET_KEY_HOST_FILE": false,
+      "IDENTITY_VERIFICATION_WEBHOOK_SECRET_HOST_FILE": false
+    },
+    "mfaSecretPresence": {
+      "localEnvironmentMFA_ENCRYPTION_KEY": false,
+      "stagingPresence": "unknown; no authorized secret readback performed",
+      "secretValuesRead": false,
+      "shapeValidated": false
+    },
+    "secretValuesRead": false,
+    "providerTrafficPerformed": false,
+    "providerActivationProven": false,
+    "paymentProviderChanged": false
+  },
+  "postDeployReadback": {
+    "requiredEndpoints": [
+      "/version",
+      "/health",
+      "/health/ready",
+      "GET /v1/auth/mfa/status (authenticated)",
+      "GET /v1/identity-verification/status (authenticated)"
+    ],
+    "mfaFunctionalE2E": {
+      "required": true,
+      "sequence": [
+        "authenticated synthetic pilot account enrolls MFA",
+        "read status and confirm server-authoritative pending state",
+        "cancel enrollment",
+        "read status and confirm no secret material is returned"
+      ],
+      "evidence": "record status codes and typed outcomes only; no TOTP seed, recovery code, token or secret",
+      "failureRule": "status 200 without successful enroll/cancel is not MFA readiness"
+    },
+    "mustMatch": {
+      "versionCommit": "82221caa2b0fb58e701ded35198bf65e80ac9d03",
+      "paymentTransport": "memory",
+      "paymentLivemode": false,
+      "identityProvider": "disabled",
+      "mfaConfigured": true,
+      "mfaCredentialSource": "file",
+      "identityLivemode": false
+    },
+    "failureRule": "any commit/image/migration/health/status mismatch blocks the next gate"
+  },
+  "rollback": {
+    "runbook": "backend/ops/deploy_release.sh",
+    "previousImageAndCommitCapturedBeforeDeploy": false,
+    "previousImageAndCommitCapture": "unknown; no deployment was executed in WP224",
+    "requiredAtExecution": true,
+    "automaticRollback": false,
+    "automaticRollbackStrategy": "staging_isolation_only",
+    "oldImageAutoRollback": false,
+    "forwardRecoveryEvidence": "required",
+    "databaseRollback": "not_attempted",
+    "backupRestoreGateRequired": true,
+    "restoredBoundary": {
+      "identityVerificationTransport": "disabled",
+      "paymentTransport": "memory",
+      "stripeLivemode": false,
+      "mfaOverlay": "retained",
+      "mfaCredentialSource": "file"
+    },
+    "verification": [
+      "Staging API is isolated/stopped if the forward deployment has started and recovery is not proven",
+      "no previous-image boot is treated as safe without an exact source/schema compatibility proof",
+      "MFA configured/file-source health remains valid on the retained overlay; otherwise the retained key file passes the non-secret validator",
+      "sanitized forward-recovery evidence is written with restricted permissions"
+    ],
+    "migrationRollback": {
+      "automaticDownMigration": false,
+      "databaseBackupRequiredBeforeDeploy": true,
+      "isolatedRestoreOrForwardCompatibilityGateRequired": true,
+      "truth": "application/image/config rollback does not reverse forward-applied migrations 075-087; no automatic down migration or database restore is permitted"
+    }
+  },
+  "budget": {
+    "prepAndParityEstimateEur": 0,
+    "providerActivationSpend": "not scheduled; separate owner/Astra gate required",
+    "maximumUserAuthorizedBudgetEur": 100
+  },
+  "focusedVerification": {
+    "backendUnitSuites": {
+      "tests": 27,
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0
+    },
+    "mfaSecretAndDeployGateTests": "10/10",
+    "mfaRollbackRetentionTest": "1/1",
+    "existingStripeAndLocalQaGates": "8/8",
+    "postgresql": {
+      "major": 16,
+      "foundationAndForeignKey": "2/2",
+      "identity": "10/10",
+      "mfa": "1/1",
+      "temporaryDatabaseCleaned": true
+    },
+    "planJsonParse": "pass",
+    "gitDiffCheck": "pass",
+    "wp226Focused": {
+      "rehearsalAndSecretLifecycle": "5/5",
+      "deployRecoveryAndMfaWiring": "4/4",
+      "backendMfaIdentityReadiness": "19/19",
+      "postgresqlLocal": "PASS; PostgreSQL 16 temporary database cleaned",
+      "protectedRehearsalExecuted": false
+    }
+  },
+  "boundaries": {
+    "deployPerformed": false,
+    "providerSecretsMounted": false,
+    "providerMutated": false,
+    "paymentMutated": false,
+    "productionChanged": false,
+    "playStoreChanged": false,
+    "deviceAccessed": false
+  },
+  "next": "Execute controlled loopback acceptance only under its exact runtime/Ops/key gate, then re-read Staging and await a separately authorized phase-1 deployment gate; keep Identity and Payment provider activation closed."
+}

@@ -1,0 +1,8 @@
+Interner Staging-Test, ohne echtes Geld:
+
+- Entdecken, Merkliste, Warenkorb und Kontozustände
+- Mehrere Artikel je Vermieter und SIT-Planer
+- Listing-Hilfe nur mit lokalem Mock, ohne externen KI-Provider
+- Ziel-API 36 für die aktuelle Google-Play-Anforderung
+- Buchungen bleiben bis zur V5.2-Rechtsfreigabe und freigegebenen Dokumenten gesperrt
+- Keine öffentliche Veröffentlichung, Reservierung oder echte Zahlung

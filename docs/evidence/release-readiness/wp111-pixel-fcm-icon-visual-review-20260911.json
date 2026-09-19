@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP111_PIXEL_FCM_ICON_VISUAL_REVIEW",
+  "status": "pixel-current-candidate-fcm-icon-visual-review-passed",
+  "recordedAt": "2026-09-11T14:17:48Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091109",
+    "artifactSourceHead": "5d8b89c82926a9f0a28627a7f36d26a88a9574fe",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "privateCapture": {
+    "sha256": "736561d7d8c01bc0e4c19b0ec8fb547a6c1c3cf24e28e700a8cc1784a04ca89f",
+    "bytes": 932147,
+    "committed": false,
+    "ownerOnly": true,
+    "containsUnrelatedPrivateNotifications": true,
+    "distributionAllowed": false
+  },
+  "visualReview": {
+    "shareItTooNotificationCardsVisible": 2,
+    "correctBrandMark": true,
+    "brandMarkClearCenteredAndRecognizable": true,
+    "blankOrGenericPlaceholder": false,
+    "visibleClippingOrDeformation": false,
+    "notificationTitleAndBodyLegible": true,
+    "aggregateSmallIconRowUsedForAttribution": false
+  },
+  "androidSmallIconWiring": {
+    "firebaseDefaultNotificationIcon": "@drawable/ic_stat_shareittoo_v2",
+    "densityResourceCount": 5,
+    "allRequiredDimensionsPresent": true,
+    "allResourcesHaveTransparentBackground": true,
+    "allVisibleAlphaBoundsCentered": true,
+    "resourceHashesMatchApprovedBrandAssets": true
+  },
+  "boundaries": {
+    "newPushSent": false,
+    "notificationCleared": false,
+    "deviceSettingChanged": false,
+    "candidateRebuiltOrReinstalled": false,
+    "onePlusContacted": false,
+    "storeChanged": false,
+    "productionChanged": false,
+    "firebaseProjectChanged": false,
+    "paymentOrProviderChanged": false,
+    "cloudVpsDnsChanged": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false,
+    "containsAccountIdentity": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPath": false,
+    "privateScreenshotCommitted": false
+  }
+}

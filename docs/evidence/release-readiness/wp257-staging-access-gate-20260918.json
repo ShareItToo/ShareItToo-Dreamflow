@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "package": "WP257-A",
+  "status": "TECHNICAL_COMPLETE",
+  "verifiedAt": "2026-09-18",
+  "sourceHead": "7887c7c754b6e43434caf44ea3fbeed6e8a902ce",
+  "branch": "codex/master-workflow-20260808",
+  "runtimeImage": {
+    "tag": "shareittoo-api-wp257:7887c7c754b6e43434caf44ea3fbeed6e8a902ce",
+    "digest": "sha256:9d90eb91166770e0803bad40058233cfc086d8d2b50f9d4622c4fc4f39a7fcf6",
+    "mode": "disposable acceptance artifact; not Green/canonical"
+  },
+  "allowlistBinding": "private staging runtime configuration; exact values redacted",
+  "enforcement": {
+    "protectedRoutes": "central middleware plus requireAuth and action-token ownership checks",
+    "cohort": "exact synthetic owner/renter cohort only; empty or malformed configuration fails closed",
+    "registration": "password and social unknown-account onboarding denied without account creation",
+    "anonymous": "only exact health/version, configured catalog listing and approved test-image GET/HEAD surfaces",
+    "providerEgress": "unchanged and blocked",
+    "schema": "unchanged; no migration"
+  },
+  "isolatedAcceptance": {
+    "inputBackup": {
+      "path": "/docker/shareittoo/backups/rehearsals/staging-wp254-green-20260918012350.dump",
+      "sha256": "79b1e739cac9d4e9a80a270aa111075840e01f7f8b9662347b37310eb0db75d9"
+    },
+    "network": "internal-only disposable network",
+    "hostPorts": false,
+    "health": {"live": 200, "ready": 200},
+    "matrix": {
+      "anonymousLive": 200,
+      "anonymousDeniedPrivateSurface": "401 staging_access_required",
+      "anonymousCatalog": 200,
+      "anonymousApprovedImage": 200,
+      "allowlistedOwner": 200,
+      "foreignPrincipal": "403 staging_account_not_allowlisted",
+      "revokedSession": "401 account_not_active",
+      "spoofedProxyIp": "401 staging_access_required",
+      "registration": "403 staging_registration_disabled",
+      "cohortCount": 2
+    },
+    "cleanup": "passed; disposable containers, network and volumes absent after run"
+  },
+  "verification": {
+    "focusedStagingAndSecurity": "13/13 passed",
+    "htmlActionTokenFlows": {
+      "passwordResetForm": "GET and POST explicitly allowlisted",
+      "accountDeletionConfirm": "GET and POST explicitly allowlisted",
+      "ownerLive": true,
+      "foreignExpiredConsumedInvalid": "rejected"
+    },
+    "pnpmCheck": "passed",
+    "postgresIntegration": "passed-and-cleaned; MFA and identity suites included",
+    "deployGateFixtureSuite": "11/11 passed",
+    "fullBackend": "1106 passed, 0 failed, 9 skipped of 1115",
+    "parentBaseline": {
+      "head": "f3e5dbece11dfb2b99257715795b4dae55fa66da",
+      "sameSixFailures": true,
+      "tests": [
+        "staging FCM validates the secret before Compose can run",
+        "Staging listing-AI requires the exact commit confirmation before Docker",
+        "Staging listing-AI validates its private key before Compose can run",
+        "Staging Stripe requires the exact commit confirmation before Docker",
+        "Staging Stripe validates private files before Compose can run",
+        "Staging Stripe requires the private exact-commit execution gate before secrets"
+      ],
+      "cause": "fixtures stopped at the newer loopback controlled-acceptance gate; no source security control was weakened"
+    },
+    "diffCheck": "passed",
+    "publicRoute": {"readback": 502, "changed": false},
+    "greenAndAlt": "unchanged"
+  },
+  "externalState": {
+    "greenSwitch": false,
+    "publicRouteActivation": false,
+    "paymentProvider": "unchanged",
+    "storePlay": "unchanged",
+    "device": "untouched",
+    "prMerge": false
+  },
+  "nextGate": "Sol review; keep Public/Green/device/provider gates closed"
+}

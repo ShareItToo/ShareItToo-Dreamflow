@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "kind": "retention-inventory",
+  "capturedAt": "2026-08-15T22:08:00Z",
+  "status": "staging-runtime-verified",
+  "scope": {
+    "aggregatedCountsOnly": true,
+    "identifiersExcluded": true,
+    "adminStepUpRequired": true,
+    "supportRoleDenied": true,
+    "readOnly": true,
+    "categoryCount": 7,
+    "datasetCount": 21,
+    "localPolicyDecisionKeysCovered": 6,
+    "retentionPeriodsApplied": false,
+    "eligibleRowsCalculated": false,
+    "executionEnabled": false
+  },
+  "verification": {
+    "syntaxCheck": "passed",
+    "unitTests": "passed-3",
+    "fullBackendSuite": "passed-135-one-postgres-integration-skipped-without-test-database",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "stagingRuntime": "passed",
+    "publicVersionCommitMatched": true,
+    "readinessDatabase": "ok",
+    "readinessMail": "ok",
+    "paymentsTransport": "memory",
+    "paymentsLivemode": false,
+    "unauthenticatedRouteHttpStatus": 401,
+    "runtimeCategoryCount": 7,
+    "runtimeDatasetCount": 21,
+    "runtimeTotalRows": 16755,
+    "runtimeContainsIdentifiers": false,
+    "runtimeExecutionEnabled": false,
+    "runtimeRetentionPeriodsApplied": false,
+    "runtimeEligibleRowsCalculated": false,
+    "runtimeVerificationTransactionRolledBack": true,
+    "persistentInventoryAuditRowsAfterRollback": 0
+  },
+  "deployment": {
+    "status": "verified",
+    "commit": "cedc5ecfd65a9f2bcf731b5ac10dfd66a8a8160b",
+    "version": "0.1.0-cedc5ecfd65a",
+    "evidenceRef": "/docker/shareittoo/releases/staging-20260815T220613Z-cedc5ecfd65a.json",
+    "stagingFcm": true
+  },
+  "policyBoundary": {
+    "legalRetentionPeriodsInvented": false,
+    "requiredRetentionDecisionsClosed": false,
+    "categoryPurgeEnabled": false,
+    "existingRowsDeletedOrChanged": false
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "storeSubmissionChanged": false,
+    "appCandidateChanged": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

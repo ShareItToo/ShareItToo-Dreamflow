@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "16.171",
+  "capturedAtUtc": "2026-08-17T14:54:18Z",
+  "sourceBaseCommit": "531bc08d18fb0fccad3dfba20b3acd182a6678a0",
+  "status": "passed",
+  "ingestionBoundary": {
+    "listingDeliveryOfferNormalizedFalse": true,
+    "listingReturnPickupOfferNormalizedFalse": true,
+    "listingExpressOfferNormalizedFalse": true,
+    "listingTransportDistanceNormalizedNull": true,
+    "bookingDeliverySelectionNormalizedFalse": true,
+    "bookingReturnPickupSelectionNormalizedFalse": true,
+    "bookingExpressStateNormalizedOff": true,
+    "bookingExpressFeeMinorEquivalent": 0,
+    "personalHandoverAndReturnPreserved": true
+  },
+  "verification": {
+    "newIngestionTests": "2/2 passed",
+    "targetedModelBookingCatalogTests": "9/9 passed",
+    "changedModelAnalyzer": "0 findings",
+    "fullTechnicalRegression": "passed with exit code 0",
+    "fullFlutter": "292 passed, 1 intentional skip",
+    "backend": "213 passed, 1 intentional PostgreSQL skip",
+    "flutterAnalyzer": "224 findings, 0 errors",
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed"
+  },
+  "serviceBoundary": {
+    "pushRetained": true,
+    "crashlyticsRetained": true,
+    "separateVoluntaryDefaultOffChoices": true,
+    "pushEnablesCrashlytics": false
+  },
+  "externalActions": {
+    "deployment": false,
+    "upload": false,
+    "storeMutation": false,
+    "providerConsoleMutation": false,
+    "liveMoney": false,
+    "candidateBuiltOrRelabeled": false
+  },
+  "sourceHashesSha256": {
+    "lib/models/item.dart": "df6476d5939d06766765361285f4966c71c24ab931239e96e348b6ced882926c",
+    "lib/models/rental_request.dart": "edfa985cfcd71bc391fd4ed6ce7d8161fa2b6671c3cfeda648666b8c1a0b6c9b",
+    "test/v51_transport_ingestion_test.dart": "39ac7b6fe23182019105dad635301cb09ca01b074dc50418e0ea10a7a5912f3c"
+  }
+}

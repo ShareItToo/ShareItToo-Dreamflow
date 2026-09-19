@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-final-non-live-launch-readiness-checkpoint",
+  "state": "autonomous-non-live-lanes-complete-external-evidence-required",
+  "capturedAt": "2026-08-23T18:45:49Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "packageHead": "b77933939adcf5825c00d680ab00759a5969bf59",
+    "originSynchronizedAtCapture": true,
+    "workingTreeCleanAtCapture": true,
+    "pullRequest": {
+      "number": 7,
+      "state": "OPEN",
+      "draft": true,
+      "mergeable": "MERGEABLE",
+      "mergeStateStatus": "CLEAN",
+      "merged": false
+    },
+    "exactCi": {
+      "regressionRunId": 32658613478,
+      "regressionConclusion": "success",
+      "codeqlRunId": 32658613486,
+      "codeqlConclusion": "success",
+      "headSha": "b77933939adcf5825c00d680ab00759a5969bf59"
+    },
+    "credentialReadiness": {
+      "authenticated": true,
+      "secureKeyring": true,
+      "gitProtocol": "https",
+      "gitCredentialHelperConfigured": true,
+      "containsToken": false,
+      "containsAccountIdentity": false
+    }
+  },
+  "driveSource": {
+    "codexFolderId": "1YOBStKRnK1jOxWiCQz17MlGj7F3yNKWc",
+    "latestCommand": "00_NEXT_COMMAND_G3A_APPROVED_V2.4.txt",
+    "latestCommandModifiedAt": "2026-08-20T19:14:03.994Z",
+    "newerCommandPresent": false,
+    "supportPacketFolderId": "1LtPEL2Lgo2TFnrA6iKxPOlAP8m-sF6fx",
+    "supportPacketItemCount": 17,
+    "supportMatrixFileId": "1CcCqdsEVveiqoKJqZlA_iHKfZhttU5Le",
+    "supportMatrixModifiedAt": "2026-08-20T22:29:02.738Z",
+    "supportMatrixSha256": "83cc25371f24b3486230f3ac4e2b7e9c26c49a48bd5aca22a5449636c9ffc6d3",
+    "repositoryHashMatchesDrive": true,
+    "scenarioCount": 167
+  },
+  "technicalReadiness": {
+    "requiredGateCount": 11,
+    "technicallyPreparedGateCount": 11,
+    "externallyReadyGateCount": 0,
+    "supportTechnicalCoverageCount": 167,
+    "supportExternalEvidenceRequiredCount": 47,
+    "supportExternalEvidencePresentCount": 0,
+    "technicalDebtExitContractCount": 21,
+    "technicalDebtOpenCount": 0,
+    "safeIndependentLaneCount": 0,
+    "releaseDecision": "hold-no-go"
+  },
+  "regression": {
+    "localFullGatePassed": true,
+    "localMode": "ci-metadata-candidate-rollover",
+    "backendAndPostgresPassed": true,
+    "flutterPassedTestCount": 387,
+    "flutterDocumentedSkipCount": 1,
+    "webAndWasmBuildPassed": true,
+    "loopbackSmokePassed": true,
+    "androidDirectGradleTaskCount": 448,
+    "androidBuildPassed": true,
+    "androidBinaryMinSdk": 24,
+    "capacityGuardPassed": true,
+    "temporaryWorkaroundUsedAsAcceptanceEvidence": false
+  },
+  "securityAndDependencies": {
+    "backendProductionAuditKnownVulnerabilityCount": 0,
+    "backendFullAuditKnownVulnerabilityCount": 0,
+    "codeqlPassed": true,
+    "knownOpenHighCriticalFindingCount": 0,
+    "unassessedHighCriticalFindingCount": 0,
+    "broadDependencyUpgradePerformed": false,
+    "deterministicCompatibilityContractsRetained": true
+  },
+  "currentAndroidCandidate": {
+    "deviceReachable": true,
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "versionName": "1.0.0",
+    "buildNumber": "2026082302",
+    "candidateCommit": "1b3e86ef1bcfa5a88b1baf965fdad00e9d64f54b",
+    "delivery": "direct-apk",
+    "privateArchiveVerified": true,
+    "exactInstalledApkVerified": true,
+    "firebaseConfigured": true,
+    "androidSigningCanonical": true,
+    "accessibilityEnabledAfterDiagnostics": false,
+    "touchExplorationEnabledAfterDiagnostics": false,
+    "manualTalkBackTraversalPassed": false,
+    "containsRawDeviceIdentifier": false
+  },
+  "platformReadiness": {
+    "androidBoundedInternalCandidateReady": true,
+    "webBuildReady": true,
+    "firebaseAndroidConfigValid": true,
+    "firebaseIosConfigValid": true,
+    "firebaseAnalyticsEnabled": false,
+    "firebaseOwnerConsoleControlsAccepted": false,
+    "iosFullXcodePresent": false,
+    "iosCocoaPodsPresent": false,
+    "iosDeferredForStageA": true,
+    "googlePlayPrivateDistributionPassed": false,
+    "paymentMode": "memory",
+    "realMoneyEnabled": false
+  },
+  "remainingExternalGates": {
+    "stageABlockerIds": [
+      "legal_and_operator_approval",
+      "operations_roles_and_absence",
+      "firebase_owner_terms_and_controls",
+      "privacy_retention_and_legal_hold",
+      "store_submission_and_closed_testing",
+      "pilot_region_roster_and_scope",
+      "explicit_activation_decision"
+    ],
+    "stageADeferredIds": [
+      "ios_apple_signing_and_device",
+      "support_evidence_scanner_and_upload_policy"
+    ],
+    "stageBOnlyIds": [
+      "psp_contract_and_sandbox_e2e"
+    ],
+    "stageCOnlyIds": [
+      "economics_and_cost_inputs"
+    ],
+    "issuedReleaseTokenCount": 0
+  },
+  "nextExternalGate": {
+    "id": "legal_and_operator_approval",
+    "actionBlock": "A1",
+    "acceptedAnswerTokens": [
+      "PF3_A1_QUOTE_REQUEST_PACK_GO",
+      "PF3_A1_HOLD"
+    ],
+    "walidPresenceRequired": true,
+    "costApprovalRequiredBeforeAnyQuotedCost": true,
+    "automaticExternalContinuationAllowed": false
+  },
+  "boundaries": {
+    "containsPersonalData": false,
+    "containsAccountIdentifiers": false,
+    "containsCredentials": false,
+    "containsSecrets": false,
+    "newAccountCreated": false,
+    "paidServiceStarted": false,
+    "contractAccepted": false,
+    "accountPermissionChanged": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "paymentProviderChanged": false,
+    "storeChanged": false,
+    "pilotChanged": false,
+    "publicActivationChanged": false,
+    "realMoneyUsed": false,
+    "pullRequestMerged": false
+  }
+}

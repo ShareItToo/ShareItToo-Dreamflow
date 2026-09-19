@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-app-content-progress",
+  "capturedAt": "2026-08-15T19:35:00Z",
+  "status": "eleven-of-twelve-saved-one-open",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "consoleBaselineBuildNumber": "2026081505",
+    "currentInternalBuildNumber": "2026081509",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "counts": {
+    "totalTasks": 12,
+    "savedTasks": 11,
+    "openTasks": 1
+  },
+  "savedTasks": [
+    "privacyPolicy",
+    "appAccess",
+    "ads",
+    "targetAudience",
+    "governmentApps",
+    "financialFeatures",
+    "health",
+    "categoryAndContact",
+    "advertisingId",
+    "contentRating",
+    "storeListing"
+  ],
+  "openTasks": {
+    "dataSafety": "all-data-type-answers-prepared-console-save-and-owner-legal-approval-pending"
+  },
+  "consoleState": {
+    "privacyPolicyUrlSaved": true,
+    "savedPrivacyPolicyUrl": "https://shareittoo.com/privacy",
+    "dataSafetyAnswersPrepared": true,
+    "dataSafetyDraftSaved": false,
+    "dataSafetySubmitted": false,
+    "sentForReview": false
+  },
+  "authoritativeSources": {
+    "appContentHandoffRef": "store/google-play/app-content-handoff.json",
+    "privacyPolicyEvidenceRef": "docs/evidence/b11/google-play-privacy-policy-saved-20260815.json",
+    "currentCandidateBindingRef": "docs/evidence/b11/google-play-data-safety-current-candidate-binding-2026081509-20260815.json",
+    "currentInternalReleaseRef": "docs/evidence/b11/google-play-internal-release-active-2026081509-20260815.json"
+  },
+  "boundaries": {
+    "consoleAnswersChanged": false,
+    "draftSaved": false,
+    "formSubmitted": false,
+    "reviewSubmitted": false,
+    "closedTestingStarted": false,
+    "productionChanged": false,
+    "paymentEndpointCalled": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false,
+    "containsReviewCredentials": false
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-analysis-private-state-and-helpers",
+  "capturedAt": "2026-08-16T07:57:04Z",
+  "status": "passed-safe-private-state-and-helper-reduction",
+  "baseline": {
+    "totalDiagnostics": 376,
+    "errors": 0,
+    "warnings": 208,
+    "infos": 168,
+    "unusedElements": 126,
+    "unusedElementParameters": 53,
+    "unusedFields": 29
+  },
+  "result": {
+    "totalDiagnostics": 352,
+    "errors": 0,
+    "warnings": 184,
+    "infos": 168,
+    "diagnosticsRemovedThisBatch": 24,
+    "diagnosticsRemovedFromOriginal611": 259,
+    "unusedElements": 116,
+    "unusedElementParameters": 52,
+    "unusedFields": 16,
+    "runtimeSourceFilesChanged": 14,
+    "sourceLinesRemoved": 164,
+    "ciAnalyzerBaseline": 352
+  },
+  "safeRemovalScope": {
+    "removedUnusedFields": 13,
+    "removedUnusedElements": 10,
+    "removedUnusedElementParameters": 1,
+    "newAnalyzerDiagnosticsIntroduced": 0,
+    "reachableWidgetBranchesRemoved": 0,
+    "privacyBoundSourceFilesChanged": 0,
+    "redundantReadOnlyFetchesRemoved": 2,
+    "displayedUiChanged": false,
+    "persistedDataChanged": false
+  },
+  "removedRegions": [
+    "unused address, social, profile, search, catalog and thumbnail state",
+    "unused date-range hint presentation and formatting helpers",
+    "unused category and sorting helpers",
+    "unused express-countdown cache and its redundant initial read",
+    "unreachable developer-preview tap reset state"
+  ],
+  "permanentlyForbiddenAnalyzerCodes": [
+    "dead_code",
+    "empty_catches",
+    "equal_keys_in_map",
+    "unreachable_switch_default",
+    "unused_import",
+    "unused_local_variable"
+  ],
+  "remainingDiagnostics": {
+    "unused_element": 116,
+    "use_build_context_synchronously": 107,
+    "deprecated_member_use": 60,
+    "unused_element_parameter": 52,
+    "unused_field": 16,
+    "avoid_web_libraries_in_flutter": 1
+  },
+  "remainingScopeBoundary": {
+    "p1_01Complete": false,
+    "reason": "larger private UI regions still require product-flow review; async context and deprecated API findings require targeted UI migrations"
+  },
+  "verification": {
+    "flutterAnalyze": "passed-with-zero-errors-and-352-non-error-diagnostics",
+    "flutterTests": "passed-268-one-skipped",
+    "analyzerBaselineWiringTests": "passed-2",
+    "technicalRegression": "passed-with-bounded-internal-candidate-rollover",
+    "webBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "boundaries": {
+    "newAppCandidateBuilt": false,
+    "existingAppCandidateChanged": false,
+    "productionChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "testAccountsMutated": false,
+    "realMoneyUsed": false
+  }
+}

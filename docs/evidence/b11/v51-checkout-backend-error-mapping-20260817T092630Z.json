@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-checkout-backend-error-mapping",
+  "status": "passed-source-and-regression",
+  "capturedAt": "2026-08-17T09:26:30Z",
+  "sourceCommit": "e66e80e3a72d97314277f88550c3de67a89d538a",
+  "checks": {
+    "knownQuoteLoadErrorsTranslated": true,
+    "knownSubmissionErrorsTranslated": true,
+    "internalServerCodesNotShown": true,
+    "staleQuoteCleared": true,
+    "staleQuoteAutomaticallyReloaded": true,
+    "renewedQuoteRequiresFreshConfirmation": true,
+    "unavailablePeriodExplained": true,
+    "duplicateRequestExplained": true,
+    "blockedBookingMessageNeutral": true,
+    "authenticationFailureExplained": true,
+    "inProgressCommandExplained": true,
+    "genericNetworkFallbackPreserved": true,
+    "realChargeNotClaimed": true
+  },
+  "verification": {
+    "checkoutErrorWiringTestsPassed": 4,
+    "targetedNodeTestsPassed": 17,
+    "targetedFlutterTestsPassed": 11,
+    "targetedPrivacyTestsPassed": 16,
+    "targetedAnalyzerFindings": 0,
+    "fullFlutterTestsPassed": 282,
+    "intentionalFlutterTestsSkipped": 1,
+    "fullAnalyzerFindings": 229,
+    "fullAnalyzerErrors": 0,
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "technicalRegression": "passed"
+  },
+  "privacy": {
+    "dataCollectionChanged": false,
+    "dataStorageChanged": false,
+    "dataTransportChanged": false,
+    "providerChanged": false,
+    "permissionChanged": false,
+    "privacyInventoryChangeRequired": false
+  },
+  "boundaries": {
+    "backendDeployed": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "storeSubmissionPerformed": false,
+    "realPaymentPerformed": false,
+    "candidateBuiltOrRelabeled": false,
+    "pushRetainedDefaultOff": true,
+    "crashRetainedDefaultOff": true,
+    "pushEnablesCrash": false,
+    "crashDataTransferred": false
+  },
+  "conclusion": {
+    "checkoutServerFailures": "bounded-user-facing-sit-copy",
+    "staleOrChangedQuote": "cleared-reloaded-and-reconfirmation-required",
+    "unknownFailure": "generic-no-false-success",
+    "officialPlayInternalCandidate": "1.0.0+2026081509",
+    "localSignedCandidate": "1.0.0+2026081510-built-local-not-uploaded"
+  }
+}

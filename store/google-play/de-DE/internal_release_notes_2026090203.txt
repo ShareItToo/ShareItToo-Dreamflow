@@ -1,0 +1,8 @@
+Technischer ShareItToo-Internal-Kandidat auf Staging, ohne echtes Geld:
+
+- Entdecken, Merkliste, Warenkorb und geschützte Kontozustände
+- Mehrere Artikel desselben Vermieters, SIT Planer und Inserat-Sets
+- Listing-Hilfe ausschließlich mit lokalem Mock, ohne externen KI-Provider
+- Globaler serverseitiger Basisschutz plus eigener begrenzter Schutz für die Planer-Auflösung
+- Buchungen bleiben bis zur professionellen V5.2-Prüfung und freigegebenen Dokumentbereitstellung gesperrt
+- Keine öffentliche Veröffentlichung, Reservierung oder echte Zahlung

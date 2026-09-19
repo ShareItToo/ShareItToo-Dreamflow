@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-pre-upload-live-readiness",
+  "status": "ready-awaiting-explicit-internal-upload-approval",
+  "capturedAt": "2026-08-14T00:55:00Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081401",
+    "commit": "5518040d63b72c08d8cd2f72d76d802023b7b055",
+    "aabSha256": "d98c87426f1452c0af67fd56ee72210eb8142f900298c512f7455962d1cca35e",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "playAppSigningCertificateSha256": "36488abf86c51da07ab2258f31b00e2f1ba8a36d076107b9f006376ade80b956"
+  },
+  "googlePlayConsole": {
+    "appStatus": "draft",
+    "internalTesting": {
+      "status": "active-existing-release-replacement-pending",
+      "draftReleaseShellPresent": true,
+      "completedTaskCount": 3,
+      "totalTaskCount": 3,
+      "maximumTesterCount": 100,
+      "emailListCreated": true,
+      "publishedJoinLinkAvailable": true,
+      "uploadedBundleCount": 1,
+      "existingReleaseBuildNumber": "2026081303"
+    },
+    "closedTesting": {
+      "status": "locked-app-setup-incomplete",
+      "minimumContinuousTesterCount": 12,
+      "minimumConsecutiveDays": 14,
+      "currentOptedInTesterCount": 0,
+      "productionAccessAllowed": false
+    },
+    "appContent": {
+      "completedTaskCount": 9,
+      "totalTaskCount": 11,
+      "openTasks": [
+        "privacy-policy",
+        "data-safety"
+      ]
+    },
+    "privacyPolicy": {
+      "urlSaved": false,
+      "preparedUrl": "https://shareittoo.com/privacy",
+      "publicRouteReleaseReady": false
+    },
+    "dataSafety": {
+      "currentStep": 1,
+      "totalSteps": 5,
+      "draftSaved": false,
+      "preparedAnswerMatrixAvailable": true
+    },
+    "storeListing": {
+      "language": "de-DE",
+      "textFieldsPresent": true,
+      "shortDescriptionConsoleWarning": "none",
+      "shortDescriptionLocalRemediationPrepared": true,
+      "appIconUploaded": true,
+      "featureGraphicUploaded": true,
+      "phoneScreenshotsUploaded": 4,
+      "validatedLocalPhoneScreenshots": 4,
+      "savedInThisObservation": false,
+      "previouslySaved": true
+    },
+    "appSigning": {
+      "releasesSignedByPlay": true,
+      "playAppSigningFingerprintObserved": true,
+      "uploadCertificateFingerprintVisibleAfterFirstBundle": true,
+      "automaticProtectionActive": true,
+      "playIntegrityApiIntegrated": false,
+      "storeListingDeviceChecksEnabled": false
+    }
+  },
+  "localCrossChecks": {
+    "assetLinksWithUploadAndPlayFingerprints": "passed-deployed",
+    "connectedAndroidDevice": {
+      "manufacturer": "Google",
+      "model": "Pixel 7 Pro",
+      "osVersion": "16",
+      "installedVersionName": "1.0.0",
+      "installedBuildNumber": "2026081401",
+      "installMethod": "direct-apk-diagnostic",
+      "storeInstall": "pending"
+    }
+  },
+  "decisionGate": {
+    "explicitCurrentInternalUploadApprovalRequired": true,
+    "submissionAllowed": false,
+    "saveDraftAllowed": false,
+    "rolloutAllowed": false,
+    "testerInvitationsAllowed": false
+  },
+  "sources": {
+    "candidateEvidenceRef": "docs/evidence/b11/android-candidate-2026081401.json",
+    "signingReadinessEvidenceRef": "docs/evidence/b11/android-play-store-links-signing-2026081302-20260813.json",
+    "screenshotReadinessEvidenceRef": "docs/evidence/b11/google-play-feed-screenshot-readiness-20260813.json",
+    "closedTestingReadinessRef": "store/google-play/closed-testing-readiness.json",
+    "deviceValidationRef": "store/device-validation.json"
+  },
+  "boundaries": {
+    "browserReadOnly": true,
+    "uploadedToStore": false,
+    "releaseMetadataSaved": false,
+    "testerListChanged": false,
+    "testerInvitationSent": false,
+    "productionChanged": false,
+    "publicRoutesChanged": false,
+    "containsTesterPersonalData": false,
+    "containsAccountIdentifiers": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

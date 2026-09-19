@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-p0b-ai-legal-preassessment",
+  "packageVersion": "P0B-L2-AI-PREASSESSMENT-2026-09-14.1",
+  "status": "AI_PREASSESSMENT_PENDING_INDEPENDENT_AI_CROSSCHECK",
+  "jurisdiction": "DE",
+  "reviewedAt": "2026-09-14",
+  "assessment": {
+    "report": "assets/legal/de/p0b-ai-preassessment-2026-09-14.1/01_ai_rechtliche_vorpruefung.md",
+    "decisionMatrix": "assets/legal/de/p0b-ai-preassessment-2026-09-14.1/02_decision_matrix.json",
+    "astraCrosscheckScope": "assets/legal/de/p0b-ai-preassessment-2026-09-14.1/03_astra_crosscheck_scope.md",
+    "decisionCount": 18,
+    "decisionCounts": {
+      "ai_recommended": 1,
+      "ai_recommended_with_changes": 13,
+      "ai_hold_external_fact": 4
+    }
+  },
+  "gates": {
+    "independentAstraCrosscheckComplete": false,
+    "ownerAdoptionRecorded": false,
+    "professionalLegalApproval": false,
+    "publicActivationAllowed": false,
+    "productionProvisioningAllowed": false,
+    "storeSubmissionAllowed": false,
+    "realMoneyAllowed": false,
+    "g3MultiItemPubliclyAvailable": false
+  },
+  "officialSources": [
+    "https://www.gesetze-im-internet.de/ddg/__5.html",
+    "https://www.gesetze-im-internet.de/bgbeg/art_246d__1.html",
+    "https://www.gesetze-im-internet.de/bgbeg/art_246a__1.html",
+    "https://www.gesetze-im-internet.de/bgb/__312j.html",
+    "https://www.gesetze-im-internet.de/bgb/BJNR001950896.html",
+    "https://www.gesetze-im-internet.de/zag_2018/BJNR244610017.html",
+    "https://eur-lex.europa.eu/legal-content/DE/TXT/?uri=CELEX:32016R0679",
+    "https://eur-lex.europa.eu/legal-content/DE/TXT/?uri=CELEX:32022R2065",
+    "https://eur-lex.europa.eu/eli/reg/2024/3228/oj",
+    "https://www.gesetze-im-internet.de/vsbg/BJNR025410016.html",
+    "https://www.gesetze-im-internet.de/ustg_1980/__14b.html"
+  ],
+  "sourceInventory": {
+    "assets/legal/de/p0b-ai-preassessment-2026-09-14.1/01_ai_rechtliche_vorpruefung.md": "a1772c59c24158315f8e23e48bf81e4c225f26a6a1f8087bfb2339c0cc5f6e44",
+    "assets/legal/de/p0b-ai-preassessment-2026-09-14.1/02_decision_matrix.json": "c715cc28e50e6f47d92d5ac7c8143a02eeca7d6ef4dd535d20490127ee5b333a",
+    "assets/legal/de/p0b-ai-preassessment-2026-09-14.1/03_astra_crosscheck_scope.md": "fcbdaf3fb545a351617aa35411b2273210e012775665cad2b821441b5589092d",
+    "assets/legal/de/legal_manifest_v52.json": "757289c45dfe50c9f3f3ec9c96953f06b62f15b282bb1d6cdedc6e8e07d2e69b",
+    "assets/legal/de/legal_manifest_v53.json": "d1265d31f68a7c616d782a78cd77c22eadb03dabbbd7e9ebe36a485d6d1a49c6",
+    "assets/legal/de/legal_review_intake_p0b_20260821.json": "2ce69106a3ea06ad6fa08a365a22716bf1342c44b107fa03cdda5a399e165696",
+    "assets/legal/de/legal_manifest_g3l_draft.json": "d3bc9b74cf70324b448df4e9d10662ab3a03485028dfc9e2d7c81535b8f9a02a",
+    "docs/architecture/g3a-same-owner-multi-item-decision-2026-08-20.md": "39db40f9b4d16dc11bca4cae5b09c87c657fcb36611ab744ed5a21710ce9af7b",
+    "lib/screens/private_pilot_checkout_screen.dart": "d00a622598d67cda94185554ba69312ad8401f7c415ddd49a2a2579fa87549c8",
+    "lib/screens/platform_withdrawal_screen.dart": "b3664e160885647afbde0607ea83b1173f201c38f3f7bdcb238ab66ed29804be",
+    "backend/src/booking_group_legal_document.js": "1cc7b6d0bcf0a4edb7c69fba605322736d353a0ea6f589e2170ae98bfe547966",
+    "backend/src/payment_workflow.js": "fd68b07de3b5ef017bb5f26531bd9c193385c66b5ba460cc6f9b871797efed9e",
+    "store/retention-deletion-readiness.json": "6858ba64d995e270660bc6ae7a5793cb0aec8bbd6dbeec66ef91779ab31e6dad",
+    "docs/compliance/s3n-separate-dsa-notice-intake-2026-08-22.md": "daec509e0997739558f4c3a97fa8e0ce3610c816f96b184e65f51d556bc0c088",
+    "docs/compliance/s3o-dsa-notice-locator-completion-2026-08-22.md": "52c5d39a4019518bc8bd91b8013a7895feec1da822ac02ab57c620c75ca447d6"
+  }
+}

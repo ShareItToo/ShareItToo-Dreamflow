@@ -1,6 +1,7 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:lendify/services/localization_service.dart';
+import 'package:lendify/widgets/app_popup.dart';
 import 'package:provider/provider.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
@@ -79,12 +80,20 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       // In a real auth setup this would call the auth provider.
       await Future<void>.delayed(const Duration(milliseconds: 450));
       if (!mounted) return;
+      await AppPopup.success(
+        context,
+        title: l10n.t('Passwort gespeichert'),
+      );
+      if (!mounted) return;
       Navigator.of(context).maybePop();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.t('Gespeichert'))));
     } catch (e) {
       debugPrint('Change password failed: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.t('Etwas ist schiefgelaufen.'))));
+      AppPopup.error(
+        context,
+        title: l10n.t('Passwort nicht gespeichert'),
+        message: l10n.t('Etwas ist schiefgelaufen.'),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -121,7 +130,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           surfaceTintColor: Colors.transparent,
           title: Text(l10n.t('account.item.changePassword')),
           centerTitle: true,
-          leading: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.of(context).maybePop()),
+          leading: IconButton(tooltip: MaterialLocalizations.of(context).backButtonTooltip, icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.of(context).maybePop()),
         ),
         body: SafeArea(
           child: SingleChildScrollView(

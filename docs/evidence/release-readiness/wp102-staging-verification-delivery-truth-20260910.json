@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP102_STAGING_VERIFICATION_DELIVERY_TRUTH",
+  "recordedOn": "2026-09-10",
+  "sourceCommit": "ccb247d356e56b96d956efc5839ed773013720e8",
+  "scope": {
+    "sourceOnly": true,
+    "remoteMailSent": false,
+    "stagingChanged": false,
+    "providerChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "deviceChanged": false
+  },
+  "finding": {
+    "ownerReport": "verification messages absent from the expected mailbox, including spam view",
+    "smtpReadinessIsInboxProof": false,
+    "acceptedRegistrationIsInboxProof": false,
+    "currentRecipientOutcome": "unknown"
+  },
+  "sourceContract": {
+    "knownDeliveryCommandFailure": {
+      "httpStatus": 503,
+      "errorCode": "verification_delivery_unavailable"
+    },
+    "unknownRecipientOutcome": "not represented as sent or delivered",
+    "resendEndpoint": "enumeration-neutral processed-request wording only",
+    "retryAfterKnownFailure": "pending-verification registration can retry normally"
+  },
+  "sourceInventory": [
+    {
+      "path": "backend/src/app.js",
+      "sha256": "d1af19fb3eb777aa9787b816ab426a29041fadefe7e275da23af49d331582ca6"
+    },
+    {
+      "path": "backend/test/postgres_foundation.integration.test.js",
+      "sha256": "f672613c9233d50efe5fbb5e245ab91b9be1efc79beafb49d7a128fb11ca210c"
+    },
+    {
+      "path": "lib/services/auth_service.dart",
+      "sha256": "6596092f68b4d6e4240a40c4fc353d450f727adea8c0a059ad3d8479a758f35d"
+    },
+    {
+      "path": "lib/screens/register_screen.dart",
+      "sha256": "f1439bd36f164d24e8074502f4aa5bf26454ea339eea8a9775d4fe79ba08e836"
+    },
+    {
+      "path": "lib/screens/login_screen.dart",
+      "sha256": "f9889db3f61e60e0f063e0b2aa0bad1805d919cf5d6e144719e41446b94e2272"
+    }
+  ],
+  "localChecks": [
+    "git diff --check",
+    "flutter test test/auth_registration_consent_test.dart test/registration_verification_handoff_test.dart",
+    "flutter analyze lib/services/auth_service.dart lib/screens/register_screen.dart lib/screens/login_screen.dart",
+    "backend: pnpm run check",
+    "backend: pnpm run test:postgres:local"
+  ],
+  "completeTechnicalRegression": {
+    "status": "stopped_fail_closed",
+    "stoppingValidator": "Google Play Internal handoff",
+    "reason": "runtime-affecting files changed after the retained rollover artifact source commit",
+    "interpretation": "the retained Android candidate cannot represent this source correction",
+    "workaroundAccepted": false
+  },
+  "externalGate": {
+    "status": "open",
+    "requiredEvidence": "read-only provider message trace classified without retaining account identifiers, links, or message contents",
+    "notEstablished": [
+      "recipient acceptance",
+      "mailbox delivery",
+      "spam or quarantine placement",
+      "bounce or rejection cause",
+      "current staging rollout of this source correction",
+      "replacement exact-source Android candidate"
+    ]
+  }
+}

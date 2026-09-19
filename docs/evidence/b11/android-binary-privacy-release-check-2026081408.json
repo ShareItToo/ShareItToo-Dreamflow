@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "kind": "release-check",
+  "status": "passed",
+  "capturedAt": "2026-08-14T18:43:13Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081408",
+    "commit": "27e65ee39a102241090c000bbf52b410cd99698b",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "releaseCheck": {
+    "id": "binaryPrivacyAndNetwork",
+    "status": "passed",
+    "verifications": [
+      {
+        "id": "signed-apk-and-aab-scan",
+        "status": "passed",
+        "checkedAt": "2026-08-14T18:43:13Z",
+        "summary": "Exact signed APK and AAB passed the extended privacy, permission, SDK and runtime-origin scan with no findings."
+      },
+      {
+        "id": "visible-chat-bounded-refresh-regression",
+        "status": "passed",
+        "checkedAt": "2026-08-14T18:43:13Z",
+        "summary": "The exact candidate includes a serialized five-second fallback refresh only while a message thread is visible, covered by targeted regression tests."
+      }
+    ]
+  },
+  "boundaries": {
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

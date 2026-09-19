@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-analysis-messages-dead-helpers-cleanup",
+  "capturedAt": "2026-08-16T14:12:29Z",
+  "status": "passed-dead-messages-presentation-reduction",
+  "baseline": {
+    "totalDiagnostics": 239,
+    "errors": 0,
+    "unusedElements": 68,
+    "asyncContextDiagnostics": 102,
+    "deprecatedMemberUse": 36,
+    "unusedElementParameters": 24,
+    "unusedFields": 9
+  },
+  "result": {
+    "totalDiagnostics": 235,
+    "errors": 0,
+    "diagnosticsRemovedThisBatch": 4,
+    "diagnosticsRemovedFromOriginal611": 376,
+    "unusedElements": 64,
+    "asyncContextDiagnostics": 102,
+    "deprecatedMemberUse": 36,
+    "unusedElementParameters": 24,
+    "unusedFields": 9,
+    "runtimeSourceFilesChanged": 1,
+    "runtimeSourceLinesRemoved": 419,
+    "runtimeSourceLinesAdded": 0,
+    "ciAnalyzerBaseline": 235
+  },
+  "safeRemovalScope": {
+    "removedUnusedElementDiagnostics": 4,
+    "newAnalyzerDiagnosticsIntroduced": 0,
+    "reachableMessageBranchesRemoved": 0,
+    "privacyBoundSourceFilesChanged": 0,
+    "displayedUiChanged": false,
+    "persistedDataChanged": false
+  },
+  "removedRegions": [
+    "unreferenced full message-list demo-state factory",
+    "unreferenced message-tab count helper",
+    "unreferenced presence and handover-return presentation formatters"
+  ],
+  "preservedReachableFlows": [
+    "remote loading of active and archived message threads",
+    "QA-gated bounded translation demo injection",
+    "message filtering search opening and unread state",
+    "archive unarchive delete block unblock and mute behavior",
+    "message settings and preview behavior",
+    "text image and location messaging launch scope"
+  ],
+  "remainingDiagnostics": {
+    "unused_element": 64,
+    "use_build_context_synchronously": 102,
+    "deprecated_member_use": 36,
+    "unused_element_parameter": 24,
+    "unused_field": 9
+  },
+  "verification": {
+    "messagesScreenAnalyze": "passed-with-zero-diagnostics",
+    "flutterAnalyze": "passed-with-zero-errors-and-235-non-error-diagnostics",
+    "targetedFlutterTests": "passed-110",
+    "targetedWiringAndPrivacyTests": "passed-29",
+    "newCriticalWiringTests": "passed-6-after-review-hardening",
+    "flutterTests": "passed-268-one-skipped",
+    "googleOnlyProfileTest": "passed-1",
+    "technicalRegression": "passed-with-bounded-internal-candidate-rollover",
+    "webBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed",
+    "independentReview": "passed-after-callback-wiring-hardening-with-no-remaining-findings"
+  },
+  "boundaries": {
+    "newAppCandidateBuilt": false,
+    "existingAppCandidateChanged": false,
+    "productionChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "testAccountsMutated": false,
+    "realMoneyUsed": false
+  }
+}

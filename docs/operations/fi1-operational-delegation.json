@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "kind": "operational-delegation-fi1",
+  "state": "hold-external-role-assignments",
+  "source": {
+    "drivePackage": "02_CODEX_WORK_PACKAGES_SIT_V2.4.md",
+    "requirements": [
+      "FI1-001-role-owner-delegate-runbook",
+      "FI1-002-audit-and-escalation-thresholds",
+      "FI1-003-no-named-person-dependency",
+      "FI1-004-cockpit-reporting-separation"
+    ]
+  },
+  "roleRegistryRef": "docs/operations/founder-independence-guardrails.json",
+  "processes": [
+    {
+      "processId": "booking_group_operations",
+      "scope": "disabled same-owner booking groups, counter-offers, shared appointments and listing sets",
+      "ownerRoleId": "operations_general_manager",
+      "delegateRoleId": "trust_safety_support",
+      "runbookRef": "docs/operations/FI1_BOOKING_GROUPS_RUNBOOK.md",
+      "auditSources": [
+        "backend.booking_group_state_events",
+        "backend.audit_log:booking_group.*",
+        "backend.audit_log:listing_set.*"
+      ],
+      "escalationThresholds": [
+        {
+          "thresholdId": "repeated_invariant_or_audit_failure",
+          "condition": "three_same_class_failures_within_15_minutes",
+          "routeToRoleId": "technical_owner_on_call",
+          "founderEscalation": false
+        },
+        {
+          "thresholdId": "cross_item_system_risk",
+          "condition": "explicit_account_scope_suspension_or_authorization_boundary_failure",
+          "routeToRoleId": "trust_safety_support",
+          "founderEscalation": false
+        }
+      ],
+      "readiness": "hold",
+      "assignmentEvidenceAvailable": false,
+      "absenceTestPassed": false
+    },
+    {
+      "processId": "project_planner_operations",
+      "scope": "deterministic planner, real-inventory resolution and project-cart synchronization",
+      "ownerRoleId": "operations_general_manager",
+      "delegateRoleId": "technical_owner_on_call",
+      "runbookRef": "docs/operations/FI1_PROJECT_PLANNER_RUNBOOK.md",
+      "auditSources": [
+        "internal_data_minimized_planner_funnel",
+        "backend.rental_cart_projects",
+        "backend.rental_cart_items"
+      ],
+      "escalationThresholds": [
+        {
+          "thresholdId": "repeated_determinism_or_snapshot_failure",
+          "condition": "three_same_class_failures_within_15_minutes",
+          "routeToRoleId": "technical_owner_on_call",
+          "founderEscalation": false
+        },
+        {
+          "thresholdId": "category_or_safety_boundary_ambiguity",
+          "condition": "one_unresolved_allowed_category_or_safety_rule_conflict",
+          "routeToRoleId": "trust_safety_support",
+          "founderEscalation": false
+        }
+      ],
+      "readiness": "hold",
+      "assignmentEvidenceAvailable": false,
+      "absenceTestPassed": false
+    },
+    {
+      "processId": "evidence_and_needs_review_operations",
+      "scope": "item-specific handover, return, evidence access, damage and needsReview handling",
+      "ownerRoleId": "trust_safety_support",
+      "delegateRoleId": "operations_general_manager",
+      "runbookRef": "docs/operations/FI1_EVIDENCE_REVIEW_RUNBOOK.md",
+      "auditSources": [
+        "backend.booking_cases",
+        "backend.booking_group_position_booking_bindings",
+        "backend.audit_log:moderation.evidence_viewed"
+      ],
+      "escalationThresholds": [
+        {
+          "thresholdId": "case_affecting_evidence_gap",
+          "condition": "one_missing_or_mismatched_required_item_evidence_reference",
+          "routeToRoleId": "trust_safety_support",
+          "founderEscalation": false
+        },
+        {
+          "thresholdId": "evidence_access_or_account_risk",
+          "condition": "one_authorization_failure_suspected_compromise_or_physical_safety_signal",
+          "routeToRoleId": "technical_owner_on_call",
+          "founderEscalation": false
+        }
+      ],
+      "readiness": "hold",
+      "assignmentEvidenceAvailable": false,
+      "absenceTestPassed": false
+    },
+    {
+      "processId": "support_escalation_operations",
+      "scope": "normal support routing, disputes, account issues and bounded specialist escalation",
+      "ownerRoleId": "trust_safety_support",
+      "delegateRoleId": "operations_general_manager",
+      "runbookRef": "docs/operations/FI1_SUPPORT_ESCALATION_RUNBOOK.md",
+      "auditSources": [
+        "backend.audit_log",
+        "backend.moderation_review_requests",
+        "backend.moderation_review_events"
+      ],
+      "escalationThresholds": [
+        {
+          "thresholdId": "specialist_boundary",
+          "condition": "one_security_privacy_legal_finance_or_physical_safety_boundary",
+          "routeToRoleId": "operations_general_manager",
+          "founderEscalation": false
+        },
+        {
+          "thresholdId": "unrouted_normal_operation",
+          "condition": "one_normal_case_without_owner_or_delegate_role_route",
+          "routeToRoleId": "operations_general_manager",
+          "founderEscalation": false
+        }
+      ],
+      "readiness": "hold",
+      "assignmentEvidenceAvailable": false,
+      "absenceTestPassed": false
+    }
+  ],
+  "founderEscalationPolicy": {
+    "normalOperationsRouteToFounder": false,
+    "automaticFounderEscalation": false,
+    "namedPersonTarget": null,
+    "allowedGateClasses": [
+      "strategy",
+      "existential",
+      "owner_authorization"
+    ]
+  },
+  "cockpit": {
+    "normalOperationsPath": "projectFunnel",
+    "founderHoursPath": "founderIndependence.hoursByCategory",
+    "founderEscalationsPath": "founderIndependence.escalations",
+    "blended": false,
+    "operationalDelegationPath": "operationalDelegation"
+  },
+  "externalGates": {
+    "roleAssignments": "open",
+    "delegateAssignments": "open",
+    "companyAccountRbac": "open",
+    "absenceTests": "not-started"
+  },
+  "boundaries": {
+    "personalDependencyIntroduced": false,
+    "accountPermissionsChanged": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "providerChanged": false,
+    "storeChanged": false,
+    "publicActivationChanged": false
+  }
+}

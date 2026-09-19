@@ -33,7 +33,7 @@ class LegalDetailScaffold extends StatelessWidget {
           surfaceTintColor: Colors.transparent,
           title: Text(title),
           centerTitle: true,
-          leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context).maybePop()),
+          leading: IconButton(tooltip: MaterialLocalizations.of(context).backButtonTooltip, icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context).maybePop()),
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, kToolbarHeight + 16, 16, 24),
@@ -84,8 +84,6 @@ class LegalSectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final onSurface = t.colorScheme.onSurface;
-
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(

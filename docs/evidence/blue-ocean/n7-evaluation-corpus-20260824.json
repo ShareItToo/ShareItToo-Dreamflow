@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-stage-a-blue-ocean-n7-evaluation-corpus",
+  "status": "verified-ready-for-n8",
+  "capturedAt": "2026-08-24T00:02:00Z",
+  "implementationBaseHead": "4e2f4f2c0d744eed62070d4c0ffc0eb031b18306",
+  "corpus": {
+    "version": "N7-2026-08-24.1",
+    "fixturePath": "backend/test/fixtures/blue_ocean_n7_evaluation_corpus.json",
+    "dataClassification": "synthetic-no-personal-data",
+    "listingCaseCount": 22,
+    "priceCaseCount": 24,
+    "priceMatrixCombinationCount": 90,
+    "deterministic": true,
+    "externalProviderRequired": false
+  },
+  "coverage": {
+    "imageAndDraftCases": "complete",
+    "providerFailureCases": "complete",
+    "ownerReviewAndPublicationCases": "complete",
+    "priceCategoryValueConditionMatrix": "complete",
+    "regionalEvidenceAndGeographyCases": "complete",
+    "demandAndSyntheticBoundaries": "complete",
+    "durationOwnerOverrideAndV52Fee": "complete",
+    "g5FailureAfterMainPublication": "corrected-and-covered"
+  },
+  "narrowCorrection": {
+    "finding": "optional-g5-link-failure-rolled-back-main-listing",
+    "requiredTruth": "main-listing-remains-published",
+    "transactionBoundary": "publication-commits-before-optional-g5-link",
+    "failureResponse": "sanitized-non-blocking-status",
+    "failureAudit": "minimized-best-effort",
+    "automaticRetryAllowed": false
+  },
+  "targetedVerification": {
+    "corpusTests": "passed-48",
+    "priceMatrixCombinations": "passed-90",
+    "applicationSyntax": "passed",
+    "artifactValidatorTests": "passed-7",
+    "artifactValidator": "passed",
+    "postgres16G5FailureIntegration": "passed",
+    "backendSuite": "passed-711-one-documented-skip",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed"
+  },
+  "exactGitHubVerification": {
+    "headSha": "a6248a7cd97711eddcf9211c0c3a8cccdf1858c7",
+    "regressionRunId": 32673817497,
+    "regressionConclusion": "success",
+    "codeqlRunId": 32673817482,
+    "codeqlConclusion": "success"
+  },
+  "boundaries": {
+    "externalProviderCallPerformed": false,
+    "paidCallPerformed": false,
+    "billingActivated": false,
+    "secretStored": false,
+    "realPersonDataUsed": false,
+    "syntheticLearningApplied": false,
+    "automaticPublicationEnabled": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "appleChanged": false,
+    "realMoneyEnabled": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false
+  },
+  "nextPackage": "N8"
+}

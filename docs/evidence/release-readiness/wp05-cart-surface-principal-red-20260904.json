@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "status": "P1_REPRODUCED_CORRECTION_OPEN",
+  "observedOn": "2026-09-04",
+  "source": "b28da2aa06816fd47eefe3a6657e7674e92cce03",
+  "previousAssignmentColdProof": {
+    "sha256": "c5bba254e1a63e3a4e66003f55884a87d7db0d8fc60662d9a82c50585905bc5a",
+    "certifiesRemainingCartSurface": false
+  },
+  "observations": {
+    "serviceActions": [
+      "addRentalCartItem",
+      "removeRentalCartItem",
+      "removeRentalCartProject",
+      "recheckRentalCart"
+    ],
+    "stableServiceControls": 4,
+    "lateASuccessAcceptedAfterB": 4,
+    "foreignBRefreshAfterA401": 4,
+    "stableUiControls": 3,
+    "lateAUiSnapshotOverwritesVerifiedB": 3,
+    "stableWishlistCreationControl": 1,
+    "wishlistDialogAndCrossAccountWriteFailures": 2,
+    "totalStablePasses": 8,
+    "totalInvariantFailures": 13,
+    "mockOnly": true,
+    "successfulRealMutationClaimed": false,
+    "successfulBRefreshOrRetryClaimed": false
+  },
+  "staticRisksNotDynamicallyProved": [
+    "cart-origin item/booking-group/planner/listing-set navigation",
+    "wishlist-folder lifetime, rename/delete and inline actions",
+    "item-details cart helper and notices"
+  ],
+  "retainedInitialRun": {
+    "passes": 6,
+    "failures": 12,
+    "fixtureFailures": 2,
+    "explanation": "Direct chip callback did not establish request start in both delete-project widget rows; not counted as product proof",
+    "correction": "Tap actual localized chip delete button and assert request started",
+    "wallClockSleepTimeoutOrConcurrencyChange": false
+  },
+  "finalDirectActionRun": {
+    "passes": 7,
+    "failures": 11
+  },
+  "finalWishlistRun": {
+    "passes": 1,
+    "failures": 2
+  },
+  "sourceHashes": {
+    "lib/screens/wishlists_screen.dart": "cb64ca5670af401b7259e3d226cdde54047891c842abcf5287522528590f4bba",
+    "lib/services/data_service.dart": "85f8d2f2b658d308e6ebec61f6eec39551daaa9c8f3c18269ed6f30862c49bbf",
+    "lib/services/backend_repository.dart": "07d0d99b361211104af647518a1204e1e8871732170d0fce9bf7b628e0794d83",
+    "lib/widgets/item_details_overlay.dart": "3541d27c2964795b925e30a2d990b81da759f3ef521b79e4fe4902be965c2141",
+    "lib/services/local_principal_scope.dart": "7bc2b1254651b1cca95059ef99de2fe4b9027bb7ebbd3cea88777f3db33e2218"
+  },
+  "logHashes": {
+    "cart-actions-red-http-ui.log": "321667b95e62c186be8ba2114fe812b8e663d66b1060b335c993d21a879c189d",
+    "cart-actions-red-final.log": "578f715ad15b98f4bfdb56cdacba84e45787ce0cba5da350a888b498bbf4f180",
+    "cart-wishlist-red-widget.log": "a2d718368e17f17b089428225d5b51ae360c45ef1525a9fdea797c41b77cc9b2"
+  },
+  "probeHashes": {
+    "sit_wp05_cart_actions_principal_probe_test.dart": "fb9b143563b3eb7dc46d1437c35de16327b11395fb776b9ca66124a7ea0961e6",
+    "sit_wp05_cart_wishlist_dialog_probe_test.dart": "9371111863889d95fbd43c7bfe58d7652087ff46811f08fd3b8aaf0223880d4c"
+  },
+  "boundaries": {
+    "sourceImplementationChanged": false,
+    "deviceTouched": false,
+    "realAccountsUsed": false,
+    "backendProviderOrMoneyAction": false,
+    "storeProductionOrOnePlusAction": false,
+    "githubAction": false,
+    "wholeGoalComplete": false
+  },
+  "next": "Consolidated saved-cart surface owner correction and permanent action/route inventory before another signed candidate."
+}

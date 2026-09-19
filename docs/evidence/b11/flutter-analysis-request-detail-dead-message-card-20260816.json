@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-analysis-request-detail-dead-message-card-cleanup",
+  "capturedAt": "2026-08-16T14:29:28Z",
+  "status": "passed-dead-request-detail-presentation-reduction",
+  "baseline": {
+    "totalDiagnostics": 235,
+    "errors": 0,
+    "unusedElements": 64,
+    "asyncContextDiagnostics": 102,
+    "deprecatedMemberUse": 36,
+    "unusedElementParameters": 24,
+    "unusedFields": 9
+  },
+  "result": {
+    "totalDiagnostics": 234,
+    "errors": 0,
+    "diagnosticsRemovedThisBatch": 1,
+    "diagnosticsRemovedFromOriginal611": 377,
+    "unusedElements": 63,
+    "asyncContextDiagnostics": 102,
+    "deprecatedMemberUse": 36,
+    "unusedElementParameters": 24,
+    "unusedFields": 9,
+    "runtimeSourceFilesChanged": 1,
+    "runtimeSourceLinesRemoved": 20,
+    "runtimeSourceLinesAdded": 0,
+    "ciAnalyzerBaseline": 234
+  },
+  "safeRemovalScope": {
+    "removedUnusedElementDiagnostics": 1,
+    "newAnalyzerDiagnosticsIntroduced": 0,
+    "reachableRequestDetailBranchesRemoved": 0,
+    "privacyBoundSourceFilesChanged": 0,
+    "displayedUiChanged": false,
+    "persistedDataChanged": false
+  },
+  "removedRegions": [
+    "unreferenced request-detail message text card"
+  ],
+  "preservedReachableFlows": [
+    "request item and renter loading",
+    "express acceptance and rejection",
+    "private-pilot owner acceptance and decline transitions",
+    "item renter dates and price cards",
+    "renter public-profile navigation"
+  ],
+  "remainingDiagnostics": {
+    "unused_element": 63,
+    "use_build_context_synchronously": 102,
+    "deprecated_member_use": 36,
+    "unused_element_parameter": 24,
+    "unused_field": 9
+  },
+  "verification": {
+    "requestDetailAnalyze": "passed-with-only-two-preexisting-async-context-diagnostics",
+    "flutterAnalyze": "passed-with-zero-errors-and-234-non-error-diagnostics",
+    "targetedFlutterTests": "passed-59",
+    "targetedWiringTests": "passed-13",
+    "newCriticalWiringTests": "passed-5",
+    "flutterTests": "passed-268-one-skipped",
+    "googleOnlyProfileTest": "passed-1",
+    "technicalRegression": "passed-with-bounded-internal-candidate-rollover",
+    "webBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed",
+    "independentReview": "passed-with-no-findings"
+  },
+  "boundaries": {
+    "newAppCandidateBuilt": false,
+    "existingAppCandidateChanged": false,
+    "productionChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "testAccountsMutated": false,
+    "realMoneyUsed": false
+  }
+}

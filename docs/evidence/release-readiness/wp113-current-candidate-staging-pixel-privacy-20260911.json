@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP113_CURRENT_CANDIDATE_STAGING_PIXEL_PRIVACY",
+  "status": "staging-pixel-privacy-current-candidate-complete",
+  "recordedAt": "2026-09-11T19:02:40Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "artifactSourceHead": "c8e2a49e14f5cae0026fa5f2bc327859fe0ff17b",
+    "backendRuntimeHead": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "diagnosticImplementationHead": "1d053ff28122aefb3e3b0dd618e356c870ebfb7f",
+    "runtimePathsChangedBetweenArtifactAndBackend": []
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091110",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkSha256": "711f058c113bd714abb1e4bcedf05d62a382004e1bf9882f6d85d04b876dd0f7",
+    "aabSha256": "20aa73271fb9ce51c33bf4025c6c235424a1f575503261c4021f8b817da0fdfb",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "firebaseAndroidConfigured": true
+  },
+  "staging": {
+    "sourceHead": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "publicApiVersion": "0.1.0-df39a14b7a19",
+    "imageDigest": "sha256:4d440d9481369b477b9495f5cefa419783f974ff35438c3490e54b42322ddfd6",
+    "releaseEvidenceBasename": "staging-20260911T174950Z-df39a14b7a19.json",
+    "apiHealthy": true,
+    "databaseHealthy": true,
+    "containerRestartCount": 0,
+    "fcmEnabled": true,
+    "smtpEnabled": true,
+    "paymentTransport": "memory",
+    "stripeLivemode": false,
+    "listingAiProvider": "on_device",
+    "externalListingAiEnabled": false,
+    "readiness": "degraded-only-known-noncritical-support-followups"
+  },
+  "pixelUpdate": {
+    "physicalDevice": true,
+    "model": "Pixel 7 Pro",
+    "installedVersionBefore": "1.0.0+2026091109",
+    "installedVersionAfter": "1.0.0+2026091110",
+    "exactApkHashMatched": true,
+    "signatureMatched": true,
+    "strictlyNewerBuild": true,
+    "dataPreservingReplace": true,
+    "firstInstallTimePreserved": true,
+    "appDataIdentityPreserved": true
+  },
+  "privacyExport": {
+    "status": "passed-exact-current-principal-export-and-complete-cleanup",
+    "wrongPasswordRejectedBeforeShare": true,
+    "correctPasswordAccepted": true,
+    "exactOwnerBound": true,
+    "foreignEmailAbsent": true,
+    "foreignOpaqueIdentifierOutsideSharedRecordsAbsent": true,
+    "sharedCounterpartySections": [
+      "operationalRecords"
+    ],
+    "localSectionCount": 6,
+    "forbiddenCredentialKeyCount": 0,
+    "exportBytes": 3202066,
+    "exportSha256": "187e4263e701a51d50bc8db11c22b9506d9fcab610c074c9bce5f311bf2a8d5a",
+    "rawExportRetained": false,
+    "temporaryNoNetworkSinkRemoved": true,
+    "protectedOwnerRestored": true
+  },
+  "verification": {
+    "preDeploymentLocalRegression": {
+      "head": "df39a14b7a19afe467842461a28f1e77fec8445e",
+      "conclusion": "success"
+    },
+    "preDeploymentGithubRegression": {
+      "runId": 34627911500,
+      "head": "df39a14b7a19afe467842461a28f1e77fec8445e",
+      "conclusion": "success",
+      "cleanCheckoutJob": "success",
+      "apiImagePublishJob": "success"
+    },
+    "preDeploymentGithubCodeql": {
+      "runId": 34627908397,
+      "head": "df39a14b7a19afe467842461a28f1e77fec8445e",
+      "conclusion": "success"
+    },
+    "diagnosticImplementationLocalRegression": "passed",
+    "diagnosticImplementationGithubRegression": {
+      "runId": 34636449790,
+      "head": "1d053ff28122aefb3e3b0dd618e356c870ebfb7f",
+      "conclusion": "success"
+    },
+    "diagnosticImplementationGithubCodeql": {
+      "runId": 34636449862,
+      "head": "1d053ff28122aefb3e3b0dd618e356c870ebfb7f",
+      "conclusion": "success"
+    }
+  },
+  "cleanup": {
+    "temporaryPrivacySinkRemoved": true,
+    "temporaryProbeSessionsRevoked": true,
+    "sourceVaultUnchanged": true,
+    "activeTemporaryJourneys": 0,
+    "publicSyntheticJourneyListings": 0
+  },
+  "boundaries": {
+    "rawExportStoredInRepository": false,
+    "accountIdentityRecorded": false,
+    "credentialsRecorded": false,
+    "paymentEndpointCalled": false,
+    "realMoneyUsed": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false
+  }
+}

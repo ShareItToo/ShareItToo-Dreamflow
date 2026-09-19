@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-pre-intervention-readiness-audit",
+  "state": "autonomous-technical-lanes-exhausted-external-evidence-required",
+  "capturedAt": "2026-08-23T16:03:32Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "baselineCommit": "9cf0e6396d8b7bc596226f17a3e8d10d2f6b22af",
+    "originSynchronizedAtCapture": true,
+    "workingTreeCleanAtCapture": true,
+    "pullRequest": {
+      "number": 7,
+      "state": "OPEN",
+      "draft": true,
+      "mergeable": "MERGEABLE",
+      "mergeStateStatus": "CLEAN",
+      "merged": false
+    },
+    "exactCi": {
+      "regressionRunId": 32649746483,
+      "regressionConclusion": "success",
+      "codeqlRunId": 32649746475,
+      "codeqlConclusion": "success",
+      "headSha": "9cf0e6396d8b7bc596226f17a3e8d10d2f6b22af"
+    }
+  },
+  "driveSource": {
+    "sitFolderId": "12ygBaPbfOg8LiLsVC3H9pv8pMxt65w1m",
+    "codexFolderId": "1YOBStKRnK1jOxWiCQz17MlGj7F3yNKWc",
+    "supportPacketFolderId": "1LtPEL2Lgo2TFnrA6iKxPOlAP8m-sF6fx",
+    "supportMatrixFileId": "1CcCqdsEVveiqoKJqZlA_iHKfZhttU5Le",
+    "supportMatrixSha256": "83cc25371f24b3486230f3ac4e2b7e9c26c49a48bd5aca22a5449636c9ffc6d3",
+    "repositoryHashMatchesDrive": true,
+    "scenarioCount": 167
+  },
+  "technicalPreparation": {
+    "requiredGateCount": 11,
+    "technicallyPreparedGateCount": 11,
+    "externallyReadyGateCount": 0,
+    "stageABlockerCount": 7,
+    "stageADeferredCount": 2,
+    "stageBOnlyBlockerCount": 1,
+    "stageCOnlyBlockerCount": 1,
+    "issuedReleaseTokenCount": 0,
+    "supportTechnicalCoverageCount": 167,
+    "supportExternalEvidenceRequiredCount": 47,
+    "supportExternalEvidencePresentCount": 0,
+    "actionPackNextBlock": "A1",
+    "nextWalidAnswerTokens": [
+      "PF3_A1_QUOTE_REQUEST_PACK_GO",
+      "PF3_A1_HOLD"
+    ],
+    "releaseDecision": "hold-no-go"
+  },
+  "currentAndroidCandidate": {
+    "deviceReachable": true,
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "versionName": "1.0.0",
+    "buildNumber": "2026082302",
+    "delivery": "direct-apk",
+    "exactInstalledApkBoundByPf17": true,
+    "fontScale": "0.85",
+    "accessibilityEnabled": false,
+    "enabledAccessibilityServices": false,
+    "containsRawDeviceIdentifier": false
+  },
+  "protectedFixture": {
+    "standardVaultPresent": false,
+    "newSyntheticAccountsCreated": false,
+    "authenticatedFixtureLinksPassedOnCurrentCandidate": false,
+    "reason": "protected-synthetic-role-vault-not-transferred",
+    "safeResumeCondition": "restore-protected-vault-or-provision-with-verified-email-and-deletion-chain",
+    "containsCredentials": false,
+    "containsAccountIdentifiers": false
+  },
+  "deterministicReleaseReadiness": {
+    "technicalDebtExitContractCount": 21,
+    "technicalDebtOpenCount": 0,
+    "aggregateDraftValidatorsPassed": true,
+    "aggregateStrictValidatorsFailedClosed": true,
+    "fullRegressionPassedAtBaseline": true,
+    "codeqlPassedAtBaseline": true
+  },
+  "nextExternalGate": {
+    "id": "legal_and_operator_approval",
+    "actionBlock": "A1",
+    "walidPresenceRequired": true,
+    "costApprovalRequiredBeforeAnyQuotedCost": true,
+    "automaticContinuationAllowed": false
+  },
+  "boundaries": {
+    "containsPersonalData": false,
+    "containsAccountIdentifiers": false,
+    "containsCredentials": false,
+    "containsSecrets": false,
+    "newAccountCreated": false,
+    "paidServiceStarted": false,
+    "contractAccepted": false,
+    "accountPermissionChanged": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "paymentProviderChanged": false,
+    "storeChanged": false,
+    "pilotChanged": false,
+    "publicActivationChanged": false,
+    "realMoneyUsed": false,
+    "pullRequestMerged": false
+  }
+}

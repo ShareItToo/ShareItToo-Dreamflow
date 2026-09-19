@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-accessibility-preflight",
+  "status": "ready-prerequisites-system-onboarding-pending",
+  "capturedAt": "2026-08-15T06:22:45.000Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081505",
+    "commit": "3908f5a3c300c1125c120c832f3050eea7a0a762",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "preflight": {
+    "cellId": "android-wifi-owner",
+    "exactCandidateInstalled": true,
+    "playInternalInstaller": true,
+    "activeTransport": "WIFI",
+    "talkBackEnabledDuringProbe": true,
+    "fontScaleAtLeast200PercentDuringProbe": true,
+    "prerequisiteBlockers": []
+  },
+  "observation": {
+    "sitTraversalPassed": false,
+    "systemTalkBackOnboardingShown": true,
+    "systemOnboardingMisclassifiedAsSit": false,
+    "privateScreenshotCommitted": false,
+    "privateScreenshotSha256": "02bb6b2ad425179d43eb9cf181116419e7fa6e0ad4878383f3a565adf61bde3b",
+    "privateUiHierarchyCommitted": false,
+    "privateUiHierarchySha256": "4a3de1b54f30f510f2b637e9c24f33eadbd6fd0320652ac0fb593b5fd9d50836"
+  },
+  "restoration": {
+    "fontScaleRestored": "0.85",
+    "enabledAccessibilityServicesRestored": "none",
+    "accessibilityEnabledRestored": false,
+    "sitReturnedToForeground": true
+  },
+  "boundaries": {
+    "manualMatrixPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "largeTextPassed": false,
+    "talkBackOnboardingCompleted": false,
+    "productionChanged": false,
+    "paymentEndpointCalled": false,
+    "containsRawNetworkNames": false,
+    "containsRawNetworkRoutes": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

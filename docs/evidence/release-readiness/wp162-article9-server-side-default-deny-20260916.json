@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "package": "WP162-ARTICLE9-SERVER-SIDE-DEFAULT-DENY-20260916",
+  "status": "technical-closure-article9-gate-open",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "sourceHead": "e1b83086c80f99cd4baa3f3dcfed6a68b3cb5a0c"
+  },
+  "technicalBoundary": {
+    "article9BasisSelected": false,
+    "serverAuthorizationIssued": false,
+    "clientClaimsAuthorize": false,
+    "sensitiveInputPersisted": false,
+    "sensitiveInputForwarded": false,
+    "neutralAccidentReportAllowed": true,
+    "historicalReadExportPreserved": true
+  },
+  "sourceInventory": {
+    "backend/src/special_category_data_guard.js": "ec2772a3c3c9eacc51536e1e89e9bc2ec13a4199e3bb93f22a2b915386a4e5e2",
+    "backend/src/support_case_domain.js": "1ed0004dd5bd320e4d30308fa5faf577e747652c58c789f7f8c5b272e4dcb96b",
+    "backend/src/support_case_workflow.js": "8a935a9c786a3469a3c350cc9a7164130a46be499dda1a1d4871b8afa49b72de",
+    "backend/src/support_evidence_workflow.js": "4834b35f16a433e26dc25f4fb73838e0d1a7937dcc1c47196b5ee24c71bde7ee",
+    "backend/test/special_category_data_guard.test.js": "ec2526219079f32e5e298539ad5569eb143af909240d64ff814248c902686506",
+    "backend/test/support_case_domain.test.js": "e51f2871245cd274b385190cdd3528d3f422baf2c47851a5c54d00c1dc333e52",
+    "backend/test/support_case_workflow.test.js": "df744c2d6f9b6c37616bcee8705ac8d74afe716bbad6877036dd27535e51c728",
+    "backend/test/support_evidence_workflow.test.js": "a391c02cec731bf483e8f4fa6e1b962bea9840e73d110aae52e07e1b07fe64d7",
+    "docs/operations/WP162_ARTICLE9_SERVER_SIDE_DEFAULT_DENY_2026-09-16.md": "23888f82245693e4f38f7aec7d037920b3a80f9fbce5044ff1b1e816c650d39f",
+    "docs/current_state.md": "653a4e15fd0f95a41ec5cff95a9e3de6fc3cd396cb90d894be87f59dca18ee30",
+    "docs/current_work_package.md": "7e7d9419f16ce339b51cf27f5b4474e4b2ee1bdd705737b2149cb7c6ce6acbb4",
+    "tool/check_current_consumer_closure.mjs": "4e82122d0e4b8b655f991752a6a787a1c12b9e0bf48ef5c717073743f8448664",
+    "tool/validate_support_evidence_external_readiness.mjs": "9823a8743086951623377c6abf3f1ea65493c083a3d415982f5be1fdb9a8c595"
+  },
+  "captureAttestation": {
+    "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
+    "sourceInventoryDigest": "3ad7bcb5d5106855e586da35d566090dea6dc004cc2cb9f63e3286a1bfff77ef",
+    "mutableConsumerManifests": {
+      "store/privacy-disclosures.json": "f37fde41cf81467853eac91a9427190a77ff61245c9c9dffc23abe69c5646cce",
+      "store/retention-deletion-readiness.json": "04c30ba19b34b1afd366ae36d5e2bbf6445e9724462661d5eb7934fead743b76",
+      "docs/evidence/external-gates/support-evidence-scanner-readiness.json": "90a662dbd1b6dc90c978e2bcf7752c111282505bf4ba4e0d2633cb3585c29336"
+    }
+  },
+  "verification": {
+    "focusedBackendTests": "passed-73-of-73",
+    "fullTechnicalRegression": "passed-ci-equivalent-3107-of-3107",
+    "auxiliaryRegression": "passed-145-of-145",
+    "syntaxAndDiffCheck": "passed",
+    "persistFilesBoundary": "sensitive-classification-and-all-product-safety-uploads-rejected-before-persistence",
+    "historicalHandlingBypassRegression": "passed-existing-product-safety-case-with-legacy-handling-and-not-indicated-upload-rejected-before-persistence",
+    "readExportRetention": "unchanged",
+    "historicalEvidenceRewritten": false
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "providerChanged": false,
+    "paymentChanged": false,
+    "storeChanged": false,
+    "cloudOrVpsChanged": false,
+    "dnsChanged": false,
+    "deviceChanged": false,
+    "credentialsReadOrRecorded": false,
+    "legalBasisSelected": false
+  },
+  "blockers": [
+    "ASTRA_GATE_REQUIRED:SPECIAL_CATEGORY_ARTICLE9_BASIS",
+    "OWNER_OR_PROFESSIONAL_REVIEW_REQUIRED:SPECIAL_CATEGORY_PROCESSING_PURPOSE_BASIS_ROLE"
+  ]
+}

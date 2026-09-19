@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp27-safety-privacy-principal-ownership",
+  "status": "verified-local-and-github",
+  "capturedAt": "2026-09-06T12:33:21Z",
+  "workPackage": "WP27",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationBase": "2076736f2695c3abe2048395ce46109f91c97a61",
+    "implementationHead": "6b39ebf898a979951c330f6fba58fdd0951ffe9f"
+  },
+  "scope": {
+    "ownerBoundUserReport": true,
+    "ownerBoundEvidenceUpload": true,
+    "ownerBoundBlockAndUnblock": true,
+    "explicitLocalPrincipalWrites": true,
+    "accountSecurityCrossTabRefresh": true,
+    "exactOwnedRouteDismissal": true,
+    "messageActionOwnerPropagation": true,
+    "bookingReturnCaseReportIssueCovered": false
+  },
+  "resultSemantics": {
+    "exactStructuredRejectionAllowlist": true,
+    "http408OutcomeUnknown": true,
+    "intermediaryOrUnstructured4xxOutcomeUnknown": true,
+    "transportAnd5xxOutcomeUnknown": true,
+    "remoteAcceptedLocalFailureDistinct": true,
+    "typedHandlerPrecedesGenericCatch": true,
+    "lateAccountAResultVisibleUnderAccountB": false
+  },
+  "verification": {
+    "flutterAnalyzer": "passed-zero-findings",
+    "focusedFlutterPassed": 65,
+    "focusedFlutterFailed": 0,
+    "focusedToolPassed": 15,
+    "focusedToolFailed": 0,
+    "completeToolPassed": 2333,
+    "completeToolFailed": 0,
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed"
+  },
+  "githubVerification": {
+    "implementationHead": "6b39ebf898a979951c330f6fba58fdd0951ffe9f",
+    "regressionRunId": 34032500401,
+    "regressionConclusion": "success",
+    "cleanCheckoutReproducibility": "passed",
+    "codeqlRunId": 34032500382,
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0,
+    "pullRequestNumber": 7,
+    "pullRequestState": "open-draft-mergeable-unmerged"
+  },
+  "ratchets": {
+    "reason": "validated-safety-principal-route-and-dependent-source-binding-change",
+    "mechanicalHashRefreshOnlyOutsideWp27Runtime": true,
+    "historicalStatusChanged": false,
+    "legalConclusionChanged": false,
+    "providerOrBillingTruthChanged": false,
+    "activeProviderState": "prepared-hold"
+  },
+  "boundaries": {
+    "stagingOnly": true,
+    "androidCandidateCreated": false,
+    "androidCandidateInstalled": false,
+    "firebaseConsoleChanged": false,
+    "providerConfigured": false,
+    "paymentChanged": false,
+    "googlePlayChanged": false,
+    "productionChanged": false,
+    "publicRegistrationChanged": false,
+    "cloudVpsDnsChanged": false,
+    "physicalDeviceContacted": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsPrivateFilesystemPath": false
+  },
+  "remaining": [
+    "separate-booking-return-case-report-issue-principal-transaction"
+  ]
+}

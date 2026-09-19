@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp165-staging-readiness-drift",
+  "status": "blocked-by-one-noncritical-support-followup",
+  "capturedOn": "2026-09-16",
+  "environment": "staging",
+  "runtime": {
+    "version": "0.1.0-df39a14b7a19",
+    "commit": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "versionEndpointHttp": 200,
+    "liveHealthHttp": 200,
+    "readyHealthHttp": 503
+  },
+  "readiness": {
+    "status": "degraded",
+    "database": "ok",
+    "mail": "ok",
+    "notificationsPending": 0,
+    "notificationsDead": 0,
+    "paymentTransport": "memory",
+    "stripeLivemode": false,
+    "paymentPending": 0,
+    "paymentFailedEvents": 0,
+    "paymentUnbalanced": 0,
+    "paymentRecoveryPending": 0,
+    "paymentRecoveryNeedsReview": 0,
+    "supportNextUpdateOverdue": 1,
+    "supportCriticalNextUpdateOverdue": 0,
+    "supportP0WithoutOwner": 0,
+    "supportWorkerStale": false,
+    "listingAiProvider": "on_device",
+    "listingAiExternalProviderExecutionAllowed": false,
+    "listingAiBudgetCents": 0
+  },
+  "interpretation": {
+    "clientInstallFailure": false,
+    "runtimeInfrastructureFailure": false,
+    "blockingCondition": "one noncritical overdue Support next-update",
+    "requiredNextAction": "authorized support-owner workflow must issue a truthful bounded update and future checkpoint",
+    "directDatabaseMutationAllowed": false,
+    "externalMessageSent": false
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "firebaseConsoleChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "onePlusContacted": false,
+    "credentialsRecorded": false,
+    "tokensRecorded": false,
+    "rawDeviceIdentifiersRecorded": false
+  }
+}

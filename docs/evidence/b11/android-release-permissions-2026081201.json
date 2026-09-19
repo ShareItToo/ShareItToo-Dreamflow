@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-permission-inventory",
+  "status": "passed-exact-merged-release-apk",
+  "capturedAt": "2026-08-12T11:49:18Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081201",
+    "commit": "c6ec80002cf664f513afc768c1b643ac0d1d19fb",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "artifacts": {
+    "apkSha256": "dd0f9c05dfb17b16b7fc3a8189e0ff19b4e6eb36f8952cf3c8eeeaed98792667",
+    "aabSha256": "d6626c5bff13bcca906f26e4cdcb15adaa704038c4eff31f46de9c71afc67e88",
+    "targetSdkVersion": 35
+  },
+  "analysis": {
+    "source": "merged-release-apk",
+    "declaredPermissions": [
+      "android.permission.ACCESS_COARSE_LOCATION",
+      "android.permission.ACCESS_FINE_LOCATION",
+      "android.permission.ACCESS_NETWORK_STATE",
+      "android.permission.CAMERA",
+      "android.permission.INTERNET",
+      "android.permission.POST_NOTIFICATIONS",
+      "android.permission.READ_EXTERNAL_STORAGE:maxSdkVersion=32",
+      "android.permission.READ_MEDIA_IMAGES",
+      "android.permission.WAKE_LOCK",
+      "android.permission.WRITE_EXTERNAL_STORAGE:maxSdkVersion=28",
+      "com.google.android.c2dm.permission.RECEIVE",
+      "com.shareittoo.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+    ],
+    "restrictedOrUnrequestedPermissionsAbsent": [
+      "android.permission.BIND_ACCESSIBILITY_SERVICE",
+      "android.permission.MANAGE_EXTERNAL_STORAGE",
+      "android.permission.QUERY_ALL_PACKAGES",
+      "android.permission.READ_CALL_LOG",
+      "android.permission.READ_CONTACTS",
+      "android.permission.READ_SMS",
+      "android.permission.RECORD_AUDIO",
+      "android.permission.REQUEST_INSTALL_PACKAGES",
+      "android.permission.SEND_SMS",
+      "android.permission.SYSTEM_ALERT_WINDOW",
+      "android.permission.WRITE_CALL_LOG",
+      "android.permission.WRITE_CONTACTS"
+    ],
+    "unexpectedPermissions": [],
+    "permissionDeclarationFormPreclaim": false,
+    "consoleWarningsPendingAfterAabUpload": true
+  },
+  "boundaries": {
+    "storeUploadPerformed": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsPersonalAccountData": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  }
+}

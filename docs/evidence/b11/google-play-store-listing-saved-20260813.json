@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-store-listing-saved",
+  "capturedAt": "2026-08-13T18:24:53Z",
+  "status": "saved-console-task-completed",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081302",
+    "releaseChannel": "internal"
+  },
+  "observedConsoleState": {
+    "primaryLocale": "de-DE",
+    "dashboardCompletedTasks": 9,
+    "dashboardTotalTasks": 11,
+    "storeListingTaskCompleted": true,
+    "changeSavedConfirmationObserved": true,
+    "draftSavedConfirmationObserved": true,
+    "sentForReview": false
+  },
+  "copy": {
+    "title": "ShareItToo",
+    "shortDescriptionUsesEmDash": true,
+    "fullDescriptionSha256": "08c54afe015801f5544697c6e23ceffe109c166ccb9f5e7166cae19a87cf3d67",
+    "mentionsFreeDocuments": false,
+    "mentionsDepositOrProtection": false
+  },
+  "assets": {
+    "appIcon": {
+      "uploaded": true,
+      "sha256": "117e4547b5de671031213d579b91b5f110ad9042ad731353ea9de6d34cc99f01"
+    },
+    "featureGraphic": {
+      "uploaded": true,
+      "sha256": "8acad5aecb120ac6c37930c5123d54f180047afa2f18cb6fe60b1a687af27896"
+    },
+    "phoneScreenshots": {
+      "uploadedCount": 4,
+      "sha256": [
+        "040b4388b39aa215ee1849ebc72c8912db05ef588ca614e038f881c258b7dd45",
+        "7e6d7f5ee35b70d9883c720ea1d3e18d62fd1d6d3d7b2cff33c2ccab3e0764ce",
+        "9dad803c42a0f541ac8b5d86af513e86071e21b2844287b8af3c644d8575b20b",
+        "592beb6cba0e54155e990dbdc316718af9df67162def1bc09eaa6c42ac3ea0a1"
+      ]
+    }
+  },
+  "remainingAppSetupTasks": [
+    "privacy-policy",
+    "data-safety"
+  ],
+  "boundaries": {
+    "listingDraftChanged": true,
+    "assetsUploaded": true,
+    "sentForReview": false,
+    "internalRolloutStarted": false,
+    "closedTestingStarted": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsAccountIdentifiers": false
+  }
+}

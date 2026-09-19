@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-social-auth-google-only-physical-boundary",
+  "status": "google-system-chooser-opened-apple-facebook-fail-closed",
+  "capturedAt": "2026-08-17T07:23:43Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081510",
+    "sourceCommit": "4cb004641391efe40fa2bf89f62da11bc1f71291",
+    "installMethod": "direct-apk",
+    "environment": "staging"
+  },
+  "physicalDevice": {
+    "platform": "android",
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16"
+  },
+  "checks": {
+    "loginScreenGoogleVisible": true,
+    "loginScreenAppleVisible": true,
+    "loginScreenFacebookVisible": true,
+    "googleTapOpenedGoogleSystemSignInActivity": true,
+    "googleAccountSelected": false,
+    "googleAuthenticationCompleted": false,
+    "googleFlowCanceledWithSystemBack": true,
+    "appleFailClosed": true,
+    "appleVisibleCopy": "Apple ist noch nicht freigeschaltet. Bitte nutze vorübergehend E-Mail.",
+    "facebookFailClosed": true,
+    "facebookVisibleCopy": "Facebook ist noch nicht freigeschaltet. Bitte nutze vorübergehend E-Mail.",
+    "syntheticStagingSessionRestored": true
+  },
+  "privateEvidence": {
+    "appleScreenshotSha256": "a5488f76629f15924b6a746b44f87b123b37b3ed6951ef8dd4d8abb82643ac94",
+    "facebookScreenshotSha256": "29af56f31690cd744d622237dc568755d9fe2ef9eeec01da6f10e88c6e02fa11",
+    "screenshotsStoredInRepository": false
+  },
+  "boundaries": {
+    "accountIdentityCaptured": false,
+    "accountIdentifierCaptured": false,
+    "accountEmailCaptured": false,
+    "credentialsCaptured": false,
+    "googleAccountMutationPerformed": false,
+    "appleExternalAuthenticationStarted": false,
+    "facebookExternalAuthenticationStarted": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "storeSubmissionPerformed": false,
+    "realPaymentPerformed": false,
+    "pushSettingChanged": false,
+    "crashSettingChanged": false,
+    "crashDataTransferred": false
+  },
+  "conclusion": {
+    "googleProviderPhysicalLaunchBoundary": "passed-without-account-selection",
+    "appleProviderBoundary": "passed-fail-closed",
+    "facebookProviderBoundary": "passed-fail-closed",
+    "fullGoogleAuthentication": "open-requires-explicit-private-account-selection-or-dedicated-test-identity"
+  }
+}

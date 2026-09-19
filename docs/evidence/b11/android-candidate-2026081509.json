@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "built-scanned-play-internal-store-install-and-bounded-device-diagnostics-verified",
+  "generatedAt": "2026-08-15T12:32:36Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "commit": "3fa045b98897f9551f91da932136c2b100b2d700",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "google-play-internal-active-store-install-verified",
+    "aabSha256": "8295b7cef0de1061acdf4179080deda0fb13133c4d7fd306da0d51062312fcc5",
+    "apkSha256": "517e1e15b8bbb4409444d29aa5094feedba590078fadaba3293142ab62f1593f",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true,
+    "privateArchivePermissionsVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "2b684fa0a4eb1784403027793f384e8875a4b1bd8790d5b4eaab04ee0398017f",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "permissionInventoryStatus": "passed",
+    "permissionInventoryEvidenceRef": "docs/evidence/b11/android-release-permissions-2026081509.json",
+    "systemPhotoPicker": "passed-broad-photo-and-video-library-permissions-absent",
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics",
+      "Firebase Authentication",
+      "Facebook Login",
+      "Google Maps Platform"
+    ],
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "localSignedInstallAndLaunch": "passed-physical-pixel-cold-launch",
+    "facebookManifestValueTypes": "passed-resource-string-references",
+    "facebookAuthPluginInitialization": "passed-no-sdk-initialization-or-plugin-registration-error",
+    "socialProviderReleaseGating": "passed-google-apple-facebook-disabled-fail-closed",
+    "centeredProviderUnavailablePopup": "passed-private-screenshot-outside-repository",
+    "stagingFeedLoaded": "passed-physical-signed-build",
+    "fatalRuntimeErrors": "none-observed",
+    "googlePlayInternalUpload": "passed-release-available-to-internal-testers",
+    "playInternalInstallAndLaunch": "passed",
+    "playInstallerVerified": "passed-com.android.vending-four-splits",
+    "playAppSigningCertificate": "passed-sha256-36488abf86c51da07ab2258f31b00e2f1ba8a36d076107b9f006376ade80b956",
+    "googlePlayStoreInstall": "passed-version-2026081509-installer-com.android.vending",
+    "googlePlayInstallerPackage": "passed-com.android.vending",
+    "googlePlayAppSigningCertificateSha256": "36488abf86c51da07ab2258f31b00e2f1ba8a36d076107b9f006376ade80b956",
+    "authenticatedSessionAcrossPlayUpdate": "passed",
+    "stagingFeedAfterPlayUpdate": "passed",
+    "facebookAuthPluginAfterPlayUpdate": "passed-no-sdk-initialization-or-plugin-registration-error",
+    "syntheticRoleBooking": "passed-bounded-google-play-split-two-role-lifecycle",
+    "authenticatedDeepLinks": "passed-bounded-google-play-split-listing-booking-chat",
+    "foregroundFcm": "passed",
+    "backgroundFcm": "passed",
+    "terminatedProcessFcm": "passed",
+    "notificationIconVisualFit": "passed-centered-contained-safety-margin",
+    "logoutColdStartGuestPersistence": "passed-physical-play-build",
+    "postLogoutPushSuppression": "passed-physical-play-build",
+    "offlineRealtimeRecovery": "passed-physical-play-build",
+    "crashlyticsMappingAndNativeSymbols": "passed-exact-mapping-upload-controlled-event-pending",
+    "largeTextAndSemanticsAutomation": "passed-manual-talkback-and-physical-visual-pass-pending",
+    "photoPickerListingChatHandover": "pending-device-flow",
+    "closedTrackDraft": "not-started-boundary",
+    "twoDevicePrivatePilotAcceptance": "pending"
+  },
+  "syntheticRoleBooking": {
+    "status": "passed",
+    "installation": "google-play-split",
+    "evidenceRef": "docs/evidence/b11/android-synthetic-role-booking-2026081509-20260815T133048Z.json"
+  },
+  "authenticatedDeepLinks": {
+    "status": "passed",
+    "installation": "google-play-split",
+    "evidenceRef": "docs/evidence/b11/android-authenticated-deep-links-2026081509-20260815T132509Z.json"
+  },
+  "controlledFcm": {
+    "status": "passed",
+    "installation": "google-play-split",
+    "evidenceRef": "docs/evidence/b11/android-controlled-fcm-2026081509-20260815T131855Z.json"
+  },
+  "logoutLifecycle": {
+    "status": "passed",
+    "installation": "google-play-split",
+    "coldStartGuestPersistence": "passed",
+    "postLogoutPushSuppression": "passed",
+    "evidenceRef": "docs/evidence/b11/android-logout-lifecycle-2026081509-20260815T131701Z.json"
+  },
+  "offlineRealtime": {
+    "status": "passed",
+    "installation": "google-play-split",
+    "offlineWindowSeconds": 15,
+    "sameProcessRecovery": "passed",
+    "networkRestoredAfterProbe": true,
+    "evidenceRef": "docs/evidence/b11/android-offline-realtime-2026081509-20260815T132209Z.json"
+  },
+  "crashlyticsReleaseMapping": {
+    "status": "mapping-and-native-symbols-uploaded-console-release-observed-controlled-event-pending",
+    "evidenceRef": "docs/evidence/b11/android-crash-release-mapping-2026081509.json"
+  },
+  "storeLinksAndSigning": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/android-play-store-links-signing-2026081509-20260815.json"
+  },
+  "deviceRestoration": {
+    "status": "passed",
+    "restoredBuildNumber": "2026081508",
+    "installerPackageName": "com.android.vending",
+    "syntheticOwnerSessionRestored": true,
+    "fatalRuntimeErrors": "none-observed"
+  },
+  "googlePlayInternalRelease": {
+    "status": "store-install-verified",
+    "releaseName": "1.0.0-internal-2026081509",
+    "evidenceRef": "docs/evidence/b11/google-play-internal-release-active-2026081509-20260815.json"
+  },
+  "staging": {
+    "serverVersion": "0.1.0-36f9145e67be",
+    "serverCommit": "36f9145e67be30fd01ffb61ad38e99361d391479",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "productionInvariant": "passed",
+    "productionVersion": "1.0.0-2026081403"
+  },
+  "boundaries": {
+    "uploadedToStore": true,
+    "internalReleaseActivated": true,
+    "installedOnPhysicalDevice": true,
+    "exactStoreBuildInstalledOnPhysicalDevice": true,
+    "productionChanged": false,
+    "realPaymentPerformed": false,
+    "closedTestingChanged": false,
+    "publicTrackChanged": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "status": "static-config-ready-tooling-and-account-gates-pending",
+  "submissionAllowed": false,
+  "distribution": "testflight-internal",
+  "candidate": {
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "commit": "3fa045b98897f9551f91da932136c2b100b2d700",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "firebaseAnalyticsEnabled": false,
+    "advertisingEnabled": false
+  },
+  "verifiedStaticConfiguration": {
+    "displayName": "ShareItToo",
+    "customUrlScheme": "shareittoo",
+    "associatedDomains": [
+      "applinks:shareittoo.com",
+      "applinks:www.shareittoo.com",
+      "applinks:staging.shareittoo.com"
+    ],
+    "debugApnsEnvironment": "development",
+    "profileApnsEnvironment": "production",
+    "releaseApnsEnvironment": "production",
+    "firebaseBundleMatches": true,
+    "usageDescriptionsPresent": true,
+    "runnerPrivacyManifestPresent": true,
+    "runnerPrivacyManifestTracking": false,
+    "runnerPrivacyManifestBoundToTarget": true,
+    "crashlyticsSymbolUploadPhasePresent": true
+  },
+  "accountGates": {
+    "enrollmentTypeDecision": "pending-user",
+    "appleAccountWithTwoFactor": "pending-user",
+    "developerProgramMembership": "pending-user",
+    "latestAgreementAccepted": "pending-user",
+    "appRecordCreated": false,
+    "bundleIdentifierRegistered": false,
+    "signingTeamAvailable": false,
+    "apnsCredentialConfiguredInFirebase": false
+  },
+  "toolingGates": {
+    "fullXcodeInstalled": false,
+    "xcodeLicenseAccepted": false,
+    "iosDependenciesResolved": false,
+    "runnerPrivacyManifestValidated": true,
+    "archiveBuilt": false,
+    "archivePrivacyReportReviewed": false,
+    "exportComplianceDecisionConfirmed": false,
+    "testflightBuildUploaded": false
+  },
+  "toolingAudit": {
+    "checkedAt": "2026-08-15T14:35:12Z",
+    "evidenceRef": "docs/evidence/b11/ios-local-tooling-readiness-2026081509-20260815.json",
+    "fullXcodeApplicationPresent": false,
+    "activeDeveloperDirectory": "command-line-tools-only",
+    "xcodebuildAvailable": false,
+    "cocoaPodsAvailable": false,
+    "flutterDoctorIosReady": false,
+    "archiveAttempted": false,
+    "evidenceConclusion": "blocked-before-build-by-missing-local-ios-tooling",
+    "diagnosticCommand": "node tool/diagnose_ios_tooling_readiness.mjs"
+  },
+  "postUploadChecks": {
+    "processingCompleted": "pending",
+    "exportComplianceCompleted": "pending",
+    "crashlyticsSymbolsVerified": "pending",
+    "internalTesterInstallCompleted": "pending",
+    "apnsForegroundBackgroundTerminatedVerified": "pending"
+  },
+  "hardStops": {
+    "externalTestFlight": true,
+    "betaAppReview": true,
+    "appReview": true,
+    "publicRelease": true,
+    "productionBackend": true,
+    "livePayments": true,
+    "credentialsInRepository": true
+  },
+  "worksheetRef": "docs/operations/B11_APPLE_DEVELOPER_AND_TESTFLIGHT_WORKSHEET_2026-08-12.md",
+  "containsSecrets": false,
+  "containsAccountIdentifiers": false
+}

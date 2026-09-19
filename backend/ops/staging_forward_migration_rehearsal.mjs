@@ -1,0 +1,1163 @@
+#!/usr/bin/env node
+
+import crypto from 'node:crypto';
+import {
+  chmod,
+  lstat,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { isIP } from 'node:net';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { spawn } from 'node:child_process';
+import pg from 'pg';
+
+const { Pool } = pg;
+
+export const rehearsalMigrationFirst = 75;
+export const rehearsalMigrationLast = 92;
+export const rehearsalMigrationUpCount = 18;
+export const rehearsalMigrationFileCount = 36;
+export const stagingProjectName = 'sit-staging';
+export const disposableRehearsalLabel = 'com.shareittoo.staging.rehearsal';
+export const disposableRehearsalRunLabel = 'com.shareittoo.staging.rehearsal_run_id';
+
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const postgresImage = 'postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777';
+
+function fail(code) {
+  const error = new Error(`Staging forward-migration rehearsal failed: ${code}`);
+  error.code = code;
+  throw error;
+}
+
+function fullCommit(value, name = 'targetCommit') {
+  if (!/^[0-9a-f]{40}$/u.test(value ?? '')) fail(`${name}_must_be_full_commit`);
+  return value;
+}
+
+export function assertStagingTarget({ project, apiContainer, databaseContainer, databaseVolume } = {}) {
+  if (project !== stagingProjectName) fail('compose_project_not_staging');
+  for (const [name, value] of Object.entries({ apiContainer, databaseContainer, databaseVolume })) {
+    if (typeof value !== 'string' || value.trim() === '' || /prod|production/i.test(value)) {
+      fail(`${name}_not_staging_safe`);
+    }
+  }
+  return true;
+}
+
+export function assertStagingLabels({ labels, expectedService, expectedVolume = false } = {}) {
+  if (labels?.['com.docker.compose.project'] !== stagingProjectName) {
+    fail('docker_project_label_not_staging');
+  }
+  if (expectedVolume) {
+    if (labels['com.docker.compose.volume'] !== 'shareittoo_staging_postgres_data') {
+      fail('docker_volume_label_not_staging');
+    }
+  } else if (labels['com.docker.compose.service'] !== expectedService) {
+    fail(`docker_service_label_unexpected_${expectedService}`);
+  }
+  return true;
+}
+
+export function assertDisposableResourceIdentity({
+  resourceType,
+  name,
+  labels,
+  runId,
+} = {}) {
+  if (!['container', 'network', 'volume'].includes(resourceType)) {
+    fail('disposable_resource_type_invalid');
+  }
+  if (typeof runId !== 'string' || !/^[0-9]{14}-[0-9a-f]{8}$/u.test(runId)) {
+    fail('disposable_run_id_invalid');
+  }
+  const expectedName = `sit-staging-rehearsal-${resourceType}-${runId}`;
+  const validContainerName = resourceType === 'container'
+    && new RegExp(`^sit-staging-rehearsal-(?:pg|api|bootstrap)-${runId}$`, 'u').test(name ?? '');
+  if (typeof name !== 'string' || (resourceType === 'container' ? !validContainerName : name !== expectedName)) {
+    fail('disposable_resource_name_mismatch');
+  }
+  if (labels?.[disposableRehearsalLabel] !== 'true'
+      || labels?.[disposableRehearsalRunLabel] !== runId) {
+    fail('disposable_resource_labels_missing');
+  }
+  if (Object.entries(labels).some(([key, value]) => /prod|production/i.test(`${key}=${value}`))) {
+    fail('disposable_resource_label_unsafe');
+  }
+  return true;
+}
+
+export function normalizeReadinessFindings(value) {
+  if (!value || typeof value !== 'object'
+      || !Array.isArray(value.paymentRecoveryNeedsReview)
+      || !Array.isArray(value.supportNextUpdateOverdue)) {
+    fail('readiness_fingerprint_shape_invalid');
+  }
+  const paymentSources = new Set(['dispute', 'refund_transfer_reversal', 'payout', 'payment_refund_truth', 'contract_blocked']);
+  const paymentCauses = new Set([
+    'transfer_recovery_needs_review', 'refund_transfer_reversal_needs_review',
+    'payout_failed', 'refund_truth_needs_review', 'contract_blocked',
+  ]);
+  const supportCauses = new Set(['next_update_overdue']);
+  const timeClasses = new Set(['<1h', '1-24h', '>24h', 'derived']);
+  const textField = (value, field) => {
+    if (typeof value !== 'string' || value.length === 0 || value.length > 96 || /[\u0000-\u001f]/u.test(value)) {
+      fail(`readiness_fingerprint_${field}_invalid`);
+    }
+    return value;
+  };
+  const strictFinding = (finding, { payment }) => {
+    if (!finding || typeof finding !== 'object' || Array.isArray(finding)) fail('readiness_fingerprint_entry_invalid');
+    const expectedKeys = payment
+      ? ['source', 'id_hash', 'cause', 'status', 'time_class']
+      : ['id_hash', 'cause', 'status', 'priority', 'time_class'];
+    const actualKeys = Object.keys(finding).sort();
+    if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== [...expectedKeys].sort()[index])) {
+      fail('readiness_fingerprint_extra_field');
+    }
+    if (typeof finding.id_hash !== 'string' || !/^[0-9a-f]{64}$/u.test(finding.id_hash)) {
+      fail('readiness_fingerprint_id_hash_invalid');
+    }
+    if (payment && !paymentSources.has(finding.source)) fail('readiness_fingerprint_source_invalid');
+    if (!payment && !/^p[0-3]$/u.test(finding.priority)) fail('readiness_fingerprint_priority_invalid');
+    if (!(payment ? paymentCauses : supportCauses).has(finding.cause) || !timeClasses.has(finding.time_class)) {
+      fail('readiness_fingerprint_enum_invalid');
+    }
+    textField(finding.status, 'status');
+    return { ...finding };
+  };
+  const sortFindings = (findings, options) => findings.map((finding) => strictFinding(finding, options))
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  return Object.freeze({
+    paymentRecoveryNeedsReview: sortFindings(value.paymentRecoveryNeedsReview, { payment: true }),
+    supportNextUpdateOverdue: sortFindings(value.supportNextUpdateOverdue, { payment: false }),
+  });
+}
+
+export function assertReadinessFindingsUnchanged(before, after) {
+  const expected = JSON.stringify(normalizeReadinessFindings(before));
+  const actual = JSON.stringify(normalizeReadinessFindings(after));
+  if (expected !== actual) fail('readiness_fingerprint_drift');
+  return true;
+}
+
+export function buildReadinessFindingSql({ contractVersion = 'V5.2-2026-08-16', payoutHoldHours = 48 } = {}) {
+  if (!/^[A-Za-z0-9._-]{1,120}$/u.test(contractVersion)) fail('readiness_contract_version_invalid');
+  if (!Number.isInteger(payoutHoldHours) || payoutHoldHours < 0 || payoutHoldHours > 720) {
+    fail('readiness_payout_hold_hours_invalid');
+  }
+  return `
+WITH contract_blocked AS (
+  SELECT DISTINCT ON (payment.id)
+         encode(digest(payment.id::text, 'sha256'), 'hex') AS id_hash,
+         'contract_blocked' AS cause, payment.status,
+         CASE WHEN COALESCE(booking.payout_instruction_due_at, booking.completed_at, booking.ends_at)
+                    <= now() - interval '24 hours' THEN '>24h'
+              WHEN COALESCE(booking.payout_instruction_due_at, booking.completed_at, booking.ends_at)
+                    <= now() - interval '1 hour' THEN '1-24h'
+              ELSE '<1h' END AS time_class
+    FROM payments AS payment
+    JOIN bookings AS booking ON booking.id = payment.booking_id
+    LEFT JOIN platform_contracts AS contract ON contract.booking_id = booking.id
+    LEFT JOIN LATERAL (
+      SELECT payout.status
+        FROM payouts AS payout
+       WHERE payout.payment_id = payment.id
+         AND payout.status IN ('scheduled', 'pending', 'failed')
+       ORDER BY payout.created_at DESC, payout.id DESC
+       LIMIT 1
+    ) AS active_payout ON true
+    JOIN sit_payment_refund_truth AS refund_truth ON refund_truth.payment_id = payment.id
+   WHERE booking.workflow_status IN ('completed', 'cancelled')
+     AND payment.status IN ('captured', 'partially_refunded')
+     AND payment.transferred_minor < payment.owner_payout_minor - refund_truth.settled_owner_refund_minor
+     AND active_payout.status IS DISTINCT FROM 'failed'
+     AND refund_truth.refund_truth_status IN ('none', 'providerBound')
+     AND ((booking.workflow_status = 'completed' AND (
+            booking.payout_instruction_due_at <= now()
+            OR (booking.payout_instruction_due_at IS NULL
+                AND booking.completed_at <= now() - (${payoutHoldHours} * interval '1 hour'))
+          )) OR (booking.workflow_status = 'cancelled'
+            AND booking.ends_at <= now() - (${payoutHoldHours} * interval '1 hour')))
+     AND (contract.id IS NULL
+       OR contract.contract_version IS DISTINCT FROM '${contractVersion}'
+       OR contract.user_id IS DISTINCT FROM booking.renter_id
+       OR contract.accepted_at IS NULL OR NOT isfinite(contract.accepted_at)
+       OR contract.created_at IS NULL OR NOT isfinite(contract.created_at)
+       OR date_trunc('milliseconds', contract.accepted_at)
+            < date_trunc('milliseconds', contract.created_at) - interval '5 minutes'
+       OR date_trunc('milliseconds', contract.accepted_at)
+            > date_trunc('milliseconds', contract.created_at) + interval '5 minutes')
+), payment_findings AS (
+  SELECT 'dispute' AS source, encode(digest(id::text, 'sha256'), 'hex') AS id_hash,
+         'transfer_recovery_needs_review' AS cause, status,
+         CASE WHEN updated_at <= now() - interval '24 hours' THEN '>24h'
+              WHEN updated_at <= now() - interval '1 hour' THEN '1-24h'
+              ELSE '<1h' END AS time_class
+    FROM disputes WHERE transfer_recovery_needs_review = true
+  UNION ALL
+  SELECT 'refund_transfer_reversal', encode(digest(id::text, 'sha256'), 'hex'),
+         'refund_transfer_reversal_needs_review', status,
+         CASE WHEN updated_at <= now() - interval '24 hours' THEN '>24h'
+              WHEN updated_at <= now() - interval '1 hour' THEN '1-24h'
+              ELSE '<1h' END
+    FROM refund_transfer_reversals WHERE needs_review = true OR status = 'manual_review'
+  UNION ALL
+  SELECT 'payout', encode(digest(id::text, 'sha256'), 'hex'),
+         'payout_failed', status,
+         CASE WHEN updated_at <= now() - interval '24 hours' THEN '>24h'
+              WHEN updated_at <= now() - interval '1 hour' THEN '1-24h'
+              ELSE '<1h' END
+    FROM payouts WHERE status = 'failed'
+  UNION ALL
+  SELECT 'payment_refund_truth', encode(digest(payment_id::text, 'sha256'), 'hex'),
+         'refund_truth_needs_review', refund_truth_status,
+         'derived'
+    FROM sit_payment_refund_truth WHERE refund_truth_status = 'needsReview'
+  UNION ALL
+  SELECT 'contract_blocked', id_hash, cause, status, time_class FROM contract_blocked
+), support_findings AS (
+  SELECT encode(digest(id::text, 'sha256'), 'hex') AS id_hash,
+         'next_update_overdue' AS cause, status, priority,
+         CASE WHEN next_update_at <= now() - interval '24 hours' THEN '>24h'
+              WHEN next_update_at <= now() - interval '1 hour' THEN '1-24h'
+              ELSE '<1h' END AS time_class
+    FROM support_cases
+   WHERE operating_mode IN ('simulation', 'internal_testing')
+     AND status NOT IN ('resolved', 'closed')
+     AND next_update_at <= now()
+)
+SELECT jsonb_build_object(
+  'paymentRecoveryNeedsReview', COALESCE((SELECT jsonb_agg(to_jsonb(payment_findings)
+    ORDER BY source, id_hash, cause, status, time_class) FROM payment_findings), '[]'::jsonb),
+  'supportNextUpdateOverdue', COALESCE((SELECT jsonb_agg(to_jsonb(support_findings)
+    ORDER BY id_hash, cause, status, priority, time_class) FROM support_findings), '[]'::jsonb)
+)::text;`;
+}
+
+export function validateStagingContainerInventory(entries, {
+  apiContainer,
+  databaseContainer,
+} = {}) {
+  const allowedServices = new Map([
+    [apiContainer, 'api'],
+    [databaseContainer, 'postgres'],
+  ]);
+  const seenServices = new Set();
+  let databaseState = null;
+  let apiState = null;
+  for (const entry of entries ?? []) {
+    const expectedService = allowedServices.get(entry.name);
+    if (!expectedService) fail('unexpected_staging_container_before_quiesce');
+    assertStagingLabels({ labels: entry.labels, expectedService });
+    if (seenServices.has(expectedService)) fail('duplicate_staging_service_before_quiesce');
+    seenServices.add(expectedService);
+    const state = entry.state ?? 'running';
+    if (expectedService === 'postgres') databaseState = state;
+    if (expectedService === 'api') apiState = state;
+  }
+  if (!seenServices.has('postgres')) fail('staging_database_not_running');
+  if (!seenServices.has('api')) fail('staging_api_not_running');
+  if (databaseState !== 'running') fail('staging_database_not_running');
+  if (!['running', 'exited'].includes(apiState)) {
+    fail('staging_api_state_unexpected');
+  }
+  return Object.freeze(apiState === 'running' ? [apiContainer] : []);
+}
+
+export function validateStagingRunningSet(entries, options = {}) {
+  return validateStagingContainerInventory(
+    (entries ?? []).map((entry) => ({ ...entry, state: entry.state ?? 'running' })),
+    options,
+  );
+}
+
+export function buildStagingRehearsalPlan({ targetCommit, appliedRange = '001-074' } = {}) {
+  fullCommit(targetCommit);
+  if (appliedRange !== '001-074') fail('current_schema_range_must_be_001_074');
+  return Object.freeze({
+    targetCommit,
+    project: stagingProjectName,
+    currentAppliedRange: appliedRange,
+    forwardRange: '075-092',
+    upMigrations: rehearsalMigrationUpCount,
+    migrationFiles: rehearsalMigrationFileCount,
+    steps: Object.freeze([
+      'verify staging compose/container/database/volume labels and reject production targets',
+      'quiesce only running Staging API/mutating services and prove no foreign database writers',
+      'create mode-0600 non-empty custom-format database backup and SHA-256 manifest',
+      'restore that exact backup into an isolated pinned PostgreSQL 16 target',
+      'verify aggregate table/data presence without emitting row or identity data',
+      'apply migrations 075-092 forward-only and verify the complete 001-092 ledger',
+      'run foreign-key and 075-092 structural/functional contract probes',
+      'clean temporary restore resources, verify their absence, and leave all quiesced services stopped for controlled acceptance',
+    ]),
+    boundaries: Object.freeze({
+      liveDatabaseMutation: false,
+      productionTargetAllowed: false,
+      automaticDownMigration: false,
+      oldImageRollbackProof: false,
+      servicesRemainQuiesced: true,
+      apiResumed: false,
+    }),
+  });
+}
+
+function commandFailure(phase) {
+  const error = new Error(`staging_rehearsal_${phase}_failed`);
+  error.code = `staging_rehearsal_${phase}_failed`;
+  return error;
+}
+
+export function runCommand(command, args, {
+  input,
+  cwd = repositoryRoot,
+  env = process.env,
+  phase = 'command',
+  allowFailure = false,
+} = {}) {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(command, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.once('error', () => reject(commandFailure(phase)));
+    child.once('close', (code) => {
+      if (code === 0 || allowFailure) resolvePromise({ stdout, stderr, code });
+      else reject(commandFailure(phase));
+    });
+    if (input !== undefined) child.stdin.end(input);
+    else child.stdin.end();
+  });
+}
+
+export function runCommandWithFileInput(command, args, filePath, {
+  cwd = repositoryRoot,
+  env = process.env,
+  phase = 'command_file_input',
+} = {}) {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(command, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const inputStream = createReadStream(filePath);
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    const failInput = (error) => {
+      inputStream.destroy();
+      child.kill('SIGTERM');
+      reject(commandFailure(`${phase}_input`));
+    };
+    const handleInputError = (error) => {
+      // pg_restore may stop reading after its archive header/list; the pipe
+      // then reports EPIPE even though the child exits successfully. Treat
+      // only that expected early-close as benign and preserve all real I/O
+      // failures as sanitized command errors.
+      if (error?.code === 'EPIPE') return;
+      failInput(error);
+    };
+    inputStream.once('error', handleInputError);
+    child.stdin.once('error', handleInputError);
+    child.once('error', () => reject(commandFailure(phase)));
+    child.once('close', (code) => {
+      if (code === 0) resolvePromise({ stdout, stderr });
+      else reject(commandFailure(phase));
+    });
+    inputStream.pipe(child.stdin);
+  });
+}
+
+async function dockerInspectJson(name, format, phase = 'docker_inspect') {
+  const result = await runCommand('docker', ['inspect', '--format', format, name], { phase });
+  try { return JSON.parse(result.stdout.trim()); } catch { fail('docker_inspect_json_invalid'); }
+}
+
+async function psql({ container, user, database, sql, phase = 'psql_query' }) {
+  const result = await runCommand('docker', [
+    'exec', container, 'psql', '-X', '--set', 'ON_ERROR_STOP=1',
+    '-U', user, '-d', database, '-Atc', sql,
+  ], { phase });
+  return result.stdout.trim();
+}
+
+export async function readReadinessFindingFingerprint({
+  container,
+  user,
+  database,
+  contractVersion = 'V5.2-2026-08-16',
+  payoutHoldHours = 48,
+}) {
+  const raw = await psql({
+    container,
+    user,
+    database,
+    sql: buildReadinessFindingSql({ contractVersion, payoutHoldHours }),
+    phase: 'readiness_fingerprint',
+  });
+  try {
+    return normalizeReadinessFindings(JSON.parse(raw));
+  } catch {
+    fail('readiness_fingerprint_invalid');
+  }
+}
+
+async function sha256File(filePath) {
+  const hash = createHash('sha256');
+  await new Promise((resolvePromise, reject) => {
+    const stream = createReadStream(filePath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.once('error', reject);
+    stream.once('end', resolvePromise);
+  });
+  return hash.digest('hex');
+}
+
+function currentUid() {
+  return typeof process.getuid === 'function' ? process.getuid() : null;
+}
+
+async function validateExistingDirectoryComponent(pathValue, { final = false } = {}) {
+  const metadata = await lstat(pathValue);
+  if (metadata.isSymbolicLink()) {
+    const uid = currentUid();
+    // macOS commonly exposes /var as a root-owned, non-writable system link.
+    // User-owned or writable links remain fail-closed.
+    if (uid === null || metadata.uid !== 0 || (metadata.mode & 0o022) !== 0 || final) {
+      fail('rehearsal_backup_directory_symlink');
+    }
+    return metadata;
+  }
+  if (!metadata.isDirectory()) fail('rehearsal_backup_directory_component_not_directory');
+  const writable = (metadata.mode & 0o022) !== 0;
+  // A root-owned sticky shared-temp ancestor (for example Linux /tmp) is the
+  // one bounded exception: descendants are still created owner-only and the
+  // requested final directory may never rely on the shared permission.
+  const safeSharedStickyAncestor = !final
+    && metadata.uid === 0
+    && (metadata.mode & 0o1000) !== 0;
+  if (writable && !safeSharedStickyAncestor) {
+    fail('rehearsal_backup_directory_component_group_world_writable');
+  }
+  const uid = currentUid();
+  if (uid !== null && metadata.uid !== uid && (final || metadata.uid !== 0)) {
+    fail(final ? 'rehearsal_backup_directory_owner_invalid' : 'rehearsal_backup_directory_ancestor_owner_invalid');
+  }
+  return metadata;
+}
+
+export async function safeExternalDirectory(directory, { repository = repositoryRoot } = {}) {
+  if (!isAbsolute(directory)) fail('rehearsal_backup_directory_not_absolute');
+  const requested = resolve(directory);
+  const resolvedRepository = resolve(repository);
+  const relativePath = relative(resolvedRepository, requested);
+  if (relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))) {
+    fail('rehearsal_backup_directory_inside_repository');
+  }
+  const parts = requested.split('/').filter(Boolean);
+  let current = requested.startsWith('/') ? '/' : '';
+  for (const part of parts) {
+    current = current === '/' ? `/${part}` : join(current, part);
+    try {
+      await validateExistingDirectoryComponent(current, { final: current === requested });
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      await mkdir(current, { mode: 0o700 });
+      await validateExistingDirectoryComponent(current, { final: current === requested });
+    }
+  }
+  const canonical = await realpath(requested);
+  const canonicalRelative = relative(resolvedRepository, canonical);
+  if (canonicalRelative === ''
+    || (!canonicalRelative.startsWith('..') && !isAbsolute(canonicalRelative))) {
+    fail('rehearsal_backup_directory_resolves_inside_repository');
+  }
+  return canonical;
+}
+
+async function migrationPlan() {
+  const entries = await readdir(join(repositoryRoot, 'backend/sql/migrations'), { withFileTypes: true });
+  const files = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.up.sql'))
+    .map((entry) => entry.name).sort();
+  const selected = files.filter((name) => {
+    const number = Number.parseInt(name.slice(0, 3), 10);
+    return number >= rehearsalMigrationFirst && number <= rehearsalMigrationLast;
+  });
+  if (selected.length !== rehearsalMigrationUpCount) fail('rehearsal_migration_inventory_unexpected');
+  return selected.map((name) => ({ name, path: join(repositoryRoot, 'backend/sql/migrations', name) }));
+}
+
+export async function writeDatabaseBackup({ databaseContainer, databaseUser, databaseName, backupDirectory, runId, env = process.env }) {
+  const backupPath = join(backupDirectory, `staging-${runId}.dump`);
+  const output = createWriteStream(backupPath, { flags: 'wx', mode: 0o600 });
+  const outputClosed = new Promise((resolvePromise, reject) => {
+    output.once('close', resolvePromise);
+    output.once('error', reject);
+  });
+  // Node rejects an unopened fs.WriteStream when it is passed directly as a
+  // child-process stdio target. Wait for its file descriptor before spawn so
+  // the backup path is deterministic on every supported Node runtime.
+  await new Promise((resolvePromise, reject) => {
+    output.once('open', resolvePromise);
+    output.once('error', reject);
+  });
+  const child = spawn('docker', [
+    'exec', databaseContainer, 'pg_dump', '-U', databaseUser, '-d', databaseName,
+    '--format=custom', '--no-owner', '--no-acl',
+  ], { cwd: repositoryRoot, env, stdio: ['ignore', output, 'pipe'] });
+  child.stderr.setEncoding('utf8');
+  const code = await new Promise((resolvePromise, reject) => {
+    child.once('error', reject);
+    child.once('close', resolvePromise);
+  });
+  if (code !== 0) {
+    output.destroy();
+    throw commandFailure('pg_dump');
+  }
+  // The child inherits the stream's descriptor but does not end the parent
+  // WriteStream. Close it explicitly after pg_dump exits so the dump is fully
+  // flushed before size, restore-list and checksum verification.
+  output.end();
+  await outputClosed;
+  const metadata = await stat(backupPath);
+  if (metadata.size <= 0) fail('staging_backup_empty');
+  await runCommandWithFileInput('docker', ['run', '--rm', '-i', postgresImage, 'pg_restore', '-l'], backupPath, {
+    env,
+    phase: 'archive_list',
+  });
+  const checksum = await sha256File(backupPath);
+  const manifestPath = `${backupPath}.sha256`;
+  await writeFile(manifestPath, `${checksum}  ${backupPath}\n`, { flag: 'wx', mode: 0o600 });
+  await chmod(manifestPath, 0o600);
+  return { backupPath, manifestPath, checksum, bytes: metadata.size };
+}
+
+export function buildFunctionalProbeSql() {
+  return `
+BEGIN;
+DO $$
+DECLARE
+  v_user_id TEXT;
+  v_booking_id TEXT;
+  v_payment_id UUID;
+  v_refund_id UUID;
+  v_payout_id UUID;
+  v_payee_id TEXT;
+  v_support_case_id UUID;
+  v_command_key TEXT := 'rehearsal-command-' || gen_random_uuid()::text;
+  v_identity_session_id TEXT := 'rehearsal-' || gen_random_uuid()::text;
+  v_provider_session_id TEXT := 'provider-' || gen_random_uuid()::text;
+  v_provider_hash TEXT := encode(digest(v_provider_session_id, 'sha256'), 'hex');
+  observed BOOLEAN;
+BEGIN
+  SELECT u.id INTO v_user_id FROM users AS u ORDER BY u.id LIMIT 1;
+  IF v_user_id IS NULL THEN RAISE EXCEPTION 'rehearsal_fixture_users_missing'; END IF;
+  DELETE FROM mfa_totp_factors WHERE user_id = v_user_id;
+
+  SELECT p.id, po.id INTO v_payment_id, v_payout_id
+    FROM payments p
+    JOIN payouts po ON po.booking_id = p.booking_id AND po.payment_id = p.id
+   WHERE NOT EXISTS (
+     SELECT 1 FROM refunds r WHERE r.payment_id = p.id AND r.status IN ('created', 'pending')
+   )
+   LIMIT 1;
+  IF v_payment_id IS NULL OR v_payout_id IS NULL THEN
+    SELECT b.id, b.owner_id INTO v_booking_id, v_payee_id
+      FROM bookings AS b ORDER BY b.id LIMIT 1;
+    IF v_booking_id IS NULL THEN RAISE EXCEPTION 'rehearsal_fixture_booking_missing'; END IF;
+    INSERT INTO payments (
+      booking_id, provider_charge_id, idempotency_key, status,
+      amount_minor, currency
+    ) VALUES (
+      v_booking_id, 'rehearsal-charge-' || gen_random_uuid()::text,
+      'rehearsal-payment-' || gen_random_uuid()::text, 'captured', 100, 'EUR'
+    ) RETURNING id INTO v_payment_id;
+    INSERT INTO payouts (
+      booking_id, payee_id, payment_id, idempotency_key, status, amount_minor, currency
+    ) VALUES (
+      v_booking_id, v_payee_id, v_payment_id,
+      'rehearsal-payout-' || gen_random_uuid()::text, 'scheduled', 100, 'EUR'
+    ) RETURNING id INTO v_payout_id;
+  END IF;
+  INSERT INTO payment_commands (idempotency_key, command_type, request_hash)
+  VALUES (v_command_key, 'connect.onboard', repeat('a', 64));
+  UPDATE payment_commands
+     SET response_payload = '{"result":"rehearsal"}'::jsonb,
+         completed_at = now(), completion_integrity_version = 1
+   WHERE idempotency_key = v_command_key;
+  BEGIN
+    UPDATE payment_commands
+       SET response_payload = '{"result":"tampered"}'::jsonb
+     WHERE idempotency_key = v_command_key;
+    RAISE EXCEPTION 'rehearsal_payment_command_mutation_was_accepted';
+  EXCEPTION WHEN SQLSTATE '55000' THEN NULL;
+  END;
+
+  BEGIN
+    EXECUTE format(
+      'INSERT INTO refunds (payment_id, idempotency_key, status, amount_minor, currency, refund_platform_fee) VALUES (%L, %L, %L, 1, %L, false)',
+      v_payment_id, 'rehearsal-legacy-' || gen_random_uuid()::text, 'created', 'EUR'
+    );
+    RAISE EXCEPTION 'rehearsal_legacy_refund_insert_was_accepted';
+  EXCEPTION WHEN undefined_column THEN NULL;
+  END;
+  INSERT INTO refunds (
+    payment_id, idempotency_key, status, amount_minor, currency,
+    owner_share_minor, platform_share_minor,
+    provider_refund_model, local_settlement_status, provider_observation_status
+  ) VALUES (
+    v_payment_id, 'rehearsal-current-refund-' || gen_random_uuid()::text, 'created', 1, 'EUR',
+    1, 0, 'separate_charge_manual_transfer_reversal_v1', 'pending', 'none'
+  ) RETURNING id INTO v_refund_id;
+
+  INSERT INTO refund_transfer_reversals (
+    refund_id, payment_id, payout_id, provider_transfer_id,
+    provider_idempotency_key, amount_minor, currency
+  ) VALUES (
+    v_refund_id, v_payment_id, v_payout_id, 'rehearsal-transfer-' || gen_random_uuid()::text,
+    'rehearsal-reversal-' || gen_random_uuid()::text, 1, 'EUR'
+  );
+  BEGIN
+    INSERT INTO refund_transfer_reversals (
+      refund_id, payment_id, payout_id, provider_transfer_id,
+      provider_idempotency_key, amount_minor, currency
+    ) VALUES (
+      v_refund_id, v_payment_id, v_payout_id, 'rehearsal-duplicate-transfer',
+      'rehearsal-duplicate-reversal-' || gen_random_uuid()::text, 1, 'EUR'
+    );
+    RAISE EXCEPTION 'rehearsal_reversal_duplicate_was_accepted';
+  EXCEPTION WHEN unique_violation THEN NULL;
+  END;
+
+  INSERT INTO account_legal_holds (
+    user_id, reason_code, placed_by, idempotency_key,
+    dataset_key, record_key, review_due_at, hold_ends_at
+  ) VALUES (v_user_id, 'rehearsal_scope', v_user_id, 'rehearsal-hold-' || gen_random_uuid()::text,
+    'rehearsal', 'record-' || gen_random_uuid()::text,
+    now() + interval '1 hour', now() + interval '2 hours');
+
+  INSERT INTO support_cases (
+      schema_version, human_readable_case_number, case_type, case_subtype,
+      priority, severity, source_channel, operating_mode, reporter_user_id,
+      reporter_role, current_owner_id, current_owner_role, approval_level,
+      waiting_on, next_action, next_update_at, user_facing_summary,
+      idempotency_key, intake_scope_evidence
+    ) VALUES (
+      1,
+      'SIT-' || substr(regexp_replace(upper(encode(gen_random_bytes(16), 'hex')), '[01]', 'A', 'g'), 1, 12),
+      'general_help', 'app_error_or_display',
+      'p3', 'low', 'internal', 'simulation', v_user_id,
+      'user', v_user_id, 'triage_owner', 'green_automatic',
+      'none', 'rehearsal probe', now() + interval '1 hour',
+      'Rehearsal support case', 'rehearsal-case-' || gen_random_uuid()::text,
+      jsonb_build_object(
+        'version', 'sit_support_single_issue_scope_v1',
+        'singleIssueConfirmed', true,
+        'separationGuidanceShown', true
+      )
+    ) RETURNING id INTO v_support_case_id;
+  BEGIN
+    UPDATE support_cases SET intake_scope_evidence = '{"unexpected":true}'::jsonb
+      WHERE id = v_support_case_id;
+    RAISE EXCEPTION 'rehearsal_special_intake_invalid_was_accepted';
+  EXCEPTION WHEN SQLSTATE '55000' THEN NULL;
+  END;
+
+  INSERT INTO mfa_totp_factors (user_id, encrypted_secret, status)
+  VALUES (v_user_id, 'rehearsal-encrypted-secret', 'pending');
+  BEGIN
+    UPDATE mfa_totp_factors SET status = 'enabled', enabled_at = NULL WHERE user_id = v_user_id;
+    RAISE EXCEPTION 'rehearsal_mfa_enabled_without_timestamp_was_accepted';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
+  INSERT INTO identity_verification_sessions (
+    id, user_id, provider, provider_session_id, status, idempotency_key, request_hash
+  ) VALUES (
+    v_identity_session_id, v_user_id, 'stripe_identity', v_provider_session_id,
+    'requires_input', 'rehearsal-idempotency-' || gen_random_uuid()::text, repeat('b', 64)
+  );
+  BEGIN
+    INSERT INTO identity_verification_sessions (
+      id, user_id, provider, provider_session_id, status, idempotency_key, request_hash
+    ) VALUES (
+      'rehearsal-duplicate-' || gen_random_uuid()::text, v_user_id,
+      'stripe_identity', 'provider-duplicate-' || gen_random_uuid()::text,
+      'requires_input', 'rehearsal-idempotency-duplicate-' || gen_random_uuid()::text, repeat('c', 64)
+    );
+    RAISE EXCEPTION 'rehearsal_identity_active_duplicate_was_accepted';
+  EXCEPTION WHEN unique_violation THEN NULL;
+  END;
+  INSERT INTO identity_verification_redaction_outbox (provider_session_id, identity_session_id)
+  VALUES (v_provider_session_id, v_identity_session_id);
+  INSERT INTO identity_verification_webhook_events (
+    provider_event_id, provider_session_id, event_type, identity_session_id
+  ) VALUES ('rehearsal-event-' || gen_random_uuid()::text, v_provider_session_id,
+    'identity.verification_session.requires_input', v_identity_session_id);
+  UPDATE identity_verification_sessions
+     SET consent_version = 'rehearsal-v1', consented_at = now()
+   WHERE id = v_identity_session_id;
+  UPDATE identity_verification_sessions
+     SET status = 'redacted', provider_session_id = NULL, provider_session_hash = v_provider_hash
+   WHERE id = v_identity_session_id;
+  UPDATE identity_verification_redaction_outbox
+     SET status = 'redacted', provider_session_id = NULL, provider_session_hash = v_provider_hash
+   WHERE identity_session_id = v_identity_session_id;
+  INSERT INTO identity_verification_provider_tombstones (provider_session_hash, expires_at)
+  VALUES (v_provider_hash, now() + interval '1 day');
+
+  INSERT INTO audit_log (actor_id, actor_role, action, resource_type, resource_id)
+  VALUES (v_user_id, 'user', 'rehearsal', 'identity_verification_session', v_identity_session_id);
+  BEGIN
+    UPDATE audit_log SET action = 'tampered' WHERE resource_id = v_identity_session_id;
+    RAISE EXCEPTION 'rehearsal_identity_audit_mutation_was_accepted';
+  EXCEPTION WHEN SQLSTATE '55000' THEN NULL;
+  END;
+
+  SELECT pilot_closed INTO observed FROM identity_verification_control WHERE id = true;
+  IF observed IS NULL OR observed THEN RAISE EXCEPTION 'rehearsal_identity_pilot_control_invalid'; END IF;
+END $$;
+ROLLBACK;`;
+}
+
+async function runFunctionalProbes({ container, user, database }) {
+  const probeSql = buildFunctionalProbeSql();
+  await psqlScript({ container, user, database, sql: probeSql, phase: 'functional_probes' });
+  return true;
+}
+
+async function psqlScript({ container, user, database, sql, phase = 'psql_script' }) {
+  return runCommand('docker', [
+    'exec', '-i', container, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', user, '-d', database,
+  ], { input: sql, phase });
+}
+
+function parseDockerJson(stdout, code) {
+  try {
+    return JSON.parse(stdout.trim());
+  } catch {
+    fail(code);
+  }
+}
+
+function isPrivateIpv4(value) {
+  const octets = value.split('.').map(Number);
+  return octets.length === 4
+    && octets.every((octet) => Number.isInteger(octet) && octet >= 0 && octet <= 255)
+    && (octets[0] === 10
+      || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
+      || (octets[0] === 192 && octets[1] === 168));
+}
+
+export function validateIsolatedPostgresNetworkBinding({
+  container,
+  network,
+  networkSettings,
+  networkInspection,
+  publishedPorts,
+} = {}) {
+  if (typeof container !== 'string' || !/^sit-staging-rehearsal-pg-[0-9]{14}-[0-9a-f]{8}$/u.test(container)) {
+    fail('isolated_postgres_container_identity_invalid');
+  }
+  if (typeof network !== 'string' || !/^sit-staging-rehearsal-network-[0-9]{14}-[0-9a-f]{8}$/u.test(network)) {
+    fail('isolated_postgres_network_identity_invalid');
+  }
+  if (!networkSettings || typeof networkSettings !== 'object' || Array.isArray(networkSettings)
+      || Object.keys(networkSettings).length !== 1 || !networkSettings[network]) {
+    fail('isolated_postgres_network_binding_invalid');
+  }
+  const binding = networkSettings[network];
+  const host = typeof binding.IPAddress === 'string' ? binding.IPAddress.trim() : '';
+  if (isIP(host) !== 4) fail('isolated_postgres_ipv4_invalid');
+  if (!isPrivateIpv4(host)) fail('isolated_postgres_ipv4_not_private');
+  if (!networkInspection || networkInspection.Name !== network || networkInspection.Internal !== true
+      || networkInspection.Labels?.[disposableRehearsalLabel] !== 'true'
+      || networkInspection.Labels?.[disposableRehearsalRunLabel] !== network.slice('sit-staging-rehearsal-network-'.length)) {
+    fail('isolated_postgres_network_not_internal_or_attested');
+  }
+  const members = Object.values(networkInspection.Containers ?? {});
+  if (members.length !== 1 || members[0]?.Name !== container
+      || members[0]?.IPv4Address !== `${host}/` + (binding.IPPrefixLen ?? 16)) {
+    fail('isolated_postgres_network_membership_invalid');
+  }
+  if (publishedPorts !== null && publishedPorts !== undefined) {
+    if (typeof publishedPorts !== 'object' || Array.isArray(publishedPorts)
+        || Object.values(publishedPorts).some((value) => Array.isArray(value) && value.length > 0)) {
+      fail('isolated_postgres_published_port_forbidden');
+    }
+  }
+  return Object.freeze({ host, port: 5432 });
+}
+
+export async function resolveIsolatedPostgresEndpoint({
+  container,
+  network,
+  command = runCommand,
+} = {}) {
+  const networkSettingsResult = await command('docker', [
+    'inspect', '--format', '{{json .NetworkSettings.Networks}}', container,
+  ], { phase: 'isolated_postgres_network_inspect' });
+  const networkInspectionResult = await command('docker', [
+    'network', 'inspect', '--format', '{{json .}}', network,
+  ], { phase: 'isolated_postgres_network_attestation' });
+  const publishedPortsResult = await command('docker', [
+    'inspect', '--format', '{{json .NetworkSettings.Ports}}', container,
+  ], { phase: 'isolated_postgres_published_ports_inspect' });
+  return validateIsolatedPostgresNetworkBinding({
+    container,
+    network,
+    networkSettings: parseDockerJson(networkSettingsResult.stdout, 'isolated_postgres_network_json_invalid'),
+    networkInspection: parseDockerJson(networkInspectionResult.stdout, 'isolated_postgres_network_attestation_json_invalid'),
+    publishedPorts: parseDockerJson(publishedPortsResult.stdout, 'isolated_postgres_published_ports_json_invalid'),
+  });
+}
+
+export async function applyMigrationsWithApplicationRunner({ container, network, database, user, password }) {
+  const endpoint = await resolveIsolatedPostgresEndpoint({ container, network });
+  const pool = new Pool({
+    host: endpoint.host,
+    port: endpoint.port,
+    user,
+    database,
+    password,
+    max: 1,
+  });
+  try {
+    const { runMigrations } = await import('../src/migrations.js');
+    try {
+      await runMigrations(pool);
+    } catch {
+      throw commandFailure('application_migration_runner');
+    }
+  } finally {
+    await pool.end();
+  }
+}
+
+export async function removeAndVerifyDockerResource(kind, name, { env = process.env } = {}) {
+  const removeArgs = kind === 'container'
+    ? ['rm', '-f', name]
+    : kind === 'volume' ? ['volume', 'rm', name] : ['network', 'rm', name];
+  const verifyArgs = kind === 'container'
+    ? ['ps', '-a', '--filter', `name=^/${name}$`, '--format', '{{.Names}}']
+    : kind === 'volume'
+      ? ['volume', 'ls', '--filter', `name=^${name}$`, '--format', '{{.Name}}']
+      : ['network', 'ls', '--filter', `name=^${name}$`, '--format', '{{.Name}}'];
+  let removalError = null;
+  try {
+    await runCommand('docker', removeArgs, {
+      phase: `cleanup_${kind}_remove`,
+      env,
+    });
+  } catch {
+    removalError = `cleanup_${kind}_remove_failed`;
+  }
+  try {
+    const result = await runCommand('docker', verifyArgs, {
+      phase: `cleanup_${kind}_verify`,
+      allowFailure: true,
+      env,
+    });
+    if (result.code !== 0) return `cleanup_${kind}_verify_failed`;
+    const listed = result.stdout.split(/\r?\n/u).map((entry) => entry.trim()).filter(Boolean);
+    if (listed.some((entry) => entry === name)) return `cleanup_${kind}_still_present`;
+    if (listed.length > 0) return `cleanup_${kind}_still_present`;
+  } catch {
+    return `cleanup_${kind}_verify_failed`;
+  }
+  return removalError;
+}
+
+export async function runStagingForwardMigrationRehearsal({
+  targetCommit,
+  environment = process.env,
+  execute = environment.SIT_STAGING_REHEARSAL_EXECUTE === '1',
+} = {}) {
+  const plan = buildStagingRehearsalPlan({ targetCommit });
+  if (!execute) fail('explicit_execute_flag_required');
+  if (environment.SIT_STAGING_REHEARSAL_CONFIRM !== targetCommit) {
+    fail('exact_rehearsal_confirmation_required');
+  }
+  await runCommand('git', ['cat-file', '-e', `${targetCommit}^{commit}`], { phase: 'target_commit_exists' });
+  try {
+    await runCommand('git', ['diff', '--quiet', targetCommit, '--', 'backend/src', 'backend/sql'], { phase: 'target_runtime_source_match' });
+  } catch {
+    fail('runtime_source_differs_from_target_commit');
+  }
+  const project = environment.STAGING_COMPOSE_PROJECT ?? stagingProjectName;
+  const apiContainer = environment.STAGING_API_CONTAINER ?? 'shareittoo-staging-api';
+  const databaseContainer = environment.STAGING_DATABASE_CONTAINER ?? 'shareittoo-staging-postgres';
+  const databaseVolume = environment.STAGING_DATABASE_VOLUME ?? 'shareittoo_staging_postgres_data';
+  assertStagingTarget({ project, apiContainer, databaseContainer, databaseVolume });
+  const databaseUser = environment.STAGING_DATABASE_USER ?? 'shareittoo_staging';
+  const databaseName = environment.STAGING_DATABASE_NAME ?? 'shareittoo_staging';
+  const readinessPayoutHoldHours = Number.parseInt(environment.PAYOUT_HOLD_HOURS ?? '48', 10);
+  const readinessContractVersion = environment.SIT_CONTRACT_VERSION ?? 'V5.2-2026-08-16';
+  const requestedBackupDirectory = environment.STAGING_REHEARSAL_BACKUP_DIR ?? '/docker/shareittoo/backups/rehearsals';
+  const backupDirectory = await safeExternalDirectory(requestedBackupDirectory);
+  const opsCommit = fullCommit(environment.SIT_STAGING_REHEARSAL_OPS_COMMIT, 'opsCommit');
+  const runningOpsCommit = (await runCommand('git', ['rev-parse', 'HEAD'], { phase: 'ops_commit_read' })).stdout.trim();
+  if (runningOpsCommit !== opsCommit) fail('ops_commit_mismatch');
+  const apiLabels = await dockerInspectJson(apiContainer, '{{json .Config.Labels}}', 'staging_api_label_inspect');
+  const databaseLabels = await dockerInspectJson(databaseContainer, '{{json .Config.Labels}}', 'staging_database_label_inspect');
+  const volumeLabels = await dockerInspectJson(databaseVolume, '{{json .Labels}}', 'staging_volume_label_inspect');
+  assertStagingLabels({ labels: apiLabels, expectedService: 'api' });
+  assertStagingLabels({ labels: databaseLabels, expectedService: 'postgres' });
+  assertStagingLabels({ labels: volumeLabels, expectedVolume: true });
+  const currentRange = await psql({
+    container: databaseContainer,
+    user: databaseUser,
+    database: databaseName,
+    sql: `SELECT count(*) FILTER (WHERE n BETWEEN 1 AND 74) || '|' ||
+      count(*) FILTER (WHERE n BETWEEN 75 AND 91) || '|' || count(DISTINCT n)
+      FROM (SELECT (regexp_match(name, '^([0-9]+)_'))[1]::int AS n FROM schema_migrations) AS rows`,
+    phase: 'current_schema_inventory',
+  });
+  if (currentRange !== '74|0|74') fail('current_schema_migration_range_not_001_074');
+  const forwardMigrations = await migrationPlan();
+
+  const runId = `${new Date().toISOString().replace(/[^0-9]/gu, '').slice(0, 14)}-${crypto.randomUUID().slice(0, 8)}`;
+  const quiesced = [];
+  let isolatedContainer = '';
+  let isolatedVolume = '';
+  let isolatedNetwork = '';
+  let succeeded = false;
+  let backup;
+  let failureCode = null;
+  let result;
+  try {
+    const inventory = (await runCommand('docker', [
+      'ps', '-a', '--filter', `label=com.docker.compose.project=${stagingProjectName}`,
+      '--format', '{{.Names}}',
+    ], { phase: 'pre_quiesce_inventory' })).stdout.trim().split(/\r?\n/u).filter(Boolean);
+    const inventoryEntries = [];
+    for (const name of inventory) {
+      const inspected = await dockerInspectJson(name, '{{json .}}', 'pre_quiesce_container_inspect');
+      inventoryEntries.push({
+        name,
+        state: inspected?.State?.Status,
+        labels: inspected?.Config?.Labels,
+      });
+    }
+    const toQuiesce = validateStagingContainerInventory(inventoryEntries, { apiContainer, databaseContainer });
+    for (const name of toQuiesce) {
+      await runCommand('docker', ['stop', name], { phase: `quiesce_${name.replaceAll(/[^a-z0-9]+/giu, '_')}` });
+      quiesced.push(name);
+    }
+    const writersBeforeBackup = await psql({
+      container: databaseContainer,
+      user: databaseUser,
+      database: databaseName,
+      sql: `SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()`,
+      phase: 'pre_backup_writer_check',
+    });
+    if (writersBeforeBackup !== '0') fail('foreign_database_writers_before_backup');
+    backup = await writeDatabaseBackup({ databaseContainer, databaseUser, databaseName, backupDirectory, runId, env: environment });
+    const writersAfterBackup = await psql({
+      container: databaseContainer,
+      user: databaseUser,
+      database: databaseName,
+      sql: `SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()`,
+      phase: 'post_backup_writer_check',
+    });
+    if (writersAfterBackup !== '0') fail('foreign_database_writers_after_backup');
+
+    isolatedVolume = `sit-staging-rehearsal-volume-${runId}`;
+    isolatedNetwork = `sit-staging-rehearsal-network-${runId}`;
+    isolatedContainer = `sit-staging-rehearsal-pg-${runId}`;
+    await runCommand('docker', [
+      'network', 'create', '--internal',
+      '--label', disposableRehearsalLabel + '=true',
+      '--label', `${disposableRehearsalRunLabel}=${runId}`,
+      isolatedNetwork,
+    ], { phase: 'temp_network_create' });
+    await runCommand('docker', [
+      'volume', 'create',
+      '--label', disposableRehearsalLabel + '=true',
+      '--label', `${disposableRehearsalRunLabel}=${runId}`,
+      isolatedVolume,
+    ], { phase: 'temp_volume_create' });
+    const isolatedPassword = crypto.randomBytes(32).toString('base64url');
+    await runCommand('docker', [
+      'create', '--name', isolatedContainer,
+      '--label', disposableRehearsalLabel + '=true',
+      '--label', `${disposableRehearsalRunLabel}=${runId}`,
+      '--network', isolatedNetwork,
+      '--mount', `type=volume,src=${isolatedVolume},dst=/var/lib/postgresql/data`,
+      '-e', 'POSTGRES_DB=shareittoo_rehearsal',
+      '-e', 'POSTGRES_USER=shareittoo_rehearsal',
+      '-e', `POSTGRES_PASSWORD=${isolatedPassword}`,
+      postgresImage,
+    ], { phase: 'temp_db_start' });
+    const isolatedNetworkLabels = await dockerInspectJson(
+      isolatedNetwork,
+      '{{json .Labels}}',
+      'temp_network_identity',
+    );
+    const isolatedVolumeLabels = await dockerInspectJson(
+      isolatedVolume,
+      '{{json .Labels}}',
+      'temp_volume_identity',
+    );
+    const isolatedContainerLabels = await dockerInspectJson(
+      isolatedContainer,
+      '{{json .Config.Labels}}',
+      'temp_container_identity',
+    );
+    assertDisposableResourceIdentity({
+      resourceType: 'network', name: isolatedNetwork, labels: isolatedNetworkLabels, runId,
+    });
+    assertDisposableResourceIdentity({
+      resourceType: 'volume', name: isolatedVolume, labels: isolatedVolumeLabels, runId,
+    });
+    assertDisposableResourceIdentity({
+      resourceType: 'container', name: isolatedContainer, labels: isolatedContainerLabels, runId,
+    });
+    await runCommand('docker', ['start', isolatedContainer], { phase: 'temp_db_start' });
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      try {
+        await runCommand('docker', ['exec', isolatedContainer, 'pg_isready', '-h', '127.0.0.1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], { phase: 'temp_db_readiness' });
+        break;
+      } catch {
+        if (attempt === 59) fail('isolated_postgres_not_ready');
+        await new Promise((resolvePromise) => setTimeout(resolvePromise, 1000));
+      }
+    }
+    await runCommandWithFileInput('docker', [
+      'exec', '-i', isolatedContainer, 'pg_restore', '-U', 'shareittoo_rehearsal',
+      '-d', 'shareittoo_rehearsal', '--no-owner', '--no-acl',
+    ], backup.backupPath, { env: environment, phase: 'isolated_restore' });
+    const aggregate = await psql({
+      container: isolatedContainer,
+      user: 'shareittoo_rehearsal',
+      database: 'shareittoo_rehearsal',
+      sql: `SELECT (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public') || '|' ||
+        (SELECT COALESCE(sum(row_count), 0)::bigint FROM (
+          SELECT count(*) AS row_count FROM users
+          UNION ALL SELECT count(*) FROM listings
+          UNION ALL SELECT count(*) FROM bookings
+          UNION ALL SELECT count(*) FROM payments
+          UNION ALL SELECT count(*) FROM refunds
+          UNION ALL SELECT count(*) FROM payouts
+          UNION ALL SELECT count(*) FROM payment_commands
+          UNION ALL SELECT count(*) FROM support_cases
+          UNION ALL SELECT count(*) FROM account_legal_holds
+        ) AS exact_counts)`,
+      phase: 'isolated_restore_inventory',
+    });
+    const [tableCount, restoredRows] = aggregate.split('|').map(Number);
+    if (!Number.isFinite(tableCount) || tableCount < 1 || !Number.isFinite(restoredRows) || restoredRows <= 0) {
+      fail('isolated_restore_empty');
+    }
+    await applyMigrationsWithApplicationRunner({
+      container: isolatedContainer,
+      network: isolatedNetwork,
+      database: 'shareittoo_rehearsal',
+      user: 'shareittoo_rehearsal',
+      password: isolatedPassword,
+    });
+    const ledger = await psql({
+      container: isolatedContainer,
+      user: 'shareittoo_rehearsal',
+      database: 'shareittoo_rehearsal',
+      sql: `SELECT count(*), count(DISTINCT (regexp_match(name, '^([0-9]+)_'))[1]::int),
+        min((regexp_match(name, '^([0-9]+)_'))[1]::int), max((regexp_match(name, '^([0-9]+)_'))[1]::int)
+        FROM schema_migrations`,
+      phase: 'isolated_migration_ledger',
+    });
+    if (ledger !== '92|92|1|92') fail('rehearsal_migration_ledger_invalid');
+    const readinessBaseline = await readReadinessFindingFingerprint({
+      container: isolatedContainer,
+      user: 'shareittoo_rehearsal',
+      database: 'shareittoo_rehearsal',
+      contractVersion: readinessContractVersion,
+      payoutHoldHours: readinessPayoutHoldHours,
+    });
+    await runCommand('docker', ['exec', '-i', isolatedContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal'], { input: await readFile(join(repositoryRoot, 'backend/ops/check_foreign_key_integrity.sql')), phase: 'isolated_fk_integrity' });
+    await runFunctionalProbes({ container: isolatedContainer, user: 'shareittoo_rehearsal', database: 'shareittoo_rehearsal' });
+    result = Object.freeze({
+      status: 'passed',
+      opsCommit,
+      targetCommit,
+      currentAppliedRange: '001-074',
+      forwardAppliedRange: '075-092',
+      backup: Object.freeze({ basename: backup.backupPath.split('/').pop(), bytes: backup.bytes, sha256: backup.checksum }),
+      isolatedRestore: Object.freeze({
+        aggregateOnly: true,
+        migrations: '001-092',
+        forwardMigrationFiles: forwardMigrations.length,
+        functionalProbes: 'passed',
+        readinessBaseline,
+      }),
+      servicesRemainQuiesced: true,
+      apiResumed: false,
+    });
+    succeeded = true;
+  } catch (error) {
+    failureCode = error?.code ?? 'rehearsal_failed';
+  } finally {
+    const cleanupFailures = [];
+  if (isolatedContainer) {
+      const cleanupFailure = await removeAndVerifyDockerResource('container', isolatedContainer);
+      if (cleanupFailure) cleanupFailures.push(cleanupFailure);
+    }
+    if (isolatedVolume) {
+      const cleanupFailure = await removeAndVerifyDockerResource('volume', isolatedVolume);
+      if (cleanupFailure) cleanupFailures.push(cleanupFailure);
+    }
+    if (isolatedNetwork) {
+      const cleanupFailure = await removeAndVerifyDockerResource('network', isolatedNetwork);
+      if (cleanupFailure) cleanupFailures.push(cleanupFailure);
+    }
+    if (cleanupFailures.length > 0) {
+      succeeded = false;
+      failureCode = 'cleanup_required';
+    }
+    if (!succeeded) {
+      const failureReportPath = join(backupDirectory, `staging-${runId}-failure.json`);
+      try {
+        await writeFile(failureReportPath, `${JSON.stringify({
+          status: 'fail-closed',
+          opsCommit,
+          targetCommit,
+          currentAppliedRange: '001-074',
+          forwardAppliedRange: 'not-applied-or-unverified',
+          failureCode: failureCode ?? 'rehearsal_failed',
+          cleanupFailures,
+          quiescedServices: quiesced,
+          servicesRemainQuiesced: true,
+          servicesResumed: false,
+          databaseRollback: 'not-attempted',
+          mfaOverlay: 'not-touched',
+        }, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+      } catch {
+        failureCode = 'recovery_evidence_write_failed';
+      }
+    }
+  }
+  if (!succeeded) fail(failureCode ?? 'rehearsal_failed');
+  return result;
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  try {
+    const targetCommit = fullCommit(process.argv[2], 'targetCommit');
+    const result = await runStagingForwardMigrationRehearsal({ targetCommit });
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+  } catch (error) {
+    process.stderr.write(`${error?.message ?? 'Staging forward-migration rehearsal failed.'}\n`);
+    process.exitCode = 1;
+  }
+}

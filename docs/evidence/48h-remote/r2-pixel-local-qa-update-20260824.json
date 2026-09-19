@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r2-pixel-local-qa-update",
+  "status": "passed-data-preserving-local-qa-update",
+  "observedAt": "2026-08-24T09:58:10.197Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "toolingCommit": "c15e12e71a3caaf6918c5b9fa8ec8de3666bd7a8",
+    "candidateCommit": "13359f209857690d53feeaff1bab3eca40bdbb48",
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026082303"
+  },
+  "candidate": {
+    "ownerOnlyArchiveVerified": true,
+    "canonicalSigningRelationshipVerified": true,
+    "debuggableLocalQaOnly": true,
+    "releaseChannel": "internal",
+    "apiBaseUrl": "http://127.0.0.1:18080/api/v1",
+    "adbReverseRequired": "tcp:18080",
+    "blueOceanMockUi": true,
+    "requiredLocalBackendProvider": "mock",
+    "g3TechnicalUi": true,
+    "g4TechnicalUi": true,
+    "g5TechnicalUi": true,
+    "aabCreated": false
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "preflight": {
+    "capturedAt": "2026-08-24T09:51:30.305Z",
+    "status": "eligible-seven-conditions-green-no-device-write-yet",
+    "conditions": {
+      "exactPackageIdentity": true,
+      "signatureCompatibleWithInstalledApp": true,
+      "nonDestructiveReplaceInstallEligible": true,
+      "uninstallOrResetNotRequired": true,
+      "ownerPinOrSystemConfirmationNotExpected": true,
+      "dataPreservationHasFailClosedPostChecks": true,
+      "rollbackArchiveAndProcedureVerified": true
+    }
+  },
+  "update": {
+    "installedVersionBefore": "1.0.0+2026082302",
+    "installedVersionAfter": "1.0.0+2026082303",
+    "method": "adb-install-no-streaming-replace",
+    "strictlyNewerBuildInstalled": true,
+    "candidateSignatureMatchedInstalledApp": true,
+    "installedCandidateBytesMatchedArchive": true,
+    "firstInstallTimePreserved": true,
+    "ceDataInodePreserved": true,
+    "foregroundActivityVerified": true,
+    "uninstallUsed": false,
+    "dataResetUsed": false,
+    "downgradeUsed": false
+  },
+  "independentVerification": {
+    "capturedAt": "2026-08-24T09:58:10.197Z",
+    "exactArchiveBytesInstalled": true,
+    "canonicalSigningRelationshipInheritedFromVerifiedArchive": true,
+    "firstInstallTimePredatesR2Update": true,
+    "nonzeroAppDataInodePresent": true,
+    "deterministicActivityStartCompleted": true,
+    "foregroundActivityVerified": true,
+    "secondInstallPerformed": false
+  },
+  "rollback": {
+    "buildNumber": "2026082302",
+    "candidateCommit": "1b3e86ef1bcfa5a88b1baf965fdad00e9d64f54b",
+    "ownerOnlyCanonicalArchiveVerified": true,
+    "binaryPrivacyScanPassed": true,
+    "previousDataPreservingReplaceEvidenceVerified": true,
+    "procedure": "Use the retained canonical owner-only 2026082302 archive only if R2 recovery is required; perform no uninstall or data reset, and reverify package and data identity after the controlled downgrade-replace."
+  },
+  "technicalDebt": {
+    "id": "TD-48H-001",
+    "status": "closed",
+    "issue": "The former post-install monkey launch checked foreground state before Android had deterministically completed the activity start.",
+    "failedTimingCheckAcceptedAsFinalEvidence": false,
+    "remediation": "Replaced the timing-sensitive launch with am start -W plus completed-start and foreground assertions.",
+    "reproducibleTestsPassed": 13,
+    "workaroundIsReleasePrerequisite": false
+  },
+  "boundaries": {
+    "storeInstallationGateSatisfied": false,
+    "publicReleaseAuthorized": false,
+    "providerCallPerformed": false,
+    "apiBillingCreated": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "paymentChanged": false,
+    "privateMediaRead": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPaths": false,
+    "containsSigningDigests": false,
+    "containsSecrets": false
+  },
+  "nextPackage": "R3_BLUE_OCEAN_FLOW_ON_REAL_PIXEL"
+}
