@@ -921,6 +921,13 @@ class SafetyActionService {
           );
         }
         remoteAccepted = true;
+        // The remote write is the commit boundary. Re-check the captured
+        // principal before interpreting or exposing its receipt so a stale
+        // caller is never classified as a local receipt failure.
+        await _requireCurrent(
+          context,
+          remoteAcceptedOrConfirmed: true,
+        );
         if (opensReview) {
           final returnCase = remoteReceipt['returnCase'];
           if (returnCase is! Map ||

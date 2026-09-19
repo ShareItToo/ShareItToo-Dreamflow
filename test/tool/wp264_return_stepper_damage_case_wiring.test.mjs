@@ -86,11 +86,10 @@ test('screen principal invalidation owns only the stepper route', () => {
   assert.match(source, /_releaseScreenRoute\?\.call\(\)/u);
 });
 
-test('confirmed remote return-case receipts are not downgraded by post-write principal drift', () => {
-  assert.match(submitReturnCaseSource, /remoteAccepted = true;\s*if \(opensReview\)/su);
-  assert.doesNotMatch(
+test('remote return-case acceptance rechecks principal before receipt parsing', () => {
+  assert.match(
     submitReturnCaseSource,
-    /remoteAccepted = true;\s*await _requireCurrent\(\s*context,\s*remoteAcceptedOrConfirmed: true,/su,
+    /remoteAccepted = true;\s*\/\/ The remote write is the commit boundary\.[\s\S]*?await _requireCurrent\(\s*context,\s*remoteAcceptedOrConfirmed: true,[\s\S]*?if \(opensReview\)/su,
   );
   assert.match(
     source,
