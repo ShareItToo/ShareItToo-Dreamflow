@@ -1,5 +1,19 @@
 # Current Work Package: WP260-C Listing-AI lifetime budget — SOURCE PASS; provider gate separate
 
+## Completed subpackage: WP260-D durable paid attempt — SOURCE PASS; provider gate separate
+
+Commits `4e262a4f562c010d7e39c80ba618d7b36c76eb2b` and
+`9ce5e97b7c7e286e60cb2b621328788dc5eabb19` add the owner-bound durable
+attempt, attempt-bound reservation, persistent egress marker and exactly-once
+finalization required before paid image screening or generation. Unknown
+outcomes are charged at the full reservation and are not retried; only a failed
+pre-egress or stale unmarked lease can be reclaimed. Focused Listing-AI suites
+are 75/75 and the real PostgreSQL 16
+integration gate passes. No provider, Stripe CLI, Play, production or device
+mutation occurred.
+
+See `docs/operations/WP260_D_LISTING_AI_DURABLE_ATTEMPT_20260919.md`.
+
 WP260-C closes the optional external Listing-AI budget invariant at source
 commits `726c7e3fcf9ce0bced46ebc421ca7e18dc1aa962` and
 `d40f74cb273f39c097f2fa278d053fdcd8a16f7d`: one durable lifetime bucket,

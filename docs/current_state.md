@@ -1,5 +1,18 @@
 # ShareItToo Current State
 
+## WP260-D Listing-AI durable paid attempt — SOURCE PASS; provider gate separate
+
+Commits `4e262a4f562c010d7e39c80ba618d7b36c76eb2b` and
+`9ce5e97b7c7e286e60cb2b621328788dc5eabb19` bind OpenAI Listing-AI
+egress to a durable owner/payload/image/consent/model attempt, an attempt-bound
+reservation and a persistent egress marker. Unknown outcomes are charged at
+the reserved maximum and written to the append-only ledger; they remain
+occupied. Only pre-egress failed or stale-unmarked reservations can be reclaimed. The
+paid ledger preserves estimated cost and nullable billed cost. Focused suites
+75/75 and the PostgreSQL 16 integration gate pass. No external provider call,
+Stripe CLI authorization, Play, production, or device action occurred. See the
+WP260-D operation report.
+
 ## WP260-C Listing-AI lifetime budget — SOURCE PASS; provider gate separate
 
 Commits `726c7e3fcf9ce0bced46ebc421ca7e18dc1aa962` and
