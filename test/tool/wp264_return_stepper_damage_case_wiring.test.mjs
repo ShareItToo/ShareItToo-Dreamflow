@@ -6,6 +6,14 @@ const source = readFileSync(
   new URL('../../lib/widgets/return_handover_stepper_sheet.dart', import.meta.url),
   'utf8',
 );
+const serviceSource = readFileSync(
+  new URL('../../lib/services/safety_action_service.dart', import.meta.url),
+  'utf8',
+);
+const submitReturnCaseSource = serviceSource.slice(
+  serviceSource.indexOf('Future<SafetyReturnCaseIssueResult> submitReturnCaseIssue'),
+  serviceSource.indexOf('Future<String?> uploadEvidence'),
+);
 
 test('damage remains return-flow-only and no-damage keeps the existing path', () => {
   assert.match(source, /if \(isReturn\) base\.add\(_StepKind\.damage\)/u);
@@ -32,7 +40,10 @@ test('damage retries retain upload ids and one opaque action idempotency key', (
   assert.match(source, /List<String\?> _damageEvidenceUploadIds/u);
   assert.match(source, /if \(_damageEvidenceUploadIds\[index\] != null\) continue/u);
   assert.match(source, /String _damageIdempotencyKey = ''/u);
-  assert.match(source, /crypto\.sha256\.convert\(utf8\.encode\(seed\)\)/u);
+  assert.match(source, /final random = Random\.secure\(\)/u);
+  assert.match(source, /List<int>\.generate\(16/u);
+  assert.match(source, /base64UrlEncode\(entropy\)/u);
+  assert.doesNotMatch(source, /widget\.request\.id.*microsecondsSinceEpoch/u);
   assert.match(source, /idempotencyKey: _damageIdempotencyKey/u);
 });
 
@@ -56,4 +67,30 @@ test('closing a nonempty damage draft requires explicit abandonment', () => {
   assert.match(source, /Schadenentwurf verwerfen\?/u);
   assert.match(source, /Weiter bearbeiten/u);
   assert.match(source, /Verwerfen/u);
+});
+
+test('all exits and toggle-off are guarded, and recorded cases lock the draft', () => {
+  assert.match(source, /PopScope<ReturnHandoverStepResult>/u);
+  assert.match(source, /onPopInvokedWithResult/u);
+  assert.match(source, /if \(_step == 0\) \{\s*await _closeStepper\(\)/su);
+  assert.match(source, /_confirmDamageAbandonment\(\)/u);
+  assert.match(source, /onChanged: _damageReceipt != null \|\| _savingDamageCase/u);
+  assert.match(source, /readOnly: _damageReceipt != null/u);
+  assert.match(source, /allowAdd: _damageReceipt == null/u);
+  assert.match(source, /serverseitig gespeichert/u);
+});
+
+test('screen principal invalidation owns only the stepper route', () => {
+  assert.match(source, /didChangeDependencies\(\)/u);
+  assert.match(source, /_safetyActions\.trackOwnedScreenRoute\(route\)/u);
+  assert.match(source, /_releaseScreenRoute\?\.call\(\)/u);
+});
+
+test('confirmed remote return-case receipts are not downgraded by post-write principal drift', () => {
+  assert.match(submitReturnCaseSource, /remoteAccepted = true;\s*if \(opensReview\)/su);
+  assert.doesNotMatch(
+    submitReturnCaseSource,
+    /remoteAccepted = true;\s*await _requireCurrent\(\s*context,\s*remoteAcceptedOrConfirmed: true,/su,
+  );
+  assert.match(source, /!_safetyActions\.isSynchronouslyCurrent\(owner\)\) \{\s*return false;/su);
 });

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:ui' show ImageFilter;
-import 'package:crypto/crypto.dart' as crypto;
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -229,10 +229,13 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   String _damageIdempotencyKey = '';
   Map<String, dynamic>? _damageReceipt;
   bool _savingDamageCase = false;
+  bool _closing = false;
   late final SafetyActionService _safetyService;
   final SafetyActionInteractionController _safetyActions =
       SafetyActionInteractionController();
   StreamSubscription<String>? _securitySubscription;
+  Route<dynamic>? _screenRoute;
+  VoidCallback? _releaseScreenRoute;
   final TextEditingController _manualCodeCtrl = TextEditingController();
   bool _showManualEntry = false;
 
@@ -258,10 +261,27 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
     unawaited(_loadConditionEvidence());
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _screenRoute = ModalRoute.of(context);
+    _bindOwnedScreenRoute();
+  }
+
+  void _bindOwnedScreenRoute() {
+    final route = _screenRoute;
+    if (route == null || _safetyActions.context == null) return;
+    _releaseScreenRoute?.call();
+    _releaseScreenRoute = _safetyActions.trackOwnedScreenRoute(route);
+  }
+
   Future<void> _loadSafetyContext() async {
     try {
       final context = await _safetyService.loadCurrentContext();
-      if (mounted && context != null) _safetyActions.replaceContext(context);
+      if (mounted && context != null) {
+        _safetyActions.replaceContext(context);
+        _bindOwnedScreenRoute();
+      }
     } catch (error) {
       debugPrint('[handover] damage principal load failed: $error');
     }
@@ -303,6 +323,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   @override
   void dispose() {
     _securitySubscription?.cancel();
+    _releaseScreenRoute?.call();
     _safetyActions.dispose();
     _damageNotesCtrl.dispose();
     _damageAmountCtrl.dispose();
@@ -376,10 +397,10 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
 
   void _ensureDamageIdempotencyKey() {
     if (_damageIdempotencyKey.isNotEmpty) return;
-    final seed = 'return-damage|${widget.request.id}|'
-        '${DateTime.now().microsecondsSinceEpoch}';
+    final random = Random.secure();
+    final entropy = List<int>.generate(16, (_) => random.nextInt(256));
     _damageIdempotencyKey =
-        'return_damage_${crypto.sha256.convert(utf8.encode(seed)).toString()}';
+        'return_damage_${base64UrlEncode(entropy).replaceAll('=', '')}';
   }
 
   Future<bool> _saveDamageCaseStep() async {
@@ -479,40 +500,46 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   bool get _hasAbandonableDamageDraft =>
       widget.mode == ReturnFlowMode.returnFlow &&
       _damageReceipt == null &&
-      (_hasDamage ||
-          _damagePhotos.isNotEmpty ||
+      (_damagePhotos.isNotEmpty ||
           _damageNotesCtrl.text.trim().isNotEmpty ||
           _damageAmountCtrl.text.trim().isNotEmpty ||
           _damageEvidenceUploadIds.any((id) => id != null));
 
-  Future<void> _closeStepper() async {
-    if (_hasAbandonableDamageDraft) {
-      final abandon = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Schadenentwurf verwerfen?'),
-          content: const Text(
-            'Die Beschreibung und geschützten Nachweise bleiben nur erhalten, wenn du den Entwurf weiterbearbeitest.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Weiter bearbeiten'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Verwerfen'),
-            ),
-          ],
+  Future<bool> _confirmDamageAbandonment() async {
+    if (!_hasAbandonableDamageDraft) return true;
+    final abandon = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Schadenentwurf verwerfen?'),
+        content: const Text(
+          'Die Beschreibung und geschützten Nachweise bleiben nur erhalten, wenn du den Entwurf weiterbearbeitest.',
         ),
-      );
-      if (abandon != true || !mounted) return;
-    }
-    if (mounted) {
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Weiter bearbeiten'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Verwerfen'),
+          ),
+        ],
+      ),
+    );
+    return abandon == true && mounted;
+  }
+
+  Future<void> _closeStepper() async {
+    if (_closing) return;
+    _closing = true;
+    final canClose = await _confirmDamageAbandonment();
+    if (canClose && mounted) {
       Navigator.of(context).pop(
         const ReturnHandoverStepResult(confirmed: false, galleryUsed: false),
       );
+      return;
     }
+    _closing = false;
   }
 
   Future<void> _next() async {
@@ -621,10 +648,9 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
     }
   }
 
-  void _back() {
+  Future<void> _back() async {
     if (_step == 0) {
-      Navigator.of(context).pop(
-          const ReturnHandoverStepResult(confirmed: false, galleryUsed: false));
+      await _closeStepper();
     } else {
       setState(() => _step--);
     }
@@ -634,170 +660,176 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   Widget build(BuildContext context) {
     final maxWidth = 760.0;
 
-    return Material(
-      color: Colors.transparent,
-      child: SafeArea(
-        top: !widget.fullScreen ? false : true,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxWidth),
-            child: ClipRRect(
-              borderRadius: widget.fullScreen
-                  ? BorderRadius.zero
-                  : const BorderRadius.vertical(top: Radius.circular(24)),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-                child: Stack(
-                  children: [
-                    // SIT-style blurred blue background with logo
-                    Positioned.fill(
-                      child: ImageFiltered(
-                        imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-                        child: Image.asset('assets/images/fulllogo.jpg',
-                            fit: BoxFit.cover),
-                      ),
-                    ),
-                    // Blue-tinted gradient overlay for stronger brand feel
-                    Positioned.fill(
-                      child: Builder(builder: (context) {
-                        final blue = Theme.of(context).colorScheme.primary;
-                        return Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                blue.withValues(alpha: 0.22),
-                                Colors.black.withValues(alpha: 0.50),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                    // Glass container border overlay
-                    Positioned.fill(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.22),
-                          borderRadius: widget.fullScreen
-                              ? BorderRadius.zero
-                              : const BorderRadius.vertical(
-                                  top: Radius.circular(24)),
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.08)),
+    return PopScope<ReturnHandoverStepResult>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) unawaited(_closeStepper());
+      },
+      child: Material(
+        color: Colors.transparent,
+        child: SafeArea(
+          top: !widget.fullScreen ? false : true,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: ClipRRect(
+                borderRadius: widget.fullScreen
+                    ? BorderRadius.zero
+                    : const BorderRadius.vertical(top: Radius.circular(24)),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                  child: Stack(
+                    children: [
+                      // SIT-style blurred blue background with logo
+                      Positioned.fill(
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+                          child: Image.asset('assets/images/fulllogo.jpg',
+                              fit: BoxFit.cover),
                         ),
                       ),
-                    ),
-                    Column(
-                      children: [
-                        if (!widget.fullScreen) ...[
-                          const SizedBox(height: 8),
-                          Container(
-                            width: 44,
-                            height: 4,
+                      // Blue-tinted gradient overlay for stronger brand feel
+                      Positioned.fill(
+                        child: Builder(builder: (context) {
+                          final blue = Theme.of(context).colorScheme.primary;
+                          return Container(
                             decoration: BoxDecoration(
-                                color: Colors.white24,
-                                borderRadius: BorderRadius.circular(2)),
-                          ),
-                        ] else
-                          const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                          child: Row(
-                            children: [
-                              // Close should abort the whole process and exit
-                              IconButton(
-                                onPressed: _closeStepper,
-                                icon: const Icon(Icons.close,
-                                    color: Colors.white),
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  blue.withValues(alpha: 0.22),
+                                  Colors.black.withValues(alpha: 0.50),
+                                ],
                               ),
-                              Expanded(
-                                child: Center(
-                                  child: Text(
-                                    _title,
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 18),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: 48,
-                                height: 48,
-                                child: Center(
-                                  child: Text(
-                                    '${_step + 1}/${_steps.length}',
-                                    style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontWeight: FontWeight.w700),
-                                  ),
-                                ),
-                              )
-                            ],
+                            ),
+                          );
+                        }),
+                      ),
+                      // Glass container border overlay
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.22),
+                            borderRadius: widget.fullScreen
+                                ? BorderRadius.zero
+                                : const BorderRadius.vertical(
+                                    top: Radius.circular(24)),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.08)),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: PrivatePilotRiskNotice(
-                            title: 'Dokumentation, kein SIT-Schadenschutz',
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Expanded(
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 400),
-                            transitionBuilder: (child, animation) {
-                              final curved = CurvedAnimation(
-                                  parent: animation,
-                                  curve: Curves.easeOutCubic,
-                                  reverseCurve: Curves.easeInCubic);
-                              return FadeTransition(
-                                  opacity: curved, child: child);
-                            },
-                            child: Padding(
-                              key: ValueKey(_step),
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                              child: _buildStep(),
+                      ),
+                      Column(
+                        children: [
+                          if (!widget.fullScreen) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              width: 44,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                  color: Colors.white24,
+                                  borderRadius: BorderRadius.circular(2)),
+                            ),
+                          ] else
+                            const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                            child: Row(
+                              children: [
+                                // Close should abort the whole process and exit
+                                IconButton(
+                                  onPressed: _closeStepper,
+                                  icon: const Icon(Icons.close,
+                                      color: Colors.white),
+                                ),
+                                Expanded(
+                                  child: Center(
+                                    child: Text(
+                                      _title,
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 18),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 48,
+                                  height: 48,
+                                  child: Center(
+                                    child: Text(
+                                      '${_step + 1}/${_steps.length}',
+                                      style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontWeight: FontWeight.w700),
+                                    ),
+                                  ),
+                                )
+                              ],
                             ),
                           ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          child: Builder(builder: (context) {
-                            final bool hidePrimaryAction = (
-                                // Renter in return flow (zeigt QR/Code); kein Primär-Button
-                                (!widget.viewerIsOwner &&
-                                        widget.mode ==
-                                            ReturnFlowMode.returnFlow &&
-                                        _steps[_step] == _StepKind.codes) ||
-                                    // Owner in pickup flow beim Schritt "Übergabe-QR": keinen "Abschließen"-Button anzeigen
-                                    (widget.viewerIsOwner &&
-                                        widget.mode ==
-                                            ReturnFlowMode.pickupFlow &&
-                                        _steps[_step] == _StepKind.codes));
-                            return Row(
-                              children: [
-                                TextButton(
-                                    onPressed: _back,
-                                    child: const Text('Zurück')),
-                                const Spacer(),
-                                if (!hidePrimaryAction)
-                                  FilledButton(
-                                    onPressed: _canContinue ? _next : null,
-                                    child: Text(_step == _steps.length - 1
-                                        ? 'Abschließen'
-                                        : 'Weiter'),
-                                  ),
-                              ],
-                            );
-                          }),
-                        ),
-                      ],
-                    ),
-                  ],
+                          const SizedBox(height: 8),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            child: PrivatePilotRiskNotice(
+                              title: 'Dokumentation, kein SIT-Schadenschutz',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Expanded(
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 400),
+                              transitionBuilder: (child, animation) {
+                                final curved = CurvedAnimation(
+                                    parent: animation,
+                                    curve: Curves.easeOutCubic,
+                                    reverseCurve: Curves.easeInCubic);
+                                return FadeTransition(
+                                    opacity: curved, child: child);
+                              },
+                              child: Padding(
+                                key: ValueKey(_step),
+                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                                child: _buildStep(),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            child: Builder(builder: (context) {
+                              final bool hidePrimaryAction = (
+                                  // Renter in return flow (zeigt QR/Code); kein Primär-Button
+                                  (!widget.viewerIsOwner &&
+                                          widget.mode ==
+                                              ReturnFlowMode.returnFlow &&
+                                          _steps[_step] == _StepKind.codes) ||
+                                      // Owner in pickup flow beim Schritt "Übergabe-QR": keinen "Abschließen"-Button anzeigen
+                                      (widget.viewerIsOwner &&
+                                          widget.mode ==
+                                              ReturnFlowMode.pickupFlow &&
+                                          _steps[_step] == _StepKind.codes));
+                              return Row(
+                                children: [
+                                  TextButton(
+                                      onPressed: _back,
+                                      child: const Text('Zurück')),
+                                  const Spacer(),
+                                  if (!hidePrimaryAction)
+                                    FilledButton(
+                                      onPressed: _canContinue ? _next : null,
+                                      child: Text(_step == _steps.length - 1
+                                          ? 'Abschließen'
+                                          : 'Weiter'),
+                                    ),
+                                ],
+                              );
+                            }),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -836,7 +868,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   // Entfernt: Checkliste, Zeitplanung, Ort bestätigen, Abrechnung, Unterschriften
 
   Widget _photoGrid(List<PlatformFile> files, VoidCallback onPick,
-      {required String emptyText}) {
+      {required String emptyText, bool allowAdd = true}) {
     final grid = Wrap(
       alignment: files.isEmpty ? WrapAlignment.center : WrapAlignment.start,
       spacing: 8,
@@ -864,21 +896,22 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
               ),
             ),
           ),
-        InkWell(
-          onTap: onPick,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            width: 92,
-            height: 92,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        if (allowAdd)
+          InkWell(
+            onTap: onPick,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 92,
+              height: 92,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+              ),
+              child: const Center(
+                  child: Icon(Icons.add_a_photo, color: Colors.white70)),
             ),
-            child: const Center(
-                child: Icon(Icons.add_a_photo, color: Colors.white70)),
           ),
-        ),
       ],
     );
 
@@ -1205,11 +1238,18 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
               const SizedBox(height: 8),
               SwitchListTile(
                 value: _hasDamage,
-                onChanged: (v) => setState(() => _hasDamage = v),
+                onChanged: _damageReceipt != null || _savingDamageCase
+                    ? null
+                    : _toggleDamage,
                 title: const Text('Schaden vorhanden',
                     style: TextStyle(color: Colors.white)),
               ),
               if (_hasDamage) ...[
+                if (_damageReceipt != null)
+                  const Text(
+                    'Schadenmeldung serverseitig gespeichert. Die Angaben und Nachweise sind für diese Rückgabe gesperrt.',
+                    style: TextStyle(color: Colors.white70),
+                  ),
                 const SizedBox(height: 8),
                 _photoGrid(
                   _damagePhotos,
@@ -1224,6 +1264,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                       multiple: true),
                   emptyText:
                       'Mindestens ein geschütztes Schadensfoto erforderlich.',
+                  allowAdd: _damageReceipt == null && !_savingDamageCase,
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -1231,6 +1272,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                   onChanged: (_) => setState(() {}),
                   minLines: 1,
                   maxLines: null,
+                  readOnly: _damageReceipt != null || _savingDamageCase,
                   decoration: const InputDecoration(
                     hintText: 'Beschreibung (mindestens 10 Zeichen)',
                     hintStyle: TextStyle(color: Colors.white54),
@@ -1244,6 +1286,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                   onChanged: (_) => setState(() {}),
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
+                  readOnly: _damageReceipt != null || _savingDamageCase,
                   decoration: const InputDecoration(
                     labelText: 'Strittiger Anteil der autorisierten Miete (€)',
                     hintText: 'z. B. 12,50 – keine Zusatzbelastung',
@@ -1263,6 +1306,24 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
         ),
       ),
     );
+  }
+
+  Future<void> _toggleDamage(bool enabled) async {
+    if (_damageReceipt != null) return;
+    if (enabled) {
+      if (mounted) setState(() => _hasDamage = true);
+      return;
+    }
+    final canDiscard = await _confirmDamageAbandonment();
+    if (!canDiscard || !mounted) return;
+    setState(() {
+      _hasDamage = false;
+      _damagePhotos = [];
+      _damageEvidenceUploadIds = [];
+      _damageNotesCtrl.clear();
+      _damageAmountCtrl.clear();
+      _damageIdempotencyKey = '';
+    });
   }
 
   Widget _stepCodes() {
