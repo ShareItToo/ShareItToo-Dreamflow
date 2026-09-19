@@ -1,5 +1,19 @@
 # ShareItToo Current State
 
+## WP260-C Listing-AI lifetime budget — SOURCE PASS; provider gate separate
+
+Commits `726c7e3fcf9ce0bced46ebc421ca7e18dc1aa962` and
+`d40f74cb273f39c097f2fa278d053fdcd8a16f7d` binds the optional external
+Listing-AI allowance to a durable PostgreSQL lifetime bucket with an exact
+EUR 100 hard cap and reservations
+including unknown-as-spent transport attempts. Migration opening spend takes
+the conservative maximum of aggregate and append-only billed ledger, and
+fails closed if spend plus reservations exceeds the cap. A five-call ceiling
+exists only as an optional per-run smoke seam, not as a product limit. The app-facing result remains a visible,
+owner-triggered, editable draft with automatic publication forbidden. No
+external AI provider, payment, production, Store, Play or device action was
+performed. See the WP260-C operation report.
+
 ## WP260-A Staging provider activation — PASS WITH TECHNICAL DEBT; live gates closed
 
 WP260-A's exact source image is now the canonical Green Staging API on a

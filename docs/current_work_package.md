@@ -1,4 +1,19 @@
-# Current Work Package: WP260-A Staging provider activation — PASS WITH TECHNICAL DEBT
+# Current Work Package: WP260-C Listing-AI lifetime budget — SOURCE PASS; provider gate separate
+
+WP260-C closes the optional external Listing-AI budget invariant at source
+commits `726c7e3fcf9ce0bced46ebc421ca7e18dc1aa962` and
+`d40f74cb273f39c097f2fa278d053fdcd8a16f7d`: one durable lifetime bucket,
+exact EUR 100 maximum, reservation/unknown-as-spent accounting,
+conservative ledger-preserving
+opening balance and a fail-closed rollover when the cap is already exceeded.
+separate optional five-call smoke cap (not a product limit). The visible owner-triggered editable draft flow and
+no-auto-publish boundary remain unchanged. Stripe/Identity provider
+activation is a separate test-only package; no provider, Play, production or
+device mutation occurred here.
+
+See `docs/operations/WP260_C_LISTING_AI_LIFETIME_BUDGET_20260919.md`.
+
+## Previous package: WP260-A Staging provider activation — PASS WITH TECHNICAL DEBT
 
 WP260-A activated the exact source image only in the canonical Green Staging
 runtime with a non-internal provider-egress bridge, the existing allowlisted
