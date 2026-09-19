@@ -440,6 +440,7 @@ class BackendRepository {
     required String generationKey,
     required List<String> photoUrls,
     required Map<String, dynamic> consent,
+    required Map<String, dynamic> capabilityHandshake,
     List<Map<String, dynamic>>? onDeviceAnalysis,
   }) async {
     final response = await _authorized(
@@ -450,6 +451,7 @@ class BackendRepository {
         'generationKey': generationKey,
         'photoUrls': photoUrls,
         'consent': consent,
+        'capabilityHandshake': capabilityHandshake,
         if (onDeviceAnalysis != null) 'onDeviceAnalysis': onDeviceAnalysis,
       },
       timeout: const Duration(seconds: 45),
@@ -463,6 +465,7 @@ class BackendRepository {
     required String generationKey,
     required List<String> photoUrls,
     required Map<String, dynamic> consent,
+    required Map<String, dynamic> capabilityHandshake,
     List<Map<String, dynamic>>? onDeviceAnalysis,
   }) async {
     final response = await _authorizedForOwner(
@@ -474,11 +477,31 @@ class BackendRepository {
         'generationKey': generationKey,
         'photoUrls': photoUrls,
         'consent': consent,
+        'capabilityHandshake': capabilityHandshake,
         if (onDeviceAnalysis != null) 'onDeviceAnalysis': onDeviceAnalysis,
       },
       timeout: const Duration(seconds: 45),
     );
     return Map<String, dynamic>.from(response['assistant'] as Map);
+  }
+
+  static Future<Map<String, dynamic>> getBlueOceanListingCapabilities() async {
+    final response = await _authorized(
+      method: 'GET',
+      path: '/blue-ocean/listing-drafts/capabilities',
+    );
+    return Map<String, dynamic>.from(response);
+  }
+
+  static Future<Map<String, dynamic>> getBlueOceanListingCapabilitiesForOwner({
+    required AuthSessionOwner owner,
+  }) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'GET',
+      path: '/blue-ocean/listing-drafts/capabilities',
+    );
+    return Map<String, dynamic>.from(response);
   }
 
   static Future<Map<String, dynamic>> reviewBlueOceanListingDraft({

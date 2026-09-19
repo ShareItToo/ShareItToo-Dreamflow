@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/foundation.dart' show protected;
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/user.dart';
@@ -13,6 +16,82 @@ enum ListingMutationFailureKind {
   localUnavailable,
   outcomeUnknown,
   principalChanged,
+}
+
+class ListingAiCapability {
+  final bool available;
+  final String provider;
+  final String mode;
+  final String disclosureVersion;
+  final String disclosureText;
+  final String disclosureHash;
+  final String policyRevision;
+  final String configRevision;
+  final String supportedClientVersion;
+  final int imageLimit;
+
+  const ListingAiCapability({
+    required this.available,
+    required this.provider,
+    required this.mode,
+    required this.disclosureVersion,
+    required this.disclosureText,
+    required this.disclosureHash,
+    required this.policyRevision,
+    required this.configRevision,
+    required this.supportedClientVersion,
+    required this.imageLimit,
+  });
+
+  factory ListingAiCapability.fromJson(Map<String, dynamic> raw) {
+    String text(String key) {
+      final value = raw[key];
+      if (value is! String || value.trim().isEmpty) {
+        throw const FormatException('listing_ai_capability_invalid');
+      }
+      return value.trim();
+    }
+
+    final imageLimit = raw['imageLimit'];
+    if (imageLimit is! num || !imageLimit.isFinite || imageLimit < 1) {
+      throw const FormatException('listing_ai_capability_invalid');
+    }
+    final available = raw['available'];
+    if (available is! bool) {
+      throw const FormatException('listing_ai_capability_invalid');
+    }
+    final disclosureText = text('disclosureText');
+    final disclosureHash = text('disclosureHash');
+    if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(disclosureHash) ||
+        crypto.sha256.convert(utf8.encode(disclosureText)).toString() !=
+            disclosureHash) {
+      throw const FormatException('listing_ai_capability_invalid');
+    }
+    return ListingAiCapability(
+      available: available,
+      provider: text('provider'),
+      mode: text('mode'),
+      disclosureVersion: text('disclosureVersion'),
+      disclosureText: disclosureText,
+      disclosureHash: disclosureHash,
+      policyRevision: text('policyRevision'),
+      configRevision: text('configRevision'),
+      supportedClientVersion: text('supportedClientVersion'),
+      imageLimit: imageLimit.toInt(),
+    );
+  }
+
+  Map<String, dynamic> get handshake => <String, dynamic>{
+        'available': available,
+        'provider': provider,
+        'mode': mode,
+        'disclosureVersion': disclosureVersion,
+        'disclosureHash': disclosureHash,
+        'policyRevision': policyRevision,
+        'configRevision': configRevision,
+        'supportedClientVersion': supportedClientVersion,
+        'imageLimit': imageLimit,
+      };
 }
 
 class ListingMutationFailure implements Exception {
@@ -200,6 +279,7 @@ class ListingMutationService {
       },
       404: <String>{'listing_not_found', 'user_not_found'},
       409: <String>{
+        'listing_ai_capability_stale',
         'listing_revision_conflict',
         'listing_locked_by_moderation',
         'listing_photo_already_used',
@@ -354,6 +434,7 @@ class ListingMutationService {
     required String generationKey,
     required List<String> photoUrls,
     required Map<String, dynamic> consent,
+    required Map<String, dynamic> capabilityHandshake,
     List<Map<String, dynamic>>? onDeviceAnalysis,
   }) =>
       _runOwnedDraftAction(
@@ -364,9 +445,28 @@ class ListingMutationService {
           generationKey: generationKey,
           photoUrls: photoUrls,
           consent: consent,
+          capabilityHandshake: capabilityHandshake,
           onDeviceAnalysis: onDeviceAnalysis,
         ),
       );
+
+  Future<ListingAiCapability> loadBlueOceanListingCapability({
+    required ListingMutationContext context,
+  }) async {
+    final raw = await _runOwnedDraftAction(
+      context: context,
+      action: () => BackendRepository.getBlueOceanListingCapabilitiesForOwner(
+        owner: context.owner.authOwner,
+      ),
+    );
+    try {
+      return ListingAiCapability.fromJson(raw);
+    } catch (_) {
+      throw const ListingMutationFailure.outcomeUnknown(
+        'listing_ai_capability_invalid',
+      );
+    }
+  }
 
   Future<Map<String, dynamic>> reviewBlueOceanDraft({
     required ListingMutationContext context,

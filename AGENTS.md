@@ -91,6 +91,12 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   example active listings versus drafts) and prove the expected tab, route and
   post-restart value. Evidence from a neighboring tab or a backend-only write
   cannot close an explicitly required app projection or edit gate.
+- Authenticated capability handshakes are principal-bound state: bind every
+  effective provider/disclosure/policy/config field into the request hash, make
+  config revisions a digest of the effective configuration rather than a
+  static gateway label, and after every async refresh perform an authoritative
+  owner check before mutating UI state; stale responses invalidate the owned
+  route and never trigger an automatic retry.
 - Any client-source change invalidates previously built or installed APK
   evidence. Before the next device assertion, build once from the current
   source, assign a distinct local-QA version, verify package and SHA-256, and

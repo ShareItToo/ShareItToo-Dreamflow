@@ -32,6 +32,7 @@ import {
 } from './auth_session_actions.js';
 import { config } from './config.js';
 import {
+  listingAiCapability,
   listingAiPerCallReservationCents,
 } from './listing_ai_gateway_config.js';
 import { inTransaction, pool } from './db.js';
@@ -1029,6 +1030,29 @@ function assertBlueOceanListingTechnicalAccess() {
       || config.listingAi.providerPublicationAllowed !== false) {
     throw new HttpError(503, 'blue_ocean_listing_assistant_not_enabled');
   }
+}
+
+function assertBlueOceanListingCapabilityHandshake(raw) {
+  const expected = listingAiCapability(config.listingAi);
+  const candidate = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw
+    : null;
+  const fields = [
+    'available',
+    'provider',
+    'mode',
+    'disclosureVersion',
+    'disclosureHash',
+    'policyRevision',
+    'configRevision',
+    'supportedClientVersion',
+    'imageLimit',
+  ];
+  if (!candidate || Object.keys(candidate).length !== fields.length
+      || fields.some((field) => candidate[field] !== expected[field])) {
+    throw new HttpError(409, 'listing_ai_capability_stale');
+  }
+  return expected;
 }
 
 function buildCatalogSearch(search, { publicListingIds = null } = {}) {
@@ -3871,8 +3895,17 @@ export function createApp({
     });
   }));
 
+  app.get('/v1/blue-ocean/listing-drafts/capabilities', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
+    res.set('Cache-Control', 'private, no-store').json(
+      listingAiCapability(config.listingAi),
+    );
+  }));
+
   app.post('/v1/blue-ocean/listing-drafts/analyze', blueOceanListingMutationLimiter, requireAuth, requireActiveAccount, requireUnsuspendedScope('listing'), asyncRoute(async (req, res) => {
     assertBlueOceanListingTechnicalAccess();
+    const capability = assertBlueOceanListingCapabilityHandshake(
+      req.body?.capabilityHandshake,
+    );
     const images = await loadBlueOceanListingImages({
       ownerId: req.auth.userId,
       photoUrls: req.body?.photoUrls,
@@ -3935,6 +3968,7 @@ export function createApp({
           maxCostCents: Math.min(10_000, listingAiPerCallReservationCents * (images.length + 1)),
           maxCallCount: Math.min(config.listingAi.runMaxProviderCalls, images.length + 1),
           budgetCents: config.listingAi.budgetCents,
+          capabilityHandshake: capability,
         });
       });
       if (attempt.retryBlocked) {

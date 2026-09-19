@@ -6,7 +6,7 @@ import { transitionListingAiDerivative } from './listing_ai_draft_domain.js';
 
 export const listingAiImagePipelineVersion = 'N4-2026-08-23.1';
 export const listingAiImageDisclosureVersion = 'listing-ai-image-disclosure-v1';
-export const listingAiImageDisclosureText = 'SIT analysiert deine ausgewählten Bilder mit einem externen KI-Dienst, um einen bearbeitbaren Anzeigenentwurf zu erstellen. Es wird nichts automatisch veröffentlicht.';
+export const listingAiImageDisclosureText = 'SIT analysiert deine ausgewählten Bilder mit der OpenAI Responses API als externem KI-Dienst (Bildinput und strukturiertes Ergebnis), um einen bearbeitbaren Anzeigenentwurf zu erstellen. Die Anfrage wird mit store:false gesendet; SIT behauptet keine Zero-Data-Retention-Zusage von OpenAI. Es wird nichts automatisch veröffentlicht.';
 export const listingAiOnDeviceDisclosureVersion = 'listing-ai-on-device-disclosure-v1';
 export const listingAiOnDeviceDisclosureText = 'SIT wertet deine ausgewählten Bilder direkt auf diesem Android-Gerät aus. Erkannte Objektbegriffe und Texte sowie die ausgewählten Anzeigenfotos werden an SIT übertragen, um einen bearbeitbaren Entwurf zu erstellen. ML Kit sendet Bildinhalte und Erkennungsergebnisse nicht an Google; technische ML-Kit-Nutzungs- und Diagnosedaten können an Google übertragen werden. Es wird nichts automatisch veröffentlicht.';
 

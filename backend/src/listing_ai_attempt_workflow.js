@@ -29,6 +29,7 @@ function canonical(value) {
 
 export function listingAiAttemptHashes({
   draftId, ownerId, generationKey, model, consent, images, maxCostCents,
+  capabilityHandshake = null,
 }) {
   const imageSha256 = sha256(JSON.stringify(images.map((entry) => ({
     imageReference: entry.imageReference,
@@ -37,10 +38,24 @@ export function listingAiAttemptHashes({
   }))));
   const consentSha256 = sha256(canonical(consent));
   const payloadSha256 = sha256(canonical({
-    draftId, ownerId, generationKey, model, consent, images, maxCostCents,
+    draftId,
+    ownerId,
+    generationKey,
+    model,
+    consent,
+    capabilityHandshake,
+    images,
+    maxCostCents,
   }));
   return Object.freeze({
-    requestSha256: sha256(canonical({ payloadSha256, imageSha256, consentSha256, model, maxCostCents })),
+    requestSha256: sha256(canonical({
+      payloadSha256,
+      imageSha256,
+      consentSha256,
+      capabilityHandshake,
+      model,
+      maxCostCents,
+    })),
     payloadSha256,
     imageSha256,
     consentSha256,
@@ -74,13 +89,21 @@ const attemptSelect = `id, draft_id, owner_id, generation_key, request_sha256,
 
 export async function claimListingAiAttempt(client, {
   draftId, ownerId, generationKey, model, consent, images,
-  maxCostCents, maxCallCount, budgetCents, leaseMs = 30_000,
+  maxCostCents, maxCallCount, budgetCents, capabilityHandshake = null,
+  leaseMs = 30_000,
 }) {
   if (!client || typeof client.query !== 'function') fail(500, 'listing_ai_attempt_store_invalid');
   assertAttemptCost({ maxCostCents, maxCallCount });
   if (!Number.isSafeInteger(budgetCents) || budgetCents < maxCostCents) fail(503, 'listing_ai_budget_exhausted');
   const hashes = listingAiAttemptHashes({
-    draftId, ownerId, generationKey, model, consent, images, maxCostCents,
+    draftId,
+    ownerId,
+    generationKey,
+    model,
+    consent,
+    images,
+    maxCostCents,
+    capabilityHandshake,
   });
   const inserted = await client.query(
     `INSERT INTO listing_ai_analysis_attempts (

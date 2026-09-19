@@ -332,7 +332,25 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       (byCoarse[g] ??= <Category>[]).add(c);
     }
     _listingActions.replaceContext(listingContext);
+    ListingAiCapability? capability;
+    String? capabilityError;
+    try {
+      capability = await _listingMutationService.loadBlueOceanListingCapability(
+        context: listingContext,
+      );
+    } on ListingMutationFailure catch (failure) {
+      capabilityError = failure.code ?? 'listing_ai_capability_unavailable';
+    } catch (_) {
+      capabilityError = 'listing_ai_capability_unavailable';
+    }
+    if (!mounted ||
+        !await _listingMutationService.isContextCurrent(listingContext)) {
+      return;
+    }
     setState(() {
+      _blueOceanCapability = capability;
+      _blueOceanCapabilityLoading = false;
+      _blueOceanCapabilityError = capabilityError;
       _currentOwnerId = user?.id;
       _categories = cats;
       final existingCategory =
@@ -409,15 +427,9 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     }
   }
 
-  static const String _blueOceanDisclosureVersion =
-      'listing-ai-on-device-disclosure-v1';
-  static const String _blueOceanDisclosureText =
-      'SIT wertet deine ausgewählten Bilder direkt auf diesem Android-Gerät '
-      'aus. Erkannte Objektbegriffe und Texte sowie die ausgewählten '
-      'Anzeigenfotos werden an SIT übertragen, um einen bearbeitbaren Entwurf '
-      'zu erstellen. ML Kit sendet Bildinhalte und Erkennungsergebnisse nicht '
-      'an Google; technische ML-Kit-Nutzungs- und Diagnosedaten können an '
-      'Google übertragen werden. Es wird nichts automatisch veröffentlicht.';
+  ListingAiCapability? _blueOceanCapability;
+  bool _blueOceanCapabilityLoading = true;
+  String? _blueOceanCapabilityError;
 
   String _newBlueOceanUuid() {
     final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256));
@@ -808,16 +820,24 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   Future<void> _startBlueOceanAssistant() async {
     final owner = _listingActions.capture();
     if (owner == null) return;
+    final capability = _blueOceanCapability;
+    if (capability == null || !capability.available) {
+      setState(() => _blueOceanError = _blueOceanCapabilityError == null
+          ? 'Die serverseitige KI-Capability ist deaktiviert. Der manuelle Editor bleibt verfügbar.'
+          : 'Die serverseitige KI-Capability konnte nicht geladen werden. Prüfe die Verbindung und arbeite manuell weiter.');
+      _focusBlueOceanMessage();
+      return;
+    }
     if (!_blueOceanConsentAccepted) {
       setState(() => _blueOceanError =
           'Bitte lies den Hinweis und stimme der ausgewählten Bildanalyse zu.');
       _focusBlueOceanMessage();
       return;
     }
-    if (_pickedImages.isEmpty || _pickedImages.length > 4) {
+    if (_pickedImages.isEmpty || _pickedImages.length > capability.imageLimit) {
       setState(() => _blueOceanError = _pickedImages.isEmpty
           ? 'Wähle zuerst mindestens ein Foto aus.'
-          : 'Für die KI-Analyse sind höchstens vier Fotos möglich. Entferne '
+          : 'Für die KI-Analyse sind höchstens ${capability.imageLimit} Fotos möglich. Entferne '
               'weitere Fotos oder nutze den manuellen Editor.');
       _focusBlueOceanMessage();
       return;
@@ -831,13 +851,17 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     }
     setState(() {
       _blueOceanBusy = true;
-      _blueOceanProgress = 'Fotos werden lokal auf diesem Gerät analysiert …';
+      _blueOceanProgress = capability.mode == 'on_device'
+          ? 'Fotos werden lokal auf diesem Gerät analysiert …'
+          : 'Fotos werden für die serverseitige Analyse vorbereitet …';
       _blueOceanError = null;
     });
     try {
-      final onDeviceAnalysis = await _onDeviceListingAnalysis.analyzeImagePaths(
-        _pickedImages.map((file) => file.path).toList(growable: false),
-      );
+      final onDeviceAnalysis = capability.mode == 'on_device'
+          ? await _onDeviceListingAnalysis.analyzeImagePaths(
+              _pickedImages.map((file) => file.path).toList(growable: false),
+            )
+          : null;
       if (!await _listingActions.isCurrent(_listingMutationService, owner)) {
         return;
       }
@@ -873,12 +897,13 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         draftId: draftId,
         generationKey: _newBlueOceanGenerationKey('analyze'),
         photoUrls: photoUrls,
-        consent: const <String, dynamic>{
+        consent: <String, dynamic>{
           'explicitlyInitiated': true,
           'accepted': true,
-          'disclosureVersion': _blueOceanDisclosureVersion,
-          'disclosureText': _blueOceanDisclosureText,
+          'disclosureVersion': capability.disclosureVersion,
+          'disclosureText': capability.disclosureText,
         },
+        capabilityHandshake: capability.handshake,
         onDeviceAnalysis: onDeviceAnalysis,
       );
       if (!mounted) return;
@@ -924,6 +949,58 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       });
       _focusBlueOceanMessage();
     } on ListingMutationFailure catch (failure) {
+      if (failure.code == 'listing_ai_capability_stale') {
+        if (mounted && _listingActions.isSynchronouslyCurrent(owner)) {
+          try {
+            final refreshed = await _listingMutationService
+                .loadBlueOceanListingCapability(context: owner.context);
+            bool refreshedOwnerCurrent = false;
+            try {
+              refreshedOwnerCurrent =
+                  await _listingMutationService.isContextCurrent(owner.context);
+            } catch (_) {
+              refreshedOwnerCurrent = false;
+            }
+            if (!refreshedOwnerCurrent) {
+              _listingActions.invalidate();
+              return;
+            }
+            if (mounted &&
+                refreshedOwnerCurrent &&
+                _listingActions.isSynchronouslyCurrent(owner)) {
+              setState(() {
+                _blueOceanCapability = refreshed;
+                _blueOceanConsentAccepted = false;
+                _blueOceanError =
+                    'Die serverseitige KI-Capability war veraltet. Sie wurde neu geladen; prüfe den aktuellen Hinweis und starte ausdrücklich erneut.';
+                _blueOceanProgress = 'Neue Capability geladen.';
+              });
+            }
+          } catch (_) {
+            bool refreshedOwnerCurrent = false;
+            try {
+              refreshedOwnerCurrent =
+                  await _listingMutationService.isContextCurrent(owner.context);
+            } catch (_) {
+              refreshedOwnerCurrent = false;
+            }
+            if (!refreshedOwnerCurrent) {
+              _listingActions.invalidate();
+              return;
+            }
+            if (mounted &&
+                refreshedOwnerCurrent &&
+                _listingActions.isSynchronouslyCurrent(owner)) {
+              setState(() {
+                _blueOceanError =
+                    'Die serverseitige KI-Capability ist veraltet. Lade die Seite neu und arbeite bis dahin manuell weiter.';
+                _blueOceanProgress = 'Manueller Editor verfügbar.';
+              });
+            }
+          }
+        }
+        return;
+      }
       if (failure.kind == ListingMutationFailureKind.principalChanged ||
           !mounted ||
           !await _listingActions.isCurrent(_listingMutationService, owner)) {
@@ -1959,6 +2036,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   }
 
   Widget _buildBlueOceanAssistantCard(BuildContext context) {
+    final capability = _blueOceanCapability;
+    final capabilityAvailable = capability?.available == true;
     final assistant = _blueOceanAssistant;
     final revision = assistant?['revision'];
     final fields = revision is Map ? revision['fields'] : null;
@@ -2052,18 +2131,24 @@ class _CreateListingScreenState extends State<CreateListingScreen>
               ),
               const SizedBox(height: 12),
               CheckboxListTile(
-                value: _blueOceanConsentAccepted,
-                onChanged: _blueOceanBusy
+                value: capabilityAvailable && _blueOceanConsentAccepted,
+                onChanged: _blueOceanBusy || !capabilityAvailable
                     ? null
                     : (value) => setState(
                         () => _blueOceanConsentAccepted = value ?? false),
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
-                title: const Text(_blueOceanDisclosureText,
-                    style: TextStyle(fontSize: 13.5, height: 1.4)),
-                subtitle: const Text(
-                  'Nur die ausgewählten 1–4 Fotos · ausdrücklicher Start · '
-                  'keine automatische Veröffentlichung',
+                title: Text(
+                  capability?.disclosureText ??
+                      'Serverhinweis wird vor der Einwilligung geladen.',
+                  style: const TextStyle(fontSize: 13.5, height: 1.4),
+                ),
+                subtitle: Text(
+                  _blueOceanCapabilityLoading
+                      ? 'Server-Capability wird geladen …'
+                      : capabilityAvailable
+                          ? 'Nur 1–${capability!.imageLimit} ausgewählte Fotos · ausdrücklicher Start · keine automatische Veröffentlichung'
+                          : 'Deaktiviert: kein Analyseversuch und kein externer Egress.',
                   style: TextStyle(fontSize: 12.5),
                 ),
               ),
