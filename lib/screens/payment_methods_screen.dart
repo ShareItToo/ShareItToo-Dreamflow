@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/backend_http.dart';
 import 'package:lendify/services/backend_repository.dart';
 
@@ -6,10 +7,14 @@ import 'technical_sandbox_screen.dart';
 
 class PaymentMethodsScreen extends StatefulWidget {
   final Future<Map<String, dynamic>> Function()? loadCapabilities;
+  final Future<AuthSession?> Function()? sessionReader;
+  final Future<bool> Function(AuthSessionOwner owner)? ownerChecker;
 
   const PaymentMethodsScreen({
     super.key,
     this.loadCapabilities,
+    this.sessionReader,
+    this.ownerChecker,
   });
 
   @override
@@ -20,6 +25,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   Map<String, dynamic>? _capabilities;
   bool _loading = true;
   String? _error;
+  int _loadRevision = 0;
 
   @override
   void initState() {
@@ -28,20 +34,49 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   }
 
   Future<void> _load() async {
+    final revision = ++_loadRevision;
     setState(() {
+      _capabilities = null;
       _loading = true;
       _error = null;
     });
+    AuthSessionOwner? capturedOwner;
     try {
-      final capabilities = await (widget.loadCapabilities ??
-          BackendRepository.getPaymentCapabilities)();
-      if (!mounted) return;
+      final session = widget.sessionReader != null
+          ? await widget.sessionReader!()
+          : (widget.loadCapabilities != null
+              ? null
+              : await AuthService.readSession());
+      if (!_isActive(revision)) return;
+      if (session == null && widget.loadCapabilities == null) {
+        throw const BackendException(401, 'authentication_required');
+      }
+      capturedOwner =
+          session == null ? null : AuthService.captureSessionOwner(session);
+      if (!await _isCurrent(capturedOwner) || !_isActive(revision)) {
+        _invalidateOwner(revision);
+        return;
+      }
+      final capabilities = widget.loadCapabilities != null
+          ? await widget.loadCapabilities!()
+          : await BackendRepository.getPaymentCapabilitiesForOwner(
+              capturedOwner!,
+            );
+      if (!await _isCurrent(capturedOwner) || !_isActive(revision)) {
+        _invalidateOwner(revision);
+        return;
+      }
       setState(() {
         _capabilities = capabilities;
         _loading = false;
       });
     } on BackendException {
-      if (!mounted) return;
+      if (!_isActive(revision) ||
+          !await _isCurrent(capturedOwner) ||
+          !_isActive(revision)) {
+        _invalidateOwner(revision);
+        return;
+      }
       setState(() {
         _capabilities = null;
         _loading = false;
@@ -49,7 +84,12 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
             'Der Zahlungsstatus konnte gerade nicht sicher geprüft werden.';
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!_isActive(revision) ||
+          !await _isCurrent(capturedOwner) ||
+          !_isActive(revision)) {
+        _invalidateOwner(revision);
+        return;
+      }
       setState(() {
         _capabilities = null;
         _loading = false;
@@ -57,6 +97,27 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
             'Der Zahlungsstatus konnte gerade nicht sicher geprüft werden.';
       });
     }
+  }
+
+  bool _isActive(int revision) => mounted && revision == _loadRevision;
+
+  Future<bool> _isCurrent(AuthSessionOwner? owner) async {
+    if (owner == null) {
+      // Injected loaders are test seams and do not represent an authenticated
+      // backend read. Production backend reads always capture an owner above.
+      return widget.loadCapabilities != null;
+    }
+    return widget.ownerChecker?.call(owner) ??
+        AuthService.isSessionOwnerDefinitelyCurrent(owner);
+  }
+
+  void _invalidateOwner(int revision) {
+    if (!_isActive(revision)) return;
+    setState(() {
+      _capabilities = null;
+      _loading = false;
+      _error = 'Melde dich erneut an.';
+    });
   }
 
   @override

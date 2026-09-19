@@ -777,7 +777,7 @@
     },
     {
       "path": "lib/screens/payment_methods_screen.dart",
-      "sha256": "405ed974af3083a7a5ab2b73e556738070010ee4bf554370a8e88b06b80ffe99"
+      "sha256": "3cbfc68ef0b2c92fdc2c8a41f1eb13432a4d4e56f14d5b0862f12944355648c0"
     },
     {
       "path": "lib/screens/stripe_payout_account_screen.dart",

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/screens/payment_methods_screen.dart';
 import 'package:lendify/screens/technical_sandbox_screen.dart';
+import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/backend_repository.dart';
 
 Map<String, dynamic> availableCapabilities() => {
@@ -118,6 +119,48 @@ void main() {
     await tester.tap(entry);
     await tester.pumpAndSettle();
     expect(find.byType(TechnicalSandboxScreen), findsOneWidget);
+  });
+
+  testWidgets(
+      'PaymentMethods drops capability returned for a stale session owner',
+      (tester) async {
+    var ownerChecks = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: PaymentMethodsScreen(
+        sessionReader: () async => const AuthSession(
+          userId: 'old-owner',
+          sessionId: 'old-session',
+          email: 'old-owner@example.invalid',
+        ),
+        ownerChecker: (_) async {
+          ownerChecks++;
+          // The capture is current, but the response belongs to the session
+          // that was replaced while the capability request was in flight.
+          return ownerChecks == 1;
+        },
+        loadCapabilities: () async => {
+          'technicalSandbox': {
+            'technicalSandboxAvailable': true,
+            'provider': 'stripe',
+            'mode': 'test',
+            'amountMinor': 100,
+            'currency': 'EUR',
+            'maxRunsPerUser24h': 3,
+            'professionalReview': false,
+            'syntheticOnly': true,
+            'liveMoney': false,
+            'bookingEffect': false,
+            'ledgerEffect': false,
+            'connectEffect': false,
+          },
+        },
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(ownerChecks, 2);
+    expect(find.text('Stripe Sandbox'), findsNothing);
+    expect(find.text('Melde dich erneut an.'), findsOneWidget);
   });
 
   testWidgets('unavailable capability disables the technical flow truthfully',
