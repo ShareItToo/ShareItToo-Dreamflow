@@ -21,9 +21,9 @@ import pg from 'pg';
 const { Pool } = pg;
 
 export const rehearsalMigrationFirst = 75;
-export const rehearsalMigrationLast = 91;
-export const rehearsalMigrationUpCount = 17;
-export const rehearsalMigrationFileCount = 34;
+export const rehearsalMigrationLast = 92;
+export const rehearsalMigrationUpCount = 18;
+export const rehearsalMigrationFileCount = 36;
 export const stagingProjectName = 'sit-staging';
 export const disposableRehearsalLabel = 'com.shareittoo.staging.rehearsal';
 export const disposableRehearsalRunLabel = 'com.shareittoo.staging.rehearsal_run_id';
@@ -286,7 +286,7 @@ export function buildStagingRehearsalPlan({ targetCommit, appliedRange = '001-07
     targetCommit,
     project: stagingProjectName,
     currentAppliedRange: appliedRange,
-    forwardRange: '075-091',
+    forwardRange: '075-092',
     upMigrations: rehearsalMigrationUpCount,
     migrationFiles: rehearsalMigrationFileCount,
     steps: Object.freeze([
@@ -295,8 +295,8 @@ export function buildStagingRehearsalPlan({ targetCommit, appliedRange = '001-07
       'create mode-0600 non-empty custom-format database backup and SHA-256 manifest',
       'restore that exact backup into an isolated pinned PostgreSQL 16 target',
       'verify aggregate table/data presence without emitting row or identity data',
-      'apply migrations 075-091 forward-only and verify the complete 001-091 ledger',
-      'run foreign-key and 075-091 structural/functional contract probes',
+      'apply migrations 075-092 forward-only and verify the complete 001-092 ledger',
+      'run foreign-key and 075-092 structural/functional contract probes',
       'clean temporary restore resources, verify their absence, and leave all quiesced services stopped for controlled acceptance',
     ]),
     boundaries: Object.freeze({
@@ -1000,7 +1000,7 @@ export async function runStagingForwardMigrationRehearsal({
         FROM schema_migrations`,
       phase: 'isolated_migration_ledger',
     });
-    if (ledger !== '91|91|1|91') fail('rehearsal_migration_ledger_invalid');
+    if (ledger !== '92|92|1|92') fail('rehearsal_migration_ledger_invalid');
     const readinessBaseline = await readReadinessFindingFingerprint({
       container: isolatedContainer,
       user: 'shareittoo_rehearsal',
@@ -1015,11 +1015,11 @@ export async function runStagingForwardMigrationRehearsal({
       opsCommit,
       targetCommit,
       currentAppliedRange: '001-074',
-      forwardAppliedRange: '075-091',
+      forwardAppliedRange: '075-092',
       backup: Object.freeze({ basename: backup.backupPath.split('/').pop(), bytes: backup.bytes, sha256: backup.checksum }),
       isolatedRestore: Object.freeze({
         aggregateOnly: true,
-        migrations: '001-091',
+        migrations: '001-092',
         forwardMigrationFiles: forwardMigrations.length,
         functionalProbes: 'passed',
         readinessBaseline,

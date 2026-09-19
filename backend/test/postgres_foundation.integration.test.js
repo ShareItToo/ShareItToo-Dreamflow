@@ -17,6 +17,10 @@ import {
   r8SyntheticAccountCount,
 } from '../../tool/r8_bounded_concurrency_contract.mjs';
 import { pruneIdentityVerificationRecords } from '../src/identity_verification_cleanup.js';
+import {
+  listingAiMockDisclosureText,
+  listingAiMockDisclosureVersion,
+} from '../src/listing_ai_image_pipeline.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL?.trim();
 
@@ -229,10 +233,124 @@ if (!databaseUrl) {
         '088_listing_ai_lifetime_budget.up.sql',
         '089_listing_ai_analysis_attempts.up.sql',
         '090_booking_review_command_type.up.sql',
+        '091_technical_sandbox_runs.up.sql',
+        '092_listing_ai_mock_disclosure.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows.at(-1).checksum, /^[0-9a-f]{64}$/);
+
+      const technicalSandboxTables = await setupPool.query(
+        `SELECT c.relname AS table_name
+           FROM pg_class AS c
+           JOIN pg_namespace AS n ON n.oid = c.relnamespace
+          WHERE n.nspname = 'public'
+            AND c.relname = ANY($1::text[])
+            AND c.relkind = 'r'
+          ORDER BY c.relname`,
+        [['technical_sandbox_provider_events', 'technical_sandbox_runs']],
+      );
+      assert.deepEqual(
+        technicalSandboxTables.rows.map((row) => row.table_name),
+        ['technical_sandbox_provider_events', 'technical_sandbox_runs'],
+        'migration 091 creates both isolated technical sandbox tables',
+      );
+
+      const technicalSandboxColumns = await setupPool.query(
+        `SELECT table_name, column_name
+           FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = ANY($1::text[])
+          ORDER BY table_name, ordinal_position`,
+        [['technical_sandbox_provider_events', 'technical_sandbox_runs']],
+      );
+      const columnsByTable = new Map();
+      for (const row of technicalSandboxColumns.rows) {
+        const columns = columnsByTable.get(row.table_name) ?? [];
+        columns.push(row.column_name);
+        columnsByTable.set(row.table_name, columns);
+      }
+      for (const [table, requiredColumns] of [
+        [
+          'technical_sandbox_runs',
+          [
+            'id', 'user_id', 'idempotency_key', 'authorization_id', 'status',
+            'amount_minor', 'currency', 'synthetic_email',
+            'provider_session_id', 'provider_payment_intent_id',
+            'provider_account_id', 'provider_livemode', 'metadata',
+          ],
+        ],
+        [
+          'technical_sandbox_provider_events',
+          [
+            'provider_event_id', 'run_id', 'event_type', 'provider_account_id',
+            'livemode', 'payload_sha256', 'outcome',
+          ],
+        ],
+      ]) {
+        assert.deepEqual(
+          requiredColumns.filter((column) =>
+            columnsByTable.get(table)?.includes(column)),
+          requiredColumns,
+          `migration 091 exposes required ${table} columns`,
+        );
+      }
+
+      const technicalSandboxConstraints = await setupPool.query(
+        `SELECT c.relname AS table_name,
+                pg_get_constraintdef(constraint_row.oid) AS definition
+           FROM pg_constraint AS constraint_row
+           JOIN pg_class AS c ON c.oid = constraint_row.conrelid
+           JOIN pg_namespace AS n ON n.oid = c.relnamespace
+          WHERE n.nspname = 'public'
+            AND c.relname = ANY($1::text[])
+          ORDER BY c.relname, constraint_row.oid`,
+        [['technical_sandbox_provider_events', 'technical_sandbox_runs']],
+      );
+      const assertSandboxConstraint = (table, expression) => {
+        assert.ok(
+          technicalSandboxConstraints.rows.some(
+            (row) => row.table_name === table && expression.test(row.definition),
+          ),
+          `migration 091 constraint missing on ${table}: ${expression}`,
+        );
+      };
+      assertSandboxConstraint(
+        'technical_sandbox_runs',
+        /FOREIGN KEY \(user_id\) REFERENCES users\(id\) ON DELETE CASCADE/u,
+      );
+      assertSandboxConstraint(
+        'technical_sandbox_runs',
+        /CHECK \(\(amount_minor = 100\)\)/u,
+      );
+      assertSandboxConstraint(
+        'technical_sandbox_runs',
+        /CHECK \(\(currency = 'EUR'::text\)\)/u,
+      );
+      assertSandboxConstraint(
+        'technical_sandbox_runs',
+        /CHECK \(\(status = ANY \(ARRAY\['/u,
+      );
+      assertSandboxConstraint(
+        'technical_sandbox_runs',
+        /CHECK \(\(synthetic_email ~~ '%@example\.invalid'::text\)\)/u,
+      );
+      assertSandboxConstraint(
+        'technical_sandbox_provider_events',
+        /FOREIGN KEY \(run_id\) REFERENCES technical_sandbox_runs\(id\) ON DELETE CASCADE/u,
+      );
+      assertSandboxConstraint(
+        'technical_sandbox_provider_events',
+        /CHECK \(\(livemode = false\)\)/u,
+      );
+      assertSandboxConstraint(
+        'technical_sandbox_provider_events',
+        /CHECK \(\(payload_sha256 ~ .*a-f0-9.*64/u,
+      );
+      assertSandboxConstraint(
+        'technical_sandbox_provider_events',
+        /CHECK \(\(outcome = ANY \(ARRAY\['/u,
+      );
 
       // WP194 retention is exercised against real PostgreSQL (not a fake
       // client): original timestamps govern the 30-day boundary, every
@@ -5592,6 +5710,16 @@ if (!databaseUrl) {
       const blueOceanUpload = await blueOceanUploadResponse.json();
       const blueOceanDraftId =
         'listing_ai_draft_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+      const blueOceanCapabilityResponse = await fetch(
+        `${baseUrl}/v1/blue-ocean/listing-drafts/capabilities`,
+        { headers: renterAHeaders },
+      );
+      assert.equal(blueOceanCapabilityResponse.status, 200);
+      const blueOceanCapability = await blueOceanCapabilityResponse.json();
+      const {
+        disclosureText: _blueOceanDisclosureText,
+        ...blueOceanCapabilityHandshake
+      } = blueOceanCapability;
       const blueOceanAnalyzeResponse = await fetch(
         `${baseUrl}/v1/blue-ocean/listing-drafts/analyze`,
         {
@@ -5601,18 +5729,22 @@ if (!databaseUrl) {
             draftId: blueOceanDraftId,
             generationKey: 'e'.repeat(64),
             photoUrls: [blueOceanUpload.url],
+            capabilityHandshake: blueOceanCapabilityHandshake,
             consent: {
               explicitlyInitiated: true,
               accepted: true,
-              disclosureVersion: 'listing-ai-image-disclosure-v1',
-              disclosureText:
-                'SIT analysiert deine ausgewählten Bilder mit einem externen KI-Dienst, um einen bearbeitbaren Anzeigenentwurf zu erstellen. Es wird nichts automatisch veröffentlicht.',
+              disclosureVersion: listingAiMockDisclosureVersion,
+              disclosureText: listingAiMockDisclosureText,
             },
           }),
         },
       );
-      assert.equal(blueOceanAnalyzeResponse.status, 201);
       const blueOceanAnalyze = await blueOceanAnalyzeResponse.json();
+      assert.equal(
+        blueOceanAnalyzeResponse.status,
+        201,
+        JSON.stringify(blueOceanAnalyze),
+      );
       assert.equal(blueOceanAnalyze.assistant.status, 'draft_ready');
       assert.equal(blueOceanAnalyze.assistant.autoPublishAllowed, false);
       assert.equal(blueOceanAnalyze.assistant.billedCostCents, 0);
