@@ -164,6 +164,38 @@ function providerId(value) {
   return text(value, 255) || null;
 }
 
+function connectedAccountIdForEvent(event) {
+  return providerId(event?.account)
+    || providerId(event?.related_object?.id)
+    || providerId(event?.data?.object?.id)
+    || providerId(event?.data?.object);
+}
+
+/**
+ * A signed Connect event is still untrusted input until its account is bound
+ * to one of the explicitly configured pilot/staging principals.  Keep this
+ * check before any provider retrieval and before processProviderEvent can
+ * mutate local state.  The persisted account mapping is the provenance for
+ * webhook recovery; it is never inferred from a current user session.
+ */
+async function assertConnectedAccountWebhookCohort(accountId) {
+  if (!accountId) throw new PaymentDomainError(400, 'invalid_connected_account_event');
+  const mapped = await pool.query(
+    'SELECT user_id FROM stripe_connect_accounts WHERE provider_account_id = $1',
+    [accountId],
+  );
+  if (mapped.rowCount !== 1) {
+    throw new PaymentDomainError(403, 'connected_account_not_in_pilot_cohort');
+  }
+  const userId = mapped.rows[0].user_id;
+  const pilot = config.payments.pilotUserIds.includes(userId);
+  const staging = config.stagingAccess?.allowedUserIds?.includes(userId) === true;
+  if (!pilot && !staging) {
+    throw new PaymentDomainError(403, 'connected_account_not_in_pilot_cohort');
+  }
+  return { accountId, userId };
+}
+
 const connectedAccountEventTypes = new Set([
   'account.updated',
   'v2.core.account.created',
@@ -2615,15 +2647,48 @@ export async function verifyAndApplyWebhook(rawBody, signatureHeader) {
   if (event.livemode !== config.payments.livemode) {
     throw new PaymentDomainError(409, 'provider_livemode_mismatch');
   }
-  if (isConnectedAccountProviderEvent(event.type) && event.type !== 'account.updated') {
-    const accountId = providerId(event.related_object?.id)
-      || providerId(event.data?.object?.id)
-      || providerId(event.data?.object);
-    if (!accountId) throw new PaymentDomainError(400, 'invalid_connected_account_event');
-    const account = await stripeProvider.retrieveConnectedAccount(accountId);
-    event = { ...event, data: { object: account } };
+  if (isConnectedAccountProviderEvent(event.type)) {
+    const accountId = connectedAccountIdForEvent(event);
+    await assertConnectedAccountWebhookCohort(accountId);
+    // Thin Connect events require a provider read, but only after the local
+    // cohort/provenance check above has passed.
+    if (event.type !== 'account.updated') {
+      const account = await stripeProvider.retrieveConnectedAccount(accountId);
+      event = { ...event, data: { object: account } };
+    }
   }
   return applyProviderEvent(event, rawBody);
+}
+
+/**
+ * Public payment links are navigation helpers, not payment confirmations.
+ * Return only a coarse, non-PII state from local durable truth; URL query
+ * parameters (including Stripe's success/cancel hints) are deliberately
+ * ignored by the caller.
+ */
+export async function getPublicPaymentLanding(bookingId) {
+  const result = await pool.query(
+    `SELECT booking.workflow_status, booking.simulation_only, payment.status
+       FROM bookings AS booking
+       LEFT JOIN LATERAL (
+         SELECT status FROM payments
+          WHERE booking_id = booking.id
+          ORDER BY created_at DESC LIMIT 1
+       ) AS payment ON true
+      WHERE booking.id = $1`,
+    [bookingId],
+  );
+  if (!result.rowCount) return { state: 'unknown' };
+  const row = result.rows[0];
+  if (row.simulation_only === true) return { state: 'unavailable' };
+  if (['captured', 'partially_refunded', 'refunded'].includes(row.status)) {
+    return { state: 'confirmed' };
+  }
+  if (['failed', 'cancelled'].includes(row.status)) return { state: 'failed' };
+  if (row.status || ['payment_pending', 'confirmed'].includes(row.workflow_status)) {
+    return { state: 'pending' };
+  }
+  return { state: 'unknown' };
 }
 
 export async function simulatePaymentEvent({ actor, paymentId, scenario, duplicate = false }) {

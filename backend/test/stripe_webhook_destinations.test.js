@@ -107,6 +107,10 @@ test('verified thin workflow retrieves the account and keeps original raw payloa
     return { id, object: 'v2.core.account', closed: true };
   });
   t.mock.method(pool, 'query', async (sql, args) => {
+    if (sql.startsWith('SELECT user_id FROM stripe_connect_accounts')) {
+      assert.equal(args[0], 'acct_fixture');
+      return { rowCount: 1, rows: [{ user_id: 'synthetic-owner' }] };
+    }
     if (sql.startsWith('SELECT payload_sha256')) {
       return { rowCount: 1, rows: [{ payload_sha256: hash }] };
     }
@@ -142,4 +146,23 @@ test('verified thin workflow retrieves the account and keeps original raw payloa
     stripeSignatureHeader({ payload: body, secret: connectSecret })),
   { duplicate: true, status: 'processed' });
   assert.equal(queries.filter(({ sql }) => sql.startsWith('UPDATE stripe_connect_accounts')).length, 1);
+});
+
+test('connect cohort rejection happens before any provider account retrieval', async (t) => {
+  const body = payload(true, { id: 'evt_unknown_cohort' });
+  const reads = t.mock.method(stripeProvider, 'retrieveConnectedAccount', async () => {
+    throw new Error('provider read must not happen');
+  });
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.startsWith('SELECT user_id FROM stripe_connect_accounts')) {
+      return { rowCount: 0, rows: [] };
+    }
+    throw new Error('database mutation must not happen');
+  });
+  await assert.rejects(
+    verifyAndApplyWebhook(Buffer.from(body),
+      stripeSignatureHeader({ payload: body, secret: connectSecret })),
+    (error) => error.code === 'connected_account_not_in_pilot_cohort',
+  );
+  assert.equal(reads.mock.callCount(), 0);
 });

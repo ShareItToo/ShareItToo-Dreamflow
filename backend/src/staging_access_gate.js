@@ -142,6 +142,10 @@ export function stagingAnonymousPathAllowed(configuration, { method, path } = {}
   const normalizedPath = String(path ?? '');
   if (!['GET', 'HEAD', 'POST'].includes(normalizedMethod)) return false;
   if (['GET', 'HEAD'].includes(normalizedMethod) && exactAnonymousPaths.has(normalizedPath)) return true;
+  if (['GET', 'HEAD'].includes(normalizedMethod)
+      && normalizedPath === '/v1/payments/connect/return') return true;
+  if (['GET', 'HEAD'].includes(normalizedMethod)
+      && /^\/v1\/open\/payment\/[A-Za-z0-9_.:-]+$/u.test(normalizedPath)) return true;
   if (normalizedMethod === 'POST' && controlledPostPaths.has(normalizedPath)) return true;
   if (['GET', 'HEAD'].includes(normalizedMethod) && controlledReadPaths.has(normalizedPath)) return true;
   if (['GET', 'HEAD'].includes(normalizedMethod) && normalizedPath === '/v1/listings') {

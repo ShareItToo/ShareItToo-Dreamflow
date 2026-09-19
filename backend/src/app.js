@@ -126,6 +126,7 @@ import {
   createConnectOnboarding,
   createPaymentCheckout,
   getBookingPayment,
+  getPublicPaymentLanding,
   getConnectStatus,
   paymentHealth,
   refundPayment,
@@ -554,6 +555,38 @@ function deepLinkFallbackPage({ kind, id }) {
   const schemeUrl = `shareittoo://${kind}/${encodeURIComponent(id)}`;
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${label} in ShareItToo öffnen</title></head>
 <body style="margin:0;background:#f3f6fb;font-family:Arial,sans-serif;color:#172033"><main style="max-width:560px;margin:12vh auto;padding:24px"><section style="background:#fff;border-radius:20px;padding:32px;box-shadow:0 10px 30px rgba(20,35,70,.08)"><div style="font-size:26px;font-weight:800;color:#2156d9">ShareItToo</div><h1>${label} öffnen</h1><p>Öffne den sicheren Kontext in der ShareItToo-App. Nach der Anmeldung wird deine Berechtigung erneut geprüft.</p><p><a href="${escapeHtml(schemeUrl)}" style="display:inline-block;background:#2156d9;color:#fff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:12px">In der App öffnen</a></p><p style="font-size:13px;color:#5d6980">Wenn die App noch nicht installiert ist, kehre bitte zur ShareItToo-Website zurück. Dieser Link enthält keine Zahlungs- oder Zugangsdaten.</p><p><a href="${escapeHtml(config.appPublicUrl)}">Zur ShareItToo-Website</a></p></section></main></body></html>`;
+}
+
+function paymentLandingPage({ id, state }) {
+  const copy = {
+    confirmed: {
+      title: 'Zahlung serverbestätigt',
+      message: 'Die Zahlung ist im ShareItToo-Backend bestätigt. Öffne die App, um den geschützten Buchungskontext zu sehen.',
+    },
+    pending: {
+      title: 'Zahlung wird verarbeitet',
+      message: 'Der Zahlungsstatus ist noch nicht abschließend bestätigt. Öffne die App und lade den Status dort erneut.',
+    },
+    failed: {
+      title: 'Zahlung nicht bestätigt',
+      message: 'Das Backend hat derzeit keine erfolgreiche Zahlung bestätigt. Öffne die App für die verbindliche Fehleranzeige.',
+    },
+    unavailable: {
+      title: 'Zahlung im Pilotmodus nicht verfügbar',
+      message: 'Diese Pilotzahlung kann über diesen Link nicht bestätigt werden. Öffne die App für den geschützten Testkontext.',
+    },
+    unknown: {
+      title: 'Zahlungsstatus nicht verfügbar',
+      message: 'Der Zahlungsstatus konnte nicht sicher zugeordnet werden. Öffne die App und melde dich an, damit der Server die Berechtigung erneut prüft.',
+    },
+  }[state] ?? null;
+  const resolved = copy ?? {
+    title: 'Zahlungsstatus nicht verfügbar',
+    message: 'Der Zahlungsstatus konnte nicht sicher zugeordnet werden. Öffne die App und melde dich an.',
+  };
+  const schemeUrl = `shareittoo://payment/${encodeURIComponent(id)}`;
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(resolved.title)}</title></head>
+<body style="margin:0;background:#f3f6fb;font-family:Arial,sans-serif;color:#172033"><main style="max-width:560px;margin:12vh auto;padding:24px"><section style="background:#fff;border-radius:20px;padding:32px;box-shadow:0 10px 30px rgba(20,35,70,.08)"><div style="font-size:26px;font-weight:800;color:#2156d9">ShareItToo</div><h1>${escapeHtml(resolved.title)}</h1><p>${escapeHtml(resolved.message)}</p><p><a href="${escapeHtml(schemeUrl)}" style="display:inline-block;background:#2156d9;color:#fff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:12px">Zahlung öffnen</a></p><p style="font-size:13px;color:#5d6980">URL-Ergebnisparameter werden nicht als Zahlungsnachweis verwendet. Der verbindliche Status wird nach der Anmeldung erneut serverseitig geprüft.</p><p><a href="${escapeHtml(config.appPublicUrl)}">Zur ShareItToo-Website</a></p></section></main></body></html>`;
 }
 
 function identifier(value, prefix) {
@@ -2153,19 +2186,30 @@ export function createApp({
     res.set('Cache-Control', 'no-store').json(releaseMetadata);
   });
 
-  app.get('/v1/open/:kind/:id', (req, res) => {
+  app.get('/v1/open/:kind/:id', asyncRoute(async (req, res) => {
     const kind = safeText(req.params.kind, 20);
     const id = safeText(req.params.id, 120);
     if (!['booking', 'chat', 'listing', 'payment', 'profile'].includes(kind)
         || !id || !/^[A-Za-z0-9_.:-]+$/.test(id)) {
-      return sendHtml(res, 404, resultPage({
+      sendHtml(res, 404, resultPage({
         title: 'Link nicht verfügbar',
         message: 'Dieser ShareItToo-Link ist ungültig oder nicht mehr verfügbar.',
         success: false,
       }));
+      return;
     }
-    return sendHtml(res, 200, deepLinkFallbackPage({ kind, id }));
-  });
+    if (kind === 'payment') {
+      let truth;
+      try {
+        truth = await getPublicPaymentLanding(id);
+      } catch {
+        truth = { state: 'unknown' };
+      }
+      sendHtml(res, 200, paymentLandingPage({ id, state: truth.state }));
+      return;
+    }
+    sendHtml(res, 200, deepLinkFallbackPage({ kind, id }));
+  }));
 
   app.post('/v1/auth/register', registrationLimiter, asyncRoute(async (req, res) => {
     assertStagingRegistrationClosed();
@@ -2496,10 +2540,10 @@ export function createApp({
     return res.json(outcome.session);
   }));
 
-  app.get('/v1/payments/connect/return', (req, res) => sendHtml(res, 200, resultPage({
-    title: req.query.state === 'complete' ? 'Auszahlungskonto aktualisiert' : 'Auszahlungskonto fortsetzen',
+  app.get('/v1/payments/connect/return', (_req, res) => sendHtml(res, 200, resultPage({
+    title: 'Auszahlungskonto – Status wird geprüft',
     message: 'Kehre zur ShareItToo-App zurück. Der Kontostatus wird dort sicher neu geladen.',
-    success: req.query.state === 'complete',
+    success: false,
   })));
 
   app.get('/v1/payments/capabilities', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
