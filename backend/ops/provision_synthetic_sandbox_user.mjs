@@ -26,6 +26,13 @@ export const stagingDatabaseIdentity = Object.freeze({
   composeProject: 'sit-staging',
 });
 
+export const greenDatabaseIdentity = Object.freeze({
+  environment: 'staging',
+  databaseName: 'shareittoo_staging',
+  databaseUser: 'shareittoo_staging',
+  composeProject: 'sit-green',
+});
+
 const minimumPasswordLength = 32;
 const maximumPasswordLength = 200;
 const runtimeUid = 100;
@@ -84,13 +91,18 @@ export function validateProvisioningContext({
 } = {}) {
   const environment = String(deploymentEnvironment ?? '').trim().toLowerCase();
   if (environment === 'staging') {
-    if (databaseIdentity?.environment !== stagingDatabaseIdentity.environment
-        || databaseIdentity.databaseName !== stagingDatabaseIdentity.databaseName
-        || databaseIdentity.databaseUser !== stagingDatabaseIdentity.databaseUser
-        || databaseIdentity.composeProject !== stagingDatabaseIdentity.composeProject) {
+    const isStaging = databaseIdentity?.environment === stagingDatabaseIdentity.environment
+      && databaseIdentity.databaseName === stagingDatabaseIdentity.databaseName
+      && databaseIdentity.databaseUser === stagingDatabaseIdentity.databaseUser
+      && databaseIdentity.composeProject === stagingDatabaseIdentity.composeProject;
+    const isGreen = databaseIdentity?.environment === greenDatabaseIdentity.environment
+      && databaseIdentity.databaseName === greenDatabaseIdentity.databaseName
+      && databaseIdentity.databaseUser === greenDatabaseIdentity.databaseUser
+      && databaseIdentity.composeProject === greenDatabaseIdentity.composeProject;
+    if (!isStaging && !isGreen) {
       fail('staging_database_identity_required');
     }
-    return stagingDatabaseIdentity;
+    return Object.freeze(isGreen ? greenDatabaseIdentity : stagingDatabaseIdentity);
   }
   if (environment === 'test' && databaseIdentity?.injected === true
       && typeof databaseIdentity.databaseName === 'string'

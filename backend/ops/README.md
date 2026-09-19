@@ -109,6 +109,57 @@ required evidence.
 
 ## Controlled Staging acceptance and explicit promotion
 
+## Green-only promotion and acceptance runner
+
+The public Staging target is the verified Green runtime, not the historical
+`sit-staging` database. `green_staging_promotion.mjs` is the single reusable
+plan/validation boundary for this lane. Its protected target manifest must be
+mode `0600` and bind exactly `shareittoo-staging-api`,
+`sit-green-postgres-20260918011528-wp254`,
+`sit-green-volume-20260918011528-wp254`,
+`sit-green-network-20260918011528-wp254`,
+`sit-staging-provider-egress` and
+`sit-green-uploads-20260918011528-wp254`, with Green label and schema `87`.
+Legacy `sit-staging`, production names, lookalike networks and mutable image
+tags are rejected before a command is planned.
+
+The plan takes a fresh protected backup, seals the observed Green API before
+any forward migration, restores the Green schema `87` into a run-scoped
+internal target and proves the current `92` migrations plus integrity and
+functional probes. The exact immutable runtime image is then accepted against
+the Green database on loopback `127.0.0.1:18082` with memory Identity, on-device
+Listing AI, payment memory, the existing access/provider configuration and
+read-only MFA/Firebase/technical-sandbox mounts. The synthetic user
+`synthetic_sandbox_user_pilot_20260919` is provisioned idempotently on Green
+using its protected password file; credentials never enter commands, logs or
+evidence.
+
+Only after live/ready `200`, MFA and Identity probes, successful run-scoped
+cleanup and an explicit public readback may the final API be created without a
+host port on both approved Green networks. The sealed old API is never booted
+after migration. Evidence is external, mode `0600`, and contains only target,
+runtime/Ops/image, backup and configuration digests plus sanitized readbacks.
+The runner has no generic degraded-baseline exception and refuses to proceed
+when cleanup or target/config preservation is uncertain.
+
+Preparation is local/read-only until the separately authorized operational
+gate is supplied; the target and config manifests stay outside Git:
+
+```sh
+GREEN_STAGING_TARGET_MANIFEST=/docker/shareittoo/ops/green-target.json \
+GREEN_STAGING_CONFIG_MANIFEST=/docker/shareittoo/ops/green-config.json \
+GREEN_STAGING_OPS_COMMIT=FULL_40_CHARACTER_OPS_COMMIT \
+GREEN_STAGING_EVIDENCE_FILE=/docker/shareittoo/evidence/green-promotion.json \
+GREEN_RUNTIME_IMAGE_DIGEST=sha256:IMMUTABLE_IMAGE_DIGEST \
+GREEN_STAGING_PROMOTION_EXECUTE=1 \
+GREEN_STAGING_PROMOTION_CONFIRM=FULL_40_CHARACTER_RUNTIME_COMMIT \
+  node ops/green_staging_promotion.mjs FULL_40_CHARACTER_RUNTIME_COMMIT
+```
+
+The command never prints the protected env file, password, database URL or
+provider keys. A failed inventory, backup, migration/probe, cleanup or public
+readback aborts before the final container is created.
+
 The shared Staging public port is never used as the acceptance target. The
 controlled candidate runs from the exact immutable image on the immediately
 preflighted free loopback port `18082`, while the reverse proxy remains bound
