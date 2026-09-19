@@ -14,6 +14,17 @@ function technicalSandboxRedirectUrl(base, runId) {
   return `${value}${value.includes('?') ? '&' : '?'}run_id=${encodeURIComponent(runId)}`;
 }
 
+function deterministicMemoryIdentitySession(id) {
+  if (!/^vs_test_sit_[0-9a-f]{24}$/u.test(id)) return null;
+  return {
+    id,
+    object: 'identity.verification_session',
+    status: 'requires_input',
+    livemode: false,
+    url: null,
+  };
+}
+
 function providerError(error) {
   if (error instanceof PaymentDomainError) return error;
   const status = Number(error?.statusCode ?? error?.status ?? 0);
@@ -272,7 +283,8 @@ export class StripeProvider {
 
   async retrieveIdentityVerificationSession(providerSessionId) {
     if (this.mode === 'memory') {
-      const session = this.memory.get(providerSessionId);
+      const session = this.memory.get(providerSessionId)
+        ?? deterministicMemoryIdentitySession(providerSessionId);
       if (!session) throw new PaymentDomainError(404, 'identity_verification_session_not_found');
       return session;
     }
@@ -281,8 +293,10 @@ export class StripeProvider {
 
   async redactIdentityVerificationSession(providerSessionId) {
     if (this.mode === 'memory') {
-      const session = this.memory.get(providerSessionId);
+      const session = this.memory.get(providerSessionId)
+        ?? deterministicMemoryIdentitySession(providerSessionId);
       if (!session) throw new PaymentDomainError(404, 'identity_verification_session_not_found');
+      this.memory.set(providerSessionId, session);
       session.redaction = { status: 'redacted' };
       session.status = session.status === 'canceled' ? 'canceled' : session.status;
       return { id: providerSessionId, status: session.status, redaction: { status: 'redacted' }, livemode: false };

@@ -262,6 +262,7 @@ const mfaProbe = `
 import crypto from 'node:crypto';
 import { pool } from '/app/src/db.js';
 import { hashPassword, signAccessToken } from '/app/src/security.js';
+import { IDENTITY_CONSENT_VERSION } from '/app/src/identity_verification_workflow.js';
 
 const runId = 'controlled-acceptance-' + crypto.randomUUID();
 const userId = runId + '-user';
@@ -290,7 +291,9 @@ async function request(path, { method = 'GET', token, body, expected }) {
   const text = await response.text();
   let value = null;
   try { value = text ? JSON.parse(text) : null; } catch { /* status-only response */ }
-  if (response.status !== expected) throw new Error('mfa_probe_http_' + path.replace(/[^A-Za-z0-9]+/gu, '_') + '_' + response.status);
+  const probe = path.startsWith('/identity-') ? 'identity' : 'mfa';
+  const errorPrefix = probe === 'identity' ? 'identity_probe_http_' : 'mfa_probe_http_';
+  if (response.status !== expected) throw new Error(errorPrefix + path.replace(/[^A-Za-z0-9]+/gu, '_') + '_' + response.status);
   return value;
 }
 
@@ -324,7 +327,64 @@ try {
   if (cancelled?.cancelled !== true) throw new Error('mfa_probe_cancel_missing');
   const finalStatus = await request('/auth/mfa/status', { token, expected: 200 });
   if (finalStatus?.pending !== false || finalStatus?.enabled !== false) throw new Error('mfa_probe_disabled_missing');
-  process.stdout.write(JSON.stringify({ mfa: 'enroll-pending-cancel-passed' }));
+
+  const identityKey = runId + '-identity';
+  const identityStarted = await request('/identity-verification/session', {
+    method: 'POST', token, expected: 201,
+    body: { idempotencyKey: identityKey, consentVersion: IDENTITY_CONSENT_VERSION },
+  });
+  if (identityStarted?.status !== 'requires_input'
+      || identityStarted?.livemode !== false
+      || identityStarted?.testFixture !== true
+      || identityStarted?.url != null
+      || typeof identityStarted?.sessionId !== 'string') {
+    throw new Error('identity_probe_start_missing');
+  }
+  const identityStatus = await request('/identity-verification/status', { token, expected: 200 });
+  if (identityStatus?.status !== 'requires_input'
+      || identityStatus?.livemode !== false
+      || typeof identityStatus?.sessionId !== 'string') {
+    throw new Error('identity_probe_status_missing');
+  }
+  const identityResumed = await request('/identity-verification/session', {
+    method: 'POST', token, expected: 200,
+    body: { idempotencyKey: identityKey, consentVersion: IDENTITY_CONSENT_VERSION },
+  });
+  if (identityResumed?.status !== 'requires_input'
+      || identityResumed?.livemode !== false
+      || identityResumed?.testFixture !== true
+      || identityResumed?.url != null
+      || identityResumed?.replayed !== true
+      || identityResumed?.resumed !== true) {
+    throw new Error('identity_probe_resume_missing');
+  }
+  const refreshed = await request('/identity-verification/refresh', {
+    method: 'POST', token, expected: 200,
+  });
+  if (refreshed?.status !== 'requires_input' || refreshed?.livemode !== false) {
+    throw new Error('identity_probe_refresh_missing');
+  }
+  const revoked = await request('/identity-verification/revoke', {
+    method: 'POST', token, expected: 200,
+  });
+  if (revoked?.redaction !== 'queued'
+      || revoked?.livemode !== false
+      || !['requires_input', 'redacted'].includes(revoked?.status)) {
+    throw new Error('identity_probe_revoke_missing');
+  }
+  const afterRevoke = await request('/identity-verification/status', { token, expected: 200 });
+  const redactionState = afterRevoke?.redactionStatus;
+  if (afterRevoke?.livemode !== false
+      || !['requires_input', 'redacted'].includes(afterRevoke?.status)
+      || (afterRevoke.status === 'redacted' && redactionState !== 'redacted')
+      || (afterRevoke.status !== 'redacted'
+        && !['queued', 'pending', 'processing', 'retry'].includes(redactionState))) {
+    throw new Error('identity_probe_revoke_status_missing');
+  }
+  process.stdout.write(JSON.stringify({
+    mfa: 'enroll-pending-cancel-passed',
+    identity: 'start-status-resume-revoke-passed',
+  }));
 } finally {
   await pool.query('DELETE FROM users WHERE id = $1', [userId]);
   await pool.end();
@@ -332,13 +392,18 @@ try {
 `;
 
 async function runMfaProbe() {
+  const expected = {
+    mfa: 'enroll-pending-cancel-passed',
+    identity: 'start-status-resume-revoke-passed',
+  };
   const output = await runCommandWithInput(
     'docker',
     ['exec', '-i', 'shareittoo-staging-acceptance-api', 'node', '--input-type=module'],
     mfaProbe,
     { phase: 'mfa_probe' },
   );
-  if (output !== JSON.stringify({ mfa: 'enroll-pending-cancel-passed' })) fail('mfa_probe_result_invalid');
+  if (output !== JSON.stringify(expected)) fail('mfa_probe_result_invalid');
+  return Object.freeze(expected);
 }
 
 async function publicCandidateProbe(runtimeCommit) {
@@ -418,7 +483,7 @@ async function verifyAcceptance({ runtimeCommit, opsCommit, port }) {
   try { version = await response.json(); } catch { fail('acceptance_version_payload_invalid'); }
   if (version?.commit !== runtimeCommit) fail('acceptance_version_commit_mismatch');
   await pollAcceptanceEndpoint('/health/ready', { port, phase: 'acceptance_readiness' });
-  await runMfaProbe();
+  const featureProbes = await runMfaProbe();
   const publicProbe = await publicCandidateProbe(runtimeCommit);
   const evidence = {
     kind: 'sit-staging-controlled-acceptance',
@@ -431,6 +496,7 @@ async function verifyAcceptance({ runtimeCommit, opsCommit, port }) {
     publicReleaseComplete: false,
     servicesRemainQuiesced: true,
     providerTraffic: false,
+    featureProbes,
     createdAt: new Date().toISOString(),
   };
   return evidence;

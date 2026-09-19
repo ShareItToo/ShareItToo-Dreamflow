@@ -14,6 +14,7 @@ import {
   readStripeSecretConfiguration,
 } from './stripe_secret_files.js';
 import { readMfaEncryptionKeyConfiguration } from './mfa_secret_files.js';
+import { normalizeIdentityVerificationTransport } from './identity_verification_config.js';
 import { readStagingAccessConfiguration } from './staging_access_gate.js';
 
 function required(name) {
@@ -241,11 +242,10 @@ const technicalSandbox = readTechnicalSandboxConfiguration(process.env, {
   deploymentEnvironment,
 });
 
-const identityVerificationTransport = (process.env.IDENTITY_VERIFICATION_TRANSPORT ?? 'disabled')
-  .trim().toLowerCase();
-if (!['disabled', 'memory', 'stripe'].includes(identityVerificationTransport)) {
-  throw new Error('IDENTITY_VERIFICATION_TRANSPORT must be disabled, memory, or stripe');
-}
+const identityVerificationTransport = normalizeIdentityVerificationTransport(
+  process.env.IDENTITY_VERIFICATION_TRANSPORT,
+  deploymentEnvironment,
+);
 const identitySecrets = readStripeIdentitySecretConfiguration(process.env, {
   deploymentEnvironment,
   identityTransport: identityVerificationTransport,

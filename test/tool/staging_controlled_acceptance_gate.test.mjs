@@ -38,6 +38,10 @@ async function evidenceFile(t, extra = {}) {
     publicReleaseComplete: false,
     servicesRemainQuiesced: true,
     providerTraffic: false,
+    featureProbes: {
+      mfa: 'enroll-pending-cancel-passed',
+      identity: 'start-status-resume-revoke-passed',
+    },
     ...extra,
   }));
   await chmod(file, 0o600);
@@ -47,6 +51,12 @@ async function evidenceFile(t, extra = {}) {
 test('controlled acceptance evidence is bound to loopback and exact commits', async (t) => {
   const file = await evidenceFile(t);
   assert.equal(validateEvidence({ evidenceFile: file, runtimeCommit, opsCommit }).status, 'passed');
+
+  const missingIdentityProbe = await evidenceFile(t, { featureProbes: undefined });
+  assert.throws(
+    () => validateEvidence({ evidenceFile: missingIdentityProbe, runtimeCommit, opsCommit }),
+    (error) => error?.code === 'controlled_acceptance_evidence_binding_invalid',
+  );
 
   const publicCandidate = await evidenceFile(t, { publicCandidateServed: true });
   assert.throws(
@@ -113,7 +123,7 @@ test('controlled acceptance compose is loopback-only and provider-neutral', asyn
   assert.doesNotMatch(compose, /env_file:/u);
   assert.match(compose, /PAYMENT_TRANSPORT: memory/u);
   assert.match(compose, /STRIPE_LIVEMODE: "false"/u);
-  assert.match(compose, /IDENTITY_VERIFICATION_TRANSPORT: disabled/u);
+  assert.match(compose, /IDENTITY_VERIFICATION_TRANSPORT: memory/u);
   assert.match(compose, /SIT_LISTING_AI_PROVIDER: mock/u);
 });
 
@@ -136,6 +146,9 @@ test('acceptance runner binds the Ops checkout and keeps the public service stop
   assert.match(runner, /pending !== true/u);
   assert.match(runner, /pending !== false/u);
   assert.match(runner, /mfa_probe_http_/u);
+  assert.match(runner, /identity_probe_http_/u);
+  assert.match(runner, /identity: 'start-status-resume-revoke-passed'/u);
+  assert.match(runner, /IDENTITY_CONSENT_VERSION/u);
 });
 
 test('loopback port preflight rejects an occupied listener and accepts a free one', async () => {

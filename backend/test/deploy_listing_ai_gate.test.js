@@ -38,6 +38,10 @@ fi
     publicCandidateServed: false,
     publicReleaseComplete: false,
     servicesRemainQuiesced: true,
+    featureProbes: {
+      mfa: 'enroll-pending-cancel-passed',
+      identity: 'start-status-resume-revoke-passed',
+    },
   }), { mode: 0o600 });
   return { root, capture, acceptanceEvidence };
 }

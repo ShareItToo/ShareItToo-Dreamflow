@@ -36,7 +36,9 @@ function validateEvidence({ evidenceFile, runtimeCommit, opsCommit, requirePubli
     || evidence.publicProxyReachable !== false
     || evidence.publicCandidateServed !== false
     || evidence.publicReleaseComplete !== false
-    || evidence.servicesRemainQuiesced !== true) {
+    || evidence.servicesRemainQuiesced !== true
+    || evidence.featureProbes?.mfa !== 'enroll-pending-cancel-passed'
+    || evidence.featureProbes?.identity !== 'start-status-resume-revoke-passed') {
     fail('controlled_acceptance_evidence_binding_invalid');
   }
   if (requirePublicRelease && process.env.SIT_STAGING_PUBLIC_RELEASE_CONFIRM !== runtimeCommit) {
