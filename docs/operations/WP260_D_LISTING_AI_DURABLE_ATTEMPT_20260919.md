@@ -19,14 +19,26 @@ passes the attempt ID through derivative screening and generation. The paid
 ledger preserves estimated cost and nullable billed cost instead of fabricating
 zero. Mock and on-device paths remain exact zero-cost.
 
+## WP260-D technical-debt closure
+
+The PostgreSQL integration now exercises two independent pool/client paths:
+concurrent idempotent claim (one claim, one pending row), five concurrent
+attempt-bound reservations with an exact sixth rejection, a COMMIT that is
+successfully applied but whose response is lost, a separate readback and
+exactly-once unknown finalization replay, and a real pre-COMMIT rollback with
+stale-lease reclaim. The shared lifetime aggregate is protected by a test
+advisory lock and its complete pre-test row is restored exactly at cleanup;
+only test-owned users/drafts/attempts/ledger rows are removed.
+
 ## Verification
 
 - Focused Listing-AI/provider/pipeline/store suites: 75 tests passed.
 - PostgreSQL 16 local integration passed, including migration, owner-binding,
   attempt reservation, stale-lease reclaim, egress marker, unknown replay and
   duplicate-finalization checks, conservative unknown settlement and the
-  attempt-bound provider reservation marker, plus foundation, foreign-key,
-  identity and MFA suites.
+  attempt-bound provider reservation marker, plus the two-client/lost-COMMIT/
+  rollback-reclaim debt closure, foundation, foreign-key, identity and MFA
+  suites.
 - `node --check` for changed JavaScript and `git diff --check`: passed.
 - No provider call, Stripe CLI authorization, live money, production, Store,
   Play, or device mutation occurred.

@@ -23,9 +23,11 @@ reservation and a persistent egress marker. Unknown outcomes are charged at
 the reserved maximum and written to the append-only ledger; they remain
 occupied. Only pre-egress failed or stale-unmarked reservations can be reclaimed. The
 paid ledger preserves estimated cost and nullable billed cost. Focused suites
-75/75 and the PostgreSQL 16 integration gate pass. No external provider call,
-Stripe CLI authorization, Play, production, or device action occurred. See the
-WP260-D operation report.
+75/75 and the PostgreSQL 16 integration gate pass. The two-client/lost-COMMIT/
+rollback-reclaim test debt is closed with exact unknown replay accounting and
+full aggregate-row restoration under an advisory lock. No external provider
+call, Stripe CLI authorization, Play, production, or device action occurred.
+See the WP260-D operation report.
 
 ## WP260-C Listing-AI lifetime budget — SOURCE PASS; provider gate separate
 

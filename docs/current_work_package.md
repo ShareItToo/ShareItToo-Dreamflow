@@ -27,8 +27,11 @@ finalization required before paid image screening or generation. Unknown
 outcomes are charged at the full reservation and are not retried; only a failed
 pre-egress or stale unmarked lease can be reclaimed. Focused Listing-AI suites
 are 75/75 and the real PostgreSQL 16
-integration gate passes. No provider, Stripe CLI, Play, production or device
-mutation occurred.
+integration gate passes. The test debt is closed with two independent clients,
+bounded concurrent reservations, simulated lost-COMMIT readback/replay, true
+rollback-before-COMMIT and stale reclaim; the shared lifetime row is
+advisory-locked and exactly restored after the test. No provider, Stripe CLI,
+Play, production or device mutation occurred.
 
 See `docs/operations/WP260_D_LISTING_AI_DURABLE_ATTEMPT_20260919.md`.
 
