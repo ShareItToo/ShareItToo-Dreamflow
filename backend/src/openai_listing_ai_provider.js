@@ -217,7 +217,7 @@ export function createOpenAiListingAiProvider({
   let reservedCents = 0;
   let estimatedSpentCents = 0;
 
-  async function invoke({ instructions, content, format, signal, outputTokens }) {
+  async function invoke({ instructions, content, format, signal, outputTokens, attemptId = null }) {
     if (estimatedSpentCents + reservedCents + reservedCostCentsPerCall
         > configuration.budgetCents) {
       throw new ListingAiGatewayError(
@@ -228,7 +228,7 @@ export function createOpenAiListingAiProvider({
     }
     let heldBudget;
     try {
-      heldBudget = await costGuard.reserve(reservedCostCentsPerCall);
+      heldBudget = await costGuard.reserve(reservedCostCentsPerCall, { attemptId });
     } catch (error) {
       throw providerError(error, { providerCallCount: 0 });
     }
@@ -312,7 +312,7 @@ export function createOpenAiListingAiProvider({
     provider: 'openai',
     model: configuration.model,
     version: openAiListingAiProviderVersion,
-    async screenDerivative(rawDerivative, { signal } = {}) {
+    async screenDerivative(rawDerivative, { signal, attemptId = null } = {}) {
       const derivative = assertDerivative(rawDerivative);
       const response = await invoke({
         instructions: [
@@ -328,6 +328,7 @@ export function createOpenAiListingAiProvider({
         ],
         format: screeningSchema,
         signal,
+        attemptId,
         outputTokens: 300,
       });
       try {
@@ -339,7 +340,7 @@ export function createOpenAiListingAiProvider({
         throw providerError(error, { providerCallCount: 1 });
       }
     },
-    async generate(request, { signal, analysisImages = [] } = {}) {
+    async generate(request, { signal, analysisImages = [], attemptId = null } = {}) {
       if (!Array.isArray(analysisImages)
           || analysisImages.length !== request.analysisImageReferences.length) {
         fail('listing_ai_provider_derivatives_missing');
@@ -385,6 +386,7 @@ export function createOpenAiListingAiProvider({
         ],
         format: providerResponseSchema(),
         signal,
+        attemptId,
         outputTokens: maximumOutputTokens,
       });
       try {

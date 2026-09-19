@@ -31,42 +31,60 @@ function exactZeroCostProvider(value) {
   return value;
 }
 
-async function persistZeroCostGenerationLedger(client, {
+async function persistGenerationLedger(client, {
   draftId,
   generationKey,
   provider,
   model,
   result,
 }) {
-  // The paid adapter deliberately reports billedCostCents as unknown until
-  // provider reconciliation. The current NOT NULL ledger must not turn that
-  // unknown value into a fabricated zero; its separate activation remains a
-  // later provider gate. Mock and on-device results are exact zero-cost truth.
-  if (provider === 'openai') return;
-  const exactProvider = exactZeroCostProvider(provider);
-  if (result?.paidCallPerformed !== false
-      || result?.estimatedCostCents !== 0
-      || result?.billedCostCents !== 0) {
-    fail(500, 'blue_ocean_zero_cost_ledger_mismatch');
+  const paid = provider === 'openai';
+  if (paid) {
+    if (result?.paidCallPerformed !== true
+        || !Number.isSafeInteger(result?.estimatedCostCents)
+        || result.estimatedCostCents < 0
+        || (result.billedCostCents !== null
+          && (!Number.isSafeInteger(result.billedCostCents)
+            || result.billedCostCents < 0))) {
+      fail(500, 'blue_ocean_paid_ledger_mismatch');
+    }
+  } else {
+    const exactProvider = exactZeroCostProvider(provider);
+    if (result?.paidCallPerformed !== false
+        || result?.estimatedCostCents !== 0
+        || result?.billedCostCents !== 0) {
+      fail(500, 'blue_ocean_zero_cost_ledger_mismatch');
+    }
   }
-  const outcome = exactProvider === 'mock' ? 'mocked' : 'succeeded';
+  const exactProvider = paid ? 'openai' : exactZeroCostProvider(provider);
   const exactModel = typeof model === 'string' && model.length > 0 && model.length <= 200
     ? model
     : null;
   if (exactProvider === 'on_device' && exactModel === null) {
     fail(500, 'blue_ocean_zero_cost_model_invalid');
   }
+  const outcome = paid ? 'succeeded' : (exactProvider === 'mock' ? 'mocked' : 'succeeded');
   const inserted = await client.query(
     `INSERT INTO listing_ai_cost_ledger (
        draft_id, generation_key, provider, model,
        input_units, output_units, estimated_cost_cents,
        billed_cost_cents, outcome
-     ) VALUES ($1, $2, $3, $4, 0, 0, 0, 0, $5)
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      ON CONFLICT (provider, generation_key) DO NOTHING
      RETURNING draft_id, generation_key, provider, model,
                input_units, output_units, estimated_cost_cents,
                billed_cost_cents, outcome`,
-    [draftId, generationKey, exactProvider, exactModel, outcome],
+    [
+      draftId,
+      generationKey,
+      exactProvider,
+      exactModel,
+      0,
+      0,
+      paid ? result.estimatedCostCents : 0,
+      paid ? result.billedCostCents : 0,
+      outcome,
+    ],
   );
   const row = inserted.rowCount === 1
     ? inserted.rows[0]
@@ -85,10 +103,12 @@ async function persistZeroCostGenerationLedger(client, {
       || (row.model ?? null) !== exactModel
       || Number(row.input_units) !== 0
       || Number(row.output_units) !== 0
-      || Number(row.estimated_cost_cents) !== 0
-      || Number(row.billed_cost_cents) !== 0
+      || Number(row.estimated_cost_cents) !== (paid ? result.estimatedCostCents : 0)
+      || (paid
+        ? row.billed_cost_cents !== result.billedCostCents
+        : Number(row.billed_cost_cents) !== 0)
       || row.outcome !== outcome) {
-    fail(409, 'blue_ocean_zero_cost_ledger_conflict');
+    fail(409, 'blue_ocean_generation_ledger_conflict');
   }
 }
 
@@ -182,7 +202,7 @@ export async function persistBlueOceanGeneratedDraft(client, {
     if (existing.rows[0].payload_sha256 !== revision.payloadSha256) {
       fail(409, 'blue_ocean_generation_idempotency_conflict');
     }
-    await persistZeroCostGenerationLedger(client, {
+    await persistGenerationLedger(client, {
       draftId: revision.draftId,
       generationKey,
       provider,
@@ -224,7 +244,7 @@ export async function persistBlueOceanGeneratedDraft(client, {
       revision.generatedAt,
     ],
   );
-  await persistZeroCostGenerationLedger(client, {
+  await persistGenerationLedger(client, {
     draftId: revision.draftId,
     generationKey,
     provider,

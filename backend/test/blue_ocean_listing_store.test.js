@@ -284,6 +284,10 @@ test('on-device generation persists an exact zero-cost ledger in the draft trans
     key,
     'on_device',
     'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1',
+    0,
+    0,
+    0,
+    0,
     'succeeded',
   ]);
 });
@@ -326,12 +330,24 @@ test('replayed generation repairs a missing ledger but rejects conflicting cost 
       model: 'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1',
       result: conflict.result,
     }),
-    /blue_ocean_zero_cost_ledger_conflict/u,
+    /blue_ocean_generation_ledger_conflict/u,
   );
 });
 
-test('paid-provider billing truth is not flattened to zero before reconciliation', async () => {
-  const client = generatedDraftClient();
+test('paid-provider billing truth is persisted without fabricating billed zero', async () => {
+  const client = generatedDraftClient({
+    ledgerRow: {
+      draft_id: draftId,
+      generation_key: generationKey('on-device-generated'),
+      provider: 'openai',
+      model: 'gpt-5.4-mini',
+      input_units: 0,
+      output_units: 0,
+      estimated_cost_cents: 2,
+      billed_cost_cents: null,
+      outcome: 'succeeded',
+    },
+  });
   const result = {
     ...client.result,
     paidCallPerformed: true,
@@ -345,8 +361,6 @@ test('paid-provider billing truth is not flattened to zero before reconciliation
     model: 'gpt-5.4-mini',
     result,
   });
-  assert.equal(
-    client.calls.some(({ text }) => text.includes('INSERT INTO listing_ai_cost_ledger')),
-    false,
-  );
+  const ledger = client.calls.find(({ text }) => text.includes('INSERT INTO listing_ai_cost_ledger'));
+  assert.deepEqual(ledger.params.slice(-5), [0, 0, 2, null, 'succeeded']);
 });

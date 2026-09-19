@@ -50,7 +50,7 @@ export function createMemoryListingAiBudgetGuard({ budgetCents, maxCallCount = N
   let reservedCalls = 0;
   return Object.freeze({
     version: listingAiBudgetGuardVersion,
-    async reserve(requestedCents) {
+    async reserve(requestedCents, _options = {}) {
       cents(requestedCents, 'listing_ai_budget_reservation_invalid', { minimum: 1 });
       if (spentCents + reservedCents + requestedCents > budgetCents
           || (Number.isFinite(maxCallCount) && callCount + reservedCalls + 1 > maxCallCount)) {
@@ -92,8 +92,88 @@ export function createPostgresListingAiBudgetGuard({
   }
   return Object.freeze({
     version: listingAiBudgetGuardVersion,
-    async reserve(requestedCents) {
+    async reserve(requestedCents, { attemptId = null } = {}) {
       cents(requestedCents, 'listing_ai_budget_reservation_invalid', { minimum: 1 });
+      if (attemptId !== null) {
+        const tx = typeof client.totalCount === 'number' && typeof client.connect === 'function'
+          ? await client.connect()
+          : client;
+        let began = false;
+        let committed = false;
+        try {
+          if (tx !== client) {
+            await tx.query('BEGIN');
+            began = true;
+          }
+          const marker = await tx.query(
+            `UPDATE listing_ai_analysis_attempts
+                SET status = 'egress_started', egress_started_at = now(), updated_at = now()
+              WHERE id = $1 AND status = 'reserved'
+              RETURNING id`,
+            [attemptId],
+          );
+          if (marker.rowCount !== 1) {
+            const current = await tx.query(
+              `SELECT status FROM listing_ai_analysis_attempts WHERE id = $1 FOR UPDATE`,
+              [attemptId],
+            );
+            if (current.rowCount !== 1 || current.rows[0].status !== 'egress_started') {
+              fail('listing_ai_attempt_egress_marker_conflict');
+            }
+          }
+          const held = await tx.query(
+            `UPDATE listing_ai_budget_reservations
+                SET consumed_cents = consumed_cents + $2,
+                    consumed_calls = consumed_calls + 1,
+                    updated_at = now()
+              WHERE attempt_id = $1 AND provider = 'openai' AND status = 'active'
+                AND consumed_cents + $2 <= reserved_cents
+                AND consumed_calls + 1 <= reserved_calls
+              RETURNING reserved_cents`,
+            [attemptId, requestedCents],
+          );
+          if (held.rowCount !== 1) fail('listing_ai_budget_exhausted');
+          if (began) {
+            await tx.query('COMMIT');
+            committed = true;
+          }
+        } catch (error) {
+          if (began && !committed) {
+            try { await tx.query('ROLLBACK'); } catch { /* preserve primary failure */ }
+          }
+          if (error?.code === 'listing_ai_attempt_egress_marker_conflict'
+              || error?.code === 'listing_ai_budget_exhausted') throw error;
+          throw new ListingAiGatewayError(503, 'listing_ai_attempt_reservation_commit_unknown');
+        } finally {
+          if (tx !== client) tx.release();
+        }
+        let state = 'reserved';
+        const close = async (release) => {
+          if (state !== 'reserved') fail('listing_ai_budget_reservation_already_closed');
+          if (release) {
+            const result = await client.query(
+              `UPDATE listing_ai_budget_reservations
+                  SET consumed_cents = consumed_cents - $2,
+                      consumed_calls = consumed_calls - 1,
+                      updated_at = now()
+                WHERE attempt_id = $1 AND status = 'active'
+                  AND consumed_cents >= $2 AND consumed_calls >= 1`,
+              [attemptId, requestedCents],
+            );
+            if (result.rowCount !== 1) fail('listing_ai_budget_release_failed');
+          }
+          state = release ? 'released' : 'settled';
+        };
+        return Object.freeze({
+          reservedCents: requestedCents,
+          async settle(spentCents) {
+            cents(spentCents, 'listing_ai_budget_settlement_invalid');
+            if (spentCents > requestedCents) fail('listing_ai_budget_settlement_exceeds_reservation');
+            await close(false);
+          },
+          async release() { await close(true); },
+        });
+      }
       // The external allowance is lifetime-scoped. `now` is only retained as
       // a validation seam; it must never choose a monthly bucket.
       periodKey(now());

@@ -355,6 +355,7 @@ export function createBlueOceanListingWorkflow({
       images,
       consent,
       onDeviceAnalysis = null,
+      attemptId = null,
     }) {
       if (!Array.isArray(images) || images.length < 1 || images.length > 4) {
         fail(400, 'blue_ocean_image_count_invalid');
@@ -389,8 +390,9 @@ export function createBlueOceanListingWorkflow({
           consent,
           auditSink: audit,
           screenDerivative,
+          attemptId,
           timeoutMs: configuration.timeoutMs,
-          consumeDerivatives: async (derivatives) => gateway.generate({
+          consumeDerivatives: async (derivatives, { attemptId: pipelineAttemptId } = {}) => gateway.generate({
             draftId,
             ownerId,
             generationKey,
@@ -412,7 +414,7 @@ export function createBlueOceanListingWorkflow({
               bytes: entry.bytes,
               sha256: entry.sha256,
             })),
-          }),
+          }, { attemptId: pipelineAttemptId }),
           disclosureVersion: configuration.provider === 'on_device'
             ? listingAiOnDeviceDisclosureVersion
             : listingAiImageDisclosureVersion,

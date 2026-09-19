@@ -146,6 +146,12 @@ import {
 } from './identity_verification_workflow.js';
 import { accountOpenRefundObligationCount } from './payment_refund_obligations.js';
 import { stripeSandboxExecutionActive } from './payment_execution_guard.js';
+import {
+  claimListingAiAttempt,
+  markListingAiAttemptFailed,
+  markListingAiAttemptSucceeded,
+  markListingAiAttemptUnknown,
+} from './listing_ai_attempt_workflow.js';
 import { ModerationDomainError } from './moderation_domain.js';
 import {
   accountExportPurposes,
@@ -3821,15 +3827,137 @@ export function createApp({
       ownerId: req.auth.userId,
       photoUrls: req.body?.photoUrls,
     });
-    const result = await blueOceanListing.analyze({
-      draftId: req.body?.draftId,
-      ownerId: req.auth.userId,
-      generationKey: req.body?.generationKey,
-      images,
-      consent: req.body?.consent,
-      onDeviceAnalysis: req.body?.onDeviceAnalysis,
-    });
+    const openAiProvider = config.listingAi.provider === 'openai';
+    const attemptPrerequisitesValid = /^listing_ai_draft_[0-9a-f-]{36}$/u.test(String(req.body?.draftId ?? ''))
+      && /^[a-f0-9]{64}$/u.test(String(req.body?.generationKey ?? ''))
+      && req.body?.consent?.accepted === true
+      && req.body?.consent?.disclosureVersion === 'listing-ai-image-disclosure-v1';
+    if (openAiProvider && !attemptPrerequisitesValid) {
+      throw new HttpError(400, 'listing_ai_attempt_prerequisites_invalid');
+    }
+    const paidAttemptEligible = openAiProvider
+      && /^listing_ai_draft_[0-9a-f-]{36}$/u.test(String(req.body?.draftId ?? ''))
+      && /^[a-f0-9]{64}$/u.test(String(req.body?.generationKey ?? ''))
+      && req.body?.consent?.accepted === true
+      && req.body?.consent?.disclosureVersion === 'listing-ai-image-disclosure-v1';
+    let attempt = null;
+    if (paidAttemptEligible) {
+      const draftId = String(req.body.draftId);
+      const generationKey = String(req.body.generationKey);
+      const disclosureVersion = typeof req.body?.consent?.disclosureVersion === 'string'
+        ? req.body.consent.disclosureVersion
+        : null;
+      attempt = await inTransaction(async (client) => {
+        await client.query(
+          `INSERT INTO listing_ai_drafts (
+             id, domain_version, schema_version, prompt_version, owner_id,
+             disclosure_version, disclosure_accepted_at
+           ) VALUES ($1, 'N2-2026-08-23.1', 'listing-ai-draft-v1',
+                     'listing-ai-prompt-v1', $2, $3,
+                     CASE WHEN $3 IS NULL THEN NULL ELSE now() END)
+           ON CONFLICT (id) DO NOTHING`,
+          [draftId, req.auth.userId, disclosureVersion],
+        );
+        const draft = await client.query(
+          `SELECT owner_id, status, current_revision, disclosure_version
+             FROM listing_ai_drafts WHERE id = $1 FOR UPDATE`,
+          [draftId],
+        );
+        if (draft.rowCount !== 1) throw new HttpError(503, 'listing_ai_draft_readback_failed');
+        if (draft.rows[0].owner_id !== req.auth.userId) {
+          throw new HttpError(403, 'blue_ocean_draft_forbidden');
+        }
+        if (draft.rows[0].status !== 'editing' || draft.rows[0].current_revision !== 0
+            || draft.rows[0].disclosure_version !== disclosureVersion) {
+          throw new HttpError(409, 'blue_ocean_draft_generation_conflict');
+        }
+        return claimListingAiAttempt(client, {
+          draftId,
+          ownerId: req.auth.userId,
+          generationKey,
+          model: config.listingAi.model,
+          consent: req.body?.consent ?? null,
+          images: images.map((image) => ({
+            imageReference: image.imageReference,
+            sha256: crypto.createHash('sha256').update(image.bytes).digest('hex'),
+            byteSize: image.bytes.length,
+          })),
+          maxCostCents: Math.min(10_000, 2 * (images.length + 1)),
+          maxCallCount: Math.min(config.listingAi.runMaxProviderCalls, images.length + 1),
+          budgetCents: config.listingAi.budgetCents,
+        });
+      });
+      if (attempt.retryBlocked) {
+        throw new HttpError(409, 'listing_ai_attempt_unknown');
+      }
+      if (attempt.pending) {
+        return res.status(202).json({
+          attemptId: attempt.attemptId,
+          assistant: { status: 'pending', reasonCode: 'listing_ai_attempt_in_progress' },
+        });
+      }
+      if (attempt.replayed) {
+        return res.status(200).json({
+          attemptId: attempt.attemptId,
+          assistant: attempt.result,
+          replayed: true,
+        });
+      }
+    }
+    let result;
+    try {
+      result = await blueOceanListing.analyze({
+        draftId: req.body?.draftId,
+        ownerId: req.auth.userId,
+        generationKey: req.body?.generationKey,
+        images,
+        consent: req.body?.consent,
+        onDeviceAnalysis: req.body?.onDeviceAnalysis,
+        attemptId: attempt?.attemptId ?? null,
+      });
+    } catch (error) {
+      if (attempt?.claimed) {
+        const providerCallCount = Number.isSafeInteger(error?.details?.providerCallCount)
+          ? Math.max(0, error.details.providerCallCount)
+          : 0;
+        const uncertain = providerCallCount > 0
+          || error?.code === 'listing_ai_attempt_reservation_commit_unknown';
+        await inTransaction((client) => (uncertain
+          ? markListingAiAttemptUnknown(client, {
+            attemptId: attempt.attemptId,
+            ownerId: req.auth.userId,
+            providerCallCount,
+            estimatedCostCents: null,
+            billedCostCents: null,
+            result: { status: 'unknown', reasonCode: error?.code ?? 'listing_ai_provider_failed' },
+          })
+          : markListingAiAttemptFailed(client, {
+            attemptId: attempt.attemptId,
+            ownerId: req.auth.userId,
+            result: { status: 'failed', reasonCode: error?.code ?? 'listing_ai_failed' },
+          })));
+      }
+      throw error;
+    }
     if (result.status !== 'draft_ready') {
+      if (attempt?.claimed) {
+        const providerCallCount = Number.isSafeInteger(result.providerCallCount)
+          ? result.providerCallCount : 0;
+        await inTransaction((client) => (result.paidCallPerformed
+          ? markListingAiAttemptUnknown(client, {
+            attemptId: attempt.attemptId,
+            ownerId: req.auth.userId,
+            providerCallCount,
+            estimatedCostCents: result.estimatedCostCents,
+            billedCostCents: result.billedCostCents,
+            result,
+          })
+          : markListingAiAttemptFailed(client, {
+            attemptId: attempt.attemptId,
+            ownerId: req.auth.userId,
+            result,
+          })));
+      }
       return res.json({ assistant: result });
     }
     const persisted = await inTransaction(async (client) => {
@@ -3840,6 +3968,16 @@ export function createApp({
         model: config.listingAi.model,
         result,
       });
+      if (attempt?.claimed) {
+        await markListingAiAttemptSucceeded(client, {
+          attemptId: attempt.attemptId,
+          ownerId: req.auth.userId,
+          providerCallCount: result.providerCallCount,
+          estimatedCostCents: result.estimatedCostCents,
+          billedCostCents: result.billedCostCents,
+          result,
+        });
+      }
       await writeAudit(client, {
         actor: req.actor,
         action: 'blue_ocean.listing_draft.generated',
@@ -3859,6 +3997,7 @@ export function createApp({
       return record;
     });
     return res.status(persisted.replayed ? 200 : 201).json({
+      ...(attempt?.attemptId ? { attemptId: attempt.attemptId } : {}),
       assistant: result,
       replayed: persisted.replayed,
     });

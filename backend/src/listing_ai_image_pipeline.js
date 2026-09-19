@@ -294,7 +294,7 @@ async function createAnalysisDerivative(image, { now, randomId }) {
   }
 }
 
-async function completeDerivativeScreening(screenDerivative, derivative, timeoutMs) {
+async function completeDerivativeScreening(screenDerivative, derivative, timeoutMs, attemptId = null) {
   if (typeof screenDerivative !== 'function'
       || derivative.screening.status === 'blocked') {
     return;
@@ -313,7 +313,7 @@ async function completeDerivativeScreening(screenDerivative, derivative, timeout
         byteSize: derivative.byteSize,
         sha256: derivative.sha256,
         bytes: derivative.bytes,
-      }), { signal: controller.signal }),
+      }), { signal: controller.signal, attemptId }),
       new Promise((_, reject) => {
         timer = setTimeout(() => {
           controller.abort();
@@ -378,7 +378,7 @@ function transition(derivative, state, now) {
   });
 }
 
-async function consumeWithTimeout(consumeDerivatives, derivatives, timeoutMs) {
+async function consumeWithTimeout(consumeDerivatives, derivatives, timeoutMs, attemptId = null) {
   if (typeof consumeDerivatives !== 'function') {
     return Object.freeze({ status: 'prepared_only' });
   }
@@ -391,7 +391,7 @@ async function consumeWithTimeout(consumeDerivatives, derivatives, timeoutMs) {
           ...safeDerivativeView(entry),
           bytes: entry.bytes,
         })),
-        { signal: controller.signal },
+        { signal: controller.signal, attemptId },
       )),
       new Promise((_, reject) => {
         timer = setTimeout(() => {
@@ -416,6 +416,7 @@ export async function runListingAiImagePrivacyPipeline({
   randomId = () => crypto.randomUUID(),
   disclosureVersion = listingAiImageDisclosureVersion,
   disclosureText = listingAiImageDisclosureText,
+  attemptId = null,
 }) {
   normalizeConsent(consent, { disclosureVersion, disclosureText });
   if (!Array.isArray(images)
@@ -453,7 +454,7 @@ export async function runListingAiImagePrivacyPipeline({
       let completedScreeningCalls = 0;
       for (const derivative of derivatives) {
         try {
-          await completeDerivativeScreening(screenDerivative, derivative, timeoutMs);
+          await completeDerivativeScreening(screenDerivative, derivative, timeoutMs, attemptId);
         } catch (error) {
           if (!(error instanceof ListingAiImagePipelineError)) throw error;
           const failedCallCount = Number.isSafeInteger(error.details?.providerCallCount)
@@ -496,6 +497,7 @@ export async function runListingAiImagePrivacyPipeline({
       consumeDerivatives,
       derivatives,
       timeoutMs,
+      attemptId,
     );
     for (const derivative of derivatives) transition(derivative, 'consumed', now);
     outcome = 'consumed';

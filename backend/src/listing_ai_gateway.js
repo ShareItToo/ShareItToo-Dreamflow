@@ -602,7 +602,7 @@ function manualFallback(reasonCode, {
   });
 }
 
-async function invokeOnceWithTimeout(provider, request, timeoutMs, analysisImages) {
+async function invokeOnceWithTimeout(provider, request, timeoutMs, analysisImages, attemptId = null) {
   const controller = new AbortController();
   let timer;
   const timeout = new Promise((resolve, reject) => {
@@ -613,7 +613,11 @@ async function invokeOnceWithTimeout(provider, request, timeoutMs, analysisImage
   });
   try {
     return await Promise.race([
-      provider.generate(request, { signal: controller.signal, analysisImages }),
+      provider.generate(request, {
+        signal: controller.signal,
+        analysisImages,
+        attemptId,
+      }),
       timeout,
     ]);
   } finally {
@@ -706,7 +710,7 @@ export function createListingAiGateway({
   });
 
   return Object.freeze({
-    async generate(rawInput) {
+    async generate(rawInput, { attemptId = null } = {}) {
       const splitInput = splitGatewayInput(rawInput);
       const input = normalizeGatewayInput(splitInput.domainInput);
       const onDeviceObservations = normalizeOnDeviceObservations(
@@ -790,6 +794,7 @@ export function createListingAiGateway({
               request,
               configuration.timeoutMs,
               analysisImages.values,
+              attemptId,
             );
           } catch (error) {
             const safeProviderCodes = new Set([

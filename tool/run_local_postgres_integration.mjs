@@ -275,8 +275,11 @@ export async function runLocalPostgresIntegration({
       // sequential so CREATE EXTENSION/migration setup cannot race itself.
       await runTests([
         'backend/test/postgres_foundation.integration.test.js',
-        'backend/test/listing_ai_lifetime_budget_migration.integration.test.js',
         'backend/test/foreign_key_integrity.integration.test.js',
+      ]);
+      await runTests([
+        'backend/test/listing_ai_lifetime_budget_migration.integration.test.js',
+        'backend/test/listing_ai_attempt_postgres.integration.test.js',
       ]);
       await runTests(['backend/test/identity_verification_postgres.integration.test.js']);
       await runTests(['backend/test/mfa_postgres.integration.test.js']);
