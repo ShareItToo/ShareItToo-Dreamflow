@@ -12,6 +12,7 @@ import {
   ListingAiGatewayError,
 } from './listing_ai_gateway.js';
 import { createMemoryListingAiBudgetGuard } from './listing_ai_budget_guard.js';
+import { listingAiPerCallReservationCents } from './listing_ai_gateway_config.js';
 import { privatePilotAllowedCatalogKeys } from './private_pilot_domain.js';
 
 export const openAiListingAiProviderVersion = 'WP03-2026-09-04.1';
@@ -19,7 +20,6 @@ export const openAiListingAiProviderVersion = 'WP03-2026-09-04.1';
 const responsesEndpoint = 'https://api.openai.com/v1/responses';
 const maximumDerivativeBytes = 4 * 1024 * 1024;
 const maximumOutputTokens = 2_500;
-const reservedCostCentsPerCall = 2;
 const sensitiveSignalTypes = Object.freeze([
   'face',
   'document',
@@ -218,7 +218,7 @@ export function createOpenAiListingAiProvider({
   let estimatedSpentCents = 0;
 
   async function invoke({ instructions, content, format, signal, outputTokens, attemptId = null }) {
-    if (estimatedSpentCents + reservedCents + reservedCostCentsPerCall
+    if (estimatedSpentCents + reservedCents + listingAiPerCallReservationCents
         > configuration.budgetCents) {
       throw new ListingAiGatewayError(
         502,
@@ -228,11 +228,11 @@ export function createOpenAiListingAiProvider({
     }
     let heldBudget;
     try {
-      heldBudget = await costGuard.reserve(reservedCostCentsPerCall, { attemptId });
+      heldBudget = await costGuard.reserve(listingAiPerCallReservationCents, { attemptId });
     } catch (error) {
       throw providerError(error, { providerCallCount: 0 });
     }
-    reservedCents += reservedCostCentsPerCall;
+    reservedCents += listingAiPerCallReservationCents;
     let budgetClosed = false;
     let transportAttempted = false;
     try {
@@ -276,7 +276,7 @@ export function createOpenAiListingAiProvider({
         fail('listing_ai_provider_response_invalid');
       }
       const measuredUsage = usage(body);
-      if (measuredUsage.estimatedCostCents > reservedCostCentsPerCall) {
+      if (measuredUsage.estimatedCostCents > listingAiPerCallReservationCents) {
         fail('listing_ai_provider_cost_bound_exceeded');
       }
       await heldBudget.settle(measuredUsage.estimatedCostCents);
@@ -289,7 +289,7 @@ export function createOpenAiListingAiProvider({
     } catch (error) {
       if (!budgetClosed) {
         try {
-          if (transportAttempted) await heldBudget.settle(reservedCostCentsPerCall);
+          if (transportAttempted) await heldBudget.settle(listingAiPerCallReservationCents);
           else await heldBudget.release();
           budgetClosed = true;
         } catch {
@@ -304,7 +304,7 @@ export function createOpenAiListingAiProvider({
         providerCallCount: transportAttempted ? 1 : 0,
       });
     } finally {
-      reservedCents -= reservedCostCentsPerCall;
+      reservedCents -= listingAiPerCallReservationCents;
     }
   }
 

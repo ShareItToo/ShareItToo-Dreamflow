@@ -123,6 +123,26 @@ test('WP260-D PostgreSQL attempt, reservation and unknown replay are owner-bound
       billedCostCents: null,
       result: { status: 'unknown' },
     });
+    const charged = await client.query(
+      `SELECT spent_cents, reserved_cents, call_count, reserved_calls
+         FROM listing_ai_budget_aggregates
+        WHERE period_key = 'lifetime' AND provider = 'openai'`,
+    );
+    assert.deepEqual(charged.rows[0], {
+      spent_cents: 4,
+      reserved_cents: 2,
+      call_count: 2,
+      reserved_calls: 1,
+    });
+    const identicalFinalize = await markListingAiAttemptUnknown(client, {
+      attemptId: first.attemptId,
+      ownerId: userId,
+      providerCallCount: 1,
+      estimatedCostCents: null,
+      billedCostCents: null,
+      result: { status: 'unknown' },
+    });
+    assert.equal(identicalFinalize.status, 'unknown');
     const blocked = await claimListingAiAttempt(client, {
       draftId, ownerId: userId, generationKey, model: 'gpt-test',
       consent: { accepted: true, disclosureVersion: 'listing-ai-image-disclosure-v1' },

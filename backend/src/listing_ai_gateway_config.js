@@ -7,6 +7,7 @@ export const listingAiGatewayVersion = 'N3-2026-08-23.1';
 export const listingAiLifetimeBudgetScope = 'lifetime';
 export const listingAiLifetimeBudgetMaxCents = 10_000;
 export const listingAiRunMaxProviderCalls = 5;
+export const listingAiPerCallReservationCents = 2;
 export const listingAiMockModel = 'listing-ai-mock-v1';
 export const listingAiOnDeviceModel = 'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1';
 export const listingAiOpenAiModel = 'gpt-4o-mini-2024-07-18';

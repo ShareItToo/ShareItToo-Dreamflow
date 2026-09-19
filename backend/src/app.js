@@ -31,6 +31,9 @@ import {
   revokeSessionByRefreshToken,
 } from './auth_session_actions.js';
 import { config } from './config.js';
+import {
+  listingAiPerCallReservationCents,
+} from './listing_ai_gateway_config.js';
 import { inTransaction, pool } from './db.js';
 import { lockFinancialPrincipals } from './account_financial_fence.js';
 import {
@@ -3882,7 +3885,7 @@ export function createApp({
             sha256: crypto.createHash('sha256').update(image.bytes).digest('hex'),
             byteSize: image.bytes.length,
           })),
-          maxCostCents: Math.min(10_000, 2 * (images.length + 1)),
+          maxCostCents: Math.min(10_000, listingAiPerCallReservationCents * (images.length + 1)),
           maxCallCount: Math.min(config.listingAi.runMaxProviderCalls, images.length + 1),
           budgetCents: config.listingAi.budgetCents,
         });

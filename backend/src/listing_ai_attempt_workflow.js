@@ -157,7 +157,8 @@ export async function claimListingAiAttempt(client, {
     const replacement = await client.query(
       `UPDATE listing_ai_budget_reservations
           SET status = 'active', consumed_cents = 0, consumed_calls = 0, updated_at = now()
-        WHERE attempt_id = $1 AND status = 'released' RETURNING attempt_id`,
+        WHERE attempt_id = $1 AND status = 'released'
+          AND consumed_cents = 0 AND consumed_calls = 0 RETURNING attempt_id`,
       [row.id],
     );
     if (replacement.rowCount !== 1) fail(503, 'listing_ai_attempt_reservation_failed');
@@ -198,7 +199,8 @@ export async function claimListingAiAttempt(client, {
     const reservation = await client.query(
       `UPDATE listing_ai_budget_reservations
           SET status = 'active', consumed_cents = 0, consumed_calls = 0, updated_at = now()
-        WHERE attempt_id = $1 AND status = 'released' RETURNING attempt_id`,
+        WHERE attempt_id = $1 AND status = 'released'
+          AND consumed_cents = 0 AND consumed_calls = 0 RETURNING attempt_id`,
       [row.id],
     );
     if (reservation.rowCount !== 1) fail(503, 'listing_ai_attempt_reservation_failed');
@@ -232,6 +234,24 @@ export async function markListingAiAttemptEgressStarted(client, { attemptId, own
 async function finalize(client, {
   attemptId, ownerId, status, providerCallCount, estimatedCostCents, billedCostCents, result,
 }) {
+  const current = await client.query(
+    `SELECT ${attemptSelect}, draft_id, generation_key, model
+       FROM listing_ai_analysis_attempts WHERE id = $1 AND owner_id = $2 FOR UPDATE`,
+    [attemptId, ownerId],
+  );
+  if (current.rowCount !== 1) fail(503, 'listing_ai_attempt_readback_failed');
+  const currentRow = current.rows[0];
+  const sameFinal = currentRow.status === status
+    && Number(currentRow.provider_call_count) === providerCallCount
+    && (currentRow.estimated_cost_cents == null
+      ? estimatedCostCents == null
+      : Number(currentRow.estimated_cost_cents) === estimatedCostCents)
+    && (currentRow.billed_cost_cents == null
+      ? billedCostCents == null
+      : Number(currentRow.billed_cost_cents) === billedCostCents)
+    && canonical(currentRow.result) === canonical(result ?? {});
+  if (sameFinal) return rowView(currentRow);
+  if (currentRow.status !== 'egress_started') fail(409, 'listing_ai_attempt_finalize_conflict');
   const reservation = await client.query(
     `SELECT reserved_cents, reserved_calls, status
        FROM listing_ai_budget_reservations WHERE attempt_id = $1 FOR UPDATE`,
@@ -250,10 +270,38 @@ async function finalize(client, {
       [attemptId, ownerId, providerCallCount, estimatedCostCents, billedCostCents, JSON.stringify(result ?? {})],
     );
     if (unknown.rowCount !== 1) fail(409, 'listing_ai_attempt_finalize_conflict');
+    const unknownReason = String(result?.reasonCode ?? '').includes('timeout')
+      ? 'timed_out'
+      : (String(result?.reasonCode ?? '').includes('schema') ? 'schema_rejected' : 'failed');
     await client.query(
-      `UPDATE listing_ai_budget_reservations SET status = 'unknown', updated_at = now()
+      `INSERT INTO listing_ai_cost_ledger (
+         draft_id, generation_key, provider, model,
+         input_units, output_units, estimated_cost_cents,
+         billed_cost_cents, outcome
+       ) VALUES ($1, $2, 'openai', $3, 0, 0, $4, NULL, $5)
+       ON CONFLICT (provider, generation_key) DO NOTHING`,
+      [currentRow.draft_id, currentRow.generation_key, currentRow.model,
+        Number.isSafeInteger(estimatedCostCents) ? estimatedCostCents : Number(held.reserved_cents), unknownReason],
+    );
+    await client.query(
+      `UPDATE listing_ai_budget_reservations
+          SET status = 'unknown', consumed_cents = reserved_cents,
+              consumed_calls = reserved_calls, updated_at = now()
         WHERE attempt_id = $1 AND status = 'active'`, [attemptId],
     );
+    const charged = await client.query(
+      `UPDATE listing_ai_budget_aggregates
+          SET reserved_cents = reserved_cents - $1,
+              reserved_calls = reserved_calls - $2,
+              spent_cents = spent_cents + $1,
+              call_count = call_count + $2,
+              updated_at = now()
+        WHERE period_key = 'lifetime' AND provider = 'openai'
+          AND reserved_cents >= $1 AND reserved_calls >= $2
+          AND spent_cents + $1 <= budget_cents RETURNING budget_cents`,
+      [Number(held.reserved_cents), Number(held.reserved_calls)],
+    );
+    if (charged.rowCount !== 1) fail(503, 'listing_ai_budget_settlement_failed');
     return rowView(unknown.rows[0]);
   }
   const spent = Number.isSafeInteger(estimatedCostCents) ? estimatedCostCents : 0;
@@ -292,6 +340,16 @@ export function markListingAiAttemptUnknown(client, input) {
 }
 
 export async function markListingAiAttemptFailed(client, { attemptId, ownerId, result }) {
+  const existing = await client.query(
+    `SELECT ${attemptSelect} FROM listing_ai_analysis_attempts
+      WHERE id = $1 AND owner_id = $2 FOR UPDATE`, [attemptId, ownerId],
+  );
+  if (existing.rowCount !== 1) fail(503, 'listing_ai_attempt_readback_failed');
+  if (existing.rows[0].status === 'failed'
+      && canonical(existing.rows[0].result) === canonical(result ?? {})) {
+    return rowView(existing.rows[0]);
+  }
+  if (existing.rows[0].status !== 'reserved') fail(409, 'listing_ai_attempt_finalize_conflict');
   const updated = await client.query(
     `UPDATE listing_ai_analysis_attempts
         SET status = 'failed', provider_call_count = 0, estimated_cost_cents = 0,
@@ -302,8 +360,9 @@ export async function markListingAiAttemptFailed(client, { attemptId, ownerId, r
   );
   if (updated.rowCount !== 1) fail(409, 'listing_ai_attempt_finalize_conflict');
   const reservation = await client.query(
-    `UPDATE listing_ai_budget_reservations SET status = 'released', updated_at = now()
+      `UPDATE listing_ai_budget_reservations SET status = 'released', updated_at = now()
       WHERE attempt_id = $1 AND status = 'active'
+        AND consumed_cents = 0 AND consumed_calls = 0
       RETURNING reserved_cents, reserved_calls`, [attemptId],
   );
   if (reservation.rowCount !== 1) fail(503, 'listing_ai_attempt_reservation_missing');
