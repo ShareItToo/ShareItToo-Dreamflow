@@ -42,6 +42,13 @@ function getTransporter() {
   return transporter;
 }
 
+function externalRecipientAllowed(email) {
+  const gate = config.notifications.externalRecipientGate;
+  if (!gate.enabled) return true;
+  return typeof email === 'string'
+    && gate.emails.includes(email.trim().toLowerCase());
+}
+
 export function getMailerStatus() {
   return status;
 }
@@ -66,6 +73,9 @@ export async function verifyMailer() {
 }
 
 async function send({ to, subject, text, html }) {
+  if (!externalRecipientAllowed(to)) {
+    throw mailError('mail_recipient_not_allowlisted');
+  }
   try {
     const info = await getTransporter().sendMail({
       from: config.mail.from,
