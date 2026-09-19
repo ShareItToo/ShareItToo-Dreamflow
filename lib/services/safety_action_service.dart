@@ -919,6 +919,10 @@ class SafetyActionService {
           );
         }
         remoteAccepted = true;
+        await _requireCurrent(
+          context,
+          remoteAcceptedOrConfirmed: true,
+        );
         if (opensReview) {
           final returnCase = remoteReceipt['returnCase'];
           if (returnCase is! Map ||
