@@ -265,6 +265,34 @@ if (!['disabled', 'memory', 'smtp'].includes(mailTransport)) {
   throw new Error('MAIL_TRANSPORT must be disabled, memory, or smtp');
 }
 
+const stagingExternalRecipientGateEnabled =
+  ['staging', 'test'].includes(deploymentEnvironment)
+  && (mailTransport === 'smtp' || pushTransport === 'fcm');
+const stagingExternalRecipientUserIds = Object.freeze(
+  [...new Set(csv(process.env.SIT_STAGING_NOTIFICATION_ALLOWED_USER_IDS
+    ?? process.env.SIT_STAGING_ALLOWED_USER_IDS))],
+);
+const stagingExternalRecipientEmails = Object.freeze(
+  [...new Set(csv(process.env.SIT_STAGING_NOTIFICATION_ALLOWED_EMAILS)
+    .map((value) => value.toLowerCase()))],
+);
+const stagingExternalRecipientPushTokenHashes = Object.freeze(
+  [...new Set(csv(process.env.SIT_STAGING_NOTIFICATION_ALLOWED_PUSH_TOKEN_HASHES)
+    .filter((value) => /^[a-f0-9]{64}$/u.test(value.toLowerCase()))
+    .map((value) => value.toLowerCase()))],
+);
+if (stagingExternalRecipientGateEnabled) {
+  if (stagingExternalRecipientUserIds.length === 0) {
+    throw new Error('SIT_STAGING_NOTIFICATION_ALLOWED_USER_IDS is required for external staging notifications');
+  }
+  if (mailTransport === 'smtp' && stagingExternalRecipientEmails.length === 0) {
+    throw new Error('SIT_STAGING_NOTIFICATION_ALLOWED_EMAILS is required for staging SMTP');
+  }
+  if (pushTransport === 'fcm' && stagingExternalRecipientPushTokenHashes.length === 0) {
+    throw new Error('SIT_STAGING_NOTIFICATION_ALLOWED_PUSH_TOKEN_HASHES is required for staging FCM');
+  }
+}
+
 const publicComplianceApproved = (process.env.PUBLIC_COMPLIANCE_APPROVED ?? 'false')
   .trim()
   .toLowerCase() === 'true';
@@ -459,6 +487,12 @@ export const config = Object.freeze({
     workerIntervalMs: Math.max(500, Number.parseInt(process.env.NOTIFICATION_WORKER_INTERVAL_MS ?? '5000', 10)),
     batchSize: Math.min(100, Math.max(1, Number.parseInt(process.env.NOTIFICATION_BATCH_SIZE ?? '25', 10))),
     maxAttempts: Math.min(20, Math.max(1, Number.parseInt(process.env.NOTIFICATION_MAX_ATTEMPTS ?? '5', 10))),
+    externalRecipientGate: Object.freeze({
+      enabled: stagingExternalRecipientGateEnabled,
+      userIds: stagingExternalRecipientUserIds,
+      emails: stagingExternalRecipientEmails,
+      pushTokenHashes: stagingExternalRecipientPushTokenHashes,
+    }),
   }),
   returnLifecycle: Object.freeze({
     workerIntervalMs: Math.min(

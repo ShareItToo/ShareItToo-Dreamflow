@@ -599,6 +599,16 @@ function channelEnabled(row, context) {
   return false;
 }
 
+export function externalRecipientAllowedForTest(row, context, gate = config.notifications.externalRecipientGate) {
+  if (!gate.enabled || row.channel === 'in_app') return true;
+  if (!gate.userIds.includes(row.user_id)) return false;
+  if (row.channel === 'email') {
+    const email = typeof context?.email === 'string' ? context.email.trim().toLowerCase() : '';
+    return gate.emails.includes(email);
+  }
+  return row.channel !== 'push' || gate.pushTokenHashes.length > 0;
+}
+
 async function deliverClaim(row) {
   if (!await refundNotificationTruthTrusted(row)) {
     return {
@@ -614,6 +624,14 @@ async function deliverClaim(row) {
   const context = await userDeliveryContext(row.user_id);
   if (!channelEnabled(row, context)) {
     return { outcome: 'suppressed', provider: 'preference', providerMessageId: null, metadata: {} };
+  }
+  if (!externalRecipientAllowedForTest(row, context)) {
+    return {
+      outcome: 'suppressed',
+      provider: 'staging_recipient_gate',
+      providerMessageId: null,
+      metadata: { reason: 'recipient_not_allowlisted' },
+    };
   }
   const payload = row.payload ?? {};
   if (row.channel === 'in_app') {

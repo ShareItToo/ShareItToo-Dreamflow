@@ -202,8 +202,10 @@ export async function sendPushToUser(client, {
     `SELECT id, platform, token, token_hash, locale
      FROM push_devices
      WHERE user_id = $1 AND enabled = true
+       AND ($2::boolean = false OR token_hash = ANY($3::text[]))
      ORDER BY last_seen_at DESC`,
-    [userId],
+    [userId, config.notifications.externalRecipientGate.enabled,
+      config.notifications.externalRecipientGate.pushTokenHashes],
   );
   if (config.push.transport === 'disabled') {
     return {
