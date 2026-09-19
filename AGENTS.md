@@ -71,6 +71,9 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   no named gate blocks it, continue the same package. If execution must stop,
   return the four-field capsule with the exact preserved paths and next command;
   an idle/completed turn state alone is not a valid blocker or handoff.
+- Do not block the executor turn with `gh run watch` while another independent,
+  already assigned source package can proceed. Sol owns lightweight CI polling;
+  Luna returns to an exact failing assertion only if that poll reports red.
 - Before coordinate-based device UI input, reread the current hierarchy and
   bind the action to the target's current bounds and the active scrollable
   viewport. After one no-op or unexpected screen, reread state and correct the

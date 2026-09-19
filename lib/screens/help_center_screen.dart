@@ -210,8 +210,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
           _HelpArticle(
             id: 'verifizierung',
             title: 'Technischen Identity-Test öffnen',
-            short:
-                'Freiwilligen, test-only Ablauf starten oder fortsetzen.',
+            short: 'Freiwilligen, test-only Ablauf starten oder fortsetzen.',
             body: _HelpBody(
               intro:
                   'Pilot-Testmodus: Der serverseitige Stripe-Testanbieter prüft nur den technischen Ablauf. Es wird keine reale Identität bestätigt und kein Produktionsstatus gesetzt.',
@@ -244,16 +243,17 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
           _HelpArticle(
             id: '2fa',
             title: 'Zwei-Faktor-Authentifizierung',
-            short: 'Geplanter zusätzlicher Schutz für dein Konto.',
+            short: 'Serverstatus und Authenticator-Schutz verwalten.',
             body: _HelpBody(
               intro:
-                  'Die sichere Zwei-Faktor-Authentifizierung ist noch nicht verfügbar. Wir zeigen keine lokale Demo als echte Kontosicherheit an.',
+                  'Der Zwei-Faktor-Schutz wird ausschließlich serverbestätigt verwaltet. Die App zeigt keinen lokalen Demo-Status als echte Kontosicherheit an.',
               steps: [
-                'Nutze bis dahin ein einzigartiges, starkes Passwort.',
-                'Prüfe unter „Sicherheit“ regelmäßig deine angemeldeten Geräte.',
+                'Öffne „Mein SIT“ → „Kontoeinstellungen“ → „Sicherheit“.',
+                'Warte den Serverstatus ab. Bei „Nicht aktiviert“ kannst du „Zwei-Faktor-Schutz verwalten“ öffnen und die Authenticator-App sowie Wiederherstellungscodes einrichten.',
+                'Wenn der Serverstatus nicht geladen werden kann, tippe „Serverstatus erneut laden“ oder „Erneut laden“ und ändere nichts lokal.',
               ],
               tips: [
-                'Sobald die serverseitige Funktion verfügbar ist, wird sie in den Kontoeinstellungen aktivierbar.'
+                'Bewahre die einmal angezeigten Wiederherstellungscodes sicher auf. Ohne bestätigten Serverstatus gilt der Schutz als unbekannt, nicht als aktiviert.'
               ],
             ),
           ),
@@ -594,10 +594,10 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
           _HelpArticle(
             id: 'verifizierung-2',
             title: 'Technischer Identity-Test',
-            short:
-                'Testgrenze, Datenschutz und Ablauf des technischen Tests.',
+            short: 'Testgrenze, Datenschutz und Ablauf des technischen Tests.',
             body: _HelpBody(
-              intro: 'Dieser Ablauf ist ein freiwilliger technischer Test und kein Vertrauens-, Ranking- oder Buchungssignal.',
+              intro:
+                  'Dieser Ablauf ist ein freiwilliger technischer Test und kein Vertrauens-, Ranking- oder Buchungssignal.',
               steps: [
                 'Mein SIT → Kontoeinstellungen → technischen Identity-Test öffnen.',
                 'Schritte in der App folgen.'

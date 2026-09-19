@@ -280,7 +280,10 @@ Future<List<_ListingOption>> _buildOptions(
     } catch (_) {
       if (context.mounted) {
         await AppPopup.toast(context,
-            icon: Icons.link_off, title: 'Link kopieren folgt bald');
+            icon: Icons.link_off,
+            title: 'Link kopieren nicht verfügbar',
+            message: 'Die Zwischenablage konnte nicht aktualisiert werden. '
+                'Versuche es erneut.');
       }
     }
   }
