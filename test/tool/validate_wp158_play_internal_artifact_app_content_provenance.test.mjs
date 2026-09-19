@@ -24,8 +24,27 @@ test('rejects candidate/archive drift', () => {
   assert.throws(() => validateWp158PlayInternalArtifactAppContentProvenance({ evidence: mutated }), /artifact archive is invalid/u);
 });
 
+test('rejects a tampered stored inventory digest', () => {
+  const mutated = structuredClone(evidence);
+  mutated.sourceInventory['AGENTS.md'] = '0'.repeat(64);
+  assert.throws(
+    () => validateWp158PlayInternalArtifactAppContentProvenance({ evidence: mutated }),
+    /source inventory digest is invalid/u,
+  );
+});
+
 test('rejects any Play mutation boundary', () => {
   const mutated = structuredClone(evidence);
   mutated.boundaries.activationPerformed = true;
   assert.throws(() => validateWp158PlayInternalArtifactAppContentProvenance({ evidence: mutated }), /boundaries is invalid/u);
+});
+
+test('does not rebind historical inventory to a later working-tree source', () => {
+  const result = validateWp158PlayInternalArtifactAppContentProvenance({
+    evidence,
+    sourceTexts: {
+      'AGENTS.md': '# later working-tree policy\n',
+    },
+  });
+  assert.equal(result.currentCandidate, '2026091312');
 });

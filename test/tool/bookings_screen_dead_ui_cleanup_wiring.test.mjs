@@ -72,10 +72,8 @@ test('renter booking list cannot reintroduce disabled transport state', () => {
 
 test('renter cancellation remains in the canonical booking detail flow', () => {
   assert.match(bookingDetail, /title: 'Buchung stornieren\?'/);
-  assert.match(
-    bookingDetail,
-    /DataService\.updateRentalRequestStatusWithActor\([\s\S]*?status: 'cancelled',[\s\S]*?cancelledBy: 'renter'/,
-  );
+  assert.match(bookingDetail, /_cancelBookingAndReadback\([\s\S]*?cancelledBy: 'renter'/);
+  assert.match(bookingDetail, /Future<bool> _cancelBookingAndReadback\([\s\S]*?status: 'cancelled',[\s\S]*?cancelledBy: cancelledBy/);
   assert.match(bookingDetail, /title: 'Buchung storniert'/);
 });
 

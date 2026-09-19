@@ -162,12 +162,15 @@ test('upcoming cancellation remains renter-bound in its canonical action', () =>
     'Future<void> _confirmWithdrawPending() async',
   );
   assert.match(cancellation, /title: 'Buchung stornieren\?'/);
-  assert.match(
-    cancellation,
-    /DataService\.updateRentalRequestStatusWithActor\(/,
+  assert.match(cancellation, /_cancelBookingAndReadback\([\s\S]*?requestId: id, cancelledBy: 'renter'/);
+  const cancellationHelper = sectionBetween(
+    bookingDetail,
+    'Future<bool> _cancelBookingAndReadback({',
+    '/// Small non-collapsible card used under the map',
   );
-  assert.match(cancellation, /status: 'cancelled'/);
-  assert.match(cancellation, /cancelledBy: 'renter'/);
+  assert.match(cancellationHelper, /DataService\.updateRentalRequestStatusWithActor\(/);
+  assert.match(cancellationHelper, /status: 'cancelled'/);
+  assert.match(cancellationHelper, /cancelledBy: cancelledBy/);
   assert.match(cancellation, /title: 'Buchung storniert'/);
 });
 

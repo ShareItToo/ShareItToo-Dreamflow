@@ -26,9 +26,11 @@ assert.ok(sentPopup, 'expected reservation confirmation popup');
 
 test('dead sheet request stays removed and page proves root navigator before confirmation UI', () => {
   assert.doesNotMatch(sheetState, /Future<void> _sendRequest\(\)/u);
+  assert.match(pageRequest, /await _clearSavedSelection\(\);\s+if \(!mounted\) return;/u);
+  assert.match(pageRequest, /if \(isEditing\) \{[\s\S]*?Reservierung aktualisiert[\s\S]*?Navigator\.of\(context\)\.maybePop\(\);/u);
   assert.match(
     pageRequest,
-    /clearSavedDateRange\(widget\.item\.id\);\s+await DataService\.clearSavedDeliverySelection\(widget\.item\.id\);\s+if \(!mounted\) return;\s+final rootNav = Navigator\.of\(context, rootNavigator: true\);\s+rootNav\.popUntil\(\(route\) => route\.isFirst\);\s+if \(!rootNav\.mounted\) return;\s+await _showReservationSentPopup\(rootNav\.context,/u,
+    /final rootNav = Navigator\.of\(context, rootNavigator: true\);[\s\S]*?rootNav\.popUntil\(\(route\) => route\.isFirst\);[\s\S]*?if \(!rootNav\.mounted\) return;[\s\S]*?await _showReservationSentPopup\(rootNav\.context,/u,
   );
 });
 

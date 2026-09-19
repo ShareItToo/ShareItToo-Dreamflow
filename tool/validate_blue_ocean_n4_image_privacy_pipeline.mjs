@@ -160,7 +160,7 @@ export function validateBlueOceanN4ImagePrivacyPipeline({
     "transition(derivative, 'purged', now)",
     'controller.abort()',
     'providerCallPerformed: derivatives.some((entry) => entry.screeningUsage)',
-    'completeDerivativeScreening(screenDerivative, derivative, timeoutMs)',
+    'async function completeDerivativeScreening(screenDerivative, derivative, timeoutMs, attemptId = null)',
     "derivative.screening.status === 'blocked'",
     "'listing_ai_image_visual_screen_timeout'",
   ]);

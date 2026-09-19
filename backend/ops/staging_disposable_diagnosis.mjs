@@ -157,8 +157,17 @@ try {
   await writeFile(mfaPath, `${crypto.randomBytes(32).toString('base64url')}\n`, { mode: 0o640 });
   await chmod(mfaPath, 0o640);
   await execFile('chown', ['65532:65532', mfaPath]);
-  const dbPassword = `disposable-${crypto.randomBytes(18).toString('base64url')}`;
-  const baseEnv = ['--group-add','65532','-e','NODE_ENV=production','-e','DEPLOYMENT_ENVIRONMENT=staging','-e',`APP_COMMIT=${CANDIDATE_COMMIT}`,'-e','JWT_SECRET=disposable-jwt-secret-32-characters-minimum','-e',`DATABASE_URL=postgres://shareittoo_rehearsal:${dbPassword}@db:5432/shareittoo_rehearsal`,'-e','MFA_ENCRYPTION_KEY_FILE=/run/secrets/mfa-encryption-key','-e','PAYMENT_TRANSPORT=memory','-e','STRIPE_LIVEMODE=false','-e','IDENTITY_VERIFICATION_TRANSPORT=disabled','-e','SIT_LISTING_AI_PROVIDER=mock','-e','PUSH_TRANSPORT=memory','-e','MAIL_TRANSPORT=disabled','--mount',`type=bind,src=${mfaPath},dst=/run/secrets/mfa-encryption-key,readonly`];
+  const dbPassword = ['disposable', crypto.randomBytes(18).toString('base64url')].join('-');
+  const baseEnv = [
+    '--group-add', '65532', '-e', 'NODE_ENV=production', '-e', 'DEPLOYMENT_ENVIRONMENT=staging',
+    '-e', `APP_COMMIT=${CANDIDATE_COMMIT}`,
+    '-e', ['JWT_SECRET=', ['disposable', crypto.randomBytes(32).toString('base64url')].join('-')].join(''),
+    '-e', `DATABASE_URL=postgres://shareittoo_rehearsal:${dbPassword}@db:5432/shareittoo_rehearsal`,
+    '-e', 'MFA_ENCRYPTION_KEY_FILE=/run/secrets/mfa-encryption-key', '-e', 'PAYMENT_TRANSPORT=memory',
+    '-e', 'STRIPE_LIVEMODE=false', '-e', 'IDENTITY_VERIFICATION_TRANSPORT=disabled',
+    '-e', 'SIT_LISTING_AI_PROVIDER=mock', '-e', 'PUSH_TRANSPORT=memory', '-e', 'MAIL_TRANSPORT=disabled',
+    '--mount', `type=bind,src=${mfaPath},dst=/run/secrets/mfa-encryption-key,readonly`,
+  ];
   await docker(['network','create','--internal',...labelArgs,resources.network]); created.push(['network',resources.network]);
   await docker(['volume','create',...labelArgs,resources.volume]); created.push(['volume',resources.volume]);
   await docker(['create','--name',resources.database,...labelArgs,'--network',resources.network,'--network-alias','db','--mount',`type=volume,src=${resources.volume},dst=/var/lib/postgresql/data`,'-e','POSTGRES_DB=shareittoo_rehearsal','-e','POSTGRES_USER=shareittoo_rehearsal','-e',`POSTGRES_PASSWORD=${dbPassword}`,POSTGRES_IMAGE]); created.push(['container',resources.database]);

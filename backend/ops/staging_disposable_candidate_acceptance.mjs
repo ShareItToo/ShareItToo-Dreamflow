@@ -34,13 +34,14 @@ function fullCommit(value, name) {
   return value;
 }
 
-export function buildCandidateRuntimeEnv({ databasePassword, mfaPath, targetCommit, api = false, jwtSecret = 'disposable-jwt-secret-32-characters-minimum' } = {}) {
-  if (typeof databasePassword !== 'string' || typeof mfaPath !== 'string' || typeof targetCommit !== 'string' || jwtSecret.length < 32) {
+export function buildCandidateRuntimeEnv({ databasePassword, mfaPath, targetCommit, api = false, jwtSecret } = {}) {
+  const resolvedJwtSecret = jwtSecret ?? `disposable-${crypto.randomBytes(32).toString('base64url')}`;
+  if (typeof databasePassword !== 'string' || typeof mfaPath !== 'string' || typeof targetCommit !== 'string' || resolvedJwtSecret.length < 32) {
     fail('candidate_runtime_env_invalid');
   }
   const env = {
     NODE_ENV: 'production', DEPLOYMENT_ENVIRONMENT: 'staging',
-    APP_COMMIT: targetCommit, JWT_SECRET: jwtSecret,
+    APP_COMMIT: targetCommit, JWT_SECRET: resolvedJwtSecret,
     DATABASE_URL: `postgres://shareittoo_rehearsal:${databasePassword}@db:5432/shareittoo_rehearsal`,
     MFA_ENCRYPTION_KEY_FILE: '/run/secrets/mfa-encryption-key',
     PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
@@ -198,7 +199,7 @@ export async function probeInternalEndpoint(command, { container, path, expected
 const mfaProbe = `import crypto from 'node:crypto';
 import { pool } from '/app/src/db.js';
 import { hashPassword, signAccessToken } from '/app/src/security.js';
-const id = 'disposable-mfa-' + crypto.randomUUID(); const email = id + '@example.invalid'; const password = 'DisposableMfa9!';
+const id = 'disposable-mfa-' + crypto.randomUUID(); const email = id + '@example.invalid'; const password = ['DisposableMfa', crypto.randomBytes(18).toString('base64url')].join('-');
 try { const h = await hashPassword(password); await pool.query("INSERT INTO users (id,email,password_hash,profile,role,account_status,email_verified_at,terms_accepted_at,privacy_accepted_at,minimum_age_confirmed_at,private_use_confirmed_at) VALUES ($1,$2,$3,$4::jsonb,'user','active',now(),now(),now(),now(),now())", [id,email,h,JSON.stringify({displayName:'Disposable MFA',emailVerified:true})]); const session = crypto.randomUUID(); await pool.query("INSERT INTO auth_sessions (id,user_id,device_label) VALUES ($1,$2,'disposable acceptance')", [session,id]); const token=signAccessToken({id,email},{sessionId:session}); async function req(path,method='GET',body,expected=200){const r=await fetch('http://127.0.0.1:8080/v1'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}); if(r.status!==expected) throw new Error('mfa_'+r.status); return r.json();} const e=await req('/auth/mfa/enroll','POST',{currentPassword:password,idempotencyKey:id},201); if(typeof e.secret!=='string') throw new Error('mfa_secret'); const p=await req('/auth/mfa/status'); if(!p.pending||p.enabled) throw new Error('mfa_pending'); const c=await req('/auth/mfa/enroll/cancel','POST',{currentPassword:password}); if(!c.cancelled) throw new Error('mfa_cancel'); console.log('disposable-mfa-ok'); } finally { await pool.query('DELETE FROM users WHERE id=$1',[id]); await pool.end(); }`;
 
 export async function runDisposableCandidateAcceptance({
@@ -243,7 +244,7 @@ export async function runDisposableCandidateAcceptance({
     assertSafeDisposableTarget({ ...resources, runId });
     mfaKey = await prepareMfaKey();
     const jwtSecret = `disposable-${crypto.randomBytes(32).toString('base64url')}`;
-    const databasePassword = `disposable-${crypto.randomBytes(18).toString('base64url')}`;
+    const databasePassword = ['disposable', crypto.randomBytes(18).toString('base64url')].join('-');
     const imageMeta = await command('docker', ['image', 'inspect', disposableCandidateImage, '--format', '{{.Id}}|{{index .Config.Labels "org.opencontainers.image.revision"}}'], { phase: 'candidate_image_identity' });
     const imageMetaText = String(typeof imageMeta === 'string' ? imageMeta : imageMeta.stdout).trim();
     const [imageId, imageRevision] = imageMetaText.split('|', 2);

@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
-import { checkCurrentConsumerClosure, sourceBindings } from '../../tool/check_current_consumer_closure.mjs';
+import { checkCurrentConsumerClosure, isApprovedHistoricalRepair, sourceBindings } from '../../tool/check_current_consumer_closure.mjs';
 
 const app = 'backend/src/app.js';
 const manifest = 'store/privacy-disclosures.json';
@@ -103,6 +103,24 @@ test('missing local source fails and changing existing historical evidence is re
   rmSync(join(f.directory, app)); assert.throws(f.check, { code: 'MISSING_SOURCE' });
   f.put(app, 'export const version = 1;\n');
   f.json(historical, { sourceInventory: {} }); assert.throws(f.check, { code: 'HISTORICAL_EVIDENCE_CHANGED' });
+});
+
+test('WP158 historical repair is exact and cannot generalize', () => {
+  const path = 'docs/evidence/release-readiness/wp158-play-internal-artifact-app-content-provenance-20260915.json';
+  const previous = { sourceInventory: {
+    'AGENTS.md': 'da71676bf035cdeb4977d95e1101f20ad29692de38fba2f71cb772d175af64c4',
+    'other.md': 'a'.repeat(64),
+  } };
+  const current = { sourceInventory: {
+    'AGENTS.md': '8bcf2e35a478492fdc19c482dc8687404d064ce787a2390d6dc798a9dce5549d',
+    'other.md': 'a'.repeat(64),
+  } };
+  assert.equal(isApprovedHistoricalRepair(path, previous, current), true);
+  assert.equal(isApprovedHistoricalRepair(path, previous, { sourceInventory: {
+    ...current.sourceInventory, 'other.md': 'b'.repeat(64),
+  } }), false);
+  assert.equal(isApprovedHistoricalRepair(path, current, previous), false);
+  assert.equal(isApprovedHistoricalRepair('docs/evidence/release-readiness/other.json', previous, current), false);
 });
 
 test('new migration detects count and last-file drift before database work', (t) => {

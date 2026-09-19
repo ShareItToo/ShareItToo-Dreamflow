@@ -57,10 +57,8 @@ test('renter detail keeps the active modern cards and critical flows', () => {
     /onPressed: \(\) async \{\s+if \(!await _timeConfirmedForStart\(isReturn: true\)\) return;\s+await _startOwnerReturnFlow\(\);\s+\},[\s\S]*?Rückgabe starten/,
   );
   assert.match(bookingDetail, /case 'cancel':\s+await _confirmCancelUpcoming\(\)/);
-  assert.match(
-    bookingDetail,
-    /status: 'cancelled',\s+cancelledBy: 'renter'/,
-  );
+  assert.match(bookingDetail, /_cancelBookingAndReadback\([\s\S]*?cancelledBy: 'renter'/);
+  assert.match(bookingDetail, /Future<bool> _cancelBookingAndReadback\([\s\S]*?status: 'cancelled',[\s\S]*?cancelledBy: cancelledBy/);
   assert.match(
     bookingDetail,
     /onPressed: _reviewAlreadySubmitted[\s\S]*?ReviewPromptSheet\.show\([\s\S]*?direction: 'renter_to_owner'/,
@@ -103,7 +101,7 @@ test('owner detail keeps active facts counterpart and handover flows', () => {
     ownerDetail,
     /onPressed: \(\) async \{[\s\S]*?_timeConfirmedForStart\(\s+req: req,\s+isReturn: true,[\s\S]*?await _startReturnFlow\(context, req, item, renter\);[\s\S]*?label: const Text\('Rückgabe starten'\)/,
   );
-  assert.match(ownerDetail, /status: 'cancelled',\s+cancelledBy: 'owner'/);
+  assert.match(ownerDetail, /DataService\s*\.updateRentalRequestStatusWithActor\([\s\S]*?status: 'cancelled',[\s\S]*?cancelledBy: 'owner'/);
   assert.match(
     ownerDetail,
     /onPressed: \(\) => _showReviewSheet\(context, rn\)[\s\S]*?direction: 'owner_to_renter'/,

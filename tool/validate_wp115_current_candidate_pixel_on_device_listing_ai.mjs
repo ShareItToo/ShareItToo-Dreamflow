@@ -29,6 +29,18 @@ function digest(repositoryRoot, path) {
     .digest('hex');
 }
 
+function digestAtCommit(repositoryRoot, path, commit) {
+  let bytes;
+  try {
+    bytes = execFileSync('git', ['-C', repositoryRoot, 'show', `${commit}:${path}`], {
+      encoding: 'buffer', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch {
+    fail(`historical source inventory ${commit}:${path} cannot be resolved`);
+  }
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
 function assertGitState(repositoryRoot) {
   try {
     execFileSync('git', ['merge-base', '--is-ancestor', executionHead, 'HEAD'], {
@@ -159,7 +171,8 @@ export function validateWp115CurrentCandidatePixelOnDeviceListingAi({
     JSON.stringify([...remaining].sort()), 'remaining inventory');
 
   for (const [path, expected] of Object.entries(value.sourceInventory ?? {})) {
-    exact(digest(canonicalRoot, path), expected, `source inventory ${path}`);
+    exact(digestAtCommit(canonicalRoot, path, value.repository.runnerSourceCommit), expected,
+      `source inventory ${path}`);
   }
   exact(Object.keys(value.sourceInventory ?? {}).length, 3, 'source inventory size');
   exact(current?.candidate?.versionCode, candidate.versionCode, 'rollover version');

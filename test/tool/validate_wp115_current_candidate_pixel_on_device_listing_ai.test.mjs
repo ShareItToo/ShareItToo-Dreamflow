@@ -48,6 +48,20 @@ test('rejects candidate, device, inference and cost drift', () => {
   }
 });
 
+test('fails closed when historical runner binding or stored digest is altered', () => {
+  for (const mutate of [
+    (value) => { value.evidence.repository.runnerSourceCommit = '0'.repeat(40); },
+    (value) => { value.evidence.sourceInventory['tool/diagnose_android_on_device_listing_ai.mjs'] = '0'.repeat(64); },
+  ]) {
+    const value = fixture();
+    mutate(value);
+    assert.throws(
+      () => validateWp115CurrentCandidatePixelOnDeviceListingAi({ ...value, checkGitState: false }),
+      /WP115|historical/u,
+    );
+  }
+});
+
 test('rejects cleanup, publication and rollover promotion', () => {
   for (const mutate of [
     (value) => { value.evidence.cleanup.controlledMediaRemoved = false; },

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -17,13 +18,22 @@ function exact(actual, expected, label) {
   if (actual !== expected) fail(`${label} does not match WP112.`);
 }
 
-function digest(path) {
-  return createHash('sha256').update(readFileSync(resolve(repositoryRoot, path))).digest('hex');
+function digestAtCommit(root, path, commit) {
+  let bytes;
+  try {
+    bytes = execFileSync('git', ['-C', root, 'show', `${commit}:${path}`], {
+      encoding: 'buffer', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch {
+    fail(`historical source inventory cannot resolve ${commit}:${path}`);
+  }
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
-export function validateWp112PixelOnDeviceListingAi({ root = repositoryRoot } = {}) {
+export function validateWp112PixelOnDeviceListingAi({ root = repositoryRoot, evidence: suppliedEvidence } = {}) {
   const canonicalRoot = realpathSync(resolve(root));
-  const evidence = JSON.parse(readFileSync(resolve(canonicalRoot, evidencePath), 'utf8'));
+  const evidence = suppliedEvidence
+    ?? JSON.parse(readFileSync(resolve(canonicalRoot, evidencePath), 'utf8'));
   exact(evidence.schemaVersion, 1, 'schemaVersion');
   exact(evidence.workPackage, 'WP112_PIXEL_ON_DEVICE_LISTING_AI_ACCEPTANCE', 'workPackage');
   exact(evidence.status, 'passed-physical-pixel-on-device-listing-ai', 'status');
@@ -62,8 +72,12 @@ export function validateWp112PixelOnDeviceListingAi({ root = repositoryRoot } = 
   if (inventory === null || typeof inventory !== 'object' || Array.isArray(inventory)) {
     fail('WP112 sourceInventory is invalid.');
   }
+  // WP112 is immutable physical evidence. Its inventory was captured from the
+  // exact runner source commit, not from today's mutable checkout.
+  const inventoryCommit = evidence.runnerSourceCommit;
   for (const [path, expected] of Object.entries(inventory)) {
-    exact(digest.call(null, path), expected, `sourceInventory.${path}`);
+    exact(digestAtCommit(canonicalRoot, path, inventoryCommit), expected,
+      `sourceInventory.${path}`);
   }
   const operation = readFileSync(resolve(canonicalRoot, operationPath), 'utf8');
   for (const statement of [

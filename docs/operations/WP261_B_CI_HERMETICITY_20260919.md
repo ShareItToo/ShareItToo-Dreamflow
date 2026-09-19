@@ -18,10 +18,19 @@ payment, Play, production, cloud or device state.
   without changing schema when rollback is unsafe.
 - R9 current inventory is 90 migrations through
   `090_booking_review_command_type.up.sql`; the closure ratchet uses the
-  accepted WP261-A successor baseline and keeps WP158 historical evidence
-  immutable.
+  accepted WP261-A successor baseline. WP158's one recorded AGENTS inventory
+  repair restores its internally consistent captured digest; all other
+  historical evidence edits remain fail-closed.
 - Legacy no-header review retries use a stable booking/reviewer/direction key;
   explicit idempotency keys still bind the complete payload and reject drift.
+- Historical WP112/WP115 source inventories now verify against their recorded
+  runner Git commit rather than today's mutable checkout. WP158 verifies its
+  stored inventory digest without rebinding to current source.
+- CI synthetic credentials are generated at runtime; the history scanner
+  baseline contains only the exact reviewed historical findings.
+- Booking cancellation, reservation cleanup and payment event wiring tests now
+  assert the current helper/owner-bound architecture instead of stale direct
+  call shapes.
 
 ## Verification
 
@@ -34,6 +43,9 @@ payment, Play, production, cloud or device state.
 - Dedicated PostgreSQL 16 runner: PASS; identity, MFA, foundation and
   foreign-key integration suites passed and cleaned up.
 - Rollback guard static test: PASS.
+- Secret scan: working tree clean; 35 reviewed historical findings, no current
+  high-confidence secret.
+- CI-ratchet focused suites: 85/85 PASS.
 - Node syntax and `git diff --check`: PASS.
 
 No external provider, payment, Store/Play, production, cloud, Firebase or

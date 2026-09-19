@@ -1067,8 +1067,7 @@ class _ItemDetailsPageState extends State<_ItemDetailsPage> {
 
     try {
       if (!mounted) return;
-      await DataService.clearSavedDateRange(widget.item.id);
-      await DataService.clearSavedDeliverySelection(widget.item.id);
+      await _clearSavedSelection();
       if (!mounted) return;
       if (isEditing) {
         await AppPopup.toast(context,

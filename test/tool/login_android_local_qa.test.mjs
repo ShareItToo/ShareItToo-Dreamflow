@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 import test from 'node:test';
 import {
   buildUiLoginCommands,
@@ -11,7 +12,7 @@ const manifest = JSON.stringify({
   kind: 'sit-android-local-qa-transient-session',
   apiBaseUrl: 'http://127.0.0.1:18080/api/v1',
   email: 'qa@example.invalid',
-  password: 'Qa-secret',
+  password: process.env.SIT_LOCAL_QA_PASSWORD ?? `Qa-${randomBytes(18).toString('base64url')}`,
 });
 const loginXml = '<hierarchy>' +
   '<node hint="E-Mail" bounds="[10,20][210,120]" />' +

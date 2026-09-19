@@ -46,7 +46,7 @@ test('listing lookup uses the owning State context only after its lifecycle proo
   );
   assert.match(
     listingLookup,
-    /ItemDetailsOverlay\.showFullPage\(context, item: bestItem\)/u,
+    /ItemDetailsOverlay\.showFullPage\(\s*context,\s*item: bestItem,\s*editRequestId:/u,
   );
   assert.doesNotMatch(listingLookup, /final ctx = context/u);
 });

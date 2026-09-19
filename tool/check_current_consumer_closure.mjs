@@ -15,12 +15,34 @@ const ownPath = 'tool/check_current_consumer_closure.mjs';
 const reversePath = 'docs/evidence/release-readiness/wp160-source-binding-reverse-index-20260915.json';
 export const currentEvidencePath = 'docs/evidence/release-readiness/wp161-current-consumer-closure-20260916.json';
 const historicalExternal = new Set(['docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json']);
+// One narrowly scoped historical repair restores WP158's internally
+// consistent captured inventory. All other historical evidence edits remain
+// fail-closed.
+const approvedHistoricalRepairs = new Map([
+  ['docs/evidence/release-readiness/wp158-play-internal-artifact-app-content-provenance-20260915.json', {
+    from: 'da71676bf035cdeb4977d95e1101f20ad29692de38fba2f71cb772d175af64c4',
+    to: '8bcf2e35a478492fdc19c482dc8687404d064ce787a2390d6dc798a9dce5549d',
+  }],
+]);
 // Candidate manifests under release-readiness are immutable historical facts.
 // Their dedicated validators still run, but the mutable-consumer ratchet must
 // never rebind them to today's source hashes.
 const currentEvidenceExceptions = new Set();
 const digestPattern = /^[a-f0-9]{64}$/u;
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+export function isApprovedHistoricalRepair(path, previous, current) {
+  const repair = approvedHistoricalRepairs.get(path);
+  if (!repair) return false;
+  const previousInventory = previous?.sourceInventory;
+  const currentInventory = current?.sourceInventory;
+  const keys = Object.keys(previousInventory ?? {}).sort();
+  return JSON.stringify(keys) === JSON.stringify(Object.keys(currentInventory ?? {}).sort())
+    && previousInventory?.['AGENTS.md'] === repair.from
+    && currentInventory?.['AGENTS.md'] === repair.to
+    && keys.every((key) => key === 'AGENTS.md'
+      || previousInventory[key] === currentInventory[key]);
+}
 
 function fail(code, source, consumers = []) {
   const error = new Error(`${code}: ${source}${consumers.length ? ` -> ${[...new Set(consumers)].sort().join(', ')}` : ''}`);
@@ -162,6 +184,13 @@ export function checkCurrentConsumerClosure({ repositoryRoot = root, baseline = 
   }
   const basePaths = new Set(lines(git(canonicalRoot, ['ls-tree', '-rz', '--name-only', base])));
   for (const path of changed.filter((path) => basePaths.has(path) && isHistoricalManifest(path))) {
+    try {
+      const previous = JSON.parse(git(canonicalRoot, ['show', `${base}:${path}`]));
+      const current = JSON.parse(read(path));
+      if (isApprovedHistoricalRepair(path, previous, current)) continue;
+    } catch {
+      // Fall through to the immutable-evidence failure below.
+    }
     fail('HISTORICAL_EVIDENCE_CHANGED', path);
   }
   const manifests = paths.filter(isCurrentManifest);

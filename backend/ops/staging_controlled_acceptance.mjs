@@ -267,7 +267,7 @@ const runId = 'controlled-acceptance-' + crypto.randomUUID();
 const userId = runId + '-user';
 const sessionId = crypto.randomUUID();
 const email = runId + '@example.invalid';
-const password = 'ControlledAcceptance9!';
+const password = ['ControlledAcceptance', crypto.randomBytes(18).toString('base64url')].join('-');
 const profile = {
   displayName: 'Controlled Acceptance',
   preferredLanguage: 'de-DE',
