@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   createMemoryListingAiBudgetGuard,
   createPostgresListingAiBudgetGuard,
+  listingAiLifetimeBudgetPeriod,
 } from '../src/listing_ai_budget_guard.js';
 import { ListingAiGatewayError } from '../src/listing_ai_gateway.js';
 
@@ -17,6 +18,7 @@ function fakePostgres(initial = null) {
           budgetCents: values[2],
           spentCents: 0,
           reservedCents: 0,
+          reservedCalls: 0,
           callCount: 0,
         };
         return { rowCount: 0, rows: [] };
@@ -24,11 +26,14 @@ function fakePostgres(initial = null) {
       if (text.includes('reserved_cents = reserved_cents +')) {
         const requested = values[2];
         const configured = values[3];
+        const maxCalls = values[4] ?? 5;
         if (state.budgetCents !== configured
-            || state.spentCents + state.reservedCents + requested > state.budgetCents) {
+            || state.spentCents + state.reservedCents + requested > state.budgetCents
+            || state.callCount + state.reservedCalls + 1 > maxCalls) {
           return { rowCount: 0, rows: [] };
         }
         state.reservedCents += requested;
+        state.reservedCalls += 1;
         return { rowCount: 1, rows: [{ budget_cents: state.budgetCents }] };
       }
       if (text.includes('SELECT budget_cents')) {
@@ -41,6 +46,7 @@ function fakePostgres(initial = null) {
         const spent = values[3];
         if (state.reservedCents < reserved) return { rowCount: 0, rows: [] };
         state.reservedCents -= reserved;
+        state.reservedCalls -= 1;
         state.spentCents += spent;
         state.callCount += 1;
         return { rowCount: 1, rows: [{ budget_cents: state.budgetCents }] };
@@ -49,6 +55,7 @@ function fakePostgres(initial = null) {
         const reserved = values[2];
         if (state.reservedCents < reserved) return { rowCount: 0, rows: [] };
         state.reservedCents -= reserved;
+        state.reservedCalls -= 1;
         return { rowCount: 1, rows: [{ budget_cents: state.budgetCents }] };
       }
       throw new Error('unexpected query');
@@ -87,6 +94,7 @@ test('postgres budget guard atomically persists reserve, settle and call count',
     budgetCents: 5,
     spentCents: 0,
     reservedCents: 2,
+    reservedCalls: 1,
     callCount: 0,
   });
   await held.settle(1);
@@ -94,6 +102,7 @@ test('postgres budget guard atomically persists reserve, settle and call count',
     budgetCents: 5,
     spentCents: 1,
     reservedCents: 0,
+    reservedCalls: 0,
     callCount: 1,
   });
 });
@@ -103,6 +112,7 @@ test('postgres budget guard fails closed on configuration drift and exhaustion',
     budgetCents: 4,
     spentCents: 0,
     reservedCents: 0,
+    reservedCalls: 0,
     callCount: 0,
   });
   const mismatch = createPostgresListingAiBudgetGuard({
@@ -118,6 +128,7 @@ test('postgres budget guard fails closed on configuration drift and exhaustion',
     budgetCents: 5,
     spentCents: 4,
     reservedCents: 0,
+    reservedCalls: 0,
     callCount: 4,
   });
   const exhausted = createPostgresListingAiBudgetGuard({
@@ -128,4 +139,35 @@ test('postgres budget guard fails closed on configuration drift and exhaustion',
     exhausted.reserve(2),
     (error) => error.code === 'listing_ai_budget_exhausted',
   );
+});
+
+test('memory guard is lifetime-scoped and caps provider attempts at five', async () => {
+  const guard = createMemoryListingAiBudgetGuard({ budgetCents: 10_000 });
+  for (let index = 0; index < 5; index += 1) {
+    const held = await guard.reserve(2);
+    await held.settle(2);
+  }
+  await assert.rejects(
+    guard.reserve(2),
+    (error) => error.code === 'listing_ai_budget_exhausted',
+  );
+  assert.equal(listingAiLifetimeBudgetPeriod, 'lifetime');
+});
+
+test('postgres guard uses the lifetime bucket and caps concurrent reservations', async () => {
+  const client = fakePostgres();
+  const guard = createPostgresListingAiBudgetGuard({
+    client,
+    budgetCents: 10_000,
+    now: () => new Date('2099-12-31T23:59:59.000Z'),
+  });
+  for (let index = 0; index < 5; index += 1) {
+    const held = await guard.reserve(2);
+    await held.settle(2);
+  }
+  await assert.rejects(
+    guard.reserve(2),
+    (error) => error.code === 'listing_ai_budget_exhausted',
+  );
+  assert.equal(client.state.callCount, 5);
 });

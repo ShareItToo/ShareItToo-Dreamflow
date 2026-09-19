@@ -4,6 +4,9 @@ import {
 } from './listing_ai_draft_domain.js';
 
 export const listingAiGatewayVersion = 'N3-2026-08-23.1';
+export const listingAiLifetimeBudgetScope = 'lifetime';
+export const listingAiLifetimeBudgetMaxCents = 10_000;
+export const listingAiLifetimeMaxProviderCalls = 5;
 export const listingAiMockModel = 'listing-ai-mock-v1';
 export const listingAiOnDeviceModel = 'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1';
 export const listingAiOpenAiModel = 'gpt-4o-mini-2024-07-18';
@@ -63,7 +66,7 @@ export function readListingAiGatewayConfiguration(
 
   const budgetCents = integer(env.SIT_LISTING_AI_BUDGET_CENTS, 0, {
     minimum: 0,
-    maximum: 10_000,
+    maximum: listingAiLifetimeBudgetMaxCents,
     code: 'SIT_LISTING_AI_BUDGET_CENTS must be a bounded non-negative integer',
   });
   const externalProviderExecutionApproved = exactFlag(
@@ -127,6 +130,8 @@ export function readListingAiGatewayConfiguration(
     promptVersion,
     schemaVersion,
     budgetCents,
+    budgetScope: listingAiLifetimeBudgetScope,
+    maxProviderCalls: listingAiLifetimeMaxProviderCalls,
     timeoutMs,
     rateLimitWindowMs,
     rateLimitMaxRequests,

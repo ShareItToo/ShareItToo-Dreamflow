@@ -1877,6 +1877,8 @@ export function createApp({
     promptVersion: config.listingAi.promptVersion,
     schemaVersion: config.listingAi.schemaVersion,
     budgetCents: config.listingAi.budgetCents,
+    budgetScope: config.listingAi.budgetScope,
+    maxProviderCalls: config.listingAi.maxProviderCalls,
     externalProviderExecutionAllowed: config.listingAi.externalProviderExecutionAllowed,
     automaticPublicationAllowed: false,
   });
