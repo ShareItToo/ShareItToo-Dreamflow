@@ -5,7 +5,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -20,7 +20,7 @@ import {
 function passwordFixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), 'sit-synthetic-sandbox-user-'));
   const file = path.join(root, 'password');
-  const password = 'SyntheticSandboxPilotPassword20260919-abcdefghijklmnopqrstuvwxyz';
+  const password = randomBytes(48).toString('base64url');
   writeFileSync(file, `${password}\n`, { mode: 0o600 });
   chmodSync(file, 0o600);
   return { root, file, password, uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 };

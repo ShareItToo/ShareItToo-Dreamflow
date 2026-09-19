@@ -1,8 +1,13 @@
 import crypto from 'node:crypto';
 
-import sharp from 'sharp';
-
 import { transitionListingAiDerivative } from './listing_ai_draft_domain.js';
+
+let sharpLoader;
+
+async function loadSharp() {
+  sharpLoader ??= import('sharp').then((module) => module.default ?? module);
+  return sharpLoader;
+}
 
 export const listingAiImagePipelineVersion = 'N4-2026-08-23.1';
 export const listingAiImageDisclosureVersion = 'listing-ai-image-disclosure-v1';
@@ -249,6 +254,7 @@ async function createAnalysisDerivative(image, { now, randomId }) {
   let derivativeBytes = null;
 
   try {
+    const sharp = await loadSharp();
     const source = sharp(image.bytes, {
       animated: false,
       failOn: 'warning',
