@@ -36,3 +36,18 @@ test('stable private reader rejects symlink paths and unsafe modes', () => {
   chmodSync(file, 0o644);
   assert.throws(() => readStablePrivateFile(file, { mode: 0o077 }), /private_file_invalid/u);
 });
+
+test('exact expected mode permits root-style 0640 and still rejects extra bits', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'sit-stable-private-file-'));
+  const file = path.join(root, 'runtime-readable');
+  writeFileSync(file, 'runtime-readable-fixture\n', { mode: 0o640 });
+  chmodSync(file, 0o640);
+  assert.equal(readStablePrivateFile(file, {
+    expectedMode: 0o640,
+    minBytes: 1,
+  }), 'runtime-readable-fixture\n');
+  chmodSync(file, 0o644);
+  assert.throws(() => readStablePrivateFile(file, { expectedMode: 0o640 }), /private_file_invalid/u);
+  chmodSync(file, 0o640);
+  assert.throws(() => readStablePrivateFile(file, { expectedMode: 0o640, mode: 0o077 }), /private_file_invalid/u);
+});

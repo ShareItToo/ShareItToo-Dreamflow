@@ -14,7 +14,7 @@ function fail(code) {
 }
 
 function assertMetadata(metadata, {
-  mode = 0o077,
+  mode,
   expectedMode,
   expectedUid,
   expectedGid,
@@ -22,8 +22,9 @@ function assertMetadata(metadata, {
   maxBytes,
   code = 'private_file_invalid',
 } = {}) {
+  const forbiddenModeBits = mode ?? (expectedMode === undefined ? 0o077 : 0);
   if (!metadata.isFile()
-      || (metadata.mode & mode) !== 0
+      || (metadata.mode & forbiddenModeBits) !== 0
       || (expectedMode !== undefined && (metadata.mode & 0o777) !== expectedMode)
       || (expectedUid !== undefined && metadata.uid !== expectedUid)
       || (expectedGid !== undefined && metadata.gid !== expectedGid)
