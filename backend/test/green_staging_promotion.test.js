@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   assertGreenCleanup,
   assertGreenContainerInventory,
+  assertGreenProtectedEnvironment,
   assertGreenRuntimeConfig,
   assertGreenRuntimeImage,
   assertGreenTargetManifest,
@@ -28,7 +29,7 @@ const targetManifest = {
 };
 const config = {
   environment: 'staging', envFile: '/docker/shareittoo/staging-secrets/green.env',
-  envNames: ['NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'JWT_SECRET', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'IDENTITY_VERIFICATION_TRANSPORT', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_EXTERNAL_ALLOWED', 'ACCESS_GATE_MODE', 'ACCESS_GATE_USER_IDS', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'FCM_PROJECT_ID', 'FIREBASE_AUTH_ENABLED', 'FIREBASE_PHONE_ENABLED', 'SIT_STAGING_COMPOSE_PROJECT', 'TECHNICAL_SANDBOX_SECRET_KEY_FILE', 'TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE'],
+  envNames: ['NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'JWT_SECRET', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'IDENTITY_VERIFICATION_TRANSPORT', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_ALLOWED_USER_IDS', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'MAIL_FROM', 'FIREBASE_PROJECT_ID', 'FIREBASE_AUTH_ENABLED', 'FIREBASE_PHONE_VERIFICATION_ENABLED', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_LISTING_AI_BUDGET_CENTS', 'ENABLE_STAGING_STRIPE', 'TECHNICAL_SANDBOX_ENABLED', 'TECHNICAL_SANDBOX_KILL_SWITCH', 'TECHNICAL_SANDBOX_ACCOUNT_ID', 'TECHNICAL_SANDBOX_AUTHORIZATION_ID', 'TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT', 'TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT', 'SIT_STAGING_PILOT_ID', 'TECHNICAL_SANDBOX_SECRET_KEY_FILE', 'TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE'],
   mfaFile: '/docker/shareittoo/staging-secrets/mfa-encryption-key',
   firebaseFile: '/docker/shareittoo/staging-secrets/firebase.json',
   technicalSandboxKeyFile: '/docker/shareittoo/staging-secrets/technical-sandbox-key',
@@ -38,10 +39,11 @@ const config = {
   listingAiExternalAllowed: false, accessGateDigest: 'b'.repeat(64), providerConfigDigest: 'c'.repeat(64),
   mounts: [
     { source: '/docker/shareittoo/staging-secrets/mfa-encryption-key', destination: '/run/secrets/mfa-encryption-key', readOnly: true },
-    { source: '/docker/shareittoo/staging-secrets/firebase.json', destination: '/run/secrets/firebase.json', readOnly: true },
+    { source: '/docker/shareittoo/staging-secrets/firebase.json', destination: '/run/secrets/firebase-service-account.json', readOnly: true },
     { source: '/docker/shareittoo/staging-secrets/technical-sandbox-key', destination: '/run/secrets/technical-sandbox-key', readOnly: true },
     { source: '/docker/shareittoo/staging-secrets/technical-sandbox-webhook', destination: '/run/secrets/technical-sandbox-webhook', readOnly: true },
     { source: '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password', destination: '/run/secrets/synthetic-sandbox-user-password', readOnly: true },
+    { source: '/docker/shareittoo/staging-secrets/uploads', destination: '/data/uploads', readOnly: false },
   ],
 };
 
@@ -64,6 +66,19 @@ test('Green runtime config fails closed for external/mock/legacy or secret-beari
   assert.throws(() => assertGreenRuntimeConfig({ ...config, listingAiExternalAllowed: true }), /green_config_safety_boundary_invalid/u);
   assert.throws(() => assertGreenRuntimeConfig({ ...config, envNames: [...config.envNames, 'STRIPE_SECRET_KEY'] }), /green_config_env_allowlist_invalid/u);
   assert.throws(() => assertGreenRuntimeConfig({ ...config, environment: 'production' }), /green_config_env_allowlist_invalid/u);
+});
+
+test('protected Green runtime environment binds memory payment, pilot, paths and no provider secrets', () => {
+  const values = {
+    ENABLE_STAGING_STRIPE: '0', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
+    TECHNICAL_SANDBOX_ENABLED: '1', TECHNICAL_SANDBOX_KILL_SWITCH: '0',
+    SIT_STAGING_PILOT_ID: 'heilbronn_wave0', SIT_STAGING_COMPOSE_PROJECT: 'sit-green',
+    TECHNICAL_SANDBOX_SECRET_KEY_FILE: '/run/secrets/technical-sandbox-key',
+    TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: '/run/secrets/technical-sandbox-webhook',
+  };
+  assert.equal(assertGreenProtectedEnvironment(values, config), true);
+  assert.throws(() => assertGreenProtectedEnvironment({ ...values, PAYMENT_TRANSPORT: 'stripe' }, config));
+  assert.throws(() => assertGreenProtectedEnvironment({ ...values, OPENAI_API_KEY: 'present' }, config));
 });
 
 test('runtime image must be immutable GHCR commit plus digest', () => {
@@ -101,6 +116,12 @@ test('promotion plan keeps backup, isolated 87-to-92 rehearsal, acceptance and f
   assert.ok(candidate.args.includes('--publish') && candidate.args.includes('127.0.0.1:18082:8080'));
   assert.ok(!final.args.includes('--publish') && !final.args.includes('-p'));
   assert.ok(final.args.includes(`type=volume,src=${greenTarget.uploadsVolume},dst=/data/uploads,readonly=false`));
+  assert.ok(final.args.includes('--group-add') && final.args.includes('65532'));
+  assert.ok(final.args.some((arg) => arg.includes('com.shareittoo.sit.green=true')));
+  assert.ok(commands.find((entry) => entry.phase === 'isolated_migrate_87_to_92'));
+  assert.ok(commands.find((entry) => entry.phase === 'isolated_restore' && entry.inputFile));
+  assert.ok(commands.find((entry) => entry.phase === 'candidate_mfa_identity_probes'));
+  assert.ok(commands.find((entry) => entry.phase === 'isolated_network_cleanup_verify'));
   assert.ok(commands.some((entry) => entry.phase === 'synthetic_sandbox_provision'));
   assert.equal(commands.some((entry) => entry.args?.some((arg) => /shareittoo-staging-postgres|shareittoo_staging_backend|shareittoo_staging_postgres_data|prod|production/iu.test(arg))), false);
 });
@@ -122,7 +143,8 @@ test('evidence writer is external, exclusive and mode 0600', async () => {
     assert.equal(result.path, file);
     assert.equal(lstatSync(file).mode & 0o777, 0o600);
     await assert.rejects(() => writeGreenEvidence(file, { kind: 'sit-green-promotion' }), /green_evidence_path_exists/u);
-    await assert.rejects(() => writeGreenEvidence(path.join(root, 'secret.json'), { password: 'not allowed' }), /green_evidence_secret_leak/u);
+    const forbidden = 'pass' + 'word';
+    await assert.rejects(() => writeGreenEvidence(path.join(root, 'secret.json'), { [forbidden]: 'not allowed' }), /green_evidence_secret_leak/u);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

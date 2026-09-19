@@ -28,8 +28,8 @@ export const stagingDatabaseIdentity = Object.freeze({
 
 export const greenDatabaseIdentity = Object.freeze({
   environment: 'staging',
-  databaseName: 'shareittoo_staging',
-  databaseUser: 'shareittoo_staging',
+  databaseName: 'shareittoo_green',
+  databaseUser: 'shareittoo_green',
   composeProject: 'sit-green',
 });
 

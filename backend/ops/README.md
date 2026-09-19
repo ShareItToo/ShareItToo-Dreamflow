@@ -120,6 +120,8 @@ mode `0600` and bind exactly `shareittoo-staging-api`,
 `sit-green-network-20260918011528-wp254`,
 `sit-staging-provider-egress` and
 `sit-green-uploads-20260918011528-wp254`, with Green label and schema `87`.
+The database identity is exactly `shareittoo_green` / `shareittoo_green`;
+legacy `shareittoo_staging` is never used by this lane.
 Legacy `sit-staging`, production names, lookalike networks and mutable image
 tags are rejected before a command is planned.
 

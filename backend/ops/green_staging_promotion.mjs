@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 import crypto from 'node:crypto';
-import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { createReadStream } from 'node:fs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -17,6 +18,8 @@ export const greenTarget = Object.freeze({
   network: 'sit-green-network-20260918011528-wp254',
   providerNetwork: 'sit-staging-provider-egress',
   uploadsVolume: 'sit-green-uploads-20260918011528-wp254',
+  databaseName: 'shareittoo_green',
+  databaseUser: 'shareittoo_green',
   runId: '20260918011528-wp254',
   sourceSchema: 87,
   currentSchema: 92,
@@ -25,13 +28,12 @@ export const greenTarget = Object.freeze({
 export const greenAllowedEnvNames = Object.freeze([
   'NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'APP_COMMIT', 'APP_BUILD_TIMESTAMP',
   'PORT', 'BIND_HOST', 'DATABASE_URL', 'JWT_SECRET', 'JWT_ISSUER',
-  'ACCESS_GATE_MODE', 'ACCESS_GATE_USER_IDS', 'ACCESS_GATE_RECIPIENT_EMAILS',
-  'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_FROM', 'FCM_PROJECT_ID',
-  'FIREBASE_AUTH_ENABLED', 'FIREBASE_PHONE_ENABLED', 'PAYMENT_TRANSPORT',
+  'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_FROM', 'PAYMENT_TRANSPORT',
   'STRIPE_LIVEMODE', 'IDENTITY_VERIFICATION_TRANSPORT', 'PUSH_TRANSPORT',
+  'ENABLE_STAGING_STRIPE',
   'MAIL_TRANSPORT', 'SIT_STAGING_PILOT_ID', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_LISTING_AI_PROVIDER',
   'SIT_LISTING_AI_MODEL', 'SIT_LISTING_AI_BUDGET_MINOR',
-  'SIT_LISTING_AI_EXTERNAL_ALLOWED', 'TECHNICAL_SANDBOX_AVAILABLE',
+  'TECHNICAL_SANDBOX_AVAILABLE',
   'TECHNICAL_SANDBOX_USER_IDS', 'TECHNICAL_SANDBOX_SECRET_KEY_FILE',
   'TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE', 'SYNTHETIC_SANDBOX_PASSWORD_FILE',
 ]);
@@ -59,10 +61,29 @@ const requiredConfigKeys = Object.freeze([
 const requiredGreenEnvNames = Object.freeze([
   'DATABASE_URL', 'JWT_SECRET', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE',
   'IDENTITY_VERIFICATION_TRANSPORT', 'SIT_LISTING_AI_PROVIDER',
-  'SIT_LISTING_AI_EXTERNAL_ALLOWED', 'ACCESS_GATE_MODE', 'ACCESS_GATE_USER_IDS',
-  'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'FCM_PROJECT_ID',
-  'FIREBASE_AUTH_ENABLED', 'FIREBASE_PHONE_ENABLED', 'SIT_STAGING_COMPOSE_PROJECT',
+  'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_ALLOWED_USER_IDS',
+  'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'MAIL_FROM', 'FIREBASE_PROJECT_ID',
+  'FIREBASE_AUTH_ENABLED', 'FIREBASE_PHONE_VERIFICATION_ENABLED',
+  'SIT_STAGING_COMPOSE_PROJECT', 'SIT_LISTING_AI_BUDGET_CENTS',
+  'ENABLE_STAGING_STRIPE', 'TECHNICAL_SANDBOX_ENABLED', 'TECHNICAL_SANDBOX_KILL_SWITCH',
+  'TECHNICAL_SANDBOX_ACCOUNT_ID', 'TECHNICAL_SANDBOX_AUTHORIZATION_ID',
+  'TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT', 'TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT',
+  'SIT_STAGING_PILOT_ID',
 ]);
+
+export function assertGreenProtectedEnvironment(values, config) {
+  if (values.ENABLE_STAGING_STRIPE !== '0' || values.PAYMENT_TRANSPORT !== 'memory'
+      || values.STRIPE_LIVEMODE !== 'false' || values.TECHNICAL_SANDBOX_ENABLED !== '1'
+      || values.TECHNICAL_SANDBOX_KILL_SWITCH !== '0' || values.SIT_STAGING_PILOT_ID !== 'heilbronn_wave0'
+      || values.SIT_STAGING_COMPOSE_PROJECT !== 'sit-green'
+      || values.TECHNICAL_SANDBOX_SECRET_KEY_FILE !== '/run/secrets/technical-sandbox-key'
+      || values.TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE !== '/run/secrets/technical-sandbox-webhook'
+      || config?.mfaFile === undefined) fail('green_runtime_environment_boundary_invalid');
+  for (const name of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_CONNECT_WEBHOOK_SECRET', 'OPENAI_API_KEY']) {
+    if (Object.hasOwn(values, name) && values[name] !== '') fail('green_main_provider_secret_forbidden');
+  }
+  return true;
+}
 
 function fail(code) {
   const error = new Error(`Green staging promotion failed: ${code}`);
@@ -96,6 +117,12 @@ function safeDigest(value, code) {
   return value;
 }
 
+function schemaNumberFromName(value, code) {
+  const match = /^(\d+)(?:_|$)/u.exec(String(value ?? '').trim());
+  if (!match) fail(code);
+  return Number(match[1]);
+}
+
 export function assertGreenTargetManifest(manifest) {
   exactKeys(manifest, [
     'kind', 'schemaVersion', 'composeProject', 'greenLabel', 'runId',
@@ -120,7 +147,7 @@ export function assertGreenTargetManifest(manifest) {
   }
   if (!/^[0-9a-f]{64}$/u.test(manifest.targetDigest ?? '')) fail('green_target_digest_invalid');
   const serialized = JSON.stringify(manifest);
-  if (/shareittoo_staging|prod|production|latest|lookalike/iu.test(serialized)) fail('legacy_or_production_target_forbidden');
+  if (/shareittoo_staging|shareittoo-staging-postgres|prod|production|latest|lookalike/iu.test(serialized)) fail('legacy_or_production_target_forbidden');
   return Object.freeze({ ...manifest });
 }
 
@@ -150,7 +177,7 @@ async function readProtectedEnv(filePath) {
   for (const line of (await readFile(filePath, 'utf8')).split(/\r?\n/u)) {
     if (!line.trim() || line.trimStart().startsWith('#')) continue;
     const match = /^([A-Z][A-Z0-9_]*)=(.*)$/u.exec(line);
-    if (!match || !isAllowedGreenEnvName(match[1]) || Object.hasOwn(values, match[1])) fail('green_env_file_allowlist_invalid');
+    if (!match || (!isAllowedGreenEnvName(match[1]) && !(forbiddenGreenEnvNames.has(match[1]) && match[2] === '')) || Object.hasOwn(values, match[1])) fail('green_env_file_allowlist_invalid');
     values[match[1]] = match[2];
   }
   return Object.freeze(values);
@@ -184,8 +211,14 @@ export function assertGreenRuntimeConfig(config) {
     exactKeys(mount, ['source', 'destination', 'readOnly'], 'green_mount_shape_invalid');
     safePath(mount.source, 'green_mount_source_invalid');
     if (typeof mount.destination !== 'string' || !mount.destination.startsWith('/')) fail('green_mount_destination_invalid');
-    if (mount.readOnly !== true) fail('green_mount_must_be_read_only');
+    if (mount.readOnly !== true && mount.destination !== '/data/uploads') fail('green_mount_must_be_read_only');
   }
+  const destinations = new Set(config.mounts.map((mount) => mount.destination));
+  for (const destination of ['/run/secrets/mfa-encryption-key', '/run/secrets/firebase-service-account.json', '/run/secrets/technical-sandbox-key', '/run/secrets/technical-sandbox-webhook', '/data/uploads']) {
+    if (!destinations.has(destination)) fail('green_mount_inventory_incomplete');
+  }
+  const uploadMount = config.mounts.find((mount) => mount.destination === '/data/uploads');
+  if (uploadMount?.readOnly !== false) fail('green_upload_mount_must_be_writable');
   if (config.technicalSandboxKeyFile === config.technicalSandboxWebhookFile) fail('green_technical_files_not_distinct');
   return Object.freeze({ ...config, envNames: [...config.envNames], mounts: config.mounts.map((mount) => Object.freeze({ ...mount })) });
 }
@@ -206,7 +239,7 @@ export function assertGreenContainerInventory(inventory) {
       || inventory.providerNetwork.name !== greenTarget.providerNetwork
       || inventory.uploadsVolume.name !== greenTarget.uploadsVolume
       || inventory.network.internal !== true
-      || inventory.api.greenLabel !== true
+      || (inventory.api.greenLabel !== true && inventory.api.prePromotionTuple !== true)
       || inventory.database.greenLabel !== true
       || inventory.api.hostPorts !== 0
       || inventory.api.running !== true
@@ -239,6 +272,8 @@ export function buildGreenPromotionPlan({
     network: `sit-green-rehearsal-network-${runId}`,
     volume: `sit-green-rehearsal-volume-${runId}`,
     database: `sit-green-rehearsal-postgres-${runId}`,
+    databaseName: 'green_rehearsal', databaseUser: 'green_rehearsal',
+    envFile: `${evidenceFile}.isolated.env`,
   };
   return Object.freeze({
     kind: 'sit-green-promotion-plan',
@@ -269,6 +304,7 @@ export function buildGreenPromotionPlan({
       productionAllowed: false,
       secretValuesInOutput: false,
     }),
+    rollbackPolicy: Object.freeze({ beforeSchemaMigration: 'sealed Green API may be restored only before migration', afterSchemaMigration: 'old image restart forbidden; use protected backup and forward recovery only' }),
   });
 }
 
@@ -284,46 +320,60 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'target_inventory_network', ...inspect(target.network) },
     { phase: 'target_inventory_provider_network', ...inspect(target.providerNetwork) },
     { phase: 'target_inventory_uploads', ...inspect(target.uploadsVolume) },
-    { phase: 'source_schema_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', 'shareittoo_staging', '-d', 'shareittoo_staging', '-Atc', 'SELECT max(version)::int FROM schema_migrations'] },
-    { phase: 'fresh_protected_backup', command: 'docker', args: ['exec', target.databaseContainer, 'pg_dump', '--format=custom', '--no-owner', '--no-acl', '-U', 'shareittoo_staging', '-d', 'shareittoo_staging'], stdoutFile: `${plan.evidenceFile}.pgdump`, binary: true },
+    { phase: 'source_schema_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', "SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"] },
+    { phase: 'fresh_protected_backup', command: 'docker', args: ['exec', target.databaseContainer, 'pg_dump', '--format=custom', '--no-owner', '--no-acl', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName], stdoutFile: `${plan.evidenceFile}.pgdump`, binary: true },
     { phase: 'quiesce_green_api', command: 'docker', args: ['stop', target.apiContainer] },
     { phase: 'seal_green_api', command: 'docker', args: ['rename', target.apiContainer, target.sealedApiContainer] },
     { phase: 'isolated_network_create', command: 'docker', args: ['network', 'create', '--internal', '--label', 'com.shareittoo.green.rehearsal=true', isolated.network] },
     { phase: 'isolated_volume_create', command: 'docker', args: ['volume', 'create', '--label', 'com.shareittoo.green.rehearsal=true', isolated.volume] },
-    { phase: 'isolated_postgres_create', command: 'docker', args: ['run', '--detach', '--network', isolated.network, '--name', isolated.database, '--label', 'com.shareittoo.green.rehearsal=true', 'postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777'] },
-    { phase: 'isolated_restore_and_migrate', command: 'node', args: ['backend/ops/staging_forward_migration_rehearsal.mjs', runtime.runtimeCommit] },
-    { phase: 'isolated_integrity_and_functional_probes', command: 'node', args: ['backend/ops/check_foreign_key_integrity.mjs', '--target', isolated.database] },
+    { phase: 'isolated_postgres_create', command: 'docker', args: ['run', '--detach', '--network', isolated.network, '--name', isolated.database, '--label', 'com.shareittoo.sit.green=true', '--label', 'com.shareittoo.green.rehearsal=true', '--network-alias', isolated.database, '--env-file', isolated.envFile, '--mount', `type=volume,src=${isolated.volume},dst=/var/lib/postgresql/data`, 'postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777'] },
+    { phase: 'isolated_restore', command: 'docker', args: ['exec', '-i', isolated.database, 'pg_restore', '-U', isolated.databaseUser, '-d', isolated.databaseName, '--no-owner', '--no-acl'], inputFile: `${plan.evidenceFile}.pgdump` },
+    { phase: 'isolated_migrate_87_to_92', command: 'docker', args: ['run', '--rm', '--network', isolated.network, '--env-file', isolated.envFile, '--entrypoint', 'node', runtime.image, '-e', "import('./src/migrations.js').then(async ({runMigrations})=>{const {Pool}=await import('pg');const pool=new Pool({connectionString:process.env.DATABASE_URL});await runMigrations(pool);await pool.end();})"] },
+    { phase: 'isolated_migration_readback', command: 'docker', args: ['exec', isolated.database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', isolated.databaseUser, '-d', isolated.databaseName, '-Atc', "SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"] },
+    { phase: 'isolated_integrity_and_functional_probes', command: 'bash', args: ['backend/ops/check_foreign_key_integrity.sh'], envFile: isolated.envFile, redacted: true },
     { phase: 'synthetic_sandbox_provision', command: 'node', args: ['backend/ops/provision_synthetic_sandbox_user.mjs'], envFile: configFile, redacted: true },
     { phase: 'candidate_acceptance_create', command: 'docker', args: [
-      'create', '--name', `sit-green-acceptance-${runtime.runtimeCommit.slice(0, 12)}`,
+      'create', '--name', `sit-green-acceptance-${runtime.runtimeCommit.slice(0, 12)}`, '--group-add', '65532',
       '--network', target.network, '--network-alias', 'sit-green-acceptance-api',
+      '--label', 'com.shareittoo.sit.green=true', '--label', `com.shareittoo.green.candidate=${plan.target.runId}`,
       '--env-file', configFile, '--publish', '127.0.0.1:18082:8080',
       '--mount', `type=volume,src=${target.uploadsVolume},dst=/data/uploads,readonly=false`,
       '--mount', `type=bind,src=${runtimeConfig.mfaFile},dst=/run/secrets/mfa-encryption-key,readonly`,
-      '--mount', `type=bind,src=${runtimeConfig.firebaseFile},dst=/run/secrets/firebase.json,readonly`,
+      '--mount', `type=bind,src=${runtimeConfig.firebaseFile},dst=/run/secrets/firebase-service-account.json,readonly`,
       '--mount', `type=bind,src=${runtimeConfig.technicalSandboxKeyFile},dst=/run/secrets/technical-sandbox-key,readonly`,
       '--mount', `type=bind,src=${runtimeConfig.technicalSandboxWebhookFile},dst=/run/secrets/technical-sandbox-webhook,readonly`,
       runtime.image,
     ], redacted: true },
     { phase: 'candidate_provider_network_attach', command: 'docker', args: ['network', 'connect', target.providerNetwork, `sit-green-acceptance-${runtime.runtimeCommit.slice(0, 12)}`] },
+    { phase: 'candidate_start', command: 'docker', args: ['start', `sit-green-acceptance-${runtime.runtimeCommit.slice(0, 12)}`] },
     { phase: 'candidate_health_and_feature_probes', command: 'curl', args: ['--fail', '--silent', '--show-error', 'http://127.0.0.1:18082/health/live'] },
     { phase: 'candidate_ready_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', 'http://127.0.0.1:18082/health/ready'] },
+    { phase: 'candidate_version_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', 'http://127.0.0.1:18082/version'] },
+    { phase: 'candidate_mfa_identity_probes', command: 'node', args: ['backend/ops/staging_controlled_acceptance.mjs', 'probe'], envFile: configFile, runtimeEnv: { STAGING_ACCEPTANCE_CONTAINER: `sit-green-acceptance-${runtime.runtimeCommit.slice(0, 12)}` }, redacted: true },
     { phase: 'candidate_cleanup', command: 'docker', args: ['rm', '--force', `sit-green-acceptance-${runtime.runtimeCommit.slice(0, 12)}`] },
     { phase: 'candidate_cleanup_verify', command: 'docker', args: ['ps', '--all', '--filter', `name=^/sit-green-acceptance-${runtime.runtimeCommit.slice(0, 12)}$`, '--format', '{{.Names}}'] },
+    { phase: 'isolated_database_cleanup', command: 'docker', args: ['rm', '--force', isolated.database] },
+    { phase: 'isolated_database_cleanup_verify', command: 'docker', args: ['ps', '--all', '--filter', `name=^/${isolated.database}$`, '--format', '{{.Names}}'] },
+    { phase: 'isolated_volume_cleanup', command: 'docker', args: ['volume', 'rm', isolated.volume] },
+    { phase: 'isolated_volume_cleanup_verify', command: 'docker', args: ['volume', 'ls', '--filter', `name=^${isolated.volume}$`, '--format', '{{.Name}}'] },
+    { phase: 'isolated_network_cleanup', command: 'docker', args: ['network', 'rm', isolated.network] },
+    { phase: 'isolated_network_cleanup_verify', command: 'docker', args: ['network', 'ls', '--filter', `name=^${isolated.network}$`, '--format', '{{.Name}}'] },
     { phase: 'final_create_no_host_port', command: 'docker', args: [
-      'create', '--name', target.apiContainer, '--restart', 'no', '--network', target.network,
+      'create', '--name', target.apiContainer, '--restart', 'no', '--group-add', '65532', '--network', target.network,
+      '--label', 'com.shareittoo.sit.green=true', '--label', `com.shareittoo.sit.green.run_id=${target.runId}`,
       '--env-file', configFile,
       '--mount', `type=volume,src=${target.uploadsVolume},dst=/data/uploads,readonly=false`,
       '--mount', `type=bind,src=${runtimeConfig.mfaFile},dst=/run/secrets/mfa-encryption-key,readonly`,
-      '--mount', `type=bind,src=${runtimeConfig.firebaseFile},dst=/run/secrets/firebase.json,readonly`,
+      '--mount', `type=bind,src=${runtimeConfig.firebaseFile},dst=/run/secrets/firebase-service-account.json,readonly`,
       '--mount', `type=bind,src=${runtimeConfig.technicalSandboxKeyFile},dst=/run/secrets/technical-sandbox-key,readonly`,
       '--mount', `type=bind,src=${runtimeConfig.technicalSandboxWebhookFile},dst=/run/secrets/technical-sandbox-webhook,readonly`,
       runtime.image,
     ], redacted: true },
     { phase: 'final_provider_network_attach', command: 'docker', args: ['network', 'connect', target.providerNetwork, target.apiContainer] },
     { phase: 'final_start', command: 'docker', args: ['start', target.apiContainer] },
-    { phase: 'public_live_readback', command: 'curl', args: ['--fail', '--silent', '--show-error', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com'}/health/live`] },
-    { phase: 'public_ready_readback', command: 'curl', args: ['--fail', '--silent', '--show-error', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com'}/health/ready`] },
+    { phase: 'final_live_wait', command: 'curl', args: ['--fail', '--silent', '--show-error', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/health/live`] },
+    { phase: 'final_ready_wait', command: 'curl', args: ['--fail', '--silent', '--show-error', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/health/ready`] },
+    { phase: 'final_version_readback', command: 'curl', args: ['--fail', '--silent', '--show-error', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/version`] },
   ];
   if (commands.some((entry) => entry.args?.some((arg) => /(?:JWT_SECRET|DATABASE_URL|password|token|whsec_|sk_live_|sk_test_)=/iu.test(arg)))) {
     fail('green_command_secret_leak');
@@ -331,14 +381,14 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
   return Object.freeze(commands.map((entry) => Object.freeze({ ...entry, args: entry.args ? [...entry.args] : undefined })));
 }
 
-export function sanitizeGreenEvidence({ plan, backupDigest, configDigest, targetReadback, imageReadback } = {}) {
+export function sanitizeGreenEvidence({ plan, backupDigest, configDigest, targetReadback, imageReadback, status = 'executed' } = {}) {
   if (!plan || plan.kind !== 'sit-green-promotion-plan') fail('green_plan_required');
   safeDigest(backupDigest, 'green_backup_digest_invalid');
   safeDigest(configDigest, 'green_config_digest_invalid');
   if (typeof targetReadback !== 'object' || typeof imageReadback !== 'object') fail('green_readback_required');
   const evidence = {
     kind: 'sit-green-promotion',
-    status: 'prepared',
+    status,
     target: {
       composeProject: plan.target.composeProject,
       apiContainer: plan.target.apiContainer,
@@ -420,18 +470,50 @@ export function runGreenCommand(command, args, { cwd = repositoryRoot, env = pro
   });
 }
 
+export function runGreenCommandWithFileInput(command, args, inputFile, { cwd = repositoryRoot, env = process.env, phase = 'green_command_file' } = {}) {
+  if (args.some((arg) => /(?:JWT_SECRET|DATABASE_URL|password|token|whsec_|sk_live_|sk_test_)=/iu.test(arg))) {
+    return Promise.reject(Object.assign(new Error(`Green staging promotion failed: ${phase}_secret_argument`), { code: `${phase}_secret_argument` }));
+  }
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(command, args, { cwd, env, stdio: ['pipe', 'ignore', 'ignore'] });
+    const input = createReadStream(inputFile);
+    const rejectSafe = (code) => { input.destroy(); child.kill('SIGTERM'); reject(Object.assign(new Error(`Green staging promotion failed: ${phase}`), { code })); };
+    input.once('error', () => rejectSafe(`${phase}_input_failed`));
+    child.stdin.once('error', (error) => { if (error?.code !== 'EPIPE') rejectSafe(`${phase}_pipe_failed`); });
+    child.once('error', () => rejectSafe(`${phase}_spawn_failed`));
+    child.once('close', (code) => { if (code === 0) resolvePromise(Object.freeze({ stdout: '', stderr: '' })); else rejectSafe(`${phase}_failed`); });
+    input.pipe(child.stdin);
+  });
+}
+
 export async function runGreenPromotion({ plan, config, configFile, environment = process.env, execute = false, command = runGreenCommand } = {}) {
   assertGreenPromotionExecutionAllowed({ environment, plan });
   if (!execute) fail('explicit_green_execute_flag_required');
   if (typeof command !== 'function') fail('green_command_runner_required');
   const protectedEnv = await readProtectedEnv(configFile);
+  assertGreenProtectedEnvironment(protectedEnv, config);
+  const isolatedPassword = crypto.randomBytes(32).toString('base64url');
+  await mkdir(dirname(plan.isolated.envFile), { recursive: true, mode: 0o700 });
+  await writeFile(plan.isolated.envFile, [
+    `POSTGRES_DB=${plan.isolated.databaseName}`,
+    `POSTGRES_USER=${plan.isolated.databaseUser}`,
+    `POSTGRES_PASSWORD=${isolatedPassword}`,
+    `DATABASE_URL=postgres://${plan.isolated.databaseUser}:${isolatedPassword}@${plan.isolated.database}:5432/${plan.isolated.databaseName}`,
+  ].join('\n') + '\n', { flag: 'wx', mode: 0o600 });
   const commandEnv = Object.freeze({ ...environment, ...protectedEnv });
   const commands = buildGreenPromotionCommands({ plan, configFile, config });
   const completed = [];
   const readbacks = {};
-  for (const entry of commands) {
+  let backupDigest;
+  try {
+    for (const entry of commands) {
+    if (entry.inputFile) {
+      await runGreenCommandWithFileInput(entry.command, entry.args, entry.inputFile, { phase: entry.phase, env: { ...commandEnv, ...(entry.runtimeEnv ?? {}) } });
+      completed.push(entry.phase);
+      continue;
+    }
     if (entry.redacted !== true && entry.stdoutFile) {
-      const result = await command(entry.command, entry.args, { phase: entry.phase, env: commandEnv, binary: entry.binary === true });
+      const result = await command(entry.command, entry.args, { phase: entry.phase, env: { ...commandEnv, ...(entry.runtimeEnv ?? {}) }, binary: entry.binary === true });
       const backupPath = resolve(entry.stdoutFile);
       await mkdir(dirname(backupPath), { recursive: true, mode: 0o700 });
       const parentMeta = await lstat(dirname(backupPath));
@@ -440,14 +522,16 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       await writeFile(backupPath, result.stdout, { flag: 'wx', mode: 0o600 });
       const backupMeta = await lstat(backupPath);
       if (!backupMeta.isFile() || backupMeta.isSymbolicLink() || (backupMeta.mode & 0o777) !== 0o600 || backupMeta.uid !== ownerUid) fail('green_backup_permissions_invalid');
+      backupDigest = sha256(result.stdout);
       completed.push(entry.phase);
       continue;
     }
-    const result = await command(entry.command, entry.args, { phase: entry.phase, env: commandEnv });
-    if (entry.phase.startsWith('target_inventory_') || entry.phase === 'source_schema_readback') {
+    const result = await command(entry.command, entry.args, { phase: entry.phase, env: { ...commandEnv, ...(entry.runtimeEnv ?? {}) } });
+    if (entry.phase.startsWith('target_inventory_') || entry.phase === 'source_schema_readback'
+        || entry.phase === 'final_live_wait' || entry.phase === 'final_ready_wait' || entry.phase === 'final_version_readback') {
       readbacks[entry.phase] = result.stdout?.trim() ?? '';
     }
-    if (entry.phase === 'candidate_cleanup_verify' && result.stdout?.trim()) fail('green_candidate_cleanup_incomplete');
+    if (entry.phase.endsWith('_cleanup_verify') && result.stdout?.trim()) fail('green_cleanup_incomplete');
     if (entry.phase === 'source_schema_readback') {
       const parseInspect = (phase) => {
         try { return JSON.parse(readbacks[phase]); } catch { fail('green_inventory_readback_invalid'); }
@@ -465,17 +549,30 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       const volumeRecord = unwrap(uploadsVolume);
       const hostPorts = Object.values(apiRecord?.NetworkSettings?.Ports ?? {}).flat().filter(Boolean).length;
       assertGreenContainerInventory({
-        api: { name: apiRecord?.Name?.replace(/^\//u, ''), greenLabel: apiRecord?.Config?.Labels?.['com.shareittoo.sit.green'] === 'true', hostPorts, running: apiRecord?.State?.Running === true },
+        api: { name: apiRecord?.Name?.replace(/^\//u, ''), greenLabel: apiRecord?.Config?.Labels?.['com.shareittoo.sit.green'] === 'true', prePromotionTuple: apiRecord?.Config?.Labels?.['com.shareittoo.sit.green'] === undefined, hostPorts, running: apiRecord?.State?.Running === true },
         database: { name: databaseRecord?.Name?.replace(/^\//u, ''), greenLabel: databaseRecord?.Config?.Labels?.['com.shareittoo.sit.green'] === 'true', running: databaseRecord?.State?.Running === true },
         network: { name: networkRecord?.Name, internal: networkRecord?.Internal === true },
         providerNetwork: { name: providerRecord?.Name },
         uploadsVolume: { name: volumeRecord?.Name },
-        schema: Number(readbacks.source_schema_readback),
+        schema: schemaNumberFromName(readbacks.source_schema_readback, 'green_source_schema_readback_invalid'),
       });
     }
+    if (entry.phase === 'isolated_migration_readback'
+        && schemaNumberFromName(result.stdout, 'green_isolated_schema_readback_invalid') !== greenTarget.currentSchema) fail('green_isolated_schema_not_current');
     completed.push(entry.phase);
+    }
+    if (!backupDigest || !readbacks.final_version_readback) fail('green_final_readback_missing');
+    const evidence = sanitizeGreenEvidence({
+    plan, status: 'executed', backupDigest,
+    configDigest: sha256(JSON.stringify(config)),
+    targetReadback: { sourceSchema: greenTarget.sourceSchema, currentSchema: greenTarget.currentSchema, cleanup: 'verified' },
+    imageReadback: JSON.parse(readbacks.final_version_readback),
+    });
+    const evidenceResult = await writeGreenEvidence(plan.evidenceFile, evidence);
+    return Object.freeze({ status: 'executed', completedPhases: Object.freeze(completed), evidence: evidenceResult });
+  } finally {
+    await unlink(plan.isolated.envFile).catch(() => {});
   }
-  return Object.freeze({ status: 'executed', completedPhases: Object.freeze(completed) });
 }
 
 async function main() {

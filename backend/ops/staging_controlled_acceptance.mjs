@@ -391,14 +391,16 @@ try {
 }
 `;
 
-async function runMfaProbe() {
+export async function runMfaProbe({ container = 'shareittoo-staging-acceptance-api' } = {}) {
+  if (!/^sit-green-acceptance-[0-9a-f]{12}$/u.test(container)
+      && container !== 'shareittoo-staging-acceptance-api') fail('mfa_probe_container_invalid');
   const expected = {
     mfa: 'enroll-pending-cancel-passed',
     identity: 'start-status-resume-revoke-passed',
   };
   const output = await runCommandWithInput(
     'docker',
-    ['exec', '-i', 'shareittoo-staging-acceptance-api', 'node', '--input-type=module'],
+    ['exec', '-i', container, 'node', '--input-type=module'],
     mfaProbe,
     { phase: 'mfa_probe' },
   );
@@ -591,6 +593,11 @@ async function promotePublic({ runtimeCommit, opsCommit, evidenceFile }) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const mode = process.argv[2];
   try {
+    if (mode === 'probe') {
+      const result = await runMfaProbe({ container: process.env.STAGING_ACCEPTANCE_CONTAINER ?? '' });
+      process.stdout.write(`${JSON.stringify(result)}\n`);
+      process.exit(0);
+    }
     const runtimeCommit = fullCommit(process.argv[3], 'runtimeCommit');
     const opsCommit = fullCommit(process.env.SIT_STAGING_REHEARSAL_OPS_COMMIT, 'opsCommit');
     const port = Number(process.env.STAGING_ACCEPTANCE_PORT ?? '18082');
