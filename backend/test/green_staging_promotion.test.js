@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { lstatSync, mkdtempSync, rmSync } from 'node:fs';
+import { lstatSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -173,6 +173,12 @@ test('every promotion command has an executable command and argv, including targ
     assert.ok(entry.command.length > 0, `${entry.phase} command must not be empty`);
     assert.ok(Array.isArray(entry.args), `${entry.phase} args must be an array`);
   }
+});
+
+test('runtime inventory binds the pre-promotion image through the promotion plan', () => {
+  const source = readFileSync(new URL('../ops/green_staging_promotion.mjs', import.meta.url), 'utf8');
+  assert.match(source, /expectedPrePromotionImage:\s*plan\.target\.prePromotionImage/u);
+  assert.doesNotMatch(source, /expectedPrePromotionImage:\s*target\.prePromotionImage/u);
 });
 
 test('command executor bindings keep isolated probes and canonical runtime distinct', () => {

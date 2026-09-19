@@ -35,6 +35,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   retries. Reproduce the defect in an isolated deterministic test, review the
   fix and re-gate it with Sol/Astra before re-execution; never chain unreviewed
   live hotfix retries.
+- Mutating Ops-runner invariant: a runner is not ready for live execution until
+  a deterministic command-executor test drives its generated plan with
+  production-shaped readbacks through the point immediately before the first
+  irreversible phase; helper- or plan-shape-only tests are insufficient.
 - Remote alias mentor invariant: after an alias or DNS failure, read the exact
   saved SSH configuration and authoritative project source before concluding
   that remote access is unavailable; test only the verified saved alias. A
