@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   applyTechnicalSandboxWebhook,
   createTechnicalSandboxCheckout,
+  getTechnicalSandboxRun,
   technicalSandboxCapabilitiesFor,
   technicalSandboxConfigRevision,
   technicalSandboxRequestFingerprint,
@@ -91,6 +92,12 @@ test('capabilities are synthetic, fixed and unavailable to foreign users or disa
   });
   assert.equal(technicalSandboxCapabilitiesFor('real-user', configuration).technicalSandboxAvailable, false);
   assert.equal(technicalSandboxCapabilitiesFor(userId, { ...configuration, available: false }).mode, 'disabled');
+  assert.equal(technicalSandboxCapabilitiesFor(userId, {
+    ...configuration,
+    available: false,
+    reason: 'authorization_expired',
+    authorizationExpiresAt: new Date('2026-09-19T09:59:59.000Z'),
+  }).technicalSandboxAvailable, false);
 });
 
 test('receipt validation requires exact test account, fixed amount, metadata and successful readback', () => {
@@ -308,7 +315,7 @@ test('provider-session attachment is compare-and-set when another recovery wins'
       return originalQuery(sql, params);
     },
   };
-  const result = await createTechnicalSandboxCheckout({
+  await assert.rejects(() => createTechnicalSandboxCheckout({
     actor: { id: userId },
     key: 'technical-sandbox:key-00000004',
     configuration,
@@ -316,11 +323,87 @@ test('provider-session attachment is compare-and-set when another recovery wins'
     databasePool: casPool,
     transaction: db.transaction,
     now,
-  });
-  assert.equal(result.id, runId);
-  assert.equal(result.status, 'pending');
-  assert.equal(result.checkoutUrl.includes('run_id='), true);
+  }), (error) => error.code === 'technical_sandbox_run_attach_conflict');
   assert.equal(db.state.queries.some((sql) => sql.includes('provider_session_id IS NULL')), false);
+});
+
+test('receipt CAS miss rereads the current paid truth instead of returning stale pending', async () => {
+  let reads = 0;
+  const pending = {
+    id: runId,
+    user_id: userId,
+    status: 'pending',
+    amount_minor: 100,
+    currency: 'EUR',
+    provider_session_id: 'cs_test_technical',
+    checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
+  };
+  const paid = { ...pending, status: 'paid', provider_payment_intent_id: 'pi_test_technical' };
+  const databasePool = {
+    async query() {
+      reads += 1;
+      return { rowCount: 1, rows: [reads === 1 ? pending : paid] };
+    },
+  };
+  const transaction = async (fn) => fn({
+    async query() { return { rowCount: 0, rows: [] }; },
+  });
+  const result = await getTechnicalSandboxRun({
+    actor: { id: userId },
+    runId,
+    configuration,
+    provider: {
+      async retrieveTechnicalSandboxCheckout() {
+        return receiptFixture();
+      },
+    },
+    databasePool,
+    transaction,
+  });
+  assert.equal(result.status, 'paid');
+  assert.equal(result.receipt.providerPaymentIntentId, 'pi_test_technical');
+  assert.equal(reads, 2);
+});
+
+test('expired provider readback closes the run without manufacturing success', async () => {
+  const row = {
+    id: runId,
+    user_id: userId,
+    status: 'pending',
+    amount_minor: 100,
+    currency: 'EUR',
+    provider_session_id: 'cs_test_expired',
+    checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
+  };
+  const result = await getTechnicalSandboxRun({
+    actor: { id: userId },
+    runId,
+    configuration,
+    provider: {
+      async retrieveTechnicalSandboxCheckout() {
+        const fixture = receiptFixture();
+        return {
+          ...fixture,
+          session: {
+          ...fixture.session,
+            id: 'cs_test_expired',
+            status: 'expired',
+            payment_status: 'unpaid',
+          },
+          accountId: configuration.expectedAccountId,
+          accountLivemode: false,
+        };
+      },
+    },
+    databasePool: { async query() { return { rowCount: 1, rows: [row] }; } },
+    transaction: async (fn) => fn({
+      async query() {
+        return { rowCount: 1, rows: [{ ...row, status: 'expired', provider_session_status: 'expired' }] };
+      },
+    }),
+  });
+  assert.equal(result.status, 'expired');
+  assert.equal(result.receipt, null);
 });
 
 test('raw webhook application rejects fabricated JSON and duplicate payload mutation', async () => {

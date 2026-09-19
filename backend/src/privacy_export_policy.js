@@ -135,6 +135,7 @@ function portabilityProjection(raw) {
       disputes: own(trustAndSafety.disputes, 'opened_by_me'),
     },
     financialActivity: raw.financialActivity,
+    technicalSandbox: raw.technicalSandbox,
   };
 }
 

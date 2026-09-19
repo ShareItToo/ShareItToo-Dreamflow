@@ -91,6 +91,7 @@ export function readTechnicalSandboxConfiguration(
     enabled,
     killSwitch,
     available: false,
+    reason: !enabled ? 'disabled' : (killSwitch ? 'kill_switch' : 'unavailable'),
     provider: 'stripe',
     mode: 'disabled',
     professionalReview: false,
@@ -110,6 +111,34 @@ export function readTechnicalSandboxConfiguration(
   };
   if (!enabled || killSwitch) return Object.freeze(base);
 
+  const authorizationId = String(env.TECHNICAL_SANDBOX_AUTHORIZATION_ID ?? '').trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$/u.test(authorizationId)) {
+    fail('technical_sandbox_authorization_id_invalid');
+  }
+  const authorizationIssuedAt = boundedInstant(
+    env.TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT,
+    'technical_sandbox_authorization_issued_at',
+    now,
+  );
+  const authorizationExpiresAt = boundedInstant(
+    env.TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT,
+    'technical_sandbox_authorization_expires_at',
+    now,
+  );
+  if (authorizationIssuedAt > now
+      || authorizationExpiresAt.getTime() - authorizationIssuedAt.getTime() > maximumAuthorizationMs) {
+    fail('technical_sandbox_authorization_invalid');
+  }
+  if (authorizationExpiresAt <= now) {
+    return Object.freeze({
+      ...base,
+      reason: 'authorization_expired',
+      authorizationId,
+      authorizationIssuedAt,
+      authorizationExpiresAt,
+    });
+  }
+
   const secretKeyFile = String(env.TECHNICAL_SANDBOX_SECRET_KEY_FILE ?? '').trim();
   const webhookSecretFile = String(env.TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE ?? '').trim();
   if (!secretKeyFile || secretKeyFile === webhookSecretFile) {
@@ -127,28 +156,10 @@ export function readTechnicalSandboxConfiguration(
   if (!/^acct_[A-Za-z0-9]+$/u.test(expectedAccountId)) {
     fail('technical_sandbox_account_id_invalid');
   }
-  const authorizationId = String(env.TECHNICAL_SANDBOX_AUTHORIZATION_ID ?? '').trim();
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$/u.test(authorizationId)) {
-    fail('technical_sandbox_authorization_id_invalid');
-  }
-  const authorizationIssuedAt = boundedInstant(
-    env.TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT,
-    'technical_sandbox_authorization_issued_at',
-    now,
-  );
-  const authorizationExpiresAt = boundedInstant(
-    env.TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT,
-    'technical_sandbox_authorization_expires_at',
-    now,
-  );
-  if (authorizationIssuedAt > now
-      || authorizationExpiresAt <= now
-      || authorizationExpiresAt.getTime() - authorizationIssuedAt.getTime() > maximumAuthorizationMs) {
-    fail('technical_sandbox_authorization_invalid');
-  }
   return Object.freeze({
     ...base,
     available: true,
+    reason: 'available',
     mode: 'test',
     authorizationId,
     authorizationIssuedAt,

@@ -261,6 +261,37 @@ async function reconcileTechnicalSandboxRun({
   } catch {
     return publicRun(row);
   }
+  const expiredBinding = readback?.session?.status === 'expired'
+    && readback.accountId === configuration.expectedAccountId
+    && readback.accountLivemode === false
+    && readback.session.livemode === false
+    && readback.session.id === row.provider_session_id
+    && readback.session.client_reference_id === row.id
+    && metadataMatches(readback.session.metadata, expectedMetadata({
+      runId: row.id,
+      userId: row.user_id,
+      configuration,
+    }));
+  if (expiredBinding) {
+    const expired = await transaction(async (client) => {
+      const result = await client.query(
+        `UPDATE technical_sandbox_runs
+            SET status = 'expired', provider_session_status = 'expired',
+                provider_payment_status = $2, updated_at = now()
+          WHERE id = $1 AND user_id = $3
+            AND status IN ('pending', 'unknown')
+          RETURNING *`,
+        [row.id, readback.session.payment_status ?? null, row.user_id],
+      );
+      return result.rows[0] ?? null;
+    });
+    if (expired) return publicRun(expired);
+    const currentResult = await databasePool.query(
+      'SELECT * FROM technical_sandbox_runs WHERE id = $1 AND user_id = $2',
+      [row.id, row.user_id],
+    );
+    return publicRun(currentResult.rows[0] ?? row);
+  }
   const receipt = validateTechnicalSandboxReceipt({
     session: readback?.session,
     paymentIntent: readback?.paymentIntent,
@@ -286,11 +317,16 @@ async function reconcileTechnicalSandboxRun({
         readback.session.status, readback.session.payment_status,
         readback.paymentIntent.status, row.user_id],
     );
-    return result.rows[0] ?? row;
+    return result.rows[0] ?? null;
   });
-  if (updated !== row) return publicRun(updated, { receipt });
-  if (row.status === 'paid') return publicRun(row, { receipt });
-  return publicRun(row);
+  if (updated) return publicRun(updated, { receipt });
+  const currentResult = await databasePool.query(
+    'SELECT * FROM technical_sandbox_runs WHERE id = $1 AND user_id = $2',
+    [row.id, row.user_id],
+  );
+  const current = currentResult.rows[0] ?? row;
+  if (current.status === 'paid') return publicRun(current, { receipt });
+  return publicRun(current);
 }
 
 export async function createTechnicalSandboxCheckout({
@@ -408,7 +444,21 @@ export async function createTechnicalSandboxCheckout({
     [prepared.row.id, userId],
   );
   if (!current.rowCount) fail(409, 'technical_sandbox_run_attach_conflict');
-  return publicRun(current.rows[0], { checkoutUrl: session.url });
+  const currentRow = current.rows[0];
+  if (currentRow.provider_session_id === session.id) {
+    return publicRun(currentRow, { checkoutUrl: session.url });
+  }
+  if (currentRow.provider_session_id) {
+    const reconciled = await reconcileTechnicalSandboxRun({
+      row: currentRow,
+      configuration,
+      provider,
+      databasePool,
+      transaction,
+    });
+    if (reconciled.receipt || reconciled.status === 'paid') return reconciled;
+  }
+  fail(409, 'technical_sandbox_run_attach_conflict');
 }
 
 export async function recoverTechnicalSandboxPendingRuns({

@@ -39,6 +39,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   saved SSH configuration and authoritative project source before concluding
   that remote access is unavailable; test only the verified saved alias. A
   guessed alias is not a blocker.
+- Time-bounded optional provider authorization may fail closed only for its own
+  lane; an expired authorization must not prevent API startup or restart.
+  Future, overlong or malformed authorization configuration remains a hard
+  validation error and requires deterministic restart/config coverage.
 - Missing operational config or a project secret is not an owner blocker when
   authorized runtime state can be reconstructed server-side or a missing key
   can be atomically generated in the approved external directory; exhaust that

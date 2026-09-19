@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { minimizeThirdPartyStructuredLocations } from '../src/privacy_export.js';
+import { buildAccountExport, minimizeThirdPartyStructuredLocations } from '../src/privacy_export.js';
 import {
   applyAccountExportPolicy,
   validateAccountExportPurpose,
@@ -39,6 +39,27 @@ test('privacy export leaves ordinary received text unchanged', () => {
   const result = minimizeThirdPartyStructuredLocations([message]);
   assert.equal(result.omittedCount, 0);
   assert.equal(result.messages[0], message);
+});
+
+test('account export includes technical sandbox runs and joined event metadata without raw payloads', async () => {
+  const client = {
+    async query(sql) {
+      if (sql.includes('FROM users WHERE id = $1')) {
+        return { rows: [{ id: 'user-a', email: 'user@example.invalid' }] };
+      }
+      if (sql.includes('FROM technical_sandbox_runs')) {
+        return { rows: [{ id: 'technical_sandbox_run_a', status: 'paid', amount_minor: 100, currency: 'EUR', authorization_id: 'auth-secret' }] };
+      }
+      if (sql.includes('FROM technical_sandbox_provider_events')) {
+        return { rows: [{ provider_event_id: 'evt-a', run_id: 'technical_sandbox_run_a', event_type: 'checkout.session.completed', payload_sha256: 'hash-secret' }] };
+      }
+      return { rows: [] };
+    },
+  };
+  const result = await buildAccountExport(client, 'user-a');
+  assert.equal(result.data.technicalSandbox.runs.length, 1);
+  assert.equal(result.data.technicalSandbox.providerEvents.length, 1);
+  assert.doesNotMatch(JSON.stringify(result.data.technicalSandbox), /auth-secret|hash-secret|response_payload/u);
 });
 
 test('access-copy policy replaces internal identifiers and withholds security internals', () => {
@@ -164,6 +185,13 @@ test('portability policy contains own and observed data but excludes received an
       disputes: [],
     },
     financialActivity: { payments: [{ id: 'payment-a' }] },
+    technicalSandbox: {
+      runs: [{ id: 'technical_sandbox_run_a', status: 'paid', authorization_id: 'secret-auth' }],
+      providerEvents: [{ provider_event_id: 'evt-a', event_type: 'checkout.session.completed', payload_sha256: 'secret-hash' }],
+      syntheticOnly: true,
+      rawPayloadsExcluded: true,
+      secretsExcluded: true,
+    },
     auditEvents: [{ action: 'internal' }],
   }, 'data_portability');
 
@@ -180,6 +208,9 @@ test('portability policy contains own and observed data but excludes received an
   assert.equal(result.data.marketplace.bookingGroups.stateEvents.length, 1);
   assert.equal(result.data.trustAndSafety.reviews.length, 1);
   assert.equal(result.data.financialActivity.payments.length, 1);
+  assert.equal(result.data.technicalSandbox.runs.length, 1);
+  assert.equal(result.data.technicalSandbox.providerEvents.length, 1);
+  assert.doesNotMatch(JSON.stringify(result.data.technicalSandbox), /secret-auth|secret-hash|response_payload/u);
 });
 
 test('privacy-export purpose is an exact closed enum', () => {

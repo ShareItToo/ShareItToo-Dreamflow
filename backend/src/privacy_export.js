@@ -157,6 +157,8 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
     moderationReviewRequests,
     blocks,
     payments,
+    technicalSandboxRuns,
+    technicalSandboxProviderEvents,
     refunds,
     payouts,
     financialDocuments,
@@ -1035,6 +1037,21 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
        WHERE booking.owner_id = $1 OR booking.renter_id = $1
        ORDER BY payment.created_at`, userId, [trustedRefundProviderModel]),
     rows(client,
+      `SELECT id, status, amount_minor, currency, authorization_id,
+              provider_account_id, provider_livemode, provider_session_status,
+              provider_payment_status, provider_payment_intent_status,
+              checkout_expires_at, provider_event_received_at, completed_at,
+              created_at, updated_at
+       FROM technical_sandbox_runs
+       WHERE user_id = $1 ORDER BY created_at`, userId),
+    rows(client,
+      `SELECT event.provider_event_id, event.run_id, event.event_type,
+              event.provider_account_id, event.livemode, event.payload_sha256,
+              event.received_at, event.processed_at, event.outcome
+       FROM technical_sandbox_provider_events AS event
+       JOIN technical_sandbox_runs AS run ON run.id = event.run_id
+       WHERE run.user_id = $1 ORDER BY event.received_at`, userId),
+    rows(client,
       `SELECT refund.id, payment.booking_id, refund.status,
               refund.amount_minor, refund.currency, refund.created_at,
               refund.updated_at,
@@ -1271,6 +1288,13 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
       depositCharges,
       disputeTransferRecoveries,
       refundTransferReversals,
+    },
+    technicalSandbox: {
+      runs: technicalSandboxRuns,
+      providerEvents: technicalSandboxProviderEvents,
+      syntheticOnly: true,
+      rawPayloadsExcluded: true,
+      secretsExcluded: true,
     },
     auditEvents,
   };

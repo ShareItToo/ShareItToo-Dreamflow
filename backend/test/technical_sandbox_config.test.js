@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import {
   chmodSync,
   mkdtempSync,
@@ -127,10 +128,26 @@ test('live/wrong credentials, permissive file mode, symlinks and expired authori
       }),
       (error) => error.code === 'TECHNICAL_SANDBOX_SECRET_KEY_FILE_unreadable',
     );
+    const expired = readTechnicalSandboxConfiguration({
+      ...files.env,
+      TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT: '2026-09-19T09:59:59.000Z',
+    }, { deploymentEnvironment: 'test', now });
+    assert.equal(expired.available, false);
+    assert.equal(expired.mode, 'disabled');
+    assert.equal(expired.reason, 'authorization_expired');
+    assert.equal(expired.secretKey, '');
+    assert.equal(expired.webhookSecret, '');
     assert.throws(
       () => readTechnicalSandboxConfiguration({
         ...files.env,
-        TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT: '2026-09-19T10:00:00.000Z',
+        TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT: '2026-09-21T10:00:00.000Z',
+      }, { deploymentEnvironment: 'test', now }),
+      (error) => error.code === 'technical_sandbox_authorization_invalid',
+    );
+    assert.throws(
+      () => readTechnicalSandboxConfiguration({
+        ...files.env,
+        TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT: '2026-09-20T10:00:01.000Z',
       }, { deploymentEnvironment: 'test', now }),
       (error) => error.code === 'technical_sandbox_authorization_invalid',
     );
@@ -151,4 +168,31 @@ test('kill switch disables an otherwise complete test configuration', () => {
   } finally {
     rmSync(files.root, { recursive: true, force: true });
   }
+});
+
+test('expired authorization disables only the sandbox lane during config restart', () => {
+  const output = execFileSync(process.execPath, [
+    '--input-type=module',
+    '-e',
+    "import('./backend/src/config.js').then(({ config }) => console.log(JSON.stringify({ available: config.technicalSandbox.available, mode: config.technicalSandbox.mode, reason: config.technicalSandbox.reason })))",
+  ], {
+    cwd: path.resolve(import.meta.dirname, '../..'),
+    env: {
+      JWT_SECRET: `restart-test-${'x'.repeat(40)}`,
+      DATABASE_URL: 'postgresql://127.0.0.1:1/sit_test',
+      BIND_HOST: '127.0.0.1',
+      NODE_ENV: 'test',
+      TECHNICAL_SANDBOX_ENABLED: 'true',
+      TECHNICAL_SANDBOX_USER_IDS: 'synthetic_sandbox_user_owner',
+      TECHNICAL_SANDBOX_AUTHORIZATION_ID: 'wp266-sandbox-auth-001',
+      TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT: '2026-09-18T09:00:00.000Z',
+      TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT: '2026-09-18T10:00:00.000Z',
+    },
+    encoding: 'utf8',
+  });
+  assert.deepEqual(JSON.parse(output), {
+    available: false,
+    mode: 'disabled',
+    reason: 'authorization_expired',
+  });
 });

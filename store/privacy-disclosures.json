@@ -80,11 +80,11 @@
     },
     {
       "path": "backend/src/privacy_export.js",
-      "sha256": "71a1e7674f2b5b327e5e5c104fe409a90783b2857c1b1d5443d18f87736bce39"
+      "sha256": "91bc05d2463252c6481ad3444b3a9798f20172d801c345c02a45a06fd6ef9a6a"
     },
     {
       "path": "backend/src/privacy_export_policy.js",
-      "sha256": "e57a5790a34852bbe82fa951d58e0436ce29e2af88458e5222fb7a9c058653bd"
+      "sha256": "11ccbe2fac1aea7fd8337bec155935685929041d5327e653ca6490c8c934887a"
     },
     {
       "path": "backend/src/observability.js",
