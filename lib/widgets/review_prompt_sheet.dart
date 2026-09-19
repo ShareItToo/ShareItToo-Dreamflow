@@ -175,9 +175,17 @@ class ReviewPromptSheet extends StatefulWidget {
 
 class _ReviewPromptSheetState extends State<ReviewPromptSheet> {
   late List<_CriterionState> _criteria;
+  late final String _idempotencyKey = _buildReviewIdempotencyKey();
   bool _submitting = false;
   String? _reviewedName;
   String? _submitError;
+
+  String _buildReviewIdempotencyKey() {
+    final raw =
+        'review_${widget.requestId}_${widget.reviewerId}_${widget.direction}'
+            .replaceAll(RegExp(r'[^A-Za-z0-9_.:-]'), '_');
+    return raw.length <= 150 ? raw : raw.substring(0, 150);
+  }
 
   @override
   void initState() {
@@ -246,12 +254,14 @@ class _ReviewPromptSheetState extends State<ReviewPromptSheet> {
                 bookingId: widget.requestId,
                 direction: widget.direction,
                 criteria: list.map((criterion) => criterion.toJson()).toList(),
+                idempotencyKey: _idempotencyKey,
               )
             : await BackendRepository.createBookingReviewForOwner(
                 owner: capturedOwner,
                 bookingId: widget.requestId,
                 direction: widget.direction,
                 criteria: list.map((criterion) => criterion.toJson()).toList(),
+                idempotencyKey: _idempotencyKey,
               );
         if (review['id']?.toString().trim().isEmpty ?? true) {
           throw StateError(

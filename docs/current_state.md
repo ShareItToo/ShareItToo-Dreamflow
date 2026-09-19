@@ -1,5 +1,17 @@
 # ShareItToo Current State
 
+## WP261-A booking interactions — SOURCE PASS; provider/device gates separate
+
+Pending booking amendment and cancellation now load authoritative backend
+state, require a pending/valid record, perform the real idempotent mutation,
+and read back the exact result before reporting success. Missing or stale
+records fail closed instead of becoming false local success. Booking reviews
+use a stable idempotency key per booking/reviewer: identical retries replay,
+payload drift conflicts, and existing reviews never create a second review or
+audit. Focused wiring/backend/analyzer/Flutter interaction checks pass. No
+provider, payment, Play, production or device mutation occurred; commit/push
+awaits Sol review. See the WP261-A operation report.
+
 ## WP260-E Connect cohort and secure payment landings — SOURCE PASS; provider gate separate
 
 At source commit `b516e37d9ff214296d995bdaa31a3fe2f351d97a` plus the

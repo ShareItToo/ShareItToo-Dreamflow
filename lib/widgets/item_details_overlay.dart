@@ -696,6 +696,9 @@ class _ItemDetailsPageState extends State<_ItemDetailsPage> {
   final PageController _pc = PageController();
   final ScrollController _sc = ScrollController();
   DateTimeRange? _selectedRange;
+  RentalRequest? _editingRequest;
+  bool _editingRequestLoading = false;
+  String? _editingRequestError;
   bool _canReserve = false;
   String? _wishlistId;
   bool _wishlistStateKnown = false;
@@ -859,7 +862,42 @@ class _ItemDetailsPageState extends State<_ItemDetailsPage> {
       _clearSavedSelection();
       // Keep _selectedRange as null to show pristine state
     } else {
-      _loadSavedRange();
+      if (widget.editRequestId != null && widget.editRequestId!.isNotEmpty) {
+        unawaited(_loadEditingRequest());
+      } else {
+        _loadSavedRange();
+      }
+    }
+  }
+
+  Future<void> _loadEditingRequest() async {
+    final requestId = widget.editRequestId?.trim() ?? '';
+    if (requestId.isEmpty) return;
+    if (mounted) setState(() => _editingRequestLoading = true);
+    try {
+      final request = await DataService.getRentalRequestById(requestId);
+      if (request == null || request.itemId != widget.item.id) {
+        throw StateError('Die Buchungsbindung passt nicht zu dieser Anzeige.');
+      }
+      if (request.status != 'pending') {
+        throw StateError('Diese Anfrage kann nicht mehr geändert werden.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _editingRequest = request;
+        _selectedRange = DateTimeRange(start: request.start, end: request.end);
+        _editingRequestLoading = false;
+        _editingRequestError = null;
+      });
+    } catch (error) {
+      f.debugPrint(
+          '[ItemDetails] authoritative edit request load failed: $error');
+      if (!mounted) return;
+      setState(() {
+        _editingRequestLoading = false;
+        _editingRequestError =
+            'Die aktuelle Anfrage konnte nicht geladen werden.';
+      });
     }
   }
 
@@ -937,12 +975,28 @@ class _ItemDetailsPageState extends State<_ItemDetailsPage> {
     final range = _selectedRange;
     if (range == null) return;
 
-    final ok = await DataService.checkAvailability(
-        itemId: widget.item.id, start: range.start, end: range.end);
-    if (!ok) {
-      if (!mounted) return;
-      await _showUnavailablePopup(context);
+    final editRequestId = widget.editRequestId?.trim() ?? '';
+    final isEditing = editRequestId.isNotEmpty;
+    if (isEditing && _editingRequestLoading) return;
+    if (isEditing &&
+        (_editingRequest == null || _editingRequestError != null)) {
+      await AppPopup.error(
+        context,
+        title: 'Anfrage nicht verfügbar',
+        message: _editingRequestError ??
+            'Die serverbestätigte Anfrage ist nicht geladen. Es wurde nichts geändert.',
+      );
       return;
+    }
+
+    if (!isEditing) {
+      final ok = await DataService.checkAvailability(
+          itemId: widget.item.id, start: range.start, end: range.end);
+      if (!ok) {
+        if (!mounted) return;
+        await _showUnavailablePopup(context);
+        return;
+      }
     }
     final current = await DataService.getCurrentUser();
     if (!mounted) return;
@@ -952,7 +1006,7 @@ class _ItemDetailsPageState extends State<_ItemDetailsPage> {
       return;
     }
 
-    if (PrivatePilotConfig.enabled) {
+    if (PrivatePilotConfig.enabled && !isEditing) {
       await Navigator.of(context).push<void>(
         MaterialPageRoute(
           builder: (_) => PrivatePilotCheckoutScreen(
@@ -980,12 +1034,34 @@ class _ItemDetailsPageState extends State<_ItemDetailsPage> {
 
     RentalRequest stored;
     try {
-      stored = await DataService.addRentalRequest(req);
+      if (isEditing) {
+        final current = _editingRequest!;
+        await DataService.updateRentalRequestTimes(
+          requestId: editRequestId,
+          start: range.start,
+          end: range.end,
+          expressRequested: current.expressRequested,
+        );
+        final confirmed = await DataService.getRentalRequestById(editRequestId);
+        if (confirmed == null ||
+            confirmed.start != range.start ||
+            confirmed.end != range.end) {
+          throw StateError('Die geänderte Anfrage wurde nicht bestätigt.');
+        }
+        stored = confirmed;
+      } else {
+        stored = await DataService.addRentalRequest(req);
+      }
     } catch (e) {
-      f.debugPrint('[ItemDetailsOverlay] addRentalRequest failed: $e');
+      f.debugPrint('[ItemDetailsOverlay] booking mutation failed: $e');
       if (!mounted) return;
-      await AppPopup.toast(context,
-          icon: Icons.error_outline, title: 'Fehler beim Senden');
+      await AppPopup.error(
+        context,
+        title:
+            isEditing ? 'Änderung nicht gespeichert' : 'Anfrage nicht gesendet',
+        message:
+            'Der Server hat keine bestätigte Änderung zurückgegeben. Bitte versuche es erneut.',
+      );
       return;
     }
 
@@ -994,11 +1070,18 @@ class _ItemDetailsPageState extends State<_ItemDetailsPage> {
       await DataService.clearSavedDateRange(widget.item.id);
       await DataService.clearSavedDeliverySelection(widget.item.id);
       if (!mounted) return;
-      final rootNav = Navigator.of(context, rootNavigator: true);
-      rootNav.popUntil((route) => route.isFirst);
-      if (!rootNav.mounted) return;
-      await _showReservationSentPopup(rootNav.context,
-          requestId: stored.id, item: widget.item);
+      if (isEditing) {
+        await AppPopup.toast(context,
+            icon: Icons.check_circle_outline,
+            title: 'Reservierung aktualisiert');
+        if (mounted) Navigator.of(context).maybePop();
+      } else {
+        final rootNav = Navigator.of(context, rootNavigator: true);
+        rootNav.popUntil((route) => route.isFirst);
+        if (!rootNav.mounted) return;
+        await _showReservationSentPopup(rootNav.context,
+            requestId: stored.id, item: widget.item);
+      }
     } catch (e) {
       f.debugPrint(
           '[ItemDetailsOverlay] post-send UI flow failed (request stored): $e');
@@ -1358,10 +1441,29 @@ class _ItemDetailsPageState extends State<_ItemDetailsPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (_editingRequestLoading)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: LinearProgressIndicator(),
+                ),
+              if (_editingRequestError != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    _editingRequestError!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               FilledButton.icon(
-                onPressed: _pickRange,
+                onPressed: _editingRequestLoading ? null : _pickRange,
                 icon: const Icon(Icons.calendar_month),
-                label: _availabilityLabel(),
+                label: widget.editRequestId?.isNotEmpty == true
+                    ? const Text('Zeitraum ändern')
+                    : _availabilityLabel(),
               ),
               if (_selectedRange != null) ...[
                 const SizedBox(height: 10),

@@ -9522,7 +9522,8 @@ class DataService {
         final remote = await BackendRepository.getPublicProfile(id);
         if (remote != null) return User.fromJson(remote);
       } catch (error) {
-        debugPrint('[DataService] authoritative public profile load failed: $error');
+        debugPrint(
+            '[DataService] authoritative public profile load failed: $error');
       }
     }
     try {
@@ -10397,18 +10398,21 @@ class DataService {
     RentalRequest? updatedRequest;
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
       final index = all.indexWhere((entry) => entry.id == requestId);
-      if (index >= 0) {
-        final current = all[index];
-        final remote = await BackendRepository.transitionBooking(
-          bookingId: requestId,
-          status: status,
-          idempotencyKey: 'transition_${requestId}_${current.status}_$status',
-          legalDeclarations: legalDeclarations,
+      if (index < 0) {
+        throw StateError(
+          'Die serverbestätigte Buchung wurde nicht gefunden; keine Statusänderung bestätigt.',
         );
-        updatedRequest = RentalRequest.fromJson(remote);
-        all[index] = updatedRequest;
-        mutated = true;
       }
+      final current = all[index];
+      final remote = await BackendRepository.transitionBooking(
+        bookingId: requestId,
+        status: status,
+        idempotencyKey: 'transition_${requestId}_${current.status}_$status',
+        legalDeclarations: legalDeclarations,
+      );
+      updatedRequest = RentalRequest.fromJson(remote);
+      all[index] = updatedRequest;
+      mutated = true;
     } else {
       for (int i = 0; i < all.length; i++) {
         if (all[i].id == requestId) {
@@ -11299,12 +11303,20 @@ class DataService {
     final all = await _getAllRentalRequests();
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
       final index = all.indexWhere((entry) => entry.id == requestId);
-      if (index < 0) return;
+      if (index < 0) {
+        throw StateError(
+          'Die serverbestätigte Buchung wurde nicht gefunden; keine Änderung bestätigt.',
+        );
+      }
       final current = all[index];
       // Pickup/return appointment times are stored in their dedicated flow
       // metadata. The authoritative rental occupancy may only be amended while
       // the request is still pending.
-      if (current.status != 'pending') return;
+      if (current.status != 'pending') {
+        throw StateError(
+          'Die Buchung kann in ihrem aktuellen Status nicht geändert werden.',
+        );
+      }
       final exp = expressRequested ?? current.expressRequested;
       final amended = current.copyWith(
         start: start,

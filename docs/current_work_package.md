@@ -1,3 +1,16 @@
+# WP261-A booking interactions — SOURCE PASS; provider/device gates separate
+
+Pending-review source work now binds pending booking amendment and cancellation
+to server-backed read/load, typed failure handling and post-mutation readback.
+Missing or non-pending backend records fail explicitly; they can never produce
+a local success toast. Review submission is idempotent per booking/reviewer,
+replays the existing review without a duplicate row/audit, and rejects payload
+drift for a reused key. The existing message-composer proof remains in WP190.
+Focused wiring, backend idempotency, analyzer and interaction tests pass. No
+provider, payment, Play, production or device mutation occurred. Awaiting Sol
+review before commit/push; see
+`docs/operations/WP261_A_BOOKING_INTERACTIONS_20260919.md`.
+
 # Current Work Package: WP260-C Listing-AI lifetime budget — SOURCE PASS; provider gate separate
 
 ## Completed subpackage: WP260-E Connect cohort and secure payment landings — SOURCE PASS; provider gate separate

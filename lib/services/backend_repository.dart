@@ -2061,11 +2061,13 @@ class BackendRepository {
     required String bookingId,
     required String direction,
     required List<Map<String, dynamic>> criteria,
+    required String idempotencyKey,
   }) async {
     final response = await _authorized(
       method: 'POST',
       path: '/bookings/${Uri.encodeComponent(bookingId)}/reviews',
       body: {'direction': direction, 'criteria': criteria},
+      additionalHeaders: {'Idempotency-Key': idempotencyKey},
     );
     return Map<String, dynamic>.from(response['review'] as Map);
   }
@@ -2075,12 +2077,14 @@ class BackendRepository {
     required String bookingId,
     required String direction,
     required List<Map<String, dynamic>> criteria,
+    required String idempotencyKey,
   }) async {
     final response = await _authorizedForOwner(
       owner: owner,
       method: 'POST',
       path: '/bookings/${Uri.encodeComponent(bookingId)}/reviews',
       body: {'direction': direction, 'criteria': criteria},
+      additionalHeaders: {'Idempotency-Key': idempotencyKey},
     );
     final review = response['review'];
     if (review is! Map) {

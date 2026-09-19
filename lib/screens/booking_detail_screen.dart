@@ -95,6 +95,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   double? _itemLng;
   Map<String, dynamic> _flowState = const {};
   bool _reviewAlreadySubmitted = false;
+  bool _bookingMutationBusy = false;
   StreamSubscription<String>? _sharedPersistenceSub;
   final SharedPersistenceRefreshCoordinator _sharedPersistenceRefresh =
       SharedPersistenceRefreshCoordinator();
@@ -822,7 +823,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  Future<void> _viewListing() async {
+  Future<void> _viewListing({bool editRequest = false}) async {
     final title = (widget.booking['title'] as String?)?.toLowerCase() ?? '';
     final tokens = title
         .split(RegExp(r'[^a-z0-9äöüß]+'))
@@ -859,7 +860,12 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       );
       return;
     }
-    await ItemDetailsOverlay.showFullPage(context, item: bestItem);
+    final requestId = (widget.booking['requestId'] as String?)?.trim() ?? '';
+    await ItemDetailsOverlay.showFullPage(
+      context,
+      item: bestItem,
+      editRequestId: editRequest && requestId.isNotEmpty ? requestId : null,
+    );
   }
 
   String _pageTitle() {
@@ -1128,6 +1134,12 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                     label: 'Anfrage zurückziehen',
                     value: 'withdraw',
                   ),
+                if (effective == 'pending' && !_isViewerOwnerSync())
+                  const SitMenuOption(
+                    icon: Icons.edit_calendar_outlined,
+                    label: 'Zeitraum ändern',
+                    value: 'amend',
+                  ),
                 if (!_simulationOnly &&
                     !_isViewerOwnerSync() &&
                     ((widget.booking['requestId'] as String?) ?? '').isNotEmpty)
@@ -1162,6 +1174,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                   break;
                 case 'withdraw':
                   await _confirmWithdrawPending();
+                  break;
+                case 'amend':
+                  await _viewListing(editRequest: true);
                   break;
                 case 'issue':
                   final requestId = widget.booking['requestId'] as String?;
@@ -4163,14 +4178,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           onPressed: () async {
             Navigator.of(context, rootNavigator: true).maybePop();
             final id = widget.booking['requestId'] as String?;
-            if (id != null && id.isNotEmpty) {
-              await DataService.updateRentalRequestStatusWithActor(
-                requestId: id,
-                status: 'cancelled',
-                cancelledBy: 'renter',
-              );
-            }
-            if (!mounted) return;
+            final confirmed = id != null && id.isNotEmpty
+                ? await _cancelBookingAndReadback(
+                    requestId: id, cancelledBy: 'renter')
+                : false;
+            if (!confirmed || !mounted) return;
             // Navigate to Bookings -> Abgeschlossen with highlight on the cancelled card
             AppPopup.toast(
               context,
@@ -4182,7 +4194,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
               MaterialPageRoute(
                 builder: (_) => BookingsScreen(
                   initialTabIndex: 3,
-                  highlightRequestId: id ?? '',
+                  highlightRequestId: id,
                 ),
               ),
             );
@@ -4210,14 +4222,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           onPressed: () async {
             Navigator.of(context, rootNavigator: true).maybePop();
             final id = widget.booking['requestId'] as String?;
-            if (id != null) {
-              await DataService.updateRentalRequestStatusWithActor(
-                requestId: id,
-                status: 'cancelled',
-                cancelledBy: 'renter',
-              );
-            }
-            if (!mounted) return;
+            final confirmed = id != null && id.isNotEmpty
+                ? await _cancelBookingAndReadback(
+                    requestId: id, cancelledBy: 'renter')
+                : false;
+            if (!confirmed || !mounted) return;
             setState(() => widget.booking['status'] = 'Zurückgezogen');
             await AppPopup.toast(
               context,
@@ -4229,6 +4238,39 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         ),
       ],
     );
+  }
+
+  Future<bool> _cancelBookingAndReadback({
+    required String requestId,
+    required String cancelledBy,
+  }) async {
+    if (_bookingMutationBusy) return false;
+    if (mounted) setState(() => _bookingMutationBusy = true);
+    try {
+      await DataService.updateRentalRequestStatusWithActor(
+        requestId: requestId,
+        status: 'cancelled',
+        cancelledBy: cancelledBy,
+      );
+      final confirmed = await DataService.getRentalRequestById(requestId);
+      if (confirmed == null || confirmed.status != 'cancelled') {
+        throw StateError('Stornierung wurde nicht bestätigt.');
+      }
+      return true;
+    } catch (error) {
+      debugPrint('[BookingDetail] cancellation failed: $error');
+      if (mounted) {
+        await AppPopup.error(
+          context,
+          title: 'Stornierung nicht bestätigt',
+          message:
+              'Der Server hat keine bestätigte Stornierung zurückgegeben. Die Buchung bleibt unverändert sichtbar.',
+        );
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _bookingMutationBusy = false);
+    }
   }
 }
 

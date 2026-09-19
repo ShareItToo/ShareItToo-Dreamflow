@@ -38,6 +38,55 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+function stableCommandValue(value) {
+  if (Array.isArray(value)) return value.map(stableCommandValue);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.keys(value).sort().map((key) => [key, stableCommandValue(value[key])]),
+  );
+}
+
+function hashCommandRequest(value) {
+  return crypto.createHash('sha256')
+    .update(JSON.stringify(stableCommandValue(value)))
+    .digest('hex');
+}
+
+async function startCommand(client, { key, actorId, type, request }) {
+  const requestHash = hashCommandRequest(request);
+  const inserted = await client.query(
+    `INSERT INTO booking_commands (idempotency_key, actor_id, command_type, request_hash)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (idempotency_key) DO NOTHING
+     RETURNING idempotency_key`,
+    [key, actorId, type, requestHash],
+  );
+  if (inserted.rowCount) return null;
+  const existing = await client.query(
+    `SELECT actor_id, command_type, request_hash, response_payload, completed_at
+       FROM booking_commands WHERE idempotency_key = $1 FOR UPDATE`,
+    [key],
+  );
+  const command = existing.rows[0];
+  if (!command || command.actor_id !== actorId || command.command_type !== type
+      || command.request_hash !== requestHash) {
+    throw new ModerationWorkflowError(409, 'idempotency_key_reused');
+  }
+  if (!command.completed_at || !command.response_payload) {
+    throw new ModerationWorkflowError(409, 'booking_command_in_progress');
+  }
+  return { ...command.response_payload, replayed: true };
+}
+
+async function completeCommand(client, key, bookingId, response) {
+  await client.query(
+    `UPDATE booking_commands
+        SET booking_id = $2, response_payload = $3::jsonb, completed_at = now()
+      WHERE idempotency_key = $1`,
+    [key, bookingId, JSON.stringify(response)],
+  );
+}
+
 async function audit(client, {
   actor,
   action,
@@ -1208,8 +1257,23 @@ export async function setListingModeration(client, {
   return { listingId, status, decision: decision.decision, replayed: false };
 }
 
-export async function createBookingReview(client, { actor, bookingId, raw }) {
+export async function createBookingReview(client, {
+  actor, bookingId, raw, idempotencyKey: suppliedIdempotencyKey = null,
+}) {
   const candidate = normalizeReviewInput(raw);
+  const commandKey = moderationIdempotencyKey(
+    suppliedIdempotencyKey
+      || `${bookingId}:${actor.id}:${candidate.direction}`,
+    'booking-review',
+  );
+  const commandRequest = { bookingId, candidate };
+  const replay = await startCommand(client, {
+    key: commandKey,
+    actorId: actor.id,
+    type: 'booking.review',
+    request: commandRequest,
+  });
+  if (replay) return replay;
   const booking = await client.query(
     `SELECT booking.*, listing.id AS resolved_listing_id
      FROM bookings AS booking JOIN listings AS listing ON listing.id = booking.listing_id
@@ -1240,7 +1304,11 @@ export async function createBookingReview(client, { actor, bookingId, raw }) {
     'SELECT * FROM reviews WHERE booking_id = $1 AND reviewer_id = $2',
     [bookingId, actor.id],
   );
-  if (existing.rowCount) return { review: shapeReview(existing.rows[0]), replayed: true };
+  if (existing.rowCount) {
+    const response = { review: shapeReview(existing.rows[0]), replayed: true };
+    await completeCommand(client, commandKey, bookingId, response);
+    return response;
+  }
   const inserted = await client.query(
     `INSERT INTO reviews (
        booking_id, listing_id, reviewer_id, reviewee_id, direction,
@@ -1268,7 +1336,9 @@ export async function createBookingReview(client, { actor, bookingId, raw }) {
     resourceId: inserted.rows[0].id,
     metadata: { bookingId, listingId: row.resolved_listing_id, revieweeId, direction },
   });
-  return { review: shapeReview(inserted.rows[0]), replayed: false };
+  const response = { review: shapeReview(inserted.rows[0]), replayed: false };
+  await completeCommand(client, commandKey, bookingId, response);
+  return response;
 }
 
 export async function listPublishedReviews(client, { revieweeId = null, listingId = null, bookingId = null }) {
