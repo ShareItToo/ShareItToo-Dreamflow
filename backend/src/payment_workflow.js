@@ -2635,19 +2635,7 @@ export async function applyProviderEvent(event, rawPayload = null) {
   }
 }
 
-export async function verifyAndApplyWebhook(rawBody, signatureHeader) {
-  if (config.payments.transport !== 'stripe') throw new PaymentDomainError(404, 'webhook_not_enabled');
-  let event = stripeProvider.parseWebhookEvent({
-    rawBody,
-    signatureHeader,
-    webhookSecret: config.payments.webhookSecret,
-    connectWebhookSecret: config.payments.connectWebhookSecret,
-  });
-  // Reject a wrong or absent mode before thin-event account retrieval, not
-  // just later at the database boundary in applyProviderEvent.
-  if (event.livemode !== config.payments.livemode) {
-    throw new PaymentDomainError(409, 'provider_livemode_mismatch');
-  }
+async function applyVerifiedPaymentWebhook(event, rawBody) {
   if (isConnectedAccountProviderEvent(event.type)) {
     const accountId = connectedAccountIdForEvent(event);
     await assertConnectedAccountWebhookCohort(accountId);
@@ -2667,6 +2655,39 @@ export async function verifyAndApplyWebhook(rawBody, signatureHeader) {
     });
   }
   return applyProviderEvent(event, rawBody);
+}
+
+export async function verifyAndApplyWebhook(
+  rawBody,
+  signatureHeader,
+  { allowTechnicalSandboxNoop = false } = {},
+) {
+  const event = verifyPaymentWebhookSignature(rawBody, signatureHeader);
+  if (allowTechnicalSandboxNoop
+      && event.data?.object?.metadata?.sit_flow === 'technical_sandbox') {
+    return { received: true, ignored: true };
+  }
+  return applyVerifiedPaymentWebhook(event, rawBody);
+}
+
+/**
+ * Verify the primary payments destination without performing any write. This
+ * is deliberately separate so the main webhook can acknowledge a signed
+ * technical-sandbox delivery as a no-op; the dedicated technical endpoint is
+ * the only endpoint allowed to persist that flow.
+ */
+export function verifyPaymentWebhookSignature(rawBody, signatureHeader) {
+  if (config.payments.transport !== 'stripe') throw new PaymentDomainError(404, 'webhook_not_enabled');
+  const event = stripeProvider.parseWebhookEvent({
+    rawBody,
+    signatureHeader,
+    webhookSecret: config.payments.webhookSecret,
+    connectWebhookSecret: config.payments.connectWebhookSecret,
+  });
+  if (event.livemode !== config.payments.livemode) {
+    throw new PaymentDomainError(409, 'provider_livemode_mismatch');
+  }
+  return event;
 }
 
 /**

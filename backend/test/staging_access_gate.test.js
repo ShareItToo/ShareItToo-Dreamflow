@@ -88,7 +88,12 @@ test('anonymous surface is a minimal exact route matrix', () => {
   }
   assert.equal(stagingAnonymousPathAllowed(configuration, { method: 'GET', path: '/v1/listings' }), true);
   assert.equal(stagingAnonymousPathAllowed(configuration, { method: 'GET', path: '/v1/uploads/fixture-full.webp' }), true);
-  for (const path of ['/v1/payments/connect/return', '/v1/open/payment/booking-1']) {
+  for (const path of [
+    '/v1/payments/connect/return',
+    '/v1/open/payment/booking-1',
+    '/v1/payments/technical-sandbox/success',
+    '/v1/payments/technical-sandbox/cancel',
+  ]) {
     assert.equal(stagingAnonymousPathAllowed(configuration, { method: 'GET', path }), true);
     assert.equal(stagingAnonymousPathAllowed(configuration, { method: 'HEAD', path }), true);
   }
@@ -102,19 +107,23 @@ test('anonymous surface is a minimal exact route matrix', () => {
     { method: 'POST', path: '/v1/listings' },
     { method: 'GET', path: '/v1/admin/overview' },
     { method: 'POST', path: '/v1/payments/webhook' },
+    { method: 'GET', path: '/v1/payments/technical-sandbox/success/extra' },
+    { method: 'GET', path: '/v1/payments/technical-sandbox/unknown' },
   ]) {
     assert.equal(stagingAnonymousPathAllowed(configuration, request), false, `${request.method} ${request.path}`);
   }
 });
 
-test('only the two signed provider webhook POSTs bypass the user JWT gate', () => {
+test('only the signed provider webhook POSTs bypass the user JWT gate', () => {
   assert.equal(stagingWebhookPathAllowed({ method: 'POST', path: '/v1/payments/webhook' }), true);
   assert.equal(stagingWebhookPathAllowed({ method: 'POST', path: '/v1/identity-verification/webhook' }), true);
+  assert.equal(stagingWebhookPathAllowed({ method: 'POST', path: '/v1/payments/technical-sandbox/webhook' }), true);
   for (const request of [
     { method: 'GET', path: '/v1/payments/webhook' },
     { method: 'POST', path: '/v1/payments/webhook/' },
     { method: 'POST', path: '/v1/auth/login' },
     { method: 'POST', path: '/v1/identity-verification/webhook/foreign' },
+    { method: 'POST', path: '/v1/payments/technical-sandbox/webhook/' },
   ]) {
     assert.equal(stagingWebhookPathAllowed(request), false, `${request.method} ${request.path}`);
   }

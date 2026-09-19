@@ -97,6 +97,26 @@ test('workflow rejects wrong destination and live/unspecified mode before any AP
   assert.equal(db.mock.callCount(), 0);
 });
 
+test('signed technical sandbox event is a main-destination no-op, unsigned metadata is rejected', async (t) => {
+  const body = payload(false, {
+    id: 'evt_technical_main_noop',
+    data: { object: { id: 'pi_technical', metadata: { sit_flow: 'technical_sandbox' } } },
+  });
+  const db = t.mock.method(pool, 'query', async () => {
+    throw new Error('technical main no-op must not touch payment DB');
+  });
+  assert.deepEqual(await verifyAndApplyWebhook(
+    Buffer.from(body),
+    stripeSignatureHeader({ payload: body, secret: snapshotSecret }),
+    { allowTechnicalSandboxNoop: true },
+  ), { received: true, ignored: true });
+  await assert.rejects(
+    verifyAndApplyWebhook(Buffer.from(body), 't=1,v1=forged', { allowTechnicalSandboxNoop: true }),
+    (error) => error.code === 'invalid_webhook_signature',
+  );
+  assert.equal(db.mock.callCount(), 0);
+});
+
 test('verified thin workflow retrieves the account and keeps original raw payload for deduplication', async (t) => {
   const body = payload(true);
   const hash = crypto.createHash('sha256').update(body).digest('hex');

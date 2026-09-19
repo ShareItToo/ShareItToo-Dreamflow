@@ -12,6 +12,7 @@ import {
   validateTechnicalSandboxWebhook,
 } from '../src/technical_sandbox_workflow.js';
 import { StripeProvider } from '../src/stripe_provider.js';
+import { config } from '../src/config.js';
 
 const now = new Date('2026-09-19T10:00:00.000Z');
 const runId = 'technical_sandbox_12345678901234567890';
@@ -198,6 +199,7 @@ test('checkout creation uses isolated table, user cap lock and stable replay wit
     cancelUrl: 'https://example.invalid/cancel',
   });
   assert.equal(first.status, 'pending');
+  assert.equal(first.replayed, false);
   assert.match(first.checkoutUrl, /[?&]run_id=technical_sandbox_/u);
   assert.equal(db.state.queries.some((sql) => /\b(payments|bookings|ledger|connect)\b/iu.test(sql)), false);
   const replayProvider = {
@@ -215,6 +217,7 @@ test('checkout creation uses isolated table, user cap lock and stable replay wit
     now,
   });
   assert.equal(replay.status, 'pending');
+  assert.equal(replay.replayed, true);
   assert.equal(replayProvider.calls, 1);
   const capped = fakeDatabase({ count: 3 });
   await assert.rejects(
@@ -230,6 +233,29 @@ test('checkout creation uses isolated table, user cap lock and stable replay wit
     (error) => error.code === 'technical_sandbox_run_limit_reached',
   );
   assert.equal(capped.state.queries.some((sql) => sql.startsWith('SELECT pg_advisory_xact_lock')), true);
+});
+
+test('default technical checkout redirects use the public API base path', async () => {
+  const db = fakeDatabase();
+  const memoryProvider = new StripeProvider({ mode: 'memory', livemode: false });
+  let request;
+  const provider = {
+    async createTechnicalSandboxCheckout(input) {
+      request = input;
+      return memoryProvider.createTechnicalSandboxCheckout(input);
+    },
+  };
+  await createTechnicalSandboxCheckout({
+    actor: { id: userId },
+    key: 'technical-sandbox:key-00000009',
+    configuration,
+    provider,
+    databasePool: db.databasePool,
+    transaction: db.transaction,
+    now,
+  });
+  assert.equal(request.successUrl, `${config.publicBaseUrl}/payments/technical-sandbox/success`);
+  assert.equal(request.cancelUrl, `${config.publicBaseUrl}/payments/technical-sandbox/cancel`);
 });
 
 test('attached open checkout resumes only with an exact provider binding', async () => {

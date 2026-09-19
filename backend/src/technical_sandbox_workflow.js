@@ -348,8 +348,8 @@ export async function createTechnicalSandboxCheckout({
   databasePool = pool,
   transaction = inTransaction,
   now = new Date(),
-  successUrl = `${config.appPublicUrl}/v1/payments/technical-sandbox/success`,
-  cancelUrl = `${config.appPublicUrl}/v1/payments/technical-sandbox/cancel`,
+  successUrl = `${config.publicBaseUrl}/payments/technical-sandbox/success`,
+  cancelUrl = `${config.publicBaseUrl}/payments/technical-sandbox/cancel`,
 }) {
   const userId = actorId(actor);
   const exactNow = nowDate(now);
@@ -410,13 +410,16 @@ export async function createTechnicalSandboxCheckout({
     return { row: inserted.rows[0], replayed: false };
   });
   if (prepared.replayed && prepared.row.provider_session_id) {
-    return reconcileTechnicalSandboxRun({
-      row: prepared.row,
-      configuration,
-      provider,
-      databasePool,
-      transaction,
-    });
+    return {
+      ...(await reconcileTechnicalSandboxRun({
+        row: prepared.row,
+        configuration,
+        provider,
+        databasePool,
+        transaction,
+      })),
+      replayed: true,
+    };
   }
 
   const session = await provider.createTechnicalSandboxCheckout({
@@ -449,7 +452,10 @@ export async function createTechnicalSandboxCheckout({
       RETURNING *`,
     [prepared.row.id, session.id, session.livemode, session.status, userId],
   );
-  if (updated.rowCount) return publicRun(updated.rows[0], { checkoutUrl: session.url });
+  if (updated.rowCount) return {
+    ...publicRun(updated.rows[0], { checkoutUrl: session.url }),
+    replayed: false,
+  };
   const current = await databasePool.query(
     'SELECT * FROM technical_sandbox_runs WHERE id = $1 AND user_id = $2',
     [prepared.row.id, userId],
@@ -457,7 +463,7 @@ export async function createTechnicalSandboxCheckout({
   if (!current.rowCount) fail(409, 'technical_sandbox_run_attach_conflict');
   const currentRow = current.rows[0];
   if (currentRow.provider_session_id === session.id) {
-    return publicRun(currentRow, { checkoutUrl: session.url });
+    return { ...publicRun(currentRow, { checkoutUrl: session.url }), replayed: true };
   }
   if (currentRow.provider_session_id) {
     const reconciled = await reconcileTechnicalSandboxRun({
@@ -467,7 +473,7 @@ export async function createTechnicalSandboxCheckout({
       databasePool,
       transaction,
     });
-    if (reconciled.receipt || reconciled.status === 'paid') return reconciled;
+    if (reconciled.receipt || reconciled.status === 'paid') return { ...reconciled, replayed: true };
   }
   fail(409, 'technical_sandbox_run_attach_conflict');
 }

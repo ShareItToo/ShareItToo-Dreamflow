@@ -137,6 +137,12 @@ import {
   verifyAndApplyWebhook,
 } from './payment_workflow.js';
 import {
+  createTechnicalSandboxCheckout,
+  getTechnicalSandboxRun,
+  handleTechnicalSandboxWebhook,
+  technicalSandboxCapabilitiesFor,
+} from './technical_sandbox_workflow.js';
+import {
   PaymentDomainError,
   trustedRefundProviderModel,
 } from './payment_domain.js';
@@ -588,6 +594,17 @@ function paymentLandingPage({ id, state }) {
   const schemeUrl = `shareittoo://payment/${encodeURIComponent(id)}`;
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(resolved.title)}</title></head>
 <body style="margin:0;background:#f3f6fb;font-family:Arial,sans-serif;color:#172033"><main style="max-width:560px;margin:12vh auto;padding:24px"><section style="background:#fff;border-radius:20px;padding:32px;box-shadow:0 10px 30px rgba(20,35,70,.08)"><div style="font-size:26px;font-weight:800;color:#2156d9">ShareItToo</div><h1>${escapeHtml(resolved.title)}</h1><p>${escapeHtml(resolved.message)}</p><p><a href="${escapeHtml(schemeUrl)}" style="display:inline-block;background:#2156d9;color:#fff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:12px">Zahlung öffnen</a></p><p style="font-size:13px;color:#5d6980">URL-Ergebnisparameter werden nicht als Zahlungsnachweis verwendet. Der verbindliche Status wird nach der Anmeldung erneut serverseitig geprüft.</p><p><a href="${escapeHtml(config.appPublicUrl)}">Zur ShareItToo-Website</a></p></section></main></body></html>`;
+}
+
+function technicalSandboxLandingPage(kind) {
+  const isCancel = kind === 'cancel';
+  const title = isCancel
+    ? 'Technischer Zahlungstest abgebrochen'
+    : 'Technischer Zahlungstest – Rückkehr zur App';
+  const message = isCancel
+    ? 'Der technische Sandbox-Test wurde nicht abgeschlossen. Der verbindliche Status wird ausschließlich nach Anmeldung im Backend geprüft.'
+    : 'Kehre zur ShareItToo-App zurück und lade den technischen Sandbox-Status dort erneut.';
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(title)}</title></head><body style="margin:0;background:#f3f6fb;font-family:Arial,sans-serif;color:#172033"><main style="max-width:560px;margin:12vh auto;padding:24px"><section style="background:#fff;border-radius:20px;padding:32px;box-shadow:0 10px 30px rgba(20,35,70,.08)"><div style="font-size:26px;font-weight:800;color:#2156d9">ShareItToo</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p><p style="font-size:13px;color:#5d6980">URL- oder Query-Parameter sind kein Zahlungsnachweis. Es wird kein echtes Geld bewegt und keine Buchung verändert.</p></section></main></body></html>`;
 }
 
 function identifier(value, prefix) {
@@ -2039,9 +2056,22 @@ export function createApp({
     handler: (req, res) => res.status(429).json(errorPayload(req, 'rate_limit_exceeded')),
   });
   app.post('/v1/payments/webhook', webhookLimiter, express.raw({ type: 'application/json', limit: '2mb' }), asyncRoute(async (req, res) => {
-    const result = await verifyAndApplyWebhook(req.body, req.get('Stripe-Signature'));
+    const result = await verifyAndApplyWebhook(req.body, req.get('Stripe-Signature'), {
+      allowTechnicalSandboxNoop: true,
+    });
+    if (result.ignored === true) return res.status(200).json(result);
     kickNotificationWorker();
     res.json({ received: true, ...result });
+  }));
+  app.post('/v1/payments/technical-sandbox/webhook', webhookLimiter, express.raw({ type: 'application/json', limit: '2mb' }), asyncRoute(async (req, res) => {
+    if (!config.technicalSandbox.available || config.technicalSandbox.killSwitch) {
+      throw new PaymentDomainError(503, 'technical_sandbox_unavailable');
+    }
+    const result = await handleTechnicalSandboxWebhook({
+      rawBody: req.body,
+      signatureHeader: req.get('Stripe-Signature'),
+    });
+    res.set('Cache-Control', 'no-store').json({ received: true, ...result });
   }));
   app.post('/v1/identity-verification/webhook', webhookLimiter, express.raw({ type: 'application/json', limit: '2mb' }), asyncRoute(async (req, res) => {
     const event = identityVerificationProvider.parseWebhookEvent({
@@ -2093,6 +2123,7 @@ export function createApp({
   const deletionLimiter = rateLimit({ windowMs: 60 * 60_000, limit: 3, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const mapsLimiter = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const confirmationLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
+  const technicalSandboxLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 12, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const staffElevationLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, skipSuccessfulRequests: true, handler: limitHandler });
   const supportBreakGlassGrantLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const supportBreakGlassReviewLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
@@ -2576,8 +2607,34 @@ export function createApp({
   app.get('/v1/payments/capabilities', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
     res.set('Cache-Control', 'private, no-store').json({
       capabilities: paymentCapabilitiesFor(req.auth.userId),
+      technicalSandbox: technicalSandboxCapabilitiesFor(req.auth.userId),
     });
   }));
+
+  app.post('/v1/payments/technical-sandbox/checkout', requireAuth, requireActiveAccount, technicalSandboxLimiter, asyncRoute(async (req, res) => {
+    const result = await createTechnicalSandboxCheckout({
+      actor: req.actor,
+      key: req.get('Idempotency-Key'),
+    });
+    res.set('Cache-Control', 'private, no-store')
+      .status(result.replayed ? 200 : 201)
+      .json(result);
+  }));
+
+  app.get('/v1/payments/technical-sandbox/runs/:runId', requireAuth, requireActiveAccount, technicalSandboxLimiter, asyncRoute(async (req, res) => {
+    const result = await getTechnicalSandboxRun({
+      actor: req.actor,
+      runId: safeText(req.params.runId, 120),
+    });
+    res.set('Cache-Control', 'private, no-store').json(result);
+  }));
+
+  const technicalSandboxSuccess = (_req, res) => sendHtml(res, 200, technicalSandboxLandingPage('success'));
+  const technicalSandboxCancel = (_req, res) => sendHtml(res, 200, technicalSandboxLandingPage('cancel'));
+  app.get('/v1/payments/technical-sandbox/success', technicalSandboxSuccess);
+  app.head('/v1/payments/technical-sandbox/success', technicalSandboxSuccess);
+  app.get('/v1/payments/technical-sandbox/cancel', technicalSandboxCancel);
+  app.head('/v1/payments/technical-sandbox/cancel', technicalSandboxCancel);
 
   app.get('/v1/payments/connect/status', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
     res.json({

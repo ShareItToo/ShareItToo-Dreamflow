@@ -108,10 +108,13 @@ const exactAnonymousPaths = new Set([
   '/health/live',
   '/health/ready',
   '/version',
+  '/v1/payments/technical-sandbox/success',
+  '/v1/payments/technical-sandbox/cancel',
 ]);
 const exactWebhookPaths = new Set([
   '/v1/payments/webhook',
   '/v1/identity-verification/webhook',
+  '/v1/payments/technical-sandbox/webhook',
 ]);
 const controlledPostPaths = new Set([
   '/v1/auth/login',

@@ -20,6 +20,7 @@ import { verifyMailer } from './mailer.js';
 import { drainNotificationOutbox } from './notifications.js';
 import { safeOperationalErrorCode } from './observability.js';
 import { reconcilePaymentLifecycle } from './payment_workflow.js';
+import { recoverTechnicalSandboxPendingRuns } from './technical_sandbox_workflow.js';
 import { reconcileReturnLifecycle } from './return_lifecycle_workflow.js';
 import { reconcileSupportDeadlines } from './support_deadline_watchdog.js';
 
@@ -96,6 +97,20 @@ async function main() {
   void reconcilePaymentLifecycle().catch((error) => {
     console.error('[payments] startup reconciliation failed', safeOperationalErrorCode(error, 'payment_startup_failed'));
   });
+  let technicalSandboxTimer = null;
+  const runTechnicalSandboxRecovery = () => {
+    void recoverTechnicalSandboxPendingRuns({ limit: 10 }).catch((error) => {
+      console.error(
+        '[technical-sandbox] pending recovery failed',
+        safeOperationalErrorCode(error, 'technical_sandbox_recovery_failed'),
+      );
+    });
+  };
+  if (config.technicalSandbox.available && !config.technicalSandbox.killSwitch) {
+    technicalSandboxTimer = setInterval(runTechnicalSandboxRecovery, 60_000);
+    technicalSandboxTimer.unref();
+    runTechnicalSandboxRecovery();
+  }
   const stopCredentialCleanup = startCredentialCleanupWorker({ client: pool });
   const stopFirebaseIdentityCleanup = startFirebaseIdentityCleanupWorker({
     client: pool,
@@ -138,6 +153,7 @@ async function main() {
     clearInterval(returnLifecycleTimer);
     clearInterval(supportDeadlineTimer);
     clearInterval(paymentTimer);
+    if (technicalSandboxTimer) clearInterval(technicalSandboxTimer);
     stopCredentialCleanup();
     stopFirebaseIdentityCleanup();
     stopCrashlyticsCleanup();
