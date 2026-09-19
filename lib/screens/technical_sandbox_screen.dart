@@ -147,6 +147,9 @@ class _TechnicalSandboxScreenState extends State<TechnicalSandboxScreen>
         await _invalidateStaleRoute();
         return;
       }
+      if (!run.isValidEnvelope) {
+        throw const BackendException(502, 'technical_sandbox_run_invalid');
+      }
       if (!mounted) return;
       setState(() {
         _run = run;
@@ -194,7 +197,11 @@ class _TechnicalSandboxScreenState extends State<TechnicalSandboxScreen>
       final runId = checkout.id.trim();
       final rawUrl = checkout.checkoutUrl?.trim() ?? '';
       final uri = Uri.tryParse(rawUrl);
-      if (runId.isEmpty || uri == null || uri.scheme != 'https') {
+      if (!isValidTechnicalSandboxRunId(runId) ||
+          checkout.amountMinor != _capabilities.amountMinor ||
+          checkout.currency != _capabilities.currency ||
+          uri == null ||
+          !isValidTechnicalSandboxHostedCheckoutUrl(rawUrl)) {
         throw const BackendException(502, 'technical_sandbox_checkout_invalid');
       }
       if (mounted) {

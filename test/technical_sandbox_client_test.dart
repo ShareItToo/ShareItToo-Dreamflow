@@ -21,13 +21,26 @@ Map<String, dynamic> availableCapabilities() => {
       },
     };
 
+const runId = 'technical_sandbox_123e4567-e89b-42d3-a456-426614174000';
+
 TechnicalSandboxCheckout checkout() => const TechnicalSandboxCheckout(
-      id: 'technical_sandbox_run_12345678901234567890',
+      id: runId,
       status: 'pending',
+      amountMinor: 100,
+      currency: 'EUR',
       checkoutUrl: 'https://checkout.stripe.com/c/test',
       checkoutExpiresAt: null,
       replayed: false,
     );
+
+Map<String, dynamic> validReceipt() => {
+      'valid': true,
+      'runId': runId,
+      'amountMinor': 100,
+      'currency': 'EUR',
+      'providerSessionId': 'cs_test_technical_sandbox_123',
+      'providerPaymentIntentId': 'pi_technical_sandbox_123',
+    };
 
 void main() {
   test('capability parsing fails closed for foreign/tampered values', () {
@@ -49,6 +62,37 @@ void main() {
     expect(first, startsWith('technical-sandbox:'));
     expect(first.length, greaterThan(40));
     expect(second, isNot(first));
+  });
+
+  test('run receipt bindings are exact and fail closed', () {
+    TechnicalSandboxRun runWith(Map<String, dynamic>? receipt) =>
+        TechnicalSandboxRun(
+          id: runId,
+          status: 'paid',
+          amountMinor: 100,
+          currency: 'EUR',
+          checkoutUrl: null,
+          checkoutExpiresAt: null,
+          receipt: receipt,
+        );
+
+    expect(runWith({}).serverConfirmed, isFalse);
+    expect(runWith({'valid': true}).serverConfirmed, isFalse);
+    expect(runWith({...validReceipt(), 'runId': 'other'}).serverConfirmed,
+        isFalse);
+    expect(runWith({...validReceipt(), 'amountMinor': 99}).serverConfirmed,
+        isFalse);
+    expect(runWith({...validReceipt(), 'currency': 'USD'}).serverConfirmed,
+        isFalse);
+    expect(
+        runWith({...validReceipt(), 'providerSessionId': 'cs_live_bad'})
+            .serverConfirmed,
+        isFalse);
+    expect(
+        runWith({...validReceipt(), 'providerPaymentIntentId': ''})
+            .serverConfirmed,
+        isFalse);
+    expect(runWith(validReceipt()).serverConfirmed, isTrue);
   });
 
   testWidgets(
@@ -133,13 +177,20 @@ void main() {
         startCheckout: (_) async => checkout(),
         openExternal: (_) async => true,
         loadRun: (_) async => const TechnicalSandboxRun(
-          id: 'technical_sandbox_run_12345678901234567890',
+          id: runId,
           status: 'paid',
           amountMinor: 100,
           currency: 'EUR',
           checkoutUrl: null,
           checkoutExpiresAt: null,
-          receipt: {'valid': true},
+          receipt: {
+            'valid': true,
+            'runId': runId,
+            'amountMinor': 100,
+            'currency': 'EUR',
+            'providerSessionId': 'cs_test_technical_sandbox_123',
+            'providerPaymentIntentId': 'pi_technical_sandbox_123',
+          },
         ),
       ),
     ));
@@ -147,5 +198,34 @@ void main() {
     await tester.tap(find.text('Technischen Zahlungstest starten'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Serverbestätigter Test'), findsOneWidget);
+  });
+
+  testWidgets('tampered checkout host is rejected before external open',
+      (tester) async {
+    var opened = false;
+    await tester.pumpWidget(MaterialApp(
+      home: TechnicalSandboxScreen(
+        loadCapabilities: () async => availableCapabilities(),
+        startCheckout: (_) async => const TechnicalSandboxCheckout(
+          id: runId,
+          status: 'pending',
+          amountMinor: 100,
+          currency: 'EUR',
+          checkoutUrl: 'https://checkout.stripe.com.evil.example/c/test',
+          checkoutExpiresAt: null,
+          replayed: false,
+        ),
+        openExternal: (_) async {
+          opened = true;
+          return true;
+        },
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Technischen Zahlungstest starten'));
+    await tester.pumpAndSettle();
+    expect(opened, isFalse);
+    expect(find.textContaining('sicher geladen'), findsOneWidget);
+    expect(find.textContaining('Serverbestätigter Test'), findsNothing);
   });
 }

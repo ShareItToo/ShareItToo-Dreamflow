@@ -265,6 +265,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   the session or UI context drifts afterwards. After the server/local write is
   confirmed, close or report success truthfully; session drift may suppress
   only later UI refresh, navigation, or readback and must never invite a retry.
+- Visible payment-test success must validate every local server-contract binding
+  fail-closed: exact run/amount/currency/status, a positively validated receipt,
+  and plausible test-mode provider IDs. Never treat a missing field or
+  `value != false` as proof.
 - For profile feedback and other external support writes, idempotency keys must
   be opaque cryptographic values: never derive them from a session ID, user ID,
   email, token, or other principal data. Same-principal background refreshes may

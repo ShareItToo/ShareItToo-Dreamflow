@@ -10,6 +10,54 @@ import 'backend_config.dart';
 import 'backend_http.dart';
 import 'local_principal_scope.dart';
 
+final RegExp _technicalSandboxRunIdPattern = RegExp(
+  r'^technical_sandbox_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+);
+final RegExp _technicalSandboxCheckoutIdPattern = RegExp(
+  r'^cs_test_[A-Za-z0-9_]+$',
+);
+final RegExp _technicalSandboxPaymentIntentIdPattern = RegExp(
+  r'^pi_[A-Za-z0-9_]+$',
+);
+
+bool isValidTechnicalSandboxRunId(String value) =>
+    _technicalSandboxRunIdPattern.hasMatch(value);
+
+bool isValidTechnicalSandboxHostedCheckoutUrl(String? raw) {
+  final uri = raw == null ? null : Uri.tryParse(raw.trim());
+  if (uri == null ||
+      uri.scheme != 'https' ||
+      uri.host != 'checkout.stripe.com') {
+    return false;
+  }
+  if (uri.userInfo.isNotEmpty || (uri.port != 0 && uri.port != 443)) {
+    return false;
+  }
+  return uri.path.startsWith('/c/') && uri.path.length > 3;
+}
+
+bool _isValidTechnicalSandboxReceipt(
+  Map<String, dynamic>? receipt,
+  String runId,
+) {
+  if (receipt == null ||
+      receipt['valid'] != true ||
+      receipt['runId'] != runId) {
+    return false;
+  }
+  final amount = receipt['amountMinor'];
+  final currency = receipt['currency'];
+  final sessionId = receipt['providerSessionId'];
+  final paymentIntentId = receipt['providerPaymentIntentId'];
+  return amount is int &&
+      amount == 100 &&
+      currency == 'EUR' &&
+      sessionId is String &&
+      _technicalSandboxCheckoutIdPattern.hasMatch(sessionId) &&
+      paymentIntentId is String &&
+      _technicalSandboxPaymentIntentIdPattern.hasMatch(paymentIntentId);
+}
+
 class TechnicalSandboxCapabilities {
   final bool available;
   final String provider;
@@ -114,6 +162,8 @@ class PaymentCapabilitiesSnapshot {
 class TechnicalSandboxCheckout {
   final String id;
   final String status;
+  final int? amountMinor;
+  final String? currency;
   final String? checkoutUrl;
   final String? checkoutExpiresAt;
   final bool replayed;
@@ -121,6 +171,8 @@ class TechnicalSandboxCheckout {
   const TechnicalSandboxCheckout({
     required this.id,
     required this.status,
+    this.amountMinor,
+    this.currency,
     required this.checkoutUrl,
     required this.checkoutExpiresAt,
     required this.replayed,
@@ -130,6 +182,9 @@ class TechnicalSandboxCheckout {
       TechnicalSandboxCheckout(
         id: value['id']?.toString() ?? '',
         status: value['status']?.toString() ?? 'unknown',
+        amountMinor:
+            value['amountMinor'] is int ? value['amountMinor'] as int : null,
+        currency: value['currency']?.toString(),
         checkoutUrl: value['checkoutUrl']?.toString(),
         checkoutExpiresAt: value['checkoutExpiresAt']?.toString(),
         replayed: value['replayed'] == true,
@@ -170,8 +225,22 @@ class TechnicalSandboxRun {
     );
   }
 
+  bool get isValidEnvelope {
+    final validStatus =
+        const {'pending', 'unknown', 'paid', 'expired'}.contains(status);
+    return isValidTechnicalSandboxRunId(id) &&
+        validStatus &&
+        amountMinor == 100 &&
+        currency == 'EUR' &&
+        (checkoutUrl == null ||
+            isValidTechnicalSandboxHostedCheckoutUrl(checkoutUrl)) &&
+        (receipt == null || _isValidTechnicalSandboxReceipt(receipt, id));
+  }
+
   bool get serverConfirmed =>
-      status == 'paid' && receipt != null && receipt!['valid'] != false;
+      isValidEnvelope &&
+      status == 'paid' &&
+      _isValidTechnicalSandboxReceipt(receipt, id);
 }
 
 class BackendRepository {
