@@ -22,6 +22,8 @@ import {
   normalizeReadinessFindings,
   assertReadinessFindingsUnchanged,
   buildReadinessFindingSql,
+  resolveIsolatedPostgresEndpoint,
+  validateIsolatedPostgresNetworkBinding,
 } from '../ops/staging_forward_migration_rehearsal.mjs';
 
 const commit = '1'.repeat(40);
@@ -96,6 +98,100 @@ test('isolated rehearsal resources require disposable run labels and reject look
       runId,
     }),
     (error) => error.code === 'disposable_resource_labels_missing',
+  );
+});
+
+test('isolated PostgreSQL migration runner uses the internal container IPv4 and never a published port', async () => {
+  const runId = '20260918010000-abcdef12';
+  const container = `sit-staging-rehearsal-pg-${runId}`;
+  const network = `sit-staging-rehearsal-network-${runId}`;
+  const networkSettings = {
+    [network]: { IPAddress: '172.31.0.2', IPPrefixLen: 16 },
+  };
+  const networkInspection = {
+    Name: network,
+    Internal: true,
+    Labels: {
+      'com.shareittoo.staging.rehearsal': 'true',
+      'com.shareittoo.staging.rehearsal_run_id': runId,
+    },
+    Containers: {
+      'container-id': { Name: container, IPv4Address: '172.31.0.2/16' },
+    },
+  };
+  assert.deepEqual(validateIsolatedPostgresNetworkBinding({
+    container,
+    network,
+    networkSettings,
+    networkInspection,
+    publishedPorts: { '5432/tcp': null },
+  }), { host: '172.31.0.2', port: 5432 });
+
+  const calls = [];
+  const endpoint = await resolveIsolatedPostgresEndpoint({
+    container,
+    network,
+    command: async (command, args) => {
+      calls.push([command, args]);
+      if (args[0] === 'network') return { stdout: JSON.stringify(networkInspection) };
+      if (args.at(-1) === '{{json .NetworkSettings.Ports}}') {
+        return { stdout: JSON.stringify({ '5432/tcp': null }) };
+      }
+      return { stdout: JSON.stringify(networkSettings) };
+    },
+  });
+  assert.deepEqual(endpoint, { host: '172.31.0.2', port: 5432 });
+  assert.deepEqual(calls.map(([, args]) => args.slice(0, 3)), [
+    ['inspect', '--format', '{{json .NetworkSettings.Networks}}'],
+    ['network', 'inspect', '--format'],
+    ['inspect', '--format', '{{json .NetworkSettings.Ports}}'],
+  ]);
+  assert.equal(calls.some(([, args]) => args.includes('-p')), false);
+  const source = await readFile(new URL('../ops/staging_forward_migration_rehearsal.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /'-p',\s*'127\.0\.0\.1::5432'/u);
+
+  assert.throws(
+    () => validateIsolatedPostgresNetworkBinding({
+      container,
+      network,
+      networkSettings,
+      networkInspection,
+      publishedPorts: { '5432/tcp': [{ HostIp: '127.0.0.1', HostPort: '5432' }] },
+    }),
+    (error) => error.code === 'isolated_postgres_published_port_forbidden',
+  );
+  assert.throws(
+    () => validateIsolatedPostgresNetworkBinding({
+      container,
+      network,
+      networkSettings: { ...networkSettings, other: { IPAddress: '172.31.0.3', IPPrefixLen: 16 } },
+      networkInspection,
+      publishedPorts: null,
+    }),
+    (error) => error.code === 'isolated_postgres_network_binding_invalid',
+  );
+  assert.throws(
+    () => validateIsolatedPostgresNetworkBinding({
+      container,
+      network,
+      networkSettings,
+      networkInspection: { ...networkInspection, Internal: false },
+      publishedPorts: null,
+    }),
+    (error) => error.code === 'isolated_postgres_network_not_internal_or_attested',
+  );
+  assert.throws(
+    () => validateIsolatedPostgresNetworkBinding({
+      container,
+      network,
+      networkSettings: { [network]: { IPAddress: '203.0.113.2', IPPrefixLen: 24 } },
+      networkInspection: {
+        ...networkInspection,
+        Containers: { 'container-id': { Name: container, IPv4Address: '203.0.113.2/24' } },
+      },
+      publishedPorts: null,
+    }),
+    (error) => error.code === 'isolated_postgres_ipv4_not_private',
   );
 });
 

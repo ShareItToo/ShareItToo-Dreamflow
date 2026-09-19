@@ -14,6 +14,7 @@ import {
 import { createReadStream, createWriteStream } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { isIP } from 'node:net';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import pg from 'pg';
@@ -743,15 +744,91 @@ async function psqlScript({ container, user, database, sql, phase = 'psql_script
   ], { input: sql, phase });
 }
 
-export async function applyMigrationsWithApplicationRunner({ container, database, user, password }) {
-  const port = await runCommand('docker', [
-    'inspect', '--format', '{{(index (index .NetworkSettings.Ports "5432/tcp") 0).HostPort}}', container,
-  ], { phase: 'temp_db_port' });
-  const hostPort = port.stdout.trim();
-  if (!/^\d+$/u.test(hostPort)) fail('isolated_postgres_host_port_invalid');
+function parseDockerJson(stdout, code) {
+  try {
+    return JSON.parse(stdout.trim());
+  } catch {
+    fail(code);
+  }
+}
+
+function isPrivateIpv4(value) {
+  const octets = value.split('.').map(Number);
+  return octets.length === 4
+    && octets.every((octet) => Number.isInteger(octet) && octet >= 0 && octet <= 255)
+    && (octets[0] === 10
+      || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
+      || (octets[0] === 192 && octets[1] === 168));
+}
+
+export function validateIsolatedPostgresNetworkBinding({
+  container,
+  network,
+  networkSettings,
+  networkInspection,
+  publishedPorts,
+} = {}) {
+  if (typeof container !== 'string' || !/^sit-staging-rehearsal-pg-[0-9]{14}-[0-9a-f]{8}$/u.test(container)) {
+    fail('isolated_postgres_container_identity_invalid');
+  }
+  if (typeof network !== 'string' || !/^sit-staging-rehearsal-network-[0-9]{14}-[0-9a-f]{8}$/u.test(network)) {
+    fail('isolated_postgres_network_identity_invalid');
+  }
+  if (!networkSettings || typeof networkSettings !== 'object' || Array.isArray(networkSettings)
+      || Object.keys(networkSettings).length !== 1 || !networkSettings[network]) {
+    fail('isolated_postgres_network_binding_invalid');
+  }
+  const binding = networkSettings[network];
+  const host = typeof binding.IPAddress === 'string' ? binding.IPAddress.trim() : '';
+  if (isIP(host) !== 4) fail('isolated_postgres_ipv4_invalid');
+  if (!isPrivateIpv4(host)) fail('isolated_postgres_ipv4_not_private');
+  if (!networkInspection || networkInspection.Name !== network || networkInspection.Internal !== true
+      || networkInspection.Labels?.[disposableRehearsalLabel] !== 'true'
+      || networkInspection.Labels?.[disposableRehearsalRunLabel] !== network.slice('sit-staging-rehearsal-network-'.length)) {
+    fail('isolated_postgres_network_not_internal_or_attested');
+  }
+  const members = Object.values(networkInspection.Containers ?? {});
+  if (members.length !== 1 || members[0]?.Name !== container
+      || members[0]?.IPv4Address !== `${host}/` + (binding.IPPrefixLen ?? 16)) {
+    fail('isolated_postgres_network_membership_invalid');
+  }
+  if (publishedPorts !== null && publishedPorts !== undefined) {
+    if (typeof publishedPorts !== 'object' || Array.isArray(publishedPorts)
+        || Object.values(publishedPorts).some((value) => Array.isArray(value) && value.length > 0)) {
+      fail('isolated_postgres_published_port_forbidden');
+    }
+  }
+  return Object.freeze({ host, port: 5432 });
+}
+
+export async function resolveIsolatedPostgresEndpoint({
+  container,
+  network,
+  command = runCommand,
+} = {}) {
+  const networkSettingsResult = await command('docker', [
+    'inspect', '--format', '{{json .NetworkSettings.Networks}}', container,
+  ], { phase: 'isolated_postgres_network_inspect' });
+  const networkInspectionResult = await command('docker', [
+    'network', 'inspect', '--format', '{{json .}}', network,
+  ], { phase: 'isolated_postgres_network_attestation' });
+  const publishedPortsResult = await command('docker', [
+    'inspect', '--format', '{{json .NetworkSettings.Ports}}', container,
+  ], { phase: 'isolated_postgres_published_ports_inspect' });
+  return validateIsolatedPostgresNetworkBinding({
+    container,
+    network,
+    networkSettings: parseDockerJson(networkSettingsResult.stdout, 'isolated_postgres_network_json_invalid'),
+    networkInspection: parseDockerJson(networkInspectionResult.stdout, 'isolated_postgres_network_attestation_json_invalid'),
+    publishedPorts: parseDockerJson(publishedPortsResult.stdout, 'isolated_postgres_published_ports_json_invalid'),
+  });
+}
+
+export async function applyMigrationsWithApplicationRunner({ container, network, database, user, password }) {
+  const endpoint = await resolveIsolatedPostgresEndpoint({ container, network });
   const pool = new Pool({
-    host: '127.0.0.1',
-    port: Number(hostPort),
+    host: endpoint.host,
+    port: endpoint.port,
     user,
     database,
     password,
@@ -919,7 +996,6 @@ export async function runStagingForwardMigrationRehearsal({
       '--label', `${disposableRehearsalRunLabel}=${runId}`,
       '--network', isolatedNetwork,
       '--mount', `type=volume,src=${isolatedVolume},dst=/var/lib/postgresql/data`,
-      '-p', '127.0.0.1::5432',
       '-e', 'POSTGRES_DB=shareittoo_rehearsal',
       '-e', 'POSTGRES_USER=shareittoo_rehearsal',
       '-e', `POSTGRES_PASSWORD=${isolatedPassword}`,
@@ -987,6 +1063,7 @@ export async function runStagingForwardMigrationRehearsal({
     }
     await applyMigrationsWithApplicationRunner({
       container: isolatedContainer,
+      network: isolatedNetwork,
       database: 'shareittoo_rehearsal',
       user: 'shareittoo_rehearsal',
       password: isolatedPassword,

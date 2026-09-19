@@ -115,8 +115,8 @@ preflighted free loopback port `18082`, while the reverse proxy remains bound
 to the normal Staging port `18080`; a foreign listener is never stopped. The
 controlled Compose file deliberately does not use `env_file`: only the selected
 database/JWT values and the runtime-readable MFA key mount are interpolated.
-Payment is hard-pinned to memory, Stripe live mode is false, Identity is
-disabled and Listing AI is the zero-budget mock.
+Payment is hard-pinned to memory, Stripe live mode is false, Identity uses the
+in-memory test transport and Listing AI is the zero-budget mock.
 
 The acceptance runner verifies the image label and `/version` commit, readiness,
 an authenticated synthetic MFA enroll -> pending -> cancel flow, and that the
@@ -171,7 +171,16 @@ adds `compose.staging.fcm.yml`, mounts the file read-only without creating a
 missing host path, and records `stagingFcm=true` in the release evidence. The
 same flag is rejected for production.
 
-## Optional Staging listing-AI activation
+## Staging pilot listing-AI boundary
+
+When `SIT_STAGING_PILOT_ID=heilbronn_wave0` is supplied to the public Staging
+release, `compose.staging.pilot.yml` selects the reviewed on-device Listing AI
+provider with zero budget and external execution disabled. This pilot path does
+not require an OpenAI key and does not send image data to an external provider.
+Do not set `ENABLE_STAGING_LISTING_AI=1` for that release; that flag is the
+separate, explicitly approved external-provider override below.
+
+## Optional Staging external listing-AI activation
 
 The external listing-AI path remains disabled by default and Production cannot
 enable it through `deploy_release.sh`. Before a separately approved Staging
