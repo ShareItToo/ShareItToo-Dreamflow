@@ -73,6 +73,7 @@ test('core limiter policy keeps the exact production thresholds immutable', () =
     general: { windowMs: 60_000, limit: 240 },
     supportIntake: { windowMs: 15 * 60_000, limit: 10 },
     supportSafetyIntake: { windowMs: 15 * 60_000, limit: 30 },
+    mfaStatus: { windowMs: 15 * 60_000, limit: 60 },
   });
   assert.equal(Object.isFrozen(coreRateLimitPolicies), true);
   assert.equal(Object.values(coreRateLimitPolicies).every(Object.isFrozen), true);
@@ -98,6 +99,28 @@ test('core limiter policy keeps the exact production thresholds immutable', () =
     method: 'GET',
     path: '/v1/bookings/booking-1/handover-exceptions',
   }), false);
+});
+
+test('MFA status has an independent bounded authenticated bucket', async () => {
+  const app = express();
+  app.disable('x-powered-by');
+  app.set('trust proxy', 1);
+  const limiters = createCoreRateLimiters({
+    limitHandler: (_req, res) => res.status(429).json({ error: 'rate_limit_exceeded' }),
+    includeGeneralLimiter: false,
+  });
+  app.get('/v1/auth/mfa/status', limiters.mfaStatusLimiter, (_req, res) => res.sendStatus(204));
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const url = `http://127.0.0.1:${server.address().port}/v1/auth/mfa/status`;
+    for (let attempt = 1; attempt <= coreRateLimitPolicies.mfaStatus.limit; attempt += 1) {
+      assert.equal((await fetch(url, { headers: { 'X-Forwarded-For': fixedClientAddress } })).status, 204);
+    }
+    assert.equal((await fetch(url, { headers: { 'X-Forwarded-For': fixedClientAddress } })).status, 429);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
 });
 
 test('ordinary support intake blocks the fixed client only after ten attempts', async () => {

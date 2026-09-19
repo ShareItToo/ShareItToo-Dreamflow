@@ -256,6 +256,7 @@ test('sanitized evidence and cleanup never turn Green promotion into legacy/prod
   assert.doesNotMatch(JSON.stringify(evidence), /DATABASE_URL|JWT_SECRET|password|token|whsec_|sk_live_|sk_test_/iu);
   assert.equal(assertGreenCleanup({ removed: ['sit-green-rehearsal-network-x'], verifiedAbsent: ['sit-green-rehearsal-network-x'], oldApiSealed: true, oldApiRunning: false }), true);
   assert.throws(() => assertGreenCleanup({ removed: ['shareittoo-staging-api'], verifiedAbsent: ['shareittoo-staging-api'], oldApiSealed: true, oldApiRunning: false }));
+  assert.throws(() => assertGreenCleanup({ removed: ['shareittoo-staging-api-lookalike'], verifiedAbsent: ['shareittoo-staging-api-lookalike'], oldApiSealed: true, oldApiRunning: false }));
 });
 
 test('evidence writer is external, exclusive and mode 0600', async () => {

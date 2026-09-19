@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import crypto from 'node:crypto';
-import { createReadStream } from 'node:fs';
-import { chmod, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { dirname } from 'node:path';
+import { createStablePrivateReadStream, readStablePrivateFile } from './stable_private_file.mjs';
 
 const OPS_CHECKOUT = '/docker/shareittoo/staging-builds/8e7283e69c4f052ac4357c9e496ceb5ece801c20';
 const OPS_COMMIT = '8e7283e69c4f052ac4357c9e496ceb5ece801c20';
@@ -44,7 +44,7 @@ async function waitPg(container) {
   fail('database_final_init_timeout');
 }
 async function dbQuery(container, sql) { const raw = await dockerExec(container, ['psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal', '-Atc', sql]); try { return JSON.parse(raw); } catch { fail('mapping_query_unreadable'); } }
-async function verifyBackup() { const m = await stat(DUMP); if (m.mode & 0o077) fail('backup_not_private'); const expected = (await readFile(MANIFEST, 'utf8')).trim().split(/\s+/u)[0]; const actual = crypto.createHash('sha256').update(await readFile(DUMP)).digest('hex'); if (expected !== actual) fail('backup_sha256_mismatch'); return { bytes: m.size, sha256: actual }; }
+async function verifyBackup() { const dump = readStablePrivateFile(DUMP, { encoding: null, mode: 0o077, code: 'backup_not_private' }); const expected = readStablePrivateFile(MANIFEST, { expectedMode: 0o600, code: 'backup_manifest_not_private' }).trim().split(/\s+/u)[0]; const actual = crypto.createHash('sha256').update(dump).digest('hex'); if (expected !== actual) fail('backup_sha256_mismatch'); return { bytes: dump.length, sha256: actual }; }
 async function stripeKeyClass() {
   const env = text(await docker(['inspect', 'shareittoo-staging-api', '--format', '{{range .Config.Env}}{{println .}}{{end}}']));
   const line = env.split('\n').find((v) => v.startsWith('STRIPE_SECRET_KEY=')); if (!line) return { key: null, keyClass: 'missing' };
@@ -103,7 +103,7 @@ try {
   await docker(['network','create','--internal',...labels,resources.network]); created.push(['network',resources.network]); await docker(['volume','create',...labels,resources.volume]); created.push(['volume',resources.volume]);
   await docker(['create','--name',resources.database,...labels,'--network',resources.network,'--network-alias','db','--mount',`type=volume,src=${resources.volume},dst=/var/lib/postgresql/data`,'-e','POSTGRES_DB=shareittoo_rehearsal','-e','POSTGRES_USER=shareittoo_rehearsal','-e',`POSTGRES_PASSWORD=${dbPassword}`,POSTGRES_IMAGE]); created.push(['container',resources.database]);
   await docker(['create','--name',resources.bootstrap,...labels,'--network',resources.network,...envArgs,CANDIDATE_IMAGE,'node','--input-type=module','-e',"import { initializeDatabase, pool } from '/app/src/db.js'; await initializeDatabase(); await pool.end();"]); created.push(['container',resources.bootstrap]);
-  await docker(['start',resources.database]); await waitPg(resources.database); await docker(['exec','-i',resources.database,'pg_restore','-U','shareittoo_rehearsal','-d','shareittoo_rehearsal','--no-owner','--no-acl'], { input: createReadStream(DUMP) }); await docker(['start',resources.bootstrap]); const exit = text(await docker(['wait',resources.bootstrap])); if (exit !== '0') fail('bootstrap_migrations_failed');
+  await docker(['start',resources.database]); await waitPg(resources.database); await docker(['exec','-i',resources.database,'pg_restore','-U','shareittoo_rehearsal','-d','shareittoo_rehearsal','--no-owner','--no-acl'], { input: createStablePrivateReadStream(DUMP, { mode: 0o077, code: 'backup_not_private' }) }); await docker(['start',resources.bootstrap]); const exit = text(await docker(['wait',resources.bootstrap])); if (exit !== '0') fail('bootstrap_migrations_failed');
   const mappings = await dbQuery(resources.database, mappingSql); const rows = Array.isArray(mappings) ? mappings : [];
   const mappingPath = process.env.SIT_WP250_MAPPING_PATH;
   if (mappingPath) {

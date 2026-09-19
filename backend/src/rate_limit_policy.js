@@ -6,6 +6,7 @@ export const coreRateLimitPolicies = Object.freeze({
   general: Object.freeze({ windowMs: 60_000, limit: 240 }),
   supportIntake: Object.freeze({ windowMs: 15 * 60_000, limit: 10 }),
   supportSafetyIntake: Object.freeze({ windowMs: 15 * 60_000, limit: 30 }),
+  mfaStatus: Object.freeze({ windowMs: 15 * 60_000, limit: 60 }),
 });
 
 const handoverExceptionPath = /^\/v1\/bookings\/[^/]+\/handover-exceptions$/u;
@@ -52,6 +53,7 @@ export function createCoreRateLimiters({
     coreRateLimitPolicies.supportSafetyIntake,
     limitHandler,
   );
+  const mfaStatusLimiter = limiter(coreRateLimitPolicies.mfaStatus, limitHandler);
   const supportIntakeRateLimiter = (req, res, next) => (
     isProtectedSupportSafetyIntake(req.body)
       ? supportSafetyIntakeLimiter(req, res, next)
@@ -62,5 +64,6 @@ export function createCoreRateLimiters({
     supportIntakeLimiter,
     supportSafetyIntakeLimiter,
     supportIntakeRateLimiter,
+    mfaStatusLimiter,
   });
 }

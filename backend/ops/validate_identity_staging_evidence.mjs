@@ -6,6 +6,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const maxAgeMs = 24 * 60 * 60 * 1000;
+const officialStripeSourceUrls = new Set([
+  'https://stripe.com/de/legal/privacy-center',
+  'https://stripe.com/de/legal/dpa',
+]);
 
 function fail(code) {
   const error = new Error('Stripe Identity staging evidence gate failed.');
@@ -63,8 +67,9 @@ export function validateIdentityStagingEvidence({ evidenceFile, deploymentCommit
         || evidence.transferMechanisms.length < 1
         || evidence.transferMechanisms.some((value) => !['scc', 'eu_us_dpf'].includes(value))
         || !Array.isArray(evidence.officialSourceUrls)
-        || !evidence.officialSourceUrls.includes('https://stripe.com/de/legal/privacy-center')
-        || !evidence.officialSourceUrls.includes('https://stripe.com/de/legal/dpa')
+        || evidence.officialSourceUrls.length !== officialStripeSourceUrls.size
+        || new Set(evidence.officialSourceUrls).size !== officialStripeSourceUrls.size
+        || evidence.officialSourceUrls.some((url) => !officialStripeSourceUrls.has(url))
         || typeof evidence.legalFactsObservedAt !== 'string') {
       fail('identity_staging_evidence_binding_invalid');
     }

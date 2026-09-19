@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { lstatSync, readFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readStablePrivateFile } from './stable_private_file.mjs';
 
 const repositoryRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
@@ -19,15 +19,18 @@ function validateEvidence({ evidenceFile, runtimeCommit, opsCommit, requirePubli
   if (relativeRepository === '' || (!relativeRepository.startsWith('..') && !isAbsolute(relativeRepository))) {
     fail('controlled_acceptance_evidence_inside_repository');
   }
-  let metadata;
-  try { metadata = lstatSync(resolved); } catch { fail('controlled_acceptance_evidence_unavailable'); }
   const uid = typeof process.getuid === 'function' ? process.getuid() : null;
-  if (!metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & 0o077) !== 0
-    || (uid !== null && metadata.uid !== uid)) {
-    fail('controlled_acceptance_evidence_permissions_invalid');
-  }
   let evidence;
-  try { evidence = JSON.parse(readFileSync(resolved, 'utf8')); } catch { fail('controlled_acceptance_evidence_json_invalid'); }
+  try {
+    evidence = JSON.parse(readStablePrivateFile(resolved, {
+      expectedUid: uid ?? undefined,
+      mode: 0o077,
+      code: 'controlled_acceptance_evidence_permissions_invalid',
+    }));
+  } catch (error) {
+    if (error?.code === 'controlled_acceptance_evidence_permissions_invalid') fail(error.code);
+    fail('controlled_acceptance_evidence_json_invalid');
+  }
   if (evidence?.kind !== 'sit-staging-controlled-acceptance'
     || evidence.status !== 'passed'
     || evidence.runtimeCommit !== runtimeCommit

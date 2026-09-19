@@ -1,13 +1,7 @@
 #!/usr/bin/env node
 
-import {
-  closeSync,
-  constants,
-  fstatSync,
-  lstatSync,
-  openSync,
-} from 'node:fs';
 import { readTechnicalSandboxConfiguration, syntheticUserPattern } from '../src/technical_sandbox_config.js';
+import { closeStablePrivateFile, openStablePrivateFile } from './stable_private_file.mjs';
 
 export const technicalSandboxApiUid = 100;
 export const technicalSandboxApiGid = 101;
@@ -24,28 +18,20 @@ function inspectSecretFile(filePath, name, { expectedUid, expectedGid } = {}) {
   }
   let descriptor;
   try {
-    const link = lstatSync(filePath);
-    if (!link.isFile() || link.isSymbolicLink()
-        || (link.mode & 0o777) !== 0o600
-        || link.uid !== expectedUid || link.gid !== expectedGid) {
-      fail(`${name}_must_be_0600_api_owned_file`);
-    }
-    descriptor = openSync(
-      filePath,
-      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_CLOEXEC,
-    );
-    const metadata = fstatSync(descriptor);
-    if (!metadata.isFile() || (metadata.mode & 0o777) !== 0o600
-        || metadata.uid !== expectedUid || metadata.gid !== expectedGid) {
-      fail(`${name}_must_be_0600_api_owned_file`);
-    }
-    return `${metadata.dev}:${metadata.ino}`;
+    const opened = openStablePrivateFile(filePath, {
+      expectedMode: 0o600,
+      expectedUid,
+      expectedGid,
+      code: `${name}_must_be_0600_api_owned_file`,
+    });
+    descriptor = opened.descriptor;
+    return `${opened.metadata.dev}:${opened.metadata.ino}`;
   } catch (error) {
     if (String(error?.code ?? '').startsWith(`${name}_`)) throw error;
     if (error?.code === 'ELOOP') fail(`${name}_symlink_forbidden`);
     fail(`${name}_unreadable`);
   } finally {
-    if (descriptor !== undefined) closeSync(descriptor);
+    if (descriptor !== undefined) closeStablePrivateFile({ descriptor });
   }
 }
 

@@ -1,13 +1,6 @@
 #!/usr/bin/env node
 
-import {
-  closeSync,
-  constants,
-  fstatSync,
-  lstatSync,
-  openSync,
-  readFileSync,
-} from 'node:fs';
+import { readStablePrivateFile } from './stable_private_file.mjs';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
@@ -58,23 +51,15 @@ function safeEmailHash() {
 
 function readPasswordFile(filePath, { expectedUid = runtimeUid, expectedGid = runtimeGid } = {}) {
   if (typeof filePath !== 'string' || !filePath.startsWith('/')) fail('password_file_path_invalid');
-  let descriptor;
   try {
-    const link = lstatSync(filePath);
-    if (!link.isFile() || link.isSymbolicLink()
-        || (link.mode & 0o777) !== 0o600
-        || link.uid !== expectedUid || link.gid !== expectedGid
-        || link.size < minimumPasswordLength || link.size > maximumPasswordLength + 1) {
-      fail('password_file_must_be_0600_runtime_owned');
-    }
-    descriptor = openSync(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_CLOEXEC);
-    const metadata = fstatSync(descriptor);
-    if (!metadata.isFile() || (metadata.mode & 0o777) !== 0o600
-        || metadata.uid !== expectedUid || metadata.gid !== expectedGid
-        || metadata.size < minimumPasswordLength || metadata.size > maximumPasswordLength + 1) {
-      fail('password_file_must_be_0600_runtime_owned');
-    }
-    const password = readFileSync(descriptor, 'utf8').trim();
+    const password = readStablePrivateFile(filePath, {
+      expectedMode: 0o600,
+      expectedUid,
+      expectedGid,
+      minBytes: minimumPasswordLength,
+      maxBytes: maximumPasswordLength + 1,
+      code: 'password_file_must_be_0600_runtime_owned',
+    }).trim();
     if (password.length < minimumPasswordLength || password.length > maximumPasswordLength
         || /\s/u.test(password) || !/[A-Za-z]/u.test(password) || !/[0-9]/u.test(password)) {
       fail('password_file_content_invalid');
@@ -84,8 +69,6 @@ function readPasswordFile(filePath, { expectedUid = runtimeUid, expectedGid = ru
     if (String(error?.code ?? '').startsWith('password_file_')) throw error;
     if (error?.code === 'ELOOP') fail('password_file_symlink_forbidden');
     fail('password_file_unreadable');
-  } finally {
-    if (descriptor !== undefined) closeSync(descriptor);
   }
 }
 

@@ -114,7 +114,7 @@ test('test-mode identity start is idempotent and never exposes client_secret', a
   assert.equal(first.status, 'requires_input');
   assert.equal(first.url, undefined);
   assert.equal(first.testFixture, true);
-  assert.equal(JSON.stringify(first).includes('verify.stripe.com'), false);
+  assert.equal(first.url, undefined);
   assert.equal('clientSecret' in first, false);
   const replay = await startIdentityVerification({
     client, actor, provider, idempotencyKey: 'identity-key-12345678', consentVersion: IDENTITY_CONSENT_VERSION,

@@ -6,6 +6,7 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
+import { closeStablePrivateFile, openStablePrivateFile, readStablePrivateFile } from './stable_private_file.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -173,28 +174,49 @@ export function assertGreenTargetManifest(manifest) {
 
 export async function readProtectedGreenManifest(filePath) {
   safePath(filePath, 'green_manifest_path_invalid');
-  const metadata = await lstat(filePath).catch(() => fail('green_manifest_missing'));
-  if (!metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & 0o777) !== 0o600) {
-    fail('green_manifest_must_be_regular_0600');
-  }
   let manifest;
-  try { manifest = JSON.parse(await readFile(filePath, 'utf8')); } catch { fail('green_manifest_json_invalid'); }
+  try {
+    manifest = JSON.parse(readStablePrivateFile(filePath, {
+      expectedMode: 0o600,
+      expectedUid: typeof process.getuid === 'function' ? process.getuid() : undefined,
+      code: 'green_manifest_must_be_regular_0600',
+    }));
+  } catch (error) {
+    if (error?.code === 'green_manifest_must_be_regular_0600') throw error;
+    fail(error?.code === 'ELOOP' ? 'green_manifest_symlink_forbidden' : 'green_manifest_json_invalid');
+  }
   return assertGreenTargetManifest(manifest);
 }
 
 async function readProtectedJson(filePath, missingCode) {
   safePath(filePath, `${missingCode}_path_invalid`);
-  const metadata = await lstat(filePath).catch(() => fail(missingCode));
-  if (!metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & 0o777) !== 0o600) fail(`${missingCode}_must_be_regular_0600`);
-  try { return JSON.parse(await readFile(filePath, 'utf8')); } catch { fail(`${missingCode}_json_invalid`); }
+  try {
+    return JSON.parse(readStablePrivateFile(filePath, {
+      expectedMode: 0o600,
+      expectedUid: typeof process.getuid === 'function' ? process.getuid() : undefined,
+      code: `${missingCode}_must_be_regular_0600`,
+    }));
+  } catch (error) {
+    if (error?.code === `${missingCode}_must_be_regular_0600`) throw error;
+    fail(error?.code === 'ELOOP' ? `${missingCode}_symlink_forbidden` : `${missingCode}_json_invalid`);
+  }
 }
 
 async function readProtectedEnv(filePath) {
   safePath(filePath, 'green_env_file');
-  const metadata = await lstat(filePath).catch(() => fail('green_env_file_missing'));
-  if (!metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & 0o777) !== 0o600) fail('green_env_file_must_be_regular_0600');
+  let content;
+  try {
+    content = readStablePrivateFile(filePath, {
+      expectedMode: 0o600,
+      expectedUid: typeof process.getuid === 'function' ? process.getuid() : undefined,
+      code: 'green_env_file_must_be_regular_0600',
+    });
+  } catch (error) {
+    if (error?.code === 'green_env_file_must_be_regular_0600') throw error;
+    fail(error?.code === 'ELOOP' ? 'green_env_file_symlink_forbidden' : 'green_env_file_missing');
+  }
   const values = {};
-  for (const line of (await readFile(filePath, 'utf8')).split(/\r?\n/u)) {
+  for (const line of content.split(/\r?\n/u)) {
     if (!line.trim() || line.trimStart().startsWith('#')) continue;
     const match = /^([A-Z][A-Z0-9_]*)=(.*)$/u.exec(line);
     if (!match || (!isAllowedGreenEnvName(match[1]) && !(forbiddenGreenEnvNames.has(match[1]) && match[2] === '')) || Object.hasOwn(values, match[1])) fail('green_env_file_allowlist_invalid');
@@ -205,10 +227,19 @@ async function readProtectedEnv(filePath) {
 
 async function readExecutionEnv(filePath) {
   safePath(filePath, 'green_execution_env_file');
-  const metadata = await lstat(filePath).catch(() => fail('green_execution_env_file_missing'));
-  if (!metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & 0o777) !== 0o600) fail('green_execution_env_file_must_be_regular_0600');
+  let content;
+  try {
+    content = readStablePrivateFile(filePath, {
+      expectedMode: 0o600,
+      expectedUid: typeof process.getuid === 'function' ? process.getuid() : undefined,
+      code: 'green_execution_env_file_must_be_regular_0600',
+    });
+  } catch (error) {
+    if (error?.code === 'green_execution_env_file_must_be_regular_0600') throw error;
+    fail(error?.code === 'ELOOP' ? 'green_execution_env_file_symlink_forbidden' : 'green_execution_env_file_missing');
+  }
   const values = {};
-  for (const line of (await readFile(filePath, 'utf8')).split(/\r?\n/u)) {
+  for (const line of content.split(/\r?\n/u)) {
     if (!line.trim() || line.trimStart().startsWith('#')) continue;
     const match = /^([A-Z][A-Z0-9_]*)=(.*)$/u.exec(line);
     if (!match || Object.hasOwn(values, match[1])) fail('green_execution_env_file_invalid');
@@ -219,8 +250,18 @@ async function readExecutionEnv(filePath) {
 
 async function assertProtectedFile(filePath, mode, uid, gid, code) {
   safePath(filePath, `${code}_path_invalid`);
-  const metadata = await lstat(filePath).catch(() => fail(`${code}_missing`));
-  if (!metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & 0o777) !== mode || metadata.uid !== uid || metadata.gid !== gid) fail(`${code}_metadata_invalid`);
+  try {
+    const opened = openStablePrivateFile(filePath, {
+      expectedMode: mode,
+      expectedUid: uid,
+      expectedGid: gid,
+      code: `${code}_metadata_invalid`,
+    });
+    closeStablePrivateFile(opened);
+  } catch (error) {
+    if (error?.code === `${code}_metadata_invalid`) throw error;
+    fail(error?.code === 'ELOOP' ? `${code}_symlink_forbidden` : `${code}_missing`);
+  }
   return true;
 }
 
@@ -586,7 +627,7 @@ export function assertGreenCleanup({ removed, verifiedAbsent, oldApiSealed, oldA
   if (!Array.isArray(removed) || !Array.isArray(verifiedAbsent)
       || removed.length !== verifiedAbsent.length
       || oldApiSealed !== true || oldApiRunning !== false) fail('green_cleanup_incomplete');
-  if (removed.some((name) => /shareittoo_staging|prod|production|shareittoo-staging-api$/iu.test(name))) {
+  if (removed.some((name) => /(?:shareittoo_staging|prod|production|shareittoo-staging-api)/iu.test(name))) {
     fail('green_cleanup_touched_protected_resource');
   }
   return true;

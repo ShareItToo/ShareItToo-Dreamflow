@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import crypto from 'node:crypto';
-import { chmod, chown, lstat, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, relative, resolve } from 'node:path';
+import { chmod, chown, lstat, mkdir, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   assertDisposableResourceIdentity,
@@ -14,6 +15,7 @@ import {
   runCommandWithFileInput,
 } from './staging_forward_migration_rehearsal.mjs';
 import { validateMfaStagingSecret } from './validate_mfa_staging_secret.mjs';
+import { readStablePrivateFile } from './stable_private_file.mjs';
 
 export const disposableCandidateCommit = 'f0bb868a8a487cbf33ae67a555946fb9c67f4e9f';
 export const disposableCandidateImage = `shareittoo-api-wp244:${disposableCandidateCommit}`;
@@ -61,7 +63,7 @@ function runtimeEnvArgs(runtime) {
 }
 
 async function createEphemeralMfaKey() {
-  const root = await (await import('node:fs/promises')).mkdtemp(join('/tmp', 'sit-disposable-mfa-'));
+  const root = await mkdtemp(join(tmpdir(), 'sit-disposable-mfa-'));
   const filePath = join(root, 'mfa-key');
   const bytes = crypto.randomBytes(32);
   await writeFile(filePath, `${bytes.toString('base64url')}\n`, { mode: 0o640 });
@@ -75,7 +77,7 @@ async function createEphemeralMfaKey() {
 
 async function removeEphemeralMfaKey(key) {
   if (!key?.filePath) return;
-  try { await (await import('node:fs/promises')).rm(key.root, { recursive: true, force: false }); } catch { fail('mfa_key_cleanup_failed'); }
+  try { await rm(key.root, { recursive: true, force: false }); } catch { fail('mfa_key_cleanup_failed'); }
   try { await stat(key.filePath); fail('mfa_key_still_present'); } catch (error) { if (error?.code !== 'ENOENT') throw error; }
 }
 
@@ -137,7 +139,7 @@ function assertSafeDisposableTarget({ network, volume, database, api, runId }) {
 async function verifyBackup({ backupPath, manifestPath, hashFile: suppliedHashFile }) {
   const hashFile = suppliedHashFile ?? (async (path) => {
   const hash = crypto.createHash('sha256');
-  const data = await readFile(path);
+  const data = readStablePrivateFile(path, { encoding: null, mode: 0o077, minBytes: 1, code: 'backup_not_private_or_empty' });
   hash.update(data);
   return hash.digest('hex');
   });
@@ -147,18 +149,13 @@ async function verifyBackup({ backupPath, manifestPath, hashFile: suppliedHashFi
   if (resolve(backupPath).startsWith(`${repositoryRoot}/`) || resolve(manifestPath).startsWith(`${repositoryRoot}/`)) {
     fail('backup_manifest_inside_repository');
   }
-  const backupLinkMetadata = await lstat(backupPath);
-  if (backupLinkMetadata.isSymbolicLink() || !backupLinkMetadata.isFile()) fail('backup_not_regular_file');
-  const metadata = await stat(backupPath);
-  if (metadata.size <= 0 || (metadata.mode & 0o077) !== 0) fail('backup_not_private_or_empty');
-  const manifestMetadata = await lstat(manifestPath);
-  if (manifestMetadata.isSymbolicLink() || !manifestMetadata.isFile() || (manifestMetadata.mode & 0o777) !== 0o600) fail('backup_manifest_not_private');
-  const manifest = (await readFile(manifestPath, 'utf8')).trim();
+  const backupData = readStablePrivateFile(backupPath, { encoding: null, mode: 0o077, minBytes: 1, code: 'backup_not_private_or_empty' });
+  const manifest = readStablePrivateFile(manifestPath, { expectedMode: 0o600, code: 'backup_manifest_not_private' }).trim();
   const match = manifest.match(/^([0-9a-f]{64})\s+(.+)$/u);
   if (!match || resolve(match[2]) !== resolve(backupPath)) fail('backup_manifest_binding_invalid');
   const actual = await hashFile(backupPath);
   if (actual !== match[1]) fail('backup_sha256_mismatch');
-  return Object.freeze({ bytes: metadata.size, sha256: actual });
+  return Object.freeze({ bytes: backupData.length, sha256: actual });
 }
 
 async function queryFingerprint({ command, container, user, database, sql }) {

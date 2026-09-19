@@ -2102,6 +2102,7 @@ export function createApp({
   const {
     supportSafetyIntakeLimiter,
     supportIntakeRateLimiter,
+    mfaStatusLimiter,
   } = createCoreRateLimiters({ limitHandler, includeGeneralLimiter: false });
   const registrationLimiter = rateLimit({ windowMs: 60 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const loginLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false, skipSuccessfulRequests: true, handler: limitHandler });
@@ -2771,7 +2772,7 @@ export function createApp({
     res.set('Cache-Control', 'private, no-store').json({ ...result, redaction: 'queued' });
   }));
 
-  app.get('/v1/auth/mfa/status', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
+  app.get('/v1/auth/mfa/status', requireAuth, requireActiveAccount, mfaStatusLimiter, asyncRoute(async (req, res) => {
     const status = await getMfaStatus(pool, req.auth.userId);
     res.set('Cache-Control', 'private, no-store').json(status);
   }));

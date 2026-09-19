@@ -72,6 +72,21 @@ test('identity staging evidence fails closed for stale or mismatched readback', 
   }), /evidence gate failed/u);
 });
 
+test('identity staging evidence requires exact official Stripe source URLs', () => {
+  const { file } = fixture({
+    officialSourceUrls: [
+      'https://stripe.com/de/legal/privacy-center.evil.example',
+      'https://stripe.com/de/legal/dpa',
+    ],
+  });
+  assert.throws(() => validateIdentityStagingEvidence({
+    evidenceFile: file,
+    deploymentCommit: commit,
+    pilotId: 'heilbronn_wave0',
+    now,
+  }), /evidence gate failed/u);
+});
+
 test('identity staging evidence rejects symlink paths', () => {
   const { root, file } = fixture();
   const link = join(root, 'link.json');

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import crypto from 'node:crypto';
-import { createReadStream } from 'node:fs';
-import { chmod, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
+import { createStablePrivateReadStream, readStablePrivateFile } from './stable_private_file.mjs';
 
 const OPS_CHECKOUT = '/docker/shareittoo/staging-builds/8e7283e69c4f052ac4357c9e496ceb5ece801c20';
 const OPS_COMMIT = '8e7283e69c4f052ac4357c9e496ceb5ece801c20';
@@ -132,12 +132,11 @@ function classify(fingerprint) {
 }
 
 async function verifyBackup() {
-  const [meta, manifest] = await Promise.all([stat(DUMP), readFile(MANIFEST, 'utf8')]);
-  if (meta.mode & 0o077) fail('backup_not_private');
-  const expected = manifest.trim().split(/\s+/u)[0];
-  const actual = crypto.createHash('sha256').update(await readFile(DUMP)).digest('hex');
+  const dump = readStablePrivateFile(DUMP, { encoding: null, mode: 0o077, code: 'backup_not_private' });
+  const expected = readStablePrivateFile(MANIFEST, { expectedMode: 0o600, code: 'backup_manifest_not_private' }).trim().split(/\s+/u)[0];
+  const actual = crypto.createHash('sha256').update(dump).digest('hex');
   if (expected !== actual) fail('backup_sha256_mismatch');
-  return { bytes: meta.size, sha256: actual };
+  return { bytes: dump.length, sha256: actual };
 }
 
 let mfaPath;
@@ -173,7 +172,7 @@ try {
   await docker(['create','--name',resources.database,...labelArgs,'--network',resources.network,'--network-alias','db','--mount',`type=volume,src=${resources.volume},dst=/var/lib/postgresql/data`,'-e','POSTGRES_DB=shareittoo_rehearsal','-e','POSTGRES_USER=shareittoo_rehearsal','-e',`POSTGRES_PASSWORD=${dbPassword}`,POSTGRES_IMAGE]); created.push(['container',resources.database]);
   await docker(['create','--name',resources.bootstrap,...labelArgs,'--network',resources.network,...baseEnv,CANDIDATE_IMAGE,'node','--input-type=module','-e',"import { initializeDatabase, pool } from '/app/src/db.js'; await initializeDatabase(); await pool.end();"]); created.push(['container',resources.bootstrap]);
   await docker(['start',resources.database]); await waitForPostgres(resources.database);
-  await docker(['exec','-i',resources.database,'pg_restore','-U','shareittoo_rehearsal','-d','shareittoo_rehearsal','--no-owner','--no-acl'], { input: createReadStream(DUMP) });
+  await docker(['exec','-i',resources.database,'pg_restore','-U','shareittoo_rehearsal','-d','shareittoo_rehearsal','--no-owner','--no-acl'], { input: createStablePrivateReadStream(DUMP, { mode: 0o077, code: 'backup_not_private' }) });
   await docker(['start',resources.bootstrap]);
   const exit = out(await docker(['wait',resources.bootstrap]));
   if (exit !== '0') {
@@ -204,7 +203,7 @@ try {
   const path = `${EVIDENCE_DIR}/staging-wp249-diagnosis-${runId}.json`;
   await writeFile(path, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600 });
   await chmod(path, 0o600);
-  const meta = await stat(path);
-  const hash = crypto.createHash('sha256').update(await readFile(path)).digest('hex');
-  process.stdout.write(`${JSON.stringify({ evidencePath: path, evidenceBytes: meta.size, evidenceSha256: hash, ...evidence })}\n`);
+  const serialized = `${JSON.stringify(evidence, null, 2)}\n`;
+  const hash = crypto.createHash('sha256').update(serialized).digest('hex');
+  process.stdout.write(`${JSON.stringify({ evidencePath: path, evidenceBytes: Buffer.byteLength(serialized), evidenceSha256: hash, ...evidence })}\n`);
 }
