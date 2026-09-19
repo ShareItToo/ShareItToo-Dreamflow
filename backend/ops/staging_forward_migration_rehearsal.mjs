@@ -440,7 +440,16 @@ async function validateExistingDirectoryComponent(pathValue, { final = false } =
     return metadata;
   }
   if (!metadata.isDirectory()) fail('rehearsal_backup_directory_component_not_directory');
-  if ((metadata.mode & 0o022) !== 0) fail('rehearsal_backup_directory_component_group_world_writable');
+  const writable = (metadata.mode & 0o022) !== 0;
+  // A root-owned sticky shared-temp ancestor (for example Linux /tmp) is the
+  // one bounded exception: descendants are still created owner-only and the
+  // requested final directory may never rely on the shared permission.
+  const safeSharedStickyAncestor = !final
+    && metadata.uid === 0
+    && (metadata.mode & 0o1000) !== 0;
+  if (writable && !safeSharedStickyAncestor) {
+    fail('rehearsal_backup_directory_component_group_world_writable');
+  }
   const uid = currentUid();
   if (uid !== null && metadata.uid !== uid && (final || metadata.uid !== 0)) {
     fail(final ? 'rehearsal_backup_directory_owner_invalid' : 'rehearsal_backup_directory_ancestor_owner_invalid');

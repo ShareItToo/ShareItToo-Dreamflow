@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chmodSync } from 'node:fs';
+import { chmodSync, lstatSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -174,6 +174,14 @@ test('backup path safety validates before mutation and rejects symlink/repo/mode
     () => safeExternalDirectory(join(repository, 'inside'), { repository }),
     (error) => error.code === 'rehearsal_backup_directory_inside_repository',
   );
+
+  const sharedTemp = lstatSync(tmpdir());
+  if (!sharedTemp.isSymbolicLink() && sharedTemp.uid === 0 && (sharedTemp.mode & 0o1000) !== 0) {
+    const sharedTarget = join(tmpdir(), `sit-rehearsal-shared-${process.pid}`);
+    t.after(() => rm(sharedTarget, { recursive: true, force: true }));
+    const sharedResult = await safeExternalDirectory(join(sharedTarget, 'child'), { repository });
+    assert.match(sharedResult, /sit-rehearsal-shared-\d+\/child$/u);
+  }
 });
 
 test('quiesce target set is fully validated before any container stop', () => {
