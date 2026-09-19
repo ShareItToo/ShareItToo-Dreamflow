@@ -2,14 +2,18 @@
 
 ## Completed subpackage: WP260-E Connect cohort and secure payment landings — SOURCE PASS; provider gate separate
 
-Commit `b516e37d9ff214296d995bdaa31a3fe2f351d97a` binds every signed Connect
-webhook to the persisted local account mapping and the exact private
-pilot/staging cohort before any provider retrieval or local mutation. Unknown
-or foreign accounts fail closed. Connect return URLs are query-neutral, and
-public payment links read only coarse durable server truth; URL success/cancel
-parameters are never payment evidence. GET/HEAD return/open paths are
-explicitly allowlisted for staging navigation while all mutations remain
-protected. Focused suites are 70/70, PostgreSQL 16 integration passes and
+Commit `b516e37d9ff214296d995bdaa31a3fe2f351d97a` plus the WP260-F closure
+correction bind every signed Connect webhook
+to a persisted local account
+mapping before provider retrieval or local mutation. New/account-configuration
+events require the exact private pilot/staging cohort; a previously
+authorized mapping remains valid provenance for signed financial recovery
+after active-cohort removal. Unknown accounts still fail closed. Connect
+return URLs are query-neutral, and public payment links read only coarse
+durable server truth; URL success/cancel parameters are never payment
+evidence. GET/HEAD return/open paths are explicitly allowlisted for staging
+navigation while all mutations remain protected. Focused suites are 71/71,
+PostgreSQL 16 integration passes and
 `node --check`/diff-check pass. No provider, Stripe CLI, production,
 Store/Play, Firebase or device mutation occurred. See
 `docs/operations/WP260_E_CONNECT_COHORT_SECURE_LANDINGS_20260919.md`.

@@ -178,7 +178,7 @@ function connectedAccountIdForEvent(event) {
  * mutate local state.  The persisted account mapping is the provenance for
  * webhook recovery; it is never inferred from a current user session.
  */
-async function assertConnectedAccountWebhookCohort(accountId) {
+async function assertConnectedAccountWebhookCohort(accountId, { currentCohortRequired = true } = {}) {
   if (!accountId) throw new PaymentDomainError(400, 'invalid_connected_account_event');
   const mapped = await pool.query(
     'SELECT user_id FROM stripe_connect_accounts WHERE provider_account_id = $1',
@@ -188,6 +188,7 @@ async function assertConnectedAccountWebhookCohort(accountId) {
     throw new PaymentDomainError(403, 'connected_account_not_in_pilot_cohort');
   }
   const userId = mapped.rows[0].user_id;
+  if (!currentCohortRequired) return { accountId, userId };
   const pilot = config.payments.pilotUserIds.includes(userId);
   const staging = config.stagingAccess?.allowedUserIds?.includes(userId) === true;
   if (!pilot && !staging) {
@@ -2656,6 +2657,14 @@ export async function verifyAndApplyWebhook(rawBody, signatureHeader) {
       const account = await stripeProvider.retrieveConnectedAccount(accountId);
       event = { ...event, data: { object: account } };
     }
+  } else if (event.account) {
+    // A signed financial/recovery event may arrive after a pilot user was
+    // removed from the active cohort. The durable local account mapping is
+    // sufficient provenance for applying that recovery; unknown mappings are
+    // still rejected before any local event write or provider action.
+    await assertConnectedAccountWebhookCohort(connectedAccountIdForEvent(event), {
+      currentCohortRequired: false,
+    });
   }
   return applyProviderEvent(event, rawBody);
 }

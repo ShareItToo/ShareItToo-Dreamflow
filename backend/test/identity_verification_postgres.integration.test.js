@@ -590,6 +590,7 @@ if (!databaseUrl) {
         id: `evt-http-${suffix}`,
         type: 'identity.verification_session.processing',
         created: Math.floor(Date.now() / 1000),
+        livemode: false,
         data: { object: {
           object: 'identity.verification_session',
           id: providerSessionId,
@@ -607,6 +608,16 @@ if (!databaseUrl) {
           body: raw,
         });
         assert.equal(invalid.status, 400);
+        const liveRaw = JSON.stringify({ ...event, id: `evt-http-live-${suffix}`, livemode: true });
+        const live = await fetch(`${baseUrl}/v1/identity-verification/webhook`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'stripe-signature': stripeSignatureHeader({ payload: liveRaw, secret }),
+          },
+          body: liveRaw,
+        });
+        assert.equal(live.status, 409);
         const accepted = await fetch(`${baseUrl}/v1/identity-verification/webhook`, {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'stripe-signature': signed },

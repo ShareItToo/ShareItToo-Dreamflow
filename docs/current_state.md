@@ -2,12 +2,15 @@
 
 ## WP260-E Connect cohort and secure payment landings — SOURCE PASS; provider gate separate
 
-At source commit `b516e37d9ff214296d995bdaa31a3fe2f351d97a`, signed Connect
-webhooks require a persisted local account mapping plus membership in the
-configured private pilot/staging cohort before provider retrieval or local
-mutation. Public payment landings ignore URL result hints and render only
-coarse server-side payment truth; Connect return is always neutral until the
-authenticated app reloads status. Focused suites are 70/70 and the real
+At source commit `b516e37d9ff214296d995bdaa31a3fe2f351d97a` plus the
+WP260-F closure correction, signed Connect webhooks require a persisted
+local mapping before provider retrieval or local mutation. New/configuration
+events require current private pilot/staging membership, while an authorized
+mapping remains valid provenance for signed financial recovery after cohort
+removal; unknown mappings remain blocked. Public payment landings ignore URL
+result hints and render only coarse server-side payment truth; Connect return
+is always neutral until the authenticated app reloads status. Focused suites
+are 71/71 and the real
 PostgreSQL 16 runner passes. No Stripe CLI/provider, production, Store/Play,
 Firebase or device action occurred. See the WP260-E operation report.
 

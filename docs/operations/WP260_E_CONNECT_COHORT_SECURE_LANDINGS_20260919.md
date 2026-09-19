@@ -2,7 +2,8 @@
 
 ## Result
 
-Source commit `b516e37d9ff214296d995bdaa31a3fe2f351d97a` is pushed on
+Source commit `b516e37d9ff214296d995bdaa31a3fe2f351d97a` plus the
+recovery-provenance correction in the WP260-F closure commit are pushed on
 `codex/master-workflow-20260808`; the worktree is clean and local/origin are
 equal. The package is source- and regression-complete. No Stripe CLI action,
 provider request, production change, Store/Play change or device action was
@@ -12,12 +13,13 @@ performed.
 
 Every signed Accounts-v2/Connect event is now bound to a persisted local
 `stripe_connect_accounts.provider_account_id` before any thin-event provider
-retrieval and before `applyProviderEvent` can mutate local state. The mapped
-principal must be in the union of the private `PAYMENT_PILOT_USER_IDS` or the
-non-production `SIT_STAGING_ALLOWED_USER_IDS` cohort. Unknown, foreign or
-malformed account mappings fail closed with a structured error. The persisted
-mapping is recovery provenance; no current JWT/session is consulted and no
-provider account is inferred from request data.
+retrieval and before `applyProviderEvent` can mutate local state. New/account
+configuration events require the mapped principal to be in the union of the
+private `PAYMENT_PILOT_USER_IDS` or non-production
+`SIT_STAGING_ALLOWED_USER_IDS` cohort. A previously authorized mapping remains
+valid provenance for a signed financial recovery event after active-cohort
+removal; unknown mappings still fail closed before any provider read or local
+event write. No decision is inferred from a current user session.
 
 ## Return/open landing boundary
 
@@ -34,7 +36,7 @@ remain protected.
 ## Verification
 
 - Focused payment/domain, webhook, landing, Stripe-gate and staging suites:
-  **70/70 passed**.
+  **71/71 passed** (including mapped recovery after cohort removal).
 - Real PostgreSQL 16 integration runner (foundation, FK, WP260-D attempt,
   identity and MFA): **passed and cleaned**.
 - App route readback in PostgreSQL integration: payment landing returned the

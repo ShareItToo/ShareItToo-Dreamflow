@@ -166,3 +166,41 @@ test('connect cohort rejection happens before any provider account retrieval', a
   );
   assert.equal(reads.mock.callCount(), 0);
 });
+
+test('mapped recovery event remains processable after active cohort removal', async (t) => {
+  const body = payload(false, {
+    id: 'evt_recovery_after_cohort_removal',
+    type: 'customer.updated',
+    account: 'acct_recovery_fixture',
+    data: { object: { id: 'cus_recovery_fixture', object: 'customer' } },
+  });
+  const hash = crypto.createHash('sha256').update(body).digest('hex');
+  const queries = [];
+  t.mock.method(pool, 'query', async (sql, args) => {
+    queries.push({ sql, args });
+    if (sql.startsWith('SELECT user_id FROM stripe_connect_accounts')) {
+      return { rowCount: 1, rows: [{ user_id: 'synthetic-recovery-removed' }] };
+    }
+    if (sql.startsWith('INSERT INTO payment_provider_events')) {
+      assert.equal(args[0], 'evt_recovery_after_cohort_removal');
+      return { rowCount: 1, rows: [{ provider_event_id: args[0] }] };
+    }
+    throw new Error(`unexpected pool query: ${sql}`);
+  });
+  t.mock.method(pool, 'connect', async () => ({
+    async query(sql, args) {
+      queries.push({ sql, args });
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [], rowCount: 0 };
+      if (sql.startsWith('SELECT * FROM payment_provider_events')) {
+        return { rows: [{ payload_sha256: hash, status: 'received' }], rowCount: 1 };
+      }
+      if (sql.startsWith('UPDATE payment_provider_events')) return { rows: [], rowCount: 1 };
+      throw new Error(`unexpected transaction query: ${sql}`);
+    },
+    release() {},
+  }));
+  assert.deepEqual(await verifyAndApplyWebhook(Buffer.from(body),
+    stripeSignatureHeader({ payload: body, secret: snapshotSecret })),
+  { duplicate: false, status: 'ignored' });
+  assert.equal(queries.some(({ sql }) => sql.startsWith('UPDATE stripe_connect_accounts')), false);
+});

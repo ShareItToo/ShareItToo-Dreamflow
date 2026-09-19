@@ -2025,6 +2025,9 @@ export function createApp({
       signatureHeader: req.get('Stripe-Signature'),
       webhookSecret: config.identityVerification.webhookSecret,
     });
+    if (event.livemode !== false || event.data?.object?.livemode !== false) {
+      throw new IdentityVerificationError(409, 'identity_verification_livemode_mismatch');
+    }
     const result = await inTransaction(async (client) => applyIdentityVerificationWebhook({
       client,
       event,
