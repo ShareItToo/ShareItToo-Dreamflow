@@ -41,7 +41,11 @@ void main() {
 
     expect(auth, contains("path: '/auth/mfa/challenge'"));
     expect(auth, contains('AuthResult.mfaRequired'));
+    expect(mfa, contains("path: '/auth/mfa/status'"));
+    expect(mfa, contains("path: '/auth/mfa/enroll'"));
+    expect(mfa, contains("path: '/auth/mfa/confirm'"));
     expect(mfa, contains("path: '/auth/mfa/enroll/cancel'"));
+    expect(mfa, contains("path: '/auth/mfa/disable'"));
     expect(mfa, isNot(contains('SharedPreferences')));
     expect(mfa, isNot(contains('debugPrint')));
     expect(screen, contains('PopScope'));
@@ -51,6 +55,7 @@ void main() {
     expect(screen, contains('_routeReplacementPending'));
     expect(screen, contains('_recoveryCodes == null'));
     expect(account, contains('TwoFactorAuthScreen'));
+    expect(account, contains('Zwei‑Faktor‑Authentifizierung'));
     expect(register, contains('_resolveMfaChallenge'));
     expect(main, contains('result.ok && result.session != null'));
   });

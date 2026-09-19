@@ -333,10 +333,9 @@
       "route": "ProfileScreen -> VerificationScreen",
       "source": "lib/screens/profile_screen.dart",
       "reachabilityMarker": "'/verify'",
-      "effect": "end-user-identity-verification-with-server-provider-session-status",
-      "pilot": "excluded",
+      "effect": "server-authoritative-identity-status-consent-start-refresh-revoke-with-explicit-unavailable-state",
+      "pilot": "allowed",
       "runtimeEvidence": "identityVerification",
-      "blocker": "source contract exists but current Staging status route is HTTP 404/not_found; deployment parity/provider activation is unproven",
       "proof": [
         "test/identity_verification_client_contract_test.dart",
         "test/tool/diagnose_n28_current_candidate_android_account_support_surfaces.test.mjs"
@@ -347,10 +346,9 @@
       "route": "AccountSettingsScreen -> TwoFactorAuthScreen row",
       "source": "lib/screens/account_settings_screen.dart",
       "reachabilityMarker": "TwoFactorAuthScreen",
-      "effect": "server-authoritative-login-mfa-enrollment-step-up-and-recovery",
-      "pilot": "excluded",
+      "effect": "server-authoritative-login-mfa-status-enrollment-confirm-cancel-disable-and-recovery",
+      "pilot": "allowed",
       "runtimeEvidence": "mfa",
-      "blocker": "source contract exists but current Staging status route is HTTP 404/not_found; deployment parity is unproven",
       "proof": [
         "test/rw10_local_security_control_truthfulness_test.dart",
         "test/tool/rw10_local_security_control_truthfulness_wiring.test.mjs"

@@ -50,7 +50,8 @@ const _identityTestSession = AuthSession(
 );
 
 Widget _screen(_FakeIdentityService service,
-    {Future<bool> Function(Uri)? launcher, Future<bool> Function(AuthSessionOwner)? ownerChecker}) {
+    {Future<bool> Function(Uri)? launcher,
+    Future<bool> Function(AuthSessionOwner)? ownerChecker}) {
   return MaterialApp(
     home: VerificationScreen(
       key: UniqueKey(),
@@ -63,11 +64,20 @@ Widget _screen(_FakeIdentityService service,
 }
 
 void main() {
-  test('identity client has explicit server states and no client secret surface', () {
-    expect(IdentityVerificationStatus.values, contains(IdentityVerificationStatus.notStarted));
-    expect(IdentityVerificationStatus.values, contains(IdentityVerificationStatus.verified));
-    final service = File('lib/services/identity_verification_service.dart').readAsStringSync();
-    final screen = File('lib/screens/verification_screen.dart').readAsStringSync();
+  test(
+      'identity client has explicit server states and no client secret surface',
+      () {
+    expect(IdentityVerificationStatus.values,
+        contains(IdentityVerificationStatus.notStarted));
+    expect(IdentityVerificationStatus.values,
+        contains(IdentityVerificationStatus.verified));
+    final service = File('lib/services/identity_verification_service.dart')
+        .readAsStringSync();
+    final screen =
+        File('lib/screens/verification_screen.dart').readAsStringSync();
+    final account =
+        File('lib/screens/account_settings_screen.dart').readAsStringSync();
+    final profile = File('lib/screens/profile_screen.dart').readAsStringSync();
     expect(service, contains("'/identity-verification/status'"));
     expect(service, contains("'/identity-verification/session'"));
     expect(service, contains("'/identity-verification/refresh'"));
@@ -75,9 +85,14 @@ void main() {
     expect(screen, contains('principal_changed'));
     expect(screen, contains('Technischer Test erfolgreich'));
     expect(screen, isNot(contains('Verifiziert ✅')));
+    expect(account, contains('const VerificationScreen()'));
+    expect(profile, contains("route: '/verify'"));
+    expect(profile, contains("case '/verify':"));
   });
 
-  test('runtime parser rejects live mode, unknown states and unsafe entrypoints', () {
+  test(
+      'runtime parser rejects live mode, unknown states and unsafe entrypoints',
+      () {
     const service = IdentityVerificationService();
     final response = <String, dynamic>{
       'sessionId': 'local-session',
@@ -87,21 +102,31 @@ void main() {
       'redactionStatus': 'queued',
     };
     expect(service.parseResponse(response).redactionStatus, 'queued');
-    expect(() => service.parseResponse({...response, 'livemode': true}), throwsA(isA<IdentityVerificationException>()));
-    expect(() => service.parseResponse({...response, 'status': 'unknown'}), throwsA(isA<IdentityVerificationException>()));
-    expect(() => service.parseResponse({...response, 'redactionStatus': 'mystery'}), throwsA(isA<IdentityVerificationException>()));
-    expect(IdentityVerificationService.isSafeEntrypoint('https://verify.stripe.com/test/session'), isTrue);
+    expect(() => service.parseResponse({...response, 'livemode': true}),
+        throwsA(isA<IdentityVerificationException>()));
+    expect(() => service.parseResponse({...response, 'status': 'unknown'}),
+        throwsA(isA<IdentityVerificationException>()));
+    expect(
+        () =>
+            service.parseResponse({...response, 'redactionStatus': 'mystery'}),
+        throwsA(isA<IdentityVerificationException>()));
+    expect(
+        IdentityVerificationService.isSafeEntrypoint(
+            'https://verify.stripe.com/test/session'),
+        isTrue);
     for (final url in [
       'http://verify.stripe.com/test/session',
       'https://evil.example/test',
       'https://verify.stripe.com.evil.example/test',
       'https://user:pass@verify.stripe.com/test/session',
     ]) {
-      expect(IdentityVerificationService.isSafeEntrypoint(url), isFalse, reason: url);
+      expect(IdentityVerificationService.isSafeEntrypoint(url), isFalse,
+          reason: url);
     }
   });
 
-  test('start parser accepts only the explicit local fixture without a URL', () {
+  test('start parser accepts only the explicit local fixture without a URL',
+      () {
     const service = IdentityVerificationService();
     final base = <String, dynamic>{
       'sessionId': 'local-session',
@@ -144,7 +169,8 @@ void main() {
     );
   });
 
-  testWidgets('requires_input offers separate resume and status actions', (tester) async {
+  testWidgets('requires_input offers separate resume and status actions',
+      (tester) async {
     final service = _FakeIdentityService(IdentityVerificationState(
       sessionId: 'local-session',
       status: IdentityVerificationStatus.requiresInput,
@@ -169,7 +195,9 @@ void main() {
     expect(service.refreshCalls, 1);
   });
 
-  testWidgets('privacy notice names the concrete internal pilot operator before consent', (tester) async {
+  testWidgets(
+      'privacy notice names the concrete internal pilot operator before consent',
+      (tester) async {
     final service = _FakeIdentityService(const IdentityVerificationState(
       sessionId: null,
       status: IdentityVerificationStatus.notStarted,
@@ -180,13 +208,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Datenschutzhinweise zum Test'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('ShareItToo – Inhaber Walid Chraibi'), findsOneWidget);
-    expect(find.textContaining('Bernhaldenweg 47, 71579 Spiegelberg'), findsOneWidget);
+    expect(find.textContaining('ShareItToo – Inhaber Walid Chraibi'),
+        findsOneWidget);
+    expect(find.textContaining('Bernhaldenweg 47, 71579 Spiegelberg'),
+        findsOneWidget);
     expect(find.textContaining('contact@shareittoo.com'), findsOneWidget);
     expect(find.text('Prüfung starten'), findsOneWidget);
   });
 
-  testWidgets('blocked launch is truthful and retry remains available', (tester) async {
+  testWidgets('blocked launch is truthful and retry remains available',
+      (tester) async {
     final service = _FakeIdentityService(const IdentityVerificationState(
       sessionId: 'local-session',
       status: IdentityVerificationStatus.notStarted,
@@ -198,11 +229,13 @@ void main() {
     await tester.tap(find.byType(CheckboxListTile));
     await tester.tap(find.text('Prüfung starten'));
     await tester.pumpAndSettle();
-    expect(find.text('Der sichere Prüf-Link konnte nicht geöffnet werden.'), findsOneWidget);
+    expect(find.text('Der sichere Prüf-Link konnte nicht geöffnet werden.'),
+        findsOneWidget);
     expect(find.text('Prüfung fortsetzen'), findsOneWidget);
   });
 
-  testWidgets('stale owner cannot start and load failure offers reload', (tester) async {
+  testWidgets('stale owner cannot start and load failure offers reload',
+      (tester) async {
     final service = _FakeIdentityService(const IdentityVerificationState(
       sessionId: null,
       status: IdentityVerificationStatus.notStarted,
@@ -210,7 +243,8 @@ void main() {
       updatedAt: null,
     ));
     var current = true;
-    await tester.pumpWidget(_screen(service, ownerChecker: (_) async => current));
+    await tester
+        .pumpWidget(_screen(service, ownerChecker: (_) async => current));
     await tester.pumpAndSettle();
     current = false;
     await tester.tap(find.byType(CheckboxListTile));
@@ -224,13 +258,15 @@ void main() {
       status: IdentityVerificationStatus.notStarted,
       livemode: false,
       updatedAt: null,
-    ))..failLoad = true;
+    ))
+      ..failLoad = true;
     await tester.pumpWidget(_screen(failed));
     await tester.pumpAndSettle();
     expect(find.text('Erneut laden'), findsOneWidget);
   });
 
-  testWidgets('resume refreshes and redacted session can restart', (tester) async {
+  testWidgets('resume refreshes and redacted session can restart',
+      (tester) async {
     final service = _FakeIdentityService(IdentityVerificationState(
       sessionId: 'local-session',
       status: IdentityVerificationStatus.processing,

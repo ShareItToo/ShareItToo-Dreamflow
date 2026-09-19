@@ -29,11 +29,13 @@ test('accepts a complete private-pilot inventory when every path is allowed', ()
   assert.equal(result.inventoryCount, result.allowedCount);
 });
 
-test('blocks every reachable excluded path instead of hiding or reclassifying it', () => {
-  assert.throws(
-    () => validateManifest(manifest, { repositoryRoot: root }),
-    /BLOCK:SIT-PILOT-FEATURE-SCOPE-20260917:reachable_excluded_paths=identity_verification,mfa/u,
-  );
+test('accepts the reachable identity and MFA status/action surfaces with explicit runtime parity', () => {
+  const result = validateManifest(manifest, { repositoryRoot: root });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.blockerCount, 0);
+  assert.equal(result.allowedCount, 23);
+  assert.equal(manifest.reachablePaths.find((entry) => entry.id === 'identity_verification')?.pilot, 'allowed');
+  assert.equal(manifest.reachablePaths.find((entry) => entry.id === 'mfa')?.pilot, 'allowed');
 });
 
 test('rejects deceptive placeholder or no-op effects even on an otherwise allowed path', () => {
