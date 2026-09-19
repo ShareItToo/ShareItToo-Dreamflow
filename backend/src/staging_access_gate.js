@@ -109,6 +109,10 @@ const exactAnonymousPaths = new Set([
   '/health/ready',
   '/version',
 ]);
+const exactWebhookPaths = new Set([
+  '/v1/payments/webhook',
+  '/v1/identity-verification/webhook',
+]);
 const controlledPostPaths = new Set([
   '/v1/auth/login',
   '/v1/auth/register',
@@ -147,6 +151,14 @@ export function stagingAnonymousPathAllowed(configuration, { method, path } = {}
     return configuration.publicUploadNames.length > 0 && configuration.publicUploadConfigurationValid;
   }
   return false;
+}
+
+// Provider webhooks are the only staging POSTs that may reach the router
+// without a user JWT. The route handlers still require their own raw-body
+// signature, test-mode and provider-object/account checks before any write.
+export function stagingWebhookPathAllowed({ method, path } = {}) {
+  return String(method ?? '').toUpperCase() === 'POST'
+    && exactWebhookPaths.has(String(path ?? ''));
 }
 
 export const stagingAccessPatterns = Object.freeze({

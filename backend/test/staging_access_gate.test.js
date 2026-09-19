@@ -9,6 +9,7 @@ import {
   stagingAnonymousPathAllowed,
   stagingGuestListingAllowed,
   stagingGuestUploadAllowed,
+  stagingWebhookPathAllowed,
 } from '../src/staging_access_gate.js';
 
 const validEnvironment = {
@@ -102,12 +103,26 @@ test('anonymous surface is a minimal exact route matrix', () => {
   }
 });
 
+test('only the two signed provider webhook POSTs bypass the user JWT gate', () => {
+  assert.equal(stagingWebhookPathAllowed({ method: 'POST', path: '/v1/payments/webhook' }), true);
+  assert.equal(stagingWebhookPathAllowed({ method: 'POST', path: '/v1/identity-verification/webhook' }), true);
+  for (const request of [
+    { method: 'GET', path: '/v1/payments/webhook' },
+    { method: 'POST', path: '/v1/payments/webhook/' },
+    { method: 'POST', path: '/v1/auth/login' },
+    { method: 'POST', path: '/v1/identity-verification/webhook/foreign' },
+  ]) {
+    assert.equal(stagingWebhookPathAllowed(request), false, `${request.method} ${request.path}`);
+  }
+});
+
 test('implementation keeps the gate before webhook routes and on token auth', () => {
   const source = fs.readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
   const securitySource = fs.readFileSync(new URL('../src/security.js', import.meta.url), 'utf8');
   assert.ok(source.indexOf('app.use(stagingAccessMiddleware)') < source.indexOf("app.post('/v1/payments/webhook'"));
   assert.match(securitySource, /config\.stagingAccess\.enabled && !isStagingUserAllowed\(config\.stagingAccess, payload\.sub\)/u);
   assert.match(source, /stagingGuestUploadAllowed\(config\.stagingAccess, storageName\)/u);
+  assert.match(source, /stagingWebhookPathAllowed\(\{ method: req\.method, path: req\.path \}\)/u);
   assert.match(source, /publicListingIds: config\.stagingAccess\.enabled/u);
   assert.match(source, /app\.post\('\/v1\/auth\/password-reset\/form'/u);
   assert.match(source, /app\.post\('\/v1\/account-deletion\/confirm'/u);

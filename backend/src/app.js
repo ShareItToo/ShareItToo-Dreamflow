@@ -442,6 +442,7 @@ import {
   stagingAnonymousPathAllowed,
   stagingGuestListingAllowed,
   stagingGuestUploadAllowed,
+  stagingWebhookPathAllowed,
 } from './staging_access_gate.js';
 import {
   beginTotpEnrollment,
@@ -563,6 +564,10 @@ function stagingAccessMiddleware(req, res, next) {
     return res.status(503).json({ error: 'staging_access_configuration_invalid' });
   }
   if (req.method === 'OPTIONS') return next();
+  if (stagingWebhookPathAllowed({ method: req.method, path: req.path })) {
+    req.stagingAccess = { authenticated: false, webhook: true };
+    return next();
+  }
   const token = bearerToken(req);
   if (!token) {
     if (stagingAnonymousPathAllowed(config.stagingAccess, req)) {
