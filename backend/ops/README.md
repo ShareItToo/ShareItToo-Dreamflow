@@ -122,19 +122,28 @@ mode `0600` and bind exactly `shareittoo-staging-api`,
 `sit-green-uploads-20260918011528-wp254`, with Green label and schema `87`.
 The database identity is exactly `shareittoo_green` / `shareittoo_green`;
 legacy `shareittoo_staging` is never used by this lane.
+The manifest also binds the observed prior image tag beginning
+`shareittoo-api-wp260b:4d616` into `targetDigest`; the live readback must match
+that exact value.
 Legacy `sit-staging`, production names, lookalike networks and mutable image
 tags are rejected before a command is planned.
 
-The plan takes a fresh protected backup, seals the observed Green API before
-any forward migration, restores the Green schema `87` into a run-scoped
-internal target and proves the current `92` migrations plus integrity and
-functional probes. The exact immutable runtime image is then accepted against
-the Green database on loopback `127.0.0.1:18082` with memory Identity, on-device
-Listing AI, payment memory, the existing access/provider configuration and
-read-only MFA/Firebase/technical-sandbox mounts. The synthetic user
-`synthetic_sandbox_user_pilot_20260919` is provisioned idempotently on Green
-using its protected password file; credentials never enter commands, logs or
-evidence.
+The plan takes a fresh protected backup, restores the Green schema `87` into a
+run-scoped internal target and explicitly migrates it to `92`, then proves
+integrity and functional probes there. The exact immutable runtime image is
+accepted first against that isolated database on loopback `127.0.0.1:18082`
+with memory Identity, on-device Listing AI, payment memory, the existing
+access/provider configuration and read-only MFA/Firebase/technical-sandbox
+mounts. The synthetic user `synthetic_sandbox_user_pilot_20260919` is
+provisioned idempotently on the isolated target and, after isolated cleanup,
+again on canonical Green using its protected password file; credentials never
+enter commands, logs or evidence.
+
+Only after the isolated candidate has passed and been cleaned up is the
+observed Green API stopped and sealed. The canonical Green database is then
+explicitly migrated from `87` to `92` and read back before the final image is
+created. If that canonical mutation starts, the sealed old image is never
+restarted; recovery is a forward candidate path.
 
 Only after live/ready `200`, MFA and Identity probes, successful run-scoped
 cleanup and an explicit public readback may the final API be created without a
@@ -163,13 +172,13 @@ provider keys. A failed inventory, backup, migration/probe, cleanup or public
 readback aborts before the final container is created.
 
 The shared Staging public port is never used as the acceptance target. The
-controlled candidate runs from the exact immutable image on the immediately
-preflighted free loopback port `18082`, while the reverse proxy remains bound
+The controlled candidate runs from the exact immutable image and isolated
+database on the immediately preflighted free loopback port `18082`, while the reverse proxy remains bound
 to the normal Staging port `18080`; a foreign listener is never stopped. The
 controlled Compose file deliberately does not use `env_file`: only the selected
 database/JWT values and the runtime-readable MFA key mount are interpolated.
 Payment is hard-pinned to memory, Stripe live mode is false, Identity uses the
-in-memory test transport and Listing AI is the zero-budget mock.
+in-memory test transport and Listing AI is on-device.
 
 The acceptance runner verifies the image label and `/version` commit, readiness,
 an authenticated synthetic MFA enroll -> pending -> cancel flow, and that the

@@ -13,6 +13,7 @@ import test from 'node:test';
 import {
   provisionSyntheticSandboxUser,
   greenDatabaseIdentity,
+  greenRehearsalDatabaseIdentity,
   stagingDatabaseIdentity,
   syntheticSandboxUser,
   validateProvisioningContext,
@@ -161,6 +162,11 @@ test('provisioning is staging-only and rejects production or unbound test databa
     deploymentEnvironment: 'staging',
     databaseIdentity: { ...greenDatabaseIdentity, composeProject: 'sit-green-lookalike' },
   }), (error) => error.code === 'staging_database_identity_required');
+});
+
+test('isolated Green rehearsal identity is explicit and cannot masquerade as canonical Green', () => {
+  assert.deepEqual(validateProvisioningContext({ deploymentEnvironment: 'staging', databaseIdentity: greenRehearsalDatabaseIdentity }), greenRehearsalDatabaseIdentity);
+  assert.throws(() => validateProvisioningContext({ deploymentEnvironment: 'staging', databaseIdentity: { ...greenRehearsalDatabaseIdentity, rehearsal: false } }), /staging_database_identity_required/u);
 });
 
 test('creates exact synthetic user, acknowledges required fields and never returns password material', async () => {

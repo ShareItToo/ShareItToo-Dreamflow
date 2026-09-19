@@ -33,6 +33,10 @@ export const greenDatabaseIdentity = Object.freeze({
   composeProject: 'sit-green',
 });
 
+export const greenRehearsalDatabaseIdentity = Object.freeze({
+  environment: 'staging', databaseName: 'green_rehearsal', databaseUser: 'green_rehearsal', composeProject: 'sit-green', rehearsal: true,
+});
+
 const minimumPasswordLength = 32;
 const maximumPasswordLength = 200;
 const runtimeUid = 100;
@@ -99,10 +103,15 @@ export function validateProvisioningContext({
       && databaseIdentity.databaseName === greenDatabaseIdentity.databaseName
       && databaseIdentity.databaseUser === greenDatabaseIdentity.databaseUser
       && databaseIdentity.composeProject === greenDatabaseIdentity.composeProject;
-    if (!isStaging && !isGreen) {
+    const isGreenRehearsal = databaseIdentity?.rehearsal === true
+      && databaseIdentity.environment === greenRehearsalDatabaseIdentity.environment
+      && databaseIdentity.databaseName === greenRehearsalDatabaseIdentity.databaseName
+      && databaseIdentity.databaseUser === greenRehearsalDatabaseIdentity.databaseUser
+      && databaseIdentity.composeProject === greenRehearsalDatabaseIdentity.composeProject;
+    if (!isStaging && !isGreen && !isGreenRehearsal) {
       fail('staging_database_identity_required');
     }
-    return Object.freeze(isGreen ? greenDatabaseIdentity : stagingDatabaseIdentity);
+    return Object.freeze(isGreenRehearsal ? greenRehearsalDatabaseIdentity : isGreen ? greenDatabaseIdentity : stagingDatabaseIdentity);
   }
   if (environment === 'test' && databaseIdentity?.injected === true
       && typeof databaseIdentity.databaseName === 'string'
@@ -118,7 +127,7 @@ export function validateProvisioningContext({
   fail('staging_environment_required');
 }
 
-function parseDatabaseIdentity(databaseUrl, environment, composeProject) {
+function parseDatabaseIdentity(databaseUrl, environment, composeProject, rehearsal = false) {
   let parsed;
   try {
     parsed = new URL(databaseUrl);
@@ -132,6 +141,7 @@ function parseDatabaseIdentity(databaseUrl, environment, composeProject) {
     databaseName,
     databaseUser,
     composeProject,
+    rehearsal,
   };
 }
 
@@ -321,6 +331,7 @@ async function main() {
     databaseUrl,
     'staging',
     process.env.SIT_STAGING_COMPOSE_PROJECT?.trim(),
+    process.env.SIT_GREEN_REHEARSAL === '1',
   );
   const passwordFile = process.env.SYNTHETIC_SANDBOX_PASSWORD_FILE?.trim();
   if (!passwordFile) fail('password_file_required');
