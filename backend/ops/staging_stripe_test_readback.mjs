@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
 import crypto from 'node:crypto';
-import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createStablePrivateReadStream, readStablePrivateFile } from './stable_private_file.mjs';
 
 const OPS_CHECKOUT = '/docker/shareittoo/staging-builds/8e7283e69c4f052ac4357c9e496ceb5ece801c20';
@@ -88,7 +89,7 @@ try {
   if (text(await execFile('git', ['-C', OPS_CHECKOUT, 'rev-parse', 'HEAD'])) !== OPS_COMMIT) fail('ops_checkout_commit_mismatch');
   const backup = await verifyBackup(); const keyInfo = await stripeKeyClass();
   const imageMeta = text(await docker(['image','inspect',CANDIDATE_IMAGE,'--format','{{.Id}}|{{index .Config.Labels "org.opencontainers.image.revision"}}'])); const [imageId, revision] = imageMeta.split('|'); if (imageId !== CANDIDATE_IMAGE || revision !== RUNTIME_COMMIT) fail('candidate_image_identity_mismatch');
-  const temp = `/tmp/sit-wp250-${runId}`; await mkdir(temp, { mode: 0o700 }); mfaPath = `${temp}/mfa-key`; await writeFile(mfaPath, `${crypto.randomBytes(32).toString('base64url')}\n`, { mode: 0o640 }); await chmod(mfaPath, 0o640); await execFile('chown', ['65532:65532', mfaPath]);
+  const temp = await mkdtemp(join(tmpdir(), 'sit-wp250-')); mfaPath = `${temp}/mfa-key`; await writeFile(mfaPath, `${crypto.randomBytes(32).toString('base64url')}\n`, { mode: 0o640 }); await chmod(mfaPath, 0o640); await execFile('chown', ['65532:65532', mfaPath]);
   const dbPassword = ['disposable', crypto.randomBytes(18).toString('base64url')].join('-');
   const envArgs = [
     '--group-add', '65532', '-e', 'NODE_ENV=production', '-e', 'DEPLOYMENT_ENVIRONMENT=staging',

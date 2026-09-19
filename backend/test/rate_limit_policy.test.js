@@ -7,6 +7,7 @@ import express from 'express';
 import {
   coreRateLimitPolicies,
   createCoreRateLimiters,
+  createStagingAccessIpLimiter,
   isProtectedSafetyRateLimitRequest,
 } from '../src/rate_limit_policy.js';
 
@@ -71,6 +72,7 @@ async function assertExactThreshold({ pathname, body, allowed }) {
 test('core limiter policy keeps the exact production thresholds immutable', () => {
   assert.deepEqual(coreRateLimitPolicies, {
     general: { windowMs: 60_000, limit: 240 },
+    stagingAccess: { windowMs: 60_000, limit: 120 },
     supportIntake: { windowMs: 15 * 60_000, limit: 10 },
     supportSafetyIntake: { windowMs: 15 * 60_000, limit: 30 },
     mfaStatus: { windowMs: 15 * 60_000, limit: 60 },
@@ -99,6 +101,31 @@ test('core limiter policy keeps the exact production thresholds immutable', () =
     method: 'GET',
     path: '/v1/bookings/booking-1/handover-exceptions',
   }), false);
+});
+
+test('staging access IP limiter returns 429 before gate work after its bounded threshold', async () => {
+  const app = express();
+  app.disable('x-powered-by');
+  app.set('trust proxy', 1);
+  let gateCalls = 0;
+  app.use(createStagingAccessIpLimiter({
+    limitHandler: (_req, res) => res.status(429).json({ error: 'rate_limit_exceeded' }),
+  }));
+  app.use((_req, res) => { gateCalls += 1; res.status(401).json({ error: 'staging_access_required' }); });
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const url = `http://127.0.0.1:${server.address().port}/v1/auth/login`;
+    for (let attempt = 1; attempt <= coreRateLimitPolicies.stagingAccess.limit; attempt += 1) {
+      assert.equal((await fetch(url, { headers: { 'X-Forwarded-For': fixedClientAddress } })).status, 401);
+    }
+    const blocked = await fetch(url, { headers: { 'X-Forwarded-For': fixedClientAddress } });
+    assert.equal(blocked.status, 429);
+    assert.equal((await blocked.json()).error, 'rate_limit_exceeded');
+    assert.equal(gateCalls, coreRateLimitPolicies.stagingAccess.limit);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
 });
 
 test('MFA status has an independent bounded authenticated bucket', async () => {

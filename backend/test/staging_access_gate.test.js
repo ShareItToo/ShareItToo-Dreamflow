@@ -132,6 +132,7 @@ test('only the signed provider webhook POSTs bypass the user JWT gate', () => {
 test('implementation keeps the gate before webhook routes and on token auth', () => {
   const source = fs.readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
   const securitySource = fs.readFileSync(new URL('../src/security.js', import.meta.url), 'utf8');
+  assert.ok(source.indexOf('app.use(stagingAccessIpLimiter)') < source.indexOf('app.use(stagingAccessMiddleware)'));
   assert.ok(source.indexOf('app.use(stagingAccessMiddleware)') < source.indexOf("app.post('/v1/payments/webhook'"));
   assert.match(securitySource, /config\.stagingAccess\.enabled && !isStagingUserAllowed\(config\.stagingAccess, payload\.sub\)/u);
   assert.match(source, /stagingGuestUploadAllowed\(config\.stagingAccess, storageName\)/u);

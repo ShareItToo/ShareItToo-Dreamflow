@@ -346,6 +346,7 @@ import { addReturnPolicyCalendarDays } from './return_calendar_policy.js';
 import {
   coreRateLimitPolicies,
   createCoreRateLimiters,
+  createStagingAccessIpLimiter,
   isProtectedSafetyRateLimitRequest,
 } from './rate_limit_policy.js';
 import {
@@ -2052,6 +2053,11 @@ export function createApp({
       'X-SIT-Evidence-SHA256',
     ],
   }));
+  const stagingAccessIpLimiter = createStagingAccessIpLimiter({
+    skip: () => !config.stagingAccess.enabled,
+    limitHandler: (req, res) => res.status(429).json(errorPayload(req, 'rate_limit_exceeded')),
+  });
+  app.use(stagingAccessIpLimiter);
   app.use(stagingAccessMiddleware);
   const webhookLimiter = rateLimit({
     windowMs: 60_000,

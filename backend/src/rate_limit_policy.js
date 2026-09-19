@@ -4,6 +4,7 @@ import { isProtectedSupportSafetyIntake } from './support_safety_impact_domain.j
 
 export const coreRateLimitPolicies = Object.freeze({
   general: Object.freeze({ windowMs: 60_000, limit: 240 }),
+  stagingAccess: Object.freeze({ windowMs: 60_000, limit: 120 }),
   supportIntake: Object.freeze({ windowMs: 15 * 60_000, limit: 10 }),
   supportSafetyIntake: Object.freeze({ windowMs: 15 * 60_000, limit: 30 }),
   mfaStatus: Object.freeze({ windowMs: 15 * 60_000, limit: 60 }),
@@ -26,6 +27,13 @@ function limiter(policy, handler, extra = {}) {
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     handler,
+  });
+}
+
+export function createStagingAccessIpLimiter({ limitHandler, skip } = {}) {
+  if (typeof limitHandler !== 'function') throw new TypeError('rate_limit_handler_required');
+  return limiter(coreRateLimitPolicies.stagingAccess, limitHandler, {
+    ...(typeof skip === 'function' ? { skip } : {}),
   });
 }
 
