@@ -1,4 +1,4 @@
-# WP260-A provider activation preflight — BLOCKED; no Green mutation
+# WP260-A provider activation — Staging-only PASS; external provider evidence bounded
 
 ## Bound source and image
 
@@ -14,39 +14,62 @@ worker-time user checks, exact allowed mailbox checks, and push token-hash
 filtering. Focused source tests are 10/10 PASS; static allowlist wiring is 2/2
 PASS; diff-check is PASS.
 
-## Read-only Green inventory
+## Read-only Green inventory and isolated activation
 
-The canonical Green container was still WP257 (`7887c7c…`), with
+Before the switch, the canonical Green container was WP257 (`7887c7c…`), with
 `MAIL_TRANSPORT=disabled`, `PUSH_TRANSPORT=memory` and `PAYMENT_TRANSPORT=memory`.
-The notification outbox contained no pending/retry/processing rows. Existing
-rows were historical `dead`, `sent` or `suppressed` rows for the allowlisted
-synthetic cohort; no foreign pending delivery was found. One enabled Pixel
-registration was observed, but its token was not retained in evidence.
+The bounded inventory had no pending/retry/processing outbox rows, six
+historical dead email rows, and one enabled Pixel registration. Those six dead
+rows were quarantined as `suppressed` with a matching audit record before the
+worker was enabled; no token content was retained.
 
-## Safe activation attempt and blocker
+The exact WP260-A image was then run as the canonical internal Green API with
+the existing database, uploads volume, MFA file mount and `--group-add 65532`.
+A dedicated non-internal bridge `sit-staging-provider-egress` was created. Its
+only member is the canonical API; PostgreSQL is not attached. The API remains
+on the private Green network for database access and has no host port or new
+inbound route. The mounted Firebase file passed the staging validator and is
+readable only through the existing secret mount (`640`, group `65532`).
+Current readback is healthy with `MAIL_TRANSPORT=smtp`,
+`PUSH_TRANSPORT=fcm`, Firebase project `shareittoo-staging`, Firebase Auth and
+Phone verification disabled, payment still memory-only, and identity
+verification disabled.
 
-A temporary container using the exact WP260-A image, the existing database,
-uploads volume, MFA file mount and Green network was started without changing
-the canonical container. The server source and database became available, but
-SMTP verification on the Green network failed with `EAI_AGAIN` for
-`smtp-relay.gmail.com`; `/health/ready` therefore remained `degraded` with
-`database=ok` and `mail=error`. The temporary container was removed. The
-canonical WP257 container, Caddy route, database, uploads and access gate were
-not changed.
+## Provider evidence
 
-The Green host has no Firebase service-account file available at the expected
-secret locations. Consequently FCM cannot be mounted or activated without an
-owner-supplied supported credential file. No FCM traffic was attempted.
+One fresh verification email was sent only to the allowlisted controlled
+mailbox `contact@shareittoo.com`. SMTP returned `250 2.0.0 OK` with one
+accepted and zero rejected recipients. Gmail readback in that mailbox showed
+the new `Bestätige deine E-Mail-Adresse bei ShareItToo` message from ShareItToo
+at the controlled probe time. The token/link value was not retained, and the
+synthetic token was not consumed because it was not bound to a staging user;
+this is provider acceptance/inbox evidence, not a claim of account
+verification.
+
+One fresh renter message on the existing allowlisted Staging thread created a
+push outbox event. After a transient worker retry and a controlled drain, the
+authoritative row was `push=sent`, attempt 4, provider `fcm`, contract `v52`,
+with a Firebase provider message id; the matching in-app row was `sent`. The
+Pixel 7 Pro showed the neutral V5.2 notification contract
+`Neue ShareItToo-Aktualisierung` / `In der App ansehen.`. Tapping `Öffnen`
+opened the in-app `Benachrichtigungen` screen on the `Nachrichten` tab, where
+the new renter notification was visible. Sender identity stayed in the
+authenticated in-app detail, not in the lock-screen payload.
+
+The first ad-hoc replacement script emitted a false-negative post-switch
+status and the API later needed one restart after a transient PostgreSQL
+`ETIMEDOUT`; current readback after restart is healthy and the rollback
+container remains stopped. This is recorded as deployment-tooling technical
+debt, not hidden as a permanent prerequisite or release proof.
 
 ## Gate result
 
-`WP260-A = BLOCKED_PRE_PROVIDER_ACTIVATION`.
+`WP260-A = STAGING_PROVIDER_ACTIVATION_PASS_WITH_TECHNICAL_DEBT`.
 
-No SMTP message, FCM notification, Firebase Auth/Phone activation, payment,
-Store, Production, DNS or OnePlus action is claimed. The next safe action is to
-resolve the Green-network DNS/SMTP path and provide the dedicated Staging FCM
-service-account file through the existing secret gate; only then may a bounded
-SMTP receipt and Pixel FCM shade/tap test run. Stripe/Identity remain separate
-read-only gates.
+No Firebase Auth/Phone/Analytics activation, payment, Store, Production, DNS,
+Play, OnePlus or public-registration change occurred. Stripe/Identity remain
+separate read-only/provider gates. SMTP one-time account verification remains
+unproven by design because the controlled probe token was synthetic and not
+stored.
 
 Evidence: `docs/evidence/release-readiness/wp260-a-provider-activation-preflight-20260919.json`.

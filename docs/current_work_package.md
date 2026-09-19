@@ -1,10 +1,14 @@
-# Current Work Package: WP260-A provider activation preflight — BLOCKED; no Green mutation
+# Current Work Package: WP260-A Staging provider activation — PASS WITH TECHNICAL DEBT
 
-WP260-A prepared the fail-closed Staging SMTP/FCM recipient gate and built an
-exact successor image, but stopped before canonical Green replacement. The
-Green network cannot resolve `smtp-relay.gmail.com` (`EAI_AGAIN`) and no
-dedicated Firebase service-account file is present on the host. The temporary
-candidate was removed; WP257 remains active. Stripe/Identity work is separate.
+WP260-A activated the exact source image only in the canonical Green Staging
+runtime with a non-internal provider-egress bridge, the existing allowlisted
+mailbox and the existing Pixel registration. SMTP provider acceptance plus
+Gmail receipt and real FCM Pixel notification/tap evidence are recorded. The
+neutral V5.2 notification intentionally omits sender identity; the in-app
+message notification carries it after authenticated reload. Payment remains
+memory-only and Firebase Auth/Phone, Identity, Store, Production, DNS, Play
+and OnePlus remain closed. A transient PostgreSQL timeout and an ad-hoc
+deployment-script false-negative are Technical Debt, not release proof.
 
 See `docs/operations/WP260_A_PROVIDER_ACTIVATION_PREFLIGHT_20260919.md` and
 its evidence JSON.

@@ -1,12 +1,20 @@
 # ShareItToo Current State
 
-## WP260-A provider activation preflight — BLOCKED; no Green mutation
+## WP260-A Staging provider activation — PASS WITH TECHNICAL DEBT; live gates closed
 
-WP260-A's exact successor source and image passed focused source verification,
-but canonical Green SMTP preflight failed closed on `EAI_AGAIN` DNS resolution
-for the relay. The Green host also lacks the dedicated Firebase service-account
-file, so FCM was not activated. Temporary runtime was removed and WP257 remains
-active; no provider traffic occurred.
+WP260-A's exact source image is now the canonical Green Staging API on a
+dedicated external-egress bridge whose only member is the API; PostgreSQL is
+not attached and no host port/inbound route was added. The mounted
+`shareittoo-staging` Firebase service account passed its validator. SMTP sent
+one allowlisted verification probe to `contact@shareittoo.com` and Gmail
+readback confirmed receipt. A real allowlisted Pixel push outbox event reached
+FCM, rendered the neutral V5.2 notification and opened the in-app
+`Benachrichtigungen → Nachrichten` surface on tap. The synthetic email token
+was not account-bound or consumed, so this is not account-verification proof.
+Payment remains memory-only; Firebase Auth/Phone, Identity, Store, Production,
+DNS, Play and OnePlus remain closed. A transient DB timeout and a false-negative
+ad-hoc deploy readback are retained as technical debt; canonical health is
+green after restart. See the WP260-A operation report and evidence JSON.
 
 ## WP259-B message, booking and FCM truth — SOURCE FIX PENDING SUCCESSOR / PROVIDER HOLD
 

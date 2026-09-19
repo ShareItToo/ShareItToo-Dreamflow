@@ -1,6 +1,6 @@
 {
   "package": "WP260-A",
-  "status": "BLOCKED_PRE_PROVIDER_ACTIVATION",
+  "status": "STAGING_PROVIDER_ACTIVATION_PASS_WITH_TECHNICAL_DEBT",
   "source": {
     "commit": "727faf9148aee6ac9c4f7667f675f65b83e48719",
     "image": "shareittoo-api-wp260a:727faf9148aee6ac9c4f7667f675f65b83e48719",
@@ -12,32 +12,72 @@
     "diffCheck": "PASS"
   },
   "readOnlyInventory": {
-    "canonicalRuntime": "WP257",
-    "mailTransport": "disabled",
-    "pushTransport": "memory",
+    "canonicalRuntime": "WP260-A",
+    "mailTransport": "smtp",
+    "pushTransport": "fcm",
     "paymentTransport": "memory",
     "pendingRetryProcessingOutbox": 0,
     "foreignPendingOutbox": 0,
+    "preexistingDeadEmailRowsQuarantined": 6,
+    "quarantineAudit": "wp260a.preexisting-dead-outbox-quarantined",
     "enabledPixelRegistration": 1,
-    "tokenContentRetained": false
+    "tokenContentRetained": false,
+    "egressBridge": {
+      "name": "sit-staging-provider-egress",
+      "members": ["shareittoo-staging-api"],
+      "postgresAttached": false,
+      "hostPorts": false
+    },
+    "firebaseSecret": {
+      "project": "shareittoo-staging",
+      "validator": "PASS",
+      "mountedMode": "640",
+      "mountedGroup": "65532",
+      "contentRetained": false
+    }
   },
-  "temporaryCandidate": {
-    "started": true,
-    "database": "ok",
-    "smtpVerification": "FAIL_EAI_AGAIN_GREEN_NETWORK_DNS",
-    "ready": false,
-    "removed": true,
-    "canonicalRuntimeChanged": false
+  "canonicalRuntime": {
+    "ready": "200_ok",
+    "release": "wp260a-727faf9148ae",
+    "paymentTransport": "memory",
+    "paymentLivemode": false,
+    "firebaseAuth": false,
+    "firebasePhoneVerification": false,
+    "identityVerification": "disabled",
+    "rollbackContainer": "stopped"
+  },
+  "smtp": {
+    "transport": "smtp",
+    "recipientGate": ["contact@shareittoo.com"],
+    "providerResponse": "250 2.0.0 OK",
+    "accepted": 1,
+    "rejected": 0,
+    "mailboxReadback": "PASS",
+    "oneTimeAccountConsumption": "NOT_RUN_SYNTHETIC_TOKEN_NOT_BOUND_TO_USER",
+    "tokenRetained": false
   },
   "fcm": {
-    "serviceAccountFileAvailableOnGreenHost": false,
-    "providerTraffic": false,
-    "activation": "BLOCKED_MISSING_SUPPORTED_SECRET_FILE"
+    "project": "shareittoo-staging",
+    "outboxEvent": "message:message_7c9d37b9-ec6b-4c33-ad49-0f088fcbb8cf",
+    "outboxPush": "sent",
+    "outboxAttempt": 4,
+    "provider": "fcm",
+    "contractVersion": "v52",
+    "pixelNotification": "PASS_NEUTRAL_V52_PAYLOAD",
+    "pixelTapDeepLink": "PASS_NOTIFICATIONS_MESSAGES_TAB",
+    "senderIdentityInPayload": false,
+    "tokenContentRetained": false
   },
-  "next": "Resolve Green-network DNS/SMTP and provide the dedicated Staging FCM service-account file through the existing secret gate before real provider tests.",
+  "deploymentDebt": {
+    "scriptPostSwitchReadback": "FALSE_NEGATIVE_OBSERVED",
+    "runtimeRestartAfterTransientPgTimeout": true,
+    "canonicalReadbackAfterRestart": "PASS",
+    "permanentPrerequisite": false
+  },
+  "next": "Proceed with WP260-B Stripe test and Identity sandbox read-only/provider preflight; keep live payment, production, Play, DNS, Firebase Auth/Phone and OnePlus closed.",
   "boundaries": [
-    "No SMTP message sent",
-    "No FCM notification sent",
+    "SMTP only to contact@shareittoo.com allowlist",
+    "FCM only to the existing controlled Pixel registration",
     "No Firebase Auth or Phone activation",
     "No payment, Store, Production, DNS or OnePlus mutation"
   ]
