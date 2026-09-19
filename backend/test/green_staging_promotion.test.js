@@ -15,6 +15,7 @@ import {
   assertGreenTargetManifest,
   buildGreenPromotionCommands,
   buildGreenPromotionPlan,
+  databaseUrlForIp,
   greenTarget,
   sanitizeGreenEvidence,
   normalizedGreenTargetDigest,
@@ -176,7 +177,7 @@ test('every promotion command has an executable command and argv, including targ
   }
 });
 
-test('executor drives production-shaped readbacks to quiesce and rejects a wrong pre-promotion image', async () => {
+test('executor drives production-shaped readbacks to quiesce and rejects bad image or database IP', async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'sit-green-runner-'));
   const configFile = path.join(root, 'green.env');
   const evidenceFile = path.join(root, 'green-promotion.json');
@@ -216,10 +217,10 @@ test('executor drives production-shaped readbacks to quiesce and rejects a wrong
     ],
   });
   const databaseRecord = { Name: `/${greenTarget.databaseContainer}`, State: { Running: true }, Config: { Labels: { 'com.shareittoo.sit.green': 'true' } } };
-  const fakeRun = async (image) => {
+  const fakeRun = async (image, { isolatedIp = '172.31.0.2' } = {}) => {
     const calls = [];
     const fake = async (command, args, options = {}) => {
-      calls.push({ command, args, phase: options.phase });
+      calls.push({ command, args, phase: options.phase, env: options.env });
       const phase = options.phase;
       if (phase === 'target_inventory_api') return { stdout: JSON.stringify([prePromotionRecord(image)]) };
       if (phase === 'target_inventory_database') return { stdout: JSON.stringify([databaseRecord]) };
@@ -229,6 +230,8 @@ test('executor drives production-shaped readbacks to quiesce and rejects a wrong
       if (phase === 'runtime_image_readback') return { stdout: JSON.stringify(imageReadback) };
       if (phase === 'source_schema_readback') return { stdout: '087_identity_verification_pilot_gate.up.sql\n' };
       if (phase === 'isolated_migration_readback') return { stdout: '092_listing_ai_mock_consent.up.sql\n' };
+      if (phase === 'isolated_database_ip_readback') return { stdout: JSON.stringify({ [plan.isolated.network]: { IPAddress: isolatedIp } }) };
+      if (phase === 'canonical_database_ip_readback') return { stdout: JSON.stringify({ [plan.target.network]: { IPAddress: '172.31.0.3' } }) };
       if (phase === 'candidate_health_and_feature_probes' || phase === 'candidate_ready_probe') return { stdout: JSON.stringify(payload) };
       if (phase === 'candidate_version_probe') return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'staging' }) };
       if (phase === 'fresh_protected_backup') return { stdout: 'synthetic protected backup' };
@@ -253,13 +256,25 @@ test('executor drives production-shaped readbacks to quiesce and rejects a wrong
     .slice(0, buildGreenPromotionCommands({ plan, configFile, config: runtimeConfig }).findIndex((entry) => entry.phase === 'quiesce_green_api'))
     .map((entry) => entry.phase);
   const good = await fakeRun(targetManifest.prePromotionImage);
-  assert.equal(good.result.code, 'test_stop_before_quiesce');
+  assert.equal(good.result?.code, 'test_stop_before_quiesce', `${good.result?.message ?? 'no-error'} :: ${good.calls.map((entry) => entry.phase).join('|')}`);
   const quiesceIndex = good.calls.findIndex((entry) => entry.phase === 'quiesce_green_api');
   assert.ok(quiesceIndex > 0);
   assert.deepEqual(good.calls.slice(0, quiesceIndex).map((entry) => entry.phase), expectedReversible);
-  const bad = await fakeRun('shareittoo-api-wrong:old');
-  assert.equal(bad.result.code, 'green_prepromotion_tuple_mismatch');
-  assert.equal(bad.calls.some((entry) => entry.phase === 'quiesce_green_api'), false);
+  const isolatedProvision = good.calls.find((entry) => entry.phase === 'synthetic_sandbox_provision_isolated');
+  const isolatedUrl = new URL(isolatedProvision.env.DATABASE_URL);
+  assert.equal(isolatedUrl.hostname, '172.31.0.2');
+  assert.equal(isolatedUrl.username, 'green_rehearsal');
+  assert.equal(isolatedUrl.port, '5432');
+  assert.equal(isolatedUrl.pathname, '/green_rehearsal');
+  rmSync(`${evidenceFile}.pgdump`, { force: true });
+  const badImage = await fakeRun('shareittoo-api-wrong:old');
+  assert.equal(badImage.result.code, 'green_prepromotion_tuple_mismatch');
+  assert.equal(badImage.calls.some((entry) => entry.phase === 'quiesce_green_api'), false);
+  rmSync(`${evidenceFile}.pgdump`, { force: true });
+  const badIp = await fakeRun(targetManifest.prePromotionImage, { isolatedIp: '8.8.8.8' });
+  assert.equal(badIp.result.code, 'green_isolated_database_ip_invalid');
+  assert.equal(badIp.calls.some((entry) => entry.phase === 'synthetic_sandbox_provision_isolated'), false);
+  assert.equal(badIp.calls.some((entry) => entry.phase === 'quiesce_green_api'), false);
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -279,6 +294,26 @@ test('command executor bindings keep isolated probes and canonical runtime disti
   assert.ok(commands.find((entry) => entry.phase === 'isolated_postgres_wait').args.join(' ').includes('pg_isready'));
   assert.ok(commands.find((entry) => entry.phase === 'candidate_health_and_feature_probes').args.includes('--retry'));
   assert.ok(commands.find((entry) => entry.phase === 'final_live_wait').args.includes('--retry'));
+  assert.ok(commands.findIndex((entry) => entry.phase === 'isolated_database_ip_readback') < commands.findIndex((entry) => entry.phase === 'synthetic_sandbox_provision_isolated'));
+  assert.ok(commands.findIndex((entry) => entry.phase === 'canonical_database_ip_readback') < commands.findIndex((entry) => entry.phase === 'synthetic_sandbox_provision_canonical'));
+});
+
+test('database IP rebinding preserves canonical identity and changes only the private host', () => {
+  const rebound = databaseUrlForIp(
+    'postgres://shareittoo_green:synthetic@shareittoo-staging-api:5432/shareittoo_green',
+    '172.31.0.3',
+    { expectedHost: 'shareittoo-staging-api', expectedUser: 'shareittoo_green', expectedDatabase: 'shareittoo_green', code: 'fixture_database_identity_invalid' },
+  );
+  const parsed = new URL(rebound);
+  assert.equal(parsed.hostname, '172.31.0.3');
+  assert.equal(parsed.username, 'shareittoo_green');
+  assert.equal(parsed.port, '5432');
+  assert.equal(parsed.pathname, '/shareittoo_green');
+  assert.throws(() => databaseUrlForIp(
+    'postgres://shareittoo_green:synthetic@legacy-db:5432/shareittoo_green',
+    '172.31.0.3',
+    { expectedHost: 'shareittoo-staging-api', expectedUser: 'shareittoo_green', expectedDatabase: 'shareittoo_green', code: 'fixture_database_identity_invalid' },
+  ), /fixture_database_identity_invalid/u);
 });
 
 test('pre-promotion inventory requires the exact Green DB host and protected mount cohort', () => {
