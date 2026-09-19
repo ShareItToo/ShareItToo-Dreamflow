@@ -2,7 +2,7 @@ import { ListingAiGatewayError } from './listing_ai_gateway.js';
 
 export const listingAiBudgetGuardVersion = 'N14-2026-09-03.1';
 export const listingAiLifetimeBudgetPeriod = 'lifetime';
-export const listingAiLifetimeMaxCalls = 5;
+export const listingAiRunMaxCalls = 5;
 
 function fail(code) {
   throw new ListingAiGatewayError(503, code);
@@ -38,9 +38,10 @@ function reservation({ reservedCents, settleOperation, releaseOperation }) {
   });
 }
 
-export function createMemoryListingAiBudgetGuard({ budgetCents, maxCallCount = listingAiLifetimeMaxCalls } = {}) {
+export function createMemoryListingAiBudgetGuard({ budgetCents, maxCallCount = Number.POSITIVE_INFINITY } = {}) {
   cents(budgetCents, 'listing_ai_budget_configuration_invalid');
-  if (!Number.isSafeInteger(maxCallCount) || maxCallCount < 1 || maxCallCount > listingAiLifetimeMaxCalls) {
+  if (maxCallCount !== Number.POSITIVE_INFINITY
+      && (!Number.isSafeInteger(maxCallCount) || maxCallCount < 1 || maxCallCount > listingAiRunMaxCalls)) {
     fail('listing_ai_budget_call_limit_invalid');
   }
   let spentCents = 0;
@@ -52,7 +53,7 @@ export function createMemoryListingAiBudgetGuard({ budgetCents, maxCallCount = l
     async reserve(requestedCents) {
       cents(requestedCents, 'listing_ai_budget_reservation_invalid', { minimum: 1 });
       if (spentCents + reservedCents + requestedCents > budgetCents
-          || callCount + reservedCalls + 1 > maxCallCount) {
+          || (Number.isFinite(maxCallCount) && callCount + reservedCalls + 1 > maxCallCount)) {
         fail('listing_ai_budget_exhausted');
       }
       reservedCents += requestedCents;
@@ -78,14 +79,15 @@ export function createPostgresListingAiBudgetGuard({
   client,
   provider = 'openai',
   budgetCents,
-  maxCallCount = listingAiLifetimeMaxCalls,
+  maxCallCount = Number.POSITIVE_INFINITY,
   now = () => new Date(),
 } = {}) {
   if (!client || typeof client.query !== 'function' || provider !== 'openai') {
     fail('listing_ai_budget_store_invalid');
   }
   cents(budgetCents, 'listing_ai_budget_configuration_invalid', { minimum: 1 });
-  if (!Number.isSafeInteger(maxCallCount) || maxCallCount < 1 || maxCallCount > listingAiLifetimeMaxCalls) {
+  if (maxCallCount !== Number.POSITIVE_INFINITY
+      && (!Number.isSafeInteger(maxCallCount) || maxCallCount < 1 || maxCallCount > listingAiRunMaxCalls)) {
     fail('listing_ai_budget_call_limit_invalid');
   }
   return Object.freeze({
@@ -112,9 +114,11 @@ export function createPostgresListingAiBudgetGuard({
             AND provider = $2
             AND budget_cents = $4
             AND spent_cents + reserved_cents + $3 <= budget_cents
-            AND call_count + reserved_calls + 1 <= $5
+            ${Number.isFinite(maxCallCount) ? 'AND call_count + reserved_calls + 1 <= $5' : ''}
         RETURNING budget_cents`,
-        [period, provider, requestedCents, budgetCents, maxCallCount],
+        Number.isFinite(maxCallCount)
+          ? [period, provider, requestedCents, budgetCents, maxCallCount]
+          : [period, provider, requestedCents, budgetCents],
       );
       if (held.rowCount !== 1) {
         const state = await client.query(

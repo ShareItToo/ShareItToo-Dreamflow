@@ -1878,7 +1878,7 @@ export function createApp({
     schemaVersion: config.listingAi.schemaVersion,
     budgetCents: config.listingAi.budgetCents,
     budgetScope: config.listingAi.budgetScope,
-    maxProviderCalls: config.listingAi.maxProviderCalls,
+    runMaxProviderCalls: config.listingAi.runMaxProviderCalls,
     externalProviderExecutionAllowed: config.listingAi.externalProviderExecutionAllowed,
     automaticPublicationAllowed: false,
   });

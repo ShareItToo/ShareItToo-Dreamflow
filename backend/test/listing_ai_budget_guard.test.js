@@ -142,7 +142,7 @@ test('postgres budget guard fails closed on configuration drift and exhaustion',
 });
 
 test('memory guard is lifetime-scoped and caps provider attempts at five', async () => {
-  const guard = createMemoryListingAiBudgetGuard({ budgetCents: 10_000 });
+  const guard = createMemoryListingAiBudgetGuard({ budgetCents: 10_000, maxCallCount: 5 });
   for (let index = 0; index < 5; index += 1) {
     const held = await guard.reserve(2);
     await held.settle(2);
@@ -159,6 +159,7 @@ test('postgres guard uses the lifetime bucket and caps concurrent reservations',
   const guard = createPostgresListingAiBudgetGuard({
     client,
     budgetCents: 10_000,
+    maxCallCount: 5,
     now: () => new Date('2099-12-31T23:59:59.000Z'),
   });
   for (let index = 0; index < 5; index += 1) {

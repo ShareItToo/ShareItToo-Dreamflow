@@ -16,7 +16,7 @@ test('listing AI configuration is disabled and zero-cost by default', () => {
   assert.equal(result.gatewayVersion, listingAiGatewayVersion);
   assert.equal(result.provider, 'disabled');
   assert.equal(result.budgetScope, 'lifetime');
-  assert.equal(result.maxProviderCalls, 5);
+  assert.equal(result.runMaxProviderCalls, 5);
   assert.equal(result.enabled, false);
   assert.equal(result.budgetCents, 0);
   assert.equal(result.externalProviderExecutionAllowed, false);
