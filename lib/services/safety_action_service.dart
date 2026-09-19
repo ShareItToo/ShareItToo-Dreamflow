@@ -89,10 +89,12 @@ class SafetyReportResult {
 class SafetyReturnCaseIssueResult {
   final bool reviewOpened;
   final bool reportRecorded;
+  final Map<String, dynamic>? receipt;
 
   const SafetyReturnCaseIssueResult({
     required this.reviewOpened,
     required this.reportRecorded,
+    this.receipt,
   });
 }
 
@@ -890,6 +892,7 @@ class SafetyActionService {
     try {
       if (backendEnabled && !qaRuntimeEnabled) {
         await _requireCurrent(context);
+        late final Map<String, dynamic> remoteReceipt;
         if (opensReview) {
           final contested = contestedAuthorizedMinor;
           if (contested == null || contested <= 0) {
@@ -897,7 +900,7 @@ class SafetyActionService {
               'v52_return_case_contested_amount_invalid',
             );
           }
-          await openReturnCaseRemote(
+          remoteReceipt = await openReturnCaseRemote(
             context: context,
             requestId: requestId,
             reasonCode: reasonCode,
@@ -907,7 +910,7 @@ class SafetyActionService {
             idempotencyKey: idempotencyKey,
           );
         } else {
-          await createBookingIssueReportRemote(
+          remoteReceipt = await createBookingIssueReportRemote(
             context: context,
             requestId: requestId,
             reasonCode: reasonCode,
@@ -916,13 +919,20 @@ class SafetyActionService {
           );
         }
         remoteAccepted = true;
-        await _requireCurrent(
-          context,
-          remoteAcceptedOrConfirmed: true,
-        );
+        if (opensReview) {
+          final returnCase = remoteReceipt['returnCase'];
+          if (returnCase is! Map ||
+              (returnCase['id']?.toString().trim() ?? '').isEmpty) {
+            throw const SafetyActionFailure.localUnavailable(
+              'return_case_receipt_invalid',
+              remoteAcceptedOrConfirmed: true,
+            );
+          }
+        }
         return SafetyReturnCaseIssueResult(
           reviewOpened: opensReview,
           reportRecorded: true,
+          receipt: remoteReceipt,
         );
       }
 

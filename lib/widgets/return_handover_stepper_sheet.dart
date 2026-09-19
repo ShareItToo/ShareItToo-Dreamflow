@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui' show ImageFilter;
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -12,6 +14,9 @@ import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/handover_code.dart';
 import 'package:lendify/services/local_artifact_storage_service.dart';
+import 'package:lendify/services/safety_action_service.dart';
+import 'package:lendify/services/shared_persistence_sync.dart';
+import 'package:lendify/widgets/safety_action_interaction.dart';
 import 'package:lendify/widgets/private_pilot_risk_notice.dart';
 
 typedef CounterpartyConfirmationVerifier = Future<bool> Function({
@@ -38,6 +43,7 @@ class ReturnHandoverStepperSheet {
     String? qrPayload,
     CounterpartyConfirmationVerifier? confirmationVerifier,
     ConfirmationChallengeLoader? confirmationChallengeLoader,
+    SafetyActionService? safetyActionService,
     bool viewerIsOwner = false,
     ReturnFlowMode mode = ReturnFlowMode.returnFlow,
   }) async {
@@ -56,6 +62,7 @@ class ReturnHandoverStepperSheet {
         qrPayload: qrPayload,
         confirmationVerifier: confirmationVerifier,
         confirmationChallengeLoader: confirmationChallengeLoader,
+        safetyActionService: safetyActionService,
         viewerIsOwner: viewerIsOwner,
         mode: mode,
         fullScreen: false,
@@ -74,6 +81,7 @@ class ReturnHandoverStepperSheet {
     String? qrPayload,
     CounterpartyConfirmationVerifier? confirmationVerifier,
     ConfirmationChallengeLoader? confirmationChallengeLoader,
+    SafetyActionService? safetyActionService,
     bool viewerIsOwner = false,
     ReturnFlowMode mode = ReturnFlowMode.returnFlow,
   }) async {
@@ -88,6 +96,7 @@ class ReturnHandoverStepperSheet {
           qrPayload: qrPayload,
           confirmationVerifier: confirmationVerifier,
           confirmationChallengeLoader: confirmationChallengeLoader,
+          safetyActionService: safetyActionService,
           viewerIsOwner: viewerIsOwner,
           mode: mode,
         ),
@@ -105,6 +114,7 @@ class ReturnHandoverStepperPage extends StatelessWidget {
   final String? qrPayload;
   final CounterpartyConfirmationVerifier? confirmationVerifier;
   final ConfirmationChallengeLoader? confirmationChallengeLoader;
+  final SafetyActionService? safetyActionService;
   final ReturnFlowMode mode;
   final bool viewerIsOwner;
   const ReturnHandoverStepperPage(
@@ -117,6 +127,7 @@ class ReturnHandoverStepperPage extends StatelessWidget {
       this.qrPayload,
       this.confirmationVerifier,
       this.confirmationChallengeLoader,
+      this.safetyActionService,
       this.mode = ReturnFlowMode.returnFlow,
       this.viewerIsOwner = false});
 
@@ -133,6 +144,7 @@ class ReturnHandoverStepperPage extends StatelessWidget {
         qrPayload: qrPayload,
         confirmationVerifier: confirmationVerifier,
         confirmationChallengeLoader: confirmationChallengeLoader,
+        safetyActionService: safetyActionService,
         viewerIsOwner: viewerIsOwner,
         mode: mode,
         fullScreen: true,
@@ -150,6 +162,7 @@ class _ReturnHandoverStepper extends StatefulWidget {
   final String? qrPayload;
   final CounterpartyConfirmationVerifier? confirmationVerifier;
   final ConfirmationChallengeLoader? confirmationChallengeLoader;
+  final SafetyActionService? safetyActionService;
   final bool
       fullScreen; // new: when true, fill the whole page instead of sheet height
   final ReturnFlowMode mode;
@@ -163,6 +176,7 @@ class _ReturnHandoverStepper extends StatefulWidget {
       this.qrPayload,
       this.confirmationVerifier,
       this.confirmationChallengeLoader,
+      this.safetyActionService,
       this.mode = ReturnFlowMode.returnFlow,
       this.fullScreen = false,
       this.viewerIsOwner = false});
@@ -209,8 +223,16 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   // Step: damage report (return flow only)
   bool _hasDamage = false;
   List<PlatformFile> _damagePhotos = [];
+  List<String?> _damageEvidenceUploadIds = [];
   final TextEditingController _damageNotesCtrl = TextEditingController();
-  // Removed: cost estimate field per request
+  final TextEditingController _damageAmountCtrl = TextEditingController();
+  String _damageIdempotencyKey = '';
+  Map<String, dynamic>? _damageReceipt;
+  bool _savingDamageCase = false;
+  late final SafetyActionService _safetyService;
+  final SafetyActionInteractionController _safetyActions =
+      SafetyActionInteractionController();
+  StreamSubscription<String>? _securitySubscription;
   final TextEditingController _manualCodeCtrl = TextEditingController();
   bool _showManualEntry = false;
 
@@ -222,9 +244,27 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   @override
   void initState() {
     super.initState();
+    _safetyService = widget.safetyActionService ?? const SafetyActionService();
     _handoverCode = widget.handoverCode;
     _qrPayload = widget.qrPayload;
+    if (widget.mode == ReturnFlowMode.returnFlow) {
+      unawaited(_loadSafetyContext());
+      _securitySubscription = SharedPersistenceSync.changes.listen((key) {
+        if (key == SharedPersistenceSync.accountSecurityStateKey) {
+          _safetyActions.invalidate();
+        }
+      });
+    }
     unawaited(_loadConditionEvidence());
+  }
+
+  Future<void> _loadSafetyContext() async {
+    try {
+      final context = await _safetyService.loadCurrentContext();
+      if (mounted && context != null) _safetyActions.replaceContext(context);
+    } catch (error) {
+      debugPrint('[handover] damage principal load failed: $error');
+    }
   }
 
   String get _evidenceSegment =>
@@ -262,7 +302,10 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
 
   @override
   void dispose() {
+    _securitySubscription?.cancel();
+    _safetyActions.dispose();
     _damageNotesCtrl.dispose();
+    _damageAmountCtrl.dispose();
     _manualCodeCtrl.dispose();
     super.dispose();
   }
@@ -304,12 +347,171 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
         }
         return false;
       case _StepKind.damage:
-        if (!_hasDamage) return true;
-        return _damagePhotos.isNotEmpty ||
-            _damageNotesCtrl.text.trim().isNotEmpty;
+        if (_savingDamageCase) return false;
+        if (!_hasDamage || _damageReceipt != null) return true;
+        return _damagePhotos.isNotEmpty &&
+            _damageNotesCtrl.text.trim().length >= 10 &&
+            _parseDamageAmountMinor() != null;
       case _StepKind.codes:
         // Hard SIT rule: final completion requires true counterparty confirmation.
         return _otherPartyConfirmed;
+    }
+  }
+
+  int? _parseDamageAmountMinor() {
+    final normalized = _damageAmountCtrl.text.trim().replaceAll(',', '.');
+    final match = RegExp(r'^(\d{1,7})(?:\.(\d{1,2}))?$').firstMatch(normalized);
+    if (match == null) return null;
+    final euros = int.tryParse(match.group(1)!);
+    final centsText = (match.group(2) ?? '').padRight(2, '0');
+    final cents = int.tryParse(centsText);
+    if (euros == null || cents == null) return null;
+    final minor = euros * 100 + cents;
+    final authorized = widget.request.quotedRentalSubtotalMinor ??
+        widget.request.quotedTotalMinor ??
+        ((widget.request.quotedTotalRenter ?? 0) * 100).round();
+    if (minor <= 0 || authorized <= 0 || minor > authorized) return null;
+    return minor;
+  }
+
+  void _ensureDamageIdempotencyKey() {
+    if (_damageIdempotencyKey.isNotEmpty) return;
+    final seed = 'return-damage|${widget.request.id}|'
+        '${DateTime.now().microsecondsSinceEpoch}';
+    _damageIdempotencyKey =
+        'return_damage_${crypto.sha256.convert(utf8.encode(seed)).toString()}';
+  }
+
+  Future<bool> _saveDamageCaseStep() async {
+    if (!_hasDamage || _damageReceipt != null) return true;
+    final details = _damageNotesCtrl.text.trim();
+    final contested = _parseDamageAmountMinor();
+    if (details.length < 10 || _damagePhotos.isEmpty || contested == null) {
+      await AppPopup.toast(
+        context,
+        icon: Icons.error_outline,
+        title:
+            'Beschreibung, Betrag und mindestens ein Schadensfoto sind erforderlich.',
+      );
+      return false;
+    }
+    final owner = _safetyActions.capture();
+    if (owner == null ||
+        !await _safetyActions.isCurrent(_safetyService, owner)) {
+      return false;
+    }
+    _ensureDamageIdempotencyKey();
+    if (mounted) setState(() => _savingDamageCase = true);
+    try {
+      while (_damageEvidenceUploadIds.length < _damagePhotos.length) {
+        _damageEvidenceUploadIds.add(null);
+      }
+      for (var index = 0; index < _damagePhotos.length; index++) {
+        if (_damageEvidenceUploadIds[index] != null) continue;
+        final bytes = _damagePhotos[index].bytes;
+        if (bytes == null || bytes.isEmpty) {
+          throw StateError('damage_evidence_bytes_missing');
+        }
+        final uploadId = await _safetyService.uploadEvidence(
+          context: owner.context,
+          bytes: bytes,
+          filename: _damagePhotos[index].name,
+        );
+        if (!mounted ||
+            !await _safetyActions.isCurrent(_safetyService, owner)) {
+          return false;
+        }
+        _damageEvidenceUploadIds[index] = uploadId;
+      }
+      final result = await _safetyService.submitReturnCaseIssue(
+        context: owner.context,
+        requestId: widget.request.id,
+        reasonCode: 'damage',
+        idempotencyKey: _damageIdempotencyKey,
+        details: details,
+        evidenceNames: _damagePhotos.map((photo) => photo.name).toList(),
+        evidenceUploadIds: _damageEvidenceUploadIds
+            .whereType<String>()
+            .toList(growable: false),
+        opensReview: true,
+        contestedAuthorizedMinor: contested,
+      );
+      if (!mounted || !_safetyActions.isSynchronouslyCurrent(owner)) {
+        return false;
+      }
+      if (!result.reportRecorded) return false;
+      setState(() => _damageReceipt = result.receipt ??
+          <String, dynamic>{'recorded': true, 'reasonCode': 'damage'});
+      return true;
+    } on SafetyActionFailure catch (failure) {
+      debugPrint('[handover] damage case failed: ${failure.kind}');
+      if (mounted && failure.kind != SafetyActionFailureKind.principalChanged) {
+        await AppPopup.toast(
+          context,
+          icon: Icons.error_outline,
+          title: failure.kind == SafetyActionFailureKind.rejected
+              ? 'Schadenmeldung abgelehnt'
+              : 'Schadenmeldung noch nicht bestätigt',
+          message:
+              'Entwurf und Nachweise bleiben erhalten. Bitte prüfe den Status und versuche es erneut.',
+        );
+      }
+      return false;
+    } catch (error) {
+      debugPrint('[handover] damage case failed: $error');
+      if (mounted) {
+        await AppPopup.toast(
+          context,
+          icon: Icons.error_outline,
+          title: 'Schadenmeldung nicht bestätigt',
+          message:
+              'Entwurf und Nachweise bleiben erhalten. Bitte versuche es erneut.',
+        );
+      }
+      return false;
+    } finally {
+      if (mounted && _safetyActions.isSynchronouslyCurrent(owner)) {
+        setState(() => _savingDamageCase = false);
+      }
+    }
+  }
+
+  bool get _hasAbandonableDamageDraft =>
+      widget.mode == ReturnFlowMode.returnFlow &&
+      _damageReceipt == null &&
+      (_hasDamage ||
+          _damagePhotos.isNotEmpty ||
+          _damageNotesCtrl.text.trim().isNotEmpty ||
+          _damageAmountCtrl.text.trim().isNotEmpty ||
+          _damageEvidenceUploadIds.any((id) => id != null));
+
+  Future<void> _closeStepper() async {
+    if (_hasAbandonableDamageDraft) {
+      final abandon = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Schadenentwurf verwerfen?'),
+          content: const Text(
+            'Die Beschreibung und geschützten Nachweise bleiben nur erhalten, wenn du den Entwurf weiterbearbeitest.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Weiter bearbeiten'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Verwerfen'),
+            ),
+          ],
+        ),
+      );
+      if (abandon != true || !mounted) return;
+    }
+    if (mounted) {
+      Navigator.of(context).pop(
+        const ReturnHandoverStepResult(confirmed: false, galleryUsed: false),
+      );
     }
   }
 
@@ -322,6 +524,10 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
     }
     if (_steps[_step] == _StepKind.photos && !_evidencePersisted) {
       final saved = await _saveConditionEvidenceStep();
+      if (!saved) return;
+    }
+    if (_steps[_step] == _StepKind.damage && _hasDamage) {
+      final saved = await _saveDamageCaseStep();
       if (!saved) return;
     }
     if (_step < _steps.length - 1 &&
@@ -502,9 +708,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                             children: [
                               // Close should abort the whole process and exit
                               IconButton(
-                                onPressed: () => Navigator.of(context).pop(
-                                    const ReturnHandoverStepResult(
-                                        confirmed: false, galleryUsed: false)),
+                                onPressed: _closeStepper,
                                 icon: const Icon(Icons.close,
                                     color: Colors.white),
                               ),
@@ -1010,22 +1214,48 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                 _photoGrid(
                   _damagePhotos,
                   () => _pickPhotosMenu(
-                      (newOnes) =>
-                          _damagePhotos = [..._damagePhotos, ...newOnes],
+                      (newOnes) => setState(() {
+                            _damagePhotos = [..._damagePhotos, ...newOnes];
+                            _damageEvidenceUploadIds = [
+                              ..._damageEvidenceUploadIds,
+                              ...List<String?>.filled(newOnes.length, null),
+                            ];
+                          }),
                       multiple: true),
-                  emptyText: 'Beschädigungsfotos hinzufügen (optional).',
+                  emptyText:
+                      'Mindestens ein geschütztes Schadensfoto erforderlich.',
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _damageNotesCtrl,
+                  onChanged: (_) => setState(() {}),
                   minLines: 1,
                   maxLines: null,
                   decoration: const InputDecoration(
-                    hintText: 'Notizen (optional)',
+                    hintText: 'Beschreibung (mindestens 10 Zeichen)',
                     hintStyle: TextStyle(color: Colors.white54),
                     border: InputBorder.none,
                   ),
                   style: const TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _damageAmountCtrl,
+                  onChanged: (_) => setState(() {}),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Strittiger Anteil der autorisierten Miete (€)',
+                    hintText: 'z. B. 12,50 – keine Zusatzbelastung',
+                    hintStyle: TextStyle(color: Colors.white54),
+                    border: OutlineInputBorder(),
+                  ),
+                  style: const TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Der Betrag wird nur aus der bereits autorisierten Miete bestritten; es entsteht keine neue Belastung.',
+                  style: TextStyle(color: Colors.white60),
                 ),
               ]
             ],
