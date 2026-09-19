@@ -466,7 +466,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
   safePath(configFile, 'green_config_file_invalid');
   const runtimeConfig = assertGreenRuntimeConfig(config);
   const { target, runtime, isolated } = plan;
-  const inspect = (name) => ['docker', ['inspect', '--format', '{{json .}}', name]];
+  const inspect = (name) => ({ command: 'docker', args: ['inspect', '--format', '{{json .}}', name] });
   const commands = [
     { phase: 'target_inventory_api', ...inspect(target.apiContainer) },
     { phase: 'target_inventory_database', ...inspect(target.databaseContainer) },

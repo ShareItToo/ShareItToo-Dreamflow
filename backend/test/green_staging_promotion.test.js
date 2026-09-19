@@ -153,6 +153,28 @@ test('promotion plan keeps backup, isolated 87-to-92 rehearsal, acceptance and f
   assert.equal(commands.some((entry) => entry.args?.some((arg) => /shareittoo-staging-postgres|shareittoo_staging_backend|shareittoo_staging_postgres_data|prod|production/iu.test(arg))), false);
 });
 
+test('every promotion command has an executable command and argv, including target inventory', () => {
+  const plan = buildGreenPromotionPlan({
+    targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`,
+    opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json',
+  });
+  const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
+  const targetInventory = commands.filter(({ phase }) => phase.startsWith('target_inventory_'));
+  assert.deepEqual(targetInventory.map(({ command, args }) => ({ command, args })), [
+    { command: 'docker', args: ['inspect', '--format', '{{json .}}', greenTarget.apiContainer] },
+    { command: 'docker', args: ['inspect', '--format', '{{json .}}', greenTarget.databaseContainer] },
+    { command: 'docker', args: ['inspect', '--format', '{{json .}}', greenTarget.network] },
+    { command: 'docker', args: ['inspect', '--format', '{{json .}}', greenTarget.providerNetwork] },
+    { command: 'docker', args: ['inspect', '--format', '{{json .}}', greenTarget.uploadsVolume] },
+  ]);
+  assert.ok(targetInventory.length > 0);
+  for (const entry of commands) {
+    assert.equal(typeof entry.command, 'string', `${entry.phase} command must be a string`);
+    assert.ok(entry.command.length > 0, `${entry.phase} command must not be empty`);
+    assert.ok(Array.isArray(entry.args), `${entry.phase} args must be an array`);
+  }
+});
+
 test('command executor bindings keep isolated probes and canonical runtime distinct', () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
