@@ -1,5 +1,16 @@
 # ShareItToo Current State
 
+## WP260-E Connect cohort and secure payment landings — SOURCE PASS; provider gate separate
+
+At source commit `b516e37d9ff214296d995bdaa31a3fe2f351d97a`, signed Connect
+webhooks require a persisted local account mapping plus membership in the
+configured private pilot/staging cohort before provider retrieval or local
+mutation. Public payment landings ignore URL result hints and render only
+coarse server-side payment truth; Connect return is always neutral until the
+authenticated app reloads status. Focused suites are 70/70 and the real
+PostgreSQL 16 runner passes. No Stripe CLI/provider, production, Store/Play,
+Firebase or device action occurred. See the WP260-E operation report.
+
 ## WP260-D Listing-AI durable paid attempt — SOURCE PASS; provider gate separate
 
 Commits `4e262a4f562c010d7e39c80ba618d7b36c76eb2b` and
