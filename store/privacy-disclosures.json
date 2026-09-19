@@ -892,7 +892,7 @@
     },
     {
       "path": "lib/screens/notification_settings_screen.dart",
-      "sha256": "00944967d9b95817e02c7a883ae4247c6e37fbf9f4984c644237d906d3f15bf6"
+      "sha256": "c0a8a84dbe7495e47886a3c04d84a3a113b5124b3e8ce40d619047816e5c51c1"
     },
     {
       "path": "lib/screens/contact_data_screen.dart",

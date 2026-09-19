@@ -440,14 +440,11 @@ class _NotificationSettingsScreenState
                               'Wähle, welche Kategorien im Benachrichtigungsfeed angezeigt werden.',
                           child: Column(
                             children: [
-                              _SettingToggleTile(
+                              _SettingInfoTile(
                                 icon: Icons.error_outline,
                                 title: 'Wichtig',
                                 description:
                                     'Zeigt dringende Hinweise und wichtige Ereignisse.',
-                                value: true,
-                                enabled: false,
-                                onChanged: null,
                                 accent: accent,
                               ),
                               const _Divider(),
@@ -523,14 +520,11 @@ class _NotificationSettingsScreenState
                                 accent: accent,
                               ),
                               const _Divider(),
-                              _SettingToggleTile(
+                              _SettingInfoTile(
                                 icon: Icons.verified_user_outlined,
                                 title: 'Sicherheit & Verifizierung',
                                 description:
                                     'Verifizierung, Sicherheitschecks und wichtige Schutz-Hinweise.',
-                                value: true,
-                                enabled: false,
-                                onChanged: null,
                                 accent: accent,
                               ),
                               const _Divider(),
@@ -806,6 +800,82 @@ class _SettingToggleTile extends StatelessWidget {
                 }),
                 onChanged: enabled ? onChanged : null,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingInfoTile extends StatelessWidget {
+  const _SettingInfoTile({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.accent,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final status = 'Im Benachrichtigungsfeed immer angezeigt.';
+    return Semantics(
+      container: true,
+      label: title,
+      value: status,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: accent.withValues(alpha: 0.24)),
+              ),
+              child: Icon(icon, color: accent, size: 19),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    softWrap: true,
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    softWrap: true,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.textBody(context), height: 1.30),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    status,
+                    softWrap: true,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppTheme.textSecondary(context),
+                        fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(left: 12),
+              child: Icon(Icons.info_outline),
             ),
           ],
         ),
