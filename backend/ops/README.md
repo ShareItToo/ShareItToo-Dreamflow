@@ -70,21 +70,21 @@ existing TOTP ciphertext would otherwise be undecryptable. After a forward
 schema attempt, the deploy runbook does not boot the observed old image: it
 isolates/stops the Staging API and records sanitized forward-recovery evidence
 until a separately proven compatible recovery image exists. Database
-migrations remain forward-applied. Before applying migrations `075-091`, take
+migrations remain forward-applied. Before applying migrations `075-092`, take
 a protected Staging database backup and pass an isolated restore or equivalent
 forward-compatibility verification gate. The flag is staging-only and rejects
 Production.
 
 ## Protected Staging forward-migration rehearsal
 
-Before applying migrations `075-091` to the shared Staging database, run the
+Before applying migrations `075-092` to the shared Staging database, run the
 exact-target-bound rehearsal operation. It verifies the Compose project,
 container and volume labels are Staging-only, repeats the `001-074`
 `schema_migrations` readback, quiesces only running Staging API/mutating
 services, proves there are no foreign database writers, and writes a non-empty
 mode-`0600` custom-format dump plus checksum. That actual dump is restored into
 an isolated pinned PostgreSQL 16 target; aggregate-only non-empty data checks,
-forward migrations `075-091`, foreign-key integrity and focused contract probes
+forward migrations `075-092`, foreign-key integrity and focused contract probes
 for refund recovery, command immutability, refund truth/rename compatibility,
 legal holds, special-category intake, MFA and Identity must all pass.
 
