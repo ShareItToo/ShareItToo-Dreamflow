@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:lendify/services/backend_http.dart';
 import 'package:lendify/services/backend_repository.dart';
 
+import 'technical_sandbox_screen.dart';
+
 class PaymentMethodsScreen extends StatefulWidget {
   final Future<Map<String, dynamic>> Function()? loadCapabilities;
 
@@ -61,6 +63,8 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   Widget build(BuildContext context) {
     final available = _capabilities?['checkoutAvailable'] == true;
     final testMode = available && _capabilities?['mode'] == 'test';
+    final technicalSandbox = TechnicalSandboxCapabilities.fromJson(
+        _capabilities?['technicalSandbox']);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Zahlungsmethoden'),
@@ -154,6 +158,50 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Text(_error!),
+                    ),
+                  ),
+                ],
+                if (technicalSandbox.available) ...[
+                  const SizedBox(height: 14),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Stripe Sandbox',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 18,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text('1,00 € Test'),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Kein echtes Geld. Keine Buchung, kein Zahlungsledger, kein Payout, kein Connect. Nur synthetischer Testnutzer. Keine professionelle Prüfung.',
+                          ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              icon: const Icon(Icons.science_outlined),
+                              label:
+                                  const Text('Technischen Zahlungstest öffnen'),
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => TechnicalSandboxScreen(
+                                      loadCapabilities: widget.loadCapabilities,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],

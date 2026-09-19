@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
@@ -8,6 +9,170 @@ import 'auth_service.dart';
 import 'backend_config.dart';
 import 'backend_http.dart';
 import 'local_principal_scope.dart';
+
+class TechnicalSandboxCapabilities {
+  final bool available;
+  final String provider;
+  final String mode;
+  final int amountMinor;
+  final String currency;
+  final int maxRunsPerUser24h;
+  final bool professionalReview;
+  final bool syntheticOnly;
+  final bool liveMoney;
+  final bool bookingEffect;
+  final bool ledgerEffect;
+  final bool connectEffect;
+
+  const TechnicalSandboxCapabilities({
+    required this.available,
+    required this.provider,
+    required this.mode,
+    required this.amountMinor,
+    required this.currency,
+    required this.maxRunsPerUser24h,
+    required this.professionalReview,
+    required this.syntheticOnly,
+    required this.liveMoney,
+    required this.bookingEffect,
+    required this.ledgerEffect,
+    required this.connectEffect,
+  });
+
+  const TechnicalSandboxCapabilities.disabled()
+      : available = false,
+        provider = 'stripe',
+        mode = 'disabled',
+        amountMinor = 100,
+        currency = 'EUR',
+        maxRunsPerUser24h = 3,
+        professionalReview = false,
+        syntheticOnly = true,
+        liveMoney = false,
+        bookingEffect = false,
+        ledgerEffect = false,
+        connectEffect = false;
+
+  factory TechnicalSandboxCapabilities.fromJson(Object? raw) {
+    if (raw is! Map) return const TechnicalSandboxCapabilities.disabled();
+    final value = Map<String, dynamic>.from(raw);
+    final amount = value['amountMinor'];
+    final limit = value['maxRunsPerUser24h'];
+    final available = value['technicalSandboxAvailable'] == true &&
+        value['provider'] == 'stripe' &&
+        value['mode'] == 'test' &&
+        amount is int &&
+        amount == 100 &&
+        value['currency'] == 'EUR' &&
+        limit is int &&
+        limit == 3 &&
+        value['professionalReview'] == false &&
+        value['syntheticOnly'] == true &&
+        value['liveMoney'] == false &&
+        value['bookingEffect'] == false &&
+        value['ledgerEffect'] == false &&
+        value['connectEffect'] == false;
+    return TechnicalSandboxCapabilities(
+      available: available,
+      provider: value['provider']?.toString() ?? 'stripe',
+      mode: available ? 'test' : 'disabled',
+      amountMinor: amount is int ? amount : 100,
+      currency: value['currency']?.toString() ?? 'EUR',
+      maxRunsPerUser24h: limit is int ? limit : 3,
+      professionalReview: value['professionalReview'] == true,
+      syntheticOnly: value['syntheticOnly'] == true,
+      liveMoney: value['liveMoney'] == true,
+      bookingEffect: value['bookingEffect'] == true,
+      ledgerEffect: value['ledgerEffect'] == true,
+      connectEffect: value['connectEffect'] == true,
+    );
+  }
+}
+
+class PaymentCapabilitiesSnapshot {
+  final Map<String, dynamic> main;
+  final TechnicalSandboxCapabilities technicalSandbox;
+
+  const PaymentCapabilitiesSnapshot({
+    required this.main,
+    required this.technicalSandbox,
+  });
+
+  factory PaymentCapabilitiesSnapshot.fromJson(Map<String, dynamic> raw) {
+    final main = Map<String, dynamic>.from(raw['capabilities'] is Map
+        ? raw['capabilities'] as Map
+        : const <String, dynamic>{});
+    return PaymentCapabilitiesSnapshot(
+      main: main,
+      technicalSandbox: TechnicalSandboxCapabilities.fromJson(
+        raw['technicalSandbox'],
+      ),
+    );
+  }
+}
+
+class TechnicalSandboxCheckout {
+  final String id;
+  final String status;
+  final String? checkoutUrl;
+  final String? checkoutExpiresAt;
+  final bool replayed;
+
+  const TechnicalSandboxCheckout({
+    required this.id,
+    required this.status,
+    required this.checkoutUrl,
+    required this.checkoutExpiresAt,
+    required this.replayed,
+  });
+
+  factory TechnicalSandboxCheckout.fromJson(Map<String, dynamic> value) =>
+      TechnicalSandboxCheckout(
+        id: value['id']?.toString() ?? '',
+        status: value['status']?.toString() ?? 'unknown',
+        checkoutUrl: value['checkoutUrl']?.toString(),
+        checkoutExpiresAt: value['checkoutExpiresAt']?.toString(),
+        replayed: value['replayed'] == true,
+      );
+}
+
+class TechnicalSandboxRun {
+  final String id;
+  final String status;
+  final int amountMinor;
+  final String currency;
+  final String? checkoutUrl;
+  final String? checkoutExpiresAt;
+  final Map<String, dynamic>? receipt;
+
+  const TechnicalSandboxRun({
+    required this.id,
+    required this.status,
+    required this.amountMinor,
+    required this.currency,
+    required this.checkoutUrl,
+    required this.checkoutExpiresAt,
+    required this.receipt,
+  });
+
+  factory TechnicalSandboxRun.fromJson(Map<String, dynamic> value) {
+    final amount = value['amountMinor'];
+    return TechnicalSandboxRun(
+      id: value['id']?.toString() ?? '',
+      status: value['status']?.toString() ?? 'unknown',
+      amountMinor: amount is int ? amount : 0,
+      currency: value['currency']?.toString() ?? '',
+      checkoutUrl: value['checkoutUrl']?.toString(),
+      checkoutExpiresAt: value['checkoutExpiresAt']?.toString(),
+      receipt: value['receipt'] is Map
+          ? Map<String, dynamic>.from(value['receipt'] as Map)
+          : null,
+    );
+  }
+
+  bool get serverConfirmed =>
+      status == 'paid' && receipt != null && receipt!['valid'] != false;
+}
 
 class BackendRepository {
   static String? _staffStepUpToken;
@@ -1494,9 +1659,95 @@ class BackendRepository {
       method: 'GET',
       path: '/payments/capabilities',
     );
-    return response['capabilities'] is Map
-        ? Map<String, dynamic>.from(response['capabilities'] as Map)
-        : const <String, dynamic>{};
+    return _paymentCapabilitiesMap(
+        PaymentCapabilitiesSnapshot.fromJson(response));
+  }
+
+  static Map<String, dynamic> _paymentCapabilitiesMap(
+    PaymentCapabilitiesSnapshot snapshot,
+  ) =>
+      <String, dynamic>{
+        ...snapshot.main,
+        'technicalSandbox': <String, dynamic>{
+          'technicalSandboxAvailable': snapshot.technicalSandbox.available,
+          'provider': snapshot.technicalSandbox.provider,
+          'mode': snapshot.technicalSandbox.mode,
+          'amountMinor': snapshot.technicalSandbox.amountMinor,
+          'currency': snapshot.technicalSandbox.currency,
+          'maxRunsPerUser24h': snapshot.technicalSandbox.maxRunsPerUser24h,
+          'professionalReview': snapshot.technicalSandbox.professionalReview,
+          'syntheticOnly': snapshot.technicalSandbox.syntheticOnly,
+          'liveMoney': snapshot.technicalSandbox.liveMoney,
+          'bookingEffect': snapshot.technicalSandbox.bookingEffect,
+          'ledgerEffect': snapshot.technicalSandbox.ledgerEffect,
+          'connectEffect': snapshot.technicalSandbox.connectEffect,
+        },
+      };
+
+  static Future<Map<String, dynamic>> getPaymentCapabilitiesForOwner(
+    AuthSessionOwner owner,
+  ) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'GET',
+      path: '/payments/capabilities',
+    );
+    return _paymentCapabilitiesMap(
+        PaymentCapabilitiesSnapshot.fromJson(response));
+  }
+
+  static String newTechnicalSandboxIdempotencyKey() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(24, (_) => random.nextInt(256));
+    return 'technical-sandbox:${base64Url.encode(bytes).replaceAll('=', '')}';
+  }
+
+  static Future<TechnicalSandboxCheckout> startTechnicalSandboxCheckout(
+      {required String idempotencyKey}) async {
+    final response = await _authorized(
+      method: 'POST',
+      path: '/payments/technical-sandbox/checkout',
+      body: const <String, dynamic>{},
+      additionalHeaders: {'Idempotency-Key': idempotencyKey},
+    );
+    return TechnicalSandboxCheckout.fromJson(response);
+  }
+
+  static Future<TechnicalSandboxCheckout>
+      startTechnicalSandboxCheckoutForOwner({
+    required AuthSessionOwner owner,
+    required String idempotencyKey,
+  }) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'POST',
+      path: '/payments/technical-sandbox/checkout',
+      body: const <String, dynamic>{},
+      additionalHeaders: {'Idempotency-Key': idempotencyKey},
+    );
+    return TechnicalSandboxCheckout.fromJson(response);
+  }
+
+  static Future<TechnicalSandboxRun> getTechnicalSandboxRun(
+    String runId,
+  ) async {
+    final response = await _authorized(
+      method: 'GET',
+      path: '/payments/technical-sandbox/runs/${Uri.encodeComponent(runId)}',
+    );
+    return TechnicalSandboxRun.fromJson(response);
+  }
+
+  static Future<TechnicalSandboxRun> getTechnicalSandboxRunForOwner({
+    required AuthSessionOwner owner,
+    required String runId,
+  }) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'GET',
+      path: '/payments/technical-sandbox/runs/${Uri.encodeComponent(runId)}',
+    );
+    return TechnicalSandboxRun.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> startConnectOnboarding({

@@ -752,7 +752,7 @@
     },
     {
       "path": "lib/services/backend_repository.dart",
-      "sha256": "eb070028edaba067d5fbbf0451be673d6844b2c7494c1f9582e6319c8e8118c6"
+      "sha256": "51fc1749b24661e9ed2961398b3e3b8e7766b782a415c18b716ab7e757b4fef2"
     },
     {
       "path": "lib/screens/help_center_screen.dart",
@@ -836,7 +836,7 @@
     },
     {
       "path": "lib/screens/payment_methods_screen.dart",
-      "sha256": "47591d15c4ae31869be0d6483a99cf173bd581efa0cd70deda5091160d4b21ff"
+      "sha256": "405ed974af3083a7a5ab2b73e556738070010ee4bf554370a8e88b06b80ffe99"
     },
     {
       "path": "lib/screens/stripe_payout_account_screen.dart",
