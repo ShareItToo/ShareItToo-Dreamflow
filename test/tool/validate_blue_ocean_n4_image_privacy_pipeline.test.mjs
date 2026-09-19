@@ -60,6 +60,22 @@ test('rejects weakened explicit disclosure, consent or publication controls', ()
   }
 });
 
+test('accepts the current on-device disclosure without opening privacy or publication controls', () => {
+  const changed = structuredClone(evidence);
+  changed.consent = {
+    version: 'listing-ai-on-device-disclosure-v1',
+    text: 'SIT wertet deine ausgewählten Bilder direkt auf diesem Android-Gerät aus. Erkannte Objektbegriffe und Texte sowie die ausgewählten Anzeigenfotos werden an SIT übertragen, um einen bearbeitbaren Entwurf zu erstellen. ML Kit sendet Bildinhalte und Erkennungsergebnisse nicht an Google; technische ML-Kit-Nutzungs- und Diagnosedaten können an Google übertragen werden. Es wird nichts automatisch veröffentlicht.',
+    explicitInitiationRequired: true,
+    acceptanceRequired: true,
+    automaticPublicationAllowed: false,
+  };
+  assert.deepEqual(validate(changed), {
+    status: 'verified-ready-for-n5',
+    visualSignalTypeCount: 6,
+    nextPackage: 'N5',
+  });
+});
+
 test('rejects invented regression completion or a forbidden mutation', () => {
   const regression = structuredClone(evidence);
   regression.targetedVerification.backendSuite = 'pending';

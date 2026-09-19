@@ -29,6 +29,10 @@ test('accepts the disabled scanner and upload-policy hold', () => {
   });
 });
 
+test('accepts the current canonical config binding while retaining the disabled hold', () => {
+  assert.equal(validateSupportEvidenceExternalReadiness().externalReadiness, false);
+});
+
 test('strict mode names every unresolved external decision', () => {
   assert.throws(
     () => validateSupportEvidenceExternalReadiness({ requireReady: true }),

@@ -31,6 +31,22 @@ function requireMarkers(content, path, markers) {
   }
 }
 
+const historicalExternalConsent = Object.freeze({
+  version: 'listing-ai-image-disclosure-v1',
+  text: 'SIT analysiert deine ausgewählten Bilder mit einem externen KI-Dienst, um einen bearbeitbaren Anzeigenentwurf zu erstellen. Es wird nichts automatisch veröffentlicht.',
+  explicitInitiationRequired: true,
+  acceptanceRequired: true,
+  automaticPublicationAllowed: false,
+});
+
+const currentOnDeviceConsent = Object.freeze({
+  version: 'listing-ai-on-device-disclosure-v1',
+  text: 'SIT wertet deine ausgewählten Bilder direkt auf diesem Android-Gerät aus. Erkannte Objektbegriffe und Texte sowie die ausgewählten Anzeigenfotos werden an SIT übertragen, um einen bearbeitbaren Entwurf zu erstellen. ML Kit sendet Bildinhalte und Erkennungsergebnisse nicht an Google; technische ML-Kit-Nutzungs- und Diagnosedaten können an Google übertragen werden. Es wird nichts automatisch veröffentlicht.',
+  explicitInitiationRequired: true,
+  acceptanceRequired: true,
+  automaticPublicationAllowed: false,
+});
+
 export function validateBlueOceanN4ImagePrivacyPipeline({
   repositoryRoot = root,
   evidence,
@@ -98,13 +114,8 @@ export function validateBlueOceanN4ImagePrivacyPipeline({
   })) {
     fail('N4 privacy or lifecycle boundary is invalid.');
   }
-  if (!exact(value.consent, {
-    version: 'listing-ai-image-disclosure-v1',
-    text: 'SIT analysiert deine ausgewählten Bilder mit einem externen KI-Dienst, um einen bearbeitbaren Anzeigenentwurf zu erstellen. Es wird nichts automatisch veröffentlicht.',
-    explicitInitiationRequired: true,
-    acceptanceRequired: true,
-    automaticPublicationAllowed: false,
-  })) {
+  if (![historicalExternalConsent, currentOnDeviceConsent]
+    .some((consent) => exact(value.consent, consent))) {
     fail('N4 disclosure and consent contract is invalid.');
   }
 
@@ -146,7 +157,9 @@ export function validateBlueOceanN4ImagePrivacyPipeline({
   requireMarkers(pipeline, pipelinePath, [
     "listingAiImagePipelineVersion = 'N4-2026-08-23.1'",
     "listingAiImageDisclosureVersion = 'listing-ai-image-disclosure-v1'",
-    'SIT analysiert deine ausgewählten Bilder mit einem externen KI-Dienst',
+    "listingAiOnDeviceDisclosureVersion = 'listing-ai-on-device-disclosure-v1'",
+    'SIT wertet deine ausgewählten Bilder direkt auf diesem Android-Gerät aus',
+    "case 'on_device':",
     'maximumImageCount = 4',
     'analysisMaximumDimension = 1280',
     'analysisWebpQuality = 80',
