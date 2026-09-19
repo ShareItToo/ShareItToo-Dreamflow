@@ -30,6 +30,14 @@ export const greenRehearsalDatabaseIdentity = Object.freeze({
   environment: 'staging', databaseName: 'green_rehearsal', databaseUser: 'green_rehearsal', composeProject: 'sit-green', rehearsal: true,
 });
 
+export const greenTestDatabaseIdentity = Object.freeze({
+  environment: 'test', databaseName: 'shareittoo_green', databaseUser: 'shareittoo_green', composeProject: 'sit-green',
+});
+
+export const greenTestRehearsalDatabaseIdentity = Object.freeze({
+  environment: 'test', databaseName: 'green_rehearsal', databaseUser: 'green_rehearsal', composeProject: 'sit-green', rehearsal: true,
+});
+
 const minimumPasswordLength = 32;
 const maximumPasswordLength = 200;
 const runtimeUid = 100;
@@ -96,16 +104,31 @@ export function validateProvisioningContext({
     }
     return Object.freeze(isGreenRehearsal ? greenRehearsalDatabaseIdentity : isGreen ? greenDatabaseIdentity : stagingDatabaseIdentity);
   }
-  if (environment === 'test' && databaseIdentity?.injected === true
-      && typeof databaseIdentity.databaseName === 'string'
-      && typeof databaseIdentity.databaseUser === 'string') {
-    return Object.freeze({
-      environment: 'test',
-      databaseName: databaseIdentity.databaseName,
-      databaseUser: databaseIdentity.databaseUser,
-      composeProject: databaseIdentity.composeProject ?? 'injected-test',
-      injected: true,
-    });
+  if (environment === 'test') {
+    if (databaseIdentity?.injected === true
+        && typeof databaseIdentity.databaseName === 'string'
+        && typeof databaseIdentity.databaseUser === 'string') {
+      return Object.freeze({
+        environment: 'test',
+        databaseName: databaseIdentity.databaseName,
+        databaseUser: databaseIdentity.databaseUser,
+        composeProject: databaseIdentity.composeProject ?? 'injected-test',
+        injected: true,
+      });
+    }
+    const isGreen = databaseIdentity?.environment === greenTestDatabaseIdentity.environment
+      && databaseIdentity.databaseName === greenTestDatabaseIdentity.databaseName
+      && databaseIdentity.databaseUser === greenTestDatabaseIdentity.databaseUser
+      && databaseIdentity.composeProject === greenTestDatabaseIdentity.composeProject
+      && databaseIdentity.rehearsal !== true;
+    const isGreenRehearsal = databaseIdentity?.rehearsal === true
+      && databaseIdentity.environment === greenTestRehearsalDatabaseIdentity.environment
+      && databaseIdentity.databaseName === greenTestRehearsalDatabaseIdentity.databaseName
+      && databaseIdentity.databaseUser === greenTestRehearsalDatabaseIdentity.databaseUser
+      && databaseIdentity.composeProject === greenTestRehearsalDatabaseIdentity.composeProject;
+    if (isGreen || isGreenRehearsal) {
+      return Object.freeze(isGreenRehearsal ? greenTestRehearsalDatabaseIdentity : greenTestDatabaseIdentity);
+    }
   }
   fail('staging_environment_required');
 }
@@ -307,12 +330,13 @@ export async function provisionSyntheticSandboxUser({
 
 async function main() {
   const environment = process.env.DEPLOYMENT_ENVIRONMENT ?? '';
-  if (environment.trim().toLowerCase() !== 'staging') fail('staging_environment_required');
+  const normalizedEnvironment = environment.trim().toLowerCase();
+  if (!['staging', 'test'].includes(normalizedEnvironment)) fail('staging_environment_required');
   const databaseUrl = process.env.DATABASE_URL?.trim();
   if (!databaseUrl) fail('database_url_required');
   const identity = parseDatabaseIdentity(
     databaseUrl,
-    'staging',
+    normalizedEnvironment,
     process.env.SIT_STAGING_COMPOSE_PROJECT?.trim(),
     process.env.SIT_GREEN_REHEARSAL === '1',
   );

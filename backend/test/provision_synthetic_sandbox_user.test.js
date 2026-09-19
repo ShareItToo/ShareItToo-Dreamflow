@@ -14,6 +14,8 @@ import {
   provisionSyntheticSandboxUser,
   greenDatabaseIdentity,
   greenRehearsalDatabaseIdentity,
+  greenTestDatabaseIdentity,
+  greenTestRehearsalDatabaseIdentity,
   stagingDatabaseIdentity,
   syntheticSandboxUser,
   validateProvisioningContext,
@@ -135,7 +137,7 @@ function options(files, database, overrides = {}) {
   };
 }
 
-test('provisioning is staging-only and rejects production or unbound test databases before writes', () => {
+test('provisioning rejects production or unbound test databases before writes', () => {
   assert.throws(
     () => validateProvisioningContext({
       deploymentEnvironment: 'production',
@@ -167,6 +169,20 @@ test('provisioning is staging-only and rejects production or unbound test databa
 test('isolated Green rehearsal identity is explicit and cannot masquerade as canonical Green', () => {
   assert.deepEqual(validateProvisioningContext({ deploymentEnvironment: 'staging', databaseIdentity: greenRehearsalDatabaseIdentity }), greenRehearsalDatabaseIdentity);
   assert.throws(() => validateProvisioningContext({ deploymentEnvironment: 'staging', databaseIdentity: { ...greenRehearsalDatabaseIdentity, rehearsal: false } }), /staging_database_identity_required/u);
+});
+
+test('test runtime accepts only exact Green canonical and rehearsal identities', () => {
+  assert.deepEqual(validateProvisioningContext({ deploymentEnvironment: 'test', databaseIdentity: greenTestDatabaseIdentity }), greenTestDatabaseIdentity);
+  assert.deepEqual(validateProvisioningContext({ deploymentEnvironment: 'test', databaseIdentity: greenTestRehearsalDatabaseIdentity }), greenTestRehearsalDatabaseIdentity);
+  for (const databaseIdentity of [
+    { ...greenTestDatabaseIdentity, databaseName: 'shareittoo_staging' },
+    { ...greenTestDatabaseIdentity, databaseUser: 'other' },
+    { ...greenTestDatabaseIdentity, composeProject: 'sit-staging' },
+    { ...greenTestDatabaseIdentity, databaseName: 'arbitrary_test_db' },
+    { ...greenTestRehearsalDatabaseIdentity, rehearsal: false },
+  ]) {
+    assert.throws(() => validateProvisioningContext({ deploymentEnvironment: 'test', databaseIdentity }), /staging_environment_required/u);
+  }
 });
 
 test('creates exact synthetic user, acknowledges required fields and never returns password material', async () => {
