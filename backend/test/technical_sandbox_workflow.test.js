@@ -232,6 +232,52 @@ test('checkout creation uses isolated table, user cap lock and stable replay wit
   assert.equal(capped.state.queries.some((sql) => sql.startsWith('SELECT pg_advisory_xact_lock')), true);
 });
 
+test('attached open checkout resumes only with an exact provider binding', async () => {
+  const row = {
+    id: runId,
+    user_id: userId,
+    status: 'pending',
+    amount_minor: 100,
+    currency: 'EUR',
+    synthetic_email: 'technical-sandbox+106dcbffb7567cdbc320@example.invalid',
+    provider_session_id: 'cs_open_technical',
+    checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
+  };
+  const openSession = {
+    id: 'cs_open_technical',
+    object: 'checkout.session',
+    status: 'open',
+    payment_status: 'unpaid',
+    client_reference_id: runId,
+    customer_email: row.synthetic_email,
+    amount_total: 100,
+    currency: 'eur',
+    livemode: false,
+    url: 'https://checkout.stripe.com/c/pay/cs_open_technical',
+    metadata: metadata(),
+  };
+  const baseProvider = {
+    async retrieveTechnicalSandboxCheckout() {
+      return { session: openSession, accountId: configuration.expectedAccountId, accountLivemode: false };
+    },
+  };
+  const databasePool = { async query() { return { rowCount: 1, rows: [row] }; } };
+  const valid = await getTechnicalSandboxRun({ actor: { id: userId }, runId, configuration, provider: baseProvider, databasePool });
+  assert.equal(valid.checkoutUrl, openSession.url);
+  const invalid = await getTechnicalSandboxRun({
+    actor: { id: userId },
+    runId,
+    configuration,
+    provider: {
+      async retrieveTechnicalSandboxCheckout() {
+        return { session: { ...openSession, customer_email: 'foreign@example.invalid' }, accountId: 'acct_foreign1234', accountLivemode: true };
+      },
+    },
+    databasePool,
+  });
+  assert.equal(invalid.checkoutUrl, null);
+});
+
 test('a replay with stale authorization/fingerprint is rejected before provider work', async () => {
   const db = fakeDatabase({
     existing: {
@@ -404,6 +450,7 @@ test('expired provider readback closes the run without manufacturing success', a
   });
   assert.equal(result.status, 'expired');
   assert.equal(result.receipt, null);
+  assert.equal(result.checkoutUrl, null);
 });
 
 test('raw webhook application rejects fabricated JSON and duplicate payload mutation', async () => {

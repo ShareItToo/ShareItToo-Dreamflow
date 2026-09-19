@@ -292,6 +292,17 @@ async function reconcileTechnicalSandboxRun({
     );
     return publicRun(currentResult.rows[0] ?? row);
   }
+  const openBinding = (row.status === 'pending' || row.status === 'unknown')
+    && readback?.session?.status === 'open'
+    && readback.session.payment_status === 'unpaid'
+    && readback.accountId === configuration.expectedAccountId
+    && readback.accountLivemode === false
+    && providerSessionMetadataValid(readback.session, {
+      runId: row.id,
+      userId: row.user_id,
+      configuration,
+    });
+  if (openBinding) return publicRun(row, { checkoutUrl: readback.session.url });
   const receipt = validateTechnicalSandboxReceipt({
     session: readback?.session,
     paymentIntent: readback?.paymentIntent,

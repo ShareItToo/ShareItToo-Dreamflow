@@ -489,7 +489,7 @@ export class StripeProvider {
     if (this.mode === 'memory') {
       const stored = this.memory.get(`technical-sandbox-session:${sessionId}`);
       if (!stored) throw new PaymentDomainError(404, 'technical_sandbox_session_not_found');
-      return { ...stored, accountId: expectedAccountId };
+      return { ...stored, accountId: expectedAccountId, accountLivemode: false };
     }
     return this.call(async (client) => {
       const [session, account] = await Promise.all([
