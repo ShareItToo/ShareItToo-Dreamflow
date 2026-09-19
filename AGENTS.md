@@ -45,6 +45,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 - A visible-function P0/P1 requires proven reachability from a current route or
   configuration. Unreachable legacy/dead code is tracked separately and is
   not itself a release blocker until reachability is demonstrated.
+- Never use `orElse: collection.first`, `.first`, `.single` or an equivalent
+  element fallback on an async, remote or mutable collection unless emptiness
+  was handled first. The empty/loading state must be deterministic, truthful
+  and covered beside the populated state in the focused test.
 - Any persisted media URL must be server-bound to an owned, approved upload
   row (including purpose, visibility and content-scan status). Client-side URL
   validation is never authorization; reject unowned, malformed, thumbnail,

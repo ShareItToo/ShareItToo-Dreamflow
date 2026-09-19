@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/config/private_pilot_config.dart';
 import 'package:lendify/models/item.dart';
+import 'package:lendify/models/category.dart';
 import 'package:lendify/navigation/main_nav_controller.dart';
 import 'package:lendify/screens/create_listing_screen.dart';
 import 'package:lendify/screens/search_results_screen.dart';
@@ -391,6 +392,79 @@ void main() {
     expect(find.text('Anzeige melden folgt bald'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'create listing price orientation tolerates empty then populated categories',
+    (tester) async {
+      final owner = buildTestUser(
+        'rw0-empty-categories-owner',
+        name: 'RW0 Empty Categories Owner',
+        city: 'Heilbronn',
+        email: 'rw0-empty-categories-owner@example.invalid',
+      );
+      final password = List<String>.filled(24, 'e').join();
+      final existingDraft = itemFrom(
+        buildTestItem(
+          id: 'rw0-empty-categories-draft',
+          ownerId: owner.id,
+          title: 'RW0 Empty Catalog Drill',
+          pricePerDay: 15,
+        ),
+        categoryId: 'cat8',
+        subcategory: 'Bohrmaschinen',
+        status: 'draft',
+        isActive: false,
+        privateStatusConfirmed: false,
+      );
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'users': jsonEncode(<Object>[owner.toJson()]),
+        'currentUser': jsonEncode(owner.toJson()),
+        'items': jsonEncode(<Object>[existingDraft.toJson()]),
+        'auth_accounts_v1': jsonEncode(<Map<String, Object>>[
+          <String, Object>{
+            'email': owner.email,
+            'password': password,
+            'createdAt': '2026-09-19T00:00:00.000Z',
+          },
+        ]),
+        'auth_seeded_v1': true,
+      });
+      final signIn = await AuthService.signInWithEmailPassword(
+        email: owner.email,
+        password: password,
+      );
+      expect(signIn.ok, isTrue);
+
+      await tester.pumpWidget(
+        _JourneyShell(
+          controller: _JourneyHostController(
+            CreateListingScreen(existing: existingDraft),
+          ),
+        ),
+      );
+      // The first frame may precede the asynchronous category load.  The
+      // local orientation must remain a no-op rather than dereferencing an
+      // empty collection.
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+
+      // Once the catalog is populated, the existing editor path remains
+      // reachable and still renders its normal category surface.
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Anzeige bearbeiten'), findsOneWidget);
+
+      final categories = await DataService.getCategories();
+      expect(resolveCreateListingCategory(const <Category>[], 'cat8'), isNull);
+      expect(resolveCreateListingCategory(categories, 'stale-category-id'),
+          isNull);
+      expect(categories, isNotEmpty);
+      expect(
+        resolveCreateListingCategory(categories, categories.first.id),
+        isNotNull,
+      );
+    },
+  );
 }
 
 class _JourneyHostController {

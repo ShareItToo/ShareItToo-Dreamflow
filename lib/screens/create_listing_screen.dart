@@ -59,10 +59,23 @@ String resolveListingPayloadCity({
   required String? registeredCity,
   required Map<String, (double lat, double lng)> availableCities,
 }) {
-  var city = registeredCity ?? availableCities.keys.first;
+  var city = registeredCity ??
+      (availableCities.isNotEmpty ? availableCities.keys.first : 'Berlin');
   final derived = DataService.deriveCityFromAddress(locationText);
   if (derived.isNotEmpty) city = derived;
   return city;
+}
+
+@visibleForTesting
+Category? resolveCreateListingCategory(
+  Iterable<Category> categories,
+  String? selectedId,
+) {
+  if (selectedId == null) return null;
+  for (final category in categories) {
+    if (category.id == selectedId) return category;
+  }
+  return null;
 }
 
 class CreateListingScreen extends StatefulWidget {
@@ -1757,20 +1770,18 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   }
 
   String _currentCoarseLabel() {
-    if (_categoryId == null || _categories.isEmpty) return 'Kategorie';
-    final fine = _categories.firstWhere(
-      (c) => c.id == _categoryId,
-      orElse: () => _categories.first,
-    );
+    final fine = _selectedCategory();
+    if (fine == null) return 'Kategorie';
     return DataService.coarseCategoryFor(fine.name);
   }
 
+  Category? _selectedCategory() {
+    return resolveCreateListingCategory(_categories, _categoryId);
+  }
+
   List<String> _availableSubcategories() {
-    if (_categoryId == null || _categories.isEmpty) return const [];
-    final category = _categories.firstWhere(
-      (candidate) => candidate.id == _categoryId,
-      orElse: () => _categories.first,
-    );
+    final category = _selectedCategory();
+    if (category == null) return const [];
     return category.subcategories
         .where((subcategory) => PrivatePilotConfig.subcategoryAllowed(
               category.id,
@@ -1780,7 +1791,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   }
 
   Future<void> _pickCategory() async {
-    if (_coarseCats.isEmpty) return;
+    if (_coarseCats.isEmpty || _categories.isEmpty) return;
     final tiles = _coarseCats.map((label) {
       final list = _catsByCoarse[label] ?? const <Category>[];
       final id = list.isNotEmpty ? list.first.id : label;
@@ -1796,12 +1807,10 @@ class _CreateListingScreenState extends State<CreateListingScreen>
               orElse: () => MapEntry('', const <Category>[]))
           .value;
       final target = list.isNotEmpty ? list.first.id : selected;
-      final subcategories = _categories
-          .firstWhere(
-            (category) => category.id == target,
-            orElse: () => _categories.first,
-          )
-          .subcategories
+      final selectedCategory =
+          resolveCreateListingCategory(_categories, target);
+      if (selectedCategory == null) return;
+      final subcategories = selectedCategory.subcategories
           .where((subcategory) =>
               PrivatePilotConfig.subcategoryAllowed(target, subcategory))
           .toList(growable: false);
@@ -1822,13 +1831,14 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     // Only calculate if all required fields are filled
     if (_titleCtrl.text.trim().isEmpty ||
         _categoryId == null ||
-        _addressCtrl.text.trim().isEmpty) {
+        _addressCtrl.text.trim().isEmpty ||
+        _categories.isEmpty) {
       return;
     }
 
     // Get category name
-    final cat = _categories.firstWhere((c) => c.id == _categoryId,
-        orElse: () => _categories.first);
+    final cat = _selectedCategory();
+    if (cat == null) return;
     final categoryName = DataService.coarseCategoryFor(cat.name);
 
     if (_priceSuggestionBusy) return;
@@ -1879,11 +1889,12 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   void _calculateLocalPriceOrientation() {
     if (_titleCtrl.text.trim().isEmpty ||
         _categoryId == null ||
-        _addressCtrl.text.trim().isEmpty) {
+        _addressCtrl.text.trim().isEmpty ||
+        _categories.isEmpty) {
       return;
     }
-    final cat = _categories.firstWhere((c) => c.id == _categoryId,
-        orElse: () => _categories.first);
+    final cat = _selectedCategory();
+    if (cat == null) return;
     final suggestion = AIPriceCalculatorService.calculate(
       title: _titleCtrl.text.trim(),
       categoryId: DataService.coarseCategoryFor(cat.name),
