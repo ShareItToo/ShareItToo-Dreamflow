@@ -1,5 +1,17 @@
 # ShareItToo Current State
 
+## WP261-B CI hermeticity and migration inventory — SOURCE PASS; external gates separate
+
+WP261-B closes the exact-head CI boundary introduced by WP261-A. Database
+integration suites are now owned by the dedicated PostgreSQL runner, while the
+generic backend job remains hermetic. Migration 090 adds the booking-review
+command type with a rollback guard that refuses to remove the constraint while
+review rows exist. R9 is current at 90 migrations; the closure ratchet uses
+the accepted WP261-A successor baseline and leaves WP158 immutable evidence
+untouched. Focused closure/backend/PostgreSQL/syntax checks pass. No provider,
+payment, Play, production or device mutation occurred. See the WP261-B
+operation report.
+
 ## WP261-A booking interactions — SOURCE PASS; provider/device gates separate
 
 Pending booking amendment and cancellation now load authoritative backend
@@ -9,8 +21,8 @@ records fail closed instead of becoming false local success. Booking reviews
 use a stable idempotency key per booking/reviewer: identical retries replay,
 payload drift conflicts, and existing reviews never create a second review or
 audit. Focused wiring/backend/analyzer/Flutter interaction checks pass. No
-provider, payment, Play, production or device mutation occurred; commit/push
-awaits Sol review. See the WP261-A operation report.
+provider, payment, Play, production or device mutation occurred. Commit:
+`e36cf9e1a4d2f7dbf215c54d6782efe81f2d625`. See the WP261-A operation report.
 
 ## WP260-E Connect cohort and secure payment landings — SOURCE PASS; provider gate separate
 

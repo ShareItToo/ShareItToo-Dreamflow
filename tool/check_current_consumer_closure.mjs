@@ -6,18 +6,19 @@ import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const closureBaseline = 'f2b6a32c387d43b93c137ce2217ba30dd6da4562';
+// Successor baseline after the prior candidate/evidence checkpoint. Historical
+// manifests before this revision are immutable; only changes made after this
+// accepted baseline are evaluated by the current-consumer ratchet.
+export const closureBaseline = 'e36cf9e1a4d2f7dbf215c54d6782efe81f2d625';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const ownPath = 'tool/check_current_consumer_closure.mjs';
 const reversePath = 'docs/evidence/release-readiness/wp160-source-binding-reverse-index-20260915.json';
 export const currentEvidencePath = 'docs/evidence/release-readiness/wp161-current-consumer-closure-20260916.json';
 const historicalExternal = new Set(['docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json']);
-// WP158 is an active current-candidate provenance ratchet. It remains
-// fail-closed and owner-gated, but its source inventory must follow the
-// current regression harness without rewriting immutable historical evidence.
-const currentEvidenceExceptions = new Set([
-  'docs/evidence/release-readiness/wp158-play-internal-artifact-app-content-provenance-20260915.json',
-]);
+// Candidate manifests under release-readiness are immutable historical facts.
+// Their dedicated validators still run, but the mutable-consumer ratchet must
+// never rebind them to today's source hashes.
+const currentEvidenceExceptions = new Set();
 const digestPattern = /^[a-f0-9]{64}$/u;
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -116,9 +117,11 @@ function literalReferences(text, consumer) {
 function assertR9(paths, read, basePaths) {
   const runner = 'tool/run_r9_database_recovery.mjs';
   if (!paths.includes(runner)) fail('MISSING_MIGRATION_CONSUMER', runner);
-  const migrations = paths.filter((path) => /^backend\/sql\/migrations\/\d+_[^/]+\.up\.sql$/u.test(path)).sort();
   const source = read(runner);
   const count = Number(source.match(/export const r9RequiredMigrationCount = (\d+);/u)?.[1]);
+  const migrations = paths
+    .filter((path) => /^backend\/sql\/migrations\/\d+_[^/]+\.up\.sql$/u.test(path))
+    .sort();
   const last = migrations.at(-1)?.split('/').at(-1);
   const lastAssertions = [...source.matchAll(/(?:plan\.at\(-1\)\?\.filename !==|requiredLastMigration =)\s*'([^']+)'/gu)].map((match) => match[1]);
   if (count !== migrations.length || lastAssertions.length !== 2 || lastAssertions.some((value) => value !== last)) {

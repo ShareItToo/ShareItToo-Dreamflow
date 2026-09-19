@@ -21,7 +21,7 @@ const decisionKeys = Object.freeze([
 const repositorySources = Object.freeze([
   Object.freeze([
     'backend/src/config.js',
-    '22571b2dbf74f873815d9e2fd7f136c40de9eb63a3712cae747580436a4e02d8',
+    '027afc3732c24ac9979e5e6d32f3631b2385fedf64f77129ef0a933fa12842da',
   ]),
   Object.freeze([
     'backend/src/support_evidence_workflow.js',

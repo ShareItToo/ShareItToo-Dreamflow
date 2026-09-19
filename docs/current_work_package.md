@@ -1,3 +1,17 @@
+# WP261-B CI hermeticity and migration inventory — SOURCE PASS; external gates separate
+
+WP261-B repairs the exact-head CI boundary after WP261-A: generic backend
+regression no longer advertises a database URL to integration-only tests;
+PostgreSQL coverage remains owned by the dedicated runner. Migration 090 adds
+the booking-review command type with a fail-closed rollback guard, and the
+current R9 inventory is now 90 migrations with deterministic path resolution.
+The consumer closure ratchet uses the accepted WP261-A successor baseline,
+keeps WP158 immutable historical evidence out of mutable source rebinding, and
+refreshes only current store/external-gate source inventories. Focused closure,
+backend, PostgreSQL 16 and syntax checks pass; no provider, payment, Play,
+production or device mutation occurred. See
+`docs/operations/WP261_B_CI_HERMETICITY_20260919.md`.
+
 # WP261-A booking interactions — SOURCE PASS; provider/device gates separate
 
 Pending-review source work now binds pending booking amendment and cancellation
@@ -7,8 +21,8 @@ a local success toast. Review submission is idempotent per booking/reviewer,
 replays the existing review without a duplicate row/audit, and rejects payload
 drift for a reused key. The existing message-composer proof remains in WP190.
 Focused wiring, backend idempotency, analyzer and interaction tests pass. No
-provider, payment, Play, production or device mutation occurred. Awaiting Sol
-review before commit/push; see
+provider, payment, Play, production or device mutation occurred. Committed as
+`e36cf9e1a4d2f7dbf215c54d6782efe81f2d625`; see
 `docs/operations/WP261_A_BOOKING_INTERACTIONS_20260919.md`.
 
 # Current Work Package: WP260-C Listing-AI lifetime budget — SOURCE PASS; provider gate separate

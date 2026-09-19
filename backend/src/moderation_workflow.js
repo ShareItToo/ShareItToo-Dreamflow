@@ -1266,7 +1266,13 @@ export async function createBookingReview(client, {
       || `${bookingId}:${actor.id}:${candidate.direction}`,
     'booking-review',
   );
-  const commandRequest = { bookingId, candidate };
+  // A caller-provided key binds the complete payload and therefore rejects
+  // payload drift. The legacy no-header path derives a stable booking/reviewer
+  // key so an already submitted review remains an idempotent replay even when
+  // a client retries with a differently shaped optional note.
+  const commandRequest = suppliedIdempotencyKey
+    ? { bookingId, candidate }
+    : { bookingId, reviewerId: actor.id, direction: candidate.direction };
   const replay = await startCommand(client, {
     key: commandKey,
     actorId: actor.id,

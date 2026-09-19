@@ -11,7 +11,9 @@ import { createPostgresListingAiBudgetGuard } from '../src/listing_ai_budget_gua
 
 const { Client, Pool } = pg;
 
-test('WP260-D PostgreSQL attempt, reservation and unknown replay are owner-bound', async () => {
+test('WP260-D PostgreSQL attempt, reservation and unknown replay are owner-bound', {
+  skip: !process.env.TEST_DATABASE_URL?.trim(),
+}, async () => {
   const client = new Client({ connectionString: process.env.TEST_DATABASE_URL });
   await client.connect();
   const suffix = crypto.randomUUID().replaceAll('-', '');
@@ -163,7 +165,9 @@ test('WP260-D PostgreSQL attempt, reservation and unknown replay are owner-bound
   }
 });
 
-test('WP260-D independent clients prove one claim, bounded calls, lost COMMIT recovery and stale reclaim', async () => {
+test('WP260-D independent clients prove one claim, bounded calls, lost COMMIT recovery and stale reclaim', {
+  skip: !process.env.TEST_DATABASE_URL?.trim(),
+}, async () => {
   const setup = new Client({ connectionString: process.env.TEST_DATABASE_URL });
   const poolA = new Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 1 });
   const poolB = new Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 1 });

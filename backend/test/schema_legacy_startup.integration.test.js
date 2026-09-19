@@ -67,7 +67,7 @@ if (!databaseUrl) {
       await runMigrations(scopedPool);
       assert.equal(
         (await scopedPool.query('SELECT count(*)::int AS count FROM schema_migrations')).rows[0].count,
-        87,
+        90,
       );
       const columns = await scopedPool.query(
         `SELECT column_name FROM information_schema.columns

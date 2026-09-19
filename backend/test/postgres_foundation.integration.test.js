@@ -228,6 +228,7 @@ if (!databaseUrl) {
         '087_identity_verification_pilot_gate.up.sql',
         '088_listing_ai_lifetime_budget.up.sql',
         '089_listing_ai_analysis_attempts.up.sql',
+        '090_booking_review_command_type.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);

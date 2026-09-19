@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import pg from 'pg';
 
 const { Client } = pg;
 
-test('WP260-C migration preserves opening costs and rolls back without resetting lifetime state', async () => {
+test('WP260-C migration preserves opening costs and rolls back without resetting lifetime state', {
+  skip: !process.env.TEST_DATABASE_URL?.trim(),
+}, async () => {
   const client = new Client({ connectionString: process.env.TEST_DATABASE_URL });
   await client.connect();
   try {
@@ -31,12 +34,16 @@ test('WP260-C migration preserves opening costs and rolls back without resetting
         billed_cost_cents INTEGER NOT NULL DEFAULT 0
       )
     `);
+    const migrationRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../sql/migrations',
+    );
     const up = await readFile(
-      path.resolve('backend/sql/migrations/088_listing_ai_lifetime_budget.up.sql'),
+      path.join(migrationRoot, '088_listing_ai_lifetime_budget.up.sql'),
       'utf8',
     );
     const down = await readFile(
-      path.resolve('backend/sql/migrations/088_listing_ai_lifetime_budget.down.sql'),
+      path.join(migrationRoot, '088_listing_ai_lifetime_budget.down.sql'),
       'utf8',
     );
 

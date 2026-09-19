@@ -14,7 +14,7 @@
     "repository": [
       {
         "path": "backend/src/config.js",
-        "sha256": "22571b2dbf74f873815d9e2fd7f136c40de9eb63a3712cae747580436a4e02d8"
+        "sha256": "027afc3732c24ac9979e5e6d32f3631b2385fedf64f77129ef0a933fa12842da"
       },
       {
         "path": "backend/src/support_evidence_workflow.js",

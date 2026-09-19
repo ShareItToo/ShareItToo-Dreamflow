@@ -179,7 +179,7 @@ test('candidate runner fails closed on Ops mismatch and unsafe evidence path bef
     (error) => error.code === 'ops_checkout_commit_mismatch',
   );
   await assert.rejects(
-    () => runDisposableCandidateAcceptance({ targetCommit: disposableCandidateCommit, execute: true, confirmation: disposableCandidateCommit, opsCommit: testOpsCommit, command, evidencePath: '/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808/evidence.json' }),
+    () => runDisposableCandidateAcceptance({ targetCommit: disposableCandidateCommit, execute: true, confirmation: disposableCandidateCommit, opsCommit: testOpsCommit, command, evidencePath: join(process.cwd(), 'evidence.json') }),
     (error) => error.code === 'evidence_path_inside_repository',
   );
 });
