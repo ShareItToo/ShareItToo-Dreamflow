@@ -246,6 +246,40 @@ coarse boundary. Before deployment the exact candidate image must declare
 Rollback removes the technical overlay and clears only its environment; the
 main memory payment transport remains intact.
 
+### Reproducible technical Sandbox pilot user
+
+`ops/provision_synthetic_sandbox_user.mjs` provisions exactly
+`synthetic_sandbox_user_pilot_20260919` with the matching
+`@example.invalid` address. It is a staging-only, transactional database
+operation against the exact `sit-staging` / `shareittoo_staging` identity; the
+unit-test seam is an explicitly injected test database identity. Production,
+other database names/users and missing compose identity fail before any write.
+The account is visibly synthetic, has role `user`, status `active`, and records
+email, terms/privacy, minimum-age and private-use acknowledgements. Only the
+`users` row and that user's active `auth_sessions` are touched; no
+notifications, listings, bookings or payment rows are created.
+
+The password must already exist in an owner-controlled regular file outside the
+repository, mode `0600`, owned by runtime `100:101`, with at least 32 random
+characters. The tool never generates, prints, logs or returns the password (or
+its password hash); it prints only the synthetic user id, a fixed email hash,
+marker and sanitized readback. Reprovisioning locks the exact user key in the
+transaction, renews its password hash, revokes only that user's existing
+sessions, and fails closed on any foreign id/email collision.
+
+```sh
+DEPLOYMENT_ENVIRONMENT=staging \
+SIT_STAGING_COMPOSE_PROJECT=sit-staging \
+DATABASE_URL='postgres://shareittoo_staging:REDACTED@staging-db:5432/shareittoo_staging' \
+SYNTHETIC_SANDBOX_PASSWORD_FILE=/absolute/private/path/sandbox-user-password \
+  node ops/provision_synthetic_sandbox_user.mjs
+```
+
+The URL above is a shape-only example; credentials stay in the approved
+runtime environment and the password file. The output is sanitized audit
+evidence for the fixture id, marker, acknowledgement readback and session
+revocation count, not a login credential or a claim of live provider activity.
+
 Stripe remains on the in-memory provider unless an exact Staging deployment
 explicitly enables the test-only override. Prepare three distinct secret files
 outside the repository: one server-side Stripe test key and the independent
