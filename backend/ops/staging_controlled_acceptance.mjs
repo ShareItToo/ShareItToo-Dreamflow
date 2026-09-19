@@ -260,15 +260,24 @@ async function startAcceptance({ runtimeCommit, opsCommit, port }) {
 
 const mfaProbe = `
 import crypto from 'node:crypto';
+import { open } from 'node:fs/promises';
 import { pool } from '/app/src/db.js';
 import { hashPassword, signAccessToken } from '/app/src/security.js';
 import { IDENTITY_CONSENT_VERSION } from '/app/src/identity_verification_workflow.js';
 
+const greenRehearsal = process.env.SIT_GREEN_REHEARSAL === '1';
+const syntheticUser = {
+  id: 'synthetic_sandbox_user_pilot_20260919',
+  email: 'synthetic_sandbox_user_pilot_20260919@example.invalid',
+  marker: 'sit_technical_sandbox_pilot_v1',
+};
 const runId = 'controlled-acceptance-' + crypto.randomUUID();
-const userId = runId + '-user';
+const userId = greenRehearsal ? syntheticUser.id : runId + '-user';
 const sessionId = crypto.randomUUID();
-const email = runId + '@example.invalid';
-const password = ['ControlledAcceptance', crypto.randomBytes(18).toString('base64url')].join('-');
+const email = greenRehearsal ? syntheticUser.email : runId + '@example.invalid';
+let password;
+let createdUser = false;
+let createdSession = false;
 const profile = {
   displayName: 'Controlled Acceptance',
   preferredLanguage: 'de-DE',
@@ -297,21 +306,63 @@ async function request(path, { method = 'GET', token, body, expected }) {
   return value;
 }
 
-try {
-  const passwordHash = await hashPassword(password);
-  await pool.query(
-    \`INSERT INTO users (
-       id, email, password_hash, profile, role, account_status,
-       email_verified_at, terms_accepted_at, privacy_accepted_at,
-       minimum_age_confirmed_at, private_use_confirmed_at
-     ) VALUES ($1, $2, $3, $4::jsonb, 'user', 'active', now(), now(), now(), now(), now())\`,
-    [userId, email, passwordHash, JSON.stringify(profile)],
+async function readGreenPassword() {
+  const filePath = process.env.SYNTHETIC_SANDBOX_PASSWORD_FILE;
+  if (filePath !== '/run/secrets/synthetic-sandbox-user-password') throw new Error('green_password_path_invalid');
+  let handle;
+  try {
+    handle = await open(filePath, 'r');
+    const bytes = Buffer.alloc(201);
+    const { bytesRead } = await handle.read(bytes, 0, bytes.length, 0);
+    if (bytesRead > 200) throw new Error('green_password_too_large');
+    const value = bytes.subarray(0, bytesRead).toString('utf8').trim();
+    if (value.length < 32 || value.length > 200 || /\\s/u.test(value)
+        || !/[A-Za-z]/u.test(value) || !/[0-9]/u.test(value)) throw new Error('green_password_invalid');
+    return value;
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
+async function assertGreenSyntheticUser() {
+  const result = await pool.query(
+    \`SELECT id, email, role, account_status, profile->>'syntheticMarker' AS synthetic_marker,
+            profile->>'syntheticPurpose' AS synthetic_purpose
+       FROM users WHERE id = $1\`,
+    [syntheticUser.id],
   );
+  const row = result.rows?.[0];
+  if (result.rows?.length !== 1 || row?.id !== syntheticUser.id || row.email !== syntheticUser.email
+      || row.role !== 'user' || row.account_status !== 'active'
+      || row.synthetic_marker !== syntheticUser.marker
+      || row.synthetic_purpose !== 'technical_sandbox_only') {
+    throw new Error('green_synthetic_user_readback_invalid');
+  }
+}
+
+try {
+  if (greenRehearsal) {
+    await assertGreenSyntheticUser();
+    password = await readGreenPassword();
+  } else {
+    password = ['ControlledAcceptance', crypto.randomBytes(18).toString('base64url')].join('-');
+    const passwordHash = await hashPassword(password);
+    await pool.query(
+      \`INSERT INTO users (
+         id, email, password_hash, profile, role, account_status,
+         email_verified_at, terms_accepted_at, privacy_accepted_at,
+         minimum_age_confirmed_at, private_use_confirmed_at
+       ) VALUES ($1, $2, $3, $4::jsonb, 'user', 'active', now(), now(), now(), now(), now())\`,
+      [userId, email, passwordHash, JSON.stringify(profile)],
+    );
+    createdUser = true;
+  }
   await pool.query(
     \`INSERT INTO auth_sessions (id, user_id, device_label)
      VALUES ($1, $2, 'controlled acceptance')\`,
     [sessionId, userId],
   );
+  createdSession = true;
   const token = signAccessToken({ id: userId, email }, { sessionId });
   const enrolled = await request('/auth/mfa/enroll', {
     method: 'POST', token, expected: 201,
@@ -386,7 +437,8 @@ try {
     identity: 'start-status-resume-revoke-passed',
   }));
 } finally {
-  await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+  if (createdSession) await pool.query('DELETE FROM auth_sessions WHERE id = $1 AND user_id = $2', [sessionId, userId]);
+  if (createdUser) await pool.query('DELETE FROM users WHERE id = $1', [userId]);
   await pool.end();
 }
 `;

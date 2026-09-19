@@ -135,7 +135,12 @@ test('promotion plan keeps backup, isolated 87-to-92 rehearsal, acceptance and f
   const candidate = commands.find((entry) => entry.phase === 'candidate_acceptance_create');
   const final = commands.find((entry) => entry.phase === 'final_create_no_host_port');
   assert.ok(candidate.args.includes('--publish') && candidate.args.includes('127.0.0.1:18082:8080'));
+  assert.ok(candidate.args.includes('SIT_GREEN_REHEARSAL=1'));
+  assert.ok(candidate.args.includes('SYNTHETIC_SANDBOX_PASSWORD_FILE=/run/secrets/synthetic-sandbox-user-password'));
+  assert.ok(candidate.args.includes(`type=bind,src=${syntheticSandboxPasswordHostPath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`));
   assert.ok(!final.args.includes('--publish') && !final.args.includes('-p'));
+  assert.equal(final.args.some((arg) => arg.includes('synthetic-sandbox-user-password')), false);
+  assert.equal(final.args.includes(syntheticSandboxPasswordHostPath), false);
   assert.ok(final.args.includes(`type=volume,src=${greenTarget.uploadsVolume},dst=/data/uploads,readonly=false`));
   assert.ok(final.args.includes('--group-add') && final.args.includes('65532'));
   assert.ok(final.args.some((arg) => arg.includes('com.shareittoo.sit.green=true')));

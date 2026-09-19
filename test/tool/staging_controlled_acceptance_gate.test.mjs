@@ -149,6 +149,16 @@ test('acceptance runner binds the Ops checkout and keeps the public service stop
   assert.match(runner, /identity_probe_http_/u);
   assert.match(runner, /identity: 'start-status-resume-revoke-passed'/u);
   assert.match(runner, /IDENTITY_CONSENT_VERSION/u);
+  assert.match(runner, /process\.env\.SIT_GREEN_REHEARSAL === '1'/u);
+  assert.match(runner, /synthetic_sandbox_user_pilot_20260919/u);
+  assert.match(runner, /synthetic_sandbox_user_pilot_20260919@example\.invalid/u);
+  assert.match(runner, /sit_technical_sandbox_pilot_v1/u);
+  assert.match(runner, /green_synthetic_user_readback_invalid/u);
+  assert.match(runner, /SYNTHETIC_SANDBOX_PASSWORD_FILE/u);
+  assert.match(runner, /run\/secrets\/synthetic-sandbox-user-password/u);
+  assert.match(runner, /DELETE FROM auth_sessions WHERE id = \$1 AND user_id = \$2/u);
+  assert.match(runner, /DELETE FROM users WHERE id = \$1/u);
+  assert.match(runner, /if \(createdUser\)/u);
 });
 
 test('loopback port preflight rejects an occupied listener and accepts a free one', async () => {
