@@ -555,7 +555,8 @@ export function sanitizeGreenEvidence({ plan, backupDigest, configDigest, target
     redaction: 'sensitive values omitted',
   };
   const serialized = JSON.stringify(evidence);
-  if (/password|secret|token|DATABASE_URL|JWT_SECRET|whsec_|sk_live_|sk_test_/iu.test(serialized)) fail('green_evidence_secret_leak');
+  if (/(?:DATABASE_URL|JWT_SECRET|whsec_|sk_live_|sk_test_)/iu.test(serialized)
+      || /"[^"\n]*(?:password|secret|token)[^"\n]*"\s*:/iu.test(serialized)) fail('green_evidence_secret_leak');
   return Object.freeze(evidence);
 }
 
@@ -632,6 +633,36 @@ export function runGreenCommandWithFileInput(command, args, inputFile, { cwd = r
     child.once('close', (code) => { if (code === 0 || allowFailure) resolvePromise(Object.freeze({ stdout: '', stderr: '', code })); else rejectSafe(`${phase}_failed`); });
     input.pipe(child.stdin);
   });
+}
+
+export async function runGreenForwardRecovery({ plan, commands, command, commandEnv = {}, completed = [] } = {}) {
+  if (!plan || plan.kind !== 'sit-green-promotion-plan' || !Array.isArray(commands) || typeof command !== 'function') fail('green_forward_recovery_input_invalid');
+  const phases = ['final_create_no_host_port', 'final_provider_network_attach', 'final_start', 'final_image_readback', 'final_inventory_readback', 'final_live_wait', 'final_health_probe', 'final_ready_wait', 'final_version_readback'];
+  const byPhase = new Map(commands.map((entry) => [entry.phase, entry]));
+  const readbacks = {};
+  const recovered = [];
+  for (const phase of phases) {
+    const mutating = phase === 'final_create_no_host_port' || phase === 'final_provider_network_attach' || phase === 'final_start';
+    if (completed.includes(phase) && mutating) continue;
+    const entry = byPhase.get(phase);
+    if (!entry) fail('green_forward_recovery_phase_missing');
+    let result;
+    if (phase === 'final_create_no_host_port' || phase === 'final_provider_network_attach' || phase === 'final_start') {
+      result = await command(entry.command, entry.args, { phase: `recovery_${phase}`, env: commandEnv, allowFailure: true });
+      if (phase === 'final_create_no_host_port' && result.code !== undefined && !result.stdout?.trim()) {
+        const existing = await command('docker', ['inspect', '--format', '{{json .}}', plan.target.apiContainer], { phase: 'recovery_existing_final_inspect', env: commandEnv, allowFailure: true });
+        if (existing.code !== undefined && !existing.stdout?.trim()) fail('green_forward_recovery_create_failed');
+      }
+    } else {
+      result = await command(entry.command, entry.args, { phase: `recovery_${phase}`, env: commandEnv });
+    }
+    if (phase.endsWith('_readback') || phase.endsWith('_wait') || phase === 'final_health_probe') readbacks[phase] = result.stdout?.trim() ?? '';
+    recovered.push(phase);
+  }
+  assertGreenImageReadback(JSON.parse(readbacks.final_image_readback), plan.runtime);
+  assertGreenFinalContainerReadback({ record: JSON.parse(readbacks.final_inventory_readback), plan });
+  assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.final_version_readback), health: JSON.parse(readbacks.final_health_probe), ready: JSON.parse(readbacks.final_ready_wait), runtimeCommit: plan.runtime.runtimeCommit });
+  return Object.freeze({ status: 'verified', completedPhases: Object.freeze(recovered) });
 }
 
 export async function runGreenEmergencyCleanup({ plan, command, commandEnv = {}, completed = [], phaseStarted, schemaMutationStarted = false }) {
@@ -774,7 +805,17 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
   } catch (error) {
     const cleanup = await runGreenEmergencyCleanup({ plan, command, commandEnv, completed, phaseStarted, schemaMutationStarted });
     error.cleanup = cleanup;
+    let forwardRecovery = { status: 'not-required' };
+    if (schemaMutationStarted) {
+      try {
+        forwardRecovery = await runGreenForwardRecovery({ plan, commands, command, commandEnv, completed });
+      } catch (recoveryError) {
+        forwardRecovery = { status: 'failed', code: recoveryError?.code ?? 'green_forward_recovery_failed' };
+      }
+    }
+    error.forwardRecovery = forwardRecovery;
     if (!cleanup.clean) error.code = 'green_cleanup_failed';
+    else if (schemaMutationStarted && forwardRecovery.status !== 'verified') error.code = 'green_forward_recovery_failed';
     throw error;
   } finally {
     await unlink(plan.isolated.envFile).catch(() => {});

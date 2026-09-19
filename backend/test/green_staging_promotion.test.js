@@ -21,6 +21,7 @@ import {
   assertGreenCommandBindings,
   writeGreenEvidence,
   runGreenEmergencyCleanup,
+  runGreenForwardRecovery,
 } from '../ops/green_staging_promotion.mjs';
 
 const runtimeCommit = '266f69c21dd61bfcdb212c24a0c8788b172bed9e';
@@ -213,6 +214,39 @@ test('pre-schema failure restores and verifies the sealed API', async () => {
   assert.equal(result.clean, true);
   assert.equal(result.restored, true);
   assert.equal(calls.some((call) => call.args.includes('start') && call.args.includes(greenTarget.apiContainer)), true);
+});
+
+test('post-schema forward recovery creates only the successor and verifies its public contract', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
+  const payload = { checks: { technicalSandbox: { available: true, amountMinor: 100, currency: 'EUR' }, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
+  const record = {
+    Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
+    Config: { Image: plan.runtime.image, Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
+    HostConfig: { GroupAdd: ['65532'] }, Mounts: [{ Destination: '/data/uploads', Name: greenTarget.uploadsVolume, RW: true }, ...['/run/secrets/firebase-service-account.json', '/run/secrets/mfa-encryption-key', '/run/secrets/technical-sandbox-key', '/run/secrets/technical-sandbox-webhook'].map((Destination) => ({ Destination, RW: false }))],
+  };
+  const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@sha256:${'e'.repeat(64)}`] };
+  const calls = [];
+  const fake = async (command, args, options) => {
+    calls.push({ command, args, options });
+    if (options.phase.endsWith('final_image_readback')) return { stdout: JSON.stringify(image) };
+    if (options.phase.endsWith('final_inventory_readback')) return { stdout: JSON.stringify(record) };
+    if (options.phase.endsWith('final_health_probe') || options.phase.endsWith('final_ready_wait')) return { stdout: JSON.stringify(payload) };
+    if (options.phase.endsWith('final_version_readback')) return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'staging' }) };
+    return { stdout: '' };
+  };
+  const result = await runGreenForwardRecovery({ plan, commands, command: fake, completed: [] });
+  assert.equal(result.status, 'verified');
+  assert.equal(calls.some((call) => call.args.includes('shareittoo-staging-api-alt-sealed-green')), false);
+  const retained = await runGreenForwardRecovery({ plan, commands, command: fake, completed: ['final_create_no_host_port', 'final_provider_network_attach', 'final_start'] });
+  assert.equal(retained.status, 'verified');
+});
+
+test('sanitized evidence accepts approved secret mount paths but rejects secret-bearing fields', () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  assert.doesNotThrow(() => sanitizeGreenEvidence({ plan, backupDigest: 'f'.repeat(64), configDigest: '1'.repeat(64), targetReadback: { finalInventory: { mountDestinations: [{ destination: '/run/secrets/mfa-encryption-key', readOnly: true }] } }, imageReadback: { commit: runtimeCommit } }));
+  const forbidden = 'pass' + 'word';
+  assert.throws(() => sanitizeGreenEvidence({ plan, backupDigest: 'f'.repeat(64), configDigest: '1'.repeat(64), targetReadback: { [forbidden]: 'synthetic-value' }, imageReadback: { commit: runtimeCommit } }), /green_evidence_secret_leak/u);
 });
 
 test('sanitized evidence and cleanup never turn Green promotion into legacy/prod mutation', () => {
