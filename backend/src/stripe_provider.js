@@ -8,6 +8,12 @@ function memoryId(prefix) {
   return `${prefix}_${crypto.randomBytes(12).toString('hex')}`;
 }
 
+function technicalSandboxRedirectUrl(base, runId) {
+  const value = String(base ?? '');
+  if (/[?&]run_id=/u.test(value)) return value;
+  return `${value}${value.includes('?') ? '&' : '?'}run_id=${encodeURIComponent(runId)}`;
+}
+
 function providerError(error) {
   if (error instanceof PaymentDomainError) return error;
   const status = Number(error?.statusCode ?? error?.status ?? 0);
@@ -355,6 +361,150 @@ export class StripeProvider {
       },
       metadata: { sit_booking_id: bookingId, sit_payment_id: paymentId },
     }, { idempotencyKey }));
+  }
+
+  async createTechnicalSandboxCheckout({
+    runId,
+    userId,
+    amountMinor,
+    currency,
+    syntheticEmail,
+    successUrl,
+    cancelUrl,
+    expiresAt,
+    authorizationId,
+    configRevision,
+    idempotencyKey,
+  }) {
+    if (amountMinor !== 100
+        || String(currency ?? '').trim().toUpperCase() !== 'EUR'
+        || !/^technical-sandbox\+[a-f0-9]{20}@example\.invalid$/u.test(String(syntheticEmail ?? ''))
+        || !Number.isFinite(new Date(expiresAt).getTime())
+        || !String(runId ?? '').startsWith('technical_sandbox_')
+        || !String(userId ?? '').trim()
+        || !String(authorizationId ?? '').trim()
+        || !/^[a-f0-9]{64}$/u.test(String(configRevision ?? ''))
+    ) {
+      throw new PaymentDomainError(409, 'technical_sandbox_checkout_payload_invalid');
+    }
+    if (this.mode === 'memory') {
+      const idempotencyFingerprint = requestHash({
+        runId,
+        userId,
+        amountMinor,
+        currency,
+        syntheticEmail,
+        successUrl,
+        cancelUrl,
+        expiresAt,
+        authorizationId,
+        configRevision,
+      });
+      const replay = this.memory.get(`technical-sandbox-idempotency:${idempotencyKey}`);
+      if (replay) {
+        if (replay.fingerprint !== idempotencyFingerprint) {
+          throw new PaymentDomainError(409, 'provider_idempotency_payload_mismatch');
+        }
+        return replay.result;
+      }
+      const id = memoryId('cs_technical_sandbox');
+      const paymentIntent = memoryId('pi_technical_sandbox');
+      const result = {
+        id,
+        object: 'checkout.session',
+        status: 'open',
+        payment_status: 'unpaid',
+        url: technicalSandboxRedirectUrl(successUrl, runId),
+        client_reference_id: runId,
+        payment_intent: paymentIntent,
+        customer_email: syntheticEmail,
+        amount_total: amountMinor,
+        currency: currency.toLowerCase(),
+        expires_at: expiresAt,
+        livemode: false,
+        metadata: {
+          sit_flow: 'technical_sandbox',
+          technical_sandbox_run_id: runId,
+          technical_sandbox_user_id: userId,
+          technical_sandbox_authorization_id: authorizationId,
+          technical_sandbox_config_revision: configRevision,
+        },
+      };
+      this.memory.set(`technical-sandbox-session:${id}`, {
+        session: result,
+        paymentIntent: {
+          id: paymentIntent,
+          object: 'payment_intent',
+          status: 'requires_payment_method',
+          amount: amountMinor,
+          currency: currency.toLowerCase(),
+          livemode: false,
+          metadata: result.metadata,
+        },
+      });
+      this.memory.set(`technical-sandbox-idempotency:${idempotencyKey}`, {
+        fingerprint: idempotencyFingerprint,
+        result,
+      });
+      return result;
+    }
+    return this.call((client) => client.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      customer_email: syntheticEmail,
+      success_url: technicalSandboxRedirectUrl(successUrl, runId),
+      cancel_url: technicalSandboxRedirectUrl(cancelUrl, runId),
+      expires_at: Math.floor(new Date(expiresAt).getTime() / 1000),
+      client_reference_id: runId,
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: currency.toLowerCase(),
+          unit_amount: amountMinor,
+          product_data: {
+            name: 'Technischer Stripe-Sandbox-Test (kein echtes Geld)',
+          },
+        },
+      }],
+      payment_intent_data: {
+        metadata: {
+          sit_flow: 'technical_sandbox',
+          technical_sandbox_run_id: runId,
+          technical_sandbox_user_id: userId,
+          technical_sandbox_authorization_id: authorizationId,
+          technical_sandbox_config_revision: configRevision,
+        },
+      },
+      metadata: {
+        sit_flow: 'technical_sandbox',
+        technical_sandbox_run_id: runId,
+        technical_sandbox_user_id: userId,
+        technical_sandbox_authorization_id: authorizationId,
+        technical_sandbox_config_revision: configRevision,
+      },
+    }, { idempotencyKey }));
+  }
+
+  async retrieveTechnicalSandboxCheckout({ sessionId, expectedAccountId }) {
+    if (this.mode === 'memory') {
+      const stored = this.memory.get(`technical-sandbox-session:${sessionId}`);
+      if (!stored) throw new PaymentDomainError(404, 'technical_sandbox_session_not_found');
+      return { ...stored, accountId: expectedAccountId };
+    }
+    return this.call(async (client) => {
+      const [session, account] = await Promise.all([
+        client.checkout.sessions.retrieve(sessionId, { expand: ['payment_intent'] }),
+        client.accounts.retrieve(),
+      ]);
+      return {
+        session,
+        paymentIntent: typeof session.payment_intent === 'object'
+          ? session.payment_intent
+          : null,
+        accountId: account.id,
+        accountLivemode: account.livemode,
+      };
+    });
   }
 
   async expirePaymentCheckout({ sessionId }) {

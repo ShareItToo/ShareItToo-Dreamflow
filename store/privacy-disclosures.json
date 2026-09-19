@@ -612,7 +612,7 @@
     },
     {
       "path": "backend/src/retention_inventory.js",
-      "sha256": "d53f32cbea960c200cde14f491d47ced83ae677aea53acfe21a498cd858f2212"
+      "sha256": "6e30c300fc90f189cef0bdf043cb3afa5d9d53438a99c54441cce3510c160a74"
     },
     {
       "path": "backend/src/financial_documents.js",
@@ -636,7 +636,7 @@
     },
     {
       "path": "backend/src/config.js",
-      "sha256": "027afc3732c24ac9979e5e6d32f3631b2385fedf64f77129ef0a933fa12842da"
+      "sha256": "97fb7d6506abaece7376b418608a63bb3155d866eb43dc20195bc8154360709f"
     },
     {
       "path": "backend/src/notifications.js",

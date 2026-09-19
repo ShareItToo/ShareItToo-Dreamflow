@@ -96,6 +96,8 @@ export async function inspectRetentionInventory(client, { actor }) {
        UNION ALL SELECT 'transactions', 'v51_withdrawal_receipts', count(*)::bigint, min(generated_at), max(created_at) FROM v51_withdrawal_receipts
        UNION ALL SELECT 'transactions', 'v51_withdrawal_receipt_events', count(*)::bigint, min(occurred_at), max(occurred_at) FROM v51_withdrawal_receipt_events
        UNION ALL SELECT 'transactions', 'payments', count(*)::bigint, min(created_at), max(updated_at) FROM payments
+       UNION ALL SELECT 'transactions', 'technical_sandbox_runs', count(*)::bigint, min(created_at), max(updated_at) FROM technical_sandbox_runs
+       UNION ALL SELECT 'securityAudit', 'technical_sandbox_provider_events', count(*)::bigint, min(received_at), max(received_at) FROM technical_sandbox_provider_events
        UNION ALL SELECT 'transactions', 'refunds', count(*)::bigint, min(created_at), max(updated_at) FROM refunds
        UNION ALL SELECT 'transactions', 'payouts', count(*)::bigint, min(created_at), max(updated_at) FROM payouts
        UNION ALL SELECT 'transactions', 'financial_documents', count(*)::bigint, min(issued_at), max(created_at) FROM financial_documents

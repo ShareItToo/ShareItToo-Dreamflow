@@ -6,6 +6,7 @@ import { readConsumerDisputeConfiguration } from './consumer_dispute_config.js';
 import { readProductSafetyConfiguration } from './product_safety_config.js';
 import { evaluateGoogleMapsActivation } from './google_maps_activation.js';
 import { readListingAiGatewayConfiguration } from './listing_ai_gateway_config.js';
+import { readTechnicalSandboxConfiguration } from './technical_sandbox_config.js';
 import { evaluateOperatorReadiness } from './operator_readiness.js';
 import { normalizePrivatePilotRegion } from './private_pilot_domain.js';
 import {
@@ -236,6 +237,9 @@ if (paymentTransport === 'stripe' && !stripeLivemode) {
     throw new Error('Stripe sandbox transport requires a current bounded execution authorization');
   }
 }
+const technicalSandbox = readTechnicalSandboxConfiguration(process.env, {
+  deploymentEnvironment,
+});
 
 const identityVerificationTransport = (process.env.IDENTITY_VERIFICATION_TRANSPORT ?? 'disabled')
   .trim().toLowerCase();
@@ -579,6 +583,7 @@ export const config = Object.freeze({
     }),
     payoutHoldHours: Math.min(24 * 30, Math.max(0, Number.parseInt(process.env.PAYOUT_HOLD_HOURS ?? '48', 10))),
   }),
+  technicalSandbox,
   identityVerification: Object.freeze({
     transport: identityVerificationTransport,
     enabled: identityVerificationTransport !== 'disabled',
