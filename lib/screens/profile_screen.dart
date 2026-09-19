@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/auth_service.dart';
+import 'package:lendify/services/backend_repository.dart';
+import 'package:lendify/services/profile_feedback_coordinator.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/screens/my_listings_screen.dart';
 import 'package:lendify/screens/owner_requests_screen.dart';
@@ -29,12 +33,70 @@ import 'package:lendify/screens/notifications_screen.dart';
 import 'package:lendify/screens/verification_screen.dart';
 import 'package:lendify/widgets/tracked_dialog_route.dart';
 
+typedef ProfileFeedbackSubmitter = Future<Map<String, dynamic>> Function(
+  AuthSessionOwner owner,
+  Map<String, dynamic> intake,
+  String idempotencyKey,
+);
+
+const int profileFeedbackMaxLength = 1982;
+
+@visibleForTesting
+String newProfileFeedbackIdempotencyKey() {
+  final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256));
+  return 'feedback-${bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join()}';
+}
+
+@visibleForTesting
+bool sameProfileFeedbackOwner(
+  SessionTransitionOwner? left,
+  SessionTransitionOwner? right,
+) {
+  if (left == null || right == null) return left == null && right == null;
+  final a = left.authOwner;
+  final b = right.authOwner;
+  return a.epoch == b.epoch &&
+      a.sessionId == b.sessionId &&
+      a.userId == b.userId &&
+      a.email == b.email &&
+      left.profileUserId == right.profileUserId;
+}
+
+@visibleForTesting
+Map<String, dynamic> buildProfileFeedbackIntake(String text) =>
+    <String, dynamic>{
+      'caseType': 'general_help',
+      'caseSubType': 'feedback_or_improvement',
+      'summary': 'Feedback zur App: ${text.trim()}',
+      'immediateDanger': false,
+      'safetyTriage': const <String, dynamic>{
+        'version': 'sit_support_safety_triage_v1',
+        'packetVersion': 'SIT_SUPPORT_PACKET_V1_2026-08-20',
+        'guidanceVersion': 'T-003@1.0.0',
+        'immediateDanger': false,
+        'guidanceShown': false,
+      },
+      'issueScope': const <String, dynamic>{
+        'version': 'sit_support_single_issue_scope_v1',
+        'singleIssueConfirmed': true,
+        'separationGuidanceShown': true,
+      },
+      'feedbackContext': const <String, dynamic>{
+        'version': 'sit_support_feedback_context_v1',
+        'feedbackKind': 'general_feedback',
+        'productArea': 'app_experience',
+        'nonUrgentConfirmed': true,
+      },
+    };
+
 class ProfileScreen extends StatefulWidget {
   final SessionTransitionService? sessionTransitionService;
+  final ProfileFeedbackSubmitter? feedbackSubmitter;
 
   const ProfileScreen({
     super.key,
     this.sessionTransitionService,
+    this.feedbackSubmitter,
   });
 
   @override
@@ -60,6 +122,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final TextEditingController _feedbackCtrl = TextEditingController();
   final FocusNode _feedbackFocus = FocusNode();
   bool _sendingFeedback = false;
+  final ProfileFeedbackCoordinator _feedbackCoordinator =
+      ProfileFeedbackCoordinator();
+  String? _feedbackSubmissionKey;
+  String? _feedbackSubmissionText;
   final TextEditingController _profileSearchCtrl = TextEditingController();
   final FocusNode _profileSearchFocus = FocusNode();
   final List<_ProfileSearchEntry> _profileSearchEntries = const [
@@ -140,6 +206,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final text = raw.trim();
     if (text.isEmpty) {
       return const FeedbackValidation(valid: false, reason: null);
+    }
+    if (text.length > profileFeedbackMaxLength) {
+      return const FeedbackValidation(
+        valid: false,
+        reason: 'Bitte kürze dein Feedback auf höchstens 1982 Zeichen.',
+      );
     }
 
     // 1) Mindestlänge
@@ -374,8 +446,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final bool loggedOut = !hasSession || maybeUser == null;
     final user = loggedOut ? _guestUser() : maybeUser;
     if (!mounted || revision != _loadRevision) return;
+    final nextOwner = hasSession ? owner : null;
+    if (_activeSessionOwner != null &&
+        !sameProfileFeedbackOwner(_activeSessionOwner, nextOwner)) {
+      _feedbackCtrl.clear();
+      _feedbackSubmissionKey = null;
+      _feedbackSubmissionText = null;
+      _sendingFeedback = false;
+    }
     setState(() {
-      _activeSessionOwner = hasSession ? owner : null;
+      _activeSessionOwner = nextOwner;
       _user = user;
       _myListingsCount = 0;
       _completedBookingsCount = 0;
@@ -1294,14 +1374,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Sag uns, was dir gefällt – oder was wir besser machen können. Dein Feedback hilft uns, ShareItToo zu verbessern. Wir lesen jede Nachricht persönlich.',
+            'Sag uns, was dir gefällt – oder was wir besser machen können. Dein Feedback wird als Support-Fall serverseitig erfasst.',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: Colors.white70, height: 1.5),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Bitte sende hier nur ein einzelnes, nicht dringendes Thema. Für Sicherheits- oder Notfälle nutze das Hilfe-Center. Mit „Absenden“ bestätigst du diese Einordnung.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: Colors.white60, height: 1.4),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _feedbackCtrl,
             focusNode: _feedbackFocus,
+            maxLength: profileFeedbackMaxLength,
+            maxLengthEnforcement: MaxLengthEnforcement.enforced,
             maxLines: 5,
             minLines: 3,
             onChanged: (_) => setState(() {}),
@@ -1383,28 +1471,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _submitFeedback() async {
-    if (_user == null) return;
-    final text = _feedbackCtrl.text.trim();
+    final user = _user;
+    final owner = _activeSessionOwner;
+    if (_sendingFeedback ||
+        user == null ||
+        owner == null ||
+        owner.profileUserId != user.id ||
+        !await _sessionTransitions.isOwnerCurrent(owner)) {
+      return;
+    }
+    final submittedRaw = _feedbackCtrl.text;
+    final text = submittedRaw.trim();
     final validation = _validateFeedback(text);
     if (!validation.valid) return;
+    if (_feedbackSubmissionText != submittedRaw ||
+        _feedbackSubmissionKey == null) {
+      _feedbackSubmissionText = submittedRaw;
+      _feedbackSubmissionKey = newProfileFeedbackIdempotencyKey();
+    }
+    final idempotencyKey = _feedbackSubmissionKey!;
     setState(() {
       _sendingFeedback = true;
     });
     try {
-      await DataService.addFeedback(userId: _user!.id, text: text);
-      if (!mounted) return;
+      final submitter = widget.feedbackSubmitter ??
+          (capturedOwner, intake, key) => BackendRepository.createSupportCase(
+                owner: capturedOwner,
+                intake: intake,
+                idempotencyKey: key,
+              );
+      final submission = await _feedbackCoordinator.submit(
+        owner: owner.authOwner,
+        submittedDraft: submittedRaw,
+        idempotencyKey: idempotencyKey,
+        persist: (key) => submitter(
+          owner.authOwner,
+          buildProfileFeedbackIntake(text),
+          key,
+        ),
+        isCurrent: () => _sessionTransitions.isOwnerCurrent(owner),
+        readDraft: () => _feedbackCtrl.text,
+        clearDraft: _feedbackCtrl.clear,
+      );
+      if (submission == null ||
+          !submission.contextCurrent ||
+          !mounted ||
+          !sameProfileFeedbackOwner(_activeSessionOwner, owner)) {
+        return;
+      }
       setState(() {
-        _feedbackCtrl.clear();
         _sendingFeedback = false;
       });
+      _feedbackSubmissionKey = null;
+      _feedbackSubmissionText = null;
       _feedbackFocus.unfocus();
 
       await AppPopup.show(
         context,
         icon: Icons.check_circle_outline,
-        title: 'Danke für dein Feedback',
-        message:
-            'Wir lesen jedes Feedback persönlich und nutzen es, um ShareItToo zu verbessern.',
+        title: 'Feedback serverseitig erfasst',
+        message: 'Dein Feedback wurde als Support-Fall empfangen.'
+            '${submission.response['caseNumber'] == null ? '' : ' Fall ${submission.response['caseNumber']}.'}',
         showCloseIcon: false,
         leadingWidget: _sitCelebrationBadge(),
         accentGradient: LinearGradient(
@@ -1431,14 +1558,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (!await _sessionTransitions.isOwnerCurrent(owner)) return;
+      if (!mounted || !sameProfileFeedbackOwner(_activeSessionOwner, owner)) {
+        return;
+      }
       setState(() {
         _sendingFeedback = false;
       });
       AppPopup.toast(
         context,
         icon: Icons.error_outline,
-        title: 'Senden fehlgeschlagen',
-        message: 'Bitte versuche es erneut.',
+        title: 'Feedback nicht serverseitig erfasst',
+        message: 'Der Entwurf bleibt erhalten. Bitte versuche es erneut.',
       );
     }
   }

@@ -251,6 +251,16 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   the session or UI context drifts afterwards. After the server/local write is
   confirmed, close or report success truthfully; session drift may suppress
   only later UI refresh, navigation, or readback and must never invite a retry.
+- For profile feedback and other external support writes, idempotency keys must
+  be opaque cryptographic values: never derive them from a session ID, user ID,
+  email, token, or other principal data. Same-principal background refreshes may
+  not clear an unsent draft or rotate its key; an epoch/session/principal change
+  must invalidate that draft. Client-side length limits must include all fixed
+  prefixes so the server's bounded summary contract is never exceeded.
+- Support/compliance intake booleans must reflect guidance actually shown and
+  acknowledged by the user; never manufacture an attestation by hardcoding a
+  `guidanceShown`, single-issue, non-urgent, or similar claim without its UI
+  basis.
 - While a review has known FIX items, run only the focused checks that exercise
   the changed invariant. Run a package or repository full regression exactly
   once after the implementation, review fixes and required real-infrastructure
