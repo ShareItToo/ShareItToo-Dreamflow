@@ -9,6 +9,35 @@ export const listingAiImageDisclosureVersion = 'listing-ai-image-disclosure-v1';
 export const listingAiImageDisclosureText = 'SIT analysiert deine ausgewählten Bilder mit der OpenAI Responses API als externem KI-Dienst (Bildinput und strukturiertes Ergebnis), um einen bearbeitbaren Anzeigenentwurf zu erstellen. Die Anfrage wird mit store:false gesendet; SIT behauptet keine Zero-Data-Retention-Zusage von OpenAI. Es wird nichts automatisch veröffentlicht.';
 export const listingAiOnDeviceDisclosureVersion = 'listing-ai-on-device-disclosure-v1';
 export const listingAiOnDeviceDisclosureText = 'SIT wertet deine ausgewählten Bilder direkt auf diesem Android-Gerät aus. Erkannte Objektbegriffe und Texte sowie die ausgewählten Anzeigenfotos werden an SIT übertragen, um einen bearbeitbaren Entwurf zu erstellen. ML Kit sendet Bildinhalte und Erkennungsergebnisse nicht an Google; technische ML-Kit-Nutzungs- und Diagnosedaten können an Google übertragen werden. Es wird nichts automatisch veröffentlicht.';
+export const listingAiMockDisclosureVersion = 'listing-ai-mock-disclosure-v1';
+export const listingAiMockDisclosureText = 'SIT verwendet für diesen technischen Test ausschließlich eine gekennzeichnete synthetische KI-Antwort. Es werden keine externen KI-Dienste kontaktiert und nichts wird automatisch veröffentlicht.';
+export const listingAiDisabledDisclosureVersion = 'listing-ai-disabled-disclosure-v1';
+export const listingAiDisabledDisclosureText = 'Die KI-Anzeigenhilfe ist derzeit deaktiviert. Du kannst die Anzeige vollständig manuell erstellen.';
+
+export function listingAiDisclosureForProvider(provider) {
+  switch (provider) {
+    case 'on_device':
+      return Object.freeze({
+        version: listingAiOnDeviceDisclosureVersion,
+        text: listingAiOnDeviceDisclosureText,
+      });
+    case 'mock':
+      return Object.freeze({
+        version: listingAiMockDisclosureVersion,
+        text: listingAiMockDisclosureText,
+      });
+    case 'openai':
+      return Object.freeze({
+        version: listingAiImageDisclosureVersion,
+        text: listingAiImageDisclosureText,
+      });
+    default:
+      return Object.freeze({
+        version: listingAiDisabledDisclosureVersion,
+        text: listingAiDisabledDisclosureText,
+      });
+  }
+}
 
 const maximumImageCount = 4;
 const maximumInputBytes = 8 * 1024 * 1024;

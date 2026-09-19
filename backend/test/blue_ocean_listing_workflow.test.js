@@ -6,8 +6,6 @@ import sharp from 'sharp';
 
 import {
   assertBlueOceanExplicitPublication,
-  blueOceanListingDisclosureText,
-  blueOceanListingDisclosureVersion,
   blueOceanOnDeviceDisclosureText,
   blueOceanOnDeviceDisclosureVersion,
   blueOceanRegionalPriceRuleByCatalogKey,
@@ -19,6 +17,7 @@ import {
 import { privatePilotAllowedCatalogKeys } from '../src/private_pilot_domain.js';
 import { regionalPriceCategoryRules } from '../src/regional_price_engine_v2.js';
 import {
+  listingAiCapability,
   listingAiMockModel,
   listingAiOnDeviceModel,
   listingAiOpenAiModel,
@@ -29,6 +28,7 @@ import {
   deterministicListingAiMockOutput,
 } from '../src/listing_ai_gateway.js';
 import { createOpenAiListingAiProvider } from '../src/openai_listing_ai_provider.js';
+import { listingAiDisclosureForProvider } from '../src/listing_ai_image_pipeline.js';
 
 const ownerId = 'owner_12345678';
 const draftId = 'listing_ai_draft_12345678-1234-4123-8123-123456789abc';
@@ -56,12 +56,13 @@ async function fixtureImage() {
   }).png().toBuffer();
 }
 
-function consent() {
+function consent(provider = 'mock') {
+  const disclosure = listingAiDisclosureForProvider(provider);
   return {
     explicitlyInitiated: true,
     accepted: true,
-    disclosureVersion: blueOceanListingDisclosureVersion,
-    disclosureText: blueOceanListingDisclosureText,
+    disclosureVersion: disclosure.version,
+    disclosureText: disclosure.text,
   };
 }
 
@@ -257,6 +258,123 @@ test('on-device sensitive labels and observation/model drift fail closed', async
   );
 });
 
+test('workflow consumes the exact capability disclosure in every provider mode', async () => {
+  const bytes = await fixtureImage();
+  let externalCalls = 0;
+  const openAiConfiguration = readListingAiGatewayConfiguration({
+    SIT_LISTING_AI_PROVIDER: 'openai',
+    SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
+    SIT_LISTING_AI_BUDGET_CENTS: '5',
+    SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
+  }, { deploymentEnvironment: 'staging' });
+  const openAiGateway = createListingAiGateway({
+    configuration: openAiConfiguration,
+    providers: {
+      openai: {
+        async generate(request) {
+          externalCalls += 1;
+          const output = structuredClone(
+            deterministicListingAiMockOutput(request.analysisImageReferences),
+          );
+          for (const field of Object.values(output.fields)) field.source.type = 'provider_output';
+          return {
+            output,
+            usage: {
+              inputUnits: 1,
+              outputUnits: 1,
+              estimatedCostCents: 1,
+              billedCostCents: null,
+            },
+          };
+        },
+      },
+    },
+  });
+  const cases = [
+    {
+      provider: 'mock',
+      configuration: config(),
+      onDeviceAnalysis: null,
+      gateway: null,
+    },
+    {
+      provider: 'on_device',
+      configuration: readListingAiGatewayConfiguration({
+        SIT_LISTING_AI_PROVIDER: 'on_device',
+        SIT_LISTING_AI_MODEL: listingAiOnDeviceModel,
+        SIT_LISTING_AI_BUDGET_CENTS: '0',
+      }, { deploymentEnvironment: 'staging' }),
+      onDeviceAnalysis: [{
+        modelVersion: listingAiOnDeviceModel,
+        labels: [],
+        ocrText: '',
+      }],
+      gateway: null,
+    },
+    {
+      provider: 'openai',
+      configuration: openAiConfiguration,
+      onDeviceAnalysis: null,
+      gateway: openAiGateway,
+    },
+    {
+      provider: 'disabled',
+      configuration: readListingAiGatewayConfiguration(),
+      onDeviceAnalysis: null,
+      gateway: null,
+    },
+  ];
+
+  for (const [index, entry] of cases.entries()) {
+    const capability = listingAiCapability(entry.configuration);
+    const workflow = createBlueOceanListingWorkflow({
+      configuration: entry.configuration,
+      gateway: entry.gateway ?? undefined,
+      screenImage: async () => ({
+        localOcrText: '',
+        visualScanCompleted: true,
+        visualSignals: [],
+      }),
+      screenDerivative: entry.provider === 'openai'
+        ? async () => {
+          externalCalls += 1;
+          return {
+            visualScanCompleted: true,
+            visualSignals: [],
+            usage: {
+              inputUnits: 1,
+              outputUnits: 1,
+              estimatedCostCents: 1,
+              billedCostCents: null,
+            },
+          };
+        }
+        : undefined,
+    });
+    const result = await workflow.analyze({
+      draftId,
+      ownerId,
+      generationKey: key(`capability-mode-${entry.provider}-${index}`),
+      images: [{
+        imageReference: 'listing_image_12345678',
+        mimeType: 'image/png',
+        bytes: Buffer.from(bytes),
+      }],
+      consent: consent(entry.provider),
+      onDeviceAnalysis: entry.onDeviceAnalysis,
+    });
+    assert.equal(result.disclosureVersion, capability.disclosureVersion);
+    assert.equal(result.disclosureText, capability.disclosureText);
+    if (entry.provider === 'disabled') {
+      assert.equal(result.status, 'manual_fallback');
+      assert.equal(result.providerCallCount, 0);
+    } else {
+      assert.equal(result.status, 'draft_ready');
+    }
+  }
+  assert.equal(externalCalls, 2);
+});
+
 test('default incomplete local screening fails closed and preserves the manual editor', async () => {
   const workflow = createBlueOceanListingWorkflow({ configuration: config() });
   const result = await workflow.analyze({
@@ -337,7 +455,7 @@ test('openai composition screens stripped derivatives and reports estimated not 
       mimeType: 'image/png',
       bytes: await fixtureImage(),
     }],
-    consent: consent(),
+    consent: consent('openai'),
   });
   assert.equal(result.status, 'draft_ready');
   assert.equal(result.providerCallCount, 2);
@@ -403,7 +521,7 @@ test('actual adapter rejects non-completed screening and generation without crea
         ownerId,
         generationKey: key(`non-completed-${failedPhase}`),
         images: [{ imageReference: 'listing_image_12345678', mimeType: 'image/png', bytes }],
-        consent: consent(),
+        consent: consent('openai'),
       });
       assert.equal(calls, failedPhase === 'screening' ? 1 : 2);
       assert.equal(result.providerCallCount, calls);
@@ -444,7 +562,7 @@ test('openai screening timeout returns a truthful paid manual fallback', async (
       mimeType: 'image/png',
       bytes: await fixtureImage(),
     }],
-    consent: consent(),
+    consent: consent('openai'),
   });
   assert.equal(signal.aborted, true);
   assert.equal(result.status, 'manual_fallback');
@@ -496,7 +614,7 @@ test('openai multi-image screening failure reports all attempted paid calls', as
         bytes: await fixtureImage(),
       },
     ],
-    consent: consent(),
+    consent: consent('openai'),
   });
   assert.equal(result.status, 'manual_fallback');
   assert.equal(result.reasonCode, 'listing_ai_image_visual_screen_failed');

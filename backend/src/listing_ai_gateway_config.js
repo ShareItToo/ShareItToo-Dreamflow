@@ -5,10 +5,7 @@ import {
   listingAiPromptVersion,
 } from './listing_ai_draft_domain.js';
 import {
-  listingAiImageDisclosureText,
-  listingAiImageDisclosureVersion,
-  listingAiOnDeviceDisclosureText,
-  listingAiOnDeviceDisclosureVersion,
+  listingAiDisclosureForProvider,
 } from './listing_ai_image_pipeline.js';
 
 export const listingAiGatewayVersion = 'N3-2026-08-23.1';
@@ -22,12 +19,6 @@ export const listingAiOpenAiModel = 'gpt-4o-mini-2024-07-18';
 export const listingAiPolicyRevision = 'listing-ai-policy-v1';
 export const listingAiSupportedClientVersion = '1.0.0+2026091705';
 export const listingAiImageLimit = 4;
-export const listingAiDisabledDisclosureVersion = 'listing-ai-disabled-disclosure-v1';
-export const listingAiDisabledDisclosureText =
-  'Die KI-Anzeigenhilfe ist derzeit deaktiviert. Du kannst die Anzeige vollständig manuell erstellen.';
-export const listingAiMockDisclosureVersion = 'listing-ai-mock-disclosure-v1';
-export const listingAiMockDisclosureText =
-  'SIT verwendet für diesen technischen Test ausschließlich eine gekennzeichnete synthetische KI-Antwort. Es werden keine externen KI-Dienste kontaktiert und nichts wird automatisch veröffentlicht.';
 
 export class ListingAiGatewayConfigurationError extends Error {
   constructor(code) {
@@ -197,13 +188,7 @@ export function listingAiCapability(configuration) {
   const provider = configuration?.provider ?? 'disabled';
   const mode = provider === 'openai' ? 'external'
     : (['on_device', 'mock'].includes(provider) ? provider : 'disabled');
-  const disclosure = provider === 'on_device'
-    ? { version: listingAiOnDeviceDisclosureVersion, text: listingAiOnDeviceDisclosureText }
-    : (provider === 'openai'
-      ? { version: listingAiImageDisclosureVersion, text: listingAiImageDisclosureText }
-      : (provider === 'mock'
-        ? { version: listingAiMockDisclosureVersion, text: listingAiMockDisclosureText }
-        : { version: listingAiDisabledDisclosureVersion, text: listingAiDisabledDisclosureText }));
+  const disclosure = listingAiDisclosureForProvider(provider);
   return Object.freeze({
     available: configuration?.enabled === true
       && configuration?.providerExecutionAllowed === true,

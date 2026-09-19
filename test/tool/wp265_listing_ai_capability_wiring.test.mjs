@@ -54,6 +54,10 @@ test('client capability fetch and analyze use the captured principal and full ha
   assert.match(mutation, /loadBlueOceanListingCapability/u);
   assert.match(mutation, /_runOwnedDraftAction/u);
   assert.match(mutation, /crypto\.sha256\.convert\(utf8\.encode\(disclosureText\)\)/u);
+  assert.match(mutation, /raw\.keys\.length != keys\.length/u);
+  assert.match(mutation, /provider\) \{[\s\S]*'openai' => 'external'/u);
+  assert.match(mutation, /imageLimit is! int/u);
+  assert.match(mutation, /PrivatePilotConfig\.v52ClientBuild/u);
   assert.match(screen, /_blueOceanCapability = capability/u);
   assert.match(screen, /!await _listingMutationService\.isContextCurrent\(listingContext\)/u);
   assert.match(screen, /failure\.code == 'listing_ai_capability_stale'/u);

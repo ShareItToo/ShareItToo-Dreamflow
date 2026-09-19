@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/foundation.dart' show protected;
+import 'package:lendify/config/private_pilot_config.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/services/backend_http.dart';
@@ -44,40 +45,73 @@ class ListingAiCapability {
   });
 
   factory ListingAiCapability.fromJson(Map<String, dynamic> raw) {
-    String text(String key) {
+    const keys = <String>{
+      'available',
+      'provider',
+      'mode',
+      'disclosureVersion',
+      'disclosureText',
+      'disclosureHash',
+      'policyRevision',
+      'configRevision',
+      'supportedClientVersion',
+      'imageLimit',
+    };
+    if (raw.keys.length != keys.length || !raw.keys.toSet().containsAll(keys)) {
+      throw const FormatException('listing_ai_capability_invalid');
+    }
+
+    String text(String key, {bool preserveWhitespace = false}) {
       final value = raw[key];
       if (value is! String || value.trim().isEmpty) {
         throw const FormatException('listing_ai_capability_invalid');
       }
-      return value.trim();
+      return preserveWhitespace ? value : value.trim();
     }
 
     final imageLimit = raw['imageLimit'];
-    if (imageLimit is! num || !imageLimit.isFinite || imageLimit < 1) {
+    if (imageLimit is! int || imageLimit < 1 || imageLimit > 4) {
       throw const FormatException('listing_ai_capability_invalid');
     }
     final available = raw['available'];
     if (available is! bool) {
       throw const FormatException('listing_ai_capability_invalid');
     }
-    final disclosureText = text('disclosureText');
+    final provider = text('provider');
+    final mode = text('mode');
+    final expectedMode = switch (provider) {
+      'disabled' => 'disabled',
+      'mock' => 'mock',
+      'on_device' => 'on_device',
+      'openai' => 'external',
+      _ => throw const FormatException('listing_ai_capability_invalid'),
+    };
+    if (mode != expectedMode || (provider == 'disabled' && available)) {
+      throw const FormatException('listing_ai_capability_invalid');
+    }
+    final disclosureText = text('disclosureText', preserveWhitespace: true);
     final disclosureHash = text('disclosureHash');
     if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(disclosureHash) ||
         crypto.sha256.convert(utf8.encode(disclosureText)).toString() !=
             disclosureHash) {
       throw const FormatException('listing_ai_capability_invalid');
     }
+    final supportedClientVersion = text('supportedClientVersion');
+    if (supportedClientVersion != PrivatePilotConfig.v52ClientBuild) {
+      throw const FormatException(
+          'listing_ai_capability_client_version_mismatch');
+    }
     return ListingAiCapability(
       available: available,
-      provider: text('provider'),
-      mode: text('mode'),
+      provider: provider,
+      mode: mode,
       disclosureVersion: text('disclosureVersion'),
       disclosureText: disclosureText,
       disclosureHash: disclosureHash,
       policyRevision: text('policyRevision'),
       configRevision: text('configRevision'),
-      supportedClientVersion: text('supportedClientVersion'),
-      imageLimit: imageLimit.toInt(),
+      supportedClientVersion: supportedClientVersion,
+      imageLimit: imageLimit,
     );
   }
 
