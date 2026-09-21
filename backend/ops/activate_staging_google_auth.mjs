@@ -383,11 +383,12 @@ export function buildGoogleAuthPreflightCommands(manifest) {
   ]);
 }
 
-export function buildReplacementCreateArgs({ manifest, envFile, currentApi }) {
+export function buildReplacementCreateArgs({ manifest, envFile, currentApi, containerName = manifest.apiContainer }) {
   if (!currentApi || typeof currentApi !== 'object') fail('replacement_source_invalid');
   const config = currentApi.Config ?? {};
   const host = currentApi.HostConfig ?? {};
-  const args = ['create', '--name', manifest.apiContainer, '--env-file', envFile];
+  if (typeof containerName !== 'string' || !/^shareittoo-staging-api-google-auth-rehearsal-[0-9a-f-]+$/u.test(containerName) && containerName !== manifest.apiContainer) fail('replacement_container_name_invalid');
+  const args = ['create', '--name', containerName, '--env-file', envFile];
   const restart = normalizedRestartPolicy(host.RestartPolicy);
   if (restart.Name) {
     args.push('--restart', restart.Name);
@@ -487,14 +488,15 @@ function runCommand(command, args, { cwd = repositoryRoot, env = process.env, ph
 
 const boundedStartupProbeScript = "const endpoints=['live','ready']; const deadline=Date.now()+15000; const attempts={live:0,ready:0}; const last={}; const sleep=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms)); let passed={}; while(Date.now()<deadline){ for(const endpoint of endpoints){ if(passed[endpoint]) continue; attempts[endpoint]++; try { const response=await fetch(`http://127.0.0.1:8080/health/${endpoint}`); last[endpoint]={status:response.status}; if(response.status===200){ passed[endpoint]=true; } } catch { last[endpoint]={status:null}; } } if(endpoints.every((endpoint)=>passed[endpoint])){ process.stdout.write(JSON.stringify({ok:true,attempts,last})); process.exit(0); } await sleep(250); } process.stdout.write(JSON.stringify({ok:false,attempts,last,reason:'startup_timeout'})); process.exit(1);";
 
-async function runBoundedStartupProbe(command, container, commandEnv) {
+async function runBoundedStartupProbe(command, container, commandEnv, phase = 'replacement_startup_probe') {
   let result;
   try {
     result = await command('docker', ['exec', container, 'node', '--input-type=module', '-e', boundedStartupProbeScript], {
-      phase: 'replacement_startup_probe', env: commandEnv, allowFailure: true,
+      phase, env: commandEnv, allowFailure: true,
     });
   } catch (error) {
-    error.code = error.code ?? 'replacement_startup_probe_failed';
+    error.failurePhase = phase;
+    error.code = error.code ?? `${phase}_failed`;
     error.probeDiagnostic = Object.freeze({ ok: false, reason: 'command_error' });
     throw error;
   }
@@ -503,8 +505,9 @@ async function runBoundedStartupProbe(command, container, commandEnv) {
     diagnostic = { ok: false, reason: 'invalid_probe_output' };
   }
   if (result?.code !== 0 || diagnostic.ok !== true) {
-    const error = new Error('Staging Google Auth activation failed: replacement_startup_probe_failed');
-    error.code = 'replacement_startup_probe_failed';
+    const error = new Error(`Staging Google Auth activation failed: ${phase}_failed`);
+    error.code = `${phase}_failed`;
+    error.failurePhase = phase;
     error.probeDiagnostic = Object.freeze({
       ok: diagnostic.ok === true,
       reason: typeof diagnostic.reason === 'string' ? diagnostic.reason : 'startup_probe_failed',
@@ -514,6 +517,46 @@ async function runBoundedStartupProbe(command, container, commandEnv) {
     throw error;
   }
   return diagnostic;
+}
+
+async function executePhase(command, args, options) {
+  try {
+    const result = await command('docker', args, options);
+    if (result?.code !== undefined && result.code !== 0) {
+      const error = new Error(`Staging Google Auth activation failed: ${options.phase}_failed`);
+      error.code = `${options.phase}_failed`;
+      error.failurePhase = options.phase;
+      error.failureExitCode = result.code;
+      throw error;
+    }
+    return result;
+  } catch (error) {
+    error.failurePhase = error.failurePhase ?? options.phase;
+    error.failureExitCode = error.failureExitCode ?? error.exitCode ?? null;
+    throw error;
+  }
+}
+
+function sanitizeCandidateState(record) {
+  const state = record?.State ?? record ?? {};
+  return Object.freeze({
+    status: typeof state.Status === 'string' ? state.Status : null,
+    running: state.Running === true,
+    exitCode: Number.isInteger(state.ExitCode) ? state.ExitCode : null,
+    oomKilled: state.OOMKilled === true,
+    restartCount: Number.isInteger(record?.RestartCount) ? record.RestartCount : (Number.isInteger(state.RestartCount) ? state.RestartCount : null),
+    error: typeof state.Error === 'string' && state.Error.length > 0 ? 'present' : null,
+  });
+}
+
+async function captureCandidateState(command, container, commandEnv) {
+  try {
+    const result = await command('docker', ['inspect', '--format', '{{json .}}', container], { phase: 'failed_candidate_state_readback', env: commandEnv, allowFailure: true });
+    if (result?.code !== 0) return Object.freeze({ status: null, running: false, exitCode: result?.code ?? null, oomKilled: false, restartCount: null, error: 'inspect_failed' });
+    return sanitizeCandidateState(oneRecord(parseJson(result.stdout, 'failed_candidate_state_invalid')));
+  } catch {
+    return Object.freeze({ status: null, running: false, exitCode: null, oomKilled: false, restartCount: null, error: 'inspect_failed' });
+  }
 }
 
 async function atomicReplace(content, manifest) {
@@ -593,14 +636,12 @@ async function rollback({ manifest, originalEnv, originalReadbacks, command, com
       const restoredApi = oneRecord(parseJson(restoredApiResult.stdout, 'rollback_api_readback_invalid'));
       if (!sameExceptAuthFlag(originalReadbacks.api, restoredApi)) fail('rollback_config_drift');
       assertExactContainerNetworks(restoredApi, manifest, 'rollback_network_inventory_invalid');
-      const live = await command('docker', ['exec', manifest.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/health/live'); process.stdout.write(JSON.stringify({status:r.status,payload:await r.json()})); if(r.status!==200) process.exit(1)"], { phase: 'rollback_live_probe', env: commandEnv });
-      const ready = await command('docker', ['exec', manifest.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/health/ready'); process.stdout.write(JSON.stringify({status:r.status,payload:await r.json()})); if(r.status!==200) process.exit(1)"], { phase: 'rollback_ready_probe', env: commandEnv });
+      const startup = await runBoundedStartupProbe(command, manifest.apiContainer, commandEnv, 'rollback_startup_probe');
       const version = await command('docker', ['exec', manifest.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/version'); process.stdout.write(JSON.stringify(await r.json())); if(r.status!==200) process.exit(1)"], { phase: 'rollback_version_probe', env: commandEnv });
       const flags = await command('docker', ['exec', manifest.apiContainer, 'node', '--input-type=module', '-e', "process.stdout.write(JSON.stringify(Object.fromEntries(['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED'].map((name)=>[name,process.env[name]??null])))"], { phase: 'rollback_runtime_flags', env: commandEnv });
       const database = await command('docker', ['exec', manifest.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', manifest.databaseUser, '-d', manifest.databaseName, '-Atc', 'SELECT 1'], { phase: 'rollback_database_probe', env: commandEnv });
-      if ([live, ready, version, flags, database].some((entry) => entry?.code !== 0)) fail('rollback_runtime_probe_failed');
-      assertHttpPayload(live.stdout, 'rollback_live_probe_invalid');
-      assertHttpPayload(ready.stdout, 'rollback_ready_probe_invalid');
+      if ([version, flags, database].some((entry) => entry?.code !== 0)) fail('rollback_runtime_probe_failed');
+      if (startup?.ok !== true) fail('rollback_startup_probe_invalid');
       assertRuntimeReadback({ version: parseJson(version.stdout, 'rollback_version_probe_invalid'), flags: parseJson(flags.stdout, 'rollback_runtime_flags_invalid'), manifest, expectedAuth: 'false', expectedEnvironment: requiredSafetyEnv.DEPLOYMENT_ENVIRONMENT });
       if (database.stdout.trim() !== '1') fail('rollback_database_probe_invalid');
       assertRecordSafety({ api: restoredApi, database: originalReadbacks.database, databaseVolume: originalReadbacks.databaseVolume, network: originalReadbacks.network, providerNetwork: originalReadbacks.providerNetwork, uploads: originalReadbacks.uploads, image: originalReadbacks.image, manifest });
@@ -614,10 +655,7 @@ async function rollback({ manifest, originalEnv, originalReadbacks, command, com
   return Object.freeze({ restored, results: Object.freeze(results) });
 }
 
-export async function runGoogleAuthActivation({ manifest, command = runCommand, commandEnv = process.env, execute = false } = {}) {
-  const target = assertGoogleAuthRuntimeManifest(manifest);
-  if (typeof command !== 'function') fail('command_runner_required');
-  const originalEnv = (await readProtectedEnvSnapshot(target)).content;
+async function collectPreflight(target, command, commandEnv) {
   const commands = buildGoogleAuthPreflightCommands(target);
   const readbacks = {};
   for (const entry of commands) {
@@ -642,6 +680,14 @@ export async function runGoogleAuthActivation({ manifest, command = runCommand, 
   }
   assertRecordSafety({ ...readbacks, manifest: target });
   assertRuntimeReadback({ version: readbacks.version, flags: readbacks.flags, manifest: target });
+  return Object.freeze({ commands, readbacks });
+}
+
+export async function runGoogleAuthActivation({ manifest, command = runCommand, commandEnv = process.env, execute = false } = {}) {
+  const target = assertGoogleAuthRuntimeManifest(manifest);
+  if (typeof command !== 'function') fail('command_runner_required');
+  const originalEnv = (await readProtectedEnvSnapshot(target)).content;
+  const { commands, readbacks } = await collectPreflight(target, command, commandEnv);
   if (!execute) return Object.freeze({ status: 'preflight-passed-no-mutation', firstIrreversiblePhase: 'atomic_env_enable', commands: Object.freeze(commands.map((entry) => entry.phase)) });
   if (commandEnv.STAGING_GOOGLE_AUTH_EXECUTE !== '1'
       || commandEnv.STAGING_GOOGLE_AUTH_CONFIRM !== target.runtimeRevision) fail('explicit_execute_confirmation_required');
@@ -649,29 +695,92 @@ export async function runGoogleAuthActivation({ manifest, command = runCommand, 
   let replacementCreated = false;
   try {
     await setActivationFlags(target, originalEnv);
-    await command('docker', ['stop', target.apiContainer], { phase: 'stop_current_api', env: commandEnv });
-    await command('docker', ['rename', target.apiContainer, sealedName], { phase: 'seal_current_api', env: commandEnv });
+    await executePhase(command, ['stop', target.apiContainer], { phase: 'stop_current_api', env: commandEnv });
+    await executePhase(command, ['rename', target.apiContainer, sealedName], { phase: 'seal_current_api', env: commandEnv });
     const createArgs = buildReplacementCreateArgs({ manifest: target, envFile: target.envFile, currentApi: readbacks.api });
-    await command('docker', createArgs, { phase: 'create_replacement_api', env: commandEnv });
     replacementCreated = true;
-    await command('docker', ['network', 'connect', target.providerNetwork, target.apiContainer], { phase: 'attach_provider_network', env: commandEnv });
-    const replacement = await command('docker', ['inspect', '--format', '{{json .}}', target.apiContainer], { phase: 'replacement_config_readback', env: commandEnv });
+    await executePhase(command, createArgs, { phase: 'create_replacement_api', env: commandEnv });
+    await executePhase(command, ['network', 'connect', target.providerNetwork, target.apiContainer], { phase: 'attach_provider_network', env: commandEnv });
+    const replacement = await executePhase(command, ['inspect', '--format', '{{json .}}', target.apiContainer], { phase: 'replacement_config_readback', env: commandEnv });
     const replacementRecord = oneRecord(parseJson(replacement.stdout, 'replacement_inspect_invalid'));
     if (!sameExceptAuthFlag(readbacks.api, replacementRecord)) fail('replacement_config_drift');
     assertExactContainerNetworks(replacementRecord, target, 'replacement_network_inventory_invalid');
-    const startResult = await command('docker', ['start', target.apiContainer], { phase: 'start_replacement_api', env: commandEnv });
+    const startResult = await executePhase(command, ['start', target.apiContainer], { phase: 'start_replacement_api', env: commandEnv });
     if (startResult?.code !== 0) fail('start_replacement_api_failed');
     await runBoundedStartupProbe(command, target.apiContainer, commandEnv);
     await command('docker', ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/version'); const p=await r.json(); if(r.status!==200 || p.commit!==process.env.APP_COMMIT || p.environment!=='staging') process.exit(1)"], { phase: 'replacement_version_probe', env: commandEnv });
-    const replacementFlags = await command('docker', ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "process.stdout.write(JSON.stringify(Object.fromEntries(['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED'].map((name)=>[name,process.env[name]??null])))"], { phase: 'replacement_runtime_flags', env: commandEnv });
+    const replacementFlags = await executePhase(command, ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "process.stdout.write(JSON.stringify(Object.fromEntries(['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED'].map((name)=>[name,process.env[name]??null])))"], { phase: 'replacement_runtime_flags', env: commandEnv });
     assertRuntimeReadback({ version: { commit: target.runtimeRevision, environment: activatedEnvironment }, flags: parseJson(replacementFlags.stdout, 'replacement_runtime_flags_invalid'), manifest: target, expectedAuth: activatedAuth, expectedEnvironment: activatedEnvironment });
-    await command('docker', ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', target.databaseUser, '-d', target.databaseName, '-Atc', 'SELECT 1'], { phase: 'replacement_database_probe', env: commandEnv });
-    const invalidToken = await command('docker', ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/v1/auth/social',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({idToken:'synthetic-invalid-token'})}); const p=await r.json(); process.stdout.write(JSON.stringify({status:r.status,code:p.code})); if(r.status!==401 || p.code!=='invalid_social_token') process.exit(1)"], { phase: 'replacement_invalid_social_token_probe', env: commandEnv });
+    await executePhase(command, ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', target.databaseUser, '-d', target.databaseName, '-Atc', 'SELECT 1'], { phase: 'replacement_database_probe', env: commandEnv });
+    const invalidToken = await executePhase(command, ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/v1/auth/social',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({idToken:'synthetic-invalid-token'})}); const p=await r.json(); process.stdout.write(JSON.stringify({status:r.status,code:p.code})); if(r.status!==401 || p.code!=='invalid_social_token') process.exit(1)"], { phase: 'replacement_invalid_social_token_probe', env: commandEnv });
     const invalidTokenPayload = parseJson(invalidToken.stdout, 'replacement_invalid_social_token_probe_invalid');
     if (invalidTokenPayload.status !== 401 || invalidTokenPayload.code !== 'invalid_social_token') fail('replacement_invalid_social_token_probe_invalid');
     return Object.freeze({ status: 'activated-awaiting-device-smoke', firstIrreversiblePhase: 'atomic_env_enable', sealedName, requiresFinalDeviceSmoke: true });
   } catch (error) {
+    if (replacementCreated) error.candidateState = await captureCandidateState(command, target.apiContainer, commandEnv);
     error.rollback = await rollback({ manifest: target, originalEnv, originalReadbacks: readbacks, command, commandEnv, sealedName, replacementCreated });
+    throw error;
+  }
+}
+
+async function cleanupRehearsal({ command, commandEnv, candidate, rehearsalEnvFile }) {
+  const results = [];
+  try {
+    const removed = await command('docker', ['rm', '--force', candidate], { phase: 'rehearsal_candidate_remove', env: commandEnv, allowFailure: true });
+    results.push({ phase: 'rehearsal_candidate_remove', ok: removed?.code === 0, ...(removed?.code === 0 ? {} : { code: removed?.code ?? 'nonzero' }) });
+    const absent = await command('docker', ['ps', '--all', '--filter', `name=^/${candidate}$`, '--format', '{{.Names}}'], { phase: 'rehearsal_candidate_absence', env: commandEnv, allowFailure: true });
+    const absentOk = absent?.code === 0 && (absent.stdout ?? '').trim() === '';
+    results.push({ phase: 'rehearsal_candidate_absence', ok: absentOk, ...(absentOk ? {} : { code: absent?.code ?? 'candidate_present' }) });
+    await unlink(rehearsalEnvFile);
+    let envAbsent = false;
+    try { await lstat(rehearsalEnvFile); } catch (error) { envAbsent = error?.code === 'ENOENT'; }
+    results.push({ phase: 'rehearsal_env_absence', ok: envAbsent, ...(envAbsent ? {} : { code: 'rehearsal_env_present' }) });
+    return Object.freeze({ cleaned: results.every((entry) => entry.ok), results: Object.freeze(results) });
+  } catch (error) {
+    results.push({ phase: 'rehearsal_cleanup', ok: false, code: error?.code ?? 'cleanup_failed' });
+    return Object.freeze({ cleaned: false, results: Object.freeze(results) });
+  }
+}
+
+export async function runGoogleAuthIsolatedRehearsal({ manifest, command = runCommand, commandEnv = process.env } = {}) {
+  const target = assertGoogleAuthRuntimeManifest(manifest);
+  if (typeof command !== 'function') fail('command_runner_required');
+  if (commandEnv.STAGING_GOOGLE_AUTH_ISOLATED_REHEARSAL !== '1'
+      || commandEnv.STAGING_GOOGLE_AUTH_CONFIRM !== target.runtimeRevision) fail('explicit_rehearsal_confirmation_required');
+  const originalEnv = (await readProtectedEnvSnapshot(target)).content;
+  const { readbacks } = await collectPreflight(target, command, commandEnv);
+  const suffix = `${target.runtimeRevision.slice(0, 12)}-${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
+  const candidate = `shareittoo-staging-api-google-auth-rehearsal-${suffix}`;
+  const rehearsalEnvFile = `${target.envFile}.google-auth-rehearsal-${suffix}`;
+  const rehearsalManifest = Object.freeze({ ...target, envFile: rehearsalEnvFile });
+  let candidateState;
+  try {
+    await atomicReplace(originalEnv, rehearsalManifest);
+    await setActivationFlags(rehearsalManifest, originalEnv);
+    const createArgs = buildReplacementCreateArgs({ manifest: target, envFile: rehearsalEnvFile, currentApi: readbacks.api, containerName: candidate });
+    await executePhase(command, createArgs, { phase: 'rehearsal_candidate_create', env: commandEnv });
+    await executePhase(command, ['network', 'connect', target.providerNetwork, candidate], { phase: 'rehearsal_provider_network_attach', env: commandEnv });
+    const inspect = await executePhase(command, ['inspect', '--format', '{{json .}}', candidate], { phase: 'rehearsal_config_readback', env: commandEnv });
+    const candidateRecord = oneRecord(parseJson(inspect.stdout, 'rehearsal_config_readback_invalid'));
+    if (!sameExceptAuthFlag(readbacks.api, candidateRecord)) fail('rehearsal_config_drift');
+    assertExactContainerNetworks(candidateRecord, target, 'rehearsal_network_inventory_invalid');
+    const started = await executePhase(command, ['start', candidate], { phase: 'rehearsal_candidate_start', env: commandEnv });
+    if (started?.code !== 0) fail('rehearsal_candidate_start_failed');
+    await runBoundedStartupProbe(command, candidate, commandEnv, 'rehearsal_startup_probe');
+    const version = await executePhase(command, ['exec', candidate, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/version'); process.stdout.write(JSON.stringify(await r.json())); if(r.status!==200) process.exit(1)"], { phase: 'rehearsal_version_probe', env: commandEnv });
+    const flags = await executePhase(command, ['exec', candidate, 'node', '--input-type=module', '-e', "process.stdout.write(JSON.stringify(Object.fromEntries(['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED'].map((name)=>[name,process.env[name]??null])))"], { phase: 'rehearsal_runtime_flags', env: commandEnv });
+    assertRuntimeReadback({ version: parseJson(version.stdout, 'rehearsal_version_probe_invalid'), flags: parseJson(flags.stdout, 'rehearsal_runtime_flags_invalid'), manifest: target, expectedAuth: activatedAuth, expectedEnvironment: activatedEnvironment });
+    await executePhase(command, ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', target.databaseUser, '-d', target.databaseName, '-Atc', 'SELECT 1'], { phase: 'rehearsal_database_probe', env: commandEnv });
+    const invalidToken = await executePhase(command, ['exec', candidate, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/v1/auth/social',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({idToken:'synthetic-invalid-token'})}); const p=await r.json(); process.stdout.write(JSON.stringify({status:r.status,code:p.code})); if(r.status!==401 || p.code!=='invalid_social_token') process.exit(1)"], { phase: 'rehearsal_invalid_social_token_probe', env: commandEnv });
+    const invalidTokenPayload = parseJson(invalidToken.stdout, 'rehearsal_invalid_social_token_probe_invalid');
+    if (invalidTokenPayload.status !== 401 || invalidTokenPayload.code !== 'invalid_social_token') fail('rehearsal_invalid_social_token_probe_invalid');
+    const cleanup = await cleanupRehearsal({ command, commandEnv, candidate, rehearsalEnvFile });
+    if (!cleanup.cleaned) fail('rehearsal_cleanup_failed');
+    return Object.freeze({ status: 'isolated-rehearsal-passed', candidate, cleanup: cleanup.results, canonicalUntouched: true });
+  } catch (error) {
+    candidateState = await captureCandidateState(command, candidate, commandEnv);
+    error.candidateState = candidateState;
+    error.rehearsalCleanup = await cleanupRehearsal({ command, commandEnv, candidate, rehearsalEnvFile });
     throw error;
   }
 }
@@ -690,6 +799,9 @@ export async function readGoogleAuthRuntimeManifest(filePath) {
 
 export function sanitizeActivationError(error) {
   const output = { status: 'failed', code: error?.code ?? 'staging_google_auth_activation_failed' };
+  if (error?.failurePhase) output.failurePhase = String(error.failurePhase);
+  if (error?.failureExitCode !== undefined && error.failureExitCode !== null) output.failureExitCode = Number(error.failureExitCode);
+  if (error?.candidateState) output.candidateState = sanitizeCandidateState(error.candidateState);
   if (error?.probeDiagnostic) output.probeDiagnostic = {
     ok: error.probeDiagnostic.ok === true,
     reason: typeof error.probeDiagnostic.reason === 'string' ? error.probeDiagnostic.reason : 'startup_probe_failed',
@@ -707,7 +819,9 @@ export function sanitizeActivationError(error) {
 
 async function main() {
   const manifest = await readGoogleAuthRuntimeManifest(process.env.STAGING_GOOGLE_AUTH_RUNTIME_MANIFEST ?? '');
-  const result = await runGoogleAuthActivation({ manifest, execute: process.env.STAGING_GOOGLE_AUTH_EXECUTE === '1' });
+  const result = process.env.STAGING_GOOGLE_AUTH_MODE === 'isolated-rehearsal'
+    ? await runGoogleAuthIsolatedRehearsal({ manifest })
+    : await runGoogleAuthActivation({ manifest, execute: process.env.STAGING_GOOGLE_AUTH_EXECUTE === '1' });
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 

@@ -9,6 +9,7 @@ import {
   buildReplacementCreateArgs,
   readGoogleAuthRuntimeManifest,
   runGoogleAuthActivation,
+  runGoogleAuthIsolatedRehearsal,
   sanitizeActivationError,
   setActivationFlags,
 } from '../ops/activate_staging_google_auth.mjs';
@@ -141,11 +142,42 @@ function statefulExecutor(fx, { failPhase, failRollbackPhase, driftReplacement =
     if (phase === 'rollback_replacement_verify') return { stdout: replacementExists ? `${fx.manifest.apiContainer}\n` : '', code: 0 };
     if (phase === 'rollback_restore_rename') { if (!sealed) return { stdout: '', code: 1 }; sealed = false; return { stdout: '', code: 0 }; }
     if (phase === 'rollback_api_readback') return { stdout: JSON.stringify(fx.api), code: 0 };
+    if (phase === 'rollback_startup_probe') return { stdout: JSON.stringify({ ok: true, attempts: { live: 1, ready: 1 }, last: { live: { status: 200 }, ready: { status: 200 } } }), code: 0 };
     if (phase === 'rollback_live_probe' || phase === 'rollback_ready_probe') return { stdout: JSON.stringify({ status: 200, payload: { status: 'ok' } }), code: 0 };
     if (phase === 'rollback_version_probe') return { stdout: JSON.stringify({ commit: revision, environment: 'test' }), code: 0 };
     if (phase === 'rollback_runtime_flags') return { stdout: JSON.stringify(fx.manifest.safetyEnv), code: 0 };
     if (phase === 'rollback_database_probe') return { stdout: '1', code: 0 };
     if (phase.startsWith('rollback_') || ['stop_current_api', 'seal_current_api', 'attach_provider_network', 'start_replacement_api'].includes(phase)) return { stdout: '', code: 0 };
+    return base.command(_cmd, args, options);
+  };
+  return { command, calls };
+}
+
+function isolatedExecutor(fx, { startupTimeout = false } = {}) {
+  const base = fakeCommand(fx);
+  const calls = base.calls;
+  let candidate;
+  const command = async (_cmd, args, options) => {
+    const { phase } = options;
+    calls.push({ phase, args });
+    if (phase === 'rehearsal_candidate_create') { candidate = args[args.indexOf('--name') + 1]; return { stdout: '', code: 0 }; }
+    if (phase === 'rehearsal_provider_network_attach') return { stdout: '', code: 0 };
+    if (phase === 'rehearsal_config_readback') {
+      const record = structuredClone(fx.api);
+      record.Name = `/${candidate}`;
+      record.Config.Env = record.Config.Env.map((entry) => entry.startsWith('FIREBASE_AUTH_ENABLED=') ? 'FIREBASE_AUTH_ENABLED=true' : entry.startsWith('DEPLOYMENT_ENVIRONMENT=') ? 'DEPLOYMENT_ENVIRONMENT=staging' : entry);
+      return { stdout: JSON.stringify(record), code: 0 };
+    }
+    if (phase === 'rehearsal_candidate_start') return { stdout: '', code: 0 };
+    if (phase === 'rehearsal_startup_probe') return startupTimeout
+      ? { stdout: JSON.stringify({ ok: false, reason: 'startup_timeout', attempts: { live: 60, ready: 60 }, last: { live: { status: 503 }, ready: { status: 503 } } }), code: 1 }
+      : { stdout: JSON.stringify({ ok: true, attempts: { live: 3, ready: 4 }, last: { live: { status: 200 }, ready: { status: 200 } } }), code: 0 };
+    if (phase === 'rehearsal_version_probe') return { stdout: JSON.stringify({ commit: revision, environment: 'staging' }), code: 0 };
+    if (phase === 'rehearsal_runtime_flags') return { stdout: JSON.stringify({ ...fx.manifest.safetyEnv, DEPLOYMENT_ENVIRONMENT: 'staging', FIREBASE_AUTH_ENABLED: 'true' }), code: 0 };
+    if (phase === 'rehearsal_database_probe') return { stdout: '1', code: 0 };
+    if (phase === 'rehearsal_invalid_social_token_probe') return { stdout: JSON.stringify({ status: 401, code: 'invalid_social_token' }), code: 0 };
+    if (phase === 'rehearsal_candidate_remove') return { stdout: '', code: 0 };
+    if (phase === 'rehearsal_candidate_absence') return { stdout: '', code: 0 };
     return base.command(_cmd, args, options);
   };
   return { command, calls };
@@ -255,6 +287,34 @@ test('bounded startup polling accepts delayed readiness and diagnoses timeout', 
     const executor = statefulExecutor(timedOut, { startupTimeout: true });
     await assert.rejects(runGoogleAuthActivation({ manifest: timedOut.manifest, command: executor.command, commandEnv: { STAGING_GOOGLE_AUTH_EXECUTE: '1', STAGING_GOOGLE_AUTH_CONFIRM: revision }, execute: true }), (error) => error.code === 'replacement_startup_probe_failed' && error.probeDiagnostic?.reason === 'startup_timeout' && error.rollback?.restored === true);
   } finally { await rm(timedOut.root, { recursive: true, force: true }); }
+});
+
+test('isolated rehearsal never stops canonical and proves candidate cleanup', async () => {
+  const fx = await fixture();
+  try {
+    const executor = isolatedExecutor(fx);
+    const result = await runGoogleAuthIsolatedRehearsal({
+      manifest: fx.manifest, command: executor.command,
+      commandEnv: { STAGING_GOOGLE_AUTH_ISOLATED_REHEARSAL: '1', STAGING_GOOGLE_AUTH_CONFIRM: revision },
+    });
+    assert.equal(result.status, 'isolated-rehearsal-passed');
+    assert.equal(result.canonicalUntouched, true);
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.env);
+    assert.ok(executor.calls.some((call) => call.phase === 'rehearsal_candidate_absence'));
+    assert.equal(executor.calls.some((call) => call.phase === 'stop_current_api' || call.phase === 'seal_current_api'), false);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('isolated rehearsal timeout returns diagnostic and cleans candidate/temp env', async () => {
+  const fx = await fixture();
+  try {
+    const executor = isolatedExecutor(fx, { startupTimeout: true });
+    await assert.rejects(runGoogleAuthIsolatedRehearsal({
+      manifest: fx.manifest, command: executor.command,
+      commandEnv: { STAGING_GOOGLE_AUTH_ISOLATED_REHEARSAL: '1', STAGING_GOOGLE_AUTH_CONFIRM: revision },
+    }), (error) => error.code === 'rehearsal_startup_probe_failed' && error.probeDiagnostic?.reason === 'startup_timeout' && error.rehearsalCleanup?.cleaned === true);
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.env);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
 test('executor failure restores env and sealed container', async () => {
