@@ -8,6 +8,9 @@ import {
   onDeviceListingAiViewportAttemptLimit,
   observedListingAiSignals,
   runAndroidOnDeviceListingAiAcceptance,
+  stagingReadbackCommand,
+  validateStagingDatabaseContainer,
+  verifyStaging,
 } from '../../tool/diagnose_android_on_device_listing_ai.mjs';
 
 const candidate = Object.freeze({
@@ -176,6 +179,37 @@ test('preserves the primary stage when cleanup and restore also run', async () =
 
 test('uses a bounded viewport collection budget', () => {
   assert.equal(onDeviceListingAiViewportAttemptLimit, 24);
+});
+
+test('requires an explicit safe staging database target and threads it into readback', () => {
+  assert.equal(validateStagingDatabaseContainer('sit-green-postgres-20260918011528-wp254'),
+    'sit-green-postgres-20260918011528-wp254');
+  assert.throws(
+    () => validateStagingDatabaseContainer(undefined),
+    /staging-database-container is required/u,
+  );
+  for (const unsafe of ['green; rm -rf /', 'green/../../postgres', 'green\npostgres', ' green']) {
+    assert.throws(
+      () => validateStagingDatabaseContainer(unsafe),
+      /safe Docker container name/u,
+    );
+  }
+  const invocation = stagingReadbackCommand('sit-green-postgres-20260918011528-wp254');
+  assert.equal(invocation.command, 'ssh');
+  assert.match(invocation.args.at(-1), /docker exec -i sit-green-postgres-20260918011528-wp254 /u);
+  assert.doesNotMatch(invocation.args.at(-1), /shareittoo-staging-postgres/iu);
+});
+
+test('verifyStaging uses exactly the selected container rather than a legacy fallback', () => {
+  const calls = [];
+  const result = verifyStaging((command, args) => {
+    calls.push({ command, args });
+    return JSON.stringify({ recentDraftFound: true });
+  }, '2026-09-21T10:00:00.000Z', 'green-db-bound-by-evidence');
+  assert.deepEqual(result, { recentDraftFound: true });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, 'ssh');
+  assert.match(calls[0].args.at(-1), /docker exec -i green-db-bound-by-evidence /u);
 });
 
 test('closes physical on-device Listing-AI with zero-cost non-public evidence', async () => {

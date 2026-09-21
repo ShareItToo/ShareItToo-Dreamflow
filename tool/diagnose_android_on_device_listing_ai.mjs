@@ -454,13 +454,32 @@ SELECT json_build_object(
 `;
 }
 
-function verifyStaging(commandRunner, startedAt) {
-  const output = commandRunner('ssh', [
-    '-o', 'BatchMode=yes',
-    '-o', 'ConnectTimeout=8',
-    'sit-staging-vps',
-    'docker exec -i shareittoo-staging-postgres sh -c \'exec psql -X -A -t -U "$POSTGRES_USER" -d "$POSTGRES_DB"\'',
-  ], {
+export function validateStagingDatabaseContainer(value) {
+  if (typeof value !== 'string' || value.length === 0) {
+    fail('--staging-database-container is required.');
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u.test(value)) {
+    fail('--staging-database-container must be a safe Docker container name.');
+  }
+  return value;
+}
+
+export function stagingReadbackCommand(stagingDatabaseContainer) {
+  const container = validateStagingDatabaseContainer(stagingDatabaseContainer);
+  return {
+    command: 'ssh',
+    args: [
+      '-o', 'BatchMode=yes',
+      '-o', 'ConnectTimeout=8',
+      'sit-staging-vps',
+      `docker exec -i ${container} sh -c 'exec psql -X -A -t -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`,
+    ],
+  };
+}
+
+export function verifyStaging(commandRunner, startedAt, stagingDatabaseContainer) {
+  const invocation = stagingReadbackCommand(stagingDatabaseContainer);
+  const output = commandRunner(invocation.command, invocation.args, {
     encoding: 'utf8',
     input: stagingReadbackSql(startedAt),
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -486,6 +505,9 @@ async function main() {
   );
   const candidateDirectory = resolve(
     argumentValue(args, '--candidate-dir') ?? fail('--candidate-dir is required.'),
+  );
+  const stagingDatabaseContainer = validateStagingDatabaseContainer(
+    argumentValue(args, '--staging-database-container'),
   );
   const adbPath = argumentValue(args, '--adb') ?? 'adb';
   const commandRunner = defaultCurrentHeadAndroidCommandRunner;
@@ -626,7 +648,7 @@ async function main() {
     },
     verifyServer: async ({ startedAt }) => {
       setStage('server-readback');
-      return verifyStaging(commandRunner, startedAt);
+      return verifyStaging(commandRunner, startedAt, stagingDatabaseContainer);
     },
     cleanup: async (performed) => {
       setStage('cleanup');
