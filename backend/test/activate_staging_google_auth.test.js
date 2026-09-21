@@ -75,7 +75,7 @@ async function fixture() {
       Image: image, Env: apiEnv, Cmd: ['node', 'src/server.js'], Entrypoint: null,
       WorkingDir: '/app', User: 'shareittoo', Tty: false, OpenStdin: false,
       Labels: { 'com.shareittoo.sit.green': 'true' },
-    }, HostConfig: { GroupAdd: ['65532'], RestartPolicy: { Name: 'unless-stopped', MaximumRetryCount: 0 }, PortBindings: {} },
+    }, HostConfig: { GroupAdd: ['65532'], RestartPolicy: { Name: 'unless-stopped', MaximumRetryCount: 0 }, PortBindings: {}, NetworkMode: manifest.network },
     Mounts: mounts.map((m) => ({ Type: m.type, Name: m.type === 'volume' ? m.name : null, Source: m.source, Destination: m.destination, RW: !m.readOnly })),
     NetworkSettings: { Ports: {}, Networks: { [manifest.network]: {}, [manifest.providerNetwork]: {} } },
   };
@@ -157,7 +157,7 @@ function statefulExecutor(fx, { failPhase, failRollbackPhase, driftReplacement =
   return { command, calls };
 }
 
-function isolatedExecutor(fx, { startupTimeout = false } = {}) {
+function isolatedExecutor(fx, { startupTimeout = false, driftNetwork = null, driftSecurity = false } = {}) {
   const base = fakeCommand(fx);
   const calls = base.calls;
   let candidate;
@@ -171,6 +171,10 @@ function isolatedExecutor(fx, { startupTimeout = false } = {}) {
       const record = structuredClone(fx.api);
       record.Name = `/${candidate}`;
       record.NetworkSettings.Networks = { [isolatedNetwork]: {} };
+      record.HostConfig.NetworkMode = isolatedNetwork;
+      if (driftNetwork === 'extra') record.NetworkSettings.Networks.extra = {};
+      if (driftNetwork === 'different') record.NetworkSettings.Networks = { 'wrong-network': {} };
+      if (driftSecurity) record.HostConfig.Privileged = true;
       const mountArg = args.find((arg) => arg.includes('dst=/data/uploads'));
       if (mountArg) record.Mounts = record.Mounts.map((mount) => mount.Destination === '/data/uploads' ? { ...mount, Name: mountArg.match(/src=([^,]+)/)?.[1], Source: mountArg.match(/src=([^,]+)/)?.[1] } : mount);
       record.Config.Env = record.Config.Env.map((entry) => entry.startsWith('FIREBASE_AUTH_ENABLED=') ? 'FIREBASE_AUTH_ENABLED=true' : entry.startsWith('DEPLOYMENT_ENVIRONMENT=') ? 'DEPLOYMENT_ENVIRONMENT=staging' : entry);
@@ -353,6 +357,29 @@ test('isolated rehearsal timeout returns diagnostic and cleans candidate/temp en
       commandEnv: { STAGING_GOOGLE_AUTH_ISOLATED_REHEARSAL: '1', STAGING_GOOGLE_AUTH_CONFIRM: revision },
     }), (error) => error.code === 'rehearsal_startup_probe_failed' && error.probeDiagnostic?.reason === 'startup_timeout' && error.rehearsalCleanup?.cleaned === true);
     assert.equal(await readFile(fx.envFile, 'utf8'), fx.env);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('isolated rehearsal rejects extra or different networks and security drift', async () => {
+  for (const driftNetwork of ['extra', 'different']) {
+    const fx = await fixture();
+    try {
+      const executor = isolatedExecutor(fx, { driftNetwork });
+      await assert.rejects(runGoogleAuthIsolatedRehearsal({
+        manifest: fx.manifest, command: executor.command,
+        commandEnv: { STAGING_GOOGLE_AUTH_ISOLATED_REHEARSAL: '1', STAGING_GOOGLE_AUTH_CONFIRM: revision },
+      }), (error) => error.code === 'rehearsal_network_inventory_invalid' && error.rehearsalCleanup?.cleaned === true);
+      assert.ok(executor.calls.some((call) => call.phase === 'rehearsal_candidate_absence'));
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+  const fx = await fixture();
+  try {
+    const executor = isolatedExecutor(fx, { driftSecurity: true });
+    await assert.rejects(runGoogleAuthIsolatedRehearsal({
+      manifest: fx.manifest, command: executor.command,
+      commandEnv: { STAGING_GOOGLE_AUTH_ISOLATED_REHEARSAL: '1', STAGING_GOOGLE_AUTH_CONFIRM: revision },
+    }), (error) => error.code === 'rehearsal_config_drift' && error.rehearsalCleanup?.cleaned === true);
+    assert.ok(executor.calls.some((call) => call.phase === 'rehearsal_candidate_absence'));
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 

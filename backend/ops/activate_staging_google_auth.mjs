@@ -825,6 +825,7 @@ function sameExceptIsolatedOverrides(left, right) {
   for (const config of [a, b]) {
     config.mounts = config.mounts.map((mount) => mount.Destination === '/data/uploads'
       ? { ...mount, Name: '<isolated-uploads>', Source: '<isolated-uploads>' } : mount);
+    config.security.networkMode = '<isolated-network>';
   }
   const envA = envMap(left?.Config?.Env);
   const envB = envMap(right?.Config?.Env);
