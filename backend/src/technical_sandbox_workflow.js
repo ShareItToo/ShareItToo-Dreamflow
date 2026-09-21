@@ -149,12 +149,21 @@ export function syntheticTechnicalSandboxEmail(userId, configuration = config.te
 }
 
 function expectedMetadata({ runId, userId, configuration }) {
+  return expectedMetadataForBinding({
+    runId,
+    userId,
+    authorizationId: configuration.authorizationId,
+    configRevision: technicalSandboxConfigRevision(configuration),
+  });
+}
+
+function expectedMetadataForBinding({ runId, userId, authorizationId, configRevision }) {
   return {
     sit_flow: technicalSandboxFlow,
     technical_sandbox_run_id: runId,
     technical_sandbox_user_id: userId,
-    technical_sandbox_authorization_id: configuration.authorizationId,
-    technical_sandbox_config_revision: technicalSandboxConfigRevision(configuration),
+    technical_sandbox_authorization_id: authorizationId,
+    technical_sandbox_config_revision: configRevision,
   };
 }
 
@@ -170,8 +179,9 @@ export function validateTechnicalSandboxReceipt({
   runId,
   userId,
   configuration = config.technicalSandbox,
+  binding = null,
 }) {
-  const expected = expectedMetadata({ runId, userId, configuration });
+  const expected = binding ?? expectedMetadata({ runId, userId, configuration });
   const exactAmount = Number(session?.amount_total) === configuration.amountMinor
     && Number(paymentIntent?.amount) === configuration.amountMinor;
   const exactCurrency = String(session?.currency ?? '').toUpperCase() === configuration.currency
@@ -205,16 +215,52 @@ export function validateTechnicalSandboxReceipt({
   });
 }
 
-function providerSessionMetadataValid(session, { runId, userId, configuration }) {
+function providerSessionMetadataValid(session, { runId, userId, configuration, binding = null }) {
+  const expected = binding?.expectedMetadata ?? expectedMetadata({ runId, userId, configuration });
+  const expectedUserId = binding?.userId ?? userId;
   return session?.object === 'checkout.session'
     && session?.livemode === false
     && session?.id
     && /^https:\/\//u.test(String(session.url ?? ''))
     && session.client_reference_id === runId
-    && session.customer_email === syntheticTechnicalSandboxEmail(userId, configuration)
+    && session.customer_email === syntheticTechnicalSandboxEmail(expectedUserId, configuration)
     && Number(session.amount_total) === configuration.amountMinor
     && String(session.currency ?? '').toUpperCase() === configuration.currency
-    && metadataMatches(session.metadata, expectedMetadata({ runId, userId, configuration }));
+    && metadataMatches(session.metadata, expected);
+}
+
+function immutableRunBinding(row, configuration) {
+  const metadata = row?.metadata;
+  const runId = String(row?.id ?? '');
+  const userId = String(row?.user_id ?? '');
+  const authorizationId = String(row?.authorization_id ?? '');
+  const configRevision = String(metadata?.configRevision ?? '');
+  if (!/^technical_sandbox_[A-Za-z0-9-]+$/u.test(runId)
+      || !/^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$/u.test(authorizationId)
+      || !/^[a-f0-9]{64}$/u.test(configRevision)
+      || metadata?.flow !== technicalSandboxFlow
+      || !userId
+      || Number(row?.amount_minor) !== configuration.amountMinor
+      || String(row?.currency ?? '').toUpperCase() !== configuration.currency
+      || row?.synthetic_email !== syntheticTechnicalSandboxEmail(userId, configuration)) {
+    return null;
+  }
+  const requestFingerprint = payloadHash(canonical({
+    flow: technicalSandboxFlow,
+    userId,
+    amountMinor: Number(row.amount_minor),
+    currency: row.currency,
+    authorizationId,
+    configRevision,
+  }));
+  if (metadata?.requestFingerprint !== requestFingerprint) return null;
+  return Object.freeze({
+    runId,
+    userId,
+    authorizationId,
+    configRevision,
+    expectedMetadata: expectedMetadataForBinding({ runId, userId, authorizationId, configRevision }),
+  });
 }
 
 function replayBindingMatches(row, { userId, configuration }) {
@@ -256,6 +302,8 @@ async function reconcileTechnicalSandboxRun({
   transaction,
 }) {
   if (!row.provider_session_id) return publicRun(row);
+  const binding = immutableRunBinding(row, configuration);
+  if (!binding) return publicRun(row);
   let readback;
   try {
     readback = await provider.retrieveTechnicalSandboxCheckout({
@@ -271,11 +319,7 @@ async function reconcileTechnicalSandboxRun({
     && readback.session.livemode === false
     && readback.session.id === row.provider_session_id
     && readback.session.client_reference_id === row.id
-    && metadataMatches(readback.session.metadata, expectedMetadata({
-      runId: row.id,
-      userId: row.user_id,
-      configuration,
-    }));
+    && metadataMatches(readback.session.metadata, binding.expectedMetadata);
   if (expiredBinding) {
     const expired = await transaction(async (client) => {
       const result = await client.query(
@@ -305,6 +349,7 @@ async function reconcileTechnicalSandboxRun({
       runId: row.id,
       userId: row.user_id,
       configuration,
+      binding,
     });
   if (openBinding) return publicRun(row, { checkoutUrl: readback.session.url });
   const receipt = validateTechnicalSandboxReceipt({
@@ -315,6 +360,7 @@ async function reconcileTechnicalSandboxRun({
     runId: row.id,
     userId: row.user_id,
     configuration,
+    binding: binding.expectedMetadata,
   });
   if (!receipt.valid) return publicRun(row);
   const updated = await transaction(async (client) => {

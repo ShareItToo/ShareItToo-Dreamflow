@@ -34,13 +34,24 @@ const configuration = Object.freeze({
   syntheticEmailDomain: 'example.invalid',
 });
 
-function metadata() {
+function metadata(sourceConfiguration = configuration) {
   return {
     sit_flow: 'technical_sandbox',
     technical_sandbox_run_id: runId,
     technical_sandbox_user_id: userId,
-    technical_sandbox_authorization_id: configuration.authorizationId,
-    technical_sandbox_config_revision: technicalSandboxConfigRevision(configuration),
+    technical_sandbox_authorization_id: sourceConfiguration.authorizationId,
+    technical_sandbox_config_revision: technicalSandboxConfigRevision(sourceConfiguration),
+  };
+}
+
+function rowBinding(sourceConfiguration = configuration) {
+  return {
+    authorization_id: sourceConfiguration.authorizationId,
+    metadata: {
+      flow: 'technical_sandbox',
+      configRevision: technicalSandboxConfigRevision(sourceConfiguration),
+      requestFingerprint: technicalSandboxRequestFingerprint({ userId, configuration: sourceConfiguration }),
+    },
   };
 }
 
@@ -262,6 +273,7 @@ test('attached open checkout resumes only with an exact provider binding', async
   const row = {
     id: runId,
     user_id: userId,
+    ...rowBinding(),
     status: 'pending',
     amount_minor: 100,
     currency: 'EUR',
@@ -405,9 +417,11 @@ test('receipt CAS miss rereads the current paid truth instead of returning stale
   const pending = {
     id: runId,
     user_id: userId,
+    ...rowBinding(),
     status: 'pending',
     amount_minor: 100,
     currency: 'EUR',
+    synthetic_email: 'technical-sandbox+106dcbffb7567cdbc320@example.invalid',
     provider_session_id: 'cs_test_technical',
     checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
   };
@@ -443,9 +457,11 @@ test('expired provider readback closes the run without manufacturing success', a
   const row = {
     id: runId,
     user_id: userId,
+    ...rowBinding(),
     status: 'pending',
     amount_minor: 100,
     currency: 'EUR',
+    synthetic_email: 'technical-sandbox+106dcbffb7567cdbc320@example.invalid',
     provider_session_id: 'cs_test_expired',
     checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
   };
@@ -480,6 +496,87 @@ test('expired provider readback closes the run without manufacturing success', a
   assert.equal(result.status, 'expired');
   assert.equal(result.receipt, null);
   assert.equal(result.checkoutUrl, null);
+});
+
+test('reconcile accepts a paid run bound to an older authorization after active rotation', async () => {
+  const historicalConfiguration = {
+    ...configuration,
+    authorizationId: 'wp266-sandbox-auth-old-001',
+    authorizationExpiresAt: new Date('2026-09-19T09:30:00.000Z'),
+  };
+  const historicalMetadata = metadata(historicalConfiguration);
+  const row = {
+    id: runId,
+    user_id: userId,
+    ...rowBinding(historicalConfiguration),
+    status: 'pending',
+    amount_minor: 100,
+    currency: 'EUR',
+    synthetic_email: 'technical-sandbox+106dcbffb7567cdbc320@example.invalid',
+    provider_session_id: 'cs_test_historical',
+    checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
+  };
+  const readback = receiptFixture({
+    session: { id: 'cs_test_historical', metadata: historicalMetadata },
+    paymentIntent: { metadata: historicalMetadata },
+  });
+  const result = await getTechnicalSandboxRun({
+    actor: { id: userId },
+    runId,
+    configuration,
+    provider: { async retrieveTechnicalSandboxCheckout() { return readback; } },
+    databasePool: { async query() { return { rowCount: 1, rows: [row] }; } },
+    transaction: async (fn) => fn({
+      async query() {
+        return { rowCount: 1, rows: [{ ...row, status: 'paid', provider_payment_intent_id: 'pi_test_technical' }] };
+      },
+    }),
+    now,
+  });
+  assert.equal(result.status, 'paid');
+  assert.equal(result.receipt.valid, true);
+  assert.equal(result.receipt.providerSessionId, 'cs_test_historical');
+});
+
+test('tampered or missing immutable DB binding fails closed before provider readback', async () => {
+  const baseRow = {
+    id: runId,
+    user_id: userId,
+    ...rowBinding(),
+    status: 'pending',
+    amount_minor: 100,
+    currency: 'EUR',
+    synthetic_email: 'technical-sandbox+106dcbffb7567cdbc320@example.invalid',
+    provider_session_id: 'cs_test_tampered',
+    checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
+  };
+  const rows = [
+    { ...baseRow, metadata: { ...baseRow.metadata, configRevision: '0'.repeat(64) } },
+    (() => {
+      const { authorization_id: _authorizationId, ...withoutAuthorization } = baseRow;
+      return withoutAuthorization;
+    })(),
+  ];
+  for (const row of rows) {
+    let providerCalls = 0;
+    let transactionCalls = 0;
+    const result = await getTechnicalSandboxRun({
+      actor: { id: userId },
+      runId,
+      configuration,
+      provider: { async retrieveTechnicalSandboxCheckout() { providerCalls += 1; return receiptFixture(); } },
+      databasePool: { async query() { return { rowCount: 1, rows: [row] }; } },
+      transaction: async (fn) => {
+        transactionCalls += 1;
+        return fn({ async query() { return { rowCount: 0, rows: [] }; } });
+      },
+      now,
+    });
+    assert.equal(result.status, 'pending');
+    assert.equal(result.receipt, null);
+    assert.equal(providerCalls, 0);
+    assert.equal(transactionCalls, 0);
+  }
 });
 
 test('raw webhook application rejects fabricated JSON and duplicate payload mutation', async () => {

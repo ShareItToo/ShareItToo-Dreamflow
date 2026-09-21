@@ -55,6 +55,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 - Calendar-bounded lane tests must inject a fixed clock through the production
   function boundary; never weaken or extend the runtime authorization window to
   keep expired fixtures passing.
+- Provider readback after authorization rotation must bind historical proof to
+  the immutable persisted run authorization/config revision; the current
+  authorization remains the access gate but must not invalidate an already
+  bound pending or paid run.
 - Remote alias mentor invariant: after an alias or DNS failure, read the exact
   saved SSH configuration and authoritative project source before concluding
   that remote access is unavailable; test only the verified saved alias. A
