@@ -128,6 +128,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   example active listings versus drafts) and prove the expected tab, route and
   post-restart value. Evidence from a neighboring tab or a backend-only write
   cannot close an explicitly required app projection or edit gate.
+- Store/runtime recency invariant: before naming the active Store build,
+  provider state or deployed runtime as a cause, take a fresh authenticated
+  console/runtime readback. Historical release evidence is provenance only and
+  must never override a newer live observation.
 - Runtime ownership mentor invariant: never invent numeric UID/GID values for
   overlays, secret files or persisted volumes; verify the exact candidate image
   `USER` and resolved UID/GID, plus persisted-volume ownership, from readback
