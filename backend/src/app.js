@@ -2413,6 +2413,7 @@ export function createApp({
         const provider = createAppleRevocationProvider(config.appleRevocation);
         refreshToken = await provider.exchangeAuthorizationCode({
           code: appleRevocationMaterial.value,
+          expectedSubject: identity.subject,
         });
       } catch (error) {
         console.error('[auth] Apple revocation exchange failed', safeOperationalErrorCode(error, 'apple_revocation_exchange_failed'));

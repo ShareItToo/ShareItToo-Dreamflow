@@ -204,26 +204,40 @@ async function processAppleRevocation(client, row, { appleRevocationProvider, ap
     const code = error instanceof AppleRevocationError ? error.code : appleErrorCode(error);
     const retryable = error instanceof AppleRevocationError ? error.retryable : true;
     if (!retryable) {
-      await client.query(
+      const blocked = await client.query(
         `UPDATE firebase_identity_deletion_outbox
             SET apple_revocation_status = 'blocked', apple_revocation_locked_at = NULL,
                 next_attempt_at = NULL, apple_revocation_last_error_code = $2,
                 updated_at = now()
-          WHERE id = $1`,
+          WHERE id = $1 AND apple_revocation_status = 'processing'`,
         [row.id, code],
       );
-      return 'blocked';
+      if (blocked.rowCount === 1) return 'blocked';
+      const state = await client.query(
+        `SELECT apple_revocation_status
+           FROM firebase_identity_deletion_outbox
+          WHERE id = $1`,
+        [row.id],
+      );
+      return state.rows[0]?.apple_revocation_status ?? 'processing';
     }
     const retryMinutes = Math.min(24 * 60, 2 ** Math.min(Number(row.apple_revocation_attempts ?? 1), 10));
-    await client.query(
+    const retry = await client.query(
       `UPDATE firebase_identity_deletion_outbox
           SET apple_revocation_status = 'retry', apple_revocation_locked_at = NULL,
               next_attempt_at = now() + ($2::int * interval '1 minute'),
               apple_revocation_last_error_code = $3, updated_at = now()
-        WHERE id = $1`,
+        WHERE id = $1 AND apple_revocation_status = 'processing'`,
       [row.id, retryMinutes, code],
     );
-    return 'retry';
+    if (retry.rowCount === 1) return 'retry';
+    const state = await client.query(
+      `SELECT apple_revocation_status
+         FROM firebase_identity_deletion_outbox
+        WHERE id = $1`,
+      [row.id],
+    );
+    return state.rows[0]?.apple_revocation_status ?? 'processing';
   } finally {
     material = null;
   }
@@ -250,7 +264,8 @@ async function finishFirebaseDeletion(client, row, appleStatus) {
               THEN now() + interval '24 hours'
               ELSE NULL END,
             updated_at = now()
-      WHERE id = $1`,
+      WHERE id = $1
+        AND apple_revocation_status NOT IN ('processing', 'succeeded')`,
     [row.id],
   );
   return false;

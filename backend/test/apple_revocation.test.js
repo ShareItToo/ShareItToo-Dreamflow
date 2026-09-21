@@ -17,6 +17,15 @@ import {
 const key = Buffer.alloc(32, 7);
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
+function syntheticAppleIdToken(claims = {
+  iss: 'https://appleid.apple.com',
+  aud: 'com.example.sit',
+  sub: 'apple-subject',
+}) {
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode(claims)}.synthetic`;
+}
+
 test('Apple revocation material is mutually exclusive and encrypted at rest', () => {
   assert.deepEqual(normalizeAppleRevocationMaterial({ authorizationCode: ' auth-code ' }), {
     kind: 'authorization_code',
@@ -52,12 +61,20 @@ test('Apple adapter exchanges authorization code and revokes through a synthetic
         ok: true,
         status: 200,
         ...(url.endsWith('/token')
-          ? { json: async () => ({ refresh_token: 'synthetic-refresh' }) }
+          ? {
+              json: async () => ({
+                id_token: syntheticAppleIdToken(),
+                refresh_token: 'synthetic-refresh',
+              }),
+            }
           : {}),
       };
     },
   });
-  const refreshToken = await provider.exchangeAuthorizationCode({ code: 'synthetic-code' });
+  const refreshToken = await provider.exchangeAuthorizationCode({
+    code: 'synthetic-code',
+    expectedSubject: 'apple-subject',
+  });
   await provider.revoke({ kind: 'refresh_token', value: refreshToken });
   assert.equal(requests.length, 2);
   assert.match(requests[0].url, /\/auth\/token$/u);
@@ -65,6 +82,47 @@ test('Apple adapter exchanges authorization code and revokes through a synthetic
   assert.equal(requests[0].options.body.get('code'), 'synthetic-code');
   assert.equal(requests[1].options.body.get('token'), 'synthetic-refresh');
   assert.equal(requests[1].options.body.get('token_type_hint'), 'refresh_token');
+});
+
+test('Apple token exchange binds the response identity before releasing refresh material', async () => {
+  for (const claims of [
+    { iss: 'https://evil.example', aud: 'com.example.sit', sub: 'apple-subject' },
+    { iss: 'https://appleid.apple.com', aud: 'other.client', sub: 'apple-subject' },
+    { iss: 'https://appleid.apple.com', aud: 'com.example.sit', sub: 'other-subject' },
+    { iss: 'https://appleid.apple.com', aud: ['com.example.sit', 'com.example.sit'], sub: 'apple-subject' },
+    { iss: 'https://appleid.apple.com', aud: ['com.example.sit', 7], sub: 'apple-subject' },
+    { iss: 'https://appleid.apple.com', aud: {}, sub: 'apple-subject' },
+    null,
+    'synthetic-non-object-payload',
+    undefined,
+  ]) {
+    const { privateKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const provider = createAppleRevocationProvider({
+      enabled: true,
+      clientId: 'com.example.sit',
+      teamId: 'TEAMID1234',
+      keyId: 'KEYID1234',
+      privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ...(claims === undefined ? {} : { id_token: syntheticAppleIdToken(claims) }),
+          refresh_token: 'synthetic-refresh',
+        }),
+      }),
+    });
+    await assert.rejects(
+      provider.exchangeAuthorizationCode({
+        code: 'synthetic-authorization-code',
+        expectedSubject: 'apple-subject',
+      }),
+      (error) => error instanceof AppleRevocationError
+        && error.code === 'apple_revocation_identity_mismatch'
+        && !String(error).includes('synthetic-authorization-code')
+        && !String(error).includes('synthetic-refresh'),
+    );
+  }
 });
 
 test('Apple token exchange preserves provider retryability without exposing response text', async () => {
@@ -247,6 +305,62 @@ test('Apple cleanup does not re-revoke after a confirmed revoke when Firebase fa
   });
   assert.deepEqual(first, { deleted: 0, retried: 1 });
   assert.deepEqual(second, { deleted: 1, retried: 0 });
+  assert.equal(revokeCalls, 1);
+});
+
+test('Apple claim loss after remote revoke cannot regress succeeded state or re-revoke', async () => {
+  const encrypted = encryptAppleRevocationMaterial('synthetic-refresh', key);
+  let claimCount = 0;
+  let appleStatus = 'pending';
+  let firebaseDeletedAt = null;
+  let revokeCalls = 0;
+  const client = {
+    query: async (sql) => {
+      if (sql.includes('RETURNING target.id')) {
+        if (claimCount > 0) return { rows: [] };
+        claimCount += 1;
+        return { rows: [{
+          id,
+          firebase_user_id: 'firebase-apple-user',
+          provider: 'apple',
+          attempts: 1,
+          firebase_deleted_at: firebaseDeletedAt,
+          apple_revocation_status: appleStatus,
+          apple_revocation_material_kind: 'refresh_token',
+          apple_revocation_material_ciphertext: encrypted,
+          apple_revocation_attempts: 1,
+          apple_revocation_last_error_code: null,
+        }] };
+      }
+      if (sql.includes("SET apple_revocation_status = 'processing'")) {
+        return { rowCount: 1, rows: [] };
+      }
+      if (sql.includes("SET apple_revocation_status = 'succeeded'")) {
+        appleStatus = 'succeeded';
+        return { rowCount: 0, rows: [] };
+      }
+      if (sql.includes("SET apple_revocation_status = 'retry'")) {
+        return { rowCount: 0, rows: [] };
+      }
+      if (sql.includes('SELECT apple_revocation_status')) {
+        return { rows: [{ apple_revocation_status: appleStatus }] };
+      }
+      if (sql.includes('SET firebase_deleted_at = now()')) {
+        firebaseDeletedAt = new Date().toISOString();
+        return { rowCount: 1, rows: [] };
+      }
+      return { rowCount: 1, rows: [] };
+    },
+  };
+  const result = await drainFirebaseIdentityDeletionOutbox({
+    client,
+    appleRevocationKey: key,
+    appleRevocationProvider: { revoke: async () => { revokeCalls += 1; } },
+    authClientFactory: async () => ({ deleteUser: async () => {} }),
+    ids: [id],
+    limit: 1,
+  });
+  assert.deepEqual(result, { deleted: 1, retried: 0 });
   assert.equal(revokeCalls, 1);
 });
 

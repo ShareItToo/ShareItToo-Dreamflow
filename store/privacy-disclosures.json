@@ -672,7 +672,7 @@
     },
     {
       "path": "backend/src/firebase_identity_cleanup.js",
-      "sha256": "1d7489b35a8f95a7e4d42fad0afd3723d808d44066d579efedb633ad8b7832f3"
+      "sha256": "f4f4f77c57cca13b3e63e96fd50add1200bc2c59a99b50125902032d1df93fa5"
     },
     {
       "path": "backend/src/crashlytics_cleanup.js",
@@ -908,7 +908,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "6c30bd0542ba41e3d01d5672cbb292af8af7f64d46c895526d5fa5b47375ffbf"
+      "sha256": "842e400c5e619c697b5f5e7b025dc709982aa523b6e3299e822cf36f4c60345b"
     },
     {
       "path": "backend/src/rate_limit_policy.js",

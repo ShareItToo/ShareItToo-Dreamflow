@@ -19,6 +19,39 @@ function boundedMaterial(value) {
   return normalized && normalized.length <= MATERIAL_MAX_LENGTH ? normalized : '';
 }
 
+function appleTokenResponseIdentity(idToken, expectedSubject, clientId) {
+  const token = boundedMaterial(idToken);
+  const subject = boundedMaterial(expectedSubject);
+  if (!token || !subject) {
+    throw new AppleRevocationError('apple_revocation_identity_mismatch', { retryable: false });
+  }
+  let payload;
+  try {
+    payload = jwt.decode(token);
+  } catch (error) {
+    throw new AppleRevocationError('apple_revocation_identity_mismatch', {
+      retryable: false,
+      cause: error,
+    });
+  }
+  const audiences = typeof payload?.aud === 'string'
+    ? [payload.aud]
+    : Array.isArray(payload?.aud)
+      && payload.aud.length > 0
+      && payload.aud.every((audience) => typeof audience === 'string' && audience.length > 0)
+      && new Set(payload.aud).size === payload.aud.length
+      ? payload.aud
+      : null;
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+      || payload.iss !== APPLE_ISSUER
+      || !audiences
+      || !audiences.includes(clientId)
+      || typeof payload.sub !== 'string'
+      || payload.sub !== subject) {
+    throw new AppleRevocationError('apple_revocation_identity_mismatch', { retryable: false });
+  }
+}
+
 function suppliedMaterial(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : '';
 }
@@ -174,7 +207,7 @@ export function createAppleRevocationProvider({
     expiresIn: 300,
     keyid: keyId,
   });
-  const exchangeAuthorizationCode = async ({ code }) => {
+  const exchangeAuthorizationCode = async ({ code, expectedSubject }) => {
     const payload = await postForm(fetchImpl, `${APPLE_AUTH_ENDPOINT}/token`, {
       grant_type: 'authorization_code',
       code,
@@ -182,6 +215,9 @@ export function createAppleRevocationProvider({
       client_secret: clientSecret(),
       ...(redirectUri ? { redirect_uri: redirectUri } : {}),
     });
+    // The token response is accepted only over the fixed Apple HTTPS endpoint;
+    // bind its identity claims to the already verified Firebase Apple subject.
+    appleTokenResponseIdentity(payload?.id_token, expectedSubject, clientId);
     const refreshToken = boundedMaterial(payload?.refresh_token);
     if (!refreshToken) {
       throw new AppleRevocationError('apple_revocation_refresh_token_missing', {
@@ -191,8 +227,8 @@ export function createAppleRevocationProvider({
     return refreshToken;
   };
   return Object.freeze({
-    async exchangeAuthorizationCode({ code }) {
-      return exchangeAuthorizationCode({ code });
+    async exchangeAuthorizationCode({ code, expectedSubject }) {
+      return exchangeAuthorizationCode({ code, expectedSubject });
     },
     async revoke({ kind, value }) {
       if (kind !== 'refresh_token') {
