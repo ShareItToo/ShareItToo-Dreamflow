@@ -25,7 +25,7 @@ const canonicalInternalRelease = JSON.parse(await readFile(
   new URL(`../../${canonicalHandoff.internalReleaseEvidenceRef}`, import.meta.url),
   'utf8'));
 const explicitRollover = JSON.parse(await readFile(
-  new URL('../../store/google-play/rollover-candidate-2026091704.json', import.meta.url),
+  new URL('../../store/google-play/rollover-candidate-2026091901.json', import.meta.url),
   'utf8'));
 
 test('candidate rollover ignores test-only drift but retains runtime drift', () => {
@@ -135,7 +135,7 @@ test('validates the explicitly named current rollover candidate and zero runtime
     changedPaths: [],
   });
   assert.equal(explicitCurrentRolloverCandidatePath,
-    'store/google-play/rollover-candidate-2026091704.json');
+    'store/google-play/rollover-candidate-2026091901.json');
   assert.equal(explicitCurrentRolloverStatus,
     'built-and-archived-internal-staging-upload-pending');
   assert.equal(result.buildNumber, data.rollover.candidate.versionCode);
