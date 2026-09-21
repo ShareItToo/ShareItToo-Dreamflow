@@ -65,7 +65,8 @@ test('runs the feature-scope gate in the release candidate preflight', () => {
 
 test('rejects stale or optimistic runtime parity claims', () => {
   const changed = structuredClone(manifest);
-  changed.runtimeEvidence.mfa.statusHttp = 200;
+  changed.runtimeEvidence.mfa.statusHttp = 404;
+  changed.runtimeEvidence.mfa.enabled = undefined;
   assert.throws(
     () => validateManifest(changed, { repositoryRoot: root }),
     /runtime_evidence_manifest_drift/u,

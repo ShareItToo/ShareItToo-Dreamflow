@@ -20,25 +20,49 @@
     "versionCode": "2026091705"
   },
   "runtimeEvidence": {
-    "source": "current-read-only-staging-readback",
-    "backendShortCommit": "df39a14b7a19",
+    "source": "real-public-green-staging-readback",
+    "runtimeCommit": "9b20afed8f4d4d8edadca61dcd790b4b669f4c33",
+    "opsCommit": "c3920ea66f0d49e470860edaf47d562e8ace8846",
+    "backendShortCommit": "9b20afed8f4d",
+    "schema": 92,
     "payment": {
       "capabilitiesHttp": 200,
+      "provider": null,
+      "providerBacked": false,
+      "normalCheckoutAvailable": false,
+      "liveMoney": false,
       "transport": "memory",
       "providerStatus": "disabled",
       "mode": "unavailable",
       "livemode": false
     },
+    "technicalSandbox": {
+      "available": true,
+      "provider": "stripe",
+      "mode": "test",
+      "amountMinor": 100,
+      "currency": "EUR",
+      "maxRuns": 3,
+      "syntheticOnly": true,
+      "liveMoney": false,
+      "bookingEffects": false,
+      "ledgerEffects": false,
+      "connectEffects": false
+    },
     "mfa": {
-      "statusHttp": 404,
-      "statusCode": "not_found"
+      "statusHttp": 200,
+      "enabled": false,
+      "pending": false,
+      "recoveryCodesRemaining": 0
     },
     "identityVerification": {
-      "statusHttp": 404,
-      "statusCode": "not_found"
+      "statusHttp": 200,
+      "status": "not_started",
+      "livemode": false,
+      "redactionStatus": null
     }
   },
-  "runtimeEvidenceRef": "docs/evidence/release-readiness/wp223-sit-pilot-feature-scope-20260917.json",
+  "runtimeEvidenceRef": "docs/evidence/release-readiness/wp269-public-green-staging-reachability-20260919.json",
   "expectedReachableGroups": [
     "discover",
     "rental_cart",

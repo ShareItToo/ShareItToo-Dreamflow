@@ -42,7 +42,7 @@ function validateManifest(manifest = readJson(manifestPath), { repositoryRoot = 
   }
   assert(manifest?.candidate?.versionName === '1.0.0', 'candidate_version_name_invalid');
   assert(/^2026091705$/u.test(String(manifest?.candidate?.versionCode ?? '')), 'candidate_version_code_invalid');
-  assert(manifest?.runtimeEvidence?.source === 'current-read-only-staging-readback',
+  assert(manifest?.runtimeEvidence?.source === 'real-public-green-staging-readback',
     'runtime_evidence_source_invalid');
   assert(typeof manifest.runtimeEvidenceRef === 'string'
       && existsSync(resolve(repositoryRoot, manifest.runtimeEvidenceRef)),
@@ -50,12 +50,77 @@ function validateManifest(manifest = readJson(manifestPath), { repositoryRoot = 
   const recordedRuntimeEvidence = JSON.parse(readFileSync(
     resolve(repositoryRoot, manifest.runtimeEvidenceRef), 'utf8',
   ));
-  assert(recordedRuntimeEvidence?.kind === 'sit-pilot-feature-scope-runtime-readback-20260917',
+  assert(recordedRuntimeEvidence?.kind === 'sit-pilot-feature-scope-runtime-readback-20260919',
     'runtime_evidence_kind_invalid');
+  assert(recordedRuntimeEvidence.environment === 'staging'
+      && recordedRuntimeEvidence.publicReachability?.versionHttp === 200
+      && recordedRuntimeEvidence.publicReachability.versionCommit === recordedRuntimeEvidence.runtimeCommit
+      && recordedRuntimeEvidence.publicReachability.liveHttp === 200
+      && recordedRuntimeEvidence.publicReachability.readyHttp === 200
+      && recordedRuntimeEvidence.publicReachability.readyStatus === 'ok',
+    'public_runtime_reachability_invalid');
+  assert(recordedRuntimeEvidence.promotionEvidence?.path
+      === '/docker/shareittoo/green-promotions/9b20afed8f4d-attempt13/evidence.json'
+      && recordedRuntimeEvidence.promotionEvidence.sha256
+        === 'c9dc9ab644887fea8e34480e0d651c95c1873fbe3f3ebb4fe2da6044691b28bb'
+      && recordedRuntimeEvidence.promotionEvidence.mode === '0600',
+    'promotion_evidence_binding_invalid');
+  const authenticated = recordedRuntimeEvidence.authenticatedSyntheticReadback;
+  assert(authenticated?.loginHttp === 200
+      && authenticated.authMeHttp === 200
+      && authenticated.userId === 'synthetic_sandbox_user_pilot_20260919'
+      && authenticated.userIdMatchesProvisionedIdentity === true
+      && authenticated.accountStatus === 'active'
+      && authenticated.syntheticOnly === true
+      && authenticated.logoutHttp === 204,
+    'authenticated_synthetic_readback_invalid');
+  assert(authenticated.paymentCapabilities?.http === 200
+      && authenticated.paymentCapabilities.provider === null
+      && authenticated.paymentCapabilities.providerBacked === false
+      && authenticated.paymentCapabilities.normalCheckoutAvailable === false
+      && authenticated.paymentCapabilities.liveMoney === false,
+    'authenticated_payment_readback_invalid');
+  assert(authenticated.technicalSandbox?.available === true
+      && authenticated.technicalSandbox.provider === 'stripe'
+      && authenticated.technicalSandbox.mode === 'test'
+      && authenticated.technicalSandbox.amountMinor === 100
+      && authenticated.technicalSandbox.currency === 'EUR'
+      && authenticated.technicalSandbox.maxRuns === 3
+      && authenticated.technicalSandbox.syntheticOnly === true
+      && authenticated.technicalSandbox.liveMoney === false
+      && authenticated.technicalSandbox.bookingEffects === false
+      && authenticated.technicalSandbox.ledgerEffects === false
+      && authenticated.technicalSandbox.connectEffects === false,
+    'authenticated_technical_sandbox_readback_invalid');
+  assert(authenticated.mfa?.statusHttp === 200
+      && authenticated.mfa.enabled === false
+      && authenticated.mfa.pending === false
+      && authenticated.mfa.recoveryCodesRemaining === 0,
+    'authenticated_mfa_readback_invalid');
+  assert(authenticated.identityVerification?.statusHttp === 200
+      && authenticated.identityVerification.status === 'not_started'
+      && authenticated.identityVerification.livemode === false
+      && authenticated.identityVerification.redactionStatus === null,
+    'authenticated_identity_readback_invalid');
+  const boundaries = recordedRuntimeEvidence.boundaries;
+  assert(boundaries?.credentialsRecorded === false
+      && boundaries.tokensRecorded === false
+      && boundaries.providerMutation === false
+      && boundaries.production === false
+      && boundaries.normalPaymentChanged === false,
+    'runtime_boundary_invalid');
   assert(JSON.stringify(recordedRuntimeEvidence.backendShortCommit)
       === JSON.stringify(manifest.runtimeEvidence.backendShortCommit)
+      && JSON.stringify(recordedRuntimeEvidence.runtimeCommit)
+        === JSON.stringify(manifest.runtimeEvidence.runtimeCommit)
+      && JSON.stringify(recordedRuntimeEvidence.opsCommit)
+        === JSON.stringify(manifest.runtimeEvidence.opsCommit)
+      && JSON.stringify(recordedRuntimeEvidence.schema)
+        === JSON.stringify(manifest.runtimeEvidence.schema)
       && JSON.stringify(recordedRuntimeEvidence.payment)
         === JSON.stringify(manifest.runtimeEvidence.payment)
+      && JSON.stringify(recordedRuntimeEvidence.technicalSandbox)
+        === JSON.stringify(manifest.runtimeEvidence.technicalSandbox)
       && JSON.stringify(recordedRuntimeEvidence.mfa)
         === JSON.stringify(manifest.runtimeEvidence.mfa)
       && JSON.stringify(recordedRuntimeEvidence.identityVerification)
@@ -63,17 +128,44 @@ function validateManifest(manifest = readJson(manifestPath), { repositoryRoot = 
     'runtime_evidence_manifest_drift');
   assert(/^[0-9a-f]{12}$/u.test(String(manifest?.runtimeEvidence?.backendShortCommit ?? '')),
     'runtime_backend_commit_invalid');
+  assert(/^[0-9a-f]{40}$/u.test(String(manifest?.runtimeEvidence?.runtimeCommit ?? '')),
+    'runtime_commit_invalid');
+  assert(/^[0-9a-f]{40}$/u.test(String(manifest?.runtimeEvidence?.opsCommit ?? '')),
+    'ops_commit_invalid');
+  assert(manifest.runtimeEvidence.schema === 92, 'runtime_schema_invalid');
   assert(manifest.runtimeEvidence.payment?.capabilitiesHttp === 200
+      && manifest.runtimeEvidence.payment.provider === null
+      && manifest.runtimeEvidence.payment.providerBacked === false
+      && manifest.runtimeEvidence.payment.normalCheckoutAvailable === false
+      && manifest.runtimeEvidence.payment.liveMoney === false
       && manifest.runtimeEvidence.payment.transport === 'memory'
       && manifest.runtimeEvidence.payment.providerStatus === 'disabled'
       && manifest.runtimeEvidence.payment.mode === 'unavailable'
       && manifest.runtimeEvidence.payment.livemode === false,
     'payment_runtime_boundary_invalid');
-  for (const key of ['mfa', 'identityVerification']) {
-    assert(manifest.runtimeEvidence[key]?.statusHttp === 404
-        && manifest.runtimeEvidence[key]?.statusCode === 'not_found',
-      `${key}_runtime_parity_invalid`);
-  }
+  const technicalSandbox = manifest.runtimeEvidence.technicalSandbox;
+  assert(technicalSandbox?.available === true
+      && technicalSandbox.provider === 'stripe'
+      && technicalSandbox.mode === 'test'
+      && technicalSandbox.amountMinor === 100
+      && technicalSandbox.currency === 'EUR'
+      && technicalSandbox.maxRuns === 3
+      && technicalSandbox.syntheticOnly === true
+      && technicalSandbox.liveMoney === false
+      && technicalSandbox.bookingEffects === false
+      && technicalSandbox.ledgerEffects === false
+      && technicalSandbox.connectEffects === false,
+    'technical_sandbox_runtime_boundary_invalid');
+  assert(manifest.runtimeEvidence.mfa?.statusHttp === 200
+      && manifest.runtimeEvidence.mfa.enabled === false
+      && manifest.runtimeEvidence.mfa.pending === false
+      && manifest.runtimeEvidence.mfa.recoveryCodesRemaining === 0,
+    'mfa_runtime_parity_invalid');
+  assert(manifest.runtimeEvidence.identityVerification?.statusHttp === 200
+      && manifest.runtimeEvidence.identityVerification.status === 'not_started'
+      && manifest.runtimeEvidence.identityVerification.livemode === false
+      && manifest.runtimeEvidence.identityVerification.redactionStatus === null,
+    'identityVerification_runtime_parity_invalid');
   assert(Array.isArray(manifest.reachablePaths) && manifest.reachablePaths.length >= 1,
     'reachable_inventory_too_small');
   assert(Array.isArray(manifest.expectedReachableGroups)
