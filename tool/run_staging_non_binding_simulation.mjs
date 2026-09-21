@@ -91,6 +91,16 @@ function safeError(value) {
     : null;
 }
 
+export function classifySimulationPaymentReadRejection(status, code) {
+  if (status === 409 && code === 'pilot_simulation_payment_forbidden') {
+    return 'simulation-booking-boundary';
+  }
+  if (status === 403 && code === 'payment_pilot_forbidden') {
+    return 'pilot-account-boundary';
+  }
+  return null;
+}
+
 async function request(fetchImpl, path, {
   method = 'GET',
   token = null,
@@ -258,9 +268,13 @@ export async function runStagingNonBindingSimulation({
   const paymentRead = await request(
     fetchImpl,
     `/bookings/${encodeURIComponent(bookingId)}/payment`,
-    { token: renterToken, expected: [409] },
+    { token: renterToken, expected: [403, 409] },
   );
-  if (safeError(paymentRead.value?.error) !== 'pilot_simulation_payment_forbidden') {
+  const paymentReadRejection = classifySimulationPaymentReadRejection(
+    paymentRead.status,
+    safeError(paymentRead.value?.error),
+  );
+  if (paymentReadRejection === null) {
     fail('The simulation payment boundary did not fail closed.');
   }
 
@@ -335,6 +349,7 @@ export async function runStagingNonBindingSimulation({
     acceptedAt: new Date().toISOString(),
     availabilityUnaffected: true,
     paymentReadRejected: true,
+    paymentReadRejection,
     inAppNotificationsVerified: true,
   };
   saveVault(vaultPath, vault);
@@ -345,6 +360,7 @@ export async function runStagingNonBindingSimulation({
     chatReady: true,
     availabilityUnaffected: true,
     paymentReadRejected: true,
+    paymentReadRejection,
     paymentEndpointCalled: false,
     stripeLivemode: false,
     contractCreated: false,

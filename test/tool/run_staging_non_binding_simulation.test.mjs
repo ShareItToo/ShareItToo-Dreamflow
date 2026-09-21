@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import {
+  classifySimulationPaymentReadRejection,
   retireStagingNonBindingSimulation,
   runStagingNonBindingSimulation,
 } from '../../tool/run_staging_non_binding_simulation.mjs';
@@ -36,6 +37,26 @@ function testVault() {
   })}\n`, { mode: 0o600 });
   return path;
 }
+
+test('accepts only the two exact payment-read rejection layers', () => {
+  assert.equal(
+    classifySimulationPaymentReadRejection(409, 'pilot_simulation_payment_forbidden'),
+    'simulation-booking-boundary',
+  );
+  assert.equal(
+    classifySimulationPaymentReadRejection(403, 'payment_pilot_forbidden'),
+    'pilot-account-boundary',
+  );
+  for (const [status, code] of [
+    [403, 'pilot_simulation_payment_forbidden'],
+    [409, 'payment_pilot_forbidden'],
+    [403, 'forbidden'],
+    [409, 'forbidden'],
+    [200, 'pilot_simulation_payment_forbidden'],
+  ]) {
+    assert.equal(classifySimulationPaymentReadRejection(status, code), null);
+  }
+});
 
 test('runs a persistent non-binding Staging request, acceptance and chat proof', async () => {
   const vaultFile = testVault();
@@ -134,6 +155,7 @@ test('runs a persistent non-binding Staging request, acceptance and chat proof',
   assert.equal(result.chatReady, true);
   assert.equal(result.availabilityUnaffected, true);
   assert.equal(result.paymentReadRejected, true);
+  assert.equal(result.paymentReadRejection, 'simulation-booking-boundary');
   assert.equal(result.contractCreated, false);
   assert.equal(result.reservationCreated, false);
   assert.equal(result.monetaryEffectMinor, 0);
@@ -143,6 +165,10 @@ test('runs a persistent non-binding Staging request, acceptance and chat proof',
   const stored = JSON.parse(readFileSync(vaultFile, 'utf8'));
   assert.equal(stored.nonBindingSimulation.status, 'accepted-chat-ready');
   assert.equal(stored.nonBindingSimulation.paymentReadRejected, true);
+  assert.equal(
+    stored.nonBindingSimulation.paymentReadRejection,
+    'simulation-booking-boundary',
+  );
   const availability = calls.find((entry) => entry.path.endsWith('/availability/check'));
   assert.equal(availability?.authorization, 'Bearer renter-token-for-staging-gate');
   assert.deepEqual(
