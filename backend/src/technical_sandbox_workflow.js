@@ -85,12 +85,16 @@ function assertAvailable(userId, configuration, now = new Date()) {
   }
 }
 
-export function technicalSandboxCapabilitiesFor(userId, configuration = config.technicalSandbox) {
+export function technicalSandboxCapabilitiesFor(
+  userId,
+  configuration = config.technicalSandbox,
+  now = new Date(),
+) {
   const eligible = technicalSandboxUserAllowed(userId, configuration);
   const available = configuration?.available === true
     && configuration.killSwitch !== true
     && eligible
-    && configuration.authorizationExpiresAt > new Date();
+    && configuration.authorizationExpiresAt > now;
   return Object.freeze({
     technicalSandboxAvailable: available,
     provider: 'stripe',
@@ -529,9 +533,10 @@ export async function getTechnicalSandboxRun({
   provider = technicalSandboxProvider,
   databasePool = pool,
   transaction = inTransaction,
+  now = new Date(),
 }) {
   const userId = actorId(actor);
-  assertAvailable(userId, configuration);
+  assertAvailable(userId, configuration, now);
   const id = text(runId, 120);
   const result = await databasePool.query(
     'SELECT * FROM technical_sandbox_runs WHERE id = $1 AND user_id = $2',

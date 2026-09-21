@@ -76,7 +76,7 @@ function receiptFixture(overrides = {}) {
 }
 
 test('capabilities are synthetic, fixed and unavailable to foreign users or disabled config', () => {
-  const allowed = technicalSandboxCapabilitiesFor(userId, configuration);
+  const allowed = technicalSandboxCapabilitiesFor(userId, configuration, now);
   assert.deepEqual(allowed, {
     technicalSandboxAvailable: true,
     provider: 'stripe',
@@ -91,14 +91,14 @@ test('capabilities are synthetic, fixed and unavailable to foreign users or disa
     ledgerEffect: false,
     connectEffect: false,
   });
-  assert.equal(technicalSandboxCapabilitiesFor('real-user', configuration).technicalSandboxAvailable, false);
-  assert.equal(technicalSandboxCapabilitiesFor(userId, { ...configuration, available: false }).mode, 'disabled');
+  assert.equal(technicalSandboxCapabilitiesFor('real-user', configuration, now).technicalSandboxAvailable, false);
+  assert.equal(technicalSandboxCapabilitiesFor(userId, { ...configuration, available: false }, now).mode, 'disabled');
   assert.equal(technicalSandboxCapabilitiesFor(userId, {
     ...configuration,
     available: false,
     reason: 'authorization_expired',
     authorizationExpiresAt: new Date('2026-09-19T09:59:59.000Z'),
-  }).technicalSandboxAvailable, false);
+  }, now).technicalSandboxAvailable, false);
 });
 
 test('receipt validation requires exact test account, fixed amount, metadata and successful readback', () => {
@@ -288,7 +288,7 @@ test('attached open checkout resumes only with an exact provider binding', async
     },
   };
   const databasePool = { async query() { return { rowCount: 1, rows: [row] }; } };
-  const valid = await getTechnicalSandboxRun({ actor: { id: userId }, runId, configuration, provider: baseProvider, databasePool });
+  const valid = await getTechnicalSandboxRun({ actor: { id: userId }, runId, configuration, provider: baseProvider, databasePool, now });
   assert.equal(valid.checkoutUrl, openSession.url);
   const invalid = await getTechnicalSandboxRun({
     actor: { id: userId },
@@ -300,6 +300,7 @@ test('attached open checkout resumes only with an exact provider binding', async
       },
     },
     databasePool,
+    now,
   });
   assert.equal(invalid.checkoutUrl, null);
 });
@@ -431,6 +432,7 @@ test('receipt CAS miss rereads the current paid truth instead of returning stale
     },
     databasePool,
     transaction,
+    now,
   });
   assert.equal(result.status, 'paid');
   assert.equal(result.receipt.providerPaymentIntentId, 'pi_test_technical');
@@ -473,6 +475,7 @@ test('expired provider readback closes the run without manufacturing success', a
         return { rowCount: 1, rows: [{ ...row, status: 'expired', provider_session_status: 'expired' }] };
       },
     }),
+    now,
   });
   assert.equal(result.status, 'expired');
   assert.equal(result.receipt, null);
