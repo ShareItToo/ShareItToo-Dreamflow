@@ -93,6 +93,7 @@ export async function getAppleRevocationCleanupStatus(client, { ids } = {}) {
       WHERE id = ANY($1::uuid[])`,
     [boundedIds],
   );
+  if (result.rows.length !== boundedIds.length) return 'pending';
   if (!result.rows.some((row) => row.apple_revocation_status !== 'not_required')) return 'not_required';
   if (result.rows.some((row) => ['needs_material', 'blocked'].includes(row.apple_revocation_status))) return 'pending';
   return 'queued';
@@ -139,7 +140,8 @@ async function processAppleRevocation(client, row, { appleRevocationProvider, ap
   if (current === 'blocked' && row.apple_revocation_last_error_code !== 'apple_revocation_provider_unavailable') {
     return current;
   }
-  if (!row.apple_revocation_material_ciphertext || !row.apple_revocation_material_kind) {
+  if (!row.apple_revocation_material_ciphertext
+      || row.apple_revocation_material_kind !== 'refresh_token') {
     await client.query(
       `UPDATE firebase_identity_deletion_outbox
           SET apple_revocation_status = 'needs_material', apple_revocation_locked_at = NULL,
@@ -183,7 +185,7 @@ async function processAppleRevocation(client, row, { appleRevocationProvider, ap
       value: material,
       operationKey: `sit_apple_revoke_${row.id}`,
     });
-    await client.query(
+    const completed = await client.query(
       `UPDATE firebase_identity_deletion_outbox
           SET apple_revocation_status = 'succeeded',
               apple_revocation_material_kind = NULL,
@@ -194,6 +196,9 @@ async function processAppleRevocation(client, row, { appleRevocationProvider, ap
         WHERE id = $1 AND apple_revocation_status = 'processing'`,
       [row.id],
     );
+    if (completed.rowCount !== 1) {
+      throw new AppleRevocationError('apple_revocation_claim_lost', { retryable: true });
+    }
     return 'succeeded';
   } catch (error) {
     const code = error instanceof AppleRevocationError ? error.code : appleErrorCode(error);

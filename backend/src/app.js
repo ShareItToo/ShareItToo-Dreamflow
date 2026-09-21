@@ -2377,13 +2377,16 @@ export function createApp({
       try {
         appleRevocationMaterial = normalizeAppleRevocationMaterial({
           authorizationCode: req.body?.appleAuthorizationCode,
-          refreshToken: req.body?.appleRefreshToken,
         });
       } catch (error) {
         if (error instanceof AppleRevocationError) {
           throw new HttpError(400, error.code);
         }
         throw error;
+      }
+      if (typeof req.body?.appleRefreshToken === 'string'
+          && req.body.appleRefreshToken.trim()) {
+        throw new HttpError(400, 'invalid_social_provider_material');
       }
       if (appleRevocationMaterial && !config.appleRevocation.enabled) {
         throw new HttpError(503, 'apple_revocation_unavailable');
@@ -2396,6 +2399,27 @@ export function createApp({
       throw new HttpError(400, 'invalid_social_provider_material');
     }
     let encryptedAppleRevocationMaterial = null;
+    if (config.stagingAccess.enabled) {
+      const existing = await pool.query(
+        "SELECT id FROM users WHERE email = $1 AND deactivated_at IS NULL AND account_status = 'active'",
+        [identity.email],
+      );
+      if (!existing.rowCount) throw new HttpError(403, 'staging_registration_disabled');
+      assertStagingUserAllowed(existing.rows[0].id);
+    }
+    if (appleRevocationMaterial?.kind === 'authorization_code') {
+      let refreshToken;
+      try {
+        const provider = createAppleRevocationProvider(config.appleRevocation);
+        refreshToken = await provider.exchangeAuthorizationCode({
+          code: appleRevocationMaterial.value,
+        });
+      } catch (error) {
+        console.error('[auth] Apple revocation exchange failed', safeOperationalErrorCode(error, 'apple_revocation_exchange_failed'));
+        throw new HttpError(503, 'apple_revocation_exchange_unavailable');
+      }
+      appleRevocationMaterial = { kind: 'refresh_token', value: refreshToken };
+    }
     if (appleRevocationMaterial) {
       try {
         encryptedAppleRevocationMaterial = {
@@ -2411,14 +2435,6 @@ export function createApp({
         }
         throw error;
       }
-    }
-    if (config.stagingAccess.enabled) {
-      const existing = await pool.query(
-        "SELECT id FROM users WHERE email = $1 AND deactivated_at IS NULL AND account_status = 'active'",
-        [identity.email],
-      );
-      if (!existing.rowCount) throw new HttpError(403, 'staging_registration_disabled');
-      assertStagingUserAllowed(existing.rows[0].id);
     }
     await reconcileExpiredAccountSuspension(identity.email);
     const consentsAccepted = req.body?.termsAccepted === true

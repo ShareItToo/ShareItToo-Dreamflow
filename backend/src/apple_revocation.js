@@ -111,7 +111,7 @@ function providerError(response, code) {
   });
 }
 
-async function postForm(fetchImpl, url, body) {
+async function postForm(fetchImpl, url, body, { expectJson = true } = {}) {
   let response;
   try {
     response = await fetchImpl(url, {
@@ -126,6 +126,7 @@ async function postForm(fetchImpl, url, body) {
     });
   }
   if (!response?.ok) throw providerError(response, 'apple_revocation_provider_rejected');
+  if (!expectJson) return null;
   let payload;
   try {
     payload = await response.json();
@@ -190,10 +191,16 @@ export function createAppleRevocationProvider({
     return refreshToken;
   };
   return Object.freeze({
+    async exchangeAuthorizationCode({ code }) {
+      return exchangeAuthorizationCode({ code });
+    },
     async revoke({ kind, value }) {
-      const token = kind === 'authorization_code'
-        ? await exchangeAuthorizationCode({ code: value })
-        : boundedMaterial(value);
+      if (kind !== 'refresh_token') {
+        throw new AppleRevocationError('apple_revocation_material_invalid', {
+          retryable: false,
+        });
+      }
+      const token = boundedMaterial(value);
       if (!token) {
         throw new AppleRevocationError('apple_revocation_token_missing', {
           retryable: false,
@@ -204,7 +211,7 @@ export function createAppleRevocationProvider({
         client_secret: clientSecret(),
         token,
         token_type_hint: 'refresh_token',
-      });
+      }, { expectJson: false });
     },
   });
 }

@@ -236,6 +236,7 @@ if (!databaseUrl) {
         '091_technical_sandbox_runs.up.sql',
         '092_listing_ai_mock_disclosure.up.sql',
         '093_apple_identity_revocation.up.sql',
+        '094_apple_refresh_material_only.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);

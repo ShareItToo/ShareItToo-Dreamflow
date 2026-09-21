@@ -92,7 +92,7 @@
     },
     {
       "path": "backend/src/server.js",
-      "sha256": "5a1429706f5a9fbe3418789e3727f32ac820629861bfd220fc102fa456a5a916"
+      "sha256": "1aa0cf59eb86690212a2940062584a372a6a7ba94a1be9d2d7d314bb57b450a9"
     },
     {
       "path": "backend/src/credential_cleanup.js",
@@ -636,7 +636,7 @@
     },
     {
       "path": "backend/src/config.js",
-      "sha256": "8179281ab9551d601cf5093caf59340f6aef6f47d053db2d163ca59359804aca"
+      "sha256": "229502f95c681641bb07fe6e0256b4ea2a5041569142d9b56a19d1d0c6db183e"
     },
     {
       "path": "backend/src/notifications.js",
@@ -672,7 +672,7 @@
     },
     {
       "path": "backend/src/firebase_identity_cleanup.js",
-      "sha256": "3dc65da07da53276c5759f86856f91a87360c55ee77defed88ecc6510e2561e0"
+      "sha256": "1d7489b35a8f95a7e4d42fad0afd3723d808d44066d579efedb633ad8b7832f3"
     },
     {
       "path": "backend/src/crashlytics_cleanup.js",
@@ -888,7 +888,7 @@
     },
     {
       "path": "lib/services/auth_service.dart",
-      "sha256": "cba5e6eb485fc55cd310ac83e93a317c527673d1f7910d73908423c92114e8ec"
+      "sha256": "4f723f544d001d2e385105311114f4c58d414e9e463806492a4c8c25ffdc8bd0"
     },
     {
       "path": "lib/screens/notification_settings_screen.dart",
@@ -908,7 +908,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "9ddf0ae574d232685bad8f6388a9625f9cb161e1725f8100db5c2eee4afb6ec6"
+      "sha256": "6c30bd0542ba41e3d01d5672cbb292af8af7f64d46c895526d5fa5b47375ffbf"
     },
     {
       "path": "backend/src/rate_limit_policy.js",

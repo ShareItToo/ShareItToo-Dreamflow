@@ -9,7 +9,10 @@ import {
   encryptAppleRevocationMaterial,
   normalizeAppleRevocationMaterial,
 } from '../src/apple_revocation.js';
-import { drainFirebaseIdentityDeletionOutbox } from '../src/firebase_identity_cleanup.js';
+import {
+  drainFirebaseIdentityDeletionOutbox,
+  getAppleRevocationCleanupStatus,
+} from '../src/firebase_identity_cleanup.js';
 
 const key = Buffer.alloc(32, 7);
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -48,17 +51,43 @@ test('Apple adapter exchanges authorization code and revokes through a synthetic
       return {
         ok: true,
         status: 200,
-        json: async () => (url.endsWith('/token') ? { refresh_token: 'synthetic-refresh' } : {}),
+        ...(url.endsWith('/token')
+          ? { json: async () => ({ refresh_token: 'synthetic-refresh' }) }
+          : {}),
       };
     },
   });
-  await provider.revoke({ kind: 'authorization_code', value: 'synthetic-code' });
+  const refreshToken = await provider.exchangeAuthorizationCode({ code: 'synthetic-code' });
+  await provider.revoke({ kind: 'refresh_token', value: refreshToken });
   assert.equal(requests.length, 2);
   assert.match(requests[0].url, /\/auth\/token$/u);
   assert.match(requests[1].url, /\/auth\/revoke$/u);
   assert.equal(requests[0].options.body.get('code'), 'synthetic-code');
   assert.equal(requests[1].options.body.get('token'), 'synthetic-refresh');
   assert.equal(requests[1].options.body.get('token_type_hint'), 'refresh_token');
+});
+
+test('Apple token exchange preserves provider retryability without exposing response text', async () => {
+  const { privateKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const provider = createAppleRevocationProvider({
+    enabled: true,
+    clientId: 'com.example.sit',
+    teamId: 'TEAMID1234',
+    keyId: 'KEYID1234',
+    privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+    fetchImpl: async () => ({
+      ok: false,
+      status: 503,
+      json: async () => ({ error: 'synthetic provider detail' }),
+    }),
+  });
+  await assert.rejects(
+    provider.exchangeAuthorizationCode({ code: 'synthetic-code' }),
+    (error) => error instanceof AppleRevocationError
+      && error.code === 'apple_revocation_provider_rejected'
+      && error.retryable === true
+      && !String(error.message).includes('synthetic provider detail'),
+  );
 });
 
 test('Apple cleanup uses a durable CAS claim, keeps Firebase deletion safe, and clears material only after success', async () => {
@@ -156,4 +185,75 @@ test('Apple revoke retry never claims completion and still permits Firebase dele
   assert.ok(calls.some(({ sql, params }) => sql.includes("apple_revocation_status = 'retry'")
     && params.includes('apple_revocation_transport_failed')));
   assert.equal(calls.some(({ sql }) => sql.startsWith('DELETE FROM firebase_identity_deletion_outbox')), false);
+});
+
+test('Apple cleanup does not re-revoke after a confirmed revoke when Firebase fails afterward', async () => {
+  const encrypted = encryptAppleRevocationMaterial('synthetic-refresh', key);
+  let claimCount = 0;
+  let appleStatus = 'pending';
+  let firebaseDeletedAt = null;
+  const client = {
+    query: async (sql, params) => {
+      if (sql.includes('RETURNING target.id')) {
+        if (claimCount >= 2) return { rows: [] };
+        claimCount += 1;
+        return { rows: [{
+          id,
+          firebase_user_id: 'firebase-apple-user',
+          provider: 'apple',
+          attempts: claimCount,
+          firebase_deleted_at: firebaseDeletedAt,
+          apple_revocation_status: appleStatus,
+          apple_revocation_material_kind: appleStatus === 'succeeded' ? null : 'refresh_token',
+          apple_revocation_material_ciphertext: appleStatus === 'succeeded' ? null : encrypted,
+          apple_revocation_attempts: 0,
+          apple_revocation_last_error_code: null,
+        }] };
+      }
+      if (sql.includes("SET apple_revocation_status = 'processing'")) {
+        return { rowCount: 1, rows: [{ apple_revocation_attempts: 1 }] };
+      }
+      if (sql.includes("SET apple_revocation_status = 'succeeded'")) {
+        appleStatus = 'succeeded';
+        return { rowCount: 1, rows: [] };
+      }
+      if (sql.includes('SET firebase_deleted_at = now()')) {
+        firebaseDeletedAt = new Date().toISOString();
+        return { rowCount: 1, rows: [] };
+      }
+      return { rowCount: 1, rows: [] };
+    },
+  };
+  let firebaseAttempts = 0;
+  let revokeCalls = 0;
+  const authClientFactory = async () => ({
+    deleteUser: async () => {
+      firebaseAttempts += 1;
+      if (firebaseAttempts === 1) {
+        const error = new Error('synthetic Firebase failure');
+        error.code = 'auth/internal-error';
+        throw error;
+      }
+    },
+  });
+  const provider = { revoke: async () => { revokeCalls += 1; } };
+  const first = await drainFirebaseIdentityDeletionOutbox({
+    client, appleRevocationKey: key, appleRevocationProvider: provider,
+    authClientFactory, ids: [id], limit: 1,
+  });
+  const second = await drainFirebaseIdentityDeletionOutbox({
+    client, appleRevocationKey: key, appleRevocationProvider: provider,
+    authClientFactory, ids: [id], limit: 1,
+  });
+  assert.deepEqual(first, { deleted: 0, retried: 1 });
+  assert.deepEqual(second, { deleted: 1, retried: 0 });
+  assert.equal(revokeCalls, 1);
+});
+
+test('Apple deletion status stays pending when its durable outbox row is missing', async () => {
+  const status = await getAppleRevocationCleanupStatus(
+    { query: async () => ({ rows: [] }) },
+    { ids: [id] },
+  );
+  assert.equal(status, 'pending');
 });

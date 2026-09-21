@@ -20,6 +20,7 @@ import 'shared_persistence_sync.dart';
 
 class _SocialSdkAcquisition {
   String? firebaseUid;
+  String? appleAuthorizationCode;
   bool googleAcquired = false;
   bool facebookAcquired = false;
 }
@@ -1290,6 +1291,9 @@ class AuthService {
           path: '/auth/social',
           body: {
             'idToken': idToken,
+            if (provider == AuthSocialProvider.apple &&
+                acquisition.appleAuthorizationCode != null)
+              'appleAuthorizationCode': acquisition.appleAuthorizationCode,
             'termsAccepted': termsAccepted,
             'privacyAccepted': privacyAccepted,
             'minimumAgeConfirmed': minimumAgeConfirmed,
@@ -1361,7 +1365,9 @@ class AuthService {
         'social_account_link_requires_reauthentication' =>
           AuthFailure.socialAccountLinkRequiresReauthentication,
         'unsupported_social_provider' ||
-        'social_auth_unavailable' =>
+        'social_auth_unavailable' ||
+        'apple_revocation_exchange_unavailable' ||
+        'apple_revocation_exchange_claim_lost' =>
           AuthFailure.providerUnavailable,
         'account_not_active' => AuthFailure.accountNotActive,
         _ => AuthFailure.network,
@@ -1473,6 +1479,17 @@ class AuthService {
       }
       acquisition.firebaseUid = credential.user?.uid;
       requireCurrent();
+      if (provider == AuthSocialProvider.apple) {
+        final authorizationCode =
+            credential.additionalUserInfo?.authorizationCode?.trim();
+        if (authorizationCode == null || authorizationCode.isEmpty) {
+          throw const _SocialProviderUnavailable(
+            'Apple authorization code was not returned by Firebase',
+          );
+        }
+        acquisition.appleAuthorizationCode = authorizationCode;
+        requireCurrent();
+      }
       final token = await credential.user?.getIdToken(true);
       if (token == null || token.isEmpty) {
         throw const _SocialProviderUnavailable();
