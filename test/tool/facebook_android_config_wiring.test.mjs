@@ -31,11 +31,11 @@ test('release builds bind explicit fail-closed social-provider flags', () => {
   assert.match(buildScript, /SIT_FACEBOOK_CLIENT_TOKEN/);
   assert.match(
     buildScript,
-    /SIT_SOCIAL_FACEBOOK_ENABLED:-0[\s\S]*validate_android_social_auth_provider_readiness\.mjs --provider facebook[\s\S]*SIT_FACEBOOK_APP_ID/,
+    /SIT_SOCIAL_FACEBOOK_ENABLED:-0[\s\S]*SIT_FACEBOOK_APP_ID[\s\S]*validate_social_provider_activation\.mjs --platform android/,
   );
   assert.match(
     buildScript,
-    /SIT_SOCIAL_APPLE_ENABLED:-0[\s\S]*validate_android_social_auth_provider_readiness\.mjs --provider apple[\s\S]*social_apple_enabled=true/,
+    /SIT_SOCIAL_APPLE_ENABLED:-0[\s\S]*social_apple_enabled=true[\s\S]*validate_social_provider_activation\.mjs --platform android/,
   );
   assert.doesNotMatch(buildScript, /SIT_SOCIAL_FACEBOOK_ENABLED:-1/);
   assert.doesNotMatch(buildScript, /SIT_SOCIAL_FACEBOOK_ENABLED:-true/);
@@ -45,4 +45,9 @@ test('release builds bind explicit fail-closed social-provider flags', () => {
     '"    \\"appleEnabled\\": $social_apple_enabled," \\',
     '"    \\"facebookEnabled\\": $social_facebook_enabled" \\',
   ]) assert.ok(buildScript.includes(line), line);
+});
+
+test('the shared activation preflight covers both Android and iOS release paths', () => {
+  const preflight = read('scripts/release_candidate_preflight.sh');
+  assert.match(preflight, /validate_social_provider_activation\.mjs --platform "\$firebase_validation_platform"/u);
 });

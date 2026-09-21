@@ -163,7 +163,6 @@ fi
 social_apple_enabled=false
 case "${SIT_SOCIAL_APPLE_ENABLED:-0}" in
   1|true)
-    node tool/validate_android_social_auth_provider_readiness.mjs --provider apple
     social_apple_enabled=true
     ;;
   0|false|'') ;;
@@ -175,7 +174,6 @@ esac
 social_facebook_enabled=false
 case "${SIT_SOCIAL_FACEBOOK_ENABLED:-0}" in
   1|true)
-    node tool/validate_android_social_auth_provider_readiness.mjs --provider facebook
     if [[ ! "${SIT_FACEBOOK_APP_ID:-}" =~ ^[1-9][0-9]{5,24}$ ||
           -z "${SIT_FACEBOOK_CLIENT_TOKEN:-}" ||
           "${SIT_FACEBOOK_CLIENT_TOKEN}" == "not-configured" ]]; then
@@ -190,6 +188,7 @@ case "${SIT_SOCIAL_FACEBOOK_ENABLED:-0}" in
     exit 1
     ;;
 esac
+node tool/validate_social_provider_activation.mjs --platform android
 common_args+=(
   "--dart-define=SIT_SOCIAL_GOOGLE_ENABLED=$social_google_enabled"
   "--dart-define=SIT_SOCIAL_APPLE_ENABLED=$social_apple_enabled"

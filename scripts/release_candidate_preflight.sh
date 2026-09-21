@@ -189,6 +189,7 @@ NODE
   unset firebase_env_lines firebase_value
 fi
 node tool/validate_firebase_release_config.mjs --platform "$firebase_validation_platform"
+node tool/validate_social_provider_activation.mjs --platform "$firebase_validation_platform"
 if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" ]]; then
   node tool/validate_apple_testflight_handoff.mjs --allow-android-candidate-rollover
 else
