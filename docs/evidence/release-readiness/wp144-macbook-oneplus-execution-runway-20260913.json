@@ -138,7 +138,7 @@
   "sourceInventory": {
     "tool/run_wp143_oneplus_current_candidate_two_role.mjs": "759d7fe02a98dcfb0aa379697e5ab2c9a5dc4f430d6dcb141db7a69567c54670",
     "tool/validate_current_head_android_release_archive.mjs": "bc8239ed9e25dd77272fe4d750a265631bef51c40142f2c49aff9569c54ae120",
-    "tool/run_staging_email_verified_two_role_journey.mjs": "5535a172757ebbe69a0e4a499595c1f4ec969daa2f2f219c8f7191999df08b7a",
-    "docs/evidence/release-readiness/wp143-oneplus-current-candidate-two-role-preparation-20260913.json": "71ee13fc36d51f20f563b472f9b47304cfd1f7bdeebb0b2479b3a3bbed2841ca"
+    "tool/run_staging_email_verified_two_role_journey.mjs": "65a40addae8b6ef1591ca34c0a01675dba3867a837c3d42c1450ae35118e8f79",
+    "docs/evidence/release-readiness/wp143-oneplus-current-candidate-two-role-preparation-20260913.json": "ca3d9da3ccc2c445f20f0772cdccdd6d8636624da53971a2db16a9f9ab43083c"
   }
 }
