@@ -879,7 +879,7 @@ function sameExceptIsolatedOverrides(left, right) {
   }
   const envA = envMap(left?.Config?.Env);
   const envB = envMap(right?.Config?.Env);
-  for (const name of ['FIREBASE_AUTH_ENABLED', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'IDENTITY_VERIFICATION_TRANSPORT', 'PUSH_TRANSPORT', 'MAIL_TRANSPORT', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_BUDGET_CENTS', 'TECHNICAL_SANDBOX_ENABLED', 'TECHNICAL_SANDBOX_KILL_SWITCH']) {
+  for (const name of ['FIREBASE_AUTH_ENABLED', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'IDENTITY_VERIFICATION_TRANSPORT', 'PUSH_TRANSPORT', 'MAIL_TRANSPORT', 'SIT_LISTING_AI_PROVIDER', 'TECHNICAL_SANDBOX_ENABLED', 'TECHNICAL_SANDBOX_KILL_SWITCH']) {
     delete envA[name]; delete envB[name];
   }
   return JSON.stringify(a) === JSON.stringify(b) && JSON.stringify(envA) === JSON.stringify(envB);
@@ -941,7 +941,7 @@ export async function runGoogleAuthIsolatedRehearsal({ manifest, command = runCo
       ['PAYMENT_TRANSPORT', 'memory'], ['STRIPE_LIVEMODE', 'false'],
       ['IDENTITY_VERIFICATION_TRANSPORT', 'disabled'], ['PUSH_TRANSPORT', 'memory'],
       ['MAIL_TRANSPORT', 'disabled'], ['SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', '0'],
-      ['SIT_LISTING_AI_PROVIDER', 'mock'], ['SIT_LISTING_AI_BUDGET_CENTS', '0'],
+      ['SIT_LISTING_AI_PROVIDER', 'disabled'],
       ['TECHNICAL_SANDBOX_ENABLED', '0'], ['TECHNICAL_SANDBOX_KILL_SWITCH', '1'],
     ]) isolatedEnv = replaceOrAppendEnvValue(isolatedEnv, name, value);
     await atomicReplace(isolatedEnv, rehearsalManifest);

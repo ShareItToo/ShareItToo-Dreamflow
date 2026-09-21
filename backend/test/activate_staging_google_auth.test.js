@@ -17,6 +17,7 @@ import {
   sanitizeActivationError,
   setActivationFlags,
 } from '../ops/activate_staging_google_auth.mjs';
+import { listingAiOpenAiModel, readListingAiGatewayConfiguration } from '../src/listing_ai_gateway_config.js';
 
 const revision = '0123456789abcdef0123456789abcdef01234567';
 const digest = 'sha256:' + 'a'.repeat(64);
@@ -37,7 +38,8 @@ async function fixture() {
     'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false',
     'DATABASE_URL=postgres://shareittoo_green:pw@canonical-db:5432/shareittoo_green',
     'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false',
-    'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED=0',
+    'SIT_LISTING_AI_PROVIDER=openai', `SIT_LISTING_AI_MODEL=${listingAiOpenAiModel}`,
+    'SIT_LISTING_AI_BUDGET_CENTS=0', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED=0',
     `APP_COMMIT=${revision}`, 'UNRELATED=preserve-me', '',
   ].join('\n');
   await writeFile(envFile, env, { mode: 0o600 });
@@ -393,14 +395,41 @@ test('isolated rehearsal never stops canonical and proves candidate cleanup', as
     assert.ok(probeCreate.args.some((arg) => arg.includes('verifyMailer')));
     assert.equal(executor.calls.some((call) => call.phase === 'rehearsal_provider_network_attach'), false);
     assert.ok(executor.calls.some((call) => call.phase === 'rehearsal_probe_remove'));
+    assert.match(executor.state.probeEnv, /SIT_LISTING_AI_PROVIDER=disabled/);
+    assert.match(executor.state.probeEnv, new RegExp(`SIT_LISTING_AI_MODEL=${listingAiOpenAiModel}`));
     assert.match(executor.state.probeEnv, /SIT_LISTING_AI_BUDGET_CENTS=0/);
+    assert.match(executor.state.probeEnv, /SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED=0/);
     assert.match(executor.state.probeEnv, /TECHNICAL_SANDBOX_ENABLED=0/);
     assert.match(executor.state.probeEnv, /TECHNICAL_SANDBOX_KILL_SWITCH=1/);
     assert.doesNotMatch(executor.state.probeEnv, /SIT_LISTING_AI_BUDGET_MINOR=/);
     assert.doesNotMatch(executor.state.probeEnv, /TECHNICAL_SANDBOX_AVAILABLE=/);
+    const isolatedEnv = Object.fromEntries(executor.state.probeEnv.trim().split('\n').map((line) => line.split('=')));
+    const isolatedListingAi = readListingAiGatewayConfiguration(isolatedEnv, { deploymentEnvironment: 'staging' });
+    assert.equal(isolatedListingAi.provider, 'disabled');
+    assert.equal(isolatedListingAi.model, listingAiOpenAiModel);
+    assert.equal(isolatedListingAi.budgetCents, 0);
+    assert.equal(isolatedListingAi.externalProviderExecutionAllowed, false);
+    assert.equal(isolatedListingAi.providerExecutionAllowed, false);
     const dbProbe = executor.calls.find((call) => call.phase === 'rehearsal_database_probe');
     assert.ok(dbProbe.args.some((arg) => arg.includes('sit-google-auth-rehearsal-db-')));
   } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+// Provider discriminator overrides must preserve each dependent model/budget/approval invariant.
+test('isolated listing AI override is disabled, zero-cost and non-external with OpenAI model preserved', () => {
+  const original = {
+    SIT_LISTING_AI_PROVIDER: 'openai',
+    SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
+    SIT_LISTING_AI_BUDGET_CENTS: '0',
+    SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0',
+  };
+  const isolated = { ...original, SIT_LISTING_AI_PROVIDER: 'disabled' };
+  const config = readListingAiGatewayConfiguration(isolated, { deploymentEnvironment: 'staging' });
+  assert.equal(config.provider, 'disabled');
+  assert.equal(config.model, listingAiOpenAiModel);
+  assert.equal(config.budgetCents, 0);
+  assert.equal(config.externalProviderExecutionAllowed, false);
+  assert.equal(config.providerExecutionAllowed, false);
 });
 
 test('isolated prestart probe classifies config, database and mailer failures before API start', async () => {
