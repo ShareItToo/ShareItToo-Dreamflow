@@ -516,35 +516,63 @@ export function runCommand(command, args, { cwd = repositoryRoot, env = process.
 
 const boundedStartupProbeScript = "const endpoints=['live','ready']; const deadline=Date.now()+15000; const attempts={live:0,ready:0}; const last={}; const sleep=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms)); let passed={}; while(Date.now()<deadline){ for(const endpoint of endpoints){ if(passed[endpoint]) continue; attempts[endpoint]++; try { const response=await fetch(`http://127.0.0.1:8080/health/${endpoint}`); last[endpoint]={status:response.status}; if(response.status===200){ passed[endpoint]=true; } } catch { last[endpoint]={status:null}; } } if(endpoints.every((endpoint)=>passed[endpoint])){ process.stdout.write(JSON.stringify({ok:true,attempts,last})); process.exit(0); } await sleep(250); } process.stdout.write(JSON.stringify({ok:false,attempts,last,reason:'startup_timeout'})); process.exit(1);";
 
-async function runBoundedStartupProbe(command, container, commandEnv, phase = 'replacement_startup_probe') {
-  let result;
-  try {
-    result = await command('docker', ['exec', container, 'node', '--input-type=module', '-e', boundedStartupProbeScript], {
-      phase, env: commandEnv, allowFailure: true,
-    });
-  } catch (error) {
-    error.failurePhase = phase;
-    error.code = error.code ?? `${phase}_failed`;
-    error.probeDiagnostic = Object.freeze({ ok: false, reason: 'command_error' });
-    throw error;
+function sanitizeProbeDiagnostic(diagnostic, reason = 'startup_probe_failed') {
+  const attempts = {};
+  for (const name of ['exec', 'live', 'ready']) {
+    if (Number.isInteger(diagnostic?.attempts?.[name]) && diagnostic.attempts[name] >= 0) attempts[name] = diagnostic.attempts[name];
   }
-  let diagnostic;
-  try { diagnostic = JSON.parse(result.stdout?.trim() ?? ''); } catch {
-    diagnostic = { ok: false, reason: 'invalid_probe_output' };
+  const last = {};
+  for (const name of ['live', 'ready']) {
+    if (diagnostic?.last?.[name] && typeof diagnostic.last[name] === 'object') {
+      const status = diagnostic.last[name].status;
+      last[name] = { status: Number.isInteger(status) ? status : null };
+    }
   }
-  if (result?.code !== 0 || diagnostic.ok !== true) {
-    const error = new Error(`Staging Google Auth activation failed: ${phase}_failed`);
-    error.code = `${phase}_failed`;
-    error.failurePhase = phase;
-    error.probeDiagnostic = Object.freeze({
-      ok: diagnostic.ok === true,
-      reason: typeof diagnostic.reason === 'string' ? diagnostic.reason : 'startup_probe_failed',
-      attempts: diagnostic.attempts && typeof diagnostic.attempts === 'object' ? diagnostic.attempts : {},
-      last: diagnostic.last && typeof diagnostic.last === 'object' ? diagnostic.last : {},
-    });
-    throw error;
+  return Object.freeze({
+    ok: diagnostic?.ok === true,
+    reason: typeof diagnostic?.reason === 'string' ? diagnostic.reason : reason,
+    attempts,
+    last,
+  });
+}
+
+function startupProbeFailure(phase, probeDiagnostic) {
+  const error = new Error(`Staging Google Auth activation failed: ${phase}_failed`);
+  error.code = `${phase}_failed`;
+  error.failurePhase = phase;
+  error.probeDiagnostic = probeDiagnostic;
+  return error;
+}
+
+export async function runBoundedStartupProbe(command, container, commandEnv, phase = 'replacement_startup_probe', { deadlineMs = 15000, retryDelayMs = 250 } = {}) {
+  const deadline = Date.now() + Math.max(0, deadlineMs);
+  const args = ['exec', container, 'node', '--input-type=module', '-e', boundedStartupProbeScript];
+  let execAttempts = 0;
+  let lastDiagnostic = sanitizeProbeDiagnostic(null, 'exec_unavailable');
+  while (Date.now() <= deadline) {
+    execAttempts += 1;
+    let result;
+    try {
+      result = await command('docker', args, { phase, env: commandEnv, allowFailure: true });
+    } catch (error) {
+      error.failurePhase = phase;
+      error.code = error.code ?? `${phase}_failed`;
+      error.probeDiagnostic = Object.freeze({ ok: false, reason: 'command_error' });
+      throw error;
+    }
+    let diagnostic;
+    try { diagnostic = JSON.parse(result?.stdout?.trim() ?? ''); } catch { diagnostic = null; }
+    if (result?.code === 0 && diagnostic?.ok === true && diagnostic?.last?.live?.status === 200 && diagnostic?.last?.ready?.status === 200) {
+      return diagnostic;
+    }
+    lastDiagnostic = sanitizeProbeDiagnostic(diagnostic, diagnostic ? 'exec_unavailable' : 'exec_unavailable');
+    if (diagnostic?.reason === 'startup_timeout') throw startupProbeFailure(phase, lastDiagnostic);
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(Math.max(0, retryDelayMs), remaining)));
   }
-  return diagnostic;
+  const attempts = { ...lastDiagnostic.attempts, exec: execAttempts };
+  throw startupProbeFailure(phase, Object.freeze({ ok: false, reason: 'startup_timeout', attempts, last: lastDiagnostic.last }));
 }
 
 async function executePhase(command, args, options) {
@@ -566,6 +594,16 @@ async function executePhase(command, args, options) {
 }
 
 function sanitizeCandidateState(record) {
+  if (record && !record.State && ('status' in record || 'exitCode' in record || 'restartCount' in record || 'oomKilled' in record)) {
+    return Object.freeze({
+      status: typeof record.status === 'string' ? record.status : null,
+      running: record.running === true,
+      exitCode: Number.isInteger(record.exitCode) ? record.exitCode : null,
+      oomKilled: record.oomKilled === true,
+      restartCount: Number.isInteger(record.restartCount) ? record.restartCount : null,
+      error: record.error === 'present' || record.error === 'inspect_failed' ? record.error : null,
+    });
+  }
   const state = record?.State ?? record ?? {};
   return Object.freeze({
     status: typeof state.Status === 'string' ? state.Status : null,
@@ -930,12 +968,7 @@ export function sanitizeActivationError(error) {
   if (error?.failurePhase) output.failurePhase = String(error.failurePhase);
   if (error?.failureExitCode !== undefined && error.failureExitCode !== null) output.failureExitCode = Number(error.failureExitCode);
   if (error?.candidateState) output.candidateState = sanitizeCandidateState(error.candidateState);
-  if (error?.probeDiagnostic) output.probeDiagnostic = {
-    ok: error.probeDiagnostic.ok === true,
-    reason: typeof error.probeDiagnostic.reason === 'string' ? error.probeDiagnostic.reason : 'startup_probe_failed',
-    attempts: error.probeDiagnostic.attempts && typeof error.probeDiagnostic.attempts === 'object' ? error.probeDiagnostic.attempts : {},
-    last: error.probeDiagnostic.last && typeof error.probeDiagnostic.last === 'object' ? error.probeDiagnostic.last : {},
-  };
+  if (error?.probeDiagnostic) output.probeDiagnostic = sanitizeProbeDiagnostic(error.probeDiagnostic);
   if (error?.rollback) output.rollback = {
     restored: error.rollback.restored === true,
     results: (error.rollback.results ?? []).map((entry) => ({

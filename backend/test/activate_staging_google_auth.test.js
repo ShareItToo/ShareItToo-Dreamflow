@@ -12,6 +12,7 @@ import {
   readGoogleAuthRuntimeManifest,
   runGoogleAuthActivation,
   runGoogleAuthIsolatedRehearsal,
+  runBoundedStartupProbe,
   runCommand,
   sanitizeActivationError,
   setActivationFlags,
@@ -244,6 +245,36 @@ test('CLI failure sanitizer emits only bounded non-secret diagnostics', () => {
     rollback: { restored: false, results: [{ phase: 'rollback_restore_rename', ok: false, code: 'rename_failed' }] },
   });
   assert.equal(JSON.stringify(output).includes('secret'), false);
+  const candidate = sanitizeActivationError({
+    code: 'rehearsal_startup_probe_failed',
+    candidateState: { status: 'exited', running: false, exitCode: 137, oomKilled: true, restartCount: 4, error: 'present' },
+  });
+  assert.deepEqual(candidate.candidateState, { status: 'exited', running: false, exitCode: 137, oomKilled: true, restartCount: 4, error: 'present' });
+});
+
+test('host startup probe retries unavailable exec and succeeds only on both 200 health checks', async () => {
+  let attempts = 0;
+  const result = await runBoundedStartupProbe(async () => {
+    attempts += 1;
+    if (attempts < 3) return { stdout: '', code: 1 };
+    return { stdout: JSON.stringify({ ok: true, attempts: { live: 1, ready: 1 }, last: { live: { status: 200 }, ready: { status: 200 } } }), code: 0 };
+  }, 'candidate', {}, 'test_startup_probe', { deadlineMs: 100, retryDelayMs: 1 });
+  assert.equal(result.ok, true);
+  assert.equal(attempts, 3);
+});
+
+test('host startup probe bounds all unavailable exec attempts', async () => {
+  let attempts = 0;
+  await assert.rejects(runBoundedStartupProbe(async () => {
+    attempts += 1;
+    return { stdout: '', code: 1 };
+  }, 'candidate', {}, 'test_startup_probe', { deadlineMs: 10, retryDelayMs: 1 }), (error) => {
+    assert.equal(error.code, 'test_startup_probe_failed');
+    assert.equal(error.probeDiagnostic.reason, 'startup_timeout');
+    assert.equal(error.probeDiagnostic.attempts.exec, attempts);
+    return true;
+  });
+  assert.ok(attempts > 1);
 });
 
 test('stdout-file runner waits for both output finish and child close', async () => {
