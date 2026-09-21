@@ -47,6 +47,11 @@ const forbiddenGreenEnvNames = new Set([
   'OPENAI_API_KEY', 'OPENAI_API_KEY_FILE',
 ]);
 
+export function containsForbiddenGreenTargetIdentifier(value) {
+  return typeof value === 'string'
+    && /(?:^|[^a-z0-9])(?:prod|production)(?=$|[^a-z0-9])/iu.test(value);
+}
+
 function isAllowedGreenEnvName(name) {
   return !forbiddenGreenEnvNames.has(name)
     && (greenAllowedEnvNames.includes(name)
@@ -171,7 +176,8 @@ export function assertGreenTargetManifest(manifest) {
   }
   if (!/^[0-9a-f]{64}$/u.test(manifest.targetDigest ?? '') || manifest.targetDigest !== normalizedGreenTargetDigest(manifest)) fail('green_target_digest_invalid');
   const serialized = JSON.stringify(manifest);
-  if (/shareittoo_staging|shareittoo-staging-postgres|prod|production|latest|lookalike/iu.test(serialized)) fail('legacy_or_production_target_forbidden');
+  if (/shareittoo_staging|shareittoo-staging-postgres|latest|lookalike/iu.test(serialized)
+      || containsForbiddenGreenTargetIdentifier(serialized)) fail('legacy_or_production_target_forbidden');
   return Object.freeze({ ...manifest });
 }
 
@@ -324,7 +330,7 @@ export function assertGreenRuntimeImage({ image, digest, runtimeCommit } = {}) {
   fullCommit(runtimeCommit, 'runtime_commit');
   if (image !== `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`) fail('runtime_image_tag_mismatch');
   if (typeof digest !== 'string' || !/^sha256:[0-9a-f]{64}$/u.test(digest)) fail('runtime_image_digest_required');
-  if (/latest|local|prod|production/iu.test(image)) fail('runtime_image_unsafe');
+  if (/latest|local/iu.test(image) || containsForbiddenGreenTargetIdentifier(image)) fail('runtime_image_unsafe');
   return Object.freeze({ image, digest, runtimeCommit });
 }
 
@@ -646,7 +652,8 @@ export function assertGreenCleanup({ removed, verifiedAbsent, oldApiSealed, oldA
   if (!Array.isArray(removed) || !Array.isArray(verifiedAbsent)
       || removed.length !== verifiedAbsent.length
       || oldApiSealed !== true || oldApiRunning !== false) fail('green_cleanup_incomplete');
-  if (removed.some((name) => /(?:shareittoo_staging|prod|production|shareittoo-staging-api)/iu.test(name))) {
+  if (removed.some((name) => /(?:shareittoo_staging|shareittoo-staging-api)/iu.test(name)
+      || containsForbiddenGreenTargetIdentifier(name))) {
     fail('green_cleanup_touched_protected_resource');
   }
   return true;

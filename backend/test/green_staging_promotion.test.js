@@ -24,6 +24,7 @@ import {
   runGreenForwardRecovery,
   runGreenPromotion,
   syntheticSandboxCredentialFilePath,
+  containsForbiddenGreenTargetIdentifier,
 } from '../ops/green_staging_promotion.mjs';
 import { readStagingAccessConfiguration, stagingAnonymousPathAllowed } from '../src/staging_access_gate.js';
 
@@ -68,6 +69,17 @@ test('Green target accepts only the exact verified resource identities', () => {
     { ...targetManifest, greenLabel: 'com.shareittoo.sit.green=false' },
   ]) {
     assert.throws(() => assertGreenTargetManifest(mutation));
+  }
+});
+
+test('forbidden production identifiers use token boundaries, not arbitrary path substrings', () => {
+  for (const value of [
+    '/tmp/sit-r10-clean-reproducibility-abc123',
+    'shareittoo-staging-api',
+    'productional-analysis',
+  ]) assert.equal(containsForbiddenGreenTargetIdentifier(value), false, value);
+  for (const value of ['/prod/', 'shareittoo-prod-api', 'shareittoo_production_db', 'registry:prod']) {
+    assert.equal(containsForbiddenGreenTargetIdentifier(value), true, value);
   }
 });
 
@@ -160,7 +172,10 @@ test('promotion plan keeps backup, isolated 87-to-92 rehearsal, acceptance and f
   assert.ok(phaseIndex('candidate_cleanup_verify') < phaseIndex('quiesce_green_api'));
   assert.ok(phaseIndex('quiesce_green_api') < phaseIndex('canonical_forward_migration_87_to_92'));
   assert.ok(phaseIndex('canonical_schema_readback') < phaseIndex('final_create_no_host_port'));
-  assert.equal(commands.some((entry) => entry.args?.some((arg) => /shareittoo-staging-postgres|shareittoo_staging_backend|shareittoo_staging_postgres_data|prod|production/iu.test(arg))), false);
+  assert.equal(commands.some((entry) => entry.args?.some((arg) => (
+    /shareittoo-staging-postgres|shareittoo_staging_backend|shareittoo_staging_postgres_data/iu.test(arg)
+      || containsForbiddenGreenTargetIdentifier(arg)
+  ))), false);
 });
 
 test('every promotion command has an executable command and argv, including target inventory', () => {

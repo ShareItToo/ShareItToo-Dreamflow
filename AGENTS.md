@@ -61,6 +61,9 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
   bound pending or paid run.
 - Parallel old/Green staging resources require an explicit evidence-bound CLI
   target; diagnostics must never fall back to a legacy resource name.
+- Operational forbidden-name checks must use identifier boundaries/tokens, never
+  arbitrary substrings over absolute paths; preserve explicit exact legacy
+  resource checks alongside the boundary check.
 - Remote alias mentor invariant: after an alias or DNS failure, read the exact
   saved SSH configuration and authoritative project source before concluding
   that remote access is unavailable; test only the verified saved alias. A
