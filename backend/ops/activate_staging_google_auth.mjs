@@ -383,11 +383,11 @@ export function buildGoogleAuthPreflightCommands(manifest) {
   ]);
 }
 
-export function buildReplacementCreateArgs({ manifest, envFile, currentApi, containerName = manifest.apiContainer, networkName = manifest.network, mounts = currentApi?.Mounts }) {
+export function buildReplacementCreateArgs({ manifest, envFile, currentApi, containerName = manifest.apiContainer, networkName = manifest.network, mounts = currentApi?.Mounts, commandOverride = null }) {
   if (!currentApi || typeof currentApi !== 'object') fail('replacement_source_invalid');
   const config = currentApi.Config ?? {};
   const host = currentApi.HostConfig ?? {};
-  if (typeof containerName !== 'string' || !/^shareittoo-staging-api-google-auth-rehearsal-[0-9a-f-]+$/u.test(containerName) && containerName !== manifest.apiContainer) fail('replacement_container_name_invalid');
+  if (typeof containerName !== 'string' || !/^shareittoo-staging-api-google-auth-rehearsal-(?:probe-)?[0-9a-f-]+$/u.test(containerName) && containerName !== manifest.apiContainer) fail('replacement_container_name_invalid');
   const args = ['create', '--name', containerName, '--env-file', envFile];
   const restart = normalizedRestartPolicy(host.RestartPolicy);
   if (restart.Name) {
@@ -460,7 +460,8 @@ export function buildReplacementCreateArgs({ manifest, envFile, currentApi, cont
     if (!type || !mount.Source || !mount.Destination) fail('unsupported_mount_type');
     args.push('--mount', `type=${type},src=${type === 'volume' ? mount.Name : mount.Source},dst=${mount.Destination},readonly=${mount.RW === false ? 'true' : 'false'}`);
   }
-  args.push('--network', networkName, manifest.image, ...(config.Cmd ?? []));
+  if (commandOverride !== null && (!Array.isArray(commandOverride) || commandOverride.some((entry) => typeof entry !== 'string'))) fail('replacement_command_override_invalid');
+  args.push('--network', networkName, manifest.image, ...(commandOverride ?? config.Cmd ?? []));
   if (args.some((arg) => /(?:JWT_SECRET|DATABASE_URL|password|token|whsec_|sk_live_|sk_test_)=/iu.test(arg))) fail('replacement_command_secret_leak');
   if (args.includes('--publish') || args.includes('-p')) fail('replacement_host_port_forbidden');
   return Object.freeze(args);
@@ -517,6 +518,14 @@ export function runCommand(command, args, { cwd = repositoryRoot, env = process.
 const boundedStartupProbeScript = "const endpoints=['live','ready']; const deadline=Date.now()+15000; const attempts={live:0,ready:0}; const last={}; const sleep=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms)); let passed={}; while(Date.now()<deadline){ for(const endpoint of endpoints){ if(passed[endpoint]) continue; attempts[endpoint]++; try { const response=await fetch(`http://127.0.0.1:8080/health/${endpoint}`); last[endpoint]={status:response.status}; if(response.status===200){ passed[endpoint]=true; } } catch { last[endpoint]={status:null}; } } if(endpoints.every((endpoint)=>passed[endpoint])){ process.stdout.write(JSON.stringify({ok:true,attempts,last})); process.exit(0); } await sleep(250); } process.stdout.write(JSON.stringify({ok:false,attempts,last,reason:'startup_timeout'})); process.exit(1);";
 
 function sanitizeProbeDiagnostic(diagnostic, reason = 'startup_probe_failed') {
+  if (diagnostic && typeof diagnostic.stage === 'string' && typeof diagnostic.code === 'string' && typeof diagnostic.errorType === 'string') {
+    return Object.freeze({
+      stage: /^[a-z_]{1,32}$/u.test(diagnostic.stage) ? diagnostic.stage : 'unknown',
+      ok: diagnostic.ok === true,
+      code: /^[a-z0-9_]{1,64}$/u.test(diagnostic.code) ? diagnostic.code : 'probe_failed',
+      errorType: /^[a-z_]{1,32}$/u.test(diagnostic.errorType) ? diagnostic.errorType : 'unknown',
+    });
+  }
   const attempts = {};
   for (const name of ['exec', 'live', 'ready']) {
     if (Number.isInteger(diagnostic?.attempts?.[name]) && diagnostic.attempts[name] >= 0) attempts[name] = diagnostic.attempts[name];
@@ -789,18 +798,21 @@ export async function runGoogleAuthActivation({ manifest, command = runCommand, 
   }
 }
 
-async function cleanupRehearsal({ command, commandEnv, candidate, databaseCandidate, rehearsalEnvFile, databaseEnvFile, dumpFile, network, databaseVolume, uploadsVolume }) {
+async function cleanupRehearsal({ command, commandEnv, candidate, probe, databaseCandidate, rehearsalEnvFile, databaseEnvFile, dumpFile, network, databaseVolume, uploadsVolume }) {
   const results = [];
   const safeCommand = async (args, phase) => {
     try { return await command('docker', args, { phase, env: commandEnv, allowFailure: true }); }
     catch (error) { results.push({ phase, ok: false, code: error?.code ?? 'cleanup_command_failed' }); return null; }
   };
   try {
-    const removed = await safeCommand(['rm', '--force', candidate], 'rehearsal_candidate_remove');
-    results.push({ phase: 'rehearsal_candidate_remove', ok: removed?.code === 0, ...(removed?.code === 0 ? {} : { code: removed?.code ?? 'nonzero' }) });
-    const absent = await safeCommand(['ps', '--all', '--filter', `name=^/${candidate}$`, '--format', '{{.Names}}'], 'rehearsal_candidate_absence');
-    const absentOk = absent?.code === 0 && (absent.stdout ?? '').trim() === '';
-    results.push({ phase: 'rehearsal_candidate_absence', ok: absentOk, ...(absentOk ? {} : { code: absent?.code ?? 'candidate_present' }) });
+    for (const [name, removePhase, absencePhase] of [[candidate, 'rehearsal_candidate_remove', 'rehearsal_candidate_absence'], [probe, 'rehearsal_probe_remove', 'rehearsal_probe_absence']]) {
+      const removed = await safeCommand(['rm', '--force', name], removePhase);
+      const absent = await safeCommand(['ps', '--all', '--filter', `name=^/${name}$`, '--format', '{{.Names}}'], absencePhase);
+      const absentOk = absent?.code === 0 && (absent.stdout ?? '').trim() === '';
+      const removeOk = removed?.code === 0 || absentOk;
+      results.push({ phase: removePhase, ok: removeOk, ...(removeOk ? {} : { code: removed?.code ?? 'nonzero' }) });
+      results.push({ phase: absencePhase, ok: absentOk, ...(absentOk ? {} : { code: absent?.code ?? 'candidate_present' }) });
+    }
     for (const [name, phase] of [[databaseCandidate, 'rehearsal_database_remove'], [databaseVolume, 'rehearsal_database_volume_remove'], [uploadsVolume, 'rehearsal_uploads_volume_remove'], [network, 'rehearsal_network_remove']]) {
       const removeArgs = phase === 'rehearsal_network_remove' ? ['network', 'rm', name] : phase.includes('volume') ? ['volume', 'rm', name] : ['rm', '--force', name];
       const removed = await safeCommand(removeArgs, phase);
@@ -867,10 +879,23 @@ function sameExceptIsolatedOverrides(left, right) {
   }
   const envA = envMap(left?.Config?.Env);
   const envB = envMap(right?.Config?.Env);
-  for (const name of ['FIREBASE_AUTH_ENABLED', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'IDENTITY_VERIFICATION_TRANSPORT', 'PUSH_TRANSPORT', 'MAIL_TRANSPORT', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_BUDGET_MINOR', 'TECHNICAL_SANDBOX_AVAILABLE']) {
+  for (const name of ['FIREBASE_AUTH_ENABLED', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'IDENTITY_VERIFICATION_TRANSPORT', 'PUSH_TRANSPORT', 'MAIL_TRANSPORT', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_BUDGET_CENTS', 'TECHNICAL_SANDBOX_ENABLED', 'TECHNICAL_SANDBOX_KILL_SWITCH']) {
     delete envA[name]; delete envB[name];
   }
   return JSON.stringify(a) === JSON.stringify(b) && JSON.stringify(envA) === JSON.stringify(envB);
+}
+
+const isolatedPrestartProbeScript = "const safeCode=(value,fallback)=>typeof value==='string' && /^[a-z0-9_]{1,64}$/u.test(value)?value:fallback; let stage='config'; let pool=null; let result={stage,ok:false,code:'probe_not_run',errorType:'unknown'}; try { await import('/app/src/config.js'); result={stage,ok:true,code:'ok',errorType:'none'}; stage='database'; const db=await import('/app/src/db.js'); pool=db.pool; await db.initializeDatabase(); result={stage,ok:true,code:'ok',errorType:'none'}; stage='mailer'; const mail=await import('/app/src/mailer.js'); const mailStatus=await mail.verifyMailer(); if(mailStatus==='error') throw Object.assign(new Error(),{code:'mailer_verify_failed'}); result={stage,ok:true,code:'ok',errorType:'none'}; stage='database_close'; await pool.end(); pool=null; result={stage:'complete',ok:true,code:'ok',errorType:'none'}; } catch(error) { result={stage,ok:false,code:safeCode(error?.code,`${stage}_probe_failed`),errorType:error?.code?'operational':'unknown'}; } finally { if(pool) await pool.end().catch(()=>{}); } process.stdout.write(JSON.stringify(result)); if(!result.ok) process.exit(1);";
+
+function parseIsolatedPrestartProbe(stdout, code = 'rehearsal_prestart_probe_output_invalid') {
+  let value;
+  try { value = JSON.parse(stdout?.trim() ?? ''); } catch { fail(code); }
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+      || typeof value.stage !== 'string' || !/^[a-z_]{1,32}$/u.test(value.stage)
+      || typeof value.ok !== 'boolean'
+      || typeof value.code !== 'string' || !/^[a-z0-9_]{1,64}$/u.test(value.code)
+      || typeof value.errorType !== 'string' || !/^[a-z_]{1,32}$/u.test(value.errorType)) fail(code);
+  return Object.freeze({ stage: value.stage, ok: value.ok, code: value.code, errorType: value.errorType });
 }
 
 export async function runGoogleAuthIsolatedRehearsal({ manifest, command = runCommand, commandEnv = process.env } = {}) {
@@ -882,6 +907,7 @@ export async function runGoogleAuthIsolatedRehearsal({ manifest, command = runCo
   const { readbacks } = await collectPreflight(target, command, commandEnv);
   const suffix = `${target.runtimeRevision.slice(0, 12)}-${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
   const candidate = `shareittoo-staging-api-google-auth-rehearsal-${suffix}`;
+  const probe = `shareittoo-staging-api-google-auth-rehearsal-probe-${suffix}`;
   const isolatedNetwork = `sit-google-auth-rehearsal-network-${suffix}`;
   const databaseCandidate = `sit-google-auth-rehearsal-db-${suffix}`;
   const databaseVolume = `sit-google-auth-rehearsal-db-volume-${suffix}`;
@@ -915,11 +941,26 @@ export async function runGoogleAuthIsolatedRehearsal({ manifest, command = runCo
       ['PAYMENT_TRANSPORT', 'memory'], ['STRIPE_LIVEMODE', 'false'],
       ['IDENTITY_VERIFICATION_TRANSPORT', 'disabled'], ['PUSH_TRANSPORT', 'memory'],
       ['MAIL_TRANSPORT', 'disabled'], ['SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', '0'],
-      ['SIT_LISTING_AI_PROVIDER', 'mock'], ['SIT_LISTING_AI_BUDGET_MINOR', '0'],
-      ['TECHNICAL_SANDBOX_AVAILABLE', 'false'],
+      ['SIT_LISTING_AI_PROVIDER', 'mock'], ['SIT_LISTING_AI_BUDGET_CENTS', '0'],
+      ['TECHNICAL_SANDBOX_ENABLED', '0'], ['TECHNICAL_SANDBOX_KILL_SWITCH', '1'],
     ]) isolatedEnv = replaceOrAppendEnvValue(isolatedEnv, name, value);
     await atomicReplace(isolatedEnv, rehearsalManifest);
     const candidateMounts = isolatedCandidateMounts(readbacks.api, uploadsVolume);
+    const probeCreateArgs = buildReplacementCreateArgs({ manifest: target, envFile: rehearsalEnvFile, currentApi: readbacks.api, containerName: probe, networkName: isolatedNetwork, mounts: candidateMounts, commandOverride: ['node', '--input-type=module', '-e', isolatedPrestartProbeScript] });
+    await executePhase(command, probeCreateArgs, { phase: 'rehearsal_probe_create', env: commandEnv });
+    await executePhase(command, ['start', probe], { phase: 'rehearsal_probe_start', env: commandEnv });
+    const probeWait = await executePhase(command, ['wait', probe], { phase: 'rehearsal_probe_wait', env: commandEnv });
+    const probeLogs = await executePhase(command, ['logs', probe], { phase: 'rehearsal_probe_logs', env: commandEnv });
+    const probeDiagnostic = parseIsolatedPrestartProbe(probeLogs.stdout);
+    if (probeWait.stdout?.trim() !== '0' || probeDiagnostic.ok !== true) {
+      const error = new Error('Staging Google Auth activation failed: rehearsal_prestart_probe_failed');
+      error.code = 'rehearsal_prestart_probe_failed';
+      error.probeDiagnostic = probeDiagnostic;
+      throw error;
+    }
+    await executePhase(command, ['rm', '--force', probe], { phase: 'rehearsal_probe_remove', env: commandEnv });
+    const probeAbsent = await executePhase(command, ['ps', '--all', '--filter', `name=^/${probe}$`, '--format', '{{.Names}}'], { phase: 'rehearsal_probe_absence', env: commandEnv });
+    if ((probeAbsent.stdout ?? '').trim() !== '') fail('rehearsal_probe_present');
     const createArgs = buildReplacementCreateArgs({ manifest: target, envFile: rehearsalEnvFile, currentApi: readbacks.api, containerName: candidate, networkName: isolatedNetwork, mounts: candidateMounts });
     await executePhase(command, createArgs, { phase: 'rehearsal_candidate_create', env: commandEnv });
     const inspect = await executePhase(command, ['inspect', '--format', '{{json .}}', candidate], { phase: 'rehearsal_config_readback', env: commandEnv });
@@ -941,12 +982,12 @@ export async function runGoogleAuthIsolatedRehearsal({ manifest, command = runCo
     const canonicalApiRecord = oneRecord(parseJson(canonicalApiAfter.stdout, 'rehearsal_canonical_api_after_invalid'));
     if (!sameExceptAuthFlag(readbacks.api, canonicalApiRecord)) fail('canonical_api_changed');
     assertExactContainerNetworks(canonicalApiRecord, target, 'canonical_network_changed');
-    const cleanup = await cleanupRehearsal({ command, commandEnv, candidate, databaseCandidate, rehearsalEnvFile, databaseEnvFile, dumpFile, network: isolatedNetwork, databaseVolume, uploadsVolume });
+    const cleanup = await cleanupRehearsal({ command, commandEnv, candidate, probe, databaseCandidate, rehearsalEnvFile, databaseEnvFile, dumpFile, network: isolatedNetwork, databaseVolume, uploadsVolume });
     if (!cleanup.cleaned) fail('rehearsal_cleanup_failed');
     return Object.freeze({ status: 'isolated-rehearsal-passed', candidate, cleanup: cleanup.results, canonicalUntouched: true });
   } catch (error) {
     error.candidateState = await captureCandidateState(command, candidate, commandEnv);
-    error.rehearsalCleanup = await cleanupRehearsal({ command, commandEnv, candidate, databaseCandidate, rehearsalEnvFile, databaseEnvFile, dumpFile, network: isolatedNetwork, databaseVolume, uploadsVolume });
+    error.rehearsalCleanup = await cleanupRehearsal({ command, commandEnv, candidate, probe, databaseCandidate, rehearsalEnvFile, databaseEnvFile, dumpFile, network: isolatedNetwork, databaseVolume, uploadsVolume });
     throw error;
   }
 }

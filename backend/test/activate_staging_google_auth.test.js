@@ -158,14 +158,20 @@ function statefulExecutor(fx, { failPhase, failRollbackPhase, driftReplacement =
   return { command, calls };
 }
 
-function isolatedExecutor(fx, { startupTimeout = false, driftNetwork = null, driftSecurity = false } = {}) {
+function isolatedExecutor(fx, { startupTimeout = false, driftNetwork = null, driftSecurity = false, probeFailureStage = null } = {}) {
   const base = fakeCommand(fx);
   const calls = base.calls;
+  const state = { probeEnv: null };
   let candidate;
   let isolatedNetwork;
   const command = async (_cmd, args, options) => {
     const { phase } = options;
     calls.push({ phase, args });
+    if (phase === 'rehearsal_probe_create') {
+      const envPath = args[args.indexOf('--env-file') + 1];
+      state.probeEnv = await readFile(envPath, 'utf8');
+      return { stdout: '', code: 0 };
+    }
     if (phase === 'rehearsal_candidate_create') { candidate = args[args.indexOf('--name') + 1]; isolatedNetwork = args[args.indexOf('--network') + 1]; return { stdout: '', code: 0 }; }
     if (phase === 'rehearsal_network_create' || phase === 'rehearsal_database_volume_create' || phase === 'rehearsal_uploads_volume_create' || phase === 'rehearsal_database_dump' || phase === 'rehearsal_database_create' || phase === 'rehearsal_database_start' || phase === 'rehearsal_database_ready' || phase === 'rehearsal_database_restore') return { stdout: '', code: 0 };
     if (phase === 'rehearsal_config_readback') {
@@ -181,6 +187,10 @@ function isolatedExecutor(fx, { startupTimeout = false, driftNetwork = null, dri
       record.Config.Env = record.Config.Env.map((entry) => entry.startsWith('FIREBASE_AUTH_ENABLED=') ? 'FIREBASE_AUTH_ENABLED=true' : entry.startsWith('DEPLOYMENT_ENVIRONMENT=') ? 'DEPLOYMENT_ENVIRONMENT=staging' : entry);
       return { stdout: JSON.stringify(record), code: 0 };
     }
+    if (phase === 'rehearsal_probe_start') return { stdout: '', code: 0 };
+    if (phase === 'rehearsal_probe_wait') return { stdout: probeFailureStage ? '1' : '0', code: 0 };
+    if (phase === 'rehearsal_probe_logs') return { stdout: JSON.stringify(probeFailureStage ? { stage: probeFailureStage, ok: false, code: `${probeFailureStage}_probe_failed`, errorType: 'operational' } : { stage: 'complete', ok: true, code: 'ok', errorType: 'none' }), code: 0 };
+    if (phase === 'rehearsal_probe_remove' || phase === 'rehearsal_probe_absence') return { stdout: '', code: 0 };
     if (phase === 'rehearsal_candidate_start') return { stdout: '', code: 0 };
     if (phase === 'rehearsal_startup_probe') return startupTimeout
       ? { stdout: JSON.stringify({ ok: false, reason: 'startup_timeout', attempts: { live: 60, ready: 60 }, last: { live: { status: 503 }, ready: { status: 503 } } }), code: 1 }
@@ -196,7 +206,7 @@ function isolatedExecutor(fx, { startupTimeout = false, driftNetwork = null, dri
     if (phase === 'rehearsal_canonical_api_after') return { stdout: JSON.stringify(fx.api), code: 0 };
     return base.command(_cmd, args, options);
   };
-  return { command, calls };
+  return { command, calls, state };
 }
 
 test('production-shaped preflight reaches the irreversible boundary without mutation', async () => {
@@ -250,6 +260,9 @@ test('CLI failure sanitizer emits only bounded non-secret diagnostics', () => {
     candidateState: { status: 'exited', running: false, exitCode: 137, oomKilled: true, restartCount: 4, error: 'present' },
   });
   assert.deepEqual(candidate.candidateState, { status: 'exited', running: false, exitCode: 137, oomKilled: true, restartCount: 4, error: 'present' });
+  assert.deepEqual(sanitizeActivationError({ code: 'rehearsal_prestart_probe_failed', probeDiagnostic: { stage: 'database', ok: false, code: 'database_probe_failed', errorType: 'operational' } }).probeDiagnostic, {
+    stage: 'database', ok: false, code: 'database_probe_failed', errorType: 'operational',
+  });
 });
 
 test('host startup probe retries unavailable exec and succeeds only on both 200 health checks', async () => {
@@ -373,10 +386,39 @@ test('isolated rehearsal never stops canonical and proves candidate cleanup', as
     const create = executor.calls.find((call) => call.phase === 'rehearsal_candidate_create');
     assert.ok(create.args.includes('--network') && !create.args.includes(fx.manifest.network));
     assert.ok(create.args.some((arg) => arg.includes('src=sit-google-auth-rehearsal-uploads-')));
+    const probeCreate = executor.calls.find((call) => call.phase === 'rehearsal_probe_create');
+    assert.ok(probeCreate.args.includes('--network') && !probeCreate.args.includes(fx.manifest.network));
+    assert.equal(probeCreate.args.includes('--publish') || probeCreate.args.includes('-p'), false);
+    assert.ok(probeCreate.args.some((arg) => arg.includes('initializeDatabase')));
+    assert.ok(probeCreate.args.some((arg) => arg.includes('verifyMailer')));
     assert.equal(executor.calls.some((call) => call.phase === 'rehearsal_provider_network_attach'), false);
+    assert.ok(executor.calls.some((call) => call.phase === 'rehearsal_probe_remove'));
+    assert.match(executor.state.probeEnv, /SIT_LISTING_AI_BUDGET_CENTS=0/);
+    assert.match(executor.state.probeEnv, /TECHNICAL_SANDBOX_ENABLED=0/);
+    assert.match(executor.state.probeEnv, /TECHNICAL_SANDBOX_KILL_SWITCH=1/);
+    assert.doesNotMatch(executor.state.probeEnv, /SIT_LISTING_AI_BUDGET_MINOR=/);
+    assert.doesNotMatch(executor.state.probeEnv, /TECHNICAL_SANDBOX_AVAILABLE=/);
     const dbProbe = executor.calls.find((call) => call.phase === 'rehearsal_database_probe');
     assert.ok(dbProbe.args.some((arg) => arg.includes('sit-google-auth-rehearsal-db-')));
   } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('isolated prestart probe classifies config, database and mailer failures before API start', async () => {
+  for (const probeFailureStage of ['config', 'database', 'mailer']) {
+    const fx = await fixture();
+    try {
+      const executor = isolatedExecutor(fx, { probeFailureStage });
+      await assert.rejects(runGoogleAuthIsolatedRehearsal({
+        manifest: fx.manifest, command: executor.command,
+        commandEnv: { STAGING_GOOGLE_AUTH_ISOLATED_REHEARSAL: '1', STAGING_GOOGLE_AUTH_CONFIRM: revision },
+      }), (error) => error.code === 'rehearsal_prestart_probe_failed'
+        && error.probeDiagnostic?.stage === probeFailureStage
+        && error.probeDiagnostic?.ok === false
+        && error.rehearsalCleanup?.cleaned === true);
+      assert.equal(executor.calls.some((call) => call.phase === 'rehearsal_candidate_create'), false);
+      assert.ok(executor.calls.some((call) => call.phase === 'rehearsal_probe_absence'));
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
 });
 
 test('isolated rehearsal timeout returns diagnostic and cleans candidate/temp env', async () => {
