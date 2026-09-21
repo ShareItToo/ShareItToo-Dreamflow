@@ -17,7 +17,7 @@ export const listingAiMockModel = 'listing-ai-mock-v1';
 export const listingAiOnDeviceModel = 'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1';
 export const listingAiOpenAiModel = 'gpt-4o-mini-2024-07-18';
 export const listingAiPolicyRevision = 'listing-ai-policy-v1';
-export const listingAiSupportedClientVersion = '1.0.0+2026091901';
+export const listingAiSupportedClientVersion = '1.0.0+2026092101';
 export const listingAiImageLimit = 4;
 
 export class ListingAiGatewayConfigurationError extends Error {
