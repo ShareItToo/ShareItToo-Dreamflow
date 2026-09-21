@@ -2504,6 +2504,80 @@ class DataService {
     return users;
   }
 
+  /// Decodes a cache while allowing the authoritative backend principal to
+  /// repair only its own stale/duplicate local entries. Any remaining
+  /// malformed or ambiguous foreign profile still fails closed.
+  static List<User> _decodeLocalUsersForAuthoritativeHydration(
+    String raw,
+    User authoritative,
+  ) {
+    if (utf8.encode(raw).length > _maxLocalUserDocumentBytes) {
+      throw const FormatException('Der lokale Profilbestand ist zu groß.');
+    }
+    final decoded = jsonDecode(raw);
+    if (decoded is! List || decoded.length > _maxLocalUsers) {
+      throw const FormatException('Der lokale Profilbestand ist ungültig.');
+    }
+    final users = <User>[];
+    for (var index = 0; index < decoded.length; index++) {
+      final entry = decoded[index];
+      final entryId = entry is Map ? entry['id'] : null;
+      if (entryId is String && entryId.trim() == authoritative.id.trim()) {
+        // The backend's principal is authoritative. A stale or partially
+        // corrupt local copy of that exact id is safe to discard; foreign
+        // entries must still pass strict validation below.
+        try {
+          users.add(_decodeLocalUserStrict(
+            entry,
+            context: 'Lokales Profil ${index + 1}',
+          ));
+        } on FormatException {
+          continue;
+        }
+      } else {
+        users.add(_decodeLocalUserStrict(
+          entry,
+          context: 'Lokales Profil ${index + 1}',
+        ));
+      }
+    }
+    final retained = _withoutAuthoritativeLocalAliases(users, authoritative);
+    final ids = <String>{};
+    final emails = <String>{};
+    for (final user in retained) {
+      if (!ids.add(user.id.trim()) ||
+          !emails.add(user.email.trim().toLowerCase())) {
+        throw const FormatException(
+          'Der lokale Profilbestand enthält mehrdeutige fremde Konten.',
+        );
+      }
+    }
+    return users;
+  }
+
+  static List<User> _withoutAuthoritativeLocalAliases(
+    Iterable<User> users,
+    User authoritative,
+  ) {
+    final id = authoritative.id.trim();
+    final email = authoritative.email.trim().toLowerCase();
+    return users
+        .where((entry) =>
+            entry.id.trim() != id && entry.email.trim().toLowerCase() != email)
+        .toList();
+  }
+
+  static List<User> _replaceAuthoritativeLocalUser(
+    List<User> users,
+    User authoritative,
+  ) {
+    final retained = _withoutAuthoritativeLocalAliases(users, authoritative);
+    if (retained.length >= _maxLocalUsers) {
+      throw StateError('Der lokale Profilbestand ist voll.');
+    }
+    return <User>[...retained, authoritative];
+  }
+
   static User _decodeCurrentUserStrict(String raw) {
     if (utf8.encode(raw).length > _maxLocalUserDocumentBytes) {
       throw const FormatException('Das lokale Kontoprofil ist zu groß.');
@@ -3784,7 +3858,7 @@ class DataService {
     await _accountProfileMutationQueue.run(() async {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_usersKey);
-      late final List<User> users;
+      late List<User> users;
       try {
         users = raw == null
             ? <User>[]
@@ -3792,24 +3866,27 @@ class DataService {
       } on FormatException catch (error) {
         if (!recoverCorruptBackendProfileCache) rethrow;
         // This opt-in is limited to authentication hydration after the
-        // backend has returned the authoritative current profile. The local
-        // users document is only a cache in that path; keeping malformed
-        // entries active would leave a valid server session trapped behind a
-        // failed login screen. Other reads and local mutations remain strict.
+        // backend has returned the authoritative current profile. Only
+        // entries with the same principal id/email may be pruned; malformed
+        // or ambiguous foreign entries still fail closed.
         debugPrint(
-          '[DataService] replacing corrupt profile cache during '
+          '[DataService] repairing authoritative profile cache during '
           'authoritative authentication hydration (${error.runtimeType})',
         );
-        users = <User>[];
+        users = _decodeLocalUsersForAuthoritativeHydration(raw!, effectiveUser);
       }
-      final index = users.indexWhere((entry) => entry.id == effectiveUser.id);
-      if (index >= 0) {
-        users[index] = effectiveUser;
+      if (recoverCorruptBackendProfileCache) {
+        users = _replaceAuthoritativeLocalUser(users, effectiveUser);
       } else {
-        if (users.length >= _maxLocalUsers) {
-          throw StateError('Der lokale Profilbestand ist voll.');
+        final index = users.indexWhere((entry) => entry.id == effectiveUser.id);
+        if (index >= 0) {
+          users[index] = effectiveUser;
+        } else {
+          if (users.length >= _maxLocalUsers) {
+            throw StateError('Der lokale Profilbestand ist voll.');
+          }
+          users.add(effectiveUser);
         }
-        users.add(effectiveUser);
       }
       await _persistAccountProfileDocumentsVerified(
         prefs: prefs,
@@ -4324,17 +4401,32 @@ class DataService {
       await verifyOwner();
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_usersKey);
-      final users = raw == null
-          ? <User>[]
-          : List<User>.from(_decodeLocalUsersStrict(raw));
-      final index = users.indexWhere((entry) => entry.id == resolved.id);
-      if (index >= 0) {
-        users[index] = resolved;
-      } else {
-        if (users.length >= _maxLocalUsers) {
-          throw StateError('Der lokale Profilbestand ist voll.');
+      final backendAuthoritative =
+          BackendConfig.enabled && !QaRuntimeService.isEnabled;
+      late List<User> users;
+      if (raw == null) {
+        users = <User>[];
+      } else if (backendAuthoritative) {
+        try {
+          users = List<User>.from(_decodeLocalUsersStrict(raw));
+        } on FormatException {
+          users = _decodeLocalUsersForAuthoritativeHydration(raw, resolved);
         }
-        users.add(resolved);
+      } else {
+        users = List<User>.from(_decodeLocalUsersStrict(raw));
+      }
+      if (backendAuthoritative) {
+        users = _replaceAuthoritativeLocalUser(users, resolved);
+      } else {
+        final index = users.indexWhere((entry) => entry.id == resolved.id);
+        if (index >= 0) {
+          users[index] = resolved;
+        } else {
+          if (users.length >= _maxLocalUsers) {
+            throw StateError('Der lokale Profilbestand ist voll.');
+          }
+          users.add(resolved);
+        }
       }
       await _persistAccountProfileDocumentsVerified(
         prefs: prefs,
