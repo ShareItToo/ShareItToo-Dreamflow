@@ -466,34 +466,50 @@ export function buildReplacementCreateArgs({ manifest, envFile, currentApi, cont
   return Object.freeze(args);
 }
 
-function runCommand(command, args, { cwd = repositoryRoot, env = process.env, phase = 'command', allowFailure = false, stdoutFile, inputFile } = {}) {
+export function runCommand(command, args, { cwd = repositoryRoot, env = process.env, phase = 'command', allowFailure = false, stdoutFile, inputFile, spawnProcess = spawn } = {}) {
   if (args.some((arg) => /(?:JWT_SECRET|DATABASE_URL|password|token|whsec_|sk_live_|sk_test_)=/iu.test(arg))) {
     return Promise.reject(Object.assign(new Error(`Staging Google Auth activation failed: ${phase}_secret_argument`), { code: `${phase}_secret_argument` }));
   }
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd, env, stdio: [inputFile ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
+    const child = spawnProcess(command, args, { cwd, env, stdio: [inputFile ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     const output = stdoutFile ? createWriteStream(stdoutFile, { mode: 0o600 }) : null;
+    let childClosed = false;
+    let childCode;
+    let settled = false;
+    const outputDone = output ? new Promise((resolveOutput, rejectOutput) => {
+      output.once('finish', resolveOutput);
+      output.once('error', rejectOutput);
+    }) : Promise.resolve();
+    const failOutput = (error) => {
+      if (settled) return;
+      settled = true;
+      try { child.kill('SIGTERM'); } catch { /* already closed */ }
+      reject(Object.assign(new Error(`Staging Google Auth activation failed: ${phase}_output`), { code: `${phase}_output`, cause: error }));
+    };
+    const finish = () => {
+      if (settled || !childClosed) return;
+      settled = true;
+      if (childCode === 0 || allowFailure) resolvePromise(Object.freeze({ stdout, stderr, code: childCode }));
+      else reject(Object.assign(new Error(`Staging Google Auth activation failed: ${phase}`), { code: `${phase}_failed` }));
+    };
+    outputDone.catch(failOutput);
     if (output) child.stdout.pipe(output);
     else child.stdout.setEncoding('utf8');
-    if (output) output.once('error', () => child.kill('SIGTERM'));
     child.stderr.setEncoding('utf8');
     if (!output) child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     if (inputFile) {
       const input = createReadStream(inputFile);
-      input.once('error', () => child.kill('SIGTERM'));
+      input.once('error', failOutput);
       input.pipe(child.stdin);
     }
     child.once('error', () => reject(Object.assign(new Error(`Staging Google Auth activation failed: ${phase}_spawn`), { code: `${phase}_spawn` })));
     child.once('close', (code) => {
-      const finish = () => {
-        if (code === 0 || allowFailure) resolvePromise(Object.freeze({ stdout, stderr, code }));
-        else reject(Object.assign(new Error(`Staging Google Auth activation failed: ${phase}`), { code: `${phase}_failed` }));
-      };
-      if (output && !output.closed) output.once('finish', finish);
-      else finish();
+      childClosed = true;
+      childCode = code;
+      outputDone.then(finish).catch(failOutput);
     });
   });
 }
@@ -937,8 +953,10 @@ async function main() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
+  try {
+    await main();
+  } catch (error) {
     process.stderr.write(`${JSON.stringify(sanitizeActivationError(error))}\n`);
     process.exitCode = 1;
-  });
+  }
 }

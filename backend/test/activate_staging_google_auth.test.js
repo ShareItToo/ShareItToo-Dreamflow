@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { chmod, lstat, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { PassThrough } from 'node:stream';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -10,6 +12,7 @@ import {
   readGoogleAuthRuntimeManifest,
   runGoogleAuthActivation,
   runGoogleAuthIsolatedRehearsal,
+  runCommand,
   sanitizeActivationError,
   setActivationFlags,
 } from '../ops/activate_staging_google_auth.mjs';
@@ -237,6 +240,28 @@ test('CLI failure sanitizer emits only bounded non-secret diagnostics', () => {
     rollback: { restored: false, results: [{ phase: 'rollback_restore_rename', ok: false, code: 'rename_failed' }] },
   });
   assert.equal(JSON.stringify(output).includes('secret'), false);
+});
+
+test('stdout-file runner waits for both output finish and child close', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'sit-google-auth-stream-'));
+  const outputPath = join(root, 'dump.bin');
+  try {
+    const fakeSpawn = () => {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.stdin = new PassThrough();
+      child.kill = () => {};
+      setImmediate(() => {
+        child.stdout.end('isolated-dump');
+        setTimeout(() => child.emit('close', 0), 10);
+      });
+      return child;
+    };
+    const result = await runCommand('fake-docker', ['inspect'], { phase: 'stream_regression', stdoutFile: outputPath, spawnProcess: fakeSpawn });
+    assert.equal(result.code, 0);
+    assert.equal(await readFile(outputPath, 'utf8'), 'isolated-dump');
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test('replacement command is immutable, exact-network, exact-mount and host-port free', async () => {
