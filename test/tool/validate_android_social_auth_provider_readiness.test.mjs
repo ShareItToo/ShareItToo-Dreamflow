@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import { validateAndroidSocialAuthProviderReadiness } from
@@ -39,6 +47,193 @@ test('rejects a fabricated activation without complete evidence', () => {
     () => validateAndroidSocialAuthProviderReadiness({ evidence: value }),
     /activation readiness/u,
   );
+});
+
+test('accepts a complete provider gate with a provider-specific synthetic evidence fixture', () => {
+  const value = fixture();
+  const temporaryRoot = mkdtempSync(join(tmpdir(), 'sit-social-provider-'));
+  const evidenceRef = 'docs/evidence/external-gates/facebook-synthetic.json';
+  const evidencePath = join(temporaryRoot, evidenceRef);
+  mkdirSync(join(temporaryRoot, 'docs/evidence/external-gates'), { recursive: true });
+  const binding = {
+    applicationId: 'com.shareittoo.app',
+    packageName: 'com.shareittoo.app',
+    provider: 'facebook',
+    candidate: {
+      buildNumber: '2026092201',
+      sourceCommit: 'a'.repeat(40),
+      versionName: '1.0.0',
+      environment: 'staging',
+    },
+    signing: {
+      uploadCertificateSha1: 'aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa:aa',
+      uploadCertificateSha256: Array.from({ length: 32 }, () => 'bb').join(':'),
+      playAppSigningCertificateSha1: 'cc:cc:cc:cc:cc:cc:cc:cc:cc:cc:cc:cc:cc:cc:cc:cc:cc:cc:cc:cc',
+    },
+    redirect: {
+      firebaseAuthHandler: 'https://shareittoo-staging.firebaseapp.com/__/auth/handler',
+    },
+  };
+  writeFileSync(evidencePath, JSON.stringify({
+    schemaVersion: 1,
+    kind: 'sit-social-auth-provider-external-readback',
+    provider: 'facebook',
+    applicationId: 'com.shareittoo.app',
+    observedAt: '2026-09-22T12:00:00Z',
+    syntheticFixture: true,
+    evidenceClass: 'synthetic',
+    candidate: {
+      applicationId: 'com.shareittoo.app',
+      packageName: 'com.shareittoo.app',
+      buildNumber: binding.candidate.buildNumber,
+      sourceCommit: binding.candidate.sourceCommit,
+      versionName: binding.candidate.versionName,
+      environment: binding.candidate.environment,
+    },
+    signing: {
+      packageName: 'com.shareittoo.app',
+      ...binding.signing,
+    },
+    redirect: binding.redirect,
+    externalReadbacks: Object.fromEntries(
+      [
+        'externalConfigurationEvidencePresent',
+        'metaDeveloperAppVerified',
+        'firebaseProviderEnabledVerified',
+        'appIdAndClientTokenProvisionedOutsideGit',
+        'androidPackageNameVerified',
+        'uploadCertificateKeyHashVerified',
+        'playAppSigningKeyHashVerified',
+        'firebaseOauthRedirectVerified',
+        'testerOrAppReviewAccessVerified',
+        'accountDeletionUrlVerified',
+        'exactCandidateAcceptancePassed',
+      ].map((key) => [key, true]),
+    ),
+    boundaries: { providerConsoleChanged: false, firebaseConsoleChanged: false },
+  }, null, 2));
+  value.facebook = {
+    ...value.facebook,
+    ...Object.fromEntries(
+      [
+        'androidOfficiallySupported',
+        'localImplementationPrepared',
+        'sdkAutomaticEventsDisabled',
+        'sdkAdvertiserIdCollectionDisabled',
+        'advertisingPermissionsRemoved',
+        'externalConfigurationEvidencePresent',
+        'metaDeveloperAppVerified',
+        'firebaseProviderEnabledVerified',
+        'appIdAndClientTokenProvisionedOutsideGit',
+        'androidPackageNameVerified',
+        'uploadCertificateKeyHashVerified',
+        'playAppSigningKeyHashVerified',
+        'firebaseOauthRedirectVerified',
+        'testerOrAppReviewAccessVerified',
+        'accountDeletionUrlVerified',
+        'exactCandidateAcceptancePassed',
+      ].map((key) => [key, true]),
+    ),
+    activationReady: true,
+    evidenceRef,
+    candidateBinding: binding,
+  };
+  try {
+    const result = validateAndroidSocialAuthProviderReadiness({
+      evidence: value,
+      repositoryRoot: temporaryRoot,
+      allowSyntheticFixture: true,
+    });
+    assert.equal(result.facebook.ready, true);
+    assert.equal(value.pilotDecision.facebookEnabled, false);
+    assert.throws(
+      () => validateAndroidSocialAuthProviderReadiness({
+        evidence: value,
+        repositoryRoot: temporaryRoot,
+      }),
+      /synthetic evidence/u,
+    );
+    const validEvidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
+    const negativeMutations = [
+      ['wrong application ID', (candidate) => { candidate.applicationId = 'com.example.other'; }],
+      ['wrong candidate', (candidate) => { candidate.candidate.buildNumber = '2026092202'; }],
+      ['wrong signing hash', (candidate) => { candidate.signing.uploadCertificateSha1 = '00'; }],
+      ['missing required readback', (candidate) => {
+        delete candidate.externalReadbacks.firebaseProviderEnabledVerified;
+      }],
+    ];
+    for (const [label, mutate] of negativeMutations) {
+      const invalidEvidence = structuredClone(validEvidence);
+      mutate(invalidEvidence);
+      writeFileSync(evidencePath, JSON.stringify(invalidEvidence));
+      assert.throws(
+        () => validateAndroidSocialAuthProviderReadiness({
+          evidence: value,
+          repositoryRoot: temporaryRoot,
+          allowSyntheticFixture: true,
+        }),
+        /evidence|binding/u,
+        label,
+      );
+    }
+    writeFileSync(evidencePath, JSON.stringify(validEvidence));
+    assert.throws(
+      () => validateAndroidSocialAuthProviderReadiness({
+        evidence: value,
+        repositoryRoot: temporaryRoot,
+        allowSyntheticFixture: true,
+        requireProvider: 'facebook',
+      }),
+      /facebook_provider_decision_not_enabled/u,
+    );
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test('rejects a ready provider that points to a missing sanitized evidence artifact', () => {
+  const value = fixture();
+  value.facebook.activationReady = true;
+  value.facebook.evidenceRef = 'docs/evidence/external-gates/missing-facebook.json';
+  assert.throws(
+    () => validateAndroidSocialAuthProviderReadiness({ evidence: value }),
+    /activation readiness/u,
+  );
+});
+
+test('rejects malformed, generic, wrong-provider, wrong-binding and incomplete evidence', () => {
+  const cases = [
+    ['malformed', '{'],
+    ['generic', JSON.stringify({ schemaVersion: 1, kind: 'technical-setup-manifest' })],
+    ['wrong-provider', JSON.stringify({
+      schemaVersion: 1,
+      kind: 'sit-social-auth-provider-external-readback',
+      provider: 'apple',
+    })],
+  ];
+  for (const [name, content] of cases) {
+    const temporaryRoot = mkdtempSync(join(tmpdir(), `sit-social-${name}-`));
+    const evidenceRef = `docs/evidence/external-gates/${name}.json`;
+    const evidencePath = join(temporaryRoot, evidenceRef);
+    mkdirSync(join(temporaryRoot, 'docs/evidence/external-gates'), { recursive: true });
+    writeFileSync(evidencePath, content);
+    const value = fixture();
+    value.facebook.activationReady = true;
+    value.facebook.evidenceRef = evidenceRef;
+    try {
+      assert.throws(
+        () => validateAndroidSocialAuthProviderReadiness({
+          evidence: value,
+          repositoryRoot: temporaryRoot,
+          allowSyntheticFixture: true,
+        }),
+        /evidence/u,
+        name,
+      );
+    } finally {
+      rmSync(temporaryRoot, { recursive: true, force: true });
+    }
+  }
 });
 
 test('rejects silently enabling Apple in the Android pilot decision', () => {
