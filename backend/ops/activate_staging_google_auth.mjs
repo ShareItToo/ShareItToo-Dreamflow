@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import crypto from 'node:crypto';
-import { constants as fsConstants, readFileSync } from 'node:fs';
+import { constants as fsConstants, createReadStream, createWriteStream, readFileSync } from 'node:fs';
 import {
   lstat,
   mkdir,
@@ -383,7 +383,7 @@ export function buildGoogleAuthPreflightCommands(manifest) {
   ]);
 }
 
-export function buildReplacementCreateArgs({ manifest, envFile, currentApi, containerName = manifest.apiContainer }) {
+export function buildReplacementCreateArgs({ manifest, envFile, currentApi, containerName = manifest.apiContainer, networkName = manifest.network, mounts = currentApi?.Mounts }) {
   if (!currentApi || typeof currentApi !== 'object') fail('replacement_source_invalid');
   const config = currentApi.Config ?? {};
   const host = currentApi.HostConfig ?? {};
@@ -455,33 +455,45 @@ export function buildReplacementCreateArgs({ manifest, envFile, currentApi, cont
     if (/(?:password|secret|token|private)/iu.test(key) || /(?:password|secret|token|private)/iu.test(String(value))) fail('label_secret_like');
     args.push('--label', `${key}=${value}`);
   }
-  for (const mount of currentApi.Mounts ?? []) {
+  for (const mount of mounts ?? []) {
     const type = mount.Type === 'volume' ? 'volume' : mount.Type === 'bind' ? 'bind' : null;
     if (!type || !mount.Source || !mount.Destination) fail('unsupported_mount_type');
     args.push('--mount', `type=${type},src=${type === 'volume' ? mount.Name : mount.Source},dst=${mount.Destination},readonly=${mount.RW === false ? 'true' : 'false'}`);
   }
-  args.push('--network', manifest.network, manifest.image, ...(config.Cmd ?? []));
+  args.push('--network', networkName, manifest.image, ...(config.Cmd ?? []));
   if (args.some((arg) => /(?:JWT_SECRET|DATABASE_URL|password|token|whsec_|sk_live_|sk_test_)=/iu.test(arg))) fail('replacement_command_secret_leak');
   if (args.includes('--publish') || args.includes('-p')) fail('replacement_host_port_forbidden');
   return Object.freeze(args);
 }
 
-function runCommand(command, args, { cwd = repositoryRoot, env = process.env, phase = 'command', allowFailure = false } = {}) {
+function runCommand(command, args, { cwd = repositoryRoot, env = process.env, phase = 'command', allowFailure = false, stdoutFile, inputFile } = {}) {
   if (args.some((arg) => /(?:JWT_SECRET|DATABASE_URL|password|token|whsec_|sk_live_|sk_test_)=/iu.test(arg))) {
     return Promise.reject(Object.assign(new Error(`Staging Google Auth activation failed: ${phase}_secret_argument`), { code: `${phase}_secret_argument` }));
   }
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, args, { cwd, env, stdio: [inputFile ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
-    child.stdout.setEncoding('utf8');
+    const output = stdoutFile ? createWriteStream(stdoutFile, { mode: 0o600 }) : null;
+    if (output) child.stdout.pipe(output);
+    else child.stdout.setEncoding('utf8');
+    if (output) output.once('error', () => child.kill('SIGTERM'));
     child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    if (!output) child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
+    if (inputFile) {
+      const input = createReadStream(inputFile);
+      input.once('error', () => child.kill('SIGTERM'));
+      input.pipe(child.stdin);
+    }
     child.once('error', () => reject(Object.assign(new Error(`Staging Google Auth activation failed: ${phase}_spawn`), { code: `${phase}_spawn` })));
     child.once('close', (code) => {
-      if (code === 0 || allowFailure) resolvePromise(Object.freeze({ stdout, stderr, code }));
-      else reject(Object.assign(new Error(`Staging Google Auth activation failed: ${phase}`), { code: `${phase}_failed` }));
+      const finish = () => {
+        if (code === 0 || allowFailure) resolvePromise(Object.freeze({ stdout, stderr, code }));
+        else reject(Object.assign(new Error(`Staging Google Auth activation failed: ${phase}`), { code: `${phase}_failed` }));
+      };
+      if (output && !output.closed) output.once('finish', finish);
+      else finish();
     });
   });
 }
@@ -723,23 +735,87 @@ export async function runGoogleAuthActivation({ manifest, command = runCommand, 
   }
 }
 
-async function cleanupRehearsal({ command, commandEnv, candidate, rehearsalEnvFile }) {
+async function cleanupRehearsal({ command, commandEnv, candidate, databaseCandidate, rehearsalEnvFile, databaseEnvFile, dumpFile, network, databaseVolume, uploadsVolume }) {
   const results = [];
+  const safeCommand = async (args, phase) => {
+    try { return await command('docker', args, { phase, env: commandEnv, allowFailure: true }); }
+    catch (error) { results.push({ phase, ok: false, code: error?.code ?? 'cleanup_command_failed' }); return null; }
+  };
   try {
-    const removed = await command('docker', ['rm', '--force', candidate], { phase: 'rehearsal_candidate_remove', env: commandEnv, allowFailure: true });
+    const removed = await safeCommand(['rm', '--force', candidate], 'rehearsal_candidate_remove');
     results.push({ phase: 'rehearsal_candidate_remove', ok: removed?.code === 0, ...(removed?.code === 0 ? {} : { code: removed?.code ?? 'nonzero' }) });
-    const absent = await command('docker', ['ps', '--all', '--filter', `name=^/${candidate}$`, '--format', '{{.Names}}'], { phase: 'rehearsal_candidate_absence', env: commandEnv, allowFailure: true });
+    const absent = await safeCommand(['ps', '--all', '--filter', `name=^/${candidate}$`, '--format', '{{.Names}}'], 'rehearsal_candidate_absence');
     const absentOk = absent?.code === 0 && (absent.stdout ?? '').trim() === '';
     results.push({ phase: 'rehearsal_candidate_absence', ok: absentOk, ...(absentOk ? {} : { code: absent?.code ?? 'candidate_present' }) });
-    await unlink(rehearsalEnvFile);
+    for (const [name, phase] of [[databaseCandidate, 'rehearsal_database_remove'], [databaseVolume, 'rehearsal_database_volume_remove'], [uploadsVolume, 'rehearsal_uploads_volume_remove'], [network, 'rehearsal_network_remove']]) {
+      const removeArgs = phase === 'rehearsal_network_remove' ? ['network', 'rm', name] : phase.includes('volume') ? ['volume', 'rm', name] : ['rm', '--force', name];
+      const removed = await safeCommand(removeArgs, phase);
+      results.push({ phase, ok: removed?.code === 0, ...(removed?.code === 0 ? {} : { code: removed?.code ?? 'nonzero' }) });
+    }
+    for (const [args, phase] of [
+      [['ps', '--all', '--filter', `name=^/${databaseCandidate}$`, '--format', '{{.Names}}'], 'rehearsal_database_absence'],
+      [['volume', 'ls', '--filter', `name=^${databaseVolume}$`, '--format', '{{.Name}}'], 'rehearsal_database_volume_absence'],
+      [['volume', 'ls', '--filter', `name=^${uploadsVolume}$`, '--format', '{{.Name}}'], 'rehearsal_uploads_volume_absence'],
+      [['network', 'ls', '--filter', `name=^${network}$`, '--format', '{{.Name}}'], 'rehearsal_network_absence'],
+    ]) {
+      const absent = await safeCommand(args, phase);
+      const ok = absent?.code === 0 && (absent.stdout ?? '').trim() === '';
+      results.push({ phase, ok, ...(ok ? {} : { code: absent?.code ?? 'resource_present' }) });
+    }
+    await unlink(rehearsalEnvFile).catch(() => {});
+    await unlink(databaseEnvFile).catch(() => {});
+    await unlink(dumpFile).catch(() => {});
     let envAbsent = false;
     try { await lstat(rehearsalEnvFile); } catch (error) { envAbsent = error?.code === 'ENOENT'; }
     results.push({ phase: 'rehearsal_env_absence', ok: envAbsent, ...(envAbsent ? {} : { code: 'rehearsal_env_present' }) });
+    for (const [file, phase] of [[databaseEnvFile, 'rehearsal_database_env_absence'], [dumpFile, 'rehearsal_dump_absence']]) {
+      let absentFile = false;
+      try { await lstat(file); } catch (error) { absentFile = error?.code === 'ENOENT'; }
+      results.push({ phase, ok: absentFile, ...(absentFile ? {} : { code: 'rehearsal_file_present' }) });
+    }
     return Object.freeze({ cleaned: results.every((entry) => entry.ok), results: Object.freeze(results) });
   } catch (error) {
     results.push({ phase: 'rehearsal_cleanup', ok: false, code: error?.code ?? 'cleanup_failed' });
     return Object.freeze({ cleaned: false, results: Object.freeze(results) });
   }
+}
+
+function replaceEnvValue(content, name, value) {
+  const expression = new RegExp(`^([ \\t]*${name}=)[^\\r\\n]*(\\r?\\n|$)`, 'mu');
+  if (!expression.test(content)) fail(`rehearsal_env_${name.toLowerCase()}_missing`);
+  return content.replace(expression, `$1${value}$2`);
+}
+
+function replaceOrAppendEnvValue(content, name, value) {
+  const expression = new RegExp(`^([ \\t]*${name}=)[^\\r\\n]*(\\r?\\n|$)`, 'mu');
+  if (expression.test(content)) return content.replace(expression, `$1${value}$2`);
+  return `${content.replace(/\\n?$/u, '')}\n${name}=${value}\n`;
+}
+
+function isolatedCandidateMounts(currentApi, uploadsVolume) {
+  return (currentApi.Mounts ?? []).map((mount) => mount.Destination === '/data/uploads'
+    ? { ...mount, Name: uploadsVolume, Source: uploadsVolume }
+    : mount);
+}
+
+function assertExactNetworks(record, expected, code) {
+  const actual = Object.keys(record?.NetworkSettings?.Networks ?? {}).sort();
+  if (JSON.stringify(actual) !== JSON.stringify([...expected].sort())) fail(code);
+}
+
+function sameExceptIsolatedOverrides(left, right) {
+  const a = normalizedConfig(left);
+  const b = normalizedConfig(right);
+  for (const config of [a, b]) {
+    config.mounts = config.mounts.map((mount) => mount.Destination === '/data/uploads'
+      ? { ...mount, Name: '<isolated-uploads>', Source: '<isolated-uploads>' } : mount);
+  }
+  const envA = envMap(left?.Config?.Env);
+  const envB = envMap(right?.Config?.Env);
+  for (const name of ['FIREBASE_AUTH_ENABLED', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'IDENTITY_VERIFICATION_TRANSPORT', 'PUSH_TRANSPORT', 'MAIL_TRANSPORT', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_BUDGET_MINOR', 'TECHNICAL_SANDBOX_AVAILABLE']) {
+    delete envA[name]; delete envB[name];
+  }
+  return JSON.stringify(a) === JSON.stringify(b) && JSON.stringify(envA) === JSON.stringify(envB);
 }
 
 export async function runGoogleAuthIsolatedRehearsal({ manifest, command = runCommand, commandEnv = process.env } = {}) {
@@ -751,36 +827,71 @@ export async function runGoogleAuthIsolatedRehearsal({ manifest, command = runCo
   const { readbacks } = await collectPreflight(target, command, commandEnv);
   const suffix = `${target.runtimeRevision.slice(0, 12)}-${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
   const candidate = `shareittoo-staging-api-google-auth-rehearsal-${suffix}`;
+  const isolatedNetwork = `sit-google-auth-rehearsal-network-${suffix}`;
+  const databaseCandidate = `sit-google-auth-rehearsal-db-${suffix}`;
+  const databaseVolume = `sit-google-auth-rehearsal-db-volume-${suffix}`;
+  const uploadsVolume = `sit-google-auth-rehearsal-uploads-${suffix}`;
   const rehearsalEnvFile = `${target.envFile}.google-auth-rehearsal-${suffix}`;
+  const databaseEnvFile = `${target.envFile}.google-auth-rehearsal-db-${suffix}`;
+  const dumpFile = `${target.envFile}.google-auth-rehearsal-${suffix}.dump`;
   const rehearsalManifest = Object.freeze({ ...target, envFile: rehearsalEnvFile });
-  let candidateState;
   try {
+    await executePhase(command, ['network', 'create', '--internal', '--label', 'com.shareittoo.sit.google-auth-rehearsal=true', isolatedNetwork], { phase: 'rehearsal_network_create', env: commandEnv });
+    await executePhase(command, ['volume', 'create', '--label', 'com.shareittoo.sit.google-auth-rehearsal=true', databaseVolume], { phase: 'rehearsal_database_volume_create', env: commandEnv });
+    await executePhase(command, ['volume', 'create', '--label', 'com.shareittoo.sit.google-auth-rehearsal=true', uploadsVolume], { phase: 'rehearsal_uploads_volume_create', env: commandEnv });
+    const databaseEnvContent = `${(readbacks.database?.Config?.Env ?? []).join('\n')}\n`;
+    await atomicReplace(databaseEnvContent, Object.freeze({ ...target, envFile: databaseEnvFile }));
+    await executePhase(command, ['exec', target.databaseContainer, 'pg_dump', '--format=custom', '--no-owner', '--no-acl', '-U', target.databaseUser, '-d', target.databaseName], { phase: 'rehearsal_database_dump', env: commandEnv, stdoutFile: dumpFile });
+    const databaseImage = readbacks.database?.Config?.Image;
+    if (typeof databaseImage !== 'string' || !databaseImage) fail('rehearsal_database_image_missing');
+    await executePhase(command, ['create', '--name', databaseCandidate, '--network', isolatedNetwork, '--env-file', databaseEnvFile, '--mount', `type=volume,src=${databaseVolume},dst=/var/lib/postgresql/data`, databaseImage], { phase: 'rehearsal_database_create', env: commandEnv });
+    await executePhase(command, ['start', databaseCandidate], { phase: 'rehearsal_database_start', env: commandEnv });
+    await executePhase(command, ['exec', databaseCandidate, 'sh', '-c', `for i in $(seq 1 30); do pg_isready -U '${target.databaseUser}' -d '${target.databaseName}' && exit 0; sleep 1; done; exit 1`], { phase: 'rehearsal_database_ready', env: commandEnv });
+    await executePhase(command, ['exec', '-i', databaseCandidate, 'pg_restore', '-U', target.databaseUser, '-d', target.databaseName, '--no-owner', '--no-acl'], { phase: 'rehearsal_database_restore', env: commandEnv, inputFile: dumpFile });
     await atomicReplace(originalEnv, rehearsalManifest);
     await setActivationFlags(rehearsalManifest, originalEnv);
-    const createArgs = buildReplacementCreateArgs({ manifest: target, envFile: rehearsalEnvFile, currentApi: readbacks.api, containerName: candidate });
+    const databaseUrl = new URL(envMap(readbacks.api.Config.Env).DATABASE_URL);
+    databaseUrl.hostname = databaseCandidate;
+    databaseUrl.port = '5432';
+    databaseUrl.pathname = `/${target.databaseName}`;
+    let isolatedEnv = await readFile(rehearsalEnvFile, 'utf8');
+    isolatedEnv = replaceEnvValue(isolatedEnv, 'DATABASE_URL', databaseUrl.toString());
+    for (const [name, value] of [
+      ['PAYMENT_TRANSPORT', 'memory'], ['STRIPE_LIVEMODE', 'false'],
+      ['IDENTITY_VERIFICATION_TRANSPORT', 'disabled'], ['PUSH_TRANSPORT', 'memory'],
+      ['MAIL_TRANSPORT', 'disabled'], ['SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', '0'],
+      ['SIT_LISTING_AI_PROVIDER', 'mock'], ['SIT_LISTING_AI_BUDGET_MINOR', '0'],
+      ['TECHNICAL_SANDBOX_AVAILABLE', 'false'],
+    ]) isolatedEnv = replaceOrAppendEnvValue(isolatedEnv, name, value);
+    await atomicReplace(isolatedEnv, rehearsalManifest);
+    const candidateMounts = isolatedCandidateMounts(readbacks.api, uploadsVolume);
+    const createArgs = buildReplacementCreateArgs({ manifest: target, envFile: rehearsalEnvFile, currentApi: readbacks.api, containerName: candidate, networkName: isolatedNetwork, mounts: candidateMounts });
     await executePhase(command, createArgs, { phase: 'rehearsal_candidate_create', env: commandEnv });
-    await executePhase(command, ['network', 'connect', target.providerNetwork, candidate], { phase: 'rehearsal_provider_network_attach', env: commandEnv });
     const inspect = await executePhase(command, ['inspect', '--format', '{{json .}}', candidate], { phase: 'rehearsal_config_readback', env: commandEnv });
     const candidateRecord = oneRecord(parseJson(inspect.stdout, 'rehearsal_config_readback_invalid'));
-    if (!sameExceptAuthFlag(readbacks.api, candidateRecord)) fail('rehearsal_config_drift');
-    assertExactContainerNetworks(candidateRecord, target, 'rehearsal_network_inventory_invalid');
+    if (!sameExceptIsolatedOverrides(readbacks.api, candidateRecord)) fail('rehearsal_config_drift');
+    assertExactNetworks(candidateRecord, [isolatedNetwork], 'rehearsal_network_inventory_invalid');
     const started = await executePhase(command, ['start', candidate], { phase: 'rehearsal_candidate_start', env: commandEnv });
     if (started?.code !== 0) fail('rehearsal_candidate_start_failed');
     await runBoundedStartupProbe(command, candidate, commandEnv, 'rehearsal_startup_probe');
     const version = await executePhase(command, ['exec', candidate, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/version'); process.stdout.write(JSON.stringify(await r.json())); if(r.status!==200) process.exit(1)"], { phase: 'rehearsal_version_probe', env: commandEnv });
     const flags = await executePhase(command, ['exec', candidate, 'node', '--input-type=module', '-e', "process.stdout.write(JSON.stringify(Object.fromEntries(['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED'].map((name)=>[name,process.env[name]??null])))"], { phase: 'rehearsal_runtime_flags', env: commandEnv });
     assertRuntimeReadback({ version: parseJson(version.stdout, 'rehearsal_version_probe_invalid'), flags: parseJson(flags.stdout, 'rehearsal_runtime_flags_invalid'), manifest: target, expectedAuth: activatedAuth, expectedEnvironment: activatedEnvironment });
-    await executePhase(command, ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', target.databaseUser, '-d', target.databaseName, '-Atc', 'SELECT 1'], { phase: 'rehearsal_database_probe', env: commandEnv });
+    await executePhase(command, ['exec', databaseCandidate, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', target.databaseUser, '-d', target.databaseName, '-Atc', 'SELECT 1'], { phase: 'rehearsal_database_probe', env: commandEnv });
     const invalidToken = await executePhase(command, ['exec', candidate, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/v1/auth/social',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({idToken:'synthetic-invalid-token'})}); const p=await r.json(); process.stdout.write(JSON.stringify({status:r.status,code:p.code})); if(r.status!==401 || p.code!=='invalid_social_token') process.exit(1)"], { phase: 'rehearsal_invalid_social_token_probe', env: commandEnv });
     const invalidTokenPayload = parseJson(invalidToken.stdout, 'rehearsal_invalid_social_token_probe_invalid');
     if (invalidTokenPayload.status !== 401 || invalidTokenPayload.code !== 'invalid_social_token') fail('rehearsal_invalid_social_token_probe_invalid');
-    const cleanup = await cleanupRehearsal({ command, commandEnv, candidate, rehearsalEnvFile });
+    if ((await readFile(target.envFile, 'utf8')) !== originalEnv) fail('canonical_env_changed');
+    const canonicalApiAfter = await executePhase(command, ['inspect', '--format', '{{json .}}', target.apiContainer], { phase: 'rehearsal_canonical_api_after', env: commandEnv });
+    const canonicalApiRecord = oneRecord(parseJson(canonicalApiAfter.stdout, 'rehearsal_canonical_api_after_invalid'));
+    if (!sameExceptAuthFlag(readbacks.api, canonicalApiRecord)) fail('canonical_api_changed');
+    assertExactContainerNetworks(canonicalApiRecord, target, 'canonical_network_changed');
+    const cleanup = await cleanupRehearsal({ command, commandEnv, candidate, databaseCandidate, rehearsalEnvFile, databaseEnvFile, dumpFile, network: isolatedNetwork, databaseVolume, uploadsVolume });
     if (!cleanup.cleaned) fail('rehearsal_cleanup_failed');
     return Object.freeze({ status: 'isolated-rehearsal-passed', candidate, cleanup: cleanup.results, canonicalUntouched: true });
   } catch (error) {
-    candidateState = await captureCandidateState(command, candidate, commandEnv);
-    error.candidateState = candidateState;
-    error.rehearsalCleanup = await cleanupRehearsal({ command, commandEnv, candidate, rehearsalEnvFile });
+    error.candidateState = await captureCandidateState(command, candidate, commandEnv);
+    error.rehearsalCleanup = await cleanupRehearsal({ command, commandEnv, candidate, databaseCandidate, rehearsalEnvFile, databaseEnvFile, dumpFile, network: isolatedNetwork, databaseVolume, uploadsVolume });
     throw error;
   }
 }

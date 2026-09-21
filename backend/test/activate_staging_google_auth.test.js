@@ -31,6 +31,7 @@ async function fixture() {
   const env = [
     'NODE_ENV=production', 'DEPLOYMENT_ENVIRONMENT=test',
     'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false',
+    'DATABASE_URL=postgres://shareittoo_green:pw@canonical-db:5432/shareittoo_green',
     'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false',
     'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED=0',
     `APP_COMMIT=${revision}`, 'UNRELATED=preserve-me', '',
@@ -80,7 +81,7 @@ async function fixture() {
 
 function fakeCommand(fx) {
   const calls = [];
-  const db = { Name: `/${fx.manifest.databaseContainer}`, State: { Running: true } };
+  const db = { Name: `/${fx.manifest.databaseContainer}`, State: { Running: true }, Config: { Image: 'postgres:16-alpine@sha256:' + 'b'.repeat(64), Env: ['POSTGRES_DB=shareittoo_green', 'POSTGRES_USER=shareittoo_green', 'POSTGRES_PASSWORD=pw'] } };
   const databaseVolume = { Name: fx.manifest.databaseVolume };
   const network = { Name: fx.network, Internal: true };
   const providerNetwork = { Name: fx.providerNetwork };
@@ -157,14 +158,18 @@ function isolatedExecutor(fx, { startupTimeout = false } = {}) {
   const base = fakeCommand(fx);
   const calls = base.calls;
   let candidate;
+  let isolatedNetwork;
   const command = async (_cmd, args, options) => {
     const { phase } = options;
     calls.push({ phase, args });
-    if (phase === 'rehearsal_candidate_create') { candidate = args[args.indexOf('--name') + 1]; return { stdout: '', code: 0 }; }
-    if (phase === 'rehearsal_provider_network_attach') return { stdout: '', code: 0 };
+    if (phase === 'rehearsal_candidate_create') { candidate = args[args.indexOf('--name') + 1]; isolatedNetwork = args[args.indexOf('--network') + 1]; return { stdout: '', code: 0 }; }
+    if (phase === 'rehearsal_network_create' || phase === 'rehearsal_database_volume_create' || phase === 'rehearsal_uploads_volume_create' || phase === 'rehearsal_database_dump' || phase === 'rehearsal_database_create' || phase === 'rehearsal_database_start' || phase === 'rehearsal_database_ready' || phase === 'rehearsal_database_restore') return { stdout: '', code: 0 };
     if (phase === 'rehearsal_config_readback') {
       const record = structuredClone(fx.api);
       record.Name = `/${candidate}`;
+      record.NetworkSettings.Networks = { [isolatedNetwork]: {} };
+      const mountArg = args.find((arg) => arg.includes('dst=/data/uploads'));
+      if (mountArg) record.Mounts = record.Mounts.map((mount) => mount.Destination === '/data/uploads' ? { ...mount, Name: mountArg.match(/src=([^,]+)/)?.[1], Source: mountArg.match(/src=([^,]+)/)?.[1] } : mount);
       record.Config.Env = record.Config.Env.map((entry) => entry.startsWith('FIREBASE_AUTH_ENABLED=') ? 'FIREBASE_AUTH_ENABLED=true' : entry.startsWith('DEPLOYMENT_ENVIRONMENT=') ? 'DEPLOYMENT_ENVIRONMENT=staging' : entry);
       return { stdout: JSON.stringify(record), code: 0 };
     }
@@ -178,6 +183,9 @@ function isolatedExecutor(fx, { startupTimeout = false } = {}) {
     if (phase === 'rehearsal_invalid_social_token_probe') return { stdout: JSON.stringify({ status: 401, code: 'invalid_social_token' }), code: 0 };
     if (phase === 'rehearsal_candidate_remove') return { stdout: '', code: 0 };
     if (phase === 'rehearsal_candidate_absence') return { stdout: '', code: 0 };
+    if (phase === 'rehearsal_database_remove' || phase === 'rehearsal_database_volume_remove' || phase === 'rehearsal_uploads_volume_remove' || phase === 'rehearsal_network_remove') return { stdout: '', code: 0 };
+    if (phase === 'rehearsal_database_absence' || phase === 'rehearsal_database_volume_absence' || phase === 'rehearsal_uploads_volume_absence' || phase === 'rehearsal_network_absence') return { stdout: '', code: 0 };
+    if (phase === 'rehearsal_canonical_api_after') return { stdout: JSON.stringify(fx.api), code: 0 };
     return base.command(_cmd, args, options);
   };
   return { command, calls };
@@ -302,6 +310,12 @@ test('isolated rehearsal never stops canonical and proves candidate cleanup', as
     assert.equal(await readFile(fx.envFile, 'utf8'), fx.env);
     assert.ok(executor.calls.some((call) => call.phase === 'rehearsal_candidate_absence'));
     assert.equal(executor.calls.some((call) => call.phase === 'stop_current_api' || call.phase === 'seal_current_api'), false);
+    const create = executor.calls.find((call) => call.phase === 'rehearsal_candidate_create');
+    assert.ok(create.args.includes('--network') && !create.args.includes(fx.manifest.network));
+    assert.ok(create.args.some((arg) => arg.includes('src=sit-google-auth-rehearsal-uploads-')));
+    assert.equal(executor.calls.some((call) => call.phase === 'rehearsal_provider_network_attach'), false);
+    const dbProbe = executor.calls.find((call) => call.phase === 'rehearsal_database_probe');
+    assert.ok(dbProbe.args.some((arg) => arg.includes('sit-google-auth-rehearsal-db-')));
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
