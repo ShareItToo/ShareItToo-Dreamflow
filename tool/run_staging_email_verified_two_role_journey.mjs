@@ -437,7 +437,9 @@ export async function verifyStagingEmailVerifiedJourneyPublished({
       && listing.isActive === true
   ));
   if (matches.length !== 1) fail('The Pixel owner publish is not server-confirmed as exactly one active listing.');
-  const catalog = await apiRequest(fetchImpl, '/listings?sort=newest&limit=100');
+  const catalog = await apiRequest(fetchImpl, '/listings?sort=newest&limit=100', {
+    token: owner.token,
+  });
   if (!(catalog.value?.listings ?? []).some((listing) => (
     listing?.id === vault.realTwoRoleJourney.listingId
       && listing.title === vault.realTwoRoleJourney.title
@@ -495,7 +497,9 @@ export async function activateStagingEmailVerifiedJourneyFixture({
       || activated.value.listing.isActive !== true) {
     fail('The isolated product-journey fixture activation was not exact.');
   }
-  const catalog = await apiRequest(fetchImpl, '/listings?sort=newest&limit=100');
+  const catalog = await apiRequest(fetchImpl, '/listings?sort=newest&limit=100', {
+    token: owner.token,
+  });
   const publicMatches = (catalog.value?.listings ?? []).filter((listing) => (
     listing?.id === vault.realTwoRoleJourney.listingId
       && listing.title === vault.realTwoRoleJourney.title
@@ -826,7 +830,9 @@ export async function retireStagingEmailVerifiedTwoRoleJourney({
   if (retired?.status !== 'ended' || retired.isActive !== false) {
     fail('The isolated product-journey listing retirement is not server-confirmed.');
   }
-  const catalog = await apiRequest(fetchImpl, '/listings?sort=newest&limit=100');
+  const catalog = await apiRequest(fetchImpl, '/listings?sort=newest&limit=100', {
+    token: owner.token,
+  });
   if ((catalog.value?.listings ?? []).some((entry) => entry?.id === listingId)) {
     fail('The retired product-journey listing remains visible in the public catalog.');
   }

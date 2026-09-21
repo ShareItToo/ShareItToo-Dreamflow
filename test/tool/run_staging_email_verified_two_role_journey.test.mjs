@@ -184,6 +184,7 @@ function stagingApi(accounts) {
       return response(200, { listing: { ...state.listing } });
     }
     if (path === '/listings?sort=newest&limit=100') {
+      assert.match(authorization, /^Bearer owner-/u);
       return response(200, {
         listings: state.listing?.status === 'active' ? [{ ...state.listing }] : [],
       });
