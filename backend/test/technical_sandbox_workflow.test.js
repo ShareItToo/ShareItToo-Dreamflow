@@ -8,6 +8,7 @@ import {
   technicalSandboxCapabilitiesFor,
   technicalSandboxConfigRevision,
   technicalSandboxRequestFingerprint,
+  syntheticTechnicalSandboxEmail,
   validateTechnicalSandboxReceipt,
   validateTechnicalSandboxWebhook,
 } from '../src/technical_sandbox_workflow.js';
@@ -33,6 +34,7 @@ const configuration = Object.freeze({
   allowlistedUserIds: [userId, 'synthetic_sandbox_user_renter'],
   syntheticEmailDomain: 'example.invalid',
 });
+const syntheticEmail = syntheticTechnicalSandboxEmail(userId, configuration);
 
 function metadata(sourceConfiguration = configuration) {
   return {
@@ -173,7 +175,7 @@ function fakeDatabase({ existing = null, count = 0 } = {}) {
           status: 'pending',
           amount_minor: 100,
           currency: 'EUR',
-          synthetic_email: 'technical-sandbox+106dcbffb7567cdbc320@example.invalid',
+          synthetic_email: syntheticEmail,
           checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
           provider_session_id: null,
           metadata: JSON.parse(params[8]),
@@ -277,7 +279,7 @@ test('attached open checkout resumes only with an exact provider binding', async
     status: 'pending',
     amount_minor: 100,
     currency: 'EUR',
-    synthetic_email: 'technical-sandbox+106dcbffb7567cdbc320@example.invalid',
+    synthetic_email: syntheticEmail,
     provider_session_id: 'cs_open_technical',
     checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
   };
@@ -386,7 +388,7 @@ test('provider-session attachment is compare-and-set when another recovery wins'
     status: 'pending',
     amount_minor: 100,
     currency: 'EUR',
-    synthetic_email: 'technical-sandbox+106dcbffb7567cdbc320@example.invalid',
+    synthetic_email: syntheticEmail,
     checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
     provider_session_id: 'cs_other_winner',
   };
@@ -421,7 +423,7 @@ test('receipt CAS miss rereads the current paid truth instead of returning stale
     status: 'pending',
     amount_minor: 100,
     currency: 'EUR',
-    synthetic_email: 'technical-sandbox+106dcbffb7567cdbc320@example.invalid',
+    synthetic_email: syntheticEmail,
     provider_session_id: 'cs_test_technical',
     checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
   };
@@ -461,7 +463,7 @@ test('expired provider readback closes the run without manufacturing success', a
     status: 'pending',
     amount_minor: 100,
     currency: 'EUR',
-    synthetic_email: 'technical-sandbox+106dcbffb7567cdbc320@example.invalid',
+    synthetic_email: syntheticEmail,
     provider_session_id: 'cs_test_expired',
     checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
   };
@@ -512,7 +514,7 @@ test('reconcile accepts a paid run bound to an older authorization after active 
     status: 'pending',
     amount_minor: 100,
     currency: 'EUR',
-    synthetic_email: 'technical-sandbox+106dcbffb7567cdbc320@example.invalid',
+    synthetic_email: syntheticEmail,
     provider_session_id: 'cs_test_historical',
     checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
   };
@@ -546,7 +548,7 @@ test('tampered or missing immutable DB binding fails closed before provider read
     status: 'pending',
     amount_minor: 100,
     currency: 'EUR',
-    synthetic_email: 'technical-sandbox+106dcbffb7567cdbc320@example.invalid',
+    synthetic_email: syntheticEmail,
     provider_session_id: 'cs_test_tampered',
     checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
   };
