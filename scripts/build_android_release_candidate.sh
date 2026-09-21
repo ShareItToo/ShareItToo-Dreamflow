@@ -193,6 +193,7 @@ common_args+=(
   "--dart-define=SIT_SOCIAL_GOOGLE_ENABLED=$social_google_enabled"
   "--dart-define=SIT_SOCIAL_APPLE_ENABLED=$social_apple_enabled"
   "--dart-define=SIT_SOCIAL_FACEBOOK_ENABLED=$social_facebook_enabled"
+  --dart-define=SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED=true
 )
 
 if [[ -n "${SIT_FACEBOOK_APP_ID:-}" ]]; then

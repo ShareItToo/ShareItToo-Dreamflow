@@ -45,6 +45,21 @@ test('release builds bind explicit fail-closed social-provider flags', () => {
     '"    \\"appleEnabled\\": $social_apple_enabled," \\',
     '"    \\"facebookEnabled\\": $social_facebook_enabled" \\',
   ]) assert.ok(buildScript.includes(line), line);
+  assert.match(buildScript, /--dart-define=SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED=true/u);
+});
+
+test('product builds require the post-preflight social activation define', () => {
+  const authService = read('lib/services/auth_service.dart');
+  assert.match(authService, /SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED/u);
+  assert.match(authService, /dart\.vm\.product/u);
+  assert.match(
+    authService,
+    /AuthSocialProvider\.apple => _appleSocialAuthEnabled &&[\s\S]*_socialProviderActivationValidated/u,
+  );
+  assert.match(
+    authService,
+    /AuthSocialProvider\.facebook => _facebookSocialAuthEnabled &&[\s\S]*_socialProviderActivationValidated/u,
+  );
 });
 
 test('the shared activation preflight covers both Android and iOS release paths', () => {

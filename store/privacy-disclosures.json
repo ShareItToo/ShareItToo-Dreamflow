@@ -888,7 +888,7 @@
     },
     {
       "path": "lib/services/auth_service.dart",
-      "sha256": "9d59bd61935196dacd88e252562e0be3916d4aa322e4212c5f7abdc2f1fab8a5"
+      "sha256": "cba5e6eb485fc55cd310ac83e93a317c527673d1f7910d73908423c92114e8ec"
     },
     {
       "path": "lib/screens/notification_settings_screen.dart",

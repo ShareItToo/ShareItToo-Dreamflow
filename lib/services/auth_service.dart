@@ -132,6 +132,17 @@ class AuthService {
     'SIT_SOCIAL_FACEBOOK_ENABLED',
     defaultValue: false,
   );
+  // Product builds must carry the explicit result of the sanitized release
+  // preflight before an external provider can be activated. Debug/profile
+  // tests retain their direct provider defines for deterministic SDK tests.
+  static const bool _socialProviderActivationValidated = bool.fromEnvironment(
+    'SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED',
+    defaultValue: false,
+  );
+  static const bool _productBuild = bool.fromEnvironment(
+    'dart.vm.product',
+    defaultValue: false,
+  );
 
   static void _notifyLocalPrincipalChanged() {
     SharedPersistenceSync.notify(SharedPersistenceSync.wishlistStateKey);
@@ -152,8 +163,10 @@ class AuthService {
   static bool socialProviderEnabled(AuthSocialProvider provider) =>
       switch (provider) {
         AuthSocialProvider.google => _googleSocialAuthEnabled,
-        AuthSocialProvider.apple => _appleSocialAuthEnabled,
-        AuthSocialProvider.facebook => _facebookSocialAuthEnabled,
+        AuthSocialProvider.apple => _appleSocialAuthEnabled &&
+            (!_productBuild || _socialProviderActivationValidated),
+        AuthSocialProvider.facebook => _facebookSocialAuthEnabled &&
+            (!_productBuild || _socialProviderActivationValidated),
       };
 
   static Future<void> ensureSeeded() async {
