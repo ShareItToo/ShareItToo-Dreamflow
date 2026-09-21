@@ -101,8 +101,8 @@
     "store/google-play/rw20d-play-draft-truth-reconciliation.json": "a15c59f35200c222501a7e9e4e5aed537e98b2b7ec1487341eede6768ba9451c",
     "docs/evidence/release-readiness/wp138-google-signin-current-candidate-pixel-closure-20260913.json": "20cd0eecf60bcae719f032aea6005d6540a7aea029e502758411c97958aff6e9",
     "docs/evidence/release-readiness/wp142-current-goal-external-gate-checkpoint-20260913.json": "63f312326964d9376a65370c136709a93e90e9de4185963992fc791599ee217a",
-    "docs/evidence/release-readiness/wp143-oneplus-current-candidate-two-role-preparation-20260913.json": "ca3d9da3ccc2c445f20f0772cdccdd6d8636624da53971a2db16a9f9ab43083c",
-    "docs/evidence/release-readiness/wp145-oneplus-current-candidate-two-role-closure-20260914.json": "b1084713cd3b68b8c8d5f41ad483c04f4e676ffec9d1da2233af70a5d4ecf333",
+    "docs/evidence/release-readiness/wp143-oneplus-current-candidate-two-role-preparation-20260913.json": "71ee13fc36d51f20f563b472f9b47304cfd1f7bdeebb0b2479b3a3bbed2841ca",
+    "docs/evidence/release-readiness/wp145-oneplus-current-candidate-two-role-closure-20260914.json": "3f8e4553fd35f6d0f082b70f6981283ce7337c0ccb3da33000250ef8ecb9bbcd",
     "docs/operations/WP158_PLAY_INTERNAL_ARTIFACT_APP_CONTENT_PROVENANCE_2026-09-15.md": "f6f39746acb9d30c39513d912ddc3cba009bb481630c58d4e3d8c79cf3fdfa63",
     "tool/validate_wp158_play_internal_artifact_app_content_provenance.mjs": "c58594684d799ab94fc51ad507bf551fa8deedc4ae7d7afecd7610b1cd345b8e",
     "test/tool/validate_wp158_play_internal_artifact_app_content_provenance.test.mjs": "6d1d1d0e9d43d7cba16889b797f3f535aaa226c09012bffeb97a15a9463c3c39"
@@ -110,6 +110,6 @@
   "captureAttestation": {
     "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
     "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
-    "sourceInventoryDigest": "fd53d418ffb5a454c3cb9b6e2dd027d775749f42bb64508de1da0a2830be1a7a"
+    "sourceInventoryDigest": "2751c79011bd8554e9a53ba846ee5eb901a9856c4265340f32c47c09c97b278b"
   }
 }
