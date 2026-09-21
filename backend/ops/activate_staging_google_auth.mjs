@@ -493,7 +493,7 @@ export function runCommand(command, args, { cwd = repositoryRoot, env = process.
       if (settled || !childClosed) return;
       settled = true;
       if (childCode === 0 || allowFailure) resolvePromise(Object.freeze({ stdout, stderr, code: childCode }));
-      else reject(Object.assign(new Error(`Staging Google Auth activation failed: ${phase}`), { code: `${phase}_failed` }));
+      else reject(Object.assign(new Error(`Staging Google Auth activation failed: ${phase}`), { code: `${phase}_failed`, failureExitCode: childCode }));
     };
     outputDone.catch(failOutput);
     if (output) child.stdout.pipe(output);
@@ -515,7 +515,7 @@ export function runCommand(command, args, { cwd = repositoryRoot, env = process.
   });
 }
 
-const boundedStartupProbeScript = "const endpoints=['live','ready']; const deadline=Date.now()+15000; const attempts={live:0,ready:0}; const last={}; const sleep=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms)); let passed={}; while(Date.now()<deadline){ for(const endpoint of endpoints){ if(passed[endpoint]) continue; attempts[endpoint]++; try { const response=await fetch(`http://127.0.0.1:8080/health/${endpoint}`); last[endpoint]={status:response.status}; if(response.status===200){ passed[endpoint]=true; } } catch { last[endpoint]={status:null}; } } if(endpoints.every((endpoint)=>passed[endpoint])){ process.stdout.write(JSON.stringify({ok:true,attempts,last})); process.exit(0); } await sleep(250); } process.stdout.write(JSON.stringify({ok:false,attempts,last,reason:'startup_timeout'})); process.exit(1);";
+const boundedStartupProbeScript = "const endpoints=['live','ready']; const runtimeNames=['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED']; const deadline=Date.now()+15000; const attempts={live:0,ready:0}; const last={}; const sleep=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms)); let passed={}; while(Date.now()<deadline){ for(const endpoint of endpoints){ if(passed[endpoint]) continue; attempts[endpoint]++; try { const response=await fetch(`http://127.0.0.1:8080/health/${endpoint}`); last[endpoint]={status:response.status}; if(response.status===200){ passed[endpoint]=true; } } catch { last[endpoint]={status:null}; } } if(endpoints.every((endpoint)=>passed[endpoint])){ let version={status:null,commit:null,environment:null}; try { const response=await fetch('http://127.0.0.1:8080/version'); const payload=await response.json(); version={status:response.status,commit:typeof payload.commit==='string'?payload.commit:null,environment:typeof payload.environment==='string'?payload.environment:null}; } catch {} const flags=Object.fromEntries(runtimeNames.map((name)=>[name,process.env[name]??null])); if(version.status===200 && typeof version.commit==='string' && typeof version.environment==='string'){ process.stdout.write(JSON.stringify({ok:true,attempts,last,version,flags})); process.exit(0); } process.stdout.write(JSON.stringify({ok:false,attempts,last,version,flags,reason:'version_probe_failed'})); process.exit(1); } await sleep(250); } process.stdout.write(JSON.stringify({ok:false,attempts,last,reason:'startup_timeout'})); process.exit(1);";
 
 function sanitizeProbeDiagnostic(diagnostic, reason = 'startup_probe_failed') {
   if (diagnostic && typeof diagnostic.stage === 'string' && typeof diagnostic.code === 'string' && typeof diagnostic.errorType === 'string') {
@@ -571,11 +571,16 @@ export async function runBoundedStartupProbe(command, container, commandEnv, pha
     }
     let diagnostic;
     try { diagnostic = JSON.parse(result?.stdout?.trim() ?? ''); } catch { diagnostic = null; }
-    if (result?.code === 0 && diagnostic?.ok === true && diagnostic?.last?.live?.status === 200 && diagnostic?.last?.ready?.status === 200) {
+    const hasRuntimeReadback = diagnostic?.version?.status === 200
+      && typeof diagnostic.version.commit === 'string'
+      && typeof diagnostic.version.environment === 'string'
+      && diagnostic.flags && typeof diagnostic.flags === 'object'
+      && ['DEPLOYMENT_ENVIRONMENT', 'FIREBASE_AUTH_ENABLED', 'FIREBASE_PHONE_VERIFICATION_ENABLED', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED'].every((name) => Object.hasOwn(diagnostic.flags, name));
+    if (result?.code === 0 && diagnostic?.ok === true && diagnostic?.last?.live?.status === 200 && diagnostic?.last?.ready?.status === 200 && hasRuntimeReadback) {
       return diagnostic;
     }
     lastDiagnostic = sanitizeProbeDiagnostic(diagnostic, diagnostic ? 'exec_unavailable' : 'exec_unavailable');
-    if (diagnostic?.reason === 'startup_timeout') throw startupProbeFailure(phase, lastDiagnostic);
+    if (diagnostic?.reason === 'startup_timeout' || diagnostic?.reason === 'version_probe_failed') throw startupProbeFailure(phase, lastDiagnostic);
     const remaining = deadline - Date.now();
     if (remaining <= 0) break;
     await new Promise((resolve) => setTimeout(resolve, Math.min(Math.max(0, retryDelayMs), remaining)));
@@ -712,12 +717,10 @@ async function rollback({ manifest, originalEnv, originalReadbacks, command, com
       if (!sameExceptAuthFlag(originalReadbacks.api, restoredApi)) fail('rollback_config_drift');
       assertExactContainerNetworks(restoredApi, manifest, 'rollback_network_inventory_invalid');
       const startup = await runBoundedStartupProbe(command, manifest.apiContainer, commandEnv, 'rollback_startup_probe');
-      const version = await command('docker', ['exec', manifest.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/version'); process.stdout.write(JSON.stringify(await r.json())); if(r.status!==200) process.exit(1)"], { phase: 'rollback_version_probe', env: commandEnv });
-      const flags = await command('docker', ['exec', manifest.apiContainer, 'node', '--input-type=module', '-e', "process.stdout.write(JSON.stringify(Object.fromEntries(['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED'].map((name)=>[name,process.env[name]??null])))"], { phase: 'rollback_runtime_flags', env: commandEnv });
       const database = await command('docker', ['exec', manifest.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', manifest.databaseUser, '-d', manifest.databaseName, '-Atc', 'SELECT 1'], { phase: 'rollback_database_probe', env: commandEnv });
-      if ([version, flags, database].some((entry) => entry?.code !== 0)) fail('rollback_runtime_probe_failed');
+      if (database?.code !== 0) fail('rollback_runtime_probe_failed');
       if (startup?.ok !== true) fail('rollback_startup_probe_invalid');
-      assertRuntimeReadback({ version: parseJson(version.stdout, 'rollback_version_probe_invalid'), flags: parseJson(flags.stdout, 'rollback_runtime_flags_invalid'), manifest, expectedAuth: 'false', expectedEnvironment: requiredSafetyEnv.DEPLOYMENT_ENVIRONMENT });
+      assertRuntimeReadback({ version: startup.version, flags: startup.flags, manifest, expectedAuth: 'false', expectedEnvironment: requiredSafetyEnv.DEPLOYMENT_ENVIRONMENT });
       if (database.stdout.trim() !== '1') fail('rollback_database_probe_invalid');
       assertRecordSafety({ api: restoredApi, database: originalReadbacks.database, databaseVolume: originalReadbacks.databaseVolume, network: originalReadbacks.network, providerNetwork: originalReadbacks.providerNetwork, uploads: originalReadbacks.uploads, image: originalReadbacks.image, manifest });
       runtimeOk = true;
@@ -782,10 +785,8 @@ export async function runGoogleAuthActivation({ manifest, command = runCommand, 
     assertExactContainerNetworks(replacementRecord, target, 'replacement_network_inventory_invalid');
     const startResult = await executePhase(command, ['start', target.apiContainer], { phase: 'start_replacement_api', env: commandEnv });
     if (startResult?.code !== 0) fail('start_replacement_api_failed');
-    await runBoundedStartupProbe(command, target.apiContainer, commandEnv);
-    await command('docker', ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/version'); const p=await r.json(); if(r.status!==200 || p.commit!==process.env.APP_COMMIT || p.environment!=='staging') process.exit(1)"], { phase: 'replacement_version_probe', env: commandEnv });
-    const replacementFlags = await executePhase(command, ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "process.stdout.write(JSON.stringify(Object.fromEntries(['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED'].map((name)=>[name,process.env[name]??null])))"], { phase: 'replacement_runtime_flags', env: commandEnv });
-    assertRuntimeReadback({ version: { commit: target.runtimeRevision, environment: activatedEnvironment }, flags: parseJson(replacementFlags.stdout, 'replacement_runtime_flags_invalid'), manifest: target, expectedAuth: activatedAuth, expectedEnvironment: activatedEnvironment });
+    const startup = await runBoundedStartupProbe(command, target.apiContainer, commandEnv);
+    assertRuntimeReadback({ version: startup.version, flags: startup.flags, manifest: target, expectedAuth: activatedAuth, expectedEnvironment: activatedEnvironment });
     await executePhase(command, ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', target.databaseUser, '-d', target.databaseName, '-Atc', 'SELECT 1'], { phase: 'replacement_database_probe', env: commandEnv });
     const invalidToken = await executePhase(command, ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/v1/auth/social',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({idToken:'synthetic-invalid-token'})}); const p=await r.json(); process.stdout.write(JSON.stringify({status:r.status,code:p.code})); if(r.status!==401 || p.code!=='invalid_social_token') process.exit(1)"], { phase: 'replacement_invalid_social_token_probe', env: commandEnv });
     const invalidTokenPayload = parseJson(invalidToken.stdout, 'replacement_invalid_social_token_probe_invalid');
@@ -969,10 +970,8 @@ export async function runGoogleAuthIsolatedRehearsal({ manifest, command = runCo
     assertExactNetworks(candidateRecord, [isolatedNetwork], 'rehearsal_network_inventory_invalid');
     const started = await executePhase(command, ['start', candidate], { phase: 'rehearsal_candidate_start', env: commandEnv });
     if (started?.code !== 0) fail('rehearsal_candidate_start_failed');
-    await runBoundedStartupProbe(command, candidate, commandEnv, 'rehearsal_startup_probe');
-    const version = await executePhase(command, ['exec', candidate, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/version'); process.stdout.write(JSON.stringify(await r.json())); if(r.status!==200) process.exit(1)"], { phase: 'rehearsal_version_probe', env: commandEnv });
-    const flags = await executePhase(command, ['exec', candidate, 'node', '--input-type=module', '-e', "process.stdout.write(JSON.stringify(Object.fromEntries(['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED'].map((name)=>[name,process.env[name]??null])))"], { phase: 'rehearsal_runtime_flags', env: commandEnv });
-    assertRuntimeReadback({ version: parseJson(version.stdout, 'rehearsal_version_probe_invalid'), flags: parseJson(flags.stdout, 'rehearsal_runtime_flags_invalid'), manifest: target, expectedAuth: activatedAuth, expectedEnvironment: activatedEnvironment });
+    const startup = await runBoundedStartupProbe(command, candidate, commandEnv, 'rehearsal_startup_probe');
+    assertRuntimeReadback({ version: startup.version, flags: startup.flags, manifest: target, expectedAuth: activatedAuth, expectedEnvironment: activatedEnvironment });
     await executePhase(command, ['exec', databaseCandidate, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', target.databaseUser, '-d', target.databaseName, '-Atc', 'SELECT 1'], { phase: 'rehearsal_database_probe', env: commandEnv });
     const invalidToken = await executePhase(command, ['exec', candidate, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/v1/auth/social',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({idToken:'synthetic-invalid-token'})}); const p=await r.json(); process.stdout.write(JSON.stringify({status:r.status,code:p.code})); if(r.status!==401 || p.code!=='invalid_social_token') process.exit(1)"], { phase: 'rehearsal_invalid_social_token_probe', env: commandEnv });
     const invalidTokenPayload = parseJson(invalidToken.stdout, 'rehearsal_invalid_social_token_probe_invalid');
