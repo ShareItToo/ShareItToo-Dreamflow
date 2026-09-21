@@ -12,6 +12,7 @@ const evidencePath =
 const handoverPath = 'docs/operations/WP144_MACBOOK_ONEPLUS_EXECUTION_RUNWAY_2026-09-13.md';
 const baselineHead = '07ce24325648ed797893ac39a6fec6472273135e';
 const candidateSource = '904c2b734160544aaeb1128cac15191a521739e7';
+const sourceInventoryRevision = 'ec95dbe3da3d430ba91df949155275b68d056948';
 const apkSha256 = 'e6d1df85e4e8973765c594b8fe9eb2654c876ee11cafe6d94cfe5c57ff8d7fb9';
 const aabSha256 = 'c0c0f27fb14d393b97c46b55bf81f201081dce1d9756f3468bfa442c4bdf9c6e';
 const certificateSha256 =
@@ -26,9 +27,18 @@ function exact(actual, expected, label) {
 }
 
 function digest(path, repositoryRoot = root) {
-  return createHash('sha256')
-    .update(readFileSync(resolve(repositoryRoot, path)))
-    .digest('hex');
+  let bytes;
+  try {
+    bytes = execFileSync('git', ['-C', repositoryRoot, 'show',
+      `${sourceInventoryRevision}:${path}`], {
+      encoding: 'buffer',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch {
+    fail(`historical source inventory cannot resolve ${sourceInventoryRevision}:${path}.`);
+  }
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 function assertGitState(repositoryRoot) {

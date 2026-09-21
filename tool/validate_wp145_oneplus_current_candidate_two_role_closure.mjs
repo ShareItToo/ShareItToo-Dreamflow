@@ -24,9 +24,18 @@ function exact(actual, expected, label) {
 }
 
 function digest(path, repositoryRoot = root) {
-  return createHash('sha256')
-    .update(readFileSync(resolve(repositoryRoot, path)))
-    .digest('hex');
+  let bytes;
+  try {
+    bytes = execFileSync('git', ['-C', repositoryRoot, 'show',
+      `${implementationHead}:${path}`], {
+      encoding: 'buffer',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch {
+    fail(`historical source inventory cannot resolve ${implementationHead}:${path}.`);
+  }
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 function assertGitState(repositoryRoot) {

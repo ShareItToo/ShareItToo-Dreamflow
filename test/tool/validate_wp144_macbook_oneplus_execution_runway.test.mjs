@@ -25,6 +25,12 @@ test('WP144 accepts the exact private MacBook execution runway without a device 
   });
 });
 
+test('WP144 binds source inventory to the recorded snapshot and rejects tampering', () => {
+  const value = clone();
+  value.sourceInventory['tool/run_staging_email_verified_two_role_journey.mjs'] = '0'.repeat(64);
+  assert.throws(() => validate(value), /source inventory/u);
+});
+
 test('WP144 rejects checkout, candidate or source drift', () => {
   for (const mutate of [
     (value) => { value.macbookRunway.head = '0'.repeat(40); },

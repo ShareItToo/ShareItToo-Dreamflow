@@ -21,6 +21,12 @@ test('WP145 accepts the exact sanitized physical OnePlus closure', () => {
   assert.deepEqual(result.portfolio, { pass: 22, partial: 4, open: 6 });
 });
 
+test('WP145 binds source inventory to the implementation snapshot and rejects tampering', () => {
+  const value = structuredClone(source);
+  value.sourceInventory['tool/diagnose_android_email_verified_two_role_product_journey.mjs'] = '0'.repeat(64);
+  assert.throws(() => validate(value), /source inventory/u);
+});
+
 test('WP145 rejects candidate, device, principal or FCM drift', () => {
   for (const mutate of [
     (value) => { value.candidate.versionCode = '2026091313'; },

@@ -15,6 +15,9 @@ const evidencePath =
 const handoverPath =
   'docs/operations/WP143_ONEPLUS_CURRENT_CANDIDATE_TWO_ROLE_PREPARATION_2026-09-13.md';
 const baselineHead = '38a15825b78ddca55e9d4e7da478a4bb6d6fb8d9';
+// The inventory includes the versioned runner introduced and stabilized after
+// the recorded baseline. Bind every entry to that immutable evidence snapshot.
+const sourceInventoryRevision = 'ec95dbe3da3d430ba91df949155275b68d056948';
 
 function fail(message) {
   throw new Error(`WP143 ${message}`);
@@ -25,9 +28,18 @@ function exact(actual, expected, label) {
 }
 
 function digest(path, repositoryRoot = root) {
-  return createHash('sha256')
-    .update(readFileSync(resolve(repositoryRoot, path)))
-    .digest('hex');
+  let bytes;
+  try {
+    bytes = execFileSync('git', ['-C', repositoryRoot, 'show',
+      `${sourceInventoryRevision}:${path}`], {
+      encoding: 'buffer',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch {
+    fail(`historical source inventory cannot resolve ${sourceInventoryRevision}:${path}.`);
+  }
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 function assertGitState(repositoryRoot) {

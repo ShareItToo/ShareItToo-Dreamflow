@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +23,20 @@ export const wp158SourcePaths = Object.freeze([
   'tool/validate_wp158_play_internal_artifact_app_content_provenance.mjs',
   'test/tool/validate_wp158_play_internal_artifact_app_content_provenance.test.mjs',
 ]);
+const wp158FinalHead = '0eb67df1992d9a234b22281fa4ef1161137399d2';
+// WP158 assembled its immutable inventory across the recorded handoff commits:
+// policy/tooling was captured at 8df, while the WP158 handoff sources were
+// introduced at 9d4. All other entries are resolved from the recorded finalHead.
+const wp158InventoryRevisions = Object.freeze({
+  'AGENTS.md': '8df42db74a9669cf6a720df75f9eb89cee1d544c',
+  'scripts/technical_regression_check.sh': '8df42db74a9669cf6a720df75f9eb89cee1d544c',
+  'docs/operations/WP158_PLAY_INTERNAL_ARTIFACT_APP_CONTENT_PROVENANCE_2026-09-15.md':
+    '9d4b252234af8ea200d73485f35f9ff0823f617e',
+  'tool/validate_wp158_play_internal_artifact_app_content_provenance.mjs':
+    '9d4b252234af8ea200d73485f35f9ff0823f617e',
+  'test/tool/validate_wp158_play_internal_artifact_app_content_provenance.test.mjs':
+    '9d4b252234af8ea200d73485f35f9ff0823f617e',
+});
 
 function fail(message) { throw new Error(`WP158 ${message}.`); }
 function exact(actual, expected, label) {
@@ -34,6 +49,20 @@ function inventoryDigest(inventory) {
 }
 function hasAll(text, markers, label) {
   for (const marker of markers) if (!text.includes(marker)) fail(`${label} marker missing: ${marker}`);
+}
+
+function digestAtRevision(repositoryRoot, path, revision) {
+  let bytes;
+  try {
+    bytes = execFileSync('git', ['-C', repositoryRoot, 'show', `${revision}:${path}`], {
+      encoding: 'buffer',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch {
+    fail(`historical source inventory cannot resolve ${revision}:${path}`);
+  }
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 export function validateWp158PlayInternalArtifactAppContentProvenance({ repositoryRoot = root, evidence, sourceTexts = {} } = {}) {
@@ -114,6 +143,9 @@ export function validateWp158PlayInternalArtifactAppContentProvenance({ reposito
   exact(value.captureAttestation.sourceInventoryDigest, inventoryDigest(value.sourceInventory), 'source inventory digest');
   for (const path of wp158SourcePaths) {
     if (!/^[a-f0-9]{64}$/u.test(value.sourceInventory[path] ?? '')) fail(`source inventory ${path} is not a SHA-256 digest`);
+    const revision = wp158InventoryRevisions[path] ?? wp158FinalHead;
+    exact(digestAtRevision(repositoryRoot, path, revision), value.sourceInventory[path],
+      `source inventory ${path} at ${revision}`);
   }
   const handover = sourceTexts[handoverPath] ?? readFileSync(resolve(repositoryRoot, handoverPath), 'utf8');
   hasAll(handover, ['WP158', 'owner gate', '2026091312', 'OWNER_GATE_REQUIRED:PLAY_INTERNAL_CURRENT_RELEASE_READBACK', 'No Play Console readback'], 'handover');

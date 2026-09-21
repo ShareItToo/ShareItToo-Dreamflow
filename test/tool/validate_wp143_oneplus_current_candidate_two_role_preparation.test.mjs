@@ -25,6 +25,12 @@ test('WP143 accepts exact current-candidate preparation without physical overcla
   });
 });
 
+test('WP143 binds source inventory to the recorded snapshot and rejects tampering', () => {
+  const value = clone();
+  value.sourceInventory['tool/run_wp143_oneplus_current_candidate_two_role.mjs'] = '0'.repeat(64);
+  assert.throws(() => validate(value), /source inventory/u);
+});
+
 test('WP143 rejects candidate or predecessor drift', () => {
   for (const mutate of [
     (value) => { value.candidate.versionCode = '2026091313'; },
