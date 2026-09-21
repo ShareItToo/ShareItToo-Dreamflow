@@ -36,6 +36,15 @@ function fail(message) {
   throw new Error(message);
 }
 
+function isSafelyCancelledBooking(booking) {
+  return booking?.workflowStatus === 'cancelled'
+    && booking.simulationOnly === true
+    && booking.contractCreated === false
+    && booking.reservationCreated === false
+    && booking.paymentCreated === false
+    && booking.monetaryEffectMinor === 0;
+}
+
 function outsideRepository(path, label) {
   const absolute = resolve(path);
   if (absolute === repositoryRoot || absolute.startsWith(`${repositoryRoot}${sep}`)) {
@@ -786,10 +795,17 @@ export async function retireStagingEmailVerifiedTwoRoleJourney({
   ]);
   const bookingId = vault.nonBindingSimulation?.bookingId;
   let bookingCancelled = bookingId === undefined;
+  let bookingStatus = bookingId === undefined ? 'not-created' : null;
   if (typeof bookingId === 'string' && bookingId.length > 0) {
     const requests = await apiRequest(fetchImpl, '/rental-requests', { token: renter.token });
-    const booking = (requests.value?.requests ?? []).find((entry) => entry?.id === bookingId);
-    if (booking && ['requested', 'accepted'].includes(booking.workflowStatus)) {
+    if (!Array.isArray(requests.value?.requests)) {
+      fail('The Staging rental-request truth is malformed during cleanup.');
+    }
+    const booking = requests.value.requests.find((entry) => entry?.id === bookingId);
+    if (!booking) {
+      bookingCancelled = true;
+      bookingStatus = 'not-created';
+    } else if (['requested', 'accepted'].includes(booking.workflowStatus)) {
       const cancelled = await apiRequest(
         fetchImpl,
         `/bookings/${encodeURIComponent(bookingId)}/transitions`,
@@ -800,14 +816,11 @@ export async function retireStagingEmailVerifiedTwoRoleJourney({
           body: { status: 'cancelled' },
         },
       );
-      bookingCancelled = cancelled.value?.booking?.workflowStatus === 'cancelled'
-        && cancelled.value.booking.simulationOnly === true
-        && cancelled.value.booking.contractCreated === false
-        && cancelled.value.booking.reservationCreated === false
-        && cancelled.value.booking.paymentCreated === false
-        && cancelled.value.booking.monetaryEffectMinor === 0;
+      bookingCancelled = isSafelyCancelledBooking(cancelled.value?.booking);
+      if (bookingCancelled) bookingStatus = 'cancelled';
     } else {
-      bookingCancelled = booking?.workflowStatus === 'cancelled';
+      bookingCancelled = isSafelyCancelledBooking(booking);
+      if (bookingCancelled) bookingStatus = 'cancelled';
     }
   }
   if (!bookingCancelled) fail('The isolated non-binding booking was not safely cancelled.');
@@ -840,7 +853,7 @@ export async function retireStagingEmailVerifiedTwoRoleJourney({
   vault.status = 'email-linked-product-journey-retired';
   vault.realTwoRoleJourney.status = 'retired';
   vault.realTwoRoleJourney.listingStatus = 'ended';
-  vault.realTwoRoleJourney.bookingStatus = bookingId === undefined ? 'not-created' : 'cancelled';
+  vault.realTwoRoleJourney.bookingStatus = bookingStatus;
   vault.realTwoRoleJourney.retiredAt = new Date().toISOString();
   writePrivateJson(canonical, vault);
   return Object.freeze({

@@ -123,6 +123,7 @@ function safeBooking(state, workflowStatus) {
     paymentCreated: false,
     reservationCreated: false,
     monetaryEffectMinor: 0,
+    ...state.bookingFields,
   };
 }
 
@@ -131,6 +132,7 @@ function stagingApi(accounts) {
     listing: null,
     bookingId: null,
     bookingStatus: null,
+    bookingFields: undefined,
     threadId: 'thread-n22-fixture',
     cart: {
       schemaVersion: 1,
@@ -339,6 +341,79 @@ test('activates and retires an exact isolated search fixture without money', asy
   assert.equal(retired.status, 'email-verified-two-role-product-journey-retired');
   assert.equal(retired.listingEnded, true);
   assert.equal(retired.monetaryEffectMinor, 0);
+});
+
+async function activeJourneyFixture() {
+  const fixture = privateFixture();
+  const api = stagingApi(fixture.accounts);
+  const prepared = await prepareStagingEmailVerifiedTwoRoleJourney({
+    sourceVaultFile: fixture.sourceVaultFile,
+    vaultRoot: fixture.journeyDirectory,
+    imagePath: fixture.imagePath,
+    fetchImpl: api.fetchImpl,
+    now: new Date('2026-09-03T08:00:00.000Z'),
+    random: () => Buffer.from([1, 2, 3, 4]),
+  });
+  await activateStagingEmailVerifiedJourneyFixture({
+    vaultFile: prepared.vaultFile,
+    fetchImpl: api.fetchImpl,
+  });
+  return { fixture, api, prepared };
+}
+
+test('treats a missing booking record as not-created and still retires the listing', async () => {
+  const { api, prepared } = await activeJourneyFixture();
+  const vault = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+  vault.nonBindingSimulation = { bookingId: 'booking-create-failed-before-side-effect' };
+  writeFileSync(prepared.vaultFile, `${JSON.stringify(vault)}\n`, { mode: 0o600 });
+
+  const retired = await retireStagingEmailVerifiedTwoRoleJourney({
+    vaultFile: prepared.vaultFile,
+    fetchImpl: api.fetchImpl,
+  });
+  assert.equal(retired.bookingCancelled, true);
+  assert.equal(api.state.listing.status, 'ended');
+  const after = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+  assert.equal(after.realTwoRoleJourney.bookingStatus, 'not-created');
+});
+
+test('strictly cancels requested and accepted existing bookings', async () => {
+  for (const workflowStatus of ['requested', 'accepted']) {
+    const { api, prepared } = await activeJourneyFixture();
+    api.state.bookingId = `booking-${workflowStatus}`;
+    api.state.bookingStatus = workflowStatus;
+    const vault = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+    vault.nonBindingSimulation = { bookingId: api.state.bookingId };
+    writeFileSync(prepared.vaultFile, `${JSON.stringify(vault)}\n`, { mode: 0o600 });
+
+    const retired = await retireStagingEmailVerifiedTwoRoleJourney({
+      vaultFile: prepared.vaultFile,
+      fetchImpl: api.fetchImpl,
+    });
+    assert.equal(retired.bookingCancelled, true);
+    assert.equal(api.state.bookingStatus, 'cancelled');
+    const after = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+    assert.equal(after.realTwoRoleJourney.bookingStatus, 'cancelled');
+  }
+});
+
+test('rejects an unsafe existing cancelled booking', async () => {
+  const { api, prepared } = await activeJourneyFixture();
+  api.state.bookingId = 'booking-unsafe';
+  api.state.bookingStatus = 'cancelled';
+  api.state.bookingFields = { simulationOnly: false };
+  const vault = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+  vault.nonBindingSimulation = { bookingId: api.state.bookingId };
+  writeFileSync(prepared.vaultFile, `${JSON.stringify(vault)}\n`, { mode: 0o600 });
+
+  await assert.rejects(
+    () => retireStagingEmailVerifiedTwoRoleJourney({
+      vaultFile: prepared.vaultFile,
+      fetchImpl: api.fetchImpl,
+    }),
+    /not safely cancelled/u,
+  );
+  assert.equal(api.state.listing.status, 'active');
 });
 
 test('captures, proves, and restores one isolated non-reserving rental-cart intent', async () => {
