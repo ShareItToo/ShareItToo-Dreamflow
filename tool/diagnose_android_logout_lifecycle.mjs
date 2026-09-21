@@ -385,26 +385,35 @@ export async function dismissAndroidSoftwareKeyboard({
   return false;
 }
 
-async function openProfile({ commandRunner, adbPath, device, wait }) {
-  launchCandidate(commandRunner, adbPath, device);
-  const main = await waitForHierarchy({
-    commandRunner,
-    adbPath,
-    device,
-    predicate: hasMainNavigation,
-    wait,
-    // A cold physical device can legitimately need longer than ten seconds
-    // to settle its authenticated Staging catalog before the bottom
-    // navigation becomes inspectable. Keep the wait bounded, but do not turn
-    // normal network-backed startup latency into a false guest-reset failure.
-    attempts: 36,
-  });
+async function openProfile({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+  initialMainHierarchy = null,
+}) {
+  let resolvedMain = initialMainHierarchy;
+  if (resolvedMain === null) {
+    launchCandidate(commandRunner, adbPath, device);
+    resolvedMain = await waitForHierarchy({
+      commandRunner,
+      adbPath,
+      device,
+      predicate: hasMainNavigation,
+      wait,
+      // A cold physical device can legitimately need longer than ten seconds
+      // to settle its authenticated Staging catalog before the bottom
+      // navigation becomes inspectable. Keep the wait bounded, but do not turn
+      // normal network-backed startup latency into a false guest-reset failure.
+      attempts: 36,
+    });
+  }
   tapNamedNode(
     commandRunner,
     adbPath,
     device,
-    main,
-    availableNavigationLabel(main, accountNavigationLabels) ?? 'Mein SIT',
+    resolvedMain,
+    availableNavigationLabel(resolvedMain, accountNavigationLabels) ?? 'Mein SIT',
   );
   return waitForHierarchy({
     commandRunner,
@@ -416,8 +425,16 @@ async function openProfile({ commandRunner, adbPath, device, wait }) {
   });
 }
 
-export async function restoreSyntheticSession({ commandRunner, adbPath, device, wait, account }) {
-  const guest = await openProfile({ commandRunner, adbPath, device, wait });
+export async function restoreSyntheticSession({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+  account,
+  initialProfileHierarchy = null,
+}) {
+  const guest = initialProfileHierarchy
+    ?? await openProfile({ commandRunner, adbPath, device, wait });
   if (hasAuthenticatedProfile(guest)) return true;
   tapNamedNode(commandRunner, adbPath, device, guest, 'Anmelden');
   const form = await waitForHierarchy({
@@ -457,7 +474,7 @@ export async function restoreSyntheticSession({ commandRunner, adbPath, device, 
     attempts: 12,
   });
   tapNamedNode(commandRunner, adbPath, device, submitForm, 'Anmelden', { chooseLast: true });
-  await waitForHierarchy({
+  const mainAfterLogin = await waitForHierarchy({
     commandRunner,
     adbPath,
     device,
@@ -465,7 +482,13 @@ export async function restoreSyntheticSession({ commandRunner, adbPath, device, 
     wait,
     attempts: 36,
   });
-  const restored = await openProfile({ commandRunner, adbPath, device, wait });
+  const restored = await openProfile({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+    initialMainHierarchy: mainAfterLogin,
+  });
   return hasAuthenticatedProfile(restored);
 }
 

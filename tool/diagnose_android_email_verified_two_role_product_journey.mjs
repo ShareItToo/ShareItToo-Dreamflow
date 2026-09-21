@@ -416,7 +416,6 @@ export async function bindExactRole({
     ?? fail('The exact email-verified product-journey role is unavailable.');
   const other = vault.accounts.find((entry) => entry.role !== role)
     ?? fail('The opposite email-verified product-journey role is unavailable.');
-  launchCurrentHeadAndroidCandidate(commandRunner, adbPath, device);
   let guestEstablished = false;
   try {
     guestEstablished = await retryIdempotentPixelState(
@@ -433,6 +432,7 @@ export async function bindExactRole({
   if (!guestEstablished) {
     fail(`The exact ${role} Pixel guest session could not be established.`);
   }
+  const guestProfile = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
   let sessionRestored = false;
   try {
     sessionRestored = await retryIdempotentPixelState(() => restoreSyntheticSession({
@@ -441,24 +441,13 @@ export async function bindExactRole({
         device,
         wait,
         account,
+        initialProfileHierarchy: guestProfile,
       })) === true;
   } catch {
     fail(`The exact ${role} Pixel login-restore surface did not appear.`);
   }
   if (!sessionRestored) {
     fail(`The exact ${role} Pixel session could not be established.`);
-  }
-  let profile;
-  try {
-    profile = await openMainDestination({
-      commandRunner,
-      adbPath,
-      device,
-      wait,
-      label: 'Mein SIT',
-    });
-  } catch {
-    fail(`The exact ${role} Pixel profile surface did not appear.`);
   }
   const exact = await waitForHierarchy({
     commandRunner,

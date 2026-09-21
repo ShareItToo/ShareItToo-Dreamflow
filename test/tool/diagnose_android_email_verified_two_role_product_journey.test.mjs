@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -245,6 +246,27 @@ test('does not read or retap after an exact-draft wait succeeds', async () => {
   assert.equal(result, 'exact draft');
   assert.equal(reads, 0);
   assert.equal(retaps, 0);
+});
+
+test('reuses the restored profile and avoids a second cold launch per role bind', () => {
+  const journey = readFileSync(
+    new URL('../../tool/diagnose_android_email_verified_two_role_product_journey.mjs', import.meta.url),
+    'utf8',
+  );
+  const bind = journey.slice(
+    journey.indexOf('export async function bindExactRole'),
+    journey.indexOf('async function publishOwnerDraftOnPixel'),
+  );
+  assert.doesNotMatch(bind, /launchCurrentHeadAndroidCandidate\(/u);
+  assert.match(bind, /initialProfileHierarchy: guestProfile/u);
+
+  const logout = readFileSync(
+    new URL('../../tool/diagnose_android_logout_lifecycle.mjs', import.meta.url),
+    'utf8',
+  );
+  assert.match(logout, /initialProfileHierarchy = null/u);
+  assert.match(logout, /initialMainHierarchy = null/u);
+  assert.match(logout, /initialMainHierarchy: mainAfterLogin/u);
 });
 
 test('restores an exact role with at most three deterministically checked attempts', async () => {
