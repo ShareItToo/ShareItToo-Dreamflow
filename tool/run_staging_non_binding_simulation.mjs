@@ -243,6 +243,11 @@ export async function runStagingNonBindingSimulation({
     `/listings/${encodeURIComponent(listingId)}/availability/check`,
     {
       method: 'POST',
+      // The staging access gate protects this POST even though the endpoint
+      // does not require an application session in an ungated environment.
+      // Bind the availability read to the renter role used for the booking
+      // flow; never fall back to an anonymous request under the gate.
+      token: renterToken,
       body: { startDate, endDate },
     },
   );

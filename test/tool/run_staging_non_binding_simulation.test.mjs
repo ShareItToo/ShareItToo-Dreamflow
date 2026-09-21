@@ -57,8 +57,24 @@ test('runs a persistent non-binding Staging request, acceptance and chat proof',
   });
   const fetchImpl = async (url, options = {}) => {
     const path = new URL(url).pathname.replace('/api/v1', '') + new URL(url).search;
-    calls.push({ path, method: options.method ?? 'GET', body: options.body });
-    if (path === '/auth/login') return response(200, { accessToken: 'x'.repeat(24) });
+    const authorization = options.headers?.Authorization ?? '';
+    calls.push({
+      path,
+      method: options.method ?? 'GET',
+      body: options.body,
+      authorization,
+    });
+    if (path === '/auth/login') {
+      const body = JSON.parse(options.body);
+      return response(200, {
+        accessToken: body.email.startsWith('owner')
+          ? 'owner-token-for-staging-gate'
+          : 'renter-token-for-staging-gate',
+      });
+    }
+    if (!authorization.startsWith('Bearer ')) {
+      return response(401, { error: 'staging_access_required' });
+    }
     if (path === '/listings/mine') {
       return response(200, { listings: [{
         id: listingId,
@@ -127,6 +143,28 @@ test('runs a persistent non-binding Staging request, acceptance and chat proof',
   const stored = JSON.parse(readFileSync(vaultFile, 'utf8'));
   assert.equal(stored.nonBindingSimulation.status, 'accepted-chat-ready');
   assert.equal(stored.nonBindingSimulation.paymentReadRejected, true);
+  const availability = calls.find((entry) => entry.path.endsWith('/availability/check'));
+  assert.equal(availability?.authorization, 'Bearer renter-token-for-staging-gate');
+  assert.deepEqual(
+    calls
+      .filter((entry) => entry.path !== '/auth/login')
+      .map((entry) => entry.authorization),
+    [
+      'Bearer owner-token-for-staging-gate',
+      'Bearer renter-token-for-staging-gate',
+      'Bearer owner-token-for-staging-gate',
+      'Bearer renter-token-for-staging-gate',
+      'Bearer renter-token-for-staging-gate',
+      'Bearer owner-token-for-staging-gate',
+      'Bearer renter-token-for-staging-gate',
+      'Bearer owner-token-for-staging-gate',
+      'Bearer owner-token-for-staging-gate',
+      'Bearer renter-token-for-staging-gate',
+      'Bearer renter-token-for-staging-gate',
+      'Bearer owner-token-for-staging-gate',
+      'Bearer renter-token-for-staging-gate',
+    ],
+  );
 });
 
 test('requires a private vault outside the repository', async () => {
