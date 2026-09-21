@@ -9,6 +9,7 @@ import {
   buildReplacementCreateArgs,
   readGoogleAuthRuntimeManifest,
   runGoogleAuthActivation,
+  sanitizeActivationError,
   setActivationFlags,
 } from '../ops/activate_staging_google_auth.mjs';
 
@@ -106,7 +107,7 @@ function fakeCommand(fx) {
   };
 }
 
-function statefulExecutor(fx, { failPhase, failRollbackPhase, driftReplacement = false } = {}) {
+function statefulExecutor(fx, { failPhase, failRollbackPhase, driftReplacement = false, startupTimeout = false, startupDelayed = false } = {}) {
   const base = fakeCommand(fx);
   const calls = base.calls;
   let replacement;
@@ -130,7 +131,11 @@ function statefulExecutor(fx, { failPhase, failRollbackPhase, driftReplacement =
     if (phase === 'replacement_runtime_flags') return { stdout: JSON.stringify({ ...fx.manifest.safetyEnv, FIREBASE_AUTH_ENABLED: 'true', DEPLOYMENT_ENVIRONMENT: 'staging' }) };
     if (phase === 'replacement_version_probe') return { stdout: JSON.stringify({ commit: revision, environment: 'staging' }) };
     if (phase === 'replacement_invalid_social_token_probe') return { stdout: JSON.stringify({ status: 401, code: 'invalid_social_token' }) };
-    if (phase === 'replacement_live_probe' || phase === 'replacement_ready_probe') return { stdout: '' };
+    if (phase === 'replacement_startup_probe') {
+      if (startupTimeout) return { stdout: JSON.stringify({ ok: false, reason: 'startup_timeout', attempts: { live: 60, ready: 60 }, last: { live: { status: 503 }, ready: { status: 503 } } }), code: 1 };
+      if (startupDelayed) return { stdout: JSON.stringify({ ok: true, attempts: { live: 3, ready: 4 }, last: { live: { status: 200 }, ready: { status: 200 } } }), code: 0 };
+      return { stdout: JSON.stringify({ ok: true, attempts: { live: 1, ready: 1 }, last: { live: { status: 200 }, ready: { status: 200 } } }), code: 0 };
+    }
     if (phase === 'replacement_database_probe') return { stdout: '1' };
     if (phase === 'rollback_replacement_remove') { replacementExists = false; return { stdout: '', code: 0 }; }
     if (phase === 'rollback_replacement_verify') return { stdout: replacementExists ? `${fx.manifest.apiContainer}\n` : '', code: 0 };
@@ -179,6 +184,21 @@ test('manifest reader enforces external private file, mode and JSON shape', asyn
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
+test('CLI failure sanitizer emits only bounded non-secret diagnostics', () => {
+  const output = sanitizeActivationError({
+    code: 'replacement_startup_probe_failed',
+    message: 'secret should not appear',
+    probeDiagnostic: { ok: false, reason: 'startup_timeout', attempts: { live: 60, ready: 60 }, last: { live: { status: 503 }, ready: { status: 503 } } },
+    rollback: { restored: false, results: [{ phase: 'rollback_restore_rename', ok: false, code: 'rename_failed', secret: 'never-output' }] },
+  });
+  assert.deepEqual(output, {
+    status: 'failed', code: 'replacement_startup_probe_failed',
+    probeDiagnostic: { ok: false, reason: 'startup_timeout', attempts: { live: 60, ready: 60 }, last: { live: { status: 503 }, ready: { status: 503 } } },
+    rollback: { restored: false, results: [{ phase: 'rollback_restore_rename', ok: false, code: 'rename_failed' }] },
+  });
+  assert.equal(JSON.stringify(output).includes('secret'), false);
+});
+
 test('replacement command is immutable, exact-network, exact-mount and host-port free', async () => {
   const fx = await fixture();
   try {
@@ -222,10 +242,25 @@ test('full executor success keeps rollback container for final device smoke', as
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
+test('bounded startup polling accepts delayed readiness and diagnoses timeout', async () => {
+  const delayed = await fixture();
+  try {
+    const executor = statefulExecutor(delayed, { startupDelayed: true });
+    const result = await runGoogleAuthActivation({ manifest: delayed.manifest, command: executor.command, commandEnv: { STAGING_GOOGLE_AUTH_EXECUTE: '1', STAGING_GOOGLE_AUTH_CONFIRM: revision }, execute: true });
+    assert.equal(result.status, 'activated-awaiting-device-smoke');
+    assert.ok(executor.calls.some((call) => call.phase === 'replacement_startup_probe'));
+  } finally { await rm(delayed.root, { recursive: true, force: true }); }
+  const timedOut = await fixture();
+  try {
+    const executor = statefulExecutor(timedOut, { startupTimeout: true });
+    await assert.rejects(runGoogleAuthActivation({ manifest: timedOut.manifest, command: executor.command, commandEnv: { STAGING_GOOGLE_AUTH_EXECUTE: '1', STAGING_GOOGLE_AUTH_CONFIRM: revision }, execute: true }), (error) => error.code === 'replacement_startup_probe_failed' && error.probeDiagnostic?.reason === 'startup_timeout' && error.rollback?.restored === true);
+  } finally { await rm(timedOut.root, { recursive: true, force: true }); }
+});
+
 test('executor failure restores env and sealed container', async () => {
   const fx = await fixture();
   try {
-    const executor = statefulExecutor(fx, { failPhase: 'replacement_ready_probe' });
+    const executor = statefulExecutor(fx, { failPhase: 'replacement_startup_probe' });
     await assert.rejects(
       runGoogleAuthActivation({
         manifest: fx.manifest,
@@ -241,19 +276,19 @@ test('executor failure restores env and sealed container', async () => {
 });
 
 test('all irreversible-phase failures are surfaced and never falsely restored', async () => {
-  for (const failPhase of ['stop_current_api', 'seal_current_api', 'create_replacement_api', 'start_replacement_api', 'replacement_ready_probe']) {
+  for (const failPhase of ['stop_current_api', 'seal_current_api', 'create_replacement_api', 'start_replacement_api', 'replacement_startup_probe']) {
     const fx = await fixture();
     try {
       const executor = statefulExecutor(fx, { failPhase });
       await assert.rejects(runGoogleAuthActivation({
         manifest: fx.manifest, command: executor.command,
         commandEnv: { STAGING_GOOGLE_AUTH_EXECUTE: '1', STAGING_GOOGLE_AUTH_CONFIRM: revision }, execute: true,
-      }), (error) => error.rollback?.restored === (failPhase === 'create_replacement_api' || failPhase === 'start_replacement_api' || failPhase === 'replacement_ready_probe'));
+      }), (error) => error.rollback?.restored === (failPhase === 'create_replacement_api' || failPhase === 'start_replacement_api' || failPhase === 'replacement_startup_probe'));
     } finally { await rm(fx.root, { recursive: true, force: true }); }
   }
   const fx = await fixture();
   try {
-    const executor = statefulExecutor(fx, { failPhase: 'replacement_ready_probe', failRollbackPhase: 'rollback_restore_rename' });
+    const executor = statefulExecutor(fx, { failPhase: 'replacement_startup_probe', failRollbackPhase: 'rollback_restore_rename' });
     await assert.rejects(runGoogleAuthActivation({
       manifest: fx.manifest, command: executor.command,
       commandEnv: { STAGING_GOOGLE_AUTH_EXECUTE: '1', STAGING_GOOGLE_AUTH_CONFIRM: revision }, execute: true,

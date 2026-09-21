@@ -485,6 +485,37 @@ function runCommand(command, args, { cwd = repositoryRoot, env = process.env, ph
   });
 }
 
+const boundedStartupProbeScript = "const endpoints=['live','ready']; const deadline=Date.now()+15000; const attempts={live:0,ready:0}; const last={}; const sleep=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms)); let passed={}; while(Date.now()<deadline){ for(const endpoint of endpoints){ if(passed[endpoint]) continue; attempts[endpoint]++; try { const response=await fetch(`http://127.0.0.1:8080/health/${endpoint}`); last[endpoint]={status:response.status}; if(response.status===200){ passed[endpoint]=true; } } catch { last[endpoint]={status:null}; } } if(endpoints.every((endpoint)=>passed[endpoint])){ process.stdout.write(JSON.stringify({ok:true,attempts,last})); process.exit(0); } await sleep(250); } process.stdout.write(JSON.stringify({ok:false,attempts,last,reason:'startup_timeout'})); process.exit(1);";
+
+async function runBoundedStartupProbe(command, container, commandEnv) {
+  let result;
+  try {
+    result = await command('docker', ['exec', container, 'node', '--input-type=module', '-e', boundedStartupProbeScript], {
+      phase: 'replacement_startup_probe', env: commandEnv, allowFailure: true,
+    });
+  } catch (error) {
+    error.code = error.code ?? 'replacement_startup_probe_failed';
+    error.probeDiagnostic = Object.freeze({ ok: false, reason: 'command_error' });
+    throw error;
+  }
+  let diagnostic;
+  try { diagnostic = JSON.parse(result.stdout?.trim() ?? ''); } catch {
+    diagnostic = { ok: false, reason: 'invalid_probe_output' };
+  }
+  if (result?.code !== 0 || diagnostic.ok !== true) {
+    const error = new Error('Staging Google Auth activation failed: replacement_startup_probe_failed');
+    error.code = 'replacement_startup_probe_failed';
+    error.probeDiagnostic = Object.freeze({
+      ok: diagnostic.ok === true,
+      reason: typeof diagnostic.reason === 'string' ? diagnostic.reason : 'startup_probe_failed',
+      attempts: diagnostic.attempts && typeof diagnostic.attempts === 'object' ? diagnostic.attempts : {},
+      last: diagnostic.last && typeof diagnostic.last === 'object' ? diagnostic.last : {},
+    });
+    throw error;
+  }
+  return diagnostic;
+}
+
 async function atomicReplace(content, manifest) {
   const directory = dirname(manifest.envFile);
   const temporary = `${manifest.envFile}.google-auth-${process.pid}-${crypto.randomBytes(8).toString('hex')}.tmp`;
@@ -628,9 +659,9 @@ export async function runGoogleAuthActivation({ manifest, command = runCommand, 
     const replacementRecord = oneRecord(parseJson(replacement.stdout, 'replacement_inspect_invalid'));
     if (!sameExceptAuthFlag(readbacks.api, replacementRecord)) fail('replacement_config_drift');
     assertExactContainerNetworks(replacementRecord, target, 'replacement_network_inventory_invalid');
-    await command('docker', ['start', target.apiContainer], { phase: 'start_replacement_api', env: commandEnv });
-    await command('docker', ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/health/live'); if(r.status!==200) process.exit(1)"], { phase: 'replacement_live_probe', env: commandEnv });
-    await command('docker', ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/health/ready'); if(r.status!==200) process.exit(1)"], { phase: 'replacement_ready_probe', env: commandEnv });
+    const startResult = await command('docker', ['start', target.apiContainer], { phase: 'start_replacement_api', env: commandEnv });
+    if (startResult?.code !== 0) fail('start_replacement_api_failed');
+    await runBoundedStartupProbe(command, target.apiContainer, commandEnv);
     await command('docker', ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/version'); const p=await r.json(); if(r.status!==200 || p.commit!==process.env.APP_COMMIT || p.environment!=='staging') process.exit(1)"], { phase: 'replacement_version_probe', env: commandEnv });
     const replacementFlags = await command('docker', ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "process.stdout.write(JSON.stringify(Object.fromEntries(['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED'].map((name)=>[name,process.env[name]??null])))"], { phase: 'replacement_runtime_flags', env: commandEnv });
     assertRuntimeReadback({ version: { commit: target.runtimeRevision, environment: activatedEnvironment }, flags: parseJson(replacementFlags.stdout, 'replacement_runtime_flags_invalid'), manifest: target, expectedAuth: activatedAuth, expectedEnvironment: activatedEnvironment });
@@ -657,6 +688,23 @@ export async function readGoogleAuthRuntimeManifest(filePath) {
   return assertGoogleAuthRuntimeManifest(JSON.parse(raw));
 }
 
+export function sanitizeActivationError(error) {
+  const output = { status: 'failed', code: error?.code ?? 'staging_google_auth_activation_failed' };
+  if (error?.probeDiagnostic) output.probeDiagnostic = {
+    ok: error.probeDiagnostic.ok === true,
+    reason: typeof error.probeDiagnostic.reason === 'string' ? error.probeDiagnostic.reason : 'startup_probe_failed',
+    attempts: error.probeDiagnostic.attempts && typeof error.probeDiagnostic.attempts === 'object' ? error.probeDiagnostic.attempts : {},
+    last: error.probeDiagnostic.last && typeof error.probeDiagnostic.last === 'object' ? error.probeDiagnostic.last : {},
+  };
+  if (error?.rollback) output.rollback = {
+    restored: error.rollback.restored === true,
+    results: (error.rollback.results ?? []).map((entry) => ({
+      phase: String(entry.phase ?? 'rollback'), ok: entry.ok === true, ...(entry.code ? { code: String(entry.code) } : {}),
+    })),
+  };
+  return output;
+}
+
 async function main() {
   const manifest = await readGoogleAuthRuntimeManifest(process.env.STAGING_GOOGLE_AUTH_RUNTIME_MANIFEST ?? '');
   const result = await runGoogleAuthActivation({ manifest, execute: process.env.STAGING_GOOGLE_AUTH_EXECUTE === '1' });
@@ -665,7 +713,7 @@ async function main() {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((error) => {
-    process.stderr.write(`${error?.code ?? 'staging_google_auth_activation_failed'}\n`);
+    process.stderr.write(`${JSON.stringify(sanitizeActivationError(error))}\n`);
     process.exitCode = 1;
   });
 }
