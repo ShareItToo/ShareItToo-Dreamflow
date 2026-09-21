@@ -397,6 +397,25 @@ test('command failures and file-input failures never expose command output', asy
   }
 });
 
+test('buffer file input preserves exact bytes and tolerates an expected early stdin close', async () => {
+  const exactBytes = Buffer.from([0, 1, 2, 127, 128, 254, 255, 10, 13]);
+  const echoed = await runCommandWithFileInput(
+    process.execPath,
+    ['-e', "const chunks=[]; process.stdin.on('data', (chunk) => chunks.push(chunk)); process.stdin.on('end', () => process.stdout.write(Buffer.concat(chunks).toString('hex')));"],
+    exactBytes,
+    { phase: 'buffer_exact_bytes' },
+  );
+  assert.equal(echoed.stdout, exactBytes.toString('hex'));
+
+  const earlyClose = await runCommandWithFileInput(
+    process.execPath,
+    ['-e', "process.stdin.once('data', () => { process.stdin.destroy(); process.exit(0); });"],
+    Buffer.alloc(16 * 1024 * 1024, 0x5a),
+    { phase: 'buffer_early_close' },
+  );
+  assert.equal(earlyClose.stdout, '');
+});
+
 test('backup stream opens and flushes before archive verification; expected list EPIPE is benign', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'sit-rehearsal-backup-'));
   t.after(() => rm(root, { recursive: true, force: true }));

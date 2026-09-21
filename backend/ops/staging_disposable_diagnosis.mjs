@@ -149,7 +149,7 @@ const created = [];
 try {
   const opsHead = out(await execFile('git', ['-C', OPS_CHECKOUT, 'rev-parse', 'HEAD']));
   if (opsHead !== OPS_COMMIT) fail('ops_checkout_commit_mismatch');
-  const backup = await verifyBackup();
+  const { input: backupInput, ...backup } = await verifyBackup();
   const imageMeta = out(await docker(['image','inspect',CANDIDATE_IMAGE,'--format','{{.Id}}|{{index .Config.Labels "org.opencontainers.image.revision"}}']));
   const [imageId, revision] = imageMeta.split('|');
   if (imageId !== CANDIDATE_IMAGE || revision !== CANDIDATE_COMMIT) fail('candidate_image_identity_mismatch');
@@ -174,7 +174,7 @@ try {
   await docker(['create','--name',resources.database,...labelArgs,'--network',resources.network,'--network-alias','db','--mount',`type=volume,src=${resources.volume},dst=/var/lib/postgresql/data`,'-e','POSTGRES_DB=shareittoo_rehearsal','-e','POSTGRES_USER=shareittoo_rehearsal','-e',`POSTGRES_PASSWORD=${dbPassword}`,POSTGRES_IMAGE]); created.push(['container',resources.database]);
   await docker(['create','--name',resources.bootstrap,...labelArgs,'--network',resources.network,...baseEnv,CANDIDATE_IMAGE,'node','--input-type=module','-e',"import { initializeDatabase, pool } from '/app/src/db.js'; await initializeDatabase(); await pool.end();"]); created.push(['container',resources.bootstrap]);
   await docker(['start',resources.database]); await waitForPostgres(resources.database);
-  await docker(['exec','-i',resources.database,'pg_restore','-U','shareittoo_rehearsal','-d','shareittoo_rehearsal','--no-owner','--no-acl'], { input: backup.input });
+  await docker(['exec','-i',resources.database,'pg_restore','-U','shareittoo_rehearsal','-d','shareittoo_rehearsal','--no-owner','--no-acl'], { input: backupInput });
   await docker(['start',resources.bootstrap]);
   const exit = out(await docker(['wait',resources.bootstrap]));
   if (exit !== '0') {

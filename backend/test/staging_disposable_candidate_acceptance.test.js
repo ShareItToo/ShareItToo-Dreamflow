@@ -93,6 +93,11 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
     assert.equal(result.hostPortPublished, false);
     assert.equal(result.readiness.http, 503);
     assert.deepEqual(restoreInput, Buffer.from('deterministic-backup'));
+    assert.deepEqual(result.backup, {
+      bytes: Buffer.byteLength('deterministic-backup'),
+      sha256: hash,
+    });
+    assert.doesNotMatch(JSON.stringify(result), /deterministic-backup/u);
     assert.deepEqual(cleanup.map(([kind]) => kind), ['container', 'container', 'container', 'volume', 'network']);
     assert.ok(calls.some(({ phase }) => phase === 'candidate_start'));
     assert.ok(calls.some(({ phase }) => phase === 'mfa_probe'));

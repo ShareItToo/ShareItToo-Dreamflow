@@ -220,7 +220,7 @@ export async function runDisposableCandidateAcceptance({
   const opsHead = await command('git', ['rev-parse', 'HEAD'], { phase: 'ops_head_read' });
   if (String(typeof opsHead === 'string' ? opsHead : opsHead.stdout).trim() !== opsCommit) fail('ops_checkout_commit_mismatch');
   const safeEvidencePath = await assertSafeEvidencePath(evidencePath);
-  const backup = await verifyBackup({ backupPath, manifestPath, hashFile });
+  const { input: backupInput, ...backup } = await verifyBackup({ backupPath, manifestPath, hashFile });
   const runId = `${new Date().toISOString().replace(/[^0-9]/gu, '').slice(0, 14)}-${crypto.randomUUID().slice(0, 8)}`;
   const network = `sit-staging-rehearsal-network-${runId}`;
   const volume = `sit-staging-rehearsal-volume-${runId}`;
@@ -271,7 +271,7 @@ export async function runDisposableCandidateAcceptance({
     }
     await command('docker', ['start', database], { phase: 'database_start' });
     await waitForPostgres({ command, container: database });
-    await commandWithFileInput('docker', ['exec', '-i', database, 'pg_restore', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal', '--no-owner', '--no-acl'], backup.input, { phase: 'restore' });
+    await commandWithFileInput('docker', ['exec', '-i', database, 'pg_restore', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal', '--no-owner', '--no-acl'], backupInput, { phase: 'restore' });
     const bootstrapScript = "import { initializeDatabase, pool } from '/app/src/db.js'; await initializeDatabase(); await pool.end();";
     await command('docker', ['create', '--name', bootstrap, ...labels, '--network', network, ...runtimeEnvArgs(bootstrapRuntime), disposableCandidateImageDigest, 'node', '--input-type=module', '-e', bootstrapScript], { phase: 'bootstrap_create' });
     const bootstrapLabels = await inspectLabels(command, bootstrap, '{{json .Config.Labels}}', 'bootstrap_identity');

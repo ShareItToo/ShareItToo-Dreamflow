@@ -93,7 +93,7 @@ SELECT jsonb_build_object(
 let mfaPath; let evidence; const created = [];
 try {
   if (text(await execFile('git', ['-C', OPS_CHECKOUT, 'rev-parse', 'HEAD'])) !== OPS_COMMIT) fail('ops_checkout_commit_mismatch');
-  const backup = await verifyBackup(); const keyInfo = await stripeKeyClass();
+  const { input: backupInput, ...backup } = await verifyBackup(); const keyInfo = await stripeKeyClass();
   const imageMeta = text(await docker(['image','inspect',CANDIDATE_IMAGE,'--format','{{.Id}}|{{index .Config.Labels "org.opencontainers.image.revision"}}'])); const [imageId, revision] = imageMeta.split('|'); if (imageId !== CANDIDATE_IMAGE || revision !== RUNTIME_COMMIT) fail('candidate_image_identity_mismatch');
   const temp = await mkdtemp(join(tmpdir(), 'sit-wp250-')); mfaPath = `${temp}/mfa-key`; await writeFile(mfaPath, `${crypto.randomBytes(32).toString('base64url')}\n`, { mode: 0o640 }); await chmod(mfaPath, 0o640); await execFile('chown', ['65532:65532', mfaPath]);
   const dbPassword = ['disposable', crypto.randomBytes(18).toString('base64url')].join('-');
@@ -110,7 +110,7 @@ try {
   await docker(['network','create','--internal',...labels,resources.network]); created.push(['network',resources.network]); await docker(['volume','create',...labels,resources.volume]); created.push(['volume',resources.volume]);
   await docker(['create','--name',resources.database,...labels,'--network',resources.network,'--network-alias','db','--mount',`type=volume,src=${resources.volume},dst=/var/lib/postgresql/data`,'-e','POSTGRES_DB=shareittoo_rehearsal','-e','POSTGRES_USER=shareittoo_rehearsal','-e',`POSTGRES_PASSWORD=${dbPassword}`,POSTGRES_IMAGE]); created.push(['container',resources.database]);
   await docker(['create','--name',resources.bootstrap,...labels,'--network',resources.network,...envArgs,CANDIDATE_IMAGE,'node','--input-type=module','-e',"import { initializeDatabase, pool } from '/app/src/db.js'; await initializeDatabase(); await pool.end();"]); created.push(['container',resources.bootstrap]);
-  await docker(['start',resources.database]); await waitPg(resources.database); await docker(['exec','-i',resources.database,'pg_restore','-U','shareittoo_rehearsal','-d','shareittoo_rehearsal','--no-owner','--no-acl'], { input: backup.input }); await docker(['start',resources.bootstrap]); const exit = text(await docker(['wait',resources.bootstrap])); if (exit !== '0') fail('bootstrap_migrations_failed');
+  await docker(['start',resources.database]); await waitPg(resources.database); await docker(['exec','-i',resources.database,'pg_restore','-U','shareittoo_rehearsal','-d','shareittoo_rehearsal','--no-owner','--no-acl'], { input: backupInput }); await docker(['start',resources.bootstrap]); const exit = text(await docker(['wait',resources.bootstrap])); if (exit !== '0') fail('bootstrap_migrations_failed');
   const mappings = await dbQuery(resources.database, mappingSql); const rows = Array.isArray(mappings) ? mappings : [];
   const mappingPath = process.env.SIT_WP250_MAPPING_PATH;
   if (mappingPath) {
