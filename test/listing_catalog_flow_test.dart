@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/models/item.dart';
@@ -130,6 +131,48 @@ void main() {
     );
 
     expect(results.map((item) => item.id), ['cheap']);
+  });
+
+  test('public catalog feed and search preserve guest and current auth tokens',
+      () async {
+    final sent = <String?>[];
+    Future<String?> guestToken() async => null;
+    Future<String?> authenticatedToken() async => 'current-staging-token';
+
+    await DataService.withPublicCatalogAccessToken(
+      readAccessToken: guestToken,
+      operation: (token) async {
+        sent.add(token);
+        return const <String>[];
+      },
+    );
+    await DataService.withPublicCatalogAccessToken(
+      readAccessToken: authenticatedToken,
+      operation: (token) async {
+        sent.add(token);
+        return const <String>[];
+      },
+    );
+
+    expect(sent, [null, 'current-staging-token']);
+  });
+
+  test('feed and filtered search both use the shared token boundary', () async {
+    final source = await File('lib/services/data_service.dart').readAsString();
+    final snapshotStart = source.indexOf(
+      'static Future<PublicCatalogSnapshot> getPublicCatalogSnapshot()',
+    );
+    final searchStart = source.indexOf(
+      'static Future<List<Item>> searchPublicItems(',
+      snapshotStart,
+    );
+    final snapshot = source.substring(snapshotStart, searchStart);
+    final search = source.substring(searchStart);
+
+    expect(snapshot, contains('withPublicCatalogAccessToken'));
+    expect(search, contains('withPublicCatalogAccessToken'));
+    expect(snapshot, contains('accessToken: accessToken'));
+    expect(search, contains('accessToken: accessToken'));
   });
 
   test('only canonical full-size backend images survive an edit', () {

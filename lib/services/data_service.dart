@@ -5118,6 +5118,30 @@ class DataService {
   }) =>
       backendEnabled && !qaRuntimeEnabled;
 
+  static Future<String?> _readPublicCatalogAccessToken() async {
+    if (!BackendConfig.enabled) return null;
+    final session = await AuthService.readSession();
+    if (session == null) return null;
+    final owner = AuthService.captureSessionOwner(session);
+    final token = await AuthService.accessTokenForOwner(owner);
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) return null;
+    return token;
+  }
+
+  /// Resolves one public-catalog request credential and passes that exact
+  /// value to the request. Keeping this boundary shared by the feed and
+  /// filtered-search paths prevents authenticated staging users from falling
+  /// back to the anonymous allowlist, while the owner check prevents a stale
+  /// principal from being projected into a successor request.
+  @visibleForTesting
+  static Future<T> withPublicCatalogAccessToken<T>({
+    required Future<T> Function(String? accessToken) operation,
+    Future<String?> Function()? readAccessToken,
+  }) async {
+    final token = await (readAccessToken ?? _readPublicCatalogAccessToken)();
+    return operation(token);
+  }
+
   static Future<PublicCatalogSnapshot> getPublicCatalogSnapshot() async {
     final items = <Item>[];
     final blockedUserIdsFuture = BlockedUsersService.getBlockedUserIds();
@@ -5134,10 +5158,12 @@ class DataService {
       // as well so the staging cohort gate can authorize the same public
       // catalog read without requiring a per-run fixture ID in deployment
       // configuration. Production keeps the same public response semantics.
-      final remote = await BackendRepository.searchListings(
-        sort: 'newest',
-        limit: 100,
-        accessToken: await AuthService.accessToken(),
+      final remote = await withPublicCatalogAccessToken(
+        operation: (accessToken) => BackendRepository.searchListings(
+          sort: 'newest',
+          limit: 100,
+          accessToken: accessToken,
+        ),
       );
       for (final entry in remote) {
         try {
@@ -5178,17 +5204,20 @@ class DataService {
   }) async {
     List<Item> items;
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-      final remote = await BackendRepository.searchListings(
-        query: query,
-        categoryIds: categoryIds,
-        conditions: conditions,
-        minPrice: minPrice,
-        maxPrice: maxPrice,
-        latitude: latitude,
-        longitude: longitude,
-        radiusKm: radiusKm,
-        sort: sort,
-        limit: limit,
+      final remote = await withPublicCatalogAccessToken(
+        operation: (accessToken) => BackendRepository.searchListings(
+          query: query,
+          categoryIds: categoryIds,
+          conditions: conditions,
+          minPrice: minPrice,
+          maxPrice: maxPrice,
+          latitude: latitude,
+          longitude: longitude,
+          radiusKm: radiusKm,
+          sort: sort,
+          limit: limit,
+          accessToken: accessToken,
+        ),
       );
       items = <Item>[];
       for (final entry in remote) {
