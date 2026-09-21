@@ -135,25 +135,49 @@ export class StripeProvider {
     if (typeof signatureHeader !== 'string' || signatureHeader.length === 0) {
       throw new PaymentDomainError(400, 'missing_webhook_signature');
     }
-    let envelope;
-    try {
-      envelope = JSON.parse(rawBody.toString('utf8'));
-    } catch {
-      throw new PaymentDomainError(400, 'invalid_webhook_json');
-    }
-    // The unsigned type only selects a destination. Trust still requires the
-    // original bytes to verify with that destination's own secret; never try
-    // the other destination's key as a fallback.
-    const thin = String(envelope?.type ?? '').startsWith('v2.');
-    const destinationSecret = thin ? connectWebhookSecret : webhookSecret;
-    if (typeof destinationSecret !== 'string' || !destinationSecret) {
+    const destinations = [
+      { kind: 'snapshot', secret: webhookSecret },
+      { kind: 'thin', secret: connectWebhookSecret },
+    ].filter(({ secret }) => typeof secret === 'string' && secret.length > 0);
+    if (destinations.length === 0) {
       throw new PaymentDomainError(503, 'webhook_destination_not_configured');
     }
+
+    // Verify the exact raw bytes before parsing JSON. Event type is untrusted
+    // until one configured destination secret has authenticated those bytes.
+    const verified = destinations.filter(({ secret }) => {
+      try {
+        this.client.webhooks.signature.verifyHeader(rawBody, signatureHeader, secret);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    if (verified.length !== 1) {
+      throw new PaymentDomainError(400, 'invalid_webhook_signature');
+    }
+
+    const [{ kind, secret }] = verified;
     try {
-      return thin
-        ? this.client.parseEventNotification(rawBody, signatureHeader, destinationSecret)
-        : this.client.webhooks.constructEvent(rawBody, signatureHeader, destinationSecret);
+      return kind === 'thin'
+        ? this.client.parseEventNotification(rawBody, signatureHeader, secret)
+        : this.client.webhooks.constructEvent(rawBody, signatureHeader, secret);
     } catch {
+      // JSON parsing is permitted only after the raw bytes authenticated. A
+      // signed but malformed body is a JSON error; a signed body from the
+      // other envelope family is a destination/signature error.
+      let envelope;
+      try {
+        envelope = JSON.parse(rawBody.toString('utf8'));
+      } catch {
+        throw new PaymentDomainError(400, 'invalid_webhook_json');
+      }
+      if (kind === 'snapshot' && String(envelope?.type ?? '').startsWith('v2.')) {
+        throw new PaymentDomainError(
+          connectWebhookSecret ? 400 : 503,
+          connectWebhookSecret ? 'invalid_webhook_signature' : 'webhook_destination_not_configured',
+        );
+      }
       throw new PaymentDomainError(400, 'invalid_webhook_signature');
     }
   }

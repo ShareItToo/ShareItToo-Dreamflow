@@ -63,6 +63,22 @@ test('missing thin secret never falls back to snapshot verification', () => {
     (error) => error.code === 'webhook_destination_not_configured');
 });
 
+test('raw webhook bytes are authenticated before malformed JSON is parsed', () => {
+  const provider = new StripeProvider({ mode: 'stripe', secretKey: 'rk_test_localunitfixture' });
+  const malformed = '{"id":';
+  const validHeader = stripeSignatureHeader({ payload: malformed, secret: snapshotSecret });
+  assert.throws(() => provider.parseWebhookEvent({
+    rawBody: Buffer.from(malformed),
+    signatureHeader: 't=1,v1=forged',
+    webhookSecret: snapshotSecret,
+  }), (error) => error.code === 'invalid_webhook_signature');
+  assert.throws(() => provider.parseWebhookEvent({
+    rawBody: Buffer.from(malformed),
+    signatureHeader: validHeader,
+    webhookSecret: snapshotSecret,
+  }), (error) => error.code === 'invalid_webhook_json');
+});
+
 test('changing event family or raw payload invalidates the signature', () => {
   const provider = new StripeProvider({ mode: 'stripe', secretKey: 'rk_test_localunitfixture' });
   const body = payload(true);
