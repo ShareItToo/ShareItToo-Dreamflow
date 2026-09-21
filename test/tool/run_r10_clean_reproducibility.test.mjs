@@ -8,6 +8,7 @@ import {
   assertSafeR10TempRoot,
   captureR10Toolchain,
   compareApkInventories,
+  compactFailureOutput,
   containsConservativeRawByteMarker,
   executeR10CleanReproducibility,
   knownD8MetadataNormalizedSha256,
@@ -24,6 +25,50 @@ const technicalRegression = readFileSync(
   new URL('../../scripts/technical_regression_check.sh', import.meta.url),
   'utf8',
 );
+
+test('R10 failure compaction preserves early TAP failure blocks and final summary', () => {
+  const tap = [
+    '# Subtest: early failure',
+    'not ok 1 - early failure',
+    '  ---',
+    "  failureType: 'testCodeFailure'",
+    '  error: |- ',
+    '    AssertionError: expected exact value',
+    '    at synthetic-test.js:12:3',
+    '  stack: |- ',
+    '    AssertionError: expected exact value',
+    '      at synthetic-test.js:12:3',
+    '  ...',
+    ...Array.from({ length: 500 }, (_, index) => `ok ${index + 2} - later passing test`),
+    'not ok 503 - second failure',
+    '  ---',
+    "  failureType: 'testCodeFailure'",
+    '  error: |- ',
+    '    second synthetic failure',
+    '  ...',
+    '# tests 501',
+    '# pass 500',
+    '# fail 2',
+    '# skipped 0',
+    '# duration_ms 1234',
+  ].join('\n');
+  const compact = compactFailureOutput(tap);
+  assert.match(compact, /not ok 1 - early failure/u);
+  assert.match(compact, /failureType: 'testCodeFailure'/u);
+  assert.match(compact, /AssertionError: expected exact value/u);
+  assert.match(compact, /# fail 2/u);
+  assert.match(compact, /not ok 503 - second failure/u);
+  assert.doesNotMatch(compact, /ok 500 - later passing test/u);
+  assert.ok(compact.length <= 16_000);
+});
+
+test('R10 failure compaction strips terminal controls and uses bounded tail fallback', () => {
+  const noisy = `\u001B[31m${'x'.repeat(20_000)}\u001B[0m\nlast line`;
+  const compact = compactFailureOutput(noisy);
+  assert.equal(compact.includes('\u001B'), false);
+  assert.match(compact, /last line/u);
+  assert.ok(compact.length <= 16_000);
+});
 
 test('R10 budgets cold caches, output, both APK inventories and reserve before starting', async () => {
   const requiredKiB = Object.values(r10StorageBudgetKiB).reduce((sum, value) => sum + value, 0);

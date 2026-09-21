@@ -88,8 +88,81 @@ function exact(actual, expected) {
   return JSON.stringify(actual) === JSON.stringify(expected);
 }
 
-function compactFailureOutput(value) {
-  return value.trim().split(/\r?\n/u).slice(-60).join('\n').slice(0, 16_000);
+const r10FailureOutputLimit = 16_000;
+
+function stripTerminalSequences(value) {
+  return value.replace(/\u001B\[[0-?]*[ -\/]*[@-~]/gu, '');
+}
+
+function boundedLines(lines, limit = r10FailureOutputLimit) {
+  const output = [];
+  let length = 0;
+  for (const line of lines) {
+    const remaining = limit - length;
+    if (remaining <= 0) break;
+    const bounded = line.slice(0, remaining);
+    output.push(bounded);
+    length += bounded.length + 1;
+    if (bounded.length < line.length) break;
+  }
+  return output.join('\n').slice(0, limit);
+}
+
+function boundedTailLines(lines, limit = r10FailureOutputLimit) {
+  const selected = [];
+  let length = 0;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index];
+    const required = line.length + (selected.length > 0 ? 1 : 0);
+    if (required <= limit - length) {
+      selected.unshift(line);
+      length += required;
+      continue;
+    }
+    if (selected.length === 0) selected.unshift(line.slice(-limit));
+    break;
+  }
+  return selected.join('\n');
+}
+
+export function compactFailureOutput(value) {
+  const lines = stripTerminalSequences(String(value)).trim().split(/\r?\n/u);
+  const failureStarts = lines
+    .map((line, index) => /^\s*not ok\b/u.test(line) ? index : -1)
+    .filter((index) => index >= 0);
+  if (failureStarts.length === 0) {
+    return boundedTailLines(lines.slice(-60));
+  }
+
+  const blocks = failureStarts.map((start, failureIndex) => {
+    const nextFailure = failureStarts[failureIndex + 1] ?? lines.length;
+    const yamlEnd = lines.findIndex((line, index) => index > start
+      && /^\s*\.\.\.\s*$/u.test(line));
+    const resultEnd = lines.findIndex((line, index) => index > start
+      && /^\s*(?:not ok|ok)\b/u.test(line));
+    const summaryEnd = lines.findIndex((line, index) => index > start
+      && /^# (?:tests|suites|pass|fail|cancelled|skipped|todo|duration_ms)\b/u.test(line));
+    const end = Math.min(
+      nextFailure,
+      yamlEnd >= 0 ? yamlEnd + 1 : lines.length,
+      resultEnd >= 0 ? resultEnd : lines.length,
+      summaryEnd >= 0 ? summaryEnd : lines.length,
+    );
+    return lines.slice(start, end);
+  });
+  const summary = lines.filter((line) => /^# (?:tests|suites|pass|fail|cancelled|skipped|todo|duration_ms)\b/u.test(line));
+  const selected = [];
+  let remaining = r10FailureOutputLimit;
+  for (const block of blocks) {
+    if (remaining <= 0) break;
+    const rendered = boundedLines(block, Math.min(remaining, 8_000));
+    if (rendered !== '') {
+      selected.push(rendered);
+      remaining -= rendered.length + 1;
+    }
+  }
+  if (summary.length > 0 && remaining > 0) selected.push(boundedLines(summary, remaining));
+  return boundedLines(selected.join('\n').split('\n'));
 }
 
 async function runCommand(command, args, {
