@@ -49,6 +49,9 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 - Unauthenticated operational probes must target paths explicitly allowlisted by
   the access gate; focused tests must cover the enabled/valid gate matrix and
   reject nearby protected paths.
+- Restricted provider lanes must use least-privilege API reads; bind account
+  identity from trusted lane configuration and session creation, not an
+  account-wide verification read requiring broader permissions.
 - Remote alias mentor invariant: after an alias or DNS failure, read the exact
   saved SSH configuration and authoritative project source before concluding
   that remote access is unavailable; test only the verified saved alias. A

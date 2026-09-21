@@ -73,7 +73,7 @@ test('stripe technical checkout request has no Connect or live-money fields', as
   assert.equal(options.idempotencyKey, checkoutInput.idempotencyKey);
 });
 
-test('strict provider readback retrieves the expected account and expanded intent', async () => {
+test('strict provider readback retrieves only the DB-bound Checkout Session with restricted test key', async () => {
   const calls = [];
   const client = {
     checkout: {
@@ -87,12 +87,6 @@ test('strict provider readback retrieves the expected account and expanded inten
         },
       },
     },
-    accounts: {
-      retrieve: async (...args) => {
-        calls.push(['account', ...args]);
-        return { id: 'acct_synthetic1234', livemode: false };
-      },
-    },
   };
   const provider = new StripeProvider({ mode: 'stripe', secretKey: 'rk_test_fixture', stripeClient: client });
   const result = await provider.retrieveTechnicalSandboxCheckout({
@@ -102,5 +96,5 @@ test('strict provider readback retrieves the expected account and expanded inten
   assert.equal(result.accountId, 'acct_synthetic1234');
   assert.equal(result.accountLivemode, false);
   assert.deepEqual(calls[0][2], { expand: ['payment_intent'] });
-  assert.deepEqual(calls[1], ['account']);
+  assert.deepEqual(calls, [['session', 'cs_test_technical', { expand: ['payment_intent'] }]]);
 });

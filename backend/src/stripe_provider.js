@@ -505,23 +505,31 @@ export class StripeProvider {
   }
 
   async retrieveTechnicalSandboxCheckout({ sessionId, expectedAccountId }) {
+    if (!/^acct_[A-Za-z0-9]+$/u.test(String(expectedAccountId ?? ''))) {
+      throw new PaymentDomainError(503, 'technical_sandbox_account_binding_invalid');
+    }
     if (this.mode === 'memory') {
       const stored = this.memory.get(`technical-sandbox-session:${sessionId}`);
       if (!stored) throw new PaymentDomainError(404, 'technical_sandbox_session_not_found');
       return { ...stored, accountId: expectedAccountId, accountLivemode: false };
     }
+    if (!/^rk_test_[A-Za-z0-9]+$/u.test(this.secretKey)) {
+      throw new PaymentDomainError(503, 'technical_sandbox_restricted_key_required');
+    }
+    // The restricted rk_test key and expectedAccountId are the lane's trusted
+    // configuration, and the session was created with the same binding. The
+    // workflow still rejects any mismatch in session/metadata/livemode/amount
+    // evidence. Avoid an account-wide API read: it requires broader Stripe
+    // permissions than retrieving the DB-bound Checkout Session.
     return this.call(async (client) => {
-      const [session, account] = await Promise.all([
-        client.checkout.sessions.retrieve(sessionId, { expand: ['payment_intent'] }),
-        client.accounts.retrieve(),
-      ]);
+      const session = await client.checkout.sessions.retrieve(sessionId, { expand: ['payment_intent'] });
       return {
         session,
         paymentIntent: typeof session.payment_intent === 'object'
           ? session.payment_intent
           : null,
-        accountId: account.id,
-        accountLivemode: account.livemode,
+        accountId: expectedAccountId,
+        accountLivemode: false,
       };
     });
   }
