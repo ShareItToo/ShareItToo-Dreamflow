@@ -17,6 +17,7 @@ import { readMfaEncryptionKeyConfiguration } from './mfa_secret_files.js';
 import { readAppleRevocationConfiguration } from './apple_revocation_secret_files.js';
 import { normalizeIdentityVerificationTransport } from './identity_verification_config.js';
 import { readStagingAccessConfiguration } from './staging_access_gate.js';
+import { readStagingGoogleRegistrationConfiguration } from './staging_google_registration.js';
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -197,6 +198,11 @@ const stripeSecretKey = stripeSecrets.secretKey;
 const stripeWebhookSecret = stripeSecrets.webhookSecret;
 const stripeConnectWebhookSecret = stripeSecrets.connectWebhookSecret;
 const stripeLivemode = (process.env.STRIPE_LIVEMODE ?? 'false').trim().toLowerCase() === 'true';
+const stagingGoogleRegistration = readStagingGoogleRegistrationConfiguration(process.env, {
+  stagingAccess,
+  firebaseAuthEnabled,
+  stripeLivemode,
+});
 if (paymentTransport === 'stripe') {
   if (!/^(?:sk|rk)_(?:test|live)_[A-Za-z0-9]+$/.test(stripeSecretKey)) {
     throw new Error('STRIPE_SECRET_KEY must be a valid server-side Stripe secret or restricted key');
@@ -431,6 +437,7 @@ export const config = Object.freeze({
   minimumAccountAge: 18,
   deploymentEnvironment,
   stagingAccess,
+  stagingGoogleRegistration,
   bookingPilotMode,
   bookingPilotEnabled: bookingPilotMode !== 'off',
   bookingPilotWithoutPayment: bookingPilotMode === 'pilot',

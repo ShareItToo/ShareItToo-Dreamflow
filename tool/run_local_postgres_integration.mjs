@@ -199,6 +199,7 @@ export async function runLocalPostgresIntegration({
   let primaryError = null;
   let port = null;
   const focusedIdentity = environment.SIT_POSTGRES_FOCUSED_IDENTITY === '1';
+  const focusedGoogleRegistration = environment.SIT_POSTGRES_FOCUSED_GOOGLE === '1';
   const focusedLegacySchema = environment.SIT_POSTGRES_FOCUSED_LEGACY === '1';
 
   const onSignal = (signal) => {
@@ -266,7 +267,9 @@ export async function runLocalPostgresIntegration({
       '--test',
       ...files,
     ], { env: testEnvironment, inherit: inheritTestOutput });
-    if (focusedLegacySchema) {
+    if (focusedGoogleRegistration) {
+      await runTests(['backend/test/staging_google_registration.integration.test.js']);
+    } else if (focusedLegacySchema) {
       await runTests(['backend/test/schema_legacy_startup.integration.test.js']);
     } else if (focusedIdentity) {
       await runTests(['backend/test/identity_verification_postgres.integration.test.js']);
@@ -277,6 +280,7 @@ export async function runLocalPostgresIntegration({
         'backend/test/postgres_foundation.integration.test.js',
         'backend/test/foreign_key_integrity.integration.test.js',
       ]);
+      await runTests(['backend/test/staging_google_registration.integration.test.js']);
       await runTests([
         'backend/test/listing_ai_lifetime_budget_migration.integration.test.js',
         'backend/test/listing_ai_attempt_postgres.integration.test.js',
@@ -358,13 +362,16 @@ export async function runLocalPostgresIntegration({
     host: '127.0.0.1',
     database: integrationDatabaseName,
     integrationTests: [
-      ...(focusedLegacySchema
+      ...(focusedGoogleRegistration
+        ? ['backend/test/staging_google_registration.integration.test.js']
+        : focusedLegacySchema
         ? ['backend/test/schema_legacy_startup.integration.test.js']
         : focusedIdentity
         ? ['backend/test/identity_verification_postgres.integration.test.js']
         : [
           'backend/test/postgres_foundation.integration.test.js',
           'backend/test/foreign_key_integrity.integration.test.js',
+          'backend/test/staging_google_registration.integration.test.js',
           'backend/test/identity_verification_postgres.integration.test.js',
           'backend/test/mfa_postgres.integration.test.js',
         ]),

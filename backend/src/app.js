@@ -368,6 +368,11 @@ import {
   verifyFirebaseSocialToken,
 } from './firebase_social_auth.js';
 import {
+  assertStagingGoogleRegistrationToken,
+  reserveStagingGoogleRegistrationReplay,
+  resolveStagingGoogleRegistration,
+} from './staging_google_registration.js';
+import {
   deleteFirebasePhoneIdentity,
   PhoneVerificationError,
   verifyFirebasePhoneToken,
@@ -672,6 +677,23 @@ function assertStagingRegistrationClosed() {
   if (config.stagingAccess.enabled) {
     throw new HttpError(403, 'staging_registration_disabled');
   }
+}
+
+function assertStagingGoogleRegistrationPolicy(error) {
+  const code = error?.code;
+  if (code === 'staging_google_registration_replay') {
+    throw new HttpError(409, code);
+  }
+  if (typeof code === 'string' && code.startsWith('staging_google_registration_token_')) {
+    throw new HttpError(401, 'invalid_social_token');
+  }
+  if (code === 'staging_google_registration_email_unverified'
+      || code === 'staging_google_registration_provider_mismatch'
+      || code === 'staging_google_identity_not_allowlisted'
+      || code === 'staging_google_registration_user_invalid') {
+    throw new HttpError(403, 'staging_google_identity_not_allowlisted');
+  }
+  throw error;
 }
 
 function assertStagingActionTokenOwner(row) {
@@ -2365,12 +2387,60 @@ export function createApp({
   app.post('/v1/auth/social', socialAuthLimiter, asyncRoute(async (req, res) => {
     let identity;
     try {
-      identity = await verifySocialToken(req.body?.idToken);
+      identity = await verifySocialToken(req.body?.idToken, {
+        requireFreshToken: config.stagingGoogleRegistration.enabled,
+      });
     } catch (error) {
       if (error instanceof SocialAuthError) {
         throw new HttpError(error.status, error.code);
       }
+      if (error?.status === 401 && error?.code === 'invalid_social_token') {
+        throw new HttpError(401, 'invalid_social_token');
+      }
       throw error;
+    }
+    let stagingGoogleRegistration = null;
+    let existingSocialAccount = null;
+    if (config.stagingGoogleRegistration.enabled) {
+      const linked = await pool.query(
+        `SELECT account.id
+           FROM auth_identities AS identity
+           JOIN users AS account ON account.id = identity.user_id
+          WHERE identity.provider = $1 AND identity.provider_subject = $2
+          LIMIT 1`,
+        [identity.provider, identity.subject],
+      );
+      existingSocialAccount = linked.rows[0] ?? null;
+      if (!existingSocialAccount) {
+        const existingByEmail = await pool.query(
+          "SELECT id FROM users WHERE email = $1 AND deactivated_at IS NULL AND account_status = 'active'",
+          [identity.email],
+        );
+        existingSocialAccount = existingByEmail.rows[0] ?? null;
+      }
+      if (existingSocialAccount && identity.tokenDigest) {
+        const replay = await pool.query(
+          'SELECT 1 FROM staging_google_registration_replays WHERE token_digest = $1',
+          [identity.tokenDigest],
+        );
+        if (replay.rowCount) {
+          throw new HttpError(409, 'staging_google_registration_replay');
+        }
+      }
+      if (!existingSocialAccount) {
+        try {
+          stagingGoogleRegistration = {
+            ...resolveStagingGoogleRegistration(config.stagingGoogleRegistration, identity),
+            token: assertStagingGoogleRegistrationToken(
+              identity,
+              Date.now(),
+              config.stagingGoogleRegistration.replayWindowSeconds,
+            ),
+          };
+        } catch (error) {
+          assertStagingGoogleRegistrationPolicy(error);
+        }
+      }
     }
     let appleRevocationMaterial = null;
     if (identity.provider === 'apple') {
@@ -2404,8 +2474,16 @@ export function createApp({
         "SELECT id FROM users WHERE email = $1 AND deactivated_at IS NULL AND account_status = 'active'",
         [identity.email],
       );
-      if (!existing.rowCount) throw new HttpError(403, 'staging_registration_disabled');
-      assertStagingUserAllowed(existing.rows[0].id);
+      if (!existing.rowCount) {
+        if (existingSocialAccount) assertStagingUserAllowed(existingSocialAccount.id);
+        else if (!stagingGoogleRegistration) throw new HttpError(403, 'staging_registration_disabled');
+      } else {
+        if (stagingGoogleRegistration
+            && existing.rows[0].id !== stagingGoogleRegistration.userId) {
+          throw new HttpError(403, 'staging_google_identity_conflict');
+        }
+        assertStagingUserAllowed(existing.rows[0].id);
+      }
     }
     if (appleRevocationMaterial?.kind === 'authorization_code') {
       let refreshToken;
@@ -2460,6 +2538,9 @@ export function createApp({
       );
       if (linked.rowCount) {
         user = linked.rows[0];
+        if (stagingGoogleRegistration && user.id !== stagingGoogleRegistration.userId) {
+          throw new HttpError(403, 'staging_google_identity_conflict');
+        }
       } else {
         const existing = await client.query(
           'SELECT * FROM users WHERE email = $1 FOR UPDATE',
@@ -2467,6 +2548,9 @@ export function createApp({
         );
         user = existing.rows[0];
         if (user) {
+          if (stagingGoogleRegistration && user.id !== stagingGoogleRegistration.userId) {
+            throw new HttpError(403, 'staging_google_identity_conflict');
+          }
           if (!identity.emailVerified) {
             throw new HttpError(409, 'social_account_link_requires_reauthentication');
           }
@@ -2482,7 +2566,16 @@ export function createApp({
           if (!consentsAccepted) {
             throw new HttpError(400, 'social_registration_consents_required');
           }
-          const userId = crypto.randomUUID();
+          const userId = stagingGoogleRegistration?.userId ?? crypto.randomUUID();
+          if (stagingGoogleRegistration) {
+            const occupied = await client.query(
+              'SELECT id FROM users WHERE id = $1 FOR UPDATE',
+              [userId],
+            );
+            if (occupied.rowCount) {
+              throw new HttpError(403, 'staging_google_identity_conflict');
+            }
+          }
           const profile = {
             ...defaultProfile({ email: identity.email }),
             ...(identity.displayName ? { displayName: identity.displayName } : {}),
@@ -2633,6 +2726,17 @@ export function createApp({
           encryptedAppleRevocationMaterial?.ciphertext ?? null,
         ],
       );
+      if (stagingGoogleRegistration) {
+        try {
+          await reserveStagingGoogleRegistrationReplay(client, {
+            tokenDigest: stagingGoogleRegistration.token.tokenDigest,
+            identityDigest: stagingGoogleRegistration.digest,
+            expiresAt: stagingGoogleRegistration.token.expiresAt,
+          });
+        } catch (error) {
+          assertStagingGoogleRegistrationPolicy(error);
+        }
+      }
       if (!user.email_verified_at) {
         return { verificationUser: user, session: null };
       }
