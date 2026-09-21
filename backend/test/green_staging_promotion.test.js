@@ -23,7 +23,7 @@ import {
   runGreenEmergencyCleanup,
   runGreenForwardRecovery,
   runGreenPromotion,
-  syntheticSandboxPasswordHostPath,
+  syntheticSandboxCredentialFilePath,
 } from '../ops/green_staging_promotion.mjs';
 import { readStagingAccessConfiguration, stagingAnonymousPathAllowed } from '../src/staging_access_gate.js';
 
@@ -53,7 +53,7 @@ const config = {
     { source: '/docker/shareittoo/staging-secrets/firebase.json', destination: '/run/secrets/firebase-service-account.json', readOnly: true },
     { source: '/docker/shareittoo/staging-secrets/technical-sandbox-key', destination: '/run/secrets/technical-sandbox-key', readOnly: true },
     { source: '/docker/shareittoo/staging-secrets/technical-sandbox-webhook', destination: '/run/secrets/technical-sandbox-webhook', readOnly: true },
-    { source: syntheticSandboxPasswordHostPath, destination: '/run/secrets/synthetic-sandbox-user-password', readOnly: true },
+    { source: syntheticSandboxCredentialFilePath, destination: '/run/secrets/synthetic-sandbox-user-password', readOnly: true },
     { source: '/docker/shareittoo/staging-secrets/uploads', destination: '/data/uploads', readOnly: false },
   ],
 };
@@ -86,7 +86,7 @@ test('protected Green runtime environment binds memory payment, pilot, paths and
     SIT_STAGING_PILOT_ID: 'heilbronn_wave0', SIT_STAGING_COMPOSE_PROJECT: 'sit-green', SIT_STAGING_ALLOWED_USER_IDS: 'synthetic_sandbox_user_pilot_20260919',
     TECHNICAL_SANDBOX_SECRET_KEY_FILE: '/run/secrets/technical-sandbox-key',
     TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: '/run/secrets/technical-sandbox-webhook',
-    SYNTHETIC_SANDBOX_PASSWORD_FILE: syntheticSandboxPasswordHostPath,
+    SYNTHETIC_SANDBOX_PASSWORD_FILE: syntheticSandboxCredentialFilePath,
   };
   assert.equal(assertGreenProtectedEnvironment(values, config), true);
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, PAYMENT_TRANSPORT: 'stripe' }, config));
@@ -137,10 +137,10 @@ test('promotion plan keeps backup, isolated 87-to-92 rehearsal, acceptance and f
   assert.ok(candidate.args.includes('--publish') && candidate.args.includes('127.0.0.1:18082:8080'));
   assert.ok(candidate.args.includes('SIT_GREEN_REHEARSAL=1'));
   assert.ok(candidate.args.includes('SYNTHETIC_SANDBOX_PASSWORD_FILE=/run/secrets/synthetic-sandbox-user-password'));
-  assert.ok(candidate.args.includes(`type=bind,src=${syntheticSandboxPasswordHostPath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`));
+  assert.ok(candidate.args.includes(`type=bind,src=${syntheticSandboxCredentialFilePath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`));
   assert.ok(!final.args.includes('--publish') && !final.args.includes('-p'));
   assert.equal(final.args.some((arg) => arg.includes('synthetic-sandbox-user-password')), false);
-  assert.equal(final.args.includes(syntheticSandboxPasswordHostPath), false);
+  assert.equal(final.args.includes(syntheticSandboxCredentialFilePath), false);
   assert.ok(final.args.includes(`type=volume,src=${greenTarget.uploadsVolume},dst=/data/uploads,readonly=false`));
   assert.ok(final.args.includes('--group-add') && final.args.includes('65532'));
   assert.ok(final.args.some((arg) => arg.includes('com.shareittoo.sit.green=true')));
@@ -204,7 +204,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT: '2026-09-19T12:00:00Z', SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
     TECHNICAL_SANDBOX_SECRET_KEY_FILE: '/run/secrets/technical-sandbox-key',
     TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: '/run/secrets/technical-sandbox-webhook',
-    SYNTHETIC_SANDBOX_PASSWORD_FILE: syntheticSandboxPasswordHostPath,
+    SYNTHETIC_SANDBOX_PASSWORD_FILE: syntheticSandboxCredentialFilePath,
   };
   writeFileSync(configFile, `${Object.entries(envValues).map(([key, value]) => `${key}=${value}`).join('\n')}\n`, { mode: 0o600 });
   chmodSync(configFile, 0o600);
@@ -282,7 +282,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     assert.ok(entry.args.some((arg) => arg.endsWith('dst=/run/secrets/firebase-service-account.json,readonly')));
     assert.ok(entry.args.some((arg) => arg.endsWith('dst=/run/secrets/technical-sandbox-key,readonly')));
     assert.ok(entry.args.some((arg) => arg.endsWith('dst=/run/secrets/technical-sandbox-webhook,readonly')));
-    assert.ok(entry.args.includes(`type=bind,src=${syntheticSandboxPasswordHostPath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`));
+    assert.ok(entry.args.includes(`type=bind,src=${syntheticSandboxCredentialFilePath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`));
     assert.ok(entry.args.includes('--env') && entry.args.includes('SYNTHETIC_SANDBOX_PASSWORD_FILE=/run/secrets/synthetic-sandbox-user-password'));
     assert.ok(entry.args.includes('--network'));
   }

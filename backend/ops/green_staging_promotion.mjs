@@ -26,7 +26,7 @@ export const greenTarget = Object.freeze({
   currentSchema: 92,
 });
 
-export const syntheticSandboxPasswordHostPath = '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password';
+export const syntheticSandboxCredentialFilePath = '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password';
 
 export const greenAllowedEnvNames = Object.freeze([
   'NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'APP_COMMIT', 'APP_BUILD_TIMESTAMP',
@@ -81,7 +81,7 @@ export function assertGreenProtectedEnvironment(values, config) {
       || values.SIT_STAGING_COMPOSE_PROJECT !== 'sit-green'
       || values.TECHNICAL_SANDBOX_SECRET_KEY_FILE !== '/run/secrets/technical-sandbox-key'
       || values.TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE !== '/run/secrets/technical-sandbox-webhook'
-      || values.SYNTHETIC_SANDBOX_PASSWORD_FILE !== syntheticSandboxPasswordHostPath
+      || values.SYNTHETIC_SANDBOX_PASSWORD_FILE !== syntheticSandboxCredentialFilePath
       || !String(values.SIT_STAGING_ALLOWED_USER_IDS ?? '').split(',').map((entry) => entry.trim()).includes('synthetic_sandbox_user_pilot_20260919')
       || config?.mfaFile === undefined) fail('green_runtime_environment_boundary_invalid');
   for (const name of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_CONNECT_WEBHOOK_SECRET', 'OPENAI_API_KEY']) {
@@ -273,10 +273,10 @@ export async function assertGreenProtectedRuntimeFiles(config, protectedEnv) {
   await assertProtectedFile(config.firebaseFile, 0o640, 0, 65532, 'green_firebase_file');
   await assertProtectedFile(config.technicalSandboxKeyFile, 0o600, 100, 101, 'green_technical_key_file');
   await assertProtectedFile(config.technicalSandboxWebhookFile, 0o600, 100, 101, 'green_technical_webhook_file');
-  if (protectedEnv.SYNTHETIC_SANDBOX_PASSWORD_FILE !== syntheticSandboxPasswordHostPath) {
+  if (protectedEnv.SYNTHETIC_SANDBOX_PASSWORD_FILE !== syntheticSandboxCredentialFilePath) {
     fail('green_synthetic_password_file_path_invalid');
   }
-  await assertProtectedFile(syntheticSandboxPasswordHostPath, 0o600, 100, 101, 'green_synthetic_password_file');
+  await assertProtectedFile(syntheticSandboxCredentialFilePath, 0o600, 100, 101, 'green_synthetic_password_file');
   return true;
 }
 
@@ -482,7 +482,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     '--mount', `type=bind,src=${runtimeConfig.firebaseFile},dst=/run/secrets/firebase-service-account.json,readonly`,
     '--mount', `type=bind,src=${runtimeConfig.technicalSandboxKeyFile},dst=/run/secrets/technical-sandbox-key,readonly`,
     '--mount', `type=bind,src=${runtimeConfig.technicalSandboxWebhookFile},dst=/run/secrets/technical-sandbox-webhook,readonly`,
-    '--mount', `type=bind,src=${syntheticSandboxPasswordHostPath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`,
+      '--mount', `type=bind,src=${syntheticSandboxCredentialFilePath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`,
   ];
   const provisionerPath = '/app/ops/provision_synthetic_sandbox_user.mjs';
   const commands = [
@@ -515,7 +515,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
       '--mount', `type=bind,src=${runtimeConfig.firebaseFile},dst=/run/secrets/firebase-service-account.json,readonly`,
       '--mount', `type=bind,src=${runtimeConfig.technicalSandboxKeyFile},dst=/run/secrets/technical-sandbox-key,readonly`,
       '--mount', `type=bind,src=${runtimeConfig.technicalSandboxWebhookFile},dst=/run/secrets/technical-sandbox-webhook,readonly`,
-      '--mount', `type=bind,src=${syntheticSandboxPasswordHostPath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`,
+    '--mount', `type=bind,src=${syntheticSandboxCredentialFilePath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`,
       runtime.image,
     ], envFile: configFile, redacted: true },
     { phase: 'candidate_provider_network_attach', command: 'docker', args: ['network', 'connect', target.providerNetwork, `sit-green-acceptance-${runtime.runtimeCommit.slice(0, 12)}`] },
