@@ -216,17 +216,13 @@ export function visibleNamedNodeTapPoint(tag, hierarchy, label) {
   });
 }
 
-export function selectNamedNodeForTap(hierarchy, label, { chooseLast = false } = {}) {
+function tapNamedNode(commandRunner, adbPath, device, hierarchy, label, { chooseLast = false } = {}) {
   const enabled = namedNodes(hierarchy, label).filter((tag) => attribute(tag, 'enabled') !== 'false');
   const clickable = enabled.filter((tag) => attribute(tag, 'clickable') === 'true');
   const matches = clickable.length ? clickable : enabled;
   if (matches.length === 0) fail(`The sanitized ${label} action is missing.`);
-  return chooseLast ? matches.at(-1) : matches[0];
-}
-
-function tapNamedNode(commandRunner, adbPath, device, hierarchy, label, { chooseLast = false } = {}) {
   const point = visibleNamedNodeTapPoint(
-    selectNamedNodeForTap(hierarchy, label, { chooseLast }),
+    chooseLast ? matches.at(-1) : matches[0],
     hierarchy,
     label,
   );
@@ -423,7 +419,7 @@ async function openProfile({ commandRunner, adbPath, device, wait }) {
 export async function restoreSyntheticSession({ commandRunner, adbPath, device, wait, account }) {
   const guest = await openProfile({ commandRunner, adbPath, device, wait });
   if (hasAuthenticatedProfile(guest)) return true;
-  tapNamedNode(commandRunner, adbPath, device, guest, 'Anmelden', { chooseLast: true });
+  tapNamedNode(commandRunner, adbPath, device, guest, 'Anmelden');
   const form = await waitForHierarchy({
     commandRunner,
     adbPath,

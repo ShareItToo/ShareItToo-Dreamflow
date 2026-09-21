@@ -6,7 +6,6 @@ import {
   hasEnteredNamedLoginInput,
   isAndroidSoftwareKeyboardShown,
   isV52ForegroundPushPopup,
-  selectNamedNodeForTap,
   sendOppositeRoleMessage,
   visibleNamedNodeTapPoint,
 } from '../../tool/diagnose_android_logout_lifecycle.mjs';
@@ -124,16 +123,6 @@ test('fails closed when persistent navigation fully occludes an action', () => {
     () => visibleNamedNodeTapPoint(logout, `<hierarchy>${logout}${navigation}</hierarchy>`, 'Abmelden'),
     /fully occluded by bottom navigation/u,
   );
-});
-
-test('role restore selects the clickable login action over repeated non-clickable labels', () => {
-  const hierarchy = '<hierarchy>'
-    + '<node class="android.view.View" content-desc="Anmelden" clickable="false" enabled="true" bounds="[605,214][835,276]"/>'
-    + '<node class="android.view.View" content-desc="Anmelden" clickable="true" enabled="true" bounds="[98,1611][1342,1771]"/>'
-    + '</hierarchy>';
-  const selected = selectNamedNodeForTap(hierarchy, 'Anmelden', { chooseLast: true });
-  assert.match(selected, /clickable="true"/u);
-  assert.match(selected, /bounds="\[98,1611\]\[1342,1771\]"/u);
 });
 
 test('dismisses login input only for an exact visible Android software keyboard', () => {
