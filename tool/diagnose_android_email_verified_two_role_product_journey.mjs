@@ -127,6 +127,38 @@ export async function retryIdempotentPixelState(operation) {
   throw lastFailure;
 }
 
+export async function waitForExactOwnerDraftWithBoundedRecovery({
+  waitForDraft,
+  readHierarchy,
+  hasSavedListingsTab,
+  retapSavedListings,
+} = {}) {
+  if (typeof waitForDraft !== 'function'
+      || typeof readHierarchy !== 'function'
+      || typeof hasSavedListingsTab !== 'function'
+      || typeof retapSavedListings !== 'function') {
+    fail('The exact-owner-draft recovery contract is invalid.');
+  }
+  let recoveryUsed = false;
+  return retryIdempotentPixelState(async () => {
+    try {
+      return await waitForDraft();
+    } catch (error) {
+      if (!recoveryUsed) {
+        recoveryUsed = true;
+        try {
+          const current = await readHierarchy();
+          if (hasSavedListingsTab(current)) await retapSavedListings(current);
+        } catch {
+          // Preserve the original wait failure; the bounded final retry still
+          // gets one chance even if the recovery read/tap is unavailable.
+        }
+      }
+      throw error;
+    }
+  });
+}
+
 export async function restoreExactRoleWithBoundedRetries({
   operation,
   wait = async () => {},
@@ -500,13 +532,27 @@ async function publishOwnerDraftOnPixel({
   });
   hierarchy = await runOwnerPublishUiSubphase({
     label: 'wait-exact-draft',
-    operation: () => waitForHierarchy({
-      commandRunner,
-      adbPath,
-      device,
-      wait,
-      label: 'exact owner draft',
-      predicate: (value) => containsAllLabels(value, [title, 'Status ändern']),
+    operation: () => waitForExactOwnerDraftWithBoundedRecovery({
+      waitForDraft: () => waitForHierarchy({
+        commandRunner,
+        adbPath,
+        device,
+        wait,
+        label: 'exact owner draft',
+        predicate: (value) => containsAllLabels(value, [title, 'Status ändern']),
+      }),
+      readHierarchy: () => dumpCurrentHeadAndroidUi(commandRunner, adbPath, device),
+      hasSavedListingsTab: (value) => currentHeadAndroidNamedNodes(
+        value,
+        'für später gespeichert',
+      ).length > 0,
+      retapSavedListings: (value) => tapLabel(
+        commandRunner,
+        adbPath,
+        device,
+        value,
+        'für später gespeichert',
+      ),
     }),
   });
   await runOwnerPublishUiSubphase({

@@ -9,6 +9,7 @@ import {
   renterNonBindingDetailVisible,
   restoreExactRoleWithBoundedRetries,
   retryIdempotentPixelState,
+  waitForExactOwnerDraftWithBoundedRecovery,
   waitForRenterAcceptedCardRecovery,
   runOwnerPublishUiSubphase,
   runAndroidEmailVerifiedTwoRoleProductJourney,
@@ -180,6 +181,70 @@ test('retries an idempotent Pixel state transition exactly once', async () => {
     /persistent surface/u,
   );
   assert.equal(attempts, 2);
+});
+
+test('recovers one exact-draft wait miss with one saved-listings retap', async () => {
+  let waits = 0;
+  let reads = 0;
+  let retaps = 0;
+  const result = await waitForExactOwnerDraftWithBoundedRecovery({
+    waitForDraft: async () => {
+      waits += 1;
+      if (waits === 1) throw new Error('first draft wait miss');
+      return 'exact draft';
+    },
+    readHierarchy: async () => {
+      reads += 1;
+      return 'für später gespeichert';
+    },
+    hasSavedListingsTab: (hierarchy) => hierarchy.includes('für später gespeichert'),
+    retapSavedListings: async () => { retaps += 1; },
+  });
+  assert.equal(result, 'exact draft');
+  assert.equal(waits, 2);
+  assert.equal(reads, 1);
+  assert.equal(retaps, 1);
+});
+
+test('fails after two exact-draft misses without an extra retap', async () => {
+  let waits = 0;
+  let reads = 0;
+  let retaps = 0;
+  await assert.rejects(
+    () => waitForExactOwnerDraftWithBoundedRecovery({
+      waitForDraft: async () => {
+        waits += 1;
+        throw new Error('persistent draft wait miss');
+      },
+      readHierarchy: async () => {
+        reads += 1;
+        return 'für später gespeichert';
+      },
+      hasSavedListingsTab: () => true,
+      retapSavedListings: async () => { retaps += 1; },
+    }),
+    /persistent draft wait miss/u,
+  );
+  assert.equal(waits, 2);
+  assert.equal(reads, 1);
+  assert.equal(retaps, 1);
+});
+
+test('does not read or retap after an exact-draft wait succeeds', async () => {
+  let reads = 0;
+  let retaps = 0;
+  const result = await waitForExactOwnerDraftWithBoundedRecovery({
+    waitForDraft: async () => 'exact draft',
+    readHierarchy: async () => {
+      reads += 1;
+      return 'für später gespeichert';
+    },
+    hasSavedListingsTab: () => true,
+    retapSavedListings: async () => { retaps += 1; },
+  });
+  assert.equal(result, 'exact draft');
+  assert.equal(reads, 0);
+  assert.equal(retaps, 0);
 });
 
 test('restores an exact role with at most three deterministically checked attempts', async () => {
