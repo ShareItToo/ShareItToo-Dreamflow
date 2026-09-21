@@ -137,12 +137,6 @@ function assertSafeDisposableTarget({ network, volume, database, api, runId }) {
 }
 
 async function verifyBackup({ backupPath, manifestPath, hashFile: suppliedHashFile }) {
-  const hashFile = suppliedHashFile ?? (async (path) => {
-  const hash = crypto.createHash('sha256');
-  const data = readStablePrivateFile(path, { encoding: null, mode: 0o077, minBytes: 1, code: 'backup_not_private_or_empty' });
-  hash.update(data);
-  return hash.digest('hex');
-  });
   if (!backupPath || !manifestPath || !backupPath.startsWith('/') || !manifestPath.startsWith('/')) {
     fail('backup_manifest_path_invalid');
   }
@@ -153,9 +147,11 @@ async function verifyBackup({ backupPath, manifestPath, hashFile: suppliedHashFi
   const manifest = readStablePrivateFile(manifestPath, { expectedMode: 0o600, code: 'backup_manifest_not_private' }).trim();
   const match = manifest.match(/^([0-9a-f]{64})\s+(.+)$/u);
   if (!match || resolve(match[2]) !== resolve(backupPath)) fail('backup_manifest_binding_invalid');
-  const actual = await hashFile(backupPath);
+  const actual = suppliedHashFile
+    ? await suppliedHashFile(backupData)
+    : crypto.createHash('sha256').update(backupData).digest('hex');
   if (actual !== match[1]) fail('backup_sha256_mismatch');
-  return Object.freeze({ bytes: backupData.length, sha256: actual });
+  return Object.freeze({ bytes: backupData.length, sha256: actual, input: backupData });
 }
 
 async function queryFingerprint({ command, container, user, database, sql }) {
@@ -275,7 +271,7 @@ export async function runDisposableCandidateAcceptance({
     }
     await command('docker', ['start', database], { phase: 'database_start' });
     await waitForPostgres({ command, container: database });
-    await commandWithFileInput('docker', ['exec', '-i', database, 'pg_restore', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal', '--no-owner', '--no-acl'], backupPath, { phase: 'restore' });
+    await commandWithFileInput('docker', ['exec', '-i', database, 'pg_restore', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal', '--no-owner', '--no-acl'], backup.input, { phase: 'restore' });
     const bootstrapScript = "import { initializeDatabase, pool } from '/app/src/db.js'; await initializeDatabase(); await pool.end();";
     await command('docker', ['create', '--name', bootstrap, ...labels, '--network', network, ...runtimeEnvArgs(bootstrapRuntime), disposableCandidateImageDigest, 'node', '--input-type=module', '-e', bootstrapScript], { phase: 'bootstrap_create' });
     const bootstrapLabels = await inspectLabels(command, bootstrap, '{{json .Config.Labels}}', 'bootstrap_identity');

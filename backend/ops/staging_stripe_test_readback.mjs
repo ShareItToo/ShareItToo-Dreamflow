@@ -5,7 +5,9 @@ import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createStablePrivateReadStream, readStablePrivateFile } from './stable_private_file.mjs';
+import { readStablePrivateFile } from './stable_private_file.mjs';
+import { writeExclusiveWp250Mapping } from './staging_wp250_mapping.mjs';
+import { serializeExactEvidence } from './staging_exact_evidence.mjs';
 
 const OPS_CHECKOUT = '/docker/shareittoo/staging-builds/8e7283e69c4f052ac4357c9e496ceb5ece801c20';
 const OPS_COMMIT = '8e7283e69c4f052ac4357c9e496ceb5ece801c20';
@@ -26,7 +28,10 @@ function execFile(command, args, { input, allowFailure = false } = {}) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] }); let stdout = ''; let stderr = '';
     child.stdout.on('data', (c) => { stdout += c; }); child.stderr.on('data', (c) => { stderr += c; });
-    if (input) input.pipe(child.stdin); else child.stdin.end(); child.on('error', reject);
+    if (input?.pipe) input.pipe(child.stdin);
+    else if (input !== undefined) child.stdin.end(input);
+    else child.stdin.end();
+    child.on('error', reject);
     child.on('close', (code) => { const result = { code, stdout, stderr }; if (code && !allowFailure) reject(Object.assign(new Error(`command_failed:${command}:${lastAction}:${stderr.slice(-900)}`), { result })); else resolvePromise(result); });
   });
 }
@@ -45,7 +50,8 @@ async function waitPg(container) {
   fail('database_final_init_timeout');
 }
 async function dbQuery(container, sql) { const raw = await dockerExec(container, ['psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', 'shareittoo_rehearsal', '-d', 'shareittoo_rehearsal', '-Atc', sql]); try { return JSON.parse(raw); } catch { fail('mapping_query_unreadable'); } }
-async function verifyBackup() { const dump = readStablePrivateFile(DUMP, { encoding: null, mode: 0o077, code: 'backup_not_private' }); const expected = readStablePrivateFile(MANIFEST, { expectedMode: 0o600, code: 'backup_manifest_not_private' }).trim().split(/\s+/u)[0]; const actual = crypto.createHash('sha256').update(dump).digest('hex'); if (expected !== actual) fail('backup_sha256_mismatch'); return { bytes: dump.length, sha256: actual }; }
+async function verifyBackup() { const dump = readStablePrivateFile(DUMP, { encoding: null, mode: 0o077, code: 'backup_not_private' }); const expected = readStablePrivateFile(MANIFEST, { expectedMode: 0o600, code: 'backup_manifest_not_private' }).trim().split(/\s+/u)[0]; const actual = crypto.createHash('sha256').update(dump).digest('hex'); if (expected !== actual) fail('backup_sha256_mismatch'); return { bytes: dump.length, sha256: actual, input: dump }; }
+
 async function stripeKeyClass() {
   const env = text(await docker(['inspect', 'shareittoo-staging-api', '--format', '{{range .Config.Env}}{{println .}}{{end}}']));
   const line = env.split('\n').find((v) => v.startsWith('STRIPE_SECRET_KEY=')); if (!line) return { key: null, keyClass: 'missing' };
@@ -104,13 +110,11 @@ try {
   await docker(['network','create','--internal',...labels,resources.network]); created.push(['network',resources.network]); await docker(['volume','create',...labels,resources.volume]); created.push(['volume',resources.volume]);
   await docker(['create','--name',resources.database,...labels,'--network',resources.network,'--network-alias','db','--mount',`type=volume,src=${resources.volume},dst=/var/lib/postgresql/data`,'-e','POSTGRES_DB=shareittoo_rehearsal','-e','POSTGRES_USER=shareittoo_rehearsal','-e',`POSTGRES_PASSWORD=${dbPassword}`,POSTGRES_IMAGE]); created.push(['container',resources.database]);
   await docker(['create','--name',resources.bootstrap,...labels,'--network',resources.network,...envArgs,CANDIDATE_IMAGE,'node','--input-type=module','-e',"import { initializeDatabase, pool } from '/app/src/db.js'; await initializeDatabase(); await pool.end();"]); created.push(['container',resources.bootstrap]);
-  await docker(['start',resources.database]); await waitPg(resources.database); await docker(['exec','-i',resources.database,'pg_restore','-U','shareittoo_rehearsal','-d','shareittoo_rehearsal','--no-owner','--no-acl'], { input: createStablePrivateReadStream(DUMP, { mode: 0o077, code: 'backup_not_private' }) }); await docker(['start',resources.bootstrap]); const exit = text(await docker(['wait',resources.bootstrap])); if (exit !== '0') fail('bootstrap_migrations_failed');
+  await docker(['start',resources.database]); await waitPg(resources.database); await docker(['exec','-i',resources.database,'pg_restore','-U','shareittoo_rehearsal','-d','shareittoo_rehearsal','--no-owner','--no-acl'], { input: backup.input }); await docker(['start',resources.bootstrap]); const exit = text(await docker(['wait',resources.bootstrap])); if (exit !== '0') fail('bootstrap_migrations_failed');
   const mappings = await dbQuery(resources.database, mappingSql); const rows = Array.isArray(mappings) ? mappings : [];
   const mappingPath = process.env.SIT_WP250_MAPPING_PATH;
   if (mappingPath) {
-    if (!mappingPath.startsWith('/tmp/sit-wp250-map-')) fail('mapping_path_invalid');
-    await writeFile(mappingPath, `${JSON.stringify(rows)}\n`, { mode: 0o600 });
-    await chmod(mappingPath, 0o600);
+    await writeExclusiveWp250Mapping(mappingPath, Buffer.from(`${JSON.stringify(rows)}\n`));
   }
   if (process.env.SIT_WP251_DRY_RUN === '1') {
     const before = await dbQuery(resources.database, syntheticFingerprintSql);
@@ -145,5 +149,5 @@ try {
   for (const [kind,name] of [...created].reverse()) { const inspected = await docker(['inspect',name,'--format',kind === 'container' ? '{{json .Config.Labels}}' : '{{json .Labels}}'], { allowFailure: true }); if (inspected.code !== 0 || !inspected.stdout.includes(runId)) { errors.push(`cleanup_${kind}_identity_failed`); continue; } if ((await docker(kind === 'container' ? ['rm','-f',name] : [kind,'rm',name], { allowFailure: true })).code !== 0) errors.push(`cleanup_${kind}_failed`); }
   if (mfaPath) await rm(dirname(mfaPath), { recursive: true, force: true }).catch(() => errors.push('mfa_key_cleanup_failed'));
   evidence = { ...evidence, cleanup: { removed: errors.length === 0, errors }, disposableAbsent: errors.length === 0 };
-  await mkdir(EVIDENCE_DIR, { recursive: true, mode: 0o700 }); const path = `${EVIDENCE_DIR}/staging-wp250-stripe-readback-${runId}.json`; await writeFile(path, `${JSON.stringify(evidence,null,2)}\n`, { mode: 0o600 }); await chmod(path,0o600); const meta = await stat(path); const hash = crypto.createHash('sha256').update(await readFile(path)).digest('hex'); process.stdout.write(`${JSON.stringify({ evidencePath:path,evidenceBytes:meta.size,evidenceSha256:hash,...evidence })}\n`);
+  await mkdir(EVIDENCE_DIR, { recursive: true, mode: 0o700 }); const path = `${EVIDENCE_DIR}/staging-wp250-stripe-readback-${runId}.json`; const serialized = serializeExactEvidence(evidence); await writeFile(path, serialized.bytes, { mode: 0o600, flag: 'wx' }); await chmod(path,0o600); process.stdout.write(`${JSON.stringify({ evidencePath:path,evidenceBytes:serialized.byteCount,evidenceSha256:serialized.sha256,...evidence })}\n`);
 }

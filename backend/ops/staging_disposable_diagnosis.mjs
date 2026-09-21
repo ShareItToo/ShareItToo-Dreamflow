@@ -5,7 +5,7 @@ import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { dirname, resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createStablePrivateReadStream, readStablePrivateFile } from './stable_private_file.mjs';
+import { readStablePrivateFile } from './stable_private_file.mjs';
 
 const OPS_CHECKOUT = '/docker/shareittoo/staging-builds/8e7283e69c4f052ac4357c9e496ceb5ece801c20';
 const OPS_COMMIT = '8e7283e69c4f052ac4357c9e496ceb5ece801c20';
@@ -40,7 +40,9 @@ function execFile(command, args, { input, allowFailure = false } = {}) {
     let stderr = '';
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
-    if (input) input.pipe(child.stdin); else child.stdin.end();
+    if (input?.pipe) input.pipe(child.stdin);
+    else if (input !== undefined) child.stdin.end(input);
+    else child.stdin.end();
     child.on('error', reject);
     child.on('close', (code) => {
       const result = { code, stdout, stderr };
@@ -137,7 +139,7 @@ async function verifyBackup() {
   const expected = readStablePrivateFile(MANIFEST, { expectedMode: 0o600, code: 'backup_manifest_not_private' }).trim().split(/\s+/u)[0];
   const actual = crypto.createHash('sha256').update(dump).digest('hex');
   if (expected !== actual) fail('backup_sha256_mismatch');
-  return { bytes: dump.length, sha256: actual };
+  return { bytes: dump.length, sha256: actual, input: dump };
 }
 
 let mfaPath;
@@ -172,7 +174,7 @@ try {
   await docker(['create','--name',resources.database,...labelArgs,'--network',resources.network,'--network-alias','db','--mount',`type=volume,src=${resources.volume},dst=/var/lib/postgresql/data`,'-e','POSTGRES_DB=shareittoo_rehearsal','-e','POSTGRES_USER=shareittoo_rehearsal','-e',`POSTGRES_PASSWORD=${dbPassword}`,POSTGRES_IMAGE]); created.push(['container',resources.database]);
   await docker(['create','--name',resources.bootstrap,...labelArgs,'--network',resources.network,...baseEnv,CANDIDATE_IMAGE,'node','--input-type=module','-e',"import { initializeDatabase, pool } from '/app/src/db.js'; await initializeDatabase(); await pool.end();"]); created.push(['container',resources.bootstrap]);
   await docker(['start',resources.database]); await waitForPostgres(resources.database);
-  await docker(['exec','-i',resources.database,'pg_restore','-U','shareittoo_rehearsal','-d','shareittoo_rehearsal','--no-owner','--no-acl'], { input: createStablePrivateReadStream(DUMP, { mode: 0o077, code: 'backup_not_private' }) });
+  await docker(['exec','-i',resources.database,'pg_restore','-U','shareittoo_rehearsal','-d','shareittoo_rehearsal','--no-owner','--no-acl'], { input: backup.input });
   await docker(['start',resources.bootstrap]);
   const exit = out(await docker(['wait',resources.bootstrap]));
   if (exit !== '0') {
@@ -201,9 +203,9 @@ try {
   evidence = { ...evidence, cleanup: { removed: cleanupErrors.length === 0, errors: cleanupErrors }, disposableAbsent: cleanupErrors.length === 0 };
   await mkdir(EVIDENCE_DIR, { recursive: true, mode: 0o700 });
   const path = `${EVIDENCE_DIR}/staging-wp249-diagnosis-${runId}.json`;
-  await writeFile(path, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600 });
+  const serialized = Buffer.from(`${JSON.stringify(evidence, null, 2)}\n`);
+  await writeFile(path, serialized, { mode: 0o600, flag: 'wx' });
   await chmod(path, 0o600);
-  const serialized = `${JSON.stringify(evidence, null, 2)}\n`;
   const hash = crypto.createHash('sha256').update(serialized).digest('hex');
-  process.stdout.write(`${JSON.stringify({ evidencePath: path, evidenceBytes: Buffer.byteLength(serialized), evidenceSha256: hash, ...evidence })}\n`);
+  process.stdout.write(`${JSON.stringify({ evidencePath: path, evidenceBytes: serialized.byteLength, evidenceSha256: hash, ...evidence })}\n`);
 }

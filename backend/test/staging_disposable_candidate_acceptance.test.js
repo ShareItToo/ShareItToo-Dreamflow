@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmod, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -19,7 +19,9 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
   try {
     const backupPath = join(root, 'backup.dump');
     const manifestPath = `${backupPath}.sha256`;
+    const replacementPath = join(root, 'replacement.dump');
     await writeFile(backupPath, 'deterministic-backup');
+    await writeFile(replacementPath, 'unverified-replacement');
     await chmod(backupPath, 0o600);
     const crypto = await import('node:crypto');
     const hash = crypto.createHash('sha256').update('deterministic-backup').digest('hex');
@@ -27,6 +29,7 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
     const calls = [];
     let fingerprintReads = 0;
     let driftMode = false;
+    let restoreInput;
     const command = async (_command, args, options = {}) => {
       calls.push({ args, phase: options.phase });
       if (options.phase === 'ops_head_read') return testOpsCommit;
@@ -68,7 +71,14 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
       confirmation: disposableCandidateCommit,
       opsCommit: testOpsCommit,
       command,
-      commandWithFileInput: async (_command, args, _file, options = {}) => { calls.push({ args, phase: options.phase }); },
+      commandWithFileInput: async (_command, args, file, options = {}) => {
+        calls.push({ args, phase: options.phase });
+        if (options.phase === 'restore') {
+          restoreInput = file;
+          await rm(backupPath);
+          await symlink(replacementPath, backupPath);
+        }
+      },
       removeResource: async (kind, name) => { cleanup.push([kind, name]); return null; },
       prepareMfaKey: async () => ({ filePath: '/tmp/disposable-mfa-test-key', root: '/tmp' }),
       cleanupMfaKey: async () => {},
@@ -82,6 +92,7 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
     assert.equal(result.acceptanceTarget, 'docker-exec-internal');
     assert.equal(result.hostPortPublished, false);
     assert.equal(result.readiness.http, 503);
+    assert.deepEqual(restoreInput, Buffer.from('deterministic-backup'));
     assert.deepEqual(cleanup.map(([kind]) => kind), ['container', 'container', 'container', 'volume', 'network']);
     assert.ok(calls.some(({ phase }) => phase === 'candidate_start'));
     assert.ok(calls.some(({ phase }) => phase === 'mfa_probe'));
@@ -104,6 +115,9 @@ test('disposable candidate runner orchestrates isolated restore, candidate check
     assert.ok(bootstrapCreate.args.includes('--group-add') && bootstrapCreate.args.includes('65532'));
     const evidenceMode = (await stat(join(root, 'evidence.json'))).mode & 0o777;
     assert.equal(evidenceMode, 0o600);
+    await rm(backupPath);
+    await writeFile(backupPath, 'deterministic-backup');
+    await chmod(backupPath, 0o600);
     fingerprintReads = 0;
     driftMode = true;
     await assert.rejects(

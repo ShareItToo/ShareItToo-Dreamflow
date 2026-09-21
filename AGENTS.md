@@ -64,6 +64,10 @@ exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 - Operational forbidden-name checks must use identifier boundaries/tokens, never
   arbitrary substrings over absolute paths; preserve explicit exact legacy
   resource checks alongside the boundary check.
+- After validating a private backup or snapshot, reuse the same stable
+  descriptor/bytes for the consuming operation; do not reopen its path. Evidence
+  files must serialize once, then use those exact bytes for exclusive write,
+  byte count and digest.
 - Remote alias mentor invariant: after an alias or DNS failure, read the exact
   saved SSH configuration and authoritative project source before concluding
   that remote access is unavailable; test only the verified saved alias. A

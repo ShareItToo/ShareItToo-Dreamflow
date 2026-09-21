@@ -349,7 +349,9 @@ export function runCommandWithFileInput(command, args, filePath, {
 } = {}) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
-    const inputStream = createReadStream(filePath);
+    const inputStream = Buffer.isBuffer(filePath) || filePath instanceof Uint8Array
+      ? null
+      : createReadStream(filePath);
     let stdout = '';
     let stderr = '';
     child.stdout.setEncoding('utf8');
@@ -357,7 +359,7 @@ export function runCommandWithFileInput(command, args, filePath, {
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     const failInput = (error) => {
-      inputStream.destroy();
+      inputStream?.destroy();
       child.kill('SIGTERM');
       reject(commandFailure(`${phase}_input`));
     };
@@ -369,14 +371,15 @@ export function runCommandWithFileInput(command, args, filePath, {
       if (error?.code === 'EPIPE') return;
       failInput(error);
     };
-    inputStream.once('error', handleInputError);
+    inputStream?.once('error', handleInputError);
     child.stdin.once('error', handleInputError);
     child.once('error', () => reject(commandFailure(phase)));
     child.once('close', (code) => {
       if (code === 0) resolvePromise({ stdout, stderr });
       else reject(commandFailure(phase));
     });
-    inputStream.pipe(child.stdin);
+    if (inputStream) inputStream.pipe(child.stdin);
+    else child.stdin.end(filePath);
   });
 }
 
