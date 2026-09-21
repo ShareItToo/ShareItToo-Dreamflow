@@ -115,7 +115,7 @@ function fakeCommand(fx) {
   };
 }
 
-function statefulExecutor(fx, { failPhase, failRollbackPhase, driftReplacement = false, startupTimeout = false, startupDelayed = false, startupWrongVersion = false, startupWrongFlags = false } = {}) {
+function statefulExecutor(fx, { failPhase, failRollbackPhase, driftReplacement = false, startupTimeout = false, startupDelayed = false, startupWrongVersion = false, startupWrongFlags = false, invalidTokenField = 'error' } = {}) {
   const base = fakeCommand(fx);
   const calls = base.calls;
   let replacement;
@@ -136,7 +136,7 @@ function statefulExecutor(fx, { failPhase, failRollbackPhase, driftReplacement =
       return { stdout: 'replacement-created' };
     }
     if (phase === 'replacement_config_readback') return { stdout: JSON.stringify(replacement) };
-    if (phase === 'replacement_invalid_social_token_probe') return { stdout: JSON.stringify({ status: 401, code: 'invalid_social_token' }) };
+    if (phase === 'replacement_invalid_social_token_probe') return { stdout: JSON.stringify(invalidTokenField === 'error' ? { status: 401, error: 'invalid_social_token' } : { status: 401, code: 'invalid_social_token' }) };
     if (phase === 'replacement_startup_probe') {
       if (startupTimeout) return { stdout: JSON.stringify({ ok: false, reason: 'startup_timeout', attempts: { live: 60, ready: 60 }, last: { live: { status: 503 }, ready: { status: 503 } } }), code: 1 };
       const version = { status: 200, commit: startupWrongVersion ? 'wrong' : revision, environment: 'staging' };
@@ -157,7 +157,7 @@ function statefulExecutor(fx, { failPhase, failRollbackPhase, driftReplacement =
   return { command, calls };
 }
 
-function isolatedExecutor(fx, { startupTimeout = false, driftNetwork = null, driftSecurity = false, probeFailureStage = null } = {}) {
+function isolatedExecutor(fx, { startupTimeout = false, driftNetwork = null, driftSecurity = false, probeFailureStage = null, invalidTokenField = 'error' } = {}) {
   const base = fakeCommand(fx);
   const calls = base.calls;
   const state = { probeEnv: null };
@@ -195,7 +195,7 @@ function isolatedExecutor(fx, { startupTimeout = false, driftNetwork = null, dri
       ? { stdout: JSON.stringify({ ok: false, reason: 'startup_timeout', attempts: { live: 60, ready: 60 }, last: { live: { status: 503 }, ready: { status: 503 } } }), code: 1 }
       : { stdout: JSON.stringify({ ok: true, attempts: { live: 3, ready: 4 }, last: { live: { status: 200 }, ready: { status: 200 } }, version: { status: 200, commit: revision, environment: 'staging' }, flags: { ...fx.manifest.safetyEnv, DEPLOYMENT_ENVIRONMENT: 'staging', FIREBASE_AUTH_ENABLED: 'true' } }), code: 0 };
     if (phase === 'rehearsal_database_probe') return { stdout: '1', code: 0 };
-    if (phase === 'rehearsal_invalid_social_token_probe') return { stdout: JSON.stringify({ status: 401, code: 'invalid_social_token' }), code: 0 };
+    if (phase === 'rehearsal_invalid_social_token_probe') return { stdout: JSON.stringify(invalidTokenField === 'error' ? { status: 401, error: 'invalid_social_token' } : { status: 401, code: 'invalid_social_token' }), code: 0 };
     if (phase === 'rehearsal_candidate_remove') return { stdout: '', code: 0 };
     if (phase === 'rehearsal_candidate_absence') return { stdout: '', code: 0 };
     if (phase === 'rehearsal_database_remove' || phase === 'rehearsal_database_volume_remove' || phase === 'rehearsal_uploads_volume_remove' || phase === 'rehearsal_network_remove') return { stdout: '', code: 0 };
@@ -461,6 +461,25 @@ test('isolated listing AI override is disabled, zero-cost and non-external with 
   assert.equal(config.budgetCents, 0);
   assert.equal(config.externalProviderExecutionAllowed, false);
   assert.equal(config.providerExecutionAllowed, false);
+});
+
+test('invalid social probe follows production error serializer and rejects invented code field', async () => {
+  const canonicalFx = await fixture();
+  try {
+    const executor = statefulExecutor(canonicalFx, { invalidTokenField: 'code' });
+    await assert.rejects(runGoogleAuthActivation({
+      manifest: canonicalFx.manifest, command: executor.command,
+      commandEnv: { STAGING_GOOGLE_AUTH_EXECUTE: '1', STAGING_GOOGLE_AUTH_CONFIRM: revision }, execute: true,
+    }), (error) => error.code === 'replacement_invalid_social_token_probe_invalid' && error.rollback?.restored === true);
+  } finally { await rm(canonicalFx.root, { recursive: true, force: true }); }
+  const fx = await fixture();
+  try {
+    const executor = isolatedExecutor(fx, { invalidTokenField: 'code' });
+    await assert.rejects(runGoogleAuthIsolatedRehearsal({
+      manifest: fx.manifest, command: executor.command,
+      commandEnv: { STAGING_GOOGLE_AUTH_ISOLATED_REHEARSAL: '1', STAGING_GOOGLE_AUTH_CONFIRM: revision },
+    }), (error) => error.code === 'rehearsal_invalid_social_token_probe_invalid' && error.rehearsalCleanup?.cleaned === true);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
 test('isolated prestart probe classifies config, database and mailer failures before API start', async () => {
