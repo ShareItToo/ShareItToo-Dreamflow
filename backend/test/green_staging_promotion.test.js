@@ -93,6 +93,7 @@ test('Green runtime config fails closed for external/mock/legacy or secret-beari
 
 test('protected Green runtime environment binds memory payment, pilot, paths and no provider secrets', () => {
   const values = {
+    NODE_ENV: 'production', DEPLOYMENT_ENVIRONMENT: 'staging', FIREBASE_AUTH_ENABLED: 'true',
     ENABLE_STAGING_STRIPE: '0', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
     TECHNICAL_SANDBOX_ENABLED: '1', TECHNICAL_SANDBOX_KILL_SWITCH: '0',
     SIT_STAGING_PILOT_ID: 'heilbronn_wave0', SIT_STAGING_COMPOSE_PROJECT: 'sit-green', SIT_STAGING_ALLOWED_USER_IDS: 'synthetic_sandbox_user_pilot_20260919',
@@ -101,6 +102,8 @@ test('protected Green runtime environment binds memory payment, pilot, paths and
     SYNTHETIC_SANDBOX_PASSWORD_FILE: syntheticSandboxCredentialFilePath,
   };
   assert.equal(assertGreenProtectedEnvironment(values, config), true);
+  assert.throws(() => assertGreenProtectedEnvironment({ ...values, FIREBASE_AUTH_ENABLED: 'false' }, config));
+  assert.throws(() => assertGreenProtectedEnvironment({ ...values, DEPLOYMENT_ENVIRONMENT: 'test' }, config));
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, PAYMENT_TRANSPORT: 'stripe' }, config));
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, OPENAI_API_KEY: 'present' }, config));
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, SYNTHETIC_SANDBOX_PASSWORD_FILE: '/run/secrets/synthetic-sandbox-user-password' }, config));
@@ -206,13 +209,14 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   const evidenceFile = path.join(root, 'green-promotion.json');
   const runtimeConfig = { ...config, envFile: configFile };
   const envValues = {
+    NODE_ENV: 'production', DEPLOYMENT_ENVIRONMENT: 'staging',
     DATABASE_URL: `postgres://shareittoo_green:fixture@${greenTarget.databaseContainer}:5432/shareittoo_green`,
     JWT_SECRET: 'synthetic-fixture-jwt', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
     IDENTITY_VERIFICATION_TRANSPORT: 'memory', SIT_LISTING_AI_PROVIDER: 'on_device',
     SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
     SIT_STAGING_ALLOWED_USER_IDS: 'synthetic_sandbox_user_pilot_20260919', SMTP_HOST: 'localhost',
     SMTP_PORT: '2525', SMTP_USER: 'synthetic', SMTP_PASSWORD: 'synthetic', MAIL_FROM: 'synthetic@example.invalid',
-    FIREBASE_PROJECT_ID: 'synthetic', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false',
+    FIREBASE_PROJECT_ID: 'synthetic', FIREBASE_AUTH_ENABLED: 'true', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false',
     SIT_STAGING_COMPOSE_PROJECT: 'sit-green', SIT_LISTING_AI_BUDGET_CENTS: '0', ENABLE_STAGING_STRIPE: '0',
     TECHNICAL_SANDBOX_ENABLED: '1', TECHNICAL_SANDBOX_KILL_SWITCH: '0', TECHNICAL_SANDBOX_ACCOUNT_ID: 'acct_fixture',
     TECHNICAL_SANDBOX_AUTHORIZATION_ID: 'auth_fixture', TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT: '2026-09-19T00:00:00Z',

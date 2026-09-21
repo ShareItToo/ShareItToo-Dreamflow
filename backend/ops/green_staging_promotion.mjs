@@ -67,7 +67,8 @@ const requiredConfigKeys = Object.freeze([
 ]);
 
 const requiredGreenEnvNames = Object.freeze([
-  'DATABASE_URL', 'JWT_SECRET', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE',
+  'NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'JWT_SECRET',
+  'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE',
   'IDENTITY_VERIFICATION_TRANSPORT', 'SIT_LISTING_AI_PROVIDER',
   'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_ALLOWED_USER_IDS',
   'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'MAIL_FROM', 'FIREBASE_PROJECT_ID',
@@ -80,7 +81,9 @@ const requiredGreenEnvNames = Object.freeze([
 ]);
 
 export function assertGreenProtectedEnvironment(values, config) {
-  if (values.ENABLE_STAGING_STRIPE !== '0' || values.PAYMENT_TRANSPORT !== 'memory'
+  if (values.NODE_ENV !== 'production' || values.DEPLOYMENT_ENVIRONMENT !== 'staging'
+      || values.FIREBASE_AUTH_ENABLED !== 'true'
+      || values.ENABLE_STAGING_STRIPE !== '0' || values.PAYMENT_TRANSPORT !== 'memory'
       || values.STRIPE_LIVEMODE !== 'false' || values.TECHNICAL_SANDBOX_ENABLED !== '1'
       || values.TECHNICAL_SANDBOX_KILL_SWITCH !== '0' || values.SIT_STAGING_PILOT_ID !== 'heilbronn_wave0'
       || values.SIT_STAGING_COMPOSE_PROJECT !== 'sit-green'
