@@ -4,6 +4,7 @@ import { createApp } from './app.js';
 import { config } from './config.js';
 import { startCredentialCleanupWorker } from './credential_cleanup.js';
 import { startFirebaseIdentityCleanupWorker } from './firebase_identity_cleanup.js';
+import { createAppleRevocationProvider } from './apple_revocation.js';
 import {
   startIdentityVerificationReconciliationWorker,
   startIdentityVerificationRedactionWorker,
@@ -114,6 +115,10 @@ async function main() {
   const stopCredentialCleanup = startCredentialCleanupWorker({ client: pool });
   const stopFirebaseIdentityCleanup = startFirebaseIdentityCleanupWorker({
     client: pool,
+    appleRevocationProvider: config.appleRevocation.enabled
+      ? createAppleRevocationProvider(config.appleRevocation)
+      : null,
+    appleRevocationKey: config.appleRevocation.encryptionKey,
   });
   const stopCrashlyticsCleanup = config.crashReportDeletion.enabled
     ? startCrashlyticsCleanupWorker({

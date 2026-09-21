@@ -375,7 +375,14 @@ import {
 import {
   drainFirebaseIdentityDeletionOutbox,
   enqueueFirebaseIdentityDeletions,
+  getAppleRevocationCleanupStatus,
 } from './firebase_identity_cleanup.js';
+import {
+  AppleRevocationError,
+  createAppleRevocationProvider,
+  encryptAppleRevocationMaterial,
+  normalizeAppleRevocationMaterial,
+} from './apple_revocation.js';
 import {
   drainIdentityVerificationRedactions,
   enqueueIdentityVerificationRedactions,
@@ -1741,6 +1748,9 @@ export async function eraseAccount(client, user, { actorRole = 'user', source = 
   const firebaseIdentityDeletionIds = await enqueueFirebaseIdentityDeletions(client, {
     userId: user.id,
   });
+  const appleRevocationCleanup = await getAppleRevocationCleanupStatus(client, {
+    ids: firebaseIdentityDeletionIds,
+  });
   const crashlyticsReportDeletionIds = await enqueueCrashlyticsReportDeletions(client, {
     userId: user.id,
   });
@@ -1793,6 +1803,7 @@ export async function eraseAccount(client, user, { actorRole = 'user', source = 
       row.thumbnail_storage_name,
     ]).filter(Boolean),
     firebaseIdentityDeletionIds,
+    appleRevocationCleanup,
     crashlyticsReportDeletionIds,
     identityVerificationRedactionIds,
   };
@@ -1901,6 +1912,10 @@ export function createApp({
   drainFirebaseIdentityDeletions = (ids) => drainFirebaseIdentityDeletionOutbox({
     client: pool,
     ids,
+    appleRevocationProvider: config.appleRevocation.enabled
+      ? createAppleRevocationProvider(config.appleRevocation)
+      : null,
+    appleRevocationKey: config.appleRevocation.encryptionKey,
   }),
   drainIdentityVerificationRedactionsNow = null,
   identityVerificationProvider: identityVerificationProviderOverride = null,
@@ -2357,6 +2372,46 @@ export function createApp({
       }
       throw error;
     }
+    let appleRevocationMaterial = null;
+    if (identity.provider === 'apple') {
+      try {
+        appleRevocationMaterial = normalizeAppleRevocationMaterial({
+          authorizationCode: req.body?.appleAuthorizationCode,
+          refreshToken: req.body?.appleRefreshToken,
+        });
+      } catch (error) {
+        if (error instanceof AppleRevocationError) {
+          throw new HttpError(400, error.code);
+        }
+        throw error;
+      }
+      if (appleRevocationMaterial && !config.appleRevocation.enabled) {
+        throw new HttpError(503, 'apple_revocation_unavailable');
+      }
+    } else if (typeof req.body?.appleAuthorizationCode === 'string'
+        && req.body.appleAuthorizationCode.trim()) {
+      throw new HttpError(400, 'invalid_social_provider_material');
+    } else if (typeof req.body?.appleRefreshToken === 'string'
+        && req.body.appleRefreshToken.trim()) {
+      throw new HttpError(400, 'invalid_social_provider_material');
+    }
+    let encryptedAppleRevocationMaterial = null;
+    if (appleRevocationMaterial) {
+      try {
+        encryptedAppleRevocationMaterial = {
+          kind: appleRevocationMaterial.kind,
+          ciphertext: encryptAppleRevocationMaterial(
+            appleRevocationMaterial.value,
+            config.appleRevocation.encryptionKey,
+          ),
+        };
+      } catch (error) {
+        if (error instanceof AppleRevocationError) {
+          throw new HttpError(503, 'apple_revocation_unavailable');
+        }
+        throw error;
+      }
+    }
     if (config.stagingAccess.enabled) {
       const existing = await pool.query(
         "SELECT id FROM users WHERE email = $1 AND deactivated_at IS NULL AND account_status = 'active'",
@@ -2485,8 +2540,9 @@ export function createApp({
         await client.query(
           `INSERT INTO auth_identities (
              user_id, provider, provider_subject, firebase_user_id, email_at_link,
-             email_verified, last_login_at
-           ) VALUES ($1, $2, $3, $4, $5, $6, now())`,
+             email_verified, last_login_at, apple_revocation_material_kind,
+             apple_revocation_material_ciphertext
+           ) VALUES ($1, $2, $3, $4, $5, $6, now(), $7, $8)`,
           [
             user.id,
             identity.provider,
@@ -2494,6 +2550,8 @@ export function createApp({
             identity.firebaseUserId,
             identity.email,
             identity.emailVerified,
+            encryptedAppleRevocationMaterial?.kind ?? null,
+            encryptedAppleRevocationMaterial?.ciphertext ?? null,
           ],
         );
       }
@@ -2544,7 +2602,9 @@ export function createApp({
          SET firebase_user_id = $3,
              email_at_link = $4,
              email_verified = email_verified OR $5,
-             last_login_at = now()
+             last_login_at = now(),
+             apple_revocation_material_kind = COALESCE($6, apple_revocation_material_kind),
+             apple_revocation_material_ciphertext = COALESCE($7, apple_revocation_material_ciphertext)
          WHERE provider = $1 AND provider_subject = $2`,
         [
           identity.provider,
@@ -2552,6 +2612,8 @@ export function createApp({
           identity.firebaseUserId,
           identity.email,
           identity.emailVerified,
+          encryptedAppleRevocationMaterial?.kind ?? null,
+          encryptedAppleRevocationMaterial?.ciphertext ?? null,
         ],
       );
       if (!user.email_verified_at) {
@@ -3761,6 +3823,7 @@ export function createApp({
     res.json({
       deleted: true,
       identityVerificationCleanup: outcome.identityVerificationRedactionIds.length ? 'queued' : 'not_required',
+      appleRevocationCleanup: outcome.appleRevocationCleanup,
     });
   }));
 
@@ -3860,7 +3923,7 @@ export function createApp({
       return sendHtml(res, 200, resultPage({
         success: true,
         title: 'Konto gelöscht',
-        message: 'Dein ShareItToo-Konto wurde geschlossen. Personenbezogene Daten wurden gelöscht oder anonymisiert; die bestätigte Löschung beim Identitätsprovider läuft gegebenenfalls noch und wird nicht vorweggenommen.',
+        message: `Dein ShareItToo-Konto wurde geschlossen. Personenbezogene Daten wurden gelöscht oder anonymisiert; die bestätigte Löschung beim Identitätsprovider läuft gegebenenfalls noch und wird nicht vorweggenommen.${outcome.appleRevocationCleanup === 'not_required' ? '' : ' Die Apple-Token-Widerrufung bleibt ausdrücklich ausstehend und wird nicht als abgeschlossen behauptet.'}`,
       }));
     } catch (error) {
       if (error instanceof HttpError && error.code === 'account_deletion_blocked') {

@@ -235,6 +235,7 @@ if (!databaseUrl) {
         '090_booking_review_command_type.up.sql',
         '091_technical_sandbox_runs.up.sql',
         '092_listing_ai_mock_disclosure.up.sql',
+        '093_apple_identity_revocation.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);
@@ -11710,6 +11711,7 @@ if (!databaseUrl) {
       assert.deepEqual(await deletion.json(), {
         deleted: true,
         identityVerificationCleanup: 'not_required',
+        appleRevocationCleanup: 'not_required',
       });
       assert.equal((await login(nextPassword)).status, 401);
       const erasedUser = await setupPool.query(

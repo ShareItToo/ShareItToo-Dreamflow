@@ -14,6 +14,7 @@ import {
   readStripeSecretConfiguration,
 } from './stripe_secret_files.js';
 import { readMfaEncryptionKeyConfiguration } from './mfa_secret_files.js';
+import { readAppleRevocationConfiguration } from './apple_revocation_secret_files.js';
 import { normalizeIdentityVerificationTransport } from './identity_verification_config.js';
 import { readStagingAccessConfiguration } from './staging_access_gate.js';
 
@@ -42,6 +43,9 @@ const mfaSecretConfiguration = readMfaEncryptionKeyConfiguration(process.env, {
   deploymentEnvironment,
 });
 const mfaEncryptionKey = mfaSecretConfiguration.key;
+const appleRevocation = readAppleRevocationConfiguration(process.env, {
+  deploymentEnvironment,
+});
 const bindHost = (process.env.BIND_HOST ?? '0.0.0.0').trim();
 if (!['0.0.0.0', '127.0.0.1', '::1'].includes(bindHost)) {
   throw new Error('BIND_HOST must be an explicit supported bind address');
@@ -412,6 +416,7 @@ export const config = Object.freeze({
     configured: mfaSecretConfiguration.configured,
     credentialSource: mfaSecretConfiguration.credentialSource,
   }),
+  appleRevocation: Object.freeze(appleRevocation),
   corsOrigins: csv(process.env.CORS_ORIGINS),
   publicBaseUrl: (process.env.PUBLIC_BASE_URL ?? 'https://shareittoo.com/api/v1').replace(/\/$/, ''),
   uploadDir: path.resolve(process.env.UPLOAD_DIR ?? '/data/uploads'),
