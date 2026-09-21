@@ -122,13 +122,17 @@ export function assertStagingGoogleRegistrationToken(
 ) {
   const expiresAt = Number(identity?.tokenExpiresAt);
   const issuedAt = Number(identity?.tokenIssuedAt);
+  const authTime = Number(identity?.tokenAuthTime);
   const tokenDigest = typeof identity?.tokenDigest === 'string' ? identity.tokenDigest : '';
   if (!digestPattern.test(tokenDigest)) fail('staging_google_registration_token_invalid');
-  if (!Number.isSafeInteger(issuedAt) || !Number.isSafeInteger(expiresAt)) {
+  if (!Number.isSafeInteger(issuedAt) || !Number.isSafeInteger(expiresAt)
+      || !Number.isSafeInteger(authTime)) {
     fail('staging_google_registration_token_claims_missing');
   }
   const nowSeconds = Math.floor(now / 1000);
-  if (issuedAt > nowSeconds + 60 || expiresAt <= nowSeconds || expiresAt <= issuedAt) {
+  if (issuedAt > nowSeconds + 60 || authTime > nowSeconds + 60
+      || nowSeconds - authTime > 15 * 60
+      || expiresAt <= nowSeconds || expiresAt <= issuedAt) {
     fail('staging_google_registration_token_expired');
   }
   if (!Number.isSafeInteger(maxLifetimeSeconds) || maxLifetimeSeconds < 300
@@ -147,7 +151,7 @@ export async function reserveStagingGoogleRegistrationReplay(
       || !(expiresAt instanceof Date) || Number.isNaN(expiresAt.getTime())) {
     fail('staging_google_registration_replay_invalid');
   }
-  await client.query('DELETE FROM staging_google_registration_replays WHERE expires_at <= now()');
+  await pruneExpiredStagingGoogleRegistrationReplays(client);
   const result = await client.query(
     `INSERT INTO staging_google_registration_replays (
        token_digest, identity_digest, expires_at
@@ -158,6 +162,12 @@ export async function reserveStagingGoogleRegistrationReplay(
   );
   if (result.rowCount !== 1) fail('staging_google_registration_replay');
   return true;
+}
+
+// Maintenance callers may prune expired protection rows even while the lane is disabled.
+// Active rows are never removed by this helper; migration rollback guards them separately.
+export async function pruneExpiredStagingGoogleRegistrationReplays(client) {
+  await client.query('DELETE FROM staging_google_registration_replays WHERE expires_at <= now()');
 }
 
 export { identityDigest };

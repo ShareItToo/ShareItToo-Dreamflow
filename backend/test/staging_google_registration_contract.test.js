@@ -7,6 +7,14 @@ const migrationSource = await fs.readFile(
   new URL('../sql/migrations/095_staging_google_registration_replays.up.sql', import.meta.url),
   'utf8',
 );
+const registrationSource = await fs.readFile(
+  new URL('../src/staging_google_registration.js', import.meta.url),
+  'utf8',
+);
+const downMigrationSource = await fs.readFile(
+  new URL('../sql/migrations/095_staging_google_registration_replays.down.sql', import.meta.url),
+  'utf8',
+);
 
 test('social HTTP contract gates fresh claims, replay, ownership, and fixed staging IDs', () => {
   assert.match(appSource, /requireFreshToken:\s*config\.stagingGoogleRegistration\.enabled/u);
@@ -33,4 +41,10 @@ test('replay migration stores only bounded digests and expiry, with a durable co
   assert.match(migrationSource, /CHECK \(token_digest ~ '\^\[0-9a-f\]\{64\}\$'\)/u);
   assert.match(migrationSource, /CREATE INDEX .*expires_at/u);
   assert.doesNotMatch(migrationSource, /email|uid|token[^_]/iu);
+});
+
+test('replay rollback refuses active protection rows and preserves expired-row maintenance', () => {
+  assert.match(downMigrationSource, /expires_at > now\(\)/u);
+  assert.match(downMigrationSource, /RAISE EXCEPTION 'staging_google_registration_replays_active_rows'/u);
+  assert.match(registrationSource, /pruneExpiredStagingGoogleRegistrationReplays/u);
 });

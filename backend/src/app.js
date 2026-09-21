@@ -2401,9 +2401,12 @@ export function createApp({
     }
     let stagingGoogleRegistration = null;
     let existingSocialAccount = null;
-    if (config.stagingGoogleRegistration.enabled) {
+    let exactExistingSocialIdentity = false;
+    const googleRegistrationLaneEnabled = config.stagingGoogleRegistration.enabled
+      && identity.provider === 'google';
+    if (googleRegistrationLaneEnabled) {
       const linked = await pool.query(
-        `SELECT account.id
+        `SELECT account.id, identity.firebase_user_id
            FROM auth_identities AS identity
            JOIN users AS account ON account.id = identity.user_id
           WHERE identity.provider = $1 AND identity.provider_subject = $2
@@ -2411,14 +2414,19 @@ export function createApp({
         [identity.provider, identity.subject],
       );
       existingSocialAccount = linked.rows[0] ?? null;
-      if (!existingSocialAccount) {
+      if (existingSocialAccount) {
+        if (existingSocialAccount.firebase_user_id !== identity.firebaseUserId) {
+          throw new HttpError(403, 'staging_google_identity_conflict');
+        }
+        exactExistingSocialIdentity = true;
+      } else {
         const existingByEmail = await pool.query(
           "SELECT id FROM users WHERE email = $1 AND deactivated_at IS NULL AND account_status = 'active'",
           [identity.email],
         );
         existingSocialAccount = existingByEmail.rows[0] ?? null;
       }
-      if (existingSocialAccount && identity.tokenDigest) {
+      if (exactExistingSocialIdentity && identity.tokenDigest) {
         const replay = await pool.query(
           'SELECT 1 FROM staging_google_registration_replays WHERE token_digest = $1',
           [identity.tokenDigest],
@@ -2427,7 +2435,7 @@ export function createApp({
           throw new HttpError(409, 'staging_google_registration_replay');
         }
       }
-      if (!existingSocialAccount) {
+      if (!exactExistingSocialIdentity) {
         try {
           stagingGoogleRegistration = {
             ...resolveStagingGoogleRegistration(config.stagingGoogleRegistration, identity),
@@ -2529,7 +2537,7 @@ export function createApp({
       let linkedExistingAccount = false;
       let createdAccount = false;
       const linked = await client.query(
-        `SELECT account.*
+        `SELECT account.*, identity.firebase_user_id
          FROM auth_identities AS identity
          JOIN users AS account ON account.id = identity.user_id
          WHERE identity.provider = $1 AND identity.provider_subject = $2
@@ -2538,6 +2546,14 @@ export function createApp({
       );
       if (linked.rowCount) {
         user = linked.rows[0];
+        if (linked.rows[0].firebase_user_id !== identity.firebaseUserId) {
+          throw new HttpError(
+            403,
+            identity.provider === 'google' && googleRegistrationLaneEnabled
+              ? 'staging_google_identity_conflict'
+              : 'social_identity_conflict',
+          );
+        }
         if (stagingGoogleRegistration && user.id !== stagingGoogleRegistration.userId) {
           throw new HttpError(403, 'staging_google_identity_conflict');
         }

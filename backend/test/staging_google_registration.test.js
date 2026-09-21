@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   assertStagingGoogleRegistrationToken,
   identityDigest,
+  pruneExpiredStagingGoogleRegistrationReplays,
   readStagingGoogleRegistrationConfiguration,
   reserveStagingGoogleRegistrationReplay,
   resolveStagingGoogleRegistration,
@@ -115,22 +116,26 @@ test('fresh token claims are bounded and replay reservation is durable and opaqu
     tokenDigest,
     tokenIssuedAt: Math.floor(now / 1000) - 60,
     tokenExpiresAt: Math.floor(now / 1000) + 600,
+    tokenAuthTime: Math.floor(now / 1000) - 60,
   }, now);
   assert.equal(token.tokenDigest, tokenDigest);
   assert.throws(() => assertStagingGoogleRegistrationToken({
     tokenDigest,
     tokenIssuedAt: Math.floor(now / 1000) - 7200,
     tokenExpiresAt: Math.floor(now / 1000) - 1,
+    tokenAuthTime: Math.floor(now / 1000) - 7200,
   }, now), /token_expired/);
   assert.throws(() => assertStagingGoogleRegistrationToken({
     tokenDigest,
     tokenIssuedAt: Math.floor(now / 1000),
     tokenExpiresAt: Math.floor(now / 1000) + 7201,
+    tokenAuthTime: Math.floor(now / 1000),
   }, now), /lifetime_invalid/);
   assert.throws(() => assertStagingGoogleRegistrationToken({
     tokenDigest,
     tokenIssuedAt: Math.floor(now / 1000) - 30,
     tokenExpiresAt: Math.floor(now / 1000) + 700,
+    tokenAuthTime: Math.floor(now / 1000) - 30,
   }, now, 600), /lifetime_invalid/);
 
   const calls = [];
@@ -174,4 +179,16 @@ test('replay and invalid identity data fail closed', async () => {
   assert.throws(() => readStagingGoogleRegistrationConfiguration(enabledEnvironment({
     SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: `${digest}=not a valid id`,
   }), { stagingAccess: access, firebaseAuthEnabled: true, stripeLivemode: false }), /allowlist_invalid/);
+});
+
+test('expired replay protection remains explicitly maintainable while the lane is disabled', async () => {
+  const calls = [];
+  const client = { query: async (sql, params) => {
+    calls.push({ sql, params });
+    return { rowCount: 2, rows: [] };
+  } };
+  await pruneExpiredStagingGoogleRegistrationReplays(client);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].sql, /expires_at <= now\(\)/u);
+  assert.deepEqual(calls[0].params, undefined);
 });

@@ -13,8 +13,11 @@ if (!databaseUrl) {
 } else {
   test('staging Google registration creates and reconnects only the allowlisted identity', async () => {
     const userId = `staging-google-${crypto.randomUUID()}`;
+    const rollbackUserId = `staging-google-rollback-${crypto.randomUUID()}`;
     const email = `${userId}@example.invalid`;
+    const rollbackEmail = `${rollbackUserId}@example.invalid`;
     const subject = `google-subject-${crypto.randomUUID()}`;
+    const rollbackSubject = `google-rollback-subject-${crypto.randomUUID()}`;
     const token = 'synthetic-google-token-a'.repeat(8);
     const token2 = 'synthetic-google-token-b'.repeat(8);
     const token3 = 'synthetic-google-token-c'.repeat(8);
@@ -23,6 +26,10 @@ if (!databaseUrl) {
     const tokenExpired = 'synthetic-expired-token'.repeat(8);
     const tokenUnlisted = 'synthetic-unlisted-token'.repeat(8);
     const tokenExistingUnlisted = 'synthetic-existing-unlisted-token'.repeat(8);
+    const tokenSameEmailAttacker = 'synthetic-same-email-attacker-token'.repeat(8);
+    const tokenExactWrongUid = 'synthetic-exact-subject-wrong-uid-token'.repeat(8);
+    const tokenExactWrongSubject = 'synthetic-exact-uid-wrong-subject-token'.repeat(8);
+    const tokenReplayConflict = 'synthetic-replay-conflict-token'.repeat(8);
     const nowSeconds = Math.floor(Date.now() / 1000);
     const identity = {
       provider: 'google',
@@ -33,10 +40,20 @@ if (!databaseUrl) {
       displayName: 'Synthetic staging pilot',
       tokenIssuedAt: nowSeconds - 30,
       tokenExpiresAt: nowSeconds + 600,
+      tokenAuthTime: nowSeconds - 30,
       tokenDigest: crypto.createHash('sha256').update(token, 'utf8').digest('hex'),
     };
     const identityDigest = crypto.createHash('sha256')
       .update(`google\n${subject}\n${identity.firebaseUserId}\n${email}`, 'utf8')
+      .digest('hex');
+    const rollbackIdentity = {
+      ...identity,
+      subject: rollbackSubject,
+      firebaseUserId: `firebase-${rollbackSubject}`,
+      email: rollbackEmail,
+    };
+    const rollbackIdentityDigest = crypto.createHash('sha256')
+      .update(`google\n${rollbackSubject}\n${rollbackIdentity.firebaseUserId}\n${rollbackEmail}`, 'utf8')
       .digest('hex');
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'sit-staging-google-registration-'));
     const serviceAccountFile = path.join(tempDir, 'firebase-service-account.json');
@@ -61,10 +78,10 @@ if (!databaseUrl) {
       FIREBASE_PROJECT_ID: 'shareittoo-staging',
       FIREBASE_SERVICE_ACCOUNT_FILE: serviceAccountFile,
       SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
-      SIT_STAGING_ALLOWED_USER_IDS: userId,
+      SIT_STAGING_ALLOWED_USER_IDS: `${userId},${rollbackUserId}`,
       SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'true',
       SIT_STAGING_GOOGLE_REGISTRATION_PROVIDER: 'google',
-      SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: `${identityDigest}=${userId}`,
+      SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: `${identityDigest}=${userId},${rollbackIdentityDigest}=${rollbackUserId}`,
     });
 
     const { default: pg } = await import('pg');
@@ -89,6 +106,7 @@ if (!databaseUrl) {
           ...withTokenDigest(tokenApple),
           provider: 'apple',
           subject: 'apple-existing-subject',
+          firebaseUserId: 'apple-firebase-user',
         }],
         [tokenExpired, {
           ...withTokenDigest(tokenExpired),
@@ -105,6 +123,23 @@ if (!databaseUrl) {
           subject: 'google-existing-unlisted-subject',
           email: 'existing-unlisted@example.invalid',
           firebaseUserId: 'firebase-existing-unlisted',
+        }],
+        [tokenSameEmailAttacker, {
+          ...withTokenDigest(tokenSameEmailAttacker),
+          subject: 'google-same-email-attacker-subject',
+          firebaseUserId: 'firebase-same-email-attacker',
+        }],
+        [tokenExactWrongUid, {
+          ...withTokenDigest(tokenExactWrongUid),
+          firebaseUserId: 'firebase-wrong-uid',
+        }],
+        [tokenExactWrongSubject, {
+          ...withTokenDigest(tokenExactWrongSubject),
+          subject: 'google-exact-uid-wrong-subject',
+        }],
+        [tokenReplayConflict, {
+          ...rollbackIdentity,
+          tokenDigest: crypto.createHash('sha256').update(tokenReplayConflict, 'utf8').digest('hex'),
         }],
       ]);
       const app = createApp({
@@ -134,6 +169,33 @@ if (!databaseUrl) {
         }),
       });
       await setupPool.query(
+        `INSERT INTO staging_google_registration_replays (
+           token_digest, identity_digest, expires_at
+         ) VALUES ($1, $2, now() + interval '10 minutes')`,
+        [
+          crypto.createHash('sha256').update(tokenReplayConflict, 'utf8').digest('hex'),
+          rollbackIdentityDigest,
+        ],
+      );
+      const rollbackMutationCounts = async () => (await setupPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM users WHERE id = $1) AS users,
+           (SELECT count(*)::int FROM auth_identities WHERE user_id = $1) AS identities,
+           (SELECT count(*)::int FROM auth_sessions WHERE user_id = $1) AS sessions,
+           (SELECT count(*)::int FROM audit_log WHERE actor_id = $1) AS audits`,
+        [rollbackUserId],
+      )).rows[0];
+      const rollbackCountsBefore = await rollbackMutationCounts();
+      const replayConflict = await request(tokenReplayConflict);
+      assert.equal(replayConflict.status, 409);
+      assert.equal((await replayConflict.json()).error, 'staging_google_registration_replay');
+      assert.deepEqual(await rollbackMutationCounts(), rollbackCountsBefore);
+      const replayConflictRow = await setupPool.query(
+        'SELECT 1 FROM staging_google_registration_replays WHERE token_digest = $1',
+        [crypto.createHash('sha256').update(tokenReplayConflict, 'utf8').digest('hex')],
+      );
+      assert.equal(replayConflictRow.rowCount, 1);
+      await setupPool.query(
         `INSERT INTO users (id, email, profile)
          VALUES ($1, 'other-owner@example.invalid', '{}'::jsonb)`,
         [userId],
@@ -142,6 +204,7 @@ if (!databaseUrl) {
       assert.equal(occupiedIdentity.status, 403);
       assert.equal((await occupiedIdentity.json()).error, 'staging_google_identity_conflict');
       await setupPool.query('DELETE FROM users WHERE id = $1', [userId]);
+      await setupPool.query('DELETE FROM users WHERE id = $1', [rollbackUserId]);
       const parallel = await Promise.all([request(token3), request(token4)]);
       assert.deepEqual(parallel.map((response) => response.status).sort(), [200, 200]);
       assert.deepEqual(
@@ -154,6 +217,24 @@ if (!databaseUrl) {
       const reconnected = await request(token2);
       assert.equal(reconnected.status, 200);
       assert.equal((await reconnected.json()).user.id, userId);
+      const mutationCounts = async () => (await setupPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM auth_identities WHERE user_id = $1) AS identities,
+           (SELECT count(*)::int FROM auth_sessions WHERE user_id = $1) AS sessions,
+           (SELECT count(*)::int FROM audit_log WHERE actor_id = $1) AS audits`,
+        [userId],
+      )).rows[0];
+      const countsBeforeIdentityConflicts = await mutationCounts();
+      const sameEmailAttacker = await request(tokenSameEmailAttacker);
+      assert.equal(sameEmailAttacker.status, 403);
+      assert.equal((await sameEmailAttacker.json()).error, 'staging_google_identity_not_allowlisted');
+      const exactSubjectWrongUid = await request(tokenExactWrongUid);
+      assert.equal(exactSubjectWrongUid.status, 403);
+      assert.equal((await exactSubjectWrongUid.json()).error, 'staging_google_identity_conflict');
+      const exactUidWrongSubject = await request(tokenExactWrongSubject);
+      assert.equal(exactUidWrongSubject.status, 403);
+      assert.equal((await exactUidWrongSubject.json()).error, 'staging_google_identity_not_allowlisted');
+      assert.deepEqual(await mutationCounts(), countsBeforeIdentityConflicts);
       await setupPool.query(
         `INSERT INTO auth_identities (
            user_id, provider, provider_subject, firebase_user_id,

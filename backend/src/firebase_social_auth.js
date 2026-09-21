@@ -62,16 +62,20 @@ export function normalizeFirebaseSocialClaims(decoded, { requireFreshToken = fal
   if (!requireFreshToken) return normalized;
   const issuedAt = Number(decoded.iat);
   const expiresAt = Number(decoded.exp);
+  const authTime = Number(decoded.auth_time);
   const nowSeconds = Math.floor(now / 1000);
   if (!Number.isSafeInteger(issuedAt) || !Number.isSafeInteger(expiresAt)
+      || !Number.isSafeInteger(authTime)
       || issuedAt > nowSeconds + 60 || expiresAt <= nowSeconds
-      || expiresAt <= issuedAt || expiresAt - issuedAt > 2 * 60 * 60) {
+      || expiresAt <= issuedAt || expiresAt - issuedAt > 2 * 60 * 60
+      || authTime > nowSeconds + 60 || nowSeconds - authTime > 15 * 60) {
     throw new SocialAuthError(401, 'invalid_social_token');
   }
   return {
     ...normalized,
     tokenIssuedAt: issuedAt,
     tokenExpiresAt: expiresAt,
+    tokenAuthTime: authTime,
     tokenDigest: crypto.createHash('sha256').update(
       boundedText(decoded.__rawToken, 12_000),
       'utf8',

@@ -95,12 +95,14 @@ test('staging registration token verification returns only bounded fresh-token m
     verifyIdToken: async () => claims({
       iat: Math.floor(fixedNow / 1000) - 30,
       exp: Math.floor(fixedNow / 1000) + 600,
+      auth_time: Math.floor(fixedNow / 1000) - 30,
     }),
     requireFreshToken: true,
     now: fixedNow,
   });
   assert.equal(identity.tokenIssuedAt, Math.floor(fixedNow / 1000) - 30);
   assert.equal(identity.tokenExpiresAt, Math.floor(fixedNow / 1000) + 600);
+  assert.equal(identity.tokenAuthTime, Math.floor(fixedNow / 1000) - 30);
   assert.match(identity.tokenDigest, /^[0-9a-f]{64}$/u);
   assert.equal(Object.hasOwn(identity, '__rawToken'), false);
   await assert.rejects(
@@ -108,6 +110,7 @@ test('staging registration token verification returns only bounded fresh-token m
       verifyIdToken: async () => claims({
         iat: Math.floor(fixedNow / 1000) - 30,
         exp: Math.floor(fixedNow / 1000) - 1,
+        auth_time: Math.floor(fixedNow / 1000) - 30,
       }),
       requireFreshToken: true,
       now: fixedNow,
