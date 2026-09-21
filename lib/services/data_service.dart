@@ -5129,9 +5129,15 @@ class DataService {
       // getItems(), whose authenticated backend path deliberately merges
       // /listings/mine for owner-management screens. A slow account-scoped
       // owner request must never hold the public catalog spinner open.
+      // The public catalog remains readable without a session. When an
+      // authenticated staging session exists, carry its current access token
+      // as well so the staging cohort gate can authorize the same public
+      // catalog read without requiring a per-run fixture ID in deployment
+      // configuration. Production keeps the same public response semantics.
       final remote = await BackendRepository.searchListings(
         sort: 'newest',
         limit: 100,
+        accessToken: await AuthService.accessToken(),
       );
       for (final entry in remote) {
         try {

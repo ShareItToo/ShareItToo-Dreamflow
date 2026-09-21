@@ -614,6 +614,7 @@ class BackendRepository {
     String sort = 'newest',
     int limit = 100,
     int offset = 0,
+    String? accessToken,
   }) async {
     final parameters = <String, String>{
       if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
@@ -632,6 +633,7 @@ class BackendRepository {
     final response = await BackendHttp.requestJson(
       method: 'GET',
       path: '/listings?$encoded',
+      accessToken: accessToken,
     );
     return _maps(response['listings']);
   }
