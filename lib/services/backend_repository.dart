@@ -686,6 +686,8 @@ class BackendRepository {
         'draftId': draftId,
         'generationKey': generationKey,
         'photoUrls': photoUrls,
+        'photoTruthClassifications':
+            List<String>.filled(photoUrls.length, 'unknown'),
         'consent': consent,
         'capabilityHandshake': capabilityHandshake,
         if (onDeviceAnalysis != null) 'onDeviceAnalysis': onDeviceAnalysis,
@@ -712,6 +714,8 @@ class BackendRepository {
         'draftId': draftId,
         'generationKey': generationKey,
         'photoUrls': photoUrls,
+        'photoTruthClassifications':
+            List<String>.filled(photoUrls.length, 'unknown'),
         'consent': consent,
         'capabilityHandshake': capabilityHandshake,
         if (onDeviceAnalysis != null) 'onDeviceAnalysis': onDeviceAnalysis,

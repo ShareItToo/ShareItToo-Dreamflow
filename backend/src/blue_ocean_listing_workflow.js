@@ -28,6 +28,11 @@ import {
   privatePilotAllowedCatalogKeys,
   privatePilotCatalogKey,
 } from './private_pilot_domain.js';
+import {
+  assertListingPhotoTruthClassification,
+  listingPhotoTruthPolicyVersion,
+  ListingPhotoTruthPolicyError,
+} from './listing_photo_truth_policy.js';
 
 export const blueOceanListingWorkflowVersion = 'N6-2026-08-24.1';
 export const blueOceanListingDisclosureVersion = listingAiImageDisclosureVersion;
@@ -291,7 +296,7 @@ function revisedQuestions(previous, answeredIds) {
   }));
 }
 
-function imageReviewMetadata(preflight) {
+function imageReviewMetadata(preflight, truthClassifications = []) {
   const warnings = preflight.images.flatMap((image) => image.screening.reasonCodes.map((code) => ({
     imageReference: image.imageReference,
     code,
@@ -306,10 +311,17 @@ function imageReviewMetadata(preflight) {
     originalMetadataRetained: false,
     temporaryDerivativeBytesPurged: true,
     realImageSafetyReviewCompleted: preflight.providerEligible === true,
+    truthPolicyVersion: listingPhotoTruthPolicyVersion,
+    truthClassifications: Object.freeze([...truthClassifications]),
   });
 }
 
-function manualFallback(reasonCode, preflight = null, generated = null, { paidProvider = false } = {}) {
+function manualFallback(
+  reasonCode,
+  preflight = null,
+  generated = null,
+  { paidProvider = false, truthClassifications = [] } = {},
+) {
   const providerCallCount = (preflight?.screeningProviderCallCount ?? 0)
     + (generated?.providerCallCount ?? 0);
   return deepFreeze({
@@ -319,7 +331,7 @@ function manualFallback(reasonCode, preflight = null, generated = null, { paidPr
     openManualEditor: true,
     photosPreserved: true,
     manualInputsPreserved: true,
-    imageReview: preflight ? imageReviewMetadata(preflight) : null,
+    imageReview: preflight ? imageReviewMetadata(preflight, truthClassifications) : null,
     autoPublishAllowed: false,
     providerCallCount,
     paidCallPerformed: paidProvider && providerCallCount > 0,
@@ -368,9 +380,23 @@ export function createBlueOceanListingWorkflow({
         configuration,
       );
       const screenedImages = [];
+      const truthClassifications = [];
       for (let index = 0; index < images.length; index += 1) {
         const image = images[index];
         const value = object(image, 'blue_ocean_image_invalid');
+        let truthClassification;
+        try {
+          truthClassification = assertListingPhotoTruthClassification(
+            value.truthClassification,
+            { index },
+          ).classification;
+        } catch (error) {
+          if (error instanceof ListingPhotoTruthPolicyError) {
+            fail(409, error.code, error.details);
+          }
+          throw error;
+        }
+        truthClassifications.push(truthClassification);
         const screening = configuration.provider === 'on_device'
           ? onDeviceScreening(boundOnDeviceAnalysis[index])
           : normalizeScreening(await screenImage({
@@ -432,7 +458,10 @@ export function createBlueOceanListingWorkflow({
             error.code,
             null,
             null,
-            { paidProvider: configuration.provider === 'openai' },
+            {
+              paidProvider: configuration.provider === 'openai',
+              truthClassifications,
+            },
           ),
           disclosureVersion: disclosure.version,
           disclosureText: disclosure.text,
@@ -453,7 +482,10 @@ export function createBlueOceanListingWorkflow({
               : 'blue_ocean_image_review_required',
             preflight,
             null,
-            { paidProvider: configuration.provider === 'openai' },
+            {
+              paidProvider: configuration.provider === 'openai',
+              truthClassifications,
+            },
           ),
           disclosureVersion: disclosure.version,
           disclosureText: disclosure.text,
@@ -466,7 +498,10 @@ export function createBlueOceanListingWorkflow({
             generated?.reasonCode ?? 'blue_ocean_generation_failed',
             preflight,
             generated,
-            { paidProvider: configuration.provider === 'openai' },
+            {
+              paidProvider: configuration.provider === 'openai',
+              truthClassifications,
+            },
           ),
           disclosureVersion: disclosure.version,
           disclosureText: disclosure.text,
@@ -478,7 +513,7 @@ export function createBlueOceanListingWorkflow({
         workflowVersion: blueOceanListingWorkflowVersion,
         status: 'draft_ready',
         revision: generated.revision,
-        imageReview: imageReviewMetadata(preflight),
+        imageReview: imageReviewMetadata(preflight, truthClassifications),
         disclosureVersion: disclosure.version,
         disclosureText: disclosure.text,
         disclosureAccepted: true,

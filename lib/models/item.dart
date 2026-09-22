@@ -1,3 +1,5 @@
+import 'package:lendify/config/private_pilot_config.dart';
+
 class Item {
   final String id;
   final String ownerId;
@@ -180,6 +182,12 @@ class Item {
         'longRentalDiscounts':
             longRentalDiscounts.map((e) => e.toJson()).toList(),
         'photos': photos,
+        'photoTruthPolicyVersion':
+            PrivatePilotConfig.listingPhotoTruthPolicyVersion,
+        'photoTruthAttestation':
+            PrivatePilotConfig.listingPhotoTruthPolicyAttestation,
+        'photoTruthClassifications':
+            List<String>.filled(photos.length, 'unknown'),
         'locationText': locationText,
         'lat': lat,
         'lng': lng,

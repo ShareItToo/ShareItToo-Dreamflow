@@ -3486,6 +3486,12 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                   title: 'Hinweis vor dem Veröffentlichen',
                 ),
                 const SizedBox(height: 8),
+                const Text(
+                  '${PrivatePilotConfig.listingPhotoTruthPolicyAttestation} '
+                  'Bei Zweifeln kann die Anzeige geprüft oder entfernt werden.',
+                  style: TextStyle(fontSize: 13.5, height: 1.4),
+                ),
+                const SizedBox(height: 8),
                 CheckboxListTile(
                   value: _privateStatusConfirmed,
                   onChanged: (value) => setState(() {

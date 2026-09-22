@@ -14,6 +14,7 @@ const mutationService = readFileSync(
   'lib/services/listing_mutation_service.dart',
   'utf8',
 );
+const item = readFileSync('lib/models/item.dart', 'utf8');
 const app = readFileSync('backend/src/app.js', 'utf8');
 const store = readFileSync('backend/src/blue_ocean_listing_store.js', 'utf8');
 
@@ -200,6 +201,18 @@ test('client and server use separate authenticated review and exact publication 
     mutationService,
     /reviewBlueOceanListingDraftForOwner\([\s\S]*owner: context\.owner\.authOwner/u,
   );
+});
+
+test('publish action carries the versioned image-truth policy without a new checkbox', () => {
+  assert.match(config, /listingPhotoTruthPolicyVersion/u);
+  assert.match(config, /listingPhotoTruthPolicyAttestation/u);
+  assert.match(screen, /listingPhotoTruthPolicyAttestation/u);
+  assert.match(screen, /Bei Zweifeln kann die Anzeige geprüft oder entfernt werden/u);
+  assert.match(item, /PrivatePilotConfig\.listingPhotoTruthPolicyVersion/u);
+  assert.match(item, /PrivatePilotConfig\.listingPhotoTruthPolicyAttestation/u);
+  assert.match(item, /photoTruthClassifications[\s\S]*unknown/u);
+  assert.match(app, /assertListingPhotoTruthPolicy\([\s\S]*requireAttestation: true/u);
+  assert.doesNotMatch(screen, /KI-generierte oder materiell veränderte Bilder.*Checkbox/u);
 });
 
 test('accessibility and recovery do not rely on color alone', () => {

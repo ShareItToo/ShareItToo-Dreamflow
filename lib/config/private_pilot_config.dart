@@ -24,6 +24,13 @@ class PrivatePilotConfig {
   static const bool enabled = true;
   static const bool deliveryEnabled = false;
 
+  /// The publish action carries this server-validated image-truth assertion;
+  /// it deliberately adds no separate checkbox to the listing flow.
+  static const String listingPhotoTruthPolicyVersion =
+      'listing-photo-truth-v1';
+  static const String listingPhotoTruthPolicyAttestation =
+      'Ich veröffentliche nur aktuelle echte Artikelbilder. Zuschneiden, Belichtung und das Schwärzen privater Details sind erlaubt, wenn Artikel, Zustand und Umfang wahr bleiben. KI-generierte oder materiell veränderte Bilder dürfen nicht veröffentlicht werden.';
+
   /// The reachable listing helpers are now available as bounded local rules
   /// plus an explicit authenticated server price action. This does not enable
   /// direct client provider traffic, auto-publication or live money.

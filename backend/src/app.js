@@ -448,6 +448,10 @@ import {
 } from './listing_set_workflow.js';
 import { ImageProcessingError, sanitizeImage } from './media_pipeline.js';
 import {
+  assertListingPhotoTruthPolicy,
+  ListingPhotoTruthPolicyError,
+} from './listing_photo_truth_policy.js';
+import {
   bearerToken,
   defaultProfile,
   hashPassword,
@@ -1026,7 +1030,11 @@ async function bindListingUploads(client, { listingId, ownerId, photos, requireP
   }
 }
 
-async function loadBlueOceanListingImages({ ownerId, photoUrls }) {
+async function loadBlueOceanListingImages({
+  ownerId,
+  photoUrls,
+  photoTruthClassifications = null,
+}) {
   if (!Array.isArray(photoUrls) || photoUrls.length < 1 || photoUrls.length > 4) {
     throw new HttpError(400, 'blue_ocean_image_count_invalid');
   }
@@ -1036,6 +1044,18 @@ async function loadBlueOceanListingImages({ ownerId, photoUrls }) {
   if (storageNames.some((entry) => !entry)
       || new Set(storageNames).size !== storageNames.length) {
     throw new HttpError(400, 'blue_ocean_photo_reference_invalid');
+  }
+  let photoTruth;
+  try {
+    photoTruth = assertListingPhotoTruthPolicy({
+      classifications: photoTruthClassifications,
+      expectedCount: storageNames.length,
+    });
+  } catch (error) {
+    if (error instanceof ListingPhotoTruthPolicyError) {
+      throw new HttpError(409, error.code, error.details);
+    }
+    throw error;
   }
   const records = await pool.query(
     `SELECT owner_id, storage_name, mime_type, purpose, content_scan_status,
@@ -1061,6 +1081,7 @@ async function loadBlueOceanListingImages({ ownerId, photoUrls }) {
       imageReference: `listing_image_${record.content_sha256.slice(0, 32)}`,
       mimeType: record.mime_type,
       bytes: await fs.readFile(path.join(config.uploadDir, storageName)),
+      truthClassification: photoTruth.classifications[images.length],
     });
   }
   return images;
@@ -4203,6 +4224,7 @@ export function createApp({
     const images = await loadBlueOceanListingImages({
       ownerId: req.auth.userId,
       photoUrls: req.body?.photoUrls,
+      photoTruthClassifications: req.body?.photoTruthClassifications,
     });
     const openAiProvider = config.listingAi.provider === 'openai';
     const attemptPrerequisitesValid = /^listing_ai_draft_[0-9a-f-]{36}$/u.test(String(req.body?.draftId ?? ''))
@@ -4496,11 +4518,21 @@ export function createApp({
     const analyzedImages = await loadBlueOceanListingImages({
       ownerId: req.auth.userId,
       photoUrls: payload.photos,
+      photoTruthClassifications: payload.photoTruthClassifications,
     });
     const analyzedReferences = analyzedImages.map((entry) => entry.imageReference).sort();
     if (JSON.stringify(analyzedReferences)
         !== JSON.stringify([...stored.revision.imageReferences].sort())) {
       throw new HttpError(409, 'blue_ocean_publication_photos_changed');
+    }
+    const storedTruthClassifications = stored.reviewMetadata?.imageReview?.truthClassifications;
+    const analyzedTruthClassifications = analyzedImages.map(
+      (entry) => entry.truthClassification,
+    );
+    if (Array.isArray(storedTruthClassifications)
+        && JSON.stringify(storedTruthClassifications)
+          !== JSON.stringify(analyzedTruthClassifications)) {
+      throw new HttpError(409, 'blue_ocean_publication_photo_truth_changed');
     }
     const projection = listingProjectionValues(payload);
     const created = await inTransaction(async (client) => {
@@ -4970,6 +5002,29 @@ export function createApp({
     const result = await inTransaction(async (client) => {
       if (isActive) {
         await requirePrivatePilotStoredListing(client, id, req.auth.userId);
+        const storedListing = await client.query(
+          `SELECT payload FROM listings
+           WHERE id = $1 AND owner_id = $2
+           FOR UPDATE`,
+          [id, req.auth.userId],
+        );
+        if (!storedListing.rowCount) throw new HttpError(404, 'listing_not_found');
+        try {
+          assertListingPhotoTruthPolicy({
+            policyVersion: storedListing.rows[0].payload?.photoTruthPolicyVersion,
+            policyText: storedListing.rows[0].payload?.photoTruthAttestation,
+            classifications: storedListing.rows[0].payload?.photoTruthClassifications,
+            expectedCount: Array.isArray(storedListing.rows[0].payload?.photos)
+              ? storedListing.rows[0].payload.photos.length
+              : 0,
+            requireAttestation: true,
+          });
+        } catch (error) {
+          if (error instanceof ListingPhotoTruthPolicyError) {
+            throw new HttpError(409, error.code, error.details);
+          }
+          throw error;
+        }
         const media = await client.query(
           `SELECT 1 FROM uploads
            WHERE listing_id = $1 AND owner_id = $2

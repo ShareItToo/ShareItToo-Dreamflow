@@ -8,6 +8,11 @@ import {
   shapePublicListing,
   storageNameFromListingPhoto,
 } from '../src/listing_catalog.js';
+import {
+  assertListingPhotoTruthPolicy,
+  listingPhotoTruthPolicyText,
+  listingPhotoTruthPolicyVersion,
+} from '../src/listing_photo_truth_policy.js';
 
 const validListing = {
   title: 'Bosch Bohrmaschine',
@@ -25,6 +30,9 @@ const validListing = {
   lng: 13.4051,
   condition: 'good',
   status: 'active',
+  photoTruthPolicyVersion: listingPhotoTruthPolicyVersion,
+  photoTruthAttestation: listingPhotoTruthPolicyText,
+  photoTruthClassifications: ['unknown'],
 };
 
 test('listing normalization enforces a complete active catalogue item', () => {
@@ -37,6 +45,90 @@ test('listing normalization enforces a complete active catalogue item', () => {
   assert.equal(listing.protectionModel, 'none');
   assert.equal(listing.availabilityMode, 'calendar');
   assert.equal(listing.isActive, true);
+});
+
+test('one authentic current photo passes the versioned truth policy', () => {
+  const listing = normalizeListingPayload({
+    ...validListing,
+    photoTruthClassifications: ['authentic'],
+  }, { id: 'listing-authentic', ownerId: 'owner' });
+  assert.equal(listing.photos.length, 1);
+  assert.equal(listing.photoTruthPolicyVersion, listingPhotoTruthPolicyVersion);
+  assert.equal(listing.photoTruthAttestation, listingPhotoTruthPolicyText);
+  assert.deepEqual(listing.photoTruthClassifications, ['unknown']);
+});
+
+test('generated or materially altered structured photos fail closed', () => {
+  for (const classification of ['generated', 'materially_altered']) {
+    assert.throws(
+      () => normalizeListingPayload({
+        ...validListing,
+        photoTruthClassifications: [classification],
+      }, { id: 'listing-forbidden-photo', ownerId: 'owner' }),
+      (error) => error instanceof ListingValidationError
+        && error.code === 'listing_photo_truth_forbidden_image',
+    );
+  }
+});
+
+test('truth-preserving edits remain publishable without being trusted as provenance', () => {
+  const listing = normalizeListingPayload({
+    ...validListing,
+    photoTruthClassifications: ['truth_preserving_edit'],
+  }, { id: 'listing-edited-photo', ownerId: 'owner' });
+  assert.equal(listing.isActive, true);
+  assert.deepEqual(listing.photoTruthClassifications, ['unknown']);
+});
+
+test('publication policy version and wording are server-owned', () => {
+  assert.throws(
+    () => normalizeListingPayload({
+      ...validListing,
+      photoTruthPolicyVersion: 'listing-photo-truth-old',
+      photoTruthAttestation: listingPhotoTruthPolicyText,
+    }, { id: 'listing-old-policy', ownerId: 'owner' }),
+    (error) => error instanceof ListingValidationError
+      && error.code === 'listing_photo_truth_policy_required',
+  );
+  assert.throws(
+    () => normalizeListingPayload({
+      ...validListing,
+      photoTruthAttestation: 'Abweichender Veröffentlichungstext.',
+    }, { id: 'listing-drifted-policy', ownerId: 'owner' }),
+    (error) => error instanceof ListingValidationError
+      && error.code === 'listing_photo_truth_policy_required',
+  );
+});
+
+test('drafts may omit the photo-truth attestation, but active listings may not', () => {
+  const { photoTruthPolicyVersion, photoTruthAttestation, photoTruthClassifications, ...draftWithoutTruth } = validListing;
+  const draft = normalizeListingPayload({
+    ...draftWithoutTruth,
+    status: 'draft',
+  }, { id: 'listing-draft-without-policy', ownerId: 'owner' });
+  assert.equal(draft.photoTruthPolicyVersion, null);
+  assert.equal(draft.photoTruthAttestation, null);
+  assert.deepEqual(draft.photoTruthClassifications, ['unknown']);
+
+  assert.throws(
+    () => normalizeListingPayload({
+      ...draftWithoutTruth,
+      status: 'active',
+    }, { id: 'listing-active-without-policy', ownerId: 'owner' }),
+    (error) => error instanceof ListingValidationError
+      && error.code === 'listing_photo_truth_policy_required',
+  );
+});
+
+test('activation cannot bypass the required exact policy attestation', () => {
+  assert.throws(
+    () => assertListingPhotoTruthPolicy({
+      classifications: ['unknown'],
+      expectedCount: 1,
+      requireAttestation: true,
+    }),
+    (error) => error.code === 'listing_photo_truth_policy_required',
+  );
 });
 
 test('legacy deposit and protection input is neutralized for the launch product', () => {
@@ -123,11 +215,21 @@ test('Privat-Pilot persists the normalized region binding and rejects unconfigur
 
 test('active listings require an image while drafts may remain private without one', () => {
   assert.throws(
-    () => normalizeListingPayload({ ...validListing, photos: [] }, { id: 'listing-1', ownerId: 'owner' }),
+    () => normalizeListingPayload({
+      ...validListing,
+      photos: [],
+      photoTruthClassifications: [],
+    }, { id: 'listing-1', ownerId: 'owner' }),
     (error) => error instanceof ListingValidationError && error.code === 'listing_photo_required',
   );
   const draft = normalizeListingPayload(
-    { ...validListing, photos: [], status: 'draft', isActive: false },
+    {
+      ...validListing,
+      photos: [],
+      status: 'draft',
+      isActive: false,
+      photoTruthClassifications: [],
+    },
     { id: 'listing-1', ownerId: 'owner' },
   );
   assert.equal(draft.status, 'draft');
@@ -141,6 +243,9 @@ test('public listings disclose only an approximate location', () => {
   assert.equal(shaped.lng, 13.41);
   assert.equal(shaped.geohash, '');
   assert.equal(shaped.distanceKm, 1.3);
+  assert.equal('photoTruthPolicyVersion' in shaped, false);
+  assert.equal('photoTruthAttestation' in shaped, false);
+  assert.equal('photoTruthClassifications' in shaped, false);
 });
 
 test('G5A evidence is server-owned, preserved on edit, and publicly exposes only confirmed accessories', () => {

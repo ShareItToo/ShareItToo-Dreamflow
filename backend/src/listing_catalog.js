@@ -3,6 +3,10 @@ import {
   privatePilotListingFields,
   PrivatePilotValidationError,
 } from './private_pilot_domain.js';
+import {
+  assertListingPhotoTruthPolicy,
+  ListingPhotoTruthPolicyError,
+} from './listing_photo_truth_policy.js';
 
 const listingStatuses = new Set(['draft', 'active', 'paused', 'ended']);
 const listingConditions = new Set([
@@ -108,6 +112,21 @@ export function normalizeListingPayload(raw, {
   const photos = Array.isArray(raw.photos)
     ? [...new Set(raw.photos.slice(0, 12).map((photo) => text(photo, 4000)).filter(Boolean))]
     : [];
+  let photoTruth;
+  try {
+    photoTruth = assertListingPhotoTruthPolicy({
+      policyVersion: raw.photoTruthPolicyVersion,
+      policyText: raw.photoTruthAttestation,
+      classifications: raw.photoTruthClassifications,
+      expectedCount: photos.length,
+      requireAttestation: status === 'active',
+    });
+  } catch (error) {
+    if (error instanceof ListingPhotoTruthPolicyError) {
+      throw new ListingValidationError(error.code, error.details);
+    }
+    throw error;
+  }
   const tags = Array.isArray(raw.tags)
     ? [...new Set(raw.tags.slice(0, 20).map((tag) => text(tag, 50)).filter(Boolean))]
     : [];
@@ -162,6 +181,9 @@ export function normalizeListingPayload(raw, {
     autoApplyDiscounts: raw.autoApplyDiscounts === true,
     longRentalDiscounts: normalizedDiscounts(raw.longRentalDiscounts),
     photos,
+    photoTruthPolicyVersion: photoTruth.policyVersion,
+    photoTruthAttestation: photoTruth.policyText,
+    photoTruthClassifications: photoTruth.classifications,
     locationText,
     lat: latitude,
     lng: longitude,
@@ -246,7 +268,13 @@ export function storageNameFromListingPhoto(photoUrl, publicBaseUrl) {
 }
 
 export function shapePublicListing(payload, { distanceKm = null } = {}) {
-  const { supplyEnrichment, ...publicPayload } = payload;
+  const {
+    supplyEnrichment,
+    photoTruthPolicyVersion,
+    photoTruthAttestation,
+    photoTruthClassifications,
+    ...publicPayload
+  } = payload;
   const latitude = finiteNumber(payload.lat);
   const longitude = finiteNumber(payload.lng);
   const city = text(payload.city, 120);

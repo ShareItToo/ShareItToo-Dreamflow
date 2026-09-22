@@ -177,6 +177,50 @@ test('trusted local preflight composes N4, mock N3 and an editable non-published
   assert.equal(result.autoPublishAllowed, false);
 });
 
+test('structured client image classifications fail closed without trusting safe declarations', async () => {
+  const workflow = createBlueOceanListingWorkflow({
+    configuration: config(),
+    screenImage: async () => ({
+      localOcrText: '',
+      visualScanCompleted: true,
+      visualSignals: [],
+    }),
+  });
+  const bytes = await fixtureImage();
+  await assert.rejects(
+    workflow.analyze({
+      draftId,
+      ownerId,
+      generationKey: key('generated-image'),
+      images: [{
+        imageReference: 'listing_image_12345678',
+        mimeType: 'image/png',
+        bytes,
+        truthClassification: 'generated',
+      }],
+      consent: consent(),
+    }),
+    (error) => error instanceof BlueOceanListingWorkflowError
+      && error.status === 409
+      && error.code === 'listing_photo_truth_forbidden_image',
+  );
+
+  const result = await workflow.analyze({
+    draftId,
+    ownerId,
+    generationKey: key('truth-preserving-edit'),
+    images: [{
+      imageReference: 'listing_image_12345678',
+      mimeType: 'image/png',
+      bytes,
+      truthClassification: 'truth_preserving_edit',
+    }],
+    consent: consent(),
+  });
+  assert.equal(result.status, 'draft_ready');
+  assert.deepEqual(result.imageReview.truthClassifications, ['unknown']);
+});
+
 test('on-device image labels and OCR are privacy-screened and create a review-only draft', async () => {
   const configuration = readListingAiGatewayConfiguration({
     SIT_LISTING_AI_PROVIDER: 'on_device',

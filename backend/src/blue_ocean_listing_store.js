@@ -299,6 +299,7 @@ export async function persistBlueOceanReview(client, {
       JSON.stringify(review.revision.ownerConfirmations),
       review.revision.payloadSha256,
       JSON.stringify({
+        imageReview: draft.reviewMetadata?.imageReview ?? null,
         readiness: review.readiness,
         priceReviewVersion: review.priceReviewVersion,
         priceMode: review.priceMode,
