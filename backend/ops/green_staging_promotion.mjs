@@ -9,6 +9,7 @@ import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { closeStablePrivateFile, openStablePrivateFile, readStablePrivateFile } from './stable_private_file.mjs';
 import { assertReadinessFindingsUnchanged, buildReadinessFindingSql, normalizeReadinessFindings } from './staging_forward_migration_rehearsal.mjs';
+import { technicalSandboxHealthProjection } from '../src/technical_sandbox_config.js';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -33,6 +34,29 @@ export const greenTarget = Object.freeze({
 });
 
 export const syntheticSandboxCredentialFilePath = '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password';
+
+// Green promotion never activates the optional technical Sandbox.  The
+// standalone technical-Sandbox lane remains separately gated; Green must
+// carry an explicit provider-off contract so an old authorization or secret
+// cannot accidentally turn promotion into provider traffic.
+export const greenTechnicalSandboxEnvironment = Object.freeze({
+  TECHNICAL_SANDBOX_ENABLED: '0',
+  TECHNICAL_SANDBOX_KILL_SWITCH: '1',
+  TECHNICAL_SANDBOX_ACCOUNT_ID: '',
+  TECHNICAL_SANDBOX_USER_IDS: '',
+  TECHNICAL_SANDBOX_AUTHORIZATION_ID: '',
+  TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT: '',
+  TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT: '',
+  TECHNICAL_SANDBOX_SECRET_KEY_FILE: '',
+  TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: '',
+});
+
+export const greenTechnicalSandboxHealth = technicalSandboxHealthProjection({
+  available: false,
+  reason: 'disabled',
+  provider: 'stripe',
+  mode: 'disabled',
+});
 
 export const greenAllowedEnvNames = Object.freeze([
   'NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'APP_COMMIT', 'APP_BUILD_TIMESTAMP',
@@ -85,6 +109,8 @@ const requiredGreenEnvNames = Object.freeze([
   'ENABLE_STAGING_STRIPE', 'TECHNICAL_SANDBOX_ENABLED', 'TECHNICAL_SANDBOX_KILL_SWITCH',
   'TECHNICAL_SANDBOX_ACCOUNT_ID', 'TECHNICAL_SANDBOX_AUTHORIZATION_ID',
   'TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT', 'TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT',
+  'TECHNICAL_SANDBOX_USER_IDS', 'TECHNICAL_SANDBOX_SECRET_KEY_FILE',
+  'TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE',
   'SIT_STAGING_PILOT_ID', 'SYNTHETIC_SANDBOX_PASSWORD_FILE',
 ]);
 
@@ -96,16 +122,21 @@ export function assertGreenProtectedEnvironment(values, config) {
       || String(values.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST ?? '').trim() !== ''
       || values.SIT_STAGING_ACCESS_GATE_ENABLED !== 'true'
       || values.ENABLE_STAGING_STRIPE !== '0' || values.PAYMENT_TRANSPORT !== 'memory'
-      || values.STRIPE_LIVEMODE !== 'false' || values.TECHNICAL_SANDBOX_ENABLED !== '1'
-      || values.TECHNICAL_SANDBOX_KILL_SWITCH !== '0' || values.SIT_STAGING_PILOT_ID !== 'heilbronn_wave0'
+      || values.STRIPE_LIVEMODE !== 'false' || values.SIT_STAGING_PILOT_ID !== 'heilbronn_wave0'
       || values.SIT_STAGING_COMPOSE_PROJECT !== 'sit-green'
-      || values.TECHNICAL_SANDBOX_SECRET_KEY_FILE !== '/run/secrets/technical-sandbox-key'
-      || values.TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE !== '/run/secrets/technical-sandbox-webhook'
       || values.SYNTHETIC_SANDBOX_PASSWORD_FILE !== syntheticSandboxCredentialFilePath
       || !String(values.SIT_STAGING_ALLOWED_USER_IDS ?? '').split(',').map((entry) => entry.trim()).includes('synthetic_sandbox_user_pilot_20260919')
       || config?.mfaFile === undefined) fail('green_runtime_environment_boundary_invalid');
+  assertGreenTechnicalSandboxProviderOff(values);
   for (const name of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_CONNECT_WEBHOOK_SECRET', 'OPENAI_API_KEY']) {
     if (Object.hasOwn(values, name) && values[name] !== '') fail('green_main_provider_secret_forbidden');
+  }
+  return true;
+}
+
+export function assertGreenTechnicalSandboxProviderOff(values) {
+  for (const [name, expected] of Object.entries(greenTechnicalSandboxEnvironment)) {
+    if (values?.[name] !== expected) fail('green_technical_sandbox_provider_off_invalid');
   }
   return true;
 }
@@ -122,6 +153,7 @@ export function assertGreenRuntimeEnvironmentReadback(values) {
       || values?.SIT_STAGING_ACCESS_GATE_ENABLED !== 'true'
       || values?.PAYMENT_TRANSPORT !== 'memory'
       || values?.STRIPE_LIVEMODE !== 'false') fail('green_runtime_prestate_readback_invalid');
+  assertGreenTechnicalSandboxProviderOff(values);
   return true;
 }
 
@@ -243,9 +275,16 @@ function assertMigrationLedgerReadback(value, expectedSchema, expectedDigest, co
 export function assertGreenRuntimeReadbacks({ version, health, ready, runtimeCommit } = {}) {
   if (version?.commit !== runtimeCommit || version?.environment !== 'test') fail('green_runtime_version_mismatch');
   for (const payload of [health, ready]) {
-    if (payload?.checks?.technicalSandbox?.available !== true
-        || payload.checks.technicalSandbox.amountMinor !== 100
-        || payload.checks.technicalSandbox.currency !== 'EUR'
+    const technicalSandbox = payload?.checks?.technicalSandbox;
+    if (technicalSandbox?.available !== false
+        || technicalSandbox?.reason !== 'disabled'
+        || technicalSandbox?.provider !== 'stripe'
+        || technicalSandbox?.mode !== 'disabled'
+        || technicalSandbox?.amountMinor !== 100
+        || technicalSandbox?.currency !== 'EUR'
+        || technicalSandbox?.maxRunsPerUser24h !== 3
+        || technicalSandbox?.professionalReview !== false
+        || technicalSandbox?.syntheticOnly !== true
         || payload.checks?.identityVerification?.provider !== 'memory'
         || payload.checks?.listingAi?.provider !== 'on_device') fail('green_runtime_capability_readback_invalid');
   }
@@ -378,8 +417,6 @@ async function assertProtectedFile(filePath, mode, uid, gid, code) {
 export async function assertGreenProtectedRuntimeFiles(config, protectedEnv) {
   await assertProtectedFile(config.mfaFile, 0o640, 0, 101, 'green_mfa_file');
   await assertProtectedFile(config.firebaseFile, 0o640, 0, 65532, 'green_firebase_file');
-  await assertProtectedFile(config.technicalSandboxKeyFile, 0o600, 100, 101, 'green_technical_key_file');
-  await assertProtectedFile(config.technicalSandboxWebhookFile, 0o600, 100, 101, 'green_technical_webhook_file');
   if (protectedEnv.SYNTHETIC_SANDBOX_PASSWORD_FILE !== syntheticSandboxCredentialFilePath) {
     fail('green_synthetic_password_file_path_invalid');
   }
@@ -392,8 +429,7 @@ export function assertGreenRuntimeConfig(config) {
   safePath(config.envFile, 'green_env_file_invalid');
   safePath(config.mfaFile, 'green_mfa_file_invalid');
   safePath(config.firebaseFile, 'green_firebase_file_invalid');
-  safePath(config.technicalSandboxKeyFile, 'green_technical_key_file_invalid');
-  safePath(config.technicalSandboxWebhookFile, 'green_technical_webhook_file_invalid');
+  if (config.technicalSandboxKeyFile !== '' || config.technicalSandboxWebhookFile !== '') fail('green_provider_mounts_forbidden');
   if (config.environment !== 'test'
       || !Array.isArray(config.envNames) || config.envNames.length === 0
       || new Set(config.envNames).size !== config.envNames.length
@@ -410,7 +446,7 @@ export function assertGreenRuntimeConfig(config) {
   }
   safeDigest(config.accessGateDigest, 'green_access_gate_digest_invalid');
   safeDigest(config.providerConfigDigest, 'green_provider_config_digest_invalid');
-  if (!Array.isArray(config.mounts) || config.mounts.length < 5) fail('green_mount_inventory_invalid');
+  if (!Array.isArray(config.mounts) || config.mounts.length < 3) fail('green_mount_inventory_invalid');
   for (const mount of config.mounts) {
     exactKeys(mount, ['source', 'destination', 'readOnly'], 'green_mount_shape_invalid');
     safePath(mount.source, 'green_mount_source_invalid');
@@ -418,12 +454,14 @@ export function assertGreenRuntimeConfig(config) {
     if (mount.readOnly !== true && mount.destination !== '/data/uploads') fail('green_mount_must_be_read_only');
   }
   const destinations = new Set(config.mounts.map((mount) => mount.destination));
-  for (const destination of ['/run/secrets/mfa-encryption-key', '/run/secrets/firebase-service-account.json', '/run/secrets/technical-sandbox-key', '/run/secrets/technical-sandbox-webhook', '/data/uploads']) {
+  if (['/run/secrets/technical-sandbox-key', '/run/secrets/technical-sandbox-webhook'].some((destination) => destinations.has(destination))) {
+    fail('green_provider_mounts_forbidden');
+  }
+  for (const destination of ['/run/secrets/mfa-encryption-key', '/run/secrets/firebase-service-account.json', '/data/uploads']) {
     if (!destinations.has(destination)) fail('green_mount_inventory_incomplete');
   }
   const uploadMount = config.mounts.find((mount) => mount.destination === '/data/uploads');
   if (uploadMount?.readOnly !== false) fail('green_upload_mount_must_be_writable');
-  if (config.technicalSandboxKeyFile === config.technicalSandboxWebhookFile) fail('green_technical_files_not_distinct');
   return Object.freeze({ ...config, envNames: [...config.envNames], mounts: config.mounts.map((mount) => Object.freeze({ ...mount })) });
 }
 
@@ -447,8 +485,6 @@ function expectedGreenSourceMounts(runtimeConfig) {
     { destination: '/data/uploads', type: 'volume', source: null, volume: greenTarget.uploadsVolume, readOnly: false },
     { destination: '/run/secrets/firebase-service-account.json', type: 'bind', source: runtimeConfig?.firebaseFile, volume: null, readOnly: true },
     { destination: '/run/secrets/mfa-encryption-key', type: 'bind', source: runtimeConfig?.mfaFile, volume: null, readOnly: true },
-    { destination: '/run/secrets/technical-sandbox-key', type: 'bind', source: runtimeConfig?.technicalSandboxKeyFile, volume: null, readOnly: true },
-    { destination: '/run/secrets/technical-sandbox-webhook', type: 'bind', source: runtimeConfig?.technicalSandboxWebhookFile, volume: null, readOnly: true },
   ];
   if (expected.some((mount) => typeof mount.source !== 'string' && mount.type === 'bind')) fail('green_prepromotion_mount_identity_missing');
   return expected.sort((left, right) => left.destination.localeCompare(right.destination));
@@ -635,8 +671,6 @@ export function buildGreenPromotionPlan({
     '/data/uploads',
     '/run/secrets/firebase-service-account.json',
     '/run/secrets/mfa-encryption-key',
-    '/run/secrets/technical-sandbox-key',
-    '/run/secrets/technical-sandbox-webhook',
   ]);
   const finalMounts = runtimeConfig.mounts.filter((mount) => finalMountDestinations.has(mount.destination)).map((mount) => Object.freeze({
     type: mount.destination === '/data/uploads' ? 'volume' : 'bind',
@@ -645,7 +679,7 @@ export function buildGreenPromotionPlan({
     destination: mount.destination,
     readOnly: mount.destination === '/data/uploads' ? false : mount.readOnly,
   }));
-  if (finalMounts.length !== 5) fail('green_final_mount_contract_invalid');
+  if (finalMounts.length !== 3) fail('green_final_mount_contract_invalid');
   fullCommit(opsCommit, 'ops_commit');
   safePath(evidenceFile, 'green_evidence_path_invalid');
   const resolvedOwnershipNonce = ownershipNonce ?? crypto.randomBytes(16).toString('hex');
@@ -667,6 +701,11 @@ export function buildGreenPromotionPlan({
     opsCommit,
     evidenceFile,
     isolated,
+    technicalSandbox: Object.freeze({
+      ...greenTechnicalSandboxHealth,
+      authorizationRenewal: false,
+      providerTraffic: false,
+    }),
     finalMounts: Object.freeze(finalMounts),
     candidateMounts: Object.freeze([
       ...finalMounts.map((mount) => Object.freeze({ ...mount, name: mount.destination === '/data/uploads' ? null : mount.name })),
@@ -678,7 +717,7 @@ export function buildGreenPromotionPlan({
       'read foreign writers before and after the fresh protected database backup, requiring an unchanged empty set',
       `restore backup into an internal run-scoped PostgreSQL target and migrate ${target.sourceSchema} to ${target.currentSchema} through ${greenTarget.currentMigration}`,
       'provision the synthetic sandbox user on the isolated target and run the immutable candidate there on loopback-only 18082',
-      'require live/ready 200, MFA, Identity memory, on-device Listing AI and technical Sandbox capability probes',
+      'require live/ready 200, MFA, Identity memory, on-device Listing AI and provider-off technical Sandbox readbacks',
       'cleanup and verify every isolated candidate/database/network; anonymous rehearsal volumes are removed only with their owned containers before touching Green',
       'stop and seal the observed Green API; never boot it after canonical schema migration',
       `explicitly migrate canonical Green ${target.sourceSchema} to ${target.currentSchema} through ${greenTarget.currentMigration}, read back the exact terminal migration, and provision the synthetic user on Green`,
@@ -714,8 +753,6 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     '--mount', `type=bind,src=${stablePrivateFileSource},dst=/app/ops/stable_private_file.mjs,readonly`,
     '--mount', `type=bind,src=${runtimeConfig.mfaFile},dst=/run/secrets/mfa-encryption-key,readonly`,
     '--mount', `type=bind,src=${runtimeConfig.firebaseFile},dst=/run/secrets/firebase-service-account.json,readonly`,
-    '--mount', `type=bind,src=${runtimeConfig.technicalSandboxKeyFile},dst=/run/secrets/technical-sandbox-key,readonly`,
-    '--mount', `type=bind,src=${runtimeConfig.technicalSandboxWebhookFile},dst=/run/secrets/technical-sandbox-webhook,readonly`,
     '--mount', `type=bind,src=${syntheticSandboxCredentialFilePath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`,
   ];
   const provisionerPath = '/app/ops/provision_synthetic_sandbox_user.mjs';
@@ -761,8 +798,6 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
       '--mount', 'type=volume,dst=/data/uploads,readonly=false',
       '--mount', `type=bind,src=${runtimeConfig.mfaFile},dst=/run/secrets/mfa-encryption-key,readonly`,
       '--mount', `type=bind,src=${runtimeConfig.firebaseFile},dst=/run/secrets/firebase-service-account.json,readonly`,
-      '--mount', `type=bind,src=${runtimeConfig.technicalSandboxKeyFile},dst=/run/secrets/technical-sandbox-key,readonly`,
-      '--mount', `type=bind,src=${runtimeConfig.technicalSandboxWebhookFile},dst=/run/secrets/technical-sandbox-webhook,readonly`,
       '--mount', `type=bind,src=${syntheticSandboxCredentialFilePath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`,
       immutableRuntimeImage,
     ], envFile: configFile, redacted: true },
@@ -772,7 +807,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'candidate_live_wait', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/live'] },
     { phase: 'candidate_health_and_feature_probes', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/ready'] },
     { phase: 'candidate_ready_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/ready'] },
-    { phase: 'candidate_runtime_flags_readback', command: 'docker', args: ['exec', isolated.candidate, 'node', '--input-type=module', '-e', "const names=['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','SIT_STAGING_ACCESS_GATE_ENABLED','SIT_STAGING_GOOGLE_REGISTRATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE']; process.stdout.write(JSON.stringify({...Object.fromEntries(names.map((name)=>[name,process.env[name]??null])),googleRegistrationAllowlistEmpty:(process.env.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST??'').trim()===''}))"] },
+    { phase: 'candidate_runtime_flags_readback', command: 'docker', args: ['exec', isolated.candidate, 'node', '--input-type=module', '-e', "const names=['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','SIT_STAGING_ACCESS_GATE_ENABLED','SIT_STAGING_GOOGLE_REGISTRATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','TECHNICAL_SANDBOX_ENABLED','TECHNICAL_SANDBOX_KILL_SWITCH','TECHNICAL_SANDBOX_ACCOUNT_ID','TECHNICAL_SANDBOX_USER_IDS','TECHNICAL_SANDBOX_AUTHORIZATION_ID','TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT','TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT','TECHNICAL_SANDBOX_SECRET_KEY_FILE','TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE']; process.stdout.write(JSON.stringify({...Object.fromEntries(names.map((name)=>[name,process.env[name]??null])),googleRegistrationAllowlistEmpty:(process.env.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST??'').trim()===''}))"] },
     { phase: 'candidate_version_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/version'] },
     { phase: 'candidate_mfa_identity_probes', command: 'node', args: ['backend/ops/staging_controlled_acceptance.mjs', 'probe'], envFile: isolated.envFile, runtimeEnv: { STAGING_ACCEPTANCE_CONTAINER: isolated.candidate }, redacted: true },
     { phase: 'candidate_cleanup', command: 'docker', args: ['rm', '--force', '--volumes', isolated.candidate] },
@@ -792,8 +827,6 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
       '--mount', `type=volume,src=${target.uploadsVolume},dst=/data/uploads,readonly=false`,
       '--mount', `type=bind,src=${runtimeConfig.mfaFile},dst=/run/secrets/mfa-encryption-key,readonly`,
       '--mount', `type=bind,src=${runtimeConfig.firebaseFile},dst=/run/secrets/firebase-service-account.json,readonly`,
-      '--mount', `type=bind,src=${runtimeConfig.technicalSandboxKeyFile},dst=/run/secrets/technical-sandbox-key,readonly`,
-      '--mount', `type=bind,src=${runtimeConfig.technicalSandboxWebhookFile},dst=/run/secrets/technical-sandbox-webhook,readonly`,
       immutableRuntimeImage,
     ], redacted: true },
     { phase: 'final_provider_network_attach', command: 'docker', args: ['network', 'connect', target.providerNetwork, target.apiContainer] },
@@ -903,6 +936,20 @@ export function sanitizeGreenEvidence({ plan, backupDigest, configDigest, target
       targetDigest: plan.target.targetDigest,
     },
     runtime: { commit: plan.runtime.runtimeCommit, image: plan.runtime.image, digest: plan.runtime.digest },
+    safety: {
+      paymentTransport: 'memory',
+      stripeLiveMode: false,
+      googleRegistration: false,
+      firebaseAuth: false,
+      listingAiProvider: 'on_device',
+      technicalSandbox: {
+        enabled: false,
+        killSwitch: true,
+        available: false,
+        authorizationRenewal: false,
+        providerTraffic: false,
+      },
+    },
     opsCommit: plan.opsCommit,
     backupSha256: backupDigest,
     configSha256: configDigest,

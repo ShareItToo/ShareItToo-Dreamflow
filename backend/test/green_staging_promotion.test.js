@@ -10,6 +10,7 @@ import {
   assertGreenCleanup,
   assertGreenContainerInventory,
   assertGreenProtectedEnvironment,
+  assertGreenRuntimeEnvironmentReadback,
   assertGreenRuntimeConfig,
   assertGreenRuntimeImage,
   assertGreenImageReadback,
@@ -21,6 +22,9 @@ import {
   buildGreenPromotionCommands,
   buildGreenPromotionPlan,
   greenTarget,
+  greenTechnicalSandboxEnvironment,
+  greenTechnicalSandboxHealth,
+  assertGreenTechnicalSandboxProviderOff,
   sanitizeGreenEvidence,
   normalizedGreenTargetDigest,
   assertGreenCommandBindings,
@@ -47,19 +51,17 @@ const targetManifest = {
 targetManifest.targetDigest = normalizedGreenTargetDigest(targetManifest);
 const config = {
   environment: 'test', envFile: '/docker/shareittoo/staging-secrets/green.env',
-  envNames: ['NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'JWT_SECRET', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'IDENTITY_VERIFICATION_TRANSPORT', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_ALLOWED_USER_IDS', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'MAIL_FROM', 'FIREBASE_PROJECT_ID', 'FIREBASE_AUTH_ENABLED', 'FIREBASE_PHONE_VERIFICATION_ENABLED', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_LISTING_AI_BUDGET_CENTS', 'ENABLE_STAGING_STRIPE', 'TECHNICAL_SANDBOX_ENABLED', 'TECHNICAL_SANDBOX_KILL_SWITCH', 'TECHNICAL_SANDBOX_ACCOUNT_ID', 'TECHNICAL_SANDBOX_AUTHORIZATION_ID', 'TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT', 'TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT', 'SIT_STAGING_PILOT_ID', 'TECHNICAL_SANDBOX_SECRET_KEY_FILE', 'TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE', 'SYNTHETIC_SANDBOX_PASSWORD_FILE'],
+  envNames: ['NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'JWT_SECRET', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'IDENTITY_VERIFICATION_TRANSPORT', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_ALLOWED_USER_IDS', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'MAIL_FROM', 'FIREBASE_PROJECT_ID', 'FIREBASE_AUTH_ENABLED', 'FIREBASE_PHONE_VERIFICATION_ENABLED', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_LISTING_AI_BUDGET_CENTS', 'ENABLE_STAGING_STRIPE', 'TECHNICAL_SANDBOX_ENABLED', 'TECHNICAL_SANDBOX_KILL_SWITCH', 'TECHNICAL_SANDBOX_ACCOUNT_ID', 'TECHNICAL_SANDBOX_USER_IDS', 'TECHNICAL_SANDBOX_AUTHORIZATION_ID', 'TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT', 'TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT', 'TECHNICAL_SANDBOX_SECRET_KEY_FILE', 'TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE', 'SIT_STAGING_PILOT_ID', 'SYNTHETIC_SANDBOX_PASSWORD_FILE'],
   mfaFile: '/docker/shareittoo/staging-secrets/mfa-encryption-key',
   firebaseFile: '/docker/shareittoo/staging-secrets/firebase.json',
-  technicalSandboxKeyFile: '/docker/shareittoo/staging-secrets/technical-sandbox-key',
-  technicalSandboxWebhookFile: '/docker/shareittoo/staging-secrets/technical-sandbox-webhook',
+  technicalSandboxKeyFile: '',
+  technicalSandboxWebhookFile: '',
   syntheticUserId: 'synthetic_sandbox_user_pilot_20260919', paymentTransport: 'memory',
   stripeLiveMode: false, identityTransport: 'memory', listingAiProvider: 'on_device',
   listingAiExternalAllowed: false, accessGateDigest: 'b'.repeat(64), providerConfigDigest: 'c'.repeat(64),
   mounts: [
     { source: '/docker/shareittoo/staging-secrets/mfa-encryption-key', destination: '/run/secrets/mfa-encryption-key', readOnly: true },
     { source: '/docker/shareittoo/staging-secrets/firebase.json', destination: '/run/secrets/firebase-service-account.json', readOnly: true },
-    { source: '/docker/shareittoo/staging-secrets/technical-sandbox-key', destination: '/run/secrets/technical-sandbox-key', readOnly: true },
-    { source: '/docker/shareittoo/staging-secrets/technical-sandbox-webhook', destination: '/run/secrets/technical-sandbox-webhook', readOnly: true },
     { source: syntheticSandboxCredentialFilePath, destination: '/run/secrets/synthetic-sandbox-user-password', readOnly: true },
     { source: '/docker/shareittoo/staging-secrets/uploads', destination: '/data/uploads', readOnly: false },
   ],
@@ -80,8 +82,6 @@ const sourceMounts = [
   { destination: '/data/uploads', type: 'volume', source: null, volume: greenTarget.uploadsVolume, readOnly: false },
   { destination: '/run/secrets/firebase-service-account.json', type: 'bind', source: config.firebaseFile, volume: null, readOnly: true },
   { destination: '/run/secrets/mfa-encryption-key', type: 'bind', source: config.mfaFile, volume: null, readOnly: true },
-  { destination: '/run/secrets/technical-sandbox-key', type: 'bind', source: config.technicalSandboxKeyFile, volume: null, readOnly: true },
-  { destination: '/run/secrets/technical-sandbox-webhook', type: 'bind', source: config.technicalSandboxWebhookFile, volume: null, readOnly: true },
 ];
 const finalMounts = sourceMounts.map((mount) => ({
   Destination: mount.destination,
@@ -89,6 +89,7 @@ const finalMounts = sourceMounts.map((mount) => ({
   ...(mount.type === 'bind' ? { Source: mount.source } : { Name: mount.volume }),
   RW: !mount.readOnly,
 }));
+const greenRuntimeEnvEntries = Object.entries(greenTechnicalSandboxEnvironment).map(([name, value]) => `${name}=${value}`);
 const originalApiIdentityRecord = {
   Id: 'api-original-id',
   Config: { Image: greenTarget.prePromotionImage, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DATABASE_URL=postgres://shareittoo_green@green-db/shareittoo_green'] },
@@ -150,13 +151,12 @@ test('protected Green runtime environment binds memory payment, pilot, paths and
   const values = {
     NODE_ENV: 'production', DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
     ENABLE_STAGING_STRIPE: '0', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
-    TECHNICAL_SANDBOX_ENABLED: '1', TECHNICAL_SANDBOX_KILL_SWITCH: '0',
+    ...greenTechnicalSandboxEnvironment,
     SIT_STAGING_PILOT_ID: 'heilbronn_wave0', SIT_STAGING_COMPOSE_PROJECT: 'sit-green', SIT_STAGING_ALLOWED_USER_IDS: 'synthetic_sandbox_user_pilot_20260919',
-    TECHNICAL_SANDBOX_SECRET_KEY_FILE: '/run/secrets/technical-sandbox-key',
-    TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: '/run/secrets/technical-sandbox-webhook',
     SYNTHETIC_SANDBOX_PASSWORD_FILE: syntheticSandboxCredentialFilePath,
   };
   assert.equal(assertGreenProtectedEnvironment(values, config), true);
+  assert.equal(assertGreenTechnicalSandboxProviderOff(values), true);
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, FIREBASE_AUTH_ENABLED: 'true' }, config));
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, FIREBASE_PHONE_VERIFICATION_ENABLED: 'true' }, config));
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, DEPLOYMENT_ENVIRONMENT: 'staging' }, config));
@@ -167,6 +167,37 @@ test('protected Green runtime environment binds memory payment, pilot, paths and
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, SYNTHETIC_SANDBOX_PASSWORD_FILE: '/run/secrets/synthetic-sandbox-user-password' }, config));
 });
 
+test('Green promotion has an explicit provider-off technical Sandbox plan and readback', () => {
+  const plan = buildGreenPromotionPlan({
+    targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`,
+    opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json',
+  });
+  assert.deepEqual(plan.technicalSandbox, {
+    ...greenTechnicalSandboxHealth,
+    authorizationRenewal: false,
+    providerTraffic: false,
+  });
+  const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
+  assert.equal(commands.some((entry) => entry.args.some((arg) => /technical-sandbox-(?:key|webhook)/u.test(arg))), false);
+  assert.equal(assertGreenRuntimeEnvironmentReadback({
+    DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false',
+    FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
+    SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory',
+    STRIPE_LIVEMODE: 'false', googleRegistrationAllowlistEmpty: true,
+    ...greenTechnicalSandboxEnvironment,
+  }), true);
+  assert.throws(() => assertGreenTechnicalSandboxProviderOff({
+    ...greenTechnicalSandboxEnvironment, TECHNICAL_SANDBOX_AUTHORIZATION_ID: 'stale-auth',
+  }), /green_technical_sandbox_provider_off_invalid/u);
+  assert.throws(() => assertGreenRuntimeEnvironmentReadback({
+    DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false',
+    FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
+    SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory',
+    STRIPE_LIVEMODE: 'false', googleRegistrationAllowlistEmpty: true,
+    ...greenTechnicalSandboxEnvironment, TECHNICAL_SANDBOX_ENABLED: '1',
+  }), /green_technical_sandbox_provider_off_invalid/u);
+});
+
 test('runtime image must be immutable GHCR commit plus digest', () => {
   assert.equal(assertGreenRuntimeImage({ image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`, digest: `sha256:${'d'.repeat(64)}`, runtimeCommit }).runtimeCommit, runtimeCommit);
   assert.throws(() => assertGreenRuntimeImage({ image: 'shareittoo-api:latest', digest: `sha256:${'d'.repeat(64)}`, runtimeCommit }), /runtime_image_tag_mismatch/u);
@@ -174,8 +205,10 @@ test('runtime image must be immutable GHCR commit plus digest', () => {
 });
 
 test('runtime readback binds version and capability safety surface', () => {
-  const payload = { checks: { technicalSandbox: { available: true, amountMinor: 100, currency: 'EUR' }, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
+  const payload = { checks: { technicalSandbox: greenTechnicalSandboxHealth, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
   assert.equal(assertGreenRuntimeReadbacks({ version: { commit: runtimeCommit, environment: 'test' }, health: payload, ready: payload, runtimeCommit }), true);
+  const extendedPayload = { checks: { ...payload.checks, technicalSandbox: { ...greenTechnicalSandboxHealth, observedAt: 'synthetic-fixture' } } };
+  assert.equal(assertGreenRuntimeReadbacks({ version: { commit: runtimeCommit, environment: 'test' }, health: extendedPayload, ready: extendedPayload, runtimeCommit }), true);
   assert.throws(() => assertGreenRuntimeReadbacks({ version: { commit: '0'.repeat(40), environment: 'test' }, health: payload, ready: payload, runtimeCommit }));
   assert.throws(() => assertGreenRuntimeReadbacks({ version: { commit: runtimeCommit, environment: 'test' }, health: { ...payload, checks: { ...payload.checks, technicalSandbox: { ...payload.checks.technicalSandbox, amountMinor: 200 } } }, ready: payload, runtimeCommit }));
 });
@@ -360,11 +393,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     SMTP_PORT: '2525', SMTP_USER: 'synthetic', SMTP_PASSWORD: 'synthetic', MAIL_FROM: 'synthetic@example.invalid',
     FIREBASE_PROJECT_ID: 'synthetic', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false',
     SIT_STAGING_COMPOSE_PROJECT: 'sit-green', SIT_LISTING_AI_BUDGET_CENTS: '0', ENABLE_STAGING_STRIPE: '0',
-    TECHNICAL_SANDBOX_ENABLED: '1', TECHNICAL_SANDBOX_KILL_SWITCH: '0', TECHNICAL_SANDBOX_ACCOUNT_ID: 'acct_fixture',
-    TECHNICAL_SANDBOX_AUTHORIZATION_ID: 'auth_fixture', TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT: '2026-09-19T00:00:00Z',
-    TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT: '2026-09-19T12:00:00Z', SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
-    TECHNICAL_SANDBOX_SECRET_KEY_FILE: '/run/secrets/technical-sandbox-key',
-    TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: '/run/secrets/technical-sandbox-webhook',
+    ...greenTechnicalSandboxEnvironment, SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
     SYNTHETIC_SANDBOX_PASSWORD_FILE: syntheticSandboxCredentialFilePath,
   };
   writeFileSync(configFile, `${Object.entries(envValues).map(([key, value]) => `${key}=${value}`).join('\n')}\n`, { mode: 0o600 });
@@ -374,7 +403,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     opsCommit, evidenceFile,
   });
   const imageReadback = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`${plan.runtime.image}@${plan.runtime.digest}`] };
-  const payload = { checks: { technicalSandbox: { available: true, amountMinor: 100, currency: 'EUR' }, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
+  const payload = { checks: { technicalSandbox: greenTechnicalSandboxHealth, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
   const prePromotionRecord = (image) => ({
     Id: originalApiIdentityRecord.Id, Name: `/${greenTarget.apiContainer}`, State: { Running: true },
     NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
@@ -390,7 +419,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     const candidateRecord = {
       Id: candidateId, Name: `/${plan.isolated.candidate}`, State: { Running: false },
       NetworkSettings: { Ports: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] }, Networks: { [plan.isolated.network]: {}, [greenTarget.providerNetwork]: {} } },
-      Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': plan.target.runId, 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
+      Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': plan.target.runId, 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
       HostConfig: { GroupAdd: ['65532'] }, Mounts: [...finalMounts.map((mount) => mount.Destination === '/data/uploads' ? { ...mount, Name: 'anonymous-uploads-id' } : mount), { Type: 'bind', Source: syntheticSandboxCredentialFilePath, Destination: '/run/secrets/synthetic-sandbox-user-password', RW: false }],
     };
     const fake = async (command, args, options = {}) => {
@@ -434,7 +463,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       if (phase === 'failure_candidate_identity_readback') return { stdout: JSON.stringify({ Id: candidateId, Name: `/${plan.isolated.candidate}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } }) };
       if (phase === 'failure_isolated_database_identity_readback') return { stdout: JSON.stringify({ Id: isolatedDatabaseId, Name: `/${plan.isolated.database}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } }) };
       if (phase === 'failure_isolated_network_identity_readback') return { stdout: JSON.stringify({ Id: isolatedNetworkId, Name: plan.isolated.network, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
-      if (phase === 'candidate_runtime_flags_readback') return { stdout: JSON.stringify({ DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', googleRegistrationAllowlistEmpty: true }) };
+      if (phase === 'candidate_runtime_flags_readback') return { stdout: JSON.stringify({ DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', ...greenTechnicalSandboxEnvironment, googleRegistrationAllowlistEmpty: true }) };
       if (phase === 'candidate_health_and_feature_probes' || phase === 'candidate_ready_probe') return { stdout: JSON.stringify(payload) };
       if (phase === 'candidate_version_probe') return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'test' }) };
       if (phase === 'fresh_protected_backup') return { stdout: 'synthetic protected backup' };
@@ -549,8 +578,6 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     assert.ok(entry.args.some((arg) => arg.endsWith('dst=/app/ops/stable_private_file.mjs,readonly')));
     assert.ok(entry.args.some((arg) => arg.endsWith('dst=/run/secrets/mfa-encryption-key,readonly')));
     assert.ok(entry.args.some((arg) => arg.endsWith('dst=/run/secrets/firebase-service-account.json,readonly')));
-    assert.ok(entry.args.some((arg) => arg.endsWith('dst=/run/secrets/technical-sandbox-key,readonly')));
-    assert.ok(entry.args.some((arg) => arg.endsWith('dst=/run/secrets/technical-sandbox-webhook,readonly')));
     assert.ok(entry.args.includes(`type=bind,src=${syntheticSandboxCredentialFilePath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`));
     assert.ok(entry.args.includes('--env') && entry.args.includes('SYNTHETIC_SANDBOX_PASSWORD_FILE=/run/secrets/synthetic-sandbox-user-password'));
     assert.ok(entry.args.includes('--network'));
@@ -625,7 +652,8 @@ test('pre-promotion inventory requires the exact Green DB host and protected mou
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => { const copy = { ...mount }; delete copy.readOnly; return copy; }) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_mount_rw_readback_invalid/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => mount.destination === '/run/secrets/mfa-encryption-key' ? { ...mount, source: '/wrong/path' } : mount) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => mount.destination === '/run/secrets/mfa-encryption-key' ? { ...mount, type: 'volume', volume: greenTarget.uploadsVolume, source: null } : mount) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
-  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => mount.destination === '/run/secrets/technical-sandbox-key' ? { ...mount, readOnly: false } : mount) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
+  assert.throws(() => assertGreenRuntimeConfig({ ...config, technicalSandboxKeyFile: '/foreign/provider-key' }), /green_provider_mounts_forbidden/u);
+  assert.throws(() => assertGreenRuntimeConfig({ ...config, mounts: [...config.mounts, { source: '/foreign/provider-key', destination: '/run/secrets/technical-sandbox-key', readOnly: true }] }), /green_provider_mounts_forbidden/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, prePromotionTuple: true, greenLabel: true, image: 'ghcr.io/shareittoo/shareittoo-api:wrong' } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
 });
 
@@ -633,7 +661,7 @@ test('final readback is authoritative for no-port Green routing, mounts, image a
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const record = {
     Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
-    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
+    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
   assert.equal(assertGreenFinalContainerReadback({ record, plan }), true);
@@ -833,10 +861,10 @@ test('restore reconciles a lost rename response before starting the exact origin
 test('post-schema forward recovery creates only the successor and verifies its public contract', async () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
-  const payload = { checks: { technicalSandbox: { available: true, amountMinor: 100, currency: 'EUR' }, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
+  const payload = { checks: { technicalSandbox: greenTechnicalSandboxHealth, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
   const record = {
     Id: 'a'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
-    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
+    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
   const preStartRecord = { ...record, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {} } } };
@@ -914,7 +942,7 @@ test('successor pre-start validation rejects wrong User, Env and mounts', () => 
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'f'.repeat(32) });
   const record = {
     Id: '9'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {} } },
-    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
+    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
   assert.equal(assertGreenSuccessorPreStartReadback({ record, plan, expectedId: record.Id }), true);
@@ -934,10 +962,10 @@ test('successor pre-start validation rejects wrong User, Env and mounts', () => 
 test('forward recovery fails closed before candidate continuation on migration readback gaps', async () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
-  const payload = { checks: { technicalSandbox: { available: true, amountMinor: 100, currency: 'EUR' }, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
+  const payload = { checks: { technicalSandbox: greenTechnicalSandboxHealth, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
   const record = {
     Id: 'b'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
-    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
+    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
   const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@sha256:${'e'.repeat(64)}`] };

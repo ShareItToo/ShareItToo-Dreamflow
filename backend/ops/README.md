@@ -130,9 +130,9 @@ digest `4199b60d7b3b19ed0cfeb113e121b77c23eeb03440f212a7dbe593c3cbee1db5`.
 The pre-promotion image is exactly
 `ghcr.io/shareittoo/shareittoo-api:ccc72004247d50656ac1064a758eb5f05c795e04`.
 The observed API tuple includes user `shareittoo`, group `65532`, no host
-port, the two approved networks, and exactly five mounts: writable uploads
-plus read-only Firebase, MFA, technical-sandbox key and technical-sandbox
-webhook mounts. The live readback must match the complete tuple.
+port, the two approved networks, and exactly three mounts: writable uploads
+plus read-only Firebase and MFA. Provider credential mounts are forbidden on
+this lane. The live readback must match the complete tuple.
 Legacy `sit-staging`, production names, lookalike networks and mutable image
 tags are rejected before a command is planned.
 
@@ -159,7 +159,14 @@ enter commands, logs or evidence.
 Promotion preserves the protected pre-state: `DEPLOYMENT_ENVIRONMENT=test`,
 Firebase Auth and phone verification false, Google registration disabled,
 allowlist empty/absent, access gate true, payment memory, and Stripe live mode
-false. After the exact target readback, the observed Green API is stopped and
+false. The Green promotion contract additionally hard-pins the optional
+technical Sandbox off: `TECHNICAL_SANDBOX_ENABLED=0`,
+`TECHNICAL_SANDBOX_KILL_SWITCH=1`, availability `false`, and empty account,
+user, credential and authorization fields. No authorization is renewed and no
+technical provider or payment request is permitted; the health/readiness
+readback must report `mode=disabled` and `reason=disabled`. The optional
+technical Sandbox activation documented above is a separate lane and is not
+implicitly enabled by this runner. After the exact target readback, the observed Green API is stopped and
 sealed before foreign-writer checks, the protected backup and the isolated
 rehearsal. The isolated candidate is then run and cleaned up before the
 canonical Green database is

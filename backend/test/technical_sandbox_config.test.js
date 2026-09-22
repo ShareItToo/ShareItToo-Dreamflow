@@ -60,6 +60,41 @@ test('technical sandbox is default-off and unavailable in production', () => {
   }
 });
 
+test('provider-off Green inputs ignore stale authorization and credential paths', () => {
+  const configuration = readTechnicalSandboxConfiguration({
+    TECHNICAL_SANDBOX_ENABLED: '0',
+    TECHNICAL_SANDBOX_KILL_SWITCH: '1',
+    TECHNICAL_SANDBOX_SECRET_KEY_FILE: '/stale/provider-key',
+    TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: '/stale/provider-webhook',
+    TECHNICAL_SANDBOX_ACCOUNT_ID: 'acct_stale',
+    TECHNICAL_SANDBOX_USER_IDS: 'synthetic_sandbox_user_owner',
+    TECHNICAL_SANDBOX_AUTHORIZATION_ID: 'stale-auth',
+    TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT: '2026-09-19T09:00:00.000Z',
+    TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT: '2026-09-20T09:00:00.000Z',
+  }, { deploymentEnvironment: 'test', now });
+  assert.deepEqual({
+    enabled: configuration.enabled,
+    killSwitch: configuration.killSwitch,
+    available: configuration.available,
+    reason: configuration.reason,
+    mode: configuration.mode,
+    accountId: configuration.expectedAccountId,
+    authorizationId: configuration.authorizationId,
+    secretKey: configuration.secretKey,
+    webhookSecret: configuration.webhookSecret,
+  }, {
+    enabled: false,
+    killSwitch: true,
+    available: false,
+    reason: 'disabled',
+    mode: 'disabled',
+    accountId: '',
+    authorizationId: '',
+    secretKey: '',
+    webhookSecret: '',
+  });
+});
+
 test('health projection is coarse and optional-lane expiry stays non-fatal', () => {
   const projection = technicalSandboxHealthProjection({
     available: true,
