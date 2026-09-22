@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -54,15 +62,19 @@ test('candidate rollover ignores test-only drift but retains runtime drift', () 
   ]);
 });
 
-async function explicitRolloverFixture() {
+async function explicitRolloverFixture({ versionCode = explicitRollover.candidate.versionCode } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'sit-explicit-rollover-fixture-'));
   const archiveRoot = join(root, 'archive');
-  const archiveDirectory = join(archiveRoot, explicitRollover.artifact.archiveDirectoryName);
+  const candidate = {
+    ...explicitRollover.candidate,
+    versionCode,
+  };
+  const archiveDirectoryName = `${candidate.versionCode}-${candidate.artifactSourceHead}`;
+  const archiveDirectory = join(archiveRoot, archiveDirectoryName);
   const rolloverPath = join(root, 'rollover.json');
   await mkdir(archiveDirectory, { recursive: true, mode: 0o700 });
   await chmod(archiveDirectory, 0o700);
 
-  const candidate = explicitRollover.candidate;
   const apkName = `shareittoo-${candidate.versionName}-${candidate.versionCode}-${candidate.artifactSourceHead}.apk`;
   const aabName = `shareittoo-${candidate.versionName}-${candidate.versionCode}-${candidate.artifactSourceHead}.aab`;
   const apk = Buffer.from('synthetic explicit rollover APK fixture');
@@ -114,8 +126,12 @@ async function explicitRolloverFixture() {
     await chmod(path, 0o600);
   }
   const rollover = structuredClone(explicitRollover);
+  rollover.candidate = candidate;
   rollover.artifact = {
     ...rollover.artifact,
+    archiveDirectoryName,
+    aabFileName: aabName,
+    apkFileName: apkName,
     aabBytes: aab.byteLength,
     aabSha256: sha256(aab),
     apkBytes: apk.byteLength,
@@ -177,58 +193,113 @@ test('rejects runtime drift in explicit rollover mode', async () => {
 });
 
 async function currentRolloverFixture() {
-  const data = await explicitRolloverFixture();
+  const data = await explicitRolloverFixture({ versionCode: '2099999999' });
+  const manifestRef = `store/google-play/rollover-candidate-${data.rollover.candidate.versionCode}.json`;
+  const manifestPath = resolve(repositoryRoot, manifestRef);
+  await writeFile(manifestPath, `${JSON.stringify(data.rollover)}\n`);
   const pointer = structuredClone(data.rollover);
-  pointer.candidateManifestRef = 'store/google-play/rollover-candidate-2026092101.json';
+  pointer.candidateManifestRef = manifestRef;
   const pointerPath = join(data.root, 'current-rollover-candidate.json');
   await writeFile(pointerPath, `${JSON.stringify(pointer)}\n`);
-  return { ...data, pointer, pointerPath };
+  return { ...data, manifestPath, manifestRef, pointer, pointerPath };
 }
 
 test('validates the dynamic current pointer through its versioned manifest', async (t) => {
   const data = await currentRolloverFixture();
-  t.after(() => rm(data.root, { recursive: true, force: true }));
+  t.after(async () => {
+    await rm(data.root, { recursive: true, force: true });
+    await rm(data.manifestPath, { force: true });
+  });
   const result = await validateCurrentRolloverCandidate({
     repositoryRoot,
     archiveRoot: data.archiveRoot,
     currentPath: data.pointerPath,
-    candidateManifestPath: data.rolloverPath,
     changedPaths: [],
   });
   assert.equal(result.buildNumber, data.rollover.candidate.versionCode);
-  assert.equal(result.candidateManifestPath, data.rolloverPath);
+  assert.equal(result.candidateManifestPath, data.manifestPath);
   assert.deepEqual(result.runtimeDrift, []);
 });
 
-test('rejects a stale current pointer or unknown versioned manifest', async (t) => {
+test('rejects a missing ref and stale or mismatched build/ref binding', async (t) => {
   const data = await currentRolloverFixture();
-  t.after(() => rm(data.root, { recursive: true, force: true }));
+  t.after(async () => {
+    await rm(data.root, { recursive: true, force: true });
+    await rm(data.manifestPath, { force: true });
+  });
+  const missingRef = structuredClone(data.pointer);
+  delete missingRef.candidateManifestRef;
+  await writeFile(data.pointerPath, JSON.stringify(missingRef));
+  await assert.rejects(() => validateCurrentRolloverCandidate({
+    repositoryRoot,
+    archiveRoot: data.archiveRoot,
+    currentPath: data.pointerPath,
+    changedPaths: [],
+  }), /must reference one versioned candidate manifest/u);
+
   const stale = structuredClone(data.pointer);
-  stale.candidate.versionCode = '2026092100';
+  stale.candidate.versionCode = '2099999998';
   await writeFile(data.pointerPath, JSON.stringify(stale));
   await assert.rejects(() => validateCurrentRolloverCandidate({
     repositoryRoot,
     archiveRoot: data.archiveRoot,
     currentPath: data.pointerPath,
-    candidateManifestPath: data.rolloverPath,
     changedPaths: [],
   }), /versioned manifest/u);
 
-  const unknown = structuredClone(data.pointer);
-  unknown.candidateManifestRef = 'store/google-play/rollover-candidate-2026092201.json';
-  await writeFile(data.pointerPath, JSON.stringify(unknown));
+  const mismatchedSource = structuredClone(data.rollover);
+  mismatchedSource.candidate.artifactSourceHead = '0'.repeat(40);
+  await writeFile(data.manifestPath, JSON.stringify(mismatchedSource));
   await assert.rejects(() => validateCurrentRolloverCandidate({
     repositoryRoot,
     archiveRoot: data.archiveRoot,
     currentPath: data.pointerPath,
-    candidateManifestPath: data.rolloverPath,
     changedPaths: [],
-  }), /versioned manifest/u);
+  }), /current pointer(?: versioned manifest|\/versioned manifest)/u);
 });
 
-test('rejects every semantic pointer/manifest divergence', async (t) => {
+test('rejects traversal, out-of-tree symlink, and semantic pointer divergence', async (t) => {
   const data = await currentRolloverFixture();
-  t.after(() => rm(data.root, { recursive: true, force: true }));
+  const symlinkRef = 'store/google-play/rollover-candidate-2099999998.json';
+  const symlinkPath = resolve(repositoryRoot, symlinkRef);
+  t.after(async () => {
+    await rm(data.root, { recursive: true, force: true });
+    await rm(data.manifestPath, { force: true });
+    await rm(symlinkPath, { force: true });
+  });
+  const traversal = structuredClone(data.pointer);
+  traversal.candidateManifestRef = 'store/google-play/../outside.json';
+  await writeFile(data.pointerPath, JSON.stringify(traversal));
+  await assert.rejects(() => validateCurrentRolloverCandidate({
+    repositoryRoot,
+    archiveRoot: data.archiveRoot,
+    currentPath: data.pointerPath,
+    changedPaths: [],
+  }), /must reference one versioned candidate manifest/u);
+
+  const outsidePath = join(data.root, 'outside.json');
+  await writeFile(outsidePath, JSON.stringify(data.rollover));
+  await writeFile(data.pointerPath, JSON.stringify(data.pointer));
+  await assert.rejects(() => validateCurrentRolloverCandidate({
+    repositoryRoot,
+    archiveRoot: data.archiveRoot,
+    currentPath: data.pointerPath,
+    candidateManifestPath: outsidePath,
+    changedPaths: [],
+  }), /must match candidateManifestRef/u);
+  await symlink(outsidePath, symlinkPath);
+  const outOfTree = structuredClone(data.pointer);
+  outOfTree.candidate.versionCode = '2099999998';
+  outOfTree.candidateManifestRef = symlinkRef;
+  await writeFile(data.pointerPath, JSON.stringify(outOfTree));
+  await assert.rejects(() => validateCurrentRolloverCandidate({
+    repositoryRoot,
+    archiveRoot: data.archiveRoot,
+    currentPath: data.pointerPath,
+    changedPaths: [],
+  }), /canonical in-repo path/u);
+  await rm(symlinkPath, { force: true });
+
   const mutations = [
     (pointer) => { pointer.sourceVerification.githubRegression = 'success'; },
     (pointer) => { pointer.playStateAtLastReadback.candidateUploaded = true; },
@@ -247,7 +318,6 @@ test('rejects every semantic pointer/manifest divergence', async (t) => {
       repositoryRoot,
       archiveRoot: data.archiveRoot,
       currentPath: data.pointerPath,
-      candidateManifestPath: data.rolloverPath,
       changedPaths: [],
     }), /current pointer\/versioned manifest/u);
   }

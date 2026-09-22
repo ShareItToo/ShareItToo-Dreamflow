@@ -317,9 +317,24 @@ export async function validateCurrentRolloverCandidate({
   const pointerVersion = pointer.candidate?.versionCode;
   const refVersion = /^store\/google-play\/rollover-candidate-(\d{10})\.json$/u.exec(ref)?.[1];
   same(pointerVersion, refVersion, 'current pointer versioned manifest');
-  const manifestPath = candidateManifestPath ?? resolve(root, ref);
-  if (candidateManifestPath === null && !manifestPath.startsWith(`${root}/`)) {
+  const repositoryRealPath = realpathSync(root);
+  const manifestPath = resolve(repositoryRealPath, ref);
+  if (!manifestPath.startsWith(`${repositoryRealPath}/`)) {
     fail('Current rollover candidate manifest left the repository.');
+  }
+  let manifestRealPath;
+  try {
+    manifestRealPath = realpathSync(manifestPath);
+  } catch (error) {
+    fail(`Current rollover candidate manifest could not be resolved: ${error.message}`);
+  }
+  if (manifestRealPath !== manifestPath
+      || !manifestRealPath.startsWith(`${repositoryRealPath}/`)) {
+    fail('Current rollover candidate manifest must resolve to a canonical in-repo path.');
+  }
+  if (candidateManifestPath !== null
+      && resolve(candidateManifestPath) !== manifestPath) {
+    fail('Current rollover candidate manifest path must match candidateManifestRef.');
   }
   const manifest = object(readJson(manifestPath, 'current versioned candidate manifest'),
     'current versioned candidate manifest');

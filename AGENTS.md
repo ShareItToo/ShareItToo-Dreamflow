@@ -225,6 +225,10 @@ discover a mechanically stale source hash.
   `PrivatePilotConfig.v52ClientBuild` fallback atomically. Release preflight
   must fail before any binary build when those values drift; never repair the
   mismatch by reusing or rebinding an already archived candidate.
+- Current-candidate validators must resolve
+  `store/google-play/current-rollover-candidate.json.candidateManifestRef` to
+  the exact canonical in-repo versioned manifest, then bind its build and
+  source fields; never hardcode a historical rollover manifest path.
 
 - Play-delivered Android installations may contain bounded base/split APK sets;
   device-update and runtime-diagnostic preflight must inspect every installed
