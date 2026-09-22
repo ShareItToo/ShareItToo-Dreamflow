@@ -257,7 +257,10 @@ export function validateFounderIndependenceGuardrails({
 
   const workflow = source(root, '.github/workflows/regression.yml', sourceOverrides);
   requireIncludes(workflow,
-    'REGISTRY_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/shareittoo-api"',
+    'REGISTRY_OWNER="$(printf \'%s\' "$GITHUB_REPOSITORY_OWNER" | tr \'[:upper:]\' \'[:lower:]\')"',
+    'GitHub workflow');
+  requireIncludes(workflow,
+    'REGISTRY_IMAGE="ghcr.io/$REGISTRY_OWNER/shareittoo-api"',
     'GitHub workflow');
   requireIncludes(workflow,
     'APP_SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"',

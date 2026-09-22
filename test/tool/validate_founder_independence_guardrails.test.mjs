@@ -88,7 +88,11 @@ test('the GHCR repository owner is normalized to a valid lowercase image path', 
   const workflow = readFileSync(resolve(root, workflowPath), 'utf8');
   assert.match(
     workflow,
-    /REGISTRY_IMAGE="ghcr\.io\/\$\{GITHUB_REPOSITORY_OWNER,,\}\/shareittoo-api"/u,
+    /REGISTRY_OWNER="\$\(printf '%s' "\$GITHUB_REPOSITORY_OWNER" \| tr '\[:upper:\]' '\[:lower:\]'\)"/u,
+  );
+  assert.match(
+    workflow,
+    /REGISTRY_IMAGE="ghcr\.io\/\$REGISTRY_OWNER\/shareittoo-api"/u,
   );
   assert.doesNotMatch(
     workflow,
