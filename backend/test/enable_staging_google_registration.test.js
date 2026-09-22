@@ -305,6 +305,10 @@ function statefulDockerExecutor(fx, {
       if (createMutation === 'memory-drift') replaceOption('--memory', '99');
       if (createMutation === 'cap-add-drift') replaceOption('--cap-add', 'CHOWN');
       if (createMutation === 'memory-swap-drift') replaceOption('--memory-swap', '256');
+      if (createMutation === 'health-drift') {
+        const networkOption = effectiveArgs.indexOf('--network');
+        effectiveArgs.splice(networkOption, 0, '--health-cmd', 'false', '--health-interval', '1000000000');
+      }
       const valueOptions = new Set(['--name', '--env-file', '--restart', '--restart-max-retries', '--user', '--workdir', '--entrypoint', '--security-opt', '--cap-add', '--cap-drop', '--stop-timeout', '--stop-signal', '--shm-size', '--dns', '--dns-search', '--add-host', '--ipc', '--pid', '--userns', '--log-driver', '--log-opt', '--memory', '--memory-swap', '--cpu-shares', '--cpu-quota', '--cpu-period', '--cpus', '--cpuset-cpus', '--cpuset-mems', '--pids-limit', '--device', '--ulimit', '--tmpfs', '--cgroupns', '--runtime', '--isolation', '--health-cmd', '--health-interval', '--health-timeout', '--health-retries', '--health-start-period', '--health-start-interval', '--group-add', '--label', '--mount', '--hostname', '--network']);
       const booleanOptions = new Set(['--privileged', '--read-only', '--no-new-privileges', '--init', '--oom-kill-disable', '--rm']);
       let cursor = 1;
@@ -317,6 +321,9 @@ function statefulDockerExecutor(fx, {
       }
       const optionValues = (option) => effectiveArgs.flatMap((entry, index) => entry === option ? [effectiveArgs[index + 1]] : []);
       const optionFirst = (option) => optionValues(option)[0] ?? null;
+      const healthOptionNames = ['--health-cmd', '--health-interval', '--health-timeout', '--health-retries', '--health-start-period', '--health-start-interval'];
+      const hasHealthOptions = healthOptionNames.some((option) => optionValues(option).length > 0);
+      if (hasHealthOptions && optionFirst('--health-cmd') === null) fail('unsupported_health_options', options.phase);
       const name = optionFirst('--name');
       const envFile = optionFirst('--env-file');
       const networkIndex = effectiveArgs.indexOf('--network');
@@ -408,8 +415,9 @@ function statefulDockerExecutor(fx, {
           return separator < 0 ? [value, ''] : [value.slice(0, separator), value.slice(separator + 1)];
         })),
       };
-      if (source.Config.Healthcheck) {
-        if (optionFirst('--health-cmd') !== null) source.Config.Healthcheck.Test = ['CMD-SHELL', optionFirst('--health-cmd')];
+      if (source.Config.Healthcheck || hasHealthOptions) {
+        if (!source.Config.Healthcheck) source.Config.Healthcheck = { Test: ['CMD-SHELL', optionFirst('--health-cmd')] };
+        else if (optionFirst('--health-cmd') !== null) source.Config.Healthcheck.Test = ['CMD-SHELL', optionFirst('--health-cmd')];
         source.Config.Healthcheck.Interval = Number(optionFirst('--health-interval') ?? 0);
         source.Config.Healthcheck.Timeout = Number(optionFirst('--health-timeout') ?? 0);
         source.Config.Healthcheck.Retries = Number(optionFirst('--health-retries') ?? 0);
@@ -421,6 +429,7 @@ function statefulDockerExecutor(fx, {
       if (createMode === 'mismatched-registration') {
         source.Config.Env = source.Config.Env.map((entry) => entry.startsWith(`${registrationAllowlistKey}=`) ? `${registrationAllowlistKey}=${'c'.repeat(64)}=other-user` : entry);
       }
+      fx.state.acceptedCreateArgs = [...effectiveArgs];
       containers.set(name, source);
       fx.state.created = true;
       if (createMode === 'response-loss' || createMode === 'foreign-response-loss' || createMode === 'mismatched-registration') {
@@ -857,6 +866,18 @@ test('resource and env ownership drift fail closed without overwriting concurren
       assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
     } finally { await rm(fx.root, { recursive: true, force: true }); }
   }
+  const absentHealthcheck = await fixture();
+  try {
+    const fake = statefulDockerExecutor(absentHealthcheck, { createMutation: 'health-drift' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: absentHealthcheck.manifest, mappingFile: absentHealthcheck.mappingFile, evidenceFile: absentHealthcheck.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.code, 'replacement_config_drift');
+      assert.equal(error.rollback.restored, true);
+      return true;
+    });
+    assert.deepEqual(absentHealthcheck.state.acceptedCreateArgs.slice(absentHealthcheck.state.acceptedCreateArgs.indexOf('--health-cmd'), absentHealthcheck.state.acceptedCreateArgs.indexOf('--health-cmd') + 4), ['--health-cmd', 'false', '--health-interval', '1000000000']);
+    assert.equal(absentHealthcheck.state.api.State.Running, true);
+    assert.equal(await readFile(absentHealthcheck.envFile, 'utf8'), envContent());
+  } finally { await rm(absentHealthcheck.root, { recursive: true, force: true }); }
   const missingRw = await fixture();
   try {
     const originalMount = missingRw.api.Mounts[0];
