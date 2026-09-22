@@ -367,6 +367,7 @@ export function assertGreenContainerInventory(inventory, expectedSourceSchema = 
       || inventory.providerNetwork.name !== greenTarget.providerNetwork
       || inventory.uploadsVolume.name !== greenTarget.uploadsVolume
       || inventory.network.internal !== true
+      || (inventory.api.greenLabel !== true && inventory.api.prePromotionTuple !== true)
       || inventory.database.greenLabel !== true
       || inventory.api.hostPorts !== 0
       || inventory.api.running !== true

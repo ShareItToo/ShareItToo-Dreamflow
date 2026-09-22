@@ -382,6 +382,7 @@ test('pre-promotion inventory requires the exact Green DB host and protected mou
   };
   assert.equal(assertGreenContainerInventory(base, greenTarget.sourceSchema, targetManifest.prePromotionImage), true);
   assert.equal(assertGreenContainerInventory({ ...base, api: { ...base.api, greenLabel: true, prePromotionTuple: false } }, greenTarget.sourceSchema, targetManifest.prePromotionImage), true);
+  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, greenLabel: false, prePromotionTuple: false } }, greenTarget.sourceSchema, targetManifest.prePromotionImage), /green_inventory_mismatch/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, databaseHost: 'legacy-db' } }, greenTarget.sourceSchema, targetManifest.prePromotionImage), /green_prepromotion_tuple_mismatch/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mountDestinations: base.api.mountDestinations.slice(0, -1) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage), /green_prepromotion_tuple_mismatch/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, prePromotionTuple: true, greenLabel: true, image: 'shareittoo-api-wp260b:4d6161ff' } }, greenTarget.sourceSchema, targetManifest.prePromotionImage), /green_prepromotion_tuple_mismatch/u);
