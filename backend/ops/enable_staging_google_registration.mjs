@@ -88,49 +88,52 @@ function normalizedContainer(record, omitRegistrationEnv = false) {
     delete entries[registrationEnabledKey];
     delete entries[registrationAllowlistKey];
   }
+  const healthcheck = config.Healthcheck ? {
+    Test: config.Healthcheck.Test ?? null,
+    Interval: Number(config.Healthcheck.Interval ?? 0),
+    Timeout: Number(config.Healthcheck.Timeout ?? 0),
+    Retries: Number(config.Healthcheck.Retries ?? 0),
+    StartPeriod: Number(config.Healthcheck.StartPeriod ?? 0),
+    StartInterval: Number(config.Healthcheck.StartInterval ?? 0),
+  } : null;
+  const resources = {
+    Memory: Number(host.Memory ?? 0), MemorySwap: Number(host.MemorySwap ?? 0),
+    CpuShares: Number(host.CpuShares ?? 0), CpuQuota: Number(host.CpuQuota ?? 0),
+    CpuPeriod: Number(host.CpuPeriod ?? 0), NanoCpus: Number(host.NanoCpus ?? 0),
+    CpusetCpus: host.CpusetCpus ?? '', CpusetMems: host.CpusetMems ?? '',
+    PidsLimit: host.PidsLimit === null || host.PidsLimit === undefined ? null : Number(host.PidsLimit),
+  };
   return {
-    image: config.Image ?? '',
-    cmd: config.Cmd ?? null,
-    entrypoint: config.Entrypoint ?? null,
-    workingDir: config.WorkingDir ?? '',
-    user: config.User ?? '',
-    tty: config.Tty === true,
-    openStdin: config.OpenStdin === true,
-    labels: sortedObject(config.Labels),
-    env: sortedObject(entries),
+    config: {
+      image: config.Image ?? '', cmd: config.Cmd ?? null, entrypoint: config.Entrypoint ?? null,
+      workingDir: config.WorkingDir ?? '', user: config.User ?? '', tty: config.Tty === true,
+      openStdin: config.OpenStdin === true, stdinOnce: config.StdinOnce === true,
+      attachStdin: config.AttachStdin === true, attachStdout: config.AttachStdout !== false,
+      attachStderr: config.AttachStderr !== false, hostname: config.Hostname ?? '', domainname: config.Domainname ?? '',
+      stopSignal: config.StopSignal ?? '', healthcheck,
+      volumes: sortedObject(config.Volumes), onBuild: config.OnBuild ?? null,
+      labels: sortedObject(config.Labels), env: sortedObject(entries),
+    },
     host: {
-      GroupAdd: [...(host.GroupAdd ?? [])].sort(),
-      RestartPolicy: host.RestartPolicy ?? null,
-      PortBindings: host.PortBindings ?? null,
-      NetworkMode: host.NetworkMode ?? '',
-      Privileged: host.Privileged === true,
-      ReadonlyRootfs: host.ReadonlyRootfs === true,
-      SecurityOpt: [...(host.SecurityOpt ?? [])].sort(),
-      NoNewPrivileges: host.NoNewPrivileges === true,
-      CapAdd: [...(host.CapAdd ?? [])].sort(),
-      CapDrop: [...(host.CapDrop ?? [])].sort(),
-      Devices: host.Devices ?? [],
+      GroupAdd: [...(host.GroupAdd ?? [])].sort(), RestartPolicy: host.RestartPolicy ?? null,
+      PortBindings: host.PortBindings ?? null, NetworkMode: host.NetworkMode ?? '',
+      Privileged: host.Privileged === true, ReadonlyRootfs: host.ReadonlyRootfs === true,
+      SecurityOpt: [...(host.SecurityOpt ?? [])].sort(), NoNewPrivileges: host.NoNewPrivileges === true,
+      CapAdd: [...(host.CapAdd ?? [])].sort(), CapDrop: [...(host.CapDrop ?? [])].sort(),
+      Devices: (host.Devices ?? []).map((entry) => ({ PathOnHost: entry.PathOnHost ?? '', PathInContainer: entry.PathInContainer ?? '', CgroupPermissions: entry.CgroupPermissions ?? '' })).sort((a, b) => a.PathInContainer.localeCompare(b.PathInContainer)),
       DeviceRequests: host.DeviceRequests ?? [],
-      Ulimits: host.Ulimits ?? [],
-      OomKillDisable: host.OomKillDisable === true,
-      Tmpfs: sortedObject(host.Tmpfs),
-      CgroupnsMode: host.CgroupnsMode ?? '',
-      Runtime: host.Runtime ?? '',
-      Isolation: host.Isolation ?? '',
-      AutoRemove: host.AutoRemove === true,
-      Dns: [...(host.Dns ?? [])].sort(),
-      DnsSearch: [...(host.DnsSearch ?? [])].sort(),
-      ExtraHosts: [...(host.ExtraHosts ?? [])].sort(),
-      IpcMode: host.IpcMode ?? '',
-      PidMode: host.PidMode ?? '',
-      UsernsMode: host.UsernsMode ?? '',
-      ShmSize: Number(host.ShmSize ?? 0),
-      Init: host.Init === true,
-      StopTimeout: Number(host.StopTimeout ?? 0),
-      LogConfig: {
-        Type: host.LogConfig?.Type ?? '',
-        Config: sortedObject(host.LogConfig?.Config),
-      },
+      Ulimits: (host.Ulimits ?? []).map((entry) => ({ Name: entry.Name ?? '', Soft: Number(entry.Soft ?? 0), Hard: Number(entry.Hard ?? 0) })).sort((a, b) => a.Name.localeCompare(b.Name)),
+      OomKillDisable: host.OomKillDisable === true, Tmpfs: sortedObject(host.Tmpfs),
+      MaskedPaths: [...(host.MaskedPaths ?? [])].sort(), ReadonlyPaths: [...(host.ReadonlyPaths ?? [])].sort(),
+      CgroupnsMode: host.CgroupnsMode ?? '', Runtime: host.Runtime ?? '', Isolation: host.Isolation ?? '', AutoRemove: host.AutoRemove === true,
+      Dns: [...(host.Dns ?? [])].sort(), DnsSearch: [...(host.DnsSearch ?? [])].sort(), ExtraHosts: [...(host.ExtraHosts ?? [])].sort(),
+      IpcMode: host.IpcMode ?? '', PidMode: host.PidMode ?? '', UsernsMode: host.UsernsMode ?? '',
+      ShmSize: Number(host.ShmSize ?? 0), Init: host.Init === true, StopTimeout: Number(host.StopTimeout ?? 0), resources,
+      OomScoreAdj: Number(host.OomScoreAdj ?? 0), MemoryReservation: Number(host.MemoryReservation ?? 0),
+      MemorySwappiness: host.MemorySwappiness === null || host.MemorySwappiness === undefined ? null : Number(host.MemorySwappiness),
+      CpuPercent: Number(host.CpuPercent ?? 0), CpuRealtimePeriod: Number(host.CpuRealtimePeriod ?? 0), CpuRealtimeRuntime: Number(host.CpuRealtimeRuntime ?? 0),
+      Binds: [...(host.Binds ?? [])].sort(), Links: [...(host.Links ?? [])].sort(),
+      LogConfig: { Type: host.LogConfig?.Type ?? '', Config: sortedObject(host.LogConfig?.Config) },
     },
     mounts: normalizedMounts(record?.Mounts),
   };
@@ -152,22 +155,19 @@ function assertNetworks(record, manifest, code = 'network_inventory_invalid') {
 }
 
 function assertImageReadback(record, manifest, code = 'image_readback_invalid') {
-  const image = record?.Config?.Image ?? '';
+  const tags = record?.RepoTags ?? [];
   const labels = record?.Config?.Labels ?? {};
   const digests = record?.RepoDigests ?? [];
-  if (image !== manifest.image
+  if (!Array.isArray(tags) || !tags.includes(manifest.image)
       || labels['org.opencontainers.image.revision'] !== manifest.runtimeRevision
+      || record?.Config?.User !== 'shareittoo'
       || (!digests.includes(`${manifest.image}@${manifest.imageDigest}`)
         && !digests.some((entry) => entry.endsWith(`@${manifest.imageDigest}`)))) fail(code);
 }
 
 function assertReplacementImageReadback(record, manifest, code = 'replacement_image_readback_invalid') {
   const image = record?.Config?.Image ?? '';
-  const accepted = new Set([manifest.image, `${manifest.image}@${manifest.imageDigest}`]);
-  const digests = record?.RepoDigests ?? [];
-  if (!accepted.has(image)
-      || (!digests.includes(`${manifest.image}@${manifest.imageDigest}`)
-        && !digests.some((entry) => entry.endsWith(`@${manifest.imageDigest}`)))) fail(code);
+  if (image !== `${manifest.image}@${manifest.imageDigest}`) fail(code);
 }
 
 function assertRuntimeFlags(flags, expectedRegistration, mappingDigest = null, code = 'runtime_flags_invalid') {
@@ -175,8 +175,7 @@ function assertRuntimeFlags(flags, expectedRegistration, mappingDigest = null, c
       || flags?.FIREBASE_AUTH_ENABLED !== 'true'
       || flags?.FIREBASE_PHONE_VERIFICATION_ENABLED !== 'false'
       || flags?.PAYMENT_TRANSPORT !== 'memory'
-      || flags?.STRIPE_LIVEMODE !== 'false'
-      || flags?.SIT_STAGING_ACCESS_GATE_ENABLED !== 'true') fail(code);
+      || flags?.STRIPE_LIVEMODE !== 'false') fail(code);
   if (expectedRegistration !== null && Object.hasOwn(flags ?? {}, registrationEnabledKey)
       && flags[registrationEnabledKey] !== expectedRegistration) fail(code);
   if (expectedRegistration !== null && Object.hasOwn(flags ?? {}, registrationAllowlistKey)
@@ -218,7 +217,7 @@ function readRegistrationMapping(filePath) {
     fail(error?.code === 'ELOOP' ? 'mapping_symlink_forbidden' : 'mapping_unreadable');
   }
   if (!/^[0-9a-f]{64}=[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}\n?$/u.test(content)
-      || /@|(?:email|subject|firebase|token|uid\s*=)/iu.test(content)) fail('mapping_plaintext_or_shape_invalid');
+      || /@|(?:email|subject|firebase|token|uid)/iu.test(content)) fail('mapping_plaintext_or_shape_invalid');
   const line = content.endsWith('\n') ? content.slice(0, -1) : content;
   const separator = line.indexOf('=');
   const digest = line.slice(0, separator);
@@ -297,7 +296,7 @@ async function atomicReplace(content, manifest) {
 
 async function readEnv(manifest) {
   try {
-    const content = readStablePrivateFile(manifest.envFile, { expectedMode: 0o600, minBytes: 1, code: 'env_file_metadata_invalid' });
+    const content = readStablePrivateFile(manifest.envFile, { expectedMode: 0o600, expectedUid: manifest.envUid, expectedGid: manifest.envGid, minBytes: 1, code: 'env_file_metadata_invalid' });
     return Object.freeze({ content, values: parseEnvContent(content) });
   } catch (error) {
     if (error?.code === 'env_file_metadata_invalid') throw error;
@@ -408,16 +407,68 @@ async function safeCommand(command, args, phase, commandEnv) {
   }
 }
 
-async function rollback({ manifest, originalEnv, originalApi, command, commandEnv, sealedName, sealed, currentStopped, replacementCreated }) {
+async function stopCurrentApi({ manifest, originalApi, command, commandEnv }) {
+  try {
+    const result = await command('docker', ['stop', manifest.apiContainer], { phase: 'stop_current_api', env: commandEnv });
+    if (result?.code !== undefined && result.code !== 0) {
+      const error = new Error('stop_current_api_failed');
+      error.code = 'stop_current_api_failed';
+      throw error;
+    }
+    return Object.freeze({ stopped: true, recoveredAfterError: false });
+  } catch (error) {
+    let readback;
+    try {
+      readback = await command('docker', ['inspect', '--format', '{{json .}}', manifest.apiContainer], { phase: 'stop_state_readback', env: commandEnv, allowFailure: true });
+    } catch (readbackError) {
+      error.code = error.code ?? 'stop_state_readback_failed';
+      error.stopStateReadbackError = readbackError;
+      throw error;
+    }
+    if (readback?.code !== undefined && readback.code !== 0) {
+      error.code = error.code ?? 'stop_state_readback_failed';
+      throw error;
+    }
+    let record;
+    try { record = parseJson(readback.stdout, 'stop_state_readback_invalid'); } catch (readbackError) {
+      error.code = error.code ?? readbackError.code ?? 'stop_state_readback_invalid';
+      throw error;
+    }
+    if (record?.Name?.replace(/^\//u, '') !== manifest.apiContainer) {
+      error.code = error.code ?? 'stop_state_target_invalid';
+      throw error;
+    }
+    if (!sameExceptRegistrationFlags(originalApi, record)) {
+      error.code = error.code ?? 'stop_state_config_drift';
+      throw error;
+    }
+    assertNetworks(record, manifest, 'stop_state_network_drift');
+    assertNoHostPort(record, 'stop_state_host_port_drift');
+    if (record?.State?.Running === false) return Object.freeze({ stopped: true, recoveredAfterError: true });
+    if (record?.State?.Running === true) {
+      error.code = error.code ?? 'stop_current_api_failed';
+      throw error;
+    }
+    error.code = error.code ?? 'stop_state_unknown';
+    throw error;
+  }
+}
+
+async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, originalApi, command, commandEnv, sealedName, sealed, currentStopped, replacementCreated }) {
   const results = [];
   let ok = true;
-  try {
-    const current = await readEnv(manifest);
-    if (current.content !== originalEnv) await atomicReplace(originalEnv, manifest);
-    results.push({ phase: 'rollback_env_restore', ok: true });
-  } catch (error) {
-    results.push({ phase: 'rollback_env_restore', ok: false, code: error?.code ?? 'rollback_env_restore' });
-    ok = false;
+  if (!envMutationOwned) {
+    results.push({ phase: 'rollback_env_restore', ok: true, skipped: true });
+  } else {
+    try {
+      const current = await readEnv(manifest);
+      if (current.content !== appliedEnv) fail('rollback_env_changed_after_mutation');
+      await atomicReplace(originalEnv, manifest);
+      results.push({ phase: 'rollback_env_restore', ok: true });
+    } catch (error) {
+      results.push({ phase: 'rollback_env_restore', ok: false, code: error?.code ?? 'rollback_env_restore' });
+      ok = false;
+    }
   }
   if (replacementCreated) {
     const removal = await safeCommand(command, ['rm', '--force', manifest.apiContainer], 'rollback_replacement_remove', commandEnv);
@@ -440,6 +491,7 @@ async function rollback({ manifest, originalEnv, originalApi, command, commandEn
         const inspect = await command('docker', ['inspect', '--format', '{{json .}}', manifest.apiContainer], { phase: 'rollback_api_readback', env: commandEnv });
         const restored = parseJson(inspect.stdout, 'rollback_api_readback_invalid');
         if (!sameExceptRegistrationFlags(originalApi, restored)) fail('rollback_config_drift');
+        if (restored?.State?.Running !== true) fail('rollback_original_stopped');
         assertNetworks(restored, manifest, 'rollback_network_inventory_invalid');
         assertNoHostPort(restored, 'rollback_host_port_forbidden');
         results.push({ phase: 'rollback_api_readback', ok: true });
@@ -461,6 +513,7 @@ async function rollback({ manifest, originalEnv, originalApi, command, commandEn
         const inspect = await command('docker', ['inspect', '--format', '{{json .}}', manifest.apiContainer], { phase: 'rollback_original_readback', env: commandEnv });
         const restored = parseJson(inspect.stdout, 'rollback_original_readback_invalid');
         if (!sameExceptRegistrationFlags(originalApi, restored)) fail('rollback_config_drift');
+        if (restored?.State?.Running !== true) fail('rollback_original_stopped');
         assertNetworks(restored, manifest, 'rollback_network_inventory_invalid');
         assertNoHostPort(restored, 'rollback_host_port_forbidden');
         results.push({ phase: 'rollback_original_readback', ok: true });
@@ -505,8 +558,12 @@ async function writeEvidence(filePath, evidence) {
     await handle.close();
     handle = undefined;
     const metadata = await lstat(filePath);
-    const readback = readStablePrivateFile(filePath, { expectedMode: 0o600, minBytes: content.length, maxBytes: content.length, code: 'evidence_readback_invalid' });
+    const expectedUid = process.getuid?.();
+    const expectedGid = process.getgid?.();
+    const readback = readStablePrivateFile(filePath, { expectedMode: 0o600, expectedUid, expectedGid, minBytes: content.length, maxBytes: content.length, code: 'evidence_readback_invalid' });
     if (!metadata.isFile() || (metadata.mode & 0o777) !== 0o600 || metadata.size !== Buffer.byteLength(content)
+        || expectedUid !== undefined && metadata.uid !== expectedUid
+        || expectedGid !== undefined && metadata.gid !== expectedGid
         || readback !== content || sha256(readback) !== sha256(content)) fail('evidence_readback_invalid');
   } catch (error) {
     if (handle) await handle.close().catch(() => {});
@@ -534,15 +591,19 @@ export async function runStagingGoogleRegistrationEnable({
   if (!execute) return Object.freeze({ status: 'preflight-passed-no-mutation', firstIrreversiblePhase: 'atomic_registration_enable', mappingDigest: mapping.mappingDigest, commands: Object.freeze(preflight.entries.map((entry) => entry.phase)) });
   if (commandEnv.STAGING_GOOGLE_REGISTRATION_EXECUTE !== '1'
       || commandEnv.STAGING_GOOGLE_REGISTRATION_CONFIRM !== target.runtimeRevision) fail('explicit_execute_confirmation_required');
+  if (typeof evidenceFile !== 'string' || !evidenceFile) fail('evidence_path_required');
   await assertEvidenceTarget(evidenceFile);
   const sealedName = `${target.apiContainer}-google-registration-rollback-${target.runtimeRevision.slice(0, 12)}`;
   let currentStopped = false;
   let sealed = false;
   let replacementCreated = false;
+  let envMutationOwned = false;
+  let appliedEnv = null;
   try {
-    await applyRegistrationFlags(target, original.content, mapping);
-    await command('docker', ['stop', target.apiContainer], { phase: 'stop_current_api', env: commandEnv });
-    currentStopped = true;
+    appliedEnv = await applyRegistrationFlags(target, original.content, mapping);
+    envMutationOwned = true;
+    const stopResult = await stopCurrentApi({ manifest: target, originalApi: preflight.readbacks.api, command, commandEnv });
+    currentStopped = stopResult.stopped;
     await command('docker', ['rename', target.apiContainer, sealedName], { phase: 'seal_current_api', env: commandEnv });
     sealed = true;
     const createArgs = [...buildReplacementCreateArgs({ manifest: target, envFile: target.envFile, currentApi: preflight.readbacks.api })];
@@ -575,7 +636,7 @@ export async function runStagingGoogleRegistrationEnable({
     await writeEvidence(evidenceFile, { kind: 'sit-staging-google-registration-enable', schemaVersion: 1, status: result.status, runtimeRevision: target.runtimeRevision, apiContainer: target.apiContainer, imageDigest: target.imageDigest, mappingDigest: mapping.mappingDigest, targetUserIdDigest: sha256(mapping.userId), mappingEntryCount: 1, schemaMigration: requiredTerminalMigration, migrationLedger: requiredMigrationLedger, providerTraffic: 'none', stripeLivemode: false, requiresLaterGate: result.requiresLaterGate });
     return result;
   } catch (error) {
-    error.rollback = await rollback({ manifest: target, originalEnv: original.content, originalApi: preflight.readbacks.api, command, commandEnv, sealedName, sealed, currentStopped, replacementCreated });
+    error.rollback = await rollback({ manifest: target, originalEnv: original.content, appliedEnv, envMutationOwned, originalApi: preflight.readbacks.api, command, commandEnv, sealedName, sealed, currentStopped, replacementCreated });
     throw error;
   }
 }

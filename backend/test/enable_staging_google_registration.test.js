@@ -95,19 +95,17 @@ function startupPayload(fx, enabled) {
     flags: {
       DEPLOYMENT_ENVIRONMENT: 'staging', FIREBASE_AUTH_ENABLED: 'true', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false',
       PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0',
-      SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
-      ...(enabled ? { SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: 'present' } : {}),
     },
   });
 }
 
-function fakeCommand(fx, { mutateUnrelated = false, falsePass = false, failAt = null, wrongSchema = false, wrongImage = false } = {}) {
+function fakeCommand(fx, { mutateUnrelated = false, falsePass = false, failAt = null, wrongSchema = false, wrongImage = false, driftHealth = false, driftMemory = false, driftMaskedPaths = false, stopAfterSideEffect = false } = {}) {
   const db = { Name: `/${fx.manifest.databaseContainer}`, State: { Running: true }, Config: { Image: `postgres:16-alpine@sha256:${'c'.repeat(64)}`, Env: ['POSTGRES_DB=shareittoo_green', 'POSTGRES_USER=shareittoo_green'] } };
   const volume = { Name: fx.manifest.databaseVolume };
   const network = { Name: fx.manifest.network, Internal: true };
   const providerNetwork = { Name: fx.manifest.providerNetwork };
   const uploads = { Name: fx.manifest.uploadsVolume };
-  const image = { Config: { Image: fx.image, User: 'shareittoo', Labels: { 'org.opencontainers.image.revision': revision } }, RepoDigests: [`${fx.image}@${imageDigest}`] };
+  const image = { RepoTags: [fx.image], Config: { User: 'shareittoo', Labels: { 'org.opencontainers.image.revision': revision } }, RepoDigests: [`${fx.image}@${imageDigest}`] };
   const calls = [];
   const command = async (_cmd, args, options = {}) => {
     const phase = options.phase;
@@ -119,7 +117,9 @@ function fakeCommand(fx, { mutateUnrelated = false, falsePass = false, failAt = 
         const cloned = structuredClone(fx.state.api);
         cloned.Config.Image = `${fx.image}@${imageDigest}`;
         cloned.Config.Env = envContent({ registration: true, allowlist: `${mappingDigest}=${userId}` }).trim().split('\n');
-        cloned.RepoDigests = [`${fx.image}@${imageDigest}`];
+        if (driftHealth) cloned.Config.Healthcheck = { Test: ['CMD-SHELL', 'false'], Interval: 1, Timeout: 1, Retries: 1, StartPeriod: 1, StartInterval: 1 };
+        if (driftMemory) cloned.HostConfig.Memory = 99;
+        if (driftMaskedPaths) cloned.HostConfig.MaskedPaths = ['/proc/drifted'];
         return json(cloned);
       }
       return json(fx.state.api);
@@ -129,7 +129,7 @@ function fakeCommand(fx, { mutateUnrelated = false, falsePass = false, failAt = 
     if (phase === 'current_network_inspect') return json(network);
     if (phase === 'current_provider_network_inspect') return json(providerNetwork);
     if (phase === 'current_uploads_volume_inspect') return json(uploads);
-    if (phase === 'current_image_inspect') return json(wrongImage ? { ...image, Config: { ...image.Config, Image: `${fx.image}-drift` } } : image);
+    if (phase === 'current_image_inspect') return json(wrongImage ? { ...image, RepoTags: [`${fx.image}-drift`] } : image);
     if (phase === 'sealed_name_conflict_check') return { stdout: '', code: 0 };
     if (phase === 'current_database_probe') return { stdout: '1\n', code: 0 };
     if (phase === 'current_schema_migration_readback' || phase === 'replacement_schema_readback') return { stdout: `${wrongSchema ? '094_apple_refresh_material_only.up.sql' : '095_staging_google_registration_replays.up.sql'}\n`, code: 0 };
@@ -148,9 +148,15 @@ function fakeCommand(fx, { mutateUnrelated = false, falsePass = false, failAt = 
       return { stdout: JSON.stringify({ enabled, allowlist: enabled ? 'present' : 'absent', allowlistDigest: crypto.createHash('sha256').update(raw).digest('hex'), allowlistEntryCount: enabled ? 1 : 0, accessGateEnabled: true }), code: 0 };
     }
     if (phase === 'rollback_replacement_verify') return { stdout: '', code: 0 };
-    if (phase === 'rollback_replacement_remove' || phase === 'rollback_restore_rename' || phase === 'rollback_restore_start') return { stdout: '', code: 0 };
+    if (phase === 'rollback_replacement_remove' || phase === 'rollback_restore_rename') return { stdout: '', code: 0 };
+    if (phase === 'rollback_restore_start' || phase === 'rollback_original_start') { fx.state.api.State.Running = true; return { stdout: '', code: 0 }; }
     if (phase === 'rollback_public_runtime_probe') return { stdout: startupPayload(fx, false), code: 0 };
-    if (phase === 'stop_current_api') { fx.state.stopped = true; return { stdout: '', code: 0 }; }
+    if (phase === 'stop_current_api') {
+      if (stopAfterSideEffect) { fx.state.api.State.Running = false; throw Object.assign(new Error('stop_response_lost'), { code: 'stop_response_lost', failurePhase: phase }); }
+      if (failAt === phase) throw Object.assign(new Error(`${phase}_failed`), { code: `${phase}_failed`, failurePhase: phase });
+      fx.state.stopped = true; return { stdout: '', code: 0 };
+    }
+    if (phase === 'stop_state_readback') return json(fx.state.api);
     if (phase === 'seal_current_api') { fx.state.sealed = true; return { stdout: '', code: 0 }; }
     if (phase === 'create_replacement_api') { fx.state.created = true; return { stdout: '', code: 0 }; }
     if (phase === 'attach_provider_network' || phase === 'replacement_registration_config_readback') return { stdout: '', code: 0 };
@@ -215,6 +221,7 @@ test('negative private mapping and target checks fail closed', async () => {
   const cases = [
     { name: 'multiple mappings', mapping: `${mappingLine()}${'c'.repeat(64)}=second-user\n`, code: 'mapping_plaintext_or_shape_invalid' },
     { name: 'plaintext-shaped', mapping: `email@example.invalid=${userId}\n`, code: 'mapping_plaintext_or_shape_invalid' },
+    { name: 'uid-shaped', mapping: `${mappingDigest}=uid_123\n`, code: 'mapping_plaintext_or_shape_invalid' },
   ];
   for (const entry of cases) {
     const fx = await fixture({ mapping: entry.mapping });
@@ -243,7 +250,10 @@ test('wrong target, mode, symlink, changed unrelated byte, and false PASS all fa
   finally { await rm(link.root, { recursive: true, force: true }); }
 
   const changed = await fixture();
-  try { await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: changed.manifest, mappingFile: changed.mappingFile, evidenceFile: changed.evidenceFile, command: fakeCommand(changed, { mutateUnrelated: true }).command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /env_changed_since_preflight/u); }
+  try {
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: changed.manifest, mappingFile: changed.mappingFile, evidenceFile: changed.evidenceFile, command: fakeCommand(changed, { mutateUnrelated: true }).command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /env_changed_since_preflight/u);
+    assert.equal(await readFile(changed.envFile, 'utf8'), envContent({ unrelated: 'changed-after-preflight' }));
+  }
   finally { await rm(changed.root, { recursive: true, force: true }); }
 
   const falsePass = await fixture();
@@ -300,6 +310,49 @@ test('wrong schema or image and stop/rename interruption never produce a false P
     await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: unsafeParent.manifest, mappingFile: unsafeParent.mappingFile, evidenceFile: unsafeParent.evidenceFile, command: fakeCommand(unsafeParent).command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /evidence_parent_unsafe/u);
     assert.equal(await readFile(unsafeParent.envFile, 'utf8'), envContent());
   } finally { await rm(unsafeParent.root, { recursive: true, force: true }); }
+});
+
+test('stop fail-before and response-loss-after-stop are recovered from real state readback', async () => {
+  const failBefore = await fixture();
+  try {
+    const fake = fakeCommand(failBefore, { failAt: 'stop_current_api' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: failBefore.manifest, mappingFile: failBefore.mappingFile, evidenceFile: failBefore.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.code, 'stop_current_api_failed');
+      assert.equal(error.rollback.restored, true);
+      assert.ok(fake.calls.some((call) => call.phase === 'stop_state_readback'));
+      return true;
+    });
+    assert.equal(failBefore.state.api.State.Running, true);
+  } finally { await rm(failBefore.root, { recursive: true, force: true }); }
+
+  const responseLoss = await fixture();
+  try {
+    const fake = fakeCommand(responseLoss, { stopAfterSideEffect: true, failAt: 'create_replacement_api' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: responseLoss.manifest, mappingFile: responseLoss.mappingFile, evidenceFile: responseLoss.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.code, 'create_replacement_api_failed');
+      assert.equal(error.rollback.restored, true);
+      assert.ok(error.rollback.results.some((entry) => entry.phase === 'rollback_api_readback' && entry.ok));
+      return true;
+    });
+    assert.equal(responseLoss.state.api.State.Running, true);
+    assert.ok(fake.calls.some((call) => call.phase === 'stop_state_readback'));
+  } finally { await rm(responseLoss.root, { recursive: true, force: true }); }
+});
+
+test('resource and env ownership drift fail closed without overwriting concurrent bytes', async () => {
+  for (const option of [{ driftHealth: true }, { driftMemory: true }, { driftMaskedPaths: true }]) {
+    const fx = await fixture();
+    try {
+      const fake = fakeCommand(fx, option);
+      await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /replacement_config_drift/u);
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+  const owner = await fixture();
+  try {
+    owner.manifest.envUid = (process.getuid?.() ?? 0) + 1;
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: owner.manifest, mappingFile: owner.mappingFile, command: fakeCommand(owner).command }), /env_file_metadata_invalid/u);
+  } finally { await rm(owner.root, { recursive: true, force: true }); }
 });
 
 test('sanitized failure output contains no mapping material', () => {
