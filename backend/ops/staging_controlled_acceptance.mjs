@@ -443,14 +443,20 @@ try {
 }
 `;
 
-export async function runMfaProbe({ container = 'shareittoo-staging-acceptance-api' } = {}) {
-  if (!/^sit-green-acceptance-[0-9a-f]{12}$/u.test(container)
-      && container !== 'shareittoo-staging-acceptance-api') fail('mfa_probe_container_invalid');
+export function isMfaProbeContainer(container) {
+  return container === 'shareittoo-staging-acceptance-api'
+    || /^sit-green-acceptance-[0-9a-f]{12}$/u.test(container ?? '')
+    || /^[0-9a-f]{64}$/u.test(container ?? '');
+}
+
+export async function runMfaProbe({ container = 'shareittoo-staging-acceptance-api', commandRunner = runCommandWithInput } = {}) {
+  if (!isMfaProbeContainer(container)) fail('mfa_probe_container_invalid');
+  if (typeof commandRunner !== 'function') fail('mfa_probe_command_runner_invalid');
   const expected = {
     mfa: 'enroll-pending-cancel-passed',
     identity: 'start-status-resume-revoke-passed',
   };
-  const output = await runCommandWithInput(
+  const output = await commandRunner(
     'docker',
     ['exec', '-i', container, 'node', '--input-type=module'],
     mfaProbe,

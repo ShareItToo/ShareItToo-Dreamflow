@@ -39,6 +39,7 @@ import {
 } from '../ops/green_staging_promotion.mjs';
 import { readStagingAccessConfiguration, stagingAnonymousPathAllowed } from '../src/staging_access_gate.js';
 import { readListingAiGatewayConfiguration } from '../src/listing_ai_gateway_config.js';
+import { isMfaProbeContainer, runMfaProbe } from '../ops/staging_controlled_acceptance.mjs';
 
 const runtimeCommit = '266f69c21dd61bfcdb212c24a0c8788b172bed9e';
 const opsCommit = '8fecd57018ab10a0c6733531539472e6179a02db';
@@ -113,6 +114,22 @@ const originalApiIdentity = {
   networks: JSON.stringify(stableIdentityValue(originalApiIdentityRecord.NetworkSettings.Networks)),
 };
 const restoredApiIdentityRecord = { ...originalApiIdentityRecord, Name: `/${greenTarget.apiContainer}`, State: { Running: true } };
+
+test('MFA probe container contract accepts only dedicated names or an exact Docker ID', () => {
+  assert.equal(isMfaProbeContainer('shareittoo-staging-acceptance-api'), true);
+  assert.equal(isMfaProbeContainer('sit-green-acceptance-0123456789ab'), true);
+  assert.equal(isMfaProbeContainer('a'.repeat(64)), true);
+  for (const invalid of [
+    'a'.repeat(12),
+    'a'.repeat(63),
+    'a'.repeat(65),
+    'g'.repeat(64),
+    'A'.repeat(64),
+    'sit-grn-c-runtime-0123456789abcdef',
+    'sit-green-acceptance-0123456789a',
+  ]) assert.equal(isMfaProbeContainer(invalid), false, invalid);
+});
+
 function restoreFixture(options, running = true) {
   if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify({ ...originalApiIdentityRecord, Name: `/${greenTarget.sealedApiContainer}` }) };
   if (options.phase === 'failure_restore_current_api_identity_readback') return { code: 'not_found', stdout: '' };
@@ -488,6 +505,22 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       if (phase === 'isolated_network_create') return { stdout: `${isolatedNetworkId}\n` };
       if (phase === 'isolated_postgres_create') return { stdout: `${isolatedDatabaseId}\n` };
       if (phase === 'candidate_acceptance_create') return { stdout: `${candidateId}\n` };
+      if (phase === 'candidate_mfa_identity_probes') {
+        assert.equal(options.env.STAGING_ACCEPTANCE_CONTAINER, candidateId);
+        const probe = await runMfaProbe({
+          container: options.env.STAGING_ACCEPTANCE_CONTAINER,
+          commandRunner: async (probeCommand, probeArgs, probeInput, probeOptions) => {
+            assert.equal(probeCommand, 'docker');
+            assert.deepEqual(probeArgs, ['exec', '-i', candidateId, 'node', '--input-type=module']);
+            assert.equal(probeOptions.phase, 'mfa_probe');
+            assert.match(probeInput, /\/auth\/mfa\/enroll/u);
+            assert.match(probeInput, /\/identity-verification\/session/u);
+            return JSON.stringify({ mfa: 'enroll-pending-cancel-passed', identity: 'start-status-resume-revoke-passed' });
+          },
+        });
+        assert.deepEqual(probe, { mfa: 'enroll-pending-cancel-passed', identity: 'start-status-resume-revoke-passed' });
+        return { stdout: JSON.stringify(probe) };
+      }
       if (phase === 'candidate_prestart_identity_readback') return { stdout: JSON.stringify(candidateRecord) };
       if (phase === 'source_schema_readback') return { stdout: '092_listing_ai_mock_disclosure.up.sql\n' };
       if (phase === 'source_migration_ledger_readback') return { stdout: sourceMigrationLedger };
