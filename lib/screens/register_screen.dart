@@ -21,6 +21,21 @@ import 'package:lendify/widgets/social_auth_button.dart';
 import 'package:lendify/widgets/tracked_dialog_route.dart';
 import 'package:provider/provider.dart';
 
+String? registrationConsentFeedback({
+  required bool minimumAgeConfirmed,
+  required bool privateUseConfirmed,
+  required bool termsAccepted,
+  required bool privacyAccepted,
+}) {
+  final missing = <String>[];
+  if (!minimumAgeConfirmed) missing.add('18 Jahre oder älter');
+  if (!privateUseConfirmed) missing.add('Privatnutzung im Privat-Pilot');
+  if (!termsAccepted) missing.add('AGB');
+  if (!privacyAccepted) missing.add('Datenschutz');
+  if (missing.isEmpty) return null;
+  return 'Bitte bestätige noch: ${missing.join(', ')}.';
+}
+
 class RegisterScreen extends StatefulWidget {
   final int? returnTabIndex;
   const RegisterScreen({super.key, this.returnTabIndex});
@@ -221,19 +236,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
     FocusScope.of(context).unfocus();
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
-    if (!_minimumAgeConfirmed) {
-      await AppPopup.toast(
-        context,
-        icon: Icons.cake_outlined,
-        title: 'Bitte bestätige, dass du 18 Jahre oder älter bist.',
-      );
-      return;
-    }
-    if (!_termsAccepted || !_privacyAccepted || !_privateUseConfirmed) {
+    final consentMessage = registrationConsentFeedback(
+      minimumAgeConfirmed: _minimumAgeConfirmed,
+      privateUseConfirmed: _privateUseConfirmed,
+      termsAccepted: _termsAccepted,
+      privacyAccepted: _privacyAccepted,
+    );
+    if (consentMessage != null) {
       await AppPopup.toast(
         context,
         icon: Icons.gavel_outlined,
-        title: 'Bitte bestätige AGB und Datenschutz.',
+        title: consentMessage,
       );
       return;
     }
@@ -256,8 +269,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
           AuthFailure.emailInUse => 'Diese E-Mail ist bereits registriert.',
           AuthFailure.weakPassword =>
             'Das Passwort muss mindestens 10 Zeichen, einen Buchstaben und eine Zahl enthalten.',
-          AuthFailure.consentRequired =>
-            'Bitte bestätige: 18 Jahre oder älter, AGB und Datenschutz.',
+          AuthFailure.consentRequired => registrationConsentFeedback(
+                minimumAgeConfirmed: _minimumAgeConfirmed,
+                privateUseConfirmed: _privateUseConfirmed,
+                termsAccepted: _termsAccepted,
+                privacyAccepted: _privacyAccepted,
+              ) ??
+              'Die erforderlichen Zustimmungen konnten nicht bestätigt werden. Bitte prüfe die vier Hinweise im Registrierungsformular.',
           AuthFailure.verificationDeliveryUnavailable =>
             'Dein Konto wurde vorgemerkt, aber die Bestätigungs-E-Mail konnte nicht angefordert werden. Bitte versuche die Registrierung später mit derselben E-Mail erneut.',
           AuthFailure.network =>
@@ -338,14 +356,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
       AuthSocialProvider.apple => 'Apple',
       AuthSocialProvider.facebook => 'Facebook',
     };
-    if (!_minimumAgeConfirmed ||
-        !_termsAccepted ||
-        !_privacyAccepted ||
-        !_privateUseConfirmed) {
+    final consentMessage = registrationConsentFeedback(
+      minimumAgeConfirmed: _minimumAgeConfirmed,
+      privateUseConfirmed: _privateUseConfirmed,
+      termsAccepted: _termsAccepted,
+      privacyAccepted: _privacyAccepted,
+    );
+    if (consentMessage != null) {
       await AppPopup.toast(
         context,
         icon: Icons.gavel_outlined,
-        title: 'Bitte bestätige: 18 Jahre oder älter, AGB und Datenschutz.',
+        title: consentMessage,
       );
       return;
     }
