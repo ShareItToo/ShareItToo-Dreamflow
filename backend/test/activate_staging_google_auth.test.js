@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { chmod, lstat, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import { chmod, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { PassThrough } from 'node:stream';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,9 +19,23 @@ import {
   setActivationFlags,
 } from '../ops/activate_staging_google_auth.mjs';
 import { listingAiOpenAiModel, readListingAiGatewayConfiguration } from '../src/listing_ai_gateway_config.js';
+import { closeStablePrivateFile, openStablePrivateFile } from '../ops/stable_private_file.mjs';
 
 const revision = '0123456789abcdef0123456789abcdef01234567';
 const digest = 'sha256:' + 'a'.repeat(64);
+
+function readPrivateSnapshot(filePath) {
+  const opened = openStablePrivateFile(filePath, {
+    expectedMode: 0o600,
+    minBytes: 1,
+    code: 'env_file_metadata_invalid',
+  });
+  try {
+    return { metadata: opened.metadata, bytes: readFileSync(opened.descriptor) };
+  } finally {
+    closeStablePrivateFile(opened);
+  }
+}
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'sit-google-auth-'));
@@ -369,11 +384,30 @@ test('atomic auth transition preserves unrelated bytes and private-file metadata
   const fx = await fixture();
   try {
     await setActivationFlags(fx.manifest, fx.env);
-    const enabled = await readFile(fx.envFile, 'utf8');
+    const enabledSnapshot = readPrivateSnapshot(fx.envFile);
+    const enabled = enabledSnapshot.bytes.toString('utf8');
     assert.equal(enabled.replace('FIREBASE_AUTH_ENABLED=true', 'FIREBASE_AUTH_ENABLED=false').replace('DEPLOYMENT_ENVIRONMENT=staging', 'DEPLOYMENT_ENVIRONMENT=test'), fx.env);
-    assert.equal((await lstat(fx.envFile)).mode & 0o777, 0o600);
+    assert.equal(enabledSnapshot.metadata.mode & 0o777, 0o600);
     await setActivationFlags(fx.manifest, enabled, { auth: 'false', environment: 'test' });
-    assert.equal(await readFile(fx.envFile, 'utf8'), fx.env);
+    const restoredSnapshot = readPrivateSnapshot(fx.envFile);
+    assert.equal(restoredSnapshot.bytes.toString('utf8'), fx.env);
+    assert.equal(restoredSnapshot.metadata.mode & 0o777, 0o600);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('private env readback keeps metadata and bytes bound to one nofollow descriptor', async () => {
+  const fx = await fixture();
+  try {
+    const moved = join(fx.root, 'green.original.env');
+    const opened = openStablePrivateFile(fx.envFile, { expectedMode: 0o600, minBytes: 1, code: 'env_file_metadata_invalid' });
+    try {
+      await rename(fx.envFile, moved);
+      await writeFile(fx.envFile, 'attacker=untrusted\n', { mode: 0o600 });
+      assert.equal(opened.metadata.mode & 0o777, 0o600);
+      assert.equal(readFileSync(opened.descriptor, 'utf8'), fx.env);
+    } finally {
+      closeStablePrivateFile(opened);
+    }
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 

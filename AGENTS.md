@@ -77,6 +77,10 @@ discover a mechanically stale source hash.
   descriptor/bytes for the consuming operation; do not reopen its path. Evidence
   files must serialize once, then use those exact bytes for exclusive write,
   byte count and digest.
+- Security-sensitive/private-file checks must bind metadata and bytes to the same
+  `O_NOFOLLOW` descriptor/handle; never `lstat`/`stat` a path and reopen or read
+  it by path afterward, and fail closed when stable opening or metadata
+  validation fails.
 - Remote alias mentor invariant: after an alias or DNS failure, read the exact
   saved SSH configuration and authoritative project source before concluding
   that remote access is unavailable; test only the verified saved alias. A
