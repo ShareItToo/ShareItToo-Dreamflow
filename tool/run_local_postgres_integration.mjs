@@ -17,6 +17,54 @@ export const requiredPostgresMajor = 16;
 export const integrationDatabaseName = 'sit_integration';
 export const integrationDatabaseUser = 'sit_runner';
 
+// Keep the execution plan and the returned evidence on one source of truth.
+// Each group runs against the same isolated database, so groups stay
+// sequential while suites inside a group may use Node's normal test runner.
+export const integrationTestGroups = Object.freeze({
+  foundation: Object.freeze([
+    'backend/test/postgres_foundation.integration.test.js',
+    'backend/test/foreign_key_integrity.integration.test.js',
+  ]),
+  stagingGoogleRegistration: Object.freeze([
+    'backend/test/staging_google_registration.integration.test.js',
+  ]),
+  listingAi: Object.freeze([
+    'backend/test/listing_ai_lifetime_budget_migration.integration.test.js',
+    'backend/test/listing_ai_attempt_postgres.integration.test.js',
+  ]),
+  identity: Object.freeze([
+    'backend/test/identity_verification_postgres.integration.test.js',
+  ]),
+  mfa: Object.freeze([
+    'backend/test/mfa_postgres.integration.test.js',
+  ]),
+});
+
+export function integrationTestPlan({
+  focusedGoogleRegistration = false,
+  focusedLegacySchema = false,
+  focusedIdentity = false,
+} = {}) {
+  if (focusedGoogleRegistration) {
+    return [integrationTestGroups.stagingGoogleRegistration];
+  }
+  if (focusedLegacySchema) {
+    return [Object.freeze([
+      'backend/test/schema_legacy_startup.integration.test.js',
+    ])];
+  }
+  if (focusedIdentity) {
+    return [integrationTestGroups.identity];
+  }
+  return [
+    integrationTestGroups.foundation,
+    integrationTestGroups.stagingGoogleRegistration,
+    integrationTestGroups.listingAi,
+    integrationTestGroups.identity,
+    integrationTestGroups.mfa,
+  ];
+}
+
 const requiredPrograms = Object.freeze([
   'postgres',
   'initdb',
@@ -201,6 +249,11 @@ export async function runLocalPostgresIntegration({
   const focusedIdentity = environment.SIT_POSTGRES_FOCUSED_IDENTITY === '1';
   const focusedGoogleRegistration = environment.SIT_POSTGRES_FOCUSED_GOOGLE === '1';
   const focusedLegacySchema = environment.SIT_POSTGRES_FOCUSED_LEGACY === '1';
+  const integrationGroups = integrationTestPlan({
+    focusedGoogleRegistration,
+    focusedLegacySchema,
+    focusedIdentity,
+  });
 
   const onSignal = (signal) => {
     receivedSignal = signal;
@@ -267,27 +320,9 @@ export async function runLocalPostgresIntegration({
       '--test',
       ...files,
     ], { env: testEnvironment, inherit: inheritTestOutput });
-    if (focusedGoogleRegistration) {
-      await runTests(['backend/test/staging_google_registration.integration.test.js']);
-    } else if (focusedLegacySchema) {
-      await runTests(['backend/test/schema_legacy_startup.integration.test.js']);
-    } else if (focusedIdentity) {
-      await runTests(['backend/test/identity_verification_postgres.integration.test.js']);
-    } else {
-      // These suites initialize the same isolated database. Keep each group
-      // sequential so CREATE EXTENSION/migration setup cannot race itself.
-      await runTests([
-        'backend/test/postgres_foundation.integration.test.js',
-        'backend/test/foreign_key_integrity.integration.test.js',
-      ]);
-      await runTests(['backend/test/staging_google_registration.integration.test.js']);
-      await runTests([
-        'backend/test/listing_ai_lifetime_budget_migration.integration.test.js',
-        'backend/test/listing_ai_attempt_postgres.integration.test.js',
-      ]);
-      await runTests(['backend/test/identity_verification_postgres.integration.test.js']);
-      await runTests(['backend/test/mfa_postgres.integration.test.js']);
-    }
+    // These suites initialize the same isolated database. Keep each group
+    // sequential so CREATE EXTENSION/migration setup cannot race itself.
+    for (const group of integrationGroups) await runTests(group);
   } catch (error) {
     let postgresDetail = '';
     try {
@@ -361,21 +396,7 @@ export async function runLocalPostgresIntegration({
     postgresMajor,
     host: '127.0.0.1',
     database: integrationDatabaseName,
-    integrationTests: [
-      ...(focusedGoogleRegistration
-        ? ['backend/test/staging_google_registration.integration.test.js']
-        : focusedLegacySchema
-        ? ['backend/test/schema_legacy_startup.integration.test.js']
-        : focusedIdentity
-        ? ['backend/test/identity_verification_postgres.integration.test.js']
-        : [
-          'backend/test/postgres_foundation.integration.test.js',
-          'backend/test/foreign_key_integrity.integration.test.js',
-          'backend/test/staging_google_registration.integration.test.js',
-          'backend/test/identity_verification_postgres.integration.test.js',
-          'backend/test/mfa_postgres.integration.test.js',
-        ]),
-    ],
+    integrationTests: integrationGroups.flat(),
   });
 }
 

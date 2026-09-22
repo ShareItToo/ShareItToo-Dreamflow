@@ -99,6 +99,19 @@ test('allocates an actually bindable loopback port', async () => {
 
 test('runs readiness, isolated database and integration before guaranteed cleanup', async (t) => {
   const fixture = await fakeFixture(t);
+  const expectedIntegrationGroups = [
+    [
+      'backend/test/postgres_foundation.integration.test.js',
+      'backend/test/foreign_key_integrity.integration.test.js',
+    ],
+    ['backend/test/staging_google_registration.integration.test.js'],
+    [
+      'backend/test/listing_ai_lifetime_budget_migration.integration.test.js',
+      'backend/test/listing_ai_attempt_postgres.integration.test.js',
+    ],
+    ['backend/test/identity_verification_postgres.integration.test.js'],
+    ['backend/test/mfa_postgres.integration.test.js'],
+  ];
   const result = await runLocalPostgresIntegration({
     repositoryRoot: fixture.root,
     postgresBinDir: fixture.bin,
@@ -111,12 +124,7 @@ test('runs readiness, isolated database and integration before guaranteed cleanu
     postgresMajor: 16,
     host: '127.0.0.1',
     database: 'sit_integration',
-    integrationTests: [
-      'backend/test/postgres_foundation.integration.test.js',
-      'backend/test/foreign_key_integrity.integration.test.js',
-      'backend/test/identity_verification_postgres.integration.test.js',
-      'backend/test/mfa_postgres.integration.test.js',
-    ],
+    integrationTests: expectedIntegrationGroups.flat(),
   });
   assert.deepEqual(await readdir(fixture.temporaryBase), []);
 
@@ -128,9 +136,21 @@ test('runs readiness, isolated database and integration before guaranteed cleanu
   );
   assert.match(log, /pg_isready\|-h 127\.0\.0\.1 .* -d postgres/u);
   assert.match(log, /createdb\|-h 127\.0\.0\.1 .* sit_integration/u);
-  assert.match(log, /node\|--throw-deprecation --import \.\/backend\/test_setup\.js --test-concurrency=1 --test backend\/test\/postgres_foundation\.integration\.test\.js backend\/test\/foreign_key_integrity\.integration\.test\.js\|postgresql:\/\/sit_runner@127\.0\.0\.1:/u);
-  assert.match(log, /node\|--throw-deprecation --import \.\/backend\/test_setup\.js --test-concurrency=1 --test backend\/test\/identity_verification_postgres\.integration\.test\.js\|postgresql:\/\/sit_runner@127\.0\.0\.1:/u);
-  assert.match(log, /node\|--throw-deprecation --import \.\/backend\/test_setup\.js --test-concurrency=1 --test backend\/test\/mfa_postgres\.integration\.test\.js\|postgresql:\/\/sit_runner@127\.0\.0\.1:/u);
+  const nodeCommands = log
+    .split(/\r?\n/u)
+    .filter((line) => line.startsWith('node|'))
+    .map((line) => line.split('|')[1]);
+  assert.deepEqual(
+    nodeCommands,
+    expectedIntegrationGroups.map((group) => [
+      '--throw-deprecation',
+      '--import',
+      './backend/test_setup.js',
+      '--test-concurrency=1',
+      '--test',
+      ...group,
+    ].join(' ')),
+  );
   assert.match(log, /pg_ctl\|.* -m fast stop\|/u);
 });
 
