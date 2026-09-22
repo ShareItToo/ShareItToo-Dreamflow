@@ -543,6 +543,35 @@ function greenMountTupleMatches(actual, expected) {
   });
 }
 
+function greenConfiguredPortBindings(record, failureCode) {
+  const portBindings = record?.HostConfig?.PortBindings;
+  if (portBindings === undefined || portBindings === null) return [];
+  if (typeof portBindings !== 'object' || Array.isArray(portBindings)) fail(failureCode);
+  return Object.entries(portBindings).flatMap(([containerPort, bindings]) => {
+    if (!Array.isArray(bindings)) fail(failureCode);
+    return bindings.map((binding) => {
+      if (!binding || typeof binding !== 'object' || Array.isArray(binding)
+          || typeof binding.HostIp !== 'string' || typeof binding.HostPort !== 'string') fail(failureCode);
+      return { containerPort, HostIp: binding.HostIp, HostPort: binding.HostPort };
+    });
+  });
+}
+
+function greenActiveNetworkPortBindings(record, failureCode) {
+  const ports = record?.NetworkSettings?.Ports;
+  if (ports === undefined || ports === null) return [];
+  if (typeof ports !== 'object' || Array.isArray(ports)) fail(failureCode);
+  return Object.entries(ports).flatMap(([containerPort, bindings]) => {
+    if (bindings === null) return [];
+    if (!Array.isArray(bindings)) fail(failureCode);
+    return bindings.filter(Boolean).map((binding) => {
+      if (typeof binding !== 'object' || Array.isArray(binding)
+          || typeof binding.HostIp !== 'string' || typeof binding.HostPort !== 'string') fail(failureCode);
+      return { containerPort, HostIp: binding.HostIp, HostPort: binding.HostPort };
+    });
+  });
+}
+
 export function assertGreenContainerInventory(inventory, expectedSourceSchema = greenTarget.sourceSchema, expectedPrePromotionImage, runtimeConfig) {
   exactKeys(inventory, ['api', 'database', 'network', 'providerNetwork', 'uploadsVolume', 'schema'], 'green_inventory_shape_invalid');
   if (inventory.api.name !== greenTarget.apiContainer
@@ -583,11 +612,11 @@ export function assertGreenFinalContainerReadback({
   expectedMounts = plan?.finalMounts,
   expectedCandidate = false,
   allowAnonymousUploadsVolume = false,
-  expectedPortCount = 0,
 } = {}) {
   if (!record || !plan) fail('green_final_inventory_required');
   const name = String(record.Name ?? '').replace(/^\//u, '');
-  const ports = Object.values(record.NetworkSettings?.Ports ?? {}).flat().filter(Boolean);
+  const ports = greenActiveNetworkPortBindings(record, 'green_final_inventory_mismatch');
+  const configuredPortBindings = greenConfiguredPortBindings(record, 'green_final_inventory_mismatch');
   const networks = Object.keys(record.NetworkSettings?.Networks ?? {}).sort();
   const mounts = record.Mounts ?? [];
   const configuredMounts = Array.isArray(expectedMounts) ? expectedMounts : [];
@@ -597,13 +626,14 @@ export function assertGreenFinalContainerReadback({
   assertGreenRuntimeEnvironmentReadback(env);
   if (name !== expectedName
       || record.State?.Running !== true
-      || ports.length !== expectedPortCount
+      || ports.length !== 0
       || networks.join('|') !== [...expectedNetworks].sort().join('|')
       || record.Config?.Labels?.['com.shareittoo.sit.green'] !== 'true'
       || record.Config?.Labels?.['com.shareittoo.sit.green.run_id'] !== expectedRunId
       || record.Config?.Image !== `${plan.runtime.image}@${plan.runtime.digest}`
       || record.Config?.User !== 'shareittoo'
       || !(record.HostConfig?.GroupAdd ?? []).includes('65532')
+      || configuredPortBindings.length !== 0
       || destinations.join('|') !== configuredMounts.map((mount) => mount.destination).sort().join('|')
       || env.PAYMENT_TRANSPORT !== 'memory'
       || env.STRIPE_LIVEMODE !== 'false'
@@ -660,21 +690,29 @@ export function assertGreenSuccessorPreStartReadback({
   expectedMounts = plan?.finalMounts,
   expectedCandidate = false,
   allowAnonymousUploadsVolume = false,
-  expectedPortCount = 0,
 } = {}) {
   if (!record || !plan || typeof record.Id !== 'string' || (expectedId && record.Id !== expectedId)) fail('green_successor_identity_invalid');
   const networks = Object.keys(record.NetworkSettings?.Networks ?? {}).sort();
-  const ports = Object.values(record.NetworkSettings?.Ports ?? {}).flat().filter(Boolean);
+  const ports = greenActiveNetworkPortBindings(record, 'green_successor_prestart_network_invalid');
+  const configuredBindings = greenConfiguredPortBindings(record, 'green_successor_prestart_network_invalid');
+  const expectedBindings = expectedCandidate
+    ? [{ containerPort: '8080/tcp', HostIp: '127.0.0.1', HostPort: '18082' }]
+    : [];
   if (record.State?.Running !== false
-      || ports.length !== expectedPortCount
+      || ports.length !== 0
+      || configuredBindings.length !== expectedBindings.length
+      || configuredBindings.some((binding, index) => binding.containerPort !== expectedBindings[index].containerPort
+        || binding.HostIp !== expectedBindings[index].HostIp
+        || binding.HostPort !== expectedBindings[index].HostPort)
       || !Array.isArray(expectedNetworks)
       || networks.join('|') !== [...expectedNetworks].sort().join('|')) fail('green_successor_prestart_network_invalid');
   const finalShape = {
     ...record,
+    HostConfig: { ...(record.HostConfig ?? {}), PortBindings: null },
     State: { ...(record.State ?? {}), Running: true },
     NetworkSettings: { ...(record.NetworkSettings ?? {}), Networks: Object.fromEntries(expectedNetworks.map((network) => [network, {}])) },
   };
-  assertGreenFinalContainerReadback({ record: finalShape, plan, expectedName, expectedNetworks, expectedRunId, expectedMounts, expectedCandidate, allowAnonymousUploadsVolume, expectedPortCount });
+  assertGreenFinalContainerReadback({ record: finalShape, plan, expectedName, expectedNetworks, expectedRunId, expectedMounts, expectedCandidate, allowAnonymousUploadsVolume });
   return true;
 }
 
@@ -1423,7 +1461,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
         const candidateReadback = await command('docker', ['inspect', '--format', '{{json .}}', candidateId], { phase: 'candidate_prestart_identity_readback', env, allowFailure: true });
         if (greenCommandResultFailed(candidateReadback)) fail('green_candidate_prestart_identity_invalid');
         const candidateRecord = parseReadbackJson(candidateReadback.stdout, 'green_candidate_prestart_identity_invalid');
-        assertGreenSuccessorPreStartReadback({ record: candidateRecord, plan, expectedId: candidateId, expectedNetworks: [plan.isolated.network, plan.target.providerNetwork], expectedName: plan.isolated.candidate, expectedMounts: plan.candidateMounts, expectedCandidate: true, allowAnonymousUploadsVolume: true, expectedPortCount: 1 });
+        assertGreenSuccessorPreStartReadback({ record: candidateRecord, plan, expectedId: candidateId, expectedNetworks: [plan.isolated.network, plan.target.providerNetwork], expectedName: plan.isolated.candidate, expectedMounts: plan.candidateMounts, expectedCandidate: true, allowAnonymousUploadsVolume: true });
       }
       if (entry.phase === 'final_provider_network_attach') {
         const finalReadback = await command('docker', ['inspect', '--format', '{{json .}}', finalApiId], { phase: 'final_prestart_identity_readback', env, allowFailure: true });

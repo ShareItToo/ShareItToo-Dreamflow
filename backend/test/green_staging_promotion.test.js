@@ -488,9 +488,9 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     const calls = [];
     const candidateRecord = {
       Id: candidateId, Name: `/${plan.isolated.candidate}`, State: { Running: false },
-      NetworkSettings: { Ports: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] }, Networks: { [plan.isolated.network]: {}, [greenTarget.providerNetwork]: {} } },
+      NetworkSettings: { Ports: {}, Networks: { [plan.isolated.network]: {}, [greenTarget.providerNetwork]: {} } },
       Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': plan.target.runId, 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
-      HostConfig: { GroupAdd: ['65532'] }, Mounts: [...finalMounts.map((mount) => mount.Destination === '/data/uploads' ? { ...mount, Name: 'anonymous-uploads-id' } : mount), { Type: 'bind', Source: syntheticSandboxCredentialFilePath, Destination: '/run/secrets/synthetic-sandbox-user-password', RW: false }],
+      HostConfig: { GroupAdd: ['65532'], PortBindings: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] } }, Mounts: [...finalMounts.map((mount) => mount.Destination === '/data/uploads' ? { ...mount, Name: 'anonymous-uploads-id' } : mount), { Type: 'bind', Source: syntheticSandboxCredentialFilePath, Destination: '/run/secrets/synthetic-sandbox-user-password', RW: false }],
     };
     const fake = async (command, args, options = {}) => {
       calls.push({ command, args, phase: options.phase, env: options.env });
@@ -767,6 +767,7 @@ test('final readback is authoritative for no-port Green routing, mounts, image a
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Config: { ...record.Config, Image: plan.runtime.image } }, plan }), /green_final_inventory_mismatch/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount, index) => index === 1 ? { Destination: mount.Destination, RW: undefined } : mount) }, plan }), /green_mount_rw_readback_invalid/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, NetworkSettings: { ...record.NetworkSettings, Ports: { '8080/tcp': [{ HostPort: '18082' }] } } }, plan }), /green_final_inventory_mismatch/u);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, HostConfig: { ...record.HostConfig, PortBindings: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] } } }, plan }), /green_final_inventory_mismatch/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: [...record.Mounts, { Type: 'bind', Source: '/wrong/extra', Destination: '/extra', RW: false }] }, plan }), /green_final_(?:inventory_mismatch|mount_inventory_mismatch)/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Source: '/wrong/source' } : mount) }, plan }), /green_final_mount_inventory_mismatch/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Type: 'volume', Name: 'foreign-secret-volume', Source: undefined } : mount) }, plan }), /green_final_mount_inventory_mismatch/u);
@@ -1046,11 +1047,19 @@ test('successor pre-start validation rejects wrong User, Env and mounts', () => 
   const candidateRecord = {
     ...record,
     Id: '8'.repeat(64), Name: `/${plan.isolated.candidate}`,
-    NetworkSettings: { Ports: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] }, Networks: { [plan.isolated.network]: {}, [greenTarget.providerNetwork]: {} } },
+    NetworkSettings: { Ports: { '8080/tcp': null }, Networks: { [plan.isolated.network]: {}, [greenTarget.providerNetwork]: {} } },
     Config: { ...record.Config, Labels: { ...record.Config.Labels, 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } },
     Mounts: [...finalMounts.map((mount) => mount.Destination === '/data/uploads' ? { ...mount, Name: 'anonymous-uploads-id' } : mount), { Type: 'bind', Source: syntheticSandboxCredentialFilePath, Destination: '/run/secrets/synthetic-sandbox-user-password', RW: false }],
   };
-  assert.equal(assertGreenSuccessorPreStartReadback({ record: candidateRecord, plan, expectedId: candidateRecord.Id, expectedNetworks: [plan.isolated.network, greenTarget.providerNetwork], expectedName: plan.isolated.candidate, expectedMounts: plan.candidateMounts, expectedCandidate: true, allowAnonymousUploadsVolume: true, expectedPortCount: 1 }), true);
+  candidateRecord.HostConfig = { ...record.HostConfig, PortBindings: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] } };
+  assert.equal(assertGreenSuccessorPreStartReadback({ record: candidateRecord, plan, expectedId: candidateRecord.Id, expectedNetworks: [plan.isolated.network, greenTarget.providerNetwork], expectedName: plan.isolated.candidate, expectedMounts: plan.candidateMounts, expectedCandidate: true, allowAnonymousUploadsVolume: true }), true);
+  for (const invalidBinding of [
+    { '8080/tcp': [{ HostIp: '0.0.0.0', HostPort: '18082' }] },
+    { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18081' }] },
+    { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }], '9090/tcp': [{ HostIp: '127.0.0.1', HostPort: '19090' }] },
+  ]) {
+    assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...candidateRecord, HostConfig: { ...candidateRecord.HostConfig, PortBindings: invalidBinding } }, plan, expectedId: candidateRecord.Id, expectedNetworks: [plan.isolated.network, greenTarget.providerNetwork], expectedName: plan.isolated.candidate, expectedMounts: plan.candidateMounts, expectedCandidate: true, allowAnonymousUploadsVolume: true }), /green_successor_prestart_network_invalid/u);
+  }
   assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...record, Config: { ...record.Config, User: 'nobody' } }, plan, expectedId: record.Id }), /green_final_inventory_mismatch/u);
   assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...record, Config: { ...record.Config, Env: record.Config.Env.map((entry) => entry === 'PAYMENT_TRANSPORT=memory' ? 'PAYMENT_TRANSPORT=stripe' : entry) } }, plan, expectedId: record.Id }), /green_prestart|green_final|green_runtime/u);
   assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Source: '/foreign/secret' } : mount) }, plan, expectedId: record.Id }), /green_final_mount_inventory_mismatch/u);
