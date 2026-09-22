@@ -134,6 +134,10 @@ discover a mechanically stale source hash.
   actually used: title or issuing body, direct URL or exact repository/Drive
   path, publication/version/effective date, access date and the supported
   claim. Never invent a citation or list an unopened source as evidence.
+- A Gemini Workspace citation chip or bare attachment filename is not a source
+  locator. Every Drive source needs its exact `drive.google.com` URL or a
+  verified full Drive path in the register; otherwise the gate is incomplete
+  and cannot pass.
 - Treat undated, cached, draft, historical, prior-AI, screenshot-only and older
   Drive claims as stale until currentness is proven. If freshness cannot be
   verified, label the point `NOT VERIFIED` or `STALE` and never return `PASS`.
