@@ -631,7 +631,7 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
     results.push({ phase: renameResult.phase, ok: renameResult.ok, ...(renameResult.ok ? {} : { code: renameResult.code }) });
     ok &&= renameResult.ok;
     attemptedRestart = true;
-    const startResult = await safeCommand(command, ['start', manifest.apiContainer], 'rollback_restore_start', commandEnv);
+    const startResult = await safeCommand(command, ['start', originalApi.Id], 'rollback_restore_start', commandEnv);
     results.push({ phase: startResult.phase, ok: startResult.ok, ...(startResult.ok ? {} : { code: startResult.code }) });
     if (ok || !startResult.ok) {
       try {
@@ -657,7 +657,7 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
   }
   if (topologySafe && !sealed && (currentStopped || stopStateUnknown)) {
     attemptedRestart = true;
-    const startResult = await safeCommand(command, ['start', manifest.apiContainer], 'rollback_original_start', commandEnv);
+    const startResult = await safeCommand(command, ['start', originalApi.Id], 'rollback_original_start', commandEnv);
     results.push({ phase: startResult.phase, ok: startResult.ok, ...(startResult.ok ? {} : { code: startResult.code }) });
     if (ok || !startResult.ok) {
       try {

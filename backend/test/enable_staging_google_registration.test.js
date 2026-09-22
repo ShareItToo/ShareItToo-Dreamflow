@@ -122,6 +122,7 @@ function statefulDockerExecutor(fx, {
   stopMode = null,
   createMode = null,
   renameMode = null,
+  rebindForeignOnStart = false,
   createMutation = null,
 } = {}) {
   const db = { Name: `/${fx.manifest.databaseContainer}`, State: { Running: true }, Config: { Image: `postgres:16-alpine@sha256:${'c'.repeat(64)}`, Env: ['POSTGRES_DB=shareittoo_green', 'POSTGRES_USER=shareittoo_green'] } };
@@ -139,6 +140,13 @@ function statefulDockerExecutor(fx, {
     const value = containers.get(name);
     if (!value) fail('container_not_found', 'inspect');
     return value;
+  };
+  const inspectContainerReference = (reference) => {
+    const byName = containers.get(reference);
+    if (byName) return byName;
+    const byId = [...containers.values()].find((container) => container.Id === reference);
+    if (!byId) fail('container_not_found', 'start');
+    return byId;
   };
   const optionValue = (args, name) => {
     const index = args.indexOf(name);
@@ -295,6 +303,8 @@ function statefulDockerExecutor(fx, {
       }
       if (createMutation === 'security-drift') replaceOption('--security-opt', 'seccomp=unconfined');
       if (createMutation === 'memory-drift') replaceOption('--memory', '99');
+      if (createMutation === 'cap-add-drift') replaceOption('--cap-add', 'CHOWN');
+      if (createMutation === 'memory-swap-drift') replaceOption('--memory-swap', '256');
       const valueOptions = new Set(['--name', '--env-file', '--restart', '--restart-max-retries', '--user', '--workdir', '--entrypoint', '--security-opt', '--cap-add', '--cap-drop', '--stop-timeout', '--stop-signal', '--shm-size', '--dns', '--dns-search', '--add-host', '--ipc', '--pid', '--userns', '--log-driver', '--log-opt', '--memory', '--memory-swap', '--cpu-shares', '--cpu-quota', '--cpu-period', '--cpus', '--cpuset-cpus', '--cpuset-mems', '--pids-limit', '--device', '--ulimit', '--tmpfs', '--cgroupns', '--runtime', '--isolation', '--health-cmd', '--health-interval', '--health-timeout', '--health-retries', '--health-start-period', '--health-start-interval', '--group-add', '--label', '--mount', '--hostname', '--network']);
       const booleanOptions = new Set(['--privileged', '--read-only', '--no-new-privileges', '--init', '--oom-kill-disable', '--rm']);
       let cursor = 1;
@@ -333,21 +343,81 @@ function statefulDockerExecutor(fx, {
         return { Type: 'bind', Name: null, Source: fields.src, Destination: destination, RW: !readOnly };
       });
       const securityOpt = optionValues('--security-opt');
-      const source = {
-        Id: 'b'.repeat(64), Name: `/${name}`, State: { Running: false },
-        Config: {
-          Image: imageArg, Env: env, Cmd: effectiveArgs.slice(networkIndex + 3), Entrypoint: optionFirst('--entrypoint') ? [optionFirst('--entrypoint')] : null,
-          WorkingDir: optionFirst('--workdir') ?? '', User: optionFirst('--user') ?? '', Hostname: optionFirst('--hostname') ?? 'b'.repeat(12),
-          Tty: false, OpenStdin: false, Labels: labels,
-        },
-        HostConfig: {
-          GroupAdd: optionValues('--group-add'), RestartPolicy: { Name: optionFirst('--restart') ?? '', MaximumRetryCount: Number(optionFirst('--restart-max-retries') ?? 0) },
-          PortBindings: {}, NetworkMode: networkName, SecurityOpt: securityOpt, NoNewPrivileges: securityOpt.includes('no-new-privileges'),
-          Privileged: effectiveArgs.includes('--privileged'), ReadonlyRootfs: effectiveArgs.includes('--read-only'), Init: effectiveArgs.includes('--init'),
-          Memory: Number(optionFirst('--memory') ?? 0),
-        },
-        Mounts: parsedMounts, NetworkSettings: { Ports: {}, Networks: { [networkName]: {} } },
+      const source = structuredClone(fx.api);
+      source.Id = 'b'.repeat(64);
+      source.Name = `/${name}`;
+      source.State = { Running: false };
+      source.Config.Image = imageArg;
+      source.Config.Env = env;
+      source.Config.Cmd = effectiveArgs.slice(networkIndex + 3);
+      source.Config.WorkingDir = optionFirst('--workdir') ?? '';
+      source.Config.User = optionFirst('--user') ?? '';
+      source.Config.Hostname = optionFirst('--hostname') ?? 'b'.repeat(12);
+      source.Config.Entrypoint = optionFirst('--entrypoint') === null ? null : [optionFirst('--entrypoint')];
+      if (optionFirst('--stop-signal') !== null) source.Config.StopSignal = optionFirst('--stop-signal');
+      source.Config.Labels = labels;
+      source.HostConfig.GroupAdd = optionValues('--group-add');
+      source.HostConfig.RestartPolicy = { Name: optionFirst('--restart') ?? '', MaximumRetryCount: Number(optionFirst('--restart-max-retries') ?? 0) };
+      source.HostConfig.NetworkMode = networkName;
+      source.HostConfig.SecurityOpt = securityOpt;
+      source.HostConfig.NoNewPrivileges = effectiveArgs.includes('--no-new-privileges') || securityOpt.includes('no-new-privileges');
+      source.HostConfig.CapAdd = optionValues('--cap-add');
+      source.HostConfig.CapDrop = optionValues('--cap-drop');
+      source.HostConfig.Privileged = effectiveArgs.includes('--privileged');
+      source.HostConfig.ReadonlyRootfs = effectiveArgs.includes('--read-only');
+      source.HostConfig.Init = effectiveArgs.includes('--init');
+      source.HostConfig.AutoRemove = effectiveArgs.includes('--rm');
+      source.HostConfig.StopTimeout = Number(optionFirst('--stop-timeout') ?? 0);
+      source.HostConfig.ShmSize = Number(optionFirst('--shm-size') ?? 0);
+      source.HostConfig.Dns = optionValues('--dns');
+      source.HostConfig.DnsSearch = optionValues('--dns-search');
+      source.HostConfig.ExtraHosts = optionValues('--add-host');
+      source.HostConfig.IpcMode = optionFirst('--ipc') ?? '';
+      source.HostConfig.PidMode = optionFirst('--pid') ?? '';
+      source.HostConfig.UsernsMode = optionFirst('--userns') ?? '';
+      source.HostConfig.CgroupnsMode = optionFirst('--cgroupns') ?? '';
+      source.HostConfig.Runtime = optionFirst('--runtime') ?? '';
+      source.HostConfig.Isolation = optionFirst('--isolation') ?? '';
+      source.HostConfig.Memory = Number(optionFirst('--memory') ?? 0);
+      source.HostConfig.MemorySwap = Number(optionFirst('--memory-swap') ?? 0);
+      source.HostConfig.CpuShares = Number(optionFirst('--cpu-shares') ?? 0);
+      source.HostConfig.CpuQuota = Number(optionFirst('--cpu-quota') ?? 0);
+      source.HostConfig.CpuPeriod = Number(optionFirst('--cpu-period') ?? 0);
+      source.HostConfig.NanoCpus = optionFirst('--cpus') === null ? 0 : Number(optionFirst('--cpus')) * 1e9;
+      source.HostConfig.CpusetCpus = optionFirst('--cpuset-cpus') ?? '';
+      source.HostConfig.CpusetMems = optionFirst('--cpuset-mems') ?? '';
+      source.HostConfig.PidsLimit = optionFirst('--pids-limit') === null ? null : Number(optionFirst('--pids-limit'));
+      source.HostConfig.Devices = optionValues('--device').map((value) => {
+        const [pathOnHost, pathInContainer, cgroupPermissions = ''] = value.split(':');
+        return { PathOnHost: pathOnHost, PathInContainer: pathInContainer, CgroupPermissions: cgroupPermissions };
+      });
+      source.HostConfig.Ulimits = optionValues('--ulimit').map((value) => {
+        const [nameValue, limits] = value.split('=');
+        const [soft, hard] = limits.split(':');
+        return { Name: nameValue, Soft: Number(soft), Hard: Number(hard) };
+      });
+      source.HostConfig.OomKillDisable = effectiveArgs.includes('--oom-kill-disable');
+      source.HostConfig.Tmpfs = Object.fromEntries(optionValues('--tmpfs').map((value) => {
+        const separator = value.indexOf(':');
+        return separator < 0 ? [value, ''] : [value.slice(0, separator), value.slice(separator + 1)];
+      }));
+      source.HostConfig.LogConfig = {
+        Type: optionFirst('--log-driver') ?? '',
+        Config: Object.fromEntries(optionValues('--log-opt').map((value) => {
+          const separator = value.indexOf('=');
+          return separator < 0 ? [value, ''] : [value.slice(0, separator), value.slice(separator + 1)];
+        })),
       };
+      if (source.Config.Healthcheck) {
+        if (optionFirst('--health-cmd') !== null) source.Config.Healthcheck.Test = ['CMD-SHELL', optionFirst('--health-cmd')];
+        source.Config.Healthcheck.Interval = Number(optionFirst('--health-interval') ?? 0);
+        source.Config.Healthcheck.Timeout = Number(optionFirst('--health-timeout') ?? 0);
+        source.Config.Healthcheck.Retries = Number(optionFirst('--health-retries') ?? 0);
+        source.Config.Healthcheck.StartPeriod = Number(optionFirst('--health-start-period') ?? 0);
+        source.Config.Healthcheck.StartInterval = Number(optionFirst('--health-start-interval') ?? 0);
+      }
+      source.Mounts = parsedMounts;
+      source.NetworkSettings = { Ports: {}, Networks: { [networkName]: {} } };
       if (createMode === 'mismatched-registration') {
         source.Config.Env = source.Config.Env.map((entry) => entry.startsWith(`${registrationAllowlistKey}=`) ? `${registrationAllowlistKey}=${'c'.repeat(64)}=other-user` : entry);
       }
@@ -373,7 +443,20 @@ function statefulDockerExecutor(fx, {
     }
     if (operation === 'start') {
       if (args.length !== 2) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
-      const container = inspectContainer(args[1]);
+      if (rebindForeignOnStart && options.phase === 'rollback_restore_start' && args[1] === fx.manifest.apiContainer && containers.has(fx.manifest.apiContainer)) {
+        const original = containers.get(fx.manifest.apiContainer);
+        containers.delete(fx.manifest.apiContainer);
+        const sealedName = `${fx.manifest.apiContainer}-google-registration-rollback-${revision.slice(0, 12)}`;
+        original.Name = `/${sealedName}`;
+        containers.set(sealedName, original);
+        const foreign = structuredClone(fx.api);
+        foreign.Id = 'f'.repeat(64);
+        foreign.Name = `/${fx.manifest.apiContainer}`;
+        foreign.State = { Running: false };
+        foreign.Config.Image = `${fx.image}@sha256:${'f'.repeat(64)}`;
+        containers.set(fx.manifest.apiContainer, foreign);
+      }
+      const container = inspectContainerReference(args[1]);
       container.State.Running = true;
       fx.state.stopped = false;
       return { stdout: '', code: 0 };
@@ -467,6 +550,25 @@ test('failure after recreate restores the prior env and container deterministica
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
+test('rollback starts the captured original ID even when the mutable name is rebound', async () => {
+  const fx = await fixture();
+  try {
+    const fake = statefulDockerExecutor(fx, { failOperation: 'replacement-startup', rebindForeignOnStart: true });
+    await assert.rejects(runStagingGoogleRegistrationEnable({
+      manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+      command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+    }), (error) => {
+      assert.equal(error.code, 'replacement_public_runtime_probe_failed');
+      assert.equal(error.rollback.restored, true);
+      assert.deepEqual(fake.calls.find((call) => call.phase === 'rollback_restore_start').args, ['start', fx.api.Id]);
+      return true;
+    });
+    const restored = fake.state.containers.get(fx.manifest.apiContainer);
+    assert.equal(restored.Id, fx.api.Id);
+    assert.equal(restored.State.Running, true);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
 test('negative private mapping and target checks fail closed', async () => {
   const cases = [
     { name: 'multiple mappings', mapping: `${mappingLine()}${'c'.repeat(64)}=second-user\n`, code: 'mapping_plaintext_or_shape_invalid' },
@@ -530,6 +632,7 @@ test('wrong schema or image and stop/rename interruption never produce a false P
       assert.equal(error.code, 'seal_current_api_failed');
       assert.equal(error.rollback.restored, true);
       assert.ok(error.rollback.results.some((entry) => entry.phase === 'rollback_original_start' && entry.ok));
+      assert.deepEqual(fake.calls.find((call) => call.phase === 'rollback_original_start').args, ['start', rename.api.Id]);
       return true;
     });
   } finally { await rm(rename.root, { recursive: true, force: true }); }
@@ -541,6 +644,7 @@ test('wrong schema or image and stop/rename interruption never produce a false P
       assert.equal(error.code, 'create_replacement_api_failed');
       assert.equal(error.rollback.restored, true);
       assert.ok(error.rollback.results.some((entry) => entry.phase === 'rollback_api_readback' && entry.ok));
+      assert.deepEqual(fake.calls.find((call) => call.phase === 'rollback_restore_start').args, ['start', create.api.Id]);
       return true;
     });
   } finally { await rm(create.root, { recursive: true, force: true }); }
@@ -610,6 +714,9 @@ test('wrong schema or image and stop/rename interruption never produce a false P
       assert.ok(fake.calls.some((call) => call.phase === 'rollback_rename_current_readback'));
       assert.ok(fake.calls.some((call) => call.phase === 'rollback_rename_sealed_readback'));
       assert.ok(fake.calls.some((call) => call.phase === 'rollback_restore_start'));
+      assert.deepEqual(fake.calls.find((call) => call.phase === 'rollback_restore_start').args, ['start', renameLoss.api.Id]);
+      assert.equal(fake.state.containers.get(renameLoss.manifest.apiContainer).Id, renameLoss.api.Id);
+      assert.equal(fake.state.containers.get(renameLoss.manifest.apiContainer).State.Running, true);
       return true;
     });
   } finally { await rm(renameLoss.root, { recursive: true, force: true }); }
@@ -683,6 +790,7 @@ test('stop fail-before and response-loss-after-stop are recovered from real stat
       assert.ok(fake.calls.some((call) => call.phase === 'stop_state_readback'));
       assert.ok(fake.calls.some((call) => call.phase === 'rollback_original_start'));
       assert.ok(fake.calls.some((call) => call.phase === 'rollback_original_readback'));
+      assert.deepEqual(fake.calls.find((call) => call.phase === 'rollback_original_start').args, ['start', inspectFailure.api.Id]);
       return true;
     });
   } finally { await rm(inspectFailure.root, { recursive: true, force: true }); }
@@ -711,6 +819,7 @@ test('stop fail-before and response-loss-after-stop are recovered from real stat
       return true;
     });
     assert.equal(fake.state.containers.get(foreignIdentity.manifest.apiContainer).Id, 'f'.repeat(64));
+    assert.equal(fake.state.containers.get(foreignIdentity.manifest.apiContainer).State.Running, false);
   } finally { await rm(foreignIdentity.root, { recursive: true, force: true }); }
 });
 
@@ -728,6 +837,22 @@ test('resource and env ownership drift fail closed without overwriting concurren
     try {
       const fake = statefulDockerExecutor(fx, { createMutation });
       await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /replacement_config_drift/u);
+      assert.equal(fx.state.api.State.Running, true);
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+  for (const [createMutation, configure, expectedOption] of [
+    ['cap-add-drift', (api) => { api.HostConfig.CapAdd = ['SYS_ADMIN']; }, ['--cap-add', 'SYS_ADMIN']],
+    ['memory-swap-drift', (api) => { api.HostConfig.MemorySwap = 128; }, ['--memory-swap', '128']],
+  ]) {
+    const fx = await fixture();
+    try {
+      configure(fx.api);
+      const fake = statefulDockerExecutor(fx, { createMutation });
+      await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /replacement_config_drift/u);
+      const create = fake.calls.find((call) => call.args[0] === 'create');
+      assert.ok(create);
+      assert.deepEqual(create.args.slice(create.args.indexOf(expectedOption[0]), create.args.indexOf(expectedOption[0]) + 2), expectedOption);
       assert.equal(fx.state.api.State.Running, true);
       assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
     } finally { await rm(fx.root, { recursive: true, force: true }); }

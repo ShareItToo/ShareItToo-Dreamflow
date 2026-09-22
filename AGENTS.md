@@ -37,6 +37,9 @@ discover a mechanically stale source hash.
   nearest authoritative instruction. Add a deterministic test, validator or
   fail-closed guard when the pattern is technically enforceable. Duplicate UI
   output or repeated reporting of one still-open incident remains one finding.
+- Recovery mutations must target the captured immutable provider/container ID,
+  never a mutable name; stateful test executors must model or explicitly reject
+  every accepted security/resource option.
 - Live-tool mentor invariant: after the first live tool defect, stop all live
   retries. Reproduce the defect in an isolated deterministic test, review the
   fix and re-gate it with Sol/Astra before re-execution; never chain unreviewed
