@@ -26,6 +26,11 @@ on:
         required: true
         default: false
         type: boolean
+      expected_publish_commit:
+        description: Full 40-character commit SHA required for an API image publication
+        required: true
+        default: ''
+        type: string
 
 concurrency:
   group: regression-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -287,8 +292,7 @@ jobs:
 
   publish-api-image:
     if: >-
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish_api_image)
+      github.event_name == 'workflow_dispatch' && inputs.publish_api_image
     needs:
       - backend-regression
       - postgres-runner-proof
@@ -300,25 +304,105 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
 
-      - name: Build and publish the verified API image
+      - name: Verify exact manual publication commit
+        env:
+          EXPECTED_PUBLISH_COMMIT: ${{ inputs.expected_publish_commit }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          [[ "$EXPECTED_PUBLISH_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
+            echo 'expected_publish_commit must be a full lowercase 40-character SHA' >&2
+            exit 1
+          }
+          test "$EXPECTED_PUBLISH_COMMIT" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "$GITHUB_SHA^{commit}")" = "$GITHUB_SHA"
+
+      - name: Build, publish and verify the immutable API image
         working-directory: backend
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           REGISTRY_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/shareittoo-api"
           APP_VERSION="0.1.0-${GITHUB_SHA::12}"
           APP_BUILD_TIME="$(git show -s --format=%cI "$GITHUB_SHA")"
           APP_SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
           IMAGE_REF="$REGISTRY_IMAGE:$GITHUB_SHA"
+          BUILD_METADATA_FILE="$RUNNER_TEMP/shareittoo-api-build-metadata.json"
+          REGISTRY_MANIFEST_FILE="$RUNNER_TEMP/shareittoo-api-registry-manifest.json"
+          PUBLICATION_MANIFEST_FILE="$RUNNER_TEMP/shareittoo-api-publication-manifest.json"
 
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          docker build \
+          docker buildx build \
+            --push \
+            --metadata-file "$BUILD_METADATA_FILE" \
             --build-arg "APP_VERSION=$APP_VERSION" \
             --build-arg "APP_COMMIT=$GITHUB_SHA" \
             --build-arg "APP_BUILD_TIME=$APP_BUILD_TIME" \
             --build-arg "APP_SOURCE_URL=$APP_SOURCE_URL" \
             --tag "$IMAGE_REF" \
             .
-          test "$(docker image inspect "$IMAGE_REF" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$GITHUB_SHA"
-          docker push "$IMAGE_REF"
+
+          IMAGE_DIGEST="$(node --input-type=module - "$BUILD_METADATA_FILE" <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { extractBuildPushDigest } from '../tool/validate_ghcr_publication.mjs';
+
+          const metadata = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          process.stdout.write(extractBuildPushDigest(metadata));
+          NODE
+          )"
+          IMAGE_DIGEST_REF="$REGISTRY_IMAGE@$IMAGE_DIGEST"
+
+          docker buildx imagetools inspect --raw "$IMAGE_DIGEST_REF" > "$REGISTRY_MANIFEST_FILE"
+          test -s "$REGISTRY_MANIFEST_FILE"
+          OCI_REVISION="$(docker pull "$IMAGE_DIGEST_REF" >/dev/null && docker image inspect "$IMAGE_DIGEST_REF" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+          node --input-type=module - "$REGISTRY_MANIFEST_FILE" "$REGISTRY_IMAGE" "$IMAGE_DIGEST" "$OCI_REVISION" "$GITHUB_SHA" <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { validateRegistryReadback } from '../tool/validate_ghcr_publication.mjs';
+
+          const [manifestPath, image, digest, ociRevision, expectedCommit] = process.argv.slice(2);
+          const rawManifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+          validateRegistryReadback({
+            image,
+            digest,
+            expectedCommit,
+            ociRevision,
+            readback: {
+              imageRef: `${image}@${digest}`,
+              manifestPresent: Boolean(rawManifest && typeof rawManifest === 'object'),
+              rawManifest,
+            },
+          });
+          NODE
+
+          node --input-type=module - "$PUBLICATION_MANIFEST_FILE" "$GITHUB_SHA" "$IMAGE_REF" "$IMAGE_DIGEST" "$GITHUB_WORKFLOW" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_REPOSITORY" "$GITHUB_EVENT_NAME" <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          import { createPublicationManifest } from '../tool/validate_ghcr_publication.mjs';
+
+          const [output, commit, tag, digest, workflow, runId, runAttempt, repository, eventName] = process.argv.slice(2);
+          const publication = createPublicationManifest({
+            commit,
+            tag,
+            digest,
+            workflow,
+            runId,
+            runAttempt,
+            repository,
+            eventName,
+          });
+          writeFileSync(output, `${JSON.stringify(publication, null, 2)}\n`, { mode: 0o600 });
+          NODE
+
+      - name: Upload immutable API publication manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: shareittoo-api-publication-${{ github.sha }}
+          path: ${{ runner.temp }}/shareittoo-api-publication-manifest.json
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: false

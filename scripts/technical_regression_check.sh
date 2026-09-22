@@ -144,6 +144,8 @@ node --test test/tool/android_gradle9_bridge_floor.test.mjs
 node --test test/tool/android_path_provider_gradle_floor.test.mjs
 node --test test/tool/android_gradle_warning_visibility.test.mjs
 node --test test/tool/codeql_workflow_wiring.test.mjs
+node --check tool/validate_ghcr_publication.mjs
+node --test test/tool/ghcr_publication_wiring.test.mjs
 node --test test/tool/pr7_integration_pilot_candidate_plan_wiring.test.mjs
 node --test test/tool/closed_android_pilot_test_measurement_plan_wiring.test.mjs
 node --test test/tool/validate_android_photo_picker_policy.test.mjs
