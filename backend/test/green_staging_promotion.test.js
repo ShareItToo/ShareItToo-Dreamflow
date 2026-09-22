@@ -43,6 +43,11 @@ import { isMfaProbeContainer, runMfaProbe } from '../ops/staging_controlled_acce
 
 const runtimeCommit = '266f69c21dd61bfcdb212c24a0c8788b172bed9e';
 const opsCommit = '8fecd57018ab10a0c6733531539472e6179a02db';
+const targetNetworkId = '4'.repeat(64);
+const providerNetworkId = '5'.repeat(64);
+const isolatedNetworkId = '1'.repeat(64);
+const isolatedDatabaseId = '2'.repeat(64);
+const candidateId = '3'.repeat(64);
 const targetManifest = {
   kind: 'sit-green-staging-target', schemaVersion: 1, composeProject: 'sit-green',
   greenLabel: 'com.shareittoo.sit.green=true', runId: greenTarget.runId,
@@ -101,7 +106,7 @@ const greenRuntimeEnvEntries = Object.entries({ ...greenBroadPromotionEnvironmen
 const originalApiIdentityRecord = {
   Id: 'api-original-id',
   Config: { Image: greenTarget.prePromotionImage, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DATABASE_URL=postgres://shareittoo_green@green-db/shareittoo_green'] },
-  NetworkSettings: { Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
+  NetworkSettings: { Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
 };
 const stableIdentityValue = (value) => Array.isArray(value)
   ? value.map((entry) => stableIdentityValue(entry))
@@ -493,34 +498,68 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   const payload = { checks: { technicalSandbox: greenTechnicalSandboxHealth, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
   const prePromotionRecord = (image) => ({
     Id: originalApiIdentityRecord.Id, Name: `/${greenTarget.apiContainer}`, State: { Running: true },
-    NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
+    NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
     Config: { Image: image, User: 'shareittoo', Labels: {}, Env: [`DATABASE_URL=${envValues.DATABASE_URL}`] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: sourceMounts.map((mount) => ({ Destination: mount.destination, Type: mount.type, Source: mount.source, Name: mount.volume, RW: !mount.readOnly })),
   });
   const databaseRecord = { Name: `/${greenTarget.databaseContainer}`, State: { Running: true }, Config: { Labels: { 'com.shareittoo.sit.green': 'true' } } };
-  const isolatedNetworkId = '1'.repeat(64);
-  const isolatedDatabaseId = '2'.repeat(64);
-  const candidateId = '3'.repeat(64);
   const fakeRun = async (image, isolatedLedger = currentMigrationLedger, initLog = 'PostgreSQL init process complete; ready for start up.\n', stableSelect2 = '1\n', targetSet = targetContainerSet, foreignBefore = '[]\n', foreignAfter = foreignBefore, candidateFinding = emptyFindingFingerprint, stopAtPhase = 'quiesce_green_api', restoreCode) => {
     const calls = [];
+    let recoveryRecord = null;
     const candidateRecord = {
       Id: candidateId, Name: `/${plan.isolated.candidate}`, State: { Running: false },
-      NetworkSettings: { Ports: {}, Networks: { [plan.isolated.network]: {}, [greenTarget.providerNetwork]: {} } },
+      NetworkSettings: { Ports: {}, Networks: { [plan.isolated.network]: { NetworkID: isolatedNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
       Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': plan.target.runId, 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
       HostConfig: { GroupAdd: ['65532'], PortBindings: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] } }, Mounts: [...finalMounts.map((mount) => mount.Destination === '/data/uploads' ? { ...mount, Name: 'anonymous-uploads-id' } : mount), { Type: 'bind', Source: syntheticSandboxCredentialFilePath, Destination: '/run/secrets/synthetic-sandbox-user-password', RW: false }],
     };
+    const recoveryFinalRecord = (running = false, attached = false) => ({
+      Id: 'a'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: running },
+      NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, ...(attached ? { [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } : {}) } },
+      Config: { ...candidateRecord.Config, Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': plan.target.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId } },
+      HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
+    });
     const fake = async (command, args, options = {}) => {
       calls.push({ command, args, phase: options.phase, env: options.env });
       const phase = options.phase;
+      if (phase.startsWith('recovery_')) {
+        const recoveryPhase = phase.slice('recovery_'.length);
+        if (recoveryPhase === 'canonical_schema_readback') return { stdout: '095_staging_google_registration_replays.up.sql\n' };
+        if (recoveryPhase === 'canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
+        if (recoveryPhase === 'successor_identity_readback') {
+          if (args.at(-1) === greenTarget.apiContainer && !recoveryRecord) return { code: 1, stdout: '' };
+          return { stdout: JSON.stringify(recoveryRecord ?? recoveryFinalRecord(false, false)) };
+        }
+        if (recoveryPhase === 'successor_exact_id_readback') return { stdout: JSON.stringify(recoveryRecord) };
+        if (recoveryPhase === 'final_name_absence_readback') return { stdout: '' };
+        if (recoveryPhase === 'final_create_no_host_port') {
+          recoveryRecord = recoveryFinalRecord(false, false);
+          assert.equal(args.at(-1), `${plan.runtime.image}@${plan.runtime.digest}`);
+          return { stdout: `${recoveryRecord.Id}\n` };
+        }
+        if (recoveryPhase === 'final_provider_network_attach') {
+          recoveryRecord = recoveryFinalRecord(false, true);
+          return { stdout: '' };
+        }
+        if (recoveryPhase === 'final_start') {
+          recoveryRecord = recoveryFinalRecord(true, true);
+          return { stdout: '' };
+        }
+        if (recoveryPhase === 'final_image_readback') return { stdout: JSON.stringify(imageReadback) };
+        if (recoveryPhase === 'final_inventory_readback') return { stdout: JSON.stringify(recoveryRecord) };
+        if (recoveryPhase === 'final_health_probe' || recoveryPhase === 'final_ready_wait') return { stdout: JSON.stringify(payload) };
+        if (recoveryPhase === 'final_version_readback') return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'test' }) };
+      }
       if (phase === 'target_container_set_readback') return { stdout: targetSet };
       if (phase === 'target_inventory_api') return { stdout: JSON.stringify([prePromotionRecord(image)]) };
       if (phase === 'target_inventory_database') return { stdout: JSON.stringify([databaseRecord]) };
-      if (phase === 'target_inventory_network') return { stdout: JSON.stringify([{ Name: greenTarget.network, Internal: true }]) };
-      if (phase === 'target_inventory_provider_network') return { stdout: JSON.stringify([{ Name: greenTarget.providerNetwork }]) };
+      if (phase === 'target_inventory_network') return { stdout: JSON.stringify([{ Id: targetNetworkId, Name: greenTarget.network, Internal: true }]) };
+      if (phase === 'target_inventory_provider_network') return { stdout: JSON.stringify([{ Id: providerNetworkId, Name: greenTarget.providerNetwork }]) };
       if (phase === 'target_inventory_uploads') return { stdout: JSON.stringify([{ Name: greenTarget.uploadsVolume }]) };
       if (phase === 'runtime_image_readback') return { stdout: JSON.stringify(imageReadback) };
       if (phase === 'isolated_network_create') return { stdout: `${isolatedNetworkId}\n` };
+      if (phase === 'isolated_network_identity_readback') return { stdout: JSON.stringify({ Id: isolatedNetworkId, Name: plan.isolated.network, Internal: true, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
       if (phase === 'isolated_postgres_create') return { stdout: `${isolatedDatabaseId}\n` };
+      if (phase === 'isolated_postgres_identity_readback') return { stdout: JSON.stringify({ Id: isolatedDatabaseId, Name: `/${plan.isolated.database}`, State: { Running: false }, Config: { Image: 'postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }, HostConfig: { PortBindings: null }, NetworkSettings: { Ports: { '5432/tcp': null }, Networks: { [plan.isolated.network]: { NetworkID: isolatedNetworkId } } }, Mounts: [{ Type: 'volume', Name: 'anonymous-postgres-data', Destination: '/var/lib/postgresql/data', RW: true }] }) };
       if (phase === 'candidate_acceptance_create') return { stdout: `${candidateId}\n` };
       if (phase === 'candidate_mfa_identity_probes') {
         assert.equal(options.env.STAGING_ACCEPTANCE_CONTAINER, candidateId);
@@ -643,7 +682,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   const findingDrift = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', JSON.stringify({ paymentRecoveryNeedsReview: [{ source: 'payout', id_hash: 'a'.repeat(64), cause: 'payout_failed', status: 'failed', time_class: '>24h' }], supportNextUpdateOverdue: [] }), 'candidate_finding_fingerprint_readback');
   assert.equal(findingDrift.result?.code, 'green_finding_fingerprint_drift');
   assert.equal(findingDrift.calls.some((entry) => entry.phase === 'candidate_health_and_feature_probes'), false);
-  assert.deepEqual(findingDrift.calls.find((entry) => entry.phase === 'candidate_provider_network_attach')?.args, ['network', 'connect', greenTarget.providerNetwork, candidateId]);
+  assert.deepEqual(findingDrift.calls.find((entry) => entry.phase === 'candidate_provider_network_attach')?.args, ['network', 'connect', providerNetworkId, candidateId]);
   assert.deepEqual(findingDrift.calls.find((entry) => entry.phase === 'candidate_start')?.args, ['start', candidateId]);
   const isolatedPostgresCreate = findingDrift.calls.find((entry) => entry.phase === 'isolated_postgres_create');
   assert.equal(isolatedPostgresCreate?.args[isolatedPostgresCreate.args.indexOf('--network') + 1], isolatedNetworkId);
@@ -665,6 +704,11 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   assert.equal(cleanupBindings.calls.find((entry) => entry.phase === 'candidate_cleanup_verify')?.args[3], `id=${candidateId}`);
   assert.equal(cleanupBindings.calls.find((entry) => entry.phase === 'isolated_database_cleanup_verify')?.args[3], `id=${isolatedDatabaseId}`);
   assert.equal(cleanupBindings.calls.find((entry) => entry.phase === 'isolated_network_cleanup_verify')?.args[3], `id=${isolatedNetworkId}`);
+  assert.equal(cleanupBindings.result?.forwardRecovery?.status, 'verified');
+  const cleanupLast = Math.max(...cleanupBindings.calls.map((entry) => entry.phase.startsWith('failure_') ? cleanupBindings.calls.indexOf(entry) : -1));
+  const recoveryFirst = cleanupBindings.calls.findIndex((entry) => entry.phase === 'recovery_canonical_schema_readback');
+  assert.ok(cleanupLast >= 0 && recoveryFirst > cleanupLast);
+  assert.equal(cleanupBindings.calls.some((entry) => entry.phase === 'failure_final_api_remove'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
   assert.deepEqual(good.calls.slice(0, quiesceIndex).map((entry) => entry.phase), expectedReversible);
   const provisionEntries = buildGreenPromotionCommands({ plan, configFile, config: runtimeConfig })
@@ -773,21 +817,22 @@ test('pre-promotion inventory requires the exact Green DB host and protected mou
 test('final readback is authoritative for no-port Green routing, mounts, image and protected cohort', () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const record = {
-    Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
-    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
+    Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
+    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
-  assert.equal(assertGreenFinalContainerReadback({ record, plan }), true);
-  assert.equal(summarizeGreenFinalContainerReadback(record, plan).hostPorts, 0);
-  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Config: { ...record.Config, Env: record.Config.Env.map((entry) => entry === 'MAIL_TRANSPORT=memory' ? 'MAIL_TRANSPORT=smtp' : entry) } }, plan }), /green_broad_promotion_provider_off_invalid/u);
-  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Config: { ...record.Config, User: 'nobody' } }, plan }), /green_final_inventory_mismatch/u);
-  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Config: { ...record.Config, Image: plan.runtime.image } }, plan }), /green_final_inventory_mismatch/u);
-  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount, index) => index === 1 ? { Destination: mount.Destination, RW: undefined } : mount) }, plan }), /green_mount_rw_readback_invalid/u);
-  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, NetworkSettings: { ...record.NetworkSettings, Ports: { '8080/tcp': [{ HostPort: '18082' }] } } }, plan }), /green_final_inventory_mismatch/u);
-  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, HostConfig: { ...record.HostConfig, PortBindings: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] } } }, plan }), /green_final_inventory_mismatch/u);
-  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: [...record.Mounts, { Type: 'bind', Source: '/wrong/extra', Destination: '/extra', RW: false }] }, plan }), /green_final_(?:inventory_mismatch|mount_inventory_mismatch)/u);
-  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Source: '/wrong/source' } : mount) }, plan }), /green_final_mount_inventory_mismatch/u);
-  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Type: 'volume', Name: 'foreign-secret-volume', Source: undefined } : mount) }, plan }), /green_final_mount_inventory_mismatch/u);
+  const expectedNetworkIds = { [greenTarget.network]: targetNetworkId, [greenTarget.providerNetwork]: providerNetworkId };
+  assert.equal(assertGreenFinalContainerReadback({ record, plan, expectedNetworkIds }), true);
+  assert.equal(summarizeGreenFinalContainerReadback(record, plan, expectedNetworkIds).hostPorts, 0);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Config: { ...record.Config, Env: record.Config.Env.map((entry) => entry === 'MAIL_TRANSPORT=memory' ? 'MAIL_TRANSPORT=smtp' : entry) } }, plan, expectedNetworkIds }), /green_broad_promotion_provider_off_invalid/u);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Config: { ...record.Config, User: 'nobody' } }, plan, expectedNetworkIds }), /green_final_inventory_mismatch/u);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Config: { ...record.Config, Image: plan.runtime.image } }, plan, expectedNetworkIds }), /green_final_inventory_mismatch/u);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount, index) => index === 1 ? { Destination: mount.Destination, RW: undefined } : mount) }, plan, expectedNetworkIds }), /green_mount_rw_readback_invalid/u);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, NetworkSettings: { ...record.NetworkSettings, Ports: { '8080/tcp': [{ HostPort: '18082' }] } } }, plan, expectedNetworkIds }), /green_final_inventory_mismatch/u);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, HostConfig: { ...record.HostConfig, PortBindings: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] } } }, plan, expectedNetworkIds }), /green_final_inventory_mismatch/u);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: [...record.Mounts, { Type: 'bind', Source: '/wrong/extra', Destination: '/extra', RW: false }] }, plan, expectedNetworkIds }), /green_final_(?:inventory_mismatch|mount_inventory_mismatch)/u);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Source: '/wrong/source' } : mount) }, plan, expectedNetworkIds }), /green_final_mount_inventory_mismatch/u);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Type: 'volume', Name: 'foreign-secret-volume', Source: undefined } : mount) }, plan, expectedNetworkIds }), /green_final_mount_inventory_mismatch/u);
 });
 
 test('emergency cleanup is bounded and never restores sealed Green after schema mutation', async () => {
@@ -992,15 +1037,16 @@ test('post-schema forward recovery creates only the successor and verifies its p
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   const payload = { checks: { technicalSandbox: greenTechnicalSandboxHealth, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
   const record = {
-    Id: 'a'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
-    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
+    Id: 'a'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
+    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
-  const preStartRecord = { ...record, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {} } } };
+  const preStartRecord = { ...record, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId } } } };
   const attachedPreStartRecord = { ...record, State: { Running: false } };
   const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@sha256:${'e'.repeat(64)}`] };
   const calls = [];
   let failProviderAttach = false;
+  let currentRecord = null;
   const fake = async (command, args, options) => {
     calls.push({ command, args, options });
     if (options.phase.startsWith('recovery_')) {
@@ -1009,44 +1055,134 @@ test('post-schema forward recovery creates only the successor and verifies its p
       if (phase === 'successor_identity_readback') {
         assert.equal(command, 'docker');
         assert.ok([record.Id, greenTarget.apiContainer].includes(args.at(-1)));
+      } else if (phase === 'successor_exact_id_readback') {
+        assert.deepEqual(args, ['inspect', '--format', '{{json .}}', record.Id]);
       } else if (phase === 'final_provider_network_attach') {
-        assert.deepEqual(args, ['network', 'connect', greenTarget.providerNetwork, record.Id]);
+        assert.deepEqual(args, ['network', 'connect', providerNetworkId, record.Id]);
+      } else if (phase === 'final_provider_network_attach_retry') {
+        assert.deepEqual(args, ['network', 'connect', providerNetworkId, record.Id]);
       } else if (phase === 'final_start') {
         assert.deepEqual(args, ['start', record.Id]);
+      } else if (phase === 'final_start_retry') {
+        assert.deepEqual(args, ['start', record.Id]);
+      } else if (phase === 'final_name_absence_readback') {
+        assert.equal(command, 'docker');
+      } else if (phase === 'final_create_no_host_port') {
+        assert.equal(command, expected.command);
+        const expectedArgs = [...expected.args];
+        const networkIndex = expectedArgs.indexOf(greenTarget.network);
+        if (networkIndex >= 0) expectedArgs[networkIndex] = targetNetworkId;
+        assert.deepEqual(args, expectedArgs);
       } else {
         assert.ok(expected, `unexpected recovery phase: ${phase}`);
         assert.equal(command, expected.command);
         assert.deepEqual(args, expected.args);
       }
     }
-    if (options.phase === 'recovery_final_provider_network_attach' && failProviderAttach) return { code: 1, stdout: '' };
+    if (options.phase === 'recovery_successor_identity_readback') {
+      if (args.at(-1) === greenTarget.apiContainer && !currentRecord) return { code: 1, stdout: '' };
+      return { stdout: JSON.stringify(currentRecord ?? preStartRecord) };
+    }
+    if (options.phase === 'recovery_successor_exact_id_readback') return { stdout: JSON.stringify(currentRecord ?? preStartRecord) };
+    if (options.phase === 'recovery_final_provider_network_attach' || options.phase === 'recovery_final_provider_network_attach_retry') {
+      if (failProviderAttach) return { code: 1, stdout: '' };
+      currentRecord = attachedPreStartRecord;
+      return { stdout: '' };
+    }
+    if (options.phase === 'recovery_final_start' || options.phase === 'recovery_final_start_retry') {
+      currentRecord = record;
+      return { stdout: '' };
+    }
     if (options.phase === 'recovery_canonical_schema_readback') return { stdout: '095_staging_google_registration_replays.up.sql\n' };
     if (options.phase === 'recovery_canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
-    if (options.phase === 'recovery_final_create_no_host_port') return { stdout: `${record.Id}\n` };
-    if (options.phase === 'recovery_successor_identity_readback') return { stdout: JSON.stringify(args.at(-1) === record.Id ? preStartRecord : attachedPreStartRecord) };
+    if (options.phase === 'recovery_final_create_no_host_port') {
+      currentRecord = preStartRecord;
+      return { stdout: `${record.Id}\n` };
+    }
     if (options.phase.endsWith('final_image_readback')) return { stdout: JSON.stringify(image) };
-    if (options.phase.endsWith('final_inventory_readback')) return { stdout: JSON.stringify(record) };
+    if (options.phase.endsWith('final_inventory_readback')) return { stdout: JSON.stringify(currentRecord ?? record) };
     if (options.phase.endsWith('final_health_probe') || options.phase.endsWith('final_ready_wait')) return { stdout: JSON.stringify(payload) };
     if (options.phase.endsWith('final_version_readback')) return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'test' }) };
     return { stdout: '' };
   };
-  const result = await runGreenForwardRecovery({ plan, commands, command: fake, completed: [] });
+  const result = await runGreenForwardRecovery({ plan, commands, command: fake, completed: [], targetNetworkId, providerNetworkId });
   assert.equal(result.status, 'verified');
   assert.equal(calls.some((call) => call.args.includes('shareittoo-staging-api-alt-sealed-green')), false);
   for (const phase of ['recovery_final_provider_network_attach', 'recovery_final_start']) {
     const call = calls.find((entry) => entry.options.phase === phase);
     assert.equal(call.args.at(-1), record.Id);
   }
-  const retained = await runGreenForwardRecovery({ plan, commands, command: fake, completed: ['final_create_no_host_port', 'final_provider_network_attach', 'final_start'] });
+  const retained = await runGreenForwardRecovery({ plan, commands, command: fake, completed: ['final_create_no_host_port', 'final_provider_network_attach', 'final_start'], targetNetworkId, providerNetworkId });
   assert.equal(retained.status, 'verified');
-  const resumed = await runGreenForwardRecovery({ plan, commands, command: fake, completed: ['final_create_no_host_port', 'final_provider_network_attach'] });
+  const resumed = await runGreenForwardRecovery({ plan, commands, command: fake, completed: ['final_create_no_host_port', 'final_provider_network_attach'], targetNetworkId, providerNetworkId });
   assert.equal(resumed.status, 'verified');
   const resumedStart = calls.findLast((entry) => entry.options.phase === 'recovery_final_start');
   assert.deepEqual(resumedStart.args, ['start', record.Id]);
   const startsBeforeAttachFailure = calls.filter((entry) => entry.options.phase === 'recovery_final_start').length;
   failProviderAttach = true;
-  await assert.rejects(runGreenForwardRecovery({ plan, commands, command: fake, completed: [] }), /green_forward_recovery_final_provider_network_attach_failed/u);
+  currentRecord = preStartRecord;
+  await assert.rejects(runGreenForwardRecovery({ plan, commands, command: fake, completed: [], targetNetworkId, providerNetworkId }), /green_forward_recovery_final_provider_network_attach_failed/u);
   assert.equal(calls.filter((entry) => entry.options.phase === 'recovery_final_start').length, startsBeforeAttachFailure);
+});
+
+test('stateful successor lifecycle reconciles lost attach/start responses and retries once when state remains stopped', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'e'.repeat(32) });
+  const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
+  const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`${plan.runtime.image}@${plan.runtime.digest}`] };
+  const payload = { checks: { technicalSandbox: greenTechnicalSandboxHealth, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
+  const id = '9'.repeat(64);
+  const base = {
+    Id: id, Name: `/${greenTarget.apiContainer}`, State: { Running: false },
+    NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId } } },
+    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': plan.target.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
+    HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
+  };
+  let current = structuredClone(base);
+  let attachAttempts = 0;
+  let startAttempts = 0;
+  const calls = [];
+  const fake = async (command, args, options) => {
+    calls.push({ command, args, phase: options.phase });
+    const phase = options.phase;
+    if (phase === 'recovery_canonical_schema_readback') return { stdout: '095_staging_google_registration_replays.up.sql\n' };
+    if (phase === 'recovery_canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
+    if (phase === 'recovery_successor_identity_readback') return { stdout: JSON.stringify(current) };
+    if (phase === 'recovery_successor_exact_id_readback') {
+      assert.deepEqual(args, ['inspect', '--format', '{{json .}}', id]);
+      return { stdout: JSON.stringify(current) };
+    }
+    if (phase === 'recovery_final_provider_network_attach') {
+      assert.deepEqual(args, ['network', 'connect', providerNetworkId, id]);
+      attachAttempts += 1;
+      current = { ...current, NetworkSettings: { ...current.NetworkSettings, Networks: { ...current.NetworkSettings.Networks, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } } };
+      return { code: 1, stdout: '' }; // lost response, state proves attach succeeded
+    }
+    if (phase === 'recovery_final_provider_network_attach_retry') assert.fail('attach must not retry after state reconciliation');
+    if (phase === 'recovery_final_start') {
+      assert.deepEqual(args, ['start', id]);
+      startAttempts += 1;
+      if (startAttempts === 2) current = { ...current, State: { Running: true } };
+      return { code: 1, stdout: '' };
+    }
+    if (phase === 'recovery_final_start_retry') {
+      assert.deepEqual(args, ['start', id]);
+      startAttempts += 1;
+      current = { ...current, State: { Running: true } };
+      return { code: 1, stdout: '' };
+    }
+    if (phase === 'recovery_final_image_readback') return { stdout: JSON.stringify(image) };
+    if (phase === 'recovery_final_inventory_readback') return { stdout: JSON.stringify(current) };
+    if (phase === 'recovery_final_live_wait') return { stdout: '' };
+    if (phase === 'recovery_final_health_probe' || phase === 'recovery_final_ready_wait') return { stdout: JSON.stringify(payload) };
+    if (phase === 'recovery_final_version_readback') return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'test' }) };
+    throw new Error(`unexpected phase ${phase}`);
+  };
+  const result = await runGreenForwardRecovery({ plan, commands, command: fake, targetNetworkId, providerNetworkId });
+  assert.equal(result.status, 'verified');
+  assert.equal(attachAttempts, 1);
+  assert.equal(startAttempts, 2);
+  assert.equal(calls.some((entry) => entry.phase === 'recovery_final_provider_network_attach_retry'), false);
+  assert.equal(calls.filter((entry) => entry.phase === 'recovery_final_start_retry').length, 1);
 });
 
 test('forward recovery stops on a foreign final-name conflict before network attach or start', async () => {
@@ -1062,7 +1198,7 @@ test('forward recovery stops on a foreign final-name conflict before network att
     if (options.phase === 'recovery_existing_final_inspect') return { stdout: JSON.stringify(foreign) };
     return { stdout: '' };
   };
-  await assert.rejects(runGreenForwardRecovery({ plan, commands, command: fake, completed: [] }), /green_forward_recovery_create_conflict/u);
+  await assert.rejects(runGreenForwardRecovery({ plan, commands, command: fake, completed: [], targetNetworkId, providerNetworkId }), /green_forward_recovery_create_conflict/u);
   assert.equal(calls.some((call) => call.options.phase === 'recovery_final_provider_network_attach'), false);
   assert.equal(calls.some((call) => call.options.phase === 'recovery_final_start'), false);
 });
@@ -1070,20 +1206,20 @@ test('forward recovery stops on a foreign final-name conflict before network att
 test('successor pre-start validation rejects wrong User, Env and mounts', () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'f'.repeat(32) });
   const record = {
-    Id: '9'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {} } },
-    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
+    Id: '9'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId } } },
+    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
-  assert.equal(assertGreenSuccessorPreStartReadback({ record, plan, expectedId: record.Id }), true);
+  assert.equal(assertGreenSuccessorPreStartReadback({ record, plan, expectedId: record.Id, expectedNetworkIds: { [greenTarget.network]: targetNetworkId } }), true);
   const candidateRecord = {
     ...record,
     Id: '8'.repeat(64), Name: `/${plan.isolated.candidate}`,
-    NetworkSettings: { Ports: { '8080/tcp': null }, Networks: { [plan.isolated.network]: {}, [greenTarget.providerNetwork]: {} } },
+    NetworkSettings: { Ports: { '8080/tcp': null }, Networks: { [plan.isolated.network]: { NetworkID: isolatedNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
     Config: { ...record.Config, Labels: { ...record.Config.Labels, 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } },
     Mounts: [...finalMounts.map((mount) => mount.Destination === '/data/uploads' ? { ...mount, Name: 'anonymous-uploads-id' } : mount), { Type: 'bind', Source: syntheticSandboxCredentialFilePath, Destination: '/run/secrets/synthetic-sandbox-user-password', RW: false }],
   };
   candidateRecord.HostConfig = { ...record.HostConfig, PortBindings: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] } };
-  assert.equal(assertGreenSuccessorPreStartReadback({ record: candidateRecord, plan, expectedId: candidateRecord.Id, expectedNetworks: [plan.isolated.network, greenTarget.providerNetwork], expectedName: plan.isolated.candidate, expectedMounts: plan.candidateMounts, expectedCandidate: true, allowAnonymousUploadsVolume: true }), true);
+  assert.equal(assertGreenSuccessorPreStartReadback({ record: candidateRecord, plan, expectedId: candidateRecord.Id, expectedNetworks: [plan.isolated.network, greenTarget.providerNetwork], expectedNetworkIds: { [plan.isolated.network]: isolatedNetworkId, [greenTarget.providerNetwork]: providerNetworkId }, expectedName: plan.isolated.candidate, expectedMounts: plan.candidateMounts, expectedCandidate: true, allowAnonymousUploadsVolume: true }), true);
   for (const invalidBinding of [
     { '8080/tcp': [{ HostIp: '0.0.0.0', HostPort: '18082' }] },
     { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18081' }] },
@@ -1091,9 +1227,10 @@ test('successor pre-start validation rejects wrong User, Env and mounts', () => 
   ]) {
     assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...candidateRecord, HostConfig: { ...candidateRecord.HostConfig, PortBindings: invalidBinding } }, plan, expectedId: candidateRecord.Id, expectedNetworks: [plan.isolated.network, greenTarget.providerNetwork], expectedName: plan.isolated.candidate, expectedMounts: plan.candidateMounts, expectedCandidate: true, allowAnonymousUploadsVolume: true }), /green_successor_prestart_network_invalid/u);
   }
-  assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...record, Config: { ...record.Config, User: 'nobody' } }, plan, expectedId: record.Id }), /green_final_inventory_mismatch/u);
-  assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...record, Config: { ...record.Config, Env: record.Config.Env.map((entry) => entry === 'PAYMENT_TRANSPORT=memory' ? 'PAYMENT_TRANSPORT=stripe' : entry) } }, plan, expectedId: record.Id }), /green_prestart|green_final|green_runtime/u);
-  assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Source: '/foreign/secret' } : mount) }, plan, expectedId: record.Id }), /green_final_mount_inventory_mismatch/u);
+  const expectedRecordNetworkIds = { [greenTarget.network]: targetNetworkId };
+  assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...record, Config: { ...record.Config, User: 'nobody' } }, plan, expectedId: record.Id, expectedNetworkIds: expectedRecordNetworkIds }), /green_final_inventory_mismatch/u);
+  assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...record, Config: { ...record.Config, Env: record.Config.Env.map((entry) => entry === 'PAYMENT_TRANSPORT=memory' ? 'PAYMENT_TRANSPORT=stripe' : entry) } }, plan, expectedId: record.Id, expectedNetworkIds: expectedRecordNetworkIds }), /green_prestart|green_final|green_runtime/u);
+  assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Source: '/foreign/secret' } : mount) }, plan, expectedId: record.Id, expectedNetworkIds: expectedRecordNetworkIds }), /green_final_mount_inventory_mismatch/u);
 });
 
 test('forward recovery fails closed before candidate continuation on migration readback gaps', async () => {
@@ -1101,8 +1238,8 @@ test('forward recovery fails closed before candidate continuation on migration r
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   const payload = { checks: { technicalSandbox: greenTechnicalSandboxHealth, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
   const record = {
-    Id: 'b'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
-    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
+    Id: 'b'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
+    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
   const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@sha256:${'e'.repeat(64)}`] };
@@ -1122,7 +1259,7 @@ test('forward recovery fails closed before candidate continuation on migration r
       if (options.phase.endsWith('final_version_readback')) return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'test' }) };
       return { stdout: '' };
     };
-    await assert.rejects(runGreenForwardRecovery({ plan, commands, command: fake, completed: [] }), new RegExp(invalid.code, 'u'));
+    await assert.rejects(runGreenForwardRecovery({ plan, commands, command: fake, completed: [], targetNetworkId, providerNetworkId }), new RegExp(invalid.code, 'u'));
     assert.equal(calls.some((call) => call.options.phase === 'recovery_final_create_no_host_port'), false);
   }
 });
