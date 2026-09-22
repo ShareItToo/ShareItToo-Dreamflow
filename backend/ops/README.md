@@ -130,15 +130,18 @@ digest `4199b60d7b3b19ed0cfeb113e121b77c23eeb03440f212a7dbe593c3cbee1db5`.
 The pre-promotion image is exactly
 `ghcr.io/shareittoo/shareittoo-api:ccc72004247d50656ac1064a758eb5f05c795e04`.
 The observed source API tuple includes user `shareittoo`, group `65532`, no
-host port, the two approved networks, and exactly five mounts: writable
+host port, the two approved networks, and exactly five source mounts: writable
 uploads plus read-only Firebase, MFA, technical-sandbox key, and
 technical-sandbox webhook. The two technical provider files are
 source-readback-only: their absolute paths may be recorded in the protected
 source manifest, but protected runtime env values stay blank and the files are
 never opened by the protected-file assertion. The successor candidate command
-plan and final runtime use exactly three mounts (uploads, Firebase, and MFA),
-with zero technical provider-credential mounts. The live readback must match
-the complete source tuple before the 5-to-3 successor transition is planned.
+plan uses exactly four mounts (anonymous uploads, Firebase, MFA, and the
+synthetic-password file); the final runtime uses exactly three (uploads,
+Firebase, and MFA). Both candidate and final have zero Stripe key or webhook
+mounts and zero technical-sandbox credential mounts. The live readback must
+match the complete source tuple before the 5-to-4-to-3 successor transition is
+planned.
 Legacy `sit-staging`, production names, lookalike networks and mutable image
 tags are rejected before a command is planned.
 
@@ -155,8 +158,10 @@ exec/start/inspect/remove mutations use those IDs, while the database alias
 remains only a DNS value in the isolated `DATABASE_URL`. Integrity/functional
 probes must pass there before provisioning the candidate. The exact immutable runtime image is
 accepted first against that isolated database on loopback `127.0.0.1:18082`
-with memory Identity, on-device Listing AI, payment memory, the existing
-access/provider configuration and read-only MFA/Firebase mounts. In this
+with memory mail, push, Identity and payment transports, on-device Listing
+AI, `SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED=0`, zero Listing-AI budget,
+the existing access/provider configuration and read-only MFA/Firebase mounts.
+In this
 provider-off lane the technical-sandbox paths are source
 readback only: the candidate receives only the read-only MFA/Firebase mounts
 and never opens or mounts either provider file. The synthetic user
@@ -168,7 +173,13 @@ enter commands, logs or evidence.
 Promotion preserves the protected pre-state: `DEPLOYMENT_ENVIRONMENT=test`,
 Firebase Auth and phone verification false, Google registration disabled,
 allowlist empty/absent, access gate true, payment memory, and Stripe live mode
-false. The Green promotion contract additionally hard-pins the optional
+false. It also hard-pins `MAIL_TRANSPORT=memory`, `PUSH_TRANSPORT=memory`,
+`IDENTITY_VERIFICATION_TRANSPORT=memory`, `SIT_LISTING_AI_PROVIDER=on_device`,
+`SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED=0`, and
+`SIT_LISTING_AI_BUDGET_CENTS=0`; protected-env and candidate/final runtime
+readbacks reject SMTP, FCM, Stripe, OpenAI, an active external flag, or a
+nonzero budget before candidate/final start. Both candidate and final carry no
+Stripe key/webhook mounts. The Green promotion contract additionally hard-pins the optional
 technical Sandbox off: `TECHNICAL_SANDBOX_ENABLED=0`,
 `TECHNICAL_SANDBOX_KILL_SWITCH=1`, availability `false`, and empty account,
 user, credential and authorization fields. No authorization is renewed and no

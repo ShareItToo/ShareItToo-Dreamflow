@@ -58,6 +58,22 @@ export const greenTechnicalSandboxHealth = technicalSandboxHealthProjection({
   mode: 'disabled',
 });
 
+// The broad Green promotion lane is provider-off. Keep this contract shared by
+// protected-env validation, runtime readback and final inventory validation so
+// stale compose overrides cannot silently select an external transport.
+export const greenBroadPromotionEnvironment = Object.freeze({
+  FIREBASE_AUTH_ENABLED: 'false',
+  FIREBASE_PHONE_VERIFICATION_ENABLED: 'false',
+  PAYMENT_TRANSPORT: 'memory',
+  STRIPE_LIVEMODE: 'false',
+  MAIL_TRANSPORT: 'memory',
+  PUSH_TRANSPORT: 'memory',
+  IDENTITY_VERIFICATION_TRANSPORT: 'memory',
+  SIT_LISTING_AI_PROVIDER: 'on_device',
+  SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0',
+  SIT_LISTING_AI_BUDGET_CENTS: '0',
+});
+
 export const greenAllowedEnvNames = Object.freeze([
   'NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'APP_COMMIT', 'APP_BUILD_TIMESTAMP',
   'PORT', 'BIND_HOST', 'DATABASE_URL', 'JWT_SECRET', 'JWT_ISSUER',
@@ -93,14 +109,15 @@ const requiredConfigKeys = Object.freeze([
   'environment', 'envFile', 'envNames', 'mfaFile', 'firebaseFile',
   'technicalSandboxKeyFile', 'technicalSandboxWebhookFile',
   'syntheticUserId', 'paymentTransport', 'stripeLiveMode',
-  'identityTransport', 'listingAiProvider', 'listingAiExternalAllowed',
+  'mailTransport', 'pushTransport', 'identityTransport', 'listingAiProvider',
+  'listingAiExternalAllowed', 'listingAiBudgetCents',
   'accessGateDigest', 'providerConfigDigest', 'mounts',
 ]);
 
 const requiredGreenEnvNames = Object.freeze([
   'NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'JWT_SECRET',
   'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE',
-  'IDENTITY_VERIFICATION_TRANSPORT', 'SIT_LISTING_AI_PROVIDER',
+  'MAIL_TRANSPORT', 'PUSH_TRANSPORT', 'IDENTITY_VERIFICATION_TRANSPORT', 'SIT_LISTING_AI_PROVIDER',
   'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_ALLOWED_USER_IDS',
   'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED',
   'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'MAIL_FROM', 'FIREBASE_PROJECT_ID',
@@ -127,9 +144,17 @@ export function assertGreenProtectedEnvironment(values, config) {
       || values.SYNTHETIC_SANDBOX_PASSWORD_FILE !== syntheticSandboxCredentialFilePath
       || !String(values.SIT_STAGING_ALLOWED_USER_IDS ?? '').split(',').map((entry) => entry.trim()).includes('synthetic_sandbox_user_pilot_20260919')
       || config?.mfaFile === undefined) fail('green_runtime_environment_boundary_invalid');
+  assertGreenBroadPromotionEnvironment(values);
   assertGreenTechnicalSandboxProviderOff(values);
   for (const name of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_CONNECT_WEBHOOK_SECRET', 'OPENAI_API_KEY']) {
     if (Object.hasOwn(values, name) && values[name] !== '') fail('green_main_provider_secret_forbidden');
+  }
+  return true;
+}
+
+export function assertGreenBroadPromotionEnvironment(values) {
+  for (const [name, expected] of Object.entries(greenBroadPromotionEnvironment)) {
+    if (values?.[name] !== expected) fail('green_broad_promotion_provider_off_invalid');
   }
   return true;
 }
@@ -153,6 +178,7 @@ export function assertGreenRuntimeEnvironmentReadback(values) {
       || values?.SIT_STAGING_ACCESS_GATE_ENABLED !== 'true'
       || values?.PAYMENT_TRANSPORT !== 'memory'
       || values?.STRIPE_LIVEMODE !== 'false') fail('green_runtime_prestate_readback_invalid');
+  assertGreenBroadPromotionEnvironment(values);
   assertGreenTechnicalSandboxProviderOff(values);
   return true;
 }
@@ -440,9 +466,12 @@ export function assertGreenRuntimeConfig(config) {
     fail('green_config_env_allowlist_invalid');
   }
   if (config.paymentTransport !== 'memory' || config.stripeLiveMode !== false
+      || config.mailTransport !== 'memory'
+      || config.pushTransport !== 'memory'
       || config.identityTransport !== 'memory'
       || config.listingAiProvider !== 'on_device'
       || config.listingAiExternalAllowed !== false
+      || config.listingAiBudgetCents !== 0
       || config.syntheticUserId !== 'synthetic_sandbox_user_pilot_20260919') {
     fail('green_config_safety_boundary_invalid');
   }
@@ -657,7 +686,7 @@ export function summarizeGreenFinalContainerReadback(record, plan) {
     greenRunId: record.Config.Labels['com.shareittoo.sit.green.run_id'], image: record.Config.Image,
     groupAdd: [...(record.HostConfig.GroupAdd ?? [])].sort(),
     mountDestinations: (record.Mounts ?? []).map((mount) => ({ destination: mount.Destination, volume: mount.Name ?? null, readOnly: mount.RW !== true })).sort((left, right) => left.destination.localeCompare(right.destination)),
-    protectedEnvDigest: sha256((record.Config.Env ?? []).filter((entry) => /^(?:PAYMENT_TRANSPORT|STRIPE_LIVEMODE|SIT_STAGING_COMPOSE_PROJECT|SIT_STAGING_ALLOWED_USER_IDS)=/u.test(entry)).sort().join('\n')),
+    protectedEnvDigest: sha256((record.Config.Env ?? []).filter((entry) => /^(?:PAYMENT_TRANSPORT|STRIPE_LIVEMODE|MAIL_TRANSPORT|PUSH_TRANSPORT|IDENTITY_VERIFICATION_TRANSPORT|SIT_LISTING_AI_PROVIDER|SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED|SIT_LISTING_AI_BUDGET_CENTS|SIT_STAGING_COMPOSE_PROJECT|SIT_STAGING_ALLOWED_USER_IDS)=/u.test(entry)).sort().join('\n')),
   });
 }
 
@@ -819,7 +848,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'candidate_live_wait', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/live'] },
     { phase: 'candidate_health_and_feature_probes', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/ready'] },
     { phase: 'candidate_ready_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/ready'] },
-    { phase: 'candidate_runtime_flags_readback', command: 'docker', args: ['exec', isolated.candidate, 'node', '--input-type=module', '-e', "const names=['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','SIT_STAGING_ACCESS_GATE_ENABLED','SIT_STAGING_GOOGLE_REGISTRATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','TECHNICAL_SANDBOX_ENABLED','TECHNICAL_SANDBOX_KILL_SWITCH','TECHNICAL_SANDBOX_ACCOUNT_ID','TECHNICAL_SANDBOX_USER_IDS','TECHNICAL_SANDBOX_AUTHORIZATION_ID','TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT','TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT','TECHNICAL_SANDBOX_SECRET_KEY_FILE','TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE']; process.stdout.write(JSON.stringify({...Object.fromEntries(names.map((name)=>[name,process.env[name]??null])),googleRegistrationAllowlistEmpty:(process.env.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST??'').trim()===''}))"] },
+    { phase: 'candidate_runtime_flags_readback', command: 'docker', args: ['exec', isolated.candidate, 'node', '--input-type=module', '-e', "const names=['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','SIT_STAGING_ACCESS_GATE_ENABLED','SIT_STAGING_GOOGLE_REGISTRATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','MAIL_TRANSPORT','PUSH_TRANSPORT','IDENTITY_VERIFICATION_TRANSPORT','SIT_LISTING_AI_PROVIDER','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED','SIT_LISTING_AI_BUDGET_CENTS','TECHNICAL_SANDBOX_ENABLED','TECHNICAL_SANDBOX_KILL_SWITCH','TECHNICAL_SANDBOX_ACCOUNT_ID','TECHNICAL_SANDBOX_USER_IDS','TECHNICAL_SANDBOX_AUTHORIZATION_ID','TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT','TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT','TECHNICAL_SANDBOX_SECRET_KEY_FILE','TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE']; process.stdout.write(JSON.stringify({...Object.fromEntries(names.map((name)=>[name,process.env[name]??null])),googleRegistrationAllowlistEmpty:(process.env.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST??'').trim()===''}))"] },
     { phase: 'candidate_version_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/version'] },
     { phase: 'candidate_mfa_identity_probes', command: 'node', args: ['backend/ops/staging_controlled_acceptance.mjs', 'probe'], envFile: isolated.envFile, runtimeEnv: { STAGING_ACCEPTANCE_CONTAINER: isolated.candidate }, redacted: true },
     { phase: 'candidate_cleanup', command: 'docker', args: ['rm', '--force', '--volumes', isolated.candidate] },
@@ -951,9 +980,14 @@ export function sanitizeGreenEvidence({ plan, backupDigest, configDigest, target
     safety: {
       paymentTransport: 'memory',
       stripeLiveMode: false,
+      mailTransport: 'memory',
+      pushTransport: 'memory',
+      identityTransport: 'memory',
       googleRegistration: false,
       firebaseAuth: false,
       listingAiProvider: 'on_device',
+      listingAiExternalExecutionApproved: false,
+      listingAiBudgetCents: 0,
       technicalSandbox: {
         enabled: false,
         killSwitch: true,
