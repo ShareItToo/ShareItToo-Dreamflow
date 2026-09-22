@@ -608,6 +608,7 @@ export function assertGreenContainerInventory(inventory, expectedSourceSchema = 
 export function assertGreenFinalContainerReadback({
   record,
   plan,
+  expectedId = null,
   expectedName = plan?.target?.apiContainer,
   expectedNetworks = [plan?.target?.network, plan?.target?.providerNetwork],
   expectedRunId = plan?.target?.runId,
@@ -627,7 +628,8 @@ export function assertGreenFinalContainerReadback({
   const destinations = mounts.map((mount) => mount.Destination).sort();
   const env = Object.fromEntries((record.Config?.Env ?? []).map((entry) => entry.split(/=(.*)/u, 2)));
   assertGreenRuntimeEnvironmentReadback(env);
-  if (name !== expectedName
+  if ((expectedId !== null && record.Id !== expectedId)
+      || name !== expectedName
       || record.State?.Running !== true
       || ports.length !== 0
       || networks.join('|') !== [...expectedNetworks].sort().join('|')
@@ -725,12 +727,12 @@ export function assertGreenSuccessorPreStartReadback({
     State: { ...(record.State ?? {}), Running: true },
     NetworkSettings: { ...(record.NetworkSettings ?? {}), Networks: Object.fromEntries(expectedNetworks.map((network) => [network, record.NetworkSettings?.Networks?.[network] ?? {}])) },
   };
-  assertGreenFinalContainerReadback({ record: finalShape, plan, expectedName, expectedNetworks, expectedRunId, expectedMounts, expectedCandidate, allowAnonymousUploadsVolume, expectedNetworkIds });
+  assertGreenFinalContainerReadback({ record: finalShape, plan, expectedId, expectedName, expectedNetworks, expectedRunId, expectedMounts, expectedCandidate, allowAnonymousUploadsVolume, expectedNetworkIds });
   return true;
 }
 
-export function summarizeGreenFinalContainerReadback(record, plan, expectedNetworkIds) {
-  assertGreenFinalContainerReadback({ record, plan, expectedNetworkIds });
+export function summarizeGreenFinalContainerReadback(record, plan, expectedNetworkIds, expectedId = null) {
+  assertGreenFinalContainerReadback({ record, plan, expectedId, expectedNetworkIds });
   return Object.freeze({
     name: String(record.Name ?? '').replace(/^\//u, ''), running: record.State.Running === true,
     hostPorts: 0, networks: Object.keys(record.NetworkSettings.Networks).sort(),
@@ -1316,6 +1318,7 @@ export async function runGreenForwardRecovery({ plan, commands, command, command
       if (successorRecord.State?.Running === true) {
         if (networks.join('|') !== [plan.target.network, plan.target.providerNetwork].sort().join('|')) fail('green_forward_recovery_successor_identity_invalid');
       } else if (networks.join('|') === [plan.target.network].join('|')) {
+        assertGreenSuccessorPreStartReadback({ record: successorRecord, plan, expectedId: successorId, expectedNetworks: [plan.target.network], expectedNetworkIds: { [plan.target.network]: verifiedTargetNetworkId } });
         needsAttach = true;
         needsStart = true;
       } else if (networks.join('|') === [plan.target.network, plan.target.providerNetwork].sort().join('|')) {
@@ -1356,6 +1359,7 @@ export async function runGreenForwardRecovery({ plan, commands, command, command
         needsAttach = false;
         needsStart = false;
       } else if (networks.join('|') === [plan.target.network].join('|')) {
+        assertGreenSuccessorPreStartReadback({ record: successorRecord, plan, expectedId: successorId, expectedNetworks: [plan.target.network], expectedNetworkIds: { [plan.target.network]: verifiedTargetNetworkId } });
         needsAttach = true;
         needsStart = true;
       } else if (networks.join('|') === [plan.target.network, plan.target.providerNetwork].sort().join('|')) {
@@ -1401,7 +1405,7 @@ export async function runGreenForwardRecovery({ plan, commands, command, command
     recovered.push(phase);
   }
   assertGreenImageReadback(JSON.parse(readbacks.final_image_readback), plan.runtime);
-  assertGreenFinalContainerReadback({ record: JSON.parse(readbacks.final_inventory_readback), plan, expectedNetworkIds: { [plan.target.network]: targetNetworkId, [plan.target.providerNetwork]: providerNetworkId } });
+  assertGreenFinalContainerReadback({ record: JSON.parse(readbacks.final_inventory_readback), plan, expectedId: successorId, expectedNetworkIds: { [plan.target.network]: targetNetworkId, [plan.target.providerNetwork]: providerNetworkId } });
   assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.final_version_readback), health: JSON.parse(readbacks.final_health_probe), ready: JSON.parse(readbacks.final_ready_wait), runtimeCommit: plan.runtime.runtimeCommit });
   return Object.freeze({ status: 'verified', completedPhases: Object.freeze(recovered) });
 }
@@ -1791,13 +1795,13 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       if (entry.phase === 'canonical_migration_ledger_readback') assertMigrationLedgerReadback(result.stdout, plan.target.currentSchema, greenTarget.currentLedgerDigest, 'green_canonical_migration_ledger_invalid');
       if (entry.phase === 'candidate_runtime_flags_readback') assertGreenRuntimeEnvironmentReadback(JSON.parse(readbacks.candidate_runtime_flags_readback));
       if (entry.phase === 'candidate_version_probe') assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.candidate_version_probe), health: JSON.parse(readbacks.candidate_health_and_feature_probes), ready: JSON.parse(readbacks.candidate_ready_probe), runtimeCommit: plan.runtime.runtimeCommit });
-      if (entry.phase === 'final_inventory_readback') assertGreenFinalContainerReadback({ record: JSON.parse(readbacks.final_inventory_readback), plan, expectedNetworkIds: { [plan.target.network]: targetNetworkId, [plan.target.providerNetwork]: providerNetworkId } });
+      if (entry.phase === 'final_inventory_readback') assertGreenFinalContainerReadback({ record: JSON.parse(readbacks.final_inventory_readback), plan, expectedId: finalApiId, expectedNetworkIds: { [plan.target.network]: targetNetworkId, [plan.target.providerNetwork]: providerNetworkId } });
       if (entry.phase === 'final_image_readback') assertGreenImageReadback(JSON.parse(readbacks.final_image_readback), plan.runtime);
       if (entry.phase === 'final_version_readback') assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.final_version_readback), health: JSON.parse(readbacks.final_health_probe), ready: JSON.parse(readbacks.final_ready_wait), runtimeCommit: plan.runtime.runtimeCommit });
       completed.push(entry.phase);
     }
     if (!backupDigest || !readbacks.final_image_readback || !readbacks.final_version_readback || !readbacks.final_inventory_readback) fail('green_final_readback_missing');
-    const evidence = sanitizeGreenEvidence({ plan, status: 'executed', backupDigest, configDigest: sha256(await readFile(configFile)), targetReadback: { sourceSchemaReadback: schemaNumberFromName(readbacks.source_schema_readback, 'green_source_schema_readback_invalid'), sourceLedgerDigest: assertMigrationLedgerReadback(readbacks.source_migration_ledger_readback, plan.target.sourceSchema, greenTarget.sourceLedgerDigest, 'green_source_migration_ledger_invalid').digest, currentSchema: schemaNumberFromName(readbacks.canonical_schema_readback, 'green_canonical_schema_readback_invalid'), currentMigration: currentMigrationFromReadback(readbacks.canonical_schema_readback, 'green_canonical_schema_readback_invalid'), migrationLedgerDigest: assertMigrationLedgerReadback(readbacks.canonical_migration_ledger_readback, plan.target.currentSchema, greenTarget.currentLedgerDigest, 'green_canonical_migration_ledger_invalid').digest, cleanup: 'verified', finalInventory: summarizeGreenFinalContainerReadback(JSON.parse(readbacks.final_inventory_readback), plan, { [plan.target.network]: targetNetworkId, [plan.target.providerNetwork]: providerNetworkId }) }, imageReadback: JSON.parse(readbacks.final_version_readback) });
+    const evidence = sanitizeGreenEvidence({ plan, status: 'executed', backupDigest, configDigest: sha256(await readFile(configFile)), targetReadback: { sourceSchemaReadback: schemaNumberFromName(readbacks.source_schema_readback, 'green_source_schema_readback_invalid'), sourceLedgerDigest: assertMigrationLedgerReadback(readbacks.source_migration_ledger_readback, plan.target.sourceSchema, greenTarget.sourceLedgerDigest, 'green_source_migration_ledger_invalid').digest, currentSchema: schemaNumberFromName(readbacks.canonical_schema_readback, 'green_canonical_schema_readback_invalid'), currentMigration: currentMigrationFromReadback(readbacks.canonical_schema_readback, 'green_canonical_schema_readback_invalid'), migrationLedgerDigest: assertMigrationLedgerReadback(readbacks.canonical_migration_ledger_readback, plan.target.currentSchema, greenTarget.currentLedgerDigest, 'green_canonical_migration_ledger_invalid').digest, cleanup: 'verified', finalInventory: summarizeGreenFinalContainerReadback(JSON.parse(readbacks.final_inventory_readback), plan, { [plan.target.network]: targetNetworkId, [plan.target.providerNetwork]: providerNetworkId }, finalApiId) }, imageReadback: JSON.parse(readbacks.final_version_readback) });
     const evidenceResult = await writeGreenEvidence(plan.evidenceFile, evidence);
     return Object.freeze({ status: 'executed', completedPhases: Object.freeze(completed), evidence: evidenceResult });
   } catch (error) {

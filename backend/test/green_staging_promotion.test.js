@@ -817,13 +817,14 @@ test('pre-promotion inventory requires the exact Green DB host and protected mou
 test('final readback is authoritative for no-port Green routing, mounts, image and protected cohort', () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const record = {
-    Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
+    Id: 'a'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
     Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
   const expectedNetworkIds = { [greenTarget.network]: targetNetworkId, [greenTarget.providerNetwork]: providerNetworkId };
-  assert.equal(assertGreenFinalContainerReadback({ record, plan, expectedNetworkIds }), true);
-  assert.equal(summarizeGreenFinalContainerReadback(record, plan, expectedNetworkIds).hostPorts, 0);
+  assert.equal(assertGreenFinalContainerReadback({ record, plan, expectedId: record.Id, expectedNetworkIds }), true);
+  assert.equal(summarizeGreenFinalContainerReadback(record, plan, expectedNetworkIds, record.Id).hostPorts, 0);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Id: 'b'.repeat(64) }, plan, expectedId: record.Id, expectedNetworkIds }), /green_final_inventory_mismatch/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Config: { ...record.Config, Env: record.Config.Env.map((entry) => entry === 'MAIL_TRANSPORT=memory' ? 'MAIL_TRANSPORT=smtp' : entry) } }, plan, expectedNetworkIds }), /green_broad_promotion_provider_off_invalid/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Config: { ...record.Config, User: 'nobody' } }, plan, expectedNetworkIds }), /green_final_inventory_mismatch/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Config: { ...record.Config, Image: plan.runtime.image } }, plan, expectedNetworkIds }), /green_final_inventory_mismatch/u);
@@ -1047,6 +1048,7 @@ test('post-schema forward recovery creates only the successor and verifies its p
   const calls = [];
   let failProviderAttach = false;
   let currentRecord = null;
+  let wrongFinalIdentity = false;
   const fake = async (command, args, options) => {
     calls.push({ command, args, options });
     if (options.phase.startsWith('recovery_')) {
@@ -1100,7 +1102,7 @@ test('post-schema forward recovery creates only the successor and verifies its p
       return { stdout: `${record.Id}\n` };
     }
     if (options.phase.endsWith('final_image_readback')) return { stdout: JSON.stringify(image) };
-    if (options.phase.endsWith('final_inventory_readback')) return { stdout: JSON.stringify(currentRecord ?? record) };
+    if (options.phase.endsWith('final_inventory_readback')) return { stdout: JSON.stringify(wrongFinalIdentity ? { ...(currentRecord ?? record), Id: 'b'.repeat(64) } : (currentRecord ?? record)) };
     if (options.phase.endsWith('final_health_probe') || options.phase.endsWith('final_ready_wait')) return { stdout: JSON.stringify(payload) };
     if (options.phase.endsWith('final_version_readback')) return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'test' }) };
     return { stdout: '' };
@@ -1108,6 +1110,9 @@ test('post-schema forward recovery creates only the successor and verifies its p
   const result = await runGreenForwardRecovery({ plan, commands, command: fake, completed: [], targetNetworkId, providerNetworkId });
   assert.equal(result.status, 'verified');
   assert.equal(calls.some((call) => call.args.includes('shareittoo-staging-api-alt-sealed-green')), false);
+  wrongFinalIdentity = true;
+  await assert.rejects(runGreenForwardRecovery({ plan, commands, command: fake, completed: [], targetNetworkId, providerNetworkId }), /green_final_inventory_mismatch/u);
+  wrongFinalIdentity = false;
   for (const phase of ['recovery_final_provider_network_attach', 'recovery_final_start']) {
     const call = calls.find((entry) => entry.options.phase === phase);
     assert.equal(call.args.at(-1), record.Id);
@@ -1183,6 +1188,16 @@ test('stateful successor lifecycle reconciles lost attach/start responses and re
   assert.equal(startAttempts, 2);
   assert.equal(calls.some((entry) => entry.phase === 'recovery_final_provider_network_attach_retry'), false);
   assert.equal(calls.filter((entry) => entry.phase === 'recovery_final_start_retry').length, 1);
+
+  const attachAttemptsBeforeWrongImage = attachAttempts;
+  const startAttemptsBeforeWrongImage = startAttempts;
+  current = { ...structuredClone(base), Config: { ...base.Config, Image: 'ghcr.io/shareittoo/shareittoo-api:wrong' } };
+  await assert.rejects(
+    runGreenForwardRecovery({ plan, commands, command: fake, targetNetworkId, providerNetworkId }),
+    /green_final_inventory_mismatch/u,
+  );
+  assert.equal(attachAttempts, attachAttemptsBeforeWrongImage);
+  assert.equal(startAttempts, startAttemptsBeforeWrongImage);
 });
 
 test('forward recovery stops on a foreign final-name conflict before network attach or start', async () => {
