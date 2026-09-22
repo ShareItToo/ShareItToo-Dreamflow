@@ -120,6 +120,17 @@ discover a mechanically stale source hash.
   `Pro` with `Extended` thinking; never route these gates to Astra. Gemini is an
   AI reviewer and cannot replace professional or owner approval. Technical
   incompleteness stays with Luna under `FIX`.
+- Before every gate answer, Gemini must freshly open every decisive source and
+  verify its currentness. For law use the current consolidated official text
+  and check amendment and effective dates; for product, account, provider,
+  repository and runtime facts check the current live state or exact commit.
+  Cite the direct source plus version or effective date and access date.
+- Treat undated, cached, draft, historical, prior-AI, screenshot-only and older
+  Drive claims as stale until currentness is proven. If freshness cannot be
+  verified, label the point `NOT VERIFIED` or `STALE` and never return `PASS`.
+  When sources conflict, identify which current source supersedes the older
+  one. Every Gemini `PASS` self-check must include source freshness, version or
+  effective date and a contradiction scan.
 - Team handoffs use four short fields: `RESULT`, `EVIDENCE`, `BLOCKER`, `NEXT`.
   Add detail only when Maximus/owner action, safety or regulated risk requires
   it. Never compress away a decisive error, version, hash, source or gate.
