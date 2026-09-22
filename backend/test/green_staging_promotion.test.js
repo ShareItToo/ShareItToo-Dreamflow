@@ -36,7 +36,7 @@ const targetManifest = {
   apiContainer: greenTarget.apiContainer, databaseContainer: greenTarget.databaseContainer,
   databaseVolume: greenTarget.databaseVolume, network: greenTarget.network,
   providerNetwork: greenTarget.providerNetwork, uploadsVolume: greenTarget.uploadsVolume,
-  networkInternal: true, sourceSchema: 87, currentSchema: 92, prePromotionImage: 'shareittoo-api-wp260b:4d61611a',
+  networkInternal: true, sourceSchema: 87, currentSchema: 95, prePromotionImage: 'shareittoo-api-wp260b:4d61611a',
 };
 targetManifest.targetDigest = normalizedGreenTargetDigest(targetManifest);
 const config = {
@@ -65,7 +65,8 @@ test('Green target accepts only the exact verified resource identities', () => {
     { ...targetManifest, composeProject: 'sit-staging' },
     { ...targetManifest, network: 'sit-green-network-lookalike' },
     { ...targetManifest, databaseContainer: 'shareittoo-staging-postgres' },
-    { ...targetManifest, sourceSchema: 92 },
+    { ...targetManifest, sourceSchema: 95 },
+    { ...targetManifest, currentSchema: 94 },
     { ...targetManifest, greenLabel: 'com.shareittoo.sit.green=false' },
   ]) {
     assert.throws(() => assertGreenTargetManifest(mutation));
@@ -130,12 +131,12 @@ test('inventory rejects wrong schema, host ports and non-Green labels', () => {
     uploadsVolume: { name: greenTarget.uploadsVolume }, schema: 87,
   };
   assert.equal(assertGreenContainerInventory(inventory), true);
-  assert.throws(() => assertGreenContainerInventory({ ...inventory, schema: 92 }));
+  assert.throws(() => assertGreenContainerInventory({ ...inventory, schema: 95 }));
   assert.throws(() => assertGreenContainerInventory({ ...inventory, api: { ...inventory.api, hostPorts: 1 } }));
   assert.throws(() => assertGreenContainerInventory({ ...inventory, network: { name: 'sit-staging', internal: true } }));
 });
 
-test('promotion plan keeps backup, isolated 87-to-92 rehearsal, acceptance and final no-port promotion ordered', () => {
+test('promotion plan keeps backup, isolated 87-to-95 rehearsal, acceptance and final no-port promotion ordered', () => {
   const plan = buildGreenPromotionPlan({
     targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`,
     opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json',
@@ -143,7 +144,8 @@ test('promotion plan keeps backup, isolated 87-to-92 rehearsal, acceptance and f
   assert.deepEqual(plan.commandPolicy.finalNetworks, [greenTarget.network, greenTarget.providerNetwork]);
   assert.equal(plan.commandPolicy.finalHostPorts, 0);
   assert.ok(plan.phases.findIndex((phase) => phase.includes('fresh protected database backup')) < plan.phases.findIndex((phase) => phase.includes('stop and seal')));
-  assert.match(plan.phases.join('\n'), /87 to 92/u);
+  assert.match(plan.phases.join('\n'), /87 to 95/u);
+  assert.match(plan.phases.join('\n'), /095_staging_google_registration_replays\.up\.sql/u);
   assert.match(plan.phases.join('\n'), /synthetic sandbox user/u);
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   assert.equal(assertGreenCommandBindings(commands, plan, config.envFile), true);
@@ -159,11 +161,11 @@ test('promotion plan keeps backup, isolated 87-to-92 rehearsal, acceptance and f
   assert.ok(final.args.includes(`type=volume,src=${greenTarget.uploadsVolume},dst=/data/uploads,readonly=false`));
   assert.ok(final.args.includes('--group-add') && final.args.includes('65532'));
   assert.ok(final.args.some((arg) => arg.includes('com.shareittoo.sit.green=true')));
-  assert.ok(commands.find((entry) => entry.phase === 'isolated_migrate_87_to_92'));
+  assert.ok(commands.find((entry) => entry.phase === 'isolated_migrate_87_to_95'));
   assert.ok(commands.find((entry) => entry.phase === 'isolated_restore' && entry.inputFile));
   assert.ok(commands.find((entry) => entry.phase === 'candidate_mfa_identity_probes'));
   assert.ok(commands.find((entry) => entry.phase === 'isolated_network_cleanup_verify'));
-  assert.ok(commands.find((entry) => entry.phase === 'canonical_forward_migration_87_to_92'));
+  assert.ok(commands.find((entry) => entry.phase === 'canonical_forward_migration_87_to_95'));
   assert.ok(commands.find((entry) => entry.phase === 'canonical_schema_readback'));
   assert.ok(commands.find((entry) => entry.phase === 'sealed_name_conflict_check'));
   assert.ok(commands.find((entry) => entry.phase === 'final_inventory_readback'));
@@ -173,7 +175,7 @@ test('promotion plan keeps backup, isolated 87-to-92 rehearsal, acceptance and f
   assert.ok(commands.find((entry) => entry.phase === 'isolated_uploads_volume_cleanup_verify'));
   const phaseIndex = (phase) => commands.findIndex((entry) => entry.phase === phase);
   assert.ok(phaseIndex('candidate_cleanup_verify') < phaseIndex('quiesce_green_api'));
-  assert.ok(phaseIndex('quiesce_green_api') < phaseIndex('canonical_forward_migration_87_to_92'));
+  assert.ok(phaseIndex('quiesce_green_api') < phaseIndex('canonical_forward_migration_87_to_95'));
   assert.ok(phaseIndex('canonical_schema_readback') < phaseIndex('final_create_no_host_port'));
   assert.equal(commands.some((entry) => entry.args?.some((arg) => (
     /shareittoo-staging-postgres|shareittoo_staging_backend|shareittoo_staging_postgres_data/iu.test(arg)
@@ -256,7 +258,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       if (phase === 'target_inventory_uploads') return { stdout: JSON.stringify([{ Name: greenTarget.uploadsVolume }]) };
       if (phase === 'runtime_image_readback') return { stdout: JSON.stringify(imageReadback) };
       if (phase === 'source_schema_readback') return { stdout: '087_identity_verification_pilot_gate.up.sql\n' };
-      if (phase === 'isolated_migration_readback') return { stdout: '092_listing_ai_mock_consent.up.sql\n' };
+      if (phase === 'isolated_migration_readback') return { stdout: '095_staging_google_registration_replays.up.sql\n' };
       if (phase === 'candidate_health_and_feature_probes' || phase === 'candidate_ready_probe') return { stdout: JSON.stringify(payload) };
       if (phase === 'candidate_version_probe') return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'staging' }) };
       if (phase === 'fresh_protected_backup') return { stdout: 'synthetic protected backup' };
@@ -330,7 +332,7 @@ test('command executor bindings keep isolated probes and canonical runtime disti
   assert.equal(isolated.runtimeEnv.DATABASE_CONTAINER, plan.isolated.database);
   assert.equal(isolated.runtimeEnv.DATABASE_NAME, plan.isolated.databaseName);
   assert.notEqual(isolated.runtimeEnv.DATABASE_NAME, greenTarget.databaseName);
-  const canonical = commands.find((entry) => entry.phase === 'canonical_forward_migration_87_to_92');
+  const canonical = commands.find((entry) => entry.phase === 'canonical_forward_migration_87_to_95');
   assert.equal(canonical.envFile, config.envFile);
   assert.ok(canonical.args.includes(config.envFile));
   const candidate = commands.find((entry) => entry.phase === 'candidate_acceptance_create');
@@ -442,7 +444,7 @@ test('sanitized evidence accepts approved secret mount paths but rejects secret-
 
 test('sanitized evidence and cleanup never turn Green promotion into legacy/prod mutation', () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
-  const evidence = sanitizeGreenEvidence({ plan, backupDigest: 'f'.repeat(64), configDigest: '1'.repeat(64), targetReadback: { schema: 92 }, imageReadback: { live: 200, ready: 200 } });
+  const evidence = sanitizeGreenEvidence({ plan, backupDigest: 'f'.repeat(64), configDigest: '1'.repeat(64), targetReadback: { schema: 95 }, imageReadback: { live: 200, ready: 200 } });
   assert.equal(evidence.redaction, 'sensitive values omitted');
   assert.doesNotMatch(JSON.stringify(evidence), /DATABASE_URL|JWT_SECRET|password|token|whsec_|sk_live_|sk_test_/iu);
   assert.equal(assertGreenCleanup({ removed: ['sit-green-rehearsal-network-x'], verifiedAbsent: ['sit-green-rehearsal-network-x'], oldApiSealed: true, oldApiRunning: false }), true);

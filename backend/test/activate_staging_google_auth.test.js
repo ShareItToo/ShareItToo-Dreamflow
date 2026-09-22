@@ -106,6 +106,7 @@ function fakeCommand(fx) {
       if (phase === 'current_uploads_volume_inspect') return json(uploads);
       if (phase === 'current_image_inspect') return json(image);
       if (phase === 'current_database_probe') return { stdout: '1' };
+      if (phase === 'current_schema_migration_readback') return { stdout: '095_staging_google_registration_replays.up.sql\n' };
       if (phase === 'current_config_import_probe') return { stdout: JSON.stringify({ auth: true, mfa: true, project: true, environment: 'staging' }) };
       if (phase === 'current_live_probe' || phase === 'current_ready_probe') return { stdout: JSON.stringify({ status: 200, payload: { status: 'ok' } }) };
       if (phase === 'current_version_probe') return { stdout: JSON.stringify({ commit: revision, environment: 'test' }) };
@@ -219,7 +220,26 @@ test('production-shaped preflight reaches the irreversible boundary without muta
     const dbProbe = fake.calls.find((call) => call.phase === 'current_database_probe');
     assert.ok(dbProbe.args.includes('-U') && dbProbe.args.includes(fx.manifest.databaseUser));
     assert.ok(dbProbe.args.includes('-d') && dbProbe.args.includes(fx.manifest.databaseName));
+    const migrationReadback = fake.calls.find((call) => call.phase === 'current_schema_migration_readback');
+    assert.ok(migrationReadback.args.includes('SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1'));
     assert.equal(fake.calls.some((call) => ['stop_current_api', 'seal_current_api', 'create_replacement_api', 'start_replacement_api'].includes(call.phase)), false);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('activation preflight rejects a non-terminal Green migration readback', async () => {
+  const fx = await fixture();
+  try {
+    const base = fakeCommand(fx);
+    await assert.rejects(
+      runGoogleAuthActivation({
+        manifest: fx.manifest,
+        command: async (cmd, args, options) => options.phase === 'current_schema_migration_readback'
+          ? { stdout: '094_apple_refresh_material_only.up.sql\n' }
+          : base.command(cmd, args, options),
+        execute: false,
+      }),
+      /current_schema_migration_readback_invalid/u,
+    );
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 

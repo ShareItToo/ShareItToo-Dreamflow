@@ -119,7 +119,10 @@ mode `0600` and bind exactly `shareittoo-staging-api`,
 `sit-green-volume-20260918011528-wp254`,
 `sit-green-network-20260918011528-wp254`,
 `sit-staging-provider-egress` and
-`sit-green-uploads-20260918011528-wp254`, with Green label and schema `87`.
+`sit-green-uploads-20260918011528-wp254`, with Green label and manifest-bound
+source readback schema `87`. The current target is schema `95`; the isolated
+and canonical readbacks must end at the exact
+`095_staging_google_registration_replays.up.sql` migration.
 The database identity is exactly `shareittoo_green` / `shareittoo_green`;
 legacy `shareittoo_staging` is never used by this lane.
 The manifest also binds the observed prior image tag beginning
@@ -128,8 +131,10 @@ that exact value.
 Legacy `sit-staging`, production names, lookalike networks and mutable image
 tags are rejected before a command is planned.
 
-The plan takes a fresh protected backup, restores the Green schema `87` into a
-run-scoped internal target and explicitly migrates it to `92`, then proves
+The plan takes a fresh protected backup, restores the manifest-bound Green
+source readback `87` into a run-scoped internal target and explicitly migrates
+it to current schema `95` through
+`095_staging_google_registration_replays.up.sql`, then proves
 integrity and functional probes there. The exact immutable runtime image is
 accepted first against that isolated database on loopback `127.0.0.1:18082`
 with memory Identity, on-device Listing AI, payment memory, the existing
@@ -141,8 +146,9 @@ enter commands, logs or evidence.
 
 Only after the isolated candidate has passed and been cleaned up is the
 observed Green API stopped and sealed. The canonical Green database is then
-explicitly migrated from `87` to `92` and read back before the final image is
-created. If that canonical mutation starts, the sealed old image is never
+explicitly migrated from source readback `87` to current schema `95` through
+`095_staging_google_registration_replays.up.sql` and read back before the
+final image is created. If that canonical mutation starts, the sealed old image is never
 restarted; recovery is a forward candidate path.
 
 Only after live/ready `200`, MFA and Identity probes, successful run-scoped

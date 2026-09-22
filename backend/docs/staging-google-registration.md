@@ -8,8 +8,10 @@ email, Firebase UID, token, or secret.
 
 ## Activation checklist
 
-1. Apply migrations through `095_staging_google_registration_replays` using
-   the normal reviewed staging migration procedure.
+1. Apply the reviewed Green forward migration from the manifest-bound source
+   readback schema `87` through current schema `95`, ending at the exact
+   `095_staging_google_registration_replays.up.sql` readback. The promotion
+   runner and activation preflight both reject any other terminal migration.
 2. Outside Git, compute one SHA-256 digest over the exact UTF-8 bytes
    `google\n<provider-subject>\n<firebase-uid>\n<lowercase-email>` and set
    `SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST` to

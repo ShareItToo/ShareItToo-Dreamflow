@@ -33,6 +33,7 @@ const requiredSafetyEnv = Object.freeze({
 });
 const activatedEnvironment = 'staging';
 const activatedAuth = 'true';
+const requiredStagingMigration = '095_staging_google_registration_replays.up.sql';
 
 function fail(code) {
   const error = new Error(`Staging Google Auth activation failed: ${code}`);
@@ -375,6 +376,7 @@ export function buildGoogleAuthPreflightCommands(manifest) {
     inspect(manifest.uploadsVolume, 'current_uploads_volume_inspect'),
     { phase: 'current_image_inspect', command: 'docker', args: ['image', 'inspect', '--format', '{{json .}}', manifest.image] },
     { phase: 'current_database_probe', command: 'docker', args: ['exec', manifest.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', manifest.databaseUser, '-d', manifest.databaseName, '-Atc', 'SELECT 1'] },
+    { phase: 'current_schema_migration_readback', command: 'docker', args: ['exec', manifest.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', manifest.databaseUser, '-d', manifest.databaseName, '-Atc', 'SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1'] },
     { phase: 'current_live_probe', command: 'docker', args: ['exec', manifest.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/health/live'); process.stdout.write(JSON.stringify({status:r.status,payload:await r.json()})); if(r.status!==200) process.exit(1)"] },
     { phase: 'current_ready_probe', command: 'docker', args: ['exec', manifest.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/health/ready'); process.stdout.write(JSON.stringify({status:r.status,payload:await r.json()})); if(r.status!==200) process.exit(1)"] },
     { phase: 'current_version_probe', command: 'docker', args: ['exec', manifest.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/version'); process.stdout.write(JSON.stringify(await r.json())); if(r.status!==200) process.exit(1)"] },
@@ -740,6 +742,7 @@ async function collectPreflight(target, command, commandEnv) {
     const result = await command(entry.command, entry.args, { phase: entry.phase, env: commandEnv });
     readbacks[entry.phase] = result.stdout?.trim() ?? '';
     if (entry.phase === 'current_database_probe' && readbacks[entry.phase] !== '1') fail('database_probe_invalid');
+    if (entry.phase === 'current_schema_migration_readback' && readbacks[entry.phase] !== requiredStagingMigration) fail('current_schema_migration_readback_invalid');
     if (entry.phase === 'current_config_import_probe') {
       const configProbe = parseJson(readbacks[entry.phase], 'config_import_probe_invalid');
       if (configProbe.auth !== true || configProbe.mfa !== true || configProbe.project !== true || configProbe.environment !== activatedEnvironment) fail('config_import_probe_invalid');
