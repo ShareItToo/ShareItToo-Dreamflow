@@ -133,6 +133,31 @@ void main() {
     expect(results.map((item) => item.id), ['cheap']);
   });
 
+  test('local search keeps a Sonstiges subcategory searchable and intact',
+      () async {
+    final source = Item.fromJson({
+      ...buildTestItem(
+        id: 'other-category-item',
+        ownerId: 'owner-a',
+        title: 'Kamera-Zubehör',
+      ).toJson(),
+      'categoryId': 'cat3',
+      'subcategory': 'Sonstiges',
+    });
+    SharedPreferences.setMockInitialValues({
+      'items': jsonEncode([source.toJson()]),
+    });
+
+    final results = await DataService.searchPublicItems(
+      query: 'sonstiges',
+      categoryIds: const ['cat3'],
+    );
+
+    expect(results, hasLength(1));
+    expect(results.single.categoryId, 'cat3');
+    expect(results.single.subcategory, 'Sonstiges');
+  });
+
   test('public catalog feed and search preserve guest and current auth tokens',
       () async {
     final sent = <String?>[];

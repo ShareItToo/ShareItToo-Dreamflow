@@ -5234,6 +5234,7 @@ class DataService {
         if (normalizedQuery.isNotEmpty &&
             !item.title.toLowerCase().contains(normalizedQuery) &&
             !item.description.toLowerCase().contains(normalizedQuery) &&
+            !item.subcategory.toLowerCase().contains(normalizedQuery) &&
             !item.tags
                 .any((tag) => tag.toLowerCase().contains(normalizedQuery))) {
           return false;

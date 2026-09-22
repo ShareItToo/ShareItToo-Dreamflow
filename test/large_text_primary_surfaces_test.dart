@@ -80,6 +80,38 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('profile header renders the persisted photoURL source',
+      (tester) async {
+    const transparentPng =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    final user = User(
+      id: 'avatar-source-user',
+      displayName: 'SIT Avatar Fixture',
+      email: 'avatar@example.invalid',
+      preferredLanguage: 'de',
+      isVerified: false,
+      isBanned: false,
+      role: 'user',
+      avgRating: 0,
+      reviewCount: 0,
+      createdAt: DateTime.utc(2026, 8),
+      photoURL: transparentPng,
+    );
+
+    await tester.pumpWidget(
+      largeTextHarness(
+        Scaffold(
+          body: ProfileHeaderCard(user: user, listingsCount: 0),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.text('SIT Avatar Fixture'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('wishlist title remains readable at 200 percent text',
       (tester) async {
     tester.view.physicalSize = const Size(412, 915);

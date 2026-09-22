@@ -1748,12 +1748,22 @@ class _CategoryNameById extends StatelessWidget {
                   iconName: 'category',
                   subcategories: const [],
                   createdAt: DateTime.now()));
-          // Map to simplified, coarse category for clean display without separators
+          // Keep both selected values visible. The subcategory is user data,
+          // not merely an editor value, so a fallback such as "Sonstiges"
+          // must survive into the listing detail surface.
           name = DataService.coarseCategoryFor(cat.name);
         }
-        // Plain text only – no dots, dashes, or extra symbols
-        return Text(name,
-            style: const TextStyle(color: Colors.white, fontSize: 12));
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(name,
+                style: const TextStyle(color: Colors.white, fontSize: 12)),
+            if (sub.trim().isNotEmpty)
+              Text(sub.trim(),
+                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          ],
+        );
       },
     );
   }

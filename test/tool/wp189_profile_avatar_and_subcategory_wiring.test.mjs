@@ -16,6 +16,8 @@ const repository = read('lib/services/backend_repository.dart');
 const data = read('lib/services/data_service.dart');
 const navigation = read('lib/navigation/main_navigation.dart');
 const publicProfile = read('lib/screens/public_profile_screen.dart');
+const ownProfile = read('lib/screens/own_profile_screen.dart');
+const itemDetails = read('lib/widgets/item_details_overlay.dart');
 
 test('WP189 subcategory fallback is canonical, bounded and readable', () => {
   assert.match(categories, /result\.add\('Sonstiges'\)/u);
@@ -25,6 +27,8 @@ test('WP189 subcategory fallback is canonical, bounded and readable', () => {
   assert.doesNotMatch(pilot, /'cat10'[\s\S]*'Sonstiges'/u);
   assert.match(editor, /height: kMinInteractiveDimension/u);
   assert.match(editor, /style:\s*const TextStyle\(fontSize: 15\)/u);
+  assert.match(data, /!item\.subcategory\.toLowerCase\(\)\.contains\(normalizedQuery\)/u);
+  assert.match(itemDetails, /Text\(sub\.trim\(\)/u);
 });
 
 test('WP189 profile avatar uses managed upload, durable profile state and fanout', () => {
@@ -40,6 +44,7 @@ test('WP189 profile avatar uses managed upload, durable profile state and fanout
   assert.match(navigation, /_loadUser\(\)/u);
   assert.match(navigation, /ValueKey\(keySuffix\)/u);
   assert.match(navigation, /_ProfileNavIcon\(photoUrl: photoUrl/u);
+  assert.match(ownProfile, /SitUserAvatar\(\s*\n\s*url: u\?\.photoURL/u);
   assert.match(publicProfile, /ProfileHeaderCard\(user: u/u);
   assert.doesNotMatch(
     publicProfile,
