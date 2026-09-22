@@ -26,11 +26,11 @@ once after the final source merge and before the first push/full regression.
 Run the fail-closed consumer-closure check before CI; never spend a CI run to
 discover a mechanically stale source hash.
 
-## Sol, Luna and Astra review loop
+## Sol, Luna and Gemini review loop
 
 - Luna executes one bounded package and returns useful evidence, not a claim of
   perfect completeness. Sol performs a targeted review and records exactly one
-  decision: `PASS`, `FIX` or `ASTRA_GATE_REQUIRED:<gate-id>`.
+  decision: `PASS`, `FIX` or `GEMINI_GATE_REQUIRED:<gate-id>`.
 - Sol is also the mentor. At the first recognized avoidable error, closure
   omission, unsafe assumption or wasteful reasoning pattern, stop it before a
   second occurrence. Sol gives one direct corrective rule and updates the
@@ -42,7 +42,7 @@ discover a mechanically stale source hash.
   every accepted security/resource option.
 - Live-tool mentor invariant: after the first live tool defect, stop all live
   retries. Reproduce the defect in an isolated deterministic test, review the
-  fix and re-gate it with Sol/Astra before re-execution; never chain unreviewed
+  fix and re-gate it with Sol/Gemini before re-execution; never chain unreviewed
   live hotfix retries.
 - Mutating Ops-runner invariant: a runner is not ready for live execution until
   a deterministic command-executor test drives its generated plan with
@@ -114,10 +114,12 @@ discover a mechanically stale source hash.
   path. Critical authentication changes require HTTP contract coverage plus
   real PostgreSQL transaction/integration coverage; mocked query tests alone
   are insufficient.
-- Escalate to Astra only at a named gate involving contradictory evidence or a
+- Escalate to Gemini only at a named gate involving contradictory evidence or a
   material decision in money, contract, privacy, security, release truth or
-  user data. Astra is an AI reviewer and cannot replace professional or owner
-  approval. Technical incompleteness stays with Luna under `FIX`.
+  user data. Use the visible ShareItToo Gemini thread in Google AI Pro mode
+  `Pro` with `Extended` thinking; never route these gates to Astra. Gemini is an
+  AI reviewer and cannot replace professional or owner approval. Technical
+  incompleteness stays with Luna under `FIX`.
 - Team handoffs use four short fields: `RESULT`, `EVIDENCE`, `BLOCKER`, `NEXT`.
   Add detail only when Maximus/owner action, safety or regulated risk requires
   it. Never compress away a decisive error, version, hash, source or gate.
