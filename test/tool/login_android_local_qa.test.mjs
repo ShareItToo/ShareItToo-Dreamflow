@@ -45,6 +45,7 @@ function fakeSpawnFactory(calls, outputPayloads, {
   loginOk = true,
   logoutStatus = 204,
   error = false,
+  ignoreLogout = false,
 } = {}) {
   return (execPath, args, options) => {
     const child = new EventEmitter();
@@ -60,6 +61,7 @@ function fakeSpawnFactory(calls, outputPayloads, {
     child.stdin.on('data', (chunk) => {
       if (error) return;
       const request = JSON.parse(String(chunk).trim());
+      if (ignoreLogout && request.op === 'logout') return;
       const response = request.op === 'login'
         ? { type: 'login', ok: loginOk }
         : { type: 'logout', ok: logoutStatus === 204, status: logoutStatus };
@@ -68,6 +70,7 @@ function fakeSpawnFactory(calls, outputPayloads, {
       child.stdout.write(serialized);
     });
     child.stdin.on('finish', () => {
+      if (ignoreLogout) return;
       child.stdout.end();
       child.emit('close', 0, null);
     });
@@ -314,6 +317,22 @@ test('child API transport handles spawn error without an unhandled event or hang
     }),
     /login sanity failed|transport failed|closed unexpectedly/u,
   );
+});
+
+test('child API transport kills a non-responding logout child within the injected bound', async () => {
+  const spawnCalls = [];
+  const outputPayloads = [];
+  const session = await startLocalQaApiSession({
+    email: 'qa@example.invalid',
+    password: childTransportSecret,
+    spawnImpl: fakeSpawnFactory(spawnCalls, outputPayloads, { ignoreLogout: true }),
+    execPath: '/usr/local/bin/node',
+    transportPath: '/repo/tool/local_qa_api_transport.mjs',
+    transportTimeoutMs: 10,
+  });
+  const startedAt = Date.now();
+  assert.equal(await session.cleanup(), false);
+  assert.ok(Date.now() - startedAt < 500);
 });
 
 test('ADB stdin transport fails closed on child error', async () => {

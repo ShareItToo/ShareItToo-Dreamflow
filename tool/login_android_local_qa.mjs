@@ -88,12 +88,12 @@ export function buildUiLoginCommands(nodes, email, password) {
   ];
 }
 
-async function readTransportMessage(iterator, child, label) {
+async function readTransportMessage(iterator, child, label, timeoutMs) {
   let timeoutHandle;
   const timeout = new Promise((_, reject) => {
     timeoutHandle = setTimeout(
       () => reject(new Error(`Local QA API transport ${label} timed out.`)),
-      10_000,
+      timeoutMs,
     );
   });
   try {
@@ -106,6 +106,18 @@ async function readTransportMessage(iterator, child, label) {
       child.kill();
       throw new Error(`Local QA API transport ${label} returned invalid status.`);
     }
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+}
+
+async function waitForChildClose(childClosed, timeoutMs) {
+  let timeoutHandle;
+  const timeout = new Promise((resolve) => {
+    timeoutHandle = setTimeout(resolve, timeoutMs);
+  });
+  try {
+    await Promise.race([childClosed, timeout]);
   } finally {
     clearTimeout(timeoutHandle);
   }
@@ -153,6 +165,7 @@ export async function startLocalQaApiSession({
   spawnImpl = spawnCallback,
   execPath = process.execPath,
   transportPath = localQaApiTransportPath,
+  transportTimeoutMs = 10_000,
 }) {
   const child = spawnImpl(execPath, [transportPath], {
     env: localQaTransportEnvironment(),
@@ -168,7 +181,7 @@ export async function startLocalQaApiSession({
   let cleaned = false;
   const stopChild = async () => {
     if (!child.killed) child.kill();
-    await childClosed;
+    await waitForChildClose(childClosed, transportTimeoutMs);
     output.close();
   };
   const send = (message) => {
@@ -178,7 +191,7 @@ export async function startLocalQaApiSession({
 
   try {
     send({ op: 'login', email, password });
-    const login = await readTransportMessage(outputIterator, child, 'login');
+    const login = await readTransportMessage(outputIterator, child, 'login', transportTimeoutMs);
     if (login.type !== 'login' || login.ok !== true) {
       throw new Error('Local QA API login sanity failed.');
     }
@@ -198,13 +211,14 @@ export async function startLocalQaApiSession({
       }
       try {
         send({ op: 'logout' });
-        const logout = await readTransportMessage(outputIterator, child, 'logout');
+        const logout = await readTransportMessage(outputIterator, child, 'logout', transportTimeoutMs);
         return logout.type === 'logout' && logout.ok === true && logout.status === 204;
       } catch {
+        if (!child.killed) child.kill();
         return false;
       } finally {
-        child.stdin.end();
-        await childClosed.catch(() => {});
+        if (!child.killed) child.stdin.end();
+        await waitForChildClose(childClosed, transportTimeoutMs);
         output.close();
       }
     },
