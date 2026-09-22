@@ -242,6 +242,7 @@ if (!databaseUrl) {
         '093_apple_identity_revocation.up.sql',
         '094_apple_refresh_material_only.up.sql',
         '095_staging_google_registration_replays.up.sql',
+        '096_booking_exact_time_snapshot.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);
@@ -4450,10 +4451,15 @@ if (!databaseUrl) {
         ownerDeliversAtDropoffChosen: false,
         ownerPicksUpAtReturnChosen: false,
       };
+      const exactQuotePayload = {
+        ...quotePayload,
+        handoverAt: '2026-10-01T10:00:00+02:00',
+        returnAt: '2026-10-03T16:00:00+02:00',
+      };
       const quoteResponse = await fetch(`${baseUrl}/v1/bookings/quote`, {
         method: 'POST',
         headers: renterAHeaders,
-        body: JSON.stringify(quotePayload),
+        body: JSON.stringify(exactQuotePayload),
       });
       assert.equal(quoteResponse.status, 200);
       const quoted = await quoteResponse.json();
@@ -4466,7 +4472,8 @@ if (!databaseUrl) {
       assert.match(quoted.quoteHash, /^[0-9a-f]{64}$/);
       assert.ok(Date.parse(quoted.quotedAt) < Date.parse(quoted.expiresAt));
       const persistedQuote = await setupPool.query(
-        `SELECT renter_id, listing_id, quote_hash, quote_payload, expires_at
+        `SELECT renter_id, listing_id, quote_hash, quote_payload,
+                time_snapshot_version, handover_at, return_at, expires_at
            FROM booking_quotes
           WHERE id = $1`,
         [quoted.quoteId],
@@ -4476,6 +4483,9 @@ if (!databaseUrl) {
       assert.equal(persistedQuote.rows[0].listing_id, 'listing-1');
       assert.equal(persistedQuote.rows[0].quote_hash, quoted.quoteHash);
       assert.equal(persistedQuote.rows[0].quote_payload.totalMinor, 3300);
+      assert.equal(persistedQuote.rows[0].time_snapshot_version, 'booking-time-v1');
+      assert.equal(persistedQuote.rows[0].handover_at.toISOString(), '2026-10-01T08:00:00.000Z');
+      assert.equal(persistedQuote.rows[0].return_at.toISOString(), '2026-10-03T14:00:00.000Z');
 
       const bookingCountBeforeGroup = (await setupPool.query(
         'SELECT count(*)::int AS count FROM bookings',

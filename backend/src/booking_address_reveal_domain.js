@@ -72,20 +72,33 @@ export function evaluateBookingAddressReveal({
   if (safetyHold === true) return hidden('safety_review_required');
 
   const prefix = segment === 'pickup' ? 'handover' : 'return';
-  const appointmentText = text(flowTimePayload?.[`${prefix}TimeIso`], 80);
+  const boundSnapshot = flowTimePayload?.timeSnapshot?.version === 'booking-time-v1'
+    ? flowTimePayload.timeSnapshot
+    : null;
+  const confirmedOverride = flowTimePayload?.[`${prefix}TimeConfirmed`] === true
+    ? text(flowTimePayload?.[`${prefix}TimeIso`], 80)
+    : '';
+  const appointmentText = text(
+    confirmedOverride
+      || boundSnapshot?.[segment === 'pickup' ? 'handoverAt' : 'returnAt']
+      || flowTimePayload?.[`${prefix}TimeIso`],
+    80,
+  );
   const requestedBy = text(flowTimePayload?.[`${prefix}TimeRequestedByUserId`], 120);
   const confirmedBy = text(flowTimePayload?.[`${prefix}TimeConfirmedByUserId`], 120);
   const confirmedAtText = text(flowTimePayload?.[`${prefix}TimeConfirmedAt`], 80);
   const appointment = new Date(appointmentText);
-  const confirmedAt = new Date(confirmedAtText);
+  const confirmedAt = boundSnapshot ? appointment : new Date(confirmedAtText);
   const expectedDate = segment === 'pickup'
     ? text(rentalStartDate, 10)
     : text(rentalEndDate, 10);
 
-  if (flowTimePayload?.[`${prefix}TimeConfirmed`] !== true
-      || !participant(requestedBy, ownerId, renterId)
-      || !participant(confirmedBy, ownerId, renterId)
-      || requestedBy === confirmedBy
+  if ((!boundSnapshot && flowTimePayload?.[`${prefix}TimeConfirmed`] !== true)
+      || (boundSnapshot && !confirmedOverride
+        && text(flowTimePayload?.[`${prefix}TimeIso`], 80))
+      || (!boundSnapshot && !participant(requestedBy, ownerId, renterId))
+      || (!boundSnapshot && !participant(confirmedBy, ownerId, renterId))
+      || (!boundSnapshot && requestedBy === confirmedBy)
       || !Number.isFinite(appointment.getTime())
       || !Number.isFinite(confirmedAt.getTime())
       || !expectedDate

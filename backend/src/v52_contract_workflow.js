@@ -242,6 +242,7 @@ export async function persistV52PlatformContract(client, {
   quoteHash,
   quoteIssuedAt,
   quoteExpiresAt,
+  timeSnapshot = null,
   clientBuild,
   declarations,
   idempotencyKey,
@@ -319,10 +320,10 @@ export async function persistV52PlatformContract(client, {
        reporting_moderation_review_snapshot_id, privacy_snapshot_id,
        imprint_withdrawal_shorttexts_snapshot_id, sit_acceptance_wording,
        sit_acceptance_sha256, locale, client_build, accepted_at, created_at,
-       idempotency_key
+       idempotency_key, time_snapshot_version, handover_at, return_at
      ) VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-       $15, $16, $17, $18, $19, $20, clock_timestamp(), $21
+       $15, $16, $17, $18, $19, $20, clock_timestamp(), $21, $22, $23, $24
      ) RETURNING id, accepted_at, created_at`,
     [
       contractId,
@@ -346,6 +347,9 @@ export async function persistV52PlatformContract(client, {
       normalizedBuild,
       contractAcceptedAt,
       normalizedKey,
+      timeSnapshot?.version ?? null,
+      timeSnapshot?.handoverAt ?? null,
+      timeSnapshot?.returnAt ?? null,
     ],
   );
   const persistedTime = platformContractAcceptanceTimeBinding({
@@ -376,6 +380,7 @@ export async function persistV52PlatformContract(client, {
     acceptedAt: new Date(contract.rows[0].accepted_at).toISOString(),
     contractVersion: v52ContractDocument.version,
     locale: v52ContractDocument.locale,
+    timeSnapshot,
     sitAcceptance: Object.freeze({
       ...acceptance,
       acceptedAt: contractAcceptedAt.toISOString(),

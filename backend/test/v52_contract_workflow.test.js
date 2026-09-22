@@ -184,8 +184,8 @@ test('declarations, explicit acceptance, nine snapshots and receipt precede hand
   assert.match(contractInsert.values[16], /^[0-9a-f]{64}$/u);
   assert.equal(new Date(contractInsert.values[19]).getTime(), acceptedAt.getTime());
   assert.equal(contractInsert.values[20], 'booking-create-1:platform-contract');
-  assert.equal(contractInsert.values.length, 21);
-  assert.match(contractInsert.sql, /\$20, clock_timestamp\(\), \$21/u);
+  assert.equal(contractInsert.values.length, 24);
+  assert.match(contractInsert.sql, /\$20, clock_timestamp\(\), \$21, \$22, \$23, \$24/u);
   const receiptHtml = calls[receiptIndex].values[1];
   assert.match(receiptHtml, /Gebundene Dokumente/u);
   assert.match(receiptHtml, /Teil A/u);

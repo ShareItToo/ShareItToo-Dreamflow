@@ -49,6 +49,12 @@ import {
   v51DisabledTransportCode,
   v51ZeroTransportQuote,
 } from './v51_transport_domain.js';
+import {
+  BookingTimeSnapshotError,
+  assertSameBookingTimeSnapshot,
+  bookingTimeSnapshotFromRow,
+  normalizeBookingTimeSnapshot,
+} from './booking_time_snapshot.js';
 
 const blockingWorkflowStatuses = Object.freeze([
   'accepted',
@@ -187,6 +193,7 @@ function bookingPayload(row, viewerUserId = null) {
     timezone: row.rental_timezone,
     start: new Date(row.starts_at).toISOString(),
     end: new Date(row.ends_at).toISOString(),
+    timeSnapshot: bookingTimeSnapshotFromRow(row),
     holdExpiresAt: row.hold_expires_at ? new Date(row.hold_expires_at).toISOString() : null,
     acceptedAt: row.accepted_at ? new Date(row.accepted_at).toISOString() : null,
     quotedTotalRenter: money(row.quoted_total_minor),
@@ -231,6 +238,9 @@ const bookingProjection = `
   booking.status, booking.workflow_status, booking.workflow_version,
   booking.workflow_revision, booking.rental_start_date, booking.rental_end_date,
   booking.rental_timezone, booking.starts_at, booking.ends_at, booking.currency,
+  booking.time_snapshot_version, booking.handover_at, booking.return_at,
+  booking.rental_start_date::text AS rental_start_date_text,
+  booking.rental_end_date::text AS rental_end_date_text,
   booking.quoted_total_minor, booking.security_deposit_minor, booking.quoted_days,
   booking.price_per_day_minor, booking.base_rental_minor, booking.discount_minor,
   booking.rental_subtotal_minor, booking.platform_fee_minor,
@@ -396,7 +406,7 @@ function quoteForListing(candidate, dates, listing) {
   return quote;
 }
 
-function quoteBindingPayload({ actorId, listing, dates, period, quote }) {
+function quoteBindingPayload({ actorId, listing, dates, period, quote, timeSnapshot = null }) {
   return {
     renterId: actorId,
     listingId: listing.id,
@@ -405,10 +415,32 @@ function quoteBindingPayload({ actorId, listing, dates, period, quote }) {
     timezone: listing.availability_timezone,
     start: new Date(period.starts_at).toISOString(),
     end: new Date(period.ends_at).toISOString(),
+    timeSnapshot,
     catalogRevision: Number(listing.catalog_revision),
     availabilityRevision: Number(listing.availability_revision),
     quote,
   };
+}
+
+export function assertBookingContractTimeSnapshot({ booking, contract }) {
+  let bookingSnapshot;
+  let contractSnapshot;
+  try {
+    bookingSnapshot = bookingTimeSnapshotFromRow(booking);
+    contractSnapshot = bookingTimeSnapshotFromRow({
+      ...contract,
+      rental_start_date: booking.rental_start_date,
+      rental_end_date: booking.rental_end_date,
+      rental_timezone: booking.rental_timezone,
+    });
+    assertSameBookingTimeSnapshot(bookingSnapshot, contractSnapshot);
+  } catch (error) {
+    if (error instanceof BookingTimeSnapshotError) {
+      throw new BookingWorkflowError(409, 'booking_exact_times_contract_mismatch');
+    }
+    throw error;
+  }
+  return bookingSnapshot;
 }
 
 async function requireFreshBookingQuote(client, {
@@ -426,7 +458,8 @@ async function requireFreshBookingQuote(client, {
   }
   const result = await client.query(
     `SELECT renter_id, listing_id, rental_start_date, rental_end_date,
-            rental_timezone, starts_at, ends_at, catalog_revision,
+            rental_timezone, starts_at, ends_at, time_snapshot_version,
+            handover_at, return_at, catalog_revision,
             availability_revision, quote_payload, quote_hash, issued_at, expires_at
        FROM booking_quotes
       WHERE id = $1 AND quote_hash = $2`,
@@ -439,12 +472,37 @@ async function requireFreshBookingQuote(client, {
   if (new Date(stored.expires_at).getTime() <= Date.now()) {
     throw new BookingWorkflowError(409, 'booking_quote_expired');
   }
+  const storedTimeSnapshot = bookingTimeSnapshotFromRow({
+    time_snapshot_version: stored.time_snapshot_version,
+    handover_at: stored.handover_at,
+    return_at: stored.return_at,
+    rental_start_date: stored.rental_start_date,
+    rental_end_date: stored.rental_end_date,
+    rental_timezone: stored.rental_timezone,
+  });
+  let requestedTimeSnapshot;
+  try {
+    requestedTimeSnapshot = normalizeBookingTimeSnapshot({
+      raw: candidate,
+      rentalStartDate: dates.startDate,
+      rentalEndDate: dates.endDate,
+      rentalTimezone: listing.availability_timezone,
+      required: false,
+    });
+    assertSameBookingTimeSnapshot(storedTimeSnapshot, requestedTimeSnapshot);
+  } catch (error) {
+    if (error instanceof BookingTimeSnapshotError) {
+      throw new BookingWorkflowError(409, error.code);
+    }
+    throw error;
+  }
   const currentBinding = quoteBindingPayload({
     actorId,
     listing,
     dates,
     period,
     quote,
+    timeSnapshot: storedTimeSnapshot,
   });
   const bindingMatches = stored.renter_id === actorId
     && stored.listing_id === listing.id
@@ -463,6 +521,7 @@ async function requireFreshBookingQuote(client, {
   return {
     quoteId,
     quoteHash,
+    timeSnapshot: storedTimeSnapshot,
     issuedAt: new Date(stored.issued_at).toISOString(),
     expiresAt: new Date(stored.expires_at).toISOString(),
   };
@@ -680,6 +739,21 @@ export async function quoteBooking(client, {
   await assertNewBookingAllowed(client, actorId, listing.owner_id);
   const dates = rentalDatesFromCandidate(candidate);
   const period = await periodInstants(client, dates, listing.availability_timezone);
+  let timeSnapshot;
+  try {
+    timeSnapshot = normalizeBookingTimeSnapshot({
+      raw: candidate,
+      rentalStartDate: dates.startDate,
+      rentalEndDate: dates.endDate,
+      rentalTimezone: listing.availability_timezone,
+      required: false,
+    });
+  } catch (error) {
+    if (error instanceof BookingTimeSnapshotError) {
+      throw new BookingWorkflowError(400, error.code);
+    }
+    throw error;
+  }
   await checkPeriodAvailability(client, {
     listing,
     dates,
@@ -687,7 +761,7 @@ export async function quoteBooking(client, {
     endsAt: period.ends_at,
   });
   const quote = quoteForListing(candidate, dates, listing);
-  const binding = quoteBindingPayload({ actorId, listing, dates, period, quote });
+  const binding = quoteBindingPayload({ actorId, listing, dates, period, quote, timeSnapshot });
   const quoteId = `quote_${crypto.randomUUID()}`;
   const quoteHash = hashCommand(binding);
   const issuedAt = new Date();
@@ -696,17 +770,19 @@ export async function quoteBooking(client, {
     await client.query(
       `INSERT INTO booking_quotes (
          id, renter_id, listing_id, rental_start_date, rental_end_date,
-         rental_timezone, starts_at, ends_at, catalog_revision,
+         rental_timezone, starts_at, ends_at, time_snapshot_version,
+         handover_at, return_at, catalog_revision,
          availability_revision, quote_version, currency, total_minor,
          quote_payload, quote_hash, issued_at, expires_at
        ) VALUES (
          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-         $14::jsonb, $15, $16, $17
+         $14, $15, $16, $17::jsonb, $18, $19, $20
        )`,
       [
         quoteId, actorId, listing.id, dates.startDate, dates.endDate,
         listing.availability_timezone, period.starts_at, period.ends_at,
-        listing.catalog_revision, listing.availability_revision,
+        timeSnapshot?.version ?? null, timeSnapshot?.handoverAt ?? null,
+        timeSnapshot?.returnAt ?? null, listing.catalog_revision, listing.availability_revision,
         quote.quoteVersion, quote.currency, quote.totalMinor,
         JSON.stringify(quote), quoteHash, issuedAt, expiresAt,
       ],
@@ -724,6 +800,7 @@ export async function quoteBooking(client, {
     timezone: listing.availability_timezone,
     start: new Date(period.starts_at).toISOString(),
     end: new Date(period.ends_at).toISOString(),
+    timeSnapshot,
     availabilityRevision: Number(listing.availability_revision),
     quote,
   };
@@ -783,6 +860,21 @@ export async function createBooking(client, {
   await assertNewBookingAllowed(client, actor.id, listing.owner_id);
   const dates = rentalDatesFromCandidate(candidate);
   const period = await periodInstants(client, dates, listing.availability_timezone);
+  let timeSnapshot;
+  try {
+    timeSnapshot = normalizeBookingTimeSnapshot({
+      raw: candidate,
+      rentalStartDate: dates.startDate,
+      rentalEndDate: dates.endDate,
+      rentalTimezone: listing.availability_timezone,
+      required: false,
+    });
+  } catch (error) {
+    if (error instanceof BookingTimeSnapshotError) {
+      throw new BookingWorkflowError(400, error.code);
+    }
+    throw error;
+  }
   await checkPeriodAvailability(client, {
     listing,
     dates,
@@ -851,6 +943,7 @@ export async function createBooking(client, {
     ...quoteSnapshotPayload(quote),
     quote,
     ...(quoteBinding ?? {}),
+    timeSnapshot,
   };
   delete payload.idempotencyKey;
   await client.query(
@@ -862,6 +955,7 @@ export async function createBooking(client, {
     `INSERT INTO bookings (
        id, listing_id, owner_id, renter_id, status, workflow_status,
        workflow_version, workflow_revision, starts_at, ends_at,
+       time_snapshot_version, handover_at, return_at,
        rental_start_date, rental_end_date, rental_timezone, currency,
        quoted_total_minor, security_deposit_minor, quoted_days,
        price_per_day_minor, base_rental_minor, discount_minor,
@@ -872,15 +966,17 @@ export async function createBooking(client, {
      ) VALUES (
        $1, $2, $3, $4, 'pending', 'requested', 1, 1, $5, $6,
        $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-       $17, $18, $19, $20, $21, $22, $23, $24::jsonb,
-       $25::timestamptz, $25::timestamptz,
-       CASE WHEN $26::boolean THEN $25::timestamptz ELSE NULL::timestamptz END,
-       $27::boolean
+       $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
+       $27::jsonb, $28::timestamptz, $28::timestamptz,
+       CASE WHEN $29::boolean THEN $28::timestamptz ELSE NULL::timestamptz END,
+       $30::boolean
      )`,
     [
       id, listing.id, listing.owner_id, actor.id, period.starts_at, period.ends_at,
-      dates.startDate, dates.endDate, listing.availability_timezone, quote.currency,
-      quote.totalMinor, quote.securityDepositMinor, quote.days, quote.pricePerDayMinor,
+      timeSnapshot?.version ?? null, timeSnapshot?.handoverAt ?? null,
+      timeSnapshot?.returnAt ?? null, dates.startDate, dates.endDate,
+      listing.availability_timezone, quote.currency, quote.totalMinor,
+      quote.securityDepositMinor, quote.days, quote.pricePerDayMinor,
       quote.baseRentalMinor, quote.discountMinor, quote.rentalSubtotalMinor,
       quote.platformFeeMinor, quote.deliveryFeeMinor, quote.pickupFeeMinor,
       quote.expressFeeMinor, quote.ownerPayoutMinor, quote.quoteVersion,
@@ -896,6 +992,7 @@ export async function createBooking(client, {
         quoteHash: quoteBinding.quoteHash,
         quoteIssuedAt: quoteBinding.issuedAt,
         quoteExpiresAt: quoteBinding.expiresAt,
+        timeSnapshot: quoteBinding.timeSnapshot,
         clientBuild,
         declarations: candidate.legalDeclarations,
         idempotencyKey: `${commandKey}:platform-contract`,
@@ -1030,6 +1127,21 @@ export async function amendBooking(client, { actor, bookingId, raw, key }) {
   const merged = { ...(row.payload ?? {}), ...candidate };
   const dates = rentalDatesFromCandidate(merged);
   const period = await periodInstants(client, dates, listing.availability_timezone);
+  let timeSnapshot;
+  try {
+    timeSnapshot = normalizeBookingTimeSnapshot({
+      raw: merged,
+      rentalStartDate: dates.startDate,
+      rentalEndDate: dates.endDate,
+      rentalTimezone: listing.availability_timezone,
+      required: false,
+    });
+  } catch (error) {
+    if (error instanceof BookingTimeSnapshotError) {
+      throw new BookingWorkflowError(400, error.code);
+    }
+    throw error;
+  }
   await checkPeriodAvailability(client, {
     listing,
     dates,
@@ -1057,27 +1169,30 @@ export async function amendBooking(client, { actor, bookingId, raw, key }) {
     quotedTotalRenter: money(quote.totalMinor),
     ...quoteSnapshotPayload(quote),
     quote,
+    timeSnapshot,
   };
   delete nextPayload.idempotencyKey;
   await client.query(
     `UPDATE bookings
      SET starts_at = $2, ends_at = $3,
+         time_snapshot_version = $4, handover_at = $5, return_at = $6,
          status = 'pending', workflow_status = 'requested', workflow_version = 1,
-         rental_start_date = $4, rental_end_date = $5,
-         rental_timezone = $6, currency = $7,
-         quoted_total_minor = $8, security_deposit_minor = $9,
-         quoted_days = $10, price_per_day_minor = $11,
-         base_rental_minor = $12, discount_minor = $13,
-         rental_subtotal_minor = $14, platform_fee_minor = $15,
-         delivery_fee_minor = $16, pickup_fee_minor = $17,
-         express_fee_minor = $18, owner_payout_minor = $19,
-         quote_version = $20, quote_breakdown = $21::jsonb,
+         rental_start_date = $7, rental_end_date = $8,
+         rental_timezone = $9, currency = $10,
+         quoted_total_minor = $11, security_deposit_minor = $12,
+         quoted_days = $13, price_per_day_minor = $14,
+         base_rental_minor = $15, discount_minor = $16,
+         rental_subtotal_minor = $17, platform_fee_minor = $18,
+         delivery_fee_minor = $19, pickup_fee_minor = $20,
+         express_fee_minor = $21, owner_payout_minor = $22,
+         quote_version = $23, quote_breakdown = $24::jsonb,
          workflow_revision = workflow_revision + 1, version = version + 1
      WHERE id = $1`,
     [
-      bookingId, period.starts_at, period.ends_at, dates.startDate, dates.endDate,
-      listing.availability_timezone, quote.currency, quote.totalMinor,
-      quote.securityDepositMinor, quote.days, quote.pricePerDayMinor,
+      bookingId, period.starts_at, period.ends_at, timeSnapshot?.version ?? null,
+      timeSnapshot?.handoverAt ?? null, timeSnapshot?.returnAt ?? null,
+      dates.startDate, dates.endDate, listing.availability_timezone, quote.currency,
+      quote.totalMinor, quote.securityDepositMinor, quote.days, quote.pricePerDayMinor,
       quote.baseRentalMinor, quote.discountMinor, quote.rentalSubtotalMinor,
       quote.platformFeeMinor, quote.deliveryFeeMinor, quote.pickupFeeMinor,
       quote.expressFeeMinor, quote.ownerPayoutMinor, quote.quoteVersion,
@@ -1368,6 +1483,32 @@ export async function transitionBooking(client, { actor, bookingId, raw, key, co
       databaseDate(row.rental_end_date),
     );
     if (!dates) throw new BookingWorkflowError(500, 'invalid_stored_rental_dates');
+    if (!simulationOnly) {
+      const contractResult = await client.query(
+        `SELECT time_snapshot_version, handover_at, return_at
+           FROM platform_contracts
+          WHERE booking_id = $1`,
+        [bookingId],
+      );
+      const bookingHasSnapshot = Boolean(
+        row.time_snapshot_version || row.handover_at || row.return_at,
+      );
+      const contractHasSnapshot = contractResult.rowCount > 0 && Boolean(
+        contractResult.rows[0].time_snapshot_version
+          || contractResult.rows[0].handover_at
+          || contractResult.rows[0].return_at,
+      );
+      if (bookingHasSnapshot !== contractHasSnapshot
+          || (bookingHasSnapshot && !contractResult.rowCount)) {
+        throw new BookingWorkflowError(409, 'booking_exact_times_contract_mismatch');
+      }
+      if (bookingHasSnapshot) {
+        assertBookingContractTimeSnapshot({
+          booking: row,
+          contract: contractResult.rows[0],
+        });
+      }
+    }
     await checkPeriodAvailability(client, {
       listing,
       dates,

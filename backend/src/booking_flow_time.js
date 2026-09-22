@@ -4,6 +4,7 @@ import {
   bookingLocalDate,
   evaluateBookingAddressReveal,
 } from './booking_address_reveal_domain.js';
+import { normalizeBookingTimeSnapshot } from './booking_time_snapshot.js';
 import { resolveZonedCalendarInstant } from './return_calendar_policy.js';
 
 const allowedWorkflowStatuses = Object.freeze([
@@ -69,6 +70,15 @@ export function normalizeBookingFlowTimeState(payload) {
     ? payload
     : {};
   return {
+    timeSnapshot: source.timeSnapshot && typeof source.timeSnapshot === 'object'
+      && !Array.isArray(source.timeSnapshot)
+      ? {
+        version: safeText(source.timeSnapshot.version, 80),
+        handoverAt: safeText(source.timeSnapshot.handoverAt, 80),
+        returnAt: safeText(source.timeSnapshot.returnAt, 80),
+        timezone: safeText(source.timeSnapshot.timezone, 120),
+      }
+      : null,
     handoverTimeRequested: safeText(source.handoverTimeRequested, 120),
     returnTimeRequested: safeText(source.returnTimeRequested, 120),
     handoverTimeIso: safeText(source.handoverTimeIso, 80),
@@ -279,7 +289,13 @@ export function applyBookingFlowTimeAction({
     if (!starting && !active) {
       throw new BookingFlowTimeError(409, 'flow_state_not_active');
     }
-    if (starting && state[`${prefix}TimeConfirmed`] !== true) {
+    const boundTimeSnapshot = state.timeSnapshot?.version === 'booking-time-v1';
+    const overrideTime = safeText(state[`${prefix}TimeIso`], 80);
+    const pendingBoundOverride = boundTimeSnapshot
+      && overrideTime.length > 0
+      && state[`${prefix}TimeConfirmed`] !== true;
+    if (starting && (pendingBoundOverride
+      || (!boundTimeSnapshot && state[`${prefix}TimeConfirmed`] !== true))) {
       throw new BookingFlowTimeError(409, 'flow_state_time_unconfirmed');
     }
     if (starting && payload?.needsReview === true) {
@@ -608,8 +624,20 @@ export async function updateBookingFlowTime(client, {
     rentalEndDate: row.rental_end_date_text,
     rentalTimezone: row.rental_timezone,
   });
+  let boundTimeSnapshot = null;
+  try {
+    boundTimeSnapshot = normalizeBookingTimeSnapshot({
+      raw: row.payload,
+      rentalStartDate: row.rental_start_date_text,
+      rentalEndDate: row.rental_end_date_text,
+      rentalTimezone: row.rental_timezone,
+      required: false,
+    });
+  } catch (error) {
+    throw new BookingFlowTimeError(409, error.code ?? 'booking_exact_times_invalid');
+  }
   const applied = applyBookingFlowTimeAction({
-    payload: row.payload,
+    payload: { ...(row.payload ?? {}), timeSnapshot: boundTimeSnapshot },
     actorId: actor.id,
     ownerId: row.owner_id,
     renterId: row.renter_id,
