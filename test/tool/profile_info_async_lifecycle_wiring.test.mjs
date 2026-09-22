@@ -6,6 +6,18 @@ const source = readFileSync(
   new URL('../../lib/screens/profile_info_screen.dart', import.meta.url),
   'utf8',
 );
+const mutationService = readFileSync(
+  new URL('../../lib/services/profile_mutation_service.dart', import.meta.url),
+  'utf8',
+);
+const thread = readFileSync(
+  new URL('../../lib/screens/message_thread_screen.dart', import.meta.url),
+  'utf8',
+);
+const booking = readFileSync(
+  new URL('../../lib/screens/booking_detail_screen.dart', import.meta.url),
+  'utf8',
+);
 
 test('late profile-load failure cannot update disposed state', () => {
   assert.match(
@@ -36,4 +48,30 @@ test('successful profile patch rechecks exact owner and refreshes local state', 
 test('profile lifecycle fix contains no timing or lint accommodation', () => {
   assert.doesNotMatch(source, /ignore:\s*use_build_context_synchronously/u);
   assert.doesNotMatch(source, /Future(?:<void>)?\.delayed|Timer\s*\(/u);
+});
+
+test('profile save reads the authenticated projection back before reporting success', () => {
+  assert.match(
+    mutationService,
+    /performProfileMutation\([\s\S]*?syncCurrentUserForSessionOwner\([\s\S]*?context\.owner\.authOwner/u,
+  );
+  assert.match(
+    mutationService,
+    /ProfileMutationFailure\.outcomeUnknown\([\s\S]*?remoteAccepted/u,
+  );
+});
+
+test('open identity surfaces refresh the authoritative avatar after profile changes', () => {
+  assert.match(
+    thread,
+    /key == SharedPersistenceSync\.accountSecurityStateKey[\s\S]*?_clearSensitiveThreadState\(\)[\s\S]*?_sharedPersistenceRefresh\.schedule\(_load\)/u,
+  );
+  assert.match(
+    booking,
+    /key != SharedPersistenceSync\.accountSecurityStateKey[\s\S]*?_reloadFromSharedPersistence/u,
+  );
+  assert.match(
+    booking,
+    /counterparty = counterpartyId\.isEmpty[\s\S]*?DataService\.getUserById\(counterpartyId\)/u,
+  );
 });

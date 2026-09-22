@@ -438,7 +438,12 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     super.initState();
     _pageController = PageController();
     _sharedPersistenceSub = SharedPersistenceSync.changes.listen((key) {
-      if (!mounted || !SharedPersistenceSync.affectsBookingSync(key)) return;
+      if (!mounted ||
+          (key != SharedPersistenceSync.accountSecurityStateKey &&
+              key != SharedPersistenceSync.profileStateKey &&
+              !SharedPersistenceSync.affectsBookingSync(key))) {
+        return;
+      }
       unawaited(
         _sharedPersistenceRefresh.schedule(_reloadFromSharedPersistence),
       );
@@ -499,6 +504,12 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final request = await DataService.getRentalRequestById(requestId);
     final state = await DataService.getHandoverReturnState(requestId);
     final current = await DataService.getCurrentUser();
+    final counterpartyId = request == null
+        ? ''
+        : (widget.viewerIsOwner ? request.renterId : request.ownerId).trim();
+    final counterparty = counterpartyId.isEmpty
+        ? null
+        : await DataService.getUserById(counterpartyId);
     final alreadyReviewed = current != null
         ? await DataService.hasSubmittedReview(
             requestId: requestId,
@@ -522,6 +533,15 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
             request.returnReportDeadline?.toIso8601String();
         widget.booking['returnCaseOpenedAt'] =
             request.returnCaseOpenedAt?.toIso8601String();
+      }
+      if (counterparty != null) {
+        if (widget.viewerIsOwner) {
+          widget.booking['renterName'] = counterparty.displayName;
+          widget.booking['renterAvatar'] = counterparty.photoURL;
+        } else {
+          widget.booking['listerName'] = counterparty.displayName;
+          widget.booking['listerAvatar'] = counterparty.photoURL;
+        }
       }
     });
     await _syncBookingLifecycleFromRequest(requestId);

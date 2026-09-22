@@ -58,6 +58,11 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
     });
     _load();
     _persistenceSubscription = SharedPersistenceSync.changes.listen((key) {
+      if (key == SharedPersistenceSync.profileStateKey) {
+        _loadRevision += 1;
+        unawaited(_load());
+        return;
+      }
       if (key != SharedPersistenceSync.accountSecurityStateKey) return;
       _loadRevision += 1;
       _decisionActions.invalidate();

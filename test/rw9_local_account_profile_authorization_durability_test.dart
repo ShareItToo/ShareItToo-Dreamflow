@@ -192,7 +192,7 @@ void main() {
       users.singleWhere((entry) => entry.id == accountA.id).photoURL,
       avatar,
     );
-    expect(changes, contains(SharedPersistenceSync.accountSecurityStateKey));
+    expect(changes, contains(SharedPersistenceSync.profileStateKey));
   });
 
   test(
@@ -227,7 +227,7 @@ void main() {
       users.singleWhere((entry) => entry.id == accountA.id).photoURL,
       isNull,
     );
-    expect(changes, contains(SharedPersistenceSync.accountSecurityStateKey));
+    expect(changes, contains(SharedPersistenceSync.profileStateKey));
   });
 
   test('parallel disjoint patches serialize without lost updates', () async {

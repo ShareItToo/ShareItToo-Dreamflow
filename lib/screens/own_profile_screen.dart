@@ -60,6 +60,10 @@ class _OwnProfileScreenState extends State<OwnProfileScreen>
         vsync: this,
         initialIndex: widget.initialTabIndex.clamp(0, 4));
     _persistenceSubscription = SharedPersistenceSync.changes.listen((key) {
+      if (key == SharedPersistenceSync.profileStateKey) {
+        unawaited(_load());
+        return;
+      }
       if (key == SharedPersistenceSync.accountSecurityStateKey) {
         _loadRevision += 1;
         _profileActions.invalidate();

@@ -144,6 +144,10 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
   void initState() {
     super.initState();
     _persistenceSubscription = SharedPersistenceSync.changes.listen((key) {
+      if (key == SharedPersistenceSync.profileStateKey) {
+        unawaited(_load());
+        return;
+      }
       if (key != SharedPersistenceSync.accountSecurityStateKey) return;
       _profileActions.invalidate();
       _loadRevision += 1;

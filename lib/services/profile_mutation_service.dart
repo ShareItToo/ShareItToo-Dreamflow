@@ -10,6 +10,7 @@ import 'package:lendify/services/backend_repository.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/session_transition_service.dart';
+import 'package:lendify/services/shared_persistence_sync.dart';
 
 enum ProfileMutationFailureKind {
   rejected,
@@ -41,8 +42,14 @@ class ProfileMutationFailure implements Exception {
           remoteAccepted: remoteAccepted,
         );
 
-  const ProfileMutationFailure.outcomeUnknown([String? code])
-      : this._(ProfileMutationFailureKind.outcomeUnknown, code: code);
+  const ProfileMutationFailure.outcomeUnknown(
+    String? code, {
+    bool remoteAccepted = false,
+  }) : this._(
+          ProfileMutationFailureKind.outcomeUnknown,
+          code: code,
+          remoteAccepted: remoteAccepted,
+        );
 
   const ProfileMutationFailure.principalChanged({
     bool remoteAccepted = false,
@@ -227,6 +234,7 @@ class ProfileMutationService {
     if (!await isContextCurrent(context)) {
       throw const ProfileMutationFailure.principalChanged();
     }
+    var remoteAccepted = false;
     try {
       if (!await isContextCurrent(context)) {
         throw const ProfileMutationFailure.principalChanged();
@@ -235,12 +243,33 @@ class ProfileMutationService {
         context: context,
         updates: updates,
       );
-      if (!await isContextCurrent(context)) {
-        throw ProfileMutationFailure.principalChanged(
-          remoteAccepted: result.remoteAccepted,
+      remoteAccepted = result.remoteAccepted;
+      var resolved = result;
+      if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+        // The PATCH response is a receipt, not the long-lived projection.
+        // Read the authenticated profile back through the same session owner
+        // so the URL/version consumed by every identity surface is the
+        // server-owned value immediately after save and after restart.
+        final refreshed = await DataService.syncCurrentUserForSessionOwner(
+          context.owner.authOwner,
+          notificationKey: SharedPersistenceSync.profileStateKey,
+        );
+        if (refreshed == null) {
+          throw ProfileMutationFailure.principalChanged(
+            remoteAccepted: remoteAccepted,
+          );
+        }
+        resolved = AccountProfileMutationResult(
+          user: refreshed,
+          remoteAccepted: remoteAccepted,
         );
       }
-      return result;
+      if (!await isContextCurrent(context)) {
+        throw ProfileMutationFailure.principalChanged(
+          remoteAccepted: resolved.remoteAccepted,
+        );
+      }
+      return resolved;
     } on ProfileMutationFailure {
       rethrow;
     } on AccountProfileMutationFailure catch (failure) {
@@ -253,7 +282,10 @@ class ProfileMutationService {
             remoteAccepted: failure.remoteAccepted,
           ),
         AccountProfileMutationFailureKind.outcomeUnknown =>
-          ProfileMutationFailure.outcomeUnknown(failure.code),
+          ProfileMutationFailure.outcomeUnknown(
+            failure.code,
+            remoteAccepted: failure.remoteAccepted,
+          ),
         AccountProfileMutationFailureKind.principalChanged =>
           ProfileMutationFailure.principalChanged(
             remoteAccepted: failure.remoteAccepted,
@@ -267,7 +299,10 @@ class ProfileMutationService {
       if (kind == ProfileMutationFailureKind.rejected) {
         throw ProfileMutationFailure.rejected(error.code);
       }
-      throw ProfileMutationFailure.outcomeUnknown(error.code);
+      throw ProfileMutationFailure.outcomeUnknown(
+        error.code,
+        remoteAccepted: remoteAccepted,
+      );
     } catch (_) {
       if (!await isContextCurrent(context)) {
         throw const ProfileMutationFailure.principalChanged();

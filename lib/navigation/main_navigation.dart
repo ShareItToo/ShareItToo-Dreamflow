@@ -76,7 +76,7 @@ class _MainNavigationState extends State<MainNavigation> {
     });
     _loadUser();
     _profileSubscription = SharedPersistenceSync.changes.listen((key) {
-      if (!mounted || key != SharedPersistenceSync.accountSecurityStateKey) {
+      if (!mounted || !SharedPersistenceSync.affectsProfileSync(key)) {
         return;
       }
       _loadUser();

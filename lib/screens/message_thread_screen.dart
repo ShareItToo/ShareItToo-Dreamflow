@@ -257,9 +257,17 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     _load();
     _sharedPersistenceSub = SharedPersistenceSync.changes.listen((key) {
       if (!mounted) return;
+      if (key == SharedPersistenceSync.profileStateKey) {
+        unawaited(_sharedPersistenceRefresh.schedule(_load));
+        return;
+      }
       if (key == SharedPersistenceSync.accountSecurityStateKey) {
         _safetyActions.invalidate();
         _clearSensitiveThreadState();
+        // Profile writes use the same account-scoped invalidation channel.
+        // Re-read the authenticated participant and public counterparty so
+        // open chats do not keep a stale avatar after a successful save.
+        unawaited(_sharedPersistenceRefresh.schedule(_load));
         return;
       }
       if (!shouldReloadMessageThreadForPersistenceChange(

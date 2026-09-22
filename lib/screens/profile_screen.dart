@@ -375,6 +375,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _onPersistenceChanged(String key) {
+    if (key == SharedPersistenceSync.profileStateKey) {
+      unawaited(_load());
+      return;
+    }
     if (key != SharedPersistenceSync.accountSecurityStateKey) return;
     final owner = _logoutInteractionOwner;
     final handle = _activeLogoutDialog;

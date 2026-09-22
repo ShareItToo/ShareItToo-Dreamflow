@@ -63,6 +63,14 @@ class _BookingsScreenState extends State<BookingsScreen>
     _load();
     _sharedPersistenceSub = SharedPersistenceSync.changes.listen((key) {
       if (!mounted) return;
+      if (key == SharedPersistenceSync.profileStateKey) {
+        _loadRevision += 1;
+        unawaited(_sharedPersistenceRefresh.schedule(() async {
+          await SharedPersistenceSync.reloadPreferences();
+          if (mounted) await _load();
+        }));
+        return;
+      }
       if (key == SharedPersistenceSync.accountSecurityStateKey) {
         _loadRevision += 1;
         setState(() {

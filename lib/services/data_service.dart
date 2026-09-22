@@ -2603,6 +2603,7 @@ class DataService {
     required User current,
     required List<User> users,
     Future<void> Function()? verifyAuthorization,
+    String notificationKey = SharedPersistenceSync.accountSecurityStateKey,
   }) async {
     final previousCurrent = prefs.getString(_currentUserKey);
     final previousUsers = prefs.getString(_usersKey);
@@ -2648,9 +2649,7 @@ class DataService {
         throw StateError('Das lokale Kontoprofil ist nicht konsistent.');
       }
       await verifyAuthorization?.call();
-      SharedPersistenceSync.notify(
-        SharedPersistenceSync.accountSecurityStateKey,
-      );
+      SharedPersistenceSync.notify(notificationKey);
     } catch (error) {
       final usersRestored = await _restorePreferenceString(
         prefs,
@@ -4154,6 +4153,7 @@ class DataService {
           current: next,
           users: users,
           verifyAuthorization: verifyOwner,
+          notificationKey: SharedPersistenceSync.profileStateKey,
         );
         return AccountProfileMutationResult(
           user: next,
@@ -4354,8 +4354,9 @@ class DataService {
   /// the final local persistence repeats authorization inside the profile
   /// mutation queue.
   static Future<User?> syncCurrentUserForSessionOwner(
-    AuthSessionOwner owner,
-  ) async {
+    AuthSessionOwner owner, {
+    String notificationKey = SharedPersistenceSync.accountSecurityStateKey,
+  }) async {
     if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) return null;
 
     User? match;
@@ -4433,6 +4434,7 @@ class DataService {
         current: resolved,
         users: users,
         verifyAuthorization: verifyOwner,
+        notificationKey: notificationKey,
       );
       return resolved;
     });

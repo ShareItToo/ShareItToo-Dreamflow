@@ -75,6 +75,10 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     _load();
     _sharedPersistenceSub = SharedPersistenceSync.changes.listen((key) {
       if (!mounted) return;
+      if (key == SharedPersistenceSync.profileStateKey) {
+        unawaited(_sharedPersistenceRefresh.schedule(_load));
+        return;
+      }
       if (key == SharedPersistenceSync.accountSecurityStateKey) {
         _loadRevision += 1;
         _decisionActions.invalidate();
