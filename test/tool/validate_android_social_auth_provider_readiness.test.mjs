@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -49,7 +50,7 @@ test('rejects a fabricated activation without complete evidence', () => {
   );
 });
 
-test('accepts a complete provider gate with a provider-specific synthetic evidence fixture', () => {
+test('validates provider shape with synthetic evidence without activating the gate', () => {
   const value = fixture();
   const temporaryRoot = mkdtempSync(join(tmpdir(), 'sit-social-provider-'));
   const evidenceRef = 'docs/evidence/external-gates/facebook-synthetic.json';
@@ -144,7 +145,8 @@ test('accepts a complete provider gate with a provider-specific synthetic eviden
       repositoryRoot: temporaryRoot,
       allowSyntheticFixture: true,
     });
-    assert.equal(result.facebook.ready, true);
+    assert.equal(result.facebook.ready, false);
+    assert.ok(result.facebook.missing.includes('syntheticEvidenceNotEligible'));
     assert.equal(value.pilotDecision.facebookEnabled, false);
     assert.throws(
       () => validateAndroidSocialAuthProviderReadiness({
@@ -161,6 +163,7 @@ test('accepts a complete provider gate with a provider-specific synthetic eviden
       ['missing required readback', (candidate) => {
         delete candidate.externalReadbacks.firebaseProviderEnabledVerified;
       }],
+      ['missing explicit boundaries', (candidate) => { candidate.boundaries = {}; }],
     ];
     for (const [label, mutate] of negativeMutations) {
       const invalidEvidence = structuredClone(validEvidence);
@@ -184,7 +187,48 @@ test('accepts a complete provider gate with a provider-specific synthetic eviden
         allowSyntheticFixture: true,
         requireProvider: 'facebook',
       }),
-      /facebook_provider_decision_not_enabled/u,
+      /facebook_provider_(?:decision_not_enabled|not_ready)/u,
+    );
+    const syntheticProviderEnabled = {
+      ...value,
+      pilotDecision: { ...value.pilotDecision, facebookEnabled: true },
+    };
+    assert.throws(
+      () => validateAndroidSocialAuthProviderReadiness({
+        evidence: syntheticProviderEnabled,
+        repositoryRoot: temporaryRoot,
+        allowSyntheticFixture: true,
+        requireProvider: 'facebook',
+      }),
+      /pilot decision enables Facebook before its provider gate is ready/u,
+    );
+
+    const externalEvidencePath = join(temporaryRoot, 'external-facebook.json');
+    writeFileSync(externalEvidencePath, JSON.stringify(validEvidence));
+    rmSync(evidencePath, { force: true });
+    symlinkSync(externalEvidencePath, evidencePath);
+    assert.throws(
+      () => validateAndroidSocialAuthProviderReadiness({
+        evidence: value,
+        repositoryRoot: temporaryRoot,
+        allowSyntheticFixture: true,
+      }),
+      /symbolic link/u,
+    );
+    rmSync(evidencePath, { force: true });
+    writeFileSync(evidencePath, JSON.stringify(validEvidence));
+
+    assert.throws(
+      () => validateAndroidSocialAuthProviderReadiness({
+        evidence: value,
+        repositoryRoot: temporaryRoot,
+        allowSyntheticFixture: true,
+        beforeEvidenceOpen: () => {
+          rmSync(evidencePath, { force: true });
+          symlinkSync(externalEvidencePath, evidencePath);
+        },
+      }),
+      /symbolic link/u,
     );
   } finally {
     rmSync(temporaryRoot, { recursive: true, force: true });
@@ -250,6 +294,12 @@ test('rejects any provider-console mutation claim', () => {
   value.boundaries.providerConsoleChanged = true;
   assert.throws(
     () => validateAndroidSocialAuthProviderReadiness({ evidence: value }),
+    /provider mutation/u,
+  );
+  const missingBoundary = fixture();
+  missingBoundary.boundaries = {};
+  assert.throws(
+    () => validateAndroidSocialAuthProviderReadiness({ evidence: missingBoundary }),
     /provider mutation/u,
   );
 });

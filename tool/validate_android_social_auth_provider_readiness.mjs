@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 
-import { readFileSync, statSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+} from 'node:fs';
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -74,6 +81,11 @@ const externalReadbackRequirements = Object.freeze({
   ]),
 });
 
+const externalBoundaryRequirements = Object.freeze([
+  'providerConsoleChanged',
+  'firebaseConsoleChanged',
+]);
+
 const sha1Pattern = /^(?:[0-9a-f]{2}:){19}[0-9a-f]{2}$/iu;
 const sha256Pattern = /^(?:[0-9a-f]{2}:){31}[0-9a-f]{2}$/iu;
 const sourceCommitPattern = /^[0-9a-f]{40}$/iu;
@@ -96,16 +108,65 @@ function exact(actual, expected, label) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${label} is invalid.`);
 }
 
-function readProviderEvidence({ provider, evidenceRef, repositoryRoot, allowSyntheticFixture }) {
-  const path = resolve(repositoryRoot, evidenceRef);
-  let value;
+function readRepositoryJson(
+  repositoryRoot,
+  relativePath,
+  label,
+  { beforeOpen = null } = {},
+) {
+  if (typeof relativePath !== 'string' || relativePath.trim() === '' || isAbsolute(relativePath)) {
+    fail(`${label} path must be repository-relative.`);
+  }
+  let descriptor;
   try {
-    if (!statSync(path).isFile()) fail(`${provider} evidence artifact is not a file.`);
-    value = JSON.parse(readFileSync(path, 'utf8'));
+    const rootPath = realpathSync(resolve(repositoryRoot));
+    const absolutePath = resolve(rootPath, relativePath);
+    const resolvedRelative = relative(rootPath, absolutePath);
+    if (resolvedRelative === ''
+        || resolvedRelative.startsWith('..')
+        || isAbsolute(resolvedRelative)) {
+      fail(`${label} path must remain inside the repository.`);
+    }
+    let parentPath;
+    try {
+      parentPath = realpathSync(dirname(absolutePath));
+    } catch {
+      fail(`${label} could not be opened safely.`);
+    }
+    const parentRelative = relative(rootPath, parentPath);
+    if (parentRelative.startsWith('..') || isAbsolute(parentRelative)) {
+      fail(`${label} path must remain inside the repository.`);
+    }
+    const canonicalPath = resolve(parentPath, basename(absolutePath));
+    if (!Number.isInteger(constants.O_NOFOLLOW)) {
+      fail(`${label} cannot be opened safely because O_NOFOLLOW is unavailable.`);
+    }
+    if (typeof beforeOpen === 'function') beforeOpen(canonicalPath);
+    descriptor = openSync(canonicalPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+    if (!fstatSync(descriptor).isFile()) fail(`${label} is not a regular file.`);
+    return JSON.parse(readFileSync(descriptor, 'utf8'));
   } catch (error) {
     if (error?.message?.startsWith('Android social provider readiness')) throw error;
-    fail(`${provider} evidence artifact is malformed.`);
+    if (error?.code === 'ELOOP') fail(`${label} must not be a symbolic link.`);
+    fail(`${label} is malformed.`);
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
   }
+}
+
+function readProviderEvidence({
+  provider,
+  evidenceRef,
+  repositoryRoot,
+  allowSyntheticFixture,
+  beforeOpen = null,
+}) {
+  const value = readRepositoryJson(
+    repositoryRoot,
+    evidenceRef,
+    `${provider} evidence artifact`,
+    { beforeOpen },
+  );
   exact(value?.schemaVersion, 1, `${provider} evidence schema version`);
   exact(value?.kind, 'sit-social-auth-provider-external-readback',
     `${provider} evidence kind`);
@@ -165,11 +226,13 @@ function readProviderEvidence({ provider, evidenceRef, repositoryRoot, allowSynt
     fail(`${provider} evidence external readbacks are incomplete.`);
   }
   if (!value.boundaries || typeof value.boundaries !== 'object'
+      || externalBoundaryRequirements.some((key) => value.boundaries[key] !== false)
       || Object.values(value.boundaries).some((entry) => entry !== false)) {
     fail(`${provider} evidence boundaries are invalid.`);
   }
 
   return Object.freeze({
+    syntheticFixture: value.syntheticFixture,
     binding: Object.freeze({
       ...expectedEvidenceBinding(provider),
       candidate: Object.freeze({
@@ -196,6 +259,7 @@ function readiness(
   requiredKeys,
   repositoryRoot,
   allowSyntheticFixture,
+  beforeEvidenceOpen,
 ) {
   const missing = requiredKeys.filter((key) => provider?.[key] !== true);
   if (typeof provider?.activationReady !== 'boolean') fail('activationReady is invalid.');
@@ -210,9 +274,16 @@ function readiness(
     evidenceRef: provider.evidenceRef,
     repositoryRoot,
     allowSyntheticFixture,
+    beforeOpen: beforeEvidenceOpen,
   });
   exact(provider.candidateBinding, evidence.binding,
     `${providerName} candidate/signing/redirect binding`);
+  if (evidence.syntheticFixture) {
+    return Object.freeze({
+      ready: false,
+      missing: Object.freeze([...missing, 'syntheticEvidenceNotEligible']),
+    });
+  }
   return Object.freeze({ ready: provider.activationReady, missing });
 }
 
@@ -221,9 +292,14 @@ export function validateAndroidSocialAuthProviderReadiness({
   requireProvider = null,
   repositoryRoot = root,
   allowSyntheticFixture = false,
+  beforeEvidenceOpen = null,
 } = {}) {
-  const value = evidence
-    ?? JSON.parse(readFileSync(resolve(repositoryRoot, evidencePath), 'utf8'));
+  const value = evidence ?? readRepositoryJson(
+    repositoryRoot,
+    evidencePath,
+    'readiness evidence',
+    { beforeOpen: beforeEvidenceOpen },
+  );
   exact(value?.schemaVersion, 1, 'schema version');
   exact(value?.kind, 'sit-android-social-auth-provider-readiness', 'kind');
   exact(value?.state, 'email-google-pilot-ready-facebook-apple-hold', 'state');
@@ -240,10 +316,12 @@ export function validateAndroidSocialAuthProviderReadiness({
   }
 
   const facebook = readiness(
-    'facebook', value?.facebook, facebookRequirements, repositoryRoot, allowSyntheticFixture,
+    'facebook', value?.facebook, facebookRequirements, repositoryRoot,
+    allowSyntheticFixture, beforeEvidenceOpen,
   );
   const apple = readiness(
-    'apple', value?.apple, appleRequirements, repositoryRoot, allowSyntheticFixture,
+    'apple', value?.apple, appleRequirements, repositoryRoot,
+    allowSyntheticFixture, beforeEvidenceOpen,
   );
   if (value.pilotDecision.facebookEnabled && !facebook.ready) {
     fail('pilot decision enables Facebook before its provider gate is ready.');
@@ -272,6 +350,7 @@ export function validateAndroidSocialAuthProviderReadiness({
   ], 'official sources');
   if (value?.boundaries === null
       || typeof value.boundaries !== 'object'
+      || externalBoundaryRequirements.some((key) => value.boundaries[key] !== false)
       || Object.values(value.boundaries).some((entry) => entry !== false)) {
     fail('cannot claim an external/provider mutation.');
   }
