@@ -116,6 +116,8 @@ function statefulDockerExecutor(fx, {
   driftMemory = false,
   driftMaskedPaths = false,
   stopMode = null,
+  createMode = null,
+  renameMode = null,
 } = {}) {
   const db = { Name: `/${fx.manifest.databaseContainer}`, State: { Running: true }, Config: { Image: `postgres:16-alpine@sha256:${'c'.repeat(64)}`, Env: ['POSTGRES_DB=shareittoo_green', 'POSTGRES_USER=shareittoo_green'] } };
   const volume = { Name: fx.manifest.databaseVolume };
@@ -162,6 +164,7 @@ function statefulDockerExecutor(fx, {
         state.stopReadbackConsumed = true;
         fail('stop_state_readback', options.phase);
       }
+      if (!containers.has(target) && options.allowFailure) return { stdout: '', stderr: 'Error: No such container', code: 1 };
       if (target === fx.manifest.apiContainer && containers.get(target)?.Id === 'b'.repeat(64)) {
         const replacement = structuredClone(containers.get(target));
         if (driftHealth) replacement.Config.Healthcheck = { Test: ['CMD-SHELL', 'false'], Interval: 1, Timeout: 1, Retries: 1, StartPeriod: 1, StartInterval: 1 };
@@ -237,10 +240,31 @@ function statefulDockerExecutor(fx, {
       container.Name = `/${newName}`;
       containers.set(newName, container);
       fx.state.sealed = newName !== fx.manifest.apiContainer;
+      if ((renameMode === 'response-loss' || renameMode === 'foreign-response-loss') && !state.renameResponseConsumed) {
+        state.renameResponseConsumed = true;
+        if (renameMode === 'foreign-response-loss') {
+          const foreign = structuredClone(fx.api);
+          foreign.Id = 'f'.repeat(64);
+          foreign.Name = `/${fx.manifest.apiContainer}`;
+          foreign.State = { Running: false };
+          foreign.Config.Image = `${fx.image}@sha256:${'f'.repeat(64)}`;
+          containers.set(fx.manifest.apiContainer, foreign);
+        }
+        fail('rename_response_lost', options.phase);
+      }
       return { stdout: '', code: 0 };
     }
     if (operation === 'create') {
       if (failFor('create')) fail('create_replacement_api', options.phase);
+      if (createMode === 'foreign-preexisting') {
+        const foreign = structuredClone(fx.api);
+        foreign.Id = 'f'.repeat(64);
+        foreign.Name = `/${fx.manifest.apiContainer}`;
+        foreign.State = { Running: true };
+        foreign.Config.Image = `${fx.image}@sha256:${'f'.repeat(64)}`;
+        containers.set(fx.manifest.apiContainer, foreign);
+        fail('create_name_conflict', options.phase);
+      }
       const valueOptions = new Set(['--name', '--env-file', '--restart', '--restart-max-retries', '--user', '--workdir', '--entrypoint', '--security-opt', '--cap-add', '--cap-drop', '--stop-timeout', '--stop-signal', '--shm-size', '--dns', '--dns-search', '--add-host', '--ipc', '--pid', '--userns', '--log-driver', '--log-opt', '--memory', '--memory-swap', '--cpu-shares', '--cpu-quota', '--cpu-period', '--cpus', '--cpuset-cpus', '--cpuset-mems', '--pids-limit', '--device', '--ulimit', '--tmpfs', '--cgroupns', '--runtime', '--isolation', '--health-cmd', '--health-interval', '--health-timeout', '--health-retries', '--health-start-period', '--health-start-interval', '--group-add', '--label', '--mount', '--hostname', '--network']);
       const booleanOptions = new Set(['--privileged', '--read-only', '--no-new-privileges', '--init', '--oom-kill-disable', '--rm']);
       let cursor = 1;
@@ -268,6 +292,15 @@ function statefulDockerExecutor(fx, {
       source.NetworkSettings = { Ports: {}, Networks: { [networkName]: {} } };
       containers.set(name, source);
       fx.state.created = true;
+      if (createMode === 'response-loss' || createMode === 'foreign-response-loss') {
+        if (createMode === 'foreign-response-loss') {
+          const foreign = structuredClone(source);
+          foreign.Id = 'f'.repeat(64);
+          foreign.Config.Image = `${fx.image}@sha256:${'f'.repeat(64)}`;
+          containers.set(name, foreign);
+        }
+        fail('create_response_lost', options.phase);
+      }
       return { stdout: '', code: 0 };
     }
     if (operation === 'network_connect') {
@@ -450,6 +483,76 @@ test('wrong schema or image and stop/rename interruption never produce a false P
       return true;
     });
   } finally { await rm(create.root, { recursive: true, force: true }); }
+
+  const createLoss = await fixture();
+  try {
+    const fake = statefulDockerExecutor(createLoss, { createMode: 'response-loss' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: createLoss.manifest, mappingFile: createLoss.mappingFile, evidenceFile: createLoss.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.code, 'create_response_lost_failed');
+      assert.equal(error.rollback.restored, true);
+      assert.equal(error.rollback.originalRunning, true);
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_create_response_readback'));
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_replacement_remove'));
+      return true;
+    });
+    assert.equal(createLoss.state.api.State.Running, true);
+  } finally { await rm(createLoss.root, { recursive: true, force: true }); }
+
+  const foreignCreate = await fixture();
+  try {
+    const fake = statefulDockerExecutor(foreignCreate, { createMode: 'foreign-response-loss' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: foreignCreate.manifest, mappingFile: foreignCreate.mappingFile, evidenceFile: foreignCreate.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.rollback.restored, false);
+      assert.equal(error.rollback.originalRunning, null);
+      assert.equal(error.rollback.attemptedRestart, false);
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_replacement_remove'));
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_restore_start'));
+      return true;
+    });
+    assert.ok(fake.state.containers.has(foreignCreate.manifest.apiContainer));
+  } finally { await rm(foreignCreate.root, { recursive: true, force: true }); }
+
+  const preexistingForeign = await fixture();
+  try {
+    const fake = statefulDockerExecutor(preexistingForeign, { createMode: 'foreign-preexisting' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: preexistingForeign.manifest, mappingFile: preexistingForeign.mappingFile, evidenceFile: preexistingForeign.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.rollback.restored, false);
+      assert.equal(error.rollback.originalRunning, null);
+      assert.equal(error.rollback.attemptedRestart, false);
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_replacement_remove'));
+      return true;
+    });
+  } finally { await rm(preexistingForeign.root, { recursive: true, force: true }); }
+
+  const renameLoss = await fixture();
+  try {
+    const fake = statefulDockerExecutor(renameLoss, { renameMode: 'response-loss' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: renameLoss.manifest, mappingFile: renameLoss.mappingFile, evidenceFile: renameLoss.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.code, 'rename_response_lost_failed');
+      assert.equal(error.rollback.restored, true);
+      assert.equal(error.rollback.originalRunning, true);
+      assert.equal(error.rollback.attemptedRestart, true);
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_rename_current_readback'));
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_rename_sealed_readback'));
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_restore_start'));
+      return true;
+    });
+  } finally { await rm(renameLoss.root, { recursive: true, force: true }); }
+
+  const foreignRename = await fixture();
+  try {
+    const fake = statefulDockerExecutor(foreignRename, { renameMode: 'foreign-response-loss' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: foreignRename.manifest, mappingFile: foreignRename.mappingFile, evidenceFile: foreignRename.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.rollback.restored, false);
+      assert.equal(error.rollback.originalRunning, null);
+      assert.equal(error.rollback.attemptedRestart, false);
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_restore_rename'));
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_restore_start'));
+      return true;
+    });
+    assert.ok(fake.state.containers.has(foreignRename.manifest.apiContainer));
+    assert.ok(fake.state.containers.has(`${foreignRename.manifest.apiContainer}-google-registration-rollback-${revision.slice(0, 12)}`));
+  } finally { await rm(foreignRename.root, { recursive: true, force: true }); }
 
   const evidence = await fixture();
   try {

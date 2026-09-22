@@ -416,6 +416,79 @@ async function safeCommand(command, args, phase, commandEnv) {
   }
 }
 
+async function inspectNamedContainer(command, name, phase, commandEnv) {
+  try {
+    const result = await command('docker', ['inspect', '--format', '{{json .}}', name], { phase, env: commandEnv, allowFailure: true });
+    if (result?.code !== undefined && result.code !== 0) {
+      const noSuch = /no such (?:object|container)/iu.test(String(result.stderr ?? ''));
+      return Object.freeze({ exists: false, unknown: !noSuch, code: noSuch ? 'container_absent' : `${phase}_failed` });
+    }
+    return Object.freeze({ exists: true, record: parseJson(result.stdout, `${phase}_invalid`) });
+  } catch (error) {
+    return Object.freeze({ exists: false, unknown: true, code: error?.code ?? `${phase}_failed` });
+  }
+}
+
+function isExactOriginalContainer(record, manifest, originalApi, name, stopped = true) {
+  try {
+    if (record?.Name?.replace(/^\//u, '') !== name
+        || !originalApi?.Id || record?.Id !== originalApi.Id
+        || record?.Config?.Image !== originalApi.Config?.Image
+        || !sameExceptRegistrationFlags(originalApi, record)) return false;
+    assertNetworks(record, manifest, 'original_identity_network_invalid');
+    assertNoHostPort(record, 'original_identity_host_port_invalid');
+    return stopped ? record?.State?.Running === false : true;
+  } catch {
+    return false;
+  }
+}
+
+function isExactCreatedReplacement(record, manifest, originalApi, name) {
+  try {
+    if (record?.Name?.replace(/^\//u, '') !== name
+        || !record?.Id || record.Id === originalApi?.Id
+        || record?.State?.Running !== false) return false;
+    assertReplacementImageReadback(record, manifest, 'replacement_identity_image_invalid');
+    const comparable = structuredClone(record);
+    comparable.Config.Image = originalApi.Config.Image;
+    if (!sameExceptRegistrationFlags(originalApi, comparable)) return false;
+    const names = Object.keys(record?.NetworkSettings?.Networks ?? {}).sort();
+    if (JSON.stringify(names) !== JSON.stringify([manifest.network])) return false;
+    assertNoHostPort(record, 'replacement_identity_host_port_invalid');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function reconcileUnknownCreate({ manifest, originalApi, command, commandEnv }) {
+  const observed = await inspectNamedContainer(command, manifest.apiContainer, 'rollback_create_response_readback', commandEnv);
+  if (observed.unknown) return Object.freeze({ ok: false, code: observed.code });
+  if (!observed.exists) return Object.freeze({ ok: true, removed: false });
+  if (!isExactCreatedReplacement(observed.record, manifest, originalApi, manifest.apiContainer)) return Object.freeze({ ok: false, code: 'replacement_target_ambiguous' });
+  const removal = await safeCommand(command, ['rm', '--force', manifest.apiContainer], 'rollback_replacement_remove', commandEnv);
+  if (!removal.ok) return Object.freeze({ ok: false, code: removal.code });
+  const absent = await inspectNamedContainer(command, manifest.apiContainer, 'rollback_replacement_verify', commandEnv);
+  if (absent.unknown || absent.exists) return Object.freeze({ ok: false, code: absent.unknown ? absent.code : 'replacement_present' });
+  return Object.freeze({ ok: true, removed: true, removalPhase: removal.phase });
+}
+
+async function reconcileUnknownRename({ manifest, originalApi, sealedName, command, commandEnv }) {
+  const current = await inspectNamedContainer(command, manifest.apiContainer, 'rollback_rename_current_readback', commandEnv);
+  const sealed = await inspectNamedContainer(command, sealedName, 'rollback_rename_sealed_readback', commandEnv);
+  if (current.unknown || sealed.unknown) return Object.freeze({ ok: false, code: current.unknown ? current.code : sealed.code });
+  if (current.exists && sealed.exists) return Object.freeze({ ok: false, code: 'rename_target_ambiguous' });
+  if (!current.exists && sealed.exists) {
+    if (!isExactOriginalContainer(sealed.record, manifest, originalApi, sealedName)) return Object.freeze({ ok: false, code: 'sealed_original_identity_invalid' });
+    return Object.freeze({ ok: true, sealed: true, currentStopped: true });
+  }
+  if (current.exists && !sealed.exists) {
+    if (!isExactOriginalContainer(current.record, manifest, originalApi, manifest.apiContainer)) return Object.freeze({ ok: false, code: 'original_target_identity_invalid' });
+    return Object.freeze({ ok: true, sealed: false, currentStopped: true });
+  }
+  return Object.freeze({ ok: false, code: 'rename_targets_absent' });
+}
+
 async function stopCurrentApi({ manifest, originalApi, command, commandEnv }) {
   const unknownState = (error, code = null) => {
     error.stopStateUnknown = true;
@@ -470,11 +543,14 @@ async function stopCurrentApi({ manifest, originalApi, command, commandEnv }) {
   }
 }
 
-async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, originalApi, command, commandEnv, sealedName, sealed, currentStopped, stopStateUnknown = false, replacementCreated }) {
+async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, originalApi, command, commandEnv, sealedName, sealed: initialSealed, currentStopped: initialCurrentStopped, stopStateUnknown = false, replacementCreated, createResponseUnknown = false, renameResponseUnknown = false }) {
   const results = [];
   let ok = true;
   let attemptedRestart = false;
-  let originalRunning = currentStopped || stopStateUnknown ? null : true;
+  let originalRunning = initialCurrentStopped || stopStateUnknown ? null : true;
+  let sealed = initialSealed;
+  let currentStopped = initialCurrentStopped;
+  let topologySafe = true;
   if (!envMutationOwned) {
     results.push({ phase: 'rollback_env_restore', ok: true, skipped: true });
   } else {
@@ -488,16 +564,34 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
       ok = false;
     }
   }
-  if (replacementCreated) {
+  if (createResponseUnknown) {
+    const reconciled = await reconcileUnknownCreate({ manifest, originalApi, command, commandEnv });
+    results.push({ phase: 'rollback_create_response_reconcile', ok: reconciled.ok, ...(reconciled.ok ? {} : { code: reconciled.code }) });
+    if (!reconciled.ok) topologySafe = false;
+    if (reconciled.removed) results.push({ phase: 'rollback_replacement_remove', ok: true });
+  }
+  if (topologySafe && replacementCreated) {
     const removal = await safeCommand(command, ['rm', '--force', manifest.apiContainer], 'rollback_replacement_remove', commandEnv);
     results.push({ phase: removal.phase, ok: removal.ok, ...(removal.ok ? {} : { code: removal.code }) });
     ok &&= removal.ok;
   }
-  if (sealed) {
+  if (renameResponseUnknown && topologySafe) {
+    const reconciled = await reconcileUnknownRename({ manifest, originalApi, sealedName, command, commandEnv });
+    results.push({ phase: 'rollback_rename_response_reconcile', ok: reconciled.ok, ...(reconciled.ok ? {} : { code: reconciled.code }) });
+    if (!reconciled.ok) topologySafe = false;
+    else {
+      sealed = reconciled.sealed;
+      currentStopped = reconciled.currentStopped;
+    }
+  }
+  if (topologySafe && sealed) {
     const verify = await safeCommand(command, ['ps', '--all', '--filter', `name=^/${manifest.apiContainer}$`, '--format', '{{.Names}}'], 'rollback_replacement_verify', commandEnv);
     const absent = verify.ok && !(verify.result?.stdout ?? '').trim();
     results.push({ phase: verify.phase, ok: absent, ...(absent ? {} : { code: 'replacement_present' }) });
     ok &&= absent;
+    if (!absent) {
+      topologySafe = false;
+    } else {
     const renameResult = await safeCommand(command, ['rename', sealedName, manifest.apiContainer], 'rollback_restore_rename', commandEnv);
     results.push({ phase: renameResult.phase, ok: renameResult.ok, ...(renameResult.ok ? {} : { code: renameResult.code }) });
     ok &&= renameResult.ok;
@@ -524,8 +618,9 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
     } else {
       ok = false;
     }
+    }
   }
-  if (!sealed && (currentStopped || stopStateUnknown)) {
+  if (topologySafe && !sealed && (currentStopped || stopStateUnknown)) {
     attemptedRestart = true;
     const startResult = await safeCommand(command, ['start', manifest.apiContainer], 'rollback_original_start', commandEnv);
     results.push({ phase: startResult.phase, ok: startResult.ok, ...(startResult.ok ? {} : { code: startResult.code }) });
@@ -547,7 +642,7 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
       ok = false;
     }
   }
-  return Object.freeze({ restored: ok && originalRunning === true, originalRunning, attemptedRestart, results: Object.freeze(results) });
+  return Object.freeze({ restored: topologySafe && ok && originalRunning === true, originalRunning, attemptedRestart, results: Object.freeze(results) });
 }
 
 async function assertEvidenceTarget(filePath) {
@@ -628,14 +723,24 @@ export async function runStagingGoogleRegistrationEnable({
     envMutationOwned = true;
     const stopResult = await stopCurrentApi({ manifest: target, originalApi: preflight.readbacks.api, command, commandEnv });
     currentStopped = stopResult.stopped;
-    await command('docker', ['rename', target.apiContainer, sealedName], { phase: 'seal_current_api', env: commandEnv });
-    sealed = true;
+    try {
+      await command('docker', ['rename', target.apiContainer, sealedName], { phase: 'seal_current_api', env: commandEnv });
+      sealed = true;
+    } catch (error) {
+      error.renameResponseUnknown = true;
+      throw error;
+    }
     const createArgs = [...buildReplacementCreateArgs({ manifest: target, envFile: target.envFile, currentApi: preflight.readbacks.api })];
     const imageIndex = createArgs.lastIndexOf(target.image);
     if (imageIndex < 0) fail('replacement_image_argument_missing');
     createArgs[imageIndex] = `${target.image}@${target.imageDigest}`;
-    await command('docker', createArgs, { phase: 'create_replacement_api', env: commandEnv });
-    replacementCreated = true;
+    try {
+      await command('docker', createArgs, { phase: 'create_replacement_api', env: commandEnv });
+      replacementCreated = true;
+    } catch (error) {
+      error.createResponseUnknown = true;
+      throw error;
+    }
     await command('docker', ['network', 'connect', target.providerNetwork, target.apiContainer], { phase: 'attach_provider_network', env: commandEnv });
     await command('docker', ['start', target.apiContainer], { phase: 'start_replacement_api', env: commandEnv });
     const replacement = await command('docker', ['inspect', '--format', '{{json .}}', target.apiContainer], { phase: 'replacement_config_readback', env: commandEnv });
@@ -660,7 +765,7 @@ export async function runStagingGoogleRegistrationEnable({
     await writeEvidence(evidenceFile, { kind: 'sit-staging-google-registration-enable', schemaVersion: 1, status: result.status, runtimeRevision: target.runtimeRevision, apiContainer: target.apiContainer, imageDigest: target.imageDigest, mappingDigest: mapping.mappingDigest, targetUserIdDigest: sha256(mapping.userId), mappingEntryCount: 1, schemaMigration: requiredTerminalMigration, migrationLedger: requiredMigrationLedger, providerTraffic: 'none', stripeLivemode: false, requiresLaterGate: result.requiresLaterGate });
     return result;
   } catch (error) {
-    error.rollback = await rollback({ manifest: target, originalEnv: original.content, appliedEnv, envMutationOwned, originalApi: preflight.readbacks.api, command, commandEnv, sealedName, sealed, currentStopped, stopStateUnknown: error.stopStateUnknown === true, replacementCreated });
+    error.rollback = await rollback({ manifest: target, originalEnv: original.content, appliedEnv, envMutationOwned, originalApi: preflight.readbacks.api, command, commandEnv, sealedName, sealed, currentStopped, stopStateUnknown: error.stopStateUnknown === true, replacementCreated, createResponseUnknown: error.createResponseUnknown === true, renameResponseUnknown: error.renameResponseUnknown === true });
     throw error;
   }
 }
