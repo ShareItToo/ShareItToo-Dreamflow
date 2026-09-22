@@ -125,13 +125,13 @@ test('runtime readback binds version and capability safety surface', () => {
 
 test('inventory rejects wrong schema, host ports and non-Green labels', () => {
   const inventory = {
-    api: { name: greenTarget.apiContainer, greenLabel: true, hostPorts: 0, running: true },
+    api: { name: greenTarget.apiContainer, greenLabel: false, prePromotionTuple: true, hostPorts: 0, running: true, networks: [greenTarget.network, greenTarget.providerNetwork], image: targetManifest.prePromotionImage, databaseHost: greenTarget.databaseContainer, databaseName: greenTarget.databaseName, databaseUser: greenTarget.databaseUser, uploadsVolume: greenTarget.uploadsVolume, groupAdd: true, mountDestinations: ['/run/secrets/mfa-encryption-key', '/run/secrets/firebase-service-account.json', '/data/uploads'] },
     database: { name: greenTarget.databaseContainer, greenLabel: true, running: true },
     network: { name: greenTarget.network, internal: true }, providerNetwork: { name: greenTarget.providerNetwork },
     uploadsVolume: { name: greenTarget.uploadsVolume }, schema: 87,
   };
-  assert.equal(assertGreenContainerInventory(inventory), true);
-  assert.throws(() => assertGreenContainerInventory({ ...inventory, schema: 95 }));
+  assert.equal(assertGreenContainerInventory(inventory, greenTarget.sourceSchema, targetManifest.prePromotionImage), true);
+  assert.throws(() => assertGreenContainerInventory({ ...inventory, schema: 95 }, greenTarget.sourceSchema, targetManifest.prePromotionImage));
   assert.throws(() => assertGreenContainerInventory({ ...inventory, api: { ...inventory.api, hostPorts: 1 } }));
   assert.throws(() => assertGreenContainerInventory({ ...inventory, network: { name: 'sit-staging', internal: true } }));
 });
@@ -203,6 +203,17 @@ test('every promotion command has an executable command and argv, including targ
     assert.ok(entry.command.length > 0, `${entry.phase} command must not be empty`);
     assert.ok(Array.isArray(entry.args), `${entry.phase} args must be an array`);
   }
+});
+
+test('promotion plan resolves the exact sealed API before emitting mutation commands', () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  assert.equal(plan.target.sealedApiContainer, greenTarget.sealedApiContainer);
+  const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
+  for (const entry of commands) {
+    assert.equal(entry.args.some((arg) => arg === undefined), false, `${entry.phase} must not contain undefined argv`);
+  }
+  const missing = Object.freeze({ ...plan, target: Object.freeze({ ...plan.target, sealedApiContainer: undefined }) });
+  assert.throws(() => buildGreenPromotionCommands({ plan: missing, configFile: config.envFile, config }), /green_sealed_target_invalid/u);
 });
 
 test('executor runs provisioners in the declared runtime image before quiesce', async () => {
@@ -366,12 +377,14 @@ test('command executor bindings keep isolated probes and canonical runtime disti
 
 test('pre-promotion inventory requires the exact Green DB host and protected mount cohort', () => {
   const base = {
-    api: { name: greenTarget.apiContainer, greenLabel: false, prePromotionTuple: true, hostPorts: 0, running: true, networks: [greenTarget.network, greenTarget.providerNetwork], image: 'shareittoo-api-wp260b:4d61611a', expectedPrePromotionImage: targetManifest.prePromotionImage, databaseHost: greenTarget.databaseContainer, databaseName: greenTarget.databaseName, databaseUser: greenTarget.databaseUser, uploadsVolume: greenTarget.uploadsVolume, groupAdd: true, mountDestinations: ['/run/secrets/mfa-encryption-key', '/run/secrets/firebase-service-account.json', '/data/uploads'] },
+    api: { name: greenTarget.apiContainer, greenLabel: false, prePromotionTuple: true, hostPorts: 0, running: true, networks: [greenTarget.network, greenTarget.providerNetwork], image: 'shareittoo-api-wp260b:4d61611a', databaseHost: greenTarget.databaseContainer, databaseName: greenTarget.databaseName, databaseUser: greenTarget.databaseUser, uploadsVolume: greenTarget.uploadsVolume, groupAdd: true, mountDestinations: ['/run/secrets/mfa-encryption-key', '/run/secrets/firebase-service-account.json', '/data/uploads'] },
     database: { name: greenTarget.databaseContainer, greenLabel: true, running: true }, network: { name: greenTarget.network, internal: true }, providerNetwork: { name: greenTarget.providerNetwork }, uploadsVolume: { name: greenTarget.uploadsVolume }, schema: 87,
   };
-  assert.equal(assertGreenContainerInventory(base), true);
-  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, databaseHost: 'legacy-db' } }), /green_prepromotion_tuple_mismatch/u);
-  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mountDestinations: base.api.mountDestinations.slice(0, -1) } }), /green_prepromotion_tuple_mismatch/u);
+  assert.equal(assertGreenContainerInventory(base, greenTarget.sourceSchema, targetManifest.prePromotionImage), true);
+  assert.equal(assertGreenContainerInventory({ ...base, api: { ...base.api, greenLabel: true, prePromotionTuple: false } }, greenTarget.sourceSchema, targetManifest.prePromotionImage), true);
+  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, databaseHost: 'legacy-db' } }, greenTarget.sourceSchema, targetManifest.prePromotionImage), /green_prepromotion_tuple_mismatch/u);
+  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mountDestinations: base.api.mountDestinations.slice(0, -1) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage), /green_prepromotion_tuple_mismatch/u);
+  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, prePromotionTuple: true, greenLabel: true, image: 'shareittoo-api-wp260b:4d6161ff' } }, greenTarget.sourceSchema, targetManifest.prePromotionImage), /green_prepromotion_tuple_mismatch/u);
 });
 
 test('final readback is authoritative for no-port Green routing, mounts, image and protected cohort', () => {
@@ -422,6 +435,8 @@ test('post-schema forward recovery creates only the successor and verifies its p
   const calls = [];
   const fake = async (command, args, options) => {
     calls.push({ command, args, options });
+    if (options.phase === 'recovery_canonical_schema_readback') return { stdout: '095_staging_google_registration_replays.up.sql\n' };
+    if (options.phase === 'recovery_canonical_migration_ledger_readback') return { stdout: '95|95|1|95\n' };
     if (options.phase.endsWith('final_image_readback')) return { stdout: JSON.stringify(image) };
     if (options.phase.endsWith('final_inventory_readback')) return { stdout: JSON.stringify(record) };
     if (options.phase.endsWith('final_health_probe') || options.phase.endsWith('final_ready_wait')) return { stdout: JSON.stringify(payload) };
@@ -433,6 +448,37 @@ test('post-schema forward recovery creates only the successor and verifies its p
   assert.equal(calls.some((call) => call.args.includes('shareittoo-staging-api-alt-sealed-green')), false);
   const retained = await runGreenForwardRecovery({ plan, commands, command: fake, completed: ['final_create_no_host_port', 'final_provider_network_attach', 'final_start'] });
   assert.equal(retained.status, 'verified');
+});
+
+test('forward recovery fails closed before candidate continuation on migration readback gaps', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
+  const payload = { checks: { technicalSandbox: { available: true, amountMinor: 100, currency: 'EUR' }, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
+  const record = {
+    Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
+    Config: { Image: plan.runtime.image, Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
+    HostConfig: { GroupAdd: ['65532'] }, Mounts: [{ Destination: '/data/uploads', Name: greenTarget.uploadsVolume, RW: true }, ...['/run/secrets/firebase-service-account.json', '/run/secrets/mfa-encryption-key', '/run/secrets/technical-sandbox-key', '/run/secrets/technical-sandbox-webhook'].map((Destination) => ({ Destination, RW: false }))],
+  };
+  const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@sha256:${'e'.repeat(64)}`] };
+  for (const invalid of [
+    { migration: '', ledger: '95|95|1|95', code: 'green_forward_recovery_schema_readback_invalid' },
+    { migration: '094_apple_refresh_material_only.up.sql', ledger: '95|95|1|95', code: 'green_forward_recovery_schema_readback_invalid' },
+    { migration: '095_staging_google_registration_replays.up.sql', ledger: '94|94|1|94', code: 'green_forward_recovery_migration_ledger_invalid' },
+  ]) {
+    const calls = [];
+    const fake = async (command, args, options) => {
+      calls.push({ command, args, options });
+      if (options.phase === 'recovery_canonical_schema_readback') return { stdout: `${invalid.migration}\n` };
+      if (options.phase === 'recovery_canonical_migration_ledger_readback') return { stdout: `${invalid.ledger}\n` };
+      if (options.phase.endsWith('final_image_readback')) return { stdout: JSON.stringify(image) };
+      if (options.phase.endsWith('final_inventory_readback')) return { stdout: JSON.stringify(record) };
+      if (options.phase.endsWith('final_health_probe') || options.phase.endsWith('final_ready_wait')) return { stdout: JSON.stringify(payload) };
+      if (options.phase.endsWith('final_version_readback')) return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'staging' }) };
+      return { stdout: '' };
+    };
+    await assert.rejects(runGreenForwardRecovery({ plan, commands, command: fake, completed: [] }), new RegExp(invalid.code, 'u'));
+    assert.equal(calls.some((call) => call.options.phase === 'recovery_final_create_no_host_port'), false);
+  }
 });
 
 test('sanitized evidence accepts approved secret mount paths but rejects secret-bearing fields', () => {

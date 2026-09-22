@@ -149,6 +149,13 @@ function currentMigrationFromReadback(value, code) {
   return migration;
 }
 
+function assertCurrentMigrationLedger(value, code) {
+  const ledger = String(value ?? '').trim();
+  const expected = `${greenTarget.currentSchema}|${greenTarget.currentSchema}|1|${greenTarget.currentSchema}`;
+  if (ledger !== expected) fail(code);
+  return ledger;
+}
+
 export function assertGreenRuntimeReadbacks({ version, health, ready, runtimeCommit } = {}) {
   if (version?.commit !== runtimeCommit || version?.environment !== 'staging' && version?.environment !== 'test') fail('green_runtime_version_mismatch');
   for (const payload of [health, ready]) {
@@ -352,7 +359,7 @@ export function assertGreenImageReadback(readback, runtime) {
   return true;
 }
 
-export function assertGreenContainerInventory(inventory, expectedSourceSchema = greenTarget.sourceSchema) {
+export function assertGreenContainerInventory(inventory, expectedSourceSchema = greenTarget.sourceSchema, expectedPrePromotionImage) {
   exactKeys(inventory, ['api', 'database', 'network', 'providerNetwork', 'uploadsVolume', 'schema'], 'green_inventory_shape_invalid');
   if (inventory.api.name !== greenTarget.apiContainer
       || inventory.database.name !== greenTarget.databaseContainer
@@ -360,7 +367,6 @@ export function assertGreenContainerInventory(inventory, expectedSourceSchema = 
       || inventory.providerNetwork.name !== greenTarget.providerNetwork
       || inventory.uploadsVolume.name !== greenTarget.uploadsVolume
       || inventory.network.internal !== true
-      || (inventory.api.greenLabel !== true && inventory.api.prePromotionTuple !== true)
       || inventory.database.greenLabel !== true
       || inventory.api.hostPorts !== 0
       || inventory.api.running !== true
@@ -369,15 +375,15 @@ export function assertGreenContainerInventory(inventory, expectedSourceSchema = 
     fail('green_inventory_mismatch');
   }
   const exactPrePromotionMounts = ['/run/secrets/mfa-encryption-key', '/run/secrets/firebase-service-account.json', '/data/uploads'].sort().join('|');
-  if (inventory.api.prePromotionTuple === true
-      && (inventory.api.networks?.slice().sort().join('|') !== [greenTarget.network, greenTarget.providerNetwork].sort().join('|')
+  if (typeof expectedPrePromotionImage !== 'string'
+      || inventory.api.image !== expectedPrePromotionImage
+        || inventory.api.networks?.slice().sort().join('|') !== [greenTarget.network, greenTarget.providerNetwork].sort().join('|')
         || inventory.api.databaseHost !== greenTarget.databaseContainer
-        || inventory.api.image !== inventory.api.expectedPrePromotionImage
         || inventory.api.databaseName !== greenTarget.databaseName
         || inventory.api.databaseUser !== greenTarget.databaseUser
         || inventory.api.uploadsVolume !== greenTarget.uploadsVolume
         || inventory.api.groupAdd !== true
-        || inventory.api.mountDestinations?.slice().sort().join('|') !== exactPrePromotionMounts)) {
+        || inventory.api.mountDestinations?.slice().sort().join('|') !== exactPrePromotionMounts) {
     fail('green_prepromotion_tuple_mismatch');
   }
   return true;
@@ -433,7 +439,9 @@ export function buildGreenPromotionPlan({
   opsCommit,
   evidenceFile,
 } = {}) {
-  const target = assertGreenTargetManifest(targetManifest);
+  const manifestTarget = assertGreenTargetManifest(targetManifest);
+  if (typeof greenTarget.sealedApiContainer !== 'string' || !greenTarget.sealedApiContainer) fail('green_sealed_target_invalid');
+  const target = Object.freeze({ ...manifestTarget, sealedApiContainer: greenTarget.sealedApiContainer });
   const runtime = assertGreenRuntimeImage({
     image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`,
     digest: runtimeImageDigest,
@@ -489,6 +497,8 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
   safePath(configFile, 'green_config_file_invalid');
   const runtimeConfig = assertGreenRuntimeConfig(config);
   const { target, runtime, isolated } = plan;
+  if (!target || typeof target.sealedApiContainer !== 'string'
+      || target.sealedApiContainer !== greenTarget.sealedApiContainer) fail('green_sealed_target_invalid');
   const inspect = (name) => ({ command: 'docker', args: ['inspect', '--format', '{{json .}}', name] });
   const provisionerSource = resolve(repositoryRoot, 'backend/ops/provision_synthetic_sandbox_user.mjs');
   const stablePrivateFileSource = resolve(repositoryRoot, 'backend/ops/stable_private_file.mjs');
@@ -502,6 +512,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     '--mount', `type=bind,src=${syntheticSandboxCredentialFilePath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`,
   ];
   const provisionerPath = '/app/ops/provision_synthetic_sandbox_user.mjs';
+  const migrationLedgerReadbackSql = "SELECT count(*) || '|' || count(DISTINCT (regexp_match(name, '^([0-9]+)_'))[1]::int) || '|' || min((regexp_match(name, '^([0-9]+)_'))[1]::int) || '|' || max((regexp_match(name, '^([0-9]+)_'))[1]::int) FROM schema_migrations";
   const commands = [
     { phase: 'target_inventory_api', ...inspect(target.apiContainer) },
     { phase: 'target_inventory_database', ...inspect(target.databaseContainer) },
@@ -556,6 +567,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'seal_green_api', command: 'docker', args: ['rename', target.apiContainer, target.sealedApiContainer] },
     { phase: 'canonical_forward_migration_87_to_95', command: 'docker', args: ['run', '--rm', '--network', target.network, '--env-file', configFile, '--entrypoint', 'node', runtime.image, '-e', "import('./src/migrations.js').then(async ({runMigrations})=>{const {Pool}=await import('pg');const pool=new Pool({connectionString:process.env.DATABASE_URL});await runMigrations(pool);await pool.end();})"], envFile: configFile, redacted: true },
     { phase: 'canonical_schema_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', "SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"] },
+    { phase: 'canonical_migration_ledger_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', migrationLedgerReadbackSql] },
     { phase: 'synthetic_sandbox_provision_canonical', command: 'docker', args: ['run', '--rm', '--user', '100:101', '--group-add', '65532', '--network', target.network, '--env-file', configFile, '--env', 'DEPLOYMENT_ENVIRONMENT=test', '--env', 'SYNTHETIC_SANDBOX_PASSWORD_FILE=/run/secrets/synthetic-sandbox-user-password', ...provisionerMounts, '--entrypoint', 'node', runtime.image, provisionerPath], envFile: configFile, redacted: true },
     { phase: 'final_create_no_host_port', command: 'docker', args: [
       'create', '--name', target.apiContainer, '--restart', 'no', '--group-add', '65532', '--network', target.network,
@@ -715,7 +727,7 @@ export function runGreenCommandWithFileInput(command, args, inputFile, { cwd = r
 
 export async function runGreenForwardRecovery({ plan, commands, command, commandEnv = {}, completed = [] } = {}) {
   if (!plan || plan.kind !== 'sit-green-promotion-plan' || !Array.isArray(commands) || typeof command !== 'function') fail('green_forward_recovery_input_invalid');
-  const phases = ['final_create_no_host_port', 'final_provider_network_attach', 'final_start', 'final_image_readback', 'final_inventory_readback', 'final_live_wait', 'final_health_probe', 'final_ready_wait', 'final_version_readback'];
+  const phases = ['canonical_schema_readback', 'canonical_migration_ledger_readback', 'final_create_no_host_port', 'final_provider_network_attach', 'final_start', 'final_image_readback', 'final_inventory_readback', 'final_live_wait', 'final_health_probe', 'final_ready_wait', 'final_version_readback'];
   const byPhase = new Map(commands.map((entry) => [entry.phase, entry]));
   const readbacks = {};
   const recovered = [];
@@ -735,6 +747,8 @@ export async function runGreenForwardRecovery({ plan, commands, command, command
       result = await command(entry.command, entry.args, { phase: `recovery_${phase}`, env: commandEnv });
     }
     if (phase.endsWith('_readback') || phase.endsWith('_wait') || phase === 'final_health_probe') readbacks[phase] = result.stdout?.trim() ?? '';
+    if (phase === 'canonical_schema_readback') currentMigrationFromReadback(readbacks[phase], 'green_forward_recovery_schema_readback_invalid');
+    if (phase === 'canonical_migration_ledger_readback') assertCurrentMigrationLedger(readbacks[phase], 'green_forward_recovery_migration_ledger_invalid');
     recovered.push(phase);
   }
   assertGreenImageReadback(JSON.parse(readbacks.final_image_readback), plan.runtime);
@@ -845,7 +859,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       if (entry.phase.startsWith('target_inventory_') || entry.phase === 'sealed_name_conflict_check' || entry.phase === 'runtime_image_readback' || entry.phase === 'source_schema_readback'
           || entry.phase === 'candidate_health_and_feature_probes' || entry.phase === 'candidate_ready_probe' || entry.phase === 'candidate_version_probe'
           || entry.phase === 'final_image_readback' || entry.phase === 'final_inventory_readback' || entry.phase === 'final_live_wait' || entry.phase === 'final_health_probe' || entry.phase === 'final_ready_wait' || entry.phase === 'final_version_readback'
-          || entry.phase.endsWith('_schema_readback')) {
+          || entry.phase.endsWith('_schema_readback') || entry.phase.endsWith('_migration_ledger_readback')) {
         readbacks[entry.phase] = result.stdout?.trim() ?? '';
       }
       if (entry.phase === 'sealed_name_conflict_check' && readbacks[entry.phase]) fail('green_sealed_name_conflict');
@@ -864,13 +878,14 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
         const apiMountDestinations = apiMounts.map((mount) => mount.Destination);
         const uploadsMount = apiMounts.find((mount) => mount.Destination === '/data/uploads');
         assertGreenContainerInventory({
-          api: { name: apiRecord?.Name?.replace(/^\//u, ''), greenLabel: apiRecord?.Config?.Labels?.['com.shareittoo.sit.green'] === 'true', prePromotionTuple: apiRecord?.Config?.Labels?.['com.shareittoo.sit.green'] === undefined, hostPorts: Object.values(apiRecord?.NetworkSettings?.Ports ?? {}).flat().filter(Boolean).length, running: apiRecord?.State?.Running === true, networks: Object.keys(apiRecord?.NetworkSettings?.Networks ?? {}), image: apiRecord?.Config?.Image, expectedPrePromotionImage: plan.target.prePromotionImage, databaseHost: (() => { try { return new URL(apiEnv.DATABASE_URL).hostname; } catch { return ''; } })(), databaseName: (() => { try { return new URL(apiEnv.DATABASE_URL).pathname.slice(1); } catch { return ''; } })(), databaseUser: (() => { try { return new URL(apiEnv.DATABASE_URL).username; } catch { return ''; } })(), uploadsVolume: uploadsMount?.Name ?? '', groupAdd: (apiRecord?.HostConfig?.GroupAdd ?? []).includes('65532'), mountDestinations: apiMountDestinations },
+          api: { name: apiRecord?.Name?.replace(/^\//u, ''), greenLabel: apiRecord?.Config?.Labels?.['com.shareittoo.sit.green'] === 'true', prePromotionTuple: apiRecord?.Config?.Labels?.['com.shareittoo.sit.green'] === undefined, hostPorts: Object.values(apiRecord?.NetworkSettings?.Ports ?? {}).flat().filter(Boolean).length, running: apiRecord?.State?.Running === true, networks: Object.keys(apiRecord?.NetworkSettings?.Networks ?? {}), image: apiRecord?.Config?.Image, databaseHost: (() => { try { return new URL(apiEnv.DATABASE_URL).hostname; } catch { return ''; } })(), databaseName: (() => { try { return new URL(apiEnv.DATABASE_URL).pathname.slice(1); } catch { return ''; } })(), databaseUser: (() => { try { return new URL(apiEnv.DATABASE_URL).username; } catch { return ''; } })(), uploadsVolume: uploadsMount?.Name ?? '', groupAdd: (apiRecord?.HostConfig?.GroupAdd ?? []).includes('65532'), mountDestinations: apiMountDestinations },
           database: { name: databaseRecord?.Name?.replace(/^\//u, ''), greenLabel: databaseRecord?.Config?.Labels?.['com.shareittoo.sit.green'] === 'true', running: databaseRecord?.State?.Running === true },
           network: { name: networkRecord?.Name, internal: networkRecord?.Internal === true }, providerNetwork: { name: providerRecord?.Name }, uploadsVolume: { name: volumeRecord?.Name }, schema: schemaNumberFromName(readbacks.source_schema_readback, 'green_source_schema_readback_invalid'),
-        }, plan.target.sourceSchema);
+        }, plan.target.sourceSchema, plan.target.prePromotionImage);
       }
       if (entry.phase === 'isolated_migration_readback') currentMigrationFromReadback(result.stdout, 'green_isolated_schema_readback_invalid');
       if (entry.phase === 'canonical_schema_readback') currentMigrationFromReadback(result.stdout, 'green_canonical_schema_readback_invalid');
+      if (entry.phase === 'canonical_migration_ledger_readback') assertCurrentMigrationLedger(result.stdout, 'green_canonical_migration_ledger_invalid');
       if (entry.phase === 'candidate_version_probe') assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.candidate_version_probe), health: JSON.parse(readbacks.candidate_health_and_feature_probes), ready: JSON.parse(readbacks.candidate_ready_probe), runtimeCommit: plan.runtime.runtimeCommit });
       if (entry.phase === 'final_inventory_readback') assertGreenFinalContainerReadback({ record: JSON.parse(readbacks.final_inventory_readback), plan });
       if (entry.phase === 'final_image_readback') assertGreenImageReadback(JSON.parse(readbacks.final_image_readback), plan.runtime);
@@ -878,7 +893,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       completed.push(entry.phase);
     }
     if (!backupDigest || !readbacks.final_image_readback || !readbacks.final_version_readback || !readbacks.final_inventory_readback) fail('green_final_readback_missing');
-    const evidence = sanitizeGreenEvidence({ plan, status: 'executed', backupDigest, configDigest: sha256(await readFile(configFile)), targetReadback: { sourceSchemaReadback: schemaNumberFromName(readbacks.source_schema_readback, 'green_source_schema_readback_invalid'), currentSchema: schemaNumberFromName(readbacks.canonical_schema_readback, 'green_canonical_schema_readback_invalid'), currentMigration: currentMigrationFromReadback(readbacks.canonical_schema_readback, 'green_canonical_schema_readback_invalid'), cleanup: 'verified', finalInventory: summarizeGreenFinalContainerReadback(JSON.parse(readbacks.final_inventory_readback), plan) }, imageReadback: JSON.parse(readbacks.final_version_readback) });
+    const evidence = sanitizeGreenEvidence({ plan, status: 'executed', backupDigest, configDigest: sha256(await readFile(configFile)), targetReadback: { sourceSchemaReadback: schemaNumberFromName(readbacks.source_schema_readback, 'green_source_schema_readback_invalid'), currentSchema: schemaNumberFromName(readbacks.canonical_schema_readback, 'green_canonical_schema_readback_invalid'), currentMigration: currentMigrationFromReadback(readbacks.canonical_schema_readback, 'green_canonical_schema_readback_invalid'), migrationLedger: assertCurrentMigrationLedger(readbacks.canonical_migration_ledger_readback, 'green_canonical_migration_ledger_invalid'), cleanup: 'verified', finalInventory: summarizeGreenFinalContainerReadback(JSON.parse(readbacks.final_inventory_readback), plan) }, imageReadback: JSON.parse(readbacks.final_version_readback) });
     const evidenceResult = await writeGreenEvidence(plan.evidenceFile, evidence);
     return Object.freeze({ status: 'executed', completedPhases: Object.freeze(completed), evidence: evidenceResult });
   } catch (error) {
