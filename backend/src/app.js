@@ -2565,6 +2565,7 @@ export function createApp({
         if (exactExistingSocialIdentity && user.id !== precheckedSocialAccountId) {
           throw new HttpError(409, 'social_identity_changed');
         }
+        if (exactExistingSocialIdentity) assertStagingUserAllowed(user.id);
         if (linked.rows[0].firebase_user_id !== identity.firebaseUserId) {
           throw new HttpError(
             403,

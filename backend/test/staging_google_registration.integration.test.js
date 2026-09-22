@@ -347,10 +347,27 @@ if (!databaseUrl) {
           WHERE id = $1`,
         [userId, `deleted-${crypto.randomUUID()}@example.invalid`],
       );
+      const raceStateBefore = await setupPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM users) AS users,
+           (SELECT count(*)::int FROM auth_identities WHERE provider = 'google') AS google_identities,
+           (SELECT count(*)::int FROM auth_sessions) AS sessions,
+           (SELECT count(*)::int FROM audit_log
+             WHERE action IN ('account.registered', 'auth.social_login')) AS social_audits`,
+      );
       releaseInterleavedSocialAuth();
       const interleavedResponse = await interleavedRequest;
       assert.equal(interleavedResponse.status, 409);
       assert.equal((await interleavedResponse.json()).error, 'social_identity_changed');
+      const raceStateAfter = await setupPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM users) AS users,
+           (SELECT count(*)::int FROM auth_identities WHERE provider = 'google') AS google_identities,
+           (SELECT count(*)::int FROM auth_sessions) AS sessions,
+           (SELECT count(*)::int FROM audit_log
+             WHERE action IN ('account.registered', 'auth.social_login')) AS social_audits`,
+      );
+      assert.deepEqual(raceStateAfter.rows[0], raceStateBefore.rows[0]);
       const { reserveStagingGoogleRegistrationReplay } = await import(
         '../src/staging_google_registration.js'
       );
