@@ -27,7 +27,10 @@ function boundedText(value, maxLength) {
   return normalized && normalized.length <= maxLength ? normalized : '';
 }
 
-export function normalizeFirebaseSocialClaims(decoded, { requireFreshToken = false, now = Date.now() } = {}) {
+export function normalizeFirebaseSocialClaims(
+  decoded,
+  { requireFreshToken = false, includeTokenDigest = false, now = Date.now() } = {},
+) {
   if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) {
     throw new SocialAuthError(401, 'invalid_social_token');
   }
@@ -59,7 +62,12 @@ export function normalizeFirebaseSocialClaims(decoded, { requireFreshToken = fal
     emailVerified: decoded.email_verified === true,
     displayName,
   };
-  if (!requireFreshToken) return normalized;
+  if (!requireFreshToken && !includeTokenDigest) return normalized;
+  const tokenDigest = crypto.createHash('sha256').update(
+    boundedText(decoded.__rawToken, 12_000),
+    'utf8',
+  ).digest('hex');
+  if (!requireFreshToken) return { ...normalized, tokenDigest };
   const issuedAt = Number(decoded.iat);
   const expiresAt = Number(decoded.exp);
   const authTime = Number(decoded.auth_time);
@@ -76,10 +84,7 @@ export function normalizeFirebaseSocialClaims(decoded, { requireFreshToken = fal
     tokenIssuedAt: issuedAt,
     tokenExpiresAt: expiresAt,
     tokenAuthTime: authTime,
-    tokenDigest: crypto.createHash('sha256').update(
-      boundedText(decoded.__rawToken, 12_000),
-      'utf8',
-    ).digest('hex'),
+    tokenDigest,
   };
 }
 
@@ -114,7 +119,7 @@ export async function firebaseAuthClient() {
 
 export async function verifyFirebaseSocialToken(
   rawToken,
-  { verifyIdToken, requireFreshToken = false, now = Date.now() } = {},
+  { verifyIdToken, requireFreshToken = false, includeTokenDigest = false, now = Date.now() } = {},
 ) {
   if (!verifyIdToken && !config.socialAuth.enabled) {
     throw new SocialAuthError(503, 'social_auth_unavailable');
@@ -126,8 +131,8 @@ export async function verifyFirebaseSocialToken(
     const verify = verifyIdToken ?? auth.verifyIdToken.bind(auth);
     const decoded = await verify(token, true);
     return normalizeFirebaseSocialClaims(
-      requireFreshToken ? { ...decoded, __rawToken: token } : decoded,
-      { requireFreshToken, now },
+      (requireFreshToken || includeTokenDigest) ? { ...decoded, __rawToken: token } : decoded,
+      { requireFreshToken, includeTokenDigest, now },
     );
   } catch (error) {
     if (error instanceof SocialAuthError) throw error;

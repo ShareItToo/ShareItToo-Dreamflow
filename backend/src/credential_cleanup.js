@@ -1,4 +1,5 @@
 import { safeOperationalErrorCode } from './observability.js';
+import { pruneExpiredStagingGoogleRegistrationReplays } from './staging_google_registration.js';
 
 export const credentialCleanupIntervalMs = 6 * 60 * 60 * 1000;
 
@@ -39,6 +40,7 @@ export async function purgeExpiredCredentials({ client } = {}) {
   if (!client || typeof client.query !== 'function') {
     throw new Error('Credential cleanup requires a database client.');
   }
+  await pruneExpiredStagingGoogleRegistrationReplays(client);
   const result = await client.query(cleanupStatement);
   const row = result.rows[0] ?? {};
   return {

@@ -22,6 +22,7 @@ if (!databaseUrl) {
     const token2 = 'synthetic-google-token-b'.repeat(8);
     const token3 = 'synthetic-google-token-c'.repeat(8);
     const token4 = 'synthetic-google-token-d'.repeat(8);
+    const token5 = 'synthetic-google-token-e'.repeat(8);
     const tokenApple = 'synthetic-apple-token'.repeat(8);
     const tokenExpired = 'synthetic-expired-token'.repeat(8);
     const tokenUnlisted = 'synthetic-unlisted-token'.repeat(8);
@@ -102,6 +103,7 @@ if (!databaseUrl) {
         [token2, withTokenDigest(token2)],
         [token3, withTokenDigest(token3)],
         [token4, withTokenDigest(token4)],
+        [token5, withTokenDigest(token5)],
         [tokenApple, {
           ...withTokenDigest(tokenApple),
           provider: 'apple',
@@ -142,9 +144,10 @@ if (!databaseUrl) {
           tokenDigest: crypto.createHash('sha256').update(tokenReplayConflict, 'utf8').digest('hex'),
         }],
       ]);
+      const verificationCalls = [];
       const app = createApp({
-        verifySocialToken: async (rawToken, options) => {
-          assert.equal(options.requireFreshToken, true);
+        verifySocialToken: async (rawToken, options = {}) => {
+          verificationCalls.push({ rawToken, fresh: options.requireFreshToken === true });
           const verified = identities.get(rawToken);
           if (!verified || verified.tokenExpiresAt <= Math.floor(Date.now() / 1000)) {
             const error = new Error('invalid_social_token');
@@ -205,7 +208,26 @@ if (!databaseUrl) {
       assert.equal((await occupiedIdentity.json()).error, 'staging_google_identity_conflict');
       await setupPool.query('DELETE FROM users WHERE id = $1', [userId]);
       await setupPool.query('DELETE FROM users WHERE id = $1', [rollbackUserId]);
-      const parallel = await Promise.all([request(token3), request(token4)]);
+      const sameTokenParallel = await Promise.all([request(token3), request(token3)]);
+      const sameTokenBodies = await Promise.all(sameTokenParallel.map((response) => response.json()));
+      assert.deepEqual(sameTokenParallel.map((response) => response.status).sort(), [200, 409]);
+      assert.equal(sameTokenBodies.filter((body) => body.user?.id === userId).length, 1);
+      assert.equal(sameTokenBodies.filter((body) => body.error === 'staging_google_registration_replay').length, 1);
+      const sameTokenState = await setupPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM auth_identities WHERE user_id = $1) AS identities,
+           (SELECT count(*)::int FROM auth_sessions WHERE user_id = $1) AS sessions,
+           (SELECT count(*)::int FROM audit_log WHERE actor_id = $1) AS audits,
+           (SELECT count(*)::int FROM staging_google_registration_replays WHERE token_digest = $2) AS replays`,
+        [userId, crypto.createHash('sha256').update(token3, 'utf8').digest('hex')],
+      );
+      assert.deepEqual(sameTokenState.rows[0], {
+        identities: 1,
+        sessions: 1,
+        audits: 2,
+        replays: 1,
+      });
+      const parallel = await Promise.all([request(token4), request(token5)]);
       assert.deepEqual(parallel.map((response) => response.status).sort(), [200, 200]);
       assert.deepEqual(
         (await Promise.all(parallel.map((response) => response.json()))).map((body) => body.user.id),
@@ -217,6 +239,10 @@ if (!databaseUrl) {
       const reconnected = await request(token2);
       assert.equal(reconnected.status, 200);
       assert.equal((await reconnected.json()).user.id, userId);
+      const verificationModes = (rawToken) => verificationCalls
+        .filter((call) => call.rawToken === rawToken)
+        .map((call) => call.fresh);
+      assert.deepEqual(verificationModes(token2), [false]);
       const mutationCounts = async () => (await setupPool.query(
         `SELECT
            (SELECT count(*)::int FROM auth_identities WHERE user_id = $1) AS identities,
@@ -245,6 +271,7 @@ if (!databaseUrl) {
       const appleExisting = await request(tokenApple);
       assert.equal(appleExisting.status, 200);
       assert.equal((await appleExisting.json()).user.id, userId);
+      assert.deepEqual(verificationModes(tokenApple), [false]);
       const expired = await request(tokenExpired);
       assert.equal(expired.status, 401);
       assert.equal((await expired.json()).error, 'invalid_social_token');
@@ -284,7 +311,7 @@ if (!databaseUrl) {
         'SELECT identity_digest FROM staging_google_registration_replays WHERE identity_digest = $1',
         [identityDigest],
       );
-      assert.equal(replayRows.rowCount, 2);
+      assert.equal(replayRows.rowCount, 1);
       const { reserveStagingGoogleRegistrationReplay } = await import(
         '../src/staging_google_registration.js'
       );
@@ -308,6 +335,23 @@ if (!databaseUrl) {
         [rollbackTokenDigest],
       );
       assert.equal(rolledBackReplay.rowCount, 0);
+      const replayDownMigration = await fs.readFile(
+        new URL('../sql/migrations/095_staging_google_registration_replays.down.sql', import.meta.url),
+        'utf8',
+      );
+      await assert.rejects(
+        setupPool.query(replayDownMigration),
+        /staging_google_registration_replays_active_rows/u,
+      );
+      await setupPool.query(
+        'UPDATE staging_google_registration_replays SET expires_at = created_at + interval \'1 second\'',
+      );
+      await new Promise((resolve) => setTimeout(resolve, 1_200));
+      await setupPool.query(replayDownMigration);
+      const replayTable = await setupPool.query(
+        "SELECT to_regclass('public.staging_google_registration_replays') AS name",
+      );
+      assert.equal(replayTable.rows[0].name, null);
     } finally {
       if (server) await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
       await setupPool.query('DELETE FROM users WHERE id = $1', [userId]);

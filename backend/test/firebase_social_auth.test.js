@@ -118,3 +118,13 @@ test('staging registration token verification returns only bounded fresh-token m
     (error) => error.code === 'invalid_social_token',
   );
 });
+
+test('token digest can be retained for replay checks without imposing fresh reauthentication', async () => {
+  const identity = await verifyFirebaseSocialToken('x'.repeat(200), {
+    verifyIdToken: async () => claims(),
+    includeTokenDigest: true,
+  });
+  assert.match(identity.tokenDigest, /^[0-9a-f]{64}$/u);
+  assert.equal(identity.tokenIssuedAt, undefined);
+  assert.equal(identity.tokenAuthTime, undefined);
+});

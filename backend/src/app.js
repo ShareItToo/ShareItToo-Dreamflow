@@ -2385,20 +2385,22 @@ export function createApp({
   }));
 
   app.post('/v1/auth/social', socialAuthLimiter, asyncRoute(async (req, res) => {
-    let identity;
-    try {
-      identity = await verifySocialToken(req.body?.idToken, {
-        requireFreshToken: config.stagingGoogleRegistration.enabled,
-      });
-    } catch (error) {
-      if (error instanceof SocialAuthError) {
-        throw new HttpError(error.status, error.code);
+    const verifySocialIdentity = async (options = undefined) => {
+      try {
+        return await verifySocialToken(req.body?.idToken, options);
+      } catch (error) {
+        if (error instanceof SocialAuthError) {
+          throw new HttpError(error.status, error.code);
+        }
+        if (error?.status === 401 && error?.code === 'invalid_social_token') {
+          throw new HttpError(401, 'invalid_social_token');
+        }
+        throw error;
       }
-      if (error?.status === 401 && error?.code === 'invalid_social_token') {
-        throw new HttpError(401, 'invalid_social_token');
-      }
-      throw error;
-    }
+    };
+    let identity = await verifySocialIdentity(
+      config.stagingGoogleRegistration.enabled ? { includeTokenDigest: true } : undefined,
+    );
     let stagingGoogleRegistration = null;
     let existingSocialAccount = null;
     let exactExistingSocialIdentity = false;
@@ -2420,6 +2422,14 @@ export function createApp({
         }
         exactExistingSocialIdentity = true;
       } else {
+        const freshIdentity = await verifySocialIdentity({ requireFreshToken: true });
+        if (freshIdentity.provider !== identity.provider
+            || freshIdentity.subject !== identity.subject
+            || freshIdentity.firebaseUserId !== identity.firebaseUserId
+            || freshIdentity.email !== identity.email) {
+          throw new HttpError(401, 'invalid_social_token');
+        }
+        identity = freshIdentity;
         const existingByEmail = await pool.query(
           "SELECT id FROM users WHERE email = $1 AND deactivated_at IS NULL AND account_status = 'active'",
           [identity.email],

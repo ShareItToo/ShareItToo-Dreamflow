@@ -17,7 +17,7 @@ const downMigrationSource = await fs.readFile(
 );
 
 test('social HTTP contract gates fresh claims, replay, ownership, and fixed staging IDs', () => {
-  assert.match(appSource, /requireFreshToken:\s*config\.stagingGoogleRegistration\.enabled/u);
+  assert.match(appSource, /verifySocialIdentity\(\{ requireFreshToken: true \}\)/u);
   assert.match(appSource, /resolveStagingGoogleRegistration\(config\.stagingGoogleRegistration, identity\)/u);
   assert.match(appSource, /reserveStagingGoogleRegistrationReplay\(client/u);
   assert.match(appSource, /const userId = stagingGoogleRegistration\?\.userId \?\? crypto\.randomUUID\(\)/u);

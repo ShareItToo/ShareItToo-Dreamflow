@@ -71,6 +71,10 @@ const rollbackGuardExpectations = Object.freeze([
     filename: '077_refund_provider_truth_parity.down.sql',
     message: 'Refund provider truth rollback blocked: post-migration refunds exist',
   }),
+  Object.freeze({
+    filename: '095_staging_google_registration_replays.down.sql',
+    message: 'staging_google_registration_replays_active_rows',
+  }),
 ]);
 
 function fail(message) {
@@ -672,6 +676,14 @@ async function assertRollbackGuardRefusals(pool, root) {
         '077_refund_provider_truth_parity.down.sql',
       ].includes(guard.filename)) {
         await insertRefundTransferReversalRollbackFixture(client);
+      }
+      if (guard.filename === '095_staging_google_registration_replays.down.sql') {
+        await client.query(
+          `INSERT INTO staging_google_registration_replays (
+             token_digest, identity_digest, expires_at
+           ) VALUES ($1, $2, now() + interval '1 hour')`,
+          ['a'.repeat(64), 'b'.repeat(64)],
+        );
       }
       try {
         await client.query(sql);

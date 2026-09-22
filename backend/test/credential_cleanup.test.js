@@ -8,11 +8,11 @@ import {
 } from '../src/credential_cleanup.js';
 
 test('purges only expired or already consumed credential material', async () => {
-  let statement = '';
+  const statements = [];
   const result = await purgeExpiredCredentials({
     client: {
       async query(sql) {
-        statement = sql;
+        statements.push(sql);
         return {
           rows: [{
             deleted_action_tokens: 2,
@@ -31,6 +31,8 @@ test('purges only expired or already consumed credential material', async () => 
     deletedStaffElevations: 1,
     scrubbedBookingChallenges: 4,
   });
+  assert.match(statements[0], /DELETE FROM staging_google_registration_replays[\s\S]*expires_at <= now\(\)/u);
+  const statement = statements[1];
   assert.match(statement, /DELETE FROM auth_action_tokens[\s\S]*expires_at <= now\(\)/u);
   assert.match(statement, /DELETE FROM refresh_tokens[\s\S]*expires_at <= now\(\)/u);
   assert.match(statement, /DELETE FROM staff_elevations[\s\S]*expires_at <= now\(\)/u);
@@ -51,7 +53,7 @@ test('cleanup worker starts immediately and bounds its interval', async () => {
   });
   await new Promise((resolve) => setImmediate(resolve));
   stop();
-  assert.equal(calls, 1);
+  assert.equal(calls, 2);
   assert.equal(credentialCleanupIntervalMs, 6 * 60 * 60 * 1000);
   assert.throws(
     () => startCredentialCleanupWorker({ intervalMs: 59_999 }),
