@@ -68,6 +68,14 @@ test('every general API route remains behind the global limiter', () => {
   }
 });
 
+test('staging authorization middleware remains behind the central staging IP limiter', () => {
+  const stagingLimiter = backendApp.indexOf('app.use(stagingAccessIpLimiter);');
+  const stagingMiddleware = backendApp.indexOf('app.use(stagingAccessMiddleware);');
+  assert.ok(stagingLimiter >= 0 && stagingMiddleware >= 0);
+  assert.ok(stagingLimiter < stagingMiddleware);
+  assert.match(rateLimitPolicy, /createStagingAccessIpLimiter/u);
+});
+
 test('Blue-Ocean listing mutations retain a dedicated bounded limiter before authentication', () => {
   assert.match(
     backendApp,

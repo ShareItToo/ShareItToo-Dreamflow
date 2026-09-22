@@ -1,10 +1,33 @@
 #!/usr/bin/env node
 
 import { execFile as execFileCallback } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
+import { readStablePrivateFile } from '../backend/ops/stable_private_file.mjs';
+
 const execFile = promisify(execFileCallback);
+const localQaApiBaseUrl = 'http://127.0.0.1:18080/api/v1';
+const localQaApiBaseUrls = new Set([localQaApiBaseUrl]);
+
+function parseLocalQaApiBaseUrl(value) {
+  let parsed;
+  try {
+    parsed = new URL(String(value ?? ''));
+  } catch {
+    throw new Error('The local QA API base is not a valid URL.');
+  }
+  const normalized = parsed.href.replace(/\/$/u, '');
+  if (parsed.protocol !== 'http:'
+      || parsed.hostname !== '127.0.0.1'
+      || parsed.username !== ''
+      || parsed.password !== ''
+      || parsed.search !== ''
+      || parsed.hash !== ''
+      || !localQaApiBaseUrls.has(normalized)) {
+    throw new Error('The local QA API base is not the exact loopback-only endpoint.');
+  }
+  return localQaApiBaseUrl;
+}
 
 export function parseBounds(value) {
   const match = /^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$/.exec(value ?? '');
@@ -65,7 +88,12 @@ export async function runLocalQaLogin({
   device,
   manifestPath,
   fetchImpl = fetch,
-  readFileImpl = readFile,
+  readFileImpl = (filePath) => readStablePrivateFile(filePath, {
+    expectedMode: 0o600,
+    minBytes: 1,
+    maxBytes: 16 * 1024,
+    code: 'local_qa_manifest_private_file_required',
+  }),
   execFileImpl = execFile,
   now = Date.now,
 }) {
@@ -75,14 +103,11 @@ export async function runLocalQaLogin({
       maxBuffer: 2 * 1024 * 1024,
     });
   };
-  const manifest = JSON.parse(await readFileImpl(manifestPath, 'utf8'));
+  const manifest = JSON.parse(await readFileImpl(manifestPath));
   if (manifest.synthetic !== true || manifest.kind !== 'sit-android-local-qa-transient-session') {
     throw new Error('The local QA session manifest is not synthetic and current.');
   }
-  const apiBaseUrl = String(manifest.apiBaseUrl ?? '').replace(/\/$/u, '');
-  if (!/^http:\/\/127\.0\.0\.1:\d+\/api\/v1$/u.test(apiBaseUrl)) {
-    throw new Error('The local QA API base is not loopback-only.');
-  }
+  const apiBaseUrl = parseLocalQaApiBaseUrl(manifest.apiBaseUrl);
   const login = await fetchImpl(`${apiBaseUrl}/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

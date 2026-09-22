@@ -11,6 +11,22 @@ const officialStripeSourceUrls = new Set([
   'https://stripe.com/de/legal/dpa',
 ]);
 
+function isExactOfficialStripeSourceUrl(value) {
+  if (typeof value !== 'string') return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:'
+      && parsed.username === ''
+      && parsed.password === ''
+      && parsed.port === ''
+      && parsed.search === ''
+      && parsed.hash === ''
+      && officialStripeSourceUrls.has(parsed.href);
+  } catch {
+    return false;
+  }
+}
+
 function fail(code) {
   const error = new Error('Stripe Identity staging evidence gate failed.');
   error.code = code;
@@ -69,7 +85,7 @@ export function validateIdentityStagingEvidence({ evidenceFile, deploymentCommit
         || !Array.isArray(evidence.officialSourceUrls)
         || evidence.officialSourceUrls.length !== officialStripeSourceUrls.size
         || new Set(evidence.officialSourceUrls).size !== officialStripeSourceUrls.size
-        || evidence.officialSourceUrls.some((url) => !officialStripeSourceUrls.has(url))
+        || evidence.officialSourceUrls.some((url) => !isExactOfficialStripeSourceUrl(url))
         || typeof evidence.legalFactsObservedAt !== 'string') {
       fail('identity_staging_evidence_binding_invalid');
     }

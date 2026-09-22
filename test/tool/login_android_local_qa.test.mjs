@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import test from 'node:test';
 import {
@@ -63,6 +66,49 @@ test('helper refuses a UI without exact login controls', () => {
     () => buildUiLoginCommands(parseUiNodes('<hierarchy><node hint="E-Mail" /></hierarchy>'), 'a', 'b'),
     /expected login form/u,
   );
+});
+
+test('helper rejects non-exact loopback API URLs before any outbound request', async () => {
+  for (const apiBaseUrl of [
+    'http://127.0.0.1:18080/api/v1.evil',
+    'http://127.0.0.1:18080/api/v1?redirect=https://evil.example',
+    'http://127.0.0.2:18080/api/v1',
+  ]) {
+    const calls = [];
+    await assert.rejects(
+      runLocalQaLogin({
+        device: 'fake-device',
+        manifestPath: '/private/session.json',
+        readFileImpl: async () => manifest.replace('http://127.0.0.1:18080/api/v1', apiBaseUrl),
+        fetchImpl: fakeFetchFactory(calls),
+        execFileImpl: fakeExecFactory(loginXml, []),
+      }),
+      /exact loopback-only endpoint/u,
+    );
+    assert.equal(calls.length, 0);
+  }
+});
+
+test('helper reads the manifest through a private no-follow descriptor', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'sit-local-qa-login-'));
+  const target = join(root, 'session.json');
+  const link = join(root, 'session-link.json');
+  try {
+    writeFileSync(target, manifest, { mode: 0o600 });
+    chmodSync(target, 0o600);
+    symlinkSync(target, link);
+    await assert.rejects(
+      runLocalQaLogin({
+        device: 'fake-device',
+        manifestPath: link,
+        fetchImpl: fakeFetchFactory([]),
+        execFileImpl: fakeExecFactory(loginXml, []),
+      }),
+      /ELOOP|private_file|manifest/u,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('helper performs one API sanity login, revokes it, and always removes the UI dump', async () => {

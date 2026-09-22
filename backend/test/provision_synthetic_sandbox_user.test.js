@@ -130,7 +130,6 @@ function options(files, database, overrides = {}) {
     passwordFile: files.file,
     PoolClass: database.PoolClass,
     databaseUrl: 'postgresql://test@127.0.0.1/sit_test',
-    hashPasswordFn: async () => 'opaque-test-hash-not-derived-from-fixture-password',
     expectedUid: files.uid,
     expectedGid: files.gid,
     ...overrides,

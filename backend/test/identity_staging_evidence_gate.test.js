@@ -87,6 +87,25 @@ test('identity staging evidence requires exact official Stripe source URLs', () 
   }), /evidence gate failed/u);
 });
 
+test('identity staging evidence rejects URL parser edge cases around official sources', () => {
+  for (const maliciousUrl of [
+    'https://stripe.com.evil.example/de/legal/privacy-center',
+    'https://stripe.com/de/legal/privacy-center.evil.example',
+    'https://stripe.com/de/legal/privacy-center?redirect=https://evil.example',
+    'https://user:pass@stripe.com/de/legal/privacy-center',
+  ]) {
+    const { file } = fixture({
+      officialSourceUrls: [maliciousUrl, 'https://stripe.com/de/legal/dpa'],
+    });
+    assert.throws(() => validateIdentityStagingEvidence({
+      evidenceFile: file,
+      deploymentCommit: commit,
+      pilotId: 'heilbronn_wave0',
+      now,
+    }), /evidence gate failed/u);
+  }
+});
+
 test('identity staging evidence rejects symlink paths', () => {
   const { root, file } = fixture();
   const link = join(root, 'link.json');
