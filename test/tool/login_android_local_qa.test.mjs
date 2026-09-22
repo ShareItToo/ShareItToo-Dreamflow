@@ -1,13 +1,15 @@
+import { EventEmitter } from 'node:events';
 import assert from 'node:assert/strict';
 import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { randomBytes } from 'node:crypto';
+import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import {
   buildUiLoginCommands,
   parseUiNodes,
   runLocalQaLogin,
+  startLocalQaApiSession,
 } from '../../tool/login_android_local_qa.mjs';
 
 const manifest = JSON.stringify({
@@ -15,25 +17,19 @@ const manifest = JSON.stringify({
   kind: 'sit-android-local-qa-transient-session',
   apiBaseUrl: 'http://127.0.0.1:18080/api/v1',
   email: 'qa@example.invalid',
-  password: process.env.SIT_LOCAL_QA_PASSWORD ?? `Qa-${randomBytes(18).toString('base64url')}`,
+  password: ['Qa', 'test', 'transport', 'password'].join('-'),
 });
+const childTransportSecret = ['Qa', 'child', 'transport', 'secret'].join('-');
 const loginXml = '<hierarchy>' +
   '<node hint="E-Mail" bounds="[10,20][210,120]" />' +
   '<node hint="Passwort" bounds="[10,140][210,240]" />' +
   '<node content-desc="Anmelden" clickable="true" bounds="[10,260][210,360]" />' +
   '</hierarchy>';
 
-function fakeFetchFactory(calls) {
-  return async (url, options) => {
-    calls.push({ url, options });
-    if (url.endsWith('/auth/login')) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ accessToken: 'x'.repeat(24), refreshToken: 'r'.repeat(24) }),
-      };
-    }
-    return { ok: true, status: 204, json: async () => ({}) };
+function fakeApiSessionFactory(calls, { cleanup = true } = {}) {
+  return async (options) => {
+    calls.push(options);
+    return { cleanup: async () => cleanup };
   };
 }
 
@@ -42,6 +38,35 @@ function fakeExecFactory(xml, calls) {
     calls.push({ file, args });
     if (args.at(-2) === 'cat') return { stdout: xml, stderr: '' };
     return { stdout: '', stderr: '' };
+  };
+}
+
+function fakeSpawnFactory(calls, outputPayloads, { loginOk = true, logoutStatus = 204 } = {}) {
+  return (execPath, args, options) => {
+    const child = new EventEmitter();
+    child.stdin = new PassThrough();
+    child.stdout = new PassThrough();
+    child.killed = false;
+    child.kill = () => {
+      child.killed = true;
+      child.stdout.end();
+      child.emit('close', null, 'SIGTERM');
+    };
+    calls.push({ execPath, args, options });
+    child.stdin.on('data', (chunk) => {
+      const request = JSON.parse(String(chunk).trim());
+      const response = request.op === 'login'
+        ? { type: 'login', ok: loginOk }
+        : { type: 'logout', ok: logoutStatus === 204, status: logoutStatus };
+      const serialized = `${JSON.stringify(response)}\n`;
+      outputPayloads.push(serialized);
+      child.stdout.write(serialized);
+    });
+    child.stdin.on('finish', () => {
+      child.stdout.end();
+      child.emit('close', 0, null);
+    });
+    return child;
   };
 }
 
@@ -80,7 +105,7 @@ test('helper rejects non-exact loopback API URLs before any outbound request', a
         device: 'fake-device',
         manifestPath: '/private/session.json',
         readFileImpl: async () => manifest.replace('http://127.0.0.1:18080/api/v1', apiBaseUrl),
-        fetchImpl: fakeFetchFactory(calls),
+        apiSessionImpl: fakeApiSessionFactory(calls),
         execFileImpl: fakeExecFactory(loginXml, []),
       }),
       /exact loopback-only endpoint/u,
@@ -101,7 +126,7 @@ test('helper reads the manifest through a private no-follow descriptor', async (
       runLocalQaLogin({
         device: 'fake-device',
         manifestPath: link,
-        fetchImpl: fakeFetchFactory([]),
+        apiSessionImpl: fakeApiSessionFactory([]),
         execFileImpl: fakeExecFactory(loginXml, []),
       }),
       /ELOOP|private_file|manifest/u,
@@ -112,13 +137,13 @@ test('helper reads the manifest through a private no-follow descriptor', async (
 });
 
 test('helper performs one API sanity login, revokes it, and always removes the UI dump', async () => {
-  const fetchCalls = [];
+  const apiSessionCalls = [];
   const execCalls = [];
   const result = await runLocalQaLogin({
     device: 'fake-device',
     manifestPath: '/private/session.json',
     readFileImpl: async () => manifest,
-    fetchImpl: fakeFetchFactory(fetchCalls),
+    apiSessionImpl: fakeApiSessionFactory(apiSessionCalls),
     execFileImpl: fakeExecFactory(loginXml, execCalls),
     now: () => 123,
   });
@@ -128,28 +153,94 @@ test('helper performs one API sanity login, revokes it, and always removes the U
     apiLoginSessionCleanup: 'revoked',
     ui: 'submitted',
   });
-  assert.deepEqual(fetchCalls.map((call) => [call.url, call.options.method]), [
-    ['http://127.0.0.1:18080/api/v1/auth/login', 'POST'],
-    ['http://127.0.0.1:18080/api/v1/auth/logout', 'POST'],
-  ]);
+  assert.deepEqual(apiSessionCalls, [{
+    email: 'qa@example.invalid',
+    password: manifest.match(/"password":"([^"]+)"/u)[1],
+    apiBaseUrl: 'http://127.0.0.1:18080/api/v1',
+  }]);
   assert.ok(execCalls.some((call) => call.args.includes('rm') && call.args.includes('/sdcard/sit_local_qa_login_123.xml')));
   assert.equal(JSON.stringify(result).includes('accessToken'), false);
 });
 
 test('helper removes the UI dump and revokes API sanity session when UI parsing fails', async () => {
-  const fetchCalls = [];
+  const apiSessionCalls = [];
   const execCalls = [];
   await assert.rejects(
     runLocalQaLogin({
       device: 'fake-device',
       manifestPath: '/private/session.json',
       readFileImpl: async () => manifest,
-      fetchImpl: fakeFetchFactory(fetchCalls),
+      apiSessionImpl: fakeApiSessionFactory(apiSessionCalls),
       execFileImpl: fakeExecFactory('<hierarchy />', execCalls),
       now: () => 456,
     }),
     /expected login form/u,
   );
-  assert.equal(fetchCalls.length, 2);
+  assert.equal(apiSessionCalls.length, 1);
   assert.ok(execCalls.some((call) => call.args.includes('rm') && call.args.includes('/sdcard/sit_local_qa_login_456.xml')));
+});
+
+test('helper reports API cleanup failure after UI failure without exposing credentials', async () => {
+  const secret = ['Qa', 'transport', 'secret'].join('-');
+  const apiSessionCalls = [];
+  const execCalls = [];
+  const privateManifest = manifest.replace(/"password":"[^"]+"/u, `"password":"${secret}"`);
+  await assert.rejects(
+    runLocalQaLogin({
+      device: 'fake-device',
+      manifestPath: '/private/session.json',
+      readFileImpl: async () => privateManifest,
+      apiSessionImpl: fakeApiSessionFactory(apiSessionCalls, { cleanup: false }),
+      execFileImpl: fakeExecFactory('<hierarchy />', execCalls),
+      now: () => 789,
+    }),
+    /expected login form/u,
+  );
+  assert.equal(JSON.stringify(execCalls).includes(secret), false);
+  assert.equal(JSON.stringify(apiSessionCalls).includes(secret), true);
+  assert.ok(execCalls.some((call) => call.args.includes('rm') && call.args.includes('/sdcard/sit_local_qa_login_789.xml')));
+});
+
+test('child API transport keeps credentials out of process args, env, and status output', async () => {
+  const secret = childTransportSecret;
+  const spawnCalls = [];
+  const outputPayloads = [];
+  const session = await startLocalQaApiSession({
+    email: 'qa@example.invalid',
+    password: secret,
+    spawnImpl: fakeSpawnFactory(spawnCalls, outputPayloads),
+    execPath: '/usr/local/bin/node',
+    transportPath: '/repo/tool/local_qa_api_transport.mjs',
+  });
+  assert.equal(await session.cleanup(), true);
+  assert.equal(JSON.stringify(spawnCalls).includes(secret), false);
+  assert.equal(outputPayloads.join('').includes(secret), false);
+  assert.deepEqual(spawnCalls[0].args, ['/repo/tool/local_qa_api_transport.mjs']);
+  assert.deepEqual(spawnCalls[0].options.env, { PATH: process.env.PATH ?? '/usr/bin:/bin' });
+});
+
+test('child API transport tears down after login failure and reports cleanup failure', async () => {
+  const spawnCalls = [];
+  const outputPayloads = [];
+  await assert.rejects(
+    startLocalQaApiSession({
+      email: 'qa@example.invalid',
+      password: childTransportSecret,
+      spawnImpl: fakeSpawnFactory(spawnCalls, outputPayloads, { loginOk: false }),
+      execPath: '/usr/local/bin/node',
+      transportPath: '/repo/tool/local_qa_api_transport.mjs',
+    }),
+    /login sanity failed/u,
+  );
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(spawnCalls[0].options.env.SIT_LOCAL_QA_PASSWORD, undefined);
+
+  const failedCleanupSession = await startLocalQaApiSession({
+    email: 'qa@example.invalid',
+    password: childTransportSecret,
+    spawnImpl: fakeSpawnFactory([], [], { logoutStatus: 500 }),
+    execPath: '/usr/local/bin/node',
+    transportPath: '/repo/tool/local_qa_api_transport.mjs',
+  });
+  assert.equal(await failedCleanupSession.cleanup(), false);
 });

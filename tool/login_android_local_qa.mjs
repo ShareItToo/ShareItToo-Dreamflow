@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 
-import { execFile as execFileCallback } from 'node:child_process';
+import { execFile as execFileCallback, spawn as spawnCallback } from 'node:child_process';
+import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 
 import { readStablePrivateFile } from '../backend/ops/stable_private_file.mjs';
 
 const execFile = promisify(execFileCallback);
 const localQaApiBaseUrl = 'http://127.0.0.1:18080/api/v1';
 const localQaApiBaseUrls = new Set([localQaApiBaseUrl]);
+const localQaApiTransportPath = fileURLToPath(
+  new URL('./local_qa_api_transport.mjs', import.meta.url),
+);
 
 function assertLocalQaApiBaseUrl(value) {
   let parsed;
@@ -83,10 +88,96 @@ export function buildUiLoginCommands(nodes, email, password) {
   ];
 }
 
+async function readTransportMessage(iterator, child, label) {
+  let timeoutHandle;
+  const timeout = new Promise((_, reject) => {
+    timeoutHandle = setTimeout(
+      () => reject(new Error(`Local QA API transport ${label} timed out.`)),
+      10_000,
+    );
+  });
+  try {
+    const next = await Promise.race([iterator.next(), timeout]);
+    if (next.done) throw new Error(`Local QA API transport ${label} closed unexpectedly.`);
+    try {
+      return JSON.parse(next.value);
+    } catch {
+      child.kill();
+      throw new Error(`Local QA API transport ${label} returned invalid status.`);
+    }
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+}
+
+function localQaTransportEnvironment() {
+  return { PATH: process.env.PATH ?? '/usr/bin:/bin' };
+}
+
+export async function startLocalQaApiSession({
+  email,
+  password,
+  spawnImpl = spawnCallback,
+  execPath = process.execPath,
+  transportPath = localQaApiTransportPath,
+}) {
+  const child = spawnImpl(execPath, [transportPath], {
+    env: localQaTransportEnvironment(),
+    stdio: ['pipe', 'pipe', 'ignore'],
+  });
+  const output = createInterface({ input: child.stdout });
+  const outputIterator = output[Symbol.asyncIterator]();
+  const childClosed = new Promise((resolve) => child.once('close', resolve));
+  let loggedIn = false;
+  let cleaned = false;
+  const stopChild = async () => {
+    if (!child.killed) child.kill();
+    await childClosed;
+    output.close();
+  };
+  const send = (message) => {
+    if (child.stdin.destroyed) throw new Error('Local QA API transport stdin is closed.');
+    child.stdin.write(`${JSON.stringify(message)}\n`);
+  };
+
+  try {
+    send({ op: 'login', email, password });
+    const login = await readTransportMessage(outputIterator, child, 'login');
+    if (login.type !== 'login' || login.ok !== true) {
+      throw new Error('Local QA API login sanity failed.');
+    }
+    loggedIn = true;
+  } catch (error) {
+    await stopChild().catch(() => {});
+    throw error;
+  }
+
+  return {
+    cleanup: async () => {
+      if (cleaned) return false;
+      cleaned = true;
+      if (!loggedIn) {
+        await stopChild().catch(() => {});
+        return false;
+      }
+      try {
+        send({ op: 'logout' });
+        const logout = await readTransportMessage(outputIterator, child, 'logout');
+        return logout.type === 'logout' && logout.ok === true && logout.status === 204;
+      } catch {
+        return false;
+      } finally {
+        child.stdin.end();
+        await childClosed.catch(() => {});
+        output.close();
+      }
+    },
+  };
+}
+
 export async function runLocalQaLogin({
   device,
   manifestPath,
-  fetchImpl = fetch,
   readFileImpl = (filePath) => readStablePrivateFile(filePath, {
     expectedMode: 0o600,
     minBytes: 1,
@@ -94,6 +185,7 @@ export async function runLocalQaLogin({
     code: 'local_qa_manifest_private_file_required',
   }),
   execFileImpl = execFile,
+  apiSessionImpl = startLocalQaApiSession,
   now = Date.now,
 }) {
   if (!device?.trim()) throw new Error('SIT_ANDROID_DEVICE is required.');
@@ -107,17 +199,11 @@ export async function runLocalQaLogin({
     throw new Error('The local QA session manifest is not synthetic and current.');
   }
   assertLocalQaApiBaseUrl(manifest.apiBaseUrl);
-  const login = await fetchImpl(`${localQaApiBaseUrl}/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: manifest.email, password: manifest.password }),
+  const apiSession = await apiSessionImpl({
+    email: manifest.email,
+    password: manifest.password,
+    apiBaseUrl: localQaApiBaseUrl,
   });
-  const loginBody = await login.json().catch(() => ({}));
-  if (!login.ok || typeof loginBody.accessToken !== 'string' ||
-      loginBody.accessToken.length < 20 ||
-      typeof loginBody.refreshToken !== 'string' || loginBody.refreshToken.length < 20) {
-    throw new Error(`Local QA API login sanity failed with status ${login.status}.`);
-  }
 
   const dumpPath = `/sdcard/sit_local_qa_login_${now()}.xml`;
   let uiSubmitted = false;
@@ -130,12 +216,7 @@ export async function runLocalQaLogin({
     uiSubmitted = true;
   } finally {
     await adb(['rm', '-f', dumpPath]).catch(() => {});
-    const logout = await fetchImpl(`${localQaApiBaseUrl}/auth/logout`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ refreshToken: loginBody.refreshToken }),
-    }).catch(() => {});
-    apiLoginSessionCleanup = logout?.status === 204;
+    apiLoginSessionCleanup = await apiSession.cleanup().catch(() => false);
   }
   if (!uiSubmitted || !apiLoginSessionCleanup) {
     throw new Error('Local QA login helper could not complete UI submit and API session cleanup.');
