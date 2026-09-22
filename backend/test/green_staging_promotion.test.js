@@ -407,11 +407,11 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       if (phase === 'failure_restore_current_api_identity_readback') return { code: 'not_found', stdout: '' };
       if (phase === 'failure_restore_current_api_absence_readback') return { stdout: '' };
       if (phase === 'failure_restore_current_api_identity_after_rename' || phase === 'failure_restore_green_api_identity_verify') return { stdout: JSON.stringify(prePromotionRecord(image)) };
-      if (phase === 'failure_candidate_identity_readback') return { stdout: JSON.stringify({ Name: `/${plan.isolated.candidate}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } }) };
-      if (phase === 'failure_isolated_database_identity_readback') return { stdout: JSON.stringify({ Name: `/${plan.isolated.database}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } }) };
+      if (phase === 'failure_candidate_identity_readback') return { stdout: JSON.stringify({ Id: 'candidate-owned-id', Name: `/${plan.isolated.candidate}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } }) };
+      if (phase === 'failure_isolated_database_identity_readback') return { stdout: JSON.stringify({ Id: 'database-owned-id', Name: `/${plan.isolated.database}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } }) };
       if (phase === 'failure_isolated_volume_identity_readback') return { stdout: JSON.stringify({ Name: plan.isolated.volume, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
       if (phase === 'failure_isolated_uploads_volume_identity_readback') return { stdout: JSON.stringify({ Name: plan.isolated.uploadsVolume, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
-      if (phase === 'failure_isolated_network_identity_readback') return { stdout: JSON.stringify({ Name: plan.isolated.network, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
+      if (phase === 'failure_isolated_network_identity_readback') return { stdout: JSON.stringify({ Id: 'network-owned-id', Name: plan.isolated.network, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
       if (phase === 'candidate_runtime_flags_readback') return { stdout: JSON.stringify({ DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', googleRegistrationAllowlistEmpty: true }) };
       if (phase === 'candidate_health_and_feature_probes' || phase === 'candidate_ready_probe') return { stdout: JSON.stringify(payload) };
       if (phase === 'candidate_version_probe') return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'test' }) };
@@ -644,7 +644,7 @@ test('emergency cleanup never deletes a prior same-name resource when create res
   const calls = [];
   const fake = async (command, args, options) => {
     calls.push({ command, args, options });
-    if (options.phase === 'failure_isolated_network_identity_readback') return { stdout: JSON.stringify({ Name: plan.isolated.network, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
+    if (options.phase === 'failure_isolated_network_identity_readback') return { stdout: JSON.stringify({ Id: 'prior-network-id', Name: plan.isolated.network, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
     if (options.phase === 'failure_isolated_network_verify') return { stdout: `${plan.isolated.network}\n` };
     return { stdout: '' };
   };
@@ -667,6 +667,40 @@ test('emergency cleanup removes only an owned resource from a partial creation s
   assert.equal(result.clean, true);
   assert.equal(calls.some((call) => call.options.phase === 'failure_isolated_volume_remove'), true);
   assert.equal(calls.some((call) => call.options.phase === 'failure_isolated_database_remove' || call.options.phase === 'failure_isolated_network_remove' || call.options.phase === 'failure_candidate_remove'), false);
+});
+
+test('emergency cleanup removes a container by the inspected immutable ID', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'c'.repeat(32) });
+  const calls = [];
+  const identity = { Id: 'c'.repeat(64), Name: `/${plan.isolated.candidate}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } };
+  const fake = async (command, args, options) => {
+    calls.push({ command, args, options });
+    if (options.phase === 'failure_candidate_identity_readback') return { stdout: JSON.stringify(identity) };
+    if (options.phase === 'failure_candidate_remove') {
+      assert.equal(args.at(-1), identity.Id);
+      return { stdout: '' };
+    }
+    return { stdout: '' };
+  };
+  const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['candidate_acceptance_create'], schemaMutationStarted: true });
+  assert.equal(result.clean, true);
+  assert.equal(calls.some((call) => call.options.phase === 'failure_candidate_remove'), true);
+});
+
+test('emergency cleanup refuses a container ID rebind before deletion', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'e'.repeat(32) });
+  const calls = [];
+  let inspectCount = 0;
+  const owned = { Id: '1'.repeat(64), Name: `/${plan.isolated.candidate}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } };
+  const foreign = { ...owned, Id: '2'.repeat(64) };
+  const fake = async (command, args, options) => {
+    calls.push({ command, args, options });
+    if (options.phase === 'failure_candidate_identity_readback') return { stdout: JSON.stringify(++inspectCount === 1 ? owned : foreign) };
+    return { stdout: '' };
+  };
+  const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['candidate_acceptance_create'], schemaMutationStarted: true });
+  assert.equal(result.clean, false);
+  assert.equal(calls.some((call) => call.options.phase === 'failure_candidate_remove'), false);
 });
 
 test('pre-schema failure restores and verifies the sealed API', async () => {
@@ -728,7 +762,10 @@ test('restore reconciles a lost rename response before starting the exact origin
     if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify({ ...originalApiIdentityRecord, Name: `/${greenTarget.sealedApiContainer}` }) };
     if (options.phase === 'failure_restore_current_api_identity_readback') return { code: 'not_found', stdout: '' };
     if (options.phase === 'failure_restore_current_api_absence_readback') return { stdout: '' };
-    if (options.phase === 'failure_restore_sealed_api') return { code: 'response_lost', stdout: '' };
+    if (options.phase === 'failure_restore_sealed_api') {
+      assert.equal(args[1], originalApiIdentity.id);
+      return { code: 'response_lost', stdout: '' };
+    }
     if (options.phase === 'failure_restore_current_api_identity_after_rename') return { stdout: JSON.stringify(restoredApiIdentityRecord) };
     if (options.phase === 'failure_restore_sealed_api_identity_after_rename') return { code: 'not_found', stdout: '' };
     if (options.phase === 'failure_restore_green_api') {
@@ -748,7 +785,7 @@ test('post-schema forward recovery creates only the successor and verifies its p
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   const payload = { checks: { technicalSandbox: { available: true, amountMinor: 100, currency: 'EUR' }, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
   const record = {
-    Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
+    Id: 'a'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
     Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
@@ -758,6 +795,8 @@ test('post-schema forward recovery creates only the successor and verifies its p
     calls.push({ command, args, options });
     if (options.phase === 'recovery_canonical_schema_readback') return { stdout: '095_staging_google_registration_replays.up.sql\n' };
     if (options.phase === 'recovery_canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
+    if (options.phase === 'recovery_final_create_no_host_port') return { stdout: `${record.Id}\n` };
+    if (options.phase === 'recovery_successor_identity_readback') return { stdout: JSON.stringify(record) };
     if (options.phase.endsWith('final_image_readback')) return { stdout: JSON.stringify(image) };
     if (options.phase.endsWith('final_inventory_readback')) return { stdout: JSON.stringify(record) };
     if (options.phase.endsWith('final_health_probe') || options.phase.endsWith('final_ready_wait')) return { stdout: JSON.stringify(payload) };
@@ -767,8 +806,30 @@ test('post-schema forward recovery creates only the successor and verifies its p
   const result = await runGreenForwardRecovery({ plan, commands, command: fake, completed: [] });
   assert.equal(result.status, 'verified');
   assert.equal(calls.some((call) => call.args.includes('shareittoo-staging-api-alt-sealed-green')), false);
+  for (const phase of ['recovery_final_provider_network_attach', 'recovery_final_start']) {
+    const call = calls.find((entry) => entry.options.phase === phase);
+    assert.equal(call.args.at(-1), record.Id);
+  }
   const retained = await runGreenForwardRecovery({ plan, commands, command: fake, completed: ['final_create_no_host_port', 'final_provider_network_attach', 'final_start'] });
   assert.equal(retained.status, 'verified');
+});
+
+test('forward recovery stops on a foreign final-name conflict before network attach or start', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'd'.repeat(32) });
+  const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
+  const calls = [];
+  const foreign = { Id: 'f'.repeat(64), Name: `/${greenTarget.apiContainer}`, Config: { Image: 'ghcr.io/foreign/api:foreign', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': 'foreign-run' } } };
+  const fake = async (command, args, options) => {
+    calls.push({ command, args, options });
+    if (options.phase === 'recovery_canonical_schema_readback') return { stdout: '095_staging_google_registration_replays.up.sql\n' };
+    if (options.phase === 'recovery_canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
+    if (options.phase === 'recovery_final_create_no_host_port') return { code: 17, stdout: '' };
+    if (options.phase === 'recovery_existing_final_inspect') return { stdout: JSON.stringify(foreign) };
+    return { stdout: '' };
+  };
+  await assert.rejects(runGreenForwardRecovery({ plan, commands, command: fake, completed: [] }), /green_forward_recovery_create_conflict/u);
+  assert.equal(calls.some((call) => call.options.phase === 'recovery_final_provider_network_attach'), false);
+  assert.equal(calls.some((call) => call.options.phase === 'recovery_final_start'), false);
 });
 
 test('forward recovery fails closed before candidate continuation on migration readback gaps', async () => {
@@ -776,7 +837,7 @@ test('forward recovery fails closed before candidate continuation on migration r
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   const payload = { checks: { technicalSandbox: { available: true, amountMinor: 100, currency: 'EUR' }, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
   const record = {
-    Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
+    Id: 'b'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
     Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
