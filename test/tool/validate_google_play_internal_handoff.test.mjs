@@ -9,6 +9,7 @@ import {
   candidateRolloverRuntimeDrift,
   explicitCurrentRolloverCandidatePath,
   explicitCurrentRolloverStatus,
+  validateCurrentRolloverCandidate,
   validateExplicitCurrentRolloverCandidate,
   validateGooglePlayInternalHandoff,
 } from '../../tool/validate_google_play_internal_handoff.mjs';
@@ -173,6 +174,83 @@ test('rejects runtime drift in explicit rollover mode', async () => {
     repositoryRoot,
     changedPaths: ['lib/main.dart'],
   }), /Runtime-affecting files changed/u);
+});
+
+async function currentRolloverFixture() {
+  const data = await explicitRolloverFixture();
+  const pointer = structuredClone(data.rollover);
+  pointer.candidateManifestRef = 'store/google-play/rollover-candidate-2026092101.json';
+  const pointerPath = join(data.root, 'current-rollover-candidate.json');
+  await writeFile(pointerPath, `${JSON.stringify(pointer)}\n`);
+  return { ...data, pointer, pointerPath };
+}
+
+test('validates the dynamic current pointer through its versioned manifest', async (t) => {
+  const data = await currentRolloverFixture();
+  t.after(() => rm(data.root, { recursive: true, force: true }));
+  const result = await validateCurrentRolloverCandidate({
+    repositoryRoot,
+    archiveRoot: data.archiveRoot,
+    currentPath: data.pointerPath,
+    candidateManifestPath: data.rolloverPath,
+    changedPaths: [],
+  });
+  assert.equal(result.buildNumber, data.rollover.candidate.versionCode);
+  assert.equal(result.candidateManifestPath, data.rolloverPath);
+  assert.deepEqual(result.runtimeDrift, []);
+});
+
+test('rejects a stale current pointer or unknown versioned manifest', async (t) => {
+  const data = await currentRolloverFixture();
+  t.after(() => rm(data.root, { recursive: true, force: true }));
+  const stale = structuredClone(data.pointer);
+  stale.candidate.versionCode = '2026092100';
+  await writeFile(data.pointerPath, JSON.stringify(stale));
+  await assert.rejects(() => validateCurrentRolloverCandidate({
+    repositoryRoot,
+    archiveRoot: data.archiveRoot,
+    currentPath: data.pointerPath,
+    candidateManifestPath: data.rolloverPath,
+    changedPaths: [],
+  }), /versioned manifest/u);
+
+  const unknown = structuredClone(data.pointer);
+  unknown.candidateManifestRef = 'store/google-play/rollover-candidate-2026092201.json';
+  await writeFile(data.pointerPath, JSON.stringify(unknown));
+  await assert.rejects(() => validateCurrentRolloverCandidate({
+    repositoryRoot,
+    archiveRoot: data.archiveRoot,
+    currentPath: data.pointerPath,
+    candidateManifestPath: data.rolloverPath,
+    changedPaths: [],
+  }), /versioned manifest/u);
+});
+
+test('rejects every semantic pointer/manifest divergence', async (t) => {
+  const data = await currentRolloverFixture();
+  t.after(() => rm(data.root, { recursive: true, force: true }));
+  const mutations = [
+    (pointer) => { pointer.sourceVerification.githubRegression = 'success'; },
+    (pointer) => { pointer.playStateAtLastReadback.candidateUploaded = true; },
+    (pointer) => { pointer.providerAndLiveHolds.productionChanged = true; },
+    (pointer) => { pointer.providerAndLiveHolds.deviceInstalledOrContacted = true; },
+    (pointer) => { pointer.deviceVerification = { preferredDeviceExactApkInstalled: true }; },
+    (pointer) => { pointer.evidenceRef = 'docs/evidence/stale-predecessor.json'; },
+    (pointer) => { pointer.extraUnexpectedField = true; },
+    (pointer) => { delete pointer.artifact.apkSha256; },
+  ];
+  for (const mutate of mutations) {
+    const pointer = structuredClone(data.pointer);
+    mutate(pointer);
+    await writeFile(data.pointerPath, JSON.stringify(pointer));
+    await assert.rejects(() => validateCurrentRolloverCandidate({
+      repositoryRoot,
+      archiveRoot: data.archiveRoot,
+      currentPath: data.pointerPath,
+      candidateManifestPath: data.rolloverPath,
+      changedPaths: [],
+    }), /current pointer\/versioned manifest/u);
+  }
 });
 
 async function fixture() {

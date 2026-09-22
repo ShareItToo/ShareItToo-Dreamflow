@@ -103,6 +103,8 @@ export const explicitCurrentRolloverCandidatePath =
   'store/google-play/rollover-candidate-2026092101.json';
 export const explicitCurrentRolloverStatus =
   'built-and-archived-internal-staging-upload-pending';
+export const currentRolloverCandidatePointerPath =
+  'store/google-play/current-rollover-candidate.json';
 
 export function candidateRolloverRuntimeDrift(changedPaths) {
   return [...changedPaths].filter((path) =>
@@ -260,6 +262,79 @@ export async function validateExplicitCurrentRolloverCandidate({
     }),
     runtimeDrift: Object.freeze([...runtimeDrift]),
     archive,
+  });
+}
+
+function sameCandidateBinding(pointer, manifest) {
+  const pointerKeys = Object.keys(pointer).filter((key) => key !== 'candidateManifestRef').sort();
+  const manifestKeys = Object.keys(manifest).sort();
+  same(JSON.stringify(pointerKeys), JSON.stringify(manifestKeys),
+    'current pointer/versioned manifest fields');
+
+  function compare(actual, expected, path) {
+    if (actual === null || expected === null || typeof actual !== 'object'
+        || typeof expected !== 'object') {
+      same(actual, expected, path);
+      return;
+    }
+    if (Array.isArray(actual) || Array.isArray(expected)) {
+      same(JSON.stringify(actual), JSON.stringify(expected), path);
+      return;
+    }
+    const actualKeys = Object.keys(actual).sort();
+    const expectedKeys = Object.keys(expected).sort();
+    same(JSON.stringify(actualKeys), JSON.stringify(expectedKeys), `${path} fields`);
+    for (const key of expectedKeys) compare(actual[key], expected[key], `${path}.${key}`);
+  }
+
+  const pointerWithoutRef = { ...pointer };
+  delete pointerWithoutRef.candidateManifestRef;
+  compare(pointerWithoutRef, manifest, 'current pointer/versioned manifest');
+}
+
+/**
+ * Validate the current pointer through its versioned candidate manifest.
+ * Historical candidates stay on validateExplicitCurrentRolloverCandidate so
+ * their evidence remains reproducible and cannot be silently replaced.
+ */
+export async function validateCurrentRolloverCandidate({
+  repositoryRoot,
+  archiveRoot = resolve(homedir(), 'Library', 'Application Support', 'ShareItToo', 'release', 'android'),
+  currentPath = null,
+  candidateManifestPath = null,
+  changedPaths = null,
+} = {}) {
+  const root = resolve(repositoryRoot ?? fileURLToPath(new URL('../', import.meta.url)));
+  const pointerPath = currentPath ?? resolve(root, currentRolloverCandidatePointerPath);
+  const pointer = object(readJson(pointerPath, 'current rollover pointer'),
+    'current rollover pointer');
+  assertNoCredentials(pointer, 'current rollover pointer');
+  const ref = pointer.candidateManifestRef;
+  if (typeof ref !== 'string'
+      || !/^store\/google-play\/rollover-candidate-\d{10}\.json$/u.test(ref)) {
+    fail('Current rollover pointer must reference one versioned candidate manifest.');
+  }
+  const pointerVersion = pointer.candidate?.versionCode;
+  const refVersion = /^store\/google-play\/rollover-candidate-(\d{10})\.json$/u.exec(ref)?.[1];
+  same(pointerVersion, refVersion, 'current pointer versioned manifest');
+  const manifestPath = candidateManifestPath ?? resolve(root, ref);
+  if (candidateManifestPath === null && !manifestPath.startsWith(`${root}/`)) {
+    fail('Current rollover candidate manifest left the repository.');
+  }
+  const manifest = object(readJson(manifestPath, 'current versioned candidate manifest'),
+    'current versioned candidate manifest');
+  assertNoCredentials(manifest, 'current versioned candidate manifest');
+  sameCandidateBinding(pointer, manifest);
+  const result = await validateExplicitCurrentRolloverCandidate({
+    repositoryRoot: root,
+    archiveRoot,
+    rolloverPath: manifestPath,
+    changedPaths,
+  });
+  return Object.freeze({
+    ...result,
+    pointerPath,
+    candidateManifestPath: manifestPath,
   });
 }
 
@@ -935,10 +1010,10 @@ async function runCli() {
   let rolloverCandidate = null;
   let rolloverMode = null;
   if (candidateRollover) {
-    rolloverCandidate = await validateExplicitCurrentRolloverCandidate({
+    rolloverCandidate = await validateCurrentRolloverCandidate({
       repositoryRoot,
     });
-    rolloverMode = 'explicit-current-rollover-verified';
+    rolloverMode = 'current-rollover-verified';
   }
   const result = validateGooglePlayInternalHandoff({
     repositoryRoot,

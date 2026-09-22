@@ -45,6 +45,9 @@ test('rejects candidate, source and current-pointer drift', () => {
   assert.throws(() => validate(source), /source digest drift/u);
 
   const pointer = readRollover();
+  pointer.deviceVerification = {
+    preferredDeviceExactApkInstalled: true,
+  };
   pointer.deviceVerification.preferredDeviceExactApkInstalled = false;
   assert.throws(() => validate(readEvidence(), pointer), /current candidate pointer/u);
 });
