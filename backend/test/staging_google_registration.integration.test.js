@@ -6,6 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+const privateKeyBegin = ['-----BEGIN', 'PRIVATE', 'KEY-----'].join(' ');
+const privateKeyEnd = ['-----END', 'PRIVATE', 'KEY-----'].join(' ');
+
 const databaseUrl = process.env.TEST_DATABASE_URL?.trim();
 
 if (!databaseUrl) {
@@ -62,7 +65,7 @@ if (!databaseUrl) {
       type: 'service_account',
       project_id: 'shareittoo-staging',
       private_key_id: 'a'.repeat(40),
-      private_key: '-----BEGIN PRIVATE KEY-----\nsynthetic-test-material\n-----END PRIVATE KEY-----\n',
+      private_key: `${privateKeyBegin}\nsynthetic-test-material\n${privateKeyEnd}\n`,
       client_email: 'synthetic-test@shareittoo-staging.iam.gserviceaccount.com',
       client_id: '123456789012345678901',
       token_uri: 'https://oauth2.googleapis.com/token',

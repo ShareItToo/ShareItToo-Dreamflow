@@ -202,6 +202,7 @@ discover a mechanically stale source hash.
   account identifiers or raw device identifiers into reports or evidence.
 - Routine tests must not send real email, SMS, push, payment, KYC or other live
   provider traffic.
+- Synthetic PEM or credential markers in tests must be assembled from separate runtime fragments; a baseline is never their replacement and may review an exact immutable historical finding only after its marker has landed in history.
 - Germany/private-adult pilot boundaries remain active: no vehicles/transport,
   paid delivery, shipping, express, deposit, SIT insurance/protection, real
   money, ads, marketing analytics or external generative AI.

@@ -83,3 +83,17 @@ test('reviews the historical Green fixed-path finding exactly once', () => {
     reason: 'Historical finding was a fixed host path, not a credential value; the current tree uses a neutral credential-file name.',
   }]);
 });
+
+test('reviews the historical staging Google synthetic PEM finding exactly once', () => {
+  const matches = baseline.reviewedFindings.filter((entry) => (
+    entry.rule === 'private_key'
+    && entry.source === '5f594fc1516017ca13aee5b19367c4a4ff1dae38'
+    && entry.file === 'backend/test/staging_google_registration.integration.test.js'
+  ));
+  assert.deepEqual(matches, [{
+    rule: 'private_key',
+    source: '5f594fc1516017ca13aee5b19367c4a4ff1dae38',
+    file: 'backend/test/staging_google_registration.integration.test.js',
+    reason: 'Historical synthetic service-account fixture; complete PEM marker literal removed from this source and rebuilt from fragments at runtime.',
+  }]);
+});
