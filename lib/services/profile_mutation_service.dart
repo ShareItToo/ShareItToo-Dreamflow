@@ -293,7 +293,9 @@ class ProfileMutationService {
       };
     } on BackendException catch (error) {
       if (!await isContextCurrent(context)) {
-        throw const ProfileMutationFailure.principalChanged();
+        throw ProfileMutationFailure.principalChanged(
+          remoteAccepted: remoteAccepted,
+        );
       }
       final kind = classifyBackendFailure(error);
       if (kind == ProfileMutationFailureKind.rejected) {
@@ -305,10 +307,13 @@ class ProfileMutationService {
       );
     } catch (_) {
       if (!await isContextCurrent(context)) {
-        throw const ProfileMutationFailure.principalChanged();
+        throw ProfileMutationFailure.principalChanged(
+          remoteAccepted: remoteAccepted,
+        );
       }
-      throw const ProfileMutationFailure.localUnavailable(
+      throw ProfileMutationFailure.localUnavailable(
         'local_profile_mutation_failed',
+        remoteAccepted: remoteAccepted,
       );
     }
   }

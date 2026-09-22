@@ -59,6 +59,10 @@ test('profile save reads the authenticated projection back before reporting succ
     mutationService,
     /ProfileMutationFailure\.outcomeUnknown\([\s\S]*?remoteAccepted/u,
   );
+  assert.match(
+    mutationService,
+    /ProfileMutationFailure\.localUnavailable\([\s\S]*?remoteAccepted: remoteAccepted/u,
+  );
 });
 
 test('open identity surfaces refresh the authoritative avatar after profile changes', () => {
