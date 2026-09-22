@@ -55,7 +55,7 @@
     "runtimeDriftBasis": "manifest-and-privacy-identities-match-current-head",
     "currentHeadArchive": "passed",
     "currentConsumerClosure": "passed",
-    "fullTechnicalRegression": "pending",
+    "fullTechnicalRegression": "passed",
     "githubRegression": "pending",
     "githubCodeql": "pending"
   },
