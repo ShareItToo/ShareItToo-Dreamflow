@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { chmodSync, lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -71,6 +72,8 @@ function migrationLedgerThrough(schema) {
 
 const sourceMigrationLedger = migrationLedgerThrough(92);
 const currentMigrationLedger = migrationLedgerThrough(95);
+const emptyFindingFingerprint = JSON.stringify({ paymentRecoveryNeedsReview: [], supportNextUpdateOverdue: [] });
+const targetContainerSet = `${greenTarget.apiContainer}\t\t\ttrue\t${greenTarget.runId}\n${greenTarget.databaseContainer}\t\t\ttrue\t\n`;
 const sourceMounts = [
   { destination: '/data/uploads', type: 'volume', source: null, volume: greenTarget.uploadsVolume, readOnly: false },
   { destination: '/run/secrets/firebase-service-account.json', type: 'bind', source: config.firebaseFile, volume: null, readOnly: true },
@@ -166,7 +169,7 @@ test('promotion plan keeps backup, isolated 92-to-95 rehearsal, acceptance and f
   });
   assert.deepEqual(plan.commandPolicy.finalNetworks, [greenTarget.network, greenTarget.providerNetwork]);
   assert.equal(plan.commandPolicy.finalHostPorts, 0);
-  assert.ok(plan.phases.findIndex((phase) => phase.includes('fresh protected database backup')) < plan.phases.findIndex((phase) => phase.includes('stop and seal')));
+  assert.ok(plan.phases.findIndex((phase) => phase.includes('stop and seal')) < plan.phases.findIndex((phase) => phase.includes('fresh protected database backup')));
   assert.match(plan.phases.join('\n'), /92 to 95/u);
   assert.match(plan.phases.join('\n'), /095_staging_google_registration_replays\.up\.sql/u);
   assert.match(plan.phases.join('\n'), /synthetic sandbox user/u);
@@ -202,8 +205,15 @@ test('promotion plan keeps backup, isolated 92-to-95 rehearsal, acceptance and f
   assert.ok(commands.some((entry) => entry.phase === 'synthetic_sandbox_provision_canonical'));
   assert.ok(commands.find((entry) => entry.phase === 'isolated_uploads_volume_cleanup_verify'));
   const phaseIndex = (phase) => commands.findIndex((entry) => entry.phase === phase);
-  assert.ok(phaseIndex('candidate_cleanup_verify') < phaseIndex('quiesce_green_api'));
-  assert.ok(phaseIndex('quiesce_green_api') < phaseIndex('canonical_forward_migration_92_to_95'));
+  assert.ok(phaseIndex('target_container_set_readback') < phaseIndex('quiesce_green_api'));
+  assert.ok(phaseIndex('quiesce_green_api') < phaseIndex('quiesce_green_api_verify'));
+  assert.ok(phaseIndex('quiesce_green_api_verify') < phaseIndex('source_foreign_writer_readback_before_backup'));
+  assert.ok(phaseIndex('source_foreign_writer_readback_before_backup') < phaseIndex('fresh_protected_backup'));
+  assert.ok(phaseIndex('fresh_protected_backup') < phaseIndex('source_foreign_writer_readback_after_backup'));
+  assert.ok(phaseIndex('isolated_finding_fingerprint_readback') < phaseIndex('candidate_start'));
+  assert.ok(phaseIndex('candidate_finding_fingerprint_readback') < phaseIndex('candidate_health_and_feature_probes'));
+  assert.ok(phaseIndex('quiesce_green_api') < phaseIndex('candidate_acceptance_create'));
+  assert.ok(phaseIndex('candidate_cleanup_verify') < phaseIndex('canonical_forward_migration_92_to_95'));
   assert.ok(phaseIndex('canonical_schema_readback') < phaseIndex('final_create_no_host_port'));
   assert.equal(commands.some((entry) => entry.args?.some((arg) => (
     /shareittoo-staging-postgres|shareittoo_staging_backend|shareittoo_staging_postgres_data/iu.test(arg)
@@ -240,8 +250,31 @@ test('promotion plan resolves the exact sealed API before emitting mutation comm
   for (const entry of commands) {
     assert.equal(entry.args.some((arg) => arg === undefined), false, `${entry.phase} must not contain undefined argv`);
   }
+  const immutableImage = `${plan.runtime.image}@${plan.runtime.digest}`;
+  for (const phase of ['isolated_migrate_92_to_95', 'synthetic_sandbox_provision_isolated', 'candidate_acceptance_create', 'canonical_forward_migration_92_to_95', 'synthetic_sandbox_provision_canonical', 'final_create_no_host_port']) {
+    const entry = commands.find((candidate) => candidate.phase === phase);
+    assert.ok(entry.args.includes(immutableImage), `${phase} must execute the verified digest-pinned image`);
+    assert.equal(entry.args.includes(plan.runtime.image), false, `${phase} must not execute the mutable tag`);
+  }
   const missing = Object.freeze({ ...plan, target: Object.freeze({ ...plan.target, sealedApiContainer: undefined }) });
   assert.throws(() => buildGreenPromotionCommands({ plan: missing, configFile: config.envFile, config }), /green_sealed_target_invalid/u);
+});
+
+test('isolated Postgres init-marker readback retries past an early readiness-only log', () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const marker = buildGreenPromotionCommands({ plan, configFile: config.envFile, config }).find((entry) => entry.phase === 'isolated_postgres_init_complete_log_readback');
+  assert.equal(marker.command, 'bash');
+  assert.match(marker.args[1], /seq 1 60/u);
+  assert.match(marker.args[1], /PostgreSQL init process complete; ready for start up\./u);
+  const root = mkdtempSync(path.join(os.tmpdir(), 'green-init-marker-'));
+  const fakeDocker = path.join(root, 'docker');
+  const countFile = path.join(root, 'count');
+  writeFileSync(fakeDocker, '#!/bin/sh\ncount=0\n[ -f "$MARKER_COUNT" ] && count=$(cat "$MARKER_COUNT")\ncount=$((count + 1))\nprintf "%s" "$count" > "$MARKER_COUNT"\nif [ "$count" -lt 2 ]; then echo "database system is ready to accept connections"; else echo "PostgreSQL init process complete; ready for start up."; fi\n', { mode: 0o700 });
+  chmodSync(fakeDocker, 0o700);
+  const output = execFileSync(marker.command, marker.args, { encoding: 'utf8', env: { ...process.env, PATH: `${root}:${process.env.PATH ?? ''}`, MARKER_COUNT: countFile } });
+  assert.match(output, /PostgreSQL init process complete; ready for start up\./u);
+  assert.equal(readFileSync(countFile, 'utf8'), '2');
+  rmSync(root, { recursive: true, force: true });
 });
 
 test('buffer restore input preserves exact bytes and fails closed on early stdin close', async () => {
@@ -296,11 +329,12 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     HostConfig: { GroupAdd: ['65532'] }, Mounts: sourceMounts.map((mount) => ({ Destination: mount.destination, Type: mount.type, Source: mount.source, Name: mount.volume, RW: !mount.readOnly })),
   });
   const databaseRecord = { Name: `/${greenTarget.databaseContainer}`, State: { Running: true }, Config: { Labels: { 'com.shareittoo.sit.green': 'true' } } };
-  const fakeRun = async (image, isolatedLedger = currentMigrationLedger, initLog = 'database system is ready to accept connections\n', stableSelect2 = '1\n') => {
+  const fakeRun = async (image, isolatedLedger = currentMigrationLedger, initLog = 'PostgreSQL init process complete; ready for start up.\n', stableSelect2 = '1\n', targetSet = targetContainerSet, foreignBefore = '[]\n', foreignAfter = foreignBefore, candidateFinding = emptyFindingFingerprint, stopAtPhase = 'quiesce_green_api') => {
     const calls = [];
     const fake = async (command, args, options = {}) => {
       calls.push({ command, args, phase: options.phase, env: options.env });
       const phase = options.phase;
+      if (phase === 'target_container_set_readback') return { stdout: targetSet };
       if (phase === 'target_inventory_api') return { stdout: JSON.stringify([prePromotionRecord(image)]) };
       if (phase === 'target_inventory_database') return { stdout: JSON.stringify([databaseRecord]) };
       if (phase === 'target_inventory_network') return { stdout: JSON.stringify([{ Name: greenTarget.network, Internal: true }]) };
@@ -309,11 +343,16 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       if (phase === 'runtime_image_readback') return { stdout: JSON.stringify(imageReadback) };
       if (phase === 'source_schema_readback') return { stdout: '092_listing_ai_mock_disclosure.up.sql\n' };
       if (phase === 'source_migration_ledger_readback') return { stdout: sourceMigrationLedger };
+      if (phase === 'source_foreign_writer_readback_before_backup') return { stdout: foreignBefore };
+      if (phase === 'source_foreign_writer_readback_after_backup') return { stdout: foreignAfter };
+      if (phase === 'quiesce_green_api_verify') return { stdout: 'false\n' };
       if (phase === 'isolated_postgres_init_complete_log_readback') return { stdout: initLog };
       if (phase === 'isolated_postgres_stable_select_1') return { stdout: '1\n' };
       if (phase === 'isolated_postgres_stable_select_2') return { stdout: stableSelect2 };
       if (phase === 'isolated_migration_readback') return { stdout: '095_staging_google_registration_replays.up.sql\n' };
       if (phase === 'isolated_migration_ledger_readback') return { stdout: isolatedLedger };
+      if (phase === 'isolated_finding_fingerprint_readback') return { stdout: emptyFindingFingerprint };
+      if (phase === 'candidate_finding_fingerprint_readback') return { stdout: candidateFinding };
       if (phase === 'candidate_runtime_flags_readback') return { stdout: JSON.stringify({ DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', googleRegistrationAllowlistEmpty: true }) };
       if (phase === 'candidate_health_and_feature_probes' || phase === 'candidate_ready_probe') return { stdout: JSON.stringify(payload) };
       if (phase === 'candidate_version_probe') return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'test' }) };
@@ -323,7 +362,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
         assert.ok(Buffer.isBuffer(options.inputBytes));
         assert.equal(options.inputDigest, crypto.createHash('sha256').update(options.inputBytes).digest('hex'));
       }
-      if (phase === 'quiesce_green_api') throw Object.assign(new Error('stop before irreversible phase'), { code: 'test_stop_before_quiesce' });
+      if (phase === stopAtPhase) throw Object.assign(new Error(`stop at ${stopAtPhase}`), { code: stopAtPhase === 'quiesce_green_api' ? 'test_stop_before_quiesce' : 'test_stop_at_phase' });
       if (phase === 'failure_restore_green_api_verify') return { stdout: 'true\n' };
       return { stdout: '' };
     };
@@ -348,17 +387,46 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   const quiesceIndex = good.calls.findIndex((entry) => entry.phase === 'quiesce_green_api');
   assert.ok(quiesceIndex > 0);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
-  const invalidIsolatedLedger = await fakeRun(targetManifest.prePromotionImage, 'bad-ledger\n');
+  for (const invalidTargetSet of [
+    `${greenTarget.apiContainer}\t\t\ttrue\t${greenTarget.runId}\n`,
+    `${targetContainerSet}${'sit-green-extra\t\t\ttrue\textra\n'}`,
+    `${greenTarget.apiContainer}\t\t\t\t${greenTarget.runId}\n${greenTarget.databaseContainer}\t\t\ttrue\t\n`,
+    `${greenTarget.apiContainer}\tsit-staging\t\ttrue\t${greenTarget.runId}\n${greenTarget.databaseContainer}\t\t\ttrue\t\n`,
+    `${targetContainerSet}shareittoo-staging-api-lookalike\t\t\t\t\n`,
+  ]) {
+    const invalidTarget = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', invalidTargetSet);
+    assert.equal(invalidTarget.result?.code, 'green_target_container_set_invalid');
+    assert.equal(invalidTarget.calls.some((entry) => entry.phase === 'quiesce_green_api'), false);
+  }
+  const preservedExitedGreen = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', `${targetContainerSet}shareittoo-staging-postgres\t sit-staging\t\t\t\n`);
+  assert.equal(preservedExitedGreen.result?.code, 'test_stop_before_quiesce');
+  const foreignWriter = JSON.stringify([{ role: 'foreign', application: 'staging-api', client: '10.0.0.2', state: 'active' }]);
+  const writerBefore = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, foreignWriter, '[]\n', emptyFindingFingerprint, 'source_foreign_writer_readback_before_backup');
+  assert.equal(writerBefore.result?.code, 'green_foreign_writer_present');
+  assert.equal(writerBefore.calls.some((entry) => entry.phase === 'fresh_protected_backup'), false);
+  const writerAfter = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', foreignWriter, emptyFindingFingerprint, 'source_foreign_writer_readback_after_backup');
+  assert.equal(writerAfter.result?.code, 'green_foreign_writer_present');
+  assert.equal(writerAfter.calls.some((entry) => entry.phase === 'fresh_protected_backup'), true);
+  rmSync(`${evidenceFile}.pgdump`, { force: true });
+  const invalidIsolatedLedger = await fakeRun(targetManifest.prePromotionImage, 'bad-ledger\n', undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_migration_ledger_readback');
   assert.equal(invalidIsolatedLedger.result?.code, 'green_isolated_migration_ledger_invalid');
   assert.equal(invalidIsolatedLedger.calls.some((entry) => entry.phase === 'synthetic_sandbox_provision_isolated'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
-  const missingInitMarker = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, '');
+  const missingInitMarker = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, '', '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_postgres_init_complete_log_readback');
   assert.equal(missingInitMarker.result?.code, 'green_isolated_init_complete_log_invalid');
   assert.equal(missingInitMarker.calls.some((entry) => entry.phase === 'isolated_restore'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
-  const missingSecondStableSelect = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, 'database system is ready to accept connections\n', '');
+  const readinessOnlyMarker = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, 'database system is ready to accept connections\n', '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_postgres_init_complete_log_readback');
+  assert.equal(readinessOnlyMarker.result?.code, 'green_isolated_init_complete_log_invalid');
+  assert.equal(readinessOnlyMarker.calls.some((entry) => entry.phase === 'isolated_restore'), false);
+  rmSync(`${evidenceFile}.pgdump`, { force: true });
+  const missingSecondStableSelect = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_postgres_stable_select_2');
   assert.equal(missingSecondStableSelect.result?.code, 'green_isolated_stable_select_2_invalid');
   assert.equal(missingSecondStableSelect.calls.some((entry) => entry.phase === 'isolated_restore'), false);
+  rmSync(`${evidenceFile}.pgdump`, { force: true });
+  const findingDrift = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', JSON.stringify({ paymentRecoveryNeedsReview: [{ source: 'payout', id_hash: 'a'.repeat(64), cause: 'payout_failed', status: 'failed', time_class: '>24h' }], supportNextUpdateOverdue: [] }), 'candidate_finding_fingerprint_readback');
+  assert.equal(findingDrift.result?.code, 'green_finding_fingerprint_drift');
+  assert.equal(findingDrift.calls.some((entry) => entry.phase === 'candidate_health_and_feature_probes'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
   assert.deepEqual(good.calls.slice(0, quiesceIndex).map((entry) => entry.phase), expectedReversible);
   const provisionEntries = buildGreenPromotionCommands({ plan, configFile, config: runtimeConfig })
@@ -369,7 +437,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     assert.ok(entry.args.includes('--user') && entry.args.includes('100:101'));
     assert.ok(entry.args.includes('--group-add') && entry.args.includes('65532'));
     assert.ok(entry.args.includes('--entrypoint') && entry.args.includes('node'));
-    assert.ok(entry.args.includes(plan.runtime.image));
+    assert.ok(entry.args.includes(`${plan.runtime.image}@${plan.runtime.digest}`));
     assert.ok(entry.args.includes('/app/ops/provision_synthetic_sandbox_user.mjs'));
     assert.ok(entry.args.some((arg) => arg.endsWith('dst=/app/ops/provision_synthetic_sandbox_user.mjs,readonly')));
     assert.ok(entry.args.some((arg) => arg.endsWith('dst=/app/ops/stable_private_file.mjs,readonly')));
@@ -389,7 +457,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   assert.ok(canonicalProvision.args.includes(plan.target.network));
   assert.ok(canonicalProvision.args.includes(configFile));
   assert.equal(canonicalProvision.args.includes(plan.isolated.envFile), false);
-  assert.equal(good.calls.find((entry) => entry.phase === 'synthetic_sandbox_provision_isolated').command, 'docker');
+  assert.equal(good.calls.find((entry) => entry.phase === 'synthetic_sandbox_provision_isolated'), undefined);
   assert.equal(good.calls.find((entry) => entry.phase === 'synthetic_sandbox_provision_canonical'), undefined);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
   const badImage = await fakeRun('shareittoo-api-wrong:old');
@@ -448,6 +516,7 @@ test('pre-promotion inventory requires the exact Green DB host and protected mou
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, greenLabel: false, prePromotionTuple: false } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_inventory_mismatch/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, databaseHost: 'legacy-db' } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.slice(0, -1) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
+  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => { const copy = { ...mount }; delete copy.readOnly; return copy; }) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_mount_rw_readback_invalid/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => mount.destination === '/run/secrets/mfa-encryption-key' ? { ...mount, source: '/wrong/path' } : mount) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => mount.destination === '/run/secrets/mfa-encryption-key' ? { ...mount, type: 'volume', volume: greenTarget.uploadsVolume, source: null } : mount) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => mount.destination === '/run/secrets/technical-sandbox-key' ? { ...mount, readOnly: false } : mount) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
@@ -467,6 +536,7 @@ test('final readback is authoritative for no-port Green routing, mounts, image a
   assert.equal(assertGreenFinalContainerReadback({ record, plan }), true);
   assert.equal(summarizeGreenFinalContainerReadback(record, plan).hostPorts, 0);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Config: { ...record.Config, User: 'nobody' } }, plan }), /green_final_inventory_mismatch/u);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount, index) => index === 1 ? { Destination: mount.Destination, RW: undefined } : mount) }, plan }), /green_mount_rw_readback_invalid/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, NetworkSettings: { ...record.NetworkSettings, Ports: { '8080/tcp': [{ HostPort: '18082' }] } } }, plan }), /green_final_inventory_mismatch/u);
 });
 
