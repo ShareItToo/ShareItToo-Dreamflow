@@ -1941,6 +1941,7 @@ export function createApp({
   }),
   drainIdentityVerificationRedactionsNow = null,
   identityVerificationProvider: identityVerificationProviderOverride = null,
+  socialAuthPreTransactionHook = null,
   drainCrashlyticsReportDeletions = (ids) => {
     if (!crashlyticsReportDeleteClient) {
       return Promise.resolve({ accepted: 0, retried: 0 });
@@ -2404,6 +2405,7 @@ export function createApp({
     let stagingGoogleRegistration = null;
     let existingSocialAccount = null;
     let exactExistingSocialIdentity = false;
+    let precheckedSocialAccountId = null;
     const googleRegistrationLaneEnabled = config.stagingGoogleRegistration.enabled
       && identity.provider === 'google';
     if (googleRegistrationLaneEnabled) {
@@ -2421,6 +2423,7 @@ export function createApp({
           throw new HttpError(403, 'staging_google_identity_conflict');
         }
         exactExistingSocialIdentity = true;
+        precheckedSocialAccountId = existingSocialAccount.id;
       } else {
         const freshIdentity = await verifySocialIdentity({ requireFreshToken: true });
         if (freshIdentity.provider !== identity.provider
@@ -2538,6 +2541,9 @@ export function createApp({
       && req.body?.privacyAccepted === true
       && req.body?.minimumAgeConfirmed === true
       && (!config.privatePilotV4Enabled || req.body?.privateUseConfirmed === true);
+    if (typeof socialAuthPreTransactionHook === 'function') {
+      await socialAuthPreTransactionHook();
+    }
     const outcome = await inTransaction(async (client) => {
       await client.query(
         'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
@@ -2556,6 +2562,9 @@ export function createApp({
       );
       if (linked.rowCount) {
         user = linked.rows[0];
+        if (exactExistingSocialIdentity && user.id !== precheckedSocialAccountId) {
+          throw new HttpError(409, 'social_identity_changed');
+        }
         if (linked.rows[0].firebase_user_id !== identity.firebaseUserId) {
           throw new HttpError(
             403,
@@ -2568,6 +2577,9 @@ export function createApp({
           throw new HttpError(403, 'staging_google_identity_conflict');
         }
       } else {
+        if (exactExistingSocialIdentity) {
+          throw new HttpError(409, 'social_identity_changed');
+        }
         const existing = await client.query(
           'SELECT * FROM users WHERE email = $1 FOR UPDATE',
           [identity.email],

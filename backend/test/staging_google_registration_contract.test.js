@@ -22,6 +22,7 @@ test('social HTTP contract gates fresh claims, replay, ownership, and fixed stag
   assert.match(appSource, /reserveStagingGoogleRegistrationReplay\(client/u);
   assert.match(appSource, /const userId = stagingGoogleRegistration\?\.userId \?\? crypto\.randomUUID\(\)/u);
   assert.match(appSource, /staging_google_identity_conflict/u);
+  assert.match(appSource, /social_identity_changed/u);
   assert.match(appSource, /metadata:\s*\{\s*method:\s*'federated',\s*provider:\s*identity\.provider\s*\}/u);
   assert.doesNotMatch(appSource, /metadata:.*tokenDigest/u);
   assert.ok(

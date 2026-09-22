@@ -145,7 +145,15 @@ if (!databaseUrl) {
         }],
       ]);
       const verificationCalls = [];
+      let interleavedSocialAuth = null;
       const app = createApp({
+        socialAuthPreTransactionHook: async () => {
+          const current = interleavedSocialAuth;
+          if (!current) return;
+          interleavedSocialAuth = null;
+          current.reached();
+          await current.continue;
+        },
         verifySocialToken: async (rawToken, options = {}) => {
           verificationCalls.push({ rawToken, fresh: options.requireFreshToken === true });
           const verified = identities.get(rawToken);
@@ -312,6 +320,37 @@ if (!databaseUrl) {
         [identityDigest],
       );
       assert.equal(replayRows.rowCount, 1);
+      let releaseInterleavedSocialAuth;
+      let signalInterleavedSocialAuth;
+      const interleavedReached = new Promise((resolve) => {
+        signalInterleavedSocialAuth = resolve;
+      });
+      const interleavedContinue = new Promise((resolve) => {
+        releaseInterleavedSocialAuth = resolve;
+      });
+      interleavedSocialAuth = {
+        reached: signalInterleavedSocialAuth,
+        continue: interleavedContinue,
+      };
+      const interleavedRequest = request(token2);
+      await interleavedReached;
+      await setupPool.query(
+        `DELETE FROM auth_identities
+          WHERE user_id = $1 AND provider = 'google' AND provider_subject = $2`,
+        [userId, subject],
+      );
+      await setupPool.query(
+        `UPDATE users
+            SET email = $2,
+                profile = jsonb_set(profile, '{emailVerified}', 'false'::jsonb, true),
+                email_verified_at = NULL
+          WHERE id = $1`,
+        [userId, `deleted-${crypto.randomUUID()}@example.invalid`],
+      );
+      releaseInterleavedSocialAuth();
+      const interleavedResponse = await interleavedRequest;
+      assert.equal(interleavedResponse.status, 409);
+      assert.equal((await interleavedResponse.json()).error, 'social_identity_changed');
       const { reserveStagingGoogleRegistrationReplay } = await import(
         '../src/staging_google_registration.js'
       );
