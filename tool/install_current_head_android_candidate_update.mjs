@@ -29,7 +29,7 @@ import {
   validateCurrentHeadAndroidReleaseArchive,
 } from './validate_current_head_android_release_archive.mjs';
 import {
-  explicitCurrentRolloverCandidatePath,
+  historicalRolloverCandidatePath,
 } from './validate_google_play_internal_handoff.mjs';
 
 const rolloverInstallStatuses = new Set([
@@ -106,7 +106,7 @@ async function validateCurrentRolloverAndroidReleaseArchive({
   candidateDirectory,
   commandRunner = execFileSync,
 } = {}) {
-  const rollover = JSON.parse(readFileSync(resolve(root, explicitCurrentRolloverCandidatePath), 'utf8'));
+  const rollover = JSON.parse(readFileSync(resolve(root, historicalRolloverCandidatePath), 'utf8'));
   const identity = rollover?.candidate ?? {};
   const candidate = await validateCurrentHeadAndroidReleaseArchive({
     root,

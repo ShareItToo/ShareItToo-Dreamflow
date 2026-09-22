@@ -2,7 +2,17 @@
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -63,6 +73,27 @@ function readJson(path, label) {
   }
 }
 
+function readCanonicalJson(path, label, { beforeOpen = null } = {}) {
+  let descriptor;
+  try {
+    const canonicalPath = realpathSync(path);
+    if (!Number.isInteger(constants.O_NOFOLLOW)) {
+      fail(`${label} cannot be opened safely because O_NOFOLLOW is unavailable.`);
+    }
+    if (typeof beforeOpen === 'function') beforeOpen(canonicalPath);
+    descriptor = openSync(canonicalPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const metadata = fstatSync(descriptor);
+    if (!metadata.isFile()) fail(`${label} must be a regular file.`);
+    return JSON.parse(readFileSync(descriptor, 'utf8'));
+  } catch (error) {
+    if (String(error?.message ?? '').startsWith(`${label} `)) throw error;
+    if (error?.code === 'ELOOP') fail(`${label} must not be a symbolic link.`);
+    fail(`${label} could not be read as JSON: ${error.message}`);
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+}
+
 function safeEvidencePath(repositoryRoot, reference, label) {
   if (typeof reference !== 'string' ||
       !/^docs\/evidence\/b11\/[a-zA-Z0-9._-]+\.json$/u.test(reference)) {
@@ -99,9 +130,11 @@ export const candidateRolloverNonRuntimeExactPaths = Object.freeze([
   'backend/ops/secret_scan_history_baseline.json',
 ]);
 
-export const explicitCurrentRolloverCandidatePath =
+// This historical path is retained only for the direct-device installer.
+// Current-candidate validation must resolve the manifest from the pointer.
+export const historicalRolloverCandidatePath =
   'store/google-play/rollover-candidate-2026092101.json';
-export const explicitCurrentRolloverStatus =
+export const explicitHistoricalRolloverStatus =
   'built-and-archived-internal-staging-upload-pending';
 export const currentRolloverCandidatePointerPath =
   'store/google-play/current-rollover-candidate.json';
@@ -134,20 +167,23 @@ function changedPathsSince(repositoryRoot, sourceCommit) {
  * missing historical private artifact can only be tolerated in this explicit
  * mode, never as a CI or implicit fallback.
  */
-export async function validateExplicitCurrentRolloverCandidate({
+export async function validateExplicitHistoricalRolloverCandidate({
   repositoryRoot,
   archiveRoot = resolve(homedir(), 'Library', 'Application Support', 'ShareItToo', 'release', 'android'),
-  rolloverPath = null,
+  rolloverPath,
   changedPaths = null,
 } = {}) {
   const root = resolve(repositoryRoot ?? fileURLToPath(new URL('../', import.meta.url)));
-  const path = rolloverPath ?? resolve(root, explicitCurrentRolloverCandidatePath);
-  const rollover = object(readJson(path, 'explicit current rollover candidate'),
-    'explicit current rollover candidate');
-  assertNoCredentials(rollover, 'explicit current rollover candidate');
+  if (typeof rolloverPath !== 'string' || rolloverPath.trim() === '') {
+    fail('Historical rollover candidate path is required.');
+  }
+  const path = resolve(rolloverPath);
+  const rollover = object(readCanonicalJson(path, 'explicit historical rollover candidate'),
+    'explicit historical rollover candidate');
+  assertNoCredentials(rollover, 'explicit historical rollover candidate');
   same(rollover.schemaVersion, 1, 'explicit rollover schemaVersion');
   same(rollover.kind, 'android-current-rollover-candidate', 'explicit rollover kind');
-  same(rollover.status, explicitCurrentRolloverStatus, 'explicit rollover status');
+  same(rollover.status, explicitHistoricalRolloverStatus, 'explicit rollover status');
   same(rollover.playConsoleReadback, 'not-performed',
     'explicit rollover.playConsoleReadback');
   const playState = object(rollover.playStateAtLastReadback,
@@ -294,7 +330,7 @@ function sameCandidateBinding(pointer, manifest) {
 
 /**
  * Validate the current pointer through its versioned candidate manifest.
- * Historical candidates stay on validateExplicitCurrentRolloverCandidate so
+ * Historical candidates stay on validateExplicitHistoricalRolloverCandidate so
  * their evidence remains reproducible and cannot be silently replaced.
  */
 export async function validateCurrentRolloverCandidate({
@@ -303,10 +339,11 @@ export async function validateCurrentRolloverCandidate({
   currentPath = null,
   candidateManifestPath = null,
   changedPaths = null,
+  beforeManifestOpen = null,
 } = {}) {
   const root = resolve(repositoryRoot ?? fileURLToPath(new URL('../', import.meta.url)));
   const pointerPath = currentPath ?? resolve(root, currentRolloverCandidatePointerPath);
-  const pointer = object(readJson(pointerPath, 'current rollover pointer'),
+  const pointer = object(readCanonicalJson(pointerPath, 'current rollover pointer'),
     'current rollover pointer');
   assertNoCredentials(pointer, 'current rollover pointer');
   const ref = pointer.candidateManifestRef;
@@ -336,11 +373,13 @@ export async function validateCurrentRolloverCandidate({
       && resolve(candidateManifestPath) !== manifestPath) {
     fail('Current rollover candidate manifest path must match candidateManifestRef.');
   }
-  const manifest = object(readJson(manifestPath, 'current versioned candidate manifest'),
+  const manifest = object(readCanonicalJson(manifestPath, 'current versioned candidate manifest', {
+    beforeOpen: beforeManifestOpen,
+  }),
     'current versioned candidate manifest');
   assertNoCredentials(manifest, 'current versioned candidate manifest');
   sameCandidateBinding(pointer, manifest);
-  const result = await validateExplicitCurrentRolloverCandidate({
+  const result = await validateExplicitHistoricalRolloverCandidate({
     repositoryRoot: root,
     archiveRoot,
     rolloverPath: manifestPath,

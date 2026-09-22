@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { rmSync, symlinkSync } from 'node:fs';
 import {
   chmod,
   mkdir,
@@ -15,10 +16,10 @@ import test from 'node:test';
 
 import {
   candidateRolloverRuntimeDrift,
-  explicitCurrentRolloverCandidatePath,
-  explicitCurrentRolloverStatus,
+  explicitHistoricalRolloverStatus,
+  historicalRolloverCandidatePath,
   validateCurrentRolloverCandidate,
-  validateExplicitCurrentRolloverCandidate,
+  validateExplicitHistoricalRolloverCandidate,
   validateGooglePlayInternalHandoff,
 } from '../../tool/validate_google_play_internal_handoff.mjs';
 
@@ -145,15 +146,15 @@ async function explicitRolloverFixture({ versionCode = explicitRollover.candidat
 test('validates the explicitly named current rollover candidate and zero runtime drift', async (t) => {
   const data = await explicitRolloverFixture();
   t.after(() => rm(data.root, { recursive: true, force: true }));
-  const result = await validateExplicitCurrentRolloverCandidate({
+  const result = await validateExplicitHistoricalRolloverCandidate({
     repositoryRoot,
     archiveRoot: data.archiveRoot,
     rolloverPath: data.rolloverPath,
     changedPaths: [],
   });
-  assert.equal(explicitCurrentRolloverCandidatePath,
+  assert.equal(historicalRolloverCandidatePath,
     'store/google-play/rollover-candidate-2026092101.json');
-  assert.equal(explicitCurrentRolloverStatus,
+  assert.equal(explicitHistoricalRolloverStatus,
     'built-and-archived-internal-staging-upload-pending');
   assert.equal(result.buildNumber, data.rollover.candidate.versionCode);
   assert.equal(result.candidate.artifactSourceHead, data.rollover.candidate.artifactSourceHead);
@@ -173,21 +174,26 @@ test('rejects a missing or wrong explicit rollover successor', async (t) => {
   wrong.candidate.applicationId = 'com.example.wrong';
   const wrongPath = join(data.root, 'wrong.json');
   await writeFile(wrongPath, JSON.stringify(wrong));
-  await assert.rejects(() => validateExplicitCurrentRolloverCandidate({
+  await assert.rejects(() => validateExplicitHistoricalRolloverCandidate({
     repositoryRoot,
     archiveRoot: data.archiveRoot,
     rolloverPath: wrongPath,
   }), /canonical signed internal Staging configuration|identity/u);
-  await assert.rejects(() => validateExplicitCurrentRolloverCandidate({
+  await assert.rejects(() => validateExplicitHistoricalRolloverCandidate({
     repositoryRoot,
     archiveRoot: data.archiveRoot,
     rolloverPath: join(data.root, 'missing.json'),
   }), /could not be read as JSON/u);
+  await assert.rejects(() => validateExplicitHistoricalRolloverCandidate({
+    repositoryRoot,
+    archiveRoot: data.archiveRoot,
+  }), /path is required/u);
 });
 
 test('rejects runtime drift in explicit rollover mode', async () => {
-  await assert.rejects(() => validateExplicitCurrentRolloverCandidate({
+  await assert.rejects(() => validateExplicitHistoricalRolloverCandidate({
     repositoryRoot,
+    rolloverPath: resolve(repositoryRoot, historicalRolloverCandidatePath),
     changedPaths: ['lib/main.dart'],
   }), /Runtime-affecting files changed/u);
 });
@@ -321,6 +327,26 @@ test('rejects traversal, out-of-tree symlink, and semantic pointer divergence', 
       changedPaths: [],
     }), /current pointer\/versioned manifest/u);
   }
+});
+
+test('binds manifest bytes to the opened descriptor across path replacement', async (t) => {
+  const data = await currentRolloverFixture();
+  const replacementPath = join(data.root, 'replacement.json');
+  t.after(async () => {
+    await rm(data.root, { recursive: true, force: true });
+    await rm(data.manifestPath, { force: true });
+  });
+  await writeFile(replacementPath, JSON.stringify(data.rollover));
+  await assert.rejects(() => validateCurrentRolloverCandidate({
+    repositoryRoot,
+    archiveRoot: data.archiveRoot,
+    currentPath: data.pointerPath,
+    changedPaths: [],
+    beforeManifestOpen: () => {
+      rmSync(data.manifestPath, { force: true });
+      symlinkSync(replacementPath, data.manifestPath);
+    },
+  }), /must not be a symbolic link/u);
 });
 
 async function fixture() {

@@ -173,7 +173,7 @@ test('uses the central explicit current rollover pointer', () => {
     new URL('../../tool/install_current_head_android_candidate_update.mjs', import.meta.url),
     'utf8',
   );
-  assert.match(source, /explicitCurrentRolloverCandidatePath/u);
+  assert.match(source, /historicalRolloverCandidatePath/u);
   assert.doesNotMatch(source, /current-rollover-candidate\.json/u);
 });
 
