@@ -21,6 +21,10 @@ import {
   listingAiMockDisclosureText,
   listingAiMockDisclosureVersion,
 } from '../src/listing_ai_image_pipeline.js';
+import {
+  listingPhotoTruthPolicyText,
+  listingPhotoTruthPolicyVersion,
+} from '../src/listing_photo_truth_policy.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL?.trim();
 
@@ -2610,7 +2614,7 @@ if (!databaseUrl) {
            latitude, longitude, min_days, max_days, protection_model
          ) VALUES (
            'listing-1', 'owner',
-           '{"id":"listing-1","ownerId":"owner","title":"Camera","description":"Camera for integration tests","categoryId":"cat3","subcategory":"Kameras","tags":["camera"],"pricePerDay":15,"priceRaw":15,"priceUnit":"day","currency":"EUR","deposit":null,"photos":["https://shareittoo.com/api/v1/uploads/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb-full.webp"],"locationText":"Owner exact address","lat":52.5201,"lng":13.4051,"geohash":"private","condition":"good","minDays":1,"maxDays":30,"createdAt":"2026-08-08T20:00:00.000Z","isActive":true,"verificationStatus":"pending","city":"Berlin","country":"Deutschland","status":"active","timesLent":0,"protectionModel":"none"}'::jsonb,
+           '{"id":"listing-1","ownerId":"owner","title":"Camera","description":"Camera for integration tests","categoryId":"cat3","subcategory":"Kameras","tags":["camera"],"pricePerDay":15,"priceRaw":15,"priceUnit":"day","currency":"EUR","deposit":null,"photos":["https://shareittoo.com/api/v1/uploads/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb-full.webp"],"locationText":"Owner exact address","lat":52.5201,"lng":13.4051,"geohash":"private","condition":"good","minDays":1,"maxDays":30,"createdAt":"2026-08-08T20:00:00.000Z","isActive":true,"verificationStatus":"pending","city":"Berlin","country":"Deutschland","status":"active","timesLent":0,"protectionModel":"none","photoTruthPolicyVersion":${JSON.stringify(listingPhotoTruthPolicyVersion)},"photoTruthAttestation":${JSON.stringify(listingPhotoTruthPolicyText)},"photoTruthClassifications":["unknown"]}'::jsonb,
            true, 1, 1, 'active', 'EUR', 1500,
            'Camera', 'Camera for integration tests', 'cat3', 'good',
            'Owner exact address', 'Berlin', 'Deutschland', 52.5201, 13.4051,
@@ -5902,6 +5906,9 @@ if (!databaseUrl) {
           status: 'active',
           isActive: true,
           privateStatusConfirmed: true,
+          photoTruthPolicyVersion: listingPhotoTruthPolicyVersion,
+          photoTruthAttestation: listingPhotoTruthPolicyText,
+          photoTruthClassifications: ['unknown'],
         },
         supplyEnrichmentLink: g5_failure_after_main_publication,
       };
@@ -5937,6 +5944,33 @@ if (!databaseUrl) {
       const blueOceanPublish = await blueOceanPublishResponse.json();
       assert.equal(blueOceanPublish.listing.ownerId, 'renter-a');
       assert.equal(blueOceanPublish.listing.pricePerDay, 16);
+      assert.equal(
+        blueOceanPublish.listing.photoTruthPolicyVersion,
+        listingPhotoTruthPolicyVersion,
+      );
+      assert.equal(
+        blueOceanPublish.listing.photoTruthAttestation,
+        listingPhotoTruthPolicyText,
+      );
+      const blueOceanStoredListing = await setupPool.query(
+        `SELECT payload->>'photoTruthPolicyVersion' AS policy_version,
+                payload->>'photoTruthAttestation' AS policy_text
+           FROM listings
+          WHERE id = $1`,
+        [blueOceanPublish.listing.id],
+      );
+      assert.deepEqual(blueOceanStoredListing.rows[0], {
+        policy_version: listingPhotoTruthPolicyVersion,
+        policy_text: listingPhotoTruthPolicyText,
+      });
+      const blueOceanPublicCatalog = await fetch(`${baseUrl}/v1/listings?q=Akku`);
+      assert.equal(blueOceanPublicCatalog.status, 200);
+      const blueOceanPublicListing = (await blueOceanPublicCatalog.json()).listings
+        .find((entry) => entry.id === blueOceanPublish.listing.id);
+      assert.ok(blueOceanPublicListing);
+      assert.equal('photoTruthPolicyVersion' in blueOceanPublicListing, false);
+      assert.equal('photoTruthAttestation' in blueOceanPublicListing, false);
+      assert.equal('photoTruthClassifications' in blueOceanPublicListing, false);
       assert.equal(
         blueOceanPublish.assistant.explicitOwnerActionVerified,
         true,
@@ -6031,7 +6065,47 @@ if (!databaseUrl) {
         protectionModel: 'none',
         status: 'active',
         isActive: true,
+        photoTruthPolicyVersion: listingPhotoTruthPolicyVersion,
+        photoTruthAttestation: listingPhotoTruthPolicyText,
+        photoTruthClassifications: ['unknown'],
       };
+      for (const [suffix, policy] of [
+        ['missing-policy', {
+          photoTruthPolicyVersion: undefined,
+          photoTruthAttestation: undefined,
+        }],
+        ['old-policy', {
+          photoTruthPolicyVersion: 'listing-photo-truth-old',
+          photoTruthAttestation: listingPhotoTruthPolicyText,
+        }],
+        ['drifted-policy', {
+          photoTruthPolicyVersion: listingPhotoTruthPolicyVersion,
+          photoTruthAttestation: 'Driftierter Veröffentlichungstext.',
+        }],
+      ]) {
+        const invalidListing = { ...lifecycleListing, id: `listing-${suffix}`, ...policy };
+        if (suffix === 'missing-policy') {
+          delete invalidListing.photoTruthPolicyVersion;
+          delete invalidListing.photoTruthAttestation;
+        }
+        const invalidCreate = await fetch(`${baseUrl}/v1/listings`, {
+          method: 'POST',
+          headers: ownerHeaders,
+          body: JSON.stringify(invalidListing),
+        });
+        assert.equal(invalidCreate.status, 400);
+        assert.equal((await invalidCreate.json()).error, 'listing_photo_truth_policy_required');
+        const invalidListingRow = await setupPool.query(
+          'SELECT count(*)::int AS count FROM listings WHERE id = $1',
+          [invalidListing.id],
+        );
+        assert.equal(invalidListingRow.rows[0].count, 0);
+        const unboundUpload = await setupPool.query(
+          'SELECT listing_id, visibility FROM uploads WHERE storage_name = $1',
+          [new URL(listingUpload.url).pathname.split('/').at(-1)],
+        );
+        assert.deepEqual(unboundUpload.rows[0], { listing_id: null, visibility: 'private' });
+      }
       const createLifecycleListing = await fetch(`${baseUrl}/v1/listings`, {
         method: 'POST',
         headers: ownerHeaders,
@@ -6044,6 +6118,8 @@ if (!databaseUrl) {
       assert.equal(createdLifecycleListing.status, 'active');
       assert.equal(createdLifecycleListing.availabilityMode, 'calendar');
       assert.equal(createdLifecycleListing.catalogRevision, 1);
+      assert.equal(createdLifecycleListing.photoTruthPolicyVersion, listingPhotoTruthPolicyVersion);
+      assert.equal(createdLifecycleListing.photoTruthAttestation, listingPhotoTruthPolicyText);
 
       const processedUpload = await setupPool.query(
         `SELECT mime_type, byte_size, thumbnail_mime_type, thumbnail_byte_size,
@@ -6083,6 +6159,9 @@ if (!databaseUrl) {
       assert.equal(lifecycleCatalog.listings[0].lat, 52.52);
       assert.equal(lifecycleCatalog.listings[0].lng, 13.41);
       assert.equal(lifecycleCatalog.listings[0].geohash, '');
+      assert.equal('photoTruthPolicyVersion' in lifecycleCatalog.listings[0], false);
+      assert.equal('photoTruthAttestation' in lifecycleCatalog.listings[0], false);
+      assert.equal('photoTruthClassifications' in lifecycleCatalog.listings[0], false);
 
       const foreignEdit = await fetch(`${baseUrl}/v1/listings/listing-lifecycle`, {
         method: 'PUT',
@@ -6283,6 +6362,69 @@ if (!databaseUrl) {
       );
       assert.equal(reactivateLifecycleListing.status, 200);
       assert.equal((await reactivateLifecycleListing.json()).listing.status, 'active');
+      assert.equal((await fetch(localMediaUrl(listingUpload.url))).status, 200);
+
+      await fetch(
+        `${baseUrl}/v1/listings/listing-lifecycle/status`,
+        {
+          method: 'PATCH',
+          headers: ownerHeaders,
+          body: JSON.stringify({ status: 'paused' }),
+        },
+      );
+      await setupPool.query(
+        `UPDATE listings
+         SET payload = payload - 'photoTruthPolicyVersion' - 'photoTruthAttestation'
+         WHERE id = 'listing-lifecycle'`,
+      );
+      const legacyReactivate = await fetch(
+        `${baseUrl}/v1/listings/listing-lifecycle/status`,
+        {
+          method: 'PATCH',
+          headers: ownerHeaders,
+          body: JSON.stringify({ status: 'active' }),
+        },
+      );
+      assert.equal(legacyReactivate.status, 409);
+      assert.equal((await legacyReactivate.json()).error, 'listing_photo_truth_policy_required');
+      const legacyPausedRow = await setupPool.query(
+        `SELECT payload, status, is_active, catalog_revision
+           FROM listings
+          WHERE id = 'listing-lifecycle'`,
+      );
+      assert.equal(legacyPausedRow.rows[0].status, 'paused');
+      assert.equal(legacyPausedRow.rows[0].is_active, false);
+      assert.equal('photoTruthPolicyVersion' in legacyPausedRow.rows[0].payload, false);
+      assert.equal('photoTruthAttestation' in legacyPausedRow.rows[0].payload, false);
+      assert.equal((await fetch(localMediaUrl(listingUpload.url))).status, 401);
+      const legacyPausedOwnerMedia = await fetch(localMediaUrl(listingUpload.url), {
+        headers: { Authorization: `Bearer ${tokenFor('owner')}` },
+      });
+      assert.equal(legacyPausedOwnerMedia.status, 200);
+      assert.equal(legacyPausedOwnerMedia.headers.get('cache-control'), 'private, no-store');
+      const restoreLegacyPolicy = await fetch(
+        `${baseUrl}/v1/listings/listing-lifecycle`,
+        {
+          method: 'PUT',
+          headers: ownerHeaders,
+          body: JSON.stringify({
+            ...lifecycleListing,
+            title: 'Bosch restored after photo-policy legacy state',
+            catalogRevision: Number(legacyPausedRow.rows[0].catalog_revision),
+          }),
+        },
+      );
+      assert.equal(restoreLegacyPolicy.status, 200);
+      const restoredExactReactivate = await fetch(
+        `${baseUrl}/v1/listings/listing-lifecycle/status`,
+        {
+          method: 'PATCH',
+          headers: ownerHeaders,
+          body: JSON.stringify({ status: 'active' }),
+        },
+      );
+      assert.equal(restoredExactReactivate.status, 200);
+      assert.equal((await restoredExactReactivate.json()).listing.status, 'active');
       assert.equal((await fetch(localMediaUrl(listingUpload.url))).status, 200);
 
       const deleteLifecycleListing = await fetch(`${baseUrl}/v1/listings/listing-lifecycle`, {
