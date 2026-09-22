@@ -225,6 +225,8 @@ discover a mechanically stale source hash.
   `PrivatePilotConfig.v52ClientBuild` fallback atomically. Release preflight
   must fail before any binary build when those values drift; never repair the
   mismatch by reusing or rebinding an already archived candidate.
+- Isolated-worker tasks must verify the worktree root, branch and HEAD before
+  the first mutation and must never commit or revert in the canonical checkout.
 - Current-candidate validators must resolve
   `store/google-play/current-rollover-candidate.json.candidateManifestRef` to
   the exact canonical in-repo versioned manifest, then bind its build and
