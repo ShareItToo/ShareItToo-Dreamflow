@@ -120,6 +120,10 @@ discover a mechanically stale source hash.
   `Pro` with `Extended` thinking; never route these gates to Astra. Gemini is an
   AI reviewer and cannot replace professional or owner approval. Technical
   incompleteness stays with Luna under `FIX`.
+- Immediately before every Gemini send, read back the visible mode selector and
+  require exactly `Pro` plus `Extended`. If Pro is quota-blocked or the selector
+  shows Flash, Flash-Lite or another mode, do not send or accept that answer;
+  wait for Pro availability and retry the unchanged gate without substituting.
 - Before every gate answer, Gemini must freshly open every decisive source and
   verify its currentness. For law use the current consolidated official text
   and check amendment and effective dates; for product, account, provider,
