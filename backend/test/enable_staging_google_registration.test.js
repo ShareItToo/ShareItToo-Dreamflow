@@ -15,6 +15,7 @@ const revision = '0123456789abcdef0123456789abcdef01234567';
 const imageDigest = `sha256:${'a'.repeat(64)}`;
 const mappingDigest = 'b'.repeat(64);
 const userId = 'synthetic_google_registration_user';
+const registrationAllowlistKey = 'SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST';
 const migrationLedgerDigest = 'b31bd8054569f851a4fed0798fb0d8b971282256461e764529564cd14d2e802f';
 
 function envContent({ unrelated = 'preserve-me', registration = false, allowlist = null } = {}) {
@@ -81,7 +82,10 @@ async function fixture({ apiContainer = 'shareittoo-staging-api', image = `regis
       WorkingDir: '/app', User: 'shareittoo', Hostname: hostname ?? 'a'.repeat(12), Tty: false, OpenStdin: false,
       Labels: { 'com.shareittoo.sit.green': 'true' },
     },
-    HostConfig: { GroupAdd: ['65532'], RestartPolicy: { Name: 'unless-stopped', MaximumRetryCount: 0 }, PortBindings: {}, NetworkMode: manifest.network },
+    HostConfig: {
+      GroupAdd: ['65532'], RestartPolicy: { Name: 'unless-stopped', MaximumRetryCount: 0 }, PortBindings: {}, NetworkMode: manifest.network,
+      SecurityOpt: ['no-new-privileges'], NoNewPrivileges: true, Memory: 64,
+    },
     Mounts: manifest.mounts.map((mount) => ({ Type: mount.type, Name: mount.type === 'volume' ? mount.name : null, Source: mount.source, Destination: mount.destination, RW: !mount.readOnly })),
     NetworkSettings: { Ports: {}, Networks: { [manifest.network]: {}, [manifest.providerNetwork]: {} } },
   };
@@ -118,6 +122,7 @@ function statefulDockerExecutor(fx, {
   stopMode = null,
   createMode = null,
   renameMode = null,
+  createMutation = null,
 } = {}) {
   const db = { Name: `/${fx.manifest.databaseContainer}`, State: { Running: true }, Config: { Image: `postgres:16-alpine@sha256:${'c'.repeat(64)}`, Env: ['POSTGRES_DB=shareittoo_green', 'POSTGRES_USER=shareittoo_green'] } };
   const volume = { Name: fx.manifest.databaseVolume };
@@ -228,6 +233,13 @@ function statefulDockerExecutor(fx, {
       const container = inspectContainer(args[1]);
       container.State.Running = false;
       fx.state.stopped = true;
+      if (stopMode === 'foreign-inspect') {
+        const foreign = structuredClone(container);
+        foreign.Id = 'f'.repeat(64);
+        foreign.State = { Running: false };
+        containers.set(args[1], foreign);
+        fail('stop_response_lost', options.phase);
+      }
       if (stopMode === 'response-loss' || stopMode === 'unknown-inspect' || stopMode === 'unknown-inspect-no-recovery') fail('stop_response_lost', options.phase);
       return { stdout: '', code: 0 };
     }
@@ -265,34 +277,83 @@ function statefulDockerExecutor(fx, {
         containers.set(fx.manifest.apiContainer, foreign);
         fail('create_name_conflict', options.phase);
       }
+      let effectiveArgs = [...args];
+      const removeOption = (option) => {
+        const index = effectiveArgs.indexOf(option);
+        if (index >= 0) effectiveArgs.splice(index, 2);
+      };
+      const replaceOption = (option, value) => {
+        const index = effectiveArgs.indexOf(option);
+        if (index >= 0) effectiveArgs[index + 1] = value;
+      };
+      if (createMutation === 'user-root') replaceOption('--user', 'root');
+      if (createMutation === 'remove-group') removeOption('--group-add');
+      if (createMutation === 'remove-mount') removeOption('--mount');
+      if (createMutation === 'wrong-mount') {
+        const index = effectiveArgs.findIndex((entry, position) => entry === '--mount' && effectiveArgs[position + 1]?.includes('dst=/data/uploads'));
+        if (index >= 0) effectiveArgs[index + 1] = effectiveArgs[index + 1].replace('dst=/data/uploads', 'dst=/data/wrong');
+      }
+      if (createMutation === 'security-drift') replaceOption('--security-opt', 'seccomp=unconfined');
+      if (createMutation === 'memory-drift') replaceOption('--memory', '99');
       const valueOptions = new Set(['--name', '--env-file', '--restart', '--restart-max-retries', '--user', '--workdir', '--entrypoint', '--security-opt', '--cap-add', '--cap-drop', '--stop-timeout', '--stop-signal', '--shm-size', '--dns', '--dns-search', '--add-host', '--ipc', '--pid', '--userns', '--log-driver', '--log-opt', '--memory', '--memory-swap', '--cpu-shares', '--cpu-quota', '--cpu-period', '--cpus', '--cpuset-cpus', '--cpuset-mems', '--pids-limit', '--device', '--ulimit', '--tmpfs', '--cgroupns', '--runtime', '--isolation', '--health-cmd', '--health-interval', '--health-timeout', '--health-retries', '--health-start-period', '--health-start-interval', '--group-add', '--label', '--mount', '--hostname', '--network']);
       const booleanOptions = new Set(['--privileged', '--read-only', '--no-new-privileges', '--init', '--oom-kill-disable', '--rm']);
       let cursor = 1;
-      while (cursor < args.length) {
-        const arg = args[cursor];
-        if (arg === '--network') { if (!args[cursor + 1] || !args[cursor + 2]) throw new Error(`unexpected_docker_command:${args.join(' ')}`); break; }
+      while (cursor < effectiveArgs.length) {
+        const arg = effectiveArgs[cursor];
+        if (arg === '--network') { if (!effectiveArgs[cursor + 1] || !effectiveArgs[cursor + 2]) throw new Error(`unexpected_docker_command:${effectiveArgs.join(' ')}`); break; }
         if (booleanOptions.has(arg)) { cursor += 1; continue; }
-        if (!valueOptions.has(arg) || !args[cursor + 1]) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+        if (!valueOptions.has(arg) || !effectiveArgs[cursor + 1]) throw new Error(`unexpected_docker_command:${effectiveArgs.join(' ')}`);
         cursor += 2;
       }
-      const name = optionValue(args, '--name');
-      const envFile = optionValue(args, '--env-file');
-      const networkIndex = args.indexOf('--network');
-      const networkName = optionValue(args, '--network');
-      const imageArg = args[networkIndex + 2];
+      const optionValues = (option) => effectiveArgs.flatMap((entry, index) => entry === option ? [effectiveArgs[index + 1]] : []);
+      const optionFirst = (option) => optionValues(option)[0] ?? null;
+      const name = optionFirst('--name');
+      const envFile = optionFirst('--env-file');
+      const networkIndex = effectiveArgs.indexOf('--network');
+      const networkName = optionFirst('--network');
+      const imageArg = effectiveArgs[networkIndex + 2];
       if (!name || envFile !== fx.envFile || networkIndex < 0 || networkName !== fx.manifest.network || imageArg !== `${fx.image}@${imageDigest}`
-          || JSON.stringify(args.slice(networkIndex + 3)) !== JSON.stringify(fx.api.Config.Cmd)) fail('unexpected_create_args', options.phase);
-      const source = structuredClone(fx.api);
-      source.Id = 'b'.repeat(64);
-      source.Name = `/${name}`;
-      source.State = { Running: false };
-      source.Config.Image = imageArg;
-      source.Config.Env = (await readFile(envFile, 'utf8')).trim().split('\n');
-      source.Config.Hostname = optionValue(args, '--hostname') ?? 'b'.repeat(12);
-      source.NetworkSettings = { Ports: {}, Networks: { [networkName]: {} } };
+          || JSON.stringify(effectiveArgs.slice(networkIndex + 3)) !== JSON.stringify(fx.api.Config.Cmd)) fail('unexpected_create_args', options.phase);
+      const env = (await readFile(envFile, 'utf8')).trim().split('\n');
+      const labels = Object.fromEntries(optionValues('--label').map((entry) => {
+        const index = entry.indexOf('=');
+        return [entry.slice(0, index), entry.slice(index + 1)];
+      }));
+      const parsedMounts = optionValues('--mount').map((spec) => {
+        const fields = Object.fromEntries(spec.split(',').map((part) => part.split('=')));
+        const type = fields.type;
+        const destination = fields.dst;
+        const readOnly = fields.readonly === 'true';
+        if (!type || !destination || !['bind', 'volume'].includes(type)) fail('unexpected_create_mount', options.phase);
+        if (type === 'volume') {
+          const original = fx.api.Mounts.find((mount) => mount.Type === 'volume' && mount.Name === fields.src);
+          if (!original) fail('unexpected_create_mount', options.phase);
+          return { Type: 'volume', Name: fields.src, Source: original.Source, Destination: destination, RW: !readOnly };
+        }
+        return { Type: 'bind', Name: null, Source: fields.src, Destination: destination, RW: !readOnly };
+      });
+      const securityOpt = optionValues('--security-opt');
+      const source = {
+        Id: 'b'.repeat(64), Name: `/${name}`, State: { Running: false },
+        Config: {
+          Image: imageArg, Env: env, Cmd: effectiveArgs.slice(networkIndex + 3), Entrypoint: optionFirst('--entrypoint') ? [optionFirst('--entrypoint')] : null,
+          WorkingDir: optionFirst('--workdir') ?? '', User: optionFirst('--user') ?? '', Hostname: optionFirst('--hostname') ?? 'b'.repeat(12),
+          Tty: false, OpenStdin: false, Labels: labels,
+        },
+        HostConfig: {
+          GroupAdd: optionValues('--group-add'), RestartPolicy: { Name: optionFirst('--restart') ?? '', MaximumRetryCount: Number(optionFirst('--restart-max-retries') ?? 0) },
+          PortBindings: {}, NetworkMode: networkName, SecurityOpt: securityOpt, NoNewPrivileges: securityOpt.includes('no-new-privileges'),
+          Privileged: effectiveArgs.includes('--privileged'), ReadonlyRootfs: effectiveArgs.includes('--read-only'), Init: effectiveArgs.includes('--init'),
+          Memory: Number(optionFirst('--memory') ?? 0),
+        },
+        Mounts: parsedMounts, NetworkSettings: { Ports: {}, Networks: { [networkName]: {} } },
+      };
+      if (createMode === 'mismatched-registration') {
+        source.Config.Env = source.Config.Env.map((entry) => entry.startsWith(`${registrationAllowlistKey}=`) ? `${registrationAllowlistKey}=${'c'.repeat(64)}=other-user` : entry);
+      }
       containers.set(name, source);
       fx.state.created = true;
-      if (createMode === 'response-loss' || createMode === 'foreign-response-loss') {
+      if (createMode === 'response-loss' || createMode === 'foreign-response-loss' || createMode === 'mismatched-registration') {
         if (createMode === 'foreign-response-loss') {
           const foreign = structuredClone(source);
           foreign.Id = 'f'.repeat(64);
@@ -524,6 +585,20 @@ test('wrong schema or image and stop/rename interruption never produce a false P
     });
   } finally { await rm(preexistingForeign.root, { recursive: true, force: true }); }
 
+  const mismatchedCreate = await fixture();
+  try {
+    const fake = statefulDockerExecutor(mismatchedCreate, { createMode: 'mismatched-registration' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: mismatchedCreate.manifest, mappingFile: mismatchedCreate.mappingFile, evidenceFile: mismatchedCreate.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.rollback.restored, false);
+      assert.equal(error.rollback.originalRunning, null);
+      assert.equal(error.rollback.attemptedRestart, false);
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_replacement_remove'));
+      return true;
+    });
+    const survivor = fake.state.containers.get(mismatchedCreate.manifest.apiContainer);
+    assert.equal(envMap(survivor.Config.Env)[registrationAllowlistKey], `${'c'.repeat(64)}=other-user`);
+  } finally { await rm(mismatchedCreate.root, { recursive: true, force: true }); }
+
   const renameLoss = await fixture();
   try {
     const fake = statefulDockerExecutor(renameLoss, { renameMode: 'response-loss' });
@@ -618,12 +693,25 @@ test('stop fail-before and response-loss-after-stop are recovered from real stat
     await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: noRecovery.manifest, mappingFile: noRecovery.mappingFile, evidenceFile: noRecovery.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
       assert.equal(error.rollback.restored, false);
       assert.equal(error.rollback.originalRunning, null);
-      assert.equal(error.rollback.attemptedRestart, true);
-      assert.ok(fake.calls.some((call) => call.phase === 'rollback_original_start'));
-      assert.ok(fake.calls.some((call) => call.phase === 'rollback_original_readback'));
+      assert.equal(error.rollback.attemptedRestart, false);
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_original_start'));
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_original_readback'));
       return true;
     });
   } finally { await rm(noRecovery.root, { recursive: true, force: true }); }
+
+  const foreignIdentity = await fixture();
+  try {
+    const fake = statefulDockerExecutor(foreignIdentity, { stopMode: 'foreign-inspect' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: foreignIdentity.manifest, mappingFile: foreignIdentity.mappingFile, evidenceFile: foreignIdentity.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.rollback.restored, false);
+      assert.equal(error.rollback.originalRunning, null);
+      assert.equal(error.rollback.attemptedRestart, false);
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_original_start'));
+      return true;
+    });
+    assert.equal(fake.state.containers.get(foreignIdentity.manifest.apiContainer).Id, 'f'.repeat(64));
+  } finally { await rm(foreignIdentity.root, { recursive: true, force: true }); }
 });
 
 test('resource and env ownership drift fail closed without overwriting concurrent bytes', async () => {
@@ -635,6 +723,21 @@ test('resource and env ownership drift fail closed without overwriting concurren
       assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
     } finally { await rm(fx.root, { recursive: true, force: true }); }
   }
+  for (const createMutation of ['user-root', 'remove-group', 'remove-mount', 'wrong-mount', 'security-drift', 'memory-drift']) {
+    const fx = await fixture();
+    try {
+      const fake = statefulDockerExecutor(fx, { createMutation });
+      await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /replacement_config_drift/u);
+      assert.equal(fx.state.api.State.Running, true);
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+  const missingRw = await fixture();
+  try {
+    const originalMount = missingRw.api.Mounts[0];
+    delete originalMount.RW;
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: missingRw.manifest, mappingFile: missingRw.mappingFile, command: statefulDockerExecutor(missingRw).command }), /mount_readback_invalid/u);
+  } finally { await rm(missingRw.root, { recursive: true, force: true }); }
   const owner = await fixture();
   try {
     owner.manifest.envUid = (process.getuid?.() ?? 0) + 1;

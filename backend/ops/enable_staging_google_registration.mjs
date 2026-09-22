@@ -71,13 +71,16 @@ function sortedObject(value) {
 }
 
 function normalizedMounts(mounts) {
-  return (mounts ?? []).map((mount) => ({
-    Type: mount.Type ?? null,
-    Name: mount.Name ?? null,
-    Source: mount.Source ?? null,
-    Destination: mount.Destination ?? null,
-    RW: mount.RW !== false,
-  })).sort((left, right) => String(left.Destination).localeCompare(String(right.Destination)));
+  return (mounts ?? []).map((mount) => {
+    if (typeof mount?.RW !== 'boolean') fail('mount_readback_invalid');
+    return {
+      Type: mount.Type ?? null,
+      Name: mount.Name ?? null,
+      Source: mount.Source ?? null,
+      Destination: mount.Destination ?? null,
+      RW: mount.RW,
+    };
+  }).sort((left, right) => String(left.Destination).localeCompare(String(right.Destination)));
 }
 
 function normalizedHostname(record) {
@@ -443,7 +446,7 @@ function isExactOriginalContainer(record, manifest, originalApi, name, stopped =
   }
 }
 
-function isExactCreatedReplacement(record, manifest, originalApi, name) {
+function isExactCreatedReplacement(record, manifest, originalApi, name, expectedAllowlist) {
   try {
     if (record?.Name?.replace(/^\//u, '') !== name
         || !record?.Id || record.Id === originalApi?.Id
@@ -452,6 +455,12 @@ function isExactCreatedReplacement(record, manifest, originalApi, name) {
     const comparable = structuredClone(record);
     comparable.Config.Image = originalApi.Config.Image;
     if (!sameExceptRegistrationFlags(originalApi, comparable)) return false;
+    const entries = record?.Config?.Env ?? [];
+    const enabledEntries = entries.filter((entry) => String(entry).startsWith(`${registrationEnabledKey}=`));
+    const allowlistEntries = entries.filter((entry) => String(entry).startsWith(`${registrationAllowlistKey}=`));
+    const values = envMap(entries);
+    if (enabledEntries.length !== 1 || allowlistEntries.length !== 1
+        || values[registrationEnabledKey] !== 'true' || values[registrationAllowlistKey] !== expectedAllowlist) return false;
     const names = Object.keys(record?.NetworkSettings?.Networks ?? {}).sort();
     if (JSON.stringify(names) !== JSON.stringify([manifest.network])) return false;
     assertNoHostPort(record, 'replacement_identity_host_port_invalid');
@@ -461,16 +470,29 @@ function isExactCreatedReplacement(record, manifest, originalApi, name) {
   }
 }
 
-async function reconcileUnknownCreate({ manifest, originalApi, command, commandEnv }) {
+function assertOriginalIdentity(record, manifest, originalApi, name, code = 'original_identity_invalid') {
+  if (!isExactOriginalContainer(record, manifest, originalApi, name, false)) fail(code);
+}
+
+async function reconcileUnknownCreate({ manifest, originalApi, expectedAllowlist, command, commandEnv }) {
   const observed = await inspectNamedContainer(command, manifest.apiContainer, 'rollback_create_response_readback', commandEnv);
   if (observed.unknown) return Object.freeze({ ok: false, code: observed.code });
   if (!observed.exists) return Object.freeze({ ok: true, removed: false });
-  if (!isExactCreatedReplacement(observed.record, manifest, originalApi, manifest.apiContainer)) return Object.freeze({ ok: false, code: 'replacement_target_ambiguous' });
+  if (!isExactCreatedReplacement(observed.record, manifest, originalApi, manifest.apiContainer, expectedAllowlist)) return Object.freeze({ ok: false, code: 'replacement_target_ambiguous' });
   const removal = await safeCommand(command, ['rm', '--force', manifest.apiContainer], 'rollback_replacement_remove', commandEnv);
   if (!removal.ok) return Object.freeze({ ok: false, code: removal.code });
   const absent = await inspectNamedContainer(command, manifest.apiContainer, 'rollback_replacement_verify', commandEnv);
   if (absent.unknown || absent.exists) return Object.freeze({ ok: false, code: absent.unknown ? absent.code : 'replacement_present' });
   return Object.freeze({ ok: true, removed: true, removalPhase: removal.phase });
+}
+
+async function reconcileUnknownStop({ manifest, originalApi, command, commandEnv }) {
+  const observed = await inspectNamedContainer(command, manifest.apiContainer, 'rollback_stop_identity_readback', commandEnv);
+  if (observed.unknown || !observed.exists) return Object.freeze({ ok: false, code: observed.code ?? 'stop_identity_unknown' });
+  if (!isExactOriginalContainer(observed.record, manifest, originalApi, manifest.apiContainer, false)) return Object.freeze({ ok: false, code: 'stop_original_identity_ambiguous' });
+  if (observed.record?.State?.Running === true) return Object.freeze({ ok: true, currentStopped: false, stopStateUnknown: false, originalRunning: true });
+  if (observed.record?.State?.Running === false) return Object.freeze({ ok: true, currentStopped: true, stopStateUnknown: false, originalRunning: null });
+  return Object.freeze({ ok: false, code: 'stop_original_state_unknown' });
 }
 
 async function reconcileUnknownRename({ manifest, originalApi, sealedName, command, commandEnv }) {
@@ -524,6 +546,9 @@ async function stopCurrentApi({ manifest, originalApi, command, commandEnv }) {
     if (record?.Name?.replace(/^\//u, '') !== manifest.apiContainer) {
       unknownState(error, 'stop_state_target_invalid');
     }
+    if (!originalApi?.Id || record?.Id !== originalApi.Id) {
+      unknownState(error, 'stop_state_identity_invalid');
+    }
     if (!sameExceptRegistrationFlags(originalApi, record)) {
       unknownState(error, 'stop_state_config_drift');
     }
@@ -543,7 +568,7 @@ async function stopCurrentApi({ manifest, originalApi, command, commandEnv }) {
   }
 }
 
-async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, originalApi, command, commandEnv, sealedName, sealed: initialSealed, currentStopped: initialCurrentStopped, stopStateUnknown = false, replacementCreated, createResponseUnknown = false, renameResponseUnknown = false }) {
+async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, originalApi, expectedAllowlist, command, commandEnv, sealedName, sealed: initialSealed, currentStopped: initialCurrentStopped, stopStateUnknown = false, replacementCreated, createResponseUnknown = false, renameResponseUnknown = false }) {
   const results = [];
   let ok = true;
   let attemptedRestart = false;
@@ -564,8 +589,18 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
       ok = false;
     }
   }
+  if (stopStateUnknown && topologySafe) {
+    const reconciled = await reconcileUnknownStop({ manifest, originalApi, command, commandEnv });
+    results.push({ phase: 'rollback_stop_identity_reconcile', ok: reconciled.ok, ...(reconciled.ok ? {} : { code: reconciled.code }) });
+    if (!reconciled.ok) topologySafe = false;
+    else {
+      currentStopped = reconciled.currentStopped;
+      stopStateUnknown = reconciled.stopStateUnknown;
+      if (reconciled.originalRunning === true) originalRunning = true;
+    }
+  }
   if (createResponseUnknown) {
-    const reconciled = await reconcileUnknownCreate({ manifest, originalApi, command, commandEnv });
+    const reconciled = await reconcileUnknownCreate({ manifest, originalApi, expectedAllowlist, command, commandEnv });
     results.push({ phase: 'rollback_create_response_reconcile', ok: reconciled.ok, ...(reconciled.ok ? {} : { code: reconciled.code }) });
     if (!reconciled.ok) topologySafe = false;
     if (reconciled.removed) results.push({ phase: 'rollback_replacement_remove', ok: true });
@@ -602,7 +637,7 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
       try {
         const inspect = await command('docker', ['inspect', '--format', '{{json .}}', manifest.apiContainer], { phase: 'rollback_api_readback', env: commandEnv });
         const restored = parseJson(inspect.stdout, 'rollback_api_readback_invalid');
-        if (!sameExceptRegistrationFlags(originalApi, restored)) fail('rollback_config_drift');
+        assertOriginalIdentity(restored, manifest, originalApi, manifest.apiContainer, 'rollback_original_identity_invalid');
         originalRunning = restored?.State?.Running === true ? true : restored?.State?.Running === false ? false : null;
         if (restored?.State?.Running !== true) fail('rollback_original_stopped');
         assertNetworks(restored, manifest, 'rollback_network_inventory_invalid');
@@ -628,7 +663,7 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
       try {
         const inspect = await command('docker', ['inspect', '--format', '{{json .}}', manifest.apiContainer], { phase: 'rollback_original_readback', env: commandEnv });
         const restored = parseJson(inspect.stdout, 'rollback_original_readback_invalid');
-        if (!sameExceptRegistrationFlags(originalApi, restored)) fail('rollback_config_drift');
+        assertOriginalIdentity(restored, manifest, originalApi, manifest.apiContainer, 'rollback_original_identity_invalid');
         originalRunning = restored?.State?.Running === true ? true : restored?.State?.Running === false ? false : null;
         if (restored?.State?.Running !== true) fail('rollback_original_stopped');
         assertNetworks(restored, manifest, 'rollback_network_inventory_invalid');
@@ -765,7 +800,7 @@ export async function runStagingGoogleRegistrationEnable({
     await writeEvidence(evidenceFile, { kind: 'sit-staging-google-registration-enable', schemaVersion: 1, status: result.status, runtimeRevision: target.runtimeRevision, apiContainer: target.apiContainer, imageDigest: target.imageDigest, mappingDigest: mapping.mappingDigest, targetUserIdDigest: sha256(mapping.userId), mappingEntryCount: 1, schemaMigration: requiredTerminalMigration, migrationLedger: requiredMigrationLedger, providerTraffic: 'none', stripeLivemode: false, requiresLaterGate: result.requiresLaterGate });
     return result;
   } catch (error) {
-    error.rollback = await rollback({ manifest: target, originalEnv: original.content, appliedEnv, envMutationOwned, originalApi: preflight.readbacks.api, command, commandEnv, sealedName, sealed, currentStopped, stopStateUnknown: error.stopStateUnknown === true, replacementCreated, createResponseUnknown: error.createResponseUnknown === true, renameResponseUnknown: error.renameResponseUnknown === true });
+    error.rollback = await rollback({ manifest: target, originalEnv: original.content, appliedEnv, envMutationOwned, originalApi: preflight.readbacks.api, expectedAllowlist: `${mapping.digest}=${mapping.userId}`, command, commandEnv, sealedName, sealed, currentStopped, stopStateUnknown: error.stopStateUnknown === true, replacementCreated, createResponseUnknown: error.createResponseUnknown === true, renameResponseUnknown: error.renameResponseUnknown === true });
     throw error;
   }
 }
