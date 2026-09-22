@@ -35,7 +35,7 @@ function mappingLine() {
   return `${mappingDigest}=${userId}\n`;
 }
 
-async function fixture({ apiContainer = 'shareittoo-staging-api', image = `registry.example/shareittoo-api:${revision}`, mapping = mappingLine() } = {}) {
+async function fixture({ apiContainer = 'shareittoo-staging-api', image = `registry.example/shareittoo-api:${revision}`, mapping = mappingLine(), hostname = null } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'sit-google-registration-enable-'));
   const envFile = join(root, 'green.env');
   const mappingFile = join(root, 'mapping.txt');
@@ -76,9 +76,9 @@ async function fixture({ apiContainer = 'shareittoo-staging-api', image = `regis
     label: { key: 'com.shareittoo.sit.green', value: 'true' },
   };
   const api = {
-    Name: `/${apiContainer}`, State: { Running: true }, Config: {
+    Id: 'a'.repeat(64), Name: `/${apiContainer}`, State: { Running: true }, Config: {
       Image: image, Env: envContent().trim().split('\n'), Cmd: ['node', 'src/server.js'], Entrypoint: null,
-      WorkingDir: '/app', User: 'shareittoo', Tty: false, OpenStdin: false,
+      WorkingDir: '/app', User: 'shareittoo', Hostname: hostname ?? 'a'.repeat(12), Tty: false, OpenStdin: false,
       Labels: { 'com.shareittoo.sit.green': 'true' },
     },
     HostConfig: { GroupAdd: ['65532'], RestartPolicy: { Name: 'unless-stopped', MaximumRetryCount: 0 }, PortBindings: {}, NetworkMode: manifest.network },
@@ -99,77 +99,207 @@ function startupPayload(fx, enabled) {
   });
 }
 
-function fakeCommand(fx, { mutateUnrelated = false, falsePass = false, failAt = null, wrongSchema = false, wrongImage = false, driftHealth = false, driftMemory = false, driftMaskedPaths = false, stopAfterSideEffect = false } = {}) {
+function envMap(entries) {
+  return Object.fromEntries((entries ?? []).map((entry) => {
+    const index = String(entry).indexOf('=');
+    return index < 0 ? [String(entry), ''] : [String(entry).slice(0, index), String(entry).slice(index + 1)];
+  }));
+}
+
+function statefulDockerExecutor(fx, {
+  mutateUnrelated = false,
+  falsePass = false,
+  failOperation = null,
+  wrongSchema = false,
+  wrongImage = false,
+  driftHealth = false,
+  driftMemory = false,
+  driftMaskedPaths = false,
+  stopMode = null,
+} = {}) {
   const db = { Name: `/${fx.manifest.databaseContainer}`, State: { Running: true }, Config: { Image: `postgres:16-alpine@sha256:${'c'.repeat(64)}`, Env: ['POSTGRES_DB=shareittoo_green', 'POSTGRES_USER=shareittoo_green'] } };
   const volume = { Name: fx.manifest.databaseVolume };
   const network = { Name: fx.manifest.network, Internal: true };
   const providerNetwork = { Name: fx.manifest.providerNetwork };
   const uploads = { Name: fx.manifest.uploadsVolume };
   const image = { RepoTags: [fx.image], Config: { User: 'shareittoo', Labels: { 'org.opencontainers.image.revision': revision } }, RepoDigests: [`${fx.image}@${imageDigest}`] };
+  const containers = new Map([[fx.manifest.apiContainer, fx.api]]);
   const calls = [];
-  const command = async (_cmd, args, options = {}) => {
-    const phase = options.phase;
-    calls.push({ phase, args });
-    if (failAt === phase) throw Object.assign(new Error(`${phase}_failed`), { code: `${phase}_failed`, failurePhase: phase });
-    const json = (value) => ({ stdout: JSON.stringify(value), code: 0 });
-    if (phase === 'current_api_inspect' || phase === 'replacement_config_readback' || phase === 'rollback_api_readback' || phase === 'rollback_original_readback') {
-      if (phase === 'replacement_config_readback') {
-        const cloned = structuredClone(fx.state.api);
-        cloned.Config.Image = `${fx.image}@${imageDigest}`;
-        cloned.Config.Env = envContent({ registration: true, allowlist: `${mappingDigest}=${userId}` }).trim().split('\n');
-        if (driftHealth) cloned.Config.Healthcheck = { Test: ['CMD-SHELL', 'false'], Interval: 1, Timeout: 1, Retries: 1, StartPeriod: 1, StartInterval: 1 };
-        if (driftMemory) cloned.HostConfig.Memory = 99;
-        if (driftMaskedPaths) cloned.HostConfig.MaskedPaths = ['/proc/drifted'];
-        return json(cloned);
-      }
-      return json(fx.state.api);
-    }
-    if (phase === 'current_database_inspect') return json(db);
-    if (phase === 'current_database_volume_inspect') return json(volume);
-    if (phase === 'current_network_inspect') return json(network);
-    if (phase === 'current_provider_network_inspect') return json(providerNetwork);
-    if (phase === 'current_uploads_volume_inspect') return json(uploads);
-    if (phase === 'current_image_inspect') return json(wrongImage ? { ...image, RepoTags: [`${fx.image}-drift`] } : image);
-    if (phase === 'sealed_name_conflict_check') return { stdout: '', code: 0 };
-    if (phase === 'current_database_probe') return { stdout: '1\n', code: 0 };
-    if (phase === 'current_schema_migration_readback' || phase === 'replacement_schema_readback') return { stdout: `${wrongSchema ? '094_apple_refresh_material_only.up.sql' : '095_staging_google_registration_replays.up.sql'}\n`, code: 0 };
-    if (phase === 'current_migration_ledger_readback' || phase === 'replacement_migration_ledger_readback') return { stdout: `${migrationLedgerDigest}\n`, code: 0 };
-    if (phase === 'current_live_probe' || phase === 'current_ready_probe') return { stdout: JSON.stringify({ status: 200, payload: { status: 'ok' } }), code: 0 };
-    if (phase === 'current_version_probe') return { stdout: JSON.stringify({ commit: revision, environment: 'staging' }), code: 0 };
-    if (phase === 'current_runtime_flags') return { stdout: JSON.stringify({ DEPLOYMENT_ENVIRONMENT: 'staging', FIREBASE_AUTH_ENABLED: 'true', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: false, SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: 'absent' }), code: 0 };
-    if (phase === 'current_registration_config_probe') {
-      if (mutateUnrelated) await writeFile(fx.envFile, envContent({ unrelated: 'changed-after-preflight' }), { mode: 0o600 });
-      return { stdout: JSON.stringify({ enabled: false, allowlist: 'absent', allowlistDigest: crypto.createHash('sha256').update('').digest('hex'), allowlistEntryCount: 0, accessGateEnabled: true }), code: 0 };
-    }
-    if (phase === 'replacement_public_runtime_probe' || phase === 'rollback_public_runtime_probe') return { stdout: startupPayload(fx, phase === 'replacement_public_runtime_probe' && !falsePass), code: 0 };
-    if (phase === 'replacement_registration_config_readback') {
-      const enabled = !falsePass;
-      const raw = enabled ? `${mappingDigest}=${userId}` : '';
-      return { stdout: JSON.stringify({ enabled, allowlist: enabled ? 'present' : 'absent', allowlistDigest: crypto.createHash('sha256').update(raw).digest('hex'), allowlistEntryCount: enabled ? 1 : 0, accessGateEnabled: true }), code: 0 };
-    }
-    if (phase === 'rollback_replacement_verify') return { stdout: '', code: 0 };
-    if (phase === 'rollback_replacement_remove' || phase === 'rollback_restore_rename') return { stdout: '', code: 0 };
-    if (phase === 'rollback_restore_start' || phase === 'rollback_original_start') { fx.state.api.State.Running = true; return { stdout: '', code: 0 }; }
-    if (phase === 'rollback_public_runtime_probe') return { stdout: startupPayload(fx, false), code: 0 };
-    if (phase === 'stop_current_api') {
-      if (stopAfterSideEffect) { fx.state.api.State.Running = false; throw Object.assign(new Error('stop_response_lost'), { code: 'stop_response_lost', failurePhase: phase }); }
-      if (failAt === phase) throw Object.assign(new Error(`${phase}_failed`), { code: `${phase}_failed`, failurePhase: phase });
-      fx.state.stopped = true; return { stdout: '', code: 0 };
-    }
-    if (phase === 'stop_state_readback') return json(fx.state.api);
-    if (phase === 'seal_current_api') { fx.state.sealed = true; return { stdout: '', code: 0 }; }
-    if (phase === 'create_replacement_api') { fx.state.created = true; return { stdout: '', code: 0 }; }
-    if (phase === 'attach_provider_network' || phase === 'replacement_registration_config_readback') return { stdout: '', code: 0 };
-    if (phase === 'start_replacement_api') return { stdout: '', code: 0 };
-    return { stdout: '', code: 0 };
+  const state = { stopReadbackConsumed: false };
+  const json = (value) => ({ stdout: JSON.stringify(value), code: 0 });
+  const fail = (code, phase) => { throw Object.assign(new Error(`${code}_failed`), { code: `${code}_failed`, failurePhase: phase }); };
+  const inspectContainer = (name) => {
+    const value = containers.get(name);
+    if (!value) fail('container_not_found', 'inspect');
+    return value;
   };
-  return { command, calls };
+  const optionValue = (args, name) => {
+    const index = args.indexOf(name);
+    return index < 0 ? null : args[index + 1];
+  };
+  const parseExec = (args) => {
+    let index = 1;
+    while (args[index] === '-e') index += 2;
+    const container = args[index];
+    return { container, script: args.slice(index + 1).join(' ') };
+  };
+  const command = async (cmd, args, options = {}) => {
+    assert.equal(cmd, 'docker');
+    calls.push({ phase: options.phase, args: [...args] });
+    let operation = args[0];
+    if (args[0] === 'image') {
+      if (args[1] !== 'inspect' || args.length !== 5 || args[2] !== '--format' || args[3] !== '{{json .}}') throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      operation = 'image_inspect';
+    } else if (args[0] === 'network') {
+      if (args[1] !== 'connect' || args.length !== 4) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      operation = 'network_connect';
+    }
+    const failFor = (name) => failOperation === name;
+    if (operation === 'inspect') {
+      if (args.length !== 4 || args[1] !== '--format' || args[2] !== '{{json .}}') throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      const target = args.at(-1);
+      if (target === fx.manifest.apiContainer && state.stopAttempted && (stopMode === 'unknown-inspect-no-recovery' || stopMode === 'unknown-inspect' && !state.stopReadbackConsumed)) {
+        state.stopReadbackConsumed = true;
+        fail('stop_state_readback', options.phase);
+      }
+      if (target === fx.manifest.apiContainer && containers.get(target)?.Id === 'b'.repeat(64)) {
+        const replacement = structuredClone(containers.get(target));
+        if (driftHealth) replacement.Config.Healthcheck = { Test: ['CMD-SHELL', 'false'], Interval: 1, Timeout: 1, Retries: 1, StartPeriod: 1, StartInterval: 1 };
+        if (driftMemory) replacement.HostConfig.Memory = 99;
+        if (driftMaskedPaths) replacement.HostConfig.MaskedPaths = ['/proc/drifted'];
+        return json(replacement);
+      }
+      return json(target === fx.manifest.databaseContainer ? db
+        : target === fx.manifest.databaseVolume ? volume
+          : target === fx.manifest.network ? network
+            : target === fx.manifest.providerNetwork ? providerNetwork
+              : target === fx.manifest.uploadsVolume ? uploads
+                : inspectContainer(target));
+    }
+    if (operation === 'image_inspect') return json(wrongImage ? { ...image, RepoTags: [`${fx.image}-drift`] } : image);
+    if (operation === 'ps') {
+      if (args.length !== 6 || args[1] !== '--all' || args[2] !== '--filter' || args[4] !== '--format' || args[5] !== '{{.Names}}') throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      const filter = args.find((arg) => arg.startsWith('name=')) ?? '';
+      const match = /^name=\^\/(.+)\$$/u.exec(filter)?.[1];
+      return { stdout: match && containers.has(match) ? `${match}\n` : '', code: 0 };
+    }
+    if (operation === 'exec') {
+      const { container, script } = parseExec(args);
+      if (!containers.has(container) && container !== fx.manifest.databaseContainer) fail('exec_target', options.phase);
+      if (container === fx.manifest.databaseContainer) {
+        const directPsql = args[2] === 'psql' && !args.includes('-e');
+        const ledgerShell = args[2] === 'sh' && args[3] === '-c' && !args.includes('-e');
+        if ((!directPsql && !ledgerShell) || args.length < 3) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+        if (script.includes('SELECT 1')) return { stdout: '1\n', code: 0 };
+        if (script.includes('ORDER BY applied_at')) return { stdout: `${wrongSchema ? '094_apple_refresh_material_only.up.sql' : '095_staging_google_registration_replays.up.sql'}\n`, code: 0 };
+        if (script.includes('string_agg')) return { stdout: `${migrationLedgerDigest}\n`, code: 0 };
+        fail('unknown_database_exec', options.phase);
+      }
+      if (args.filter((arg) => arg === '-e').length !== 1 || !args.includes('--input-type=module') || args.at(-2) !== '-e') throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      if (script.includes('runtimeNames')) {
+        if (failOperation === 'replacement-startup' && inspectContainer(container).Id === 'b'.repeat(64)) fail('replacement_public_runtime_probe', options.phase);
+        return { stdout: startupPayload(fx, true), code: 0 };
+      }
+      if (script.includes('/health/live')) return { stdout: JSON.stringify({ status: 200, payload: { status: 'ok' } }), code: 0 };
+      if (script.includes('/health/ready')) return { stdout: JSON.stringify({ status: 200, payload: { status: 'ok' } }), code: 0 };
+      if (script.includes('/version')) return { stdout: JSON.stringify({ commit: revision, environment: 'staging' }), code: 0 };
+      if (script.includes('allowlistEntryCount')) {
+        const inspected = inspectContainer(container);
+        if (mutateUnrelated && inspected.Config.Image === fx.image) await writeFile(fx.envFile, envContent({ unrelated: 'changed-after-preflight' }), { mode: 0o600 });
+        const values = envMap(inspected.Config.Env);
+        const replacement = inspected.Config.Image === `${fx.image}@${imageDigest}`;
+        const raw = falsePass && replacement ? '' : values.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST ?? '';
+        const enabled = falsePass && replacement ? false : values.SIT_STAGING_GOOGLE_REGISTRATION_ENABLED === 'true';
+        return { stdout: JSON.stringify({ enabled, allowlist: raw ? 'present' : 'absent', allowlistDigest: crypto.createHash('sha256').update(raw).digest('hex'), allowlistEntryCount: raw ? raw.split(',').length : 0, accessGateEnabled: values.SIT_STAGING_ACCESS_GATE_ENABLED === 'true' }), code: 0 };
+      }
+      if (script.includes('SIT_STAGING_ACCESS_GATE_ENABLED')) {
+        const values = envMap(inspectContainer(container).Config.Env);
+        return { stdout: JSON.stringify({ DEPLOYMENT_ENVIRONMENT: values.DEPLOYMENT_ENVIRONMENT, FIREBASE_AUTH_ENABLED: values.FIREBASE_AUTH_ENABLED, FIREBASE_PHONE_VERIFICATION_ENABLED: values.FIREBASE_PHONE_VERIFICATION_ENABLED, PAYMENT_TRANSPORT: values.PAYMENT_TRANSPORT, STRIPE_LIVEMODE: values.STRIPE_LIVEMODE, SIT_STAGING_ACCESS_GATE_ENABLED: values.SIT_STAGING_ACCESS_GATE_ENABLED, SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: values.SIT_STAGING_GOOGLE_REGISTRATION_ENABLED === 'true', SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: values.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST ? 'present' : 'absent' }), code: 0 };
+      }
+      fail('unknown_api_exec', options.phase);
+    }
+    if (operation === 'stop') {
+      if (args.length !== 2) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      if (failFor('stop-before') || stopMode === 'fail-before') fail('stop_current_api', options.phase);
+      state.stopAttempted = true;
+      const container = inspectContainer(args[1]);
+      container.State.Running = false;
+      fx.state.stopped = true;
+      if (stopMode === 'response-loss' || stopMode === 'unknown-inspect' || stopMode === 'unknown-inspect-no-recovery') fail('stop_response_lost', options.phase);
+      return { stdout: '', code: 0 };
+    }
+    if (operation === 'rename') {
+      if (args.length !== 3) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      if (failFor('rename')) fail('seal_current_api', options.phase);
+      const [oldName, newName] = args.slice(1);
+      const container = inspectContainer(oldName);
+      containers.delete(oldName);
+      container.Name = `/${newName}`;
+      containers.set(newName, container);
+      fx.state.sealed = newName !== fx.manifest.apiContainer;
+      return { stdout: '', code: 0 };
+    }
+    if (operation === 'create') {
+      if (failFor('create')) fail('create_replacement_api', options.phase);
+      const valueOptions = new Set(['--name', '--env-file', '--restart', '--restart-max-retries', '--user', '--workdir', '--entrypoint', '--security-opt', '--cap-add', '--cap-drop', '--stop-timeout', '--stop-signal', '--shm-size', '--dns', '--dns-search', '--add-host', '--ipc', '--pid', '--userns', '--log-driver', '--log-opt', '--memory', '--memory-swap', '--cpu-shares', '--cpu-quota', '--cpu-period', '--cpus', '--cpuset-cpus', '--cpuset-mems', '--pids-limit', '--device', '--ulimit', '--tmpfs', '--cgroupns', '--runtime', '--isolation', '--health-cmd', '--health-interval', '--health-timeout', '--health-retries', '--health-start-period', '--health-start-interval', '--group-add', '--label', '--mount', '--hostname', '--network']);
+      const booleanOptions = new Set(['--privileged', '--read-only', '--no-new-privileges', '--init', '--oom-kill-disable', '--rm']);
+      let cursor = 1;
+      while (cursor < args.length) {
+        const arg = args[cursor];
+        if (arg === '--network') { if (!args[cursor + 1] || !args[cursor + 2]) throw new Error(`unexpected_docker_command:${args.join(' ')}`); break; }
+        if (booleanOptions.has(arg)) { cursor += 1; continue; }
+        if (!valueOptions.has(arg) || !args[cursor + 1]) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+        cursor += 2;
+      }
+      const name = optionValue(args, '--name');
+      const envFile = optionValue(args, '--env-file');
+      const networkIndex = args.indexOf('--network');
+      const networkName = optionValue(args, '--network');
+      const imageArg = args[networkIndex + 2];
+      if (!name || envFile !== fx.envFile || networkIndex < 0 || networkName !== fx.manifest.network || imageArg !== `${fx.image}@${imageDigest}`
+          || JSON.stringify(args.slice(networkIndex + 3)) !== JSON.stringify(fx.api.Config.Cmd)) fail('unexpected_create_args', options.phase);
+      const source = structuredClone(fx.api);
+      source.Id = 'b'.repeat(64);
+      source.Name = `/${name}`;
+      source.State = { Running: false };
+      source.Config.Image = imageArg;
+      source.Config.Env = (await readFile(envFile, 'utf8')).trim().split('\n');
+      source.Config.Hostname = optionValue(args, '--hostname') ?? 'b'.repeat(12);
+      source.NetworkSettings = { Ports: {}, Networks: { [networkName]: {} } };
+      containers.set(name, source);
+      fx.state.created = true;
+      return { stdout: '', code: 0 };
+    }
+    if (operation === 'network_connect') {
+      const networkName = args[2];
+      if (networkName !== fx.manifest.providerNetwork || args[3] !== fx.manifest.apiContainer) fail('unexpected_network_connect', options.phase);
+      const container = inspectContainer(args[3]);
+      container.NetworkSettings.Networks[networkName] = {};
+      return { stdout: '', code: 0 };
+    }
+    if (operation === 'start') {
+      if (args.length !== 2) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      const container = inspectContainer(args[1]);
+      container.State.Running = true;
+      fx.state.stopped = false;
+      return { stdout: '', code: 0 };
+    }
+    if (operation === 'rm') {
+      if (args.length !== 3 || args[1] !== '--force') throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      const name = args.at(-1);
+      containers.delete(name);
+      fx.state.created = false;
+      return { stdout: '', code: 0 };
+    }
+    throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+  };
+  return { command, calls, state: { containers } };
 }
 
 test('default-off preflight validates schema 95 and does not mutate or expose mapping', async () => {
   const fx = await fixture();
   try {
-    const fake = fakeCommand(fx);
+    const fake = statefulDockerExecutor(fx);
     const result = await runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, command: fake.command });
     assert.equal(result.status, 'preflight-passed-no-mutation');
     assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
@@ -182,7 +312,7 @@ test('default-off preflight validates schema 95 and does not mutate or expose ma
 test('successful execution changes only registration flags and writes digest-only evidence', async () => {
   const fx = await fixture();
   try {
-    const fake = fakeCommand(fx);
+    const fake = statefulDockerExecutor(fx);
     const result = await runStagingGoogleRegistrationEnable({
       manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
       command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
@@ -198,13 +328,39 @@ test('successful execution changes only registration flags and writes digest-onl
     assert.equal(JSON.stringify(evidence).includes(userId), false);
     assert.equal(JSON.stringify(evidence).includes(mappingLine()), false);
     assert.equal(fake.calls.some((call) => call.args?.includes('--publish') || call.args?.includes('-p')), false);
+    const create = fake.calls.find((call) => call.args[0] === 'create');
+    assert.ok(create);
+    assert.equal(create.args.includes('--hostname'), false);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('Docker-default hostname may change only with successor identity, while explicit hostname is preserved', async () => {
+  const fx = await fixture({ hostname: 'green-api.example' });
+  try {
+    const fake = statefulDockerExecutor(fx);
+    await runStagingGoogleRegistrationEnable({
+      manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+      command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+    });
+    const create = fake.calls.find((call) => call.args[0] === 'create');
+    assert.ok(create);
+    assert.deepEqual(create.args.slice(create.args.indexOf('--hostname'), create.args.indexOf('--hostname') + 2), ['--hostname', 'green-api.example']);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('stateful executor rejects unknown Docker commands and argument shapes', async () => {
+  const fx = await fixture();
+  try {
+    const fake = statefulDockerExecutor(fx);
+    await assert.rejects(fake.command('docker', ['image', 'pull', fx.image], { phase: 'negative_unknown_command' }), /unexpected_docker_command/u);
+    await assert.rejects(fake.command('docker', ['inspect', '--format', '{{json .}}', fx.manifest.apiContainer, 'unexpected'], { phase: 'negative_unknown_args' }), /unexpected_docker_command/u);
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
 test('failure after recreate restores the prior env and container deterministically', async () => {
   const fx = await fixture();
   try {
-    const fake = fakeCommand(fx, { failAt: 'replacement_public_runtime_probe' });
+  const fake = statefulDockerExecutor(fx, { failOperation: 'replacement-startup' });
     await assert.rejects(runStagingGoogleRegistrationEnable({
       manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
       command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
@@ -232,13 +388,13 @@ test('negative private mapping and target checks fail closed', async () => {
   try {
     const content = await readFile(fx.envFile, 'utf8');
     await writeFile(fx.envFile, content.replace(`SIT_STAGING_ALLOWED_USER_IDS=${userId}`, 'SIT_STAGING_ALLOWED_USER_IDS=other-user'), { mode: 0o600 });
-    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, command: fakeCommand(fx).command }), /mapping_target_not_access_allowed/u);
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, command: statefulDockerExecutor(fx).command }), /mapping_target_not_access_allowed/u);
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
 test('wrong target, mode, symlink, changed unrelated byte, and false PASS all fail closed', async () => {
   const badManifest = await fixture({ apiContainer: 'wrong-api' });
-  try { await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: badManifest.manifest, mappingFile: badManifest.mappingFile, command: fakeCommand(badManifest).command }), /target_not_staging_green/u); }
+  try { await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: badManifest.manifest, mappingFile: badManifest.mappingFile, command: statefulDockerExecutor(badManifest).command }), /target_not_staging_green/u); }
   finally { await rm(badManifest.root, { recursive: true, force: true }); }
 
   const mode = await fixture();
@@ -251,14 +407,14 @@ test('wrong target, mode, symlink, changed unrelated byte, and false PASS all fa
 
   const changed = await fixture();
   try {
-    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: changed.manifest, mappingFile: changed.mappingFile, evidenceFile: changed.evidenceFile, command: fakeCommand(changed, { mutateUnrelated: true }).command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /env_changed_since_preflight/u);
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: changed.manifest, mappingFile: changed.mappingFile, evidenceFile: changed.evidenceFile, command: statefulDockerExecutor(changed, { mutateUnrelated: true }).command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /env_changed_since_preflight/u);
     assert.equal(await readFile(changed.envFile, 'utf8'), envContent({ unrelated: 'changed-after-preflight' }));
   }
   finally { await rm(changed.root, { recursive: true, force: true }); }
 
   const falsePass = await fixture();
   try {
-    const fake = fakeCommand(falsePass, { falsePass: true });
+    const fake = statefulDockerExecutor(falsePass, { falsePass: true });
     await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: falsePass.manifest, mappingFile: falsePass.mappingFile, evidenceFile: falsePass.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /registration_config_readback_invalid/u);
     assert.equal(await readFile(falsePass.envFile, 'utf8'), envContent());
   } finally { await rm(falsePass.root, { recursive: true, force: true }); }
@@ -266,16 +422,16 @@ test('wrong target, mode, symlink, changed unrelated byte, and false PASS all fa
 
 test('wrong schema or image and stop/rename interruption never produce a false PASS', async () => {
   const schema = await fixture();
-  try { await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: schema.manifest, mappingFile: schema.mappingFile, command: fakeCommand(schema, { wrongSchema: true }).command }), /current_schema_migration_readback_invalid/u); }
+  try { await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: schema.manifest, mappingFile: schema.mappingFile, command: statefulDockerExecutor(schema, { wrongSchema: true }).command }), /current_schema_migration_readback_invalid/u); }
   finally { await rm(schema.root, { recursive: true, force: true }); }
 
   const image = await fixture();
-  try { await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: image.manifest, mappingFile: image.mappingFile, command: fakeCommand(image, { wrongImage: true }).command }), /image_readback_invalid/u); }
+  try { await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: image.manifest, mappingFile: image.mappingFile, command: statefulDockerExecutor(image, { wrongImage: true }).command }), /image_readback_invalid/u); }
   finally { await rm(image.root, { recursive: true, force: true }); }
 
   const rename = await fixture();
   try {
-    const fake = fakeCommand(rename, { failAt: 'seal_current_api' });
+    const fake = statefulDockerExecutor(rename, { failOperation: 'rename' });
     await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: rename.manifest, mappingFile: rename.mappingFile, evidenceFile: rename.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
       assert.equal(error.code, 'seal_current_api_failed');
       assert.equal(error.rollback.restored, true);
@@ -286,7 +442,7 @@ test('wrong schema or image and stop/rename interruption never produce a false P
 
   const create = await fixture();
   try {
-    const fake = fakeCommand(create, { failAt: 'create_replacement_api' });
+    const fake = statefulDockerExecutor(create, { failOperation: 'create' });
     await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: create.manifest, mappingFile: create.mappingFile, evidenceFile: create.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
       assert.equal(error.code, 'create_replacement_api_failed');
       assert.equal(error.rollback.restored, true);
@@ -298,7 +454,7 @@ test('wrong schema or image and stop/rename interruption never produce a false P
   const evidence = await fixture();
   try {
     await writeFile(evidence.evidenceFile, '{"existing":true}\n', { mode: 0o600 });
-    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: evidence.manifest, mappingFile: evidence.mappingFile, evidenceFile: evidence.evidenceFile, command: fakeCommand(evidence).command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /evidence_already_exists/u);
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: evidence.manifest, mappingFile: evidence.mappingFile, evidenceFile: evidence.evidenceFile, command: statefulDockerExecutor(evidence).command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /evidence_already_exists/u);
     assert.equal(await readFile(evidence.envFile, 'utf8'), envContent());
   } finally { await rm(evidence.root, { recursive: true, force: true }); }
 
@@ -307,7 +463,7 @@ test('wrong schema or image and stop/rename interruption never produce a false P
     const directory = join(unsafeParent.root, 'unsafe-evidence-parent');
     await mkdir(directory, { mode: 0o755 });
     unsafeParent.evidenceFile = join(directory, 'evidence.json');
-    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: unsafeParent.manifest, mappingFile: unsafeParent.mappingFile, evidenceFile: unsafeParent.evidenceFile, command: fakeCommand(unsafeParent).command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /evidence_parent_unsafe/u);
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: unsafeParent.manifest, mappingFile: unsafeParent.mappingFile, evidenceFile: unsafeParent.evidenceFile, command: statefulDockerExecutor(unsafeParent).command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /evidence_parent_unsafe/u);
     assert.equal(await readFile(unsafeParent.envFile, 'utf8'), envContent());
   } finally { await rm(unsafeParent.root, { recursive: true, force: true }); }
 });
@@ -315,7 +471,7 @@ test('wrong schema or image and stop/rename interruption never produce a false P
 test('stop fail-before and response-loss-after-stop are recovered from real state readback', async () => {
   const failBefore = await fixture();
   try {
-    const fake = fakeCommand(failBefore, { failAt: 'stop_current_api' });
+    const fake = statefulDockerExecutor(failBefore, { stopMode: 'fail-before' });
     await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: failBefore.manifest, mappingFile: failBefore.mappingFile, evidenceFile: failBefore.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
       assert.equal(error.code, 'stop_current_api_failed');
       assert.equal(error.rollback.restored, true);
@@ -327,7 +483,7 @@ test('stop fail-before and response-loss-after-stop are recovered from real stat
 
   const responseLoss = await fixture();
   try {
-    const fake = fakeCommand(responseLoss, { stopAfterSideEffect: true, failAt: 'create_replacement_api' });
+    const fake = statefulDockerExecutor(responseLoss, { stopMode: 'response-loss', failOperation: 'create' });
     await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: responseLoss.manifest, mappingFile: responseLoss.mappingFile, evidenceFile: responseLoss.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
       assert.equal(error.code, 'create_replacement_api_failed');
       assert.equal(error.rollback.restored, true);
@@ -337,13 +493,41 @@ test('stop fail-before and response-loss-after-stop are recovered from real stat
     assert.equal(responseLoss.state.api.State.Running, true);
     assert.ok(fake.calls.some((call) => call.phase === 'stop_state_readback'));
   } finally { await rm(responseLoss.root, { recursive: true, force: true }); }
+
+  const inspectFailure = await fixture();
+  try {
+    const fake = statefulDockerExecutor(inspectFailure, { stopMode: 'unknown-inspect' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: inspectFailure.manifest, mappingFile: inspectFailure.mappingFile, evidenceFile: inspectFailure.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.code, 'stop_response_lost_failed');
+      assert.equal(error.rollback.restored, true);
+      assert.equal(error.rollback.originalRunning, true);
+      assert.equal(error.rollback.attemptedRestart, true);
+      assert.ok(fake.calls.some((call) => call.phase === 'stop_state_readback'));
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_original_start'));
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_original_readback'));
+      return true;
+    });
+  } finally { await rm(inspectFailure.root, { recursive: true, force: true }); }
+
+  const noRecovery = await fixture();
+  try {
+    const fake = statefulDockerExecutor(noRecovery, { stopMode: 'unknown-inspect-no-recovery' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: noRecovery.manifest, mappingFile: noRecovery.mappingFile, evidenceFile: noRecovery.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.rollback.restored, false);
+      assert.equal(error.rollback.originalRunning, null);
+      assert.equal(error.rollback.attemptedRestart, true);
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_original_start'));
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_original_readback'));
+      return true;
+    });
+  } finally { await rm(noRecovery.root, { recursive: true, force: true }); }
 });
 
 test('resource and env ownership drift fail closed without overwriting concurrent bytes', async () => {
   for (const option of [{ driftHealth: true }, { driftMemory: true }, { driftMaskedPaths: true }]) {
     const fx = await fixture();
     try {
-      const fake = fakeCommand(fx, option);
+      const fake = statefulDockerExecutor(fx, option);
       await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /replacement_config_drift/u);
       assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
     } finally { await rm(fx.root, { recursive: true, force: true }); }
@@ -351,12 +535,12 @@ test('resource and env ownership drift fail closed without overwriting concurren
   const owner = await fixture();
   try {
     owner.manifest.envUid = (process.getuid?.() ?? 0) + 1;
-    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: owner.manifest, mappingFile: owner.mappingFile, command: fakeCommand(owner).command }), /env_file_metadata_invalid/u);
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: owner.manifest, mappingFile: owner.mappingFile, command: statefulDockerExecutor(owner).command }), /env_file_metadata_invalid/u);
   } finally { await rm(owner.root, { recursive: true, force: true }); }
 });
 
 test('sanitized failure output contains no mapping material', () => {
   const output = sanitizeGoogleRegistrationEnableError({ code: 'registration_config_readback_invalid', rollback: { restored: false, results: [{ phase: 'rollback_env_restore', ok: false, code: 'env_restore_failed', secret: mappingLine() }] } });
-  assert.deepEqual(output, { status: 'failed', code: 'registration_config_readback_invalid', rollback: { restored: false, results: [{ phase: 'rollback_env_restore', ok: false, code: 'env_restore_failed' }] } });
+  assert.deepEqual(output, { status: 'failed', code: 'registration_config_readback_invalid', rollback: { restored: false, originalRunning: null, attemptedRestart: false, results: [{ phase: 'rollback_env_restore', ok: false, code: 'env_restore_failed' }] } });
   assert.equal(JSON.stringify(output).includes(mappingLine()), false);
 });

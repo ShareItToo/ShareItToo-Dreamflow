@@ -80,6 +80,15 @@ function normalizedMounts(mounts) {
   })).sort((left, right) => String(left.Destination).localeCompare(String(right.Destination)));
 }
 
+function normalizedHostname(record) {
+  const hostname = String(record?.Config?.Hostname ?? '');
+  const id = String(record?.Id ?? '').replace(/^\//u, '');
+  const isDockerDefaultHostname = /^[0-9a-f]{12,64}$/u.test(hostname)
+    && /^[0-9a-f]{64}$/u.test(id)
+    && (hostname === id || hostname === id.slice(0, hostname.length));
+  return isDockerDefaultHostname ? 'docker-default-hostname' : hostname;
+}
+
 function normalizedContainer(record, omitRegistrationEnv = false) {
   const config = record?.Config ?? {};
   const host = record?.HostConfig ?? {};
@@ -109,7 +118,7 @@ function normalizedContainer(record, omitRegistrationEnv = false) {
       workingDir: config.WorkingDir ?? '', user: config.User ?? '', tty: config.Tty === true,
       openStdin: config.OpenStdin === true, stdinOnce: config.StdinOnce === true,
       attachStdin: config.AttachStdin === true, attachStdout: config.AttachStdout !== false,
-      attachStderr: config.AttachStderr !== false, hostname: config.Hostname ?? '', domainname: config.Domainname ?? '',
+      attachStderr: config.AttachStderr !== false, hostname: normalizedHostname(record), domainname: config.Domainname ?? '',
       stopSignal: config.StopSignal ?? '', healthcheck,
       volumes: sortedObject(config.Volumes), onBuild: config.OnBuild ?? null,
       labels: sortedObject(config.Labels), env: sortedObject(entries),
@@ -408,6 +417,12 @@ async function safeCommand(command, args, phase, commandEnv) {
 }
 
 async function stopCurrentApi({ manifest, originalApi, command, commandEnv }) {
+  const unknownState = (error, code = null) => {
+    error.stopStateUnknown = true;
+    error.stopStateReadbackFailed = true;
+    if (code !== null) error.code = error.code ?? code;
+    throw error;
+  };
   try {
     const result = await command('docker', ['stop', manifest.apiContainer], { phase: 'stop_current_api', env: commandEnv });
     if (result?.code !== undefined && result.code !== 0) {
@@ -423,40 +438,43 @@ async function stopCurrentApi({ manifest, originalApi, command, commandEnv }) {
     } catch (readbackError) {
       error.code = error.code ?? 'stop_state_readback_failed';
       error.stopStateReadbackError = readbackError;
-      throw error;
+      unknownState(error);
     }
     if (readback?.code !== undefined && readback.code !== 0) {
-      error.code = error.code ?? 'stop_state_readback_failed';
-      throw error;
+      unknownState(error, 'stop_state_readback_failed');
     }
     let record;
     try { record = parseJson(readback.stdout, 'stop_state_readback_invalid'); } catch (readbackError) {
       error.code = error.code ?? readbackError.code ?? 'stop_state_readback_invalid';
-      throw error;
+      unknownState(error);
     }
     if (record?.Name?.replace(/^\//u, '') !== manifest.apiContainer) {
-      error.code = error.code ?? 'stop_state_target_invalid';
-      throw error;
+      unknownState(error, 'stop_state_target_invalid');
     }
     if (!sameExceptRegistrationFlags(originalApi, record)) {
-      error.code = error.code ?? 'stop_state_config_drift';
-      throw error;
+      unknownState(error, 'stop_state_config_drift');
     }
-    assertNetworks(record, manifest, 'stop_state_network_drift');
-    assertNoHostPort(record, 'stop_state_host_port_drift');
+    try {
+      assertNetworks(record, manifest, 'stop_state_network_drift');
+      assertNoHostPort(record, 'stop_state_host_port_drift');
+    } catch (readbackError) {
+      error.code = error.code ?? readbackError.code ?? 'stop_state_inventory_invalid';
+      unknownState(error);
+    }
     if (record?.State?.Running === false) return Object.freeze({ stopped: true, recoveredAfterError: true });
     if (record?.State?.Running === true) {
       error.code = error.code ?? 'stop_current_api_failed';
       throw error;
     }
-    error.code = error.code ?? 'stop_state_unknown';
-    throw error;
+    unknownState(error, 'stop_state_unknown');
   }
 }
 
-async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, originalApi, command, commandEnv, sealedName, sealed, currentStopped, replacementCreated }) {
+async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, originalApi, command, commandEnv, sealedName, sealed, currentStopped, stopStateUnknown = false, replacementCreated }) {
   const results = [];
   let ok = true;
+  let attemptedRestart = false;
+  let originalRunning = currentStopped || stopStateUnknown ? null : true;
   if (!envMutationOwned) {
     results.push({ phase: 'rollback_env_restore', ok: true, skipped: true });
   } else {
@@ -483,14 +501,15 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
     const renameResult = await safeCommand(command, ['rename', sealedName, manifest.apiContainer], 'rollback_restore_rename', commandEnv);
     results.push({ phase: renameResult.phase, ok: renameResult.ok, ...(renameResult.ok ? {} : { code: renameResult.code }) });
     ok &&= renameResult.ok;
+    attemptedRestart = true;
     const startResult = await safeCommand(command, ['start', manifest.apiContainer], 'rollback_restore_start', commandEnv);
     results.push({ phase: startResult.phase, ok: startResult.ok, ...(startResult.ok ? {} : { code: startResult.code }) });
-    ok &&= startResult.ok;
-    if (ok) {
+    if (ok || !startResult.ok) {
       try {
         const inspect = await command('docker', ['inspect', '--format', '{{json .}}', manifest.apiContainer], { phase: 'rollback_api_readback', env: commandEnv });
         const restored = parseJson(inspect.stdout, 'rollback_api_readback_invalid');
         if (!sameExceptRegistrationFlags(originalApi, restored)) fail('rollback_config_drift');
+        originalRunning = restored?.State?.Running === true ? true : restored?.State?.Running === false ? false : null;
         if (restored?.State?.Running !== true) fail('rollback_original_stopped');
         assertNetworks(restored, manifest, 'rollback_network_inventory_invalid');
         assertNoHostPort(restored, 'rollback_host_port_forbidden');
@@ -502,17 +521,20 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
         results.push({ phase: 'rollback_runtime_readback', ok: false, code: error?.code ?? 'rollback_runtime_readback' });
         ok = false;
       }
+    } else {
+      ok = false;
     }
   }
-  if (!sealed && currentStopped && ok) {
+  if (!sealed && (currentStopped || stopStateUnknown)) {
+    attemptedRestart = true;
     const startResult = await safeCommand(command, ['start', manifest.apiContainer], 'rollback_original_start', commandEnv);
     results.push({ phase: startResult.phase, ok: startResult.ok, ...(startResult.ok ? {} : { code: startResult.code }) });
-    ok &&= startResult.ok;
-    if (ok) {
+    if (ok || !startResult.ok) {
       try {
         const inspect = await command('docker', ['inspect', '--format', '{{json .}}', manifest.apiContainer], { phase: 'rollback_original_readback', env: commandEnv });
         const restored = parseJson(inspect.stdout, 'rollback_original_readback_invalid');
         if (!sameExceptRegistrationFlags(originalApi, restored)) fail('rollback_config_drift');
+        originalRunning = restored?.State?.Running === true ? true : restored?.State?.Running === false ? false : null;
         if (restored?.State?.Running !== true) fail('rollback_original_stopped');
         assertNetworks(restored, manifest, 'rollback_network_inventory_invalid');
         assertNoHostPort(restored, 'rollback_host_port_forbidden');
@@ -521,9 +543,11 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
         results.push({ phase: 'rollback_original_readback', ok: false, code: error?.code ?? 'rollback_original_readback' });
         ok = false;
       }
+    } else {
+      ok = false;
     }
   }
-  return Object.freeze({ restored: ok, results: Object.freeze(results) });
+  return Object.freeze({ restored: ok && originalRunning === true, originalRunning, attemptedRestart, results: Object.freeze(results) });
 }
 
 async function assertEvidenceTarget(filePath) {
@@ -636,7 +660,7 @@ export async function runStagingGoogleRegistrationEnable({
     await writeEvidence(evidenceFile, { kind: 'sit-staging-google-registration-enable', schemaVersion: 1, status: result.status, runtimeRevision: target.runtimeRevision, apiContainer: target.apiContainer, imageDigest: target.imageDigest, mappingDigest: mapping.mappingDigest, targetUserIdDigest: sha256(mapping.userId), mappingEntryCount: 1, schemaMigration: requiredTerminalMigration, migrationLedger: requiredMigrationLedger, providerTraffic: 'none', stripeLivemode: false, requiresLaterGate: result.requiresLaterGate });
     return result;
   } catch (error) {
-    error.rollback = await rollback({ manifest: target, originalEnv: original.content, appliedEnv, envMutationOwned, originalApi: preflight.readbacks.api, command, commandEnv, sealedName, sealed, currentStopped, replacementCreated });
+    error.rollback = await rollback({ manifest: target, originalEnv: original.content, appliedEnv, envMutationOwned, originalApi: preflight.readbacks.api, command, commandEnv, sealedName, sealed, currentStopped, stopStateUnknown: error.stopStateUnknown === true, replacementCreated });
     throw error;
   }
 }
@@ -646,7 +670,12 @@ export function sanitizeGoogleRegistrationEnableError(error) {
     status: 'failed',
     code: error?.code ?? 'staging_google_registration_enable_failed',
     ...(error?.failurePhase ? { failurePhase: String(error.failurePhase) } : {}),
-    ...(error?.rollback ? { rollback: { restored: error.rollback.restored === true, results: (error.rollback.results ?? []).map((entry) => ({ phase: String(entry.phase ?? 'rollback'), ok: entry.ok === true, ...(entry.code ? { code: String(entry.code) } : {}) })) } } : {}),
+    ...(error?.rollback ? { rollback: {
+      restored: error.rollback.restored === true,
+      originalRunning: error.rollback.originalRunning === true ? true : error.rollback.originalRunning === false ? false : null,
+      attemptedRestart: error.rollback.attemptedRestart === true,
+      results: (error.rollback.results ?? []).map((entry) => ({ phase: String(entry.phase ?? 'rollback'), ok: entry.ok === true, ...(entry.code ? { code: String(entry.code) } : {}) })),
+    } } : {}),
   };
 }
 

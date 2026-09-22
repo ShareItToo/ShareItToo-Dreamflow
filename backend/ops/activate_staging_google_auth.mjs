@@ -398,6 +398,15 @@ export function buildReplacementCreateArgs({ manifest, envFile, currentApi, cont
   }
   if (config.User) args.push('--user', config.User);
   if (config.WorkingDir) args.push('--workdir', config.WorkingDir);
+  // Docker supplies Config.Hostname from the successor container identity when
+  // --hostname is omitted. Preserve an explicit hostname; the registration
+  // runner separately permits only that narrow Docker-default identity change.
+  const currentId = String(currentApi.Id ?? '').replace(/^\//u, '');
+  const currentHostname = String(config.Hostname ?? '');
+  const isDockerDefaultHostname = /^[0-9a-f]{12,64}$/u.test(currentHostname)
+    && /^[0-9a-f]{64}$/u.test(currentId)
+    && (currentHostname === currentId || currentHostname === currentId.slice(0, currentHostname.length));
+  if (currentHostname && !isDockerDefaultHostname) args.push('--hostname', currentHostname);
   if (config.Entrypoint) {
     if (!Array.isArray(config.Entrypoint) || config.Entrypoint.length !== 1) fail('entrypoint_shape_not_cloneable');
     args.push('--entrypoint', config.Entrypoint[0]);
