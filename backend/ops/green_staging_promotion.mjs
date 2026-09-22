@@ -1400,7 +1400,10 @@ export async function runGreenForwardRecovery({ plan, commands, command, command
 
   for (const phase of ['final_image_readback', 'final_inventory_readback', 'final_live_wait', 'final_health_probe', 'final_ready_wait', 'final_version_readback']) {
     const entry = entryFor(phase);
-    result = await run(entry, phase);
+    const args = phase === 'final_inventory_readback'
+      ? [...entry.args.slice(0, -1), successorId]
+      : entry.args;
+    result = await run(entry, phase, args);
     if (phase === 'final_image_readback' || phase === 'final_inventory_readback' || phase === 'final_health_probe' || phase === 'final_ready_wait' || phase === 'final_version_readback') readbacks[phase] = result.stdout?.trim() ?? '';
     recovered.push(phase);
   }
