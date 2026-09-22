@@ -54,12 +54,13 @@ function response(status, value) {
   });
 }
 
-function boundQuote() {
+function boundQuote(timeSnapshot = null) {
   return {
     quoteId: 'quote-1',
     quoteHash: 'a'.repeat(64),
     quotedAt: '2026-01-01T00:00:00.000Z',
     expiresAt: '2099-01-01T00:10:00.000Z',
+    ...(timeSnapshot === null ? {} : { timeSnapshot }),
   };
 }
 
@@ -106,9 +107,18 @@ function createFetch(log) {
     if (path === '/listings') return response(201, { listing: { id: 'fixture' } });
     if (path.endsWith('/availability')) return response(200, { availability: {} });
     if (path === '/bookings/quote') {
-      return response(200, boundQuote());
+      return response(200, boundQuote(JSON.parse(options.body).timeSnapshot));
     }
-    if (path === '/bookings') return response(201, { booking: { workflowStatus: 'requested' } });
+    if (path === '/bookings') {
+      const body = JSON.parse(options.body);
+      return response(201, {
+        booking: {
+          workflowStatus: 'requested',
+          timeSnapshot: body.timeSnapshot,
+          quoteHash: body.quoteHash,
+        },
+      });
+    }
     throw new Error(`Unexpected path ${path}`);
   };
 }
@@ -145,6 +155,12 @@ test('creates an isolated requested booking and returns no credentials or identi
   assert.equal(listingCall.body.privateStatusConfirmed, true);
   const bookingCall = calls.find(({ path }) => path === '/bookings');
   assert.equal(bookingCall.body.privateStatusConfirmed, true);
+  assert.deepEqual(bookingCall.body.timeSnapshot, {
+    version: 'booking-time-v1',
+    handoverAt: '2026-10-09T10:00:00.000Z',
+    returnAt: '2026-10-11T16:00:00.000Z',
+    timezone: 'Europe/Berlin',
+  });
   assert.equal(bookingCall.body.legalDeclarations.length, 2);
   assert.deepEqual(
     bookingCall.body.legalDeclarations.map(({ type }) => type),
@@ -168,6 +184,8 @@ test('creates an isolated requested booking and returns no credentials or identi
   );
   const stored = JSON.parse(readFileSync(fixture.vaultFile, 'utf8'));
   assert.equal(stored.syntheticBooking.workflowStatus, 'requested');
+  assert.deepEqual(stored.syntheticBooking.timeSnapshot, bookingCall.body.timeSnapshot);
+  assert.equal(stored.syntheticBooking.quoteHash, 'a'.repeat(64));
 });
 
 test('clamps V5.2 acceptance to a slightly newer authoritative quote timestamp', () => {
@@ -311,16 +329,30 @@ test('runs the complete role-visible lifecycle without returning private fixture
       if (path === '/listings') return response(201, { listing: { id: 'fixture' } });
       if (path.endsWith('/availability')) return response(200, { availability: {} });
       if (path === '/bookings/quote') {
-        return response(200, boundQuote());
+        return response(200, boundQuote(JSON.parse(options.body).timeSnapshot));
       }
       if (path === '/bookings') {
         workflowStatus = 'requested';
-        return response(201, { booking: { workflowStatus } });
+        const body = JSON.parse(options.body);
+        return response(201, {
+          booking: {
+            workflowStatus,
+            timeSnapshot: body.timeSnapshot,
+            quoteHash: body.quoteHash,
+          },
+        });
       }
       if (path.endsWith('/transitions')) {
         const requested = JSON.parse(options.body).status;
         workflowStatus = { accepted: 'accepted', running: 'active', completed: 'completed' }[requested];
-        return response(200, { booking: { workflowStatus } });
+        const stored = JSON.parse(readFileSync(fixture.vaultFile, 'utf8')).syntheticBooking;
+        return response(200, {
+          booking: {
+            workflowStatus,
+            timeSnapshot: stored.timeSnapshot,
+            quoteHash: stored.quoteHash,
+          },
+        });
       }
       throw new Error(`Unexpected path ${path}`);
     },
@@ -331,6 +363,12 @@ test('runs the complete role-visible lifecycle without returning private fixture
   assert.equal(result.tests.renterUpcomingVisibility.result, 'accepted-visible-to-renter');
   assert.equal(result.tests.renterRunningVisibility.result, 'active-visible-to-renter');
   assert.equal(result.tests.renterCompletedVisibility.result, 'completed-visible-to-renter');
+  assert.deepEqual(result.acceptance.timeSnapshot, {
+    version: 'booking-time-v1',
+    handoverAt: '2026-10-10T10:00:00.000Z',
+    returnAt: '2026-10-12T16:00:00.000Z',
+    timezone: 'Europe/Berlin',
+  });
   assert.equal(result.confirmations.pickup.presenterRole, 'owner');
   assert.equal(result.confirmations.pickup.verifierRole, 'renter');
   assert.equal(result.confirmations.return.presenterRole, 'renter');
@@ -454,6 +492,13 @@ test('recovers one already-created requested fixture without creating a duplicat
           workflowStatus: 'requested',
           startDate: '2026-10-09',
           endDate: '2026-10-11',
+          timeSnapshot: {
+            version: 'booking-time-v1',
+            handoverAt: '2026-10-09T10:00:00.000Z',
+            returnAt: '2026-10-11T16:00:00.000Z',
+            timezone: 'Europe/Berlin',
+          },
+          quoteHash: 'a'.repeat(64),
         }] });
       }
       throw new Error(`Unexpected path ${path}`);
@@ -464,6 +509,39 @@ test('recovers one already-created requested fixture without creating a duplicat
   assert.equal(calls.includes('/uploads'), false);
   assert.equal(calls.includes('/listings'), false);
   assert.equal(calls.includes('/bookings'), false);
+});
+
+test('refuses legacy requested fixture recovery without an exact time snapshot', async () => {
+  const fixture = vaultFixture();
+  await assert.rejects(
+    createSyntheticBookingFixture({
+      ...fixture,
+      fetchImpl: async (url) => {
+        const path = new URL(url).pathname.replace('/api/v1', '');
+        if (path === '/auth/login') {
+          return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
+        }
+        if (path === '/listings/mine') {
+          return response(200, { listings: [{
+            id: 'existing-listing',
+            title: 'SIT Rollenprüfung 20260810t065907z-a6b6f407',
+          }] });
+        }
+        if (path === '/rental-requests') {
+          return response(200, { requests: [{
+            id: 'existing-booking',
+            itemId: 'existing-listing',
+            workflowStatus: 'requested',
+            startDate: '2026-10-09',
+            endDate: '2026-10-11',
+            quoteHash: 'a'.repeat(64),
+          }] });
+        }
+        throw new Error(`Unexpected path ${path}`);
+      },
+    }),
+    /legacy synthetic booking recovery is unsafe/u,
+  );
 });
 
 test('reuses one prepared listing after a failed booking request', async () => {
@@ -490,10 +568,17 @@ test('reuses one prepared listing after a failed booking request', async () => {
       }
       if (path === '/rental-requests') return response(200, { requests: [] });
       if (path === '/bookings/quote') {
-        return response(200, boundQuote());
+        return response(200, boundQuote(JSON.parse(options.body).timeSnapshot));
       }
       if (path === '/bookings') {
-        return response(201, { booking: { workflowStatus: 'requested' } });
+        const body = JSON.parse(options.body);
+        return response(201, {
+          booking: {
+            workflowStatus: 'requested',
+            timeSnapshot: body.timeSnapshot,
+            quoteHash: body.quoteHash,
+          },
+        });
       }
       throw new Error(`Unexpected path ${path}`);
     },
@@ -539,10 +624,17 @@ test('does not reuse a previously paused listing with the same synthetic run tit
       if (path === '/listings') return response(201, { listing: { id: 'fixture' } });
       if (path.endsWith('/availability')) return response(200, { availability: {} });
       if (path === '/bookings/quote') {
-        return response(200, boundQuote());
+        return response(200, boundQuote(JSON.parse(options.body).timeSnapshot));
       }
       if (path === '/bookings') {
-        return response(201, { booking: { workflowStatus: 'requested' } });
+        const body = JSON.parse(options.body);
+        return response(201, {
+          booking: {
+            workflowStatus: 'requested',
+            timeSnapshot: body.timeSnapshot,
+            quoteHash: body.quoteHash,
+          },
+        });
       }
       throw new Error(`Unexpected path ${path}`);
     },
@@ -592,7 +684,7 @@ test('retires the exact new listing after the V5.2 legal hold rejects booking cr
           return response(200, { listing: { status: 'paused', isActive: false } });
         }
         if (path === '/bookings/quote') {
-          return response(200, boundQuote());
+          return response(200, boundQuote(JSON.parse(options.body).timeSnapshot));
         }
         if (path === '/bookings') {
           return response(409, {

@@ -26,6 +26,16 @@ const allowedTransitions = new Map([
   ['completed', { role: 'owner', previous: 'active', result: 'completed' }],
 ]);
 const terminalWorkflowStatuses = new Set(['completed', 'declined', 'cancelled', 'refunded']);
+const syntheticBookingTimeSnapshotVersion = 'booking-time-v1';
+
+function syntheticBookingTimeSnapshot(startDate, endDate) {
+  return Object.freeze({
+    version: syntheticBookingTimeSnapshotVersion,
+    handoverAt: `${startDate}T10:00:00.000Z`,
+    returnAt: `${endDate}T16:00:00.000Z`,
+    timezone: 'Europe/Berlin',
+  });
+}
 
 function fail(message) {
   throw new Error(message);
@@ -299,6 +309,16 @@ export async function createSyntheticBookingFixture({
   if (matchingListings.length === 1 && matchingRequests.length === 1) {
     const listing = matchingListings[0];
     const booking = matchingRequests[0];
+    const recoveredTimeSnapshot = booking.timeSnapshot;
+    const expectedRecoveredSnapshot = syntheticBookingTimeSnapshot(
+      booking.startDate,
+      booking.endDate,
+    );
+    if (JSON.stringify(recoveredTimeSnapshot) !== JSON.stringify(expectedRecoveredSnapshot)
+        || typeof booking.quoteHash !== 'string'
+        || !/^[0-9a-f]{64}$/u.test(booking.quoteHash)) {
+      fail('A legacy synthetic booking recovery is unsafe; controlled cleanup is required.');
+    }
     vault.syntheticBooking = {
       schemaVersion: 1,
       listingId: listing.id,
@@ -306,6 +326,8 @@ export async function createSyntheticBookingFixture({
       title: expectedTitle,
       startDate: booking.startDate,
       endDate: booking.endDate,
+      timeSnapshot: recoveredTimeSnapshot,
+      quoteHash: booking.quoteHash,
       workflowStatus: 'requested',
       createdAt: booking.createdAt ?? now.toISOString(),
       recoveredAt: now.toISOString(),
@@ -343,7 +365,9 @@ export async function createSyntheticBookingFixture({
   const title = expectedTitle;
   const startDate = dateOnly(now, 60);
   const endDate = dateOnly(now, 62);
+  const timeSnapshot = syntheticBookingTimeSnapshot(startDate, endDate);
   let listingCreatedThisRun = false;
+  let boundQuoteHash = null;
   try {
     if (!recoveredListing) {
       const imageBytes = readFileSync(resolve(imagePath));
@@ -419,6 +443,7 @@ export async function createSyntheticBookingFixture({
         itemId: listingId,
         startDate,
         endDate,
+        timeSnapshot,
         ownerDeliversAtDropoffChosen: false,
         ownerPicksUpAtReturnChosen: false,
         expressRequested: false,
@@ -426,9 +451,11 @@ export async function createSyntheticBookingFixture({
     });
     if (typeof quote?.quoteId !== 'string'
         || typeof quote?.quoteHash !== 'string'
-        || !/^[0-9a-f]{64}$/.test(quote.quoteHash)) {
+        || !/^[0-9a-f]{64}$/.test(quote.quoteHash)
+        || JSON.stringify(quote.timeSnapshot) !== JSON.stringify(timeSnapshot)) {
       fail('The synthetic booking quote is not immutably bound.');
     }
+    boundQuoteHash = quote.quoteHash;
     // The server clock can be a few milliseconds ahead of this client even
     // after the quote response arrives. Clamp to the authoritative issued-at
     // value so a transport-timing skew cannot invalidate the V5.2 consent.
@@ -462,11 +489,14 @@ export async function createSyntheticBookingFixture({
         clientBuild,
         quoteId: quote.quoteId,
         quoteHash: quote.quoteHash,
+        timeSnapshot,
         legalDeclarations,
       },
       expected: [201],
     });
-    if (created?.booking?.workflowStatus !== 'requested') {
+    if (created?.booking?.workflowStatus !== 'requested'
+        || JSON.stringify(created.booking.timeSnapshot) !== JSON.stringify(timeSnapshot)
+        || created.booking.quoteHash !== quote.quoteHash) {
       fail('The synthetic booking was not created in the requested state.');
     }
   } catch (error) {
@@ -492,6 +522,8 @@ export async function createSyntheticBookingFixture({
     title,
     startDate,
     endDate,
+    timeSnapshot,
+    quoteHash: boundQuoteHash,
     workflowStatus: 'requested',
     createdAt: now.toISOString(),
     paymentMode: 'memory',
@@ -571,6 +603,10 @@ export async function transitionSyntheticBookingFixture({
   if (result?.booking?.workflowStatus !== transition.result) {
     fail(`The synthetic booking did not reach ${transition.result}.`);
   }
+  if (result?.booking?.timeSnapshot !== undefined
+      && JSON.stringify(result.booking.timeSnapshot) !== JSON.stringify(fixture.timeSnapshot)) {
+    fail('The synthetic booking transition changed the immutable time snapshot.');
+  }
   fixture.workflowStatus = transition.result;
   fixture.updatedAt = now.toISOString();
   if (status === 'completed') vault.status = 'synthetic-booking-completed';
@@ -579,6 +615,9 @@ export async function transitionSyntheticBookingFixture({
     status: `synthetic-booking-${status}`,
     actingRole: transition.role,
     workflowStatus: transition.result,
+    ...(result?.booking?.timeSnapshot === undefined
+      ? {}
+      : { timeSnapshot: result.booking.timeSnapshot }),
     paymentMode: fixture.paymentMode,
     stripeLivemode: false,
     paymentEndpointCalled: false,
@@ -804,7 +843,9 @@ export async function runSyntheticRoleBookingLifecycle({
     expectedStatus: 'requested',
     fetchImpl,
   });
-  await transitionSyntheticBookingFixture({ vaultFile, status: 'accepted', fetchImpl, now });
+  const acceptanceTransition = await transitionSyntheticBookingFixture({
+    vaultFile, status: 'accepted', fetchImpl, now,
+  });
   const renterUpcomingVisibility = await inspectSyntheticBookingRoleVisibility({
     vaultFile,
     expectedStatus: 'accepted',
@@ -834,6 +875,9 @@ export async function runSyntheticRoleBookingLifecycle({
       renterUpcomingVisibility,
       renterRunningVisibility,
       renterCompletedVisibility,
+    }),
+    acceptance: Object.freeze({
+      timeSnapshot: acceptanceTransition.timeSnapshot ?? null,
     }),
     confirmations: Object.freeze({
       pickup: pickupTransition.confirmation,
