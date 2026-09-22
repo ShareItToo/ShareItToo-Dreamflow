@@ -328,7 +328,8 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          REGISTRY_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/shareittoo-api"
+          REGISTRY_OWNER="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          REGISTRY_IMAGE="ghcr.io/$REGISTRY_OWNER/shareittoo-api"
           APP_VERSION="0.1.0-${GITHUB_SHA::12}"
           APP_BUILD_TIME="$(git show -s --format=%cI "$GITHUB_SHA")"
           APP_SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
