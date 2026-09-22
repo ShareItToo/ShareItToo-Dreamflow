@@ -429,7 +429,9 @@ export function assertGreenRuntimeConfig(config) {
   safePath(config.envFile, 'green_env_file_invalid');
   safePath(config.mfaFile, 'green_mfa_file_invalid');
   safePath(config.firebaseFile, 'green_firebase_file_invalid');
-  if (config.technicalSandboxKeyFile !== '' || config.technicalSandboxWebhookFile !== '') fail('green_provider_mounts_forbidden');
+  safePath(config.technicalSandboxKeyFile, 'green_technical_key_file_invalid');
+  safePath(config.technicalSandboxWebhookFile, 'green_technical_webhook_file_invalid');
+  if (config.technicalSandboxKeyFile === config.technicalSandboxWebhookFile) fail('green_technical_files_not_distinct');
   if (config.environment !== 'test'
       || !Array.isArray(config.envNames) || config.envNames.length === 0
       || new Set(config.envNames).size !== config.envNames.length
@@ -446,7 +448,7 @@ export function assertGreenRuntimeConfig(config) {
   }
   safeDigest(config.accessGateDigest, 'green_access_gate_digest_invalid');
   safeDigest(config.providerConfigDigest, 'green_provider_config_digest_invalid');
-  if (!Array.isArray(config.mounts) || config.mounts.length < 3) fail('green_mount_inventory_invalid');
+  if (!Array.isArray(config.mounts) || config.mounts.length !== 5) fail('green_mount_inventory_invalid');
   for (const mount of config.mounts) {
     exactKeys(mount, ['source', 'destination', 'readOnly'], 'green_mount_shape_invalid');
     safePath(mount.source, 'green_mount_source_invalid');
@@ -454,10 +456,7 @@ export function assertGreenRuntimeConfig(config) {
     if (mount.readOnly !== true && mount.destination !== '/data/uploads') fail('green_mount_must_be_read_only');
   }
   const destinations = new Set(config.mounts.map((mount) => mount.destination));
-  if (['/run/secrets/technical-sandbox-key', '/run/secrets/technical-sandbox-webhook'].some((destination) => destinations.has(destination))) {
-    fail('green_provider_mounts_forbidden');
-  }
-  for (const destination of ['/run/secrets/mfa-encryption-key', '/run/secrets/firebase-service-account.json', '/data/uploads']) {
+  for (const destination of ['/run/secrets/mfa-encryption-key', '/run/secrets/firebase-service-account.json', '/run/secrets/technical-sandbox-key', '/run/secrets/technical-sandbox-webhook', '/data/uploads']) {
     if (!destinations.has(destination)) fail('green_mount_inventory_incomplete');
   }
   const uploadMount = config.mounts.find((mount) => mount.destination === '/data/uploads');
@@ -485,6 +484,8 @@ function expectedGreenSourceMounts(runtimeConfig) {
     { destination: '/data/uploads', type: 'volume', source: null, volume: greenTarget.uploadsVolume, readOnly: false },
     { destination: '/run/secrets/firebase-service-account.json', type: 'bind', source: runtimeConfig?.firebaseFile, volume: null, readOnly: true },
     { destination: '/run/secrets/mfa-encryption-key', type: 'bind', source: runtimeConfig?.mfaFile, volume: null, readOnly: true },
+    { destination: '/run/secrets/technical-sandbox-key', type: 'bind', source: runtimeConfig?.technicalSandboxKeyFile, volume: null, readOnly: true },
+    { destination: '/run/secrets/technical-sandbox-webhook', type: 'bind', source: runtimeConfig?.technicalSandboxWebhookFile, volume: null, readOnly: true },
   ];
   if (expected.some((mount) => typeof mount.source !== 'string' && mount.type === 'bind')) fail('green_prepromotion_mount_identity_missing');
   return expected.sort((left, right) => left.destination.localeCompare(right.destination));
@@ -500,6 +501,17 @@ function normalizedGreenSourceMounts(mounts) {
     volume: mount.type === 'volume' ? (mount.volume ?? null) : null,
     readOnly: mount.readOnly,
   })).sort((left, right) => left.destination.localeCompare(right.destination));
+}
+
+function greenMountTupleMatches(actual, expected) {
+  return actual.length === expected.length && actual.every((mount, index) => {
+    const expectedMount = expected[index];
+    return mount.destination === expectedMount.destination
+      && mount.type === expectedMount.type
+      && mount.source === expectedMount.source
+      && mount.volume === expectedMount.volume
+      && mount.readOnly === expectedMount.readOnly;
+  });
 }
 
 export function assertGreenContainerInventory(inventory, expectedSourceSchema = greenTarget.sourceSchema, expectedPrePromotionImage, runtimeConfig) {
@@ -527,7 +539,7 @@ export function assertGreenContainerInventory(inventory, expectedSourceSchema = 
         || inventory.api.user !== 'shareittoo'
         || inventory.api.uploadsVolume !== greenTarget.uploadsVolume
       || inventory.api.groupAdd !== true
-      || JSON.stringify(normalizedGreenSourceMounts(inventory.api.mounts)) !== JSON.stringify(expectedGreenSourceMounts(runtimeConfig))) {
+      || !greenMountTupleMatches(normalizedGreenSourceMounts(inventory.api.mounts), expectedGreenSourceMounts(runtimeConfig))) {
     fail('green_prepromotion_tuple_mismatch');
   }
   return true;

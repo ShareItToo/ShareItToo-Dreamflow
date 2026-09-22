@@ -129,10 +129,16 @@ The source readback is exactly schema `92` with the manifest-bound ledger
 digest `4199b60d7b3b19ed0cfeb113e121b77c23eeb03440f212a7dbe593c3cbee1db5`.
 The pre-promotion image is exactly
 `ghcr.io/shareittoo/shareittoo-api:ccc72004247d50656ac1064a758eb5f05c795e04`.
-The observed API tuple includes user `shareittoo`, group `65532`, no host
-port, the two approved networks, and exactly three mounts: writable uploads
-plus read-only Firebase and MFA. Provider credential mounts are forbidden on
-this lane. The live readback must match the complete tuple.
+The observed source API tuple includes user `shareittoo`, group `65532`, no
+host port, the two approved networks, and exactly five mounts: writable
+uploads plus read-only Firebase, MFA, technical-sandbox key, and
+technical-sandbox webhook. The two technical provider files are
+source-readback-only: their absolute paths may be recorded in the protected
+source manifest, but protected runtime env values stay blank and the files are
+never opened by the protected-file assertion. The successor candidate command
+plan and final runtime use exactly three mounts (uploads, Firebase, and MFA),
+with zero technical provider-credential mounts. The live readback must match
+the complete source tuple before the 5-to-3 successor transition is planned.
 Legacy `sit-staging`, production names, lookalike networks and mutable image
 tags are rejected before a command is planned.
 
@@ -150,8 +156,11 @@ remains only a DNS value in the isolated `DATABASE_URL`. Integrity/functional
 probes must pass there before provisioning the candidate. The exact immutable runtime image is
 accepted first against that isolated database on loopback `127.0.0.1:18082`
 with memory Identity, on-device Listing AI, payment memory, the existing
-access/provider configuration and read-only MFA/Firebase/technical-sandbox
-mounts. The synthetic user `synthetic_sandbox_user_pilot_20260919` is
+access/provider configuration and read-only MFA/Firebase mounts. In this
+provider-off lane the technical-sandbox paths are source
+readback only: the candidate receives only the read-only MFA/Firebase mounts
+and never opens or mounts either provider file. The synthetic user
+`synthetic_sandbox_user_pilot_20260919` is
 provisioned idempotently on the isolated target and, after isolated cleanup,
 again on canonical Green using its protected password file; credentials never
 enter commands, logs or evidence.
