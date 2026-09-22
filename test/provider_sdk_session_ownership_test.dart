@@ -720,7 +720,11 @@ class _User extends UserPlatform {
 }
 
 class _Credential extends UserCredentialPlatform {
-  _Credential({required super.auth, required super.user});
+  _Credential({
+    required super.auth,
+    required super.user,
+    super.additionalUserInfo,
+  });
 }
 
 class _Sdk extends FirebaseAuthPlatform {
@@ -755,7 +759,14 @@ class _Sdk extends FirebaseAuthPlatform {
     socialCalls++;
     final user = await social();
     active = user;
-    return _Credential(auth: this, user: user);
+    return _Credential(
+      auth: this,
+      user: user,
+      additionalUserInfo: AdditionalUserInfo(
+        isNewUser: false,
+        authorizationCode: 'synthetic-apple-authorization-code',
+      ),
+    );
   }
 
   @override
