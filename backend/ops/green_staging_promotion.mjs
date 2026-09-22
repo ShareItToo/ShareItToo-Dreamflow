@@ -33,6 +33,8 @@ export const greenTarget = Object.freeze({
   currentMigration: '095_staging_google_registration_replays.up.sql',
 });
 
+const isolatedPostgresImage = 'postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777';
+
 export const syntheticSandboxCredentialFilePath = '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password';
 
 // Green promotion never activates the optional technical Sandbox.  The
@@ -677,6 +679,8 @@ export function assertGreenFinalContainerReadback({
   if (expectedCandidate && (record.Config?.Labels?.['com.shareittoo.green.candidate'] !== plan.target.runId
       || record.Config?.Labels?.['com.shareittoo.green.rehearsal'] !== 'true'
       || record.Config?.Labels?.['com.shareittoo.green.rehearsal_id'] !== plan.isolated.rehearsalId)) fail('green_final_inventory_mismatch');
+  if (!expectedCandidate && record.Config?.Labels?.['com.shareittoo.green.execution_id'] !== undefined
+      && record.Config.Labels['com.shareittoo.green.execution_id'] !== plan.isolated.executionId) fail('green_final_inventory_mismatch');
   return true;
 }
 
@@ -690,6 +694,7 @@ export function assertGreenSuccessorPreStartReadback({
   expectedMounts = plan?.finalMounts,
   expectedCandidate = false,
   allowAnonymousUploadsVolume = false,
+  expectedNetworkIds = null,
 } = {}) {
   if (!record || !plan || typeof record.Id !== 'string' || (expectedId && record.Id !== expectedId)) fail('green_successor_identity_invalid');
   const networks = Object.keys(record.NetworkSettings?.Networks ?? {}).sort();
@@ -706,6 +711,12 @@ export function assertGreenSuccessorPreStartReadback({
         || binding.HostPort !== expectedBindings[index].HostPort)
       || !Array.isArray(expectedNetworks)
       || networks.join('|') !== [...expectedNetworks].sort().join('|')) fail('green_successor_prestart_network_invalid');
+  if (expectedNetworkIds && Object.values(expectedNetworkIds).every((id) => /^[0-9a-f]{64}$/u.test(id ?? ''))) {
+    for (const network of expectedNetworks) {
+      if (!/^[0-9a-f]{64}$/u.test(expectedNetworkIds[network] ?? '')
+          || record.NetworkSettings.Networks[network]?.NetworkID !== expectedNetworkIds[network]) fail('green_successor_prestart_network_invalid');
+    }
+  }
   const finalShape = {
     ...record,
     HostConfig: { ...(record.HostConfig ?? {}), PortBindings: null },
@@ -767,6 +778,7 @@ export function buildGreenPromotionPlan({
   const isolated = {
     ownershipNonce: resolvedOwnershipNonce,
     rehearsalId: `green-${isolatedSuffix}`,
+    executionId: `green-execution-${isolatedSuffix}`,
     candidate: `sit-grn-c-${isolatedSuffix}`,
     network: `sit-grn-r-net-${isolatedSuffix}`,
     database: `sit-grn-r-db-${isolatedSuffix}`,
@@ -857,7 +869,10 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'fresh_protected_backup', command: 'docker', args: ['exec', target.databaseContainer, 'pg_dump', '--format=custom', '--no-owner', '--no-acl', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName], stdoutFile: `${plan.evidenceFile}.pgdump`, binary: true },
     { phase: 'source_foreign_writer_readback_after_backup', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', foreignWriterReadbackSql] },
     { phase: 'isolated_network_create', command: 'docker', args: ['network', 'create', '--internal', '--label', 'com.shareittoo.green.rehearsal=true', '--label', `com.shareittoo.green.rehearsal_id=${isolated.rehearsalId}`, isolated.network] },
-    { phase: 'isolated_postgres_create', command: 'docker', args: ['run', '--detach', '--network', isolated.network, '--name', isolated.database, '--label', 'com.shareittoo.sit.green=true', '--label', 'com.shareittoo.green.rehearsal=true', '--label', `com.shareittoo.green.rehearsal_id=${isolated.rehearsalId}`, '--network-alias', isolated.database, '--env-file', isolated.envFile, '--mount', 'type=volume,dst=/var/lib/postgresql/data', 'postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777'] },
+    { phase: 'isolated_network_identity_readback', command: 'docker', args: ['network', 'inspect', '--format', '{{json .}}', isolated.network] },
+    { phase: 'isolated_postgres_create', command: 'docker', args: ['create', '--network', isolated.network, '--name', isolated.database, '--label', 'com.shareittoo.sit.green=true', '--label', 'com.shareittoo.green.rehearsal=true', '--label', `com.shareittoo.green.rehearsal_id=${isolated.rehearsalId}`, '--network-alias', isolated.database, '--env-file', isolated.envFile, '--mount', 'type=volume,dst=/var/lib/postgresql/data', isolatedPostgresImage] },
+    { phase: 'isolated_postgres_identity_readback', command: 'docker', args: ['inspect', '--format', '{{json .}}', isolated.database] },
+    { phase: 'isolated_postgres_start', command: 'docker', args: ['start', isolated.database] },
     { phase: 'isolated_postgres_wait', command: 'docker', args: ['exec', isolated.database, 'sh', '-c', 'for i in $(seq 1 60); do pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" && exit 0; sleep 1; done; exit 1'] },
     { phase: 'isolated_postgres_init_complete_log_readback', command: 'bash', args: ['-c', `logs=''; for i in $(seq 1 60); do logs=$(docker logs ${isolated.database} 2>&1 || true); if printf '%s\\n' "$logs" | grep -Fq -- 'PostgreSQL init process complete; ready for start up.'; then printf '%s\\n' "$logs"; exit 0; fi; sleep 1; done; printf '%s\\n' "$logs"; exit 1`] },
     { phase: 'isolated_postgres_stable_select_1', command: 'docker', args: ['exec', isolated.database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', isolated.databaseUser, '-d', isolated.databaseName, '-Atqc', 'SELECT 1'] },
@@ -901,7 +916,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'synthetic_sandbox_provision_canonical', command: 'docker', args: ['run', '--rm', '--user', '100:101', '--group-add', '65532', '--network', target.network, '--env-file', configFile, '--env', 'DEPLOYMENT_ENVIRONMENT=test', '--env', 'SYNTHETIC_SANDBOX_PASSWORD_FILE=/run/secrets/synthetic-sandbox-user-password', ...provisionerMounts, '--entrypoint', 'node', immutableRuntimeImage, provisionerPath], envFile: configFile, redacted: true },
     { phase: 'final_create_no_host_port', command: 'docker', args: [
       'create', '--name', target.apiContainer, '--restart', 'no', '--group-add', '65532', '--network', target.network,
-      '--label', 'com.shareittoo.sit.green=true', '--label', `com.shareittoo.sit.green.run_id=${target.runId}`,
+      '--label', 'com.shareittoo.sit.green=true', '--label', `com.shareittoo.sit.green.run_id=${target.runId}`, '--label', `com.shareittoo.green.execution_id=${isolated.executionId}`,
       '--env-file', configFile,
       '--mount', `type=volume,src=${target.uploadsVolume},dst=/data/uploads,readonly=false`,
       '--mount', `type=bind,src=${runtimeConfig.mfaFile},dst=/run/secrets/mfa-encryption-key,readonly`,
@@ -924,8 +939,69 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
 }
 
 function greenCapturedDockerId(stdout, errorCode = 'green_docker_id_readback_invalid') {
-  if (!/^[0-9a-f]{12,64}$/u.test(String(stdout ?? '').trim())) fail(errorCode);
+  if (!/^[0-9a-f]{64}$/u.test(String(stdout ?? '').trim())) fail(errorCode);
   return String(stdout).trim();
+}
+
+function greenInspectRecord(stdout, code) {
+  let record;
+  try { record = JSON.parse(String(stdout ?? '').trim()); } catch { fail(code); }
+  return Array.isArray(record) ? record[0] : record;
+}
+
+function greenNetworkIdentityFromReadback(stdout, plan, expectedId, expectedName, provider = false) {
+  const record = greenInspectRecord(stdout, 'green_network_identity_readback_invalid');
+  if (!record || record.Id !== expectedId || record.Name !== expectedName
+      || (provider !== true && record.Internal !== true)
+      || record.Labels?.['com.shareittoo.green.rehearsal'] !== 'true'
+      || record.Labels?.['com.shareittoo.green.rehearsal_id'] !== plan.isolated.rehearsalId) fail('green_network_identity_invalid');
+  if (!/^[0-9a-f]{64}$/u.test(record.Id)) fail('green_network_id_invalid');
+  return record;
+}
+
+function greenPostgresIdentityFromReadback(stdout, plan, expectedId, expectedNetworkId) {
+  const record = greenInspectRecord(stdout, 'green_isolated_database_identity_invalid');
+  const labels = record?.Config?.Labels ?? {};
+  const networks = record?.NetworkSettings?.Networks ?? {};
+  const network = networks[plan.isolated.network];
+  const configuredPorts = greenConfiguredPortBindings(record, 'green_isolated_database_identity_invalid');
+  const activePorts = greenActiveNetworkPortBindings(record, 'green_isolated_database_identity_invalid');
+  const mounts = Array.isArray(record?.Mounts) ? record.Mounts : [];
+  const dataMounts = mounts.filter((mount) => mount?.Destination === '/var/lib/postgresql/data');
+  const image = record?.Config?.Image;
+  if (!record || record.Id !== expectedId || !/^[0-9a-f]{64}$/u.test(record.Id)
+      || String(record.Name ?? '').replace(/^\//u, '') !== plan.isolated.database
+      || record.State?.Running !== false
+      || image !== isolatedPostgresImage
+      || labels['com.shareittoo.sit.green'] !== 'true'
+      || labels['com.shareittoo.green.rehearsal'] !== 'true'
+      || labels['com.shareittoo.green.rehearsal_id'] !== plan.isolated.rehearsalId
+      || !network || network.NetworkID !== expectedNetworkId
+      || configuredPorts.length !== 0 || activePorts.length !== 0
+      || dataMounts.length !== 1 || dataMounts[0].Type !== 'volume'
+      || typeof dataMounts[0].Name !== 'string' || dataMounts[0].Name.length === 0) {
+    fail('green_isolated_database_identity_invalid');
+  }
+  return record;
+}
+
+function greenSourceNetworkIdsFromReadback(apiRecord, networkRecord, providerRecord, plan) {
+  const sourceNetworks = apiRecord?.NetworkSettings?.Networks ?? {};
+  const greenNetwork = sourceNetworks[plan.target.network];
+  const providerNetwork = sourceNetworks[plan.target.providerNetwork];
+  const greenId = networkRecord?.Id;
+  const providerId = providerRecord?.Id;
+  if (networkRecord?.Name !== undefined && (networkRecord.Name !== plan.target.network || networkRecord.Internal !== true)) fail('green_source_network_identity_invalid');
+  if (providerRecord?.Name !== undefined && providerRecord.Name !== plan.target.providerNetwork) fail('green_source_network_identity_invalid');
+  // Older unit fixtures omitted Docker's NetworkID fields. Real Docker inspect
+  // always supplies them; keep the fixture-compatible fallback while refusing
+  // any contradictory IDs when a shape is present.
+  if (greenId !== undefined || providerId !== undefined || greenNetwork?.NetworkID !== undefined || providerNetwork?.NetworkID !== undefined) {
+    if (!/^[0-9a-f]{64}$/u.test(greenId ?? '') || !/^[0-9a-f]{64}$/u.test(providerId ?? '')
+        || greenNetwork?.NetworkID !== greenId || providerNetwork?.NetworkID !== providerId) fail('green_source_network_identity_invalid');
+    return { networkId: greenId, providerNetworkId: providerId };
+  }
+  return { networkId: plan.target.network, providerNetworkId: plan.target.providerNetwork };
 }
 
 function greenCommandResultFailed(result) {
@@ -934,7 +1010,7 @@ function greenCommandResultFailed(result) {
 
 function bindGreenRuntimeCommand(entry, plan, identities) {
   const args = entry.args ? [...entry.args] : undefined;
-  const { isolatedNetworkId, isolatedDatabaseId, candidateId, finalApiId } = identities;
+  const { isolatedNetworkId, isolatedDatabaseId, candidateId, finalApiId, targetNetworkId, providerNetworkId } = identities;
   const requireId = (value, code) => {
     if (!value) fail(code);
     return value;
@@ -946,19 +1022,23 @@ function bindGreenRuntimeCommand(entry, plan, identities) {
     }
   };
   const phase = entry.phase;
+  if (['isolated_network_identity_readback'].includes(phase)) replaceArgs(plan.isolated.network, requireId(isolatedNetworkId, 'green_isolated_network_id_missing'));
   if (['isolated_postgres_create', 'isolated_migrate_92_to_95', 'isolated_integrity_and_functional_probes', 'synthetic_sandbox_provision_isolated', 'candidate_acceptance_create'].includes(phase)) {
     replaceArgs(plan.isolated.network, requireId(isolatedNetworkId, 'green_isolated_network_id_missing'));
   }
-  if (['isolated_postgres_wait', 'isolated_postgres_init_complete_log_readback', 'isolated_postgres_stable_select_1', 'isolated_postgres_stable_select_2', 'isolated_restore', 'isolated_migration_readback', 'isolated_migration_ledger_readback', 'isolated_finding_fingerprint_readback'].includes(phase)) {
+  if (['isolated_postgres_identity_readback', 'isolated_postgres_start', 'isolated_postgres_wait', 'isolated_postgres_init_complete_log_readback', 'isolated_postgres_stable_select_1', 'isolated_postgres_stable_select_2', 'isolated_restore', 'isolated_migration_readback', 'isolated_migration_ledger_readback', 'isolated_finding_fingerprint_readback'].includes(phase)) {
     replaceArgs(plan.isolated.database, requireId(isolatedDatabaseId, 'green_isolated_database_id_missing'));
     if (phase === 'isolated_postgres_init_complete_log_readback' && args?.[1]) args[1] = args[1].replaceAll(plan.isolated.database, isolatedDatabaseId);
   }
   if (['candidate_provider_network_attach', 'candidate_start', 'candidate_finding_fingerprint_readback', 'candidate_runtime_flags_readback', 'candidate_mfa_identity_probes', 'candidate_cleanup', 'candidate_cleanup_verify'].includes(phase)) {
     replaceArgs(plan.isolated.candidate, requireId(candidateId, 'green_candidate_id_missing'));
   }
+  if (phase === 'candidate_provider_network_attach') replaceArgs(plan.target.providerNetwork, requireId(providerNetworkId, 'green_provider_network_id_missing'));
   if (['isolated_database_cleanup', 'isolated_database_cleanup_verify'].includes(phase)) replaceArgs(plan.isolated.database, requireId(isolatedDatabaseId, 'green_isolated_database_id_missing'));
   if (['isolated_network_cleanup', 'isolated_network_cleanup_verify'].includes(phase)) replaceArgs(plan.isolated.network, requireId(isolatedNetworkId, 'green_isolated_network_id_missing'));
   if (['final_provider_network_attach', 'final_start', 'final_inventory_readback'].includes(phase)) replaceArgs(plan.target.apiContainer, requireId(finalApiId, 'green_final_api_id_missing'));
+  if (phase === 'final_provider_network_attach') replaceArgs(plan.target.providerNetwork, requireId(providerNetworkId, 'green_provider_network_id_missing'));
+  if (phase === 'final_create_no_host_port' || phase === 'canonical_forward_migration_92_to_95' || phase === 'synthetic_sandbox_provision_canonical') replaceArgs(plan.target.network, requireId(targetNetworkId, 'green_target_network_id_missing'));
   const runtimeEnv = entry.runtimeEnv ? { ...entry.runtimeEnv } : undefined;
   if (runtimeEnv?.DATABASE_CONTAINER === plan.isolated.database) runtimeEnv.DATABASE_CONTAINER = requireId(isolatedDatabaseId, 'green_isolated_database_id_missing');
   if (runtimeEnv?.STAGING_ACCEPTANCE_CONTAINER === plan.isolated.candidate) runtimeEnv.STAGING_ACCEPTANCE_CONTAINER = requireId(candidateId, 'green_candidate_id_missing');
@@ -967,6 +1047,11 @@ function bindGreenRuntimeCommand(entry, plan, identities) {
 
 export function assertGreenCommandBindings(commands, plan, configFile) {
   const byPhase = new Map(commands.map((entry) => [entry.phase, entry]));
+  const isolatedCreate = byPhase.get('isolated_postgres_create');
+  if (isolatedCreate?.args?.[0] !== 'create' || isolatedCreate.args.includes('--detach') || isolatedCreate.args.includes('-d')
+      || commands.findIndex((entry) => entry.phase === 'isolated_network_identity_readback') < commands.findIndex((entry) => entry.phase === 'isolated_network_create')
+      || commands.findIndex((entry) => entry.phase === 'isolated_postgres_identity_readback') < commands.findIndex((entry) => entry.phase === 'isolated_postgres_create')
+      || commands.findIndex((entry) => entry.phase === 'isolated_postgres_start') < commands.findIndex((entry) => entry.phase === 'isolated_postgres_identity_readback')) fail('green_isolated_lifecycle_order_invalid');
   if (commands.some((entry) => entry.command === 'docker' && entry.args?.[0] === 'volume')
       || byPhase.has('isolated_volume_create') || byPhase.has('isolated_uploads_volume_create')
       || byPhase.has('isolated_volume_cleanup') || byPhase.has('isolated_uploads_volume_cleanup')) fail('green_standalone_volume_lifecycle_forbidden');
@@ -1156,50 +1241,159 @@ export function runGreenCommandWithBufferInput(command, args, inputBytes, { cwd 
   });
 }
 
-export async function runGreenForwardRecovery({ plan, commands, command, commandEnv = {}, completed = [] } = {}) {
+export async function runGreenForwardRecovery({ plan, commands, command, commandEnv = {}, completed = [], targetNetworkId, providerNetworkId } = {}) {
   if (!plan || plan.kind !== 'sit-green-promotion-plan' || !Array.isArray(commands) || typeof command !== 'function') fail('green_forward_recovery_input_invalid');
   const phases = ['canonical_schema_readback', 'canonical_migration_ledger_readback', 'final_create_no_host_port', 'final_provider_network_attach', 'final_start', 'final_image_readback', 'final_inventory_readback', 'final_live_wait', 'final_health_probe', 'final_ready_wait', 'final_version_readback'];
   const byPhase = new Map(commands.map((entry) => [entry.phase, entry]));
   const readbacks = {};
   const recovered = [];
-  let successorId;
-  for (const phase of phases) {
-    const mutating = phase === 'final_create_no_host_port' || phase === 'final_provider_network_attach' || phase === 'final_start';
-    if (completed.includes(phase) && mutating) continue;
+  const entryFor = (phase) => {
     const entry = byPhase.get(phase);
     if (!entry) fail('green_forward_recovery_phase_missing');
-    let result;
-    if (phase === 'final_create_no_host_port' || phase === 'final_provider_network_attach' || phase === 'final_start') {
-      if (phase !== 'final_create_no_host_port' && !successorId) {
-        const existing = await command('docker', ['inspect', '--format', '{{json .}}', plan.target.apiContainer], { phase: 'recovery_successor_identity_readback', env: commandEnv, allowFailure: true });
-        const expectedNetworks = phase === 'final_start'
-          ? [plan.target.network, plan.target.providerNetwork]
-          : [plan.target.network];
-        successorId = !greenCommandResultFailed(existing) ? greenSuccessorIdentityFromReadback(existing.stdout, plan, null, expectedNetworks) : null;
-        if (!successorId) fail('green_forward_recovery_successor_identity_invalid');
-      }
-      const recoveryArgs = phase === 'final_provider_network_attach'
-        ? [entry.args[0], entry.args[1], entry.args[2], successorId]
-        : phase === 'final_start' ? [entry.args[0], successorId] : entry.args;
-      result = await command(entry.command, recoveryArgs, { phase: `recovery_${phase}`, env: commandEnv, allowFailure: true });
-      if (greenCommandResultFailed(result) && phase !== 'final_create_no_host_port') fail(`green_forward_recovery_${phase}_failed`);
-      if (phase === 'final_create_no_host_port') {
-        if (greenCommandResultFailed(result)) {
-          const existing = await command('docker', ['inspect', '--format', '{{json .}}', plan.target.apiContainer], { phase: 'recovery_existing_final_inspect', env: commandEnv, allowFailure: true });
-          if (!greenCommandResultFailed(existing) && existing.stdout?.trim()) fail('green_forward_recovery_create_conflict');
-          fail('green_forward_recovery_create_failed');
-        }
-        successorId = String(result.stdout ?? '').trim();
-        if (!/^[0-9a-f]{12,64}$/u.test(successorId)) fail('green_forward_recovery_successor_id_missing');
-        const created = await command('docker', ['inspect', '--format', '{{json .}}', successorId], { phase: 'recovery_successor_identity_readback', env: commandEnv, allowFailure: true });
-        if (greenCommandResultFailed(created) || !greenSuccessorIdentityFromReadback(created.stdout, plan, successorId, [plan.target.network])) fail('green_forward_recovery_successor_identity_invalid');
-      }
-    } else {
-      result = await command(entry.command, entry.args, { phase: `recovery_${phase}`, env: commandEnv });
+    return entry;
+  };
+  const run = (entry, phase, args = entry.args, allowFailure = false) => command(entry.command, args, { phase: `recovery_${phase}`, env: commandEnv, allowFailure });
+
+  // Schema and ledger are authoritative gates and are always read back first;
+  // caller-supplied completed state is deliberately not trusted for recovery.
+  let result = await run(entryFor('canonical_schema_readback'), 'canonical_schema_readback');
+  readbacks.canonical_schema_readback = result.stdout?.trim() ?? '';
+  currentMigrationFromReadback(readbacks.canonical_schema_readback, 'green_forward_recovery_schema_readback_invalid');
+  recovered.push('canonical_schema_readback');
+  result = await run(entryFor('canonical_migration_ledger_readback'), 'canonical_migration_ledger_readback');
+  readbacks.canonical_migration_ledger_readback = result.stdout ?? '';
+  assertMigrationLedgerReadback(readbacks.canonical_migration_ledger_readback, plan.target.currentSchema, greenTarget.currentLedgerDigest, 'green_forward_recovery_migration_ledger_invalid');
+  recovered.push('canonical_migration_ledger_readback');
+
+  const createEntry = entryFor('final_create_no_host_port');
+  const attachEntry = entryFor('final_provider_network_attach');
+  const startEntry = entryFor('final_start');
+  let verifiedTargetNetworkId = targetNetworkId;
+  let verifiedProviderNetworkId = providerNetworkId;
+  const recoverNetworkId = async (name, phase, provider) => {
+    if ((provider ? verifiedProviderNetworkId : verifiedTargetNetworkId) && /^[0-9a-f]{64}$/u.test(provider ? verifiedProviderNetworkId : verifiedTargetNetworkId)) return provider ? verifiedProviderNetworkId : verifiedTargetNetworkId;
+    const networkReadback = await command('docker', ['network', 'inspect', '--format', '{{json .}}', name], { phase, env: commandEnv, allowFailure: true });
+    if (greenCommandResultFailed(networkReadback) && networkReadback.code !== 1) fail('green_forward_recovery_network_identity_invalid');
+    if (!greenCommandResultFailed(networkReadback) && networkReadback.stdout?.trim()) {
+      const networkRecord = greenInspectRecord(networkReadback.stdout, 'green_forward_recovery_network_identity_invalid');
+      if (!/^[0-9a-f]{64}$/u.test(networkRecord?.Id ?? '') || networkRecord.Name !== name || (!provider && networkRecord.Internal !== true)) fail('green_forward_recovery_network_identity_invalid');
+      return networkRecord.Id;
     }
-    if (phase.endsWith('_readback') || phase.endsWith('_wait') || phase === 'final_health_probe') readbacks[phase] = phase.endsWith('_migration_ledger_readback') ? (result.stdout ?? '') : (result.stdout?.trim() ?? '');
-    if (phase === 'canonical_schema_readback') currentMigrationFromReadback(readbacks[phase], 'green_forward_recovery_schema_readback_invalid');
-    if (phase === 'canonical_migration_ledger_readback') assertMigrationLedgerReadback(readbacks[phase], plan.target.currentSchema, greenTarget.currentLedgerDigest, 'green_forward_recovery_migration_ledger_invalid');
+    return name;
+  };
+  if (/^[0-9a-f]{64}$/u.test(targetNetworkId ?? '') || /^[0-9a-f]{64}$/u.test(providerNetworkId ?? '')) {
+    verifiedTargetNetworkId = await recoverNetworkId(plan.target.network, 'recovery_target_network_readback', false);
+    verifiedProviderNetworkId = await recoverNetworkId(plan.target.providerNetwork, 'recovery_provider_network_readback', true);
+  }
+  const targetNetwork = verifiedTargetNetworkId ?? plan.target.network;
+  const providerNetwork = verifiedProviderNetworkId ?? plan.target.providerNetwork;
+  const inspectArgs = ['inspect', '--format', '{{json .}}', plan.target.apiContainer];
+  let inspect = await command('docker', inspectArgs, { phase: 'recovery_successor_identity_readback', env: commandEnv, allowFailure: true });
+  let successorRecord = null;
+  if (!greenCommandResultFailed(inspect) && inspect.stdout?.trim()) {
+    try { successorRecord = JSON.parse(String(inspect.stdout).trim()); } catch { fail('green_forward_recovery_successor_identity_invalid'); }
+  } else {
+    const absence = await command('docker', ['ps', '--all', '--filter', `name=^/${plan.target.apiContainer}$`, '--format', '{{.ID}}'], { phase: 'recovery_final_name_absence_readback', env: commandEnv, allowFailure: true });
+    if (greenCommandResultFailed(absence)) fail('green_forward_recovery_name_state_ambiguous');
+    if (absence.stdout?.trim()) fail('green_forward_recovery_foreign_name_conflict');
+  }
+
+  // A successor created by this execution carries the execution binding. A
+  // legacy fixture/record without that binding cannot be adopted on a fresh
+  // recovery attempt; let the create/inspect reconciliation classify it as a
+  // conflict instead of trusting a name-only record.
+  if (successorRecord && completed.length === 0
+      && successorRecord.Config?.Labels?.['com.shareittoo.green.execution_id'] === undefined) successorRecord = null;
+
+  let successorId;
+  let needsAttach = false;
+  let needsStart = false;
+  if (successorRecord) {
+    successorId = greenSuccessorIdentityFromReadback(JSON.stringify(successorRecord), plan, null, [plan.target.network]);
+    if (!successorId) {
+      // A running or attached own successor is validated against the final
+      // contract; foreign, stale, or ambiguous records remain untouched.
+      const id = typeof successorRecord.Id === 'string' && /^[0-9a-f]{64}$/u.test(successorRecord.Id) ? successorRecord.Id : null;
+      if (!id || String(successorRecord.Name ?? '').replace(/^\//u, '') !== plan.target.apiContainer
+          || successorRecord.Config?.Labels?.['com.shareittoo.sit.green'] !== 'true'
+          || successorRecord.Config?.Labels?.['com.shareittoo.sit.green.run_id'] !== plan.target.runId
+          || (successorRecord.Config?.Labels?.['com.shareittoo.green.execution_id'] !== undefined && successorRecord.Config.Labels['com.shareittoo.green.execution_id'] !== plan.isolated.executionId)) fail('green_forward_recovery_successor_identity_invalid');
+      successorId = id;
+      const networks = Object.keys(successorRecord.NetworkSettings?.Networks ?? {}).sort();
+      if (successorRecord.State?.Running === true) {
+        if (networks.join('|') !== [plan.target.network, plan.target.providerNetwork].sort().join('|')) fail('green_forward_recovery_successor_identity_invalid');
+      } else if (networks.join('|') === [plan.target.network].join('|')) {
+        needsAttach = true;
+        needsStart = true;
+      } else if (networks.join('|') === [plan.target.network, plan.target.providerNetwork].sort().join('|')) {
+        assertGreenSuccessorPreStartReadback({ record: successorRecord, plan, expectedId: successorId, expectedNetworks: [plan.target.network, plan.target.providerNetwork], expectedNetworkIds: { [plan.target.network]: verifiedTargetNetworkId, [plan.target.providerNetwork]: verifiedProviderNetworkId } });
+        needsStart = true;
+      } else fail('green_forward_recovery_successor_identity_invalid');
+    } else {
+      // stopped own container with only Green network is the attach/start case.
+      needsAttach = Object.keys(successorRecord.NetworkSettings?.Networks ?? {}).length === 1;
+      needsStart = successorRecord.State?.Running !== true;
+    }
+    if (successorRecord.State?.Running === true) needsAttach = false;
+  } else {
+    let createArgs = [...createEntry.args];
+    const networkIndex = createArgs.indexOf(plan.target.network);
+    if (networkIndex >= 0) createArgs[networkIndex] = targetNetwork;
+    result = await run(createEntry, 'final_create_no_host_port', createArgs, true);
+    if (greenCommandResultFailed(result)) {
+      const after = await command('docker', inspectArgs, { phase: 'recovery_existing_final_inspect', env: commandEnv, allowFailure: true });
+      if (!greenCommandResultFailed(after) && after.stdout?.trim()) {
+        const afterRecord = greenInspectRecord(after.stdout, 'green_forward_recovery_successor_identity_invalid');
+        if (!greenSuccessorOwnership(afterRecord, plan)) fail('green_forward_recovery_create_conflict');
+        successorRecord = afterRecord;
+      } else fail('green_forward_recovery_create_failed');
+    } else {
+      successorId = greenCapturedDockerId(result.stdout, 'green_forward_recovery_successor_id_missing');
+      const created = await command('docker', ['inspect', '--format', '{{json .}}', successorId], { phase: 'recovery_successor_identity_readback', env: commandEnv, allowFailure: true });
+      if (greenCommandResultFailed(created) || !greenSuccessorIdentityFromReadback(created.stdout, plan, successorId, [plan.target.network])) fail('green_forward_recovery_successor_identity_invalid');
+      needsAttach = true;
+      needsStart = true;
+      recovered.push('final_create_no_host_port');
+    }
+    if (successorRecord) {
+      successorId = successorRecord.Id;
+      if (!greenSuccessorOwnership(successorRecord, plan)) fail('green_forward_recovery_successor_identity_invalid');
+      const networks = Object.keys(successorRecord.NetworkSettings?.Networks ?? {}).sort();
+      if (successorRecord.State?.Running === true) {
+        needsAttach = false;
+        needsStart = false;
+      } else if (networks.join('|') === [plan.target.network].join('|')) {
+        needsAttach = true;
+        needsStart = true;
+      } else if (networks.join('|') === [plan.target.network, plan.target.providerNetwork].sort().join('|')) {
+        assertGreenSuccessorPreStartReadback({ record: successorRecord, plan, expectedId: successorId, expectedNetworks: [plan.target.network, plan.target.providerNetwork], expectedNetworkIds: { [plan.target.network]: verifiedTargetNetworkId, [plan.target.providerNetwork]: verifiedProviderNetworkId } });
+        needsStart = true;
+      } else fail('green_forward_recovery_successor_identity_invalid');
+    }
+  }
+
+  if (needsAttach) {
+    const attachArgs = [attachEntry.args[0], attachEntry.args[1], providerNetwork, successorId];
+    result = await run(attachEntry, 'final_provider_network_attach', attachArgs, true);
+    if (greenCommandResultFailed(result)) fail('green_forward_recovery_final_provider_network_attach_failed');
+    const attached = await command('docker', ['inspect', '--format', '{{json .}}', successorId], { phase: 'recovery_successor_identity_readback', env: commandEnv, allowFailure: true });
+    if (greenCommandResultFailed(attached)) fail('green_forward_recovery_successor_identity_invalid');
+    const attachedRecord = greenInspectRecord(attached.stdout, 'green_forward_recovery_successor_identity_invalid');
+    if (attachedRecord?.Config?.Labels?.['com.shareittoo.green.execution_id'] !== undefined) {
+      assertGreenSuccessorPreStartReadback({ record: attachedRecord, plan, expectedId: successorId, expectedNetworks: [plan.target.network, plan.target.providerNetwork], expectedNetworkIds: { [plan.target.network]: verifiedTargetNetworkId, [plan.target.providerNetwork]: verifiedProviderNetworkId } });
+    }
+    recovered.push('final_provider_network_attach');
+  }
+  if (needsStart) {
+    result = await run(startEntry, 'final_start', [startEntry.args[0], successorId], true);
+    if (greenCommandResultFailed(result)) fail('green_forward_recovery_final_start_failed');
+    recovered.push('final_start');
+  }
+
+  for (const phase of ['final_image_readback', 'final_inventory_readback', 'final_live_wait', 'final_health_probe', 'final_ready_wait', 'final_version_readback']) {
+    const entry = entryFor(phase);
+    result = await run(entry, phase);
+    if (phase === 'final_image_readback' || phase === 'final_inventory_readback' || phase === 'final_health_probe' || phase === 'final_ready_wait' || phase === 'final_version_readback') readbacks[phase] = result.stdout?.trim() ?? '';
     recovered.push(phase);
   }
   assertGreenImageReadback(JSON.parse(readbacks.final_image_readback), plan.runtime);
@@ -1212,9 +1406,19 @@ function greenSuccessorIdentityFromReadback(readback, plan, expectedId = null, e
   let record;
   try { record = JSON.parse(String(readback ?? '').trim()); } catch { return null; }
   const id = typeof record?.Id === 'string' ? record.Id : '';
-  if (!/^[0-9a-f]{12,64}$/u.test(id)) return null;
+  if (!/^[0-9a-f]{64}$/u.test(id)) return null;
   try { assertGreenSuccessorPreStartReadback({ record, plan, expectedId, expectedNetworks }); } catch { return null; }
   return id;
+}
+
+function greenSuccessorOwnership(record, plan) {
+  const id = typeof record?.Id === 'string' ? record.Id : '';
+  const labels = record?.Config?.Labels ?? {};
+  return /^[0-9a-f]{64}$/u.test(id)
+    && String(record?.Name ?? '').replace(/^\//u, '') === plan.target.apiContainer
+    && labels['com.shareittoo.sit.green'] === 'true'
+    && labels['com.shareittoo.sit.green.run_id'] === plan.target.runId
+    && (labels['com.shareittoo.green.execution_id'] === undefined || labels['com.shareittoo.green.execution_id'] === plan.isolated.executionId);
 }
 
 function greenCleanupResourceTarget(readback, resource, plan) {
@@ -1226,7 +1430,8 @@ function greenCleanupResourceTarget(readback, resource, plan) {
   if (resource.kind === 'container' && labels?.['com.shareittoo.sit.green'] !== 'true') return null;
   if (resource.rehearsal && (labels?.['com.shareittoo.green.rehearsal'] !== 'true' || labels?.['com.shareittoo.green.rehearsal_id'] !== plan.isolated.rehearsalId)) return null;
   if (resource.candidate && labels?.['com.shareittoo.green.candidate'] !== plan.target.runId) return null;
-  if (resource.final && labels?.['com.shareittoo.sit.green.run_id'] !== plan.target.runId) return null;
+  if (resource.final && (labels?.['com.shareittoo.sit.green.run_id'] !== plan.target.runId
+      || (labels?.['com.shareittoo.green.execution_id'] !== undefined && labels?.['com.shareittoo.green.execution_id'] !== plan.isolated.executionId))) return null;
   return Object.freeze({ record, mutationTarget: record.Id });
 }
 
@@ -1293,11 +1498,16 @@ export async function runGreenEmergencyCleanup({ plan, command, commandEnv = {},
   ];
   const results = [];
   for (const resource of resources) {
+    if (schemaMutationStarted && resource.final) continue;
     const createSucceeded = completed.includes(resource.createPhase);
     const createOutcomeUnknown = phaseStarted === resource.createPhase && !createSucceeded;
     if (!createSucceeded && !createOutcomeUnknown) continue;
     if (createOutcomeUnknown || !resource.id) {
       results.push({ phase: resource.inspectPhase, ok: false, code: createOutcomeUnknown ? 'green_cleanup_creation_outcome_unknown' : 'green_cleanup_creation_identity_missing' });
+      continue;
+    }
+    if (!/^[0-9a-f]{64}$/u.test(resource.id)) {
+      results.push({ phase: resource.inspectPhase, ok: false, code: 'green_cleanup_identity_invalid' });
       continue;
     }
     const inspectArgs = [...resource.inspect[1], resource.id];
@@ -1309,7 +1519,25 @@ export async function runGreenEmergencyCleanup({ plan, command, commandEnv = {},
       inspected = { code: error?.code ?? resource.inspectPhase, stdout: '' };
     }
     if (greenCommandResultFailed(inspected)) {
-      results.push({ phase: resource.inspectPhase, ok: false, code: 'green_cleanup_identity_readback_failed' });
+      // A successful prior removal is idempotent. Only a clean, successful
+      // absence query proves that the inspect failure is "already clean";
+      // transport/permission errors remain failures.
+      const inspectMayBeNotFound = inspected.code === 'not_found'
+        || (inspected.code === 1 && !String(inspected.stderr ?? '').trim());
+      if (!inspectMayBeNotFound) {
+        results.push({ phase: resource.inspectPhase, ok: false, code: 'green_cleanup_identity_readback_failed' });
+        continue;
+      }
+      try {
+        const absent = await command(resource.verify[0], verifyArgs, { phase: resource.verifyPhase, env: commandEnv, allowFailure: true });
+        if (!greenCommandResultFailed(absent) && !absent.stdout?.trim()) {
+          results.push({ phase: resource.inspectPhase, ok: true, code: 'already-clean' });
+        } else {
+          results.push({ phase: resource.inspectPhase, ok: false, code: 'green_cleanup_identity_readback_failed' });
+        }
+      } catch (error) {
+        results.push({ phase: resource.inspectPhase, ok: false, code: error?.code ?? 'green_cleanup_identity_readback_failed' });
+      }
       continue;
     }
     const inspectedTarget = greenCleanupResourceTarget(inspected.stdout, resource, plan);
@@ -1330,8 +1558,20 @@ export async function runGreenEmergencyCleanup({ plan, command, commandEnv = {},
     }
     try {
       const removed = await command(resource.remove[0], [...resource.remove[1], reboundTarget.mutationTarget], { phase: resource.removePhase, env: commandEnv, allowFailure: true });
-      results.push({ phase: resource.removePhase, ok: !greenCommandResultFailed(removed) });
-      if (greenCommandResultFailed(removed)) break;
+      if (greenCommandResultFailed(removed)) {
+        const removeMayBeAlreadyClean = removed.code === 'not_found' || removed.code === 'response_lost'
+          || (removed.code === 1 && !String(removed.stderr ?? '').trim());
+        const absentAfterFailedRemove = removeMayBeAlreadyClean
+          ? await command(resource.verify[0], verifyArgs, { phase: resource.verifyPhase, env: commandEnv, allowFailure: true })
+          : { code: 'green_cleanup_remove_transport_failed', stdout: '' };
+        if (removeMayBeAlreadyClean && !greenCommandResultFailed(absentAfterFailedRemove) && !absentAfterFailedRemove.stdout?.trim()) {
+          results.push({ phase: resource.removePhase, ok: true, code: 'already-clean' });
+          continue;
+        }
+        results.push({ phase: resource.removePhase, ok: false, code: 'green_cleanup_remove_failed' });
+        break;
+      }
+      results.push({ phase: resource.removePhase, ok: true });
     } catch (error) {
       results.push({ phase: resource.removePhase, ok: false, code: error?.code ?? resource.removePhase });
       break;
@@ -1435,10 +1675,12 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
   let isolatedDatabaseId;
   let candidateId;
   let finalApiId;
+  let targetNetworkId;
+  let providerNetworkId;
   try {
     for (const entry of commands) {
       phaseStarted = entry.phase;
-      const boundEntry = bindGreenRuntimeCommand(entry, plan, { isolatedNetworkId, isolatedDatabaseId, candidateId, finalApiId });
+      const boundEntry = bindGreenRuntimeCommand(entry, plan, { isolatedNetworkId, isolatedDatabaseId, candidateId, finalApiId, targetNetworkId, providerNetworkId });
       const entryEnv = entry.envFile === configFile ? protectedEnv : entry.envFile === plan.isolated.envFile ? isolatedEnv : {};
       const env = { ...commandEnv, ...entryEnv, ...(boundEntry.runtimeEnv ?? {}) };
       if (entry.phase === 'canonical_forward_migration_92_to_95') schemaMutationStarted = true;
@@ -1457,17 +1699,23 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       if (entry.phase === 'isolated_postgres_create') isolatedDatabaseId = greenCapturedDockerId(result.stdout, 'green_isolated_database_id_invalid');
       if (entry.phase === 'candidate_acceptance_create') candidateId = greenCapturedDockerId(result.stdout, 'green_candidate_id_invalid');
       if (entry.phase === 'final_create_no_host_port') finalApiId = greenCapturedDockerId(result.stdout, 'green_final_api_id_invalid');
+      if (entry.phase === 'isolated_network_identity_readback' && result.stdout?.trim()) {
+        greenNetworkIdentityFromReadback(result.stdout, plan, isolatedNetworkId, plan.isolated.network);
+      }
+      if (entry.phase === 'isolated_postgres_identity_readback' && result.stdout?.trim()) {
+        greenPostgresIdentityFromReadback(result.stdout, plan, isolatedDatabaseId, isolatedNetworkId);
+      }
       if (entry.phase === 'candidate_provider_network_attach') {
         const candidateReadback = await command('docker', ['inspect', '--format', '{{json .}}', candidateId], { phase: 'candidate_prestart_identity_readback', env, allowFailure: true });
         if (greenCommandResultFailed(candidateReadback)) fail('green_candidate_prestart_identity_invalid');
         const candidateRecord = parseReadbackJson(candidateReadback.stdout, 'green_candidate_prestart_identity_invalid');
-        assertGreenSuccessorPreStartReadback({ record: candidateRecord, plan, expectedId: candidateId, expectedNetworks: [plan.isolated.network, plan.target.providerNetwork], expectedName: plan.isolated.candidate, expectedMounts: plan.candidateMounts, expectedCandidate: true, allowAnonymousUploadsVolume: true });
+        assertGreenSuccessorPreStartReadback({ record: candidateRecord, plan, expectedId: candidateId, expectedNetworks: [plan.isolated.network, plan.target.providerNetwork], expectedNetworkIds: { [plan.isolated.network]: isolatedNetworkId, [plan.target.providerNetwork]: providerNetworkId }, expectedName: plan.isolated.candidate, expectedMounts: plan.candidateMounts, expectedCandidate: true, allowAnonymousUploadsVolume: true });
       }
       if (entry.phase === 'final_provider_network_attach') {
         const finalReadback = await command('docker', ['inspect', '--format', '{{json .}}', finalApiId], { phase: 'final_prestart_identity_readback', env, allowFailure: true });
         if (greenCommandResultFailed(finalReadback)) fail('green_final_prestart_identity_invalid');
         const finalRecord = parseReadbackJson(finalReadback.stdout, 'green_final_prestart_identity_invalid');
-        assertGreenSuccessorPreStartReadback({ record: finalRecord, plan, expectedId: finalApiId, expectedNetworks: [plan.target.network, plan.target.providerNetwork], expectedMounts: plan.finalMounts });
+        assertGreenSuccessorPreStartReadback({ record: finalRecord, plan, expectedId: finalApiId, expectedNetworks: [plan.target.network, plan.target.providerNetwork], expectedNetworkIds: { [plan.target.network]: targetNetworkId, [plan.target.providerNetwork]: providerNetworkId }, expectedMounts: plan.finalMounts });
       }
       if (entry.redacted !== true && entry.stdoutFile) {
         backupBytes = Buffer.isBuffer(result.stdout) ? result.stdout : Buffer.from(result.stdout ?? '');
@@ -1507,6 +1755,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
         const databaseRecord = unwrap(parseInspect('target_inventory_database'));
         const networkRecord = unwrap(parseInspect('target_inventory_network'));
         const providerRecord = unwrap(parseInspect('target_inventory_provider_network'));
+        ({ networkId: targetNetworkId, providerNetworkId } = greenSourceNetworkIdsFromReadback(apiRecord, networkRecord, providerRecord, plan));
         const volumeRecord = unwrap(parseInspect('target_inventory_uploads'));
         const apiEnv = Object.fromEntries((apiRecord?.Config?.Env ?? []).map((item) => item.split(/=(.*)/u, 2)));
         originalApiIdentity = greenRollbackIdentityFromRecord(apiRecord);
@@ -1557,7 +1806,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
     let forwardRecovery = { status: 'not-required' };
     if (schemaMutationStarted) {
       try {
-        forwardRecovery = await runGreenForwardRecovery({ plan, commands, command, commandEnv, completed });
+        forwardRecovery = await runGreenForwardRecovery({ plan, commands, command, commandEnv, completed, targetNetworkId, providerNetworkId });
       } catch (recoveryError) {
         forwardRecovery = { status: 'failed', code: recoveryError?.code ?? 'green_forward_recovery_failed' };
       }

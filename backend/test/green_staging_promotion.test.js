@@ -363,6 +363,23 @@ test('promotion plan keeps backup, isolated 92-to-95 rehearsal, acceptance and f
   ))), false);
 });
 
+test('isolated lifecycle is create, inspect-by-ID, then start-by-ID with execution-bound final successor', () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: '7'.repeat(32) });
+  const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
+  const phase = (name) => commands.findIndex((entry) => entry.phase === name);
+  const postgresCreate = commands.find((entry) => entry.phase === 'isolated_postgres_create');
+  assert.equal(postgresCreate.args[0], 'create');
+  assert.equal(postgresCreate.args.includes('--detach'), false);
+  assert.ok(phase('isolated_network_create') < phase('isolated_network_identity_readback'));
+  assert.ok(phase('isolated_network_identity_readback') < phase('isolated_postgres_create'));
+  assert.ok(phase('isolated_postgres_create') < phase('isolated_postgres_identity_readback'));
+  assert.ok(phase('isolated_postgres_identity_readback') < phase('isolated_postgres_start'));
+  assert.ok(phase('isolated_postgres_start') < phase('isolated_postgres_wait'));
+  const finalCreate = commands.find((entry) => entry.phase === 'final_create_no_host_port');
+  assert.ok(finalCreate.args.includes(`com.shareittoo.green.execution_id=${plan.isolated.executionId}`));
+  assert.equal(assertGreenCommandBindings(commands, plan, config.envFile), true);
+});
+
 test('isolated resource names and labels carry a fresh per-execution ownership nonce', () => {
   const first = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'a'.repeat(32) });
   const second = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'b'.repeat(32) });
@@ -861,6 +878,20 @@ test('emergency cleanup removes a container by the inspected immutable ID', asyn
   const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['candidate_acceptance_create'], resourceIds: { candidateId: identity.Id }, schemaMutationStarted: true });
   assert.equal(result.clean, true);
   assert.equal(calls.some((call) => call.options.phase === 'failure_candidate_remove'), true);
+});
+
+test('emergency cleanup does not classify a transport error as already absent', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const candidateId = 'c'.repeat(64);
+  const calls = [];
+  const fake = async (command, args, options) => {
+    calls.push({ command, args, options });
+    if (options.phase === 'failure_candidate_identity_readback') return { code: 'transport', stderr: 'daemon unavailable', stdout: '' };
+    return { stdout: '' };
+  };
+  const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['candidate_acceptance_create'], resourceIds: { candidateId } });
+  assert.equal(result.clean, false);
+  assert.equal(calls.some((entry) => entry.options.phase === 'failure_candidate_remove'), false);
 });
 
 test('emergency cleanup refuses a container ID rebind before deletion', async () => {
