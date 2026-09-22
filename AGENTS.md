@@ -125,6 +125,11 @@ discover a mechanically stale source hash.
   and check amendment and effective dates; for product, account, provider,
   repository and runtime facts check the current live state or exact commit.
   Cite the direct source plus version or effective date and access date.
+- For German federal law, Gemini must read the live full-text header on
+  `gesetze-im-internet.de` and record its current full citation and last-
+  amendment date. A remembered date, search snippet, section-only page or
+  citation that conflicts with that header invalidates the whole gate answer
+  and requires a fresh re-gate; its prior `PASS` must not be carried forward.
 - End every Gemini gate answer with a complete source register for every source
   actually used: title or issuing body, direct URL or exact repository/Drive
   path, publication/version/effective date, access date and the supported
