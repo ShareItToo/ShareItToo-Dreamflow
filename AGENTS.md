@@ -125,6 +125,10 @@ discover a mechanically stale source hash.
   and check amendment and effective dates; for product, account, provider,
   repository and runtime facts check the current live state or exact commit.
   Cite the direct source plus version or effective date and access date.
+- End every Gemini gate answer with a complete source register for every source
+  actually used: title or issuing body, direct URL or exact repository/Drive
+  path, publication/version/effective date, access date and the supported
+  claim. Never invent a citation or list an unopened source as evidence.
 - Treat undated, cached, draft, historical, prior-AI, screenshot-only and older
   Drive claims as stale until currentness is proven. If freshness cannot be
   verified, label the point `NOT VERIFIED` or `STALE` and never return `PASS`.
