@@ -20,6 +20,12 @@ search before rereading large sources, avoid unchanged duplicate gates and
 retain all audit evidence. Efficiency must never weaken deterministic tests,
 exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 
+When a package changes a source file bound by privacy, retention or another
+current source-inventory manifest, refresh every affected current manifest
+once after the final source merge and before the first push/full regression.
+Run the fail-closed consumer-closure check before CI; never spend a CI run to
+discover a mechanically stale source hash.
+
 ## Sol, Luna and Astra review loop
 
 - Luna executes one bounded package and returns useful evidence, not a claim of

@@ -96,7 +96,7 @@
     },
     {
       "path": "backend/src/credential_cleanup.js",
-      "sha256": "c8258b5aaf1db215852dd5ad17025091fefe1e481dfe7ecb90aed185ad9fe1e1"
+      "sha256": "bf0b51a9acbda223ab0fc87aa212737f76f9f852f929ce24dd4b00fae8393700"
     },
     {
       "path": "backend/src/db.js",
@@ -636,7 +636,7 @@
     },
     {
       "path": "backend/src/config.js",
-      "sha256": "229502f95c681641bb07fe6e0256b4ea2a5041569142d9b56a19d1d0c6db183e"
+      "sha256": "70ddaa49289cc1991de3b526e483c9fb1cd0f7397a3b4f075859203f89ae0e52"
     },
     {
       "path": "backend/src/notifications.js",
@@ -668,7 +668,19 @@
     },
     {
       "path": "backend/src/firebase_social_auth.js",
-      "sha256": "eb94da31526a69226e5cc4081f05b80b2504114aa557c3de3fad63cfb84559c6"
+      "sha256": "58843e34ac407b429d2d1886d56fce54a37645e5f92e75ef282953003c235399"
+    },
+    {
+      "path": "backend/src/staging_google_registration.js",
+      "sha256": "f1699603e3b0a0f6e672bdcad1bbaf8c13924f1aec53bea98ad06842c77a3cbb"
+    },
+    {
+      "path": "backend/sql/migrations/095_staging_google_registration_replays.up.sql",
+      "sha256": "6b42056c21dba33e6b5f5db85999d9c3706ac2c8a8c0a2b0d9575f655141bf66"
+    },
+    {
+      "path": "backend/sql/migrations/095_staging_google_registration_replays.down.sql",
+      "sha256": "2ef33390248763e4054070a893477abdc92b76c6d16a4e2c85b4cf27c4715cf9"
     },
     {
       "path": "backend/src/firebase_identity_cleanup.js",
@@ -724,7 +736,7 @@
     },
     {
       "path": "lib/services/data_service.dart",
-      "sha256": "5f3dbe1521275ad5a59dcd0d080d5993293c78f437aba64d6eb471a953249fff"
+      "sha256": "f53fd03a4da2faea0770a28dfd78b413bd5b7df2baf8df62b710fadead170db7"
     },
     {
       "path": "lib/services/local_safety_privacy_service.dart",
@@ -796,7 +808,7 @@
     },
     {
       "path": "lib/widgets/item_details_overlay.dart",
-      "sha256": "c38cc80b16dfc3a135b7223757897554428be197f0f48d645391fbd306564332"
+      "sha256": "8d21cfeea4e049044631f520e87c72bbc280987af80fd7827e1c52e88c94b9da"
     },
     {
       "path": "lib/config/private_pilot_config.dart",
@@ -908,7 +920,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "842e400c5e619c697b5f5e7b025dc709982aa523b6e3299e822cf36f4c60345b"
+      "sha256": "878b8c49caaa951aa74c085a95e36220fcd322a3838d3c9d181b0d76baaac0ec"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
