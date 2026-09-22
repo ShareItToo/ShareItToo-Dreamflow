@@ -156,8 +156,10 @@ enter commands, logs or evidence.
 Promotion preserves the protected pre-state: `DEPLOYMENT_ENVIRONMENT=test`,
 Firebase Auth and phone verification false, Google registration disabled,
 allowlist empty/absent, access gate true, payment memory, and Stripe live mode
-false. Only after the isolated candidate has passed and been cleaned up is the
-observed Green API stopped and sealed. The canonical Green database is then
+false. After the exact target readback, the observed Green API is stopped and
+sealed before foreign-writer checks, the protected backup and the isolated
+rehearsal. The isolated candidate is then run and cleaned up before the
+canonical Green database is
 explicitly migrated from source readback `92` to current schema `95` through
 `095_staging_google_registration_replays.up.sql` and read back before the
 final image is created. If that canonical mutation starts, the sealed old image is never

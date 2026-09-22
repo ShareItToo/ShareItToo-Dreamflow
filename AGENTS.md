@@ -419,6 +419,9 @@ Safety helpers are not considered implemented until the real orchestrated
 runner calls them; focused tests must exercise configured resource names and
 the baseline-versus-post-start branch, including negative drift and cleanup
 failures.
+Mutating container recovery must bind rollback to the immutable preflight
+container Id plus the expected Config and network map; never rename or start
+by container name alone, and treat same-name identity ambiguity as failure.
 For a fresh official PostgreSQL volume, an initial `pg_isready` is not a final
 startup proof: require the official init-complete log marker followed by two
 stable `SELECT 1` successes before any restore operation.

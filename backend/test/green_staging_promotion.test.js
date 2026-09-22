@@ -12,6 +12,7 @@ import {
   assertGreenProtectedEnvironment,
   assertGreenRuntimeConfig,
   assertGreenRuntimeImage,
+  assertGreenImageReadback,
   assertGreenRuntimeReadbacks,
   assertGreenFinalContainerReadback,
   summarizeGreenFinalContainerReadback,
@@ -81,6 +82,35 @@ const sourceMounts = [
   { destination: '/run/secrets/technical-sandbox-key', type: 'bind', source: config.technicalSandboxKeyFile, volume: null, readOnly: true },
   { destination: '/run/secrets/technical-sandbox-webhook', type: 'bind', source: config.technicalSandboxWebhookFile, volume: null, readOnly: true },
 ];
+const finalMounts = sourceMounts.map((mount) => ({
+  Destination: mount.destination,
+  Type: mount.type,
+  ...(mount.type === 'bind' ? { Source: mount.source } : { Name: mount.volume }),
+  RW: !mount.readOnly,
+}));
+const originalApiIdentityRecord = {
+  Id: 'api-original-id',
+  Config: { Image: greenTarget.prePromotionImage, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DATABASE_URL=postgres://shareittoo_green@green-db/shareittoo_green'] },
+  NetworkSettings: { Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
+};
+const stableIdentityValue = (value) => Array.isArray(value)
+  ? value.map((entry) => stableIdentityValue(entry))
+  : value && typeof value === 'object'
+    ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableIdentityValue(value[key])]))
+    : value;
+const originalApiIdentity = {
+  id: originalApiIdentityRecord.Id,
+  config: JSON.stringify(stableIdentityValue(originalApiIdentityRecord.Config)),
+  networks: JSON.stringify(stableIdentityValue(originalApiIdentityRecord.NetworkSettings.Networks)),
+};
+const restoredApiIdentityRecord = { ...originalApiIdentityRecord, Name: `/${greenTarget.apiContainer}`, State: { Running: true } };
+function restoreFixture(options, running = true) {
+  if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify({ ...originalApiIdentityRecord, Name: `/${greenTarget.sealedApiContainer}` }) };
+  if (options.phase === 'failure_restore_current_api_identity_readback') return { code: 'not_found', stdout: '' };
+  if (options.phase === 'failure_restore_current_api_absence_readback') return { stdout: '' };
+  if (options.phase === 'failure_restore_current_api_identity_after_rename' || options.phase === 'failure_restore_green_api_identity_verify') return { stdout: JSON.stringify({ ...restoredApiIdentityRecord, State: { Running: running } }) };
+  return null;
+}
 
 test('Green target accepts only the exact verified resource identities', () => {
   assert.deepEqual(assertGreenTargetManifest(targetManifest), targetManifest);
@@ -147,6 +177,13 @@ test('runtime readback binds version and capability safety surface', () => {
   assert.equal(assertGreenRuntimeReadbacks({ version: { commit: runtimeCommit, environment: 'test' }, health: payload, ready: payload, runtimeCommit }), true);
   assert.throws(() => assertGreenRuntimeReadbacks({ version: { commit: '0'.repeat(40), environment: 'test' }, health: payload, ready: payload, runtimeCommit }));
   assert.throws(() => assertGreenRuntimeReadbacks({ version: { commit: runtimeCommit, environment: 'test' }, health: { ...payload, checks: { ...payload.checks, technicalSandbox: { ...payload.checks.technicalSandbox, amountMinor: 200 } } }, ready: payload, runtimeCommit }));
+});
+
+test('production-shaped image inspect readback may omit Config.Image but must bind digest and revision', () => {
+  const runtime = { image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`, digest: `sha256:${'d'.repeat(64)}`, runtimeCommit };
+  const readback = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`${runtime.image}@${runtime.digest}`] };
+  assert.equal(assertGreenImageReadback(readback, runtime), true);
+  assert.throws(() => assertGreenImageReadback({ ...readback, RepoDigests: [`${runtime.image}@sha256:${'e'.repeat(64)}`] }, runtime), /green_image_readback_mismatch/u);
 });
 
 test('inventory rejects wrong schema, host ports and non-Green labels', () => {
@@ -219,6 +256,19 @@ test('promotion plan keeps backup, isolated 92-to-95 rehearsal, acceptance and f
     /shareittoo-staging-postgres|shareittoo_staging_backend|shareittoo_staging_postgres_data/iu.test(arg)
       || containsForbiddenGreenTargetIdentifier(arg)
   ))), false);
+});
+
+test('isolated resource names and labels carry a fresh per-execution ownership nonce', () => {
+  const first = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'a'.repeat(32) });
+  const second = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'b'.repeat(32) });
+  assert.match(first.isolated.candidate, new RegExp(first.isolated.ownershipNonce, 'u'));
+  assert.match(first.isolated.rehearsalId, new RegExp(first.isolated.ownershipNonce, 'u'));
+  assert.notEqual(first.isolated.ownershipNonce, second.isolated.ownershipNonce);
+  assert.throws(() => buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'not-a-nonce' }), /green_ownership_nonce_invalid/u);
+  const commands = buildGreenPromotionCommands({ plan: first, configFile: config.envFile, config });
+  const candidate = commands.find((entry) => entry.phase === 'candidate_acceptance_create');
+  assert.equal(candidate.args[candidate.args.indexOf('--name') + 1], first.isolated.candidate);
+  assert.ok(candidate.args.includes(`com.shareittoo.green.rehearsal_id=${first.isolated.rehearsalId}`));
 });
 
 test('every promotion command has an executable command and argv, including target inventory', () => {
@@ -323,7 +373,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   const imageReadback = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`${plan.runtime.image}@${plan.runtime.digest}`] };
   const payload = { checks: { technicalSandbox: { available: true, amountMinor: 100, currency: 'EUR' }, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
   const prePromotionRecord = (image) => ({
-    Name: `/${greenTarget.apiContainer}`, State: { Running: true },
+    Id: originalApiIdentityRecord.Id, Name: `/${greenTarget.apiContainer}`, State: { Running: true },
     NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
     Config: { Image: image, User: 'shareittoo', Labels: {}, Env: [`DATABASE_URL=${envValues.DATABASE_URL}`] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: sourceMounts.map((mount) => ({ Destination: mount.destination, Type: mount.type, Source: mount.source, Name: mount.volume, RW: !mount.readOnly })),
@@ -353,6 +403,15 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       if (phase === 'isolated_migration_ledger_readback') return { stdout: isolatedLedger };
       if (phase === 'isolated_finding_fingerprint_readback') return { stdout: emptyFindingFingerprint };
       if (phase === 'candidate_finding_fingerprint_readback') return { stdout: candidateFinding };
+      if (phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify({ ...prePromotionRecord(image), Name: `/${greenTarget.sealedApiContainer}` }) };
+      if (phase === 'failure_restore_current_api_identity_readback') return { code: 'not_found', stdout: '' };
+      if (phase === 'failure_restore_current_api_absence_readback') return { stdout: '' };
+      if (phase === 'failure_restore_current_api_identity_after_rename' || phase === 'failure_restore_green_api_identity_verify') return { stdout: JSON.stringify(prePromotionRecord(image)) };
+      if (phase === 'failure_candidate_identity_readback') return { stdout: JSON.stringify({ Name: `/${plan.isolated.candidate}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } }) };
+      if (phase === 'failure_isolated_database_identity_readback') return { stdout: JSON.stringify({ Name: `/${plan.isolated.database}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } }) };
+      if (phase === 'failure_isolated_volume_identity_readback') return { stdout: JSON.stringify({ Name: plan.isolated.volume, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
+      if (phase === 'failure_isolated_uploads_volume_identity_readback') return { stdout: JSON.stringify({ Name: plan.isolated.uploadsVolume, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
+      if (phase === 'failure_isolated_network_identity_readback') return { stdout: JSON.stringify({ Name: plan.isolated.network, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
       if (phase === 'candidate_runtime_flags_readback') return { stdout: JSON.stringify({ DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', googleRegistrationAllowlistEmpty: true }) };
       if (phase === 'candidate_health_and_feature_probes' || phase === 'candidate_ready_probe') return { stdout: JSON.stringify(payload) };
       if (phase === 'candidate_version_probe') return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'test' }) };
@@ -527,17 +586,18 @@ test('final readback is authoritative for no-port Green routing, mounts, image a
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const record = {
     Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
-    Config: { Image: plan.runtime.image, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
-    HostConfig: { GroupAdd: ['65532'] }, Mounts: [
-      { Destination: '/data/uploads', Name: greenTarget.uploadsVolume, RW: true },
-      ...['/run/secrets/firebase-service-account.json', '/run/secrets/mfa-encryption-key', '/run/secrets/technical-sandbox-key', '/run/secrets/technical-sandbox-webhook'].map((Destination) => ({ Destination, RW: false })),
-    ],
+    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
+    HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
   assert.equal(assertGreenFinalContainerReadback({ record, plan }), true);
   assert.equal(summarizeGreenFinalContainerReadback(record, plan).hostPorts, 0);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Config: { ...record.Config, User: 'nobody' } }, plan }), /green_final_inventory_mismatch/u);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Config: { ...record.Config, Image: plan.runtime.image } }, plan }), /green_final_inventory_mismatch/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount, index) => index === 1 ? { Destination: mount.Destination, RW: undefined } : mount) }, plan }), /green_mount_rw_readback_invalid/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, NetworkSettings: { ...record.NetworkSettings, Ports: { '8080/tcp': [{ HostPort: '18082' }] } } }, plan }), /green_final_inventory_mismatch/u);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: [...record.Mounts, { Type: 'bind', Source: '/wrong/extra', Destination: '/extra', RW: false }] }, plan }), /green_final_(?:inventory_mismatch|mount_inventory_mismatch)/u);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Source: '/wrong/source' } : mount) }, plan }), /green_final_mount_inventory_mismatch/u);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Type: 'volume', Name: 'foreign-secret-volume', Source: undefined } : mount) }, plan }), /green_final_mount_inventory_mismatch/u);
 });
 
 test('emergency cleanup is bounded and never restores sealed Green after schema mutation', async () => {
@@ -550,14 +610,133 @@ test('emergency cleanup is bounded and never restores sealed Green after schema 
   assert.equal(calls.some((call) => call.args.includes('start') && call.args.includes(greenTarget.apiContainer)), false);
 });
 
+test('emergency cleanup with no completed creation phases issues zero deletion commands', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const calls = [];
+  const fake = async (command, args, options) => { calls.push({ command, args, options }); return { stdout: '' }; };
+  const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: [] });
+  assert.equal(result.clean, true);
+  assert.equal(calls.some((call) => call.args.includes('rm')), false);
+  assert.equal(calls.some((call) => call.args.includes('volume') || call.args.includes('network')), false);
+});
+
+test('emergency cleanup rejects same-name foreign resources without deleting them', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const calls = [];
+  const foreign = { Config: { Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': 'different-run', 'com.shareittoo.sit.green': 'true' } }, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': 'different-run' } };
+  const fake = async (command, args, options) => {
+    calls.push({ command, args, options });
+    if (options.phase.endsWith('identity_readback')) return { stdout: JSON.stringify({ Name: `/${args.at(-1)}`, ...foreign }) };
+    if (options.phase.endsWith('_verify')) return { stdout: 'foreign-resource\n' };
+    return { stdout: '' };
+  };
+  const result = await runGreenEmergencyCleanup({
+    plan,
+    command: fake,
+    completed: ['candidate_acceptance_create', 'isolated_postgres_create', 'isolated_volume_create', 'isolated_uploads_volume_create', 'isolated_network_create'],
+  });
+  assert.equal(result.clean, false);
+  assert.equal(calls.some((call) => call.args.includes('rm')), false);
+});
+
+test('emergency cleanup never deletes a prior same-name resource when create response is unknown', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const calls = [];
+  const fake = async (command, args, options) => {
+    calls.push({ command, args, options });
+    if (options.phase === 'failure_isolated_network_identity_readback') return { stdout: JSON.stringify({ Name: plan.isolated.network, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
+    if (options.phase === 'failure_isolated_network_verify') return { stdout: `${plan.isolated.network}\n` };
+    return { stdout: '' };
+  };
+  const result = await runGreenEmergencyCleanup({ plan, command: fake, phaseStarted: 'isolated_network_create' });
+  assert.equal(result.clean, false);
+  assert.equal(calls.some((call) => call.options.phase === 'failure_isolated_network_remove'), false);
+});
+
+test('emergency cleanup removes only an owned resource from a partial creation state', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const calls = [];
+  const fake = async (command, args, options) => {
+    calls.push({ command, args, options });
+    if (options.phase === 'failure_isolated_volume_identity_readback') return { stdout: JSON.stringify({ Name: plan.isolated.volume, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
+    const restore = restoreFixture(options);
+    if (restore) return restore;
+    return { stdout: '' };
+  };
+  const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['isolated_volume_create'], originalApiIdentity });
+  assert.equal(result.clean, true);
+  assert.equal(calls.some((call) => call.options.phase === 'failure_isolated_volume_remove'), true);
+  assert.equal(calls.some((call) => call.options.phase === 'failure_isolated_database_remove' || call.options.phase === 'failure_isolated_network_remove' || call.options.phase === 'failure_candidate_remove'), false);
+});
+
 test('pre-schema failure restores and verifies the sealed API', async () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const calls = [];
-  const fake = async (command, args, options) => { calls.push({ command, args, options }); return { stdout: options.phase === 'failure_restore_green_api_verify' ? 'true\n' : '' }; };
-  const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['quiesce_green_api', 'seal_green_api'], phaseStarted: 'seal_green_api', schemaMutationStarted: false });
+  const fake = async (command, args, options) => { calls.push({ command, args, options }); return restoreFixture(options) ?? { stdout: '' }; };
+  const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['quiesce_green_api', 'seal_green_api'], phaseStarted: 'seal_green_api', schemaMutationStarted: false, originalApiIdentity });
   assert.equal(result.clean, true);
   assert.equal(result.restored, true);
   assert.equal(calls.some((call) => call.args.includes('start') && call.args.includes(greenTarget.apiContainer)), true);
+});
+
+test('quiesce response loss with failed restore is not reported clean', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const fake = async (command, args, options) => restoreFixture(options, false) ?? { stdout: '' };
+  const result = await runGreenEmergencyCleanup({ plan, command: fake, phaseStarted: 'quiesce_green_api', schemaMutationStarted: false, originalApiIdentity });
+  assert.equal(result.restored, false);
+  assert.equal(result.clean, false);
+  assert.equal(result.restoreError, 'failure_restore_green_api_not_running_or_identity_mismatch');
+});
+
+test('restore refuses a same-name rebound container after rename', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const calls = [];
+  const rebound = { ...restoredApiIdentityRecord, Id: 'foreign-rebound-id' };
+  const fake = async (command, args, options) => {
+    calls.push({ command, args, options });
+    if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify({ ...originalApiIdentityRecord, Name: `/${greenTarget.sealedApiContainer}` }) };
+    if (options.phase === 'failure_restore_current_api_identity_readback') return { code: 'not_found', stdout: '' };
+    if (options.phase === 'failure_restore_current_api_absence_readback') return { stdout: '' };
+    if (options.phase === 'failure_restore_current_api_identity_after_rename') return { stdout: JSON.stringify(rebound) };
+    return { stdout: '' };
+  };
+  const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['quiesce_green_api'], phaseStarted: 'seal_green_api', originalApiIdentity });
+  assert.equal(result.clean, false);
+  assert.equal(calls.some((call) => call.options.phase === 'failure_restore_green_api'), false);
+});
+
+test('restore refuses a foreign sealed-name collision even when current name is exact', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const foreignSealed = { ...originalApiIdentityRecord, Id: 'foreign-sealed-id', Name: `/${greenTarget.sealedApiContainer}` };
+  const calls = [];
+  const fake = async (command, args, options) => {
+    calls.push({ command, args, options });
+    if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify(foreignSealed) };
+    if (options.phase === 'failure_restore_current_api_identity_readback') return { stdout: JSON.stringify({ ...restoredApiIdentityRecord, State: { Running: false } }) };
+    return { stdout: '' };
+  };
+  const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['quiesce_green_api'], phaseStarted: 'seal_green_api', originalApiIdentity });
+  assert.equal(result.clean, false);
+  assert.equal(calls.some((call) => call.options.phase === 'failure_restore_green_api'), false);
+});
+
+test('restore reconciles a lost rename response before starting the exact original', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const calls = [];
+  const fake = async (command, args, options) => {
+    calls.push({ command, args, options });
+    if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify({ ...originalApiIdentityRecord, Name: `/${greenTarget.sealedApiContainer}` }) };
+    if (options.phase === 'failure_restore_current_api_identity_readback') return { code: 'not_found', stdout: '' };
+    if (options.phase === 'failure_restore_current_api_absence_readback') return { stdout: '' };
+    if (options.phase === 'failure_restore_sealed_api') return { code: 'response_lost', stdout: '' };
+    if (options.phase === 'failure_restore_current_api_identity_after_rename') return { stdout: JSON.stringify(restoredApiIdentityRecord) };
+    if (options.phase === 'failure_restore_sealed_api_identity_after_rename') return { code: 'not_found', stdout: '' };
+    if (options.phase === 'failure_restore_green_api_identity_verify') return { stdout: JSON.stringify(restoredApiIdentityRecord) };
+    return { stdout: '' };
+  };
+  const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['quiesce_green_api'], phaseStarted: 'seal_green_api', originalApiIdentity });
+  assert.equal(result.clean, true);
+  assert.equal(calls.some((call) => call.options.phase === 'failure_restore_green_api'), true);
 });
 
 test('post-schema forward recovery creates only the successor and verifies its public contract', async () => {
@@ -566,8 +745,8 @@ test('post-schema forward recovery creates only the successor and verifies its p
   const payload = { checks: { technicalSandbox: { available: true, amountMinor: 100, currency: 'EUR' }, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
   const record = {
     Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
-    Config: { Image: plan.runtime.image, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
-    HostConfig: { GroupAdd: ['65532'] }, Mounts: [{ Destination: '/data/uploads', Name: greenTarget.uploadsVolume, RW: true }, ...['/run/secrets/firebase-service-account.json', '/run/secrets/mfa-encryption-key', '/run/secrets/technical-sandbox-key', '/run/secrets/technical-sandbox-webhook'].map((Destination) => ({ Destination, RW: false }))],
+    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
+    HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
   const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@sha256:${'e'.repeat(64)}`] };
   const calls = [];
@@ -594,8 +773,8 @@ test('forward recovery fails closed before candidate continuation on migration r
   const payload = { checks: { technicalSandbox: { available: true, amountMinor: 100, currency: 'EUR' }, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
   const record = {
     Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
-    Config: { Image: plan.runtime.image, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
-    HostConfig: { GroupAdd: ['65532'] }, Mounts: [{ Destination: '/data/uploads', Name: greenTarget.uploadsVolume, RW: true }, ...['/run/secrets/firebase-service-account.json', '/run/secrets/mfa-encryption-key', '/run/secrets/technical-sandbox-key', '/run/secrets/technical-sandbox-webhook'].map((Destination) => ({ Destination, RW: false }))],
+    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
+    HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
   const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@sha256:${'e'.repeat(64)}`] };
   for (const invalid of [
