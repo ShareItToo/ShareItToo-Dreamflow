@@ -1,3 +1,5 @@
+import 'package:lendify/models/booking_time_snapshot.dart';
+
 class RentalRequest {
   final String id;
   final String itemId;
@@ -5,6 +7,7 @@ class RentalRequest {
   final String renterId; // user who requests to rent
   final DateTime start;
   final DateTime end;
+  final BookingTimeSnapshot? timeSnapshot;
   final String startDate;
   final String endDate;
   final String
@@ -86,6 +89,7 @@ class RentalRequest {
     required this.renterId,
     required this.start,
     required this.end,
+    this.timeSnapshot,
     String? startDate,
     String? endDate,
     this.status = 'pending',
@@ -156,6 +160,7 @@ class RentalRequest {
   RentalRequest copyWith({
     DateTime? start,
     DateTime? end,
+    BookingTimeSnapshot? timeSnapshot,
     String? startDate,
     String? endDate,
     String? status,
@@ -225,6 +230,7 @@ class RentalRequest {
         renterId: renterId,
         start: start ?? this.start,
         end: end ?? this.end,
+        timeSnapshot: timeSnapshot ?? this.timeSnapshot,
         startDate: startDate ?? (start == null ? this.startDate : null),
         endDate: endDate ?? (end == null ? this.endDate : null),
         status: status ?? this.status,
@@ -316,6 +322,9 @@ class RentalRequest {
       renterId: json['renterId'] as String,
       start: DateTime.parse(json['start'] as String),
       end: DateTime.parse(json['end'] as String),
+      timeSnapshot: json['timeSnapshot'] == null
+          ? null
+          : BookingTimeSnapshot.fromJson(json['timeSnapshot']),
       startDate: json['startDate'] as String?,
       endDate: json['endDate'] as String?,
       status: (json['status'] as String?) ?? 'pending',
@@ -440,6 +449,7 @@ class RentalRequest {
         'renterId': renterId,
         'start': start.toIso8601String(),
         'end': end.toIso8601String(),
+        'timeSnapshot': timeSnapshot?.toJson(),
         'startDate': startDate,
         'endDate': endDate,
         'status': status,

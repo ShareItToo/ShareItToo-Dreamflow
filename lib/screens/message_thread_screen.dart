@@ -97,6 +97,9 @@ bool canStartPrimaryBookingAction({
   bool handoverActive = false,
   bool returnActive = false,
   bool needsReview = false,
+  bool hasBoundTimeSnapshot = false,
+  bool handoverTimeOverridePending = false,
+  bool returnTimeOverridePending = false,
 }) {
   switch (chatState) {
     case BookingChatState.confirmed:
@@ -106,6 +109,8 @@ bool canStartPrimaryBookingAction({
         handoverTimeConfirmed: handoverTimeConfirmed,
         handoverActive: handoverActive,
         needsReview: needsReview,
+        hasBoundTimeSnapshot: hasBoundTimeSnapshot,
+        timeOverridePending: handoverTimeOverridePending,
       );
     case BookingChatState.running:
     case BookingChatState.returnPlanned:
@@ -114,6 +119,8 @@ bool canStartPrimaryBookingAction({
         viewerIsOwner: viewerIsOwner,
         returnTimeConfirmed: returnTimeConfirmed,
         returnActive: returnActive,
+        hasBoundTimeSnapshot: hasBoundTimeSnapshot,
+        timeOverridePending: returnTimeOverridePending,
       );
     case BookingChatState.requestOpen:
     case BookingChatState.completed:
@@ -1612,6 +1619,14 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     }
   }
 
+  bool _pendingFlowTimeOverride({required bool isReturn}) {
+    final prefix = isReturn ? 'return' : 'handover';
+    final proposed =
+        (_handoverReturnState['${prefix}TimeIso'] as String?)?.trim() ?? '';
+    return proposed.isNotEmpty &&
+        _handoverReturnState['${prefix}TimeConfirmed'] != true;
+  }
+
   bool _shouldShowActions(_ChatState st) {
     switch (st) {
       case _ChatState.confirmed:
@@ -1622,6 +1637,10 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
               _handoverReturnState['handoverTimeConfirmed'] == true,
           handoverActive: _handoverReturnState['handoverActive'] == true,
           needsReview: _request?.needsReview ?? false,
+          hasBoundTimeSnapshot: _request?.timeSnapshot != null,
+          handoverTimeOverridePending: _pendingFlowTimeOverride(
+            isReturn: false,
+          ),
         );
       case _ChatState.running:
         return canStartPrimaryBookingAction(
@@ -1631,6 +1650,10 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
               _handoverReturnState['returnTimeConfirmed'] == true,
           returnActive: _handoverReturnState['returnActive'] == true,
           needsReview: _request?.needsReview ?? false,
+          hasBoundTimeSnapshot: _request?.timeSnapshot != null,
+          returnTimeOverridePending: _pendingFlowTimeOverride(
+            isReturn: true,
+          ),
         );
       case _ChatState.returnPlanned:
         return canStartPrimaryBookingAction(
@@ -1640,6 +1663,10 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
               _handoverReturnState['returnTimeConfirmed'] == true,
           returnActive: _handoverReturnState['returnActive'] == true,
           needsReview: _request?.needsReview ?? false,
+          hasBoundTimeSnapshot: _request?.timeSnapshot != null,
+          returnTimeOverridePending: _pendingFlowTimeOverride(
+            isReturn: true,
+          ),
         );
       case _ChatState.requestOpen: // Chat blockiert
       case _ChatState.completed: // Chat blockiert
@@ -2263,7 +2290,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     final confirmedHandover =
         _handoverReturnState['handoverTimeConfirmed'] == true
             ? DateTime.tryParse(handoverIso)?.toLocal()
-            : null;
+            : _request?.timeSnapshot?.handoverAt;
     final revealAt = (confirmedHandover ?? r.start).subtract(
       const Duration(hours: 6),
     );
@@ -2278,7 +2305,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     final confirmedHandover =
         _handoverReturnState['handoverTimeConfirmed'] == true
             ? DateTime.tryParse(handoverIso)?.toLocal()
-            : null;
+            : _request?.timeSnapshot?.handoverAt;
     if (confirmedHandover == null) {
       return 'Hinweis zur Adressfreigabe: Die genaue Adresse wird automatisch etwa 6 h vor der bestätigten Übergabe angezeigt.';
     }
@@ -2811,15 +2838,24 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
                       messages,
                       isHandover: false,
                     ),
-                    handoverConfirmed:
-                        _handoverReturnState['handoverTimeConfirmed'] == true,
-                    returnConfirmed:
-                        _handoverReturnState['returnTimeConfirmed'] == true,
+                    handoverConfirmed: _request?.timeSnapshot != null
+                        ? !_pendingFlowTimeOverride(isReturn: false)
+                        : _handoverReturnState['handoverTimeConfirmed'] == true,
+                    returnConfirmed: _request?.timeSnapshot != null
+                        ? !_pendingFlowTimeOverride(isReturn: true)
+                        : _handoverReturnState['returnTimeConfirmed'] == true,
+                    boundTimeSnapshot: _request?.timeSnapshot != null,
                     confirmedHandoverTime:
                         _handoverReturnState['handoverTimeConfirmed'] == true
-                            ? (_request?.start ??
+                            ? (DateTime.tryParse(
+                                  (_handoverReturnState['handoverTimeIso']
+                                          as String?) ??
+                                      '',
+                                ) ??
+                                _request?.timeSnapshot?.handoverAt ??
+                                _request?.start ??
                                 DateTime.now().add(const Duration(days: 2)))
-                            : null,
+                            : (_request?.timeSnapshot?.handoverAt),
                     counterpartyName: _displayName(),
                   ),
               ],
@@ -6253,6 +6289,7 @@ class _TransactionComposer extends StatefulWidget {
   final String? returnTimeRequested;
   final bool handoverConfirmed;
   final bool returnConfirmed;
+  final bool boundTimeSnapshot;
   final DateTime? confirmedHandoverTime;
   // Gegenparteiname für Subline
   final String? counterpartyName;
@@ -6283,6 +6320,7 @@ class _TransactionComposer extends StatefulWidget {
     this.returnTimeRequested,
     this.handoverConfirmed = false,
     this.returnConfirmed = false,
+    this.boundTimeSnapshot = false,
     this.confirmedHandoverTime,
     this.counterpartyName,
   });
@@ -6350,7 +6388,8 @@ class _TransactionComposerState extends State<_TransactionComposer> {
         final showReturnTimeButton = !isComposing &&
             (widget.chatState == _ChatState.confirmed ||
                 widget.chatState == _ChatState.running ||
-                widget.chatState == _ChatState.returnPlanned);
+                widget.chatState == _ChatState.returnPlanned) &&
+            !(widget.boundTimeSnapshot && widget.returnConfirmed);
         final showTimeButtons = showHandoverTimeButton || showReturnTimeButton;
         final showActions = !isComposing && widget.showActions;
 

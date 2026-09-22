@@ -10160,6 +10160,7 @@ class DataService {
       renterId: req.renterId,
       start: req.start,
       end: req.end,
+      timeSnapshot: req.timeSnapshot,
       status: req.status,
       message: req.message,
       expressRequested: req.expressRequested,
@@ -13335,6 +13336,11 @@ class DataService {
         handoverTimeConfirmed: existing['handoverTimeConfirmed'] == true,
         handoverActive: existing['handoverActive'] == true,
         needsReview: request.needsReview,
+        hasBoundTimeSnapshot: request.timeSnapshot != null,
+        timeOverridePending:
+            (existing['handoverTimeIso'] as String?)?.trim().isNotEmpty ==
+                    true &&
+                existing['handoverTimeConfirmed'] != true,
       )) {
         return false;
       }
@@ -13419,6 +13425,10 @@ class DataService {
         viewerIsOwner: false,
         returnTimeConfirmed: existing['returnTimeConfirmed'] == true,
         returnActive: existing['returnActive'] == true,
+        hasBoundTimeSnapshot: request.timeSnapshot != null,
+        timeOverridePending:
+            (existing['returnTimeIso'] as String?)?.trim().isNotEmpty == true &&
+                existing['returnTimeConfirmed'] != true,
       )) {
         return false;
       }

@@ -554,7 +554,7 @@ class _SelectRentalDurationScreenState
                           ),
                           const SizedBox(height: 8),
                           Text(
-                              'Die genaue Übergabe- und Rückgabezeit stimmst du nach Annahme im Chat ab.',
+                              'Die genaue Abhol- und Rückgabezeit wählst du im nächsten Checkout-Schritt. Änderungen danach laufen beidseitig über „Zeit ändern“.',
                               style: TextStyle(color: sub, fontSize: 12)),
                           if (_overlapsBlocked) ...[
                             const SizedBox(height: 8),

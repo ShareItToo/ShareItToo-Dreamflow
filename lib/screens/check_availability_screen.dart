@@ -78,7 +78,9 @@ class _CheckAvailabilityScreenState extends State<CheckAvailabilityScreen> {
   }
 
   void _onDayTap(DateTime day) {
-    if (day.isBefore(_firstDate) || day.isAfter(_lastDate) || _isBookedDay(day)) return;
+    if (day.isBefore(_firstDate) || day.isAfter(_lastDate) || _isBookedDay(day)) {
+      return;
+    }
     setState(() {
       if (_start == null || (_start != null && _end != null)) {
         _start = _strip(day);
@@ -361,7 +363,7 @@ class _CheckAvailabilityScreenState extends State<CheckAvailabilityScreen> {
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     child: Text(
-                      'Nach Annahme deiner Anfrage vereinbarst du im Chat die Abhol- und Rückgabezeit mit dem Vermieter',
+                      'Vor der Anfrage wählst du im Checkout die exakte Abhol- und Rückgabezeit. Änderungen danach laufen beidseitig über „Zeit ändern“.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white70, fontSize: 12),
                     ),

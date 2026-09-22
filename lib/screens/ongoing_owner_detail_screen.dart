@@ -437,6 +437,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
                     as String?) ??
                 '')
             .trim();
+    if (req.timeSnapshot != null && requested.isEmpty) return true;
     if (requested.isNotEmpty && !confirmed) {
       if (mounted) {
         AppPopup.toast(

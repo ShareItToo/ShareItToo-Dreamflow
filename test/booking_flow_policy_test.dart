@@ -65,4 +65,41 @@ void main() {
       isFalse,
     );
   });
+
+  test('bound snapshot skips duplicate confirmation but blocks pending changes',
+      () {
+    expect(
+      canStartHandover(
+        requestStatus: 'accepted',
+        viewerIsOwner: true,
+        handoverTimeConfirmed: false,
+        handoverActive: false,
+        needsReview: false,
+        hasBoundTimeSnapshot: true,
+      ),
+      isTrue,
+    );
+    expect(
+      canStartHandover(
+        requestStatus: 'accepted',
+        viewerIsOwner: true,
+        handoverTimeConfirmed: false,
+        handoverActive: false,
+        needsReview: false,
+        hasBoundTimeSnapshot: true,
+        timeOverridePending: true,
+      ),
+      isFalse,
+    );
+    expect(
+      canStartReturn(
+        requestStatus: 'running',
+        viewerIsOwner: false,
+        returnTimeConfirmed: false,
+        returnActive: false,
+        hasBoundTimeSnapshot: true,
+      ),
+      isTrue,
+    );
+  });
 }

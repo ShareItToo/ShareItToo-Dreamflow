@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:lendify/config/private_pilot_config.dart';
+import 'package:lendify/models/booking_time_snapshot.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/screens/v52_legal_document_screen.dart';
@@ -43,6 +44,10 @@ class _PrivatePilotCheckoutScreenState
   Timer? _quoteExpiryTimer;
   late PrivatePilotQuote _displayQuote;
   String _ownerName = 'der private Vermieter';
+  DateTime? _handoverWallTime;
+  DateTime? _returnWallTime;
+  BookingTimeSnapshot? _timeSnapshot;
+  String? _timeSelectionError;
 
   bool get _usesRemoteBackend =>
       BackendConfig.enabled && !QaRuntimeService.isEnabled;
@@ -59,9 +64,6 @@ class _PrivatePilotCheckoutScreenState
     _paymentMethodAvailable =
         !_usesRemoteBackend && PrivatePilotConfig.bindingCheckoutEnabled;
     unawaited(_loadOwnerName());
-    if (_usesRemoteBackend && PrivatePilotConfig.bindingCheckoutEnabled) {
-      unawaited(_loadFreshQuote());
-    }
   }
 
   @override
@@ -87,7 +89,7 @@ class _PrivatePilotCheckoutScreenState
   }
 
   Future<void> _loadFreshQuote() async {
-    if (_loadingQuote) return;
+    if (_loadingQuote || _timeSnapshot == null) return;
     _quoteExpiryTimer?.cancel();
     setState(() {
       _loadingQuote = true;
@@ -103,10 +105,15 @@ class _PrivatePilotCheckoutScreenState
         'itemId': widget.item.id,
         'startDate': _dateKey(widget.range.start),
         'endDate': _dateKey(widget.range.end),
+        'timeSnapshot': _timeSnapshot!.toJson(),
         'ownerDeliversAtDropoffChosen': false,
         'ownerPicksUpAtReturnChosen': false,
         'expressRequested': false,
       });
+      requireMatchingBookingTimeSnapshot(
+        expected: _timeSnapshot!,
+        actual: envelope['timeSnapshot'],
+      );
       final quoteJson = envelope['quote'];
       final expiresAt = DateTime.tryParse(
         envelope['expiresAt']?.toString() ?? '',
@@ -251,8 +258,9 @@ class _PrivatePilotCheckoutScreenState
       _privateAndTermsConfirmed && _earlyPerformanceAndWithdrawalConfirmed;
 
   bool get _canSubmit => _stageANonBindingPilot
-      ? _simulationAcknowledged && !_submitting
+      ? _timeSnapshot != null && _simulationAcknowledged && !_submitting
       : PrivatePilotConfig.bindingCheckoutEnabled &&
+          _timeSnapshot != null &&
           _allConfirmed &&
           _freshQuoteAvailable &&
           _paymentMethodAvailable &&
@@ -283,6 +291,7 @@ class _PrivatePilotCheckoutScreenState
         renterId: current.id,
         start: widget.range.start,
         end: widget.range.end,
+        timeSnapshot: _timeSnapshot,
         status: 'pending',
         expressRequested: false,
         bindingExpiresAt: simulationOnly ? null : _bindingDeadline,
@@ -392,6 +401,127 @@ class _PrivatePilotCheckoutScreenState
           'Buchungsanfragen sind vorübergehend nicht verfügbar.',
         _ => 'Der verbindliche Serverpreis konnte nicht geladen werden.',
       };
+
+  Future<void> _chooseTime({required bool isReturn}) async {
+    final current = isReturn ? _returnWallTime : _handoverWallTime;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: current == null
+          ? const TimeOfDay(hour: 10, minute: 0)
+          : TimeOfDay.fromDateTime(current),
+      helpText: isReturn ? 'Rückgabezeit wählen' : 'Abholzeit wählen',
+      cancelText: 'Abbrechen',
+      confirmText: 'Übernehmen',
+    );
+    if (picked == null || !mounted) return;
+    final date = isReturn ? widget.range.end : widget.range.start;
+    // Keep the selected Berlin wall-clock fields timezone-neutral. A local
+    // DateTime would be normalized by the device timezone before DST checks.
+    final wall = DateTime.utc(
+      date.year,
+      date.month,
+      date.day,
+      picked.hour,
+      picked.minute,
+    );
+    setState(() {
+      if (isReturn) {
+        _returnWallTime = wall;
+      } else {
+        _handoverWallTime = wall;
+      }
+      _timeSnapshot = null;
+      _timeSelectionError = null;
+      _checkoutQuote = null;
+      _quoteExpiresAt = null;
+      _paymentMethodAvailable =
+          !_usesRemoteBackend && PrivatePilotConfig.bindingCheckoutEnabled;
+      _privateAndTermsConfirmed = false;
+      _earlyPerformanceAndWithdrawalConfirmed = false;
+    });
+    if (_handoverWallTime == null || _returnWallTime == null) return;
+    try {
+      final snapshot = BookingTimeSnapshot.fromLocal(
+        handover: _handoverWallTime!,
+        returned: _returnWallTime!,
+      );
+      if (!mounted) return;
+      setState(() => _timeSnapshot = snapshot);
+      if (_usesRemoteBackend && PrivatePilotConfig.bindingCheckoutEnabled) {
+        await _loadFreshQuote();
+      }
+    } on FormatException catch (error) {
+      if (!mounted) return;
+      setState(() => _timeSelectionError = error.message);
+    }
+  }
+
+  Widget _timeSummaryCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final snapshot = _timeSnapshot;
+    String selection(DateTime? wall) {
+      if (wall == null) return 'Noch nicht gewählt';
+      String two(int value) => value.toString().padLeft(2, '0');
+      return '${two(wall.day)}.${two(wall.month)}.${wall.year}, '
+          '${two(wall.hour)}:${two(wall.minute)} Uhr';
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Abhol- und Rückgabezeit',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Bitte beide exakten Zeiten wählen. Sie werden mit dem Angebot und dem Vertrag unveränderlich gebunden. Zeitzone: Europe/Berlin.',
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Abholung'),
+              subtitle: Text(
+                snapshot?.displayHandover() ?? selection(_handoverWallTime),
+              ),
+              trailing: OutlinedButton(
+                onPressed:
+                    _submitting ? null : () => _chooseTime(isReturn: false),
+                child: Text(_handoverWallTime == null ? 'Wählen' : 'Ändern'),
+              ),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Rückgabe'),
+              subtitle: Text(
+                snapshot?.displayReturn() ?? selection(_returnWallTime),
+              ),
+              trailing: OutlinedButton(
+                onPressed:
+                    _submitting ? null : () => _chooseTime(isReturn: true),
+                child: Text(_returnWallTime == null ? 'Wählen' : 'Ändern'),
+              ),
+            ),
+            if (_timeSelectionError != null)
+              Text(
+                _timeSelectionError!,
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
+            if (snapshot == null)
+              const Text(
+                'Ohne beide Zeiten bleibt die Anfrage gesperrt; es wird keine Mitternachtszeit ergänzt.',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   ({String title, String message, bool refreshQuote}) _submissionFailure(
     String code,
@@ -505,6 +635,8 @@ class _PrivatePilotCheckoutScreenState
               ),
             ),
           ],
+          _timeSummaryCard(context),
+          const SizedBox(height: 12),
           const SizedBox(height: 18),
           if (_loadingQuote) ...[
             const LinearProgressIndicator(),

@@ -791,6 +791,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   Future<bool> _timeConfirmedForStart({required bool isReturn}) async {
     final requestId = (widget.booking['requestId'] as String?)?.trim() ?? '';
     if (requestId.isEmpty) return true;
+    final request = await DataService.getRentalRequestById(requestId);
     final state = await DataService.getHandoverReturnState(requestId);
     final confirmed =
         state[isReturn ? 'returnTimeConfirmed' : 'handoverTimeConfirmed'] ==
@@ -800,6 +801,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                     as String?) ??
                 '')
             .trim();
+    if (request?.timeSnapshot != null && requested.isEmpty) return true;
     if (requested.isNotEmpty && !confirmed) {
       if (mounted) {
         AppPopup.toast(

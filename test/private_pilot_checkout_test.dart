@@ -2,7 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lendify/models/booking_time_snapshot.dart';
+import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/screens/private_pilot_checkout_screen.dart';
+import 'package:lendify/widgets/private_pilot_owner_acceptance_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/test_builders.dart';
@@ -10,7 +13,7 @@ import 'support/test_builders.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('opening checkout creates nothing and declarations gate submit',
+  testWidgets('opening checkout keeps submit blocked until exact times exist',
       (tester) async {
     final item = buildTestItem(
       id: 'pilot-item',
@@ -82,6 +85,42 @@ void main() {
         'Bestätigen und bezahlen',
       ),
     );
-    expect(enabledSubmit.onPressed, isNotNull);
+    expect(enabledSubmit.onPressed, isNull);
+    await tester.scrollUntilVisible(
+      find.text('Abhol- und Rückgabezeit'),
+      -300,
+      scrollable: scrollable,
+    );
+    expect(find.textContaining('Ohne beide Zeiten bleibt die Anfrage gesperrt'),
+        findsOneWidget);
+  });
+
+  testWidgets('owner acceptance detail shows the immutable local times',
+      (tester) async {
+    final snapshot = BookingTimeSnapshot.fromLocal(
+      handover: DateTime.utc(2026, 9, 1, 9),
+      returned: DateTime.utc(2026, 9, 2, 17),
+    );
+    final request = RentalRequest(
+      id: 'request-owner-detail',
+      itemId: 'item-owner-detail',
+      ownerId: 'owner',
+      renterId: 'renter',
+      start: DateTime.utc(2026, 9, 1),
+      end: DateTime.utc(2026, 9, 2),
+      timeSnapshot: snapshot,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: buildPrivatePilotOwnerAcceptanceDialog(
+            request: request,
+            dismiss: (_) {},
+          ),
+        ),
+      ),
+    );
+    expect(find.textContaining('01.09.2026, 09:00 Uhr'), findsOneWidget);
+    expect(find.textContaining('02.09.2026, 17:00 Uhr'), findsOneWidget);
   });
 }

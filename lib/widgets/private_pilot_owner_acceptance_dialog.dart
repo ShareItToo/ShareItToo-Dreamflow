@@ -132,6 +132,13 @@ class _OwnerAcceptanceDialogState extends State<_OwnerAcceptanceDialog> {
               Text(
                 'Zeitraum: ${_date(widget.request.start)} bis ${_date(widget.request.end)}',
               ),
+              if (widget.request.timeSnapshot != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Übergabe: ${widget.request.timeSnapshot!.displayHandover()} · Rückgabe: ${widget.request.timeSnapshot!.displayReturn()} (Europe/Berlin)',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ],
               const SizedBox(height: 8),
               Text(
                 displayedQuote == null
