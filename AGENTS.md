@@ -405,10 +405,13 @@ writers immediately before and after the protected backup. A successful
 protected rehearsal leaves all quiesced services stopped; cleanup must be
 verified and any cleanup failure overrides PASS. Runtime source and Ops
 orchestration commits are pinned separately and must be recorded at invocation.
-Every disposable rehearsal container, network and volume must be created with
-an exact run-scoped name plus matching disposable labels, and those identities
-must be inspected and attested before the first start; a loopback port or
-container name alone is never sufficient. Before any candidate start, capture
+Every disposable rehearsal container and network must be created with an exact
+run-scoped name plus matching disposable labels, and those identities must be
+inspected and attested before the first start; rehearsal storage must use
+anonymous volumes attached to the captured container and may only be removed
+atomically with that immutable container ID using `--volumes`. No standalone
+rehearsal volume create/rm or name-based volume cleanup is allowed; a loopback
+port or container name alone is never sufficient. Before any candidate start, capture
 the complete sanitized payment-recovery-needs-review and support-next-update-
 overdue finding sets from that same restore using only stable hashed IDs,
 cause/status and coarse time classes. Re-read after candidate migrations/start

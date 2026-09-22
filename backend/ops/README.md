@@ -143,8 +143,11 @@ it to current schema `95` through
 the full source-to-current migration ledger (expected 95-row digest
 `b31bd8054569f851a4fed0798fb0d8b971282256461e764529564cd14d2e802f`) and
 the official PostgreSQL init-complete log marker followed by two stable
-`SELECT 1` readbacks before restore/provisioning. Integrity/functional probes
-must pass there before provisioning the candidate. The exact immutable runtime image is
+`SELECT 1` readbacks before restore/provisioning. The network, Postgres and
+candidate creation responses are captured as immutable IDs; all later
+exec/start/inspect/remove mutations use those IDs, while the database alias
+remains only a DNS value in the isolated `DATABASE_URL`. Integrity/functional
+probes must pass there before provisioning the candidate. The exact immutable runtime image is
 accepted first against that isolated database on loopback `127.0.0.1:18082`
 with memory Identity, on-device Listing AI, payment memory, the existing
 access/provider configuration and read-only MFA/Firebase/technical-sandbox
