@@ -1,28 +1,38 @@
 # Staging-only Google registration lane
 
-This lane is disabled unless `SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=true`.
-It is accepted only when `DEPLOYMENT_ENVIRONMENT` is `staging` or `test`,
-Firebase Auth is enabled, Stripe live mode is false, and the staging access
-gate is valid. The allowlist is runtime-only and must contain no plaintext
-email, Firebase UID, token, or secret.
+This lane is disabled by default. The Green promotion preserves the existing
+pre-state with `DEPLOYMENT_ENVIRONMENT=test`, Firebase Auth and phone
+verification false, Google registration disabled, an empty/absent allowlist,
+the access gate enabled, payment memory, and Stripe live mode false. A later
+activation is separately reviewed; the allowlist is runtime-only and must
+contain no plaintext email, Firebase UID, token, or secret.
 
 ## Activation checklist
 
-1. Apply the reviewed Green forward migration from the manifest-bound source
-   readback schema `87` through current schema `95`, ending at the exact
-   `095_staging_google_registration_replays.up.sql` readback. The promotion
-   runner and activation preflight both reject any other terminal migration.
-2. Outside Git, compute one SHA-256 digest over the exact UTF-8 bytes
+1. Run the Green promotion from the manifest-bound source readback schema
+   `92` through current schema `95`. Require the source ledger digest before
+   rehearsal, the full isolated 95 ledger digest before candidate provisioning,
+   and the exact `095_staging_google_registration_replays.up.sql` readback for
+   isolated and canonical targets. The runner rejects any other readback and
+   leaves Google registration disabled.
+2. Run the existing separate Firebase-auth activation runner for its reviewed
+   `test` to `staging` transition and its `FIREBASE_AUTH_ENABLED=false` to
+   `true` transition. This promotion package does not change that runner.
+3. In the later Google-registration activation step, outside Git, compute one SHA-256 digest over the exact UTF-8 bytes
    `google\n<provider-subject>\n<firebase-uid>\n<lowercase-email>` and set
    `SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST` to
    `<digest>=<staging-user-id>`. The user ID must also be present in
    `SIT_STAGING_ALLOWED_USER_IDS`.
-3. Set `SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=true`, keep
+4. Set `SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=true`, keep
    `FIREBASE_AUTH_ENABLED=true`, `STRIPE_LIVEMODE=false`, and verify the
    runtime configuration readback without printing environment values.
-4. Restart only the reviewed staging API and verify health, version, and the
+5. Restart only the reviewed staging API and verify health, version, and the
    social-auth HTTP contract. Use a fresh, verified Firebase ID token for each
    attempt; the lane rejects expired tokens and durable token replays.
+
+The separate Google-registration enablement runner for step 3 is not present
+in this package and remains an operational blocker; do not infer or synthesize
+its command or account mapping.
 
 An allowlisted identity is linked to an existing account with the exact
 allowlisted user ID, or created with that ID after normal consent checks. A

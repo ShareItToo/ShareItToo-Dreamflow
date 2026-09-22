@@ -120,22 +120,30 @@ mode `0600` and bind exactly `shareittoo-staging-api`,
 `sit-green-network-20260918011528-wp254`,
 `sit-staging-provider-egress` and
 `sit-green-uploads-20260918011528-wp254`, with Green label and manifest-bound
-source readback schema `87`. The current target is schema `95`; the isolated
+source readback schema `92`. The current target is schema `95`; the isolated
 and canonical readbacks must end at the exact
 `095_staging_google_registration_replays.up.sql` migration.
 The database identity is exactly `shareittoo_green` / `shareittoo_green`;
 legacy `shareittoo_staging` is never used by this lane.
-The manifest also binds the observed prior image tag beginning
-`shareittoo-api-wp260b:4d616` into `targetDigest`; the live readback must match
-that exact value.
+The source readback is exactly schema `92` with the manifest-bound ledger
+digest `4199b60d7b3b19ed0cfeb113e121b77c23eeb03440f212a7dbe593c3cbee1db5`.
+The pre-promotion image is exactly
+`ghcr.io/shareittoo/shareittoo-api:ccc72004247d50656ac1064a758eb5f05c795e04`.
+The observed API tuple includes user `shareittoo`, group `65532`, no host
+port, the two approved networks, and exactly five mounts: writable uploads
+plus read-only Firebase, MFA, technical-sandbox key and technical-sandbox
+webhook mounts. The live readback must match the complete tuple.
 Legacy `sit-staging`, production names, lookalike networks and mutable image
 tags are rejected before a command is planned.
 
 The plan takes a fresh protected backup, restores the manifest-bound Green
-source readback `87` into a run-scoped internal target and explicitly migrates
+source readback `92` into a run-scoped internal target and explicitly migrates
 it to current schema `95` through
 `095_staging_google_registration_replays.up.sql`, then proves
-integrity and functional probes there. The exact immutable runtime image is
+the full source-to-current migration ledger (expected 95-row digest
+`b31bd8054569f851a4fed0798fb0d8b971282256461e764529564cd14d2e802f`) and
+integrity/functional probes there before provisioning the candidate. The exact
+immutable runtime image is
 accepted first against that isolated database on loopback `127.0.0.1:18082`
 with memory Identity, on-device Listing AI, payment memory, the existing
 access/provider configuration and read-only MFA/Firebase/technical-sandbox
@@ -144,9 +152,12 @@ provisioned idempotently on the isolated target and, after isolated cleanup,
 again on canonical Green using its protected password file; credentials never
 enter commands, logs or evidence.
 
-Only after the isolated candidate has passed and been cleaned up is the
+Promotion preserves the protected pre-state: `DEPLOYMENT_ENVIRONMENT=test`,
+Firebase Auth and phone verification false, Google registration disabled,
+allowlist empty/absent, access gate true, payment memory, and Stripe live mode
+false. Only after the isolated candidate has passed and been cleaned up is the
 observed Green API stopped and sealed. The canonical Green database is then
-explicitly migrated from source readback `87` to current schema `95` through
+explicitly migrated from source readback `92` to current schema `95` through
 `095_staging_google_registration_replays.up.sql` and read back before the
 final image is created. If that canonical mutation starts, the sealed old image is never
 restarted; recovery is a forward candidate path.
