@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { readStablePrivateFile } from './stable_private_file.mjs';
+import { readFileSync } from 'node:fs';
+import { closeStablePrivateFile, openStablePrivateFile } from './stable_private_file.mjs';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
@@ -59,15 +60,17 @@ function safeEmailHash() {
 
 function readPasswordFile(filePath, { expectedUid = runtimeUid, expectedGid = runtimeGid } = {}) {
   if (typeof filePath !== 'string' || !filePath.startsWith('/')) fail('password_file_path_invalid');
+  let opened;
   try {
-    const password = readStablePrivateFile(filePath, {
+    opened = openStablePrivateFile(filePath, {
       expectedMode: 0o600,
       expectedUid,
       expectedGid,
       minBytes: minimumPasswordLength,
       maxBytes: maximumPasswordLength + 1,
       code: 'password_file_must_be_0600_runtime_owned',
-    }).trim();
+    });
+    const password = readFileSync(opened.descriptor, 'utf8').trim();
     if (password.length < minimumPasswordLength || password.length > maximumPasswordLength
         || /\s/u.test(password) || !/[A-Za-z]/u.test(password) || !/[0-9]/u.test(password)) {
       fail('password_file_content_invalid');
@@ -77,6 +80,8 @@ function readPasswordFile(filePath, { expectedUid = runtimeUid, expectedGid = ru
     if (String(error?.code ?? '').startsWith('password_file_')) throw error;
     if (error?.code === 'ELOOP') fail('password_file_symlink_forbidden');
     fail('password_file_unreadable');
+  } finally {
+    if (opened) closeStablePrivateFile(opened);
   }
 }
 

@@ -2,9 +2,12 @@ import {
   closeSync,
   constants,
   createReadStream,
+  fchmodSync,
+  fchownSync,
   fstatSync,
   openSync,
   readFileSync,
+  writeFileSync,
 } from 'node:fs';
 
 function fail(code) {
@@ -64,6 +67,24 @@ export function createStablePrivateReadStream(filePath, options = {}) {
     // The stream owns the descriptor and closes it on error.
   });
   return stream;
+}
+
+export function writeExclusivePrivateFile(filePath, bytes, {
+  mode = 0o600,
+  uid,
+  gid,
+} = {}) {
+  let descriptor;
+  try {
+    descriptor = openSync(filePath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW | constants.O_CLOEXEC, mode);
+    writeFileSync(descriptor, bytes);
+    if (uid !== undefined || gid !== undefined) {
+      fchownSync(descriptor, uid ?? -1, gid ?? -1);
+    }
+    fchmodSync(descriptor, mode);
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
 }
 
 export function closeStablePrivateFile(opened) {

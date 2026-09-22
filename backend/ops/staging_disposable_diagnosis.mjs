@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 import crypto from 'node:crypto';
-import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { dirname, resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { readStablePrivateFile } from './stable_private_file.mjs';
+import { readStablePrivateFile, writeExclusivePrivateFile } from './stable_private_file.mjs';
 
 const OPS_CHECKOUT = '/docker/shareittoo/staging-builds/8e7283e69c4f052ac4357c9e496ceb5ece801c20';
 const OPS_COMMIT = '8e7283e69c4f052ac4357c9e496ceb5ece801c20';
@@ -155,9 +155,7 @@ try {
   if (imageId !== CANDIDATE_IMAGE || revision !== CANDIDATE_COMMIT) fail('candidate_image_identity_mismatch');
   const temp = await mkdtemp(join(tmpdir(), 'sit-wp249-'));
   mfaPath = `${temp}/mfa-key`;
-  await writeFile(mfaPath, `${crypto.randomBytes(32).toString('base64url')}\n`, { mode: 0o640 });
-  await chmod(mfaPath, 0o640);
-  await execFile('chown', ['65532:65532', mfaPath]);
+  writeExclusivePrivateFile(mfaPath, `${crypto.randomBytes(32).toString('base64url')}\n`, { mode: 0o640, uid: 65532, gid: 65532 });
   const dbPassword = ['disposable', crypto.randomBytes(18).toString('base64url')].join('-');
   const baseEnv = [
     '--group-add', '65532', '-e', 'NODE_ENV=production', '-e', 'DEPLOYMENT_ENVIRONMENT=staging',
@@ -204,8 +202,7 @@ try {
   await mkdir(EVIDENCE_DIR, { recursive: true, mode: 0o700 });
   const path = `${EVIDENCE_DIR}/staging-wp249-diagnosis-${runId}.json`;
   const serialized = Buffer.from(`${JSON.stringify(evidence, null, 2)}\n`);
-  await writeFile(path, serialized, { mode: 0o600, flag: 'wx' });
-  await chmod(path, 0o600);
+  writeExclusivePrivateFile(path, serialized, { mode: 0o600 });
   const hash = crypto.createHash('sha256').update(serialized).digest('hex');
   process.stdout.write(`${JSON.stringify({ evidencePath: path, evidenceBytes: serialized.byteLength, evidenceSha256: hash, ...evidence })}\n`);
 }

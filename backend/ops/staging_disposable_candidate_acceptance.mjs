@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import crypto from 'node:crypto';
-import { chmod, chown, lstat, mkdir, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, realpath, rm, stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -15,7 +15,7 @@ import {
   runCommandWithFileInput,
 } from './staging_forward_migration_rehearsal.mjs';
 import { validateMfaStagingSecret } from './validate_mfa_staging_secret.mjs';
-import { readStablePrivateFile } from './stable_private_file.mjs';
+import { readStablePrivateFile, writeExclusivePrivateFile } from './stable_private_file.mjs';
 
 export const disposableCandidateCommit = 'f0bb868a8a487cbf33ae67a555946fb9c67f4e9f';
 export const disposableCandidateImage = `shareittoo-api-wp244:${disposableCandidateCommit}`;
@@ -66,11 +66,9 @@ async function createEphemeralMfaKey() {
   const root = await mkdtemp(join(tmpdir(), 'sit-disposable-mfa-'));
   const filePath = join(root, 'mfa-key');
   const bytes = crypto.randomBytes(32);
-  await writeFile(filePath, `${bytes.toString('base64url')}\n`, { mode: 0o640 });
-  bytes.fill(0);
-  await chmod(filePath, 0o640);
   const ownerUid = typeof process.getuid === 'function' ? process.getuid() : 0;
-  await chown(filePath, ownerUid, 65532);
+  writeExclusivePrivateFile(filePath, `${bytes.toString('base64url')}\n`, { mode: 0o640, uid: ownerUid, gid: 65532 });
+  bytes.fill(0);
   validateMfaStagingSecret({ filePath, runtimeReadable: true, runtimeGroup: 65532 });
   return Object.freeze({ filePath, root });
 }
@@ -334,8 +332,7 @@ export async function runDisposableCandidateAcceptance({
     if (evidence) evidence.cleanup = cleanup;
     if (evidence && evidencePath) {
       await mkdir(resolve(evidencePath, '..'), { recursive: true, mode: 0o700 });
-      await writeFile(safeEvidencePath, `${JSON.stringify({ ...evidence, cleanup }, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
-      await chmod(safeEvidencePath, 0o600);
+      writeExclusivePrivateFile(safeEvidencePath, `${JSON.stringify({ ...evidence, cleanup }, null, 2)}\n`, { mode: 0o600 });
     }
   }
 }

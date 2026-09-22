@@ -21,3 +21,15 @@ test('backup evidence contracts keep verified input bytes out of diagnosis and S
     assert.doesNotMatch(source, /backup\.input/u, path);
   }
 });
+
+test('disposable runners use descriptor-bound exclusive writes for temporary and evidence files', async () => {
+  for (const path of [
+    'staging_disposable_candidate_acceptance.mjs',
+    'staging_disposable_diagnosis.mjs',
+    'staging_stripe_test_readback.mjs',
+  ]) {
+    const source = await readFile(new URL(`../ops/${path}`, import.meta.url), 'utf8');
+    assert.match(source, /writeExclusivePrivateFile/u, path);
+    assert.doesNotMatch(source, /\b(?:writeFile|chmod|chown)\([^)]*(?:mfaPath|safeEvidencePath|serialized)/u, path);
+  }
+});

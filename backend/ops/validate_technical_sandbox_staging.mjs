@@ -16,22 +16,21 @@ function inspectSecretFile(filePath, name, { expectedUid, expectedGid } = {}) {
   if (typeof filePath !== 'string' || !filePath.startsWith('/')) {
     fail(`${name}_path_invalid`);
   }
-  let descriptor;
+  let opened;
   try {
-    const opened = openStablePrivateFile(filePath, {
+    opened = openStablePrivateFile(filePath, {
       expectedMode: 0o600,
       expectedUid,
       expectedGid,
       code: `${name}_must_be_0600_api_owned_file`,
     });
-    descriptor = opened.descriptor;
     return `${opened.metadata.dev}:${opened.metadata.ino}`;
   } catch (error) {
     if (String(error?.code ?? '').startsWith(`${name}_`)) throw error;
     if (error?.code === 'ELOOP') fail(`${name}_symlink_forbidden`);
     fail(`${name}_unreadable`);
   } finally {
-    if (descriptor !== undefined) closeStablePrivateFile({ descriptor });
+    if (opened) closeStablePrivateFile(opened);
   }
 }
 
