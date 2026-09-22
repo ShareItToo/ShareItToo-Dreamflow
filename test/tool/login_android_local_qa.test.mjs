@@ -41,7 +41,11 @@ function fakeExecFactory(xml, calls) {
   };
 }
 
-function fakeSpawnFactory(calls, outputPayloads, { loginOk = true, logoutStatus = 204 } = {}) {
+function fakeSpawnFactory(calls, outputPayloads, {
+  loginOk = true,
+  logoutStatus = 204,
+  error = false,
+} = {}) {
   return (execPath, args, options) => {
     const child = new EventEmitter();
     child.stdin = new PassThrough();
@@ -54,6 +58,7 @@ function fakeSpawnFactory(calls, outputPayloads, { loginOk = true, logoutStatus 
     };
     calls.push({ execPath, args, options });
     child.stdin.on('data', (chunk) => {
+      if (error) return;
       const request = JSON.parse(String(chunk).trim());
       const response = request.op === 'login'
         ? { type: 'login', ok: loginOk }
@@ -65,6 +70,26 @@ function fakeSpawnFactory(calls, outputPayloads, { loginOk = true, logoutStatus 
     child.stdin.on('finish', () => {
       child.stdout.end();
       child.emit('close', 0, null);
+    });
+    if (error) queueMicrotask(() => child.emit('error', new Error('synthetic spawn failure')));
+    return child;
+  };
+}
+
+function fakeAdbSpawnFactory(calls, stdinPayloads, { error = false } = {}) {
+  return (file, args, options) => {
+    const child = new EventEmitter();
+    child.stdin = new PassThrough();
+    child.killed = false;
+    child.kill = () => {
+      child.killed = true;
+      child.emit('close', null, 'SIGTERM');
+    };
+    calls.push({ file, args, options });
+    child.stdin.on('data', (chunk) => stdinPayloads.push(String(chunk)));
+    child.stdin.on('finish', () => {
+      if (error) child.emit('error', new Error('synthetic adb spawn failure'));
+      child.emit('close', error ? 1 : 0, error ? null : null);
     });
     return child;
   };
@@ -145,6 +170,7 @@ test('helper performs one API sanity login, revokes it, and always removes the U
     readFileImpl: async () => manifest,
     apiSessionImpl: fakeApiSessionFactory(apiSessionCalls),
     execFileImpl: fakeExecFactory(loginXml, execCalls),
+    adbSpawnImpl: fakeAdbSpawnFactory([], []),
     now: () => 123,
   });
   assert.deepEqual(result, {
@@ -160,6 +186,36 @@ test('helper performs one API sanity login, revokes it, and always removes the U
   }]);
   assert.ok(execCalls.some((call) => call.args.includes('rm') && call.args.includes('/sdcard/sit_local_qa_login_123.xml')));
   assert.equal(JSON.stringify(result).includes('accessToken'), false);
+});
+
+test('helper sends UI credential text over ADB stdin, never ADB argv', async () => {
+  const apiSessionCalls = [];
+  const execCalls = [];
+  const adbSpawnCalls = [];
+  const adbStdinPayloads = [];
+  const result = await runLocalQaLogin({
+    device: 'fake-device',
+    manifestPath: '/private/session.json',
+    readFileImpl: async () => manifest,
+    apiSessionImpl: fakeApiSessionFactory(apiSessionCalls),
+    execFileImpl: fakeExecFactory(loginXml, execCalls),
+    adbSpawnImpl: fakeAdbSpawnFactory(adbSpawnCalls, adbStdinPayloads),
+    now: () => 321,
+  });
+  assert.equal(result.status, 'passed');
+  assert.equal(adbSpawnCalls.length, 2);
+  assert.equal(JSON.stringify(adbSpawnCalls).includes('qa@example.invalid'), false);
+  assert.equal(JSON.stringify(adbSpawnCalls).includes(manifest.match(/"password":"([^"]+)"/u)[1]), false);
+  assert.deepEqual(adbSpawnCalls.map(({ file, args }) => [file, args]), [
+    ['adb', ['-s', 'fake-device', 'shell']],
+    ['adb', ['-s', 'fake-device', 'shell']],
+  ]);
+  assert.ok(adbStdinPayloads.some((payload) => payload.includes("'input' 'text' 'qa@example.invalid'")));
+  assert.ok(adbStdinPayloads.some((payload) => payload.includes(
+    `'input' 'text' '${manifest.match(/"password":"([^"]+)"/u)[1]}'`,
+  )));
+  assert.equal(JSON.stringify(execCalls).includes('qa@example.invalid'), false);
+  assert.equal(JSON.stringify(execCalls).includes(manifest.match(/"password":"([^"]+)"/u)[1]), false);
 });
 
 test('helper removes the UI dump and revokes API sanity session when UI parsing fails', async () => {
@@ -243,4 +299,40 @@ test('child API transport tears down after login failure and reports cleanup fai
     transportPath: '/repo/tool/local_qa_api_transport.mjs',
   });
   assert.equal(await failedCleanupSession.cleanup(), false);
+});
+
+test('child API transport handles spawn error without an unhandled event or hang', async () => {
+  const spawnCalls = [];
+  const outputPayloads = [];
+  await assert.rejects(
+    startLocalQaApiSession({
+      email: 'qa@example.invalid',
+      password: childTransportSecret,
+      spawnImpl: fakeSpawnFactory(spawnCalls, outputPayloads, { error: true }),
+      execPath: '/usr/local/bin/node',
+      transportPath: '/repo/tool/local_qa_api_transport.mjs',
+    }),
+    /login sanity failed|transport failed|closed unexpectedly/u,
+  );
+});
+
+test('ADB stdin transport fails closed on child error', async () => {
+  const apiSessionCalls = [];
+  const execCalls = [];
+  const adbSpawnCalls = [];
+  const adbStdinPayloads = [];
+  await assert.rejects(
+    runLocalQaLogin({
+      device: 'fake-device',
+      manifestPath: '/private/session.json',
+      readFileImpl: async () => manifest,
+      apiSessionImpl: fakeApiSessionFactory(apiSessionCalls),
+      execFileImpl: fakeExecFactory(loginXml, execCalls),
+      adbSpawnImpl: fakeAdbSpawnFactory(adbSpawnCalls, adbStdinPayloads, { error: true }),
+      now: () => 654,
+    }),
+    /ADB shell input transport failed/u,
+  );
+  assert.equal(adbSpawnCalls.length, 1);
+  assert.equal(adbStdinPayloads.length, 1);
 });

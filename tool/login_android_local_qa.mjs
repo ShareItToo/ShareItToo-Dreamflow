@@ -97,7 +97,8 @@ async function readTransportMessage(iterator, child, label) {
     );
   });
   try {
-    const next = await Promise.race([iterator.next(), timeout]);
+    const next = await Promise.race([iterator.next(), child.failure, timeout]);
+    if (next?.transportError) throw next.transportError;
     if (next.done) throw new Error(`Local QA API transport ${label} closed unexpectedly.`);
     try {
       return JSON.parse(next.value);
@@ -114,6 +115,38 @@ function localQaTransportEnvironment() {
   return { PATH: process.env.PATH ?? '/usr/bin:/bin' };
 }
 
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", "'\\''")}'`;
+}
+
+async function runAdbShellInput({ device, args, spawnImpl }) {
+  const child = spawnImpl('adb', ['-s', device, 'shell'], {
+    env: localQaTransportEnvironment(),
+    stdio: ['pipe', 'ignore', 'ignore'],
+  });
+  child.failure = new Promise((resolve) => {
+    child.once('error', () => resolve({ transportError: new Error('ADB shell input transport failed.') }));
+  });
+  const result = new Promise((resolve) => {
+    child.once('close', (code, signal) => resolve({ code, signal }));
+  });
+  let timeoutHandle;
+  const timeout = new Promise((_, reject) => {
+    timeoutHandle = setTimeout(() => reject(new Error('ADB shell input transport timed out.')), 10_000);
+  });
+  try {
+    child.stdin.end(`${args.map(shellQuote).join(' ')}\n`);
+    const completed = await Promise.race([result, child.failure, timeout]);
+    if (completed?.transportError) throw completed.transportError;
+    if (completed.code !== 0) throw new Error('ADB shell input transport failed.');
+  } catch (error) {
+    if (!child.killed) child.kill();
+    throw error;
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+}
+
 export async function startLocalQaApiSession({
   email,
   password,
@@ -127,6 +160,9 @@ export async function startLocalQaApiSession({
   });
   const output = createInterface({ input: child.stdout });
   const outputIterator = output[Symbol.asyncIterator]();
+  child.failure = new Promise((resolve) => {
+    child.once('error', () => resolve({ transportError: new Error('Local QA API transport failed.') }));
+  });
   const childClosed = new Promise((resolve) => child.once('close', resolve));
   let loggedIn = false;
   let cleaned = false;
@@ -186,10 +222,15 @@ export async function runLocalQaLogin({
   }),
   execFileImpl = execFile,
   apiSessionImpl = startLocalQaApiSession,
+  adbSpawnImpl = spawnCallback,
   now = Date.now,
 }) {
   if (!device?.trim()) throw new Error('SIT_ANDROID_DEVICE is required.');
   const adb = async (args) => {
+    if (args[0] === 'input' && args[1] === 'text') {
+      await runAdbShellInput({ device, args, spawnImpl: adbSpawnImpl });
+      return;
+    }
     await execFileImpl('adb', ['-s', device, 'shell', ...args], {
       maxBuffer: 2 * 1024 * 1024,
     });
