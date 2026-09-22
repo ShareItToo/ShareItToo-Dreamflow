@@ -9,7 +9,7 @@ const execFile = promisify(execFileCallback);
 const localQaApiBaseUrl = 'http://127.0.0.1:18080/api/v1';
 const localQaApiBaseUrls = new Set([localQaApiBaseUrl]);
 
-function parseLocalQaApiBaseUrl(value) {
+function assertLocalQaApiBaseUrl(value) {
   let parsed;
   try {
     parsed = new URL(String(value ?? ''));
@@ -26,7 +26,6 @@ function parseLocalQaApiBaseUrl(value) {
       || !localQaApiBaseUrls.has(normalized)) {
     throw new Error('The local QA API base is not the exact loopback-only endpoint.');
   }
-  return localQaApiBaseUrl;
 }
 
 export function parseBounds(value) {
@@ -107,8 +106,8 @@ export async function runLocalQaLogin({
   if (manifest.synthetic !== true || manifest.kind !== 'sit-android-local-qa-transient-session') {
     throw new Error('The local QA session manifest is not synthetic and current.');
   }
-  const apiBaseUrl = parseLocalQaApiBaseUrl(manifest.apiBaseUrl);
-  const login = await fetchImpl(`${apiBaseUrl}/auth/login`, {
+  assertLocalQaApiBaseUrl(manifest.apiBaseUrl);
+  const login = await fetchImpl(`${localQaApiBaseUrl}/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ email: manifest.email, password: manifest.password }),
@@ -131,7 +130,7 @@ export async function runLocalQaLogin({
     uiSubmitted = true;
   } finally {
     await adb(['rm', '-f', dumpPath]).catch(() => {});
-    const logout = await fetchImpl(`${apiBaseUrl}/auth/logout`, {
+    const logout = await fetchImpl(`${localQaApiBaseUrl}/auth/logout`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ refreshToken: loginBody.refreshToken }),
