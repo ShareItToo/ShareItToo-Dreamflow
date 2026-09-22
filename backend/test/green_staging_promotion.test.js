@@ -15,6 +15,7 @@ import {
   assertGreenImageReadback,
   assertGreenRuntimeReadbacks,
   assertGreenFinalContainerReadback,
+  assertGreenSuccessorPreStartReadback,
   summarizeGreenFinalContainerReadback,
   assertGreenTargetManifest,
   buildGreenPromotionCommands,
@@ -469,6 +470,8 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   rmSync(`${evidenceFile}.pgdump`, { force: true });
   const invalidIsolatedLedger = await fakeRun(targetManifest.prePromotionImage, 'bad-ledger\n', undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_migration_ledger_readback');
   assert.equal(invalidIsolatedLedger.result?.code, 'green_isolated_migration_ledger_invalid');
+  assert.equal(invalidIsolatedLedger.result?.cleanup?.clean, false);
+  assert.equal(invalidIsolatedLedger.result?.cleanup?.results.some((entry) => entry.code === 'green_cleanup_volume_no_immutable_delete_identity'), true);
   assert.equal(invalidIsolatedLedger.calls.some((entry) => entry.phase === 'synthetic_sandbox_provision_isolated'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
   const missingInitMarker = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, '', '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_postgres_init_complete_log_readback');
@@ -653,7 +656,7 @@ test('emergency cleanup never deletes a prior same-name resource when create res
   assert.equal(calls.some((call) => call.options.phase === 'failure_isolated_network_remove'), false);
 });
 
-test('emergency cleanup removes only an owned resource from a partial creation state', async () => {
+test('emergency cleanup retains a volume when no immutable deletion identity exists', async () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const calls = [];
   const fake = async (command, args, options) => {
@@ -664,8 +667,9 @@ test('emergency cleanup removes only an owned resource from a partial creation s
     return { stdout: '' };
   };
   const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['isolated_volume_create'], originalApiIdentity });
-  assert.equal(result.clean, true);
-  assert.equal(calls.some((call) => call.options.phase === 'failure_isolated_volume_remove'), true);
+  assert.equal(result.clean, false);
+  assert.equal(result.results.some((entry) => entry.code === 'green_cleanup_volume_no_immutable_delete_identity'), true);
+  assert.equal(calls.some((call) => call.options.phase === 'failure_isolated_volume_remove'), false);
   assert.equal(calls.some((call) => call.options.phase === 'failure_isolated_database_remove' || call.options.phase === 'failure_isolated_network_remove' || call.options.phase === 'failure_candidate_remove'), false);
 });
 
@@ -789,14 +793,32 @@ test('post-schema forward recovery creates only the successor and verifies its p
     Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
+  const preStartRecord = { ...record, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {} } } };
+  const attachedPreStartRecord = { ...record, State: { Running: false } };
   const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@sha256:${'e'.repeat(64)}`] };
   const calls = [];
   const fake = async (command, args, options) => {
     calls.push({ command, args, options });
+    if (options.phase.startsWith('recovery_')) {
+      const phase = options.phase.slice('recovery_'.length);
+      const expected = commands.find((entry) => entry.phase === phase);
+      if (phase === 'successor_identity_readback') {
+        assert.equal(command, 'docker');
+        assert.ok([record.Id, greenTarget.apiContainer].includes(args.at(-1)));
+      } else if (phase === 'final_provider_network_attach') {
+        assert.deepEqual(args, ['network', 'connect', greenTarget.providerNetwork, record.Id]);
+      } else if (phase === 'final_start') {
+        assert.deepEqual(args, ['start', record.Id]);
+      } else {
+        assert.ok(expected, `unexpected recovery phase: ${phase}`);
+        assert.equal(command, expected.command);
+        assert.deepEqual(args, expected.args);
+      }
+    }
     if (options.phase === 'recovery_canonical_schema_readback') return { stdout: '095_staging_google_registration_replays.up.sql\n' };
     if (options.phase === 'recovery_canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
     if (options.phase === 'recovery_final_create_no_host_port') return { stdout: `${record.Id}\n` };
-    if (options.phase === 'recovery_successor_identity_readback') return { stdout: JSON.stringify(record) };
+    if (options.phase === 'recovery_successor_identity_readback') return { stdout: JSON.stringify(args.at(-1) === record.Id ? preStartRecord : attachedPreStartRecord) };
     if (options.phase.endsWith('final_image_readback')) return { stdout: JSON.stringify(image) };
     if (options.phase.endsWith('final_inventory_readback')) return { stdout: JSON.stringify(record) };
     if (options.phase.endsWith('final_health_probe') || options.phase.endsWith('final_ready_wait')) return { stdout: JSON.stringify(payload) };
@@ -812,6 +834,10 @@ test('post-schema forward recovery creates only the successor and verifies its p
   }
   const retained = await runGreenForwardRecovery({ plan, commands, command: fake, completed: ['final_create_no_host_port', 'final_provider_network_attach', 'final_start'] });
   assert.equal(retained.status, 'verified');
+  const resumed = await runGreenForwardRecovery({ plan, commands, command: fake, completed: ['final_create_no_host_port', 'final_provider_network_attach'] });
+  assert.equal(resumed.status, 'verified');
+  const resumedStart = calls.findLast((entry) => entry.options.phase === 'recovery_final_start');
+  assert.deepEqual(resumedStart.args, ['start', record.Id]);
 });
 
 test('forward recovery stops on a foreign final-name conflict before network attach or start', async () => {
@@ -830,6 +856,19 @@ test('forward recovery stops on a foreign final-name conflict before network att
   await assert.rejects(runGreenForwardRecovery({ plan, commands, command: fake, completed: [] }), /green_forward_recovery_create_conflict/u);
   assert.equal(calls.some((call) => call.options.phase === 'recovery_final_provider_network_attach'), false);
   assert.equal(calls.some((call) => call.options.phase === 'recovery_final_start'), false);
+});
+
+test('successor pre-start validation rejects wrong User, Env and mounts', () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'f'.repeat(32) });
+  const record = {
+    Id: '9'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {} } },
+    Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919'] },
+    HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
+  };
+  assert.equal(assertGreenSuccessorPreStartReadback({ record, plan, expectedId: record.Id }), true);
+  assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...record, Config: { ...record.Config, User: 'nobody' } }, plan, expectedId: record.Id }), /green_final_inventory_mismatch/u);
+  assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...record, Config: { ...record.Config, Env: record.Config.Env.map((entry) => entry === 'PAYMENT_TRANSPORT=memory' ? 'PAYMENT_TRANSPORT=stripe' : entry) } }, plan, expectedId: record.Id }), /green_prestart|green_final|green_runtime/u);
+  assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Source: '/foreign/secret' } : mount) }, plan, expectedId: record.Id }), /green_final_mount_inventory_mismatch/u);
 });
 
 test('forward recovery fails closed before candidate continuation on migration readback gaps', async () => {
