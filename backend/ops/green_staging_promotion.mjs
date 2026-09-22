@@ -1133,8 +1133,8 @@ export async function runGreenEmergencyCleanup({ plan, command, commandEnv = {},
         restoreError = 'failure_restore_green_api_identity_ambiguous';
       }
       if (!restoreError) {
-        await command('docker', ['start', plan.target.apiContainer], { phase: 'failure_restore_green_api', env: commandEnv, allowFailure: true });
-        const restoredRecord = await command('docker', ['inspect', '--format', '{{json .}}', plan.target.apiContainer], { phase: 'failure_restore_green_api_identity_verify', env: commandEnv, allowFailure: false });
+        await command('docker', ['start', originalApiIdentity.id], { phase: 'failure_restore_green_api', env: commandEnv, allowFailure: true });
+        const restoredRecord = await command('docker', ['inspect', '--format', '{{json .}}', originalApiIdentity.id], { phase: 'failure_restore_green_api_identity_verify', env: commandEnv, allowFailure: false });
         let restoredRecordJson;
         try { restoredRecordJson = JSON.parse(String(restoredRecord.stdout ?? '').trim()); } catch { restoredRecordJson = null; }
         restored = greenRollbackIdentityMatches(restoredRecord.stdout, originalApiIdentity) && restoredRecordJson?.State?.Running === true;

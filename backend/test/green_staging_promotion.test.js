@@ -676,7 +676,7 @@ test('pre-schema failure restores and verifies the sealed API', async () => {
   const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['quiesce_green_api', 'seal_green_api'], phaseStarted: 'seal_green_api', schemaMutationStarted: false, originalApiIdentity });
   assert.equal(result.clean, true);
   assert.equal(result.restored, true);
-  assert.equal(calls.some((call) => call.args.includes('start') && call.args.includes(greenTarget.apiContainer)), true);
+  assert.equal(calls.some((call) => call.args.includes('start') && call.args.includes(originalApiIdentity.id)), true);
 });
 
 test('quiesce response loss with failed restore is not reported clean', async () => {
@@ -731,6 +731,10 @@ test('restore reconciles a lost rename response before starting the exact origin
     if (options.phase === 'failure_restore_sealed_api') return { code: 'response_lost', stdout: '' };
     if (options.phase === 'failure_restore_current_api_identity_after_rename') return { stdout: JSON.stringify(restoredApiIdentityRecord) };
     if (options.phase === 'failure_restore_sealed_api_identity_after_rename') return { code: 'not_found', stdout: '' };
+    if (options.phase === 'failure_restore_green_api') {
+      assert.equal(args[1], originalApiIdentity.id);
+      return { stdout: '' };
+    }
     if (options.phase === 'failure_restore_green_api_identity_verify') return { stdout: JSON.stringify(restoredApiIdentityRecord) };
     return { stdout: '' };
   };
