@@ -4,6 +4,7 @@ import { chmodSync, lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync, w
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
   assertGreenCleanup,
   assertGreenContainerInventory,
@@ -23,6 +24,7 @@ import {
   writeGreenEvidence,
   runGreenEmergencyCleanup,
   runGreenForwardRecovery,
+  runGreenCommandWithBufferInput,
   runGreenPromotion,
   syntheticSandboxCredentialFilePath,
   containsForbiddenGreenTargetIdentifier,
@@ -61,7 +63,7 @@ const config = {
 };
 
 function migrationLedgerThrough(schema) {
-  const root = path.resolve('backend/sql/migrations');
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'sql', 'migrations');
   const rows = readdirSync(root).filter((name) => /^\d+_.+\.up\.sql$/u.test(name) && Number(name.slice(0, 3)) <= schema).sort()
     .map((name) => `${name}|${crypto.createHash('sha256').update(readFileSync(path.join(root, name))).digest('hex')}`);
   return `${rows.join('\n')}\n`;
@@ -69,6 +71,13 @@ function migrationLedgerThrough(schema) {
 
 const sourceMigrationLedger = migrationLedgerThrough(92);
 const currentMigrationLedger = migrationLedgerThrough(95);
+const sourceMounts = [
+  { destination: '/data/uploads', type: 'volume', source: null, volume: greenTarget.uploadsVolume, readOnly: false },
+  { destination: '/run/secrets/firebase-service-account.json', type: 'bind', source: config.firebaseFile, volume: null, readOnly: true },
+  { destination: '/run/secrets/mfa-encryption-key', type: 'bind', source: config.mfaFile, volume: null, readOnly: true },
+  { destination: '/run/secrets/technical-sandbox-key', type: 'bind', source: config.technicalSandboxKeyFile, volume: null, readOnly: true },
+  { destination: '/run/secrets/technical-sandbox-webhook', type: 'bind', source: config.technicalSandboxWebhookFile, volume: null, readOnly: true },
+];
 
 test('Green target accepts only the exact verified resource identities', () => {
   assert.deepEqual(assertGreenTargetManifest(targetManifest), targetManifest);
@@ -139,15 +148,15 @@ test('runtime readback binds version and capability safety surface', () => {
 
 test('inventory rejects wrong schema, host ports and non-Green labels', () => {
   const inventory = {
-    api: { name: greenTarget.apiContainer, greenLabel: false, prePromotionTuple: true, hostPorts: 0, running: true, networks: [greenTarget.network, greenTarget.providerNetwork], image: targetManifest.prePromotionImage, user: 'shareittoo', databaseHost: greenTarget.databaseContainer, databaseName: greenTarget.databaseName, databaseUser: greenTarget.databaseUser, uploadsVolume: greenTarget.uploadsVolume, groupAdd: true, mountDestinations: ['/data/uploads', '/run/secrets/firebase-service-account.json', '/run/secrets/mfa-encryption-key', '/run/secrets/technical-sandbox-key', '/run/secrets/technical-sandbox-webhook'] },
+    api: { name: greenTarget.apiContainer, greenLabel: false, prePromotionTuple: true, hostPorts: 0, running: true, networks: [greenTarget.network, greenTarget.providerNetwork], image: targetManifest.prePromotionImage, user: 'shareittoo', databaseHost: greenTarget.databaseContainer, databaseName: greenTarget.databaseName, databaseUser: greenTarget.databaseUser, uploadsVolume: greenTarget.uploadsVolume, groupAdd: true, mounts: sourceMounts },
     database: { name: greenTarget.databaseContainer, greenLabel: true, running: true },
     network: { name: greenTarget.network, internal: true }, providerNetwork: { name: greenTarget.providerNetwork },
     uploadsVolume: { name: greenTarget.uploadsVolume }, schema: 92,
   };
-  assert.equal(assertGreenContainerInventory(inventory, greenTarget.sourceSchema, targetManifest.prePromotionImage), true);
-  assert.throws(() => assertGreenContainerInventory({ ...inventory, schema: 95 }, greenTarget.sourceSchema, targetManifest.prePromotionImage));
-  assert.throws(() => assertGreenContainerInventory({ ...inventory, api: { ...inventory.api, hostPorts: 1 } }));
-  assert.throws(() => assertGreenContainerInventory({ ...inventory, network: { name: 'sit-staging', internal: true } }));
+  assert.equal(assertGreenContainerInventory(inventory, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), true);
+  assert.throws(() => assertGreenContainerInventory({ ...inventory, schema: 95 }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config));
+  assert.throws(() => assertGreenContainerInventory({ ...inventory, api: { ...inventory.api, hostPorts: 1 } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config));
+  assert.throws(() => assertGreenContainerInventory({ ...inventory, network: { name: 'sit-staging', internal: true } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config));
 });
 
 test('promotion plan keeps backup, isolated 92-to-95 rehearsal, acceptance and final no-port promotion ordered', () => {
@@ -178,6 +187,9 @@ test('promotion plan keeps backup, isolated 92-to-95 rehearsal, acceptance and f
   assert.ok(commands.find((entry) => entry.phase === 'isolated_migrate_92_to_95'));
   assert.ok(commands.findIndex((entry) => entry.phase === 'isolated_migration_readback') < commands.findIndex((entry) => entry.phase === 'isolated_migration_ledger_readback'));
   assert.ok(commands.findIndex((entry) => entry.phase === 'isolated_migration_ledger_readback') < commands.findIndex((entry) => entry.phase === 'synthetic_sandbox_provision_isolated'));
+  assert.ok(commands.findIndex((entry) => entry.phase === 'isolated_postgres_init_complete_log_readback') < commands.findIndex((entry) => entry.phase === 'isolated_postgres_stable_select_1'));
+  assert.ok(commands.findIndex((entry) => entry.phase === 'isolated_postgres_stable_select_1') < commands.findIndex((entry) => entry.phase === 'isolated_postgres_stable_select_2'));
+  assert.ok(commands.findIndex((entry) => entry.phase === 'isolated_postgres_stable_select_2') < commands.findIndex((entry) => entry.phase === 'isolated_restore'));
   assert.ok(commands.find((entry) => entry.phase === 'isolated_restore' && entry.inputFile));
   assert.ok(commands.find((entry) => entry.phase === 'candidate_mfa_identity_probes'));
   assert.ok(commands.find((entry) => entry.phase === 'isolated_network_cleanup_verify'));
@@ -232,6 +244,20 @@ test('promotion plan resolves the exact sealed API before emitting mutation comm
   assert.throws(() => buildGreenPromotionCommands({ plan: missing, configFile: config.envFile, config }), /green_sealed_target_invalid/u);
 });
 
+test('buffer restore input preserves exact bytes and fails closed on early stdin close', async () => {
+  const exactBytes = Buffer.from([0, 1, 255]);
+  await runGreenCommandWithBufferInput(
+    process.execPath,
+    ['-e', "const chunks=[]; process.stdin.on('data', (chunk) => chunks.push(chunk)); process.stdin.on('end', () => process.exit(Buffer.concat(chunks).equals(Buffer.from([0,1,255])) ? 0 : 9));"],
+    exactBytes,
+    { phase: 'green_buffer_exact_bytes' },
+  );
+  await assert.rejects(
+    () => runGreenCommandWithBufferInput(process.execPath, ['-e', "process.stdin.once('data', () => { process.stdin.destroy(); setTimeout(() => process.exit(0), 10); });"], Buffer.alloc(16 * 1024 * 1024), { phase: 'green_buffer_early_close' }),
+    (error) => error.code === 'green_buffer_early_close_stdin_closed_early',
+  );
+});
+
 test('executor runs provisioners in the declared runtime image before quiesce', async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'sit-green-runner-'));
   const configFile = path.join(root, 'green.env');
@@ -267,16 +293,10 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     Name: `/${greenTarget.apiContainer}`, State: { Running: true },
     NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {}, [greenTarget.providerNetwork]: {} } },
     Config: { Image: image, User: 'shareittoo', Labels: {}, Env: [`DATABASE_URL=${envValues.DATABASE_URL}`] },
-    HostConfig: { GroupAdd: ['65532'] }, Mounts: [
-      { Destination: '/run/secrets/mfa-encryption-key', RW: false },
-      { Destination: '/run/secrets/firebase-service-account.json', RW: false },
-      { Destination: '/run/secrets/technical-sandbox-key', RW: false },
-      { Destination: '/run/secrets/technical-sandbox-webhook', RW: false },
-      { Destination: '/data/uploads', Name: greenTarget.uploadsVolume, RW: true },
-    ],
+    HostConfig: { GroupAdd: ['65532'] }, Mounts: sourceMounts.map((mount) => ({ Destination: mount.destination, Type: mount.type, Source: mount.source, Name: mount.volume, RW: !mount.readOnly })),
   });
   const databaseRecord = { Name: `/${greenTarget.databaseContainer}`, State: { Running: true }, Config: { Labels: { 'com.shareittoo.sit.green': 'true' } } };
-  const fakeRun = async (image, isolatedLedger = currentMigrationLedger) => {
+  const fakeRun = async (image, isolatedLedger = currentMigrationLedger, initLog = 'database system is ready to accept connections\n', stableSelect2 = '1\n') => {
     const calls = [];
     const fake = async (command, args, options = {}) => {
       calls.push({ command, args, phase: options.phase, env: options.env });
@@ -289,12 +309,20 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       if (phase === 'runtime_image_readback') return { stdout: JSON.stringify(imageReadback) };
       if (phase === 'source_schema_readback') return { stdout: '092_listing_ai_mock_disclosure.up.sql\n' };
       if (phase === 'source_migration_ledger_readback') return { stdout: sourceMigrationLedger };
+      if (phase === 'isolated_postgres_init_complete_log_readback') return { stdout: initLog };
+      if (phase === 'isolated_postgres_stable_select_1') return { stdout: '1\n' };
+      if (phase === 'isolated_postgres_stable_select_2') return { stdout: stableSelect2 };
       if (phase === 'isolated_migration_readback') return { stdout: '095_staging_google_registration_replays.up.sql\n' };
       if (phase === 'isolated_migration_ledger_readback') return { stdout: isolatedLedger };
       if (phase === 'candidate_runtime_flags_readback') return { stdout: JSON.stringify({ DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', googleRegistrationAllowlistEmpty: true }) };
       if (phase === 'candidate_health_and_feature_probes' || phase === 'candidate_ready_probe') return { stdout: JSON.stringify(payload) };
       if (phase === 'candidate_version_probe') return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'test' }) };
       if (phase === 'fresh_protected_backup') return { stdout: 'synthetic protected backup' };
+      if (phase === 'isolated_restore') {
+        rmSync(options.inputFile, { force: true });
+        assert.ok(Buffer.isBuffer(options.inputBytes));
+        assert.equal(options.inputDigest, crypto.createHash('sha256').update(options.inputBytes).digest('hex'));
+      }
       if (phase === 'quiesce_green_api') throw Object.assign(new Error('stop before irreversible phase'), { code: 'test_stop_before_quiesce' });
       if (phase === 'failure_restore_green_api_verify') return { stdout: 'true\n' };
       return { stdout: '' };
@@ -323,6 +351,14 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   const invalidIsolatedLedger = await fakeRun(targetManifest.prePromotionImage, 'bad-ledger\n');
   assert.equal(invalidIsolatedLedger.result?.code, 'green_isolated_migration_ledger_invalid');
   assert.equal(invalidIsolatedLedger.calls.some((entry) => entry.phase === 'synthetic_sandbox_provision_isolated'), false);
+  rmSync(`${evidenceFile}.pgdump`, { force: true });
+  const missingInitMarker = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, '');
+  assert.equal(missingInitMarker.result?.code, 'green_isolated_init_complete_log_invalid');
+  assert.equal(missingInitMarker.calls.some((entry) => entry.phase === 'isolated_restore'), false);
+  rmSync(`${evidenceFile}.pgdump`, { force: true });
+  const missingSecondStableSelect = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, 'database system is ready to accept connections\n', '');
+  assert.equal(missingSecondStableSelect.result?.code, 'green_isolated_stable_select_2_invalid');
+  assert.equal(missingSecondStableSelect.calls.some((entry) => entry.phase === 'isolated_restore'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
   assert.deepEqual(good.calls.slice(0, quiesceIndex).map((entry) => entry.phase), expectedReversible);
   const provisionEntries = buildGreenPromotionCommands({ plan, configFile, config: runtimeConfig })
@@ -404,15 +440,18 @@ test('command executor bindings keep isolated probes and canonical runtime disti
 
 test('pre-promotion inventory requires the exact Green DB host and protected mount cohort', () => {
   const base = {
-    api: { name: greenTarget.apiContainer, greenLabel: false, prePromotionTuple: true, hostPorts: 0, running: true, networks: [greenTarget.network, greenTarget.providerNetwork], image: greenTarget.prePromotionImage, user: 'shareittoo', databaseHost: greenTarget.databaseContainer, databaseName: greenTarget.databaseName, databaseUser: greenTarget.databaseUser, uploadsVolume: greenTarget.uploadsVolume, groupAdd: true, mountDestinations: ['/data/uploads', '/run/secrets/firebase-service-account.json', '/run/secrets/mfa-encryption-key', '/run/secrets/technical-sandbox-key', '/run/secrets/technical-sandbox-webhook'] },
+    api: { name: greenTarget.apiContainer, greenLabel: false, prePromotionTuple: true, hostPorts: 0, running: true, networks: [greenTarget.network, greenTarget.providerNetwork], image: greenTarget.prePromotionImage, user: 'shareittoo', databaseHost: greenTarget.databaseContainer, databaseName: greenTarget.databaseName, databaseUser: greenTarget.databaseUser, uploadsVolume: greenTarget.uploadsVolume, groupAdd: true, mounts: sourceMounts },
     database: { name: greenTarget.databaseContainer, greenLabel: true, running: true }, network: { name: greenTarget.network, internal: true }, providerNetwork: { name: greenTarget.providerNetwork }, uploadsVolume: { name: greenTarget.uploadsVolume }, schema: 92,
   };
-  assert.equal(assertGreenContainerInventory(base, greenTarget.sourceSchema, targetManifest.prePromotionImage), true);
-  assert.equal(assertGreenContainerInventory({ ...base, api: { ...base.api, greenLabel: true, prePromotionTuple: false } }, greenTarget.sourceSchema, targetManifest.prePromotionImage), true);
-  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, greenLabel: false, prePromotionTuple: false } }, greenTarget.sourceSchema, targetManifest.prePromotionImage), /green_inventory_mismatch/u);
-  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, databaseHost: 'legacy-db' } }, greenTarget.sourceSchema, targetManifest.prePromotionImage), /green_prepromotion_tuple_mismatch/u);
-  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mountDestinations: base.api.mountDestinations.slice(0, -1) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage), /green_prepromotion_tuple_mismatch/u);
-  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, prePromotionTuple: true, greenLabel: true, image: 'ghcr.io/shareittoo/shareittoo-api:wrong' } }, greenTarget.sourceSchema, targetManifest.prePromotionImage), /green_prepromotion_tuple_mismatch/u);
+  assert.equal(assertGreenContainerInventory(base, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), true);
+  assert.equal(assertGreenContainerInventory({ ...base, api: { ...base.api, greenLabel: true, prePromotionTuple: false } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), true);
+  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, greenLabel: false, prePromotionTuple: false } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_inventory_mismatch/u);
+  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, databaseHost: 'legacy-db' } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
+  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.slice(0, -1) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
+  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => mount.destination === '/run/secrets/mfa-encryption-key' ? { ...mount, source: '/wrong/path' } : mount) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
+  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => mount.destination === '/run/secrets/mfa-encryption-key' ? { ...mount, type: 'volume', volume: greenTarget.uploadsVolume, source: null } : mount) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
+  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => mount.destination === '/run/secrets/technical-sandbox-key' ? { ...mount, readOnly: false } : mount) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
+  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, prePromotionTuple: true, greenLabel: true, image: 'ghcr.io/shareittoo/shareittoo-api:wrong' } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
 });
 
 test('final readback is authoritative for no-port Green routing, mounts, image and protected cohort', () => {
@@ -427,6 +466,7 @@ test('final readback is authoritative for no-port Green routing, mounts, image a
   };
   assert.equal(assertGreenFinalContainerReadback({ record, plan }), true);
   assert.equal(summarizeGreenFinalContainerReadback(record, plan).hostPorts, 0);
+  assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Config: { ...record.Config, User: 'nobody' } }, plan }), /green_final_inventory_mismatch/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, NetworkSettings: { ...record.NetworkSettings, Ports: { '8080/tcp': [{ HostPort: '18082' }] } } }, plan }), /green_final_inventory_mismatch/u);
 });
 

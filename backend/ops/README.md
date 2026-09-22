@@ -142,8 +142,9 @@ it to current schema `95` through
 `095_staging_google_registration_replays.up.sql`, then proves
 the full source-to-current migration ledger (expected 95-row digest
 `b31bd8054569f851a4fed0798fb0d8b971282256461e764529564cd14d2e802f`) and
-integrity/functional probes there before provisioning the candidate. The exact
-immutable runtime image is
+the official PostgreSQL init-complete log marker followed by two stable
+`SELECT 1` readbacks before restore/provisioning. Integrity/functional probes
+must pass there before provisioning the candidate. The exact immutable runtime image is
 accepted first against that isolated database on loopback `127.0.0.1:18082`
 with memory Identity, on-device Listing AI, payment memory, the existing
 access/provider configuration and read-only MFA/Firebase/technical-sandbox
