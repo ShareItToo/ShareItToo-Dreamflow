@@ -78,7 +78,7 @@ export const privatePilotDeclarations = Object.freeze({
   platformTerms: 'Ich akzeptiere die Plattform-Nutzungsbedingungen und den angezeigten Plattformbeitrag.',
   earlyPerformance: 'Ich verlange, dass ShareItToo vor Ablauf der Widerrufsfrist mit der Vermittlung und technischen Buchungsbestätigung beginnt.',
   withdrawalKnowledge: 'Mir ist bekannt, dass mein Widerrufsrecht bei vollständiger Vertragserfüllung unter den gesetzlichen Voraussetzungen erlöschen kann.',
-  ownerAcceptance: 'Ich nehme die zahlungspflichtige Buchungsanfrage zu den angezeigten Bedingungen und Dokumentversionen an.',
+  ownerAcceptance: 'Du nimmst die Buchungsanfrage zu den angezeigten Konditionen und den Privat-Mietbedingungen an.',
   platformWithdrawal: 'Ich widerrufe die kostenpflichtige Plattformleistung von ShareItToo für die ausgewählte Buchung.',
 });
 

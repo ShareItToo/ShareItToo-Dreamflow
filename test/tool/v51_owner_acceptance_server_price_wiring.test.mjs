@@ -108,12 +108,14 @@ test('acceptance dialog and backend transition receive the same guarded quote fl
   );
   assert.match(
     dialog,
-    /onPressed: _confirmed && acceptanceAllowed/u,
+    /onPressed: acceptanceAllowed/u,
   );
+  assert.doesNotMatch(dialog, /CheckboxListTile/u);
   assert.match(
     dialog,
-    /onChanged: acceptanceAllowed\s+\? \(value\)/u,
+    /Du nimmst die Buchungsanfrage zu den angezeigten Konditionen und den Privat-Mietbedingungen an/u,
   );
+  assert.match(dialog, /V52LegalDocumentScreen/u);
   assert.match(dialog, /Preisprüfung fehlgeschlagen/u);
 });
 
@@ -208,11 +210,11 @@ test('an acceptance race at the server deadline becomes a centered SIT message',
   assert.match(dialog, /Bitte lade die Ansicht neu/u);
 });
 
-test('an already-open acceptance dialog expires itself and clears confirmation', () => {
+test('an already-open acceptance dialog expires itself and disables the action', () => {
   assert.match(dialog, /class _OwnerAcceptanceDialog extends StatefulWidget/u);
   assert.match(
     dialog,
-    /_deadlineTimer = Timer\(remaining,[\s\S]*?setState\(\(\) => _confirmed = false\)/u,
+    /_deadlineTimer = Timer\(remaining,[\s\S]*?setState\(\(\) \{\}\)/u,
   );
   assert.match(
     dialog,
@@ -222,10 +224,8 @@ test('an already-open acceptance dialog expires itself and clears confirmation',
     dialog,
     /bool get _deadlineValid[\s\S]*?bindingDeadline!\.isAfter\(DateTime\.now\(\)\)/u,
   );
-  assert.match(
-    dialog,
-    /value: _confirmed,[\s\S]*?onChanged: acceptanceAllowed[\s\S]*?onPressed: _confirmed && acceptanceAllowed/u,
-  );
+  assert.doesNotMatch(dialog, /_confirmed/u);
+  assert.match(dialog, /onPressed: acceptanceAllowed/u);
 });
 
 test('the owner request overview refreshes exactly at the next server deadline', () => {

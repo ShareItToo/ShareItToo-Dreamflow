@@ -26,8 +26,7 @@ class PrivatePilotConfig {
 
   /// The publish action carries this server-validated image-truth assertion;
   /// it deliberately adds no separate checkbox to the listing flow.
-  static const String listingPhotoTruthPolicyVersion =
-      'listing-photo-truth-v1';
+  static const String listingPhotoTruthPolicyVersion = 'listing-photo-truth-v1';
   static const String listingPhotoTruthPolicyAttestation =
       'Ich veröffentliche nur aktuelle echte Artikelbilder. Zuschneiden, Belichtung und das Schwärzen privater Details sind erlaubt, wenn Artikel, Zustand und Umfang wahr bleiben. KI-generierte oder materiell veränderte Bilder dürfen nicht veröffentlicht werden.';
 
@@ -132,7 +131,7 @@ class PrivatePilotConfig {
   static const String withdrawalKnowledgeDeclaration =
       'Mir ist bekannt, dass mein Widerrufsrecht bei vollständiger Vertragserfüllung unter den gesetzlichen Voraussetzungen erlöschen kann.';
   static const String ownerAcceptanceDeclaration =
-      'Ich nehme die zahlungspflichtige Buchungsanfrage zu den angezeigten Bedingungen und Dokumentversionen an.';
+      'Du nimmst die Buchungsanfrage zu den angezeigten Konditionen und den Privat-Mietbedingungen an.';
   static const String platformWithdrawalDeclaration =
       'Ich widerrufe die kostenpflichtige Plattformleistung von ShareItToo für die ausgewählte Buchung.';
   static const String v51DocumentName = 'ShareItToo Rechtsmappe Privat-Launch';

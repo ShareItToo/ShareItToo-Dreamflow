@@ -9,6 +9,7 @@ import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/private_pilot_pricing.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/services/rental_request_decision_service.dart';
+import 'package:lendify/screens/v52_legal_document_screen.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/private_pilot_risk_notice.dart';
 
@@ -85,7 +86,6 @@ class _OwnerAcceptanceDialog extends StatefulWidget {
 
 class _OwnerAcceptanceDialogState extends State<_OwnerAcceptanceDialog> {
   Timer? _deadlineTimer;
-  bool _confirmed = false;
 
   @override
   void initState() {
@@ -96,7 +96,7 @@ class _OwnerAcceptanceDialogState extends State<_OwnerAcceptanceDialog> {
     if (remaining <= Duration.zero) return;
     _deadlineTimer = Timer(remaining, () {
       if (!mounted) return;
-      setState(() => _confirmed = false);
+      setState(() {});
     });
   }
 
@@ -212,26 +212,44 @@ class _OwnerAcceptanceDialogState extends State<_OwnerAcceptanceDialog> {
                 const PrivatePilotRiskNotice(
                   title: 'Privatvermietung ohne SIT-Schadenschutz',
                 ),
-              const SizedBox(height: 8),
-              CheckboxListTile(
-                value: _confirmed,
-                onChanged: acceptanceAllowed
-                    ? (value) => setState(() => _confirmed = value == true)
-                    : null,
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: Text(
-                  widget.request.simulationOnly
-                      ? 'Ich nehme ausschließlich diese unverbindliche Pilot-Simulation an.'
-                      : PrivatePilotConfig.ownerAcceptanceDeclaration,
+              if (!widget.request.simulationOnly) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Du nimmst die Buchungsanfrage zu den angezeigten Konditionen und den Privat-Mietbedingungen an.',
                 ),
-                subtitle: widget.request.simulationOnly
-                    ? const Text(
-                        'Kein Vertrag · keine Reservierung · keine Zahlung')
-                    : const Text(
-                        '${PrivatePilotConfig.documentName} · ${PrivatePilotConfig.documentVersion}',
+                TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const V52LegalDocumentScreen(
+                        title: 'Privat-Mietbedingungen und Regeln',
+                        documents: [
+                          V52LegalAsset(
+                            part: 'B',
+                            title: 'Privat-Mietbedingungen',
+                            assetPath:
+                                'assets/legal/de/v52/part_b_private_rental_terms.html',
+                          ),
+                          V52LegalAsset(
+                            part: 'C',
+                            title: 'Storno und Refund',
+                            assetPath:
+                                'assets/legal/de/v52/part_c_cancellation_refund.html',
+                          ),
+                          V52LegalAsset(
+                            part: 'D',
+                            title: 'Übergabe, Rückgabe und Schaden',
+                            assetPath:
+                                'assets/legal/de/v52/part_d_handover_return_damage.html',
+                          ),
+                        ],
                       ),
-              ),
+                    ),
+                  ),
+                  child: Text(
+                    'Privat-Mietbedingungen und Regeln · Teile B-D · ${PrivatePilotConfig.v52DocumentVersion}',
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -242,12 +260,12 @@ class _OwnerAcceptanceDialogState extends State<_OwnerAcceptanceDialog> {
           child: const Text('Abbrechen'),
         ),
         FilledButton(
-          onPressed: _confirmed && acceptanceAllowed
+          onPressed: acceptanceAllowed
               ? () {
                   if (widget.requiresRemoteDeadline &&
                       (widget.bindingDeadline == null ||
                           !widget.bindingDeadline!.isAfter(DateTime.now()))) {
-                    setState(() => _confirmed = false);
+                    setState(() {});
                     return;
                   }
                   if (widget.request.simulationOnly) {

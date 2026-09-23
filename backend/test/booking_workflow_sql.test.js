@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import test from 'node:test';
+import {
+  assertPrivatePilotOwnerAcceptance,
+  privatePilotDeclarations,
+  privatePilotDocument,
+} from '../src/private_pilot_domain.js';
 
 const workflowPath = resolve(import.meta.dirname, '../src/booking_workflow.js');
 
@@ -30,6 +35,35 @@ test('missing owner pilot acceptance is translated into a client error', async (
     source.match(/requiredPrivatePilotOwnerAcceptance\(candidate\)/gu)?.length,
     3,
   );
+});
+
+test('owner acceptance requires the exact current one-action declaration', () => {
+  const declaration = {
+    type: 'owner_booking_acceptance',
+    exactWording: privatePilotDeclarations.ownerAcceptance,
+    documentName: privatePilotDocument.name,
+    documentVersion: privatePilotDocument.version,
+    language: privatePilotDocument.language,
+    accepted: true,
+    acceptedAt: '2026-09-23T10:00:00.000Z',
+  };
+  assert.equal(
+    assertPrivatePilotOwnerAcceptance({ legalDeclarations: [declaration] }),
+    declaration,
+  );
+  for (const changed of [
+    { exactWording: 'tampered wording' },
+    { documentVersion: 'V5.0-legacy' },
+    { accepted: false },
+    { acceptedAt: 'not-an-instant' },
+  ]) {
+    assert.throws(
+      () => assertPrivatePilotOwnerAcceptance({
+        legalDeclarations: [{ ...declaration, ...changed }],
+      }),
+      (error) => error.code === 'private_pilot_declaration_missing:owner_booking_acceptance',
+    );
+  }
 });
 
 test('private booking eligibility is rechecked from persisted state at quote, request and acceptance', async () => {
