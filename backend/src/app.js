@@ -317,6 +317,13 @@ import {
   privatePilotDocument,
   PrivatePilotValidationError,
 } from './private_pilot_domain.js';
+import {
+  buildRegistrationConsentBundle,
+  registrationBundleDocumentVersion,
+  registrationBundleType,
+  registrationActionLabels,
+  registrationActionLabelForProvider,
+} from './registration_consent_bundle.js';
 import { v52ContractDocumentReadiness } from './v52_contract_workflow.js';
 import {
   getV51ContractReceipt,
@@ -838,6 +845,39 @@ async function writePrivatePilotDeclaration(client, {
       releaseMetadata.version,
       privatePilotDocument.language,
       accepted,
+    ],
+  );
+}
+
+async function writeRegistrationConsentBundle(client, {
+  userId,
+  actionLabel,
+}) {
+  const bundle = buildRegistrationConsentBundle({
+    actionLabel,
+    appVersion: releaseMetadata.version,
+    declaredAt: new Date().toISOString(),
+  });
+  await client.query(
+    `INSERT INTO legal_declarations (
+       user_id, listing_id, booking_id, declaration_type, exact_wording,
+       document_name, document_version, app_version, language, accepted,
+       declared_at, metadata
+     ) VALUES ($1, NULL, NULL, $2, $3, $4, $5, $6, $7, $8, $9::timestamptz, $10::jsonb)
+     ON CONFLICT (user_id, declaration_type)
+       WHERE declaration_type = 'account_registration_bundle'
+     DO NOTHING`,
+    [
+      userId,
+      registrationBundleType,
+      bundle.exactCtaText,
+      'ShareItToo Plattformbedingungen und Datenschutzerklärung',
+      registrationBundleDocumentVersion,
+      releaseMetadata.version,
+      bundle.language,
+      bundle.accepted,
+      bundle.declaredAt,
+      JSON.stringify(bundle),
     ],
   );
 }
@@ -2347,6 +2387,7 @@ export function createApp({
     const email = normalizeEmail(req.body?.email);
     const password = req.body?.password;
     const displayName = safeText(req.body?.displayName, 80);
+    const registrationActionLabel = safeText(req.body?.registrationActionLabel, 80);
     if (!isValidEmail(email)) throw new HttpError(400, 'invalid_email');
     const policyError = passwordPolicyError(password);
     if (policyError) throw new HttpError(400, policyError);
@@ -2355,6 +2396,9 @@ export function createApp({
         || req.body?.minimumAgeConfirmed !== true
         || (config.privatePilotV4Enabled && req.body?.privateUseConfirmed !== true)) {
       throw new HttpError(400, 'registration_consents_required');
+    }
+    if (registrationActionLabel !== 'Kostenlos registrieren') {
+      throw new HttpError(400, 'registration_action_label_mismatch');
     }
     const passwordHash = await hashPassword(password);
     const userId = crypto.randomUUID();
@@ -2393,6 +2437,10 @@ export function createApp({
         resourceType: 'user',
         resourceId: userId,
         metadata: { method: 'email_password' },
+      });
+      await writeRegistrationConsentBundle(client, {
+        userId,
+        actionLabel: registrationActionLabel,
       });
     });
     if (verificationUser) {
@@ -2562,6 +2610,8 @@ export function createApp({
       && req.body?.privacyAccepted === true
       && req.body?.minimumAgeConfirmed === true
       && (!config.privatePilotV4Enabled || req.body?.privateUseConfirmed === true);
+    const registrationActionLabel = safeText(req.body?.registrationActionLabel, 80);
+    const expectedSocialActionLabel = registrationActionLabelForProvider(identity.provider);
     if (typeof socialAuthPreTransactionHook === 'function') {
       await socialAuthPreTransactionHook();
     }
@@ -2626,6 +2676,12 @@ export function createApp({
           if (!consentsAccepted) {
             throw new HttpError(400, 'social_registration_consents_required');
           }
+          if (!registrationActionLabels.has(registrationActionLabel)) {
+            throw new HttpError(400, 'registration_action_label_required');
+          }
+          if (registrationActionLabel !== expectedSocialActionLabel) {
+            throw new HttpError(400, 'registration_action_label_mismatch');
+          }
           const userId = stagingGoogleRegistration?.userId ?? crypto.randomUUID();
           if (stagingGoogleRegistration) {
             const occupied = await client.query(
@@ -2676,6 +2732,10 @@ export function createApp({
             resourceId: user.id,
             requestId: req.requestId,
             metadata: { method: 'federated', provider: identity.provider },
+          });
+          await writeRegistrationConsentBundle(client, {
+            userId: user.id,
+            actionLabel: registrationActionLabel,
           });
         }
         if (!createdAccount && (

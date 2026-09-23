@@ -180,6 +180,8 @@ if (!databaseUrl) {
           termsAccepted: true,
           privacyAccepted: true,
           minimumAgeConfirmed: true,
+          privateUseConfirmed: true,
+          registrationActionLabel: 'Mit Google registrieren',
         }),
       });
       await setupPool.query(

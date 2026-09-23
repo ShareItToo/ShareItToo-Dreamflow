@@ -1,93 +1,51 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lendify/screens/legal_privacy_screen.dart';
+import 'package:lendify/screens/legal_terms_screen.dart';
 import 'package:lendify/screens/register_screen.dart';
+import 'package:lendify/utils/registration_consent_bundle.dart';
 
 void main() {
-  test('registration consent feedback names each missing rule', () {
+  test('registration CTA wording resolves the action label and four facts', () {
     expect(
-      registrationConsentFeedback(
-        minimumAgeConfirmed: false,
-        privateUseConfirmed: true,
-        termsAccepted: true,
-        privacyAccepted: true,
-      ),
-      'Bitte bestätige noch: 18 Jahre oder älter.',
-    );
-    expect(
-      registrationConsentFeedback(
-        minimumAgeConfirmed: true,
-        privateUseConfirmed: false,
-        termsAccepted: true,
-        privacyAccepted: true,
-      ),
-      'Bitte bestätige noch: Privatnutzung im Privat-Pilot.',
-    );
-    expect(
-      registrationConsentFeedback(
-        minimumAgeConfirmed: true,
-        privateUseConfirmed: true,
-        termsAccepted: false,
-        privacyAccepted: true,
-      ),
-      'Bitte bestätige noch: AGB.',
-    );
-    expect(
-      registrationConsentFeedback(
-        minimumAgeConfirmed: true,
-        privateUseConfirmed: true,
-        termsAccepted: true,
-        privacyAccepted: false,
-      ),
-      'Bitte bestätige noch: Datenschutz.',
+      registrationConsentActionText('Kostenlos registrieren'),
+      'Mit Klick auf „Kostenlos registrieren“ bestätigst du, mindestens 18 Jahre alt zu sein und ShareItToo ausschließlich privat zu nutzen. Du akzeptierst die SIT-Plattformbedingungen und nimmst die Datenschutzerklärung zur Kenntnis.',
     );
   });
 
-  test(
-      'registration consent feedback lists all missing rules and passes through when complete',
-      () {
-    expect(
-      registrationConsentFeedback(
-        minimumAgeConfirmed: false,
-        privateUseConfirmed: false,
-        termsAccepted: false,
-        privacyAccepted: false,
-      ),
-      'Bitte bestätige noch: 18 Jahre oder älter, Privatnutzung im Privat-Pilot, AGB, Datenschutz.',
-    );
-    expect(
-      registrationConsentFeedback(
-        minimumAgeConfirmed: true,
-        privateUseConfirmed: true,
-        termsAccepted: true,
-        privacyAccepted: true,
-      ),
-      isNull,
-    );
-  });
-
-  testWidgets('registration shows four separate unchecked confirmations',
+  testWidgets('registration has one action notice and no required checkboxes',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(home: RegisterScreen()));
     await tester.pumpAndSettle();
 
+    expect(find.byType(CheckboxListTile), findsNothing);
+    expect(find.text('Kostenlos registrieren'), findsOneWidget);
+    expect(find.text('Mit Google registrieren'), findsOneWidget);
+    expect(find.text('Mit Apple registrieren'), findsOneWidget);
+    expect(find.text('Mit Facebook registrieren'), findsOneWidget);
+    expect(find.text('SIT-Plattformbedingungen'), findsWidgets);
+    expect(find.text('Datenschutzerklärung'), findsWidgets);
     expect(
-      find.text('Ich bin 18 Jahre oder älter.'),
-      findsOneWidget,
-    );
-    expect(find.text('Ich akzeptiere die AGB.'), findsOneWidget);
-    expect(
-      find.textContaining('nutze ShareItToo im Privat-Pilot'),
-      findsOneWidget,
-    );
-    expect(
-      find.text('Ich akzeptiere die Datenschutzbestimmungen.'),
+      find.bySemanticsLabel(
+        registrationConsentActionText('Kostenlos registrieren'),
+      ),
       findsOneWidget,
     );
 
-    final confirmations = tester.widgetList<CheckboxListTile>(
-      find.byType(CheckboxListTile),
-    );
-    expect(confirmations, hasLength(4));
-    expect(confirmations.every((checkbox) => checkbox.value == false), isTrue);
+    final termsLink = find.text('SIT-Plattformbedingungen').first;
+    await tester.ensureVisible(termsLink);
+    await tester.tap(termsLink);
+    await tester.pumpAndSettle();
+    expect(find.byType(LegalTermsScreen), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    final privacyLink = find.text('Datenschutzerklärung').first;
+    await tester.ensureVisible(privacyLink);
+    await tester.tap(privacyLink);
+    await tester.pumpAndSettle();
+    expect(find.byType(LegalPrivacyScreen), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
   });
 }

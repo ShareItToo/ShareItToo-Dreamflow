@@ -40,7 +40,7 @@ test('accepts the honest fail-closed legal draft', () => {
   assert.equal(result.approvalAllowed, false);
   assert.equal(result.storeGate, 'open');
   assert.equal(result.documentCount, 6);
-  assert.equal(result.explicitConfirmations, 4);
+  assert.equal(result.preservedRegistrationFacts, 4);
   assert.equal(result.interimPolicyVersion, 'V5.1-2026-08-16');
   assert.equal(result.activeOpenPilotDecisions, 0);
   assert.equal(result.supersededPilotDecisions, 6);
@@ -205,7 +205,7 @@ test('accepts a complete internally consistent approved fixture', () => {
   const submissionManifest = clone(baseSubmissionManifest);
   legalManifest.state = 'approved';
   legalManifest.approvalAllowed = true;
-  legalManifest.consentContract.technicalStatus = 'explicit-versioned-approved';
+  legalManifest.consentContract.technicalStatus = 'single-action-versioned-approved';
   for (const [key, item] of Object.entries(legalManifest.documents)) {
     item.status = 'approved';
     item.approvedContentSha256 = item.currentContentSha256;

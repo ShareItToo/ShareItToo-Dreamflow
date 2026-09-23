@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -34,7 +36,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('registration rejects every missing explicit consent', () async {
+  test('registration rejects every missing preserved registration fact', () async {
     for (final values in [
       (age: false, terms: true, privacy: true),
       (age: true, terms: false, privacy: true),
@@ -57,10 +59,28 @@ void main() {
     expect(privateUseMissing.failure, AuthFailure.consentRequired);
   });
 
-  test('local registration accepts only the complete consent set', () async {
+  test('local registration accepts only the complete four-fact set', () async {
     final result = await register(age: true, terms: true, privacy: true);
 
     expect(result.ok, isTrue);
     expect(result.session, isNotNull);
+
+    final prefs = await SharedPreferences.getInstance();
+    final accounts = jsonDecode(prefs.getString('auth_accounts_v1')!) as List;
+    final bundle = (accounts.cast<Map>().firstWhere((account) =>
+        account['email']
+            .toString()
+            .startsWith('consent-'))['registrationBundle']) as Map;
+    expect(bundle['localTestOnly'], isTrue);
+    expect(bundle['accepted'], isTrue);
+    expect(bundle['facts'], containsPair('minimumAge18', true));
+    expect(bundle['facts'], containsPair('privateUseOnly', true));
+    expect(bundle['facts'], containsPair('termsAccepted', true));
+    expect(bundle['facts'], containsPair('privacyAcknowledged', true));
+    expect(bundle['declaredAt'], isNotNull);
+    expect(
+        bundle['declaredAt'],
+        (accounts.cast<Map>().firstWhere((account) =>
+            account['email'].toString().startsWith('consent-'))['createdAt']));
   });
 }

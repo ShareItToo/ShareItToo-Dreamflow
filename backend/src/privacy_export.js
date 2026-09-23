@@ -49,6 +49,13 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
 
   const account = accountResult.rows[0];
   if (!account) return null;
+  const registrationBundles = await rows(client,
+    `SELECT id, declaration_type, exact_wording, document_name,
+            document_version, declared_at, app_version, language, accepted,
+            metadata
+       FROM legal_declarations
+      WHERE user_id = $1 AND declaration_type = 'account_registration_bundle'
+      ORDER BY declared_at, id`, userId)();
   const identityVerificationSessions = await rows(client,
     `SELECT status, livemode, created_at, updated_at
        FROM identity_verification_sessions WHERE user_id = $1 ORDER BY created_at`, userId)();
@@ -1164,7 +1171,7 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
   const privacySafeMessages = minimizeThirdPartyStructuredLocations(messages);
 
   const raw = {
-    account,
+    account: { ...account, registrationBundles },
     authentication: { sessions, identities, pushDevices },
     marketplace: {
       listings,

@@ -179,20 +179,24 @@ function assertExplicitConsentContract({ root, sourceTexts, consent }) {
   }
 
   const registration = sourceText(root, sourceTexts, consent.registrationSource);
+  const registrationBundle = sourceText(
+    root,
+    sourceTexts,
+    'lib/utils/registration_consent_bundle.dart',
+  );
   for (const marker of [
-    '_minimumAgeConfirmed',
-    '_termsAccepted',
-    '_privacyAccepted',
-    '_privateUseConfirmed',
-    'Ich bin 18 Jahre oder älter.',
-    'Ich akzeptiere die AGB.',
-    'Ich akzeptiere die Datenschutzbestimmungen.',
-    'termsAccepted: _termsAccepted',
-    'privacyAccepted: _privacyAccepted',
-    'minimumAgeConfirmed: _minimumAgeConfirmed',
-    'privateUseConfirmed: _privateUseConfirmed',
+    'registrationConsentActionText',
+    'Kostenlos registrieren',
+    'Mit Google registrieren',
+    'Mit Apple registrieren',
+    'Mit Facebook registrieren',
+    'termsAccepted: true',
+    'privacyAccepted: true',
+    'minimumAgeConfirmed: true',
+    'privateUseConfirmed: true',
+    'registrationActionLabel:',
   ]) {
-    if (!registration.includes(marker)) {
+    if (!registration.includes(marker) && !registrationBundle.includes(marker)) {
       fail(`Registration consent contract is missing: ${marker}`);
     }
   }
@@ -590,14 +594,17 @@ export function validateLegalReadiness({
   if (consent.minimumUserAge !== 18 || submission.product?.minimumUserAge !== 18) {
     fail('The registration and store minimum age must both remain 18.');
   }
-  const confirmations = consent.explicitConfirmations;
-  if (!Array.isArray(confirmations)
-      || confirmations.join(',') !== 'minimumAge,terms,privacy,privateUse') {
-    fail('consentContract.explicitConfirmations must contain minimumAge, terms, privacy, and privateUse in order.');
+  if (consent.explicitRegistrationAction !== 'one-button-account-creation') {
+    fail('consentContract.explicitRegistrationAction must describe one account-creation action.');
+  }
+  const preservedFacts = consent.preservedRegistrationFacts;
+  if (!Array.isArray(preservedFacts)
+      || preservedFacts.join(',') !== 'minimumAge,terms,privacy,privateUse') {
+    fail('consentContract.preservedRegistrationFacts must contain minimumAge, terms, privacy, and privateUse in order.');
   }
   const expectedTechnicalStatus = legal.state === 'approved'
-    ? 'explicit-versioned-approved'
-    : 'explicit-unversioned-draft';
+    ? 'single-action-versioned-approved'
+    : 'single-action-versioned-draft';
   if (consent.technicalStatus !== expectedTechnicalStatus) {
     fail(`consentContract.technicalStatus must be ${expectedTechnicalStatus} for state=${legal.state}.`);
   }
@@ -721,7 +728,7 @@ export function validateLegalReadiness({
     approvalAllowed: legal.approvalAllowed,
     storeGate: storeGate.status,
     documentCount: Object.keys(documents).length,
-    explicitConfirmations: confirmations.length,
+    preservedRegistrationFacts: preservedFacts.length,
     interimPolicyVersion: legal.interimPilotRules.version,
     activeOpenPilotDecisions: 0,
     supersededPilotDecisions: v51SuccessorDecisionContract.length,

@@ -43,13 +43,16 @@
   },
   "consentContract": {
     "minimumUserAge": 18,
-    "explicitConfirmations": [
+    "explicitRegistrationAction": "one-button-account-creation",
+    "preservedRegistrationFacts": [
       "minimumAge",
       "terms",
       "privacy",
       "privateUse"
     ],
-    "technicalStatus": "explicit-unversioned-draft",
+    "registrationBundleDeclarationType": "account_registration_bundle",
+    "registrationBundleEvidence": "one-append-only-bundle-with-four-named-facts",
+    "technicalStatus": "single-action-versioned-draft",
     "registrationSource": "lib/screens/register_screen.dart",
     "authServiceSource": "lib/services/auth_service.dart",
     "backendSource": "backend/src/app.js"

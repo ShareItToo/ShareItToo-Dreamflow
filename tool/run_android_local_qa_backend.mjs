@@ -336,6 +336,7 @@ async function main() {
         privacyAccepted: true,
         minimumAgeConfirmed: true,
         privateUseConfirmed: true,
+        registrationActionLabel: 'Kostenlos registrieren',
       }),
       signal: AbortSignal.timeout(5_000),
     });

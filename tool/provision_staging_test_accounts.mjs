@@ -193,6 +193,7 @@ export function stagingRegistrationPayload(account) {
     privacyAccepted: true,
     minimumAgeConfirmed: true,
     privateUseConfirmed: true,
+    registrationActionLabel: 'Kostenlos registrieren',
   });
 }
 

@@ -9,7 +9,9 @@ import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/private_pilot_config.dart';
 import '../models/mfa.dart';
+import '../utils/registration_consent_bundle.dart';
 import 'backend_config.dart';
 import 'backend_http.dart';
 import 'backend_realtime_service.dart';
@@ -637,6 +639,7 @@ class AuthService {
     required bool privacyAccepted,
     required bool minimumAgeConfirmed,
     required bool privateUseConfirmed,
+    String registrationActionLabel = 'Kostenlos registrieren',
   }) async {
     if (!termsAccepted ||
         !privacyAccepted ||
@@ -657,6 +660,7 @@ class AuthService {
             'privacyAccepted': privacyAccepted,
             'minimumAgeConfirmed': minimumAgeConfirmed,
             'privateUseConfirmed': privateUseConfirmed,
+            'registrationActionLabel': registrationActionLabel,
           },
         );
         if (response['accepted'] != true) {
@@ -669,7 +673,9 @@ class AuthService {
             error.code == 'password_too_weak') {
           return const AuthResult.failure(AuthFailure.weakPassword);
         }
-        if (error.code == 'registration_consents_required') {
+        if (error.code == 'registration_consents_required' ||
+            error.code == 'registration_action_label_required' ||
+            error.code == 'registration_action_label_mismatch') {
           return const AuthResult.failure(AuthFailure.consentRequired);
         }
         if (error.code == 'verification_delivery_unavailable') {
@@ -695,15 +701,21 @@ class AuthService {
             (account['email'] as String?)?.toLowerCase() == normalizedEmail,
       );
       if (exists) return const AuthResult.failure(AuthFailure.emailInUse);
+      final createdAt = DateTime.now().toUtc().toIso8601String();
       accounts.add({
         'email': normalizedEmail,
         'password': password,
-        'createdAt': DateTime.now().toIso8601String(),
+        'createdAt': createdAt,
+        'registrationBundle': localRegistrationConsentBundle(
+          actionLabel: registrationActionLabel,
+          appVersion: PrivatePilotConfig.v52ClientBuild,
+          declaredAt: createdAt,
+        ),
       });
       await prefs.setString(_accountsKey, jsonEncode(accounts));
       final sessionData = {
         'email': normalizedEmail,
-        'createdAt': DateTime.now().toIso8601String(),
+        'createdAt': createdAt,
       };
       await _persistSessionEncoded(jsonEncode(sessionData));
       return AuthResult.success(
@@ -1223,6 +1235,7 @@ class AuthService {
     bool privacyAccepted = false,
     bool minimumAgeConfirmed = false,
     bool privateUseConfirmed = false,
+    String? registrationActionLabel,
     int? expectedSessionEpoch,
     bool Function()? isActionCurrent,
   }) {
@@ -1245,6 +1258,7 @@ class AuthService {
           privacyAccepted: privacyAccepted,
           minimumAgeConfirmed: minimumAgeConfirmed,
           privateUseConfirmed: privateUseConfirmed,
+          registrationActionLabel: registrationActionLabel,
           expectedSessionEpoch: capturedEpoch,
           isActionCurrent: isActionCurrent,
         ));
@@ -1256,6 +1270,7 @@ class AuthService {
     required bool privacyAccepted,
     required bool minimumAgeConfirmed,
     required bool privateUseConfirmed,
+    String? registrationActionLabel,
     required int expectedSessionEpoch,
     required bool Function()? isActionCurrent,
   }) async {
@@ -1298,6 +1313,8 @@ class AuthService {
             'privacyAccepted': privacyAccepted,
             'minimumAgeConfirmed': minimumAgeConfirmed,
             'privateUseConfirmed': privateUseConfirmed,
+            'registrationActionLabel': registrationActionLabel ??
+                'Mit ${provider.name[0].toUpperCase()}${provider.name.substring(1)} registrieren',
           },
         ),
         persist: (response) async {
@@ -1356,7 +1373,10 @@ class AuthService {
         return const AuthResult.failure(AuthFailure.principalChanged);
       }
       final failure = switch (error.code) {
-        'social_registration_consents_required' => AuthFailure.consentRequired,
+        'social_registration_consents_required' ||
+        'registration_action_label_required' ||
+        'registration_action_label_mismatch' =>
+          AuthFailure.consentRequired,
         'social_email_required' => AuthFailure.socialEmailRequired,
         'social_email_verification_required' =>
           AuthFailure.socialEmailVerificationRequired,

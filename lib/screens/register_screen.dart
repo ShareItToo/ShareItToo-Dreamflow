@@ -1,8 +1,6 @@
 import 'dart:ui';
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:lendify/config/private_pilot_config.dart';
 import 'package:lendify/models/mfa.dart';
 import 'package:lendify/navigation/main_navigation.dart';
 import 'package:lendify/screens/legal_privacy_screen.dart';
@@ -14,27 +12,13 @@ import 'package:lendify/services/developer_preview_service.dart';
 import 'package:lendify/services/firebase_runtime.dart';
 import 'package:lendify/services/mfa_auth_flow.dart';
 import 'package:lendify/theme.dart';
+import 'package:lendify/utils/registration_consent_bundle.dart';
 import 'package:lendify/utils/registration_input_policy.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/mfa_challenge_dialog.dart';
 import 'package:lendify/widgets/social_auth_button.dart';
 import 'package:lendify/widgets/tracked_dialog_route.dart';
 import 'package:provider/provider.dart';
-
-String? registrationConsentFeedback({
-  required bool minimumAgeConfirmed,
-  required bool privateUseConfirmed,
-  required bool termsAccepted,
-  required bool privacyAccepted,
-}) {
-  final missing = <String>[];
-  if (!minimumAgeConfirmed) missing.add('18 Jahre oder älter');
-  if (!privateUseConfirmed) missing.add('Privatnutzung im Privat-Pilot');
-  if (!termsAccepted) missing.add('AGB');
-  if (!privacyAccepted) missing.add('Datenschutz');
-  if (missing.isEmpty) return null;
-  return 'Bitte bestätige noch: ${missing.join(', ')}.';
-}
 
 class RegisterScreen extends StatefulWidget {
   final int? returnTabIndex;
@@ -73,11 +57,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _pwVisible = false;
   bool _pw2Visible = false;
   bool _peekBackdrop = false;
-  bool _minimumAgeConfirmed = false;
-  bool _privateUseConfirmed = false;
-  bool _termsAccepted = false;
-  bool _privacyAccepted = false;
-
   bool _didInteract = false;
   int _socialActionEpoch = 0;
   TrackedDialogRouteHandle<String>? _activeMfaRoute;
@@ -236,21 +215,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     FocusScope.of(context).unfocus();
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
-    final consentMessage = registrationConsentFeedback(
-      minimumAgeConfirmed: _minimumAgeConfirmed,
-      privateUseConfirmed: _privateUseConfirmed,
-      termsAccepted: _termsAccepted,
-      privacyAccepted: _privacyAccepted,
-    );
-    if (consentMessage != null) {
-      await AppPopup.toast(
-        context,
-        icon: Icons.gavel_outlined,
-        title: consentMessage,
-      );
-      return;
-    }
-
     setState(() => _busy = true);
     try {
       await Future<void>.delayed(const Duration(milliseconds: 600));
@@ -258,10 +222,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email: _emailCtrl.text.trim(),
         password: _pwCtrl.text,
         displayName: _nameCtrl.text.trim(),
-        termsAccepted: _termsAccepted,
-        privacyAccepted: _privacyAccepted,
-        minimumAgeConfirmed: _minimumAgeConfirmed,
-        privateUseConfirmed: _privateUseConfirmed,
+        termsAccepted: true,
+        privacyAccepted: true,
+        minimumAgeConfirmed: true,
+        privateUseConfirmed: true,
+        registrationActionLabel: 'Kostenlos registrieren',
       );
       if (!mounted) return;
       if (!result.ok) {
@@ -269,13 +234,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           AuthFailure.emailInUse => 'Diese E-Mail ist bereits registriert.',
           AuthFailure.weakPassword =>
             'Das Passwort muss mindestens 10 Zeichen, einen Buchstaben und eine Zahl enthalten.',
-          AuthFailure.consentRequired => registrationConsentFeedback(
-                minimumAgeConfirmed: _minimumAgeConfirmed,
-                privateUseConfirmed: _privateUseConfirmed,
-                termsAccepted: _termsAccepted,
-                privacyAccepted: _privacyAccepted,
-              ) ??
-              'Die erforderlichen Zustimmungen konnten nicht bestätigt werden. Bitte prüfe die vier Hinweise im Registrierungsformular.',
+          AuthFailure.consentRequired =>
+            'Die erforderlichen Angaben konnten nicht bestätigt werden. Bitte versuche es erneut.',
           AuthFailure.verificationDeliveryUnavailable =>
             'Dein Konto wurde vorgemerkt, aber die Bestätigungs-E-Mail konnte nicht angefordert werden. Bitte versuche die Registrierung später mit derselben E-Mail erneut.',
           AuthFailure.network =>
@@ -356,20 +316,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       AuthSocialProvider.apple => 'Apple',
       AuthSocialProvider.facebook => 'Facebook',
     };
-    final consentMessage = registrationConsentFeedback(
-      minimumAgeConfirmed: _minimumAgeConfirmed,
-      privateUseConfirmed: _privateUseConfirmed,
-      termsAccepted: _termsAccepted,
-      privacyAccepted: _privacyAccepted,
-    );
-    if (consentMessage != null) {
-      await AppPopup.toast(
-        context,
-        icon: Icons.gavel_outlined,
-        title: consentMessage,
-      );
-      return;
-    }
     AuthSessionOwner? successfulSessionOwner;
     setState(() => _busy = true);
     try {
@@ -382,10 +328,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
       var result = await AuthService.signInWithSocialProvider(
         provider,
-        termsAccepted: _termsAccepted,
-        privacyAccepted: _privacyAccepted,
-        minimumAgeConfirmed: _minimumAgeConfirmed,
-        privateUseConfirmed: _privateUseConfirmed,
+        termsAccepted: true,
+        privacyAccepted: true,
+        minimumAgeConfirmed: true,
+        privateUseConfirmed: true,
+        registrationActionLabel: 'Mit $providerLabel registrieren',
         expectedSessionEpoch: noSessionEpoch,
         isActionCurrent: () => _isSocialActionCurrent(actionEpoch),
       );
@@ -837,88 +784,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                         text:
                                                             'Passwörter müssen übereinstimmen'),
                                                     const SizedBox(height: 10),
-                                                    CheckboxListTile(
-                                                      value:
-                                                          _minimumAgeConfirmed,
-                                                      onChanged: _busy
-                                                          ? null
-                                                          : (value) => setState(
-                                                              () =>
-                                                                  _minimumAgeConfirmed =
-                                                                      value ==
-                                                                          true),
-                                                      controlAffinity:
-                                                          ListTileControlAffinity
-                                                              .leading,
-                                                      contentPadding:
-                                                          EdgeInsets.zero,
-                                                      dense: true,
-                                                      title: const Text(
-                                                        'Ich bin 18 Jahre oder älter.',
-                                                      ),
-                                                    ),
-                                                    CheckboxListTile(
-                                                      value:
-                                                          _privateUseConfirmed,
-                                                      onChanged: _busy
-                                                          ? null
-                                                          : (value) => setState(
-                                                              () =>
-                                                                  _privateUseConfirmed =
-                                                                      value ==
-                                                                          true),
-                                                      controlAffinity:
-                                                          ListTileControlAffinity
-                                                              .leading,
-                                                      contentPadding:
-                                                          EdgeInsets.zero,
-                                                      dense: true,
-                                                      title: const Text(
-                                                        PrivatePilotConfig
-                                                            .accountPrivateDeclaration,
-                                                      ),
-                                                    ),
-                                                    CheckboxListTile(
-                                                      value: _termsAccepted,
-                                                      onChanged: _busy
-                                                          ? null
-                                                          : (value) => setState(
-                                                              () =>
-                                                                  _termsAccepted =
-                                                                      value ==
-                                                                          true),
-                                                      controlAffinity:
-                                                          ListTileControlAffinity
-                                                              .leading,
-                                                      contentPadding:
-                                                          EdgeInsets.zero,
-                                                      dense: true,
-                                                      title: const Text(
-                                                        'Ich akzeptiere die AGB.',
-                                                      ),
-                                                    ),
-                                                    CheckboxListTile(
-                                                      value: _privacyAccepted,
-                                                      onChanged: _busy
-                                                          ? null
-                                                          : (value) => setState(
-                                                              () =>
-                                                                  _privacyAccepted =
-                                                                      value ==
-                                                                          true),
-                                                      controlAffinity:
-                                                          ListTileControlAffinity
-                                                              .leading,
-                                                      contentPadding:
-                                                          EdgeInsets.zero,
-                                                      dense: true,
-                                                      title: const Text(
-                                                        'Ich akzeptiere die Datenschutzbestimmungen.',
-                                                      ),
-                                                    ),
                                                     const SizedBox(height: 10),
                                                     const SocialAuthOrDivider(),
                                                     const SizedBox(height: 10),
+                                                    _LegalText(
+                                                      actionLabel:
+                                                          'Mit Google registrieren',
+                                                      onOpenTerms: _openTerms,
+                                                      onOpenPrivacy:
+                                                          _openPrivacy,
+                                                    ),
+                                                    const SizedBox(height: 4),
                                                     SocialAuthButton(
                                                         brand: SocialAuthBrand
                                                             .google,
@@ -933,6 +809,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                                 AuthSocialProvider
                                                                     .google)),
                                                     const SizedBox(height: 8),
+                                                    _LegalText(
+                                                      actionLabel:
+                                                          'Mit Apple registrieren',
+                                                      onOpenTerms: _openTerms,
+                                                      onOpenPrivacy:
+                                                          _openPrivacy,
+                                                    ),
+                                                    const SizedBox(height: 4),
                                                     SocialAuthButton(
                                                         brand: SocialAuthBrand
                                                             .apple,
@@ -948,6 +832,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                                 AuthSocialProvider
                                                                     .apple)),
                                                     const SizedBox(height: 8),
+                                                    _LegalText(
+                                                      actionLabel:
+                                                          'Mit Facebook registrieren',
+                                                      onOpenTerms: _openTerms,
+                                                      onOpenPrivacy:
+                                                          _openPrivacy,
+                                                    ),
+                                                    const SizedBox(height: 4),
                                                     SocialAuthButton(
                                                         brand: SocialAuthBrand
                                                             .facebook,
@@ -1407,13 +1299,15 @@ class _StickyAuthBar extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _LegalText(
+                    actionLabel: 'Kostenlos registrieren',
+                    onOpenTerms: onOpenTerms,
+                    onOpenPrivacy: onOpenPrivacy),
+                const SizedBox(height: 8),
                 _PrimaryCTAButton(
                     busy: busy,
                     label: busy ? 'Registrieren…' : 'Kostenlos registrieren',
                     onTap: onSubmit),
-                const SizedBox(height: 8),
-                _LegalText(
-                    onOpenTerms: onOpenTerms, onOpenPrivacy: onOpenPrivacy),
                 const SizedBox(height: 6),
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Text('Schon bei SIT? ',
@@ -1508,9 +1402,14 @@ class _PrimaryCTAButton extends StatelessWidget {
 }
 
 class _LegalText extends StatelessWidget {
+  final String actionLabel;
   final VoidCallback onOpenTerms;
   final VoidCallback onOpenPrivacy;
-  const _LegalText({required this.onOpenTerms, required this.onOpenPrivacy});
+  const _LegalText({
+    required this.actionLabel,
+    required this.onOpenTerms,
+    required this.onOpenPrivacy,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1525,29 +1424,62 @@ class _LegalText extends StatelessWidget {
       decoration: TextDecoration.underline,
       decorationColor: Colors.white.withValues(alpha: 0.80),
     );
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Text.rich(
-        TextSpan(
+    final actionText = registrationConsentActionText(actionLabel);
+    final termsPrefix = actionText.split('SIT-Plattformbedingungen').first;
+    final privacySuffix = actionText.split('Datenschutzerklärung').last;
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      label: actionText,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            TextSpan(
-                text: 'Bitte lies vor der Registrierung unsere ', style: base),
-            TextSpan(
-                text: 'AGB',
-                style: link,
-                recognizer: TapGestureRecognizer()..onTap = onOpenTerms),
-            TextSpan(text: ' und ', style: base),
-            TextSpan(
-                text: 'Datenschutzbestimmungen',
-                style: link,
-                recognizer: TapGestureRecognizer()..onTap = onOpenPrivacy),
-            TextSpan(text: '.', style: base),
+            Text(termsPrefix, style: base, textAlign: TextAlign.center),
+            _InlineLegalLink(
+              label: 'SIT-Plattformbedingungen',
+              style: link,
+              onTap: onOpenTerms,
+            ),
+            Text(' und nimmst die ', style: base),
+            _InlineLegalLink(
+              label: 'Datenschutzerklärung',
+              style: link,
+              onTap: onOpenPrivacy,
+            ),
+            Text(privacySuffix, style: base),
           ],
         ),
-        textAlign: TextAlign.center,
       ),
     );
   }
+}
+
+class _InlineLegalLink extends StatelessWidget {
+  final String label;
+  final TextStyle? style;
+  final VoidCallback onTap;
+
+  const _InlineLegalLink({
+    required this.label,
+    required this.style,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: label,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+            child: Text(label, style: style),
+          ),
+        ),
+      );
 }
 
 class _TextLink extends StatelessWidget {

@@ -243,6 +243,7 @@ if (!databaseUrl) {
         '094_apple_refresh_material_only.up.sql',
         '095_staging_google_registration_replays.up.sql',
         '096_booking_exact_time_snapshot.up.sql',
+        '097_registration_consent_bundle.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);
@@ -12006,6 +12007,8 @@ if (!databaseUrl) {
         termsAccepted: true,
         privacyAccepted: true,
         minimumAgeConfirmed: true,
+        privateUseConfirmed: true,
+        registrationActionLabel: 'Kostenlos registrieren',
       };
       const register = () => fetch(`${baseUrl}/v1/auth/register`, {
         method: 'POST',
@@ -12017,9 +12020,37 @@ if (!databaseUrl) {
       const registration = await register();
       assert.equal(registration.status, 202);
       assert.deepEqual(await registration.json(), { accepted: true });
+      const emailBundle = await setupPool.query(
+        `SELECT declaration_type, exact_wording, accepted, declared_at, metadata
+           FROM legal_declarations
+          WHERE user_id = (SELECT id FROM users WHERE email = $1)
+            AND declaration_type = 'account_registration_bundle'`,
+        [registrationBody.email],
+      );
+      assert.equal(emailBundle.rowCount, 1);
+      assert.equal(emailBundle.rows[0].accepted, true);
+      assert.equal(emailBundle.rows[0].metadata.localTestOnly, false);
+      assert.equal(
+        new Date(emailBundle.rows[0].declared_at).toISOString(),
+        emailBundle.rows[0].metadata.declaredAt,
+      );
+      assert.deepEqual(emailBundle.rows[0].metadata.facts, {
+        minimumAge18: true,
+        privateUseOnly: true,
+        termsAccepted: true,
+        privacyAcknowledged: true,
+      });
       const duplicateRegistration = await register();
       assert.equal(duplicateRegistration.status, 202);
       assert.deepEqual(await duplicateRegistration.json(), { accepted: true });
+      const duplicateEmailBundle = await setupPool.query(
+        `SELECT count(*)::int AS count
+           FROM legal_declarations
+          WHERE user_id = (SELECT id FROM users WHERE email = $1)
+            AND declaration_type = 'account_registration_bundle'`,
+        [registrationBody.email],
+      );
+      assert.equal(duplicateEmailBundle.rows[0].count, 1);
 
       const unavailableRegistrationBody = {
         ...registrationBody,
@@ -12069,7 +12100,7 @@ if (!databaseUrl) {
       assert.equal(unverifiedLogin.status, 403);
       assert.equal((await unverifiedLogin.json()).error, 'email_verification_required');
 
-      const socialRequest = (token, consents = false) =>
+      const socialRequest = (token, consents = false, registrationActionLabel = 'Mit Google registrieren') =>
         fetch(`${baseUrl}/v1/auth/social`, {
           method: 'POST',
           headers: {
@@ -12081,6 +12112,8 @@ if (!databaseUrl) {
             termsAccepted: consents,
             privacyAccepted: consents,
             minimumAgeConfirmed: consents,
+            privateUseConfirmed: consents,
+            registrationActionLabel,
           }),
         });
       socialClaims.set('google-new', {
@@ -12106,6 +12139,16 @@ if (!databaseUrl) {
       assert.equal(socialSession.user.email, 'social-google@example.com');
       assert.equal(socialSession.user.emailVerified, true);
       assert.match(socialSession.sessionId, /^[0-9a-f-]{36}$/);
+      const socialBundle = await setupPool.query(
+        `SELECT count(*)::int AS count, metadata
+           FROM legal_declarations
+          WHERE user_id = $1 AND declaration_type = 'account_registration_bundle'
+          GROUP BY metadata`,
+        [socialSession.user.id],
+      );
+      assert.equal(socialBundle.rows.length, 1);
+      assert.equal(socialBundle.rows[0].count, 1);
+      assert.equal(socialBundle.rows[0].metadata.actionLabel, 'Mit Google registrieren');
       const passwordlessExportResponse = await fetch(`${baseUrl}/v1/account/export`, {
         method: 'POST',
         headers: {
@@ -12139,6 +12182,13 @@ if (!databaseUrl) {
       );
       assert.equal(repeatSocialLogin.status, 200);
       assert.equal((await repeatSocialLogin.json()).user.id, socialSession.user.id);
+      const repeatedSocialBundle = await setupPool.query(
+        `SELECT count(*)::int AS count
+           FROM legal_declarations
+          WHERE user_id = $1 AND declaration_type = 'account_registration_bundle'`,
+        [socialSession.user.id],
+      );
+      assert.equal(repeatedSocialBundle.rows[0].count, 1);
 
       socialClaims.set('facebook-existing', {
         provider: 'facebook',
@@ -12195,6 +12245,7 @@ if (!databaseUrl) {
       const facebookRegistration = await socialRequest(
         'facebook-new',
         true,
+        'Mit Facebook registrieren',
       );
       assert.equal(facebookRegistration.status, 202);
       assert.deepEqual(await facebookRegistration.json(), {
