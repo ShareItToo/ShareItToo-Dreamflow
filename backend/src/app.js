@@ -1116,7 +1116,10 @@ async function requirePrivatePilotStoredListing(
       pilotRegionCode: row.private_pilot_region_code,
       ownerPrivateUseConfirmedAt: row.private_use_confirmed_at,
       ownerPrivateMarketplaceReviewStatus: row.private_marketplace_review_status,
-    }, { allowedRegions: config.privatePilot.allowedRegions });
+    }, {
+      allowedRegions: config.privatePilot.allowedRegions,
+      requireDeclaration,
+    });
   } catch (error) {
     translatePrivatePilotEligibilityError(error);
   }
@@ -5279,6 +5282,7 @@ export function createApp({
         updated = await client.query(
           `UPDATE listings
            SET private_status_confirmed_at = now(),
+               catalog_revision = catalog_revision + 1,
                payload = jsonb_set(payload, '{privateStatusConfirmed}', 'true'::jsonb)
            WHERE id = $1 AND owner_id = $2
            RETURNING payload, catalog_revision`,

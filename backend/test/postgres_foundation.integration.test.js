@@ -2659,6 +2659,22 @@ if (!databaseUrl) {
          )`,
         ['b'.repeat(64)],
       );
+      if (process.env.PRIVATE_PILOT_V4_ENABLED === 'true') {
+        await setupPool.query(
+          `UPDATE users
+              SET private_use_confirmed_at = now(),
+                  private_marketplace_review_status = 'clear'
+            WHERE id = 'owner'`,
+        );
+        await setupPool.query(
+          `UPDATE listings
+              SET private_status_confirmed_at = now(),
+                  private_pilot_region_code = 'berlin',
+                  subcategory = 'Kameras',
+                  payload = jsonb_set(payload, '{privateStatusConfirmed}', 'true'::jsonb)
+            WHERE id = 'listing-1'`,
+        );
+      }
       await setupPool.query(
         `UPDATE listings
          SET payload = jsonb_set(

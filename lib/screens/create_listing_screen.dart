@@ -12,6 +12,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/category.dart';
 import 'package:lendify/models/supply_enrichment.dart';
+import 'package:lendify/models/user.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/listing_mutation_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
@@ -51,6 +52,17 @@ String resolveListingEditorCity({
     if (normalized.isNotEmpty) return normalized;
   }
   throw StateError('Für den Anzeigeneditor ist keine Stadt verfügbar.');
+}
+
+@visibleForTesting
+String resolveListingEditorProfilePlace(User user) {
+  final homeLocation = user.homeLocation?.trim() ?? '';
+  if (homeLocation.isNotEmpty) return homeLocation;
+  final city = (user.addressCity ?? user.city)?.trim() ?? '';
+  final country = (user.addressCountry ?? user.country)?.trim() ?? '';
+  return <String>[city, country]
+      .where((part) => part.isNotEmpty)
+      .join(', ');
 }
 
 @visibleForTesting
@@ -328,12 +340,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         widget.existing == null &&
         widget.supplyPrefill == null &&
         _addressCtrl.text.trim().isEmpty) {
-      final profilePlace = user.homeLocation?.trim().isNotEmpty == true
-          ? user.homeLocation!.trim()
-          : <String?>[user.addressCity, user.addressCountry]
-              .where((part) => part?.trim().isNotEmpty == true)
-              .map((part) => part!.trim())
-              .join(', ');
+      final profilePlace = resolveListingEditorProfilePlace(user);
       if (profilePlace.isNotEmpty) {
         _addressCtrl.text = profilePlace;
         _registeredCity ??= user.addressCity ?? user.city;

@@ -44,7 +44,13 @@ export function integrationTestPlan({
   focusedGoogleRegistration = false,
   focusedLegacySchema = false,
   focusedIdentity = false,
+  focusedPrivateListing = false,
 } = {}) {
+  if (focusedPrivateListing) {
+    return [Object.freeze([
+      'backend/test/private_pilot_listing_activation.integration.test.js',
+    ])];
+  }
   if (focusedGoogleRegistration) {
     return [integrationTestGroups.stagingGoogleRegistration];
   }
@@ -247,12 +253,14 @@ export async function runLocalPostgresIntegration({
   let primaryError = null;
   let port = null;
   const focusedIdentity = environment.SIT_POSTGRES_FOCUSED_IDENTITY === '1';
+  const focusedPrivateListing = environment.SIT_POSTGRES_FOCUSED_PRIVATE_LISTING === '1';
   const focusedGoogleRegistration = environment.SIT_POSTGRES_FOCUSED_GOOGLE === '1';
   const focusedLegacySchema = environment.SIT_POSTGRES_FOCUSED_LEGACY === '1';
   const integrationGroups = integrationTestPlan({
     focusedGoogleRegistration,
     focusedLegacySchema,
     focusedIdentity,
+    focusedPrivateListing,
   });
 
   const onSignal = (signal) => {
