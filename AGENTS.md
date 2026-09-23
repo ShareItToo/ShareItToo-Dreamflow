@@ -44,6 +44,11 @@ discover a mechanically stale source hash.
   retries. Reproduce the defect in an isolated deterministic test, review the
   fix and re-gate it with Sol/Gemini before re-execution; never chain unreviewed
   live hotfix retries.
+- Shell variable hygiene: in zsh never assign `path`, `PATH`, `fpath`, `cdpath`
+  or another shell-special array or option as a task variable. Use a
+  task-specific name such as `sit_route`; after variable shadowing causes
+  `command not found`, discard that snippet and rerun only with the verified
+  task-specific name.
 - Mutating Ops-runner invariant: a runner is not ready for live execution until
   a deterministic command-executor test drives its generated plan with
   production-shaped readbacks through the point immediately before the first
