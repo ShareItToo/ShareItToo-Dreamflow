@@ -683,6 +683,22 @@
       "sha256": "2ef33390248763e4054070a893477abdc92b76c6d16a4e2c85b4cf27c4715cf9"
     },
     {
+      "path": "backend/sql/migrations/096_booking_exact_time_snapshot.up.sql",
+      "sha256": "b3c3ad6d0f279c243ea1e61cba555d9e370d0f5338f3b9cc2256d0da03263677"
+    },
+    {
+      "path": "backend/sql/migrations/096_booking_exact_time_snapshot.down.sql",
+      "sha256": "9855c3315058e63073220d17f7abdb88e565aeb6e13d64b1c2859b99e051aa29"
+    },
+    {
+      "path": "backend/sql/migrations/097_registration_consent_bundle.up.sql",
+      "sha256": "27e60272f42625d920b48538221a0aaf193a582cab789eaa8f2f7da4d477b6c0"
+    },
+    {
+      "path": "backend/sql/migrations/097_registration_consent_bundle.down.sql",
+      "sha256": "5189efec03d7cf9b8cd331621e1f8f764a9f1e4221433934fc5e873862133c1f"
+    },
+    {
       "path": "backend/src/firebase_identity_cleanup.js",
       "sha256": "f4f4f77c57cca13b3e63e96fd50add1200bc2c59a99b50125902032d1df93fa5"
     },

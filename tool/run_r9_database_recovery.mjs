@@ -75,6 +75,14 @@ const rollbackGuardExpectations = Object.freeze([
     filename: '095_staging_google_registration_replays.down.sql',
     message: 'staging_google_registration_replays_active_rows',
   }),
+  Object.freeze({
+    filename: '096_booking_exact_time_snapshot.down.sql',
+    message: 'booking_exact_time_snapshot_active_rows',
+  }),
+  Object.freeze({
+    filename: '097_registration_consent_bundle.down.sql',
+    message: 'registration_consent_bundles_active_rows',
+  }),
 ]);
 
 function fail(message) {
@@ -683,6 +691,42 @@ async function assertRollbackGuardRefusals(pool, root) {
              token_digest, identity_digest, expires_at
            ) VALUES ($1, $2, now() + interval '1 hour')`,
           ['a'.repeat(64), 'b'.repeat(64)],
+        );
+      }
+      if (guard.filename === '096_booking_exact_time_snapshot.down.sql') {
+        await client.query(
+          `INSERT INTO booking_quotes (
+             id, renter_id, listing_id, rental_start_date, rental_end_date,
+             rental_timezone, starts_at, ends_at, catalog_revision,
+             availability_revision, quote_version, currency, total_minor,
+             quote_payload, quote_hash, expires_at, time_snapshot_version,
+             handover_at, return_at
+           ) VALUES (
+             'quote_00000000-0000-4000-8000-000000000096', 'r9-user-001',
+             'r9-listing-001', '2026-10-01', '2026-10-02', 'Europe/Berlin',
+             '2026-10-01T10:00:00Z', '2026-10-02T10:00:00Z', 1, 1, 1,
+             'EUR', 1000, '{}'::jsonb, $1, '2026-10-03T10:00:00Z',
+             'booking-time-v1', '2026-10-01T10:00:00Z', '2026-10-01T11:00:00Z'
+           )`,
+          ['c'.repeat(64)],
+        );
+      }
+      if (guard.filename === '097_registration_consent_bundle.down.sql') {
+        await client.query(
+          `INSERT INTO legal_declarations (
+             user_id, declaration_type, exact_wording, document_name,
+             document_version, app_version, language, accepted, metadata
+           ) VALUES (
+             'r9-user-001', 'account_registration_bundle', 'synthetic wording',
+             'synthetic registration bundle', 'V5.2-2026-08-16', 'r9-test',
+             'de', TRUE, $1::jsonb
+           )`,
+          [JSON.stringify({
+            type: 'account_registration_bundle', actionLabel: 'Synthetic registration',
+            exactCtaText: 'Synthetic registration', facts: {}, documents: {},
+            appVersion: 'r9-test', language: 'de', declaredAt: '2026-09-23T00:00:00Z',
+            localTestOnly: false,
+          })],
         );
       }
       try {

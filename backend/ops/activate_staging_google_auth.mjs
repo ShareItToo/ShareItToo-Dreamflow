@@ -33,7 +33,7 @@ const requiredSafetyEnv = Object.freeze({
 });
 const activatedEnvironment = 'staging';
 const activatedAuth = 'true';
-const requiredStagingMigration = '095_staging_google_registration_replays.up.sql';
+const requiredStagingMigration = '097_registration_consent_bundle.up.sql';
 
 function fail(code) {
   const error = new Error(`Staging Google Auth activation failed: ${code}`);

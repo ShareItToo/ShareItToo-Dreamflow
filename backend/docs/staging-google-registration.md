@@ -10,9 +10,9 @@ contain no plaintext email, Firebase UID, token, or secret.
 ## Activation checklist
 
 1. Run the Green promotion from the manifest-bound source readback schema
-   `92` through current schema `95`. Require the source ledger digest before
-   rehearsal, the full isolated 95 ledger digest before candidate provisioning,
-   and the exact `095_staging_google_registration_replays.up.sql` readback for
+   `92` through current schema `97`. Require the source ledger digest before
+   rehearsal, the full isolated 97 ledger digest before candidate provisioning,
+   and the exact `097_registration_consent_bundle.up.sql` readback for
    isolated and canonical targets. The runner rejects any other readback and
    leaves Google registration disabled.
 2. Run the existing separate Firebase-auth activation runner for its reviewed

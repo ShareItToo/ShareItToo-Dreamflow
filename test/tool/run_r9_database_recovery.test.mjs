@@ -84,6 +84,8 @@ function passedObservation() {
         '075_refund_transfer_reversal_recovery.down.sql:Refund transfer reversal rollback blocked: durable provider recovery data exists',
         '077_refund_provider_truth_parity.down.sql:Refund provider truth rollback blocked: post-migration refunds exist',
         '095_staging_google_registration_replays.down.sql:staging_google_registration_replays_active_rows',
+        '096_booking_exact_time_snapshot.down.sql:booking_exact_time_snapshot_active_rows',
+        '097_registration_consent_bundle.down.sql:registration_consent_bundles_active_rows',
       ],
       allDestructiveRollbacksRefused: true,
       restoredDataDigestUnchanged: true,

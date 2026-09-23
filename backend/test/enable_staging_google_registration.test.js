@@ -16,7 +16,7 @@ const imageDigest = `sha256:${'a'.repeat(64)}`;
 const mappingDigest = 'b'.repeat(64);
 const userId = 'synthetic_google_registration_user';
 const registrationAllowlistKey = 'SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST';
-const migrationLedgerDigest = 'b31bd8054569f851a4fed0798fb0d8b971282256461e764529564cd14d2e802f';
+const migrationLedgerDigest = '950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0';
 
 function envContent({ unrelated = 'preserve-me', registration = false, allowlist = null } = {}) {
   return [
@@ -207,7 +207,7 @@ function statefulDockerExecutor(fx, {
         const ledgerShell = args[2] === 'sh' && args[3] === '-c' && !args.includes('-e');
         if ((!directPsql && !ledgerShell) || args.length < 3) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
         if (script.includes('SELECT 1')) return { stdout: '1\n', code: 0 };
-        if (script.includes('ORDER BY applied_at')) return { stdout: `${wrongSchema ? '094_apple_refresh_material_only.up.sql' : '095_staging_google_registration_replays.up.sql'}\n`, code: 0 };
+        if (script.includes('ORDER BY applied_at')) return { stdout: `${wrongSchema ? '096_booking_exact_time_snapshot.up.sql' : '097_registration_consent_bundle.up.sql'}\n`, code: 0 };
         if (script.includes('string_agg')) return { stdout: `${migrationLedgerDigest}\n`, code: 0 };
         fail('unknown_database_exec', options.phase);
       }
@@ -482,7 +482,7 @@ function statefulDockerExecutor(fx, {
   return { command, calls, state: { containers } };
 }
 
-test('default-off preflight validates schema 95 and does not mutate or expose mapping', async () => {
+test('default-off preflight validates schema 97 and does not mutate or expose mapping', async () => {
   const fx = await fixture();
   try {
     const fake = statefulDockerExecutor(fx);

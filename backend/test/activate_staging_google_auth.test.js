@@ -121,7 +121,7 @@ function fakeCommand(fx) {
       if (phase === 'current_uploads_volume_inspect') return json(uploads);
       if (phase === 'current_image_inspect') return json(image);
       if (phase === 'current_database_probe') return { stdout: '1' };
-      if (phase === 'current_schema_migration_readback') return { stdout: '095_staging_google_registration_replays.up.sql\n' };
+      if (phase === 'current_schema_migration_readback') return { stdout: '097_registration_consent_bundle.up.sql\n' };
       if (phase === 'current_config_import_probe') return { stdout: JSON.stringify({ auth: true, mfa: true, project: true, environment: 'staging' }) };
       if (phase === 'current_live_probe' || phase === 'current_ready_probe') return { stdout: JSON.stringify({ status: 200, payload: { status: 'ok' } }) };
       if (phase === 'current_version_probe') return { stdout: JSON.stringify({ commit: revision, environment: 'test' }) };

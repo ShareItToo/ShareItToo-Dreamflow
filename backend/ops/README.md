@@ -120,9 +120,9 @@ mode `0600` and bind exactly `shareittoo-staging-api`,
 `sit-green-network-20260918011528-wp254`,
 `sit-staging-provider-egress` and
 `sit-green-uploads-20260918011528-wp254`, with Green label and manifest-bound
-source readback schema `92`. The current target is schema `95`; the isolated
+source readback schema `92`. The current target is schema `97`; the isolated
 and canonical readbacks must end at the exact
-`095_staging_google_registration_replays.up.sql` migration.
+`097_registration_consent_bundle.up.sql` migration.
 The database identity is exactly `shareittoo_green` / `shareittoo_green`;
 legacy `shareittoo_staging` is never used by this lane.
 The source readback is exactly schema `92` with the manifest-bound ledger
@@ -147,10 +147,10 @@ tags are rejected before a command is planned.
 
 The plan takes a fresh protected backup, restores the manifest-bound Green
 source readback `92` into a run-scoped internal target and explicitly migrates
-it to current schema `95` through
-`095_staging_google_registration_replays.up.sql`, then proves
-the full source-to-current migration ledger (expected 95-row digest
-`b31bd8054569f851a4fed0798fb0d8b971282256461e764529564cd14d2e802f`) and
+it to current schema `97` through
+`097_registration_consent_bundle.up.sql`, then proves
+the full source-to-current migration ledger (expected 97-row digest
+`950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0`) and
 the official PostgreSQL init-complete log marker followed by two stable
 `SELECT 1` readbacks before restore/provisioning. The network, Postgres and
 candidate creation responses are captured as immutable IDs; all later
@@ -190,8 +190,8 @@ implicitly enabled by this runner. After the exact target readback, the observed
 sealed before foreign-writer checks, the protected backup and the isolated
 rehearsal. The isolated candidate is then run and cleaned up before the
 canonical Green database is
-explicitly migrated from source readback `92` to current schema `95` through
-`095_staging_google_registration_replays.up.sql` and read back before the
+explicitly migrated from source readback `92` to current schema `97` through
+`097_registration_consent_bundle.up.sql` and read back before the
 final image is created. If that canonical mutation starts, the sealed old image is never
 restarted; recovery is a forward candidate path.
 

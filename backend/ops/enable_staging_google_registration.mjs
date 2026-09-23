@@ -16,8 +16,8 @@ import {
 import { readStablePrivateFile } from './stable_private_file.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const requiredTerminalMigration = '095_staging_google_registration_replays.up.sql';
-const requiredMigrationLedger = 'b31bd8054569f851a4fed0798fb0d8b971282256461e764529564cd14d2e802f';
+const requiredTerminalMigration = '097_registration_consent_bundle.up.sql';
+const requiredMigrationLedger = '950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0';
 const registrationEnabledKey = 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED';
 const registrationAllowlistKey = 'SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST';
 const allowedUserIdsKey = 'SIT_STAGING_ALLOWED_USER_IDS';
