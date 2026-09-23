@@ -363,6 +363,12 @@ import {
   safeOperationalErrorCode,
 } from './observability.js';
 import { buildAccountExport } from './privacy_export.js';
+import {
+  emailVerificationCapabilities,
+  emailVerificationRequiredCode,
+  routeNeedsVerifiedEmail,
+  uploadNeedsVerifiedEmail,
+} from './email_verification_gate.js';
 import { createMapsProxy, MapsProxyError } from './maps_proxy.js';
 import {
   ComplianceReviewError,
@@ -717,6 +723,7 @@ function assertStagingActionTokenOwner(row) {
 const requireActiveAccount = asyncRoute(async (req, _res, next) => {
   const result = await pool.query(
     `SELECT u.id, u.email, u.role, u.account_status, u.deactivated_at,
+            u.email_verified_at,
             session.id AS session_id, session.revoked_at AS session_revoked_at,
             session.mfa_verified_at,
             factor.status AS mfa_status, factor.enabled_at AS mfa_enabled_at
@@ -740,7 +747,92 @@ const requireActiveAccount = asyncRoute(async (req, _res, next) => {
     role: user.role,
     accountStatus: user.account_status,
     deactivatedAt: user.deactivated_at,
+    emailVerified: Boolean(user.email_verified_at),
   };
+  next();
+});
+
+async function readCurrentEmailVerification(req) {
+  const result = await pool.query(
+    `SELECT u.email_verified_at, u.deactivated_at, u.account_status,
+            session.revoked_at AS session_revoked_at
+       FROM users AS u
+       JOIN auth_sessions AS session
+         ON session.id = $2 AND session.user_id = u.id
+      WHERE u.id = $1`,
+    [req.auth.userId, req.auth.sessionId],
+  );
+  return result.rows[0] ?? null;
+}
+
+async function assertCurrentEmailVerified(req) {
+  const state = await readCurrentEmailVerification(req);
+  if (!state || state.deactivated_at || state.account_status !== 'active'
+      || state.session_revoked_at) return;
+  if (!state.email_verified_at) {
+    throw new HttpError(403, emailVerificationRequiredCode, {
+      verificationPending: true,
+      resendAllowed: true,
+    });
+  }
+  req.auth.emailVerified = true;
+  req.auth.capabilities = emailVerificationCapabilities(true);
+}
+
+const requireVerifiedEmailForUpload = asyncRoute(async (req, _res, next) => {
+  const purpose = safeText(req.body?.purpose, 40) || 'listing_image';
+  let required = uploadNeedsVerifiedEmail(purpose);
+  if (purpose === 'listing_image' && req.body?.listingId) {
+    const listing = await pool.query(
+      'SELECT is_active, status FROM listings WHERE id = $1 AND owner_id = $2',
+      [safeText(req.body.listingId, 120), req.auth.userId],
+    );
+    required = required || listing.rows[0]?.is_active === true || listing.rows[0]?.status === 'active';
+  }
+  if (required) await assertCurrentEmailVerified(req);
+  next();
+});
+
+const emailVerificationRouteGate = asyncRoute(async (req, _res, next) => {
+  if (!bearerToken(req)) return next();
+  let payload;
+  try {
+    payload = verifyAccessToken(bearerToken(req));
+  } catch {
+    return next();
+  }
+  const auth = { userId: payload.sub, sessionId: payload.sid };
+  const route = {
+    method: req.method,
+    path: req.path,
+    body: req.body,
+  };
+  if (req.method === 'PUT' && /^\/v1\/listings\/[^/]+(?:\/availability)?$/u.test(req.path)) {
+    const listingId = req.path.split('/')[3];
+    const listing = await pool.query(
+      'SELECT is_active FROM listings WHERE id = $1 AND owner_id = $2',
+      [req.params?.id ?? listingId, payload.sub],
+    );
+    route.listingIsActive = listing.rowCount ? listing.rows[0].is_active === true : null;
+  }
+  if (!routeNeedsVerifiedEmail(route)) return next();
+  const state = await pool.query(
+    `SELECT u.email_verified_at, u.deactivated_at, u.account_status,
+            session.revoked_at AS session_revoked_at
+       FROM users AS u
+       JOIN auth_sessions AS session
+         ON session.id = $2 AND session.user_id = u.id
+      WHERE u.id = $1`,
+    [auth.userId, auth.sessionId],
+  );
+  const current = state.rows[0];
+  if (current && !current.deactivated_at && current.account_status === 'active'
+      && !current.session_revoked_at && !current.email_verified_at) {
+    throw new HttpError(403, emailVerificationRequiredCode, {
+      verificationPending: true,
+      resendAllowed: true,
+    });
+  }
   next();
 });
 
@@ -2202,6 +2294,9 @@ export function createApp({
   }));
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: false, limit: '20kb' }));
+  // Evaluate verification-sensitive capabilities from the current DB row at request time.
+  // Webhooks are registered above this middleware and remain provider-authenticated.
+  app.use(emailVerificationRouteGate);
 
   const limitHandler = (req, res) => res.status(429).json(errorPayload(req, 'rate_limit_exceeded'));
   const {
@@ -2403,6 +2498,7 @@ export function createApp({
     const passwordHash = await hashPassword(password);
     const userId = crypto.randomUUID();
     let verificationUser = null;
+    let registrationSession = null;
 
     await inTransaction(async (client) => {
       const existing = await client.query('SELECT * FROM users WHERE email = $1', [email]);
@@ -2442,16 +2538,30 @@ export function createApp({
         userId,
         actionLabel: registrationActionLabel,
       });
+      registrationSession = await issueSession(client, result.rows[0], {
+        userAgent: req.get('user-agent'),
+        ipAddress: requestIp(req),
+      });
     });
     if (verificationUser) {
       try {
         await deliverVerification(verificationUser);
       } catch (error) {
         console.error('[auth] registration verification delivery failed', safeOperationalErrorCode(error, 'verification_delivery_failed'));
-        throw new HttpError(503, 'verification_delivery_unavailable');
+        return res.status(202).json({
+          accepted: true,
+          verificationPending: true,
+          verificationEmailSent: false,
+          session: registrationSession,
+        });
       }
     }
-    res.status(202).json({ accepted: true });
+    res.status(202).json({
+      accepted: true,
+      verificationPending: Boolean(verificationUser),
+      verificationEmailSent: Boolean(verificationUser),
+      ...(registrationSession ? { session: registrationSession } : {}),
+    });
   }));
 
   app.post('/v1/auth/social', socialAuthLimiter, asyncRoute(async (req, res) => {
@@ -2857,9 +2967,7 @@ export function createApp({
           assertStagingGoogleRegistrationPolicy(error);
         }
       }
-      if (!user.email_verified_at) {
-        return { verificationUser: user, session: null };
-      }
+      const verificationPending = !user.email_verified_at;
       if (await isMfaEnabled(client, user.id)) {
         const challenge = await createLoginChallenge(client, {
           userId: user.id,
@@ -2874,7 +2982,12 @@ export function createApp({
           requestId: req.requestId,
           metadata: { provider: identity.provider },
         });
-        return { verificationUser: null, session: null, mfaRequired: true, ...challenge };
+        return {
+          verificationUser: verificationPending ? user : null,
+          session: null,
+          mfaRequired: true,
+          ...challenge,
+        };
       }
       const issued = await issueSession(client, user, {
         userAgent: req.get('user-agent'),
@@ -2892,19 +3005,40 @@ export function createApp({
           linkedExistingAccount,
         },
       });
-      return { verificationUser: null, session: issued, mfaRequired: false };
+      return {
+        verificationUser: verificationPending ? user : null,
+        session: issued,
+        mfaRequired: false,
+      };
     });
     if (outcome.verificationUser) {
       try {
         await deliverVerification(outcome.verificationUser);
       } catch (error) {
         console.error('[auth] social verification delivery failed', safeOperationalErrorCode(error, 'verification_delivery_failed'));
-        throw new HttpError(503, 'verification_delivery_unavailable');
+        return res.status(202).json({
+          accepted: true,
+          verificationPending: true,
+          verificationEmailSent: false,
+          ...(outcome.mfaRequired ? {
+            mfaRequired: true,
+            mfaChallenge: outcome.challenge,
+            expiresAt: outcome.expiresAt,
+          } : {}),
+          ...(outcome.session ? { session: outcome.session } : {}),
+        });
       }
       return res.status(202).json({
         accepted: true,
         verificationEmailSent: true,
+        verificationPending: true,
         email: outcome.verificationUser.email,
+        ...(outcome.mfaRequired ? {
+          mfaRequired: true,
+          mfaChallenge: outcome.challenge,
+          expiresAt: outcome.expiresAt,
+        } : {}),
+        ...(outcome.session ? { session: outcome.session } : {}),
       });
     }
     if (outcome.mfaRequired) return res.set('Cache-Control', 'private, no-store').status(202).json({
@@ -2922,9 +3056,24 @@ export function createApp({
   })));
 
   app.get('/v1/payments/capabilities', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
+    const emailVerified = req.actor.emailVerified === true;
+    const capabilities = paymentCapabilitiesFor(req.auth.userId);
+    let technicalSandbox = technicalSandboxCapabilitiesFor(req.auth.userId);
+    if (!emailVerified) {
+      capabilities.checkoutAvailable = false;
+      capabilities.payoutOnboardingAvailable = false;
+      capabilities.liveMoney = false;
+      capabilities.mode = 'unavailable';
+      capabilities.verificationRequired = true;
+      technicalSandbox = {
+        ...technicalSandbox,
+        technicalSandboxAvailable: false,
+        verificationRequired: true,
+      };
+    }
     res.set('Cache-Control', 'private, no-store').json({
-      capabilities: paymentCapabilitiesFor(req.auth.userId),
-      technicalSandbox: technicalSandboxCapabilitiesFor(req.auth.userId),
+      capabilities,
+      technicalSandbox,
     });
   }));
 
@@ -3214,7 +3363,7 @@ export function createApp({
         [verified.userId],
       );
       const user = userResult.rows[0];
-      if (!user || !user.email_verified_at) throw new HttpError(401, 'mfa_challenge_invalid');
+      if (!user) throw new HttpError(401, 'mfa_challenge_invalid');
       const session = await issueSession(client, user, {
         userAgent: req.get('user-agent'),
         ipAddress: requestIp(req),
@@ -3269,7 +3418,6 @@ export function createApp({
       }
       throw new HttpError(401, 'invalid_credentials');
     }
-    if (!user.email_verified_at) throw new HttpError(403, 'email_verification_required');
     const outcome = await inTransaction(async (client) => {
       await client.query(
         `UPDATE users
@@ -7207,7 +7355,7 @@ export function createApp({
   }));
 
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1 } });
-  app.post('/v1/uploads', requireAuth, requireActiveAccount, upload.single('file'), asyncRoute(async (req, res) => {
+  app.post('/v1/uploads', requireAuth, requireActiveAccount, upload.single('file'), requireVerifiedEmailForUpload, asyncRoute(async (req, res) => {
     if (!req.file?.buffer) throw new HttpError(400, 'file_required');
     const detected = await fileTypeFromBuffer(req.file.buffer);
     const allowed = new Set(['image/jpeg', 'image/png', 'image/webp']);

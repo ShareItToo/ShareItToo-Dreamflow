@@ -1743,16 +1743,20 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   ) =>
       _showOwnedListingMessage(
         owner,
-        title: failure.remoteAccepted
-            ? 'Serverseitig gespeichert'
-            : failure.kind == ListingMutationFailureKind.outcomeUnknown
-                ? 'Speicherstatus unklar'
-                : 'Speichern abgelehnt',
-        message: failure.remoteAccepted
-            ? 'Der Server hat die Anzeige verarbeitet, aber der lokale Stand konnte noch nicht sicher aktualisiert werden. Bitte lade deine Anzeigen neu.'
-            : failure.kind == ListingMutationFailureKind.outcomeUnknown
-                ? 'Die Anzeige könnte serverseitig verarbeitet worden sein. Bitte lade deine Anzeigen neu und prüfe den Stand, bevor du erneut speicherst.'
-                : 'Der Server hat die Änderung eindeutig abgelehnt. Fotos und Eingaben bleiben erhalten.',
+        title: failure.code == 'email_verification_required'
+            ? 'E-Mail-Bestätigung erforderlich'
+            : failure.remoteAccepted
+                ? 'Serverseitig gespeichert'
+                : failure.kind == ListingMutationFailureKind.outcomeUnknown
+                    ? 'Speicherstatus unklar'
+                    : 'Speichern abgelehnt',
+        message: failure.code == 'email_verification_required'
+            ? 'Bestätige zuerst deine E-Mail. Entwürfe bleiben möglich; veröffentlichen ist danach freigeschaltet.'
+            : failure.remoteAccepted
+                ? 'Der Server hat die Anzeige verarbeitet, aber der lokale Stand konnte noch nicht sicher aktualisiert werden. Bitte lade deine Anzeigen neu.'
+                : failure.kind == ListingMutationFailureKind.outcomeUnknown
+                    ? 'Die Anzeige könnte serverseitig verarbeitet worden sein. Bitte lade deine Anzeigen neu und prüfe den Stand, bevor du erneut speicherst.'
+                    : 'Der Server hat die Änderung eindeutig abgelehnt. Fotos und Eingaben bleiben erhalten.',
       );
 
   Future<void> _showOwnedListingMessage(

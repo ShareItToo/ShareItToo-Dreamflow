@@ -283,6 +283,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
           message:
               'Öffne den Link in deiner E-Mail, um dein Konto zu bestätigen.',
         );
+      } else if (result.verificationPending && mounted) {
+        await AppPopup.toast(
+          context,
+          icon: Icons.mark_email_unread_outlined,
+          title: 'E-Mail-Bestätigung ausstehend',
+          message:
+              'Der Versandstatus ist unklar. Öffne im Hinweis oben die erneute Anforderung.',
+        );
       }
 
       if (!mounted) return;
@@ -430,6 +438,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
         successfulSessionOwner,
       )) {
         return;
+      }
+      if (result.verificationPending &&
+          !result.verificationEmailSent &&
+          mounted) {
+        await AppPopup.toast(
+          context,
+          icon: Icons.mark_email_unread_outlined,
+          title: 'E-Mail-Bestätigung ausstehend',
+          message:
+              'Der Versandstatus ist unklar. Nutze den Hinweis oben für eine erneute Anforderung.',
+        );
       }
       if (!mounted) return;
       await context

@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 
 import { config } from './config.js';
 import { isStagingUserAllowed } from './staging_access_gate.js';
+import { emailVerificationCapabilities } from './email_verification_gate.js';
 
 const scrypt = promisify(crypto.scrypt);
 export function normalizeEmail(value) {
@@ -195,6 +196,7 @@ export function shapeUser(row, { publicOnly = false } = {}) {
   const accountStatus = ['active', 'suspended', 'closed'].includes(row.account_status)
     ? row.account_status
     : (row.deactivated_at ? 'closed' : 'active');
+  const emailVerified = Boolean(row.email_verified_at);
   profile.role = role;
   profile.isBanned = accountStatus === 'suspended';
   if (publicOnly) {
@@ -208,8 +210,10 @@ export function shapeUser(row, { publicOnly = false } = {}) {
     createdAt: new Date(row.created_at).toISOString(),
     isDeactivated: Boolean(row.deactivated_at),
     deactivatedAt: row.deactivated_at ? new Date(row.deactivated_at).toISOString() : null,
-    emailVerified: Boolean(row.email_verified_at),
     ...(!publicOnly ? {
+      emailVerified,
+      capabilities: emailVerificationCapabilities(emailVerified),
+      verificationPending: !emailVerified,
       phoneVerified: Boolean(row.phone_verified_at),
       termsAccepted: Boolean(row.terms_accepted_at),
       privacyAccepted: Boolean(row.privacy_accepted_at),

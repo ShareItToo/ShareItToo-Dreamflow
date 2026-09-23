@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/screens/my_listings_screen.dart';
+import 'package:lendify/services/auth_service.dart';
+import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
@@ -103,6 +105,82 @@ void main() {
       throwsStateError,
     );
     expect(prefs.getString('items'), raw);
+  });
+
+  test(
+      'backend-off unverified users may persist drafts but not active listings',
+      () async {
+    if (BackendConfig.enabled) return;
+    final pending = accountA.copyWith(emailVerified: false);
+    final active = buildTestItem(id: 'rw7-pending-active', ownerId: pending.id);
+    final draft = Item.fromJson(<String, dynamic>{
+      ...buildTestItem(id: 'rw7-pending-draft', ownerId: pending.id).toJson(),
+      'status': 'draft',
+      'isActive': false,
+    });
+    SharedPreferences.setMockInitialValues(
+      catalogState(<Item>[active]),
+    );
+    await useAccount(pending);
+    final session = await AuthService.readSession();
+    expect(session, isNotNull);
+    final owner = AuthService.captureSessionOwner(session!);
+
+    Future<void> expectEmailVerificationRequired(
+      Future<Object?> operation,
+    ) async {
+      await expectLater(
+        operation,
+        throwsA(
+          isA<AccountListingMutationFailure>().having(
+            (failure) => failure.code,
+            'code',
+            'email_verification_required',
+          ),
+        ),
+      );
+    }
+
+    await expectEmailVerificationRequired(
+      DataService.addItemForOwner(owner: owner, item: active),
+    );
+    await expectEmailVerificationRequired(
+      DataService.updateItemForOwner(
+        owner: owner,
+        updated: changed(active, title: 'Unverified active edit'),
+      ),
+    );
+    final deactivated = await DataService.updateItemForOwner(
+      owner: owner,
+      updated: changed(
+        active,
+        status: 'draft',
+        isActive: false,
+      ),
+    );
+    expect(deactivated.item?.status, 'draft');
+    expect(deactivated.item?.isActive, isFalse);
+
+    final created = await DataService.addItemForOwner(
+      owner: owner,
+      item: draft,
+    );
+    expect(created.item?.status, 'draft');
+    expect(created.item?.isActive, isFalse);
+    final editedDraft = await DataService.updateItemForOwner(
+      owner: owner,
+      updated: changed(
+        created.item!,
+        title: 'Unverified draft edit',
+        status: 'draft',
+        isActive: false,
+      ),
+    );
+    expect(editedDraft.item?.title, 'Unverified draft edit');
+    expect(
+      (await DataService.getItems()).where((item) => item.status == 'active'),
+      hasLength(0),
+    );
   });
 
   test('legacy local email session remains exact-current-owner scoped',

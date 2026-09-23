@@ -397,6 +397,8 @@ class _PrivatePilotCheckoutScreenState
         'booking_blocked_by_user_block' ||
         'booking_blocked_by_moderation' =>
           'Diese Buchung ist derzeit nicht möglich.',
+        'email_verification_required' =>
+          'Bestätige zuerst deine E-Mail. Buchungsanfragen und Zahlungen bleiben bis dahin gesperrt.',
         'booking_pilot_not_enabled' =>
           'Buchungsanfragen sind vorübergehend nicht verfügbar.',
         _ => 'Der verbindliche Serverpreis konnte nicht geladen werden.',
@@ -566,6 +568,12 @@ class _PrivatePilotCheckoutScreenState
             title: 'Anmeldung erforderlich',
             message:
                 'Bitte melde dich erneut an und öffne den Checkout danach noch einmal.',
+            refreshQuote: false,
+          ),
+        'email_verification_required' => (
+            title: 'E-Mail-Bestätigung erforderlich',
+            message:
+                'Bestätige zuerst deine E-Mail. Buchungsanfragen und Zahlungen bleiben bis dahin gesperrt.',
             refreshQuote: false,
           ),
         'booking_command_in_progress' => (

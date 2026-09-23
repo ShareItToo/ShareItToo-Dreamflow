@@ -508,6 +508,9 @@ class AuthService {
             return AuthResult.success(
               session: session,
               verificationEmailSent: response['verificationEmailSent'] == true,
+              verificationPending: response['verificationPending'] == true ||
+                  (response['user'] is Map &&
+                      (response['user'] as Map)['emailVerified'] != true),
             );
           },
           discardRemote: _discardIssuedRemoteSession,
@@ -666,7 +669,18 @@ class AuthService {
         if (response['accepted'] != true) {
           return const AuthResult.failure(AuthFailure.network);
         }
-        return const AuthResult.success(verificationEmailSent: true);
+        AuthSession? session;
+        final rawSession = response['session'];
+        if (rawSession is Map) {
+          session = await _saveRemoteSession(
+            Map<String, dynamic>.from(rawSession),
+          );
+        }
+        return AuthResult.success(
+          session: session,
+          verificationEmailSent: response['verificationEmailSent'] == true,
+          verificationPending: response['verificationPending'] == true,
+        );
       } on BackendException catch (error) {
         if (error.code == 'password_too_short' ||
             error.code == 'password_too_long' ||
@@ -1318,11 +1332,12 @@ class AuthService {
           },
         ),
         persist: (response) async {
-          if (response['accepted'] == true &&
-              response['verificationEmailSent'] == true) {
-            return AuthResult.success(
-              verificationEmailSent: true,
-              pendingEmail: response['email']?.toString().trim().toLowerCase(),
+          AuthSession? session;
+          final rawSession = response['session'];
+          if (rawSession is Map) {
+            session = await _saveRemoteSession(
+              Map<String, dynamic>.from(rawSession),
+              expectedGeneration: expectedSessionEpoch,
             );
           }
           final challenge = _parseMfaChallenge(response);
@@ -1332,11 +1347,24 @@ class AuthService {
             }
             return AuthResult.mfaRequired(challenge);
           }
+          if (response['accepted'] == true &&
+              response['verificationEmailSent'] == true) {
+            return AuthResult.success(
+              session: session,
+              verificationEmailSent: true,
+              verificationPending: response['verificationPending'] == true,
+              pendingEmail: response['email']?.toString().trim().toLowerCase(),
+            );
+          }
           return AuthResult.success(
-            session: await _saveRemoteSession(
-              response,
-              expectedGeneration: expectedSessionEpoch,
-            ),
+            session: session ??
+                await _saveRemoteSession(
+                  response,
+                  expectedGeneration: expectedSessionEpoch,
+                ),
+            verificationPending: response['verificationPending'] == true ||
+                (response['user'] is Map &&
+                    (response['user'] as Map)['emailVerified'] != true),
           );
         },
         discardRemote: _discardIssuedRemoteSession,
@@ -1573,7 +1601,11 @@ class AuthService {
         response,
         expectedGeneration: expectedSessionEpoch,
       );
-      final result = AuthResult.success(session: session);
+      final user = response['user'];
+      final result = AuthResult.success(
+        session: session,
+        verificationPending: user is Map && user['emailVerified'] != true,
+      );
       if (!_authAttemptActionCurrent(isActionCurrent) ||
           !await _authResultSessionDefinitelyCurrent(result)) {
         await _discardPersistedAuthResult(result);
@@ -1964,12 +1996,14 @@ class AuthResult {
   final AuthFailure? failure;
   final AuthSession? session;
   final bool verificationEmailSent;
+  final bool verificationPending;
   final String? pendingEmail;
   final AuthMfaChallenge? mfaChallenge;
 
   const AuthResult.success({
     this.session,
     this.verificationEmailSent = false,
+    this.verificationPending = false,
     this.pendingEmail,
     this.mfaChallenge,
   })  : ok = true,
@@ -1979,11 +2013,13 @@ class AuthResult {
         failure = AuthFailure.mfaRequired,
         session = null,
         verificationEmailSent = false,
+        verificationPending = false,
         pendingEmail = null;
   const AuthResult.failure(this.failure)
       : ok = false,
         session = null,
         verificationEmailSent = false,
+        verificationPending = false,
         pendingEmail = null,
         mfaChallenge = null;
 }

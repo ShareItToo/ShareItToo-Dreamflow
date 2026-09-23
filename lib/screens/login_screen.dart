@@ -533,6 +533,15 @@ class _LoginScreenState extends State<LoginScreen> {
       )) {
         return;
       }
+      if (result.verificationPending && mounted) {
+        await AppPopup.toast(
+          context,
+          icon: Icons.mark_email_unread_outlined,
+          title: 'E-Mail-Bestätigung ausstehend',
+          message:
+              'Bestätige deine E-Mail für Veröffentlichungen, Anfragen und Zahlungen. Nutze den Hinweis oben zum erneuten Senden.',
+        );
+      }
       unawaited(FirebaseRuntime.syncPushRegistration());
       if (!await _retainSuccessfulLoginOwner(
         loginOwner,
@@ -742,6 +751,15 @@ class _LoginScreenState extends State<LoginScreen> {
         successfulSessionOwner,
       )) {
         return;
+      }
+      if (result.verificationPending && mounted) {
+        await AppPopup.toast(
+          context,
+          icon: Icons.mark_email_unread_outlined,
+          title: 'E-Mail-Bestätigung ausstehend',
+          message:
+              'Bestätige deine E-Mail für Veröffentlichungen, Anfragen und Zahlungen. Nutze den Hinweis oben zum erneuten Senden.',
+        );
       }
       unawaited(FirebaseRuntime.syncPushRegistration());
       if (!await _retainSuccessfulSocialLoginOwner(

@@ -2916,6 +2916,12 @@ if (!databaseUrl) {
           await hashPassword(ownerPassword),
         ],
       );
+      // Binding-flow fixtures represent already verified members; unverified behavior is
+      // exercised by the registration/login cases below.
+      await setupPool.query(
+        `UPDATE users SET email_verified_at = now()
+         WHERE id IN ('renter-b', 'outsider')`,
+      );
       const socialClaims = new Map();
       const phoneClaims = new Map();
       const deletedPhoneIdentities = [];
@@ -12010,16 +12016,21 @@ if (!databaseUrl) {
         privateUseConfirmed: true,
         registrationActionLabel: 'Kostenlos registrieren',
       };
-      const register = () => fetch(`${baseUrl}/v1/auth/register`, {
+      const register = (body = registrationBody) => fetch(`${baseUrl}/v1/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(registrationBody),
+        body: JSON.stringify(body),
       });
       const registration = await register();
       assert.equal(registration.status, 202);
-      assert.deepEqual(await registration.json(), { accepted: true });
+      const registrationResponse = await registration.json();
+      assert.equal(registrationResponse.accepted, true);
+      assert.equal(registrationResponse.verificationPending, true);
+      assert.equal(registrationResponse.verificationEmailSent, true);
+      assert.equal(registrationResponse.session.user.emailVerified, false);
+      assert.equal(registrationResponse.session.user.capabilities.limitedSession, true);
       const emailBundle = await setupPool.query(
         `SELECT declaration_type, exact_wording, accepted, declared_at, metadata
            FROM legal_declarations
@@ -12091,9 +12102,15 @@ if (!databaseUrl) {
         [wrongEmailLabelBody.email],
       );
       assert.deepEqual(wrongEmailSideEffects.rows[0], { users: 0, bundles: 0 });
-      const duplicateRegistration = await register();
+      const duplicateRegistration = await register({
+        ...registrationBody,
+        password: createEphemeralAcceptancePassword(),
+      });
       assert.equal(duplicateRegistration.status, 202);
-      assert.deepEqual(await duplicateRegistration.json(), { accepted: true });
+      const duplicateRegistrationResponse = await duplicateRegistration.json();
+      assert.equal(duplicateRegistrationResponse.accepted, true);
+      assert.equal(duplicateRegistrationResponse.verificationPending, true);
+      assert.equal(duplicateRegistrationResponse.session, undefined);
       const duplicateEmailBundle = await setupPool.query(
         `SELECT count(*)::int AS count
            FROM legal_declarations
@@ -12120,11 +12137,11 @@ if (!databaseUrl) {
         },
         body: JSON.stringify(unavailableRegistrationBody),
       });
-      assert.equal(unavailableRegistration.status, 503);
-      assert.equal(
-        (await unavailableRegistration.json()).error,
-        'verification_delivery_unavailable',
-      );
+      assert.equal(unavailableRegistration.status, 202);
+      const unavailableRegistrationResponse = await unavailableRegistration.json();
+      assert.equal(unavailableRegistrationResponse.accepted, true);
+      assert.equal(unavailableRegistrationResponse.verificationEmailSent, false);
+      assert.equal(unavailableRegistrationResponse.session.user.capabilities.limitedSession, true);
 
       applicationOptions.deliverVerification = undefined;
       await restartApplicationServer();
@@ -12136,7 +12153,9 @@ if (!databaseUrl) {
         body: JSON.stringify(unavailableRegistrationBody),
       });
       assert.equal(recoveredRegistration.status, 202);
-      assert.deepEqual(await recoveredRegistration.json(), { accepted: true });
+      const recoveredRegistrationResponse = await recoveredRegistration.json();
+      assert.equal(recoveredRegistrationResponse.accepted, true);
+      assert.equal(recoveredRegistrationResponse.session, undefined);
 
       const unverifiedLogin = await fetch(`${baseUrl}/v1/auth/login`, {
         method: 'POST',
@@ -12148,8 +12167,54 @@ if (!databaseUrl) {
           password: registrationBody.password,
         }),
       });
-      assert.equal(unverifiedLogin.status, 403);
-      assert.equal((await unverifiedLogin.json()).error, 'email_verification_required');
+      assert.equal(unverifiedLogin.status, 200);
+      const unverifiedLoginResponse = await unverifiedLogin.json();
+      assert.equal(unverifiedLoginResponse.user.emailVerified, false);
+      assert.equal(unverifiedLoginResponse.user.verificationPending, true);
+      assert.equal(unverifiedLoginResponse.user.capabilities.canPublish, false);
+      const unverifiedAccessToken = unverifiedLoginResponse.accessToken;
+      const unverifiedUserId = unverifiedLoginResponse.user.id;
+      const unverifiedPaymentCapabilities = await fetch(`${baseUrl}/v1/payments/capabilities`, {
+        headers: { Authorization: `Bearer ${unverifiedAccessToken}` },
+      });
+      assert.equal(unverifiedPaymentCapabilities.status, 200);
+      const unverifiedPaymentBody = await unverifiedPaymentCapabilities.json();
+      assert.equal(unverifiedPaymentBody.capabilities.checkoutAvailable, false);
+      assert.equal(unverifiedPaymentBody.capabilities.verificationRequired, true);
+      const blockedUnverifiedQuote = await fetch(`${baseUrl}/v1/bookings/quote`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${unverifiedAccessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+      assert.equal(blockedUnverifiedQuote.status, 403);
+      assert.equal((await blockedUnverifiedQuote.json()).error, 'email_verification_required');
+      const blockedImplicitActiveListing = await fetch(`${baseUrl}/v1/listings`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${unverifiedAccessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+      assert.equal(blockedImplicitActiveListing.status, 403);
+      assert.equal((await blockedImplicitActiveListing.json()).error, 'email_verification_required');
+      await setupPool.query(
+        `UPDATE users
+         SET email_verified_at = now(),
+             profile = jsonb_set(profile, '{emailVerified}', 'true'::jsonb, true)
+         WHERE id = $1`,
+        [unverifiedUserId],
+      );
+      const refreshedAfterVerification = await fetch(`${baseUrl}/v1/auth/me`, {
+        headers: { Authorization: `Bearer ${unverifiedAccessToken}` },
+      });
+      assert.equal(refreshedAfterVerification.status, 200);
+      const refreshedAfterVerificationResponse = await refreshedAfterVerification.json();
+      assert.equal(refreshedAfterVerificationResponse.user.emailVerified, true);
+      assert.equal(refreshedAfterVerificationResponse.user.capabilities.limitedSession, false);
 
       const socialRequest = (token, consents = false, registrationActionLabel = 'Mit Google registrieren') =>
         fetch(`${baseUrl}/v1/auth/social`, {
@@ -12306,11 +12371,11 @@ if (!databaseUrl) {
         true,
         'Mit Facebook registrieren',
       );
-      assert.equal(unavailableFacebookRegistration.status, 503);
-      assert.equal(
-        (await unavailableFacebookRegistration.json()).error,
-        'verification_delivery_unavailable',
-      );
+      assert.equal(unavailableFacebookRegistration.status, 202);
+      const unavailableFacebookResponse = await unavailableFacebookRegistration.json();
+      assert.equal(unavailableFacebookResponse.accepted, true);
+      assert.equal(unavailableFacebookResponse.verificationEmailSent, false);
+      assert.equal(unavailableFacebookResponse.session.user.capabilities.limitedSession, true);
       applicationOptions.deliverVerification = undefined;
       await restartApplicationServer();
 
@@ -12328,11 +12393,23 @@ if (!databaseUrl) {
         'Mit Facebook registrieren',
       );
       assert.equal(facebookRegistration.status, 202);
-      assert.deepEqual(await facebookRegistration.json(), {
-        accepted: true,
-        verificationEmailSent: true,
-        email: 'social-facebook@example.com',
-      });
+      const facebookRegistrationResponse = await facebookRegistration.json();
+      assert.deepEqual(
+        {
+          accepted: facebookRegistrationResponse.accepted,
+          verificationEmailSent: facebookRegistrationResponse.verificationEmailSent,
+          verificationPending: facebookRegistrationResponse.verificationPending,
+          email: facebookRegistrationResponse.email,
+        },
+        {
+          accepted: true,
+          verificationEmailSent: true,
+          verificationPending: true,
+          email: 'social-facebook@example.com',
+        },
+      );
+      assert.equal(facebookRegistrationResponse.session.user.emailVerified, false);
+      assert.equal(facebookRegistrationResponse.session.user.capabilities.canCreateBindingBooking, false);
       const facebookAccount = await setupPool.query(
         `SELECT account.id, account.email_verified_at, identity.email_verified
          FROM users AS account

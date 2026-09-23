@@ -250,6 +250,27 @@ class AccountListingMutationResult {
   });
 }
 
+/// Backend-off sessions have no authoritative verification service. They may
+/// still work on an explicitly inactive draft, but must never persist a
+/// listing that is active or can be interpreted as published.
+@visibleForTesting
+bool canPersistLocalListingForEmailVerification({
+  required bool emailVerified,
+  required Item requested,
+}) {
+  if (emailVerified) return true;
+  return requested.status.trim().toLowerCase() == 'draft' &&
+      !requested.isActive;
+}
+
+@visibleForTesting
+bool canMutateLocalListingStatusForEmailVerification({
+  required bool emailVerified,
+  required String status,
+}) {
+  return emailVerified || status.trim().toLowerCase() != 'active';
+}
+
 enum AccountRentalRequestMutationFailureKind {
   rejected,
   localUnavailable,
@@ -1990,6 +2011,7 @@ class DataService {
         'account_not_active',
       },
       403: <String>{
+        'email_verification_required',
         'listing_forbidden',
         'listing_photo_forbidden',
         'action_blocked_by_moderation',
@@ -2100,6 +2122,15 @@ class DataService {
         operation: (captured, verifyOwner, attempt) async {
           final prefs = await SharedPreferences.getInstance();
           final items = _readListingsStrict(prefs);
+          if ((!BackendConfig.enabled || QaRuntimeService.isEnabled) &&
+              !canPersistLocalListingForEmailVerification(
+                emailVerified: captured.emailVerified,
+                requested: item,
+              )) {
+            throw const AccountListingMutationFailure.rejected(
+              'email_verification_required',
+            );
+          }
           if (items.length >= _maxLocalListings) {
             throw StateError('Der lokale Anzeigenkatalog ist voll.');
           }
@@ -4942,6 +4973,15 @@ class DataService {
           if (index >= 0 && items[index].ownerId != captured.id) {
             throw const AccountListingMutationFailure.principalChanged();
           }
+          if ((!BackendConfig.enabled || QaRuntimeService.isEnabled) &&
+              !canPersistLocalListingForEmailVerification(
+                emailVerified: captured.emailVerified,
+                requested: updated,
+              )) {
+            throw const AccountListingMutationFailure.rejected(
+              'email_verification_required',
+            );
+          }
 
           Item effective;
           if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
@@ -5017,6 +5057,15 @@ class DataService {
         }
         if (index >= 0 && items[index].ownerId != captured.id) {
           throw const AccountListingMutationFailure.principalChanged();
+        }
+        if ((!BackendConfig.enabled || QaRuntimeService.isEnabled) &&
+            !canMutateLocalListingStatusForEmailVerification(
+              emailVerified: captured.emailVerified,
+              status: status,
+            )) {
+          throw const AccountListingMutationFailure.rejected(
+            'email_verification_required',
+          );
         }
 
         Item effective;
@@ -10496,6 +10545,7 @@ class DataService {
         'account_not_active',
       },
       403: <String>{
+        'email_verification_required',
         'booking_forbidden',
         'renter_no_show_owner_required',
         'action_blocked_by_moderation',

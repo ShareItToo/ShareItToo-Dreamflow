@@ -19,6 +19,7 @@ import 'package:lendify/services/developer_preview_service.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
+import 'package:lendify/services/contact_verification_service.dart';
 import 'package:lendify/widgets/login_nudge_sheet.dart';
 
 bool shouldGateAccountTab({
@@ -31,6 +32,10 @@ bool shouldGateAccountTab({
   final guestGateEnabled = backendEnabled || releaseMode || previewGuest;
   return guestGateEnabled && (!hasSession || !hasCurrentUser);
 }
+
+@visibleForTesting
+bool shouldShowEmailVerificationBanner(model.User? user) =>
+    user != null && !user.emailVerified;
 
 @visibleForTesting
 const List<String> mainNavigationLabelKeys = <String>[
@@ -61,14 +66,18 @@ class MainNavigation extends StatefulWidget {
   State<MainNavigation> createState() => _MainNavigationState();
 }
 
-class _MainNavigationState extends State<MainNavigation> {
+class _MainNavigationState extends State<MainNavigation>
+    with WidgetsBindingObserver {
   int _currentIndex = 0;
   model.User? _currentUser;
+  String? _verificationBannerStatus;
+  bool _resendingVerification = false;
   StreamSubscription<String>? _profileSubscription;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _currentIndex = widget.initialIndex.clamp(0, _screens.length - 1);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -85,15 +94,112 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _profileSubscription?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshUserAfterResume());
+    }
+  }
+
+  Future<void> _refreshUserAfterResume() async {
+    try {
+      final session = await AuthService.readSession();
+      if (session == null) return;
+      final owner = AuthService.captureSessionOwner(session);
+      await DataService.syncCurrentUserForSessionOwner(owner);
+      await _loadUser();
+    } catch (_) {
+      // Keep the cached status visible until the next explicit refresh.
+    }
   }
 
   Future<void> _loadUser() async {
     try {
       final u = await DataService.getCurrentUser();
-      if (mounted) setState(() => _currentUser = u);
+      if (mounted) {
+        setState(() {
+          _currentUser = u;
+          if (u?.emailVerified == true) _verificationBannerStatus = null;
+        });
+      }
     } catch (_) {}
+  }
+
+  Future<void> _resendVerification() async {
+    final user = _currentUser;
+    if (!shouldShowEmailVerificationBanner(user) || _resendingVerification) {
+      return;
+    }
+    final pendingUser = user;
+    if (pendingUser == null) return;
+    setState(() {
+      _resendingVerification = true;
+      _verificationBannerStatus = null;
+    });
+    try {
+      await const ContactVerificationService()
+          .requestLoginEmailVerification(pendingUser.email);
+      if (mounted) {
+        setState(() {
+          _verificationBannerStatus =
+              'Anfrage verarbeitet. Prüfe dein Postfach; der Versand kann verzögert sein.';
+        });
+      }
+    } on ContactActionFailure catch (failure) {
+      if (!mounted) return;
+      final message = switch (failure.kind) {
+        ContactActionFailureKind.rejected =>
+          'Bitte kurz warten und später erneut versuchen.',
+        ContactActionFailureKind.localUnavailable =>
+          'Die Bestätigung ist im lokalen Modus nicht verfügbar.',
+        ContactActionFailureKind.outcomeUnknown =>
+          'Der Versandstatus ist unklar. Prüfe zuerst dein Postfach.',
+        ContactActionFailureKind.principalChanged =>
+          'Dein Konto wurde inzwischen aktualisiert.',
+      };
+      setState(() => _verificationBannerStatus = message);
+    } finally {
+      if (mounted) setState(() => _resendingVerification = false);
+    }
+  }
+
+  Widget _buildEmailVerificationBanner() {
+    final user = _currentUser;
+    if (!shouldShowEmailVerificationBanner(user)) {
+      return const SizedBox.shrink();
+    }
+    return Material(
+      color: Colors.amber.shade50,
+      child: Semantics(
+        container: true,
+        label: 'E-Mail noch nicht bestätigt',
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Expanded(
+                child: Text(
+                  'Bestätige deine E-Mail, bevor du veröffentlichst, anfragst oder bezahlst.',
+                  style: TextStyle(fontSize: 13),
+                ),
+              ),
+              TextButton(
+                onPressed: _resendingVerification ? null : _resendVerification,
+                child: Text(_resendingVerification
+                    ? 'Wird gesendet …'
+                    : 'E-Mail erneut senden'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   final List<Widget> _screens = [
@@ -159,7 +265,27 @@ class _MainNavigationState extends State<MainNavigation> {
         child: Scaffold(
           backgroundColor: Colors.transparent,
           extendBody: true,
-          body: _screens[_currentIndex],
+          body: Column(
+            children: [
+              SafeArea(
+                top: true,
+                bottom: false,
+                child: _buildEmailVerificationBanner(),
+              ),
+              if (_verificationBannerStatus != null)
+                Semantics(
+                  liveRegion: true,
+                  child: Container(
+                    width: double.infinity,
+                    color: Colors.amber.shade100,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    child: Text(_verificationBannerStatus!),
+                  ),
+                ),
+              Expanded(child: _screens[_currentIndex]),
+            ],
+          ),
           bottomNavigationBar: BottomNavigationBar(
             backgroundColor: Colors.transparent,
             elevation: 0,

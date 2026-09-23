@@ -1254,9 +1254,11 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
     final (title, message) = switch (failure.kind) {
       RentalRequestDecisionFailureKind.rejected => (
           '$verb abgelehnt',
-          failure.code == 'booking_request_expired'
-              ? 'Die Annahmefrist ist abgelaufen. Lade die Anfrage neu.'
-              : 'Der Server hat die Entscheidung eindeutig abgelehnt. Lade die Anfrage neu und prüfe ihren aktuellen Status.',
+          failure.code == 'email_verification_required'
+              ? 'Bestätige zuerst deine E-Mail, bevor du eine bindende Vermieterentscheidung triffst.'
+              : failure.code == 'booking_request_expired'
+                  ? 'Die Annahmefrist ist abgelaufen. Lade die Anfrage neu.'
+                  : 'Der Server hat die Entscheidung eindeutig abgelehnt. Lade die Anfrage neu und prüfe ihren aktuellen Status.',
         ),
       RentalRequestDecisionFailureKind.localUnavailable
           when failure.remoteAccepted =>

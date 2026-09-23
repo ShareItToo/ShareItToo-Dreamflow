@@ -1,8 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lendify/models/user.dart';
 import 'package:lendify/navigation/main_navigation.dart';
 
 void main() {
+  test('email verification banner follows fresh server profile state', () {
+    expect(shouldShowEmailVerificationBanner(null), isFalse);
+    final pending = User(
+      id: 'pending-user',
+      displayName: 'Pending',
+      email: 'pending@example.com',
+      preferredLanguage: 'de-DE',
+      isVerified: false,
+      isBanned: false,
+      role: 'user',
+      avgRating: 0,
+      reviewCount: 0,
+      createdAt: DateTime.utc(2026, 1, 1),
+    );
+    expect(shouldShowEmailVerificationBanner(pending), isTrue);
+    expect(
+      shouldShowEmailVerificationBanner(pending.copyWith(emailVerified: true)),
+      isFalse,
+    );
+  });
+
   testWidgets('primary navigation keeps every semantic target at least 48dp',
       (tester) async {
     final semantics = tester.ensureSemantics();
