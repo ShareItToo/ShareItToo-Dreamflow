@@ -10,6 +10,26 @@ import {
 
 const workflowPath = resolve(import.meta.dirname, '../src/booking_workflow.js');
 
+function splitSqlList(value) {
+  const parts = [];
+  let depth = 0;
+  let start = 0;
+  let quote = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (character === "'" && value[index - 1] !== '\\') quote = !quote;
+    if (quote) continue;
+    if (character === '(') depth += 1;
+    if (character === ')') depth -= 1;
+    if (character === ',' && depth === 0) {
+      parts.push(value.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  parts.push(value.slice(start).trim());
+  return parts;
+}
+
 test('booking creation binds its shared creation instant as timestamptz everywhere', async () => {
   const source = await readFile(workflowPath, 'utf8');
   const insert = source.match(
@@ -17,11 +37,24 @@ test('booking creation binds its shared creation instant as timestamptz everywhe
   )?.[0] ?? '';
 
   assert.notEqual(insert, '');
-  assert.match(
-    insert,
-    /\$25::timestamptz, \$25::timestamptz,[\s\S]*THEN \$25::timestamptz ELSE NULL::timestamptz END/u,
+  const statement = insert.match(
+    /INSERT INTO bookings \((?<columns>[\s\S]*?)\)\s+VALUES\s+\((?<values>[\s\S]*?)\)\s*`/u,
   );
-  assert.doesNotMatch(insert, /\$24::jsonb, \$25, \$25,/u);
+  assert.ok(statement?.groups);
+  const columns = splitSqlList(statement.groups.columns);
+  const values = splitSqlList(statement.groups.values);
+  assert.equal(columns.length, values.length);
+
+  const valueFor = (column) => values[columns.indexOf(column)];
+  const sharedInstant = valueFor('requested_at');
+  const sharedParameter = sharedInstant.match(/^\$(\d+)::timestamptz$/u)?.[1];
+  assert.ok(sharedParameter);
+  assert.equal(valueFor('created_at'), sharedInstant);
+  assert.match(
+    valueFor('private_status_confirmed_at'),
+    new RegExp(`^CASE WHEN \\$\\d+::boolean THEN \\$${sharedParameter}::timestamptz ELSE NULL::timestamptz END$`, 'u'),
+  );
+  assert.equal(valueFor('simulation_only'), '$30::boolean');
 });
 
 test('missing owner pilot acceptance is translated into a client error', async () => {
