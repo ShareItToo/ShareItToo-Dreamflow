@@ -106,8 +106,20 @@ const finalMounts = sourceMounts.filter((mount) => mount.destination === '/data/
 const greenRuntimeEnvEntries = Object.entries({ ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment }).map(([name, value]) => `${name}=${value}`);
 const originalApiIdentityRecord = {
   Id: 'api-original-id',
+  State: { Running: false },
   Config: { Image: greenTarget.prePromotionImage, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DATABASE_URL=postgres://shareittoo_green@green-db/shareittoo_green'] },
-  NetworkSettings: { Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
+  NetworkSettings: { Networks: {
+    [greenTarget.network]: {
+      NetworkID: targetNetworkId,
+      Aliases: [greenTarget.apiContainer, 'shareittoo-staging-api'],
+      DNSNames: [greenTarget.apiContainer, 'shareittoo-staging-api', 'api-original-id'],
+    },
+    [greenTarget.providerNetwork]: {
+      NetworkID: providerNetworkId,
+      Aliases: [greenTarget.apiContainer],
+      DNSNames: [greenTarget.apiContainer, 'api-original-id'],
+    },
+  } },
 };
 const stableIdentityValue = (value) => Array.isArray(value)
   ? value.map((entry) => stableIdentityValue(entry))
@@ -117,9 +129,21 @@ const stableIdentityValue = (value) => Array.isArray(value)
 const originalApiIdentity = {
   id: originalApiIdentityRecord.Id,
   config: JSON.stringify(stableIdentityValue(originalApiIdentityRecord.Config)),
-  networks: JSON.stringify(stableIdentityValue(originalApiIdentityRecord.NetworkSettings.Networks)),
+  networks: JSON.stringify(Object.fromEntries(Object.keys(originalApiIdentityRecord.NetworkSettings.Networks).sort()
+    .map((name) => [name, originalApiIdentityRecord.NetworkSettings.Networks[name].NetworkID]))),
 };
 const restoredApiIdentityRecord = { ...originalApiIdentityRecord, Name: `/${greenTarget.apiContainer}`, State: { Running: true } };
+const renamedSealedApiIdentityRecord = {
+  ...originalApiIdentityRecord,
+  Name: `/${greenTarget.sealedApiContainer}`,
+  NetworkSettings: {
+    Networks: Object.fromEntries(Object.entries(originalApiIdentityRecord.NetworkSettings.Networks).map(([name, endpoint]) => [name, {
+      ...endpoint,
+      Aliases: [greenTarget.sealedApiContainer, `sealed-${name}`],
+      DNSNames: [greenTarget.sealedApiContainer, `sealed-${name}`, 'api-original-id'],
+    }])),
+  },
+};
 
 test('MFA probe container contract accepts only dedicated names or an exact Docker ID', () => {
   assert.equal(isMfaProbeContainer('shareittoo-staging-acceptance-api'), true);
@@ -137,7 +161,7 @@ test('MFA probe container contract accepts only dedicated names or an exact Dock
 });
 
 function restoreFixture(options, running = true) {
-  if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify({ ...originalApiIdentityRecord, Name: `/${greenTarget.sealedApiContainer}` }) };
+  if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify(renamedSealedApiIdentityRecord) };
   if (options.phase === 'failure_restore_current_api_identity_readback') return { code: 'not_found', stdout: '' };
   if (options.phase === 'failure_restore_current_api_absence_readback') return { stdout: '' };
   if (options.phase === 'failure_restore_current_api_identity_after_rename' || options.phase === 'failure_restore_green_api_identity_verify') return { stdout: JSON.stringify({ ...restoredApiIdentityRecord, State: { Running: running } }) };
@@ -504,7 +528,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     HostConfig: { GroupAdd: ['65532'] }, Mounts: sourceMounts.map((mount) => ({ Destination: mount.destination, Type: mount.type, Source: mount.source, Name: mount.volume, RW: !mount.readOnly })),
   });
   const databaseRecord = { Name: `/${greenTarget.databaseContainer}`, State: { Running: true }, Config: { Labels: { 'com.shareittoo.sit.green': 'true' } } };
-  const fakeRun = async (image, isolatedLedger = currentMigrationLedger, initLog = 'PostgreSQL init process complete; ready for start up.\n', stableSelect2 = '1\n', targetSet = targetContainerSet, foreignBefore = '[]\n', foreignAfter = foreignBefore, candidateFinding = emptyFindingFingerprint, stopAtPhase = 'quiesce_green_api', restoreCode) => {
+  const fakeRun = async (image, isolatedLedger = currentMigrationLedger, initLog = 'PostgreSQL init process complete; ready for start up.\n', stableSelect2 = '1\n', targetSet = targetContainerSet, foreignBefore = '[]\n', foreignAfter = foreignBefore, candidateFinding = emptyFindingFingerprint, stopAtPhase = 'quiesce_green_api', restoreCode, postgresIdentityOverrides = {}) => {
     const calls = [];
     let recoveryRecord = null;
     const candidateRecord = {
@@ -576,7 +600,24 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       if (phase === 'isolated_network_create') return { stdout: `${isolatedNetworkId}\n` };
       if (phase === 'isolated_network_identity_readback') return { stdout: JSON.stringify({ Id: isolatedNetworkId, Name: plan.isolated.network, Internal: true, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
       if (phase === 'isolated_postgres_create') return { stdout: `${isolatedDatabaseId}\n` };
-      if (phase === 'isolated_postgres_identity_readback') return { stdout: JSON.stringify({ Id: isolatedDatabaseId, Name: `/${plan.isolated.database}`, State: { Running: false }, Config: { Image: 'postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }, HostConfig: { PortBindings: null }, NetworkSettings: { Ports: { '5432/tcp': null }, Networks: { [plan.isolated.network]: { NetworkID: isolatedNetworkId } } }, Mounts: [{ Type: 'volume', Name: 'anonymous-postgres-data', Destination: '/var/lib/postgresql/data', RW: true }] }) };
+      if (phase === 'isolated_postgres_identity_readback') {
+        const postgresRecord = {
+          Id: isolatedDatabaseId,
+          Name: `/${plan.isolated.database}`,
+          State: { Running: false },
+          Config: { Image: 'postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } },
+          HostConfig: { PortBindings: null, NetworkMode: isolatedNetworkId },
+          NetworkSettings: { Ports: { '5432/tcp': null }, Networks: { [plan.isolated.network]: { NetworkID: '' } } },
+          Mounts: [{ Type: 'volume', Name: 'anonymous-postgres-data', Destination: '/var/lib/postgresql/data', RW: true }],
+        };
+        const overrideRecord = {
+          ...postgresRecord,
+          ...postgresIdentityOverrides,
+          HostConfig: { ...postgresRecord.HostConfig, ...(postgresIdentityOverrides.HostConfig ?? {}) },
+          NetworkSettings: { ...postgresRecord.NetworkSettings, ...(postgresIdentityOverrides.NetworkSettings ?? {}) },
+        };
+        return { stdout: JSON.stringify(overrideRecord) };
+      }
       if (phase === 'candidate_acceptance_create') return { stdout: `${candidateId}\n` };
       if (phase === 'candidate_mfa_identity_probes') {
         assert.equal(options.env.STAGING_ACCEPTANCE_CONTAINER, candidateId);
@@ -658,6 +699,19 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   assert.equal(good.result?.code, 'test_stop_before_quiesce', `${good.result?.message ?? 'no-error'} :: ${good.calls.map((entry) => entry.phase).join('|')}`);
   const quiesceIndex = good.calls.findIndex((entry) => entry.phase === 'quiesce_green_api');
   assert.ok(quiesceIndex > 0);
+  rmSync(`${evidenceFile}.pgdump`, { force: true });
+  for (const [label, postgresIdentityOverrides] of [
+    ['wrong NetworkMode', { HostConfig: { NetworkMode: 'bridge' } }],
+    ['empty NetworkMode', { HostConfig: { NetworkMode: '' } }],
+    ['network-name NetworkMode', { HostConfig: { NetworkMode: plan.isolated.network } }],
+    ['wrong nonempty NetworkID', { NetworkSettings: { Networks: { [plan.isolated.network]: { NetworkID: '6'.repeat(64) } } } }],
+    ['additional network', { NetworkSettings: { Networks: { [plan.isolated.network]: { NetworkID: '' }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } } }],
+  ]) {
+    rmSync(`${evidenceFile}.pgdump`, { force: true });
+    const invalidPostgres = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_postgres_start', undefined, postgresIdentityOverrides);
+    assert.equal(invalidPostgres.result?.code, 'green_isolated_database_network_identity_invalid', label);
+    assert.equal(invalidPostgres.calls.some((entry) => entry.phase === 'isolated_postgres_start'), false, label);
+  }
   rmSync(`${evidenceFile}.pgdump`, { force: true });
   for (const invalidTargetSet of [
     `${greenTarget.apiContainer}\t\t\ttrue\t${greenTarget.runId}\n`,
@@ -1012,6 +1066,58 @@ test('pre-schema failure restores and verifies the sealed API', async () => {
   assert.equal(calls.some((call) => call.args.includes('start') && call.args.includes(originalApiIdentity.id)), true);
 });
 
+test('restore refuses a changed network set or NetworkID before rename/start', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const cases = [
+    ['network set', { Networks: { [greenTarget.network]: renamedSealedApiIdentityRecord.NetworkSettings.Networks[greenTarget.network] } }],
+    ['NetworkID', { Networks: Object.fromEntries(Object.entries(renamedSealedApiIdentityRecord.NetworkSettings.Networks).map(([name, endpoint]) => [name, {
+      ...endpoint,
+      ...(name === greenTarget.network ? { NetworkID: '6'.repeat(64) } : {}),
+    }])) }],
+  ];
+  for (const [label, networkSettings] of cases) {
+    const calls = [];
+    const sealed = { ...renamedSealedApiIdentityRecord, NetworkSettings: networkSettings };
+    const fake = async (command, args, options) => {
+      calls.push({ command, args, options });
+      if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify(sealed) };
+      if (options.phase === 'failure_restore_current_api_identity_readback') return { code: 'not_found', stdout: '' };
+      if (options.phase === 'failure_restore_current_api_absence_readback') return { stdout: '' };
+      return { stdout: '' };
+    };
+    const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['quiesce_green_api'], phaseStarted: 'seal_green_api', originalApiIdentity });
+    assert.equal(result.clean, false, label);
+    assert.equal(result.restoreError, 'failure_restore_green_api_identity_ambiguous', label);
+    assert.equal(calls.some((call) => call.options.phase === 'failure_restore_sealed_api'), false, label);
+    assert.equal(calls.some((call) => call.args.includes('start')), false, label);
+  }
+});
+
+test('restore rejects malformed network identity before rename/start', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const cases = [
+    ['missing NetworkID', { Networks: { [greenTarget.network]: { Aliases: ['sealed-api'] } } }],
+    ['invalid network key', { Networks: { 'sealed network': { NetworkID: targetNetworkId } } }],
+    ['empty network map', { Networks: {} }],
+  ];
+  for (const [label, networkSettings] of cases) {
+    const calls = [];
+    const sealed = { ...renamedSealedApiIdentityRecord, NetworkSettings: networkSettings };
+    const fake = async (command, args, options) => {
+      calls.push({ command, args, options });
+      if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify(sealed) };
+      if (options.phase === 'failure_restore_current_api_identity_readback') return { code: 'not_found', stdout: '' };
+      if (options.phase === 'failure_restore_current_api_absence_readback') return { stdout: '' };
+      return { stdout: '' };
+    };
+    const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['quiesce_green_api'], phaseStarted: 'seal_green_api', originalApiIdentity });
+    assert.equal(result.clean, false, label);
+    assert.equal(result.restoreError, 'failure_restore_green_api_identity_ambiguous', label);
+    assert.equal(calls.some((call) => call.options.phase === 'failure_restore_sealed_api'), false, label);
+    assert.equal(calls.some((call) => call.args.includes('start')), false, label);
+  }
+});
+
 test('quiesce response loss with failed restore is not reported clean', async () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const fake = async (command, args, options) => restoreFixture(options, false) ?? { stdout: '' };
@@ -1027,7 +1133,7 @@ test('restore refuses a same-name rebound container after rename', async () => {
   const rebound = { ...restoredApiIdentityRecord, Id: 'foreign-rebound-id' };
   const fake = async (command, args, options) => {
     calls.push({ command, args, options });
-    if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify({ ...originalApiIdentityRecord, Name: `/${greenTarget.sealedApiContainer}` }) };
+    if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify(renamedSealedApiIdentityRecord) };
     if (options.phase === 'failure_restore_current_api_identity_readback') return { code: 'not_found', stdout: '' };
     if (options.phase === 'failure_restore_current_api_absence_readback') return { stdout: '' };
     if (options.phase === 'failure_restore_current_api_identity_after_rename') return { stdout: JSON.stringify(rebound) };
@@ -1040,7 +1146,7 @@ test('restore refuses a same-name rebound container after rename', async () => {
 
 test('restore refuses a foreign sealed-name collision even when current name is exact', async () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
-  const foreignSealed = { ...originalApiIdentityRecord, Id: 'foreign-sealed-id', Name: `/${greenTarget.sealedApiContainer}` };
+  const foreignSealed = { ...renamedSealedApiIdentityRecord, Id: 'foreign-sealed-id' };
   const calls = [];
   const fake = async (command, args, options) => {
     calls.push({ command, args, options });
@@ -1058,7 +1164,7 @@ test('restore reconciles a lost rename response before starting the exact origin
   const calls = [];
   const fake = async (command, args, options) => {
     calls.push({ command, args, options });
-    if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify({ ...originalApiIdentityRecord, Name: `/${greenTarget.sealedApiContainer}` }) };
+    if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify(renamedSealedApiIdentityRecord) };
     if (options.phase === 'failure_restore_current_api_identity_readback') return { code: 'not_found', stdout: '' };
     if (options.phase === 'failure_restore_current_api_absence_readback') return { stdout: '' };
     if (options.phase === 'failure_restore_sealed_api') {

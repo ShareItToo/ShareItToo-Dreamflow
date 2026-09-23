@@ -968,11 +968,18 @@ function greenPostgresIdentityFromReadback(stdout, plan, expectedId, expectedNet
   const labels = record?.Config?.Labels ?? {};
   const networks = record?.NetworkSettings?.Networks ?? {};
   const network = networks[plan.isolated.network];
+  const networkMode = record?.HostConfig?.NetworkMode;
   const configuredPorts = greenConfiguredPortBindings(record, 'green_isolated_database_identity_invalid');
   const activePorts = greenActiveNetworkPortBindings(record, 'green_isolated_database_identity_invalid');
   const mounts = Array.isArray(record?.Mounts) ? record.Mounts : [];
   const dataMounts = mounts.filter((mount) => mount?.Destination === '/var/lib/postgresql/data');
   const image = record?.Config?.Image;
+  const networkModeValid = typeof networkMode === 'string'
+    && networkMode === expectedNetworkId;
+  const networkIdentityValid = Object.keys(networks).length === 1
+    && Boolean(network)
+    && networkModeValid
+    && (network.NetworkID === expectedNetworkId || network.NetworkID === '');
   if (!record || record.Id !== expectedId || !/^[0-9a-f]{64}$/u.test(record.Id)
       || String(record.Name ?? '').replace(/^\//u, '') !== plan.isolated.database
       || record.State?.Running !== false
@@ -980,14 +987,13 @@ function greenPostgresIdentityFromReadback(stdout, plan, expectedId, expectedNet
       || labels['com.shareittoo.sit.green'] !== 'true'
       || labels['com.shareittoo.green.rehearsal'] !== 'true'
       || labels['com.shareittoo.green.rehearsal_id'] !== plan.isolated.rehearsalId
-      || !network || network.NetworkID !== expectedNetworkId
-      || Object.keys(networks).length !== 1
       || configuredPorts.length !== 0 || activePorts.length !== 0
       || mounts.length !== 1 || dataMounts.length !== 1 || dataMounts[0].Type !== 'volume'
       || dataMounts[0].RW !== true
       || typeof dataMounts[0].Name !== 'string' || dataMounts[0].Name.length === 0) {
     fail('green_isolated_database_identity_invalid');
   }
+  if (!networkIdentityValid) fail('green_isolated_database_network_identity_invalid');
   return record;
 }
 
@@ -1452,14 +1458,29 @@ function stableGreenIdentityValue(value) {
   return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableGreenIdentityValue(value[key])]));
 }
 
+function stableGreenRollbackNetworks(networks) {
+  if (!networks || typeof networks !== 'object' || Array.isArray(networks)) return null;
+  const networkIds = {};
+  for (const [name, endpoint] of Object.entries(networks)) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/u.test(name)
+        || !endpoint || typeof endpoint !== 'object' || Array.isArray(endpoint)
+        || !/^[0-9a-f]{64}$/u.test(endpoint.NetworkID ?? '')) return null;
+    networkIds[name] = endpoint.NetworkID;
+  }
+  if (Object.keys(networkIds).length === 0) return null;
+  return JSON.stringify(Object.fromEntries(Object.keys(networkIds).sort().map((name) => [name, networkIds[name]])));
+}
+
 function greenRollbackIdentityFromRecord(record) {
   if (typeof record?.Id !== 'string' || !record.Id
       || !record.Config || typeof record.Config !== 'object'
       || !record.NetworkSettings?.Networks || typeof record.NetworkSettings.Networks !== 'object') return null;
+  const networks = stableGreenRollbackNetworks(record.NetworkSettings.Networks);
+  if (!networks) return null;
   return Object.freeze({
     id: record.Id,
     config: JSON.stringify(stableGreenIdentityValue(record.Config)),
-    networks: JSON.stringify(stableGreenIdentityValue(record.NetworkSettings.Networks)),
+    networks,
   });
 }
 

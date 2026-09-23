@@ -50,10 +50,11 @@ discover a mechanically stale source hash.
 - Recovery mutations must target the captured immutable provider/container ID,
   never a mutable name; stateful test executors must model or explicitly reject
   every accepted security/resource option.
-- Live-tool mentor invariant: after the first live tool defect, stop all live
-  retries. Reproduce the defect in an isolated deterministic test, review the
-  fix and re-gate it with Sol/Gemini before re-execution; never chain unreviewed
-  live hotfix retries.
+- Live-tool mentor invariant: after the first fail-closed live-tool defect,
+  restore the affected service first, then reproduce it in an isolated,
+  production-shaped deterministic test, review the fix and re-gate it with
+  Sol before re-execution; use Gemini only for a separately defined critical
+  gate. Never blind-retry the live tool.
 - Shell variable hygiene: in zsh never assign `path`, `PATH`, `fpath`, `cdpath`
   or another shell-special array or option as a task variable. Use a
   task-specific name such as `sit_route`; after variable shadowing causes
@@ -67,6 +68,12 @@ discover a mechanically stale source hash.
   in the declared runtime image, UID, network and mounted-file context; tests
   must not mock away host/runtime/network assumptions that the live command
   depends on.
+- Remote read-only invariant: read-only remote work permits zero writes,
+  including temporary, scratch or evidence files; use stdout or command
+  substitution only and never write through a remote shell.
+- Remote execution preflight: before a remote package install or runner,
+  verify host tool/runtime versions, package engine requirements and imports;
+  reuse a verified isolated runtime rather than changing the system runtime.
 - Idempotent startup/readiness polls must retry transient resets and empty
   replies as well as refused connections, with bounded retries; never broaden
   retry behavior onto mutating requests.
