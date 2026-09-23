@@ -13,6 +13,7 @@ import {
   prepareSyntheticBookingThread,
   reconcileSyntheticBookingFixture,
   retireSyntheticBookingFixture,
+  runSyntheticFullAcceptanceJourney,
   runSyntheticRoleBookingLifecycle,
   sendSyntheticBookingDiagnosticMessage,
   transitionSyntheticBookingFixture,
@@ -377,6 +378,146 @@ test('runs the complete role-visible lifecycle without returning private fixture
   assert.equal(result.containsSecrets, false);
   assert.equal(result.containsFixtureIdentifiers, false);
   assert.equal(calls.some(({ path }) => path.includes('payment')), false);
+});
+
+test('runs the full synthetic acceptance journey with eight distinct evidence uploads, avatar and both reviews', async () => {
+  const fixture = vaultFixture();
+  let workflowStatus = null;
+  let uploadCount = 0;
+  let latestUploadUrl = null;
+  let currentPhotoURL = null;
+  let reviewCount = 0;
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    const parsed = new URL(url);
+    const path = parsed.pathname.replace('/api/v1', '');
+    calls.push({ path, method: options.method ?? 'GET' });
+    if (path === '/auth/login') {
+      return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
+    }
+    if (path === '/version') return response(200, { commit: 'a'.repeat(40), environment: 'test' });
+    const confirmation = bookingConfirmationResponse(path, options);
+    if (confirmation !== null) return confirmation;
+    if (path === '/listings/mine') {
+      return response(200, workflowStatus === null ? { listings: [] } : { listings: [] });
+    }
+    if (path === '/rental-requests') {
+      return response(200, workflowStatus === null ? { requests: [] } : {
+        requests: [{ id: JSON.parse(readFileSync(fixture.vaultFile, 'utf8')).syntheticBooking?.bookingId, workflowStatus }],
+      });
+    }
+    if (path === '/uploads') {
+      uploadCount += 1;
+      latestUploadUrl = `https://staging.shareittoo.com/uploads/00000000-0000-4000-8000-${String(uploadCount).padStart(12, '0')}-full.png`;
+      return response(201, {
+        id: `00000000-0000-4000-8000-${String(uploadCount).padStart(12, '0')}`,
+        url: latestUploadUrl,
+      });
+    }
+    if (path === '/listings') return response(201, { listing: { id: 'fixture' } });
+    if (path.endsWith('/availability')) return response(200, { availability: {} });
+    if (path === '/bookings/quote') return response(200, boundQuote(JSON.parse(options.body).timeSnapshot));
+    if (path === '/bookings') {
+      workflowStatus = 'requested';
+      const body = JSON.parse(options.body);
+      return response(201, { booking: { workflowStatus, timeSnapshot: body.timeSnapshot, quoteHash: body.quoteHash } });
+    }
+    if (path.startsWith('/message-threads/booking/')) return response(201, { thread: { id: 'synthetic-thread' } });
+    if (path.startsWith('/message-threads/synthetic-thread/messages')) return response(201, { message: { id: `message-${calls.length}` } });
+    if (path.includes('/condition-evidence')) {
+      return response(200, { summary: {
+        presenterPhotos: 4,
+        deviationPhotos: 0,
+        counterpartyConfirmation: { decision: 'confirmed' },
+      } });
+    }
+    if (path.endsWith('/condition-confirmations')) return response(201, { confirmation: { decision: 'confirmed' } });
+    if (path.endsWith('/transitions')) {
+      const status = JSON.parse(options.body).status;
+      workflowStatus = { accepted: 'accepted', running: 'active', completed: 'completed' }[status];
+      const stored = JSON.parse(readFileSync(fixture.vaultFile, 'utf8')).syntheticBooking;
+      return response(200, { booking: { workflowStatus, timeSnapshot: stored.timeSnapshot, quoteHash: stored.quoteHash } });
+    }
+    if (path === '/profile') {
+      currentPhotoURL = JSON.parse(options.body).photoURL;
+      return response(200, { user: { photoURL: currentPhotoURL } });
+    }
+    if (path === '/auth/me') return response(200, { user: { id: 'synthetic-owner', photoURL: currentPhotoURL } });
+    if (path === '/profiles/synthetic-owner') return response(200, { user: { id: 'synthetic-owner', photoURL: currentPhotoURL } });
+    if (path.endsWith('/reviews')) {
+      if (options.method === 'POST') {
+        reviewCount += 1;
+        return response(201, { review: { direction: JSON.parse(options.body).direction, rating: 5 } });
+      }
+      return response(200, { reviews: [
+        { direction: 'renter_to_owner' },
+        { direction: 'owner_to_renter' },
+      ] });
+    }
+    if (path.endsWith('/status')) return response(200, { listing: { status: 'paused', isActive: false } });
+    throw new Error(`Unexpected path ${path}`);
+  };
+  const result = await runSyntheticFullAcceptanceJourney({
+    ...fixture,
+    fetchImpl,
+    expectedRuntimeCommit: 'a'.repeat(40),
+    now: new Date('2026-08-11T19:20:00.000Z'),
+    random: () => Buffer.from('a1b2c3d4', 'hex'),
+  });
+  assert.equal(result.status, 'passed-full-synthetic-acceptance-journey');
+  assert.equal(result.evidence.pickupPresenterPhotos, 4);
+  assert.equal(result.evidence.returnPresenterPhotos, 4);
+  assert.equal(result.avatar.publicReadback, true);
+  assert.equal(result.avatar.restored, true);
+  assert.equal(result.reviews.readbackCount, 2);
+  assert.equal(result.cleanup.listingPaused, true);
+  assert.equal(result.cleanup.bookingRetainedForAudit, true);
+  assert.equal(result.cleanup.listingDeleted, false);
+  assert.equal(result.cleanup.vaultArchived, true);
+  assert.equal(result.runtime.environment, 'test');
+  assert.equal(result.paymentEndpointCalled, false);
+  assert.equal(result.syntheticDataLabeled, true);
+  assert.equal(uploadCount, 10);
+  assert.equal(reviewCount, 2);
+  assert.equal(calls.some(({ path }) => /payment|stripe/iu.test(path)), false);
+  const stored = JSON.parse(readFileSync(fixture.vaultFile, 'utf8'));
+  assert.equal(stored.status, 'fixture-verified-ready-for-login');
+  assert.equal(stored.syntheticBookingHistory.at(-1).acceptance.pickupPresenterPhotoCount, 4);
+});
+
+test('fails closed before any request when full journey evidence contents are duplicated', async () => {
+  const fixture = vaultFixture();
+  let requestCount = 0;
+  await assert.rejects(
+    runSyntheticFullAcceptanceJourney({
+      ...fixture,
+      expectedRuntimeCommit: 'a'.repeat(40),
+      evidenceImagePaths: Array.from({ length: 8 }, () => fixture.imagePath),
+      fetchImpl: async () => {
+        requestCount += 1;
+        return response(500, null);
+      },
+    }),
+    /requires eight distinct image contents/u,
+  );
+  assert.equal(requestCount, 0);
+});
+
+test('fails closed on runtime commit or environment mismatch before auth or mutation', async () => {
+  const fixture = vaultFixture();
+  const calls = [];
+  await assert.rejects(
+    runSyntheticFullAcceptanceJourney({
+      ...fixture,
+      expectedRuntimeCommit: 'a'.repeat(40),
+      fetchImpl: async (url) => {
+        calls.push(new URL(url).pathname.replace('/api/v1', ''));
+        return response(200, { commit: 'b'.repeat(40), environment: 'test' });
+      },
+    }),
+    /runtime version or environment does not match/u,
+  );
+  assert.deepEqual(calls, ['/version']);
 });
 
 test('requires equal owner and renter truth for one server-confirmed return case', async () => {

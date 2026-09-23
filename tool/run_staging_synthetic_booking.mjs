@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   chmodSync,
   lstatSync,
@@ -39,6 +39,13 @@ function syntheticBookingTimeSnapshot(startDate, endDate) {
 
 function fail(message) {
   throw new Error(message);
+}
+
+function exactRuntimeCommit(value) {
+  if (typeof value !== 'string' || !/^[0-9a-f]{40}$/u.test(value)) {
+    fail('The expected runtime commit must be an exact 40-character lowercase SHA-1.');
+  }
+  return value;
 }
 
 function safeFixtureIdentifier(value, label) {
@@ -141,6 +148,9 @@ async function request(fetchImpl, path, {
   if (typeof path !== 'string' || !path.startsWith('/') || path.includes('://')) {
     fail('A Staging API path is invalid.');
   }
+  if (/\/(?:payment|payments)(?:\/|$)/u.test(path) || /stripe/iu.test(path)) {
+    fail('The synthetic acceptance runner must never call a provider or payment endpoint.');
+  }
   const response = await fetchImpl(`${stagingApiBaseUrl}${path}`, {
     method,
     headers: {
@@ -175,6 +185,220 @@ async function request(fetchImpl, path, {
     );
   }
   return value;
+}
+
+const syntheticEvidenceImagePaths = Object.freeze([
+  resolve(repositoryRoot, 'assets/images/U_bergabe.png'),
+  resolve(repositoryRoot, 'assets/images/treffen.png'),
+  resolve(repositoryRoot, 'assets/images/flat_illustration_people_handover_package_modern_blue_1773676464821.png'),
+  resolve(repositoryRoot, 'assets/images/mobile_onboarding_illustration_two_people_handing_over_item_rental_exchange_modern_flat_transparent_1773675738200.png'),
+  resolve(repositoryRoot, 'assets/images/seite_2.png'),
+  resolve(repositoryRoot, 'assets/images/seite_3.png'),
+  resolve(repositoryRoot, 'assets/images/mobile_onboarding_illustration_chat_rating_shield_safety_icons_modern_flat_transparent_1773675738920.png'),
+  resolve(repositoryRoot, 'assets/images/icononly_transparent.png'),
+]);
+
+function assertDistinctSyntheticEvidenceImages(imagePaths) {
+  const digests = imagePaths.map((imagePath) => {
+    const bytes = readFileSync(resolve(imagePath));
+    if (bytes.length < 100) fail('The synthetic acceptance image is invalid.');
+    return createHash('sha256').update(bytes).digest('hex');
+  });
+  if (new Set(digests).size !== digests.length) {
+    fail('The synthetic acceptance journey requires eight distinct image contents.');
+  }
+  if (new Set(digests.slice(0, 4)).size < 4
+      || new Set(digests.slice(4, 8)).size < 4) {
+    fail('Each synthetic handover segment requires four distinct image contents.');
+  }
+  return Object.freeze(digests);
+}
+
+async function assertSyntheticRuntime({ fetchImpl, expectedRuntimeCommit }) {
+  const expected = exactRuntimeCommit(expectedRuntimeCommit);
+  const version = await request(fetchImpl, '/version', { expected: [200] });
+  if (version?.commit !== expected || version?.environment !== 'test') {
+    fail('The synthetic acceptance runtime version or environment does not match the expected test runtime.');
+  }
+  return Object.freeze({ commit: version.commit, environment: version.environment });
+}
+
+function assertSyntheticPhotoUpload(upload, label) {
+  if (typeof upload?.id !== 'string' || !upload.id
+      || typeof upload?.url !== 'string' || !upload.url.startsWith('https://')) {
+    fail(`The synthetic ${label} upload did not return a safe owned upload.`);
+  }
+  return Object.freeze({ id: upload.id, url: upload.url });
+}
+
+async function uploadSyntheticPhoto({
+  fetchImpl,
+  token,
+  imagePath,
+  purpose,
+  threadId = null,
+  filename,
+}) {
+  const imageBytes = readFileSync(resolve(imagePath));
+  if (imageBytes.length < 100) fail('The synthetic acceptance image is invalid.');
+  const form = new FormData();
+  form.append('purpose', purpose);
+  if (threadId !== null) form.append('threadId', threadId);
+  form.append('file', new Blob([imageBytes], { type: 'image/png' }), filename);
+  const upload = await request(fetchImpl, '/uploads', {
+    method: 'POST',
+    token,
+    body: form,
+    expected: [201],
+  });
+  return assertSyntheticPhotoUpload(upload, purpose);
+}
+
+async function recordSyntheticConditionPhoto({
+  fetchImpl,
+  token,
+  threadId,
+  bookingId,
+  segment,
+  semanticSlot,
+  uploadId,
+  sequence,
+}) {
+  const result = await request(
+    fetchImpl,
+    `/message-threads/${encodeURIComponent(threadId)}/messages`,
+    {
+      method: 'POST',
+      token,
+      headers: {
+        'Idempotency-Key': `${bookingId}-${segment}-condition-${semanticSlot}-${sequence}`,
+      },
+      body: {
+        text: `SYNTHETISCHE SIT-Testdokumentation (${segment}/${semanticSlot}); keine authentische Produktaufnahme.`,
+        attachmentIds: [uploadId],
+        conditionEvidence: {
+          segment,
+          kind: 'presenter_photo',
+          source: 'gallery',
+          semanticSlot,
+        },
+      },
+      expected: [200, 201],
+    },
+  );
+  if (typeof result?.message?.id !== 'string' || !result.message.id) {
+    fail(`The synthetic ${segment} condition message was not accepted.`);
+  }
+  return Object.freeze({ semanticSlot, uploadId, messageAccepted: true });
+}
+
+async function collectSyntheticConditionSet({
+  fetchImpl,
+  token,
+  threadId,
+  bookingId,
+  segment,
+  imagePaths,
+}) {
+  const slots = ['overview', 'detail', 'accessories', 'critical'];
+  if (!Array.isArray(imagePaths) || imagePaths.length !== slots.length) {
+    fail(`The synthetic ${segment} condition set must contain exactly four images.`);
+  }
+  const uploads = [];
+  const messages = [];
+  for (const [index, semanticSlot] of slots.entries()) {
+    const upload = await uploadSyntheticPhoto({
+      fetchImpl,
+      token,
+      imagePath: imagePaths[index],
+      purpose: segment === 'pickup' ? 'handover_evidence' : 'return_evidence',
+      threadId,
+      filename: `sit-${segment}-${semanticSlot}.png`,
+    });
+    uploads.push(upload);
+    messages.push(await recordSyntheticConditionPhoto({
+      fetchImpl,
+      token,
+      threadId,
+      bookingId,
+      segment,
+      semanticSlot,
+      uploadId: upload.id,
+      sequence: index,
+    }));
+  }
+  if (new Set(uploads.map(({ id }) => id)).size !== 4) {
+    fail(`The synthetic ${segment} condition set did not contain four distinct uploads.`);
+  }
+  return Object.freeze({
+    segment,
+    photoCount: uploads.length,
+    distinctUploadCount: new Set(uploads.map(({ id }) => id)).size,
+    slots: Object.freeze(messages.map(({ semanticSlot }) => semanticSlot)),
+  });
+}
+
+async function confirmSyntheticConditionSet({
+  fetchImpl,
+  token,
+  bookingId,
+  segment,
+}) {
+  const before = await request(
+    fetchImpl,
+    `/bookings/${encodeURIComponent(bookingId)}/condition-evidence?segment=${segment}`,
+    { token },
+  );
+  if (before?.summary?.presenterPhotos !== 4
+      || before.summary.deviationPhotos !== 0) {
+    fail(`The synthetic ${segment} condition evidence is incomplete before confirmation.`);
+  }
+  const confirmation = await request(
+    fetchImpl,
+    `/bookings/${encodeURIComponent(bookingId)}/condition-confirmations`,
+    {
+      method: 'POST',
+      token,
+      body: { segment, decision: 'confirmed' },
+      expected: [200, 201],
+    },
+  );
+  if (confirmation?.confirmation?.decision !== 'confirmed') {
+    fail(`The synthetic ${segment} condition confirmation was not persisted.`);
+  }
+  const after = await request(
+    fetchImpl,
+    `/bookings/${encodeURIComponent(bookingId)}/condition-evidence?segment=${segment}`,
+    { token },
+  );
+  if (after?.summary?.presenterPhotos !== 4
+      || after.summary.counterpartyConfirmation?.decision !== 'confirmed') {
+    fail(`The synthetic ${segment} condition confirmation did not read back.`);
+  }
+  return Object.freeze({ segment, presenterPhotoCount: 4, decision: 'confirmed' });
+}
+
+function syntheticReviewCriteria() {
+  return [
+    { key: 'communication', stars: 5 },
+    { key: 'reliability', stars: 5 },
+    { key: 'article_as_described', stars: 5 },
+    { key: 'handover_return', stars: 5 },
+  ];
+}
+
+async function submitSyntheticReview({ fetchImpl, token, bookingId, direction }) {
+  const result = await request(fetchImpl, `/bookings/${encodeURIComponent(bookingId)}/reviews`, {
+    method: 'POST',
+    token,
+    headers: { 'Idempotency-Key': `${bookingId}-review-${direction}` },
+    body: { direction, criteria: syntheticReviewCriteria() },
+    expected: [200, 201],
+  });
+  if (result?.review?.direction !== direction) {
+    fail(`The synthetic ${direction} review was not accepted.`);
+  }
+  return Object.freeze({ direction, rating: result.review.rating });
 }
 
 async function login(fetchImpl, account) {
@@ -893,6 +1117,230 @@ export async function runSyntheticRoleBookingLifecycle({
   });
 }
 
+/**
+ * Execute the complete production-shaped synthetic acceptance journey.
+ *
+ * This remains deliberately separate from the older role-visibility helper:
+ * callers that only need lifecycle probes do not silently create evidence,
+ * avatars or reviews. Every image in this lane is labeled synthetic and the
+ * runner hard-blocks payment/provider paths.
+ */
+export async function runSyntheticFullAcceptanceJourney({
+  vaultFile,
+  imagePath = resolve(repositoryRoot, 'assets/images/shareittoo_app_icon_master.png'),
+  evidenceImagePaths = syntheticEvidenceImagePaths,
+  expectedRuntimeCommit,
+  fetchImpl = globalThis.fetch,
+  now = new Date(),
+  random = (size) => randomBytes(size),
+  archive = true,
+} = {}) {
+  if (!Array.isArray(evidenceImagePaths) || evidenceImagePaths.length !== 8) {
+    fail('The synthetic acceptance journey requires eight condition images.');
+  }
+  const runtime = exactRuntimeCommit(expectedRuntimeCommit);
+  const evidenceDigests = assertDistinctSyntheticEvidenceImages(evidenceImagePaths);
+  const runtimeReadback = await assertSyntheticRuntime({ fetchImpl, expectedRuntimeCommit: runtime });
+  await createSyntheticBookingFixture({ vaultFile, imagePath, fetchImpl, now, random });
+  const ownerRequestVisibility = await inspectSyntheticBookingRoleVisibility({
+    vaultFile, expectedStatus: 'requested', fetchImpl,
+  });
+  await transitionSyntheticBookingFixture({ vaultFile, status: 'accepted', fetchImpl, now });
+  const renterUpcomingVisibility = await inspectSyntheticBookingRoleVisibility({
+    vaultFile, expectedStatus: 'accepted', fetchImpl,
+  });
+  const preparedThread = await prepareSyntheticBookingThread({
+    vaultFile, actorRole: 'owner', fetchImpl,
+  });
+  const activeVault = readVault(vaultFile);
+  const fixture = activeVault.vault.syntheticBooking;
+  const ownerToken = await login(fetchImpl, activeVault.accounts.get('owner'));
+  const renterToken = await login(fetchImpl, activeVault.accounts.get('renter'));
+  const pickupEvidence = await collectSyntheticConditionSet({
+    fetchImpl,
+    token: ownerToken,
+    threadId: fixture.threadId,
+    bookingId: fixture.bookingId,
+    segment: 'pickup',
+    imagePaths: evidenceImagePaths.slice(0, 4),
+  });
+  const pickupConfirmation = await confirmSyntheticConditionSet({
+    fetchImpl, token: renterToken, bookingId: fixture.bookingId, segment: 'pickup',
+  });
+  const pickupTransition = await transitionSyntheticBookingFixture({
+    vaultFile, status: 'running', fetchImpl, now,
+  });
+  const renterRunningVisibility = await inspectSyntheticBookingRoleVisibility({
+    vaultFile, expectedStatus: 'active', fetchImpl,
+  });
+  const returnEvidence = await collectSyntheticConditionSet({
+    fetchImpl,
+    token: renterToken,
+    threadId: fixture.threadId,
+    bookingId: fixture.bookingId,
+    segment: 'return',
+    imagePaths: evidenceImagePaths.slice(4, 8),
+  });
+  const returnConfirmation = await confirmSyntheticConditionSet({
+    fetchImpl, token: ownerToken, bookingId: fixture.bookingId, segment: 'return',
+  });
+  const returnTransition = await transitionSyntheticBookingFixture({
+    vaultFile, status: 'completed', fetchImpl, now,
+  });
+  const renterCompletedVisibility = await inspectSyntheticBookingRoleVisibility({
+    vaultFile, expectedStatus: 'completed', fetchImpl,
+  });
+
+  const originalOwnerProfile = await request(fetchImpl, '/auth/me', { token: ownerToken });
+  if (typeof originalOwnerProfile?.user?.id !== 'string' || !originalOwnerProfile.user.id) {
+    fail('The original synthetic owner profile did not read back safely.');
+  }
+  const originalPhotoURL = typeof originalOwnerProfile.user.photoURL === 'string'
+    ? originalOwnerProfile.user.photoURL
+    : null;
+  const avatarUpload = await uploadSyntheticPhoto({
+    fetchImpl,
+    token: ownerToken,
+    imagePath,
+    purpose: 'profile_image',
+    filename: 'sit-synthetic-avatar.png',
+  });
+  await request(fetchImpl, '/profile', {
+    method: 'PATCH',
+    token: ownerToken,
+    body: { photoURL: avatarUpload.url },
+    expected: [200],
+  });
+  const ownProfile = await request(fetchImpl, '/auth/me', { token: ownerToken });
+  if (ownProfile?.user?.photoURL !== avatarUpload.url) {
+    fail('The synthetic avatar did not read back from the owner session.');
+  }
+  const publicProfile = await request(
+    fetchImpl,
+    `/profiles/${encodeURIComponent(ownProfile.user.id)}`,
+    { token: ownerToken },
+  );
+  if (publicProfile?.user?.photoURL !== avatarUpload.url) {
+    fail('The synthetic avatar did not read back from the public profile.');
+  }
+
+  const renterReview = await submitSyntheticReview({
+    fetchImpl, token: renterToken, bookingId: fixture.bookingId, direction: 'renter_to_owner',
+  });
+  const ownerReview = await submitSyntheticReview({
+    fetchImpl, token: ownerToken, bookingId: fixture.bookingId, direction: 'owner_to_renter',
+  });
+  const reviewReadback = await request(
+    fetchImpl,
+    `/bookings/${encodeURIComponent(fixture.bookingId)}/reviews`,
+    { token: ownerToken },
+  );
+  if (!Array.isArray(reviewReadback?.reviews)
+      || reviewReadback.reviews.length !== 2
+      || new Set(reviewReadback.reviews.map((review) => review.direction)).size !== 2) {
+    fail('Both synthetic review directions did not read back exactly once.');
+  }
+
+  await request(fetchImpl, '/profile', {
+    method: 'PATCH',
+    token: ownerToken,
+    body: { photoURL: originalPhotoURL },
+    expected: [200],
+  });
+  const restoredOwnProfile = await request(fetchImpl, '/auth/me', { token: ownerToken });
+  const restoredPublicProfile = await request(
+    fetchImpl,
+    `/profiles/${encodeURIComponent(originalOwnerProfile.user.id)}`,
+    { token: ownerToken },
+  );
+  if (restoredOwnProfile?.user?.photoURL !== originalPhotoURL
+      || restoredPublicProfile?.user?.photoURL !== originalPhotoURL) {
+    fail('The original synthetic owner avatar did not restore and read back exactly.');
+  }
+
+  const stored = readVault(vaultFile);
+  stored.vault.syntheticBooking.acceptance = {
+    synthetic: true,
+    paymentMode: 'memory',
+    stripeLivemode: false,
+    paymentEndpointCalled: false,
+    pickupPresenterPhotoCount: pickupEvidence.distinctUploadCount,
+    returnPresenterPhotoCount: returnEvidence.distinctUploadCount,
+    pickupConfirmed: pickupConfirmation.decision === 'confirmed',
+    returnConfirmed: returnConfirmation.decision === 'confirmed',
+    avatarReadback: true,
+    reviewDirections: ['renter_to_owner', 'owner_to_renter'],
+    completedAt: now.toISOString(),
+  };
+  saveVault(stored.path, stored.vault);
+  const retired = await retireSyntheticBookingFixture({ vaultFile, fetchImpl, now });
+  if (retired.status !== 'synthetic-booking-retired'
+      || retired.bookingCompleted !== true
+      || retired.listingPaused !== true
+      || retired.paymentEndpointCalled !== false
+      || retired.stripeLivemode !== false) {
+    fail('The completed synthetic acceptance fixture was not retired safely.');
+  }
+  if (archive) {
+    const currentRunId = readVault(vaultFile).vault.runId;
+    archiveCompletedSyntheticBookingFixture({
+      vaultFile,
+      nextRunId: `${currentRunId.slice(0, 74)}-next`,
+      now,
+    });
+  }
+  return Object.freeze({
+    status: 'passed-full-synthetic-acceptance-journey',
+    runtime: runtimeReadback,
+    workflow: Object.freeze(['requested', 'accepted', 'active', 'completed']),
+    thread: preparedThread.status,
+    evidence: Object.freeze({
+      pickupPresenterPhotos: pickupEvidence.distinctUploadCount,
+      returnPresenterPhotos: returnEvidence.distinctUploadCount,
+      sourceImageSha256: evidenceDigests,
+      pickupConfirmation: pickupConfirmation.decision,
+      returnConfirmation: returnConfirmation.decision,
+    }),
+    avatar: Object.freeze({
+      written: true,
+      ownReadback: true,
+      publicReadback: true,
+      restored: true,
+    }),
+    reviews: Object.freeze({
+      directions: Object.freeze([renterReview.direction, ownerReview.direction]),
+      readbackCount: reviewReadback.reviews.length,
+    }),
+    paymentMode: 'memory',
+    stripeLivemode: false,
+    paymentEndpointCalled: false,
+    syntheticDataLabeled: true,
+    cleanup: Object.freeze({
+      status: archive
+        ? 'completed-booking-retained-for-audit-listing-paused-vault-archived'
+        : 'completed-booking-retained-for-audit-listing-paused-vault-retained',
+      bookingRetainedForAudit: true,
+      listingPaused: retired.listingPaused,
+      listingDeleted: false,
+      vaultArchived: archive,
+    }),
+    visibility: Object.freeze({
+      ownerRequestVisibility,
+      renterUpcomingVisibility,
+      renterRunningVisibility,
+      renterCompletedVisibility,
+    }),
+    confirmations: Object.freeze({
+      pickup: pickupTransition.confirmation,
+      return: returnTransition.confirmation,
+    }),
+    containsSecrets: false,
+    containsEmailAddresses: false,
+    containsTokens: false,
+    containsFixtureIdentifiers: false,
+  });
+}
+
 export function archiveCompletedSyntheticBookingFixture({
   vaultFile,
   nextRunId,
@@ -1171,6 +1619,11 @@ if (invokedPath === import.meta.url) {
               })
           : command === 'diagnose-lifecycle'
             ? await runSyntheticRoleBookingLifecycle({ vaultFile })
+          : command === 'diagnose-full-acceptance'
+            ? await runSyntheticFullAcceptanceJourney({
+                vaultFile,
+                expectedRuntimeCommit: cliValue(process.argv.slice(2), '--expected-runtime-commit'),
+              })
         : await transitionSyntheticBookingFixture({
             vaultFile,
             status: cliValue(process.argv.slice(2), '--status'),
