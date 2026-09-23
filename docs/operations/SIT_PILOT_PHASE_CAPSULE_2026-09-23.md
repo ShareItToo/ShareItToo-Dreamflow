@@ -54,14 +54,20 @@ historical evidence or grant any external, legal, provider or release approval.
 
 - Branch: `codex/master-workflow-20260808`
 - Source baseline HEAD: `37062669513b7ecd6a7ecc34bb0f5173f5e7f98a`
-- Worktree: package changes are bounded to LISTING-CONFIRMATION-1 and are
-  recorded atomically in its successor commit.
+- Documentation-only history: `2ba9f15bf4ee675b320de4807d5fa32beb51fdeb`
+  and the prior baseline `37062669513b7ecd6a7ecc34bb0f5173f5e7f98a` are
+  docs-only successors of the Gemini gate source; neither contains the
+  implementation.
+- Accepted implementation successor: `f6a57a78f224047801594270c7565c7abea2ce2e`
+  (`LISTING-CONFIRMATION-1`); this is the code/test successor, distinct from
+  the documentation-only commits above.
 - Candidate: `2026092203` is stale against later runtime source and remains
   expected/deferred P3 evidence; it is not a P1 source blocker.
 - Focused proof: `GREEN-92-97-CURRENTNESS-01` PASS on source HEAD
-  `1360628406736c61ecd26d99fe0b9663994ba47b`; the current successor HEAD is
-  docs-only for this capsule update and Green promotion/schema currentness
-  remains closed through migration 097.
+  `1360628406736c61ecd26d99fe0b9663994ba47b`; the 370626 baseline and its
+  documentation-only successors did not contain this implementation, while
+  f6a57a78 is the accepted code/test successor. Green promotion/schema
+  currentness remains closed through migration 097.
 - Current read-only closure evidence: 3 manifests, 158 code consumers,
   370 owning tests and 97 migrations; candidate-focused/wiring checks 107/107
   PASS. No Full Gate has been run for this capsule update.

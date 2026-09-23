@@ -6,7 +6,7 @@ approval.
 
 Target source: ShareItToo worktree
 `/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808`, exact source
-HEAD supplied to the gate `37062669513b7ecd6a7ecc34bb0f5173f5e7f98a`.
+HEAD supplied to the gate `1360628406736c61ecd26d99fe0b9663994ba47b`.
 
 ## Immutable gate decision
 
@@ -36,7 +36,8 @@ HEAD supplied to the gate `37062669513b7ecd6a7ecc34bb0f5173f5e7f98a`.
 ### Sol source register supplied to Gemini
 
 No external sources were used. Gemini did **not** open local files or Git.
-The technical source was the Sol capsule bound to the exact HEAD above:
+The technical source was the Sol capsule bound to the supplied product HEAD
+`1360628406736c61ecd26d99fe0b9663994ba47b`:
 
 | Source | SHA-256 |
 | --- | --- |
@@ -44,6 +45,9 @@ The technical source was the Sol capsule bound to the exact HEAD above:
 | `backend/src/app.js` | `3109d02ecf91aab92261eb0d3ac199e85649b1db58e49110359701dfcc664efb` |
 | `backend/src/blue_ocean_listing_workflow.js` | `253a6d9c323d45256537bccaf10423eec0964929f4f7eadd8db8d7a0b28514b3` |
 | `backend/src/listing_ai_draft_domain.js` | `91f6e5abe557a8a518ddfb6d180a313629b27ec5c57f53c79a785bd06c9f2684` |
+| `backend/src/listing_photo_truth_policy.js` | `5edafaadff65b990e931b021904da1b1306210b39aadfef43f748d68b33e5ba9` |
+| `lib/services/data_service.dart` | `cce04e10456801644408f2100db3b179711d531600c09bff2672b1126b732449` |
+| `lib/config/private_pilot_config.dart` | `869bb82f4c4f860fa3101b0e6f891d2c9e511f30dbe85e66f2af11a3af2446ec` |
 
 Implementation and focused closure evidence are recorded in the package
 commit that follows this decision record.
@@ -51,7 +55,7 @@ commit that follows this decision record.
 Gemini in the browser has no demonstrated access to this local filesystem or
 Git repository. Do not ask Gemini to open local paths or claim that it opened
 them. The technical facts below are the compact Sol-verified gate input,
-extracted from product HEAD `37062669513b7ecd6a7ecc34bb0f5173f5e7f98a` and
+extracted from product HEAD `1360628406736c61ecd26d99fe0b9663994ba47b` and
 bound to the listed SHA-256 values. The current documentation packet is a
 docs-only correction successor to commit
 `9e8e159511de8f486687ad8acf9e604df4b77be5`.
@@ -121,7 +125,7 @@ must remain mandatory in every option; AI must never auto-publish.
 ### Technical fact capsule (Sol-verified; use as provided)
 
 All excerpts below are from product HEAD
-`37062669513b7ecd6a7ecc34bb0f5173f5e7f98a`. The path and hash identify the
+`1360628406736c61ecd26d99fe0b9663994ba47b`. The path and hash identify the
 source binding; they do not imply that Gemini opened the local file.
 
 `lib/screens/create_listing_screen.dart:212-224`
