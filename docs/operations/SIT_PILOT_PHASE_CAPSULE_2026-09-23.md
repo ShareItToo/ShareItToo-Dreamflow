@@ -52,93 +52,49 @@ historical evidence or grant any external, legal, provider or release approval.
 
 ## Active capsule
 
-- Branch: `codex/master-workflow-20260808`
-- Source baseline HEAD: `37062669513b7ecd6a7ecc34bb0f5173f5e7f98a`
-- Documentation-only history: `2ba9f15bf4ee675b320de4807d5fa32beb51fdeb`
-  and the prior baseline `37062669513b7ecd6a7ecc34bb0f5173f5e7f98a` are
-  docs-only successors of the Gemini gate source; neither contains the
-  implementation.
-- Accepted implementation successor: `f6a57a78f224047801594270c7565c7abea2ce2e`
-  (`LISTING-CONFIRMATION-1`); this is the code/test successor, distinct from
-  the documentation-only commits above.
-- Candidate: `2026092203` is stale against later runtime source and remains
-  expected/deferred P3 evidence; it is not a P1 source blocker.
-- A first `2026092204` build attempt stopped before archive/evidence because
-  the social flags were omitted. No archive and no
-  `build/release-evidence/android-2026092204` were created; `1.0.0+2026092204`
-  remains unconsumed and is not a candidate. Its numeric code may only be used
-  by a new corrected build from the accepted source commit; the stopped old
-  exact-head attempt is never reused. The corrected P3 profile requires
-  explicit `SIT_SOCIAL_GOOGLE_ENABLED=true`,
-  `SIT_SOCIAL_APPLE_ENABLED=false`, and
-  `SIT_SOCIAL_FACEBOOK_ENABLED=false`; Apple/Facebook remain hard stops until
-  separately proven provider configuration exists.
-- A second signed `2026092204` archive was created locally but is rejected as
-  a noncandidate because its manifest had `closedPilotEnvelope=false`, an empty
-  pilot ID, and G3/G4/G5 technical surfaces disabled. Retain that private
-  archive for audit only; it was never uploaded, activated, installed, or used
-  for device/live evidence. The next unambiguous source version is
-  `1.0.0+2026092205` and requires the complete full-pilot envelope.
-- Focused proof: `GREEN-92-97-CURRENTNESS-01` PASS on source HEAD
-  `1360628406736c61ecd26d99fe0b9663994ba47b`; the 370626 baseline and its
-  documentation-only successors did not contain this implementation, while
-  f6a57a78 is the accepted code/test successor. Green promotion/schema
-  currentness remains closed through migration 097.
-- Current read-only closure evidence: 3 manifests, 158 code consumers,
-  370 owning tests and 97 migrations; candidate-focused/wiring checks 107/107
-  PASS. No Full Gate has been run for this capsule update.
+- Branch: `codex/master-workflow-20260808`.
+- P1 Source convergence: **CLOSED** for the accepted source package and its
+  focused closure evidence.
+- P2 Exact-HEAD CI: **CLOSED** at clean HEAD
+  `ba889476a44ce8e40d84720cd9a8d67785ece3df`; GitHub Regression run
+  `35902814828` and CodeQL run `35902814833` both succeeded on that exact
+  head.
+- P3 candidate: **ACCEPTED and VERIFIED** as `1.0.0+2026092205`, source
+  `ba889476a44ce8e40d84720cd9a8d67785ece3df`, internal/Staging, full closed
+  pilot envelope `heilbronn_wave0`, G3/G4/G5 technical surfaces enabled, and
+  Google-only social auth (`Google=true`, `Apple=false`, `Facebook=false`).
+  External Listing AI remains disabled.
+- Candidate artifact evidence: archive basename
+  `2026092205-ba889476a44ce8e40d84720cd9a8d67785ece3df`; AAB
+  `139603854` bytes / SHA-256
+  `100da118fab4c3433a2aa6e9f6d1f982f77ea3e8ebfd0c180442a3fb7ecbad89`; APK
+  `201763199` bytes / SHA-256
+  `4f2096c09e0960ff38efb4e63d20fca0339bbcad33a11cd0bd9ff00e4bc359cc`;
+  privacy report SHA-256
+  `9dd8e0d6c0e0c96bc4ba2dc4363ef77c20cf08276d54106350f21c7d3812698b`;
+  upload certificate SHA-256
+  `098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4`.
+- Play readback, upload, activation, tester changes and device contact remain
+  **not performed/false**. No provider, production, payment, DNS, Firebase or
+  pull-request mutation is claimed.
+- Candidate `2026092203` remains stale/deferred P3 evidence and is not reused.
+- The first `2026092204` build attempt stopped before archive/evidence because
+  social flags were omitted. No archive and no
+  `build/release-evidence/android-2026092204` were created;
+  that stopped attempt did not consume an artifact and is not a candidate.
+- A later reduced-profile signed `2026092204` archive was created and is
+  rejected as a noncandidate because `closedPilotEnvelope=false`, the pilot ID
+  was empty, and G3/G4/G5 technical surfaces were disabled. Retain it privately
+  for audit only; it was never uploaded, activated, installed or used for
+  device/live evidence.
 - Gemini listing-confirmation gate: **closed — Decision 1 / PASS** in
-  `SIT_GEMINI_LISTING_CONFIRMATION_GATE_PACKET_2026-09-23.md`.
-- Package `LISTING-CONFIRMATION-1`: one visible aggregate owner confirmation;
-  the existing ten factual IDs remain mapped in `review.ownerConfirmations`;
-  `final_publication` is false until the exact publish action.
-- Package result: focused client/server wiring and domain checks are green;
-  manual listing, photo truth, clarification, AI-consent, readiness,
-  fingerprint/price and 4+4 boundaries remain unchanged.
+  `SIT_GEMINI_LISTING_CONFIRMATION_GATE_PACKET_2026-09-23.md`. The
+  `LISTING-CONFIRMATION-1` package remains bounded and `final_publication` is
+  false until an exact publish action.
 
 ## Exact next sequence
 
-Green-promotion migration currentness is PASS. The Gemini
-listing-confirmation gate is closed and the bounded package is implemented.
-Next: run focused closure, then exactly one local Full Gate with the maintained
-v2 Mac-mini profile:
-
-```sh
-node tool/run_with_local_build_cache.mjs \
-  --profile /Users/walidchraibi/Documents/Codex/2026-08-19/new-chat/SIT_ANDROID_BUILD_20260904.json \
-  -- env CI=true SIT_ALLOW_CANDIDATE_ROLLOVER=1 bash scripts/technical_regression_check.sh
-```
-
-`CI=true` selects the permitted metadata-only candidate paths; it cannot claim
-Store upload, Store activation, candidate installation or any device pass.
-After that local gate, execute P2: push the accepted exact HEAD and obtain
-exact-HEAD GitHub Regression and CodeQL evidence. Only then execute P3 by
-building a fresh strictly higher candidate from that accepted source state.
-The P3 preflight/build commands must include the explicit Google-only profile
-and rollover controls; omission fails closed before artifact work:
-
-```sh
-node tool/run_with_local_build_cache.mjs \
-  --profile /Users/walidchraibi/Documents/Codex/2026-08-19/new-chat/SIT_ANDROID_BUILD_20260904.json \
-  -- env \
-  SIT_ALLOW_CANDIDATE_ROLLOVER=1 \
-  SIT_BUILD_PREFLIGHT_ONLY=1 \
-  SIT_REQUIRE_CANONICAL_SIGNING=1 \
-  SIT_REQUIRE_FIREBASE=1 \
-  SIT_BLUE_OCEAN_LISTING_ASSISTANT=1 \
-  SIT_CLOSED_PILOT_ENVELOPE=1 \
-  SIT_STAGE_A_PILOT_ID=heilbronn_wave0 \
-  SIT_REQUIRE_STORE_SUBMISSION=0 \
-  SIT_RELEASE_CHANNEL=internal \
-  SIT_API_BASE_URL=https://staging.shareittoo.com/api/v1 \
-  SIT_SOCIAL_GOOGLE_ENABLED=true \
-  SIT_SOCIAL_APPLE_ENABLED=false \
-  SIT_SOCIAL_FACEBOOK_ENABLED=false \
-  bash scripts/build_android_release_candidate.sh
-```
-
-After the preflight and `BUILD_READY`, repeat the same command without
-`SIT_BUILD_PREFLIGHT_ONLY=1`. This remains a future 2205 command; do not reuse
-either 2204 attempt or claim the reduced 2204 archive as a candidate.
-Do not rewrite historical status files or repeat full gates after serial
-failures in one owning test/validator class; close that cluster focused-first.
+P4 is next: verify Green Staging against the exact `2026092205` candidate,
+then perform bounded runtime readback and separately labeled sandbox/provider
+E2E checks. Repository evidence does not claim Play upload, activation, device
+installation, provider traffic or pilot completion.
