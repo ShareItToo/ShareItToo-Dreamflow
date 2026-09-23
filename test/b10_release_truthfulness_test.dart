@@ -357,11 +357,8 @@ void main() {
         ),
       );
     }
-    expect(
-      register,
-      contains("? 'Passwortbestätigung verbergen'"),
-    );
-    expect(register, contains(": 'Passwortbestätigung anzeigen'"));
+    expect(register, isNot(contains('Passwort wiederholen')));
+    expect(register, isNot(contains('Passwortbestätigung')));
     expect(login, contains("label: 'E-Mail für Passwortzurücksetzung'"));
   });
 

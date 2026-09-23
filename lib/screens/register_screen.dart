@@ -46,16 +46,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  final _pw2Ctrl = TextEditingController();
-
   final _nameFocus = FocusNode();
   final _emailFocus = FocusNode();
   final _pwFocus = FocusNode();
-  final _pw2Focus = FocusNode();
 
   bool _busy = false;
   bool _pwVisible = false;
-  bool _pw2Visible = false;
   bool _peekBackdrop = false;
   bool _didInteract = false;
   int _socialActionEpoch = 0;
@@ -72,7 +68,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _nameCtrl.addListener(markDirty);
     _emailCtrl.addListener(markDirty);
     _pwCtrl.addListener(markDirty);
-    _pw2Ctrl.addListener(markDirty);
   }
 
   void _openTerms() {
@@ -92,11 +87,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _pwCtrl.dispose();
-    _pw2Ctrl.dispose();
     _nameFocus.dispose();
     _emailFocus.dispose();
     _pwFocus.dispose();
-    _pw2Focus.dispose();
     super.dispose();
   }
 
@@ -203,13 +196,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return null;
   }
 
-  String? _validatePassword2(String? v) {
-    final value = (v ?? '');
-    if (value.trim().isEmpty) return 'Bitte bestätige dein Passwort.';
-    if (value != _pwCtrl.text) return 'Die Passwörter stimmen nicht überein.';
-    return null;
-  }
-
   Future<void> _register() async {
     if (_busy) return;
     FocusScope.of(context).unfocus();
@@ -249,7 +235,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (result.session == null) {
         final pendingEmail = _emailCtrl.text.trim();
         _pwCtrl.clear();
-        _pw2Ctrl.clear();
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
@@ -520,7 +505,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final nameOk = _validateName(_nameCtrl.text) == null;
     final emailOk = _validateEmail(_emailCtrl.text) == null;
     final pwOk = _validatePassword(_pwCtrl.text) == null;
-    final pw2Ok = _validatePassword2(_pw2Ctrl.text) == null;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -702,12 +686,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                       placeholder: '••••••••',
                                                       controller: _pwCtrl,
                                                       focusNode: _pwFocus,
-                                                      nextFocusNode: _pw2Focus,
                                                       keyboardType:
                                                           TextInputType
                                                               .visiblePassword,
                                                       textInputAction:
-                                                          TextInputAction.next,
+                                                          TextInputAction.done,
                                                       validator:
                                                           _validatePassword,
                                                       prefixIcon:
@@ -728,6 +711,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                       textCapitalization:
                                                           TextCapitalization
                                                               .none,
+                                                      onSubmitted: (_) =>
+                                                          _register(),
                                                       suffix: _GlassSuffixIconButton(
                                                           icon: _pwVisible
                                                               ? Icons
@@ -748,61 +733,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                         ok: pwOk,
                                                         text:
                                                             'Mind. 10 Zeichen, Buchstabe und Zahl'),
-                                                    const SizedBox(height: 10),
-                                                    _SITTextField(
-                                                      label:
-                                                          'Passwort wiederholen',
-                                                      placeholder: '••••••••',
-                                                      controller: _pw2Ctrl,
-                                                      focusNode: _pw2Focus,
-                                                      keyboardType:
-                                                          TextInputType
-                                                              .visiblePassword,
-                                                      textInputAction:
-                                                          TextInputAction.done,
-                                                      validator:
-                                                          _validatePassword2,
-                                                      prefixIcon:
-                                                          Icons.lock_outline,
-                                                      status: _didInteract &&
-                                                              _pw2Ctrl.text
-                                                                  .isNotEmpty
-                                                          ? (pw2Ok
-                                                              ? _FieldStatus
-                                                                  .success
-                                                              : _FieldStatus
-                                                                  .error)
-                                                          : _FieldStatus
-                                                              .neutral,
-                                                      obscureText: !_pw2Visible,
-                                                      autocorrect: false,
-                                                      enableSuggestions: false,
-                                                      textCapitalization:
-                                                          TextCapitalization
-                                                              .none,
-                                                      onSubmitted: (_) =>
-                                                          _register(),
-                                                      suffix: _GlassSuffixIconButton(
-                                                          icon: _pw2Visible
-                                                              ? Icons
-                                                                  .visibility_off_outlined
-                                                              : Icons
-                                                                  .visibility_outlined,
-                                                          semanticLabel: _pw2Visible
-                                                              ? 'Passwortbestätigung verbergen'
-                                                              : 'Passwortbestätigung anzeigen',
-                                                          onTap: () => setState(
-                                                              () => _pw2Visible =
-                                                                  !_pw2Visible)),
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    _HintRow(
-                                                        icon: Icons
-                                                            .verified_outlined,
-                                                        ok: pw2Ok,
-                                                        text:
-                                                            'Passwörter müssen übereinstimmen'),
-                                                    const SizedBox(height: 10),
                                                     const SizedBox(height: 10),
                                                     const SocialAuthOrDivider(),
                                                     const SizedBox(height: 10),

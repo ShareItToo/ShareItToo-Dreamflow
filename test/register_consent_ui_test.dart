@@ -48,4 +48,25 @@ void main() {
     expect(find.byType(LegalPrivacyScreen), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
   });
+
+  testWidgets('registration uses one strong password field with submit action',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: RegisterScreen()));
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel('Passwort'), findsOneWidget);
+    expect(find.text('Passwort wiederholen'), findsNothing);
+    expect(find.text('Passwörter müssen übereinstimmen'), findsNothing);
+    expect(find.bySemanticsLabel('Passwort anzeigen'), findsOneWidget);
+
+    final passwordSemantics = find.bySemanticsLabel('Passwort');
+    final passwordField = find.descendant(
+      of: passwordSemantics,
+      matching: find.byType(EditableText),
+    );
+    expect(passwordField, findsOneWidget);
+    final field = tester.widget<EditableText>(passwordField);
+    expect(field.textInputAction, TextInputAction.done);
+    expect(field.onSubmitted, isNotNull);
+  });
 }

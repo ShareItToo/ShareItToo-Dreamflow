@@ -127,7 +127,7 @@ test('wires the exact candidate, form, consent, verification and cold-start gate
     'Dein SIT-Konto erstellen',
     'Name',
     'E-Mail',
-    'Passwort wiederholen',
+    'Passwort',
     'Kostenlos registrieren',
     'Prüfe deine E-Mail',
     'pixel-ui-registration-submission-outcome-unknown',

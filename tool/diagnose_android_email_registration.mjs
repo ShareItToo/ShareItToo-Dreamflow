@@ -451,7 +451,6 @@ export async function submitPixelUiRegistration({
     ['Name', vault.account.displayName],
     ['E-Mail', vault.account.email],
     ['Passwort', vault.account.password],
-    ['Passwort wiederholen', vault.account.password],
   ]) {
     inputText(commandRunner, adbPath, device, hierarchy, label, value);
     hierarchy = dumpUi(commandRunner, adbPath, device);
