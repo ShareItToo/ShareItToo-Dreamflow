@@ -170,9 +170,19 @@ function documentReferenceMap(value) {
   return result;
 }
 
-function sanitize(value, references, parentKey = '') {
+function sanitize(
+  value,
+  references,
+  parentKey = '',
+  preserveRegistrationBundleFacts = false,
+) {
   if (Array.isArray(value)) {
-    return value.map((entry) => sanitize(entry, references, parentKey));
+    return value.map((entry) => sanitize(
+      entry,
+      references,
+      parentKey,
+      preserveRegistrationBundleFacts,
+    ));
   }
   if (!value || typeof value !== 'object') {
     return typeof value === 'string'
@@ -184,16 +194,34 @@ function sanitize(value, references, parentKey = '') {
   const result = {};
   for (const [rawKey, entry] of Object.entries(value)) {
     if ((rawKey !== 'password_changed_at' && credentialKeyPattern.test(rawKey))
-        || explicitlyWithheldKeys.has(rawKey)) continue;
+        || (explicitlyWithheldKeys.has(rawKey)
+          && !(preserveRegistrationBundleFacts && rawKey === 'facts'))) continue;
     const key = references.get(rawKey) ?? rawKey;
-    result[key] = sanitize(entry, references, rawKey);
+    result[key] = sanitize(
+      entry,
+      references,
+      rawKey,
+      preserveRegistrationBundleFacts || rawKey === 'registrationBundles',
+    );
   }
   return result;
 }
 
-function assertSanitized(value, references, parentKey = '') {
+function assertSanitized(
+  value,
+  references,
+  parentKey = '',
+  preserveRegistrationBundleFacts = false,
+) {
   if (Array.isArray(value)) {
-    for (const entry of value) assertSanitized(entry, references, parentKey);
+    for (const entry of value) {
+      assertSanitized(
+        entry,
+        references,
+        parentKey,
+        preserveRegistrationBundleFacts,
+      );
+    }
     return;
   }
   if (!value || typeof value !== 'object') {
@@ -206,11 +234,17 @@ function assertSanitized(value, references, parentKey = '') {
   }
   for (const [key, entry] of Object.entries(value)) {
     if ((key !== 'password_changed_at' && credentialKeyPattern.test(key))
-        || explicitlyWithheldKeys.has(key)
+        || (explicitlyWithheldKeys.has(key)
+          && !(preserveRegistrationBundleFacts && key === 'facts'))
         || references.has(key)) {
       throw new Error('account_export_forbidden_field_detected');
     }
-    assertSanitized(entry, references, key);
+    assertSanitized(
+      entry,
+      references,
+      key,
+      preserveRegistrationBundleFacts || key === 'registrationBundles',
+    );
   }
 }
 

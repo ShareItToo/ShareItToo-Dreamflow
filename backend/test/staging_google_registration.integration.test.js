@@ -415,7 +415,8 @@ if (!databaseUrl) {
       assert.equal(replayTable.rows[0].name, null);
     } finally {
       if (server) await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-      await setupPool.query('DELETE FROM users WHERE id = $1', [userId]);
+      // The isolated local cluster is discarded after this suite; registration
+      // bundles are append-only and must not be deleted during cleanup.
       await setupPool.end();
       await fs.rm(tempDir, { recursive: true, force: true });
     }

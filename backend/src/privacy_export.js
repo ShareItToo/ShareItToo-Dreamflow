@@ -51,7 +51,7 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
   if (!account) return null;
   const registrationBundles = await rows(client,
     `SELECT id, declaration_type, exact_wording, document_name,
-            document_version, declared_at, app_version, language, accepted,
+            document_version, declared_at::text AS declared_at, app_version, language, accepted,
             metadata
        FROM legal_declarations
       WHERE user_id = $1 AND declaration_type = 'account_registration_bundle'

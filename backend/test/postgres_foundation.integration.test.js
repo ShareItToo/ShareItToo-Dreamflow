@@ -12040,6 +12040,57 @@ if (!databaseUrl) {
         termsAccepted: true,
         privacyAcknowledged: true,
       });
+      const emailAccount = await setupPool.query(
+        'SELECT id FROM users WHERE email = $1',
+        [registrationBody.email],
+      );
+      const exportedEmailAccount = await inTransaction(async (client) =>
+        buildAccountExport(client, emailAccount.rows[0].id));
+      const exportedRegistrationBundles =
+        exportedEmailAccount.data.account.registrationBundles;
+      assert.equal(exportedRegistrationBundles.length, 1);
+      const exportedBundle = exportedRegistrationBundles[0];
+      assert.equal(exportedBundle.declaration_type, 'account_registration_bundle');
+      assert.equal(exportedBundle.exact_wording, emailBundle.rows[0].exact_wording);
+      assert.equal(exportedBundle.metadata.actionLabel, 'Kostenlos registrieren');
+      assert.deepEqual(exportedBundle.metadata.facts, emailBundle.rows[0].metadata.facts);
+      assert.equal(
+        exportedBundle.metadata.declaredAt,
+        new Date(exportedBundle.declared_at).toISOString(),
+      );
+      assert.equal(exportedBundle.metadata.documents.terms.version, 'V5.2-2026-08-16');
+      assert.equal(exportedBundle.metadata.documents.privacy.version, 'V5.2-2026-08-16');
+      assert.equal(exportedBundle.ip, undefined);
+      assert.equal(exportedBundle.metadata.ip, undefined);
+      assert.equal(exportedBundle.metadata.ipAddress, undefined);
+
+      const wrongEmailLabelBody = {
+        ...registrationBody,
+        email: 'wrong-email-registration-label@example.com',
+        registrationActionLabel: 'Mit Facebook registrieren',
+      };
+      const wrongEmailLabel = await fetch(`${baseUrl}/v1/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(wrongEmailLabelBody),
+      });
+      assert.equal(wrongEmailLabel.status, 400);
+      assert.equal(
+        (await wrongEmailLabel.json()).error,
+        'registration_action_label_mismatch',
+      );
+      const wrongEmailSideEffects = await setupPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM users WHERE email = $1) AS users,
+           (SELECT count(*)::int
+              FROM legal_declarations
+             WHERE declaration_type = 'account_registration_bundle'
+               AND user_id IN (SELECT id FROM users WHERE email = $1)) AS bundles`,
+        [wrongEmailLabelBody.email],
+      );
+      assert.deepEqual(wrongEmailSideEffects.rows[0], { users: 0, bundles: 0 });
       const duplicateRegistration = await register();
       assert.equal(duplicateRegistration.status, 202);
       assert.deepEqual(await duplicateRegistration.json(), { accepted: true });
@@ -12124,6 +12175,34 @@ if (!databaseUrl) {
         emailVerified: true,
         displayName: 'Google Member',
       });
+      socialClaims.set('google-label-mismatch', {
+        provider: 'google',
+        subject: 'firebase-google-label-mismatch',
+        firebaseUserId: 'firebase-user-google-label-mismatch',
+        email: 'social-google-label-mismatch@example.com',
+        emailVerified: true,
+        displayName: 'Google Label Mismatch',
+      });
+      const socialLabelMismatch = await socialRequest(
+        'google-label-mismatch',
+        true,
+        'Mit Facebook registrieren',
+      );
+      assert.equal(socialLabelMismatch.status, 400);
+      assert.equal(
+        (await socialLabelMismatch.json()).error,
+        'registration_action_label_mismatch',
+      );
+      const socialLabelMismatchSideEffects = await setupPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM users WHERE email = $1) AS users,
+           (SELECT count(*)::int
+              FROM legal_declarations
+             WHERE declaration_type = 'account_registration_bundle'
+               AND user_id IN (SELECT id FROM users WHERE email = $1)) AS bundles`,
+        ['social-google-label-mismatch@example.com'],
+      );
+      assert.deepEqual(socialLabelMismatchSideEffects.rows[0], { users: 0, bundles: 0 });
       const socialMissingConsents = await socialRequest('google-new');
       assert.equal(socialMissingConsents.status, 400);
       assert.equal(
@@ -12225,6 +12304,7 @@ if (!databaseUrl) {
       const unavailableFacebookRegistration = await socialRequest(
         'facebook-delivery-unavailable',
         true,
+        'Mit Facebook registrieren',
       );
       assert.equal(unavailableFacebookRegistration.status, 503);
       assert.equal(
