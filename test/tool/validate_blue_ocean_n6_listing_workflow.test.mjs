@@ -4,13 +4,18 @@ import { dirname, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { validateBlueOceanN6ListingWorkflow } from '../../tool/validate_blue_ocean_n6_listing_workflow.mjs';
+import {
+  validateBlueOceanN6ListingScreen,
+  validateBlueOceanN6ListingWorkflow,
+} from '../../tool/validate_blue_ocean_n6_listing_workflow.mjs';
 
 const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const evidence = JSON.parse(readFileSync(resolve(
   root,
   'docs/evidence/blue-ocean/n6-listing-workflow-20260824.json',
 ), 'utf8'));
+const screenPath = resolve(root, 'lib/screens/create_listing_screen.dart');
+const screen = readFileSync(screenPath, 'utf8');
 
 function validate(changed = evidence) {
   return validateBlueOceanN6ListingWorkflow({ repositoryRoot: root, evidence: changed });
@@ -22,6 +27,51 @@ test('accepts the exact default-off N6 listing workflow', () => {
     ownerConfirmationCount: 11,
     nextPackage: 'N7',
   });
+});
+
+test('accepts exactly one visible owner confirmation and the ten factual IDs', () => {
+  assert.deepEqual(validateBlueOceanN6ListingScreen(screen), {
+    factualOwnerConfirmationCount: 10,
+    visibleOwnerConfirmationCount: 1,
+  });
+});
+
+test('rejects owner-confirmation UX drift and early final publication', () => {
+  const missingWording = screen.replace(
+    'Ich habe alle generierten Inseratsdaten (Artikel, Zustand, Preis, Verfügbarkeit etc.) geprüft und bestätige deren Richtigkeit sowie meine Berechtigung zur Vermietung.',
+    'Ich habe die Daten geprüft.',
+  );
+  assert.throws(
+    () => validateBlueOceanN6ListingScreen(missingWording),
+    /N6 marker missing.*generierten Inseratsdaten/u,
+  );
+
+  const extraControl = screen.replace(
+    'title: const Text(ownerTruthConfirmation),',
+    'title: const Text(ownerTruthConfirmation),\n                CheckboxListTile(value: false),',
+  );
+  assert.throws(
+    () => validateBlueOceanN6ListingScreen(extraControl),
+    /exactly one visible active owner confirmation/u,
+  );
+
+  const visibleFinalPublication = screen.replace(
+    'title: const Text(ownerTruthConfirmation),',
+    "title: const Text(ownerTruthConfirmation),\n                CheckboxListTile(value: false, title: const Text('final_publication')),",
+  );
+  assert.throws(
+    () => validateBlueOceanN6ListingScreen(visibleFinalPublication),
+    /final_publication must not be a visible owner control/u,
+  );
+
+  const earlyFinalPublication = screen.replace(
+    'review: _blueOceanReviewPayload(finalPublication: false)',
+    'review: _blueOceanReviewPayload(finalPublication: true)',
+  );
+  assert.throws(
+    () => validateBlueOceanN6ListingScreen(earlyFinalPublication),
+    /finalPublication: false/u,
+  );
 });
 
 test('rejects workflow, readiness, price or publication authority drift', () => {

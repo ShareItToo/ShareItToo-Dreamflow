@@ -26,6 +26,77 @@ function requireMarkers(content, path, markers) {
   }
 }
 
+const factualOwnerConfirmationIds = Object.freeze([
+  'ownership',
+  'item_identity',
+  'allowed_category',
+  'functionality',
+  'condition',
+  'accessories',
+  'owner_price',
+  'duration_discounts',
+  'availability',
+  'pickup_region',
+]);
+const exactOwnerConfirmationWording =
+  'Ich habe alle generierten Inseratsdaten (Artikel, Zustand, Preis, Verfügbarkeit etc.) geprüft und bestätige deren Richtigkeit sowie meine Berechtigung zur Vermietung.';
+
+export function validateBlueOceanN6ListingScreen(screen) {
+  const path = 'lib/screens/create_listing_screen.dart';
+  requireMarkers(screen, path, [
+    'KI-Anzeigenassistent',
+    'Ausgewählte Fotos analysieren',
+    'Bearbeitbarer KI-Entwurf',
+    'Rückfragen (höchstens drei)',
+    "Text('Eigentümer-Bestätigung'",
+    exactOwnerConfirmationWording,
+    '_blueOceanFactualConfirmationIds',
+    'Mietdauer- und V5.2-Gebührenvorschau',
+    'READY_TO_PUBLISH',
+    "const Text('Anzeige veröffentlichen')",
+    'liveRegion: true',
+    'Scrollable.ensureVisible',
+  ]);
+
+  const factualIdsMatch = screen.match(
+    /static const List<String> _blueOceanFactualConfirmationIds = <String>\[([\s\S]*?)\n  \];/u,
+  );
+  if (!factualIdsMatch) fail('N6 factual owner confirmation ID list is missing.');
+  const factualIds = [...factualIdsMatch[1].matchAll(/'([^']+)'/gu)].map(
+    ([, id]) => id,
+  );
+  if (!exact(factualIds, factualOwnerConfirmationIds)) {
+    fail('N6 factual owner confirmation IDs are invalid.');
+  }
+
+  const ownerSectionStart = screen.indexOf("Text('Eigentümer-Bestätigung'");
+  const ownerSectionEnd = screen.indexOf('OutlinedButton.icon', ownerSectionStart);
+  if (ownerSectionStart < 0 || ownerSectionEnd < ownerSectionStart) {
+    fail('N6 owner confirmation section boundary is invalid.');
+  }
+  const ownerSection = screen.slice(ownerSectionStart, ownerSectionEnd);
+  if (ownerSection.includes('final_publication')) {
+    fail('N6 final_publication must not be a visible owner control.');
+  }
+  const visibleOwnerControls = ownerSection.match(/CheckboxListTile\(/gu) ?? [];
+  if (visibleOwnerControls.length !== 1
+      || !ownerSection.includes('value: _blueOceanOwnerTruthConfirmed')
+      || !ownerSection.includes('_setBlueOceanOwnerTruthConfirmed')) {
+    fail('N6 requires exactly one visible active owner confirmation control.');
+  }
+
+  requireMarkers(screen, path, [
+    "confirmations['final_publication'] = finalPublication;",
+    'review: _blueOceanReviewPayload(finalPublication: false)',
+    'blueOceanReview: blueOceanPublication',
+    '_blueOceanReviewPayload(finalPublication: true)',
+  ]);
+  return Object.freeze({
+    factualOwnerConfirmationCount: factualOwnerConfirmationIds.length,
+    visibleOwnerConfirmationCount: visibleOwnerControls.length,
+  });
+}
+
 export function validateBlueOceanN6ListingWorkflow({
   repositoryRoot = root,
   evidence,
@@ -195,8 +266,15 @@ export function validateBlueOceanN6ListingWorkflow({
     "'/v1/blue-ocean/listing-drafts/:id/publish'",
     'assertBlueOceanListingTechnicalAccess();',
     "req.body?.explicitAction !== 'Anzeige veröffentlichen'",
+    "req.body?.ownerConfirmations?.final_publication === true",
     "action: 'blue_ocean.listing.published_by_owner'",
     'requireAuth, requireActiveAccount, requireUnsuspendedScope(\'listing\')',
+  ]);
+
+  const repository = source(repositoryRoot, 'lib/services/backend_repository.dart');
+  requireMarkers(repository, 'lib/services/backend_repository.dart', [
+    '/blue-ocean/listing-drafts/${Uri.encodeComponent(draftId)}/publish',
+    "'explicitAction': 'Anzeige veröffentlichen'",
   ]);
 
   const config = source(repositoryRoot, 'lib/config/private_pilot_config.dart');
@@ -205,18 +283,7 @@ export function validateBlueOceanN6ListingWorkflow({
     'defaultValue: false',
   ]);
   const screen = source(repositoryRoot, 'lib/screens/create_listing_screen.dart');
-  requireMarkers(screen, 'lib/screens/create_listing_screen.dart', [
-    'KI-Anzeigenassistent',
-    'Ausgewählte Fotos analysieren',
-    'Bearbeitbarer KI-Entwurf',
-    'Rückfragen (höchstens drei)',
-    'Eigentümer-Bestätigungen',
-    'Mietdauer- und V5.2-Gebührenvorschau',
-    'READY_TO_PUBLISH',
-    "const Text('Anzeige veröffentlichen')",
-    'liveRegion: true',
-    'Scrollable.ensureVisible',
-  ]);
+  validateBlueOceanN6ListingScreen(screen);
 
   const upPath = 'backend/sql/migrations/068_blue_ocean_listing_workflow.up.sql';
   const up = source(repositoryRoot, upPath);
