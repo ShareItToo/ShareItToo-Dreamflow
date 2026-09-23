@@ -45,17 +45,17 @@ test('on-device suggestions require an explicit takeover before publication', ()
   const readyBranch = screen.slice(readyStart, screen.indexOf('} else {', readyStart));
   assert.match(assistantStart >= 0 ? screen.slice(assistantStart) : '', /_onDeviceListingAnalysis\.analyzeImagePaths/u);
   assert.match(assistantStart >= 0 ? screen.slice(assistantStart) : '', /onDeviceAnalysis: onDeviceAnalysis/u);
-  assert.match(readyBranch, /_blueOceanSuggestionsAccepted = false/u);
+  assert.match(readyBranch, /_setBlueOceanSuggestionsAccepted\(false\)/u);
   assert.doesNotMatch(readyBranch, /_applyBlueOceanDraft\(assistant\)/u);
   assert.match(screen, /void _acceptBlueOceanSuggestions\(\)/u);
   assert.match(
     screen,
-    /_applyBlueOceanDraft\(assistant\);[\s\S]*_blueOceanSuggestionsAccepted = true/u,
+    /_applyBlueOceanDraft\(assistant\);[\s\S]*_blueOceanTakeover =\s*_blueOceanTakeover\.accept/u,
   );
   assert.match(screen, /label: const Text\('Vorschläge übernehmen'\)/u);
   assert.match(
     screen,
-    /if \(!_blueOceanSuggestionsAccepted\)[\s\S]*Übernimm die Vorschläge bewusst/u,
+    /if \(!_blueOceanSuggestionsAccepted\)[\s\S]*Die KI-Vorschläge werden erst/u,
   );
 });
 

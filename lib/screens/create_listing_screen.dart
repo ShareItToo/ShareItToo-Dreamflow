@@ -18,6 +18,7 @@ import 'package:lendify/services/listing_mutation_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/blue_ocean_draft_recovery_service.dart';
+import 'package:lendify/services/blue_ocean_suggestion_takeover.dart';
 import 'package:lendify/services/maps_service.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/services/on_device_listing_analysis_service.dart';
@@ -195,7 +196,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   final GlobalKey _blueOceanCardKey = GlobalKey();
   final FocusNode _blueOceanErrorFocus = FocusNode();
   bool _blueOceanConsentAccepted = false;
-  bool _blueOceanSuggestionsAccepted = false;
+  BlueOceanSuggestionTakeoverState _blueOceanTakeover =
+      const BlueOceanSuggestionTakeoverState.fresh();
   bool _blueOceanBusy = false;
   bool _submitBusy = false;
   String _blueOceanProgress = '';
@@ -470,6 +472,14 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   bool _blueOceanCapabilityLoading = true;
   String? _blueOceanCapabilityError;
 
+  bool get _blueOceanSuggestionsAccepted => _blueOceanTakeover.accepted;
+
+  void _setBlueOceanSuggestionsAccepted(bool accepted) {
+    _blueOceanTakeover = accepted
+        ? _blueOceanTakeover.accept(const <String, dynamic>{})
+        : _blueOceanTakeover.resetForNewAssistant();
+  }
+
   String _newBlueOceanUuid() {
     final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256));
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
@@ -506,7 +516,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         'longitude': _selectedAddrLng,
         'ownerDailyPrice': _priceCtrl.text,
         'condition': _condition,
-        'suggestionsAccepted': _blueOceanSuggestionsAccepted,
+        'suggestionsAccepted':
+            _blueOceanTakeover.toRecoveryFields()['suggestionsAccepted'],
         'durationPricingEnabled': _autoApplyDiscounts,
         'durationPricing': <Map<String, dynamic>>[
           <String, dynamic>{'days': _tier1Days, 'percent': _tier1Pct},
@@ -640,7 +651,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       _selectedAddrLat = latitude.toDouble();
       _selectedAddrLng = longitude.toDouble();
     }
-    _blueOceanSuggestionsAccepted = fields['suggestionsAccepted'] == true;
+    _blueOceanTakeover =
+        BlueOceanSuggestionTakeoverState.fromRecovery(fields);
     _autoApplyDiscounts = fields['durationPricingEnabled'] == true;
     final durationPricing = fields['durationPricing'];
     if (durationPricing is List && durationPricing.length == 3) {
@@ -714,7 +726,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     _blueOceanDraftId = null;
     _blueOceanAssistant = null;
     _blueOceanPhotoUrls = const <String>[];
-    _blueOceanSuggestionsAccepted = false;
+    _blueOceanTakeover = _blueOceanTakeover.resetForPhotoReplacement();
     _blueOceanReadyFingerprint = null;
     _blueOceanAnsweredQuestions.clear();
     _blueOceanReplacementBandConfirmed = false;
@@ -779,7 +791,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       ],
       'answeredClarifications': answered,
       'ownerConfirmations': confirmations,
-      'suggestionsAccepted': _blueOceanSuggestionsAccepted,
+      'suggestionsAccepted':
+          _blueOceanTakeover.toRecoveryFields()['suggestionsAccepted'],
       'photoUrls': _blueOceanPhotoUrls,
     };
     return sha256.convert(utf8.encode(jsonEncode(snapshot))).toString();
@@ -862,7 +875,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     if (_blueOceanDraftId == null || assistant == null) return;
     setState(() {
       _applyBlueOceanDraft(assistant);
-      _blueOceanSuggestionsAccepted = true;
+      _blueOceanTakeover =
+          _blueOceanTakeover.accept(_blueOceanRecoveryEditableFields());
       _invalidateBlueOceanReviewState(clearClarifications: true);
       _blueOceanProgress =
           'Vorschläge übernommen. Prüfe und bearbeite die Felder jetzt selbst.';
@@ -970,7 +984,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         _blueOceanAssistant = assistant;
         if (assistant['status'] == 'draft_ready') {
           _blueOceanDraftId = draftId;
-          _blueOceanSuggestionsAccepted = false;
+          _setBlueOceanSuggestionsAccepted(false);
           _blueOceanReadyFingerprint = null;
           _blueOceanAnsweredQuestions.clear();
           _blueOceanReplacementBandConfirmed = false;
@@ -981,7 +995,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
               'Vorschläge sind bereit. Übernimm sie bewusst, bevor du sie bearbeitest.';
         } else {
           _blueOceanDraftId = null;
-          _blueOceanSuggestionsAccepted = false;
+          _setBlueOceanSuggestionsAccepted(false);
           _blueOceanError =
               'Die KI-Analyse wurde sicher beendet. Prüfe oder ersetze die '
               'Fotos und arbeite im manuellen Editor weiter.';
@@ -1674,7 +1688,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     final blueOceanPublication =
         !forceInactive && !_isEdit && _blueOceanDraftId != null;
     if (blueOceanPublication) {
-      if (!_blueOceanSuggestionsAccepted) {
+      if (!_blueOceanTakeover.canPublish) {
         if (!mounted) return;
         setState(() => _blueOceanError =
             'Übernimm die Vorschläge bewusst, bevor du diesen KI-Entwurf '
