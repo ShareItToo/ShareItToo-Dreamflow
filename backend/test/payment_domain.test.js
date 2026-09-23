@@ -3,6 +3,7 @@ import test from 'node:test';
 import { StripeProvider } from '../src/stripe_provider.js';
 
 import {
+  assertPrivatePilotPaymentAmounts,
   assertProviderPaymentBinding,
   assertProviderRefundBinding,
   assertProviderTransferBinding,
@@ -384,6 +385,34 @@ test('payment amounts are copied from the authoritative booking quote', () => {
   assert.throws(() => paymentAmounts({
     quoted_total_minor: '100', owner_payout_minor: '101', rental_subtotal_minor: '100', currency: 'EUR',
   }), /invalid_booking_payment_amounts/);
+});
+
+test('Private Pilot payment boundary binds the exact 10% fee and no extras', () => {
+  const booking = {
+    quoted_total_minor: '3300',
+    owner_payout_minor: '3000',
+    rental_subtotal_minor: '3000',
+    security_deposit_minor: '0',
+    delivery_fee_minor: '0',
+    pickup_fee_minor: '0',
+    express_fee_minor: '0',
+    currency: 'EUR',
+  };
+  const amounts = paymentAmounts(booking);
+  assert.equal(assertPrivatePilotPaymentAmounts({ booking, amounts }), true);
+  for (const changed of [
+    { ...booking, quoted_total_minor: '3400' },
+    { ...booking, owner_payout_minor: '2900' },
+    { ...booking, security_deposit_minor: '1' },
+    { ...booking, delivery_fee_minor: '1' },
+    { ...booking, pickup_fee_minor: '1' },
+    { ...booking, express_fee_minor: '1' },
+  ]) {
+    assert.throws(
+      () => assertPrivatePilotPaymentAmounts({ booking: changed, amounts: paymentAmounts(changed) }),
+      (error) => error.code === 'private_pilot_payment_amounts_mismatch',
+    );
+  }
 });
 
 test('capture, transfer and refund ledger entries always balance', () => {

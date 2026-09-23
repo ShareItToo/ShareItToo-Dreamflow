@@ -4,6 +4,7 @@ import {
   deLegalDeadlineTimeZone,
   endOfReturnPolicyCalendarDay,
 } from './return_calendar_policy.js';
+import { platformFeeMinor } from './booking_domain.js';
 import {
   platformContractAcceptanceTimeBinding,
   v52ContractDocument,
@@ -126,6 +127,40 @@ export function paymentAmounts(booking) {
     securityDepositMinor: 0,
     currency: normalizePaymentCurrency(booking.currency),
   });
+}
+
+/**
+ * Keep the Private-Pilot payment boundary tied to the authoritative quote:
+ * exactly 10% SIT contribution, no deposit, and no transport/express extras.
+ * A tampered or legacy row must fail before any provider mutation.
+ */
+export function assertPrivatePilotPaymentAmounts({ booking, amounts }) {
+  const rentalSubtotalMinor = Number(booking?.rental_subtotal_minor);
+  const securityDepositMinor = Number(booking?.security_deposit_minor);
+  const deliveryFeeMinor = Number(booking?.delivery_fee_minor);
+  const pickupFeeMinor = Number(booking?.pickup_fee_minor);
+  const expressFeeMinor = Number(booking?.express_fee_minor);
+  const expectedPlatformFeeMinor = platformFeeMinor(rentalSubtotalMinor);
+  const fieldsAreValid = [
+    rentalSubtotalMinor,
+    securityDepositMinor,
+    deliveryFeeMinor,
+    pickupFeeMinor,
+    expressFeeMinor,
+  ].every(Number.isSafeInteger);
+  const quoteMatchesPilot = fieldsAreValid
+    && securityDepositMinor === 0
+    && deliveryFeeMinor === 0
+    && pickupFeeMinor === 0
+    && expressFeeMinor === 0
+    && amounts?.rentalSubtotalMinor === rentalSubtotalMinor
+    && amounts?.ownerPayoutMinor === rentalSubtotalMinor
+    && amounts?.platformFeeMinor === expectedPlatformFeeMinor
+    && amounts?.amountMinor === rentalSubtotalMinor + expectedPlatformFeeMinor;
+  if (!quoteMatchesPilot) {
+    throw new PaymentDomainError(409, 'private_pilot_payment_amounts_mismatch');
+  }
+  return true;
 }
 
 export function captureLedger({ amountMinor, ownerPayoutMinor, platformFeeMinor, ownerId }) {

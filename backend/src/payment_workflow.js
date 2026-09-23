@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { config } from './config.js';
 import { inTransaction, pool } from './db.js';
 import {
+  assertPrivatePilotPaymentAmounts,
   assertProviderPaymentBinding,
   assertProviderRefundBinding,
   canonicalPositionReviewHold,
@@ -1910,6 +1911,9 @@ export async function createPaymentCheckout({ actor, bookingId, key: rawKey }) {
       throw new PaymentDomainError(409, 'owner_payout_account_not_ready');
     }
     const amounts = paymentAmounts(booking);
+    if (config.privatePilotV4Enabled) {
+      assertPrivatePilotPaymentAmounts({ booking, amounts });
+    }
     const existing = await client.query(
       `SELECT * FROM payments
        WHERE booking_id = $1 AND payment_version = 1
