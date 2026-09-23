@@ -18,8 +18,9 @@ historical evidence or grant any external, legal, provider or release approval.
      green tests alone do not close this phase.
 
 3. **P3 — Fresh higher Android candidate**
-   - Produce one higher candidate from the accepted source state and bind its
-     artifact and manifest hashes.
+   - Read the highest current Play versionCode freshly, then choose a strictly
+     higher candidate from the accepted source state and bind its artifact and
+     manifest hashes; never assume local availability of `2026092203`.
    - Exit only when the candidate identity is fresh, reproducible and the
      prior-candidate manifest is no longer stale.
 
@@ -50,11 +51,11 @@ historical evidence or grant any external, legal, provider or release approval.
 ## Active capsule
 
 - Branch: `codex/master-workflow-20260808`
-- HEAD: `a3b747aeed36725a25487ff15839db233949927a`
+- Base HEAD at capsule capture: `a3b747aeed36725a25487ff15839db233949927a`
 - Worktree: clean at capsule capture
 - Candidate: no exact-HEAD candidate yet
-- Focused proof: listing viewport cluster green, Product Journey 10/10 and
-  Accessibility Resilience 8/8
+- Focused proof: listing viewport cluster green, Product Journey 3/3,
+  Accessibility Resilience 7/7, cluster 10/10
 - Full gate: not green; the last rerun stopped on a stale Accessibility
   viewport test, now repaired in the focused cluster
 - Known next source blockers:
