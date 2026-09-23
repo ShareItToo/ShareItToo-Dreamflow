@@ -263,6 +263,22 @@ function safePath(value, code) {
   return value;
 }
 
+export async function assertGreenEvidenceArtifactFamilyAvailable({ evidenceFile, isolatedEnvFile } = {}) {
+  safePath(evidenceFile, 'green_evidence_path_invalid');
+  safePath(isolatedEnvFile, 'green_execution_env_file');
+  if (isolatedEnvFile !== `${evidenceFile}.isolated.env`) fail('green_evidence_artifact_family_invalid');
+  for (const artifactPath of [evidenceFile, `${evidenceFile}.pgdump`, isolatedEnvFile]) {
+    try {
+      await lstat(artifactPath);
+    } catch (error) {
+      if (error?.code === 'ENOENT') continue;
+      fail('green_evidence_artifact_family_unsafe');
+    }
+    fail('green_evidence_artifact_family_occupied');
+  }
+  return true;
+}
+
 function safeDigest(value, code) {
   if (typeof value !== 'string' || !/^[0-9a-f]{64}$/u.test(value)) fail(code);
   return value;
@@ -1703,17 +1719,23 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
   assertGreenRuntimeConfig(config);
   if (typeof command !== 'function') fail('green_command_runner_required');
   if (typeof assertRuntimeFiles !== 'function') fail('green_runtime_file_assertion_required');
+  await assertGreenEvidenceArtifactFamilyAvailable({ evidenceFile: plan?.evidenceFile, isolatedEnvFile: plan?.isolated?.envFile });
   const protectedEnv = await readProtectedEnv(configFile);
   assertGreenProtectedEnvironment(protectedEnv, config);
   await assertRuntimeFiles(config, protectedEnv);
   const isolatedPassword = crypto.randomBytes(32).toString('base64url');
   await mkdir(dirname(plan.isolated.envFile), { recursive: true, mode: 0o700 });
-  await writeFile(plan.isolated.envFile, [
-    `POSTGRES_DB=${plan.isolated.databaseName}`,
-    `POSTGRES_USER=${plan.isolated.databaseUser}`,
-    `POSTGRES_PASSWORD=${isolatedPassword}`,
-    `DATABASE_URL=postgres://${plan.isolated.databaseUser}:${isolatedPassword}@${plan.isolated.database}:5432/${plan.isolated.databaseName}`,
-  ].join('\n') + '\n', { flag: 'wx', mode: 0o600 });
+  try {
+    await writeFile(plan.isolated.envFile, [
+      `POSTGRES_DB=${plan.isolated.databaseName}`,
+      `POSTGRES_USER=${plan.isolated.databaseUser}`,
+      `POSTGRES_PASSWORD=${isolatedPassword}`,
+      `DATABASE_URL=postgres://${plan.isolated.databaseUser}:${isolatedPassword}@${plan.isolated.database}:5432/${plan.isolated.databaseName}`,
+    ].join('\n') + '\n', { flag: 'wx', mode: 0o600 });
+  } catch (error) {
+    if (error?.code === 'EEXIST') fail('green_evidence_artifact_family_occupied');
+    throw error;
+  }
   const isolatedEnv = await readExecutionEnv(plan.isolated.envFile);
   const commandEnv = Object.freeze({ ...environment, ...protectedEnv });
   const commands = buildGreenPromotionCommands({ plan, configFile, config });
@@ -1781,7 +1803,12 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
         const parentMeta = await lstat(dirname(backupPath));
         const ownerUid = typeof process.getuid === 'function' ? process.getuid() : parentMeta.uid;
         if (!parentMeta.isDirectory() || parentMeta.isSymbolicLink() || (parentMeta.mode & 0o777) !== 0o700 || parentMeta.uid !== ownerUid) fail('green_backup_directory_unsafe');
-        await writeFile(backupPath, backupBytes, { flag: 'wx', mode: 0o600 });
+        try {
+          await writeFile(backupPath, backupBytes, { flag: 'wx', mode: 0o600 });
+        } catch (error) {
+          if (error?.code === 'EEXIST') fail('green_evidence_artifact_family_occupied');
+          throw error;
+        }
         const backupMeta = await lstat(backupPath);
         if (!backupMeta.isFile() || backupMeta.isSymbolicLink() || (backupMeta.mode & 0o777) !== 0o600 || backupMeta.uid !== ownerUid) fail('green_backup_permissions_invalid');
       }

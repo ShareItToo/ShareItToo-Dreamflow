@@ -205,6 +205,11 @@ discover a mechanically stale source hash.
   carry `APP_VERSION`, `APP_COMMIT` or `APP_BUILD_TIME`; `assertGreenRuntimeConfig`
   must reject those keys before any command or quiesce, and `/version` must bind
   the immutable image/runtime identity.
+- Green evidence-family invariant: before any Green command or quiesce, preflight
+  the exact final evidence JSON and every derived artifact (`.pgdump`,
+  `.isolated.env`) as one reserved namespace; any existing or unsafe member is
+  a fail-closed collision. Each attempt uses a fresh immutable base and never
+  reuses a retained backup namespace; exclusive writes remain the race guard.
 - Authenticated capability handshakes are principal-bound state: bind every
   effective provider/disclosure/policy/config field into the request hash, make
   config revisions a digest of the effective configuration rather than a

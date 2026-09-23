@@ -29,6 +29,7 @@ import {
   sanitizeGreenEvidence,
   normalizedGreenTargetDigest,
   assertGreenCommandBindings,
+  assertGreenEvidenceArtifactFamilyAvailable,
   writeGreenEvidence,
   runGreenEmergencyCleanup,
   runGreenForwardRecovery,
@@ -241,6 +242,47 @@ test('release identity overrides are rejected before runtime files or commands',
     );
     assert.equal(commandCalls, 0, `${releaseName} must reject before command execution`);
     assert.equal(runtimeFileCalls, 0, `${releaseName} must reject before runtime-file checks`);
+  }
+});
+
+test('evidence artifact family preflight rejects retained backups and env files before commands', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'sit-green-artifact-family-'));
+  try {
+    for (const suffix of ['.json', '.pgdump', '.isolated.env']) {
+      const evidenceFile = path.join(root, `green-promotion-${suffix.slice(1)}.json`);
+      const plan = buildGreenPromotionPlan({
+        targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile,
+        ownershipNonce: 'c'.repeat(32),
+      });
+      const retainedPath = suffix === '.json' ? evidenceFile : suffix === '.pgdump' ? `${evidenceFile}.pgdump` : plan.isolated.envFile;
+      writeFileSync(retainedPath, 'retained immutable backup namespace\n', { mode: 0o600 });
+      let commandCalls = 0;
+      let runtimeFileCalls = 0;
+      await assert.rejects(
+        () => runGreenPromotion({
+          plan, config, configFile: config.envFile,
+          environment: { GREEN_STAGING_PROMOTION_EXECUTE: '1', GREEN_STAGING_PROMOTION_CONFIRM: runtimeCommit },
+          execute: true,
+          command: async () => { commandCalls += 1; return { stdout: '' }; },
+          assertRuntimeFiles: async () => { runtimeFileCalls += 1; },
+        }),
+        (error) => error?.code === 'green_evidence_artifact_family_occupied',
+        suffix,
+      );
+      assert.equal(commandCalls, 0, `${suffix} must fail before Docker/command execution`);
+      assert.equal(runtimeFileCalls, 0, `${suffix} must fail before runtime mutation checks`);
+      assert.equal(readFileSync(retainedPath, 'utf8'), 'retained immutable backup namespace\n');
+      rmSync(retainedPath, { force: true });
+    }
+    const absentEvidenceFile = path.join(root, 'green-promotion-absent.json');
+    const absentPlan = buildGreenPromotionPlan({
+      targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: absentEvidenceFile,
+      ownershipNonce: 'd'.repeat(32),
+    });
+    assert.equal(await assertGreenEvidenceArtifactFamilyAvailable({ evidenceFile: absentPlan.evidenceFile, isolatedEnvFile: absentPlan.isolated.envFile }), true);
+    assert.equal(readdirSync(root).length, 0, 'absent family preflight must not reserve or mutate artifacts');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
