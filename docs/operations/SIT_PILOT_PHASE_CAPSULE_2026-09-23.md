@@ -63,6 +63,16 @@ historical evidence or grant any external, legal, provider or release approval.
   the documentation-only commits above.
 - Candidate: `2026092203` is stale against later runtime source and remains
   expected/deferred P3 evidence; it is not a P1 source blocker.
+- A first `2026092204` build attempt stopped before archive/evidence because
+  the social flags were omitted. No archive and no
+  `build/release-evidence/android-2026092204` were created; `1.0.0+2026092204`
+  remains unconsumed and is not a candidate. Its numeric code may only be used
+  by a new corrected build from the accepted source commit; the stopped old
+  exact-head attempt is never reused. The corrected P3 profile requires
+  explicit `SIT_SOCIAL_GOOGLE_ENABLED=true`,
+  `SIT_SOCIAL_APPLE_ENABLED=false`, and
+  `SIT_SOCIAL_FACEBOOK_ENABLED=false`; Apple/Facebook remain hard stops until
+  separately proven provider configuration exists.
 - Focused proof: `GREEN-92-97-CURRENTNESS-01` PASS on source HEAD
   `1360628406736c61ecd26d99fe0b9663994ba47b`; the 370626 baseline and its
   documentation-only successors did not contain this implementation, while
@@ -98,5 +108,28 @@ Store upload, Store activation, candidate installation or any device pass.
 After that local gate, execute P2: push the accepted exact HEAD and obtain
 exact-HEAD GitHub Regression and CodeQL evidence. Only then execute P3 by
 building a fresh strictly higher candidate from that accepted source state.
+The P3 preflight/build commands must include the explicit Google-only profile
+and rollover controls; omission fails closed before artifact work:
+
+```sh
+node tool/run_with_local_build_cache.mjs \
+  --profile /Users/walidchraibi/Documents/Codex/2026-08-19/new-chat/SIT_ANDROID_BUILD_20260904.json \
+  -- env \
+  SIT_ALLOW_CANDIDATE_ROLLOVER=1 \
+  SIT_BUILD_PREFLIGHT_ONLY=1 \
+  SIT_REQUIRE_CANONICAL_SIGNING=1 \
+  SIT_REQUIRE_FIREBASE=1 \
+  SIT_BLUE_OCEAN_LISTING_ASSISTANT=1 \
+  SIT_RELEASE_CHANNEL=internal \
+  SIT_API_BASE_URL=https://staging.shareittoo.com/api/v1 \
+  SIT_SOCIAL_GOOGLE_ENABLED=true \
+  SIT_SOCIAL_APPLE_ENABLED=false \
+  SIT_SOCIAL_FACEBOOK_ENABLED=false \
+  bash scripts/build_android_release_candidate.sh
+```
+
+After the preflight and `BUILD_READY`, repeat the same command without
+`SIT_BUILD_PREFLIGHT_ONLY=1`. This remains a future corrected command; do not
+reuse the stopped `2026092204` attempt or claim it as a candidate.
 Do not rewrite historical status files or repeat full gates after serial
 failures in one owning test/validator class; close that cluster focused-first.

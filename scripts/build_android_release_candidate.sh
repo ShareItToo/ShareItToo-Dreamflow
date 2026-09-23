@@ -74,6 +74,11 @@ if [[ "$REQUIRE_CLEAN" == "1" ]] && [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
+# Social provider inputs are part of the candidate identity. Validate them
+# before reading local Firebase configuration or entering any build/preflight
+# work so omission can never silently compile all providers disabled.
+node tool/validate_android_release_social_profile.mjs
+
 commit="$(git rev-parse HEAD)"
 version="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
 build_name="${version%%+*}"

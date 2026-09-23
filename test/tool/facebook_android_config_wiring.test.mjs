@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+
+import {
+  validateAndroidReleaseSocialProfile,
+} from '../../tool/validate_android_release_social_profile.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
@@ -46,7 +51,84 @@ test('release builds bind explicit fail-closed social-provider flags', () => {
     '"    \\"facebookEnabled\\": $social_facebook_enabled" \\',
   ]) assert.ok(buildScript.includes(line), line);
   assert.match(buildScript, /--dart-define=SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED=true/u);
+  assert.match(
+    buildScript,
+    /node tool\/validate_android_release_social_profile\.mjs/u,
+  );
 });
+
+test('social profile validation rejects omitted inputs before release work', () => {
+  assert.throws(
+    () => validateAndroidReleaseSocialProfile({
+      environment: {
+        SIT_SOCIAL_GOOGLE_ENABLED: 'true',
+        SIT_SOCIAL_APPLE_ENABLED: 'false',
+      },
+    }),
+    /SIT_SOCIAL_FACEBOOK_ENABLED must be explicitly set/u,
+  );
+});
+
+test('release builder stops on omitted social inputs before preflight or artifacts', () => {
+  const environment = { ...process.env, SIT_REQUIRE_CLEAN: '0' };
+  delete environment.SIT_SOCIAL_GOOGLE_ENABLED;
+  delete environment.SIT_SOCIAL_APPLE_ENABLED;
+  delete environment.SIT_SOCIAL_FACEBOOK_ENABLED;
+  const result = spawnSync(
+    'bash',
+    ['scripts/build_android_release_candidate.sh'],
+    { cwd: root, env: environment, encoding: 'utf8' },
+  );
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /SIT_SOCIAL_GOOGLE_ENABLED must be explicitly set/u);
+  assert.doesNotMatch(result.stderr, /release_candidate_preflight|flutter clean|run_checked_android_build/u);
+});
+
+test('social profile validation accepts the exact Google-only internal Staging rollover', () => {
+  assert.deepEqual(
+    validateAndroidReleaseSocialProfile({
+      environment: {
+        SIT_SOCIAL_GOOGLE_ENABLED: 'true',
+        SIT_SOCIAL_APPLE_ENABLED: 'false',
+        SIT_SOCIAL_FACEBOOK_ENABLED: 'false',
+        SIT_ALLOW_CANDIDATE_ROLLOVER: '1',
+        SIT_RELEASE_CHANNEL: 'internal',
+        SIT_API_BASE_URL: 'https://staging.shareittoo.com/api/v1',
+      },
+    }),
+    {
+      google: true,
+      apple: false,
+      facebook: false,
+      releaseChannel: 'internal',
+      apiBaseUrl: 'https://staging.shareittoo.com/api/v1',
+      candidateRollover: true,
+      internalStaging: true,
+    },
+  );
+});
+
+for (const [name, value] of [
+  ['Apple', { SIT_SOCIAL_APPLE_ENABLED: 'true' }],
+  ['Facebook', { SIT_SOCIAL_FACEBOOK_ENABLED: 'true' }],
+]) {
+  test(`social profile validation rejects ${name} for an internal Staging rollover`, () => {
+    assert.throws(
+      () => validateAndroidReleaseSocialProfile({
+        environment: {
+          SIT_SOCIAL_GOOGLE_ENABLED: 'true',
+          SIT_SOCIAL_APPLE_ENABLED: 'false',
+          SIT_SOCIAL_FACEBOOK_ENABLED: 'false',
+          SIT_ALLOW_CANDIDATE_ROLLOVER: '1',
+          SIT_RELEASE_CHANNEL: 'internal',
+          SIT_API_BASE_URL: 'https://staging.shareittoo.com/api/v1',
+          ...value,
+        },
+      }),
+      /candidate rollover requires Google=true, Apple=false, and Facebook=false/u,
+    );
+  });
+}
 
 test('product builds require the post-preflight social activation define', () => {
   const authService = read('lib/services/auth_service.dart');

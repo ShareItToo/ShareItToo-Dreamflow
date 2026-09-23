@@ -33,12 +33,47 @@ Current state: all three gates are **not granted**.
 4. Run the complete deterministic technical regression at that commit.
 5. Run the same build path in preflight-only mode with these fixed controls:
    Internal channel, Staging API, Android Firebase required, canonical signing
-   required, Blue Ocean listing assistant enabled, no Store-submission mode.
+   required, Blue Ocean listing assistant enabled, no Store-submission mode,
+   and the explicit Google-only social profile. Omission is a hard failure; do
+   not rely on shell defaults:
+
+   ```sh
+   node tool/run_with_local_build_cache.mjs \
+     --profile /Users/walidchraibi/Documents/Codex/2026-08-19/new-chat/SIT_ANDROID_BUILD_20260904.json \
+     -- env \
+     SIT_ALLOW_CANDIDATE_ROLLOVER=1 \
+     SIT_BUILD_PREFLIGHT_ONLY=1 \
+     SIT_REQUIRE_CANONICAL_SIGNING=1 \
+     SIT_REQUIRE_FIREBASE=1 \
+     SIT_BLUE_OCEAN_LISTING_ASSISTANT=1 \
+     SIT_RELEASE_CHANNEL=internal \
+     SIT_API_BASE_URL=https://staging.shareittoo.com/api/v1 \
+     SIT_SOCIAL_GOOGLE_ENABLED=true \
+     SIT_SOCIAL_APPLE_ENABLED=false \
+     SIT_SOCIAL_FACEBOOK_ENABLED=false \
+     bash scripts/build_android_release_candidate.sh
+   ```
 6. Stop unless the preflight reports pass without showing values or creating
    artifacts and the owner grants `BUILD_READY` for that exact commit/code.
 7. Run `scripts/build_android_release_candidate.sh` once with the identical
-   controls and without `SIT_BUILD_PREFLIGHT_ONLY`. No automatic retry is
-   allowed.
+   controls, including all three explicit social flags, and without
+   `SIT_BUILD_PREFLIGHT_ONLY`. No automatic retry is allowed:
+
+   ```sh
+   node tool/run_with_local_build_cache.mjs \
+     --profile /Users/walidchraibi/Documents/Codex/2026-08-19/new-chat/SIT_ANDROID_BUILD_20260904.json \
+     -- env \
+     SIT_ALLOW_CANDIDATE_ROLLOVER=1 \
+     SIT_REQUIRE_CANONICAL_SIGNING=1 \
+     SIT_REQUIRE_FIREBASE=1 \
+     SIT_BLUE_OCEAN_LISTING_ASSISTANT=1 \
+     SIT_RELEASE_CHANNEL=internal \
+     SIT_API_BASE_URL=https://staging.shareittoo.com/api/v1 \
+     SIT_SOCIAL_GOOGLE_ENABLED=true \
+     SIT_SOCIAL_APPLE_ENABLED=false \
+     SIT_SOCIAL_FACEBOOK_ENABLED=false \
+     bash scripts/build_android_release_candidate.sh
+   ```
 8. The builder must verify AAB/APK signatures, package/version/commit,
    permissions/privacy, the enabled Blue Ocean build flag and the Staging
    origin before creating the non-overwriting owner-only archive.
@@ -49,12 +84,15 @@ Current state: all three gates are **not granted**.
 10. Re-run Android permission/privacy/product-truth and exact-candidate checks
     against those bytes. Only then may Walid decide `PLAY_UPLOAD_APPROVED`.
 
-The prepared preflight command uses the same script but sets
+The prepared preflight command above uses the same script but sets
 `SIT_BUILD_PREFLIGHT_ONLY=1`, `SIT_REQUIRE_CANONICAL_SIGNING=1`,
 `SIT_REQUIRE_FIREBASE=1`, `SIT_BLUE_OCEAN_LISTING_ASSISTANT=1`,
 `SIT_RELEASE_CHANNEL=internal`,
-`SIT_API_BASE_URL=https://staging.shareittoo.com/api/v1` and
-`SIT_ALLOW_CANDIDATE_ROLLOVER=1`. The build command differs only by removing
+`SIT_API_BASE_URL=https://staging.shareittoo.com/api/v1`,
+`SIT_ALLOW_CANDIDATE_ROLLOVER=1`, and all three explicit social flags. The
+builder rejects omitted social inputs and rejects any Internal/Staging rollover
+profile other than `Google=true`, `Apple=false`, `Facebook=false` before local
+Firebase/preflight or artifact work. The build command differs only by removing
 preflight-only mode after `BUILD_READY`.
 
 ## Signing and AAB hash binding
