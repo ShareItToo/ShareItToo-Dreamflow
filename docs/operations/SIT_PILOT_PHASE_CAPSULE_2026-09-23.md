@@ -51,23 +51,23 @@ historical evidence or grant any external, legal, provider or release approval.
 ## Active capsule
 
 - Branch: `codex/master-workflow-20260808`
-- Base HEAD at capsule capture: `a3b747aeed36725a25487ff15839db233949927a`
-- Worktree: clean at capsule capture
+- Base HEAD at capsule capture: `1360628406736c61ecd26d99fe0b9663994ba47b`
+- Worktree: clean at exact-head package capture before this docs-only packet
 - Candidate: no exact-HEAD candidate yet
-- Focused proof: listing viewport cluster green, Product Journey 3/3,
-  Accessibility Resilience 7/7, cluster 10/10
+- Focused proof: `GREEN-92-97-CURRENTNESS-01` PASS on exact HEAD
+  `1360628406736c61ecd26d99fe0b9663994ba47b`; Green promotion/schema
+  currentness is closed through migration 097.
 - Full gate: not green; the last rerun stopped on a stale Accessibility
   viewport test, now repaired in the focused cluster
 - Known next source blockers:
-  - Green-promotion runner/schema mismatch: expected 92→95 while current
-    migrations are 096/097
   - Gemini listing-confirmation correction required before UX implementation
   - stale candidate manifest
 
 ## Exact next sequence
 
-Audit and fix Green-promotion migration currentness; obtain the required
-Gemini listing-confirmation correction; refresh the source-binding closure; then
-run one full gate on the resulting exact HEAD. Do not rewrite historical status
-files or repeat full gates after serial failures in one owning test/validator
-class; close that cluster focused-first.
+Green-promotion migration currentness is PASS on the exact HEAD. Prepare the
+source-bound Gemini Pro-Extended listing-confirmation gate packet, obtain its
+0/1/3 declaration decision, then refresh source-binding closure before any UX
+implementation or full gate. Do not rewrite historical status files or repeat
+full gates after serial failures in one owning test/validator class; close that
+cluster focused-first.
