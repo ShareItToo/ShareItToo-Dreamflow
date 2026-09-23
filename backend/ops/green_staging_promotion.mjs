@@ -90,6 +90,10 @@ export const greenAllowedEnvNames = Object.freeze([
   'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED',
 ]);
 
+const greenImmutableReleaseEnvNames = Object.freeze([
+  'APP_VERSION', 'APP_COMMIT', 'APP_BUILD_TIME',
+]);
+
 const forbiddenGreenEnvNames = new Set([
   'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_CONNECT_WEBHOOK_SECRET',
   'STRIPE_SECRET_KEY_FILE', 'STRIPE_WEBHOOK_SECRET_FILE', 'STRIPE_CONNECT_WEBHOOK_SECRET_FILE',
@@ -466,6 +470,9 @@ export function assertGreenRuntimeConfig(config) {
       || config.envNames.some((name) => !isAllowedGreenEnvName(name))
       || requiredGreenEnvNames.some((name) => !config.envNames.includes(name))) {
     fail('green_config_env_allowlist_invalid');
+  }
+  if (config.envNames.some((name) => greenImmutableReleaseEnvNames.includes(name))) {
+    fail('green_config_release_identity_env_forbidden');
   }
   if (config.paymentTransport !== 'memory' || config.stripeLiveMode !== false
       || config.mailTransport !== 'memory'
@@ -1693,6 +1700,7 @@ export async function runGreenEmergencyCleanup({ plan, command, commandEnv = {},
 export async function runGreenPromotion({ plan, config, configFile, environment = process.env, execute = false, command = runGreenCommand, assertRuntimeFiles = assertGreenProtectedRuntimeFiles } = {}) {
   assertGreenPromotionExecutionAllowed({ environment, plan });
   if (!execute) fail('explicit_green_execute_flag_required');
+  assertGreenRuntimeConfig(config);
   if (typeof command !== 'function') fail('green_command_runner_required');
   if (typeof assertRuntimeFiles !== 'function') fail('green_runtime_file_assertion_required');
   const protectedEnv = await readProtectedEnv(configFile);

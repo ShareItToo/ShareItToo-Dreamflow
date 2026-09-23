@@ -201,6 +201,10 @@ discover a mechanically stale source hash.
   overlays, secret files or persisted volumes; verify the exact candidate image
   `USER` and resolved UID/GID, plus persisted-volume ownership, from readback
   before deployment.
+- Immutable release identity invariant: Green deployment env files must not
+  carry `APP_VERSION`, `APP_COMMIT` or `APP_BUILD_TIME`; `assertGreenRuntimeConfig`
+  must reject those keys before any command or quiesce, and `/version` must bind
+  the immutable image/runtime identity.
 - Authenticated capability handshakes are principal-bound state: bind every
   effective provider/disclosure/policy/config field into the request hash, make
   config revisions a digest of the effective configuration rather than a

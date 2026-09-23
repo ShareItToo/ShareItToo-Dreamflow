@@ -195,6 +195,14 @@ test('forbidden production identifiers use token boundaries, not arbitrary path 
 
 test('Green runtime config fails closed for external/mock/legacy or secret-bearing variants', () => {
   assert.equal(assertGreenRuntimeConfig(config).listingAiProvider, 'on_device');
+  assert.equal(assertGreenRuntimeConfig({ ...config, envNames: [...config.envNames, 'APP_FEATURE_FLAG'] }).environment, 'test');
+  for (const releaseName of ['APP_VERSION', 'APP_COMMIT', 'APP_BUILD_TIME']) {
+    assert.throws(
+      () => assertGreenRuntimeConfig({ ...config, envNames: [...config.envNames, releaseName] }),
+      /green_config_release_identity_env_forbidden/u,
+      releaseName,
+    );
+  }
   assert.throws(() => assertGreenRuntimeConfig({ ...config, listingAiProvider: 'mock' }), /green_config_safety_boundary_invalid/u);
   assert.throws(() => assertGreenRuntimeConfig({ ...config, listingAiExternalAllowed: true }), /green_config_safety_boundary_invalid/u);
   for (const [name, value] of [
@@ -207,6 +215,33 @@ test('Green runtime config fails closed for external/mock/legacy or secret-beari
   }), /green_config_safety_boundary_invalid/u);
   assert.throws(() => assertGreenRuntimeConfig({ ...config, envNames: [...config.envNames, 'STRIPE_SECRET_KEY'] }), /green_config_env_allowlist_invalid/u);
   assert.throws(() => assertGreenRuntimeConfig({ ...config, environment: 'production' }), /green_config_env_allowlist_invalid/u);
+});
+
+test('release identity overrides are rejected before runtime files or commands', async () => {
+  const plan = buildGreenPromotionPlan({
+    targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit,
+    evidenceFile: '/docker/shareittoo/evidence/green-promotion.json',
+  });
+  for (const releaseName of ['APP_VERSION', 'APP_COMMIT', 'APP_BUILD_TIME']) {
+    let commandCalls = 0;
+    let runtimeFileCalls = 0;
+    const invalidConfig = { ...config, envNames: [...config.envNames, releaseName] };
+    await assert.rejects(
+      () => runGreenPromotion({
+        plan,
+        config: invalidConfig,
+        configFile: config.envFile,
+        environment: { GREEN_STAGING_PROMOTION_EXECUTE: '1', GREEN_STAGING_PROMOTION_CONFIRM: runtimeCommit },
+        execute: true,
+        command: async () => { commandCalls += 1; return { stdout: '' }; },
+        assertRuntimeFiles: async () => { runtimeFileCalls += 1; },
+      }),
+      (error) => error?.code === 'green_config_release_identity_env_forbidden',
+      releaseName,
+    );
+    assert.equal(commandCalls, 0, `${releaseName} must reject before command execution`);
+    assert.equal(runtimeFileCalls, 0, `${releaseName} must reject before runtime-file checks`);
+  }
 });
 
 test('Green provider-off contract matches the real Listing-AI server parser', () => {
