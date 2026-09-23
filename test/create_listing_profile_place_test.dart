@@ -14,6 +14,20 @@ void main() {
     expect(resolveListingEditorProfilePlace(user), 'Ulm, Deutschland');
   });
 
+  test('profile-place fallback ignores blank address fields', () {
+    final user = buildTestUser(
+      'listing-place-blank-address',
+      name: 'Blank Address',
+      city: 'Ulm',
+    ).copyWith(
+      country: 'Deutschland',
+      addressCity: '   ',
+      addressCountry: '',
+    );
+
+    expect(resolveListingEditorProfilePlace(user), 'Ulm, Deutschland');
+  });
+
   test('profile home location remains the preferred coarse place', () {
     final user = buildTestUser(
       'listing-place-home',

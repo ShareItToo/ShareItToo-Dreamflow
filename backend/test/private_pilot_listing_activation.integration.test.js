@@ -128,13 +128,15 @@ if (!databaseUrl) {
       assert.equal(activated.status, 200);
       const active = await pool.query(
         `SELECT status, is_active, private_status_confirmed_at,
-                payload->>'privateStatusConfirmed' AS payload_private_status_confirmed
+                payload->>'privateStatusConfirmed' AS payload_private_status_confirmed,
+                catalog_revision
            FROM listings WHERE id = 'pilot-draft'`,
       );
       assert.equal(active.rows[0].status, 'active');
       assert.equal(active.rows[0].is_active, true);
       assert.ok(active.rows[0].private_status_confirmed_at);
       assert.equal(active.rows[0].payload_private_status_confirmed, 'true');
+      assert.equal(active.rows[0].catalog_revision, 2);
       const activeRow = await pool.query(
         `SELECT id, owner_id, status, is_active, catalog_version, moderation_status
            FROM listings WHERE id = 'pilot-draft'`,
@@ -162,12 +164,13 @@ if (!databaseUrl) {
       });
       assert.equal(paused.status, 200, await paused.text());
       const pausedState = await pool.query(
-        `SELECT status, is_active, private_status_confirmed_at
+        `SELECT status, is_active, private_status_confirmed_at, catalog_revision
            FROM listings WHERE id = 'pilot-draft'`,
       );
       assert.equal(pausedState.rows[0].status, 'paused');
       assert.equal(pausedState.rows[0].is_active, false);
       assert.ok(pausedState.rows[0].private_status_confirmed_at);
+      assert.equal(pausedState.rows[0].catalog_revision, 3);
 
       const reactivated = await fetch(`${baseUrl}/v1/listings/pilot-draft/status`, {
         method: 'PATCH',
@@ -176,12 +179,13 @@ if (!databaseUrl) {
       });
       assert.equal(reactivated.status, 200);
       const reactivatedState = await pool.query(
-        `SELECT status, is_active, private_status_confirmed_at
+        `SELECT status, is_active, private_status_confirmed_at, catalog_revision
            FROM listings WHERE id = 'pilot-draft'`,
       );
       assert.equal(reactivatedState.rows[0].status, 'active');
       assert.equal(reactivatedState.rows[0].is_active, true);
       assert.ok(reactivatedState.rows[0].private_status_confirmed_at);
+      assert.equal(reactivatedState.rows[0].catalog_revision, 4);
       assert.ok(
         reactivatedState.rows[0].private_status_confirmed_at
           >= firstDeclaration.rows[0].declared_at,

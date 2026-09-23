@@ -5258,36 +5258,33 @@ export function createApp({
         );
         if (!media.rowCount) throw new HttpError(400, 'listing_photo_required');
       }
-      let updated = await client.query(
+      const privatePilotActivation = isActive && config.privatePilotV4Enabled;
+      const statusPayload = `jsonb_set(
+        jsonb_set(
+          jsonb_set(payload, '{isActive}', to_jsonb($3::boolean)),
+          '{status}', to_jsonb($4::text)
+        ),
+        '{endedAt}',
+        CASE WHEN $4 = 'ended' THEN to_jsonb(now()::text) ELSE 'null'::jsonb END
+      )`;
+      const payload = privatePilotActivation
+        ? `jsonb_set(${statusPayload}, '{privateStatusConfirmed}', 'true'::jsonb)`
+        : statusPayload;
+      const updated = await client.query(
         `UPDATE listings
          SET is_active = $3,
              catalog_revision = catalog_revision + 1,
              status = $4,
              published_at = CASE WHEN $4 = 'active' THEN COALESCE(published_at, now()) ELSE published_at END,
              ended_at = CASE WHEN $4 = 'ended' THEN now() ELSE NULL END,
-             payload = jsonb_set(
-               jsonb_set(
-                 jsonb_set(payload, '{isActive}', to_jsonb($3::boolean)),
-                 '{status}', to_jsonb($4::text)
-               ),
-               '{endedAt}',
-               CASE WHEN $4 = 'ended' THEN to_jsonb(now()::text) ELSE 'null'::jsonb END
-             )
+             private_status_confirmed_at = CASE WHEN $5 THEN now() ELSE private_status_confirmed_at END,
+             payload = ${payload}
          WHERE id = $1 AND owner_id = $2 AND catalog_version = 1
            AND moderation_status = 'active'
          RETURNING payload, catalog_revision`,
-        [id, req.auth.userId, isActive, status],
+        [id, req.auth.userId, isActive, status, privatePilotActivation],
       );
-      if (updated.rowCount && isActive && config.privatePilotV4Enabled) {
-        updated = await client.query(
-          `UPDATE listings
-           SET private_status_confirmed_at = now(),
-               catalog_revision = catalog_revision + 1,
-               payload = jsonb_set(payload, '{privateStatusConfirmed}', 'true'::jsonb)
-           WHERE id = $1 AND owner_id = $2
-           RETURNING payload, catalog_revision`,
-          [id, req.auth.userId],
-        );
+      if (updated.rowCount && privatePilotActivation) {
         await writePrivatePilotDeclaration(client, {
           userId: req.auth.userId,
           listingId: id,

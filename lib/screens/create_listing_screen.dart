@@ -58,8 +58,16 @@ String resolveListingEditorCity({
 String resolveListingEditorProfilePlace(User user) {
   final homeLocation = user.homeLocation?.trim() ?? '';
   if (homeLocation.isNotEmpty) return homeLocation;
-  final city = (user.addressCity ?? user.city)?.trim() ?? '';
-  final country = (user.addressCountry ?? user.country)?.trim() ?? '';
+  String firstNonEmpty(Iterable<String?> values) {
+    for (final value in values) {
+      final trimmed = value?.trim() ?? '';
+      if (trimmed.isNotEmpty) return trimmed;
+    }
+    return '';
+  }
+
+  final city = firstNonEmpty([user.addressCity, user.city]);
+  final country = firstNonEmpty([user.addressCountry, user.country]);
   return <String>[city, country]
       .where((part) => part.isNotEmpty)
       .join(', ');
