@@ -688,6 +688,21 @@ export function assertGreenFinalContainerReadback({
   return true;
 }
 
+function greenSuccessorPreStartNetworkIdentityMatches(record, expectedNetworks, expectedNetworkIds) {
+  const recordNetworks = record?.NetworkSettings?.Networks;
+  if (!recordNetworks || typeof recordNetworks !== 'object' || Array.isArray(recordNetworks)
+      || !Array.isArray(expectedNetworks) || expectedNetworks.length === 0
+      || new Set(expectedNetworks).size !== expectedNetworks.length
+      || !expectedNetworkIds) return false;
+  const expectedNames = [...expectedNetworks].sort();
+  if (Object.keys(recordNetworks).sort().join('|') !== expectedNames.join('|')) return false;
+  const primaryNetwork = expectedNetworks[0];
+  if (!/^[0-9a-f]{64}$/u.test(expectedNetworkIds[primaryNetwork] ?? '')
+      || record?.HostConfig?.NetworkMode !== expectedNetworkIds[primaryNetwork]) return false;
+  return expectedNetworks.every((network) => /^[0-9a-f]{64}$/u.test(expectedNetworkIds[network] ?? '')
+    && (recordNetworks[network]?.NetworkID === expectedNetworkIds[network] || recordNetworks[network]?.NetworkID === ''));
+}
+
 export function assertGreenSuccessorPreStartReadback({
   record,
   plan,
@@ -701,7 +716,8 @@ export function assertGreenSuccessorPreStartReadback({
   expectedNetworkIds = null,
 } = {}) {
   if (!record || !plan || typeof record.Id !== 'string' || (expectedId && record.Id !== expectedId)) fail('green_successor_identity_invalid');
-  const networks = Object.keys(record.NetworkSettings?.Networks ?? {}).sort();
+  const recordNetworks = record.NetworkSettings?.Networks;
+  const networks = Object.keys(recordNetworks ?? {}).sort();
   const ports = greenActiveNetworkPortBindings(record, 'green_successor_prestart_network_invalid');
   const configuredBindings = greenConfiguredPortBindings(record, 'green_successor_prestart_network_invalid');
   const expectedBindings = expectedCandidate
@@ -713,19 +729,18 @@ export function assertGreenSuccessorPreStartReadback({
       || configuredBindings.some((binding, index) => binding.containerPort !== expectedBindings[index].containerPort
         || binding.HostIp !== expectedBindings[index].HostIp
         || binding.HostPort !== expectedBindings[index].HostPort)
+      || !greenSuccessorPreStartNetworkIdentityMatches(record, expectedNetworks, expectedNetworkIds)
       || !Array.isArray(expectedNetworks)
       || networks.join('|') !== [...expectedNetworks].sort().join('|')) fail('green_successor_prestart_network_invalid');
-  if (expectedNetworkIds && Object.values(expectedNetworkIds).every((id) => /^[0-9a-f]{64}$/u.test(id ?? ''))) {
-    for (const network of expectedNetworks) {
-      if (!/^[0-9a-f]{64}$/u.test(expectedNetworkIds[network] ?? '')
-          || record.NetworkSettings.Networks[network]?.NetworkID !== expectedNetworkIds[network]) fail('green_successor_prestart_network_invalid');
-    }
-  } else fail('green_successor_prestart_network_invalid');
+  const normalizedNetworks = Object.fromEntries(expectedNetworks.map((network) => [network, {
+    ...(recordNetworks?.[network] ?? {}),
+    NetworkID: recordNetworks[network].NetworkID === '' ? expectedNetworkIds[network] : recordNetworks[network].NetworkID,
+  }]));
   const finalShape = {
     ...record,
     HostConfig: { ...(record.HostConfig ?? {}), PortBindings: null },
     State: { ...(record.State ?? {}), Running: true },
-    NetworkSettings: { ...(record.NetworkSettings ?? {}), Networks: Object.fromEntries(expectedNetworks.map((network) => [network, record.NetworkSettings?.Networks?.[network] ?? {}])) },
+    NetworkSettings: { ...(record.NetworkSettings ?? {}), Networks: normalizedNetworks },
   };
   assertGreenFinalContainerReadback({ record: finalShape, plan, expectedId, expectedName, expectedNetworks, expectedRunId, expectedMounts, expectedCandidate, allowAnonymousUploadsVolume, expectedNetworkIds });
   return true;
@@ -1320,7 +1335,11 @@ export async function runGreenForwardRecovery({ plan, commands, command, command
       successorId = id;
       const networks = Object.keys(successorRecord.NetworkSettings?.Networks ?? {}).sort();
       const targetNetworkRecord = successorRecord.NetworkSettings?.Networks?.[plan.target.network];
-      if (targetNetworkRecord?.NetworkID !== verifiedTargetNetworkId) fail('green_forward_recovery_successor_identity_invalid');
+      const targetNetworkIdValid = targetNetworkRecord?.NetworkID === verifiedTargetNetworkId
+        || (successorRecord.State?.Running === false
+          && targetNetworkRecord?.NetworkID === ''
+          && successorRecord.HostConfig?.NetworkMode === verifiedTargetNetworkId);
+      if (!targetNetworkIdValid) fail('green_forward_recovery_successor_identity_invalid');
       if (successorRecord.State?.Running === true) {
         if (networks.join('|') !== [plan.target.network, plan.target.providerNetwork].sort().join('|')) fail('green_forward_recovery_successor_identity_invalid');
       } else if (networks.join('|') === [plan.target.network].join('|')) {

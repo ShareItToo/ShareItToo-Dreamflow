@@ -533,15 +533,15 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     let recoveryRecord = null;
     const candidateRecord = {
       Id: candidateId, Name: `/${plan.isolated.candidate}`, State: { Running: false },
-      NetworkSettings: { Ports: {}, Networks: { [plan.isolated.network]: { NetworkID: isolatedNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
+      NetworkSettings: { Ports: {}, Networks: { [plan.isolated.network]: { NetworkID: '' }, [greenTarget.providerNetwork]: { NetworkID: '' } } },
       Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': plan.target.runId, 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
-      HostConfig: { GroupAdd: ['65532'], PortBindings: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] } }, Mounts: [...finalMounts.map((mount) => mount.Destination === '/data/uploads' ? { ...mount, Name: 'anonymous-uploads-id' } : mount), { Type: 'bind', Source: syntheticSandboxCredentialFilePath, Destination: '/run/secrets/synthetic-sandbox-user-password', RW: false }],
+      HostConfig: { GroupAdd: ['65532'], NetworkMode: isolatedNetworkId, PortBindings: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] } }, Mounts: [...finalMounts.map((mount) => mount.Destination === '/data/uploads' ? { ...mount, Name: 'anonymous-uploads-id' } : mount), { Type: 'bind', Source: syntheticSandboxCredentialFilePath, Destination: '/run/secrets/synthetic-sandbox-user-password', RW: false }],
     };
     const recoveryFinalRecord = (running = false, attached = false) => ({
       Id: 'a'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: running },
-      NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, ...(attached ? { [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } : {}) } },
+      NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: running ? targetNetworkId : '' }, ...(attached ? { [greenTarget.providerNetwork]: { NetworkID: running ? providerNetworkId : '' } } : {}) } },
       Config: { ...candidateRecord.Config, Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': plan.target.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId } },
-      HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
+      HostConfig: { GroupAdd: ['65532'], NetworkMode: targetNetworkId }, Mounts: finalMounts,
     });
     const fake = async (command, args, options = {}) => {
       calls.push({ command, args, phase: options.phase, env: options.env });
@@ -907,7 +907,7 @@ test('final readback is authoritative for no-port Green routing, mounts, image a
   const record = {
     Id: 'a'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
     Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
-    HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
+    HostConfig: { GroupAdd: ['65532'], NetworkMode: targetNetworkId }, Mounts: finalMounts,
   };
   const expectedNetworkIds = { [greenTarget.network]: targetNetworkId, [greenTarget.providerNetwork]: providerNetworkId };
   assert.equal(assertGreenFinalContainerReadback({ record, plan, expectedId: record.Id, expectedNetworkIds }), true);
@@ -1192,10 +1192,10 @@ test('post-schema forward recovery creates only the successor and verifies its p
   const record = {
     Id: 'a'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
     Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
-    HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
+    HostConfig: { GroupAdd: ['65532'], NetworkMode: targetNetworkId }, Mounts: finalMounts,
   };
-  const preStartRecord = { ...record, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId } } } };
-  const attachedPreStartRecord = { ...record, State: { Running: false } };
+  const preStartRecord = { ...record, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: '' } } } };
+  const attachedPreStartRecord = { ...record, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: '' }, [greenTarget.providerNetwork]: { NetworkID: '' } } } };
   const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@sha256:${'e'.repeat(64)}`] };
   const calls = [];
   let failProviderAttach = false;
@@ -1292,9 +1292,9 @@ test('stateful successor lifecycle reconciles lost attach/start responses and re
   const id = '9'.repeat(64);
   const base = {
     Id: id, Name: `/${greenTarget.apiContainer}`, State: { Running: false },
-    NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId } } },
+    NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: '' } } },
     Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': plan.target.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
-    HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
+    HostConfig: { GroupAdd: ['65532'], NetworkMode: targetNetworkId }, Mounts: finalMounts,
   };
   let current = structuredClone(base);
   let attachAttempts = 0;
@@ -1320,13 +1320,13 @@ test('stateful successor lifecycle reconciles lost attach/start responses and re
     if (phase === 'recovery_final_start') {
       assert.deepEqual(args, ['start', id]);
       startAttempts += 1;
-      if (startAttempts === 2) current = { ...current, State: { Running: true } };
+      if (startAttempts === 2) current = { ...current, State: { Running: true }, NetworkSettings: { ...current.NetworkSettings, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } } };
       return { code: 1, stdout: '' };
     }
     if (phase === 'recovery_final_start_retry') {
       assert.deepEqual(args, ['start', id]);
       startAttempts += 1;
-      current = { ...current, State: { Running: true } };
+      current = { ...current, State: { Running: true }, NetworkSettings: { ...current.NetworkSettings, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } } };
       return { code: 1, stdout: '' };
     }
     if (phase === 'recovery_final_image_readback') return { stdout: JSON.stringify(image) };
@@ -1366,6 +1366,14 @@ test('stateful successor lifecycle reconciles lost attach/start responses and re
       record: { ...structuredClone(base), NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: {} } } },
     },
     {
+      code: /green_(?:forward_recovery_successor_identity_invalid|successor_prestart_network_invalid)/u,
+      record: { ...structuredClone(base), HostConfig: { ...base.HostConfig, NetworkMode: 'bridge' } },
+    },
+    {
+      code: /green_(?:forward_recovery_successor_identity_invalid|successor_prestart_network_invalid)/u,
+      record: { ...structuredClone(base), NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: '' }, [greenTarget.providerNetwork]: { NetworkID: '6'.repeat(64) } } } },
+    },
+    {
       code: /green_forward_recovery_successor_identity_invalid/u,
       record: { ...structuredClone(base), Config: { ...base.Config, Labels: { ...base.Config.Labels, 'com.shareittoo.green.execution_id': 'wrong-execution' } } },
     },
@@ -1376,13 +1384,13 @@ test('stateful successor lifecycle reconciles lost attach/start responses and re
   ];
   for (const { code, record } of negativeSuccessors) {
     current = record;
+    const before = structuredClone(record);
     const attachBefore = attachAttempts;
     const startBefore = startAttempts;
     await assert.rejects(runGreenForwardRecovery({ plan, commands, command: fake, targetNetworkId, providerNetworkId }), code);
     assert.equal(attachAttempts, attachBefore);
     assert.equal(startAttempts, startBefore);
-    assert.equal(current.State.Running, false);
-    assert.equal(current.NetworkSettings.Networks[greenTarget.providerNetwork], undefined);
+    assert.deepEqual(current, before);
   }
 });
 
@@ -1394,7 +1402,7 @@ test('forward recovery stops on a foreign final-name conflict before network att
     Id: 'f'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: false },
     NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId } } },
     Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': plan.target.runId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
-    HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
+    HostConfig: { GroupAdd: ['65532'], NetworkMode: targetNetworkId }, Mounts: finalMounts,
   };
   const fake = async (command, args, options) => {
     calls.push({ command, args, options });
@@ -1428,7 +1436,7 @@ test('successor pre-start validation rejects wrong User, Env and mounts', () => 
   const record = {
     Id: '9'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId } } },
     Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
-    HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
+    HostConfig: { GroupAdd: ['65532'], NetworkMode: targetNetworkId }, Mounts: finalMounts,
   };
   assert.equal(assertGreenSuccessorPreStartReadback({ record, plan, expectedId: record.Id, expectedNetworkIds: { [greenTarget.network]: targetNetworkId } }), true);
   const candidateRecord = {
@@ -1438,8 +1446,16 @@ test('successor pre-start validation rejects wrong User, Env and mounts', () => 
     Config: { ...record.Config, Labels: { ...record.Config.Labels, 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } },
     Mounts: [...finalMounts.map((mount) => mount.Destination === '/data/uploads' ? { ...mount, Name: 'anonymous-uploads-id' } : mount), { Type: 'bind', Source: syntheticSandboxCredentialFilePath, Destination: '/run/secrets/synthetic-sandbox-user-password', RW: false }],
   };
-  candidateRecord.HostConfig = { ...record.HostConfig, PortBindings: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] } };
+  candidateRecord.HostConfig = { ...record.HostConfig, NetworkMode: isolatedNetworkId, PortBindings: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] } };
   assert.equal(assertGreenSuccessorPreStartReadback({ record: candidateRecord, plan, expectedId: candidateRecord.Id, expectedNetworks: [plan.isolated.network, greenTarget.providerNetwork], expectedNetworkIds: { [plan.isolated.network]: isolatedNetworkId, [greenTarget.providerNetwork]: providerNetworkId }, expectedName: plan.isolated.candidate, expectedMounts: plan.candidateMounts, expectedCandidate: true, allowAnonymousUploadsVolume: true }), true);
+  assert.equal(assertGreenSuccessorPreStartReadback({
+    record: { ...candidateRecord, NetworkSettings: { Ports: { '8080/tcp': null }, Networks: { [plan.isolated.network]: { NetworkID: '' }, [greenTarget.providerNetwork]: { NetworkID: '' } } } },
+    plan, expectedId: candidateRecord.Id, expectedNetworks: [plan.isolated.network, greenTarget.providerNetwork], expectedNetworkIds: { [plan.isolated.network]: isolatedNetworkId, [greenTarget.providerNetwork]: providerNetworkId }, expectedName: plan.isolated.candidate, expectedMounts: plan.candidateMounts, expectedCandidate: true, allowAnonymousUploadsVolume: true,
+  }), true);
+  assert.equal(assertGreenSuccessorPreStartReadback({
+    record: { ...record, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: '' } } } },
+    plan, expectedId: record.Id, expectedNetworkIds: { [greenTarget.network]: targetNetworkId },
+  }), true);
   for (const invalidBinding of [
     { '8080/tcp': [{ HostIp: '0.0.0.0', HostPort: '18082' }] },
     { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18081' }] },
@@ -1449,6 +1465,14 @@ test('successor pre-start validation rejects wrong User, Env and mounts', () => 
   }
   const expectedRecordNetworkIds = { [greenTarget.network]: targetNetworkId };
   assert.throws(() => assertGreenSuccessorPreStartReadback({ record: { ...record, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: '6'.repeat(64) } } } }, plan, expectedId: record.Id, expectedNetworkIds: expectedRecordNetworkIds }), /green_successor_prestart_network_invalid/u);
+  for (const invalidNetworkRecord of [
+    { ...record, HostConfig: { ...record.HostConfig, NetworkMode: '' }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: '' } } } },
+    { ...record, HostConfig: { ...record.HostConfig, NetworkMode: greenTarget.network }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: '' } } } },
+    { ...record, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: '' }, [greenTarget.providerNetwork]: { NetworkID: '' } } } },
+    { ...record, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: '' }, [greenTarget.providerNetwork]: { NetworkID: '6'.repeat(64) } } } },
+  ]) {
+    assert.throws(() => assertGreenSuccessorPreStartReadback({ record: invalidNetworkRecord, plan, expectedId: record.Id, expectedNetworkIds: expectedRecordNetworkIds }), /green_successor_prestart_network_invalid/u);
+  }
   for (const labels of [
     { ...record.Config.Labels, 'com.shareittoo.green.execution_id': 'wrong-execution' },
     Object.fromEntries(Object.entries(record.Config.Labels).filter(([name]) => name !== 'com.shareittoo.green.execution_id')),
