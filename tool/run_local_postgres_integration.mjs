@@ -21,6 +21,9 @@ export const integrationDatabaseUser = 'sit_runner';
 // Each group runs against the same isolated database, so groups stay
 // sequential while suites inside a group may use Node's normal test runner.
 export const integrationTestGroups = Object.freeze({
+  profileAvatar: Object.freeze([
+    'backend/test/profile_avatar_postgres.integration.test.js',
+  ]),
   foundation: Object.freeze([
     'backend/test/postgres_foundation.integration.test.js',
     'backend/test/foreign_key_integrity.integration.test.js',
@@ -45,11 +48,15 @@ export function integrationTestPlan({
   focusedLegacySchema = false,
   focusedIdentity = false,
   focusedPrivateListing = false,
+  focusedProfileAvatar = false,
 } = {}) {
   if (focusedPrivateListing) {
     return [Object.freeze([
       'backend/test/private_pilot_listing_activation.integration.test.js',
     ])];
+  }
+  if (focusedProfileAvatar) {
+    return [integrationTestGroups.profileAvatar];
   }
   if (focusedGoogleRegistration) {
     return [integrationTestGroups.stagingGoogleRegistration];
@@ -254,6 +261,7 @@ export async function runLocalPostgresIntegration({
   let port = null;
   const focusedIdentity = environment.SIT_POSTGRES_FOCUSED_IDENTITY === '1';
   const focusedPrivateListing = environment.SIT_POSTGRES_FOCUSED_PRIVATE_LISTING === '1';
+  const focusedProfileAvatar = environment.SIT_POSTGRES_FOCUSED_PROFILE_AVATAR === '1';
   const focusedGoogleRegistration = environment.SIT_POSTGRES_FOCUSED_GOOGLE === '1';
   const focusedLegacySchema = environment.SIT_POSTGRES_FOCUSED_LEGACY === '1';
   const integrationGroups = integrationTestPlan({
@@ -261,6 +269,7 @@ export async function runLocalPostgresIntegration({
     focusedLegacySchema,
     focusedIdentity,
     focusedPrivateListing,
+    focusedProfileAvatar,
   });
 
   const onSignal = (signal) => {
