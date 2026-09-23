@@ -20,6 +20,7 @@ import {
 
 const repositoryRoot = realpathSync(resolve(fileURLToPath(new URL('..', import.meta.url))));
 const stagingApiBaseUrl = 'https://staging.shareittoo.com/api/v1';
+const stagingGatewayBaseUrl = 'https://staging.shareittoo.com/api';
 const allowedTransitions = new Map([
   ['accepted', { role: 'owner', previous: 'requested', result: 'accepted' }],
   ['running', { role: 'renter', previous: 'accepted', result: 'active' }],
@@ -139,6 +140,7 @@ export function acceptanceTimestampForQuote(quote, observedAt = new Date()) {
 }
 
 async function request(fetchImpl, path, {
+  baseUrl = stagingApiBaseUrl,
   method = 'GET',
   token = null,
   body = undefined,
@@ -151,7 +153,7 @@ async function request(fetchImpl, path, {
   if (/\/(?:payment|payments)(?:\/|$)/u.test(path) || /stripe/iu.test(path)) {
     fail('The synthetic acceptance runner must never call a provider or payment endpoint.');
   }
-  const response = await fetchImpl(`${stagingApiBaseUrl}${path}`, {
+  const response = await fetchImpl(`${baseUrl}${path}`, {
     method,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -216,7 +218,10 @@ function assertDistinctSyntheticEvidenceImages(imagePaths) {
 
 async function assertSyntheticRuntime({ fetchImpl, expectedRuntimeCommit }) {
   const expected = exactRuntimeCommit(expectedRuntimeCommit);
-  const version = await request(fetchImpl, '/version', { expected: [200] });
+  const version = await request(fetchImpl, '/version', {
+    baseUrl: stagingGatewayBaseUrl,
+    expected: [200],
+  });
   if (version?.commit !== expected || version?.environment !== 'test') {
     fail('The synthetic acceptance runtime version or environment does not match the expected test runtime.');
   }

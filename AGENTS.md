@@ -80,6 +80,9 @@ discover a mechanically stale source hash.
 - Unauthenticated operational probes must target paths explicitly allowlisted by
   the access gate; focused tests must cover the enabled/valid gate matrix and
   reject nearby protected paths.
+- Public-gateway operational probes must bind the complete external gateway
+  prefix and path (for example `/api/version`); tests must assert the full URL,
+  while authenticated product calls remain bound to `/api/v1/*`.
 - Restricted provider lanes must use least-privilege API reads; bind account
   identity from trusted lane configuration and session creation, not an
   account-wide verification read requiring broader permissions.

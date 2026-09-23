@@ -390,12 +390,15 @@ test('runs the full synthetic acceptance journey with eight distinct evidence up
   const calls = [];
   const fetchImpl = async (url, options = {}) => {
     const parsed = new URL(url);
+    calls.push({ url: parsed.href, path: parsed.pathname.replace('/api/v1', ''), method: options.method ?? 'GET' });
+    if (parsed.pathname === '/api/version') {
+      return response(200, { commit: 'a'.repeat(40), environment: 'test' });
+    }
+    assert.match(parsed.pathname, /^\/api\/v1\//u);
     const path = parsed.pathname.replace('/api/v1', '');
-    calls.push({ path, method: options.method ?? 'GET' });
     if (path === '/auth/login') {
       return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
     }
-    if (path === '/version') return response(200, { commit: 'a'.repeat(40), environment: 'test' });
     const confirmation = bookingConfirmationResponse(path, options);
     if (confirmation !== null) return confirmation;
     if (path === '/listings/mine') {
@@ -480,6 +483,10 @@ test('runs the full synthetic acceptance journey with eight distinct evidence up
   assert.equal(uploadCount, 10);
   assert.equal(reviewCount, 2);
   assert.equal(calls.some(({ path }) => /payment|stripe/iu.test(path)), false);
+  assert.equal(calls[0].url, 'https://staging.shareittoo.com/api/version');
+  assert.ok(calls.slice(1).length > 0);
+  assert.ok(calls.slice(1).every(({ url }) => url.startsWith('https://staging.shareittoo.com/api/v1/')));
+  assert.ok(calls.slice(1).some(({ url }) => url === 'https://staging.shareittoo.com/api/v1/auth/login'));
   const stored = JSON.parse(readFileSync(fixture.vaultFile, 'utf8'));
   assert.equal(stored.status, 'fixture-verified-ready-for-login');
   assert.equal(stored.syntheticBookingHistory.at(-1).acceptance.pickupPresenterPhotoCount, 4);
@@ -511,13 +518,13 @@ test('fails closed on runtime commit or environment mismatch before auth or muta
       ...fixture,
       expectedRuntimeCommit: 'a'.repeat(40),
       fetchImpl: async (url) => {
-        calls.push(new URL(url).pathname.replace('/api/v1', ''));
+        calls.push(new URL(url).href);
         return response(200, { commit: 'b'.repeat(40), environment: 'test' });
       },
     }),
     /runtime version or environment does not match/u,
   );
-  assert.deepEqual(calls, ['/version']);
+  assert.deepEqual(calls, ['https://staging.shareittoo.com/api/version']);
 });
 
 test('requires equal owner and renter truth for one server-confirmed return case', async () => {
