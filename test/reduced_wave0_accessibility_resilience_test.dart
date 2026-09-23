@@ -316,10 +316,28 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
 
-        await tester.tap(find.widgetWithText(FilledButton, 'Weiter'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(FilledButton, 'Weiter'));
-        await tester.pumpAndSettle();
+        Future<void> tapVisibleNextStep() async {
+          final nextButtonFinder = find.widgetWithText(FilledButton, 'Weiter');
+          final nextScrollable = find.byType(Scrollable).first;
+          await tester.scrollUntilVisible(
+            nextButtonFinder,
+            500,
+            scrollable: nextScrollable,
+          );
+          expect(nextButtonFinder, findsOneWidget);
+          final nextButton = tester.widget<FilledButton>(nextButtonFinder);
+          expect(nextButton.onPressed, isNotNull);
+          expect(nextButtonFinder.hitTestable(), findsOneWidget);
+          await tester.tap(nextButtonFinder);
+          await tester.pumpAndSettle(
+            const Duration(milliseconds: 100),
+            EnginePhase.sendSemanticsUpdate,
+            const Duration(seconds: 5),
+          );
+        }
+
+        await tapVisibleNextStep();
+        await tapVisibleNextStep();
 
         final declaration = find.textContaining(
           PrivatePilotConfig.listingPrivateDeclaration,
