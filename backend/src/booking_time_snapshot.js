@@ -73,10 +73,18 @@ export function normalizeBookingTimeSnapshot({
 
 export function bookingTimeSnapshotFromRow(row) {
   if (!row?.handover_at && !row?.return_at && !row?.time_snapshot_version) return null;
+  // node-postgres decodes timestamptz columns to Date objects. Keep strict
+  // string/offset validation for external request payloads, but canonicalize
+  // trusted DB-row instants before passing them through the same validator.
+  const databaseInstant = (value, code) => {
+    if (!(value instanceof Date)) return value;
+    if (!Number.isFinite(value.getTime())) throw new BookingTimeSnapshotError(code);
+    return value.toISOString();
+  };
   return normalizeBookingTimeSnapshot({
     raw: {
-      handoverAt: row.handover_at,
-      returnAt: row.return_at,
+      handoverAt: databaseInstant(row.handover_at, 'booking_handover_time_invalid'),
+      returnAt: databaseInstant(row.return_at, 'booking_return_time_invalid'),
       timeSnapshotVersion: row.time_snapshot_version,
     },
     rentalStartDate: row.rental_start_date,

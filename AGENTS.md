@@ -102,6 +102,10 @@ discover a mechanically stale source hash.
   descriptor/bytes for the consuming operation; do not reopen its path. Evidence
   files must serialize once, then use those exact bytes for exclusive write,
   byte count and digest.
+- Database-row decoders must test actual `pg` runtime types before live
+  acceptance: `timestamptz` arrives as a JavaScript `Date` while `date` remains
+  a string; canonicalize trusted row values at the decoder boundary and fail
+  closed on invalid dates without weakening external request validation.
 - Security-sensitive/private-file checks must bind metadata and bytes to the same
   `O_NOFOLLOW` descriptor/handle; never `lstat`/`stat` a path and reopen or read
   it by path afterward, and fail closed when stable opening or metadata
