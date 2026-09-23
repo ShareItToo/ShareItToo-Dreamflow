@@ -20,6 +20,11 @@ search before rereading large sources, avoid unchanged duplicate gates and
 retain all audit evidence. Efficiency must never weaken deterministic tests,
 exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 
+Before every SIT turn, read
+`docs/operations/SIT_PILOT_PHASE_CAPSULE_2026-09-23.md` as the compact entry
+point. Read larger status histories only when a concrete discrepancy requires
+them; do not reconstruct the project from historical files by default.
+
 When a package changes a source file bound by privacy, retention or another
 current source-inventory manifest, refresh every affected current manifest
 once after the final source merge and before the first push/full regression.

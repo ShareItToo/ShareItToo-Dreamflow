@@ -28,6 +28,9 @@ release evidence.
 - Do not repeat an unchanged green gate. Repeat only when its bound source,
   environment, candidate or assertion changed, or when a recorded failure must
   be reproduced.
+- After two sequential failures in the same test or validator class, stop full
+  reruns. Make the complete owning cluster focused-green first, then run one
+  complete gate on the repaired source state.
 - Keep normal deterministic timing and parallelism. Rate-limit, cache, timing
   or reduced-parallelism workarounds are Technical Debt, never release proof.
 - When a push automatically starts CI, do not push intermediate repair states:
@@ -47,7 +50,7 @@ release evidence.
 
 - Keep raw command output local. Record only the command/gate identity, result,
   exact HEAD, relevant counts or artifact hashes and a short failure cause.
-- Internal Sol/Luna/Astra messages use only `RESULT`, `EVIDENCE`, `BLOCKER` and
+- Internal Sol/Luna/Gemini messages use only `RESULT`, `EVIDENCE`, `BLOCKER` and
   `NEXT`. Omit narrative unless a Maximus/owner action, safety issue or
   regulated risk cannot be handled correctly without it.
 - A delegated worker turn never ends silently. When unfinished without a named
@@ -57,8 +60,9 @@ release evidence.
 - Never copy credentials, account identifiers, private links, raw device IDs,
   cookies, tokens, KYC data or secret-bearing configuration into Git, Drive
   reports or chat.
-- Notify Walid through the established Maximus/Telegram route only for a truly
-  non-delegable owner action. Continue every independent package lane quietly.
+- Notify Walid through the established Maximus route only for an unavoidable
+  physical owner action; all source, test, validator and documentation work
+  remains in the repository lane. Continue independent packages quietly.
 
 ## Mentor ratchet from the first mistake
 
@@ -69,9 +73,9 @@ release evidence.
 - Update only the nearest authoritative instruction; search first and do not
   duplicate the rule across historical handovers. If enforceable, add a focused
   regression, validator or fail-closed guard in the owning package.
-- Sol labels the review `PASS`, `FIX` or `ASTRA_GATE_REQUIRED:<gate-id>`.
-  `FIX` names the failed assertion and required proof. Astra is used only for a
-  named money, contract, privacy, security, release-truth or user-data gate,
+- Sol labels the review `PASS`, `FIX` or `GEMINI_GATE_REQUIRED:<gate-id>`.
+  `FIX` names the failed assertion and required proof. Gemini is used only for
+  a named money, contract, privacy, security, release-truth or user-data gate,
   never for ordinary incompleteness and never as a substitute for professional
   or owner approval.
 - After each review, give Luna exactly one bounded next task. Preserve already
