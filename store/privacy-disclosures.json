@@ -944,7 +944,7 @@
     },
     {
       "path": "tool/run_staging_synthetic_booking.mjs",
-      "sha256": "299ff42070214b7173846f87b24bedc7530d934f07922fdc3dec3dd9b0f789b6"
+      "sha256": "ec514a856e5b18abda5c66e1f0a5e40299dc0ce88bb2f530fd917802854655b9"
     },
     {
       "path": "tool/run_staging_non_binding_simulation.mjs",
