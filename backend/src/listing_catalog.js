@@ -71,9 +71,16 @@ export function normalizeListingPayload(raw, {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new ListingValidationError('invalid_listing');
   }
+  const requestedStatus = text(raw.status, 30);
+  const status = listingStatuses.has(requestedStatus)
+    ? requestedStatus
+    : (raw.isActive === false ? 'draft' : 'active');
   if (privatePilot) {
     try {
-      assertPrivatePilotListing(raw, { allowedRegions: privatePilotAllowedRegions });
+      assertPrivatePilotListing(raw, {
+        allowedRegions: privatePilotAllowedRegions,
+        requireDeclaration: status === 'active',
+      });
     } catch (error) {
       if (error instanceof PrivatePilotValidationError) {
         throw new ListingValidationError(error.code);
@@ -94,10 +101,6 @@ export function normalizeListingPayload(raw, {
   const country = text(raw.country, 120);
   const latitude = finiteNumber(raw.lat);
   const longitude = finiteNumber(raw.lng);
-  const requestedStatus = text(raw.status, 30);
-  const status = listingStatuses.has(requestedStatus)
-    ? requestedStatus
-    : (raw.isActive === false ? 'draft' : 'active');
   const minDays = integerInRange(raw.minDays, 1, 3650) ?? 1;
   const maxDays = integerInRange(raw.maxDays, 1, 3650) ?? 30;
   if (minDays > maxDays) throw new ListingValidationError('invalid_listing_duration');

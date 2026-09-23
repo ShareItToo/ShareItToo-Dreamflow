@@ -127,16 +127,10 @@ void main() {
           existing: draft,
         ));
         await tester.pumpAndSettle();
-
-        final declaration =
-            find.text(PrivatePilotConfig.listingPrivateDeclaration);
-        await tester.scrollUntilVisible(
-          declaration,
-          500,
-          scrollable: find.byType(Scrollable).first,
-        );
-        await tester.tap(declaration);
-        await tester.pump();
+        await tester.tap(find.widgetWithText(FilledButton, 'Weiter'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, 'Weiter'));
+        await tester.pumpAndSettle();
 
         final publish =
             find.widgetWithText(FilledButton, 'Anzeige veröffentlichen');

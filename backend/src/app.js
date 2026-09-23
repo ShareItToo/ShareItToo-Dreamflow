@@ -1085,7 +1085,12 @@ async function requirePrivatePilotListingOwner(client, ownerId) {
   }
 }
 
-async function requirePrivatePilotStoredListing(client, listingId, ownerId) {
+async function requirePrivatePilotStoredListing(
+  client,
+  listingId,
+  ownerId,
+  { requireDeclaration = true } = {},
+) {
   if (!config.privatePilotV4Enabled) return;
   const result = await client.query(
     `SELECT listing.category_id, listing.subcategory, listing.city,
@@ -4781,7 +4786,7 @@ export function createApp({
         photos: payload.photos,
         requirePhoto: true,
       });
-      if (config.privatePilotV4Enabled) {
+      if (config.privatePilotV4Enabled && payload.status === 'active') {
         await client.query(
           'UPDATE listings SET private_status_confirmed_at = now() WHERE id = $1',
           [id],
@@ -4926,7 +4931,7 @@ export function createApp({
         photos: payload.photos,
         requirePhoto: payload.status === 'active',
       });
-      if (config.privatePilotV4Enabled) {
+      if (config.privatePilotV4Enabled && payload.status === 'active') {
         await client.query(
           'UPDATE listings SET private_status_confirmed_at = now() WHERE id = $1',
           [id],
@@ -5174,7 +5179,7 @@ export function createApp({
         photos: payload.photos,
         requirePhoto: payload.status === 'active',
       });
-      if (config.privatePilotV4Enabled) {
+      if (config.privatePilotV4Enabled && payload.status === 'active') {
         await client.query(
           'UPDATE listings SET private_status_confirmed_at = now() WHERE id = $1',
           [id],
@@ -5207,9 +5212,16 @@ export function createApp({
     const status = safeText(req.body?.status, 30);
     if (!['active', 'paused', 'ended'].includes(status)) throw new HttpError(400, 'invalid_listing_status');
     const isActive = status === 'active';
+    if (isActive
+        && config.privatePilotV4Enabled
+        && req.body?.privateStatusConfirmed !== true) {
+      throw new HttpError(400, 'private_status_confirmation_required');
+    }
     const result = await inTransaction(async (client) => {
       if (isActive) {
-        await requirePrivatePilotStoredListing(client, id, req.auth.userId);
+        await requirePrivatePilotStoredListing(client, id, req.auth.userId, {
+          requireDeclaration: false,
+        });
         const storedListing = await client.query(
           `SELECT payload FROM listings
            WHERE id = $1 AND owner_id = $2
@@ -5243,7 +5255,7 @@ export function createApp({
         );
         if (!media.rowCount) throw new HttpError(400, 'listing_photo_required');
       }
-      const updated = await client.query(
+      let updated = await client.query(
         `UPDATE listings
          SET is_active = $3,
              catalog_revision = catalog_revision + 1,
@@ -5263,6 +5275,21 @@ export function createApp({
          RETURNING payload, catalog_revision`,
         [id, req.auth.userId, isActive, status],
       );
+      if (updated.rowCount && isActive && config.privatePilotV4Enabled) {
+        updated = await client.query(
+          `UPDATE listings
+           SET private_status_confirmed_at = now(),
+               payload = jsonb_set(payload, '{privateStatusConfirmed}', 'true'::jsonb)
+           WHERE id = $1 AND owner_id = $2
+           RETURNING payload, catalog_revision`,
+          [id, req.auth.userId],
+        );
+        await writePrivatePilotDeclaration(client, {
+          userId: req.auth.userId,
+          listingId: id,
+          declarationType: 'listing_private',
+        });
+      }
       if (updated.rowCount) {
         await writeAudit(client, {
           actor: req.actor,

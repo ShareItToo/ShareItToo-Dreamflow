@@ -161,12 +161,15 @@ export function assertPrivatePilotAccountState(raw) {
   return true;
 }
 
-export function assertPrivatePilotStoredListing(raw, { allowedRegions = [] } = {}) {
+export function assertPrivatePilotStoredListing(raw, {
+  allowedRegions = [],
+  requireDeclaration = true,
+} = {}) {
   assertPrivatePilotAccountState({
     privateUseConfirmedAt: raw?.ownerPrivateUseConfirmedAt,
     privateMarketplaceReviewStatus: raw?.ownerPrivateMarketplaceReviewStatus,
   });
-  if (!raw?.privateStatusConfirmedAt) {
+  if (requireDeclaration && !raw?.privateStatusConfirmedAt) {
     throw new PrivatePilotValidationError('private_pilot_listing_declaration_required');
   }
   const { regionCode } = assertPrivatePilotCatalogEntry(raw, { allowedRegions });
@@ -183,8 +186,11 @@ export class PrivatePilotValidationError extends Error {
   }
 }
 
-export function assertPrivatePilotListing(raw, { allowedRegions = [] } = {}) {
-  if (raw?.privateStatusConfirmed !== true) {
+export function assertPrivatePilotListing(raw, {
+  allowedRegions = [],
+  requireDeclaration = true,
+} = {}) {
+  if (requireDeclaration && raw?.privateStatusConfirmed !== true) {
     throw new PrivatePilotValidationError('private_status_confirmation_required');
   }
   assertPrivatePilotCatalogEntry(raw, { allowedRegions });

@@ -1100,7 +1100,10 @@ class BackendRepository {
     final response = await _authorized(
       method: 'PATCH',
       path: '/listings/${Uri.encodeComponent(id)}/status',
-      body: {'status': status},
+      body: <String, dynamic>{
+        'status': status,
+        if (status == 'active') 'privateStatusConfirmed': true,
+      },
     );
     return Map<String, dynamic>.from(response['listing'] as Map);
   }
@@ -1114,7 +1117,10 @@ class BackendRepository {
       owner: owner,
       method: 'PATCH',
       path: '/listings/${Uri.encodeComponent(id)}/status',
-      body: {'status': status},
+      body: <String, dynamic>{
+        'status': status,
+        if (status == 'active') 'privateStatusConfirmed': true,
+      },
     );
     return Map<String, dynamic>.from(response['listing'] as Map);
   }

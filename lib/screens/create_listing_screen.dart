@@ -95,6 +95,7 @@ class CreateListingScreen extends StatefulWidget {
 class _CreateListingScreenState extends State<CreateListingScreen>
     with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
+  final ScrollController _listingScrollController = ScrollController();
 
   // Basic fields
   final TextEditingController _titleCtrl = TextEditingController();
@@ -171,7 +172,6 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       false; // if user edits any tier, avoid overwriting with AI
   // If user manually edits the price, we stop all auto-adjustments
   bool _priceTouched = false;
-  bool _privateStatusConfirmed = false;
   final GlobalKey _blueOceanCardKey = GlobalKey();
   final FocusNode _blueOceanErrorFocus = FocusNode();
   bool _blueOceanConsentAccepted = false;
@@ -212,6 +212,14 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       widget.listingMutationService;
   // Force-refresh discount rows when switching strategy so focused inputs also update
   int _strategyEpoch = 0;
+  int _listingStep = 0;
+  String? _listingStepError;
+
+  static const _listingStepLabels = <String>[
+    'Artikel',
+    'Preis & Ort',
+    'Vorschau',
+  ];
 
   @override
   void initState() {
@@ -274,7 +282,6 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       _selectedAddrLat = ex.lat;
       _selectedAddrLng = ex.lng;
       _existingPhotos = List<String>.from(ex.photos);
-      _privateStatusConfirmed = ex.privateStatusConfirmed;
       // Prefill discount tiers: map first three thresholds ascending
       _autoApplyDiscounts = ex.autoApplyDiscounts;
       if (ex.longRentalDiscounts.isNotEmpty) {
@@ -316,6 +323,21 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     if (widget.existing != null && widget.existing!.ownerId != user!.id) {
       _listingActions.invalidate();
       return;
+    }
+    if (user != null &&
+        widget.existing == null &&
+        widget.supplyPrefill == null &&
+        _addressCtrl.text.trim().isEmpty) {
+      final profilePlace = user.homeLocation?.trim().isNotEmpty == true
+          ? user.homeLocation!.trim()
+          : <String?>[user.addressCity, user.addressCountry]
+              .where((part) => part?.trim().isNotEmpty == true)
+              .map((part) => part!.trim())
+              .join(', ');
+      if (profilePlace.isNotEmpty) {
+        _addressCtrl.text = profilePlace;
+        _registeredCity ??= user.addressCity ?? user.city;
+      }
     }
     // Build coarse/top-level groups in fixed order, limited to those present
     final present = <String>{
@@ -411,6 +433,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     _blueOceanPickupRegionCtrl.dispose();
     _addressCtrl.dispose();
     _blueOceanErrorFocus.dispose();
+    _listingScrollController.dispose();
     _debounce?.cancel();
     _priceRecalcDebounce?.cancel();
     super.dispose();
@@ -473,7 +496,6 @@ class _CreateListingScreenState extends State<CreateListingScreen>
           <String, dynamic>{'days': _tier2Days, 'percent': _tier2Pct},
           <String, dynamic>{'days': _tier3Days, 'percent': _tier3Pct},
         ],
-        'privateStatusConfirmed': _privateStatusConfirmed,
       };
 
   BlueOceanDraftRecoverySnapshot? _blueOceanRecoverySnapshot() {
@@ -627,7 +649,6 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       _tier2Pct = percentages[1];
       _tier3Pct = percentages[2];
     }
-    _privateStatusConfirmed = fields['privateStatusConfirmed'] == true;
   }
 
   Future<void> _restoreBlueOceanRecoverySnapshot(String ownerId) async {
@@ -1354,6 +1375,192 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     return 'image/jpeg';
   }
 
+  String? _validateListingStep(int step) {
+    if (step == 0) {
+      if (_titleCtrl.text.trim().length < 3) {
+        return 'Titel ist erforderlich und muss mindestens 3 Zeichen haben.';
+      }
+      if (_descCtrl.text.trim().length < 10) {
+        return 'Beschreibe den Artikel mit mindestens 10 Zeichen.';
+      }
+      if (_categoryId == null ||
+          !PrivatePilotConfig.categoryAllowed(_categoryId!)) {
+        return 'Bitte wähle eine zulässige Kategorie.';
+      }
+      if (!PrivatePilotConfig.subcategoryAllowed(
+        _categoryId!,
+        _subcategory ?? '',
+      )) {
+        return 'Bitte wähle eine Unterkategorie, zum Beispiel „Sonstiges“.';
+      }
+    }
+    if (step == 1) {
+      final price = double.tryParse(_priceCtrl.text.replaceAll(',', '.'));
+      if (price == null || price <= 0) {
+        return 'Gib einen gültigen Tagespreis ein.';
+      }
+      if (_addressCtrl.text.trim().isEmpty) {
+        return 'Wähle einen Profilstandort für die persönliche Übergabe.';
+      }
+    }
+    return null;
+  }
+
+  String _conditionLabel(String value) {
+    switch (value) {
+      case 'new':
+        return 'Neu';
+      case 'like-new':
+        return 'Wie neu';
+      case 'good':
+        return 'Gut gepflegt';
+      case 'acceptable':
+        return 'Normale Gebrauchsspuren';
+      case 'worn':
+        return 'Stark gebraucht';
+      default:
+        return value;
+    }
+  }
+
+  String? _validateAllListingFields() {
+    return _validateListingStep(0) ?? _validateListingStep(1);
+  }
+
+  void _advanceListingStep() {
+    final error = _validateListingStep(_listingStep);
+    if (error != null) {
+      setState(() => _listingStepError = error);
+      return;
+    }
+    if (_listingStep < _listingStepLabels.length - 1) {
+      setState(() {
+        _listingStep++;
+        _listingStepError = null;
+      });
+      _scrollListingToTop();
+      _scheduleBlueOceanRecoverySave();
+    }
+  }
+
+  void _retreatListingStep() {
+    if (_listingStep == 0) {
+      return;
+    }
+    setState(() {
+      _listingStep--;
+      _listingStepError = null;
+    });
+    _scrollListingToTop();
+  }
+
+  void _scrollListingToTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_listingScrollController.hasClients) return;
+      _listingScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  Widget _buildListingStepHeader(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final label = _listingStepLabels[_listingStep];
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: 'Schritt ${_listingStep + 1} von 3: $label',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Anzeige erstellen',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: (_listingStep + 1) / _listingStepLabels.length,
+            minHeight: 6,
+            borderRadius: BorderRadius.circular(6),
+            semanticsLabel: 'Fortschritt der Anzeigenerstellung',
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              for (var index = 0; index < _listingStepLabels.length; index++)
+                Semantics(
+                  label: 'Schritt ${index + 1}: ${_listingStepLabels[index]}',
+                  selected: index == _listingStep,
+                  child: Chip(
+                    label: Text(_listingStepLabels[index]),
+                    avatar: CircleAvatar(
+                      radius: 10,
+                      backgroundColor: index <= _listingStep
+                          ? scheme.primary
+                          : scheme.surfaceContainerHighest,
+                      child: Text(
+                        '${index + 1}',
+                        style: TextStyle(
+                          color: index <= _listingStep
+                              ? scheme.onPrimary
+                              : scheme.onSurface,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (_listingStepError != null) ...[
+            const SizedBox(height: 8),
+            Semantics(
+              liveRegion: true,
+              label: _listingStepError,
+              child: Text(
+                _listingStepError!,
+                style: TextStyle(color: scheme.error, height: 1.3),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListingStepNavigation({required bool showBack}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 4),
+      child: Row(
+        children: [
+          if (showBack) ...[
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _submitBusy ? null : _retreatListingStep,
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('Zurück'),
+              ),
+            ),
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: _submitBusy ? null : _advanceListingStep,
+              icon: const Icon(Icons.arrow_forward),
+              label: const Text('Weiter'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit({bool forceInactive = false}) async {
     if (_submitBusy) return;
     final owner = _listingActions.capture();
@@ -1390,7 +1597,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     ListingMutationActionOwner owner, {
     bool forceInactive = false,
   }) async {
-    if (!_formKey.currentState!.validate()) {
+    if (_validateAllListingFields() != null) {
       if (mounted) {
         await _showOwnedListingMessage(
           owner,
@@ -1399,15 +1606,6 @@ class _CreateListingScreenState extends State<CreateListingScreen>
               'Einige Pflichtfelder sind noch unvollständig. Bitte fülle die markierten Felder aus.',
         );
       }
-      return;
-    }
-
-    if (PrivatePilotConfig.enabled && !_privateStatusConfirmed) {
-      await _showOwnedListingMessage(
-        owner,
-        title: 'Privatstatus bestaetigen',
-        message: PrivatePilotConfig.listingPrivateDeclaration,
-      );
       return;
     }
     if (PrivatePilotConfig.enabled &&
@@ -1614,7 +1812,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
           LongRentalDiscount(days: _tier2Days, discountPercent: _tier2Pct),
           LongRentalDiscount(days: _tier3Days, discountPercent: _tier3Pct),
         ]..sort((a, b) => a.days.compareTo(b.days))),
-        privateStatusConfirmed: _privateStatusConfirmed,
+        privateStatusConfirmed: !forceInactive,
       );
 
       final result = await _listingMutationService.execute(
@@ -1703,7 +1901,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         LongRentalDiscount(days: _tier2Days, discountPercent: _tier2Pct),
         LongRentalDiscount(days: _tier3Days, discountPercent: _tier3Pct),
       ]..sort((a, b) => a.days.compareTo(b.days))),
-      privateStatusConfirmed: _privateStatusConfirmed,
+      privateStatusConfirmed: !forceInactive,
       catalogRevision: ex.catalogRevision,
     );
 
@@ -2606,12 +2804,18 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       WidgetsBinding.instance
           .addPostFrameCallback((_) => _calculateLocalPriceOrientation());
     }
-    return Scaffold(
+    return PopScope<void>(
+      canPop: _listingStep == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _listingStep > 0) _retreatListingStep();
+      },
+      child: Scaffold(
       appBar: AppBar(
           title: Text(_isEdit ? 'Anzeige bearbeiten' : 'Neue Anzeige'),
           centerTitle: true),
       body: SafeArea(
         child: SingleChildScrollView(
+            controller: _listingScrollController,
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           child: Theme(
             data: theme.copyWith(
@@ -2666,6 +2870,9 @@ class _CreateListingScreenState extends State<CreateListingScreen>
             child: Form(
               key: _formKey,
               child: Column(children: [
+                  _buildListingStepHeader(context),
+                  const SizedBox(height: 12),
+                  if (_listingStep == 0) ...[
                 _Section(
                     title: 'Kategorie',
                     leading: Icon(Icons.widgets_outlined,
@@ -2680,7 +2887,9 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                               decoration: const InputDecoration(
                                   hintText: 'Kategorie wählen'),
                               child: Row(children: [
-                                Icon(_coarseIconForGroup(_currentCoarseLabel()),
+                                    Icon(
+                                        _coarseIconForGroup(
+                                            _currentCoarseLabel()),
                                     color: isDark
                                         ? Colors.white
                                         : AppTheme.textPrimary(context)),
@@ -2707,8 +2916,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                           DropdownButtonFormField<String>(
                             key: ValueKey(_categoryId),
                             isExpanded: true,
-                            initialValue:
-                                _availableSubcategories().contains(_subcategory)
+                                initialValue: _availableSubcategories()
+                                        .contains(_subcategory)
                                     ? _subcategory
                                     : null,
                             decoration: const InputDecoration(
@@ -2725,8 +2934,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                             subcategory,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style:
-                                                const TextStyle(fontSize: 15),
+                                                style: const TextStyle(
+                                                    fontSize: 15),
                                           ),
                                         ),
                                       ),
@@ -2766,11 +2975,14 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                             fontSize: 15,
                             fontWeight: FontWeight.w500),
                         decoration: const InputDecoration(
-                            labelText: 'Titel', hintText: 'Was bietest du an?'),
+                                labelText: 'Titel',
+                                hintText: 'Was bietest du an?'),
                         onChanged: (_) {
                           setState(() {
                             _invalidateBlueOceanReviewState(
-                              confirmations: const <String>['item_identity'],
+                                  confirmations: const <String>[
+                                    'item_identity'
+                                  ],
                               clearClarifications: true,
                             );
                           });
@@ -2797,13 +3009,16 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                         onChanged: (_) {
                           setState(() {
                             _invalidateBlueOceanReviewState(
-                              confirmations: const <String>['item_identity'],
+                                  confirmations: const <String>[
+                                    'item_identity'
+                                  ],
                               clearClarifications: true,
                             );
                           });
                           _schedulePriceRecalc();
                         },
-                        validator: (v) => (v == null || v.trim().length < 10)
+                            validator: (v) =>
+                                (v == null || v.trim().length < 10)
                             ? 'Mindestens 10 Zeichen'
                             : null,
                       ),
@@ -2823,7 +3038,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                         _pickedImages.isEmpty
                                     ? _blueOceanPhotoUrls
                                     : const <String>[];
-                            final hasAnyPhotos = _existingPhotos.isNotEmpty ||
+                                final hasAnyPhotos =
+                                    _existingPhotos.isNotEmpty ||
                                 _pickedImages.isNotEmpty ||
                                 restoredBlueOceanPhotos.isNotEmpty;
                             if (!hasAnyPhotos) {
@@ -2846,7 +3062,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                 if (_existingPhotos.isNotEmpty)
                                   for (final url in _existingPhotos)
                                     ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
                                       child: SizedBox(
                                           width: 84,
                                           height: 84,
@@ -2865,7 +3082,9 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                       ),
                                     ),
                                   ),
-                                for (int i = 0; i < _pickedImages.length; i++)
+                                    for (int i = 0;
+                                        i < _pickedImages.length;
+                                        i++)
                                   _PickedThumb(
                                       file: _pickedImages[i],
                                       onRemove: () => setState(() {
@@ -2892,19 +3111,22 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                               liveRegion: true,
                               label: error,
                               child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                 children: [
                                   Icon(Icons.info_outline,
                                       size: 18,
-                                      color:
-                                          Theme.of(context).colorScheme.error),
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .error),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       error,
                                       style: TextStyle(
-                                        color:
-                                            Theme.of(context).colorScheme.error,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .error,
                                         fontSize: 13,
                                         height: 1.35,
                                       ),
@@ -2938,6 +3160,9 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                   _buildBlueOceanAssistantCard(context),
                   const SizedBox(height: 12),
                 ],
+                    _buildListingStepNavigation(showBack: false),
+                  ],
+                  if (_listingStep == 1) ...[
                 _Section(
                   title: 'Zustand',
                   leading: Icon(Icons.workspace_premium_outlined,
@@ -3113,7 +3338,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                               _applyModeDiscountPreset(force: true);
                             },
                             onRecalculate: _calculatePriceSuggestion,
-                            canCalculate: _titleCtrl.text.trim().isNotEmpty &&
+                                canCalculate:
+                                    _titleCtrl.text.trim().isNotEmpty &&
                                 _categoryId != null &&
                                 _addressCtrl.text.trim().isNotEmpty,
                             busy: _priceSuggestionBusy,
@@ -3151,8 +3377,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                             );
                           }),
                           validator: (v) {
-                            final n =
-                                double.tryParse((v ?? '').replaceAll(',', '.'));
+                                final n = double.tryParse(
+                                    (v ?? '').replaceAll(',', '.'));
                             if (n == null || n <= 0) {
                               return 'Gültigen Preis eingeben';
                             }
@@ -3162,7 +3388,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                         if (_priceTouched)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
-                            child: Text('Du hast den Preis manuell angepasst.',
+                                child: Text(
+                                    'Du hast den Preis manuell angepasst.',
                                 style: TextStyle(
                                     color: Theme.of(context).brightness ==
                                             Brightness.dark
@@ -3206,13 +3433,15 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                       diameter: 24),
                                   const SizedBox(width: 6),
                                   Expanded(
-                                    child: Text('Rabatt bei längerer Mietdauer',
+                                        child: Text(
+                                            'Rabatt bei längerer Mietdauer',
                                         style: TextStyle(
                                             color: Theme.of(context)
                                                         .brightness ==
                                                     Brightness.dark
                                                 ? Colors.white
-                                                : AppTheme.textPrimary(context),
+                                                    : AppTheme.textPrimary(
+                                                        context),
                                             fontWeight: FontWeight.w600,
                                             fontSize: 15)),
                                   ),
@@ -3224,7 +3453,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                           color: _autoApplyDiscounts
                                               ? (isDark
                                                   ? Colors.white
-                                                  : AppTheme.textBody(context))
+                                                      : AppTheme.textBody(
+                                                          context))
                                               : (isDark
                                                   ? Colors.white54
                                                   : AppTheme.textDisabled(
@@ -3256,7 +3486,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                             alignment: Alignment.centerLeft,
                                             child: Text('Mietdauer',
                                                 maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                 style: TextStyle(
                                                     color: isDark
                                                         ? Colors.white60
@@ -3274,7 +3505,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                                   maxLines: 1,
                                                   overflow:
                                                       TextOverflow.ellipsis,
-                                                  textAlign: TextAlign.center,
+                                                      textAlign:
+                                                          TextAlign.center,
                                                   style: TextStyle(
                                                       color: isDark
                                                           ? Colors.white60
@@ -3288,12 +3520,14 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                           ),
                                           Expanded(
                                             child: Align(
-                                              alignment: Alignment.centerRight,
+                                                  alignment:
+                                                      Alignment.centerRight,
                                               child: Text('Preis pro Tag',
                                                   maxLines: 1,
                                                   overflow:
                                                       TextOverflow.ellipsis,
-                                                  textAlign: TextAlign.right,
+                                                      textAlign:
+                                                          TextAlign.right,
                                                   style: TextStyle(
                                                       color: isDark
                                                           ? Colors.white60
@@ -3311,7 +3545,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                     key: ValueKey('tier1_$_strategyEpoch'),
                                     days: _tier1Days,
                                     percent: _tier1Pct,
-                                    pricePerDay: double.tryParse(_priceCtrl.text
+                                        pricePerDay: double.tryParse(_priceCtrl
+                                                .text
                                             .replaceAll(',', '.')) ??
                                         0.0,
                                     onDaysChanged: (v) => setState(() {
@@ -3338,7 +3573,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                     key: ValueKey('tier2_$_strategyEpoch'),
                                     days: _tier2Days,
                                     percent: _tier2Pct,
-                                    pricePerDay: double.tryParse(_priceCtrl.text
+                                        pricePerDay: double.tryParse(_priceCtrl
+                                                .text
                                             .replaceAll(',', '.')) ??
                                         0.0,
                                     onDaysChanged: (v) => setState(() {
@@ -3365,7 +3601,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                     key: ValueKey('tier3_$_strategyEpoch'),
                                     days: _tier3Days,
                                     percent: _tier3Pct,
-                                    pricePerDay: double.tryParse(_priceCtrl.text
+                                        pricePerDay: double.tryParse(_priceCtrl
+                                                .text
                                             .replaceAll(',', '.')) ??
                                         0.0,
                                     onDaysChanged: (v) => setState(() {
@@ -3401,7 +3638,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                                             .brightness ==
                                                         Brightness.dark
                                                     ? Colors.white70
-                                                    : AppTheme.textSecondary(
+                                                        : AppTheme
+                                                            .textSecondary(
                                                         context),
                                                 fontSize: 13)))
                                   ]),
@@ -3458,18 +3696,80 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                 Text(
                                     'Du legst deinen Mietpreis selbst fest. Im öffentlichen Endpreis ist der Plattformbeitrag von exakt 10 % bereits enthalten. Rabatte werden zuerst vom Mietpreis abgezogen; danach wird der Beitrag centgenau berechnet.',
                                     style: TextStyle(
-                                        color: Theme.of(context).brightness ==
+                                            color:
+                                                Theme.of(context).brightness ==
                                                 Brightness.dark
                                             ? Colors.white70
-                                            : AppTheme.textSecondary(context),
+                                                    : AppTheme.textSecondary(
+                                                        context),
                                         fontSize: 13.5,
                                         height: 1.45))
                               ]),
                         ),
                       ]),
                 ),
-                // Preis-Section Ende – ab hier Inhalte außerhalb der Preis-Karte
-                // Stornierungsbedingungen außerhalb der Preis-Karte und oberhalb des Erstellen-Buttons
+                    _buildListingStepNavigation(showBack: true),
+                  ],
+                  if (_listingStep == 2) ...[
+                    // Kompakte, entscheidungsrelevante Vorschau vor der Publikation.
+                    _Section(
+                      title: 'Vorschau',
+                      leading: Icon(Icons.preview_outlined,
+                          color: colorScheme.primary, size: 18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_existingPhotos.isNotEmpty ||
+                              _pickedImages.isNotEmpty ||
+                              _blueOceanPhotoUrls.isNotEmpty)
+                            SizedBox(
+                              height: 96,
+                              child: _existingPhotos.isNotEmpty
+                                  ? AppImage(
+                                      url: _existingPhotos.first,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : _blueOceanPhotoUrls.isNotEmpty
+                                      ? AppImage(
+                                          url: _blueOceanPhotoUrls.first,
+                                          fit: BoxFit.cover,
+                                        )
+                                      : const Icon(Icons.photo_outlined,
+                                          size: 48),
+                            )
+                          else
+                            const SizedBox(
+                              height: 72,
+                              child: Center(
+                                child: Icon(Icons.photo_outlined, size: 42),
+                              ),
+                            ),
+                          const SizedBox(height: 10),
+                          Text(
+                            _titleCtrl.text.trim().isEmpty
+                                ? 'Titel noch nicht eingetragen'
+                                : _titleCtrl.text.trim(),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${_currentCoarseLabel()} · ${_subcategory ?? 'Sonstiges'}',
+                          ),
+                          Text('Zustand: ${_conditionLabel(_condition)}'),
+                          Text(
+                            'Tagespreis: ${_priceCtrl.text.trim().isEmpty ? '–' : '${_priceCtrl.text.trim()} €'}',
+                          ),
+                          Text(
+                            'Übergabeort: ${_addressCtrl.text.trim().isEmpty ? '–' : _addressCtrl.text.trim()}',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Stornierungsbedingungen außerhalb der Preis-Karte und oberhalb des Erstellen-Buttons
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
@@ -3496,25 +3796,16 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                   style: TextStyle(fontSize: 13.5, height: 1.4),
                 ),
                 const SizedBox(height: 8),
-                CheckboxListTile(
-                  value: _privateStatusConfirmed,
-                  onChanged: (value) => setState(() {
-                    _privateStatusConfirmed = value ?? false;
-                    _scheduleBlueOceanRecoverySave();
-                  }),
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    PrivatePilotConfig.listingPrivateDeclaration,
-                    style: TextStyle(fontSize: 13.5, height: 1.35),
-                  ),
-                  subtitle: const Padding(
-                    padding: EdgeInsets.only(top: 4),
+                    Semantics(
+                      container: true,
+                      label: 'Privatpilot-Hinweis vor dem Veröffentlichen',
                     child: Text(
+                        '${PrivatePilotConfig.listingPrivateDeclaration} '
                       '${PrivatePilotConfig.documentName} · '
-                      '${PrivatePilotConfig.documentVersion}',
-                      style: TextStyle(fontSize: 12),
-                    ),
+                        '${PrivatePilotConfig.documentVersion} '
+                        'wird beim bewussten Klick auf „Veröffentlichen“ '
+                        'als Publikationsdeklaration gespeichert.',
+                        style: const TextStyle(fontSize: 13.5, height: 1.35),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -3527,7 +3818,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                         icon: const Icon(Icons.add_business),
                         label: const Text('Anzeige veröffentlichen'),
                         style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
                             backgroundColor: colorScheme.primary,
                             foregroundColor: colorScheme.onPrimary,
                             textStyle: const TextStyle(
@@ -3539,11 +3831,10 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                             ? null
                             : () => _submit(forceInactive: true),
                         icon: const Icon(Icons.save_outlined),
-                        label: Text(_isEdit
-                            ? 'Bearbeitung speichern'
-                            : 'Für später speichern'),
+                            label: const Text('Entwurf speichern'),
                         style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 13),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 13),
                             foregroundColor: isDark
                                 ? Colors.white
                                 : AppTheme.textBody(context),
@@ -3558,12 +3849,14 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                 fontWeight: FontWeight.w500, fontSize: 15)),
                       ),
                     ])
+                  ],
               ]),
             ),
           ),
         ),
       ),
       backgroundColor: isDark ? Colors.transparent : null,
+      ),
     );
   }
 }

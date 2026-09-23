@@ -6138,6 +6138,40 @@ if (!databaseUrl) {
       assert.equal(createdLifecycleListing.photoTruthPolicyVersion, listingPhotoTruthPolicyVersion);
       assert.equal(createdLifecycleListing.photoTruthAttestation, listingPhotoTruthPolicyText);
 
+      const draftWithoutPrivateDeclaration = {
+        ...lifecycleListing,
+        id: 'listing-lifecycle-draft',
+        status: 'draft',
+        isActive: false,
+        privateStatusConfirmed: false,
+        photos: [],
+      };
+      delete draftWithoutPrivateDeclaration.photoTruthPolicyVersion;
+      delete draftWithoutPrivateDeclaration.photoTruthAttestation;
+      delete draftWithoutPrivateDeclaration.photoTruthClassifications;
+      const createDraftWithoutPrivateDeclaration = await fetch(`${baseUrl}/v1/listings`, {
+        method: 'POST',
+        headers: ownerHeaders,
+        body: JSON.stringify(draftWithoutPrivateDeclaration),
+      });
+      assert.equal(createDraftWithoutPrivateDeclaration.status, 201);
+      const createdDraftWithoutPrivateDeclaration =
+        (await createDraftWithoutPrivateDeclaration.json()).listing;
+      assert.equal(createdDraftWithoutPrivateDeclaration.status, 'draft');
+      assert.equal(createdDraftWithoutPrivateDeclaration.isActive, false);
+      assert.equal(createdDraftWithoutPrivateDeclaration.privateStatusConfirmed, false);
+      const draftDeclarationState = await setupPool.query(
+        `SELECT private_status_confirmed_at,
+                (SELECT count(*)::int FROM legal_declarations
+                 WHERE listing_id = $1 AND declaration_type = 'listing_private') AS declarations
+         FROM listings WHERE id = $1`,
+        [draftWithoutPrivateDeclaration.id],
+      );
+      assert.deepEqual(draftDeclarationState.rows[0], {
+        private_status_confirmed_at: null,
+        declarations: 0,
+      });
+
       const processedUpload = await setupPool.query(
         `SELECT mime_type, byte_size, thumbnail_mime_type, thumbnail_byte_size,
                 image_width, image_height, content_sha256, content_scan_status,
@@ -6377,8 +6411,40 @@ if (!databaseUrl) {
           body: JSON.stringify({ status: 'active' }),
         },
       );
-      assert.equal(reactivateLifecycleListing.status, 200);
-      assert.equal((await reactivateLifecycleListing.json()).listing.status, 'active');
+      const privatePilotEnabled = process.env.PRIVATE_PILOT_V4_ENABLED === 'true';
+      if (privatePilotEnabled) {
+        assert.equal(reactivateLifecycleListing.status, 400);
+        assert.equal((await reactivateLifecycleListing.json()).error, 'private_status_confirmation_required');
+      } else {
+        assert.equal(reactivateLifecycleListing.status, 200);
+      }
+      const reactivateLifecycleListingWithDeclaration = await fetch(
+        `${baseUrl}/v1/listings/listing-lifecycle/status`,
+        {
+          method: 'PATCH',
+          headers: ownerHeaders,
+          body: JSON.stringify({
+            status: 'active',
+            privateStatusConfirmed: true,
+          }),
+        },
+      );
+      assert.equal(reactivateLifecycleListingWithDeclaration.status, 200);
+      assert.equal(
+        (await reactivateLifecycleListingWithDeclaration.json()).listing.status,
+        'active',
+      );
+      if (privatePilotEnabled) {
+        const reactivationDeclarationState = await setupPool.query(
+          `SELECT private_status_confirmed_at,
+                  (SELECT count(*)::int FROM legal_declarations
+                   WHERE listing_id = $1 AND declaration_type = 'listing_private') AS declarations
+             FROM listings WHERE id = $1`,
+          [lifecycleListing.id],
+        );
+        assert.equal(reactivationDeclarationState.rows[0].declarations, 1);
+        assert.ok(reactivationDeclarationState.rows[0].private_status_confirmed_at);
+      }
       assert.equal((await fetch(localMediaUrl(listingUpload.url))).status, 200);
 
       await fetch(
@@ -6399,7 +6465,10 @@ if (!databaseUrl) {
         {
           method: 'PATCH',
           headers: ownerHeaders,
-          body: JSON.stringify({ status: 'active' }),
+          body: JSON.stringify({
+            status: 'active',
+            privateStatusConfirmed: true,
+          }),
         },
       );
       assert.equal(legacyReactivate.status, 409);
@@ -6437,7 +6506,10 @@ if (!databaseUrl) {
         {
           method: 'PATCH',
           headers: ownerHeaders,
-          body: JSON.stringify({ status: 'active' }),
+          body: JSON.stringify({
+            status: 'active',
+            privateStatusConfirmed: true,
+          }),
         },
       );
       assert.equal(restoredExactReactivate.status, 200);

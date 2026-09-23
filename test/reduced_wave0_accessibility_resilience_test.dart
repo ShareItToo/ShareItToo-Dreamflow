@@ -316,19 +316,21 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
 
-        final declaration =
-            find.text(PrivatePilotConfig.listingPrivateDeclaration);
+        await tester.tap(find.widgetWithText(FilledButton, 'Weiter'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, 'Weiter'));
+        await tester.pumpAndSettle();
+
+        final declaration = find.textContaining(
+          PrivatePilotConfig.listingPrivateDeclaration,
+        );
         await tester.scrollUntilVisible(
           declaration,
           420,
           scrollable: find.byType(Scrollable).first,
         );
-        expect(declaration.hitTestable(), findsOneWidget);
-        final declarationNode = tester.getSemantics(declaration);
-        expect(
-          declarationNode.getSemanticsData().hasAction(SemanticsAction.tap),
-          isTrue,
-        );
+        expect(declaration, findsOneWidget);
+        expect(find.byType(CheckboxListTile), findsNothing);
 
         final publish =
             find.widgetWithText(FilledButton, 'Anzeige veröffentlichen');

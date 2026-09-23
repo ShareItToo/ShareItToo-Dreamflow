@@ -174,6 +174,27 @@ test('Privat-Pilot listing validation is fail-closed', () => {
   }
 });
 
+test('Privat-Pilot drafts may omit the publication declaration', () => {
+  const draft = normalizeListingPayload({
+    ...validListing,
+    status: 'draft',
+    isActive: false,
+    privateStatusConfirmed: false,
+    photoTruthPolicyVersion: undefined,
+    photoTruthAttestation: undefined,
+    photoTruthClassifications: undefined,
+    photos: [],
+  }, {
+    id: 'listing-pilot-draft',
+    ownerId: 'owner',
+    privatePilot: true,
+    privatePilotAllowedRegions: ['berlin'],
+  });
+  assert.equal(draft.status, 'draft');
+  assert.equal(draft.isActive, false);
+  assert.equal(draft.privateStatusConfirmed, false);
+});
+
 test('Privat-Pilot persists the normalized region binding and rejects unconfigured places', () => {
   const listing = normalizeListingPayload({
     ...validListing,
