@@ -60,14 +60,15 @@ historical evidence or grant any external, legal, provider or release approval.
 - Full gate: not green; the last rerun stopped on a stale Accessibility
   viewport test, now repaired in the focused cluster
 - Known next source blockers:
-  - Gemini listing-confirmation correction required before UX implementation
+  - Gemini listing-confirmation gate decision required before UX implementation
   - stale candidate manifest
 
 ## Exact next sequence
 
-Green-promotion migration currentness is PASS on the exact HEAD. Prepare the
-source-bound Gemini Pro-Extended listing-confirmation gate packet, obtain its
-0/1/3 declaration decision, then refresh source-binding closure before any UX
-implementation or full gate. Do not rewrite historical status files or repeat
-full gates after serial failures in one owning test/validator class; close that
-cluster focused-first.
+Green-promotion migration currentness is PASS on the exact HEAD. The Gemini
+listing-confirmation packet is corrected to provide a Sol-verified technical
+fact capsule because local paths and commits are not browser-accessible. Obtain
+its 0/1/3 declaration decision, then refresh source-binding closure before any
+UX implementation or full gate. Do not rewrite historical status files or
+repeat full gates after serial failures in one owning test/validator class;
+close that cluster focused-first.

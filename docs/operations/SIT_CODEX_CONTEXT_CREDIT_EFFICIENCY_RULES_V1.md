@@ -78,6 +78,12 @@ release evidence.
   a named money, contract, privacy, security, release-truth or user-data gate,
   never for ordinary incompleteness and never as a substitute for professional
   or owner approval.
+- External expert gates must never claim or require access to local paths or
+  Git commits. Sol passes the smallest verified technical fact capsule instead:
+  repository path, product HEAD, SHA-256 and decisive excerpts. Current legal
+  or platform sources are a separate external lane and must be freshly opened,
+  timestamped and fully registered by the expert; local source access is never
+  implied.
 - After each review, give Luna exactly one bounded next task. Preserve already
   correct work and never restart the whole package merely because one assertion
   failed.
