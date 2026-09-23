@@ -283,6 +283,9 @@ discover a mechanically stale source hash.
   in-flight deduplication/idempotency and server-side budget/rate limiting.
 - Local rule output is always labelled as rule-based orientation. It is not a
   market-price estimate and never proves provider execution.
+- Synthetic acceptance fixtures must import canonical domain policy constants,
+  preserve their required field cardinality, and never duplicate legal/policy
+  strings in runner payloads.
 
 ### Candidate version binding
 

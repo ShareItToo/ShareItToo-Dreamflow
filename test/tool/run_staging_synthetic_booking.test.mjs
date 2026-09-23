@@ -18,6 +18,12 @@ import {
   sendSyntheticBookingDiagnosticMessage,
   transitionSyntheticBookingFixture,
 } from '../../tool/run_staging_synthetic_booking.mjs';
+import {
+  assertListingPhotoTruthPolicy,
+  listingPhotoTruthClassifications,
+  listingPhotoTruthPolicyText,
+  listingPhotoTruthPolicyVersion,
+} from '../../backend/src/listing_photo_truth_policy.js';
 import { createTestTempTracker } from './test_temp_fixtures.mjs';
 
 const tempFixtures = createTestTempTracker();
@@ -387,6 +393,7 @@ test('runs the full synthetic acceptance journey with eight distinct evidence up
   let latestUploadUrl = null;
   let currentPhotoURL = null;
   let reviewCount = 0;
+  let listingBody = null;
   const calls = [];
   const fetchImpl = async (url, options = {}) => {
     const parsed = new URL(url);
@@ -417,7 +424,10 @@ test('runs the full synthetic acceptance journey with eight distinct evidence up
         url: latestUploadUrl,
       });
     }
-    if (path === '/listings') return response(201, { listing: { id: 'fixture' } });
+    if (path === '/listings') {
+      listingBody = JSON.parse(options.body);
+      return response(201, { listing: { id: 'fixture' } });
+    }
     if (path.endsWith('/availability')) return response(200, { availability: {} });
     if (path === '/bookings/quote') return response(200, boundQuote(JSON.parse(options.body).timeSnapshot));
     if (path === '/bookings') {
@@ -487,9 +497,52 @@ test('runs the full synthetic acceptance journey with eight distinct evidence up
   assert.ok(calls.slice(1).length > 0);
   assert.ok(calls.slice(1).every(({ url }) => url.startsWith('https://staging.shareittoo.com/api/v1/')));
   assert.ok(calls.slice(1).some(({ url }) => url === 'https://staging.shareittoo.com/api/v1/auth/login'));
+  assert.deepEqual({
+    photoTruthPolicyVersion: listingBody.photoTruthPolicyVersion,
+    photoTruthAttestation: listingBody.photoTruthAttestation,
+    photoTruthClassifications: listingBody.photoTruthClassifications,
+  }, {
+    photoTruthPolicyVersion: listingPhotoTruthPolicyVersion,
+    photoTruthAttestation: listingPhotoTruthPolicyText,
+    photoTruthClassifications: [listingPhotoTruthClassifications[0]],
+  });
   const stored = JSON.parse(readFileSync(fixture.vaultFile, 'utf8'));
   assert.equal(stored.status, 'fixture-verified-ready-for-login');
   assert.equal(stored.syntheticBookingHistory.at(-1).acceptance.pickupPresenterPhotoCount, 4);
+});
+
+test('requires the canonical listing photo truth policy before synthetic listing creation', () => {
+  assert.throws(
+    () => assertListingPhotoTruthPolicy({
+      requireAttestation: true,
+      expectedCount: 1,
+      classifications: [listingPhotoTruthClassifications[0]],
+    }),
+    /listing_photo_truth_policy_required/u,
+  );
+  assert.throws(
+    () => assertListingPhotoTruthPolicy({
+      policyVersion: 'listing-photo-truth-old',
+      policyText: listingPhotoTruthPolicyText,
+      expectedCount: 1,
+      classifications: [listingPhotoTruthClassifications[0]],
+    }),
+    /listing_photo_truth_policy_required/u,
+  );
+  assert.deepEqual(
+    assertListingPhotoTruthPolicy({
+      policyVersion: listingPhotoTruthPolicyVersion,
+      policyText: listingPhotoTruthPolicyText,
+      expectedCount: 1,
+      classifications: [listingPhotoTruthClassifications[0]],
+      requireAttestation: true,
+    }),
+    {
+      policyVersion: listingPhotoTruthPolicyVersion,
+      policyText: listingPhotoTruthPolicyText,
+      classifications: [listingPhotoTruthClassifications[0]],
+    },
+  );
 });
 
 test('fails closed before any request when full journey evidence contents are duplicated', async () => {

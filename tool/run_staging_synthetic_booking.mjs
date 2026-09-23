@@ -17,6 +17,11 @@ import {
   privatePilotDocument,
   privatePilotRequiredCheckoutDeclarations,
 } from '../backend/src/private_pilot_domain.js';
+import {
+  listingPhotoTruthClassifications,
+  listingPhotoTruthPolicyText,
+  listingPhotoTruthPolicyVersion,
+} from '../backend/src/listing_photo_truth_policy.js';
 
 const repositoryRoot = realpathSync(resolve(fileURLToPath(new URL('..', import.meta.url))));
 const stagingApiBaseUrl = 'https://staging.shareittoo.com/api/v1';
@@ -630,6 +635,9 @@ export async function createSyntheticBookingFixture({
           currency: 'EUR',
           deposit: null,
           photos: [upload.url],
+          photoTruthPolicyVersion: listingPhotoTruthPolicyVersion,
+          photoTruthAttestation: listingPhotoTruthPolicyText,
+          photoTruthClassifications: [listingPhotoTruthClassifications[0]],
           locationText: 'Staging Testadresse',
           city: 'Heilbronn',
           country: 'Deutschland',
