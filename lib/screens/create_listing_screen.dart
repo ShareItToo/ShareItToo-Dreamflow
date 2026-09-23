@@ -222,6 +222,32 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     'pickup_region': false,
     'final_publication': false,
   };
+  static const List<String> _blueOceanFactualConfirmationIds = <String>[
+    'ownership',
+    'item_identity',
+    'allowed_category',
+    'functionality',
+    'condition',
+    'accessories',
+    'owner_price',
+    'duration_discounts',
+    'availability',
+    'pickup_region',
+  ];
+
+  bool get _blueOceanOwnerTruthConfirmed =>
+      _blueOceanFactualConfirmationIds.every(
+        (id) => _blueOceanConfirmations[id] == true,
+      );
+
+  void _setBlueOceanOwnerTruthConfirmed(bool confirmed) {
+    for (final id in _blueOceanFactualConfirmationIds) {
+      _blueOceanConfirmations[id] = confirmed;
+    }
+    _blueOceanConfirmations['final_publication'] = false;
+    _blueOceanReadyFingerprint = null;
+    _scheduleBlueOceanRecoverySave();
+  }
   final BlueOceanDraftRecoveryService _blueOceanDraftRecovery =
       BlueOceanDraftRecoveryService();
   final OnDeviceListingAnalysisService _onDeviceListingAnalysis =
@@ -1122,8 +1148,9 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   }) {
     final ownerDaily = double.tryParse(_priceCtrl.text.replaceAll(',', '.'));
     final confirmations = Map<String, bool>.from(_blueOceanConfirmations);
-    confirmations['final_publication'] = finalPublication &&
-        (_blueOceanConfirmations['final_publication'] ?? false);
+    // The final declaration is derived only for the exact publish command.
+    // The review endpoint must always receive it as false.
+    confirmations['final_publication'] = finalPublication;
     return <String, dynamic>{
       'generationKey': _newBlueOceanGenerationKey(
           finalPublication ? 'publish-review' : 'review'),
@@ -1184,7 +1211,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       final assistant = await _listingMutationService.reviewBlueOceanDraft(
         context: owner.context,
         draftId: draftId,
-        review: _blueOceanReviewPayload(finalPublication: true),
+        review: _blueOceanReviewPayload(finalPublication: false),
       );
       if (!mounted ||
           !await _listingActions.isCurrent(_listingMutationService, owner)) {
@@ -1204,7 +1231,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
           }
         }
         final readiness = assistant['readiness'];
-        if (readiness is Map && readiness['readyToPublish'] == true) {
+        if (readiness is Map && readiness['previewReady'] == true) {
           _blueOceanReadyFingerprint = _blueOceanEditableFingerprint();
         }
       });
@@ -1697,6 +1724,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         return;
       }
       final missingConfirmation = _blueOceanConfirmations.entries
+          .where((entry) => entry.key != 'final_publication')
           .where((entry) => entry.value != true)
           .map((entry) => entry.key)
           .toList(growable: false);
@@ -1715,7 +1743,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
           !_blueOceanReplacementBandConfirmed) {
         if (!mounted) return;
         setState(() => _blueOceanError =
-            'Vor der Veröffentlichung müssen alle Eigentümer-Bestätigungen, '
+                'Vor der Veröffentlichung müssen die Eigentümer-Bestätigung, '
                 'Rückfragen und die Wertspanne geprüft sein.');
         _focusBlueOceanMessage();
         return;
@@ -2314,23 +2342,11 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         : const <dynamic>[];
     final readiness = assistant?['readiness'];
     final exactCurrentStateIsReady = readiness is Map &&
-        readiness['readyToPublish'] == true &&
+        readiness['previewReady'] == true &&
         _blueOceanReadyFingerprint != null &&
         _blueOceanReadyFingerprint == _blueOceanEditableFingerprint();
-    const confirmationLabels = <String, String>{
-      'ownership': 'Der Artikel gehört mir oder ich darf ihn vermieten.',
-      'item_identity': 'Artikel, Marke, Modell und Beschreibung sind geprüft.',
-      'allowed_category': 'Kategorie und Unterkategorie sind korrekt.',
-      'functionality': 'Der Artikel funktioniert vollständig.',
-      'condition': 'Der angegebene Zustand ist korrekt.',
-      'accessories': 'Das aufgeführte Zubehör ist vollständig und korrekt.',
-      'owner_price': 'Ich bestätige meinen ausgewählten Tagespreis.',
-      'duration_discounts': 'Ich bestätige die Einstellungen zur Mietdauer.',
-      'availability': 'Die Verfügbarkeit kann von mir eingehalten werden.',
-      'pickup_region': 'Die grobe Abholregion ist korrekt.',
-      'final_publication':
-          'Ich habe die vollständige Vorschau geprüft und möchte veröffentlichen.',
-    };
+    const ownerTruthConfirmation =
+        'Ich habe alle generierten Inseratsdaten (Artikel, Zustand, Preis, Verfügbarkeit etc.) geprüft und bestätige deren Richtigkeit sowie meine Berechtigung zur Vermietung.';
     const bandLabels = <String, String>{
       'under_100': 'unter 100 €',
       'eur_100_250': '100–250 €',
@@ -2698,30 +2714,26 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text('Eigentümer-Bestätigungen',
+                Text('Eigentümer-Bestätigung',
                     style: Theme.of(context)
                         .textTheme
                         .titleSmall
                         ?.copyWith(fontWeight: FontWeight.w700)),
                 const Text(
-                  'Funktionalität und die abschließende Publikationsprüfung '
-                  'sind harte Sperren.',
+                  'Diese eine Bestätigung umfasst die zehn sachlichen Prüfpunkte. '
+                  'Die abschließende Veröffentlichung bleibt an den exakten '
+                  'Veröffentlichungsaufruf gebunden.',
                   style: TextStyle(fontSize: 13, height: 1.35),
                 ),
-                for (final entry in confirmationLabels.entries)
-                  CheckboxListTile(
-                    value: _blueOceanConfirmations[entry.key] ?? false,
-                    onChanged: (value) => setState(() {
-                      _blueOceanReadyFingerprint = null;
-                      if (entry.key != 'final_publication') {
-                        _blueOceanConfirmations['final_publication'] = false;
-                      }
-                      _blueOceanConfirmations[entry.key] = value ?? false;
-                    }),
-                    controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(entry.value),
+                CheckboxListTile(
+                  value: _blueOceanOwnerTruthConfirmed,
+                  onChanged: (value) => setState(
+                    () => _setBlueOceanOwnerTruthConfirmed(value == true),
                   ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(ownerTruthConfirmation),
+                ),
                 const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,

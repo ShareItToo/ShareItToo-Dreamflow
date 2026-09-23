@@ -1,16 +1,57 @@
 # SIT Gemini Listing Confirmation Gate Packet — 2026-09-23
 
-Status: **PREPARATION ONLY — no implementation, external message, web access,
-CUA action or release decision.**
+Status: **CLOSED — DECISION 1 / PASS.** This immutable record binds the
+Gemini Pro + Extended gate outcome; it is not a legal conclusion or release
+approval.
 
 Target source: ShareItToo worktree
-`/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808`, exact HEAD
-`1360628406736c61ecd26d99fe0b9663994ba47b`.
+`/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808`, exact source
+HEAD supplied to the gate `37062669513b7ecd6a7ecc34bb0f5173f5e7f98a`.
+
+## Immutable gate decision
+
+- Mode: **Gemini Pro + Extended**.
+- Decision: **1 active visible owner confirmation / PASS**.
+- Exact owner wording: **“Ich habe alle generierten Inseratsdaten (Artikel,
+  Zustand, Preis, Verfügbarkeit etc.) geprüft und bestätige deren Richtigkeit
+  sowie meine Berechtigung zur Vermietung.”**
+- Mapping: the one active confirmation expands to the existing ten factual
+  `review.ownerConfirmations` IDs only: `ownership`, `item_identity`,
+  `allowed_category`, `functionality`, `condition`, `accessories`,
+  `owner_price`, `duration_discounts`, `availability`, `pickup_region`.
+- `final_publication` remains in the existing 11-ID payload but is false for
+  review/early/AI paths and becomes true only with the exact owner invocation
+  of `Anzeige veröffentlichen` through
+  `/v1/blue-ocean/listing-drafts/:id/publish`.
+- No `ai_draft_verified` field is added or renamed. Server readiness,
+  fingerprint/price/photo checks, clarification questions, AI disclosure and
+  consent, explicit analysis initiation, draft recovery/editability,
+  `autoPublishAllowed: false`, and
+  `blue_ocean.listing.published_by_owner` remain mandatory.
+- Guardrails retained: one authentic listing photo; `listing-photo-truth-v1`;
+  generated/materially altered product images forbidden; handover/return 4+4;
+  no vehicle/transport, paid delivery/shipping/express, deposit or insurance;
+  10% fee and payment after owner acceptance.
+
+### Sol source register supplied to Gemini
+
+No external sources were used. Gemini did **not** open local files or Git.
+The technical source was the Sol capsule bound to the exact HEAD above:
+
+| Source | SHA-256 |
+| --- | --- |
+| `lib/screens/create_listing_screen.dart` | `8f614158bdb145642856048c6c3a32d998d1e967a2228f58933ef06f0fbd9bfd` |
+| `backend/src/app.js` | `3109d02ecf91aab92261eb0d3ac199e85649b1db58e49110359701dfcc664efb` |
+| `backend/src/blue_ocean_listing_workflow.js` | `253a6d9c323d45256537bccaf10423eec0964929f4f7eadd8db8d7a0b28514b3` |
+| `backend/src/listing_ai_draft_domain.js` | `91f6e5abe557a8a518ddfb6d180a313629b27ec5c57f53c79a785bd06c9f2684` |
+
+Implementation and focused closure evidence are recorded in the package
+commit that follows this decision record.
 
 Gemini in the browser has no demonstrated access to this local filesystem or
 Git repository. Do not ask Gemini to open local paths or claim that it opened
 them. The technical facts below are the compact Sol-verified gate input,
-extracted from product HEAD `1360628406736c61ecd26d99fe0b9663994ba47b` and
+extracted from product HEAD `37062669513b7ecd6a7ecc34bb0f5173f5e7f98a` and
 bound to the listed SHA-256 values. The current documentation packet is a
 docs-only correction successor to commit
 `9e8e159511de8f486687ad8acf9e604df4b77be5`.
@@ -80,7 +121,7 @@ must remain mandatory in every option; AI must never auto-publish.
 ### Technical fact capsule (Sol-verified; use as provided)
 
 All excerpts below are from product HEAD
-`1360628406736c61ecd26d99fe0b9663994ba47b`. The path and hash identify the
+`37062669513b7ecd6a7ecc34bb0f5173f5e7f98a`. The path and hash identify the
 source binding; they do not imply that Gemini opened the local file.
 
 `lib/screens/create_listing_screen.dart:212-224`

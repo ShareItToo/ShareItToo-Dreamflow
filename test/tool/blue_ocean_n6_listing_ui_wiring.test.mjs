@@ -103,15 +103,26 @@ test('one-image timeout fails closed into a manual fallback without losing input
   assert.match(screen, /_submitBusy \|\| _blueOceanBusy \? null : _submit/u);
 });
 
-test('all eleven owner confirmations and hard functionality/final gates are visible', () => {
+test('one visible owner confirmation maps to the ten factual IDs while final publication stays internal', () => {
   for (const id of [
     'ownership', 'item_identity', 'allowed_category', 'functionality',
     'condition', 'accessories', 'owner_price', 'duration_discounts',
-    'availability', 'pickup_region', 'final_publication',
+    'availability', 'pickup_region',
   ]) {
     assert.match(screen, new RegExp(`'${id}': false`, 'u'));
   }
-  assert.match(screen, /Funktionalität.*abschließende Publikationsprüfung/su);
+  assert.match(screen, /_blueOceanFactualConfirmationIds/u);
+  assert.match(
+    screen,
+    /Ich habe alle generierten Inseratsdaten \(Artikel, Zustand, Preis, Verfügbarkeit etc\.\) geprüft und bestätige deren Richtigkeit sowie meine Berechtigung zur Vermietung\./u,
+  );
+  assert.match(screen, /_blueOceanOwnerTruthConfirmed/u);
+  assert.match(screen, /_setBlueOceanOwnerTruthConfirmed/u);
+  assert.match(screen, /'final_publication': false/u);
+  assert.doesNotMatch(
+    screen,
+    /title: Text\([^\n]*vollständige Vorschau geprüft und möchte veröffentlichen/u,
+  );
   assert.match(screen, /READY_TO_PUBLISH/u);
   assert.match(screen, /NEEDS_REVIEW/u);
 });
@@ -170,7 +181,11 @@ test('dependent edits invalidate stale confirmations, clarifications and READY s
 
   assert.match(
     screen,
-    /if \(entry\.key != 'final_publication'\)[\s\S]*_blueOceanConfirmations\['final_publication'\] = false;/u,
+    /for \(final id in _blueOceanFactualConfirmationIds\)[\s\S]*_blueOceanConfirmations\[id\] = confirmed;/u,
+  );
+  assert.match(
+    screen,
+    /_blueOceanConfirmations\['final_publication'\] = false;/u,
   );
 });
 
@@ -186,7 +201,7 @@ test('publication is bound to the exact fully reviewed editable snapshot', () =>
   }
   assert.match(
     screen,
-    /readiness is Map && readiness\['readyToPublish'\] == true[\s\S]*_blueOceanReadyFingerprint = _blueOceanEditableFingerprint\(\)/u,
+    /readiness is Map && readiness\['previewReady'\] == true[\s\S]*_blueOceanReadyFingerprint = _blueOceanEditableFingerprint\(\)/u,
   );
   assert.match(
     screen,
@@ -214,11 +229,16 @@ test('client and server use separate authenticated review and exact publication 
   assert.match(app, /autoPublishAllowed: false/u);
   assert.match(
     screen,
-    /reviewBlueOceanDraft\([\s\S]*_blueOceanReviewPayload\(finalPublication: true\)/u,
-  );
-  assert.doesNotMatch(
-    screen,
     /reviewBlueOceanDraft\([\s\S]*_blueOceanReviewPayload\(finalPublication: false\)/u,
+  );
+  assert.match(
+    screen,
+    /blueOceanReview: blueOceanPublication[\s\S]*_blueOceanReviewPayload\(finalPublication: true\)/u,
+  );
+  assert.match(screen, /final_publication.*finalPublication/u);
+  assert.match(
+    app,
+    /app\.post\('\/v1\/blue-ocean\/listing-drafts\/:id\/review'[\s\S]*final_publication === true[\s\S]*blue_ocean_explicit_publication_required/u,
   );
   assert.match(
     mutationService,

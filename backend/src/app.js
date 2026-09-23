@@ -4621,6 +4621,9 @@ export function createApp({
 
   app.post('/v1/blue-ocean/listing-drafts/:id/review', blueOceanListingMutationLimiter, requireAuth, requireActiveAccount, requireUnsuspendedScope('listing'), asyncRoute(async (req, res) => {
     assertBlueOceanListingTechnicalAccess();
+    if (req.body?.ownerConfirmations?.final_publication === true) {
+      throw new HttpError(409, 'blue_ocean_explicit_publication_required');
+    }
     const draftId = safeText(req.params.id, 160);
     const stored = await loadBlueOceanDraft(pool, {
       draftId,

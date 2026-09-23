@@ -53,8 +53,9 @@ historical evidence or grant any external, legal, provider or release approval.
 ## Active capsule
 
 - Branch: `codex/master-workflow-20260808`
-- Current HEAD: `2ba9f15bf4ee675b320de4807d5fa32beb51fdeb`
-- Worktree: clean at current exact HEAD before this docs-only packet
+- Source baseline HEAD: `37062669513b7ecd6a7ecc34bb0f5173f5e7f98a`
+- Worktree: package changes are bounded to LISTING-CONFIRMATION-1 and are
+  recorded atomically in its successor commit.
 - Candidate: `2026092203` is stale against later runtime source and remains
   expected/deferred P3 evidence; it is not a P1 source blocker.
 - Focused proof: `GREEN-92-97-CURRENTNESS-01` PASS on source HEAD
@@ -64,16 +65,21 @@ historical evidence or grant any external, legal, provider or release approval.
 - Current read-only closure evidence: 3 manifests, 158 code consumers,
   370 owning tests and 97 migrations; candidate-focused/wiring checks 107/107
   PASS. No Full Gate has been run for this capsule update.
-- Only remaining P1 blocker: Gemini listing-confirmation gate decision.
+- Gemini listing-confirmation gate: **closed — Decision 1 / PASS** in
+  `SIT_GEMINI_LISTING_CONFIRMATION_GATE_PACKET_2026-09-23.md`.
+- Package `LISTING-CONFIRMATION-1`: one visible aggregate owner confirmation;
+  the existing ten factual IDs remain mapped in `review.ownerConfirmations`;
+  `final_publication` is false until the exact publish action.
+- Package result: focused client/server wiring and domain checks are green;
+  manual listing, photo truth, clarification, AI-consent, readiness,
+  fingerprint/price and 4+4 boundaries remain unchanged.
 
 ## Exact next sequence
 
 Green-promotion migration currentness is PASS. The Gemini
-listing-confirmation packet is corrected to provide a Sol-verified technical
-fact capsule because local paths and commits are not browser-accessible. Obtain
-its 0/1/3 declaration decision, implement only the permitted UX change, and
-refresh focused tests plus source-binding closure. Then run exactly one local
-Full Gate with the maintained v2 Mac-mini profile:
+listing-confirmation gate is closed and the bounded package is implemented.
+Next: run focused closure, then exactly one local Full Gate with the maintained
+v2 Mac-mini profile:
 
 ```sh
 node tool/run_with_local_build_cache.mjs \

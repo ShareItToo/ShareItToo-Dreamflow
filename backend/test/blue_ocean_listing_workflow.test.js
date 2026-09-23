@@ -932,9 +932,28 @@ test('READY_TO_PUBLISH still requires the separate exact owner publication actio
     }],
     consent: consent(),
   });
+  const prePublishReview = reviewBlueOceanListingDraft({
+    previousRevision: generated.revision,
+    generationKey: key('publish-review-pre-action'),
+    editedFields: editedFields(),
+    answeredClarificationIds: generated.revision.clarificationQuestions.map((entry) => entry.id),
+    ownerConfirmations: confirmations(),
+    pricing: pricing(1_600),
+    imagePreflightPassed: true,
+    consentValid: true,
+  });
+  assert.equal(prePublishReview.readiness.previewReady, true);
+  assert.equal(prePublishReview.readiness.readyToPublish, false);
+  assert.equal(prePublishReview.readiness.state, 'NEEDS_REVIEW');
+  assert.throws(
+    () => assertBlueOceanExplicitPublication(prePublishReview, { explicitOwnerAction: true }),
+    (error) => error instanceof BlueOceanListingWorkflowError
+      && error.code === 'blue_ocean_draft_not_ready_to_publish',
+  );
+
   const review = reviewBlueOceanListingDraft({
     previousRevision: generated.revision,
-    generationKey: key('publish-review'),
+    generationKey: key('publish-review-action'),
     editedFields: editedFields(),
     answeredClarificationIds: generated.revision.clarificationQuestions.map((entry) => entry.id),
     ownerConfirmations: confirmations({ finalPublication: true }),

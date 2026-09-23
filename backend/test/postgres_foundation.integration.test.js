@@ -5814,6 +5814,17 @@ if (!databaseUrl) {
         'condition', 'accessories', 'owner_price', 'duration_discounts',
         'availability', 'pickup_region', 'final_publication',
       ].map((key) => [key, key !== 'final_publication']));
+      const blueOceanEarlyPublicationResponse = await fetch(
+        `${baseUrl}/v1/blue-ocean/listing-drafts/${encodeURIComponent(blueOceanDraftId)}/review`,
+        {
+          method: 'POST',
+          headers: renterAHeaders,
+          body: JSON.stringify({
+            ownerConfirmations: { final_publication: true },
+          }),
+        },
+      );
+      assert.equal(blueOceanEarlyPublicationResponse.status, 409);
       const blueOceanReviewResponse = await fetch(
         `${baseUrl}/v1/blue-ocean/listing-drafts/${encodeURIComponent(blueOceanDraftId)}/review`,
         {
