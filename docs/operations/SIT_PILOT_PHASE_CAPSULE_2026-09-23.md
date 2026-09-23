@@ -20,7 +20,9 @@ historical evidence or grant any external, legal, provider or release approval.
 3. **P3 — Fresh higher Android candidate**
    - Read the highest current Play versionCode freshly, then choose a strictly
      higher candidate from the accepted source state and bind its artifact and
-     manifest hashes; never assume local availability of `2026092203`.
+     manifest hashes. The existing `2026092203` candidate is expected
+     deferred P3 evidence, not a P1 source blocker; never assume it is an
+     exact-HEAD candidate.
    - Exit only when the candidate identity is fresh, reproducible and the
      prior-candidate manifest is no longer stale.
 
@@ -51,24 +53,38 @@ historical evidence or grant any external, legal, provider or release approval.
 ## Active capsule
 
 - Branch: `codex/master-workflow-20260808`
-- Base HEAD at capsule capture: `1360628406736c61ecd26d99fe0b9663994ba47b`
-- Worktree: clean at exact-head package capture before this docs-only packet
-- Candidate: no exact-HEAD candidate yet
-- Focused proof: `GREEN-92-97-CURRENTNESS-01` PASS on exact HEAD
-  `1360628406736c61ecd26d99fe0b9663994ba47b`; Green promotion/schema
-  currentness is closed through migration 097.
-- Full gate: not green; the last rerun stopped on a stale Accessibility
-  viewport test, now repaired in the focused cluster
-- Known next source blockers:
-  - Gemini listing-confirmation gate decision required before UX implementation
-  - stale candidate manifest
+- Current HEAD: `2ba9f15bf4ee675b320de4807d5fa32beb51fdeb`
+- Worktree: clean at current exact HEAD before this docs-only packet
+- Candidate: `2026092203` is stale against later runtime source and remains
+  expected/deferred P3 evidence; it is not a P1 source blocker.
+- Focused proof: `GREEN-92-97-CURRENTNESS-01` PASS on source HEAD
+  `1360628406736c61ecd26d99fe0b9663994ba47b`; the current successor HEAD is
+  docs-only for this capsule update and Green promotion/schema currentness
+  remains closed through migration 097.
+- Current read-only closure evidence: 3 manifests, 158 code consumers,
+  370 owning tests and 97 migrations; candidate-focused/wiring checks 107/107
+  PASS. No Full Gate has been run for this capsule update.
+- Only remaining P1 blocker: Gemini listing-confirmation gate decision.
 
 ## Exact next sequence
 
-Green-promotion migration currentness is PASS on the exact HEAD. The Gemini
+Green-promotion migration currentness is PASS. The Gemini
 listing-confirmation packet is corrected to provide a Sol-verified technical
 fact capsule because local paths and commits are not browser-accessible. Obtain
-its 0/1/3 declaration decision, then refresh source-binding closure before any
-UX implementation or full gate. Do not rewrite historical status files or
-repeat full gates after serial failures in one owning test/validator class;
-close that cluster focused-first.
+its 0/1/3 declaration decision, implement only the permitted UX change, and
+refresh focused tests plus source-binding closure. Then run exactly one local
+Full Gate with the maintained v2 Mac-mini profile:
+
+```sh
+node tool/run_with_local_build_cache.mjs \
+  --profile /Users/walidchraibi/Documents/Codex/2026-08-19/new-chat/SIT_ANDROID_BUILD_20260904.json \
+  -- env CI=true SIT_ALLOW_CANDIDATE_ROLLOVER=1 bash scripts/technical_regression_check.sh
+```
+
+`CI=true` selects the permitted metadata-only candidate paths; it cannot claim
+Store upload, Store activation, candidate installation or any device pass.
+After that local gate, execute P2: push the accepted exact HEAD and obtain
+exact-HEAD GitHub Regression and CodeQL evidence. Only then execute P3 by
+building a fresh strictly higher candidate from that accepted source state.
+Do not rewrite historical status files or repeat full gates after serial
+failures in one owning test/validator class; close that cluster focused-first.
