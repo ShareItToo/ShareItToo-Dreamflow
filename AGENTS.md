@@ -26,6 +26,11 @@ once after the final source merge and before the first push/full regression.
 Run the fail-closed consumer-closure check before CI; never spend a CI run to
 discover a mechanically stale source hash.
 
+- Frozen source-bound evidence must not be reinterpreted by later mutable
+  validator schemas. Verify its recorded exact validator/source digests or run
+  the validator from that captured snapshot; never rewrite historical evidence
+  to satisfy the current schema.
+
 ## Sol, Luna and Gemini review loop
 
 - Luna executes one bounded package and returns useful evidence, not a claim of

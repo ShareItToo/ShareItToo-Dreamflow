@@ -21,6 +21,14 @@ test('accepts the source-bound inactive V5.4 correction package', () => {
   assert.equal(result.realMoneyAllowed, false);
 });
 
+test('does not reinterpret the frozen snapshot with the current legal validator', () => {
+  const source = readFileSync(
+    resolve(repositoryRoot, 'tool/validate_wp152_v54_contract_draft.mjs'),
+    'utf8',
+  );
+  assert.doesNotMatch(source, /validateLegalReadiness/u);
+});
+
 test('rejects a closure claim that activates V5.4 or hides legal approval', () => {
   const value = structuredClone(evidence);
   value.decision.successorActivationAllowed = true;

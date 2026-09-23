@@ -65,6 +65,7 @@ test('binds synthetic registration to every private-pilot declaration', () => {
       privacyAccepted: true,
       minimumAgeConfirmed: true,
       privateUseConfirmed: true,
+      registrationActionLabel: 'Kostenlos registrieren',
     },
   );
 });

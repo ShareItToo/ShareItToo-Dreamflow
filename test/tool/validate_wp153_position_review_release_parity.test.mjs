@@ -24,6 +24,14 @@ test('accepts the source-bound inactive WP153 position-review package', () => {
   assert.equal(result.realMoneyAllowed, false);
 });
 
+test('does not reinterpret the frozen snapshot with the current legal validator', () => {
+  const source = readFileSync(
+    resolve(repositoryRoot, 'tool/validate_wp153_position_review_release_parity.mjs'),
+    'utf8',
+  );
+  assert.doesNotMatch(source, /validateLegalReadiness/u);
+});
+
 test('rejects a mutable-payload hold or a derived whole-group hold', () => {
   const value = structuredClone(evidence);
   value.invariants.mutablePayloadMayAuthorizeHold = true;

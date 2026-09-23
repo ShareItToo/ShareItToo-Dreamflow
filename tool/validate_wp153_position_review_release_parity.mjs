@@ -5,7 +5,6 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { validateLegalReadiness } from './validate_legal_readiness.mjs';
 import { validateV55LegalAssets } from './validate_v55_legal_assets.mjs';
 import {
   boundDigest,
@@ -229,12 +228,6 @@ export function validateWp153PositionReviewReleaseParity({
   }
 
   validateV55LegalAssets({ repositoryRoot, sourceTexts });
-  validateLegalReadiness({
-    root: repositoryRoot,
-    legalManifest: JSON.parse(source(repositoryRoot, 'store/legal-readiness.json', sourceTexts)),
-    submissionManifest: JSON.parse(source(repositoryRoot, 'store/submission.json', sourceTexts)),
-    sourceTexts,
-  });
 
   const payment = source(repositoryRoot, 'backend/src/payment_workflow.js', sourceTexts);
   const returnCase = source(

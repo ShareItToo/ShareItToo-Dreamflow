@@ -5,7 +5,6 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { validateLegalReadiness } from './validate_legal_readiness.mjs';
 import { validateV54LegalAssets } from './validate_v54_legal_assets.mjs';
 import {
   boundDigest,
@@ -250,18 +249,6 @@ export function validateWp152V54ContractDraft({
       `source inventory ${path}`);
   }
 
-  const legalReadiness = JSON.parse(source(
-    repositoryRoot,
-    'store/legal-readiness.json',
-    sourceTexts,
-  ));
-  const submission = JSON.parse(source(repositoryRoot, 'store/submission.json', sourceTexts));
-  validateLegalReadiness({
-    root: repositoryRoot,
-    legalManifest: legalReadiness,
-    submissionManifest: submission,
-    sourceTexts,
-  });
   const legalResult = validateV54LegalAssets({ repositoryRoot, sourceTexts });
   exact(legalResult, {
     status: 'draft-blocked-after-ai-corrections',
