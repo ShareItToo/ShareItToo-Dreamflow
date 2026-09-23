@@ -49,12 +49,34 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Unverbindliche Stage-A-Vorschau'), findsOneWidget);
-    expect(find.text('Unverbindliche Preisvorschau'), findsOneWidget);
-    expect(find.text('Simulierte Gesamtsumme'), findsOneWidget);
     expect(
       find.text(PrivatePilotConfig.blueOceanStageANonBindingNotice),
       findsOneWidget,
     );
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.text('Abhol- und Rückgabezeit'),
+      300,
+      scrollable: scrollable,
+    );
+    expect(
+      find.widgetWithText(OutlinedButton, 'Wählen'),
+      findsNWidgets(2),
+    );
+    for (var index = 0; index < 2; index += 1) {
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Wählen').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Übernehmen'));
+      await tester.pumpAndSettle();
+    }
+    final pricePreviewFinder = find.text('Unverbindliche Preisvorschau');
+    await tester.scrollUntilVisible(
+      pricePreviewFinder,
+      300,
+      scrollable: scrollable,
+    );
+    expect(pricePreviewFinder, findsOneWidget);
+    expect(find.text('Simulierte Gesamtsumme'), findsOneWidget);
     expect(
         find.textContaining('verbindliche Buchungsanfrage ab'), findsNothing);
 
@@ -65,7 +87,7 @@ void main() {
     await tester.scrollUntilVisible(
       buttonFinder,
       300,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: scrollable,
     );
     final button = tester.widget<FilledButton>(buttonFinder);
     expect(button.onPressed, isNull);
