@@ -22,7 +22,7 @@ test('Flutter gate is default-off while the complete manual editor remains prese
   assert.match(config, /SIT_BLUE_OCEAN_LISTING_ASSISTANT/u);
   assert.match(config, /defaultValue:\s*false/u);
   assert.match(screen, /PrivatePilotConfig\.blueOceanListingAssistantEnabled/u);
-  assert.match(screen, /Für später speichern/u);
+  assert.match(screen, /Entwurf speichern/u);
   assert.match(screen, /Der manuelle Editor bleibt vollständig verfügbar/u);
 });
 
@@ -34,6 +34,29 @@ test('UI requires exact disclosure, opt-in, explicit initiation and never promis
   assert.match(screen, /_blueOceanConsentAccepted/u);
   assert.match(screen, /Ausgewählte Fotos analysieren/u);
   assert.match(screen, /capability\?\.disclosureText/u);
+});
+
+test('on-device suggestions require an explicit takeover before publication', () => {
+  const assistantStart = screen.indexOf('Future<void> _startBlueOceanAssistant()');
+  const readyStart = screen.indexOf(
+    "if (assistant['status'] == 'draft_ready')",
+    assistantStart,
+  );
+  const readyBranch = screen.slice(readyStart, screen.indexOf('} else {', readyStart));
+  assert.match(assistantStart >= 0 ? screen.slice(assistantStart) : '', /_onDeviceListingAnalysis\.analyzeImagePaths/u);
+  assert.match(assistantStart >= 0 ? screen.slice(assistantStart) : '', /onDeviceAnalysis: onDeviceAnalysis/u);
+  assert.match(readyBranch, /_blueOceanSuggestionsAccepted = false/u);
+  assert.doesNotMatch(readyBranch, /_applyBlueOceanDraft\(assistant\)/u);
+  assert.match(screen, /void _acceptBlueOceanSuggestions\(\)/u);
+  assert.match(
+    screen,
+    /_applyBlueOceanDraft\(assistant\);[\s\S]*_blueOceanSuggestionsAccepted = true/u,
+  );
+  assert.match(screen, /label: const Text\('Vorschläge übernehmen'\)/u);
+  assert.match(
+    screen,
+    /if \(!_blueOceanSuggestionsAccepted\)[\s\S]*Übernimm die Vorschläge bewusst/u,
+  );
 });
 
 test('UI exposes progress, editable fields, confidence text and at most three clarifications', () => {

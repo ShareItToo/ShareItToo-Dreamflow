@@ -195,6 +195,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   final GlobalKey _blueOceanCardKey = GlobalKey();
   final FocusNode _blueOceanErrorFocus = FocusNode();
   bool _blueOceanConsentAccepted = false;
+  bool _blueOceanSuggestionsAccepted = false;
   bool _blueOceanBusy = false;
   bool _submitBusy = false;
   String _blueOceanProgress = '';
@@ -505,6 +506,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         'longitude': _selectedAddrLng,
         'ownerDailyPrice': _priceCtrl.text,
         'condition': _condition,
+        'suggestionsAccepted': _blueOceanSuggestionsAccepted,
         'durationPricingEnabled': _autoApplyDiscounts,
         'durationPricing': <Map<String, dynamic>>[
           <String, dynamic>{'days': _tier1Days, 'percent': _tier1Pct},
@@ -638,6 +640,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       _selectedAddrLat = latitude.toDouble();
       _selectedAddrLng = longitude.toDouble();
     }
+    _blueOceanSuggestionsAccepted = fields['suggestionsAccepted'] == true;
     _autoApplyDiscounts = fields['durationPricingEnabled'] == true;
     final durationPricing = fields['durationPricing'];
     if (durationPricing is List && durationPricing.length == 3) {
@@ -684,7 +687,6 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         _blueOceanDraftId = snapshot.draftId;
         _blueOceanAssistant = snapshot.assistant;
         _blueOceanPhotoUrls = snapshot.managedPhotoUrls;
-        _applyBlueOceanDraft(snapshot.assistant);
         _applyBlueOceanRecoveryEditableFields(snapshot.editableFields);
         _blueOceanConsentAccepted = false;
         _blueOceanAnsweredQuestions.clear();
@@ -712,6 +714,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     _blueOceanDraftId = null;
     _blueOceanAssistant = null;
     _blueOceanPhotoUrls = const <String>[];
+    _blueOceanSuggestionsAccepted = false;
     _blueOceanReadyFingerprint = null;
     _blueOceanAnsweredQuestions.clear();
     _blueOceanReplacementBandConfirmed = false;
@@ -776,6 +779,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       ],
       'answeredClarifications': answered,
       'ownerConfirmations': confirmations,
+      'suggestionsAccepted': _blueOceanSuggestionsAccepted,
       'photoUrls': _blueOceanPhotoUrls,
     };
     return sha256.convert(utf8.encode(jsonEncode(snapshot))).toString();
@@ -851,6 +855,20 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     _blueOceanPickupRegionCtrl.text =
         _blueOceanFieldValue(assistant, 'pickupRegion')?.toString() ??
             (_registeredCity ?? '');
+  }
+
+  void _acceptBlueOceanSuggestions() {
+    final assistant = _blueOceanAssistant;
+    if (_blueOceanDraftId == null || assistant == null) return;
+    setState(() {
+      _applyBlueOceanDraft(assistant);
+      _blueOceanSuggestionsAccepted = true;
+      _invalidateBlueOceanReviewState(clearClarifications: true);
+      _blueOceanProgress =
+          'Vorschläge übernommen. Prüfe und bearbeite die Felder jetzt selbst.';
+      _blueOceanError = null;
+    });
+    unawaited(_persistBlueOceanRecoverySnapshot());
   }
 
   Future<void> _startBlueOceanAssistant() async {
@@ -952,16 +970,18 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         _blueOceanAssistant = assistant;
         if (assistant['status'] == 'draft_ready') {
           _blueOceanDraftId = draftId;
+          _blueOceanSuggestionsAccepted = false;
           _blueOceanReadyFingerprint = null;
           _blueOceanAnsweredQuestions.clear();
           _blueOceanReplacementBandConfirmed = false;
           for (final key in _blueOceanConfirmations.keys) {
             _blueOceanConfirmations[key] = false;
           }
-          _blueOceanProgress = 'Bearbeitbarer Entwurf ist bereit.';
-          _applyBlueOceanDraft(assistant);
+          _blueOceanProgress =
+              'Vorschläge sind bereit. Übernimm sie bewusst, bevor du sie bearbeitest.';
         } else {
           _blueOceanDraftId = null;
+          _blueOceanSuggestionsAccepted = false;
           _blueOceanError =
               'Die KI-Analyse wurde sicher beendet. Prüfe oder ersetze die '
               'Fotos und arbeite im manuellen Editor weiter.';
@@ -1654,6 +1674,14 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     final blueOceanPublication =
         !forceInactive && !_isEdit && _blueOceanDraftId != null;
     if (blueOceanPublication) {
+      if (!_blueOceanSuggestionsAccepted) {
+        if (!mounted) return;
+        setState(() => _blueOceanError =
+            'Übernimm die Vorschläge bewusst, bevor du diesen KI-Entwurf '
+            'veröffentlichst.');
+        _focusBlueOceanMessage();
+        return;
+      }
       final missingConfirmation = _blueOceanConfirmations.entries
           .where((entry) => entry.value != true)
           .map((entry) => entry.key)
@@ -2429,6 +2457,32 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                         .textTheme
                         .titleSmall
                         ?.copyWith(fontWeight: FontWeight.w700)),
+                if (!_blueOceanSuggestionsAccepted) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Die KI-Vorschläge werden erst nach deiner bewussten '
+                    'Übernahme in die bearbeitbaren Felder eingesetzt.',
+                    style: TextStyle(fontSize: 13.5, height: 1.4),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _blueOceanBusy
+                          ? null
+                          : _acceptBlueOceanSuggestions,
+                      icon: const Icon(Icons.input_outlined),
+                      label: const Text('Vorschläge übernehmen'),
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Vorschläge übernommen. Alle Felder bleiben bearbeitbar; '
+                    'prüfe sie vor dem Entwurf und der Veröffentlichung.',
+                    style: TextStyle(fontSize: 13.5, height: 1.4),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
