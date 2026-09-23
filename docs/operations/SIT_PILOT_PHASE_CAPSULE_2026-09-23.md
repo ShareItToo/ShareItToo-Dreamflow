@@ -73,6 +73,12 @@ historical evidence or grant any external, legal, provider or release approval.
   `SIT_SOCIAL_APPLE_ENABLED=false`, and
   `SIT_SOCIAL_FACEBOOK_ENABLED=false`; Apple/Facebook remain hard stops until
   separately proven provider configuration exists.
+- A second signed `2026092204` archive was created locally but is rejected as
+  a noncandidate because its manifest had `closedPilotEnvelope=false`, an empty
+  pilot ID, and G3/G4/G5 technical surfaces disabled. Retain that private
+  archive for audit only; it was never uploaded, activated, installed, or used
+  for device/live evidence. The next unambiguous source version is
+  `1.0.0+2026092205` and requires the complete full-pilot envelope.
 - Focused proof: `GREEN-92-97-CURRENTNESS-01` PASS on source HEAD
   `1360628406736c61ecd26d99fe0b9663994ba47b`; the 370626 baseline and its
   documentation-only successors did not contain this implementation, while
@@ -120,6 +126,9 @@ node tool/run_with_local_build_cache.mjs \
   SIT_REQUIRE_CANONICAL_SIGNING=1 \
   SIT_REQUIRE_FIREBASE=1 \
   SIT_BLUE_OCEAN_LISTING_ASSISTANT=1 \
+  SIT_CLOSED_PILOT_ENVELOPE=1 \
+  SIT_STAGE_A_PILOT_ID=heilbronn_wave0 \
+  SIT_REQUIRE_STORE_SUBMISSION=0 \
   SIT_RELEASE_CHANNEL=internal \
   SIT_API_BASE_URL=https://staging.shareittoo.com/api/v1 \
   SIT_SOCIAL_GOOGLE_ENABLED=true \
@@ -129,7 +138,7 @@ node tool/run_with_local_build_cache.mjs \
 ```
 
 After the preflight and `BUILD_READY`, repeat the same command without
-`SIT_BUILD_PREFLIGHT_ONLY=1`. This remains a future corrected command; do not
-reuse the stopped `2026092204` attempt or claim it as a candidate.
+`SIT_BUILD_PREFLIGHT_ONLY=1`. This remains a future 2205 command; do not reuse
+either 2204 attempt or claim the reduced 2204 archive as a candidate.
 Do not rewrite historical status files or repeat full gates after serial
 failures in one owning test/validator class; close that cluster focused-first.

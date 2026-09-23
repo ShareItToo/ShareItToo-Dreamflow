@@ -78,6 +78,7 @@ fi
 # before reading local Firebase configuration or entering any build/preflight
 # work so omission can never silently compile all providers disabled.
 node tool/validate_android_release_social_profile.mjs
+node tool/validate_android_release_candidate_profile.mjs
 
 commit="$(git rev-parse HEAD)"
 version="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
@@ -268,7 +269,8 @@ if [[ -n "${GOOGLE_MAPS_API_KEY:-}" ]]; then
   exit 1
 fi
 
-if [[ "${SIT_REQUIRE_FIREBASE:-0}" == "1" ]]; then
+if [[ "${SIT_REQUIRE_FIREBASE:-0}" == "1" ||
+      "${SIT_REQUIRE_FIREBASE:-}" == "true" ]]; then
   node tool/validate_firebase_release_config.mjs --require-configured --platform android
 fi
 

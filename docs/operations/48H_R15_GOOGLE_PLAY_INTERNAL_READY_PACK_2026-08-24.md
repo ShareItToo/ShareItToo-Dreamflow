@@ -46,6 +46,9 @@ Current state: all three gates are **not granted**.
      SIT_REQUIRE_CANONICAL_SIGNING=1 \
      SIT_REQUIRE_FIREBASE=1 \
      SIT_BLUE_OCEAN_LISTING_ASSISTANT=1 \
+     SIT_CLOSED_PILOT_ENVELOPE=1 \
+     SIT_STAGE_A_PILOT_ID=heilbronn_wave0 \
+     SIT_REQUIRE_STORE_SUBMISSION=0 \
      SIT_RELEASE_CHANNEL=internal \
      SIT_API_BASE_URL=https://staging.shareittoo.com/api/v1 \
      SIT_SOCIAL_GOOGLE_ENABLED=true \
@@ -67,6 +70,9 @@ Current state: all three gates are **not granted**.
      SIT_REQUIRE_CANONICAL_SIGNING=1 \
      SIT_REQUIRE_FIREBASE=1 \
      SIT_BLUE_OCEAN_LISTING_ASSISTANT=1 \
+     SIT_CLOSED_PILOT_ENVELOPE=1 \
+     SIT_STAGE_A_PILOT_ID=heilbronn_wave0 \
+     SIT_REQUIRE_STORE_SUBMISSION=0 \
      SIT_RELEASE_CHANNEL=internal \
      SIT_API_BASE_URL=https://staging.shareittoo.com/api/v1 \
      SIT_SOCIAL_GOOGLE_ENABLED=true \
@@ -87,12 +93,17 @@ Current state: all three gates are **not granted**.
 The prepared preflight command above uses the same script but sets
 `SIT_BUILD_PREFLIGHT_ONLY=1`, `SIT_REQUIRE_CANONICAL_SIGNING=1`,
 `SIT_REQUIRE_FIREBASE=1`, `SIT_BLUE_OCEAN_LISTING_ASSISTANT=1`,
+`SIT_CLOSED_PILOT_ENVELOPE=1`, `SIT_STAGE_A_PILOT_ID=heilbronn_wave0`,
+`SIT_REQUIRE_STORE_SUBMISSION=0`,
 `SIT_RELEASE_CHANNEL=internal`,
 `SIT_API_BASE_URL=https://staging.shareittoo.com/api/v1`,
-`SIT_ALLOW_CANDIDATE_ROLLOVER=1`, and all three explicit social flags. The
+`SIT_ALLOW_CANDIDATE_ROLLOVER=1`, explicit canonical-signing/Firebase=true
+controls, and all three explicit social flags. The
 builder rejects omitted social inputs and rejects any Internal/Staging rollover
 profile other than `Google=true`, `Apple=false`, `Facebook=false` before local
-Firebase/preflight or artifact work. The build command differs only by removing
+Firebase/preflight or artifact work. For a rollover, the complete
+`heilbronn_wave0` private-pilot envelope is also mandatory; reduced/default
+scope is rejected and is never a candidate. The build command differs only by removing
 preflight-only mode after `BUILD_READY`.
 
 ## Signing and AAB hash binding

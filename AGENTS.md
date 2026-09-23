@@ -271,6 +271,15 @@ discover a mechanically stale source hash.
   `PrivatePilotConfig.v52ClientBuild` fallback atomically. Release preflight
   must fail before any binary build when those values drift; never repair the
   mismatch by reusing or rebinding an already archived candidate.
+- An Internal/Staging candidate rollover (`SIT_ALLOW_CANDIDATE_ROLLOVER=1`) must
+  explicitly bind the complete private-pilot profile before Firebase,
+  preflight or artifact work: Google=true, Apple=false, Facebook=false,
+  Blue Ocean=true, `SIT_CLOSED_PILOT_ENVELOPE=true`,
+  `SIT_STAGE_A_PILOT_ID=heilbronn_wave0`, and
+  `SIT_REQUIRE_STORE_SUBMISSION=false`,
+  `SIT_REQUIRE_CANONICAL_SIGNING=true`, and `SIT_REQUIRE_FIREBASE=true`.
+  Omitted or reduced profile values are hard failures; a reduced archive is
+  never a candidate.
 - Isolated-worker tasks must verify the worktree root, branch and HEAD before
   the first mutation and must never commit or revert in the canonical checkout.
 - Current-candidate validators must resolve

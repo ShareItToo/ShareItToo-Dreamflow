@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+import {
+  validateAndroidReleaseCandidateProfile,
+} from '../../tool/validate_android_release_candidate_profile.mjs';
 
 const read = (path) => readFileSync(path, 'utf8');
 const builder = read('scripts/build_android_release_candidate.sh');
@@ -10,6 +16,7 @@ const pilotCompose = read('backend/compose.staging.pilot.yml');
 const smtpCompose = read('backend/compose.staging.smtp.yml');
 const workflow = read('.github/workflows/regression.yml');
 const regression = read('scripts/technical_regression_check.sh');
+const root = fileURLToPath(new URL('../../', import.meta.url));
 
 test('signed pilot envelope is bound to exact Internal Staging Wave-0 identity', () => {
   for (const marker of [
@@ -27,6 +34,82 @@ test('signed pilot envelope is bound to exact Internal Staging Wave-0 identity',
     'android_on_device',
   ]) assert.ok(builder.includes(marker), marker);
   assert.match(builder, /SIT_BOOKING_GROUPS_PUBLIC_RELEASE_ALLOWED=false/u);
+});
+
+const fullPilotEnvironment = Object.freeze({
+  SIT_ALLOW_CANDIDATE_ROLLOVER: '1',
+  SIT_BLUE_OCEAN_LISTING_ASSISTANT: 'true',
+  SIT_CLOSED_PILOT_ENVELOPE: 'true',
+  SIT_STAGE_A_PILOT_ID: 'heilbronn_wave0',
+  SIT_RELEASE_CHANNEL: 'internal',
+  SIT_API_BASE_URL: 'https://staging.shareittoo.com/api/v1',
+  SIT_REQUIRE_STORE_SUBMISSION: 'false',
+  SIT_REQUIRE_CANONICAL_SIGNING: 'true',
+  SIT_REQUIRE_FIREBASE: 'true',
+  SIT_SOCIAL_GOOGLE_ENABLED: 'true',
+  SIT_SOCIAL_APPLE_ENABLED: 'false',
+  SIT_SOCIAL_FACEBOOK_ENABLED: 'false',
+});
+
+test('candidate profile rejects the reduced/default rollover before build work', () => {
+  const reduced = {
+    ...fullPilotEnvironment,
+    SIT_CLOSED_PILOT_ENVELOPE: 'false',
+    SIT_STAGE_A_PILOT_ID: 'reduced_profile',
+  };
+  assert.throws(
+    () => validateAndroidReleaseCandidateProfile({ environment: reduced }),
+    /complete heilbronn_wave0 private-pilot profile/u,
+  );
+  for (const name of [
+    'SIT_CLOSED_PILOT_ENVELOPE',
+    'SIT_STAGE_A_PILOT_ID',
+    'SIT_REQUIRE_CANONICAL_SIGNING',
+    'SIT_REQUIRE_FIREBASE',
+  ]) {
+    const omitted = { ...fullPilotEnvironment };
+    delete omitted[name];
+    assert.throws(
+      () => validateAndroidReleaseCandidateProfile({ environment: omitted }),
+      new RegExp(`${name} must be explicitly set`),
+    );
+  }
+});
+
+test('candidate profile accepts the exact full private-pilot rollover', () => {
+  assert.deepEqual(
+    validateAndroidReleaseCandidateProfile({ environment: fullPilotEnvironment }),
+    {
+      candidateRollover: true,
+      fullPilotEnvelope: true,
+      blueOcean: true,
+      closedEnvelope: true,
+      stagePilotId: 'heilbronn_wave0',
+      releaseChannel: 'internal',
+      apiBaseUrl: 'https://staging.shareittoo.com/api/v1',
+      storeSubmission: false,
+      canonicalSigning: true,
+      firebaseRequired: true,
+    },
+  );
+});
+
+test('builder rejects reduced rollover before preflight or artifacts', () => {
+  const environment = {
+    ...process.env,
+    ...fullPilotEnvironment,
+    SIT_REQUIRE_CLEAN: '0',
+    SIT_CLOSED_PILOT_ENVELOPE: 'false',
+    SIT_STAGE_A_PILOT_ID: 'reduced_profile',
+  };
+  const result = spawnSync(
+    'bash',
+    ['scripts/build_android_release_candidate.sh'],
+    { cwd: root, env: environment, encoding: 'utf8' },
+  );
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /SIT_STAGE_A_PILOT_ID is accepted only|complete heilbronn_wave0 private-pilot profile/u);
+  assert.doesNotMatch(result.stderr, /release_candidate_preflight|run_checked_android_build|flutter clean/u);
 });
 
 test('private archive rejects partial pilot identity or surface truth', () => {
