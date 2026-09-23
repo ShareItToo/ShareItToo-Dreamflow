@@ -1400,26 +1400,7 @@ class AuthService {
       )) {
         return const AuthResult.failure(AuthFailure.principalChanged);
       }
-      final failure = switch (error.code) {
-        'social_registration_consents_required' ||
-        'registration_action_label_required' ||
-        'registration_action_label_mismatch' =>
-          AuthFailure.consentRequired,
-        'social_email_required' => AuthFailure.socialEmailRequired,
-        'social_email_verification_required' =>
-          AuthFailure.socialEmailVerificationRequired,
-        'social_provider_already_linked' =>
-          AuthFailure.socialProviderAlreadyLinked,
-        'social_account_link_requires_reauthentication' =>
-          AuthFailure.socialAccountLinkRequiresReauthentication,
-        'unsupported_social_provider' ||
-        'social_auth_unavailable' ||
-        'apple_revocation_exchange_unavailable' ||
-        'apple_revocation_exchange_claim_lost' =>
-          AuthFailure.providerUnavailable,
-        'account_not_active' => AuthFailure.accountNotActive,
-        _ => AuthFailure.network,
-      };
+      final failure = classifySocialBackendError(error.code);
       debugPrint('[AuthService] social exchange failed: ${error.code}');
       return AuthResult.failure(failure);
     } catch (error) {
@@ -1462,6 +1443,29 @@ class AuthService {
       }
     }
   }
+
+  @visibleForTesting
+  static AuthFailure classifySocialBackendError(String code) => switch (code) {
+        'social_registration_consents_required' ||
+        'registration_action_label_required' ||
+        'registration_action_label_mismatch' =>
+          AuthFailure.consentRequired,
+        'social_email_required' => AuthFailure.socialEmailRequired,
+        'social_email_verification_required' =>
+          AuthFailure.socialEmailVerificationRequired,
+        'social_provider_already_linked' =>
+          AuthFailure.socialProviderAlreadyLinked,
+        'social_account_link_requires_reauthentication' =>
+          AuthFailure.socialAccountLinkRequiresReauthentication,
+        'unsupported_social_provider' ||
+        'social_auth_unavailable' ||
+        'apple_revocation_unavailable' ||
+        'apple_revocation_exchange_unavailable' ||
+        'apple_revocation_exchange_claim_lost' =>
+          AuthFailure.providerUnavailable,
+        'account_not_active' => AuthFailure.accountNotActive,
+        _ => AuthFailure.network,
+      };
 
   static Future<String> _firebaseSocialIdToken(
     AuthSocialProvider provider, {
