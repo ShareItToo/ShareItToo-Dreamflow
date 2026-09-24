@@ -26,6 +26,7 @@ import {
   greenTechnicalSandboxEnvironment,
   greenTechnicalSandboxHealth,
   assertGreenTechnicalSandboxProviderOff,
+  assertGreenRetainedSealedInventory,
   sanitizeGreenEvidence,
   normalizedGreenTargetDigest,
   assertGreenCommandBindings,
@@ -50,15 +51,17 @@ const isolatedNetworkId = '1'.repeat(64);
 const isolatedDatabaseId = '2'.repeat(64);
 const candidateId = '3'.repeat(64);
 const targetManifest = {
-  kind: 'sit-green-staging-target', schemaVersion: 1, composeProject: 'sit-green',
+  kind: 'sit-green-staging-target', schemaVersion: 2, composeProject: 'sit-green',
   greenLabel: 'com.shareittoo.sit.green=true', runId: greenTarget.runId,
   apiContainer: greenTarget.apiContainer, databaseContainer: greenTarget.databaseContainer,
   databaseVolume: greenTarget.databaseVolume, network: greenTarget.network,
   providerNetwork: greenTarget.providerNetwork, uploadsVolume: greenTarget.uploadsVolume,
-  networkInternal: true, sourceSchema: 92, currentSchema: 97, prePromotionImage: greenTarget.prePromotionImage,
+  networkInternal: true, sourceSchema: 97, currentSchema: 97,
+  sourceLedgerDigest: greenTarget.sourceLedgerDigest, currentLedgerDigest: greenTarget.currentLedgerDigest,
+  prePromotionImage: greenTarget.prePromotionImage, sealedApiContainer: greenTarget.sealedApiContainer,
+  retainedSealed: { ...greenTarget.retainedSealed },
 };
 targetManifest.targetDigest = normalizedGreenTargetDigest(targetManifest);
-assert.equal(targetManifest.targetDigest, '77431508ab14034d7ac1b0e49db4e898468f896c10eee82f2f5feee48aeee210');
 const config = {
   environment: 'test', envFile: '/docker/shareittoo/staging-secrets/green.env',
   envNames: ['NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'JWT_SECRET', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'MAIL_TRANSPORT', 'PUSH_TRANSPORT', 'IDENTITY_VERIFICATION_TRANSPORT', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_ALLOWED_USER_IDS', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'MAIL_FROM', 'FIREBASE_PROJECT_ID', 'FIREBASE_AUTH_ENABLED', 'FIREBASE_PHONE_VERIFICATION_ENABLED', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_LISTING_AI_BUDGET_CENTS', 'ENABLE_STAGING_STRIPE', 'TECHNICAL_SANDBOX_ENABLED', 'TECHNICAL_SANDBOX_KILL_SWITCH', 'TECHNICAL_SANDBOX_ACCOUNT_ID', 'TECHNICAL_SANDBOX_USER_IDS', 'TECHNICAL_SANDBOX_AUTHORIZATION_ID', 'TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT', 'TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT', 'TECHNICAL_SANDBOX_SECRET_KEY_FILE', 'TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE', 'SIT_STAGING_PILOT_ID', 'SYNTHETIC_SANDBOX_PASSWORD_FILE'],
@@ -85,10 +88,10 @@ function migrationLedgerThrough(schema) {
   return `${rows.join('\n')}\n`;
 }
 
-const sourceMigrationLedger = migrationLedgerThrough(92);
+const sourceMigrationLedger = migrationLedgerThrough(97);
 const currentMigrationLedger = migrationLedgerThrough(97);
 const emptyFindingFingerprint = JSON.stringify({ paymentRecoveryNeedsReview: [], supportNextUpdateOverdue: [] });
-const targetContainerSet = `${greenTarget.apiContainer}\t\t\ttrue\t${greenTarget.runId}\n${greenTarget.databaseContainer}\t\t\ttrue\t\n`;
+const targetContainerSet = `${greenTarget.apiContainer}\t\t\ttrue\t${greenTarget.runId}\n${greenTarget.databaseContainer}\t\t\ttrue\t\n${greenTarget.retainedSealed.name}\t\t\ttrue\t${greenTarget.runId}\n`;
 const sourceMounts = [
   { destination: '/data/uploads', type: 'volume', source: null, volume: greenTarget.uploadsVolume, readOnly: false },
   { destination: '/run/secrets/firebase-service-account.json', type: 'bind', source: config.firebaseFile, volume: null, readOnly: true },
@@ -171,13 +174,30 @@ function restoreFixture(options, running = true) {
 
 test('Green target accepts only the exact verified resource identities', () => {
   assert.deepEqual(assertGreenTargetManifest(targetManifest), targetManifest);
+  assert.equal(assertGreenRetainedSealedInventory({
+    Name: `/${greenTarget.retainedSealed.name}`,
+    State: { Running: false },
+    Config: {
+      Image: greenTarget.retainedSealed.image,
+      Labels: {
+        'com.shareittoo.sit.green': greenTarget.retainedSealed.greenLabel,
+        'com.shareittoo.sit.green.run_id': greenTarget.retainedSealed.runId,
+      },
+    },
+  }), true);
+  assert.throws(() => assertGreenRetainedSealedInventory({
+    Name: `/${greenTarget.retainedSealed.name}`,
+    State: { Running: true },
+    Config: { Image: greenTarget.retainedSealed.image, Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId } },
+  }), /green_retained_sealed_inventory_mismatch/u);
   for (const mutation of [
     { ...targetManifest, composeProject: 'sit-staging' },
     { ...targetManifest, network: 'sit-green-network-lookalike' },
     { ...targetManifest, databaseContainer: 'shareittoo-staging-postgres' },
-    { ...targetManifest, sourceSchema: 91 },
+    { ...targetManifest, sourceSchema: 96 },
     { ...targetManifest, currentSchema: 94 },
     { ...targetManifest, greenLabel: 'com.shareittoo.sit.green=false' },
+    { ...targetManifest, retainedSealed: { ...targetManifest.retainedSealed, image: greenTarget.prePromotionImage } },
   ]) {
     assert.throws(() => assertGreenTargetManifest(mutation));
   }
@@ -402,15 +422,15 @@ test('inventory rejects wrong schema, host ports and non-Green labels', () => {
     api: { name: greenTarget.apiContainer, greenLabel: false, prePromotionTuple: true, hostPorts: 0, running: true, networks: [greenTarget.network, greenTarget.providerNetwork], image: targetManifest.prePromotionImage, user: 'shareittoo', databaseHost: greenTarget.databaseContainer, databaseName: greenTarget.databaseName, databaseUser: greenTarget.databaseUser, uploadsVolume: greenTarget.uploadsVolume, groupAdd: true, mounts: sourceMounts },
     database: { name: greenTarget.databaseContainer, greenLabel: true, running: true },
     network: { name: greenTarget.network, internal: true }, providerNetwork: { name: greenTarget.providerNetwork },
-    uploadsVolume: { name: greenTarget.uploadsVolume }, schema: 92,
+    uploadsVolume: { name: greenTarget.uploadsVolume }, schema: 97,
   };
   assert.equal(assertGreenContainerInventory(inventory, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), true);
-  assert.throws(() => assertGreenContainerInventory({ ...inventory, schema: 97 }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config));
+  assert.throws(() => assertGreenContainerInventory({ ...inventory, schema: 96 }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config));
   assert.throws(() => assertGreenContainerInventory({ ...inventory, api: { ...inventory.api, hostPorts: 1 } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config));
   assert.throws(() => assertGreenContainerInventory({ ...inventory, network: { name: 'sit-staging', internal: true } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config));
 });
 
-test('promotion plan keeps backup, isolated 92-to-97 rehearsal, acceptance and final no-port promotion ordered', () => {
+test('promotion plan keeps backup, isolated 97-to-97 idempotency, acceptance and final no-port promotion ordered', () => {
   const plan = buildGreenPromotionPlan({
     targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`,
     opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json',
@@ -418,7 +438,7 @@ test('promotion plan keeps backup, isolated 92-to-97 rehearsal, acceptance and f
   assert.deepEqual(plan.commandPolicy.finalNetworks, [greenTarget.network, greenTarget.providerNetwork]);
   assert.equal(plan.commandPolicy.finalHostPorts, 0);
   assert.ok(plan.phases.findIndex((phase) => phase.includes('stop and seal')) < plan.phases.findIndex((phase) => phase.includes('fresh protected database backup')));
-  assert.match(plan.phases.join('\n'), /92 to 97/u);
+  assert.match(plan.phases.join('\n'), /97_to_97/u);
   assert.match(plan.phases.join('\n'), /097_registration_consent_bundle\.up\.sql/u);
   assert.match(plan.phases.join('\n'), /synthetic sandbox user/u);
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
@@ -435,7 +455,7 @@ test('promotion plan keeps backup, isolated 92-to-97 rehearsal, acceptance and f
   assert.ok(final.args.includes(`type=volume,src=${greenTarget.uploadsVolume},dst=/data/uploads,readonly=false`));
   assert.ok(final.args.includes('--group-add') && final.args.includes('65532'));
   assert.ok(final.args.some((arg) => arg.includes('com.shareittoo.sit.green=true')));
-  assert.ok(commands.find((entry) => entry.phase === 'isolated_migrate_92_to_97'));
+  assert.ok(commands.find((entry) => entry.phase === 'isolated_idempotent_migration_97_to_97'));
   assert.ok(commands.findIndex((entry) => entry.phase === 'isolated_migration_readback') < commands.findIndex((entry) => entry.phase === 'isolated_migration_ledger_readback'));
   assert.ok(commands.findIndex((entry) => entry.phase === 'isolated_migration_ledger_readback') < commands.findIndex((entry) => entry.phase === 'synthetic_sandbox_provision_isolated'));
   assert.ok(commands.findIndex((entry) => entry.phase === 'isolated_postgres_init_complete_log_readback') < commands.findIndex((entry) => entry.phase === 'isolated_postgres_stable_select_1'));
@@ -444,9 +464,10 @@ test('promotion plan keeps backup, isolated 92-to-97 rehearsal, acceptance and f
   assert.ok(commands.find((entry) => entry.phase === 'isolated_restore' && entry.inputFile));
   assert.ok(commands.find((entry) => entry.phase === 'candidate_mfa_identity_probes'));
   assert.ok(commands.find((entry) => entry.phase === 'isolated_network_cleanup_verify'));
-  assert.ok(commands.find((entry) => entry.phase === 'canonical_forward_migration_92_to_97'));
+  assert.ok(commands.find((entry) => entry.phase === 'canonical_idempotent_migration_97_to_97'));
   assert.ok(commands.find((entry) => entry.phase === 'canonical_schema_readback'));
   assert.ok(commands.find((entry) => entry.phase === 'sealed_name_conflict_check'));
+  assert.ok(commands.find((entry) => entry.phase === 'retained_sealed_inventory_readback'));
   assert.ok(commands.find((entry) => entry.phase === 'final_inventory_readback'));
   assert.ok(commands.find((entry) => entry.phase === 'final_image_readback'));
   assert.ok(commands.some((entry) => entry.phase === 'synthetic_sandbox_provision_isolated'));
@@ -462,7 +483,7 @@ test('promotion plan keeps backup, isolated 92-to-97 rehearsal, acceptance and f
   assert.ok(phaseIndex('isolated_finding_fingerprint_readback') < phaseIndex('candidate_start'));
   assert.ok(phaseIndex('candidate_finding_fingerprint_readback') < phaseIndex('candidate_health_and_feature_probes'));
   assert.ok(phaseIndex('quiesce_green_api') < phaseIndex('candidate_acceptance_create'));
-  assert.ok(phaseIndex('candidate_cleanup_verify') < phaseIndex('canonical_forward_migration_92_to_97'));
+  assert.ok(phaseIndex('candidate_cleanup_verify') < phaseIndex('canonical_idempotent_migration_97_to_97'));
   assert.ok(phaseIndex('canonical_schema_readback') < phaseIndex('final_create_no_host_port'));
   assert.equal(commands.some((entry) => entry.args?.some((arg) => (
     /shareittoo-staging-postgres|shareittoo_staging_backend|shareittoo_staging_postgres_data/iu.test(arg)
@@ -530,13 +551,31 @@ test('promotion plan resolves the exact sealed API before emitting mutation comm
     assert.equal(entry.args.some((arg) => arg === undefined), false, `${entry.phase} must not contain undefined argv`);
   }
   const immutableImage = `${plan.runtime.image}@${plan.runtime.digest}`;
-  for (const phase of ['isolated_migrate_92_to_97', 'synthetic_sandbox_provision_isolated', 'candidate_acceptance_create', 'canonical_forward_migration_92_to_97', 'synthetic_sandbox_provision_canonical', 'final_create_no_host_port']) {
+  for (const phase of ['isolated_idempotent_migration_97_to_97', 'synthetic_sandbox_provision_isolated', 'candidate_acceptance_create', 'canonical_idempotent_migration_97_to_97', 'synthetic_sandbox_provision_canonical', 'final_create_no_host_port']) {
     const entry = commands.find((candidate) => candidate.phase === phase);
     assert.ok(entry.args.includes(immutableImage), `${phase} must execute the verified digest-pinned image`);
     assert.equal(entry.args.includes(plan.runtime.image), false, `${phase} must not execute the mutable tag`);
   }
   const missing = Object.freeze({ ...plan, target: Object.freeze({ ...plan.target, sealedApiContainer: undefined }) });
   assert.throws(() => buildGreenPromotionCommands({ plan: missing, configFile: config.envFile, config }), /green_sealed_target_invalid/u);
+});
+
+test('Docker env-file bindings reject JSON manifests and accept only real protected env files', () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  assert.throws(() => buildGreenPromotionCommands({ plan, configFile: '/docker/shareittoo/ops/green-config.json', config }), /green_config_file_invalid/u);
+  const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
+  const mutated = commands.map((entry) => ({ ...entry, args: entry.args?.map((arg) => arg === plan.isolated.envFile ? '/docker/shareittoo/ops/green-config.json' : arg) }));
+  assert.throws(() => assertGreenCommandBindings(mutated, plan, config.envFile), /green_env_file_invalid/u);
+});
+
+test('retained historical seal is read-only and the new seal is the only rename target', () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
+  const oldName = plan.target.retainedSealed.name;
+  const mutatingOldName = commands.filter((entry) => ['rename', 'rm', 'start', 'stop', 'network'].includes(entry.args?.[0]) && entry.args.includes(oldName));
+  assert.deepEqual(mutatingOldName, []);
+  const rename = commands.find((entry) => entry.phase === 'seal_green_api');
+  assert.deepEqual(rename.args, ['rename', plan.target.apiContainer, plan.target.sealedApiContainer]);
 });
 
 test('isolated Postgres init-marker readback retries past an early readiness-only log', () => {
@@ -673,6 +712,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       if (phase === 'target_inventory_network') return { stdout: JSON.stringify([{ Id: targetNetworkId, Name: greenTarget.network, Internal: true }]) };
       if (phase === 'target_inventory_provider_network') return { stdout: JSON.stringify([{ Id: providerNetworkId, Name: greenTarget.providerNetwork }]) };
       if (phase === 'target_inventory_uploads') return { stdout: JSON.stringify([{ Name: greenTarget.uploadsVolume }]) };
+      if (phase === 'retained_sealed_inventory_readback') return { stdout: JSON.stringify({ Name: `/${greenTarget.retainedSealed.name}`, State: { Running: false }, Config: { Image: greenTarget.retainedSealed.image, Labels: { 'com.shareittoo.sit.green': greenTarget.retainedSealed.greenLabel, 'com.shareittoo.sit.green.run_id': greenTarget.retainedSealed.runId } } }) };
       if (phase === 'runtime_image_readback') return { stdout: JSON.stringify(imageReadback) };
       if (phase === 'isolated_network_create') return { stdout: `${isolatedNetworkId}\n` };
       if (phase === 'isolated_network_identity_readback') return { stdout: JSON.stringify({ Id: isolatedNetworkId, Name: plan.isolated.network, Internal: true, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
@@ -713,7 +753,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
         return { stdout: JSON.stringify(probe) };
       }
       if (phase === 'candidate_prestart_identity_readback') return { stdout: JSON.stringify(candidateRecord) };
-      if (phase === 'source_schema_readback') return { stdout: '092_listing_ai_mock_disclosure.up.sql\n' };
+      if (phase === 'source_schema_readback') return { stdout: '097_registration_consent_bundle.up.sql\n' };
       if (phase === 'source_migration_ledger_readback') return { stdout: sourceMigrationLedger };
       if (phase === 'canonical_schema_readback') return { stdout: '097_registration_consent_bundle.up.sql\n' };
       if (phase === 'canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
@@ -849,7 +889,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   assert.equal(restoreNonzero.result?.code, 'green_isolated_restore_failed');
   assert.equal(restoreNonzero.calls.some((entry) => entry.phase === 'isolated_integrity_and_functional_probes'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
-  const cleanupBindings = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'canonical_forward_migration_92_to_97');
+  const cleanupBindings = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'canonical_idempotent_migration_97_to_97');
   assert.equal(cleanupBindings.calls.find((entry) => entry.phase === 'candidate_cleanup')?.args[3], candidateId);
   assert.equal(cleanupBindings.calls.find((entry) => entry.phase === 'candidate_cleanup_verify')?.args[3], `id=${candidateId}`);
   assert.equal(cleanupBindings.calls.find((entry) => entry.phase === 'isolated_database_cleanup_verify')?.args[3], `id=${isolatedDatabaseId}`);
@@ -919,7 +959,7 @@ test('command executor bindings keep isolated probes and canonical runtime disti
   assert.equal(isolated.runtimeEnv.DATABASE_CONTAINER, plan.isolated.database);
   assert.equal(isolated.runtimeEnv.DATABASE_NAME, plan.isolated.databaseName);
   assert.notEqual(isolated.runtimeEnv.DATABASE_NAME, greenTarget.databaseName);
-  const canonical = commands.find((entry) => entry.phase === 'canonical_forward_migration_92_to_97');
+  const canonical = commands.find((entry) => entry.phase === 'canonical_idempotent_migration_97_to_97');
   assert.equal(canonical.envFile, config.envFile);
   assert.ok(canonical.args.includes(config.envFile));
   const candidate = commands.find((entry) => entry.phase === 'candidate_acceptance_create');
@@ -963,7 +1003,7 @@ test('command executor bindings keep isolated probes and canonical runtime disti
 test('pre-promotion inventory requires the exact Green DB host and protected mount cohort', () => {
   const base = {
     api: { name: greenTarget.apiContainer, greenLabel: false, prePromotionTuple: true, hostPorts: 0, running: true, networks: [greenTarget.network, greenTarget.providerNetwork], image: greenTarget.prePromotionImage, user: 'shareittoo', databaseHost: greenTarget.databaseContainer, databaseName: greenTarget.databaseName, databaseUser: greenTarget.databaseUser, uploadsVolume: greenTarget.uploadsVolume, groupAdd: true, mounts: sourceMounts },
-    database: { name: greenTarget.databaseContainer, greenLabel: true, running: true }, network: { name: greenTarget.network, internal: true }, providerNetwork: { name: greenTarget.providerNetwork }, uploadsVolume: { name: greenTarget.uploadsVolume }, schema: 92,
+    database: { name: greenTarget.databaseContainer, greenLabel: true, running: true }, network: { name: greenTarget.network, internal: true }, providerNetwork: { name: greenTarget.providerNetwork }, uploadsVolume: { name: greenTarget.uploadsVolume }, schema: 97,
   };
   assert.equal(assertGreenContainerInventory(base, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), true);
   assert.equal(assertGreenContainerInventory({ ...base, api: { ...base.api, greenLabel: true, prePromotionTuple: false } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), true);

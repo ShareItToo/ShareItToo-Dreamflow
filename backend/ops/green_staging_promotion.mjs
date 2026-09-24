@@ -16,7 +16,17 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.
 export const greenTarget = Object.freeze({
   composeProject: 'sit-green',
   apiContainer: 'shareittoo-staging-api',
-  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green',
+  // The current ea25 successor gets a fresh seal name.  The previous ccc720
+  // seal is retained as a read-only historical descriptor and is never a
+  // mutation target of this runner.
+  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-ea25e7cb',
+  retainedSealed: Object.freeze({
+    name: 'shareittoo-staging-api-alt-sealed-green',
+    image: 'ghcr.io/shareittoo/shareittoo-api:ccc72004247d50656ac1064a758eb5f05c795e04',
+    greenLabel: 'true',
+    runId: '20260918011528-wp254',
+    running: false,
+  }),
   databaseContainer: 'sit-green-postgres-20260918011528-wp254',
   databaseVolume: 'sit-green-volume-20260918011528-wp254',
   network: 'sit-green-network-20260918011528-wp254',
@@ -25,10 +35,10 @@ export const greenTarget = Object.freeze({
   databaseName: 'shareittoo_green',
   databaseUser: 'shareittoo_green',
   runId: '20260918011528-wp254',
-  sourceSchema: 92,
+  sourceSchema: 97,
   currentSchema: 97,
-  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:ccc72004247d50656ac1064a758eb5f05c795e04',
-  sourceLedgerDigest: '4199b60d7b3b19ed0cfeb113e121b77c23eeb03440f212a7dbe593c3cbee1db5',
+  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:ea25e7cb9747dde9ccb331b0a439bb1f9cc6134e',
+  sourceLedgerDigest: '950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0',
   currentLedgerDigest: '950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0',
   currentMigration: '097_registration_consent_bundle.up.sql',
 });
@@ -205,7 +215,8 @@ function assertGreenTargetContainerSet(value, target = greenTarget) {
     if (!name || extra.length > 0) fail('green_target_container_set_invalid');
     return { name, project, service, greenLabel, runId };
   });
-  const expectedNames = new Set([target.apiContainer, target.databaseContainer]);
+  const retainedName = target.retainedSealed?.name ?? greenTarget.retainedSealed.name;
+  const expectedNames = new Set([target.apiContainer, target.databaseContainer, retainedName]);
   const legacyNames = new Set(['shareittoo-staging-postgres', 'shareittoo_staging_backend', 'shareittoo_staging_postgres_data']);
   const relevant = rows.filter((row) => expectedNames.has(row.name) || row.greenLabel === 'true'
     || ((!legacyNames.has(row.name)) && /^(?:shareittoo-staging-api|sit-green-postgres)(?:[-_]|$)/u.test(row.name)));
@@ -214,6 +225,7 @@ function assertGreenTargetContainerSet(value, target = greenTarget) {
   const expected = new Map([
     [target.apiContainer, { project: '', service: '', greenLabel: 'true', runId: target.runId }],
     [target.databaseContainer, { project: '', service: '', greenLabel: 'true', runId: '' }],
+    [retainedName, { project: '', service: '', greenLabel: 'true', runId: target.runId }],
   ]);
   if (relevant.length !== expected.size || new Set(relevant.map((row) => row.name)).size !== expected.size) fail('green_target_container_set_invalid');
   for (const row of relevant) {
@@ -236,6 +248,24 @@ function normalizedGreenForeignWriterSet(value) {
   }).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
   if (normalized.length !== 0) fail('green_foreign_writer_present');
   return JSON.stringify(normalized);
+}
+
+// The retained historical seal is an immutable readback-only witness.  It is
+// deliberately validated independently of the active/new seal name so a
+// stopped old container cannot be mistaken for the container this run may
+// rename or remove.
+export function assertGreenRetainedSealedInventory(readback, descriptor = greenTarget.retainedSealed) {
+  const record = Array.isArray(readback) ? readback[0] : readback;
+  exactKeys(descriptor, ['name', 'image', 'greenLabel', 'runId', 'running'], 'green_retained_sealed_descriptor_shape_invalid');
+  if (!record
+      || String(record.Name ?? '').replace(/^\//u, '') !== descriptor.name
+      || record.State?.Running !== descriptor.running
+      || record.Config?.Image !== descriptor.image
+      || record.Config?.Labels?.['com.shareittoo.sit.green'] !== descriptor.greenLabel
+      || record.Config?.Labels?.['com.shareittoo.sit.green.run_id'] !== descriptor.runId) {
+    fail('green_retained_sealed_inventory_mismatch');
+  }
+  return true;
 }
 
 function normalizedGreenFindingFingerprint(value, code) {
@@ -263,6 +293,16 @@ function safePath(value, code) {
   return value;
 }
 
+function assertRealGreenEnvFilePath(value, code = 'green_env_file_invalid') {
+  safePath(value, code);
+  // A JSON config manifest describes the run; Docker --env-file must receive
+  // only the separately protected KEY=VALUE file (or the generated isolated
+  // env file).  Rejecting by shape and suffix prevents accidental JSON
+  // injection even when a caller supplies a plausible-looking path.
+  if (!/\.env$/u.test(value) || /\.json$/u.test(value)) fail(code);
+  return value;
+}
+
 export async function assertGreenEvidenceArtifactFamilyAvailable({ evidenceFile, isolatedEnvFile } = {}) {
   safePath(evidenceFile, 'green_evidence_path_invalid');
   safePath(isolatedEnvFile, 'green_execution_env_file');
@@ -285,7 +325,7 @@ function safeDigest(value, code) {
 }
 
 export function normalizedGreenTargetDigest(manifest) {
-  const fields = ['kind', 'schemaVersion', 'composeProject', 'greenLabel', 'runId', 'apiContainer', 'databaseContainer', 'databaseVolume', 'network', 'providerNetwork', 'uploadsVolume', 'networkInternal', 'sourceSchema', 'currentSchema', 'prePromotionImage'];
+  const fields = ['kind', 'schemaVersion', 'composeProject', 'greenLabel', 'runId', 'apiContainer', 'databaseContainer', 'databaseVolume', 'network', 'providerNetwork', 'uploadsVolume', 'networkInternal', 'sourceSchema', 'currentSchema', 'sourceLedgerDigest', 'currentLedgerDigest', 'prePromotionImage', 'sealedApiContainer', 'retainedSealed'];
   return sha256(JSON.stringify(Object.fromEntries(fields.map((field) => [field, manifest?.[field]]))));
 }
 
@@ -344,9 +384,11 @@ export function assertGreenTargetManifest(manifest) {
     'kind', 'schemaVersion', 'composeProject', 'greenLabel', 'runId',
     'apiContainer', 'databaseContainer', 'databaseVolume', 'network',
     'providerNetwork', 'uploadsVolume', 'networkInternal', 'sourceSchema',
-    'currentSchema', 'prePromotionImage', 'targetDigest',
+    'currentSchema', 'sourceLedgerDigest', 'currentLedgerDigest',
+    'prePromotionImage', 'sealedApiContainer', 'retainedSealed', 'targetDigest',
   ], 'green_target_manifest_shape_invalid');
-  if (manifest.kind !== 'sit-green-staging-target' || manifest.schemaVersion !== 1
+  exactKeys(manifest.retainedSealed, ['name', 'image', 'greenLabel', 'runId', 'running'], 'green_retained_sealed_descriptor_shape_invalid');
+  if (manifest.kind !== 'sit-green-staging-target' || manifest.schemaVersion !== 2
       || manifest.composeProject !== greenTarget.composeProject
       || manifest.greenLabel !== 'com.shareittoo.sit.green=true'
       || manifest.runId !== greenTarget.runId
@@ -359,7 +401,11 @@ export function assertGreenTargetManifest(manifest) {
       || manifest.networkInternal !== true
       || manifest.sourceSchema !== greenTarget.sourceSchema
       || manifest.currentSchema !== greenTarget.currentSchema
-      || manifest.prePromotionImage !== greenTarget.prePromotionImage) {
+      || manifest.sourceLedgerDigest !== greenTarget.sourceLedgerDigest
+      || manifest.currentLedgerDigest !== greenTarget.currentLedgerDigest
+      || manifest.prePromotionImage !== greenTarget.prePromotionImage
+      || manifest.sealedApiContainer !== greenTarget.sealedApiContainer
+      || JSON.stringify(manifest.retainedSealed) !== JSON.stringify(greenTarget.retainedSealed)) {
     fail('green_target_identity_mismatch');
   }
   if (!/^[0-9a-f]{64}$/u.test(manifest.targetDigest ?? '') || manifest.targetDigest !== normalizedGreenTargetDigest(manifest)) fail('green_target_digest_invalid');
@@ -423,7 +469,7 @@ async function readProtectedEnv(filePath) {
 }
 
 async function readExecutionEnv(filePath) {
-  safePath(filePath, 'green_execution_env_file');
+  assertRealGreenEnvFilePath(filePath, 'green_execution_env_file');
   let content;
   try {
     content = readStablePrivateFile(filePath, {
@@ -474,7 +520,7 @@ export async function assertGreenProtectedRuntimeFiles(config, protectedEnv) {
 
 export function assertGreenRuntimeConfig(config) {
   exactKeys(config, requiredConfigKeys, 'green_config_shape_invalid');
-  safePath(config.envFile, 'green_env_file_invalid');
+  assertRealGreenEnvFilePath(config.envFile, 'green_env_file_invalid');
   safePath(config.mfaFile, 'green_mfa_file_invalid');
   safePath(config.firebaseFile, 'green_firebase_file_invalid');
   safePath(config.technicalSandboxKeyFile, 'green_technical_key_file_invalid');
@@ -791,8 +837,10 @@ export function buildGreenPromotionPlan({
   ownershipNonce,
 } = {}) {
   const manifestTarget = assertGreenTargetManifest(targetManifest);
-  if (typeof greenTarget.sealedApiContainer !== 'string' || !greenTarget.sealedApiContainer) fail('green_sealed_target_invalid');
-  const target = Object.freeze({ ...manifestTarget, sealedApiContainer: greenTarget.sealedApiContainer });
+  if (typeof greenTarget.sealedApiContainer !== 'string' || !greenTarget.sealedApiContainer
+      || manifestTarget.sealedApiContainer !== greenTarget.sealedApiContainer
+      || manifestTarget.retainedSealed?.name !== greenTarget.retainedSealed.name) fail('green_sealed_target_invalid');
+  const target = Object.freeze({ ...manifestTarget });
   const runtime = assertGreenRuntimeImage({
     image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`,
     digest: runtimeImageDigest,
@@ -848,12 +896,12 @@ export function buildGreenPromotionPlan({
       `validate exact Green inventory and manifest-bound source readback schema ${target.sourceSchema}; reject legacy/production/lookalikes`,
       'stop and seal only the active Green API and verify it is stopped before any backup or schema mutation',
       'read foreign writers before and after the fresh protected database backup, requiring an unchanged empty set',
-      `restore backup into an internal run-scoped PostgreSQL target and migrate ${target.sourceSchema} to ${target.currentSchema} through ${greenTarget.currentMigration}`,
+      `restore backup into an internal run-scoped PostgreSQL target and verify idempotent migration at schema ${target.currentSchema} (${target.sourceSchema}_to_${target.currentSchema}) through ${greenTarget.currentMigration}`,
       'provision the synthetic sandbox user on the isolated target and run the immutable candidate there on loopback-only 18082',
       'require live/ready 200, MFA, Identity memory, on-device Listing AI and provider-off technical Sandbox readbacks',
       'cleanup and verify every isolated candidate/database/network; anonymous rehearsal volumes are removed only with their owned containers before touching Green',
       'stop and seal the observed Green API; never boot it after canonical schema migration',
-      `explicitly migrate canonical Green ${target.sourceSchema} to ${target.currentSchema} through ${greenTarget.currentMigration}, read back the exact terminal migration, and provision the synthetic user on Green`,
+      `explicitly run the idempotent canonical Green migration at schema ${target.currentSchema} (${target.sourceSchema}_to_${target.currentSchema}) through ${greenTarget.currentMigration}, read back the exact terminal migration, and provision the synthetic user on Green`,
       'create final no-host-port Green API on both approved networks with existing uploads and approved config only',
       'read back public live/ready/version and write only sanitized 0600 evidence',
     ]),
@@ -873,7 +921,7 @@ export function buildGreenPromotionPlan({
 
 export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
   if (!plan || plan.kind !== 'sit-green-promotion-plan') fail('green_plan_required');
-  safePath(configFile, 'green_config_file_invalid');
+  assertRealGreenEnvFilePath(configFile, 'green_config_file_invalid');
   const runtimeConfig = assertGreenRuntimeConfig(config);
   const { target, runtime, isolated } = plan;
   if (!target || typeof target.sealedApiContainer !== 'string'
@@ -894,13 +942,14 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
   const foreignWriterReadbackSql = "SELECT COALESCE(jsonb_agg(jsonb_build_object('role', usename, 'application', COALESCE(application_name, ''), 'client', COALESCE(host(client_addr), ''), 'state', state) ORDER BY usename, application_name, host(client_addr), state), '[]'::jsonb) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()";
   const findingFingerprintSql = buildReadinessFindingSql({ contractVersion: 'V5.2-2026-08-16', payoutHoldHours: 48 });
   const commands = [
-    { phase: 'target_container_set_readback', command: 'docker', args: ['ps', '--format', '{{.Names}}\t{{.Label "com.docker.compose.project"}}\t{{.Label "com.docker.compose.service"}}\t{{.Label "com.shareittoo.sit.green"}}\t{{.Label "com.shareittoo.sit.green.run_id"}}'] },
+    { phase: 'target_container_set_readback', command: 'docker', args: ['ps', '--all', '--format', '{{.Names}}\t{{.Label "com.docker.compose.project"}}\t{{.Label "com.docker.compose.service"}}\t{{.Label "com.shareittoo.sit.green"}}\t{{.Label "com.shareittoo.sit.green.run_id"}}'] },
     { phase: 'target_inventory_api', ...inspect(target.apiContainer) },
     { phase: 'target_inventory_database', ...inspect(target.databaseContainer) },
     { phase: 'target_inventory_network', ...inspect(target.network) },
     { phase: 'target_inventory_provider_network', ...inspect(target.providerNetwork) },
     { phase: 'target_inventory_uploads', ...inspect(target.uploadsVolume) },
     { phase: 'sealed_name_conflict_check', command: 'docker', args: ['ps', '--all', '--filter', `name=^/${target.sealedApiContainer}$`, '--format', '{{.Names}}'] },
+    { phase: 'retained_sealed_inventory_readback', command: 'docker', args: ['inspect', '--format', '{{json .}}', target.retainedSealed.name] },
     { phase: 'runtime_image_readback', command: 'docker', args: ['image', 'inspect', '--format', '{{json .}}', runtime.image] },
     { phase: 'source_schema_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', "SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"] },
     { phase: 'source_migration_ledger_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', migrationLedgerReadbackSql] },
@@ -920,7 +969,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'isolated_postgres_stable_select_1', command: 'docker', args: ['exec', isolated.database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', isolated.databaseUser, '-d', isolated.databaseName, '-Atqc', 'SELECT 1'] },
     { phase: 'isolated_postgres_stable_select_2', command: 'docker', args: ['exec', isolated.database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', isolated.databaseUser, '-d', isolated.databaseName, '-Atqc', 'SELECT 1'] },
     { phase: 'isolated_restore', command: 'docker', args: ['exec', '-i', isolated.database, 'pg_restore', '-U', isolated.databaseUser, '-d', isolated.databaseName, '--no-owner', '--no-acl'], inputFile: `${plan.evidenceFile}.pgdump`, inputSource: 'fresh_protected_backup' },
-    { phase: 'isolated_migrate_92_to_97', command: 'docker', args: ['run', '--rm', '--network', isolated.network, '--env-file', isolated.envFile, '--entrypoint', 'node', immutableRuntimeImage, '-e', "import('./src/migrations.js').then(async ({runMigrations})=>{const {Pool}=await import('pg');const pool=new Pool({connectionString:process.env.DATABASE_URL});await runMigrations(pool);await pool.end();})"] },
+    { phase: 'isolated_idempotent_migration_97_to_97', command: 'docker', args: ['run', '--rm', '--network', isolated.network, '--env-file', isolated.envFile, '--entrypoint', 'node', immutableRuntimeImage, '-e', "import('./src/migrations.js').then(async ({runMigrations})=>{const {Pool}=await import('pg');const pool=new Pool({connectionString:process.env.DATABASE_URL});await runMigrations(pool);await pool.end();})"] },
     { phase: 'isolated_migration_readback', command: 'docker', args: ['exec', isolated.database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', isolated.databaseUser, '-d', isolated.databaseName, '-Atc', "SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"] },
     { phase: 'isolated_migration_ledger_readback', command: 'docker', args: ['exec', isolated.database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', isolated.databaseUser, '-d', isolated.databaseName, '-Atc', migrationLedgerReadbackSql] },
     { phase: 'isolated_finding_fingerprint_readback', command: 'docker', args: ['exec', isolated.database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', isolated.databaseUser, '-d', isolated.databaseName, '-Atc', findingFingerprintSql] },
@@ -952,7 +1001,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'isolated_database_cleanup_verify', command: 'docker', args: ['ps', '--all', '--filter', `id=${isolated.database}`, '--format', '{{.ID}}'] },
     { phase: 'isolated_network_cleanup', command: 'docker', args: ['network', 'rm', isolated.network] },
     { phase: 'isolated_network_cleanup_verify', command: 'docker', args: ['network', 'ls', '--filter', `id=${isolated.network}`, '--format', '{{.ID}}'] },
-    { phase: 'canonical_forward_migration_92_to_97', command: 'docker', args: ['run', '--rm', '--network', target.network, '--env-file', configFile, '--entrypoint', 'node', immutableRuntimeImage, '-e', "import('./src/migrations.js').then(async ({runMigrations})=>{const {Pool}=await import('pg');const pool=new Pool({connectionString:process.env.DATABASE_URL});await runMigrations(pool);await pool.end();})"], envFile: configFile, redacted: true },
+    { phase: 'canonical_idempotent_migration_97_to_97', command: 'docker', args: ['run', '--rm', '--network', target.network, '--env-file', configFile, '--entrypoint', 'node', immutableRuntimeImage, '-e', "import('./src/migrations.js').then(async ({runMigrations})=>{const {Pool}=await import('pg');const pool=new Pool({connectionString:process.env.DATABASE_URL});await runMigrations(pool);await pool.end();})"], envFile: configFile, redacted: true },
     { phase: 'canonical_schema_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', "SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"] },
     { phase: 'canonical_migration_ledger_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', migrationLedgerReadbackSql] },
     { phase: 'synthetic_sandbox_provision_canonical', command: 'docker', args: ['run', '--rm', '--user', '100:101', '--group-add', '65532', '--network', target.network, '--env-file', configFile, '--env', 'DEPLOYMENT_ENVIRONMENT=test', '--env', 'SYNTHETIC_SANDBOX_PASSWORD_FILE=/run/secrets/synthetic-sandbox-user-password', ...provisionerMounts, '--entrypoint', 'node', immutableRuntimeImage, provisionerPath], envFile: configFile, redacted: true },
@@ -1067,7 +1116,7 @@ function bindGreenRuntimeCommand(entry, plan, identities) {
   };
   const phase = entry.phase;
   if (['isolated_network_identity_readback'].includes(phase)) replaceArgs(plan.isolated.network, requireId(isolatedNetworkId, 'green_isolated_network_id_missing'));
-  if (['isolated_postgres_create', 'isolated_migrate_92_to_97', 'isolated_integrity_and_functional_probes', 'synthetic_sandbox_provision_isolated', 'candidate_acceptance_create'].includes(phase)) {
+  if (['isolated_postgres_create', 'isolated_idempotent_migration_97_to_97', 'isolated_integrity_and_functional_probes', 'synthetic_sandbox_provision_isolated', 'candidate_acceptance_create'].includes(phase)) {
     replaceArgs(plan.isolated.network, requireId(isolatedNetworkId, 'green_isolated_network_id_missing'));
   }
   if (['isolated_postgres_identity_readback', 'isolated_postgres_start', 'isolated_postgres_wait', 'isolated_postgres_init_complete_log_readback', 'isolated_postgres_stable_select_1', 'isolated_postgres_stable_select_2', 'isolated_restore', 'isolated_migration_readback', 'isolated_migration_ledger_readback', 'isolated_finding_fingerprint_readback'].includes(phase)) {
@@ -1082,7 +1131,7 @@ function bindGreenRuntimeCommand(entry, plan, identities) {
   if (['isolated_network_cleanup', 'isolated_network_cleanup_verify'].includes(phase)) replaceArgs(plan.isolated.network, requireId(isolatedNetworkId, 'green_isolated_network_id_missing'));
   if (['final_provider_network_attach', 'final_start', 'final_inventory_readback'].includes(phase)) replaceArgs(plan.target.apiContainer, requireId(finalApiId, 'green_final_api_id_missing'));
   if (phase === 'final_provider_network_attach') replaceArgs(plan.target.providerNetwork, requireId(providerNetworkId, 'green_provider_network_id_missing'));
-  if (phase === 'final_create_no_host_port' || phase === 'canonical_forward_migration_92_to_97' || phase === 'synthetic_sandbox_provision_canonical') replaceArgs(plan.target.network, requireId(targetNetworkId, 'green_target_network_id_missing'));
+  if (phase === 'final_create_no_host_port' || phase === 'canonical_idempotent_migration_97_to_97' || phase === 'synthetic_sandbox_provision_canonical') replaceArgs(plan.target.network, requireId(targetNetworkId, 'green_target_network_id_missing'));
   const runtimeEnv = entry.runtimeEnv ? { ...entry.runtimeEnv } : undefined;
   if (runtimeEnv?.DATABASE_CONTAINER === plan.isolated.database) runtimeEnv.DATABASE_CONTAINER = requireId(isolatedDatabaseId, 'green_isolated_database_id_missing');
   if (runtimeEnv?.STAGING_ACCEPTANCE_CONTAINER === plan.isolated.candidate) runtimeEnv.STAGING_ACCEPTANCE_CONTAINER = requireId(candidateId, 'green_candidate_id_missing');
@@ -1090,6 +1139,16 @@ function bindGreenRuntimeCommand(entry, plan, identities) {
 }
 
 export function assertGreenCommandBindings(commands, plan, configFile) {
+  assertRealGreenEnvFilePath(configFile, 'green_config_file_invalid');
+  for (const entry of commands) {
+    const args = entry.args ?? [];
+    for (let index = 0; index < args.length; index += 1) {
+      if (args[index] !== '--env-file') continue;
+      const envFile = args[index + 1];
+      assertRealGreenEnvFilePath(envFile, 'green_env_file_invalid');
+      if (envFile !== configFile && envFile !== plan?.isolated?.envFile) fail('green_env_file_binding_invalid');
+    }
+  }
   const byPhase = new Map(commands.map((entry) => [entry.phase, entry]));
   const isolatedCreate = byPhase.get('isolated_postgres_create');
   if (isolatedCreate?.args?.[0] !== 'create' || isolatedCreate.args.includes('--detach') || isolatedCreate.args.includes('-d')
@@ -1109,7 +1168,7 @@ export function assertGreenCommandBindings(commands, plan, configFile) {
       || !byPhase.get('candidate_acceptance_create')?.args?.includes(plan.isolated.envFile)
       || byPhase.get('candidate_mfa_identity_probes')?.envFile !== plan.isolated.envFile) fail('green_candidate_isolated_binding_missing');
   if (byPhase.get('synthetic_sandbox_provision_isolated')?.envFile !== plan.isolated.envFile) fail('green_isolated_provision_binding_missing');
-  for (const phase of ['isolated_postgres_create', 'isolated_migrate_92_to_97']) {
+  for (const phase of ['isolated_postgres_create', 'isolated_idempotent_migration_97_to_97']) {
     if (!byPhase.get(phase)?.args?.includes(plan.isolated.envFile)) fail('green_isolated_env_binding_missing');
     if (byPhase.get(phase)?.args?.some((arg) => arg.includes(greenTarget.databaseName))) fail('green_isolated_database_cross_bind');
   }
@@ -1118,8 +1177,8 @@ export function assertGreenCommandBindings(commands, plan, configFile) {
       || integrity.runtimeEnv?.DATABASE_CONTAINER !== plan.isolated.database
       || integrity.runtimeEnv?.DATABASE_USER !== plan.isolated.databaseUser
       || integrity.runtimeEnv?.DATABASE_NAME !== plan.isolated.databaseName) fail('green_isolated_probe_binding_missing');
-  if (byPhase.get('canonical_forward_migration_92_to_97')?.envFile !== configFile
-      || !byPhase.get('canonical_forward_migration_92_to_97')?.args?.includes(configFile)) fail('green_canonical_migration_binding_missing');
+  if (byPhase.get('canonical_idempotent_migration_97_to_97')?.envFile !== configFile
+      || !byPhase.get('canonical_idempotent_migration_97_to_97')?.args?.includes(configFile)) fail('green_canonical_migration_binding_missing');
   if (byPhase.get('isolated_restore')?.inputFile !== `${plan.evidenceFile}.pgdump`) fail('green_restore_backup_binding_missing');
   return true;
 }
@@ -1141,6 +1200,8 @@ export function sanitizeGreenEvidence({ plan, backupDigest, configDigest, target
       uploadsVolume: plan.target.uploadsVolume,
       sourceSchema: plan.target.sourceSchema,
       currentSchema: plan.target.currentSchema,
+      sealedApiContainer: plan.target.sealedApiContainer,
+      retainedSealed: { ...plan.target.retainedSealed },
       targetDigest: plan.target.targetDigest,
     },
     runtime: { commit: plan.runtime.runtimeCommit, image: plan.runtime.image, digest: plan.runtime.digest },
@@ -1660,7 +1721,7 @@ export async function runGreenEmergencyCleanup({ plan, command, commandEnv = {},
     'source_foreign_writer_readback_before_backup', 'fresh_protected_backup',
     'source_foreign_writer_readback_after_backup', 'isolated_network_create', 'isolated_postgres_create',
     'isolated_postgres_wait', 'isolated_postgres_init_complete_log_readback', 'isolated_restore',
-    'isolated_migrate_92_to_97', 'isolated_migration_readback', 'isolated_migration_ledger_readback',
+    'isolated_idempotent_migration_97_to_97', 'isolated_migration_readback', 'isolated_migration_ledger_readback',
     'isolated_finding_fingerprint_readback', 'isolated_integrity_and_functional_probes',
     'synthetic_sandbox_provision_isolated', 'candidate_acceptance_create', 'candidate_provider_network_attach',
     'candidate_start', 'candidate_live_wait', 'candidate_health_and_feature_probes', 'candidate_ready_probe',
@@ -1760,7 +1821,10 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       const boundEntry = bindGreenRuntimeCommand(entry, plan, { isolatedNetworkId, isolatedDatabaseId, candidateId, finalApiId, targetNetworkId, providerNetworkId });
       const entryEnv = entry.envFile === configFile ? protectedEnv : entry.envFile === plan.isolated.envFile ? isolatedEnv : {};
       const env = { ...commandEnv, ...entryEnv, ...(boundEntry.runtimeEnv ?? {}) };
-      if (entry.phase === 'canonical_forward_migration_92_to_97') schemaMutationStarted = true;
+      // Starting this canonical command is the irreversible boundary even
+      // when runMigrations is idempotent at 97; the sealed ea25 image must
+      // never be restarted after this point.
+      if (entry.phase === 'canonical_idempotent_migration_97_to_97') schemaMutationStarted = true;
       let result;
       if (boundEntry.inputFile) {
         result = command === runGreenCommand
@@ -1812,7 +1876,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
         const backupMeta = await lstat(backupPath);
         if (!backupMeta.isFile() || backupMeta.isSymbolicLink() || (backupMeta.mode & 0o777) !== 0o600 || backupMeta.uid !== ownerUid) fail('green_backup_permissions_invalid');
       }
-      if (entry.phase === 'target_container_set_readback' || entry.phase.startsWith('target_inventory_') || entry.phase === 'sealed_name_conflict_check' || entry.phase === 'runtime_image_readback' || entry.phase === 'source_schema_readback'
+      if (entry.phase === 'target_container_set_readback' || entry.phase.startsWith('target_inventory_') || entry.phase === 'sealed_name_conflict_check' || entry.phase === 'retained_sealed_inventory_readback' || entry.phase === 'runtime_image_readback' || entry.phase === 'source_schema_readback'
           || entry.phase === 'quiesce_green_api_verify'
           || entry.phase === 'source_foreign_writer_readback_before_backup' || entry.phase === 'source_foreign_writer_readback_after_backup'
           || entry.phase === 'isolated_finding_fingerprint_readback' || entry.phase === 'candidate_finding_fingerprint_readback'
@@ -1828,6 +1892,9 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       if (entry.phase === 'target_container_set_readback') assertGreenTargetContainerSet(readbacks[entry.phase], plan.target);
       if (entry.phase === 'quiesce_green_api_verify' && readbacks[entry.phase] !== 'false') fail('green_quiesce_verify_invalid');
       if (entry.phase === 'sealed_name_conflict_check' && readbacks[entry.phase]) fail('green_sealed_name_conflict');
+      if (entry.phase === 'retained_sealed_inventory_readback') {
+        assertGreenRetainedSealedInventory(parseReadbackJson(readbacks[entry.phase], 'green_retained_sealed_inventory_invalid'), plan.target.retainedSealed);
+      }
       if (entry.phase.endsWith('_cleanup_verify') && result.stdout?.trim()) fail('green_cleanup_incomplete');
       if (entry.phase === 'source_schema_readback') {
         try { assertGreenImageReadback(JSON.parse(readbacks.runtime_image_readback), plan.runtime); } catch (error) { if (error?.code === 'green_image_readback_mismatch') throw error; fail('green_image_readback_invalid'); }

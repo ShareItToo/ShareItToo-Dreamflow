@@ -120,15 +120,21 @@ mode `0600` and bind exactly `shareittoo-staging-api`,
 `sit-green-network-20260918011528-wp254`,
 `sit-staging-provider-egress` and
 `sit-green-uploads-20260918011528-wp254`, with Green label and manifest-bound
-source readback schema `92`. The current target is schema `97`; the isolated
-and canonical readbacks must end at the exact
+source readback schema `97`. The current target is also schema `97`; isolated
+and canonical readbacks verify the exact idempotent terminal state
 `097_registration_consent_bundle.up.sql` migration.
 The database identity is exactly `shareittoo_green` / `shareittoo_green`;
 legacy `shareittoo_staging` is never used by this lane.
-The source readback is exactly schema `92` with the manifest-bound ledger
-digest `4199b60d7b3b19ed0cfeb113e121b77c23eeb03440f212a7dbe593c3cbee1db5`.
+The source readback is exactly schema `97` with the manifest-bound ledger
+digest `950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0`.
 The pre-promotion image is exactly
-`ghcr.io/shareittoo/shareittoo-api:ccc72004247d50656ac1064a758eb5f05c795e04`.
+`ghcr.io/shareittoo/shareittoo-api:ea25e7cb9747dde9ccb331b0a439bb1f9cc6134e`.
+The new seal is
+`shareittoo-staging-api-alt-sealed-green-ea25e7cb`. The historical seal
+`shareittoo-staging-api-alt-sealed-green` remains a separately read-only
+validated, stopped ccc720 container with the exact Green label and run ID; it
+is never renamed, removed or restarted. Unknown extra Green containers fail
+the all-containers inventory gate.
 The observed source API tuple includes user `shareittoo`, group `65532`, no
 host port, the two approved networks, and exactly five source mounts: writable
 uploads plus read-only Firebase, MFA, technical-sandbox key, and
@@ -146,8 +152,8 @@ Legacy `sit-staging`, production names, lookalike networks and mutable image
 tags are rejected before a command is planned.
 
 The plan takes a fresh protected backup, restores the manifest-bound Green
-source readback `92` into a run-scoped internal target and explicitly migrates
-it to current schema `97` through
+source readback `97` into a run-scoped internal target and runs the migration
+runner idempotently at `97_to_97` through
 `097_registration_consent_bundle.up.sql`, then proves
 the full source-to-current migration ledger (expected 97-row digest
 `950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0`) and
@@ -190,7 +196,7 @@ implicitly enabled by this runner. After the exact target readback, the observed
 sealed before foreign-writer checks, the protected backup and the isolated
 rehearsal. The isolated candidate is then run and cleaned up before the
 canonical Green database is
-explicitly migrated from source readback `92` to current schema `97` through
+explicitly passed through the idempotent `97_to_97` migration command and
 `097_registration_consent_bundle.up.sql` and read back before the
 final image is created. If that canonical mutation starts, the sealed old image is never
 restarted; recovery is a forward candidate path.
@@ -214,8 +220,12 @@ GREEN_STAGING_EVIDENCE_FILE=/docker/shareittoo/evidence/green-promotion.json \
 GREEN_RUNTIME_IMAGE_DIGEST=sha256:IMMUTABLE_IMAGE_DIGEST \
 GREEN_STAGING_PROMOTION_EXECUTE=1 \
 GREEN_STAGING_PROMOTION_CONFIRM=FULL_40_CHARACTER_RUNTIME_COMMIT \
-  node ops/green_staging_promotion.mjs FULL_40_CHARACTER_RUNTIME_COMMIT
+node ops/green_staging_promotion.mjs FULL_40_CHARACTER_RUNTIME_COMMIT
 ```
+
+`GREEN_STAGING_CONFIG_MANIFEST` is a protected JSON descriptor. Docker never
+receives it as `--env-file`; generated commands bind only its real protected
+`config.envFile` (a `KEY=VALUE` `.env`) and the run-scoped `.isolated.env`.
 
 The command never prints the protected env file, password, database URL or
 provider keys. A failed inventory, backup, migration/probe, cleanup or public

@@ -217,6 +217,11 @@ discover a mechanically stale source hash.
   `.isolated.env`) as one reserved namespace; any existing or unsafe member is
   a fail-closed collision. Each attempt uses a fresh immutable base and never
   reuses a retained backup namespace; exclusive writes remain the race guard.
+- Green Docker env-file invariant: `docker --env-file` may receive only the
+  protected real `config.envFile` or the generated `.isolated.env`; a JSON
+  config/target manifest is descriptive input only and must never be passed to
+  Docker. Deterministic command tests reject JSON env-file sources before any
+  mutation.
 - Authenticated capability handshakes are principal-bound state: bind every
   effective provider/disclosure/policy/config field into the request hash, make
   config revisions a digest of the effective configuration rather than a
