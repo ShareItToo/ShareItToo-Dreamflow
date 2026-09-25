@@ -30,6 +30,8 @@ import {
   sanitizeGreenEvidence,
   normalizedGreenTargetDigest,
   assertGreenCommandBindings,
+  assertGreenControlExecutables,
+  greenRequiredControlExecutables,
   assertGreenEvidenceArtifactFamilyAvailable,
   writeGreenEvidence,
   runGreenEmergencyCleanup,
@@ -580,6 +582,28 @@ test('retained historical seal is read-only and the new seal is the only rename 
   assert.deepEqual(rename.args, ['rename', plan.target.apiContainer, plan.target.sealedApiContainer]);
 });
 
+test('control executable preflight fails before any mutating executor command and accepts modeled prerequisites', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
+  assert.deepEqual(greenRequiredControlExecutables(commands), ['bash', 'curl', 'docker', 'node']);
+  const calls = [];
+  await assert.rejects(
+    () => runGreenPromotion({
+      plan,
+      config,
+      configFile: config.envFile,
+      environment: { GREEN_STAGING_PROMOTION_EXECUTE: '1', GREEN_STAGING_PROMOTION_CONFIRM: runtimeCommit },
+      execute: true,
+      executableAvailable: async (executable) => executable !== 'bash',
+      command: async (...args) => { calls.push(args); return { stdout: '' }; },
+      assertRuntimeFiles: async () => {},
+    }),
+    (error) => error?.code === 'green_control_executables_missing' && error.missing?.join(',') === 'bash',
+  );
+  assert.equal(calls.length, 0, 'missing control executable must fail before Docker/quiesce/backup commands');
+  assert.equal(await assertGreenControlExecutables({ commands, executableAvailable: async () => true }).then((value) => value.join(',')), 'bash,curl,docker,node');
+});
+
 test('isolated Postgres init-marker readback retries past an early readiness-only log', () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const marker = buildGreenPromotionCommands({ plan, configFile: config.envFile, config }).find((entry) => entry.phase === 'isolated_postgres_init_complete_log_readback');
@@ -803,7 +827,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       await runGreenPromotion({
         plan, config: runtimeConfig, configFile, environment: {
           GREEN_STAGING_PROMOTION_EXECUTE: '1', GREEN_STAGING_PROMOTION_CONFIRM: runtimeCommit,
-        }, execute: true, command: fake, assertRuntimeFiles: async () => {},
+        }, execute: true, command: fake, executableAvailable: async () => true, assertRuntimeFiles: async () => {},
       });
       assert.fail('promotion should stop before quiesce');
     } catch (error) {

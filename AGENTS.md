@@ -225,6 +225,12 @@ discover a mechanically stale source hash.
   config/target manifest is descriptive input only and must never be passed to
   Docker. Deterministic command tests reject JSON env-file sources before any
   mutation.
+- Green control-runtime executable invariant: enumerate the executables in the
+  generated Ops command plan (including `bash`, `docker`, `curl`, `node` or
+  `sh` whenever the plan uses them) and preflight their availability in the
+  external control runtime before quiescing Green, creating backups, or any
+  other mutating command. A missing executable is a fail-closed preflight
+  result, never a mid-promotion spawn failure.
 - Authenticated capability handshakes are principal-bound state: bind every
   effective provider/disclosure/policy/config field into the request hash, make
   config revisions a digest of the effective configuration rather than a

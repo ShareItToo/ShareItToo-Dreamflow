@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import crypto from 'node:crypto';
-import { lstat, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -1280,6 +1281,47 @@ export function assertGreenPromotionExecutionAllowed({ environment = process.env
   return true;
 }
 
+export function greenRequiredControlExecutables(commands) {
+  if (!Array.isArray(commands) || commands.length === 0) fail('green_control_commands_required');
+  const executables = new Set();
+  for (const entry of commands) {
+    if (typeof entry?.command !== 'string' || entry.command.trim() === '') fail('green_control_command_invalid');
+    executables.add(entry.command.trim());
+  }
+  return Object.freeze([...executables].sort());
+}
+
+async function greenControlExecutableAvailable(executable, pathValue = process.env.PATH) {
+  const candidates = executable.includes('/')
+    ? [executable]
+    : String(pathValue ?? '').split(':').filter(Boolean).map((directory) => `${directory}/${executable}`);
+  for (const candidate of candidates) {
+    try {
+      await access(candidate, fsConstants.X_OK);
+      return true;
+    } catch {
+      // Continue through PATH candidates; absence is reported once below.
+    }
+  }
+  return false;
+}
+
+export async function assertGreenControlExecutables({ commands, executableAvailable = greenControlExecutableAvailable } = {}) {
+  const required = greenRequiredControlExecutables(commands);
+  if (typeof executableAvailable !== 'function') fail('green_control_executable_probe_required');
+  const missing = [];
+  for (const executable of required) {
+    if (!await executableAvailable(executable)) missing.push(executable);
+  }
+  if (missing.length > 0) {
+    const error = new Error(`Green staging promotion failed: green_control_executables_missing (${missing.join(',')})`);
+    error.code = 'green_control_executables_missing';
+    error.missing = Object.freeze(missing);
+    throw error;
+  }
+  return required;
+}
+
 export function runGreenCommand(command, args, { cwd = repositoryRoot, env = process.env, phase = 'green_command', binary = false, allowFailure = false } = {}) {
   if (args.some((arg) => /(?:JWT_SECRET|DATABASE_URL|password|token|whsec_|sk_live_|sk_test_)=/iu.test(arg))) {
     return Promise.reject(Object.assign(new Error(`Green staging promotion failed: ${phase}_secret_argument`), { code: `${phase}_secret_argument` }));
@@ -1779,13 +1821,15 @@ export async function runGreenEmergencyCleanup({ plan, command, commandEnv = {},
   return Object.freeze({ clean, schemaMutationStarted, restored, results: Object.freeze(results), restoreError });
 }
 
-export async function runGreenPromotion({ plan, config, configFile, environment = process.env, execute = false, command = runGreenCommand, assertRuntimeFiles = assertGreenProtectedRuntimeFiles } = {}) {
+export async function runGreenPromotion({ plan, config, configFile, environment = process.env, execute = false, command = runGreenCommand, assertRuntimeFiles = assertGreenProtectedRuntimeFiles, executableAvailable = greenControlExecutableAvailable } = {}) {
   assertGreenPromotionExecutionAllowed({ environment, plan });
   if (!execute) fail('explicit_green_execute_flag_required');
   assertGreenRuntimeConfig(config);
   if (typeof command !== 'function') fail('green_command_runner_required');
   if (typeof assertRuntimeFiles !== 'function') fail('green_runtime_file_assertion_required');
+  const commands = buildGreenPromotionCommands({ plan, configFile, config });
   await assertGreenEvidenceArtifactFamilyAvailable({ evidenceFile: plan?.evidenceFile, isolatedEnvFile: plan?.isolated?.envFile });
+  await assertGreenControlExecutables({ commands, executableAvailable });
   const protectedEnv = await readProtectedEnv(configFile);
   assertGreenProtectedEnvironment(protectedEnv, config);
   await assertRuntimeFiles(config, protectedEnv);
@@ -1804,7 +1848,6 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
   }
   const isolatedEnv = await readExecutionEnv(plan.isolated.envFile);
   const commandEnv = Object.freeze({ ...environment, ...protectedEnv });
-  const commands = buildGreenPromotionCommands({ plan, configFile, config });
   const completed = [];
   const readbacks = {};
   let backupDigest;
