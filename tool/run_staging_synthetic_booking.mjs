@@ -26,6 +26,11 @@ import {
 const repositoryRoot = realpathSync(resolve(fileURLToPath(new URL('..', import.meta.url))));
 const stagingApiBaseUrl = 'https://staging.shareittoo.com/api/v1';
 const stagingGatewayBaseUrl = 'https://staging.shareittoo.com/api';
+const canonicalEndpointContext = Object.freeze({
+  apiBaseUrl: stagingApiBaseUrl,
+  gatewayBaseUrl: stagingGatewayBaseUrl,
+  isolated: false,
+});
 const allowedTransitions = new Map([
   ['accepted', { role: 'owner', previous: 'requested', result: 'accepted' }],
   ['running', { role: 'renter', previous: 'accepted', result: 'active' }],
@@ -33,6 +38,74 @@ const allowedTransitions = new Map([
 ]);
 const terminalWorkflowStatuses = new Set(['completed', 'declined', 'cancelled', 'refunded']);
 const syntheticBookingTimeSnapshotVersion = 'booking-time-v1';
+
+function strictLoopbackApiBaseUrl(value) {
+  if (typeof value !== 'string' || value.length < 1 || value.length > 200) {
+    fail('The isolated API base URL must be an explicit loopback HTTP URL.');
+  }
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    fail('The isolated API base URL is invalid.');
+  }
+  if (parsed.protocol !== 'http:'
+      || !['127.0.0.1', '[::1]'].includes(parsed.hostname)
+      || !parsed.port
+      || parsed.username
+      || parsed.password
+      || parsed.search
+      || parsed.hash
+      || parsed.pathname !== '/v1') {
+    fail('The isolated API base URL must be HTTP, loopback-only, and exactly end in /v1.');
+  }
+  return `http://${parsed.hostname}${parsed.port ? `:${parsed.port}` : ''}/v1`;
+}
+
+export function resolveSyntheticEndpointContext({
+  isolatedTest = false,
+  isolatedApiBaseUrl = null,
+} = {}) {
+  if (isolatedApiBaseUrl === null || isolatedApiBaseUrl === undefined) {
+    if (isolatedTest !== false) {
+      fail('The isolated-test flag requires an explicit isolated loopback API base URL.');
+    }
+    return canonicalEndpointContext;
+  }
+  if (isolatedTest !== true) {
+    fail('An isolated API override requires the exact --isolated-test flag.');
+  }
+  const apiBaseUrl = strictLoopbackApiBaseUrl(isolatedApiBaseUrl);
+  const parsed = new URL(apiBaseUrl);
+  const gatewayBaseUrl = `http://${parsed.hostname}:${parsed.port}`;
+  return Object.freeze({ apiBaseUrl, gatewayBaseUrl, isolated: true });
+}
+
+function endpointScopedFetch(fetchImpl, endpointContext) {
+  if (!endpointContext.isolated) return fetchImpl;
+  return async (url, options) => {
+    const source = new URL(url);
+    const canonicalApi = new URL(stagingApiBaseUrl);
+    const canonicalGateway = new URL(stagingGatewayBaseUrl);
+    let targetPrefix;
+    let sourcePrefix;
+    if (source.origin === canonicalApi.origin
+        && (source.pathname === canonicalApi.pathname
+          || source.pathname.startsWith(`${canonicalApi.pathname}/`))) {
+      sourcePrefix = canonicalApi;
+      targetPrefix = endpointContext.apiBaseUrl;
+    } else if (source.origin === canonicalGateway.origin
+        && (source.pathname === canonicalGateway.pathname
+          || source.pathname.startsWith(`${canonicalGateway.pathname}/`))) {
+      sourcePrefix = canonicalGateway;
+      targetPrefix = endpointContext.gatewayBaseUrl;
+    } else {
+      fail('The isolated acceptance request escaped the canonical API or gateway path.');
+    }
+    const target = `${targetPrefix}${source.pathname.slice(sourcePrefix.pathname.length)}${source.search}`;
+    return fetchImpl(target, options);
+  };
+}
 
 function syntheticBookingTimeSnapshot(startDate, endDate) {
   return Object.freeze({
@@ -80,7 +153,7 @@ function privateVaultFile(value) {
   return canonical;
 }
 
-function readVault(vaultFile) {
+function readVault(vaultFile, endpointContext = canonicalEndpointContext) {
   const path = privateVaultFile(vaultFile);
   let vault;
   try {
@@ -90,7 +163,8 @@ function readVault(vaultFile) {
   }
   if (vault?.schemaVersion !== 1
       || vault?.kind !== 'sit-staging-synthetic-account-vault'
-      || vault?.apiBaseUrl !== stagingApiBaseUrl
+      || (vault?.apiBaseUrl !== endpointContext.apiBaseUrl
+        && !(endpointContext.isolated && vault?.apiBaseUrl === stagingApiBaseUrl))
       || vault?.stripeLivemode !== false
       || ![
         'fixture-verified-ready-for-login',
@@ -511,10 +585,11 @@ export async function createSyntheticBookingFixture({
   fetchImpl = globalThis.fetch,
   now = new Date(),
   random = (size) => randomBytes(size),
+  endpointContext = canonicalEndpointContext,
 } = {}) {
   if (typeof fetchImpl !== 'function') fail('A fetch implementation is required.');
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) fail('The fixture time is invalid.');
-  const { path, vault, accounts } = readVault(vaultFile);
+  const { path, vault, accounts } = readVault(vaultFile, endpointContext);
   if (vault.syntheticBooking && vault.syntheticBooking.workflowStatus !== 'cleaned') {
     fail('The vault already contains an active synthetic booking fixture.');
   }
@@ -790,10 +865,11 @@ export async function transitionSyntheticBookingFixture({
   status,
   fetchImpl = globalThis.fetch,
   now = new Date(),
+  endpointContext = canonicalEndpointContext,
 } = {}) {
   const transition = allowedTransitions.get(status);
   if (!transition) fail('The synthetic booking transition is invalid.');
-  const { path, vault, accounts } = readVault(vaultFile);
+  const { path, vault, accounts } = readVault(vaultFile, endpointContext);
   const fixture = vault.syntheticBooking;
   if (!fixture || fixture.paymentEndpointCalled !== false || fixture.stripeLivemode !== false) {
     fail('The active synthetic booking fixture is missing or unsafe.');
@@ -869,24 +945,25 @@ export async function retireSyntheticBookingFixture({
   vaultFile,
   fetchImpl = globalThis.fetch,
   now = new Date(),
+  endpointContext = canonicalEndpointContext,
 } = {}) {
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
     fail('The synthetic fixture retirement timestamp is invalid.');
   }
-  let current = readVault(vaultFile).vault.syntheticBooking?.workflowStatus;
+  let current = readVault(vaultFile, endpointContext).vault.syntheticBooking?.workflowStatus;
   if (current === 'requested') {
-    await transitionSyntheticBookingFixture({ vaultFile, status: 'accepted', fetchImpl, now });
+    await transitionSyntheticBookingFixture({ vaultFile, status: 'accepted', fetchImpl, now, endpointContext });
     current = 'accepted';
   }
   if (current === 'accepted') {
-    await transitionSyntheticBookingFixture({ vaultFile, status: 'running', fetchImpl, now });
+    await transitionSyntheticBookingFixture({ vaultFile, status: 'running', fetchImpl, now, endpointContext });
     current = 'active';
   }
   if (current === 'active') {
-    await transitionSyntheticBookingFixture({ vaultFile, status: 'completed', fetchImpl, now });
+    await transitionSyntheticBookingFixture({ vaultFile, status: 'completed', fetchImpl, now, endpointContext });
     current = 'completed';
   }
-  const { path, vault, accounts } = readVault(vaultFile);
+  const { path, vault, accounts } = readVault(vaultFile, endpointContext);
   const fixture = vault.syntheticBooking;
   if (current !== 'completed'
       || fixture?.workflowStatus !== 'completed'
@@ -940,10 +1017,11 @@ export async function inspectSyntheticBookingRoleVisibility({
   vaultFile,
   expectedStatus,
   fetchImpl = globalThis.fetch,
+  endpointContext = canonicalEndpointContext,
 } = {}) {
   const expectation = roleVisibilityExpectations[expectedStatus];
   if (!expectation) fail('The synthetic booking visibility status is invalid.');
-  const { vault, accounts } = readVault(vaultFile);
+  const { vault, accounts } = readVault(vaultFile, endpointContext);
   const fixture = vault.syntheticBooking;
   if (!fixture
       || fixture.workflowStatus !== expectedStatus
@@ -1073,36 +1151,41 @@ export async function runSyntheticRoleBookingLifecycle({
   fetchImpl = globalThis.fetch,
   now = new Date(),
   random = (size) => randomBytes(size),
+  endpointContext = canonicalEndpointContext,
 } = {}) {
-  await createSyntheticBookingFixture({ vaultFile, imagePath, fetchImpl, now, random });
+  await createSyntheticBookingFixture({ vaultFile, imagePath, fetchImpl, now, random, endpointContext });
   const ownerRequestVisibility = await inspectSyntheticBookingRoleVisibility({
     vaultFile,
     expectedStatus: 'requested',
     fetchImpl,
+    endpointContext,
   });
   const acceptanceTransition = await transitionSyntheticBookingFixture({
-    vaultFile, status: 'accepted', fetchImpl, now,
+    vaultFile, status: 'accepted', fetchImpl, now, endpointContext,
   });
   const renterUpcomingVisibility = await inspectSyntheticBookingRoleVisibility({
     vaultFile,
     expectedStatus: 'accepted',
     fetchImpl,
+    endpointContext,
   });
   const pickupTransition = await transitionSyntheticBookingFixture({
-    vaultFile, status: 'running', fetchImpl, now,
+    vaultFile, status: 'running', fetchImpl, now, endpointContext,
   });
   const renterRunningVisibility = await inspectSyntheticBookingRoleVisibility({
     vaultFile,
     expectedStatus: 'active',
     fetchImpl,
+    endpointContext,
   });
   const returnTransition = await transitionSyntheticBookingFixture({
-    vaultFile, status: 'completed', fetchImpl, now,
+    vaultFile, status: 'completed', fetchImpl, now, endpointContext,
   });
   const renterCompletedVisibility = await inspectSyntheticBookingRoleVisibility({
     vaultFile,
     expectedStatus: 'completed',
     fetchImpl,
+    endpointContext,
   });
   return Object.freeze({
     status: 'passed-bounded-synthetic-role-booking-lifecycle',
@@ -1147,30 +1230,38 @@ export async function runSyntheticFullAcceptanceJourney({
   now = new Date(),
   random = (size) => randomBytes(size),
   archive = true,
+  isolatedTest = false,
+  isolatedApiBaseUrl = null,
 } = {}) {
   if (!Array.isArray(evidenceImagePaths) || evidenceImagePaths.length !== 8) {
     fail('The synthetic acceptance journey requires eight condition images.');
   }
   const runtime = exactRuntimeCommit(expectedRuntimeCommit);
   const evidenceDigests = assertDistinctSyntheticEvidenceImages(evidenceImagePaths);
-  const runtimeReadback = await assertSyntheticRuntime({ fetchImpl, expectedRuntimeCommit: runtime });
-  await createSyntheticBookingFixture({ vaultFile, imagePath, fetchImpl, now, random });
-  const ownerRequestVisibility = await inspectSyntheticBookingRoleVisibility({
-    vaultFile, expectedStatus: 'requested', fetchImpl,
+  const endpointContext = resolveSyntheticEndpointContext({ isolatedTest, isolatedApiBaseUrl });
+  const journeyFetch = endpointScopedFetch(fetchImpl, endpointContext);
+  const runtimeReadback = await assertSyntheticRuntime({ fetchImpl: journeyFetch, expectedRuntimeCommit: runtime });
+  await createSyntheticBookingFixture({
+    vaultFile, imagePath, fetchImpl: journeyFetch, now, random, endpointContext,
   });
-  await transitionSyntheticBookingFixture({ vaultFile, status: 'accepted', fetchImpl, now });
+  const ownerRequestVisibility = await inspectSyntheticBookingRoleVisibility({
+    vaultFile, expectedStatus: 'requested', fetchImpl: journeyFetch, endpointContext,
+  });
+  await transitionSyntheticBookingFixture({
+    vaultFile, status: 'accepted', fetchImpl: journeyFetch, now, endpointContext,
+  });
   const renterUpcomingVisibility = await inspectSyntheticBookingRoleVisibility({
-    vaultFile, expectedStatus: 'accepted', fetchImpl,
+    vaultFile, expectedStatus: 'accepted', fetchImpl: journeyFetch, endpointContext,
   });
   const preparedThread = await prepareSyntheticBookingThread({
-    vaultFile, actorRole: 'owner', fetchImpl,
+    vaultFile, actorRole: 'owner', fetchImpl: journeyFetch, endpointContext,
   });
-  const activeVault = readVault(vaultFile);
+  const activeVault = readVault(vaultFile, endpointContext);
   const fixture = activeVault.vault.syntheticBooking;
-  const ownerToken = await login(fetchImpl, activeVault.accounts.get('owner'));
-  const renterToken = await login(fetchImpl, activeVault.accounts.get('renter'));
+  const ownerToken = await login(journeyFetch, activeVault.accounts.get('owner'));
+  const renterToken = await login(journeyFetch, activeVault.accounts.get('renter'));
   const pickupEvidence = await collectSyntheticConditionSet({
-    fetchImpl,
+    fetchImpl: journeyFetch,
     token: ownerToken,
     threadId: fixture.threadId,
     bookingId: fixture.bookingId,
@@ -1178,16 +1269,16 @@ export async function runSyntheticFullAcceptanceJourney({
     imagePaths: evidenceImagePaths.slice(0, 4),
   });
   const pickupConfirmation = await confirmSyntheticConditionSet({
-    fetchImpl, token: renterToken, bookingId: fixture.bookingId, segment: 'pickup',
+    fetchImpl: journeyFetch, token: renterToken, bookingId: fixture.bookingId, segment: 'pickup',
   });
   const pickupTransition = await transitionSyntheticBookingFixture({
-    vaultFile, status: 'running', fetchImpl, now,
+    vaultFile, status: 'running', fetchImpl: journeyFetch, now, endpointContext,
   });
   const renterRunningVisibility = await inspectSyntheticBookingRoleVisibility({
-    vaultFile, expectedStatus: 'active', fetchImpl,
+    vaultFile, expectedStatus: 'active', fetchImpl: journeyFetch, endpointContext,
   });
   const returnEvidence = await collectSyntheticConditionSet({
-    fetchImpl,
+    fetchImpl: journeyFetch,
     token: renterToken,
     threadId: fixture.threadId,
     bookingId: fixture.bookingId,
@@ -1195,16 +1286,16 @@ export async function runSyntheticFullAcceptanceJourney({
     imagePaths: evidenceImagePaths.slice(4, 8),
   });
   const returnConfirmation = await confirmSyntheticConditionSet({
-    fetchImpl, token: ownerToken, bookingId: fixture.bookingId, segment: 'return',
+    fetchImpl: journeyFetch, token: ownerToken, bookingId: fixture.bookingId, segment: 'return',
   });
   const returnTransition = await transitionSyntheticBookingFixture({
-    vaultFile, status: 'completed', fetchImpl, now,
+    vaultFile, status: 'completed', fetchImpl: journeyFetch, now, endpointContext,
   });
   const renterCompletedVisibility = await inspectSyntheticBookingRoleVisibility({
-    vaultFile, expectedStatus: 'completed', fetchImpl,
+    vaultFile, expectedStatus: 'completed', fetchImpl: journeyFetch, endpointContext,
   });
 
-  const originalOwnerProfile = await request(fetchImpl, '/auth/me', { token: ownerToken });
+  const originalOwnerProfile = await request(journeyFetch, '/auth/me', { token: ownerToken });
   if (typeof originalOwnerProfile?.user?.id !== 'string' || !originalOwnerProfile.user.id) {
     fail('The original synthetic owner profile did not read back safely.');
   }
@@ -1212,24 +1303,24 @@ export async function runSyntheticFullAcceptanceJourney({
     ? originalOwnerProfile.user.photoURL
     : null;
   const avatarUpload = await uploadSyntheticPhoto({
-    fetchImpl,
+    fetchImpl: journeyFetch,
     token: ownerToken,
     imagePath,
     purpose: 'profile_image',
     filename: 'sit-synthetic-avatar.png',
   });
-  await request(fetchImpl, '/profile', {
+  await request(journeyFetch, '/profile', {
     method: 'PATCH',
     token: ownerToken,
     body: { photoURL: avatarUpload.url },
     expected: [200],
   });
-  const ownProfile = await request(fetchImpl, '/auth/me', { token: ownerToken });
+  const ownProfile = await request(journeyFetch, '/auth/me', { token: ownerToken });
   if (ownProfile?.user?.photoURL !== avatarUpload.url) {
     fail('The synthetic avatar did not read back from the owner session.');
   }
   const publicProfile = await request(
-    fetchImpl,
+    journeyFetch,
     `/profiles/${encodeURIComponent(ownProfile.user.id)}`,
     { token: ownerToken },
   );
@@ -1238,13 +1329,13 @@ export async function runSyntheticFullAcceptanceJourney({
   }
 
   const renterReview = await submitSyntheticReview({
-    fetchImpl, token: renterToken, bookingId: fixture.bookingId, direction: 'renter_to_owner',
+    fetchImpl: journeyFetch, token: renterToken, bookingId: fixture.bookingId, direction: 'renter_to_owner',
   });
   const ownerReview = await submitSyntheticReview({
-    fetchImpl, token: ownerToken, bookingId: fixture.bookingId, direction: 'owner_to_renter',
+    fetchImpl: journeyFetch, token: ownerToken, bookingId: fixture.bookingId, direction: 'owner_to_renter',
   });
   const reviewReadback = await request(
-    fetchImpl,
+    journeyFetch,
     `/bookings/${encodeURIComponent(fixture.bookingId)}/reviews`,
     { token: ownerToken },
   );
@@ -1254,15 +1345,15 @@ export async function runSyntheticFullAcceptanceJourney({
     fail('Both synthetic review directions did not read back exactly once.');
   }
 
-  await request(fetchImpl, '/profile', {
+  await request(journeyFetch, '/profile', {
     method: 'PATCH',
     token: ownerToken,
     body: { photoURL: originalPhotoURL },
     expected: [200],
   });
-  const restoredOwnProfile = await request(fetchImpl, '/auth/me', { token: ownerToken });
+  const restoredOwnProfile = await request(journeyFetch, '/auth/me', { token: ownerToken });
   const restoredPublicProfile = await request(
-    fetchImpl,
+    journeyFetch,
     `/profiles/${encodeURIComponent(originalOwnerProfile.user.id)}`,
     { token: ownerToken },
   );
@@ -1271,7 +1362,7 @@ export async function runSyntheticFullAcceptanceJourney({
     fail('The original synthetic owner avatar did not restore and read back exactly.');
   }
 
-  const stored = readVault(vaultFile);
+  const stored = readVault(vaultFile, endpointContext);
   stored.vault.syntheticBooking.acceptance = {
     synthetic: true,
     paymentMode: 'memory',
@@ -1286,7 +1377,9 @@ export async function runSyntheticFullAcceptanceJourney({
     completedAt: now.toISOString(),
   };
   saveVault(stored.path, stored.vault);
-  const retired = await retireSyntheticBookingFixture({ vaultFile, fetchImpl, now });
+  const retired = await retireSyntheticBookingFixture({
+    vaultFile, fetchImpl: journeyFetch, now, endpointContext,
+  });
   if (retired.status !== 'synthetic-booking-retired'
       || retired.bookingCompleted !== true
       || retired.listingPaused !== true
@@ -1295,11 +1388,12 @@ export async function runSyntheticFullAcceptanceJourney({
     fail('The completed synthetic acceptance fixture was not retired safely.');
   }
   if (archive) {
-    const currentRunId = readVault(vaultFile).vault.runId;
+    const currentRunId = readVault(vaultFile, endpointContext).vault.runId;
     archiveCompletedSyntheticBookingFixture({
       vaultFile,
       nextRunId: `${currentRunId.slice(0, 74)}-next`,
       now,
+      endpointContext,
     });
   }
   return Object.freeze({
@@ -1358,6 +1452,7 @@ export function archiveCompletedSyntheticBookingFixture({
   vaultFile,
   nextRunId,
   now = new Date(),
+  endpointContext = canonicalEndpointContext,
 } = {}) {
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
     fail('The fixture archive time is invalid.');
@@ -1368,7 +1463,7 @@ export function archiveCompletedSyntheticBookingFixture({
       || !/^[A-Za-z0-9_-]+$/.test(nextRunId)) {
     fail('The next synthetic run identifier is invalid.');
   }
-  const { path, vault } = readVault(vaultFile);
+  const { path, vault } = readVault(vaultFile, endpointContext);
   const fixture = vault.syntheticBooking;
   if (vault.status !== 'synthetic-booking-completed'
       || fixture?.workflowStatus !== 'completed'
@@ -1404,11 +1499,12 @@ export async function reconcileSyntheticBookingFixture({
   vaultFile,
   fetchImpl = globalThis.fetch,
   now = new Date(),
+  endpointContext = canonicalEndpointContext,
 } = {}) {
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
     fail('The fixture reconciliation timestamp is invalid.');
   }
-  const { path, vault, accounts } = readVault(vaultFile);
+  const { path, vault, accounts } = readVault(vaultFile, endpointContext);
   const fixture = vault.syntheticBooking;
   if (!fixture || fixture.paymentEndpointCalled !== false || fixture.stripeLivemode !== false) {
     fail('The active synthetic booking fixture is missing or unsafe.');
@@ -1453,6 +1549,7 @@ export function archiveTerminalSyntheticBookingFixture({
   vaultFile,
   nextRunId,
   now = new Date(),
+  endpointContext = canonicalEndpointContext,
 } = {}) {
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
     fail('The fixture archive timestamp is invalid.');
@@ -1463,7 +1560,7 @@ export function archiveTerminalSyntheticBookingFixture({
       || !/^[A-Za-z0-9_-]+$/.test(nextRunId)) {
     fail('The next synthetic run identifier is invalid.');
   }
-  const { path, vault } = readVault(vaultFile);
+  const { path, vault } = readVault(vaultFile, endpointContext);
   const fixture = vault.syntheticBooking;
   if (vault.status !== 'synthetic-booking-terminal'
       || !terminalWorkflowStatuses.has(fixture?.workflowStatus)
@@ -1499,9 +1596,10 @@ export async function prepareSyntheticBookingThread({
   vaultFile,
   actorRole = 'owner',
   fetchImpl = globalThis.fetch,
+  endpointContext = canonicalEndpointContext,
 } = {}) {
   if (!['owner', 'renter'].includes(actorRole)) fail('The thread actor role is invalid.');
-  const { path, vault, accounts } = readVault(vaultFile);
+  const { path, vault, accounts } = readVault(vaultFile, endpointContext);
   const fixture = vault.syntheticBooking;
   if (!fixture
       || !['accepted', 'active', 'completed'].includes(fixture.workflowStatus)
@@ -1602,8 +1700,11 @@ function cliValue(args, flag) {
 
 const invokedPath = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : null;
 if (invokedPath === import.meta.url) {
-  const [command] = process.argv.slice(2);
-  const vaultFile = cliValue(process.argv.slice(2), '--vault-file');
+  const args = process.argv.slice(2);
+  const [command] = args;
+  const vaultFile = cliValue(args, '--vault-file');
+  const isolatedTest = args.includes('--isolated-test');
+  const isolatedApiBaseUrl = cliValue(args, '--isolated-api-base-url');
   try {
     const result = command === 'create'
       ? await createSyntheticBookingFixture({ vaultFile })
@@ -1635,11 +1736,13 @@ if (invokedPath === import.meta.url) {
           : command === 'diagnose-full-acceptance'
             ? await runSyntheticFullAcceptanceJourney({
                 vaultFile,
-                expectedRuntimeCommit: cliValue(process.argv.slice(2), '--expected-runtime-commit'),
+                expectedRuntimeCommit: cliValue(args, '--expected-runtime-commit'),
+                isolatedTest,
+                isolatedApiBaseUrl,
               })
         : await transitionSyntheticBookingFixture({
             vaultFile,
-            status: cliValue(process.argv.slice(2), '--status'),
+            status: cliValue(args, '--status'),
           });
     console.log(JSON.stringify(result, null, 2));
   } catch (error) {

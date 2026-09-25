@@ -15,6 +15,7 @@ import {
   retireSyntheticBookingFixture,
   runSyntheticFullAcceptanceJourney,
   runSyntheticRoleBookingLifecycle,
+  resolveSyntheticEndpointContext,
   sendSyntheticBookingDiagnosticMessage,
   transitionSyntheticBookingFixture,
 } from '../../tool/run_staging_synthetic_booking.mjs';
@@ -578,6 +579,55 @@ test('fails closed on runtime commit or environment mismatch before auth or muta
     /runtime version or environment does not match/u,
   );
   assert.deepEqual(calls, ['https://staging.shareittoo.com/api/version']);
+});
+
+test('keeps the canonical endpoint by default and permits only an exact loopback isolated override', () => {
+  assert.deepEqual(resolveSyntheticEndpointContext(), {
+    apiBaseUrl: 'https://staging.shareittoo.com/api/v1',
+    gatewayBaseUrl: 'https://staging.shareittoo.com/api',
+    isolated: false,
+  });
+  assert.deepEqual(resolveSyntheticEndpointContext({
+    isolatedTest: true,
+    isolatedApiBaseUrl: 'http://127.0.0.1:18080/v1',
+  }), {
+    apiBaseUrl: 'http://127.0.0.1:18080/v1',
+    gatewayBaseUrl: 'http://127.0.0.1:18080',
+    isolated: true,
+  });
+});
+
+test('rejects public, non-loopback, ambiguous, or unflagged endpoint overrides before any request', async () => {
+  const unsafeUrls = [
+    ['https://staging.shareittoo.com/api/v1', {}],
+    ['https://shareittoo.com/v1', { isolatedTest: true }],
+    ['http://10.0.0.2:18080/v1', { isolatedTest: true }],
+    ['http://127.0.0.1:18080/api', { isolatedTest: true }],
+    ['http://127.0.0.1:18080/v1?provider=stripe', { isolatedTest: true }],
+    ['http://127.0.0.1/v1', { isolatedTest: true }],
+  ];
+  for (const [isolatedApiBaseUrl, options] of unsafeUrls) {
+    assert.throws(
+      () => resolveSyntheticEndpointContext({ isolatedApiBaseUrl, ...options }),
+      /isolated|loopback|exact|flag|HTTP/u,
+    );
+  }
+  const fixture = vaultFixture();
+  const calls = [];
+  await assert.rejects(
+    runSyntheticFullAcceptanceJourney({
+      ...fixture,
+      expectedRuntimeCommit: 'a'.repeat(40),
+      isolatedTest: true,
+      isolatedApiBaseUrl: 'http://127.0.0.1:18080/v1',
+      fetchImpl: async (url) => {
+        calls.push(url);
+        return response(200, { commit: 'b'.repeat(40), environment: 'test' });
+      },
+    }),
+    /runtime version or environment does not match/u,
+  );
+  assert.deepEqual(calls, ['http://127.0.0.1:18080/version']);
 });
 
 test('requires equal owner and renter truth for one server-confirmed return case', async () => {
