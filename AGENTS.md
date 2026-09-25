@@ -113,6 +113,9 @@ discover a mechanically stale source hash.
   descriptor/bytes for the consuming operation; do not reopen its path. Evidence
   files must serialize once, then use those exact bytes for exclusive write,
   byte count and digest.
+- Full commit identifiers recorded in evidence must come directly from an exact
+  `git rev-parse` or immutable runtime readback and be passed unchanged into the
+  writer. Never manually expand or infer a 40-character SHA from a short prefix.
 - Database-row decoders must test actual `pg` runtime types before live
   acceptance: `timestamptz` arrives as a JavaScript `Date` while `date` remains
   a string; canonicalize trusted row values at the decoder boundary and fail
