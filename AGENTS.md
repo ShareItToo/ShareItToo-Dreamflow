@@ -72,6 +72,11 @@ discover a mechanically stale source hash.
   access gate and every enabled payment-pilot gate; never use wildcard or
   post-mutation allowlisting. For memory-payment acceptance, missing or
   incomplete `PAYMENT_PILOT_USER_IDS` is a fail-closed preflight error.
+- Cleanup evidence must follow the product's declared retention contract, not
+  an invented row-retention expectation. Revoked or expired credential rows
+  such as `staff_elevations` are expected to be purged; preserve and verify the
+  corresponding append-only audit event instead of recreating credential
+  material or treating its removal as evidence loss.
 - Deployment executor context invariant: dependency-bearing steps must execute
   in the declared runtime image, UID, network and mounted-file context; tests
   must not mock away host/runtime/network assumptions that the live command
