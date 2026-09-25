@@ -14,6 +14,7 @@ import {
   resolveClosedPilotClientBuild,
 } from './closed_pilot_acceptance.mjs';
 import { createEphemeralAcceptancePassword } from './ephemeral_acceptance_password.mjs';
+import { completeClosedPilotHandover } from './closed_pilot_handover.mjs';
 import {
   assertAcceptancePrincipalGateCompatibility,
   deriveAcceptancePrincipalIds,
@@ -233,6 +234,28 @@ async function main() {
     token: users.owner.token,
     headers: { 'Idempotency-Key': `${runId}-booking-accept` },
     body: closedPilotOwnerAcceptanceBody(),
+  });
+  let handover = await completeClosedPilotHandover({
+    api,
+    bookingId,
+    runId,
+    users,
+    segment: 'pickup',
+  });
+  const active = await api(`/bookings/${bookingId}/transitions`, {
+    method: 'POST',
+    token: users.renter.token,
+    headers: { 'Idempotency-Key': `${runId}-booking-running` },
+    body: { status: 'active' },
+  });
+  assert.equal(active.value.booking.workflowStatus, 'active');
+  handover = await completeClosedPilotHandover({
+    api,
+    bookingId,
+    runId,
+    users,
+    segment: 'return',
+    threadId: handover.threadId,
   });
   await api(`/bookings/${bookingId}/transitions`, {
     method: 'POST',

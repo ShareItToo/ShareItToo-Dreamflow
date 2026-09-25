@@ -76,6 +76,14 @@ discover a mechanically stale source hash.
   fixtures must import the current canonical policy constants and preflight
   them before sending requests; never hand-copy legal/policy text or permit
   `generated`/`materially_altered` classifications in synthetic payloads.
+- Acceptance lifecycle-fixture invariant: every B8/B9 handover must use the
+  proven V5.2 helper for the exact booking thread, four distinct presenter
+  uploads in `overview`/`detail`/`accessories`/`critical` slots with the
+  segment-specific purpose, presenter condition-evidence messages,
+  counterparty confirmation, and presenter-challenge/counterparty QR-v3
+  verification before the guarded `active`/`running`/`completed` transition.
+  Synthetic messages and media must be explicitly marked test/non-authentic;
+  do not bypass mandatory state preconditions with direct database updates.
 - Acceptance mandatory-input invariant: every mandatory runner input,
   including the exact candidate `ACCEPTANCE_CLIENT_BUILD` and explicit
   `ACCEPTANCE_BASE_URL` endpoint, must be strictly validated through a

@@ -14,6 +14,7 @@ import {
   resolveClosedPilotClientBuild,
 } from './closed_pilot_acceptance.mjs';
 import { createEphemeralAcceptancePassword } from './ephemeral_acceptance_password.mjs';
+import { completeClosedPilotHandover } from './closed_pilot_handover.mjs';
 import {
   assertAcceptancePrincipalGateCompatibility,
   assertAcceptancePaymentPilotCompatibility,
@@ -271,6 +272,14 @@ async function main() {
   });
   assert.equal(accepted.value.booking.workflowStatus, 'accepted');
 
+  let handover = await completeClosedPilotHandover({
+    api,
+    bookingId,
+    runId,
+    users,
+    segment: 'pickup',
+  });
+
   const checkoutRequest = () => api(`/bookings/${bookingId}/payment/checkout`, {
     method: 'POST',
     token: users.renter.token,
@@ -385,6 +394,14 @@ async function main() {
     body: { status: 'active' },
   });
   assert.equal(active.value.booking.workflowStatus, 'active');
+  handover = await completeClosedPilotHandover({
+    api,
+    bookingId,
+    runId,
+    users,
+    segment: 'return',
+    threadId: handover.threadId,
+  });
   const completed = await api(`/bookings/${bookingId}/transitions`, {
     method: 'POST',
     token: users.owner.token,
