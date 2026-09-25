@@ -72,6 +72,14 @@ discover a mechanically stale source hash.
   access gate and every enabled payment-pilot gate; never use wildcard or
   post-mutation allowlisting. For memory-payment acceptance, missing or
   incomplete `PAYMENT_PILOT_USER_IDS` is a fail-closed preflight error.
+- Gated acceptance catalog-read mentor invariant: authenticate every product
+  catalog search with an explicitly allowed still-active principal (B9 hidden,
+  restored and post-delete readbacks use `users.renter.token`). Read the empty
+  catalog immediately after deleting the listing and before deleting any
+  account; do not perform a catalog read after its principals are deleted.
+  Focused source-shape coverage must reject unauthenticated `/listings?q=` calls
+  and assert the delete-listing -> authenticated empty-search -> account-
+  deletion order.
 - Acceptance-fixture policy invariant: listing and other contract-bound
   fixtures must import the current canonical policy constants and preflight
   them before sending requests; never hand-copy legal/policy text or permit

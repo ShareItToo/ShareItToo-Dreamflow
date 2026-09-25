@@ -30,3 +30,23 @@ for (const route of [
 }
   assert.doesNotMatch(source, /UPDATE\s+(reports|listings|user_suspensions)\s+SET/iu);
 });
+
+test('B9 catalog searches use the renter principal and precede account deletion', async () => {
+  const source = await fs.readFile(path.join(backendRoot, 'ops/staging_b9_acceptance.mjs'), 'utf8');
+  const authenticatedCatalogCalls = source.match(
+    /await api\(`\/listings\?[^`]+`, \{\s+token: users\.renter\.token,\s+\}\);/gu,
+  ) ?? [];
+  assert.equal(authenticatedCatalogCalls.length, 3);
+  assert.doesNotMatch(source, /await api\(`\/listings\?[^`]+`\);/u);
+
+  const deleteListingIndex = source.indexOf("await api(`/listings/${listingId}`, {");
+  const emptyCatalogIndex = source.indexOf("const postDeleteCatalog = await api(`/listings?q=${encodeURIComponent(runId)}`, {");
+  const accountDeletionIndex = source.indexOf('for (const [index, user] of Object.values(users).entries()) {');
+  assert.ok(deleteListingIndex >= 0);
+  assert.ok(emptyCatalogIndex > deleteListingIndex);
+  assert.ok(accountDeletionIndex > emptyCatalogIndex);
+  assert.match(
+    source.slice(emptyCatalogIndex, accountDeletionIndex),
+    /token: users\.renter\.token[\s\S]*assert\.deepEqual\(postDeleteCatalog\.value\.listings, \[\]\)/u,
+  );
+});

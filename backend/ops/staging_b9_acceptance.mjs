@@ -396,7 +396,9 @@ async function main() {
       }),
     },
   });
-  const hiddenSearch = await api(`/listings?q=${encodeURIComponent(runId)}`);
+  const hiddenSearch = await api(`/listings?q=${encodeURIComponent(runId)}`, {
+    token: users.renter.token,
+  });
   assert.deepEqual(hiddenSearch.value.listings, []);
   await api(`/admin/listings/${listingId}/moderation`, {
     method: 'PATCH',
@@ -415,7 +417,9 @@ async function main() {
       }),
     },
   });
-  const restoredSearch = await api(`/listings?q=${encodeURIComponent(runId)}`);
+  const restoredSearch = await api(`/listings?q=${encodeURIComponent(runId)}`, {
+    token: users.renter.token,
+  });
   assert.equal(restoredSearch.value.listings.length, 1);
 
   const outsiderReport = await api('/reports', {
@@ -607,6 +611,10 @@ async function main() {
     token: users.owner.token,
     expected: [204],
   });
+  const postDeleteCatalog = await api(`/listings?q=${encodeURIComponent(runId)}`, {
+    token: users.renter.token,
+  });
+  assert.deepEqual(postDeleteCatalog.value.listings, []);
   for (const [index, user] of Object.values(users).entries()) {
     const preflight = await api('/account/deletion-preflight', { token: user.token });
     assert.equal(preflight.value.canDelete, true, `${user.id} must be deletable after B9 cleanup`);
@@ -640,7 +648,6 @@ async function main() {
     [Object.values(users).map((user) => user.id)],
   );
   assert.equal(activeReports.rows[0].count, 0);
-  assert.deepEqual((await api(`/listings?q=${encodeURIComponent(runId)}`)).value.listings, []);
 
   const versionResponse = await fetch(`${baseUrl.replace(/\/v1$/, '')}/version`);
   assert.equal(versionResponse.status, 200);
