@@ -5,7 +5,14 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { createEphemeralAcceptancePassword } from '../ops/ephemeral_acceptance_password.mjs';
-import { assertClosedPilotLegalReadiness } from '../ops/closed_pilot_acceptance.mjs';
+import {
+  assertClosedPilotLegalReadiness,
+  closedPilotListingPhotoTruth,
+} from '../ops/closed_pilot_acceptance.mjs';
+import {
+  listingPhotoTruthPolicyText,
+  listingPhotoTruthPolicyVersion,
+} from '../src/listing_photo_truth_policy.js';
 import { detectHighConfidenceSecretRules } from '../ops/secret_scan_rules.mjs';
 
 const backendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -49,6 +56,22 @@ test('staging acceptance fixtures satisfy the closed-pilot declarations', async 
     assert.match(contents, /closedPilotBookingBody\(/u, relativePath);
     assert.match(contents, /closedPilotOwnerAcceptanceBody\(\)/u, relativePath);
     assert.match(contents, /assertClosedPilotLegalReadiness\(pool\)/u, relativePath);
+  }
+});
+
+test('B8 and B9 listing fixtures use the canonical safe photo-truth declaration', async () => {
+  assert.deepEqual(closedPilotListingPhotoTruth, {
+    photoTruthPolicyVersion: listingPhotoTruthPolicyVersion,
+    photoTruthAttestation: listingPhotoTruthPolicyText,
+    photoTruthClassifications: ['unknown'],
+  });
+  for (const relativePath of [
+    'ops/staging_b8_acceptance.mjs',
+    'ops/staging_b9_acceptance.mjs',
+  ]) {
+    const contents = await fs.readFile(path.join(backendRoot, relativePath), 'utf8');
+    assert.match(contents, /\.\.\.closedPilotListingPhotoTruth/u, relativePath);
+    assert.doesNotMatch(contents, /['"](?:generated|materially_altered)['"]/u, relativePath);
   }
 });
 

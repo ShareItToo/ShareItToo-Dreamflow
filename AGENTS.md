@@ -72,6 +72,10 @@ discover a mechanically stale source hash.
   access gate and every enabled payment-pilot gate; never use wildcard or
   post-mutation allowlisting. For memory-payment acceptance, missing or
   incomplete `PAYMENT_PILOT_USER_IDS` is a fail-closed preflight error.
+- Acceptance-fixture policy invariant: listing and other contract-bound
+  fixtures must import the current canonical policy constants and preflight
+  them before sending requests; never hand-copy legal/policy text or permit
+  `generated`/`materially_altered` classifications in synthetic payloads.
 - Cleanup evidence must follow the product's declared retention contract, not
   an invented row-retention expectation. Revoked or expired credential rows
   such as `staff_elevations` are expected to be purged; preserve and verify the

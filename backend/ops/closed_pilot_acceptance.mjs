@@ -4,6 +4,10 @@ import {
   privatePilotDocument,
   privatePilotRequiredCheckoutDeclarations,
 } from '../src/private_pilot_domain.js';
+import {
+  listingPhotoTruthPolicyText,
+  listingPhotoTruthPolicyVersion,
+} from '../src/listing_photo_truth_policy.js';
 import { v52ContractDocumentReadiness } from '../src/v52_contract_workflow.js';
 
 export const closedPilotLocation = Object.freeze({
@@ -17,6 +21,12 @@ export const closedPilotLocation = Object.freeze({
 export const closedPilotListingCategory = Object.freeze({
   categoryId: 'cat3',
   subcategory: 'Kameras',
+});
+
+export const closedPilotListingPhotoTruth = Object.freeze({
+  photoTruthPolicyVersion: listingPhotoTruthPolicyVersion,
+  photoTruthAttestation: listingPhotoTruthPolicyText,
+  photoTruthClassifications: Object.freeze(['unknown']),
 });
 
 function acceptanceClientBuild() {
