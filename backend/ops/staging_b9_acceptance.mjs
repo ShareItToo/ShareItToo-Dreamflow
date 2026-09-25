@@ -12,13 +12,18 @@ import {
   closedPilotQuoteBody,
 } from './closed_pilot_acceptance.mjs';
 import { createEphemeralAcceptancePassword } from './ephemeral_acceptance_password.mjs';
+import {
+  assertAcceptancePrincipalGateCompatibility,
+  deriveAcceptancePrincipalIds,
+  resolveAcceptanceRunId,
+} from './acceptance_run_identity.mjs';
 
 import { pool } from '../src/db.js';
 import { hashPassword, signAccessToken } from '../src/security.js';
 
 const baseUrl = (process.env.ACCEPTANCE_BASE_URL || 'http://127.0.0.1:8080/v1')
   .replace(/\/$/, '');
-const runId = `b9-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
+const runId = resolveAcceptanceRunId('b9');
 const password = createEphemeralAcceptancePassword();
 
 function dateOnly(daysFromNow) {
@@ -71,16 +76,20 @@ async function stepUp(user) {
 async function main() {
   await assertClosedPilotLegalReadiness(pool);
   const passwordHash = await hashPassword(password);
+  const principalIds = deriveAcceptancePrincipalIds(runId, ['owner', 'renter', 'outsider', 'support', 'admin']);
   const users = {
-    owner: { role: 'user', displayName: 'B9 Staging Owner' },
-    renter: { role: 'user', displayName: 'B9 Staging Renter' },
-    outsider: { role: 'user', displayName: 'B9 Staging Outsider' },
-    support: { role: 'support', displayName: 'B9 Staging Support' },
-    admin: { role: 'admin', displayName: 'B9 Staging Admin' },
+    owner: { id: principalIds.owner, role: 'user', displayName: 'B9 Staging Owner' },
+    renter: { id: principalIds.renter, role: 'user', displayName: 'B9 Staging Renter' },
+    outsider: { id: principalIds.outsider, role: 'user', displayName: 'B9 Staging Outsider' },
+    support: { id: principalIds.support, role: 'support', displayName: 'B9 Staging Support' },
+    admin: { id: principalIds.admin, role: 'admin', displayName: 'B9 Staging Admin' },
   };
+  assertAcceptancePrincipalGateCompatibility(
+    runId,
+    Object.values(users).map((user) => user.id),
+  );
 
   for (const [key, user] of Object.entries(users)) {
-    user.id = `${runId}-${key}`;
     user.email = `${runId}-${key}@example.invalid`;
     user.sessionId = crypto.randomUUID();
     await pool.query(

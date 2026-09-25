@@ -12,6 +12,11 @@ import {
   closedPilotQuoteBody,
 } from './closed_pilot_acceptance.mjs';
 import { createEphemeralAcceptancePassword } from './ephemeral_acceptance_password.mjs';
+import {
+  assertAcceptancePrincipalGateCompatibility,
+  deriveAcceptancePrincipalIds,
+  resolveAcceptanceRunId,
+} from './acceptance_run_identity.mjs';
 
 import { config } from '../src/config.js';
 import { pool } from '../src/db.js';
@@ -20,7 +25,7 @@ import { hashPassword, signAccessToken } from '../src/security.js';
 
 const baseUrl = (process.env.ACCEPTANCE_BASE_URL || 'http://127.0.0.1:8080/v1')
   .replace(/\/$/, '');
-const runId = `b8-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
+const runId = resolveAcceptanceRunId('b8');
 const password = createEphemeralAcceptancePassword();
 
 function dateOnly(daysFromNow) {
@@ -67,29 +72,34 @@ async function main() {
   await assertClosedPilotLegalReadiness(pool);
 
   const passwordHash = await hashPassword(password);
+  const principalIds = deriveAcceptancePrincipalIds(runId, ['owner', 'renter', 'admin']);
   const users = {
     owner: {
-      id: `${runId}-owner`,
+      id: principalIds.owner,
       email: `${runId}-owner@example.invalid`,
       displayName: 'B8 Staging Owner',
       role: 'user',
       sessionId: crypto.randomUUID(),
     },
     renter: {
-      id: `${runId}-renter`,
+      id: principalIds.renter,
       email: `${runId}-renter@example.invalid`,
       displayName: 'B8 Staging Renter',
       role: 'user',
       sessionId: crypto.randomUUID(),
     },
     admin: {
-      id: `${runId}-admin`,
+      id: principalIds.admin,
       email: `${runId}-admin@example.invalid`,
       displayName: 'B8 Staging Admin',
       role: 'admin',
       sessionId: crypto.randomUUID(),
     },
   };
+  assertAcceptancePrincipalGateCompatibility(
+    runId,
+    Object.values(users).map((user) => user.id),
+  );
 
   for (const user of Object.values(users)) {
     await pool.query(

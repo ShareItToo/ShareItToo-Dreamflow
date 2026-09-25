@@ -67,6 +67,9 @@ discover a mechanically stale source hash.
   a deterministic command-executor test drives its generated plan with
   production-shaped readbacks through the point immediately before the first
   irreversible phase; helper- or plan-shape-only tests are insufficient.
+- Gated acceptance-runner invariant: derive every exact synthetic principal ID
+  before the first data mutation and preflight those IDs against the configured
+  access gate; never use wildcard or post-mutation allowlisting.
 - Deployment executor context invariant: dependency-bearing steps must execute
   in the declared runtime image, UID, network and mounted-file context; tests
   must not mock away host/runtime/network assumptions that the live command
