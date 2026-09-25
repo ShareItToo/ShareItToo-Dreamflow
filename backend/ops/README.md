@@ -120,20 +120,21 @@ mode `0600` and bind exactly `shareittoo-staging-api`,
 `sit-green-network-20260918011528-wp254`,
 `sit-staging-provider-egress` and
 `sit-green-uploads-20260918011528-wp254`, with Green label and manifest-bound
-source readback schema `97`. The current target is also schema `97`; isolated
+source readback schema `97`. The current target is schema `98`; isolated
 and canonical readbacks verify the exact idempotent terminal state
-`097_registration_consent_bundle.up.sql` migration.
+`098_booking_checkout_declaration_constraints.up.sql` migration.
 The database identity is exactly `shareittoo_green` / `shareittoo_green`;
 legacy `shareittoo_staging` is never used by this lane.
 The source readback is exactly schema `97` with the manifest-bound ledger
 digest `950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0`.
 The pre-promotion image is exactly
-`ghcr.io/shareittoo/shareittoo-api:cffb4e43accee5de4bf6d33d553adde18a33d16f`
+`ghcr.io/shareittoo/shareittoo-api:56ec5dc15a18d3fee77d1f9db8252d851afd48f2`
 with digest
-`sha256:c63bc16223d81e845a423c5728c0e697bc05809b3699449755b83f3e0763a2a0`.
+`sha256:e5fed4491335e8164fa747663f13cdb34028d5f1ca6f90ee66f662524e705814`.
 The new seal is
-`shareittoo-staging-api-alt-sealed-green-cffb4e43`. The two historical seals
-`shareittoo-staging-api-alt-sealed-green-ea25e7cb` (ea25 tag plus exact digest)
+`shareittoo-staging-api-alt-sealed-green-56ec5dc1`. The three historical seals
+`shareittoo-staging-api-alt-sealed-green-cffb4e43` (cffb tag plus exact digest),
+`shareittoo-staging-api-alt-sealed-green-ea25e7cb` (ea25 tag plus exact digest),
 and `shareittoo-staging-api-alt-sealed-green` (exact ccc720 tag) remain
 separately read-only validated, stopped containers with the exact Green label
 and run ID; neither is ever renamed, removed, restarted or network-targeted.
@@ -149,10 +150,12 @@ tags are rejected before a command is planned.
 
 The plan takes a fresh protected backup, restores the manifest-bound Green
 source readback `97` into a run-scoped internal target and runs the migration
-runner idempotently at `97_to_97` through
-`097_registration_consent_bundle.up.sql`, then proves
-the full source-to-current migration ledger (expected 97-row digest
-`950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0`) and
+runner idempotently at `97_to_98` through
+`098_booking_checkout_declaration_constraints.up.sql`, then proves
+the full source-to-current migration ledger (expected source 97-row digest
+`950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0`; current
+98-row digest
+`796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196`) and
 the official PostgreSQL init-complete log marker followed by two stable
 `SELECT 1` readbacks before restore/provisioning. The network, Postgres and
 candidate creation responses are captured as immutable IDs; all later
@@ -192,8 +195,8 @@ implicitly enabled by this runner. After the exact target readback, the observed
 sealed before foreign-writer checks, the protected backup and the isolated
 rehearsal. The isolated candidate is then run and cleaned up before the
 canonical Green database is
-explicitly passed through the idempotent `97_to_97` migration command and
-`097_registration_consent_bundle.up.sql` and read back before the
+explicitly passed through the idempotent `97_to_98` migration command and
+`098_booking_checkout_declaration_constraints.up.sql` and read back before the
 final image is created. If that canonical mutation starts, the sealed old image is never
 restarted; recovery is a forward candidate path.
 

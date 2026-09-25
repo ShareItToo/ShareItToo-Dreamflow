@@ -59,13 +59,13 @@ const targetManifest = {
   apiContainer: greenTarget.apiContainer, databaseContainer: greenTarget.databaseContainer,
   databaseVolume: greenTarget.databaseVolume, network: greenTarget.network,
   providerNetwork: greenTarget.providerNetwork, uploadsVolume: greenTarget.uploadsVolume,
-  networkInternal: true, sourceSchema: 97, currentSchema: 97,
+  networkInternal: true, sourceSchema: 97, currentSchema: 98,
   sourceLedgerDigest: greenTarget.sourceLedgerDigest, currentLedgerDigest: greenTarget.currentLedgerDigest,
   prePromotionImage: greenTarget.prePromotionImage, prePromotionImageDigest: greenTarget.prePromotionImageDigest, sealedApiContainer: greenTarget.sealedApiContainer,
   retainedSealed: greenTarget.retainedSealed.map((descriptor) => ({ ...descriptor })),
 };
 targetManifest.targetDigest = normalizedGreenTargetDigest(targetManifest);
-assert.equal(targetManifest.targetDigest, '152084fed8868ce1b5da9ce7f8cc57f91f5d33b8667453e7852c8acb997739ce');
+assert.equal(targetManifest.targetDigest, '585422e5880147459571a1ca8bbae7a586987b9c08f745334fdb7d491f8d6b84');
 const prePromotionImageReference = `${greenTarget.prePromotionImage}@${greenTarget.prePromotionImageDigest}`;
 const config = {
   environment: 'test', envFile: '/docker/shareittoo/staging-secrets/green.env',
@@ -94,7 +94,7 @@ function migrationLedgerThrough(schema) {
 }
 
 const sourceMigrationLedger = migrationLedgerThrough(97);
-const currentMigrationLedger = migrationLedgerThrough(97);
+const currentMigrationLedger = migrationLedgerThrough(98);
 const emptyFindingFingerprint = JSON.stringify({ paymentRecoveryNeedsReview: [], supportNextUpdateOverdue: [] });
 const targetContainerSet = `${greenTarget.apiContainer}\t\t\ttrue\t${greenTarget.runId}\n${greenTarget.databaseContainer}\t\t\ttrue\t\n${greenTarget.retainedSealed.map((descriptor) => `${descriptor.name}\t\t\ttrue\t${descriptor.runId}`).join('\n')}\n`;
 const sourceMounts = [
@@ -178,9 +178,10 @@ function restoreFixture(options, running = true) {
 test('Green target accepts only the exact verified resource identities', () => {
   assert.deepEqual(assertGreenTargetManifest(targetManifest), targetManifest);
   assert.equal(targetManifest.schemaVersion, 3);
-  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:cffb4e43accee5de4bf6d33d553adde18a33d16f');
-  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:c63bc16223d81e845a423c5728c0e697bc05809b3699449755b83f3e0763a2a0');
+  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:56ec5dc15a18d3fee77d1f9db8252d851afd48f2');
+  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:e5fed4491335e8164fa747663f13cdb34028d5f1ca6f90ee66f662524e705814');
   assert.deepEqual(targetManifest.retainedSealed.map((descriptor) => descriptor.name), [
+    'shareittoo-staging-api-alt-sealed-green-cffb4e43',
     'shareittoo-staging-api-alt-sealed-green-ea25e7cb',
     'shareittoo-staging-api-alt-sealed-green',
   ]);
@@ -439,7 +440,7 @@ test('inventory rejects wrong schema, host ports and non-Green labels', () => {
   assert.throws(() => assertGreenContainerInventory({ ...inventory, api: { ...inventory.api, image: `${prePromotionImageReference.slice(0, -64)}${'0'.repeat(64)}` } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
 });
 
-test('promotion plan keeps backup, isolated 97-to-97 idempotency, acceptance and final no-port promotion ordered', () => {
+test('promotion plan keeps backup, isolated 97-to-98 idempotency, acceptance and final no-port promotion ordered', () => {
   const plan = buildGreenPromotionPlan({
     targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`,
     opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json',
@@ -447,8 +448,8 @@ test('promotion plan keeps backup, isolated 97-to-97 idempotency, acceptance and
   assert.deepEqual(plan.commandPolicy.finalNetworks, [greenTarget.network, greenTarget.providerNetwork]);
   assert.equal(plan.commandPolicy.finalHostPorts, 0);
   assert.ok(plan.phases.findIndex((phase) => phase.includes('stop and seal')) < plan.phases.findIndex((phase) => phase.includes('fresh protected database backup')));
-  assert.match(plan.phases.join('\n'), /97_to_97/u);
-  assert.match(plan.phases.join('\n'), /097_registration_consent_bundle\.up\.sql/u);
+  assert.match(plan.phases.join('\n'), /97_to_98/u);
+  assert.match(plan.phases.join('\n'), /098_booking_checkout_declaration_constraints\.up\.sql/u);
   assert.match(plan.phases.join('\n'), /synthetic sandbox user/u);
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   assert.equal(assertGreenCommandBindings(commands, plan, config.envFile), true);
@@ -464,7 +465,7 @@ test('promotion plan keeps backup, isolated 97-to-97 idempotency, acceptance and
   assert.ok(final.args.includes(`type=volume,src=${greenTarget.uploadsVolume},dst=/data/uploads,readonly=false`));
   assert.ok(final.args.includes('--group-add') && final.args.includes('65532'));
   assert.ok(final.args.some((arg) => arg.includes('com.shareittoo.sit.green=true')));
-  assert.ok(commands.find((entry) => entry.phase === 'isolated_idempotent_migration_97_to_97'));
+  assert.ok(commands.find((entry) => entry.phase === 'isolated_idempotent_migration_97_to_98'));
   assert.ok(commands.findIndex((entry) => entry.phase === 'isolated_migration_readback') < commands.findIndex((entry) => entry.phase === 'isolated_migration_ledger_readback'));
   assert.ok(commands.findIndex((entry) => entry.phase === 'isolated_migration_ledger_readback') < commands.findIndex((entry) => entry.phase === 'synthetic_sandbox_provision_isolated'));
   assert.ok(commands.findIndex((entry) => entry.phase === 'isolated_postgres_init_complete_log_readback') < commands.findIndex((entry) => entry.phase === 'isolated_postgres_stable_select_1'));
@@ -473,7 +474,7 @@ test('promotion plan keeps backup, isolated 97-to-97 idempotency, acceptance and
   assert.ok(commands.find((entry) => entry.phase === 'isolated_restore' && entry.inputFile));
   assert.ok(commands.find((entry) => entry.phase === 'candidate_mfa_identity_probes'));
   assert.ok(commands.find((entry) => entry.phase === 'isolated_network_cleanup_verify'));
-  assert.ok(commands.find((entry) => entry.phase === 'canonical_idempotent_migration_97_to_97'));
+  assert.ok(commands.find((entry) => entry.phase === 'canonical_idempotent_migration_97_to_98'));
   assert.ok(commands.find((entry) => entry.phase === 'canonical_schema_readback'));
   assert.ok(commands.find((entry) => entry.phase === 'sealed_name_conflict_check'));
   assert.deepEqual(commands.filter((entry) => entry.phase.startsWith('retained_sealed_inventory_readback_')).map((entry) => entry.args.at(-1)), greenTarget.retainedSealed.map((descriptor) => descriptor.name));
@@ -492,7 +493,7 @@ test('promotion plan keeps backup, isolated 97-to-97 idempotency, acceptance and
   assert.ok(phaseIndex('isolated_finding_fingerprint_readback') < phaseIndex('candidate_start'));
   assert.ok(phaseIndex('candidate_finding_fingerprint_readback') < phaseIndex('candidate_health_and_feature_probes'));
   assert.ok(phaseIndex('quiesce_green_api') < phaseIndex('candidate_acceptance_create'));
-  assert.ok(phaseIndex('candidate_cleanup_verify') < phaseIndex('canonical_idempotent_migration_97_to_97'));
+  assert.ok(phaseIndex('candidate_cleanup_verify') < phaseIndex('canonical_idempotent_migration_97_to_98'));
   assert.ok(phaseIndex('canonical_schema_readback') < phaseIndex('final_create_no_host_port'));
   assert.equal(commands.some((entry) => entry.args?.some((arg) => (
     /shareittoo-staging-postgres|shareittoo_staging_backend|shareittoo_staging_postgres_data/iu.test(arg)
@@ -560,7 +561,7 @@ test('promotion plan resolves the exact sealed API before emitting mutation comm
     assert.equal(entry.args.some((arg) => arg === undefined), false, `${entry.phase} must not contain undefined argv`);
   }
   const immutableImage = `${plan.runtime.image}@${plan.runtime.digest}`;
-  for (const phase of ['isolated_idempotent_migration_97_to_97', 'synthetic_sandbox_provision_isolated', 'candidate_acceptance_create', 'canonical_idempotent_migration_97_to_97', 'synthetic_sandbox_provision_canonical', 'final_create_no_host_port']) {
+  for (const phase of ['isolated_idempotent_migration_97_to_98', 'synthetic_sandbox_provision_isolated', 'candidate_acceptance_create', 'canonical_idempotent_migration_97_to_98', 'synthetic_sandbox_provision_canonical', 'final_create_no_host_port']) {
     const entry = commands.find((candidate) => candidate.phase === phase);
     assert.ok(entry.args.includes(immutableImage), `${phase} must execute the verified digest-pinned image`);
     assert.equal(entry.args.includes(plan.runtime.image), false, `${phase} must not execute the mutable tag`);
@@ -696,7 +697,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       const phase = options.phase;
       if (phase.startsWith('recovery_')) {
         const recoveryPhase = phase.slice('recovery_'.length);
-        if (recoveryPhase === 'canonical_schema_readback') return { stdout: '097_registration_consent_bundle.up.sql\n' };
+        if (recoveryPhase === 'canonical_schema_readback') return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n' };
         if (recoveryPhase === 'canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
         if (recoveryPhase === 'successor_identity_readback') {
           if (args.at(-1) === greenTarget.apiContainer && !recoveryRecord) return { code: 1, stdout: '' };
@@ -790,7 +791,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       if (phase === 'candidate_prestart_identity_readback') return { stdout: JSON.stringify(candidateRecord) };
       if (phase === 'source_schema_readback') return { stdout: '097_registration_consent_bundle.up.sql\n' };
       if (phase === 'source_migration_ledger_readback') return { stdout: sourceMigrationLedger };
-      if (phase === 'canonical_schema_readback') return { stdout: '097_registration_consent_bundle.up.sql\n' };
+      if (phase === 'canonical_schema_readback') return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n' };
       if (phase === 'canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
       if (phase === 'source_foreign_writer_readback_before_backup') return { stdout: foreignBefore };
       if (phase === 'source_foreign_writer_readback_after_backup') return { stdout: foreignAfter };
@@ -798,7 +799,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       if (phase === 'isolated_postgres_init_complete_log_readback') return { stdout: initLog };
       if (phase === 'isolated_postgres_stable_select_1') return { stdout: '1\n' };
       if (phase === 'isolated_postgres_stable_select_2') return { stdout: stableSelect2 };
-      if (phase === 'isolated_migration_readback') return { stdout: '097_registration_consent_bundle.up.sql\n' };
+      if (phase === 'isolated_migration_readback') return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n' };
       if (phase === 'isolated_migration_ledger_readback') return { stdout: isolatedLedger };
       if (phase === 'isolated_finding_fingerprint_readback') return { stdout: emptyFindingFingerprint };
       if (phase === 'candidate_finding_fingerprint_readback') return { stdout: candidateFinding };
@@ -924,7 +925,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   assert.equal(restoreNonzero.result?.code, 'green_isolated_restore_failed');
   assert.equal(restoreNonzero.calls.some((entry) => entry.phase === 'isolated_integrity_and_functional_probes'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
-  const cleanupBindings = await fakeRun(prePromotionImageReference, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'canonical_idempotent_migration_97_to_97');
+  const cleanupBindings = await fakeRun(prePromotionImageReference, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'canonical_idempotent_migration_97_to_98');
   assert.equal(cleanupBindings.calls.find((entry) => entry.phase === 'candidate_cleanup')?.args[3], candidateId);
   assert.equal(cleanupBindings.calls.find((entry) => entry.phase === 'candidate_cleanup_verify')?.args[3], `id=${candidateId}`);
   assert.equal(cleanupBindings.calls.find((entry) => entry.phase === 'isolated_database_cleanup_verify')?.args[3], `id=${isolatedDatabaseId}`);
@@ -994,7 +995,7 @@ test('command executor bindings keep isolated probes and canonical runtime disti
   assert.equal(isolated.runtimeEnv.DATABASE_CONTAINER, plan.isolated.database);
   assert.equal(isolated.runtimeEnv.DATABASE_NAME, plan.isolated.databaseName);
   assert.notEqual(isolated.runtimeEnv.DATABASE_NAME, greenTarget.databaseName);
-  const canonical = commands.find((entry) => entry.phase === 'canonical_idempotent_migration_97_to_97');
+  const canonical = commands.find((entry) => entry.phase === 'canonical_idempotent_migration_97_to_98');
   assert.equal(canonical.envFile, config.envFile);
   assert.ok(canonical.args.includes(config.envFile));
   const candidate = commands.find((entry) => entry.phase === 'candidate_acceptance_create');
@@ -1402,7 +1403,7 @@ test('post-schema forward recovery creates only the successor and verifies its p
       currentRecord = record;
       return { stdout: '' };
     }
-    if (options.phase === 'recovery_canonical_schema_readback') return { stdout: '097_registration_consent_bundle.up.sql\n' };
+    if (options.phase === 'recovery_canonical_schema_readback') return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n' };
     if (options.phase === 'recovery_canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
     if (options.phase === 'recovery_final_create_no_host_port') {
       currentRecord = preStartRecord;
@@ -1456,7 +1457,7 @@ test('stateful successor lifecycle reconciles lost attach/start responses and re
   const fake = async (command, args, options) => {
     calls.push({ command, args, phase: options.phase });
     const phase = options.phase;
-    if (phase === 'recovery_canonical_schema_readback') return { stdout: '097_registration_consent_bundle.up.sql\n' };
+    if (phase === 'recovery_canonical_schema_readback') return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n' };
     if (phase === 'recovery_canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
     if (phase === 'recovery_successor_identity_readback') return { stdout: JSON.stringify(current) };
     if (phase === 'recovery_successor_exact_id_readback') {
@@ -1559,7 +1560,7 @@ test('forward recovery stops on a foreign final-name conflict before network att
   };
   const fake = async (command, args, options) => {
     calls.push({ command, args, options });
-    if (options.phase === 'recovery_canonical_schema_readback') return { stdout: '097_registration_consent_bundle.up.sql\n' };
+    if (options.phase === 'recovery_canonical_schema_readback') return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n' };
     if (options.phase === 'recovery_canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
     if (options.phase === 'recovery_final_create_no_host_port') return { code: 17, stdout: '' };
     if (options.phase === 'recovery_existing_final_inspect') return { stdout: JSON.stringify(foreign) };
@@ -1573,7 +1574,7 @@ test('forward recovery stops on a foreign final-name conflict before network att
   const wrongCalls = [];
   const wrongFake = async (command, args, options) => {
     wrongCalls.push({ command, args, options });
-    if (options.phase === 'recovery_canonical_schema_readback') return { stdout: '097_registration_consent_bundle.up.sql\n' };
+    if (options.phase === 'recovery_canonical_schema_readback') return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n' };
     if (options.phase === 'recovery_canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
     if (options.phase === 'recovery_final_create_no_host_port') return { code: 17, stdout: '' };
     if (options.phase === 'recovery_existing_final_inspect') return { stdout: JSON.stringify(wrongExecution) };
@@ -1650,7 +1651,7 @@ test('forward recovery fails closed before candidate continuation on migration r
   for (const invalid of [
     { migration: '', ledger: currentMigrationLedger, code: 'green_forward_recovery_schema_readback_invalid' },
     { migration: '094_apple_refresh_material_only.up.sql', ledger: currentMigrationLedger, code: 'green_forward_recovery_schema_readback_invalid' },
-    { migration: '097_registration_consent_bundle.up.sql', ledger: 'bad-ledger\n', code: 'green_forward_recovery_migration_ledger_invalid' },
+    { migration: '098_booking_checkout_declaration_constraints.up.sql', ledger: 'bad-ledger\n', code: 'green_forward_recovery_migration_ledger_invalid' },
   ]) {
     const calls = [];
     const fake = async (command, args, options) => {

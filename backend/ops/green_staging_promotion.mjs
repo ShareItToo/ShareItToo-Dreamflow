@@ -17,11 +17,18 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.
 export const greenTarget = Object.freeze({
   composeProject: 'sit-green',
   apiContainer: 'shareittoo-staging-api',
-  // The next promotion seals the exact active cffb runtime.  Both older
+  // The next promotion seals the exact active 56ec runtime.  All older
   // stopped seals remain immutable read-only witnesses and are never mutation
   // targets of this runner.
-  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-cffb4e43',
+  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-56ec5dc1',
   retainedSealed: Object.freeze([
+    Object.freeze({
+      name: 'shareittoo-staging-api-alt-sealed-green-cffb4e43',
+      image: 'ghcr.io/shareittoo/shareittoo-api:cffb4e43accee5de4bf6d33d553adde18a33d16f@sha256:c63bc16223d81e845a423c5728c0e697bc05809b3699449755b83f3e0763a2a0',
+      greenLabel: 'true',
+      runId: '20260918011528-wp254',
+      running: false,
+    }),
     Object.freeze({
       name: 'shareittoo-staging-api-alt-sealed-green-ea25e7cb',
       image: 'ghcr.io/shareittoo/shareittoo-api:ea25e7cb9747dde9ccb331b0a439bb1f9cc6134e@sha256:d440dd4a27bebb8caf3db4366d4289af4cadb1eaa7d8796c4f58ab80db0bbaca',
@@ -46,12 +53,12 @@ export const greenTarget = Object.freeze({
   databaseUser: 'shareittoo_green',
   runId: '20260918011528-wp254',
   sourceSchema: 97,
-  currentSchema: 97,
-  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:cffb4e43accee5de4bf6d33d553adde18a33d16f',
-  prePromotionImageDigest: 'sha256:c63bc16223d81e845a423c5728c0e697bc05809b3699449755b83f3e0763a2a0',
+  currentSchema: 98,
+  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:56ec5dc15a18d3fee77d1f9db8252d851afd48f2',
+  prePromotionImageDigest: 'sha256:e5fed4491335e8164fa747663f13cdb34028d5f1ca6f90ee66f662524e705814',
   sourceLedgerDigest: '950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0',
-  currentLedgerDigest: '950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0',
-  currentMigration: '097_registration_consent_bundle.up.sql',
+  currentLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
+  currentMigration: '098_booking_checkout_declaration_constraints.up.sql',
 });
 
 const isolatedPostgresImage = 'postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777';
@@ -995,7 +1002,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'isolated_postgres_stable_select_1', command: 'docker', args: ['exec', isolated.database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', isolated.databaseUser, '-d', isolated.databaseName, '-Atqc', 'SELECT 1'] },
     { phase: 'isolated_postgres_stable_select_2', command: 'docker', args: ['exec', isolated.database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', isolated.databaseUser, '-d', isolated.databaseName, '-Atqc', 'SELECT 1'] },
     { phase: 'isolated_restore', command: 'docker', args: ['exec', '-i', isolated.database, 'pg_restore', '-U', isolated.databaseUser, '-d', isolated.databaseName, '--no-owner', '--no-acl'], inputFile: `${plan.evidenceFile}.pgdump`, inputSource: 'fresh_protected_backup' },
-    { phase: 'isolated_idempotent_migration_97_to_97', command: 'docker', args: ['run', '--rm', '--network', isolated.network, '--env-file', isolated.envFile, '--entrypoint', 'node', immutableRuntimeImage, '-e', "import('./src/migrations.js').then(async ({runMigrations})=>{const {Pool}=await import('pg');const pool=new Pool({connectionString:process.env.DATABASE_URL});await runMigrations(pool);await pool.end();})"] },
+    { phase: 'isolated_idempotent_migration_97_to_98', command: 'docker', args: ['run', '--rm', '--network', isolated.network, '--env-file', isolated.envFile, '--entrypoint', 'node', immutableRuntimeImage, '-e', "import('./src/migrations.js').then(async ({runMigrations})=>{const {Pool}=await import('pg');const pool=new Pool({connectionString:process.env.DATABASE_URL});await runMigrations(pool);await pool.end();})"] },
     { phase: 'isolated_migration_readback', command: 'docker', args: ['exec', isolated.database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', isolated.databaseUser, '-d', isolated.databaseName, '-Atc', "SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"] },
     { phase: 'isolated_migration_ledger_readback', command: 'docker', args: ['exec', isolated.database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', isolated.databaseUser, '-d', isolated.databaseName, '-Atc', migrationLedgerReadbackSql] },
     { phase: 'isolated_finding_fingerprint_readback', command: 'docker', args: ['exec', isolated.database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', isolated.databaseUser, '-d', isolated.databaseName, '-Atc', findingFingerprintSql] },
@@ -1027,7 +1034,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'isolated_database_cleanup_verify', command: 'docker', args: ['ps', '--all', '--filter', `id=${isolated.database}`, '--format', '{{.ID}}'] },
     { phase: 'isolated_network_cleanup', command: 'docker', args: ['network', 'rm', isolated.network] },
     { phase: 'isolated_network_cleanup_verify', command: 'docker', args: ['network', 'ls', '--filter', `id=${isolated.network}`, '--format', '{{.ID}}'] },
-    { phase: 'canonical_idempotent_migration_97_to_97', command: 'docker', args: ['run', '--rm', '--network', target.network, '--env-file', configFile, '--entrypoint', 'node', immutableRuntimeImage, '-e', "import('./src/migrations.js').then(async ({runMigrations})=>{const {Pool}=await import('pg');const pool=new Pool({connectionString:process.env.DATABASE_URL});await runMigrations(pool);await pool.end();})"], envFile: configFile, redacted: true },
+    { phase: 'canonical_idempotent_migration_97_to_98', command: 'docker', args: ['run', '--rm', '--network', target.network, '--env-file', configFile, '--entrypoint', 'node', immutableRuntimeImage, '-e', "import('./src/migrations.js').then(async ({runMigrations})=>{const {Pool}=await import('pg');const pool=new Pool({connectionString:process.env.DATABASE_URL});await runMigrations(pool);await pool.end();})"], envFile: configFile, redacted: true },
     { phase: 'canonical_schema_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', "SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"] },
     { phase: 'canonical_migration_ledger_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', migrationLedgerReadbackSql] },
     { phase: 'synthetic_sandbox_provision_canonical', command: 'docker', args: ['run', '--rm', '--user', '100:101', '--group-add', '65532', '--network', target.network, '--env-file', configFile, '--env', 'DEPLOYMENT_ENVIRONMENT=test', '--env', 'SYNTHETIC_SANDBOX_PASSWORD_FILE=/run/secrets/synthetic-sandbox-user-password', ...provisionerMounts, '--entrypoint', 'node', immutableRuntimeImage, provisionerPath], envFile: configFile, redacted: true },
@@ -1142,7 +1149,7 @@ function bindGreenRuntimeCommand(entry, plan, identities) {
   };
   const phase = entry.phase;
   if (['isolated_network_identity_readback'].includes(phase)) replaceArgs(plan.isolated.network, requireId(isolatedNetworkId, 'green_isolated_network_id_missing'));
-  if (['isolated_postgres_create', 'isolated_idempotent_migration_97_to_97', 'isolated_integrity_and_functional_probes', 'synthetic_sandbox_provision_isolated', 'candidate_acceptance_create'].includes(phase)) {
+  if (['isolated_postgres_create', 'isolated_idempotent_migration_97_to_98', 'isolated_integrity_and_functional_probes', 'synthetic_sandbox_provision_isolated', 'candidate_acceptance_create'].includes(phase)) {
     replaceArgs(plan.isolated.network, requireId(isolatedNetworkId, 'green_isolated_network_id_missing'));
   }
   if (['isolated_postgres_identity_readback', 'isolated_postgres_start', 'isolated_postgres_wait', 'isolated_postgres_init_complete_log_readback', 'isolated_postgres_stable_select_1', 'isolated_postgres_stable_select_2', 'isolated_restore', 'isolated_migration_readback', 'isolated_migration_ledger_readback', 'isolated_finding_fingerprint_readback'].includes(phase)) {
@@ -1157,7 +1164,7 @@ function bindGreenRuntimeCommand(entry, plan, identities) {
   if (['isolated_network_cleanup', 'isolated_network_cleanup_verify'].includes(phase)) replaceArgs(plan.isolated.network, requireId(isolatedNetworkId, 'green_isolated_network_id_missing'));
   if (['final_provider_network_attach', 'final_start', 'final_inventory_readback'].includes(phase)) replaceArgs(plan.target.apiContainer, requireId(finalApiId, 'green_final_api_id_missing'));
   if (phase === 'final_provider_network_attach') replaceArgs(plan.target.providerNetwork, requireId(providerNetworkId, 'green_provider_network_id_missing'));
-  if (phase === 'final_create_no_host_port' || phase === 'canonical_idempotent_migration_97_to_97' || phase === 'synthetic_sandbox_provision_canonical') replaceArgs(plan.target.network, requireId(targetNetworkId, 'green_target_network_id_missing'));
+  if (phase === 'final_create_no_host_port' || phase === 'canonical_idempotent_migration_97_to_98' || phase === 'synthetic_sandbox_provision_canonical') replaceArgs(plan.target.network, requireId(targetNetworkId, 'green_target_network_id_missing'));
   const runtimeEnv = entry.runtimeEnv ? { ...entry.runtimeEnv } : undefined;
   if (runtimeEnv?.DATABASE_CONTAINER === plan.isolated.database) runtimeEnv.DATABASE_CONTAINER = requireId(isolatedDatabaseId, 'green_isolated_database_id_missing');
   if (runtimeEnv?.STAGING_ACCEPTANCE_CONTAINER === plan.isolated.candidate) runtimeEnv.STAGING_ACCEPTANCE_CONTAINER = requireId(candidateId, 'green_candidate_id_missing');
@@ -1194,7 +1201,7 @@ export function assertGreenCommandBindings(commands, plan, configFile) {
       || !byPhase.get('candidate_acceptance_create')?.args?.includes(plan.isolated.envFile)
       || byPhase.get('candidate_mfa_identity_probes')?.envFile !== plan.isolated.envFile) fail('green_candidate_isolated_binding_missing');
   if (byPhase.get('synthetic_sandbox_provision_isolated')?.envFile !== plan.isolated.envFile) fail('green_isolated_provision_binding_missing');
-  for (const phase of ['isolated_postgres_create', 'isolated_idempotent_migration_97_to_97']) {
+  for (const phase of ['isolated_postgres_create', 'isolated_idempotent_migration_97_to_98']) {
     if (!byPhase.get(phase)?.args?.includes(plan.isolated.envFile)) fail('green_isolated_env_binding_missing');
     if (byPhase.get(phase)?.args?.some((arg) => arg.includes(greenTarget.databaseName))) fail('green_isolated_database_cross_bind');
   }
@@ -1203,8 +1210,8 @@ export function assertGreenCommandBindings(commands, plan, configFile) {
       || integrity.runtimeEnv?.DATABASE_CONTAINER !== plan.isolated.database
       || integrity.runtimeEnv?.DATABASE_USER !== plan.isolated.databaseUser
       || integrity.runtimeEnv?.DATABASE_NAME !== plan.isolated.databaseName) fail('green_isolated_probe_binding_missing');
-  if (byPhase.get('canonical_idempotent_migration_97_to_97')?.envFile !== configFile
-      || !byPhase.get('canonical_idempotent_migration_97_to_97')?.args?.includes(configFile)) fail('green_canonical_migration_binding_missing');
+  if (byPhase.get('canonical_idempotent_migration_97_to_98')?.envFile !== configFile
+      || !byPhase.get('canonical_idempotent_migration_97_to_98')?.args?.includes(configFile)) fail('green_canonical_migration_binding_missing');
   if (byPhase.get('isolated_restore')?.inputFile !== `${plan.evidenceFile}.pgdump`) fail('green_restore_backup_binding_missing');
   return true;
 }
@@ -1788,7 +1795,7 @@ export async function runGreenEmergencyCleanup({ plan, command, commandEnv = {},
     'source_foreign_writer_readback_before_backup', 'fresh_protected_backup',
     'source_foreign_writer_readback_after_backup', 'isolated_network_create', 'isolated_postgres_create',
     'isolated_postgres_wait', 'isolated_postgres_init_complete_log_readback', 'isolated_restore',
-    'isolated_idempotent_migration_97_to_97', 'isolated_migration_readback', 'isolated_migration_ledger_readback',
+    'isolated_idempotent_migration_97_to_98', 'isolated_migration_readback', 'isolated_migration_ledger_readback',
     'isolated_finding_fingerprint_readback', 'isolated_integrity_and_functional_probes',
     'synthetic_sandbox_provision_isolated', 'candidate_acceptance_create', 'candidate_provider_network_attach',
     'candidate_start', 'candidate_live_wait', 'candidate_health_and_feature_probes', 'candidate_ready_probe',
@@ -1890,9 +1897,9 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       const entryEnv = entry.envFile === configFile ? protectedEnv : entry.envFile === plan.isolated.envFile ? isolatedEnv : {};
       const env = { ...commandEnv, ...entryEnv, ...(boundEntry.runtimeEnv ?? {}) };
       // Starting this canonical command is the irreversible boundary even
-      // when runMigrations is idempotent at 97; the sealed ea25 image must
-      // never be restarted after this point.
-      if (entry.phase === 'canonical_idempotent_migration_97_to_97') schemaMutationStarted = true;
+      // when runMigrations advances idempotently from schema 97 to 98; the
+      // sealed 56ec image must never be restarted after this point.
+      if (entry.phase === 'canonical_idempotent_migration_97_to_98') schemaMutationStarted = true;
       let result;
       if (boundEntry.inputFile) {
         result = command === runGreenCommand
