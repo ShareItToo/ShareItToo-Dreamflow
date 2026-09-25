@@ -29,8 +29,10 @@ export const closedPilotListingPhotoTruth = Object.freeze({
   photoTruthClassifications: Object.freeze(['unknown']),
 });
 
-function acceptanceClientBuild() {
-  const value = process.env.ACCEPTANCE_CLIENT_BUILD?.trim() ?? '';
+export function resolveClosedPilotClientBuild(environment = process.env) {
+  const value = typeof environment.ACCEPTANCE_CLIENT_BUILD === 'string'
+    ? environment.ACCEPTANCE_CLIENT_BUILD
+    : '';
   if (!/^1\.0\.0\+[1-9][0-9]{9}$/u.test(value)) {
     throw new Error('ACCEPTANCE_CLIENT_BUILD must bind the exact closed-pilot Android candidate.');
   }
@@ -55,7 +57,7 @@ export function closedPilotQuoteBody({ itemId, startDate, endDate }) {
 }
 
 export function closedPilotBookingBody({ id, itemId, startDate, endDate, quote }) {
-  const clientBuild = acceptanceClientBuild();
+  const clientBuild = resolveClosedPilotClientBuild();
   const acceptedAt = new Date().toISOString();
   return {
     id,

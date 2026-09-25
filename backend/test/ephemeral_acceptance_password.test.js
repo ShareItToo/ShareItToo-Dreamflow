@@ -8,6 +8,7 @@ import { createEphemeralAcceptancePassword } from '../ops/ephemeral_acceptance_p
 import {
   assertClosedPilotLegalReadiness,
   closedPilotListingPhotoTruth,
+  resolveClosedPilotClientBuild,
 } from '../ops/closed_pilot_acceptance.mjs';
 import {
   listingPhotoTruthPolicyText,
@@ -72,6 +73,30 @@ test('B8 and B9 listing fixtures use the canonical safe photo-truth declaration'
     const contents = await fs.readFile(path.join(backendRoot, relativePath), 'utf8');
     assert.match(contents, /\.\.\.closedPilotListingPhotoTruth/u, relativePath);
     assert.doesNotMatch(contents, /['"](?:generated|materially_altered)['"]/u, relativePath);
+  }
+});
+
+test('closed-pilot client build preflight is strict and reusable before mutation', async () => {
+  assert.equal(
+    resolveClosedPilotClientBuild({ ACCEPTANCE_CLIENT_BUILD: '1.0.0+2026092205' }),
+    '1.0.0+2026092205',
+  );
+  for (const value of [undefined, '', '1.0.0+20260922', '1.0.1+2026092205', ' 1.0.0+2026092205']) {
+    assert.throws(
+      () => resolveClosedPilotClientBuild({ ACCEPTANCE_CLIENT_BUILD: value }),
+      /ACCEPTANCE_CLIENT_BUILD must bind the exact closed-pilot Android candidate/u,
+    );
+  }
+  for (const relativePath of [
+    'ops/staging_b8_acceptance.mjs',
+    'ops/staging_b9_acceptance.mjs',
+  ]) {
+    const contents = await fs.readFile(path.join(backendRoot, relativePath), 'utf8');
+    assert.ok(
+      contents.indexOf('resolveClosedPilotClientBuild();')
+        < contents.indexOf('INSERT INTO users'),
+      relativePath,
+    );
   }
 });
 

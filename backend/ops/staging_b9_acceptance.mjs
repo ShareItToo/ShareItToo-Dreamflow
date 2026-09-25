@@ -11,6 +11,7 @@ import {
   closedPilotLocation,
   closedPilotOwnerAcceptanceBody,
   closedPilotQuoteBody,
+  resolveClosedPilotClientBuild,
 } from './closed_pilot_acceptance.mjs';
 import { createEphemeralAcceptancePassword } from './ephemeral_acceptance_password.mjs';
 import {
@@ -75,6 +76,7 @@ async function stepUp(user) {
 }
 
 async function main() {
+  resolveClosedPilotClientBuild();
   await assertClosedPilotLegalReadiness(pool);
   const passwordHash = await hashPassword(password);
   const principalIds = deriveAcceptancePrincipalIds(runId, ['owner', 'renter', 'outsider', 'support', 'admin']);

@@ -11,6 +11,7 @@ import {
   closedPilotLocation,
   closedPilotOwnerAcceptanceBody,
   closedPilotQuoteBody,
+  resolveClosedPilotClientBuild,
 } from './closed_pilot_acceptance.mjs';
 import { createEphemeralAcceptancePassword } from './ephemeral_acceptance_password.mjs';
 import {
@@ -71,6 +72,7 @@ async function api(path, {
 async function main() {
   assert.equal(config.payments.transport, 'memory', 'B8 acceptance requires PAYMENT_TRANSPORT=memory');
   assert.equal(config.payments.livemode, false, 'B8 acceptance must never run in live mode');
+  resolveClosedPilotClientBuild();
   await assertClosedPilotLegalReadiness(pool);
 
   const passwordHash = await hashPassword(password);
