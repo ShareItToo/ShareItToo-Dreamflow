@@ -134,6 +134,14 @@ export function observedListingAiSignals(hierarchy) {
   return Object.freeze(Object.fromEntries(keys.map((key) => [key, text.includes(key)])));
 }
 
+export function returnedToListingEditorAfterPhotoPicker(hierarchy) {
+  const exactMatches = allNodes(hierarchy).filter((node) => [
+    currentHeadAndroidNodeAttribute(node, 'text') ?? '',
+    currentHeadAndroidNodeAttribute(node, 'content-desc') ?? '',
+  ].some((value) => value === 'Neue Anzeige'));
+  return exactMatches.length === 1;
+}
+
 export function onDeviceListingAiUiProof(hierarchy) {
   const count = (label) => currentHeadAndroidNamedNodes(hierarchy, label).length;
   const proof = {
@@ -600,8 +608,7 @@ async function main() {
         device,
         wait,
         label: 'controlled listing photo',
-        predicate: (value) => currentHeadAndroidNamedNodes(value, 'Neue Anzeige').length === 1
-          && currentHeadAndroidNamedNodes(value, 'Foto hinzufügen').length === 1,
+        predicate: returnedToListingEditorAfterPhotoPicker,
       });
       hierarchy = await scrollUntil({
         commandRunner,

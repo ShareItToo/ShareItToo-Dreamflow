@@ -924,7 +924,7 @@
     },
     {
       "path": "lib/services/auth_service.dart",
-      "sha256": "ce15e9e1f80b5a74a308f12f00bcaa88c6de920629830b40b0c699d85781c986"
+      "sha256": "2307a6385ef826c4618ceeac5e9d49a23c2b7738e2cf962a9d7559563ec7815c"
     },
     {
       "path": "lib/screens/notification_settings_screen.dart",

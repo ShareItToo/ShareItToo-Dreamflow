@@ -22,6 +22,11 @@ const applicationId = 'com.shareittoo.app';
 const remoteUiDump = '/sdcard/sit-logout-lifecycle.xml';
 const v52ForegroundPushTitle = 'Neue ShareItToo-Aktualisierung';
 const v52ForegroundPushBody = 'In der App ansehen.';
+// The post-login profile performs an exact session-bound profile hydration.
+// Keep the ordinary navigation wait bounded at 36 observations, but allow the
+// authenticated profile settle step a little more time on a cold Staging
+// device. This remains below the runner's existing retry/cleanup envelope.
+export const authenticatedProfileRestoreAttemptLimit = 60;
 
 function fail(message) {
   throw new Error(message);
@@ -391,6 +396,7 @@ async function openProfile({
   device,
   wait,
   initialMainHierarchy = null,
+  profileAttempts = 36,
 }) {
   let resolvedMain = initialMainHierarchy;
   if (resolvedMain === null) {
@@ -421,7 +427,7 @@ async function openProfile({
     device,
     predicate: (hierarchy) => hasAuthenticatedProfile(hierarchy) || hasGuestProfile(hierarchy),
     wait,
-    attempts: 36,
+    attempts: profileAttempts,
   });
 }
 
@@ -488,6 +494,7 @@ export async function restoreSyntheticSession({
     device,
     wait,
     initialMainHierarchy: mainAfterLogin,
+    profileAttempts: authenticatedProfileRestoreAttemptLimit,
   });
   return hasAuthenticatedProfile(restored);
 }

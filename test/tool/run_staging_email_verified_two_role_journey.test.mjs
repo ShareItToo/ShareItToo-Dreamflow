@@ -21,6 +21,12 @@ import {
   runStagingEmailVerifiedTwoRoleSimulation,
   verifyStagingEmailVerifiedJourneyPublished,
 } from '../../tool/run_staging_email_verified_two_role_journey.mjs';
+import {
+  assertListingPhotoTruthPolicy,
+  listingPhotoTruthClassifications,
+  listingPhotoTruthPolicyText,
+  listingPhotoTruthPolicyVersion,
+} from '../../backend/src/listing_photo_truth_policy.js';
 
 function response(status, value) {
   return { status, text: async () => JSON.stringify(value) };
@@ -171,6 +177,13 @@ function stagingApi(accounts) {
     }
     if (path === '/listings' && method === 'POST') {
       state.listing = JSON.parse(options.body);
+      assertListingPhotoTruthPolicy({
+        policyVersion: state.listing.photoTruthPolicyVersion,
+        policyText: state.listing.photoTruthAttestation,
+        classifications: state.listing.photoTruthClassifications,
+        expectedCount: state.listing.photos?.length,
+        requireAttestation: true,
+      });
       return response(201, { listing: { ...state.listing, isActive: false } });
     }
     if (path === '/listings/mine') {
@@ -275,6 +288,15 @@ test('runs and retires an isolated email-verified two-role Staging journey', asy
   assert.equal(prepared.containsEmailAddresses, false);
   assert.equal(prepared.containsTokens, false);
   assert.equal(api.state.listing.status, 'draft');
+  assert.deepEqual({
+    photoTruthPolicyVersion: api.state.listing.photoTruthPolicyVersion,
+    photoTruthAttestation: api.state.listing.photoTruthAttestation,
+    photoTruthClassifications: api.state.listing.photoTruthClassifications,
+  }, {
+    photoTruthPolicyVersion: listingPhotoTruthPolicyVersion,
+    photoTruthAttestation: listingPhotoTruthPolicyText,
+    photoTruthClassifications: [listingPhotoTruthClassifications[0]],
+  });
 
   api.state.listing.status = 'active';
   api.state.listing.isActive = true;

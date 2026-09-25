@@ -1797,10 +1797,16 @@ class AuthService {
         return false;
       }
       final prefs = await SharedPreferences.getInstance();
+      final sameLogicalSession = _sameLogicalSessionIdentityEncoded(
+        prefs.getString(_sessionKey),
+        encoded,
+      );
       final persisted = await prefs.setString(_sessionKey, encoded);
       if (!persisted || prefs.getString(_sessionKey) != encoded) return false;
-      _sessionGeneration += 1;
-      _notifyLocalPrincipalChanged();
+      if (!sameLogicalSession) {
+        _sessionGeneration += 1;
+        _notifyLocalPrincipalChanged();
+      }
       if (connectAccessToken != null && connectAccessToken.isNotEmpty) {
         try {
           await BackendRealtimeService.connect(connectAccessToken);
@@ -1816,6 +1822,76 @@ class AuthService {
       }
       return true;
     });
+  }
+
+  static bool _sameLogicalSessionIdentityEncoded(
+    String? previousEncoded,
+    String nextEncoded,
+  ) {
+    Map<String, dynamic>? decode(String? encoded) {
+      if (encoded == null || encoded.isEmpty) return null;
+      try {
+        final decoded = jsonDecode(encoded);
+        return decoded is Map<String, dynamic>
+            ? decoded
+            : decoded is Map
+                ? Map<String, dynamic>.from(decoded)
+                : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    return _sameLogicalSessionIdentity(
+      decode(previousEncoded),
+      decode(nextEncoded),
+    );
+  }
+
+  @visibleForTesting
+  static bool sameLogicalSessionIdentityForTesting(
+    Map<String, dynamic>? previous,
+    Map<String, dynamic>? next,
+  ) =>
+      _sameLogicalSessionIdentity(previous, next);
+
+  static bool _sameLogicalSessionIdentity(
+    Map<String, dynamic>? previous,
+    Map<String, dynamic>? next,
+  ) {
+    final previousIdentity = _logicalSessionIdentity(previous);
+    final nextIdentity = _logicalSessionIdentity(next);
+    return previousIdentity != null &&
+        nextIdentity != null &&
+        previousIdentity == nextIdentity;
+  }
+
+  static _LogicalSessionIdentity? _logicalSessionIdentity(
+    Map<String, dynamic>? session,
+  ) {
+    if (session == null) return null;
+    final userId = _requiredIdentityString(session['userId']);
+    final sessionId = _requiredIdentityString(session['sessionId']);
+    final emailValue = session['email'];
+    final createdAtValue = session['createdAt'];
+    if (userId == null || sessionId == null || emailValue is! String) {
+      return null;
+    }
+    final email = emailValue.trim().toLowerCase();
+    if (email.isEmpty || createdAtValue is! String) return null;
+    final createdAt = DateTime.tryParse(createdAtValue);
+    if (createdAt == null) return null;
+    return _LogicalSessionIdentity(
+      userId: userId,
+      email: email,
+      sessionId: sessionId,
+      createdAtMicros: createdAt.toUtc().microsecondsSinceEpoch,
+    );
+  }
+
+  static String? _requiredIdentityString(Object? value) {
+    if (value is! String || value.isEmpty || value.trim().isEmpty) return null;
+    return value;
   }
 
   static Future<bool> _removeStoredSessionIfRawMatches(String expectedRaw) {
@@ -1865,6 +1941,31 @@ class AuthService {
 
 class _DiscardedRefreshResult implements Exception {
   const _DiscardedRefreshResult();
+}
+
+class _LogicalSessionIdentity {
+  final String userId;
+  final String email;
+  final String sessionId;
+  final int createdAtMicros;
+
+  const _LogicalSessionIdentity({
+    required this.userId,
+    required this.email,
+    required this.sessionId,
+    required this.createdAtMicros,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      other is _LogicalSessionIdentity &&
+      other.userId == userId &&
+      other.email == email &&
+      other.sessionId == sessionId &&
+      other.createdAtMicros == createdAtMicros;
+
+  @override
+  int get hashCode => Object.hash(userId, email, sessionId, createdAtMicros);
 }
 
 enum AuthSocialProvider { google, apple, facebook }

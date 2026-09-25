@@ -7,6 +7,7 @@ import {
   onDeviceListingAiUiProof,
   onDeviceListingAiViewportAttemptLimit,
   observedListingAiSignals,
+  returnedToListingEditorAfterPhotoPicker,
   runAndroidOnDeviceListingAiAcceptance,
   stagingReadbackCommand,
   validateStagingDatabaseContainer,
@@ -100,6 +101,20 @@ test('selects only the newest square Android photo-picker tile', () => {
     width: 478,
     height: 478,
   });
+});
+
+test('accepts the returned listing editor when the photo add tile is below the viewport', () => {
+  const returned = '<hierarchy>'
+    + '<node text="Neue Anzeige" content-desc="Neue Anzeige"/>'
+    + '<node text="Ausgewählte Fotos analysieren" content-desc="Ausgewählte Fotos analysieren"/>'
+    + '</hierarchy>';
+  assert.equal(returnedToListingEditorAfterPhotoPicker(returned), true);
+  assert.equal(returnedToListingEditorAfterPhotoPicker(
+    '<hierarchy><node content-desc="Neue Anzeige erstellen"/></hierarchy>',
+  ), false);
+  assert.equal(returnedToListingEditorAfterPhotoPicker(
+    '<hierarchy><node text="Fertig" content-desc="Fertig"/></hierarchy>',
+  ), false);
 });
 
 test('requires the controlled image to be the unique newest media row', () => {

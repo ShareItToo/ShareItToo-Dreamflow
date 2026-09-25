@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  authenticatedProfileRestoreAttemptLimit,
   ensureAndroidGuestSession,
   hasEnteredNamedLoginInput,
   isAndroidSoftwareKeyboardShown,
   isV52ForegroundPushPopup,
+  restoreSyntheticSession,
   sendOppositeRoleMessage,
   visibleNamedNodeTapPoint,
 } from '../../tool/diagnose_android_logout_lifecycle.mjs';
@@ -88,6 +90,80 @@ test('guest reset tolerates a bounded slow physical cold start and profile load'
   });
   assert.equal(result, true);
   assert.equal(waits, 44);
+});
+
+test('login restoration allows the bounded post-login profile hydration window', async () => {
+  assert.equal(authenticatedProfileRestoreAttemptLimit, 60);
+  let screen = 'guest';
+  let profileDumps = 0;
+  let emailEntered = false;
+  let passwordEntered = false;
+  let focusedField = null;
+  const node = (label, bounds = '[0,0][500,100]') => (
+    `<node text="${label}" content-desc="" clickable="true" enabled="true" bounds="${bounds}"/>`
+  );
+  const loginForm = () => '<hierarchy>'
+    + `<node class="android.widget.EditText" hint="E-Mail" text="${emailEntered ? 'owner@example.invalid' : ''}" bounds="[0,100][500,200]" />`
+    + '<node class="android.widget.EditText" hint="Passwort" text="" bounds="[0,200][500,300]" />'
+    + '</hierarchy>';
+  const populatedLogin = () => '<hierarchy>'
+    + `<node class="android.widget.EditText" hint="E-Mail" text="${emailEntered ? 'owner@example.invalid' : ''}" bounds="[0,100][500,200]" />`
+    + `<node class="android.widget.EditText" hint="Passwort" text="${passwordEntered ? '••••••••' : ''}" bounds="[0,200][500,300]" />`
+    + `${node('Anmelden')}</hierarchy>`;
+  const main = () => `<hierarchy>${node('Entdecken', '[0,2200][300,2400]')}`
+    + `${node('Nachrichten', '[600,2200][900,2400]')}`
+    + `${node('Mein SIT', '[900,2200][1200,2400]')}</hierarchy>`;
+  const profile = () => `<hierarchy>${node('Meine Anzeigen')}`
+    + `${node('Mietanfragen')}${node('Abmelden')}</hierarchy>`;
+  const runner = (_file, args) => {
+    const command = args.slice(2);
+    const joined = command.join(' ');
+    if (joined === 'shell uiautomator dump /sdcard/sit-logout-lifecycle.xml') {
+      return 'UI hierarchy dumped';
+    }
+    if (joined === 'exec-out cat /sdcard/sit-logout-lifecycle.xml') {
+      if (screen === 'guest') {
+        return '<hierarchy>' + node('Anmelden') + node('Konto erstellen') + '</hierarchy>';
+      }
+      if (screen === 'login') return emailEntered && passwordEntered
+        ? populatedLogin()
+        : loginForm();
+      if (screen === 'main') return main();
+      profileDumps += 1;
+      return profileDumps < 40 ? '<hierarchy />' : profile();
+    }
+    if (joined === 'shell rm -f /sdcard/sit-logout-lifecycle.xml') return '';
+    if (command[0] === 'shell' && command[1] === 'input' && command[2] === 'tap') {
+      if (screen === 'guest') screen = 'login';
+      else if (screen === 'login') {
+        const y = Number(command.at(-1));
+        if (y >= 100 && y < 200) focusedField = 'email';
+        else if (y >= 200 && y < 300) focusedField = 'password';
+        else if (emailEntered && passwordEntered) screen = 'main';
+      }
+      else if (screen === 'main') screen = 'profile';
+      return '';
+    }
+    if (command[0] === 'shell' && command[1] === 'input' && command[2] === 'text') {
+      if (focusedField === 'email') emailEntered = true;
+      if (focusedField === 'password') passwordEntered = true;
+      return '';
+    }
+    if (joined === 'shell dumpsys input_method') {
+      return 'mInputShown=false\n mIsInputViewShown=false';
+    }
+    throw new Error(`Unexpected fake ADB command: ${joined}`);
+  };
+  const restored = await restoreSyntheticSession({
+    commandRunner: runner,
+    adbPath: 'adb',
+    device: { serial: 'PRIVATE-SERIAL' },
+    wait: async () => {},
+    account: { email: 'owner@example.invalid', password: 'private-password' },
+    initialProfileHierarchy: '<hierarchy>' + node('Anmelden') + node('Konto erstellen') + '</hierarchy>',
+  });
+  assert.equal(restored, true);
+  assert.equal(profileDumps, 40);
 });
 
 test('taps the visible part of an action overlapped by persistent bottom navigation', () => {

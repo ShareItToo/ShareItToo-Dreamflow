@@ -21,6 +21,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   runStagingNonBindingSimulation,
 } from './run_staging_non_binding_simulation.mjs';
+import {
+  listingPhotoTruthClassifications,
+  listingPhotoTruthPolicyText,
+  listingPhotoTruthPolicyVersion,
+} from '../backend/src/listing_photo_truth_policy.js';
 
 const repositoryRoot = realpathSync(resolve(fileURLToPath(new URL('..', import.meta.url))));
 const stagingApiBaseUrl = 'https://staging.shareittoo.com/api/v1';
@@ -325,6 +330,7 @@ export async function prepareStagingEmailVerifiedTwoRoleJourney({
         || !upload.value.url.startsWith('https://staging.shareittoo.com/')) {
       fail('The isolated product-journey upload did not return a Staging URL.');
     }
+    const photos = [upload.value.url];
     const created = await apiRequest(fetchImpl, '/listings', {
       method: 'POST',
       token: owner.token,
@@ -341,7 +347,10 @@ export async function prepareStagingEmailVerifiedTwoRoleJourney({
         priceUnit: 'day',
         currency: 'EUR',
         deposit: null,
-        photos: [upload.value.url],
+        photos,
+        photoTruthPolicyVersion: listingPhotoTruthPolicyVersion,
+        photoTruthAttestation: listingPhotoTruthPolicyText,
+        photoTruthClassifications: photos.map(() => listingPhotoTruthClassifications[0]),
         locationText: 'Staging Testadresse',
         city: 'Heilbronn',
         country: 'Deutschland',

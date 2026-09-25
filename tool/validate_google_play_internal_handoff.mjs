@@ -136,6 +136,8 @@ export const historicalRolloverCandidatePath =
   'store/google-play/rollover-candidate-2026092101.json';
 export const explicitHistoricalRolloverStatus =
   'built-and-archived-internal-staging-upload-pending';
+export const activeRolloverStatus =
+  'built-and-archived-internal-staging-release-active';
 export const currentRolloverCandidatePointerPath =
   'store/google-play/current-rollover-candidate.json';
 
@@ -183,21 +185,69 @@ export async function validateExplicitHistoricalRolloverCandidate({
   assertNoCredentials(rollover, 'explicit historical rollover candidate');
   same(rollover.schemaVersion, 1, 'explicit rollover schemaVersion');
   same(rollover.kind, 'android-current-rollover-candidate', 'explicit rollover kind');
-  same(rollover.status, explicitHistoricalRolloverStatus, 'explicit rollover status');
-  same(rollover.playConsoleReadback, 'not-performed',
-    'explicit rollover.playConsoleReadback');
+  if (![explicitHistoricalRolloverStatus, activeRolloverStatus].includes(rollover.status)) {
+    fail('explicit rollover status does not match the bound candidate.');
+  }
+  const active = rollover.status === activeRolloverStatus;
   const playState = object(rollover.playStateAtLastReadback,
     'explicit rollover.playStateAtLastReadback');
-  same(playState.readbackPerformed, false,
-    'explicit rollover.playStateAtLastReadback.readbackPerformed');
-  same(playState.candidateUploaded, false,
-    'explicit rollover.playStateAtLastReadback.candidateUploaded');
-  same(playState.candidateActivated, false,
-    'explicit rollover.playStateAtLastReadback.candidateActivated');
-  same(playState.testerListChanged, false,
-    'explicit rollover.playStateAtLastReadback.testerListChanged');
-  same(playState.consoleActionPerformed, false,
-    'explicit rollover.playStateAtLastReadback.consoleActionPerformed');
+  if (active) {
+    const readback = object(rollover.playConsoleReadback,
+      'explicit rollover.playConsoleReadback');
+    same(readback.track, 'internal-testing',
+      'explicit rollover.playConsoleReadback.track');
+    same(readback.releaseName, `${rollover.candidate?.versionCode} (${rollover.candidate?.versionName})`,
+      'explicit rollover.playConsoleReadback.releaseName');
+    same(readback.versionName, rollover.candidate?.versionName,
+      'explicit rollover.playConsoleReadback.versionName');
+    same(readback.versionCode, rollover.candidate?.versionCode,
+      'explicit rollover.playConsoleReadback.versionCode');
+    same(readback.status, 'available-to-internal-testers',
+      'explicit rollover.playConsoleReadback.status');
+    same(readback.reviewed, false,
+      'explicit rollover.playConsoleReadback.reviewed');
+    same(readback.sentForReview, false,
+      'explicit rollover.playConsoleReadback.sentForReview');
+    same(readback.temporaryAppName, `${rollover.candidate?.applicationId} (unreviewed)`,
+      'explicit rollover.playConsoleReadback.temporaryAppName');
+    same(readback.testerListName, 'SIT interner Test',
+      'explicit rollover.playConsoleReadback.testerListName');
+    same(readback.testerCount, 2,
+      'explicit rollover.playConsoleReadback.testerCount');
+    same(readback.testerListUnchanged, true,
+      'explicit rollover.playConsoleReadback.testerListUnchanged');
+    same(readback.joinLinkAvailable, true,
+      'explicit rollover.playConsoleReadback.joinLinkAvailable');
+    if (!/^\d+$/u.test(String(readback.releaseId ?? ''))
+        || !/^\/console\/u\/0\/developers\/\d+\/app\/\d+\/tracks\/\d+\/releases\/\d+\/details$/u
+          .test(readback.releaseDetailsPath ?? '')
+        || typeof readback.performedAt !== 'string') {
+      fail('explicit rollover.playConsoleReadback live release identity is invalid.');
+    }
+    same(playState.readbackPerformed, true,
+      'explicit rollover.playStateAtLastReadback.readbackPerformed');
+    same(playState.candidateUploaded, true,
+      'explicit rollover.playStateAtLastReadback.candidateUploaded');
+    same(playState.candidateActivated, true,
+      'explicit rollover.playStateAtLastReadback.candidateActivated');
+    same(playState.testerListChanged, false,
+      'explicit rollover.playStateAtLastReadback.testerListChanged');
+    same(playState.consoleActionPerformed, true,
+      'explicit rollover.playStateAtLastReadback.consoleActionPerformed');
+  } else {
+    same(rollover.playConsoleReadback, 'not-performed',
+      'explicit rollover.playConsoleReadback');
+    same(playState.readbackPerformed, false,
+      'explicit rollover.playStateAtLastReadback.readbackPerformed');
+    same(playState.candidateUploaded, false,
+      'explicit rollover.playStateAtLastReadback.candidateUploaded');
+    same(playState.candidateActivated, false,
+      'explicit rollover.playStateAtLastReadback.candidateActivated');
+    same(playState.testerListChanged, false,
+      'explicit rollover.playStateAtLastReadback.testerListChanged');
+    same(playState.consoleActionPerformed, false,
+      'explicit rollover.playStateAtLastReadback.consoleActionPerformed');
+  }
   for (const key of [
     'containsSecrets', 'containsTesterIdentity', 'containsOptInUrl',
     'containsPrivateFilesystemPath',
