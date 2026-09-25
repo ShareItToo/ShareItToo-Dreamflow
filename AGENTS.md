@@ -98,6 +98,17 @@ discover a mechanically stale source hash.
   mutating contract timestamps, clocks, append-only state or trigger-guarded
   rows; deterministic old-fixture integration covers post-window dispute,
   payout and refund behavior separately.
+- Acceptance chargeback-sequencing invariant: when no public dispute-close
+  endpoint exists, a B8/B9 fixture must complete the terminal lifecycle and
+  prove the authentic payout-hold boundary before entering an intentional
+  synthetic chargeback state; funds reinstatement must be read back as a
+  retained `disputed` booking with no direct SQL status reset, time bypass,
+  post-window payout or refund action.
+- Merged read-only source-directory invariant: clone-only merged Ops source
+  directories use mode `0755`, consumed source files use `0644`, and the
+  exact runtime UID must pass a readability plus `node --check` preflight
+  against the same read-only mounts before execution; manifests, evidence and
+  secret files remain owner-only `0600` outside the source directory.
 - Cleanup evidence must follow the product's declared retention contract, not
   an invented row-retention expectation. Revoked or expired credential rows
   such as `staff_elevations` are expected to be purged; preserve and verify the

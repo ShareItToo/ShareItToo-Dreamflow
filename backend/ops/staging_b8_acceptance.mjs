@@ -331,42 +331,6 @@ async function main() {
   assert.ok(captured.provider_payment_id);
   assert.ok(captured.provider_charge_id);
 
-  const providerDisputeId = `dp_memory_${runId}`;
-  const providerDisputeObject = {
-    id: providerDisputeId,
-    object: 'dispute',
-    charge: captured.provider_charge_id,
-    amount: paid.value.payment.amountMinor,
-    currency: 'eur',
-    reason: 'fraudulent',
-    status: 'under_review',
-    evidence_details: { due_by: Math.floor(Date.now() / 1000) + 604800 },
-  };
-  for (const [suffix, type, status] of [
-    ['created', 'charge.dispute.created', 'under_review'],
-    ['withdrawn', 'charge.dispute.funds_withdrawn', 'under_review'],
-    ['reinstated', 'charge.dispute.funds_reinstated', 'won'],
-  ]) {
-    const event = {
-      id: `evt_memory_${runId}_${suffix}`,
-      object: 'event',
-      type,
-      created: Math.floor(Date.now() / 1000),
-      livemode: false,
-      data: { object: { ...providerDisputeObject, status } },
-    };
-    const result = await applyProviderEvent(event, Buffer.from(JSON.stringify(event)));
-    assert.equal(result.status, 'processed');
-  }
-  const chargebackLedger = await pool.query(
-    `SELECT transaction_type FROM ledger_transactions
-     WHERE provider_reference = $1 ORDER BY created_at, transaction_type`,
-    [providerDisputeId],
-  );
-  assert.deepEqual(
-    chargebackLedger.rows.map((row) => row.transaction_type).sort(),
-    ['chargeback', 'chargeback_reversed'],
-  );
   const disabledDepositRoute = await api(`/bookings/${bookingId}/deposit/setup`, {
     method: 'POST',
     token: users.renter.token,
@@ -407,6 +371,65 @@ async function main() {
   });
   assert.equal(blockedPayout.value.error, 'payout_hold_active');
 
+  const preDisputeFinancialCounts = (await pool.query(
+    `SELECT
+       (SELECT count(*)::int FROM payouts WHERE payment_id = $1) AS payouts,
+       (SELECT count(*)::int FROM refunds WHERE payment_id = $1) AS refunds`,
+    [paymentId],
+  )).rows[0];
+  assert.deepEqual(preDisputeFinancialCounts, { payouts: 0, refunds: 0 });
+
+  // The payout-hold boundary is proven before the intentional synthetic
+  // chargeback state. Funds reinstatement does not close the separate human
+  // dispute or restore a booking from `disputed` to its prior lifecycle state.
+  const providerDisputeId = `dp_memory_${runId}`;
+  const providerDisputeObject = {
+    id: providerDisputeId,
+    object: 'dispute',
+    charge: captured.provider_charge_id,
+    amount: paid.value.payment.amountMinor,
+    currency: 'eur',
+    reason: 'fraudulent',
+    status: 'under_review',
+    evidence_details: { due_by: Math.floor(Date.now() / 1000) + 604800 },
+  };
+  for (const [suffix, type, status] of [
+    ['created', 'charge.dispute.created', 'under_review'],
+    ['withdrawn', 'charge.dispute.funds_withdrawn', 'under_review'],
+    ['reinstated', 'charge.dispute.funds_reinstated', 'won'],
+  ]) {
+    const event = {
+      id: `evt_memory_${runId}_${suffix}`,
+      object: 'event',
+      type,
+      created: Math.floor(Date.now() / 1000),
+      livemode: false,
+      data: { object: { ...providerDisputeObject, status } },
+    };
+    const result = await applyProviderEvent(event, Buffer.from(JSON.stringify(event)));
+    assert.equal(result.status, 'processed');
+  }
+  const disputeState = (await pool.query(
+    `SELECT dispute.status, dispute.provider_status, booking.workflow_status
+       FROM disputes AS dispute
+       JOIN bookings AS booking ON booking.id = dispute.booking_id
+      WHERE dispute.provider_dispute_id = $1`,
+    [providerDisputeId],
+  )).rows[0];
+  assert.deepEqual(disputeState, {
+    status: 'investigating',
+    provider_status: 'won',
+    workflow_status: 'disputed',
+  });
+  const chargebackLedger = await pool.query(
+    `SELECT transaction_type FROM ledger_transactions
+     WHERE provider_reference = $1 ORDER BY created_at, transaction_type`,
+    [providerDisputeId],
+  );
+  assert.deepEqual(
+    chargebackLedger.rows.map((row) => row.transaction_type).sort(),
+    ['chargeback', 'chargeback_reversed'],
+  );
   const financialCounts = (await pool.query(
     `SELECT
        (SELECT count(*)::int FROM payouts WHERE payment_id = $1) AS payouts,
@@ -414,6 +437,7 @@ async function main() {
     [paymentId],
   )).rows[0];
   assert.deepEqual(financialCounts, { payouts: 0, refunds: 0 });
+  assert.deepEqual(financialCounts, preDisputeFinancialCounts);
 
   const ledgerBalance = await pool.query(
     `SELECT tx.id, tx.transaction_type,
@@ -473,10 +497,18 @@ async function main() {
     chargebackLedger: chargebackLedger.rows.map((row) => row.transaction_type).sort(),
     deposit: { enabled: false, securityDepositMinor: 0 },
     payout: {
-      boundary: blockedPayout.value.error,
+      boundary: 'pre_dispute_payout_hold_active',
+      error: blockedPayout.value.error,
       payouts: financialCounts.payouts,
     },
     refunds: { count: financialCounts.refunds, postWindowFlow: 'not_proven' },
+    dispute: {
+      boundary: 'post_completed_chargeback_reinstatement',
+      status: disputeState.status,
+      providerStatus: disputeState.provider_status,
+      bookingWorkflowStatus: disputeState.workflow_status,
+      humanClosure: 'not_performed',
+    },
     ledger: {
       transactions: ledgerBalance.rowCount,
       balanced: true,

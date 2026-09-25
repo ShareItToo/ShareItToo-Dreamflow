@@ -211,11 +211,25 @@ test('B8 and B9 use the shared handover helper before guarded transitions', asyn
 
 test('B8 stops at the authentic payout boundary without time or trigger bypasses', async () => {
   const b8 = await fs.readFile(path.join(backendRoot, 'ops/staging_b8_acceptance.mjs'), 'utf8');
+  const completed = b8.indexOf("body: { status: 'completed' }");
+  const payoutProbe = b8.indexOf("assert.equal(blockedPayout.value.error, 'payout_hold_active')");
+  const payoutBoundary = b8.indexOf("boundary: 'pre_dispute_payout_hold_active'");
+  const chargeback = b8.indexOf("['created', 'charge.dispute.created', 'under_review']");
+  const disputeReadback = b8.indexOf('provider_status, booking.workflow_status');
+  assert.ok(completed >= 0 && completed < payoutProbe && payoutProbe < chargeback);
+  assert.ok(chargeback < disputeReadback && disputeReadback < payoutBoundary);
   assert.match(b8, /payout_hold_active/u);
   assert.match(b8, /postWindowFlow: 'not_proven'/u);
+  assert.match(b8, /boundary: 'post_completed_chargeback_reinstatement'/u);
+  assert.match(b8, /status: 'investigating'/u);
+  assert.match(b8, /providerStatus: disputeState\.provider_status/u);
+  assert.match(b8, /bookingWorkflowStatus: disputeState\.workflow_status/u);
+  assert.match(b8, /humanClosure: 'not_performed'/u);
   assert.match(b8, /cleanup_required: true/u);
   assert.match(b8, /cleanup: \{ required: true, scope: 'isolated_clone'/u);
   assert.doesNotMatch(b8, /payout_blocked_by_dispute/u);
+  assert.doesNotMatch(b8, /UPDATE\s+disputes/u);
+  assert.doesNotMatch(b8, /UPDATE\s+bookings/u);
   assert.doesNotMatch(b8, /payout_instruction_due_at\s*=\s*now\(\)/u);
   assert.doesNotMatch(b8, /completed_at\s*=\s*now\(\)/u);
   assert.doesNotMatch(b8, /\/payments\/\$\{paymentId\}\/refunds/u);
