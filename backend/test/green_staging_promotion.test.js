@@ -63,6 +63,7 @@ const targetManifest = {
 };
 targetManifest.targetDigest = normalizedGreenTargetDigest(targetManifest);
 assert.equal(targetManifest.targetDigest, '268cde13935b986b32a6cd99474317a257625ffc656ac50c13f192db7fbb3b8d');
+const prePromotionImageReference = `${greenTarget.prePromotionImage}@${greenTarget.prePromotionImageDigest}`;
 const config = {
   environment: 'test', envFile: '/docker/shareittoo/staging-secrets/green.env',
   envNames: ['NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'JWT_SECRET', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'MAIL_TRANSPORT', 'PUSH_TRANSPORT', 'IDENTITY_VERIFICATION_TRANSPORT', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_ALLOWED_USER_IDS', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'MAIL_FROM', 'FIREBASE_PROJECT_ID', 'FIREBASE_AUTH_ENABLED', 'FIREBASE_PHONE_VERIFICATION_ENABLED', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_LISTING_AI_BUDGET_CENTS', 'ENABLE_STAGING_STRIPE', 'TECHNICAL_SANDBOX_ENABLED', 'TECHNICAL_SANDBOX_KILL_SWITCH', 'TECHNICAL_SANDBOX_ACCOUNT_ID', 'TECHNICAL_SANDBOX_USER_IDS', 'TECHNICAL_SANDBOX_AUTHORIZATION_ID', 'TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT', 'TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT', 'TECHNICAL_SANDBOX_SECRET_KEY_FILE', 'TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE', 'SIT_STAGING_PILOT_ID', 'SYNTHETIC_SANDBOX_PASSWORD_FILE'],
@@ -418,7 +419,7 @@ test('production-shaped image inspect readback may omit Config.Image but must bi
 
 test('inventory rejects wrong schema, host ports and non-Green labels', () => {
   const inventory = {
-    api: { name: greenTarget.apiContainer, greenLabel: false, prePromotionTuple: true, hostPorts: 0, running: true, networks: [greenTarget.network, greenTarget.providerNetwork], image: targetManifest.prePromotionImage, user: 'shareittoo', databaseHost: greenTarget.databaseContainer, databaseName: greenTarget.databaseName, databaseUser: greenTarget.databaseUser, uploadsVolume: greenTarget.uploadsVolume, groupAdd: true, mounts: sourceMounts },
+    api: { name: greenTarget.apiContainer, greenLabel: false, prePromotionTuple: true, hostPorts: 0, running: true, networks: [greenTarget.network, greenTarget.providerNetwork], image: prePromotionImageReference, user: 'shareittoo', databaseHost: greenTarget.databaseContainer, databaseName: greenTarget.databaseName, databaseUser: greenTarget.databaseUser, uploadsVolume: greenTarget.uploadsVolume, groupAdd: true, mounts: sourceMounts },
     database: { name: greenTarget.databaseContainer, greenLabel: true, running: true },
     network: { name: greenTarget.network, internal: true }, providerNetwork: { name: greenTarget.providerNetwork },
     uploadsVolume: { name: greenTarget.uploadsVolume }, schema: 97,
@@ -427,6 +428,8 @@ test('inventory rejects wrong schema, host ports and non-Green labels', () => {
   assert.throws(() => assertGreenContainerInventory({ ...inventory, schema: 96 }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config));
   assert.throws(() => assertGreenContainerInventory({ ...inventory, api: { ...inventory.api, hostPorts: 1 } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config));
   assert.throws(() => assertGreenContainerInventory({ ...inventory, network: { name: 'sit-staging', internal: true } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config));
+  assert.throws(() => assertGreenContainerInventory({ ...inventory, api: { ...inventory.api, image: targetManifest.prePromotionImage } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
+  assert.throws(() => assertGreenContainerInventory({ ...inventory, api: { ...inventory.api, image: `${prePromotionImageReference.slice(0, -64)}${'0'.repeat(64)}` } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
 });
 
 test('promotion plan keeps backup, isolated 97-to-97 idempotency, acceptance and final no-port promotion ordered', () => {
@@ -811,7 +814,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   const expectedReversible = buildGreenPromotionCommands({ plan, configFile, config: runtimeConfig })
     .slice(0, buildGreenPromotionCommands({ plan, configFile, config: runtimeConfig }).findIndex((entry) => entry.phase === 'quiesce_green_api'))
     .map((entry) => entry.phase);
-  const good = await fakeRun(targetManifest.prePromotionImage);
+  const good = await fakeRun(prePromotionImageReference);
   assert.equal(good.result?.code, 'test_stop_before_quiesce', `${good.result?.message ?? 'no-error'} :: ${good.calls.map((entry) => entry.phase).join('|')}`);
   const quiesceIndex = good.calls.findIndex((entry) => entry.phase === 'quiesce_green_api');
   assert.ok(quiesceIndex > 0);
@@ -824,7 +827,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     ['additional network', { NetworkSettings: { Networks: { [plan.isolated.network]: { NetworkID: '' }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } } }],
   ]) {
     rmSync(`${evidenceFile}.pgdump`, { force: true });
-    const invalidPostgres = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_postgres_start', undefined, postgresIdentityOverrides);
+    const invalidPostgres = await fakeRun(prePromotionImageReference, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_postgres_start', undefined, postgresIdentityOverrides);
     assert.equal(invalidPostgres.result?.code, 'green_isolated_database_network_identity_invalid', label);
     assert.equal(invalidPostgres.calls.some((entry) => entry.phase === 'isolated_postgres_start'), false, label);
   }
@@ -836,39 +839,39 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     `${greenTarget.apiContainer}\tsit-staging\t\ttrue\t${greenTarget.runId}\n${greenTarget.databaseContainer}\t\t\ttrue\t\n`,
     `${targetContainerSet}shareittoo-staging-api-lookalike\t\t\t\t\n`,
   ]) {
-    const invalidTarget = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', invalidTargetSet);
+    const invalidTarget = await fakeRun(prePromotionImageReference, currentMigrationLedger, undefined, '1\n', invalidTargetSet);
     assert.equal(invalidTarget.result?.code, 'green_target_container_set_invalid');
     assert.equal(invalidTarget.calls.some((entry) => entry.phase === 'quiesce_green_api'), false);
   }
-  const preservedExitedGreen = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', `${targetContainerSet}shareittoo-staging-postgres\t sit-staging\t\t\t\n`);
+  const preservedExitedGreen = await fakeRun(prePromotionImageReference, currentMigrationLedger, undefined, '1\n', `${targetContainerSet}shareittoo-staging-postgres\t sit-staging\t\t\t\n`);
   assert.equal(preservedExitedGreen.result?.code, 'test_stop_before_quiesce');
   const foreignWriter = JSON.stringify([{ role: 'foreign', application: 'staging-api', client: '10.0.0.2', state: 'active' }]);
-  const writerBefore = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, foreignWriter, '[]\n', emptyFindingFingerprint, 'source_foreign_writer_readback_before_backup');
+  const writerBefore = await fakeRun(prePromotionImageReference, currentMigrationLedger, undefined, '1\n', targetContainerSet, foreignWriter, '[]\n', emptyFindingFingerprint, 'source_foreign_writer_readback_before_backup');
   assert.equal(writerBefore.result?.code, 'green_foreign_writer_present');
   assert.equal(writerBefore.calls.some((entry) => entry.phase === 'fresh_protected_backup'), false);
-  const writerAfter = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', foreignWriter, emptyFindingFingerprint, 'source_foreign_writer_readback_after_backup');
+  const writerAfter = await fakeRun(prePromotionImageReference, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', foreignWriter, emptyFindingFingerprint, 'source_foreign_writer_readback_after_backup');
   assert.equal(writerAfter.result?.code, 'green_foreign_writer_present');
   assert.equal(writerAfter.calls.some((entry) => entry.phase === 'fresh_protected_backup'), true);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
-  const invalidIsolatedLedger = await fakeRun(targetManifest.prePromotionImage, 'bad-ledger\n', undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_migration_ledger_readback');
+  const invalidIsolatedLedger = await fakeRun(prePromotionImageReference, 'bad-ledger\n', undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_migration_ledger_readback');
   assert.equal(invalidIsolatedLedger.result?.code, 'green_isolated_migration_ledger_invalid');
   assert.equal(invalidIsolatedLedger.result?.cleanup?.clean, true);
   assert.deepEqual(invalidIsolatedLedger.calls.find((entry) => entry.phase === 'failure_isolated_network_remove')?.args, ['network', 'rm', isolatedNetworkId]);
   assert.equal(invalidIsolatedLedger.calls.some((entry) => entry.phase === 'synthetic_sandbox_provision_isolated'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
-  const missingInitMarker = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, '', '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_postgres_init_complete_log_readback');
+  const missingInitMarker = await fakeRun(prePromotionImageReference, currentMigrationLedger, '', '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_postgres_init_complete_log_readback');
   assert.equal(missingInitMarker.result?.code, 'green_isolated_init_complete_log_invalid');
   assert.equal(missingInitMarker.calls.some((entry) => entry.phase === 'isolated_restore'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
-  const readinessOnlyMarker = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, 'database system is ready to accept connections\n', '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_postgres_init_complete_log_readback');
+  const readinessOnlyMarker = await fakeRun(prePromotionImageReference, currentMigrationLedger, 'database system is ready to accept connections\n', '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_postgres_init_complete_log_readback');
   assert.equal(readinessOnlyMarker.result?.code, 'green_isolated_init_complete_log_invalid');
   assert.equal(readinessOnlyMarker.calls.some((entry) => entry.phase === 'isolated_restore'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
-  const missingSecondStableSelect = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_postgres_stable_select_2');
+  const missingSecondStableSelect = await fakeRun(prePromotionImageReference, currentMigrationLedger, undefined, '', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_postgres_stable_select_2');
   assert.equal(missingSecondStableSelect.result?.code, 'green_isolated_stable_select_2_invalid');
   assert.equal(missingSecondStableSelect.calls.some((entry) => entry.phase === 'isolated_restore'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
-  const findingDrift = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', JSON.stringify({ paymentRecoveryNeedsReview: [{ source: 'payout', id_hash: 'a'.repeat(64), cause: 'payout_failed', status: 'failed', time_class: '>24h' }], supportNextUpdateOverdue: [] }), 'candidate_finding_fingerprint_readback');
+  const findingDrift = await fakeRun(prePromotionImageReference, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', JSON.stringify({ paymentRecoveryNeedsReview: [{ source: 'payout', id_hash: 'a'.repeat(64), cause: 'payout_failed', status: 'failed', time_class: '>24h' }], supportNextUpdateOverdue: [] }), 'candidate_finding_fingerprint_readback');
   assert.equal(findingDrift.result?.code, 'green_finding_fingerprint_drift');
   assert.equal(findingDrift.calls.some((entry) => entry.phase === 'candidate_health_and_feature_probes'), false);
   assert.deepEqual(findingDrift.calls.find((entry) => entry.phase === 'candidate_provider_network_attach')?.args, ['network', 'connect', providerNetworkId, candidateId]);
@@ -879,16 +882,16 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   assert.deepEqual(findingDrift.calls.find((entry) => entry.phase === 'failure_candidate_remove')?.args, ['rm', '--force', '--volumes', candidateId]);
   assert.deepEqual(findingDrift.calls.find((entry) => entry.phase === 'failure_isolated_database_remove')?.args, ['rm', '--force', '--volumes', isolatedDatabaseId]);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
-  const restoreZero = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_integrity_and_functional_probes', 0);
+  const restoreZero = await fakeRun(prePromotionImageReference, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_integrity_and_functional_probes', 0);
   assert.equal(restoreZero.result?.code, 'test_stop_at_phase');
   assert.ok(restoreZero.calls.findIndex((entry) => entry.phase === 'isolated_restore') < restoreZero.calls.findIndex((entry) => entry.phase === 'isolated_integrity_and_functional_probes'));
   assert.equal(restoreZero.calls.some((entry) => entry.phase === 'candidate_cleanup'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
-  const restoreNonzero = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_integrity_and_functional_probes', 7);
+  const restoreNonzero = await fakeRun(prePromotionImageReference, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'isolated_integrity_and_functional_probes', 7);
   assert.equal(restoreNonzero.result?.code, 'green_isolated_restore_failed');
   assert.equal(restoreNonzero.calls.some((entry) => entry.phase === 'isolated_integrity_and_functional_probes'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
-  const cleanupBindings = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'canonical_idempotent_migration_97_to_97');
+  const cleanupBindings = await fakeRun(prePromotionImageReference, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'canonical_idempotent_migration_97_to_97');
   assert.equal(cleanupBindings.calls.find((entry) => entry.phase === 'candidate_cleanup')?.args[3], candidateId);
   assert.equal(cleanupBindings.calls.find((entry) => entry.phase === 'candidate_cleanup_verify')?.args[3], `id=${candidateId}`);
   assert.equal(cleanupBindings.calls.find((entry) => entry.phase === 'isolated_database_cleanup_verify')?.args[3], `id=${isolatedDatabaseId}`);
@@ -900,7 +903,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   assert.equal(cleanupBindings.calls.some((entry) => entry.phase === 'failure_final_api_remove'), false);
   rmSync(`${evidenceFile}.pgdump`, { force: true });
 
-  const lateFinalFailure = await fakeRun(targetManifest.prePromotionImage, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'final_image_readback');
+  const lateFinalFailure = await fakeRun(prePromotionImageReference, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'final_image_readback');
   assert.equal(lateFinalFailure.result?.code, 'test_stop_at_phase');
   assert.equal(lateFinalFailure.result?.cleanup?.clean, true);
   assert.equal(lateFinalFailure.result?.forwardRecovery?.status, 'verified');
@@ -1001,7 +1004,7 @@ test('command executor bindings keep isolated probes and canonical runtime disti
 
 test('repeat-promotion inventory requires the exact Green DB host and retained final mount cohort', () => {
   const base = {
-    api: { name: greenTarget.apiContainer, greenLabel: false, prePromotionTuple: true, hostPorts: 0, running: true, networks: [greenTarget.network, greenTarget.providerNetwork], image: greenTarget.prePromotionImage, user: 'shareittoo', databaseHost: greenTarget.databaseContainer, databaseName: greenTarget.databaseName, databaseUser: greenTarget.databaseUser, uploadsVolume: greenTarget.uploadsVolume, groupAdd: true, mounts: sourceMounts },
+    api: { name: greenTarget.apiContainer, greenLabel: false, prePromotionTuple: true, hostPorts: 0, running: true, networks: [greenTarget.network, greenTarget.providerNetwork], image: prePromotionImageReference, user: 'shareittoo', databaseHost: greenTarget.databaseContainer, databaseName: greenTarget.databaseName, databaseUser: greenTarget.databaseUser, uploadsVolume: greenTarget.uploadsVolume, groupAdd: true, mounts: sourceMounts },
     database: { name: greenTarget.databaseContainer, greenLabel: true, running: true }, network: { name: greenTarget.network, internal: true }, providerNetwork: { name: greenTarget.providerNetwork }, uploadsVolume: { name: greenTarget.uploadsVolume }, schema: 97,
   };
   assert.equal(assertGreenContainerInventory(base, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), true);

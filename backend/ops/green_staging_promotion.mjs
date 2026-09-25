@@ -38,6 +38,7 @@ export const greenTarget = Object.freeze({
   sourceSchema: 97,
   currentSchema: 97,
   prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:ea25e7cb9747dde9ccb331b0a439bb1f9cc6134e',
+  prePromotionImageDigest: 'sha256:d440dd4a27bebb8caf3db4366d4289af4cadb1eaa7d8796c4f58ab80db0bbaca',
   sourceLedgerDigest: '950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0',
   currentLedgerDigest: '950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0',
   currentMigration: '097_registration_consent_bundle.up.sql',
@@ -647,6 +648,7 @@ function greenActiveNetworkPortBindings(record, failureCode) {
 
 export function assertGreenContainerInventory(inventory, expectedSourceSchema = greenTarget.sourceSchema, expectedPrePromotionImage, runtimeConfig) {
   exactKeys(inventory, ['api', 'database', 'network', 'providerNetwork', 'uploadsVolume', 'schema'], 'green_inventory_shape_invalid');
+  const expectedSourceImage = `${greenTarget.prePromotionImage}@${greenTarget.prePromotionImageDigest}`;
   if (inventory.api.name !== greenTarget.apiContainer
       || inventory.database.name !== greenTarget.databaseContainer
       || inventory.network.name !== greenTarget.network
@@ -662,7 +664,8 @@ export function assertGreenContainerInventory(inventory, expectedSourceSchema = 
     fail('green_inventory_mismatch');
   }
   if (typeof expectedPrePromotionImage !== 'string'
-      || inventory.api.image !== expectedPrePromotionImage
+      || expectedPrePromotionImage !== greenTarget.prePromotionImage
+      || inventory.api.image !== expectedSourceImage
         || inventory.api.networks?.slice().sort().join('|') !== [greenTarget.network, greenTarget.providerNetwork].sort().join('|')
         || inventory.api.databaseHost !== greenTarget.databaseContainer
         || inventory.api.databaseName !== greenTarget.databaseName
