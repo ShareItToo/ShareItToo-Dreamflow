@@ -540,7 +540,9 @@ async function main() {
     expected: [201],
   });
   assert.equal(ownerReview.value.review.rating, 4.5);
-  const publicReviews = await api(`/listings/${listingId}/reviews`);
+  const publicReviews = await api(`/listings/${listingId}/reviews`, {
+    token: users.renter.token,
+  });
   assert.equal(publicReviews.value.reviews.length, 2);
 
   const staffChecks = {};

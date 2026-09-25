@@ -50,3 +50,13 @@ test('B9 catalog searches use the renter principal and precede account deletion'
     /token: users\.renter\.token[\s\S]*assert\.deepEqual\(postDeleteCatalog\.value\.listings, \[\]\)/u,
   );
 });
+
+test('B9 public review readback uses an admitted pilot principal', async () => {
+  const source = await fs.readFile(path.join(backendRoot, 'ops/staging_b9_acceptance.mjs'), 'utf8');
+
+  assert.match(
+    source,
+    /const publicReviews = await api\(`\/listings\/\$\{listingId\}\/reviews`, \{\s+token: users\.renter\.token,\s+\}\);/u,
+  );
+  assert.doesNotMatch(source, /await api\(`\/listings\/\$\{listingId\}\/reviews`\);/u);
+});
