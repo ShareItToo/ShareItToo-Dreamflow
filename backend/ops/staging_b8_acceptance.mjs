@@ -411,7 +411,8 @@ async function main() {
   assert.equal(completed.value.booking.workflowStatus, 'completed');
   await pool.query(
     `UPDATE bookings
-     SET completed_at = now() - ($2::text || ' hours')::interval - interval '1 minute'
+     SET completed_at = now() - ($2::text || ' hours')::interval - interval '1 minute',
+         payout_instruction_due_at = now() - interval '1 minute'
      WHERE id = $1`,
     [bookingId, config.payments.payoutHoldHours],
   );

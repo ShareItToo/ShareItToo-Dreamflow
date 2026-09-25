@@ -89,6 +89,10 @@ discover a mechanically stale source hash.
   `ACCEPTANCE_BASE_URL` endpoint, must be strictly validated through a
   canonical helper before the first data mutation; do not defer validation
   until a later fixture request and never provide a silent endpoint default.
+- Acceptance payout-time invariant: fixtures that simulate an elapsed payout
+  hold must advance the authoritative `payout_instruction_due_at` field, not
+  infer elapsed time from `completed_at`; a focused test must prove that this
+  update occurs before the dispute-block assertion.
 - Cleanup evidence must follow the product's declared retention contract, not
   an invented row-retention expectation. Revoked or expired credential rows
   such as `staff_elevations` are expected to be purged; preserve and verify the

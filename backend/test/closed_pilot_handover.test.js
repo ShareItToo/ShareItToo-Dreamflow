@@ -208,3 +208,15 @@ test('B8 and B9 use the shared handover helper before guarded transitions', asyn
   assert.equal((b9.match(/body: \{ status: 'active' \}/gu) ?? []).length, 1);
   assert.equal(b9Running, -1);
 });
+
+test('B8 advances the authoritative payout hold before dispute blocking', async () => {
+  const b8 = await fs.readFile(path.join(backendRoot, 'ops/staging_b8_acceptance.mjs'), 'utf8');
+  const payoutHoldUpdate = b8.indexOf('payout_instruction_due_at = now() - interval \'1 minute\'');
+  const disputeBlockAssertion = b8.indexOf("payout_blocked_by_dispute");
+  assert.ok(payoutHoldUpdate >= 0);
+  assert.ok(disputeBlockAssertion > payoutHoldUpdate);
+  assert.match(
+    b8.slice(Math.max(0, payoutHoldUpdate - 180), payoutHoldUpdate + 100),
+    /SET completed_at = now\(\) - \(\$2::text \|\| ' hours'\)::interval - interval '1 minute',[\s\S]*payout_instruction_due_at = now\(\) - interval '1 minute'/u,
+  );
+});
