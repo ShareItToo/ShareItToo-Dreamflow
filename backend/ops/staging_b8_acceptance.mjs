@@ -18,6 +18,7 @@ import {
   assertAcceptancePrincipalGateCompatibility,
   assertAcceptancePaymentPilotCompatibility,
   deriveAcceptancePrincipalIds,
+  resolveAcceptanceBaseUrl,
   resolveAcceptanceRunId,
 } from './acceptance_run_identity.mjs';
 
@@ -26,8 +27,7 @@ import { pool } from '../src/db.js';
 import { applyProviderEvent } from '../src/payment_workflow.js';
 import { hashPassword, signAccessToken } from '../src/security.js';
 
-const baseUrl = (process.env.ACCEPTANCE_BASE_URL || 'http://127.0.0.1:8080/v1')
-  .replace(/\/$/, '');
+const baseUrl = resolveAcceptanceBaseUrl();
 const runId = resolveAcceptanceRunId('b8');
 const password = createEphemeralAcceptancePassword();
 

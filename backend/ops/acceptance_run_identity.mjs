@@ -9,6 +9,35 @@ function fail(code) {
   throw new Error(code);
 }
 
+export function resolveAcceptanceBaseUrl(environment = process.env) {
+  const raw = environment?.ACCEPTANCE_BASE_URL;
+  if (typeof raw !== 'string' || raw.length === 0) {
+    fail('acceptance_base_url_missing');
+  }
+  if (raw.trim() !== raw || raw.trim() === '') {
+    fail('acceptance_base_url_invalid');
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    fail('acceptance_base_url_invalid');
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)
+      || !parsed.hostname
+      || !parsed.host
+      || parsed.username
+      || parsed.password
+      || parsed.search
+      || parsed.hash
+      || !['/v1', '/v1/'].includes(parsed.pathname)) {
+    fail('acceptance_base_url_invalid');
+  }
+
+  return `${parsed.origin}/v1`;
+}
+
 export function resolveAcceptanceRunId(block, environment = process.env) {
   if (!['b8', 'b9'].includes(block)) fail('acceptance_block_invalid');
   const supplied = environment.ACCEPTANCE_RUN_ID;

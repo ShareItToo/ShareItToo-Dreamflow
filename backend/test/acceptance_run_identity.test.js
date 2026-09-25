@@ -5,8 +5,48 @@ import {
   assertAcceptancePrincipalGateCompatibility,
   assertAcceptancePaymentPilotCompatibility,
   deriveAcceptancePrincipalIds,
+  resolveAcceptanceBaseUrl,
   resolveAcceptanceRunId,
 } from '../ops/acceptance_run_identity.mjs';
+
+test('acceptance endpoint is explicit, absolute and normalized before a runner starts', () => {
+  assert.throws(
+    () => resolveAcceptanceBaseUrl({}),
+    /acceptance_base_url_missing/u,
+  );
+  assert.throws(
+    () => resolveAcceptanceBaseUrl({ ACCEPTANCE_BASE_URL: '' }),
+    /acceptance_base_url_missing/u,
+  );
+  for (const value of [
+    'http://api:8080',
+    'http://api:8080/v1/extra',
+    'http://user:pass@api:8080/v1',
+    'http://api:8080/v1?probe=1',
+    'http://api:8080/v1#probe',
+    'ftp://api:8080/v1',
+    ' http://api:8080/v1',
+    'http://api:8080/v1 ',
+  ]) {
+    assert.throws(
+      () => resolveAcceptanceBaseUrl({ ACCEPTANCE_BASE_URL: value }),
+      /acceptance_base_url_invalid/u,
+      value,
+    );
+  }
+  assert.equal(
+    resolveAcceptanceBaseUrl({ ACCEPTANCE_BASE_URL: 'http://api:8080/v1' }),
+    'http://api:8080/v1',
+  );
+  assert.equal(
+    resolveAcceptanceBaseUrl({ ACCEPTANCE_BASE_URL: 'https://clone.internal:8443/v1/' }),
+    'https://clone.internal:8443/v1',
+  );
+  assert.equal(
+    resolveAcceptanceBaseUrl({ ACCEPTANCE_BASE_URL: 'http://127.0.0.1:8080/v1/' }),
+    'http://127.0.0.1:8080/v1',
+  );
+});
 
 test('explicit B8 run IDs are strict and derive stable principal IDs', () => {
   const environment = { ACCEPTANCE_RUN_ID: 'b8-muh2n3rs-fed16b' };

@@ -100,6 +100,17 @@ test('closed-pilot client build preflight is strict and reusable before mutation
   }
 });
 
+test('B8 and B9 require the canonical explicit acceptance endpoint resolver', async () => {
+  for (const relativePath of [
+    'ops/staging_b8_acceptance.mjs',
+    'ops/staging_b9_acceptance.mjs',
+  ]) {
+    const contents = await fs.readFile(path.join(backendRoot, relativePath), 'utf8');
+    assert.match(contents, /resolveAcceptanceBaseUrl\(\)/u, relativePath);
+    assert.doesNotMatch(contents, /ACCEPTANCE_BASE_URL\s*\|\|/u, relativePath);
+  }
+});
+
 test('closed-pilot acceptance fails before fixtures when V5.2 snapshots are unavailable', async () => {
   await assert.rejects(
     assertClosedPilotLegalReadiness({ query: async () => ({ rows: [] }) }),

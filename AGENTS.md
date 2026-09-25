@@ -77,9 +77,10 @@ discover a mechanically stale source hash.
   them before sending requests; never hand-copy legal/policy text or permit
   `generated`/`materially_altered` classifications in synthetic payloads.
 - Acceptance mandatory-input invariant: every mandatory runner input,
-  including the exact candidate `ACCEPTANCE_CLIENT_BUILD`, must be strictly
-  validated through a canonical helper before the first data mutation; do not
-  defer validation until a later fixture request.
+  including the exact candidate `ACCEPTANCE_CLIENT_BUILD` and explicit
+  `ACCEPTANCE_BASE_URL` endpoint, must be strictly validated through a
+  canonical helper before the first data mutation; do not defer validation
+  until a later fixture request and never provide a silent endpoint default.
 - Cleanup evidence must follow the product's declared retention contract, not
   an invented row-retention expectation. Revoked or expired credential rows
   such as `staff_elevations` are expected to be purged; preserve and verify the
