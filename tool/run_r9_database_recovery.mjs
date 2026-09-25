@@ -28,7 +28,7 @@ const requireFromBackend = createRequire(
   new URL('../backend/package.json', import.meta.url),
 );
 
-export const r9RequiredMigrationCount = 97;
+export const r9RequiredMigrationCount = 98;
 export const r9SyntheticAccountCount = 12;
 export const r9SyntheticListingCount = 6;
 export const r9ResultClassification = 'LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF';
@@ -82,6 +82,10 @@ const rollbackGuardExpectations = Object.freeze([
   Object.freeze({
     filename: '097_registration_consent_bundle.down.sql',
     message: 'registration_consent_bundles_active_rows',
+  }),
+  Object.freeze({
+    filename: '098_booking_checkout_declaration_constraints.down.sql',
+    message: 'v52_booking_declaration_rows_active',
   }),
 ]);
 
@@ -162,7 +166,7 @@ async function readMigrationPlan(root) {
   }
   if (plan.length !== r9RequiredMigrationCount
       || plan[0]?.filename !== '001_b3_foundation.up.sql'
-      || plan.at(-1)?.filename !== '097_registration_consent_bundle.up.sql') {
+      || plan.at(-1)?.filename !== '098_booking_checkout_declaration_constraints.up.sql') {
     fail('r9_migration_inventory_unexpected');
   }
   return Object.freeze(plan);
@@ -668,6 +672,39 @@ async function insertRefundTransferReversalRollbackFixture(client) {
   );
 }
 
+async function insertBookingDeclarationRollbackFixture(client) {
+  await client.query(
+    `INSERT INTO rental_requests (
+       id, item_id, owner_id, renter_id, status, payload
+     ) VALUES (
+       'r9-booking-declaration-guard', 'r9-listing-001',
+       'r9-user-001', 'r9-user-002', 'accepted',
+       '{"synthetic":true,"fixture":"r9_booking_declaration_guard"}'::jsonb
+     )`,
+  );
+  await client.query(
+    `INSERT INTO bookings (
+       id, listing_id, owner_id, renter_id, status, starts_at, ends_at,
+       currency, quoted_total_minor, security_deposit_minor
+     ) VALUES (
+       'r9-booking-declaration-guard', 'r9-listing-001',
+       'r9-user-001', 'r9-user-002', 'completed',
+       '2026-10-01T10:00:00Z', '2026-10-02T10:00:00Z',
+       'EUR', 1000, 0
+     )`,
+  );
+  await client.query(
+    `INSERT INTO legal_declarations (
+       user_id, booking_id, declaration_type, exact_wording,
+       document_name, document_version, app_version, language, accepted
+     ) VALUES (
+       'r9-user-001', 'r9-booking-declaration-guard',
+       'private_terms_and_platform_terms', 'SYNTHETIC_TEST_ONLY',
+       'SYNTHETIC_TEST_ONLY', 'V5.2-test', 'r9-test', 'de', true
+     )`,
+  );
+}
+
 async function assertRollbackGuardRefusals(pool, root) {
   const refused = [];
   for (const guard of rollbackGuardExpectations) {
@@ -728,6 +765,9 @@ async function assertRollbackGuardRefusals(pool, root) {
             localTestOnly: false,
           })],
         );
+      }
+      if (guard.filename === '098_booking_checkout_declaration_constraints.down.sql') {
+        await insertBookingDeclarationRollbackFixture(client);
       }
       try {
         await client.query(sql);
@@ -800,7 +840,7 @@ async function closePools(pools) {
 
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
-  requiredLastMigration = '097_registration_consent_bundle.up.sql',
+  requiredLastMigration = '098_booking_checkout_declaration_constraints.up.sql',
   requiredRollbackGuards = rollbackGuardExpectations,
 } = {}) {
   if (value?.schemaVersion !== 1
