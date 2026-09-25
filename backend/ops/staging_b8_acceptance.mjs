@@ -428,6 +428,18 @@ async function main() {
   );
   assert.ok(ledgerBalance.rowCount >= 3);
   assert.ok(ledgerBalance.rows.every((row) => row.debit === row.credit));
+  await assert.rejects(
+    pool.query(
+      `UPDATE ledger_entries SET debit_minor = debit_minor + 1
+       WHERE id = (
+         SELECT min(entry.id) FROM ledger_entries AS entry
+         JOIN ledger_transactions AS tx ON tx.id = entry.transaction_id
+         WHERE tx.booking_id = $1
+       )`,
+      [bookingId],
+    ),
+    (error) => error?.code === '55000',
+  );
 
   const providerEvents = await pool.query(
     `SELECT event_type, status, processing_attempts

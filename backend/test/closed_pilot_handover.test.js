@@ -220,5 +220,6 @@ test('B8 stops at the authentic payout boundary without time or trigger bypasses
   assert.doesNotMatch(b8, /completed_at\s*=\s*now\(\)/u);
   assert.doesNotMatch(b8, /\/payments\/\$\{paymentId\}\/refunds/u);
   assert.doesNotMatch(b8, /\/account\/deletion/u);
-  assert.doesNotMatch(b8, /UPDATE ledger_entries/u);
+  assert.match(b8, /UPDATE ledger_entries/u);
+  assert.match(b8, /error\?\.code === '55000'/u);
 });
