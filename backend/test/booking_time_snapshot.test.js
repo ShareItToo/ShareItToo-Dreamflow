@@ -81,8 +81,9 @@ test('database timestamptz Date values are canonicalized before strict validatio
     time_snapshot_version: bookingTimeSnapshotVersion,
     handover_at: new Date('2026-03-29T08:00:00.000Z'),
     return_at: new Date('2026-03-30T08:00:00.000Z'),
-    rental_start_date: '2026-03-29',
-    rental_end_date: '2026-03-30',
+    // Matches node-postgres' DATE parser: local midnight, not UTC midnight.
+    rental_start_date: new Date(2026, 2, 29),
+    rental_end_date: new Date(2026, 2, 30),
     rental_timezone: 'Europe/Berlin',
   }), {
     version: bookingTimeSnapshotVersion,
@@ -90,6 +91,18 @@ test('database timestamptz Date values are canonicalized before strict validatio
     returnAt: '2026-03-30T08:00:00.000Z',
     timezone: 'Europe/Berlin',
   });
+});
+
+test('invalid database rental date values fail closed', () => {
+  assert.throws(() => bookingTimeSnapshotFromRow({
+    time_snapshot_version: bookingTimeSnapshotVersion,
+    handover_at: new Date('2026-03-29T08:00:00.000Z'),
+    return_at: new Date('2026-03-30T08:00:00.000Z'),
+    rental_start_date: new Date('not-a-date'),
+    rental_end_date: new Date(2026, 2, 30),
+    rental_timezone: 'Europe/Berlin',
+  }), (error) => error instanceof BookingTimeSnapshotError
+    && error.code === 'booking_exact_times_outside_rental_dates');
 });
 
 test('invalid database timestamptz Date values fail closed', () => {

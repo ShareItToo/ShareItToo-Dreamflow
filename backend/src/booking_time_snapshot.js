@@ -1,4 +1,5 @@
 import { bookingLocalDate } from './booking_address_reveal_domain.js';
+import { postgresDateText } from './postgres_date.js';
 
 export const bookingTimeSnapshotVersion = 'booking-time-v1';
 
@@ -81,14 +82,21 @@ export function bookingTimeSnapshotFromRow(row) {
     if (!Number.isFinite(value.getTime())) throw new BookingTimeSnapshotError(code);
     return value.toISOString();
   };
+  const databaseDate = (value) => {
+    try {
+      return postgresDateText(value);
+    } catch {
+      throw new BookingTimeSnapshotError('booking_exact_times_outside_rental_dates');
+    }
+  };
   return normalizeBookingTimeSnapshot({
     raw: {
       handoverAt: databaseInstant(row.handover_at, 'booking_handover_time_invalid'),
       returnAt: databaseInstant(row.return_at, 'booking_return_time_invalid'),
       timeSnapshotVersion: row.time_snapshot_version,
     },
-    rentalStartDate: row.rental_start_date,
-    rentalEndDate: row.rental_end_date,
+    rentalStartDate: databaseDate(row.rental_start_date),
+    rentalEndDate: databaseDate(row.rental_end_date),
     rentalTimezone: row.rental_timezone,
     required: true,
   });
