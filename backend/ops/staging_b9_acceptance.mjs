@@ -245,7 +245,7 @@ async function main() {
   const active = await api(`/bookings/${bookingId}/transitions`, {
     method: 'POST',
     token: users.renter.token,
-    headers: { 'Idempotency-Key': `${runId}-booking-running` },
+    headers: { 'Idempotency-Key': `${runId}-booking-active` },
     body: { status: 'active' },
   });
   assert.equal(active.value.booking.workflowStatus, 'active');
@@ -256,12 +256,6 @@ async function main() {
     users,
     segment: 'return',
     threadId: handover.threadId,
-  });
-  await api(`/bookings/${bookingId}/transitions`, {
-    method: 'POST',
-    token: users.renter.token,
-    headers: { 'Idempotency-Key': `${runId}-booking-active` },
-    body: { status: 'running' },
   });
   const completed = await api(`/bookings/${bookingId}/transitions`, {
     method: 'POST',

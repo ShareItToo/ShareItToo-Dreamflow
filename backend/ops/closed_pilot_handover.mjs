@@ -147,8 +147,9 @@ export async function completeClosedPilotHandover({
     expected: [201],
   });
   const qrPayload = challenge.value?.challenge?.qrPayload;
-  if (typeof qrPayload !== 'string' || qrPayload.length === 0) {
-    throw new Error('closed_pilot_handover_qr_missing');
+  const qrPrefix = `shareittoo:v3:${segment}:${plan.presenterRole}:`;
+  if (typeof qrPayload !== 'string' || !qrPayload.startsWith(qrPrefix)) {
+    throw new Error('closed_pilot_handover_qr_invalid');
   }
 
   const verification = await api(`/bookings/${bookingId}/confirmation-challenges/verify`, {
@@ -158,8 +159,14 @@ export async function completeClosedPilotHandover({
     body: { qrPayload },
     expected: [200],
   });
-  if (verification.value?.rejected === true) {
-    throw new Error('closed_pilot_handover_qr_rejected');
+  const verificationConfirmation = verification.value?.confirmation;
+  if (
+    verification.value?.rejected === true
+    || verificationConfirmation?.verificationVersion !== 3
+    || verificationConfirmation.presenterRole !== plan.presenterRole
+    || verificationConfirmation.confirmedByRole !== plan.verifierRole
+  ) {
+    throw new Error('closed_pilot_handover_verification_invalid');
   }
 
   return Object.freeze({

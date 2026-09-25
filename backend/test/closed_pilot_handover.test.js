@@ -12,6 +12,45 @@ import {
 
 const backendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+function createHandoverApi({
+  qrPayload = 'shareittoo:v3:pickup:owner:challenge:123456:booking-1',
+  verification = {
+    replayed: false,
+    confirmation: {
+      verificationVersion: 3,
+      presenterRole: 'owner',
+      confirmedByRole: 'renter',
+    },
+  },
+} = {}) {
+  const calls = [];
+  let uploadIndex = 0;
+  const api = async (route, options = {}) => {
+    calls.push({ route, options });
+    if (route === '/message-threads/booking/booking-1') {
+      return { value: { thread: { id: 'thread-1' } } };
+    }
+    if (route === '/uploads') {
+      uploadIndex += 1;
+      return { value: { id: `upload-${uploadIndex}` } };
+    }
+    if (route === '/message-threads/thread-1/messages') {
+      return { value: { message: { id: `message-${calls.length}` } } };
+    }
+    if (route === '/bookings/booking-1/condition-confirmations') {
+      return { value: { confirmation: { id: 'confirmation-1' } } };
+    }
+    if (route === '/bookings/booking-1/confirmation-challenges') {
+      return { value: { challenge: { qrPayload } } };
+    }
+    if (route === '/bookings/booking-1/confirmation-challenges/verify') {
+      return { value: verification };
+    }
+    throw new Error(`unexpected_route:${route}`);
+  };
+  return { api, calls };
+}
+
 test('closed-pilot V5.2 handover plan fixes exact slots, roles and purposes', () => {
   assert.deepEqual(CLOSED_PILOT_HANDOVER_SLOTS, [
     'overview',
@@ -40,35 +79,11 @@ test('closed-pilot V5.2 handover plan fixes exact slots, roles and purposes', ()
 });
 
 test('handover helper creates four distinct slot messages before confirmation and QR-v3 verification', async () => {
-  const calls = [];
-  let uploadIndex = 0;
   const users = {
     owner: { id: 'owner-1', token: 'owner-token' },
     renter: { id: 'renter-1', token: 'renter-token' },
   };
-  const api = async (route, options = {}) => {
-    calls.push({ route, options });
-    if (route === '/message-threads/booking/booking-1') {
-      return { value: { thread: { id: 'thread-1' } } };
-    }
-    if (route === '/uploads') {
-      uploadIndex += 1;
-      return { value: { id: `upload-${uploadIndex}` } };
-    }
-    if (route === '/message-threads/thread-1/messages') {
-      return { value: { message: { id: `message-${calls.length}` } } };
-    }
-    if (route === '/bookings/booking-1/condition-confirmations') {
-      return { value: { confirmation: { id: 'confirmation-1' } } };
-    }
-    if (route === '/bookings/booking-1/confirmation-challenges') {
-      return { value: { challenge: { qrPayload: 'shareittoo:v3:pickup:owner:challenge:123456:booking-1' } } };
-    }
-    if (route === '/bookings/booking-1/confirmation-challenges/verify') {
-      return { value: { replayed: false } };
-    }
-    throw new Error(`unexpected_route:${route}`);
-  };
+  const { api, calls } = createHandoverApi();
 
   const result = await completeClosedPilotHandover({
     api,
@@ -118,6 +133,59 @@ test('handover helper creates four distinct slot messages before confirmation an
   assert.ok(challengeIndex < verifyIndex);
 });
 
+for (const [label, options, expectedError] of [
+  [
+    'rejects a wrong QR segment/role prefix',
+    { qrPayload: 'shareittoo:v3:return:renter:challenge:123456:booking-1' },
+    /closed_pilot_handover_qr_invalid/u,
+  ],
+  [
+    'rejects a wrong verification version',
+    {
+      verification: {
+        replayed: false,
+        confirmation: {
+          verificationVersion: 2,
+          presenterRole: 'owner',
+          confirmedByRole: 'renter',
+        },
+      },
+    },
+    /closed_pilot_handover_verification_invalid/u,
+  ],
+  [
+    'rejects wrong presenter and verifier roles',
+    {
+      verification: {
+        replayed: false,
+        confirmation: {
+          verificationVersion: 3,
+          presenterRole: 'renter',
+          confirmedByRole: 'owner',
+        },
+      },
+    },
+    /closed_pilot_handover_verification_invalid/u,
+  ],
+]) {
+  test(`handover helper ${label} fail closed`, async () => {
+    const { api } = createHandoverApi(options);
+    await assert.rejects(
+      completeClosedPilotHandover({
+        api,
+        bookingId: 'booking-1',
+        runId: 'b8-negative-test',
+        users: {
+          owner: { id: 'owner-1', token: 'owner-token' },
+          renter: { id: 'renter-1', token: 'renter-token' },
+        },
+        segment: 'pickup',
+      }),
+      expectedError,
+    );
+  });
+}
+
 test('B8 and B9 use the shared handover helper before guarded transitions', async () => {
   const b8 = await fs.readFile(path.join(backendRoot, 'ops/staging_b8_acceptance.mjs'), 'utf8');
   const b9 = await fs.readFile(path.join(backendRoot, 'ops/staging_b9_acceptance.mjs'), 'utf8');
@@ -135,5 +203,8 @@ test('B8 and B9 use the shared handover helper before guarded transitions', asyn
   const b9Running = b9.indexOf("body: { status: 'running' }");
   const b9Completed = b9.indexOf("body: { status: 'completed' }");
   assert.ok(b9Pickup >= 0 && b9Active > b9Pickup && b9Return > b9Active
-    && b9Running > b9Return && b9Completed > b9Running);
+    && b9Completed > b9Return);
+  assert.equal((b9.match(/body: \{ status: '(?:active|running)' \}/gu) ?? []).length, 1);
+  assert.equal((b9.match(/body: \{ status: 'active' \}/gu) ?? []).length, 1);
+  assert.equal(b9Running, -1);
 });
