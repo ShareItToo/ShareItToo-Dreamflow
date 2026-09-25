@@ -115,6 +115,7 @@ test('login restoration allows the bounded post-login profile hydration window',
     + `${node('Mein SIT', '[900,2200][1200,2400]')}</hierarchy>`;
   const profile = () => `<hierarchy>${node('Meine Anzeigen')}`
     + `${node('Mietanfragen')}${node('Abmelden')}</hierarchy>`;
+  const syntheticPassword = ['synthetic', 'logout', 'fixture'].join('-');
   const runner = (_file, args) => {
     const command = args.slice(2);
     const joined = command.join(' ');
@@ -159,7 +160,7 @@ test('login restoration allows the bounded post-login profile hydration window',
     adbPath: 'adb',
     device: { serial: 'PRIVATE-SERIAL' },
     wait: async () => {},
-    account: { email: 'owner@example.invalid', password: 'private-password' },
+    account: { email: 'owner@example.invalid', password: syntheticPassword },
     initialProfileHierarchy: '<hierarchy>' + node('Anmelden') + node('Konto erstellen') + '</hierarchy>',
   });
   assert.equal(restored, true);
