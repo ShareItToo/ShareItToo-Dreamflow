@@ -244,6 +244,7 @@ if (!databaseUrl) {
         '095_staging_google_registration_replays.up.sql',
         '096_booking_exact_time_snapshot.up.sql',
         '097_registration_consent_bundle.up.sql',
+        '098_booking_checkout_declaration_constraints.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);
@@ -2714,6 +2715,183 @@ if (!databaseUrl) {
         catalog_revision: 2,
         is_active: true,
       });
+
+      // WP255: exercise the real private-pilot booking dual-write against
+      // PostgreSQL. The synthetic document rows stay inside this transaction
+      // and are rolled back; canonical Green remains fail-closed when its
+      // V5.2 snapshots are absent.
+      const { createBooking, quoteBooking } = await import('../src/booking_workflow.js');
+      const {
+        v52CheckoutDeclarations: wp255CheckoutDeclarations,
+        v52ContractDocument: wp255ContractDocument,
+        v52ContractDocuments: wp255ContractDocuments,
+      } = await import('../src/v52_contract_workflow.js');
+      const wp255Client = await setupPool.connect();
+      const wp255Suffix = String(process.pid);
+      const wp255BookingId = `wp255-booking-path-${wp255Suffix}`;
+      try {
+        await wp255Client.query('BEGIN');
+        await wp255Client.query(
+          `UPDATE users
+              SET private_use_confirmed_at = now(),
+                  private_marketplace_review_status = 'clear'
+            WHERE id IN ('owner', 'renter-a')`,
+        );
+        await wp255Client.query(
+          `UPDATE listings
+              SET private_status_confirmed_at = now(),
+                  private_pilot_region_code = 'berlin',
+                  moderation_status = 'active',
+                  subcategory = 'Kameras',
+                  payload = jsonb_set(payload, '{privateStatusConfirmed}', 'true'::jsonb),
+                  catalog_revision = catalog_revision + 1,
+                  catalog_version = 1
+            WHERE id = 'listing-1'`,
+        );
+        const wp255ListingState = (await wp255Client.query(
+          `SELECT catalog_version, is_active, status, moderation_status,
+                  owner_id, category_id, subcategory, city, country,
+                  private_status_confirmed_at, private_pilot_region_code
+             FROM listings WHERE id = 'listing-1'`,
+        )).rows[0];
+        assert.deepEqual({
+          catalog_version: wp255ListingState.catalog_version,
+          is_active: wp255ListingState.is_active,
+          status: wp255ListingState.status,
+          moderation_status: wp255ListingState.moderation_status,
+          owner_id: wp255ListingState.owner_id,
+          category_id: wp255ListingState.category_id,
+          subcategory: wp255ListingState.subcategory,
+          city: wp255ListingState.city,
+          country: wp255ListingState.country,
+          private_pilot_region_code: wp255ListingState.private_pilot_region_code,
+        }, {
+          catalog_version: 1,
+          is_active: true,
+          status: 'active',
+          moderation_status: 'active',
+          owner_id: 'owner',
+          category_id: 'cat3',
+          subcategory: 'Kameras',
+          city: 'Berlin',
+          country: 'Deutschland',
+          private_pilot_region_code: 'berlin',
+        });
+        assert.ok(wp255ListingState.private_status_confirmed_at);
+        for (const document of wp255ContractDocuments) {
+          const content = `SYNTHETIC_TEST_ONLY WP255 ${document.key}`;
+          await wp255Client.query(
+            `INSERT INTO legal_document_snapshots (
+               document_key, document_version, locale, content_type,
+               content_text, content_sha256, effective_at
+             ) VALUES ($1, $2, $3, 'text/plain', $4, $5, now() - interval '1 minute')`,
+            [
+              document.key,
+              wp255ContractDocument.version,
+              wp255ContractDocument.locale,
+              content,
+              crypto.createHash('sha256').update(content).digest('hex'),
+            ],
+          );
+        }
+        const bookingDates = {
+          startDate: '2026-12-01',
+          endDate: '2026-12-03',
+        };
+        const quoteInput = {
+          itemId: 'listing-1',
+          ...bookingDates,
+          privateStatusConfirmed: true,
+        };
+        const quoted = await quoteBooking(wp255Client, {
+          actorId: 'renter-a',
+          raw: quoteInput,
+          privatePilot: true,
+          privatePilotAllowedRegions: ['berlin'],
+        });
+        const acceptedAt = new Date();
+        const legalDeclarations = wp255CheckoutDeclarations.map((declaration) => ({
+          type: declaration.type,
+          exactWording: declaration.wording,
+          documentName: wp255ContractDocument.name,
+          documentVersion: wp255ContractDocument.version,
+          language: wp255ContractDocument.locale,
+          clientBuild: 'wp255-booking-path',
+          quoteId: quoted.quoteId,
+          quoteHash: quoted.quoteHash,
+          documentReferences: declaration.documentReferences.map((reference) => ({ ...reference })),
+          accepted: true,
+          acceptedAt: acceptedAt.toISOString(),
+        }));
+        const created = await createBooking(wp255Client, {
+          actor: { id: 'renter-a', role: 'user' },
+          raw: {
+            ...quoteInput,
+            id: wp255BookingId,
+            quoteId: quoted.quoteId,
+            quoteHash: quoted.quoteHash,
+            clientBuild: 'wp255-booking-path',
+            idempotencyKey: 'wp255-booking-path-command',
+            legalDeclarations,
+          },
+          key: 'wp255-booking-path-command',
+          privatePilot: true,
+          privatePilotAllowedRegions: ['berlin'],
+        });
+        assert.equal(created.booking.id, wp255BookingId);
+        assert.deepEqual((await wp255Client.query(
+          `SELECT declaration_type, booking_id
+             FROM legal_declarations
+            WHERE booking_id = $1
+            ORDER BY declaration_type`,
+          [wp255BookingId],
+        )).rows, [
+          {
+            declaration_type: 'early_performance_and_withdrawal',
+            booking_id: wp255BookingId,
+          },
+          {
+            declaration_type: 'private_terms_and_platform_terms',
+            booking_id: wp255BookingId,
+          },
+        ]);
+        assert.deepEqual((await wp255Client.query(
+          `SELECT declaration_type, booking_id
+             FROM platform_contract_declarations
+            WHERE booking_id = $1
+            ORDER BY declaration_type`,
+          [wp255BookingId],
+        )).rows.map((row) => ({
+          declaration_type: row.declaration_type,
+          booking_id: row.booking_id,
+        })), [
+          {
+            declaration_type: 'early_performance_and_withdrawal',
+            booking_id: wp255BookingId,
+          },
+          {
+            declaration_type: 'private_terms_and_platform_terms',
+            booking_id: wp255BookingId,
+          },
+        ]);
+        await wp255Client.query('SAVEPOINT wp255_nearby_type_rejection');
+        await assert.rejects(
+          wp255Client.query(
+            `INSERT INTO legal_declarations (
+               user_id, booking_id, declaration_type, exact_wording,
+               document_name, document_version, app_version, language, accepted
+             ) VALUES ('renter-a', $1, 'private_terms_and_platform_terms_typo',
+                       'SYNTHETIC_TEST_ONLY', 'SYNTHETIC_TEST_ONLY',
+                       'V5.2-test', 'wp255-integration', 'de', true)`,
+            [wp255BookingId],
+          ),
+          (error) => error?.code === '23514',
+        );
+        await wp255Client.query('ROLLBACK TO SAVEPOINT wp255_nearby_type_rejection');
+      } finally {
+        await wp255Client.query('ROLLBACK').catch(() => {});
+        wp255Client.release();
+      }
 
       const acceptanceWindow = futureAcceptanceWindow();
       for (const [id, renterId] of [['booking-a', 'renter-a'], ['booking-b', 'renter-b']]) {

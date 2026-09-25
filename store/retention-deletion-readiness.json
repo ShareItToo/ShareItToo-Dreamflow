@@ -372,6 +372,14 @@
       "sha256": "5189efec03d7cf9b8cd331621e1f8f764a9f1e4221433934fc5e873862133c1f"
     },
     {
+      "path": "backend/sql/migrations/098_booking_checkout_declaration_constraints.up.sql",
+      "sha256": "d03cdf5be85bdeafa04f7dcb65739eb6dc01b83d4f927fe2690f619928e8481b"
+    },
+    {
+      "path": "backend/sql/migrations/098_booking_checkout_declaration_constraints.down.sql",
+      "sha256": "959847e95e017033a0869dba9b1a5c03d1c2a474b49abb3d1ab3b20b29e70aa6"
+    },
+    {
       "path": "backend/src/firebase_phone_verification.js",
       "sha256": "ea8fb71aeada7eab59006e789d7890c697e1d6d43fbf7c94a3bed5df615d81dc"
     },

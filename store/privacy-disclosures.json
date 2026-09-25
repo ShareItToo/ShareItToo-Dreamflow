@@ -699,6 +699,14 @@
       "sha256": "5189efec03d7cf9b8cd331621e1f8f764a9f1e4221433934fc5e873862133c1f"
     },
     {
+      "path": "backend/sql/migrations/098_booking_checkout_declaration_constraints.up.sql",
+      "sha256": "d03cdf5be85bdeafa04f7dcb65739eb6dc01b83d4f927fe2690f619928e8481b"
+    },
+    {
+      "path": "backend/sql/migrations/098_booking_checkout_declaration_constraints.down.sql",
+      "sha256": "959847e95e017033a0869dba9b1a5c03d1c2a474b49abb3d1ab3b20b29e70aa6"
+    },
+    {
       "path": "backend/src/firebase_identity_cleanup.js",
       "sha256": "f4f4f77c57cca13b3e63e96fd50add1200bc2c59a99b50125902032d1df93fa5"
     },
@@ -944,7 +952,7 @@
     },
     {
       "path": "tool/run_staging_synthetic_booking.mjs",
-      "sha256": "75f63e854836634956cd5ffa08e0fdfaaf64f7534da7fdccad1f5cd13d7bbee8"
+      "sha256": "175433186d185ccb22dd46cb4b9aab281be2fdbc56a944415a7be658c4a2ae0b"
     },
     {
       "path": "tool/run_staging_non_binding_simulation.mjs",

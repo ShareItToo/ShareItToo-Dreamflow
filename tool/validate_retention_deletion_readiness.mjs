@@ -99,6 +99,8 @@ const sourcePaths = [
   'backend/sql/migrations/096_booking_exact_time_snapshot.down.sql',
   'backend/sql/migrations/097_registration_consent_bundle.up.sql',
   'backend/sql/migrations/097_registration_consent_bundle.down.sql',
+  'backend/sql/migrations/098_booking_checkout_declaration_constraints.up.sql',
+  'backend/sql/migrations/098_booking_checkout_declaration_constraints.down.sql',
   'backend/src/firebase_phone_verification.js',
   'backend/src/firebase_identity_cleanup.js',
   'backend/src/crashlytics_cleanup.js',
