@@ -71,6 +71,14 @@ discover a mechanically stale source hash.
   in the declared runtime image, UID, network and mounted-file context; tests
   must not mock away host/runtime/network assumptions that the live command
   depends on.
+- A derived runtime env file must pass the exact candidate image's real config
+  import before the first service start. Preserve each setting's accepted
+  encoding from verified runtime state; never guess that `false` and `0` (or
+  `true` and `1`) are interchangeable.
+- Provider-isolated clone transport must not rely on a published host port from
+  an internal-only Docker network. Prove health inside the exact container,
+  require empty host port bindings, inspect its run-scoped internal IP, and use
+  that immutable readback only as the remote target of an SSH loopback tunnel.
 - Remote read-only invariant: read-only remote work permits zero writes,
   including temporary, scratch or evidence files; use stdout or command
   substitution only and never write through a remote shell.
