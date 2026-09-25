@@ -209,14 +209,16 @@ test('B8 and B9 use the shared handover helper before guarded transitions', asyn
   assert.equal(b9Running, -1);
 });
 
-test('B8 advances the authoritative payout hold before dispute blocking', async () => {
+test('B8 stops at the authentic payout boundary without time or trigger bypasses', async () => {
   const b8 = await fs.readFile(path.join(backendRoot, 'ops/staging_b8_acceptance.mjs'), 'utf8');
-  const payoutHoldUpdate = b8.indexOf('payout_instruction_due_at = now() - interval \'1 minute\'');
-  const disputeBlockAssertion = b8.indexOf("payout_blocked_by_dispute");
-  assert.ok(payoutHoldUpdate >= 0);
-  assert.ok(disputeBlockAssertion > payoutHoldUpdate);
-  assert.match(
-    b8.slice(Math.max(0, payoutHoldUpdate - 180), payoutHoldUpdate + 100),
-    /SET completed_at = now\(\) - \(\$2::text \|\| ' hours'\)::interval - interval '1 minute',[\s\S]*payout_instruction_due_at = now\(\) - interval '1 minute'/u,
-  );
+  assert.match(b8, /payout_hold_active/u);
+  assert.match(b8, /postWindowFlow: 'not_proven'/u);
+  assert.match(b8, /cleanup_required: true/u);
+  assert.match(b8, /cleanup: \{ required: true, scope: 'isolated_clone'/u);
+  assert.doesNotMatch(b8, /payout_blocked_by_dispute/u);
+  assert.doesNotMatch(b8, /payout_instruction_due_at\s*=\s*now\(\)/u);
+  assert.doesNotMatch(b8, /completed_at\s*=\s*now\(\)/u);
+  assert.doesNotMatch(b8, /\/payments\/\$\{paymentId\}\/refunds/u);
+  assert.doesNotMatch(b8, /\/account\/deletion/u);
+  assert.doesNotMatch(b8, /UPDATE ledger_entries/u);
 });
