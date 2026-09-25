@@ -33,6 +33,25 @@ function dateOnly(daysFromNow) {
   return new Date(Date.now() + daysFromNow * 86_400_000).toISOString().slice(0, 10);
 }
 
+const syntheticModerationTerritorialScope = 'Alle SIT-Oberflächen; keine geografische Teilbeschränkung.';
+
+function humanModerationDecision({ facts, basis, reasoning, durationType }) {
+  return {
+    facts,
+    basis,
+    reasoning,
+    detectionMethod: 'human',
+    statementOfReasons: {
+      decisionGround: 'terms_violation',
+      decisionOrigin: 'notice',
+      territorialScope: syntheticModerationTerritorialScope,
+      durationType,
+      endsAt: null,
+      automationRole: 'none',
+    },
+  };
+}
+
 async function api(path, {
   method = 'GET',
   token = null,
@@ -337,6 +356,12 @@ async function main() {
       status: 'actioned',
       reasonCode: 'documented_policy_violation',
       resolution: { outcome: 'listing_temporarily_hidden' },
+      decision: humanModerationDecision({
+        facts: 'Die kontrollierte B9-Meldung enthält eine synthetische Evidenzdatei zur geprüften Anzeige.',
+        basis: 'Kontrollierte Moderationsrichtlinie für einen dokumentierten Richtlinienverstoß.',
+        reasoning: 'Die Admin-Prüfung bestätigt die Meldung und actioniert eine reversible Ausblendung der Anzeige.',
+        durationType: 'not_applicable',
+      }),
     },
   });
   assert.equal(actioned.value.report.status, 'actioned');
@@ -363,6 +388,12 @@ async function main() {
       reportId,
       reasonCode: 'documented_policy_violation',
       note: 'Reversible kontrollierte Maßnahme.',
+      decision: humanModerationDecision({
+        facts: 'Die geprüfte synthetische Anzeige ist für die kontrollierte Moderationsprobe aktiv.',
+        basis: 'Kontrollierte Moderationsrichtlinie für eine reversible Anzeigeeinschränkung.',
+        reasoning: 'Die Anzeige wird bis zur Verifikation verborgen, damit die öffentliche Suche sie nicht ausliefert.',
+        durationType: 'until_reversed',
+      }),
     },
   });
   const hiddenSearch = await api(`/listings?q=${encodeURIComponent(runId)}`);
@@ -376,6 +407,12 @@ async function main() {
       reportId,
       reasonCode: 'verification_completed',
       note: 'Kontrollierte Maßnahme vollständig zurückgenommen.',
+      decision: humanModerationDecision({
+        facts: 'Die synthetische Anzeige wurde nach der abgeschlossenen kontrollierten Prüfung wiederhergestellt.',
+        basis: 'Kontrollierte Moderationsrichtlinie für die Aufhebung einer Anzeigeeinschränkung.',
+        reasoning: 'Die Verifikation ist abgeschlossen; die reversible Ausblendung wird mit dem aktiven Status aufgehoben.',
+        durationType: 'not_applicable',
+      }),
     },
   });
   const restoredSearch = await api(`/listings?q=${encodeURIComponent(runId)}`);
@@ -402,6 +439,12 @@ async function main() {
       reportId: outsiderReportId,
       reasonCode: 'controlled_scope_probe',
       note: 'Reversible B9-Staging-Sperre.',
+      decision: humanModerationDecision({
+        facts: 'Der synthetische Nutzer wird für die kontrollierte Buchungs-Sperrprobe mit einem Nutzerbericht verknüpft.',
+        basis: 'Kontrollierte Account-Safety-Richtlinie für eine bereichsbezogene Einschränkung.',
+        reasoning: 'Die Admin-Prüfung setzt eine reversible Buchungs-Sperre, um den blockierten Angebotsabruf nachzuweisen.',
+        durationType: 'until_reversed',
+      }),
     },
     expected: [201],
   });
@@ -422,7 +465,16 @@ async function main() {
     method: 'POST',
     token: users.admin.token,
     headers: { ...adminStepUp, 'Idempotency-Key': `${runId}-booking-suspension-lift` },
-    body: { reasonCode: 'verification_completed', note: 'Sperre zurückgenommen.' },
+    body: {
+      reasonCode: 'verification_completed',
+      note: 'Sperre zurückgenommen.',
+      decision: humanModerationDecision({
+        facts: 'Die synthetische Buchungs-Sperrprobe hat den erwarteten blockierten Abruf gezeigt.',
+        basis: 'Kontrollierte Moderationsrichtlinie für die Aufhebung einer Bereichseinschränkung.',
+        reasoning: 'Nach dem Readback wird die Sperre aufgehoben, damit der Nutzer wieder auf Angebote zugreifen kann.',
+        durationType: 'not_applicable',
+      }),
+    },
   });
   await api('/bookings/quote', {
     method: 'POST',
@@ -524,6 +576,12 @@ async function main() {
       reasonCode: 'acceptance_completed',
       resolution: { outcome: 'controlled_test_complete' },
       note: 'B9-Staging-Abnahme abgeschlossen.',
+      decision: humanModerationDecision({
+        facts: 'Die synthetische Anzeigenmeldung und die zugehörige reversible Maßnahme wurden vollständig geprüft.',
+        basis: 'Kontrollierte Moderationsrichtlinie für den Abschluss eines Testfalls.',
+        reasoning: 'Nach Evidence-Readback und Restore-Readback wird der Anzeigenfall als abgeschlossen markiert.',
+        durationType: 'not_applicable',
+      }),
     },
   });
   await api(`/admin/reports/${outsiderReportId}`, {
@@ -535,6 +593,12 @@ async function main() {
       reasonCode: 'acceptance_completed',
       resolution: { outcome: 'controlled_test_complete' },
       note: 'Reversible Sperrprobe abgeschlossen.',
+      decision: humanModerationDecision({
+        facts: 'Die synthetische Nutzer-Sperrprobe und ihre Aufhebung wurden vollständig geprüft.',
+        basis: 'Kontrollierte Account-Safety-Richtlinie für den Abschluss eines Testfalls.',
+        reasoning: 'Nach Suspension- und Lift-Readback wird der Nutzerfall als abgeschlossen markiert.',
+        durationType: 'not_applicable',
+      }),
     },
   });
 

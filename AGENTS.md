@@ -76,6 +76,13 @@ discover a mechanically stale source hash.
   fixtures must import the current canonical policy constants and preflight
   them before sending requests; never hand-copy legal/policy text or permit
   `generated`/`materially_altered` classifications in synthetic payloads.
+- Acceptance moderation-decision mentor invariant: before the first B9
+  mutation, acceptance fixtures must track every current mandatory moderation
+  decision field through one reusable human-decision helper. Every
+  consequential or reversal call must carry truthful `facts`, `basis`,
+  `reasoning`, `detectionMethod: 'human'`, and a complete
+  `statementOfReasons` with the action's exact duration; focused source-shape
+  coverage must reject missing decisions or direct bypasses.
 - Acceptance lifecycle-fixture invariant: every B8/B9 handover must use the
   proven V5.2 helper for the exact booking thread, four distinct presenter
   uploads in `overview`/`detail`/`accessories`/`critical` slots with the
