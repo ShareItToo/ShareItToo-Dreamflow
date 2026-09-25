@@ -14,6 +14,7 @@ import {
 import { createEphemeralAcceptancePassword } from './ephemeral_acceptance_password.mjs';
 import {
   assertAcceptancePrincipalGateCompatibility,
+  assertAcceptancePaymentPilotCompatibility,
   deriveAcceptancePrincipalIds,
   resolveAcceptanceRunId,
 } from './acceptance_run_identity.mjs';
@@ -99,6 +100,14 @@ async function main() {
   assertAcceptancePrincipalGateCompatibility(
     runId,
     Object.values(users).map((user) => user.id),
+  );
+  assertAcceptancePaymentPilotCompatibility(
+    runId,
+    Object.values(users).map((user) => user.id),
+    {
+      PAYMENT_TRANSPORT: config.payments.transport,
+      PAYMENT_PILOT_USER_IDS: config.payments.pilotUserIds.join(','),
+    },
   );
 
   for (const user of Object.values(users)) {

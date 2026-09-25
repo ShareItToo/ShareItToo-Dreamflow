@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   assertAcceptancePrincipalGateCompatibility,
+  assertAcceptancePaymentPilotCompatibility,
   deriveAcceptancePrincipalIds,
   resolveAcceptanceRunId,
 } from '../ops/acceptance_run_identity.mjs';
@@ -70,6 +71,49 @@ test('disabled gate does not hide principal compatibility checks behind a wildca
     assertAcceptancePrincipalGateCompatibility(runId, [principal], {
       SIT_STAGING_ACCESS_GATE_ENABLED: 'false',
       SIT_STAGING_ALLOWED_USER_IDS: '',
+    }),
+    { enabled: false, missing: [] },
+  );
+});
+
+test('memory payment pilot gate requires every exact B8 principal before mutation', () => {
+  const runId = 'b8-muh2n3rs-fed16b';
+  const principals = Object.values(deriveAcceptancePrincipalIds(runId, ['owner', 'renter', 'admin']));
+  const base = { PAYMENT_TRANSPORT: 'memory' };
+  assert.throws(
+    () => assertAcceptancePaymentPilotCompatibility(runId, principals, base),
+    /acceptance_payment_pilot_allowlist_missing/u,
+  );
+  assert.throws(
+    () => assertAcceptancePaymentPilotCompatibility(runId, principals, {
+      ...base,
+      PAYMENT_PILOT_USER_IDS: `${principals[0]},${principals[1]},*`,
+    }),
+    /acceptance_payment_pilot_allowlist_invalid/u,
+  );
+  assert.throws(
+    () => assertAcceptancePaymentPilotCompatibility(runId, principals, {
+      ...base,
+      PAYMENT_PILOT_USER_IDS: principals.slice(0, 2).join(','),
+    }),
+    /acceptance_payment_pilot_not_allowlisted:b8-muh2n3rs-fed16b-admin/u,
+  );
+  assert.deepEqual(
+    assertAcceptancePaymentPilotCompatibility(runId, principals, {
+      ...base,
+      PAYMENT_PILOT_USER_IDS: principals.join(','),
+    }),
+    { enabled: true, missing: [] },
+  );
+});
+
+test('non-memory payment transport does not activate the memory pilot gate', () => {
+  const runId = 'b8-muh2n3rs-fed16b';
+  const principal = 'b8-muh2n3rs-fed16b-owner';
+  assert.deepEqual(
+    assertAcceptancePaymentPilotCompatibility(runId, [principal], {
+      PAYMENT_TRANSPORT: 'disabled',
+      PAYMENT_PILOT_USER_IDS: '',
     }),
     { enabled: false, missing: [] },
   );

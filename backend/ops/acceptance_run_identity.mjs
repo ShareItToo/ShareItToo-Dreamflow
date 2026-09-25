@@ -40,21 +40,56 @@ export function assertAcceptancePrincipalGateCompatibility(runId, principalIds, 
     fail('acceptance_access_gate_flag_invalid');
   }
   if (!enabledFlags.has(flag)) return Object.freeze({ enabled: false, missing: Object.freeze([]) });
+  const allowed = exactPrincipalAllowlist(
+    runId,
+    principalIds,
+    environment.SIT_STAGING_ALLOWED_USER_IDS,
+    'acceptance_principal_gate_input_invalid',
+    'acceptance_principal_allowlist_missing',
+    'acceptance_principal_allowlist_invalid',
+  );
+  const missing = principalIds.filter((id) => !allowed.includes(id));
+  if (missing.length > 0) fail(`acceptance_principal_not_allowlisted:${missing.join(',')}`);
+  return Object.freeze({ enabled: true, missing: Object.freeze([]) });
+}
+
+export function assertAcceptancePaymentPilotCompatibility(runId, principalIds, environment = process.env) {
+  const transport = String(environment.PAYMENT_TRANSPORT ?? '').trim().toLowerCase();
+  if (transport !== 'memory') return Object.freeze({ enabled: false, missing: Object.freeze([]) });
+  const allowed = exactPrincipalAllowlist(
+    runId,
+    principalIds,
+    environment.PAYMENT_PILOT_USER_IDS,
+    'acceptance_payment_pilot_input_invalid',
+    'acceptance_payment_pilot_allowlist_missing',
+    'acceptance_payment_pilot_allowlist_invalid',
+  );
+  const missing = principalIds.filter((id) => !allowed.includes(id));
+  if (missing.length > 0) fail(`acceptance_payment_pilot_not_allowlisted:${missing.join(',')}`);
+  return Object.freeze({ enabled: true, missing: Object.freeze([]) });
+}
+
+function exactPrincipalAllowlist(
+  runId,
+  principalIds,
+  rawValue,
+  inputError,
+  missingError,
+  invalidError,
+) {
   if (typeof runId !== 'string' || !runIdPattern.test(runId)
       || !Array.isArray(principalIds) || principalIds.length === 0
       || principalIds.some((id) => typeof id !== 'string'
         || !id.startsWith(`${runId}-`)
         || !principalKeyPattern.test(id.slice(runId.length + 1)))) {
-    fail('acceptance_principal_gate_input_invalid');
+    fail(inputError);
   }
-  const raw = String(environment.SIT_STAGING_ALLOWED_USER_IDS ?? '').trim();
-  if (!raw) fail('acceptance_principal_allowlist_missing');
+  const raw = String(rawValue ?? '').trim();
+  if (!raw) fail(missingError);
   const allowed = raw.split(',').map((value) => value.trim());
   if (allowed.some((value) => !value || value.includes('*') || value.includes('?'))
       || new Set(allowed).size !== allowed.length) {
-    fail('acceptance_principal_allowlist_invalid');
+    fail(invalidError);
   }
-  const missing = principalIds.filter((id) => !allowed.includes(id));
-  if (missing.length > 0) fail(`acceptance_principal_not_allowlisted:${missing.join(',')}`);
-  return Object.freeze({ enabled: true, missing: Object.freeze([]) });
+  return allowed;
 }
