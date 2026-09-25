@@ -97,8 +97,6 @@ const sourceMounts = [
   { destination: '/data/uploads', type: 'volume', source: null, volume: greenTarget.uploadsVolume, readOnly: false },
   { destination: '/run/secrets/firebase-service-account.json', type: 'bind', source: config.firebaseFile, volume: null, readOnly: true },
   { destination: '/run/secrets/mfa-encryption-key', type: 'bind', source: config.mfaFile, volume: null, readOnly: true },
-  { destination: '/run/secrets/technical-sandbox-key', type: 'bind', source: config.technicalSandboxKeyFile, volume: null, readOnly: true },
-  { destination: '/run/secrets/technical-sandbox-webhook', type: 'bind', source: config.technicalSandboxWebhookFile, volume: null, readOnly: true },
 ];
 const finalMounts = sourceMounts.filter((mount) => mount.destination === '/data/uploads'
   || mount.destination === '/run/secrets/firebase-service-account.json'
@@ -1001,7 +999,7 @@ test('command executor bindings keep isolated probes and canonical runtime disti
   }
 });
 
-test('pre-promotion inventory requires the exact Green DB host and protected mount cohort', () => {
+test('repeat-promotion inventory requires the exact Green DB host and retained final mount cohort', () => {
   const base = {
     api: { name: greenTarget.apiContainer, greenLabel: false, prePromotionTuple: true, hostPorts: 0, running: true, networks: [greenTarget.network, greenTarget.providerNetwork], image: greenTarget.prePromotionImage, user: 'shareittoo', databaseHost: greenTarget.databaseContainer, databaseName: greenTarget.databaseName, databaseUser: greenTarget.databaseUser, uploadsVolume: greenTarget.uploadsVolume, groupAdd: true, mounts: sourceMounts },
     database: { name: greenTarget.databaseContainer, greenLabel: true, running: true }, network: { name: greenTarget.network, internal: true }, providerNetwork: { name: greenTarget.providerNetwork }, uploadsVolume: { name: greenTarget.uploadsVolume }, schema: 97,
@@ -1013,6 +1011,7 @@ test('pre-promotion inventory requires the exact Green DB host and protected mou
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.slice(0, -1) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => { const copy = { ...mount }; delete copy.readOnly; return copy; }) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_mount_rw_readback_invalid/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => mount.destination === '/run/secrets/mfa-encryption-key' ? { ...mount, source: '/wrong/path' } : mount) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
+  assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: [...base.api.mounts, { destination: '/run/secrets/technical-sandbox-key', type: 'bind', source: config.technicalSandboxKeyFile, volume: null, readOnly: true }, { destination: '/run/secrets/technical-sandbox-webhook', type: 'bind', source: config.technicalSandboxWebhookFile, volume: null, readOnly: true }] } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => mount.destination === '/run/secrets/mfa-encryption-key' ? { ...mount, type: 'volume', volume: greenTarget.uploadsVolume, source: null } : mount) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
   assert.equal(assertGreenRuntimeConfig(config).mounts.length, 5);
   assert.equal(buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' }).finalMounts.length, 3);

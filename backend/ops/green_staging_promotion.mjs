@@ -580,12 +580,14 @@ export function assertGreenImageReadback(readback, runtime) {
 }
 
 function expectedGreenSourceMounts(runtimeConfig) {
+  // Repeat promotion starts from the last verified final runtime.  Its source
+  // inventory is the same three-mount cohort retained by the final container;
+  // technical-Sandbox credentials are provider-off and must not be expected or
+  // mounted here, even though the first-promotion config still names them.
   const expected = [
     { destination: '/data/uploads', type: 'volume', source: null, volume: greenTarget.uploadsVolume, readOnly: false },
     { destination: '/run/secrets/firebase-service-account.json', type: 'bind', source: runtimeConfig?.firebaseFile, volume: null, readOnly: true },
     { destination: '/run/secrets/mfa-encryption-key', type: 'bind', source: runtimeConfig?.mfaFile, volume: null, readOnly: true },
-    { destination: '/run/secrets/technical-sandbox-key', type: 'bind', source: runtimeConfig?.technicalSandboxKeyFile, volume: null, readOnly: true },
-    { destination: '/run/secrets/technical-sandbox-webhook', type: 'bind', source: runtimeConfig?.technicalSandboxWebhookFile, volume: null, readOnly: true },
   ];
   if (expected.some((mount) => typeof mount.source !== 'string' && mount.type === 'bind')) fail('green_prepromotion_mount_identity_missing');
   return expected.sort((left, right) => left.destination.localeCompare(right.destination));
