@@ -85,6 +85,11 @@ discover a mechanically stale source hash.
   such as `staff_elevations` are expected to be purged; preserve and verify the
   corresponding append-only audit event instead of recreating credential
   material or treating its removal as evidence loss.
+- Direct lifecycle-helper use must reproduce the complete public endpoint
+  lifecycle, including every returned post-transaction file or provider-cleanup
+  action, before claiming cleanup complete. Verify both database absence and
+  exact owned-file absence; never treat `eraseAccount` alone as the whole
+  account-deletion path.
 - Deployment executor context invariant: dependency-bearing steps must execute
   in the declared runtime image, UID, network and mounted-file context; tests
   must not mock away host/runtime/network assumptions that the live command
