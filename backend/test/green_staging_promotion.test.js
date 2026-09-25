@@ -27,6 +27,7 @@ import {
   greenTechnicalSandboxHealth,
   assertGreenTechnicalSandboxProviderOff,
   assertGreenRetainedSealedInventory,
+  assertGreenRetainedSealedInventories,
   sanitizeGreenEvidence,
   normalizedGreenTargetDigest,
   assertGreenCommandBindings,
@@ -53,18 +54,18 @@ const isolatedNetworkId = '1'.repeat(64);
 const isolatedDatabaseId = '2'.repeat(64);
 const candidateId = '3'.repeat(64);
 const targetManifest = {
-  kind: 'sit-green-staging-target', schemaVersion: 2, composeProject: 'sit-green',
+  kind: 'sit-green-staging-target', schemaVersion: 3, composeProject: 'sit-green',
   greenLabel: 'com.shareittoo.sit.green=true', runId: greenTarget.runId,
   apiContainer: greenTarget.apiContainer, databaseContainer: greenTarget.databaseContainer,
   databaseVolume: greenTarget.databaseVolume, network: greenTarget.network,
   providerNetwork: greenTarget.providerNetwork, uploadsVolume: greenTarget.uploadsVolume,
   networkInternal: true, sourceSchema: 97, currentSchema: 97,
   sourceLedgerDigest: greenTarget.sourceLedgerDigest, currentLedgerDigest: greenTarget.currentLedgerDigest,
-  prePromotionImage: greenTarget.prePromotionImage, sealedApiContainer: greenTarget.sealedApiContainer,
-  retainedSealed: { ...greenTarget.retainedSealed },
+  prePromotionImage: greenTarget.prePromotionImage, prePromotionImageDigest: greenTarget.prePromotionImageDigest, sealedApiContainer: greenTarget.sealedApiContainer,
+  retainedSealed: greenTarget.retainedSealed.map((descriptor) => ({ ...descriptor })),
 };
 targetManifest.targetDigest = normalizedGreenTargetDigest(targetManifest);
-assert.equal(targetManifest.targetDigest, '268cde13935b986b32a6cd99474317a257625ffc656ac50c13f192db7fbb3b8d');
+assert.equal(targetManifest.targetDigest, '152084fed8868ce1b5da9ce7f8cc57f91f5d33b8667453e7852c8acb997739ce');
 const prePromotionImageReference = `${greenTarget.prePromotionImage}@${greenTarget.prePromotionImageDigest}`;
 const config = {
   environment: 'test', envFile: '/docker/shareittoo/staging-secrets/green.env',
@@ -95,7 +96,7 @@ function migrationLedgerThrough(schema) {
 const sourceMigrationLedger = migrationLedgerThrough(97);
 const currentMigrationLedger = migrationLedgerThrough(97);
 const emptyFindingFingerprint = JSON.stringify({ paymentRecoveryNeedsReview: [], supportNextUpdateOverdue: [] });
-const targetContainerSet = `${greenTarget.apiContainer}\t\t\ttrue\t${greenTarget.runId}\n${greenTarget.databaseContainer}\t\t\ttrue\t\n${greenTarget.retainedSealed.name}\t\t\ttrue\t${greenTarget.runId}\n`;
+const targetContainerSet = `${greenTarget.apiContainer}\t\t\ttrue\t${greenTarget.runId}\n${greenTarget.databaseContainer}\t\t\ttrue\t\n${greenTarget.retainedSealed.map((descriptor) => `${descriptor.name}\t\t\ttrue\t${descriptor.runId}`).join('\n')}\n`;
 const sourceMounts = [
   { destination: '/data/uploads', type: 'volume', source: null, volume: greenTarget.uploadsVolume, readOnly: false },
   { destination: '/run/secrets/firebase-service-account.json', type: 'bind', source: config.firebaseFile, volume: null, readOnly: true },
@@ -176,22 +177,26 @@ function restoreFixture(options, running = true) {
 
 test('Green target accepts only the exact verified resource identities', () => {
   assert.deepEqual(assertGreenTargetManifest(targetManifest), targetManifest);
-  assert.equal(assertGreenRetainedSealedInventory({
-    Name: `/${greenTarget.retainedSealed.name}`,
+  assert.equal(targetManifest.schemaVersion, 3);
+  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:cffb4e43accee5de4bf6d33d553adde18a33d16f');
+  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:c63bc16223d81e845a423c5728c0e697bc05809b3699449755b83f3e0763a2a0');
+  assert.deepEqual(targetManifest.retainedSealed.map((descriptor) => descriptor.name), [
+    'shareittoo-staging-api-alt-sealed-green-ea25e7cb',
+    'shareittoo-staging-api-alt-sealed-green',
+  ]);
+  const retainedReadbacks = greenTarget.retainedSealed.map((descriptor) => ({
+    Name: `/${descriptor.name}`,
     State: { Running: false },
     Config: {
-      Image: greenTarget.retainedSealed.image,
+      Image: descriptor.image,
       Labels: {
-        'com.shareittoo.sit.green': greenTarget.retainedSealed.greenLabel,
-        'com.shareittoo.sit.green.run_id': greenTarget.retainedSealed.runId,
+        'com.shareittoo.sit.green': descriptor.greenLabel,
+        'com.shareittoo.sit.green.run_id': descriptor.runId,
       },
     },
-  }), true);
-  assert.throws(() => assertGreenRetainedSealedInventory({
-    Name: `/${greenTarget.retainedSealed.name}`,
-    State: { Running: true },
-    Config: { Image: greenTarget.retainedSealed.image, Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId } },
-  }), /green_retained_sealed_inventory_mismatch/u);
+  }));
+  assert.equal(assertGreenRetainedSealedInventories(retainedReadbacks, targetManifest.retainedSealed), true);
+  assert.throws(() => assertGreenRetainedSealedInventory({ ...retainedReadbacks[0], State: { Running: true } }, targetManifest.retainedSealed[0]), /green_retained_sealed_inventory_mismatch/u);
   for (const mutation of [
     { ...targetManifest, composeProject: 'sit-staging' },
     { ...targetManifest, network: 'sit-green-network-lookalike' },
@@ -199,7 +204,7 @@ test('Green target accepts only the exact verified resource identities', () => {
     { ...targetManifest, sourceSchema: 96 },
     { ...targetManifest, currentSchema: 94 },
     { ...targetManifest, greenLabel: 'com.shareittoo.sit.green=false' },
-    { ...targetManifest, retainedSealed: { ...targetManifest.retainedSealed, image: greenTarget.prePromotionImage } },
+    { ...targetManifest, retainedSealed: [{ ...targetManifest.retainedSealed[0], image: greenTarget.prePromotionImage }, targetManifest.retainedSealed[1]] },
   ]) {
     assert.throws(() => assertGreenTargetManifest(mutation));
   }
@@ -471,7 +476,7 @@ test('promotion plan keeps backup, isolated 97-to-97 idempotency, acceptance and
   assert.ok(commands.find((entry) => entry.phase === 'canonical_idempotent_migration_97_to_97'));
   assert.ok(commands.find((entry) => entry.phase === 'canonical_schema_readback'));
   assert.ok(commands.find((entry) => entry.phase === 'sealed_name_conflict_check'));
-  assert.ok(commands.find((entry) => entry.phase === 'retained_sealed_inventory_readback'));
+  assert.deepEqual(commands.filter((entry) => entry.phase.startsWith('retained_sealed_inventory_readback_')).map((entry) => entry.args.at(-1)), greenTarget.retainedSealed.map((descriptor) => descriptor.name));
   assert.ok(commands.find((entry) => entry.phase === 'final_inventory_readback'));
   assert.ok(commands.find((entry) => entry.phase === 'final_image_readback'));
   assert.ok(commands.some((entry) => entry.phase === 'synthetic_sandbox_provision_isolated'));
@@ -575,9 +580,10 @@ test('Docker env-file bindings reject JSON manifests and accept only real protec
 test('retained historical seal is read-only and the new seal is the only rename target', () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
-  const oldName = plan.target.retainedSealed.name;
-  const mutatingOldName = commands.filter((entry) => ['rename', 'rm', 'start', 'stop', 'network'].includes(entry.args?.[0]) && entry.args.includes(oldName));
-  assert.deepEqual(mutatingOldName, []);
+  for (const descriptor of plan.target.retainedSealed) {
+    const mutatingOldName = commands.filter((entry) => ['rename', 'rm', 'start', 'stop', 'network'].includes(entry.args?.[0]) && entry.args.includes(descriptor.name));
+    assert.deepEqual(mutatingOldName, []);
+  }
   const rename = commands.find((entry) => entry.phase === 'seal_green_api');
   assert.deepEqual(rename.args, ['rename', plan.target.apiContainer, plan.target.sealedApiContainer]);
 });
@@ -738,7 +744,10 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       if (phase === 'target_inventory_network') return { stdout: JSON.stringify([{ Id: targetNetworkId, Name: greenTarget.network, Internal: true }]) };
       if (phase === 'target_inventory_provider_network') return { stdout: JSON.stringify([{ Id: providerNetworkId, Name: greenTarget.providerNetwork }]) };
       if (phase === 'target_inventory_uploads') return { stdout: JSON.stringify([{ Name: greenTarget.uploadsVolume }]) };
-      if (phase === 'retained_sealed_inventory_readback') return { stdout: JSON.stringify({ Name: `/${greenTarget.retainedSealed.name}`, State: { Running: false }, Config: { Image: greenTarget.retainedSealed.image, Labels: { 'com.shareittoo.sit.green': greenTarget.retainedSealed.greenLabel, 'com.shareittoo.sit.green.run_id': greenTarget.retainedSealed.runId } } }) };
+      if (phase.startsWith('retained_sealed_inventory_readback_')) {
+        const descriptor = greenTarget.retainedSealed[Number(phase.slice('retained_sealed_inventory_readback_'.length))];
+        return { stdout: JSON.stringify({ Name: `/${descriptor.name}`, State: { Running: false }, Config: { Image: descriptor.image, Labels: { 'com.shareittoo.sit.green': descriptor.greenLabel, 'com.shareittoo.sit.green.run_id': descriptor.runId } } }) };
+      }
       if (phase === 'runtime_image_readback') return { stdout: JSON.stringify(imageReadback) };
       if (phase === 'isolated_network_create') return { stdout: `${isolatedNetworkId}\n` };
       if (phase === 'isolated_network_identity_readback') return { stdout: JSON.stringify({ Id: isolatedNetworkId, Name: plan.isolated.network, Internal: true, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };

@@ -128,26 +128,22 @@ legacy `shareittoo_staging` is never used by this lane.
 The source readback is exactly schema `97` with the manifest-bound ledger
 digest `950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0`.
 The pre-promotion image is exactly
-`ghcr.io/shareittoo/shareittoo-api:ea25e7cb9747dde9ccb331b0a439bb1f9cc6134e`.
+`ghcr.io/shareittoo/shareittoo-api:cffb4e43accee5de4bf6d33d553adde18a33d16f`
+with digest
+`sha256:c63bc16223d81e845a423c5728c0e697bc05809b3699449755b83f3e0763a2a0`.
 The new seal is
-`shareittoo-staging-api-alt-sealed-green-ea25e7cb`. The historical seal
-`shareittoo-staging-api-alt-sealed-green` remains a separately read-only
-validated, stopped ccc720 container with the exact Green label and run ID; it
-is never renamed, removed or restarted. Unknown extra Green containers fail
-the all-containers inventory gate.
-The observed source API tuple includes user `shareittoo`, group `65532`, no
-host port, the two approved networks, and exactly five source mounts: writable
-uploads plus read-only Firebase, MFA, technical-sandbox key, and
-technical-sandbox webhook. The two technical provider files are
-source-readback-only: their absolute paths may be recorded in the protected
-source manifest, but protected runtime env values stay blank and the files are
-never opened by the protected-file assertion. The successor candidate command
-plan uses exactly four mounts (anonymous uploads, Firebase, MFA, and the
-synthetic-password file); the final runtime uses exactly three (uploads,
-Firebase, and MFA). Both candidate and final have zero Stripe key or webhook
-mounts and zero technical-sandbox credential mounts. The live readback must
-match the complete source tuple before the 5-to-4-to-3 successor transition is
-planned.
+`shareittoo-staging-api-alt-sealed-green-cffb4e43`. The two historical seals
+`shareittoo-staging-api-alt-sealed-green-ea25e7cb` (ea25 tag plus exact digest)
+and `shareittoo-staging-api-alt-sealed-green` (exact ccc720 tag) remain
+separately read-only validated, stopped containers with the exact Green label
+and run ID; neither is ever renamed, removed, restarted or network-targeted.
+Unknown extra Green containers fail the all-containers inventory gate. The
+observed source API tuple includes user `shareittoo`, group `65532`, no host
+port, the two approved networks, and exactly three mounts: writable uploads
+plus read-only Firebase and MFA. The successor candidate adds only its
+run-scoped synthetic-password mount; the final runtime retains exactly the
+three approved mounts. Both candidate and final have zero Stripe key or
+webhook mounts and zero technical-sandbox credential mounts.
 Legacy `sit-staging`, production names, lookalike networks and mutable image
 tags are rejected before a command is planned.
 

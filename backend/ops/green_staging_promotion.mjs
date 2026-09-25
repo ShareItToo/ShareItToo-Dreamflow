@@ -17,17 +17,26 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.
 export const greenTarget = Object.freeze({
   composeProject: 'sit-green',
   apiContainer: 'shareittoo-staging-api',
-  // The current ea25 successor gets a fresh seal name.  The previous ccc720
-  // seal is retained as a read-only historical descriptor and is never a
-  // mutation target of this runner.
-  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-ea25e7cb',
-  retainedSealed: Object.freeze({
-    name: 'shareittoo-staging-api-alt-sealed-green',
-    image: 'ghcr.io/shareittoo/shareittoo-api:ccc72004247d50656ac1064a758eb5f05c795e04',
-    greenLabel: 'true',
-    runId: '20260918011528-wp254',
-    running: false,
-  }),
+  // The next promotion seals the exact active cffb runtime.  Both older
+  // stopped seals remain immutable read-only witnesses and are never mutation
+  // targets of this runner.
+  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-cffb4e43',
+  retainedSealed: Object.freeze([
+    Object.freeze({
+      name: 'shareittoo-staging-api-alt-sealed-green-ea25e7cb',
+      image: 'ghcr.io/shareittoo/shareittoo-api:ea25e7cb9747dde9ccb331b0a439bb1f9cc6134e@sha256:d440dd4a27bebb8caf3db4366d4289af4cadb1eaa7d8796c4f58ab80db0bbaca',
+      greenLabel: 'true',
+      runId: '20260918011528-wp254',
+      running: false,
+    }),
+    Object.freeze({
+      name: 'shareittoo-staging-api-alt-sealed-green',
+      image: 'ghcr.io/shareittoo/shareittoo-api:ccc72004247d50656ac1064a758eb5f05c795e04',
+      greenLabel: 'true',
+      runId: '20260918011528-wp254',
+      running: false,
+    }),
+  ]),
   databaseContainer: 'sit-green-postgres-20260918011528-wp254',
   databaseVolume: 'sit-green-volume-20260918011528-wp254',
   network: 'sit-green-network-20260918011528-wp254',
@@ -38,8 +47,8 @@ export const greenTarget = Object.freeze({
   runId: '20260918011528-wp254',
   sourceSchema: 97,
   currentSchema: 97,
-  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:ea25e7cb9747dde9ccb331b0a439bb1f9cc6134e',
-  prePromotionImageDigest: 'sha256:d440dd4a27bebb8caf3db4366d4289af4cadb1eaa7d8796c4f58ab80db0bbaca',
+  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:cffb4e43accee5de4bf6d33d553adde18a33d16f',
+  prePromotionImageDigest: 'sha256:c63bc16223d81e845a423c5728c0e697bc05809b3699449755b83f3e0763a2a0',
   sourceLedgerDigest: '950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0',
   currentLedgerDigest: '950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0',
   currentMigration: '097_registration_consent_bundle.up.sql',
@@ -217,8 +226,8 @@ function assertGreenTargetContainerSet(value, target = greenTarget) {
     if (!name || extra.length > 0) fail('green_target_container_set_invalid');
     return { name, project, service, greenLabel, runId };
   });
-  const retainedName = target.retainedSealed?.name ?? greenTarget.retainedSealed.name;
-  const expectedNames = new Set([target.apiContainer, target.databaseContainer, retainedName]);
+  const retainedSealed = Array.isArray(target.retainedSealed) ? target.retainedSealed : [];
+  const expectedNames = new Set([target.apiContainer, target.databaseContainer, ...retainedSealed.map((descriptor) => descriptor.name)]);
   const legacyNames = new Set(['shareittoo-staging-postgres', 'shareittoo_staging_backend', 'shareittoo_staging_postgres_data']);
   const relevant = rows.filter((row) => expectedNames.has(row.name) || row.greenLabel === 'true'
     || ((!legacyNames.has(row.name)) && /^(?:shareittoo-staging-api|sit-green-postgres)(?:[-_]|$)/u.test(row.name)));
@@ -227,7 +236,7 @@ function assertGreenTargetContainerSet(value, target = greenTarget) {
   const expected = new Map([
     [target.apiContainer, { project: '', service: '', greenLabel: 'true', runId: target.runId }],
     [target.databaseContainer, { project: '', service: '', greenLabel: 'true', runId: '' }],
-    [retainedName, { project: '', service: '', greenLabel: 'true', runId: target.runId }],
+    ...retainedSealed.map((descriptor) => [descriptor.name, { project: '', service: '', greenLabel: descriptor.greenLabel, runId: descriptor.runId }]),
   ]);
   if (relevant.length !== expected.size || new Set(relevant.map((row) => row.name)).size !== expected.size) fail('green_target_container_set_invalid');
   for (const row of relevant) {
@@ -252,11 +261,11 @@ function normalizedGreenForeignWriterSet(value) {
   return JSON.stringify(normalized);
 }
 
-// The retained historical seal is an immutable readback-only witness.  It is
+// Retained historical seals are immutable readback-only witnesses. They are
 // deliberately validated independently of the active/new seal name so a
 // stopped old container cannot be mistaken for the container this run may
 // rename or remove.
-export function assertGreenRetainedSealedInventory(readback, descriptor = greenTarget.retainedSealed) {
+export function assertGreenRetainedSealedInventory(readback, descriptor) {
   const record = Array.isArray(readback) ? readback[0] : readback;
   exactKeys(descriptor, ['name', 'image', 'greenLabel', 'runId', 'running'], 'green_retained_sealed_descriptor_shape_invalid');
   if (!record
@@ -267,6 +276,14 @@ export function assertGreenRetainedSealedInventory(readback, descriptor = greenT
       || record.Config?.Labels?.['com.shareittoo.sit.green.run_id'] !== descriptor.runId) {
     fail('green_retained_sealed_inventory_mismatch');
   }
+  return true;
+}
+
+export function assertGreenRetainedSealedInventories(readbacks, descriptors = greenTarget.retainedSealed) {
+  if (!Array.isArray(readbacks) || !Array.isArray(descriptors) || readbacks.length !== descriptors.length) {
+    fail('green_retained_sealed_inventory_count_invalid');
+  }
+  descriptors.forEach((descriptor, index) => assertGreenRetainedSealedInventory(readbacks[index], descriptor));
   return true;
 }
 
@@ -327,7 +344,7 @@ function safeDigest(value, code) {
 }
 
 export function normalizedGreenTargetDigest(manifest) {
-  const fields = ['kind', 'schemaVersion', 'composeProject', 'greenLabel', 'runId', 'apiContainer', 'databaseContainer', 'databaseVolume', 'network', 'providerNetwork', 'uploadsVolume', 'networkInternal', 'sourceSchema', 'currentSchema', 'sourceLedgerDigest', 'currentLedgerDigest', 'prePromotionImage', 'sealedApiContainer', 'retainedSealed'];
+  const fields = ['kind', 'schemaVersion', 'composeProject', 'greenLabel', 'runId', 'apiContainer', 'databaseContainer', 'databaseVolume', 'network', 'providerNetwork', 'uploadsVolume', 'networkInternal', 'sourceSchema', 'currentSchema', 'sourceLedgerDigest', 'currentLedgerDigest', 'prePromotionImage', 'prePromotionImageDigest', 'sealedApiContainer', 'retainedSealed'];
   return sha256(JSON.stringify(Object.fromEntries(fields.map((field) => [field, manifest?.[field]]))));
 }
 
@@ -387,10 +404,11 @@ export function assertGreenTargetManifest(manifest) {
     'apiContainer', 'databaseContainer', 'databaseVolume', 'network',
     'providerNetwork', 'uploadsVolume', 'networkInternal', 'sourceSchema',
     'currentSchema', 'sourceLedgerDigest', 'currentLedgerDigest',
-    'prePromotionImage', 'sealedApiContainer', 'retainedSealed', 'targetDigest',
+    'prePromotionImage', 'prePromotionImageDigest', 'sealedApiContainer', 'retainedSealed', 'targetDigest',
   ], 'green_target_manifest_shape_invalid');
-  exactKeys(manifest.retainedSealed, ['name', 'image', 'greenLabel', 'runId', 'running'], 'green_retained_sealed_descriptor_shape_invalid');
-  if (manifest.kind !== 'sit-green-staging-target' || manifest.schemaVersion !== 2
+  if (!Array.isArray(manifest.retainedSealed) || manifest.retainedSealed.length !== greenTarget.retainedSealed.length) fail('green_retained_sealed_descriptor_shape_invalid');
+  manifest.retainedSealed.forEach((descriptor) => exactKeys(descriptor, ['name', 'image', 'greenLabel', 'runId', 'running'], 'green_retained_sealed_descriptor_shape_invalid'));
+  if (manifest.kind !== 'sit-green-staging-target' || manifest.schemaVersion !== 3
       || manifest.composeProject !== greenTarget.composeProject
       || manifest.greenLabel !== 'com.shareittoo.sit.green=true'
       || manifest.runId !== greenTarget.runId
@@ -406,6 +424,7 @@ export function assertGreenTargetManifest(manifest) {
       || manifest.sourceLedgerDigest !== greenTarget.sourceLedgerDigest
       || manifest.currentLedgerDigest !== greenTarget.currentLedgerDigest
       || manifest.prePromotionImage !== greenTarget.prePromotionImage
+      || manifest.prePromotionImageDigest !== greenTarget.prePromotionImageDigest
       || manifest.sealedApiContainer !== greenTarget.sealedApiContainer
       || JSON.stringify(manifest.retainedSealed) !== JSON.stringify(greenTarget.retainedSealed)) {
     fail('green_target_identity_mismatch');
@@ -845,7 +864,7 @@ export function buildGreenPromotionPlan({
   const manifestTarget = assertGreenTargetManifest(targetManifest);
   if (typeof greenTarget.sealedApiContainer !== 'string' || !greenTarget.sealedApiContainer
       || manifestTarget.sealedApiContainer !== greenTarget.sealedApiContainer
-      || manifestTarget.retainedSealed?.name !== greenTarget.retainedSealed.name) fail('green_sealed_target_invalid');
+      || JSON.stringify(manifestTarget.retainedSealed) !== JSON.stringify(greenTarget.retainedSealed)) fail('green_sealed_target_invalid');
   const target = Object.freeze({ ...manifestTarget });
   const runtime = assertGreenRuntimeImage({
     image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`,
@@ -932,6 +951,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
   const { target, runtime, isolated } = plan;
   if (!target || typeof target.sealedApiContainer !== 'string'
       || target.sealedApiContainer !== greenTarget.sealedApiContainer) fail('green_sealed_target_invalid');
+  if (!Array.isArray(target.retainedSealed) || JSON.stringify(target.retainedSealed) !== JSON.stringify(greenTarget.retainedSealed)) fail('green_sealed_target_invalid');
   const inspect = (name) => ({ command: 'docker', args: ['inspect', '--format', '{{json .}}', name] });
   const provisionerSource = resolve(repositoryRoot, 'backend/ops/provision_synthetic_sandbox_user.mjs');
   const stablePrivateFileSource = resolve(repositoryRoot, 'backend/ops/stable_private_file.mjs');
@@ -955,7 +975,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'target_inventory_provider_network', ...inspect(target.providerNetwork) },
     { phase: 'target_inventory_uploads', ...inspect(target.uploadsVolume) },
     { phase: 'sealed_name_conflict_check', command: 'docker', args: ['ps', '--all', '--filter', `name=^/${target.sealedApiContainer}$`, '--format', '{{.Names}}'] },
-    { phase: 'retained_sealed_inventory_readback', command: 'docker', args: ['inspect', '--format', '{{json .}}', target.retainedSealed.name] },
+    ...target.retainedSealed.map((descriptor, index) => ({ phase: `retained_sealed_inventory_readback_${index}`, command: 'docker', args: ['inspect', '--format', '{{json .}}', descriptor.name] })),
     { phase: 'runtime_image_readback', command: 'docker', args: ['image', 'inspect', '--format', '{{json .}}', runtime.image] },
     { phase: 'source_schema_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', "SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"] },
     { phase: 'source_migration_ledger_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', migrationLedgerReadbackSql] },
@@ -1207,7 +1227,7 @@ export function sanitizeGreenEvidence({ plan, backupDigest, configDigest, target
       sourceSchema: plan.target.sourceSchema,
       currentSchema: plan.target.currentSchema,
       sealedApiContainer: plan.target.sealedApiContainer,
-      retainedSealed: { ...plan.target.retainedSealed },
+      retainedSealed: plan.target.retainedSealed.map((descriptor) => ({ ...descriptor })),
       targetDigest: plan.target.targetDigest,
     },
     runtime: { commit: plan.runtime.runtimeCommit, image: plan.runtime.image, digest: plan.runtime.digest },
@@ -1924,7 +1944,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
         const backupMeta = await lstat(backupPath);
         if (!backupMeta.isFile() || backupMeta.isSymbolicLink() || (backupMeta.mode & 0o777) !== 0o600 || backupMeta.uid !== ownerUid) fail('green_backup_permissions_invalid');
       }
-      if (entry.phase === 'target_container_set_readback' || entry.phase.startsWith('target_inventory_') || entry.phase === 'sealed_name_conflict_check' || entry.phase === 'retained_sealed_inventory_readback' || entry.phase === 'runtime_image_readback' || entry.phase === 'source_schema_readback'
+      if (entry.phase === 'target_container_set_readback' || entry.phase.startsWith('target_inventory_') || entry.phase === 'sealed_name_conflict_check' || entry.phase.startsWith('retained_sealed_inventory_readback_') || entry.phase === 'runtime_image_readback' || entry.phase === 'source_schema_readback'
           || entry.phase === 'quiesce_green_api_verify'
           || entry.phase === 'source_foreign_writer_readback_before_backup' || entry.phase === 'source_foreign_writer_readback_after_backup'
           || entry.phase === 'isolated_finding_fingerprint_readback' || entry.phase === 'candidate_finding_fingerprint_readback'
@@ -1940,8 +1960,10 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       if (entry.phase === 'target_container_set_readback') assertGreenTargetContainerSet(readbacks[entry.phase], plan.target);
       if (entry.phase === 'quiesce_green_api_verify' && readbacks[entry.phase] !== 'false') fail('green_quiesce_verify_invalid');
       if (entry.phase === 'sealed_name_conflict_check' && readbacks[entry.phase]) fail('green_sealed_name_conflict');
-      if (entry.phase === 'retained_sealed_inventory_readback') {
-        assertGreenRetainedSealedInventory(parseReadbackJson(readbacks[entry.phase], 'green_retained_sealed_inventory_invalid'), plan.target.retainedSealed);
+      if (entry.phase.startsWith('retained_sealed_inventory_readback_')) {
+        const index = Number(entry.phase.slice('retained_sealed_inventory_readback_'.length));
+        if (!Number.isInteger(index) || !plan.target.retainedSealed[index]) fail('green_retained_sealed_inventory_invalid');
+        assertGreenRetainedSealedInventory(parseReadbackJson(readbacks[entry.phase], 'green_retained_sealed_inventory_invalid'), plan.target.retainedSealed[index]);
       }
       if (entry.phase.endsWith('_cleanup_verify') && result.stdout?.trim()) fail('green_cleanup_incomplete');
       if (entry.phase === 'source_schema_readback') {
