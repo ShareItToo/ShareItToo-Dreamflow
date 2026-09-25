@@ -1,5 +1,67 @@
 # ShareItToo Current State
 
+## P5 Google Play Internal — ACTIVE; P6 successor gate blocked
+
+The exact signed candidate `1.0.0+2026092206` from source commit
+`c2da8585b1f822e123307d7c763530dc0f598893` is active in the **Internal
+testing** track. Play shows latest release VersionCode `2026092206` (`1.0.0`),
+release id `29`, and **Available to internal testers**; the UI release time is
+25 September 2026, 22:48 Europe/Berlin. The temporary app name remains
+`com.shareittoo.app (unreviewed)`. Tester list `SIT interner Test` is unchanged
+at 2 users and the internal-test join link is available. Release details path:
+`/console/u/0/developers/4653202812150286845/app/4973917320514947988/tracks/4701593427959921264/releases/29/details`.
+
+GitHub Regression `36183779963` and CodeQL `36179682061` both succeeded for
+the exact candidate source. A sanitized Pixel readback verifies the
+Play-installed package `com.shareittoo.app` `1.0.0+2026092206`, installer
+`com.android.vending`, and split delivery; no device serial or other raw device
+identity is retained. No provider, payment, production, Firebase, DNS or
+PR-merge action is claimed. P6 is blocked on a strictly higher successor
+because the exact-2206 physical listing-AI pass was not achieved; this does
+not close legal, pilot or production readiness.
+
+## P6 Pixel/OnePlus truth — BLOCKED; successor required
+
+The exact-2206 listing-AI physical PASS was not achieved. The runner exposed a
+real app-route loss during token rotation and photo-picker handling. The source
+fix is currently uncommitted: token rotation within the same logical session
+no longer invalidates the principal. A strictly higher successor build is
+required; 2206 is not claimed fixed. The core Pixel two-role rerun is deferred
+to that successor. OnePlus exact-current physical proof remains pending and
+the user device is absent.
+
+## P4 Green Staging closure — PASS; technical gate only
+
+Green promotion/readback is closed for runtime
+`c2da8585b1f822e123307d7c763530dc0f598893` with image digest
+`sha256:cb7f92814225044a677106d9979b95bc7d019a549ca223228c17bd281a2b97d8`,
+Ops commit `928861bd4cfd080f90463d0445d59810c3280ad2`, and target digest
+`585422e5880147459571a1ca8bbae7a586987b9c08f745334fdb7d491f8d6b84`.
+Schema `97`→`98`, migration
+`098_booking_checkout_declaration_constraints.up.sql`, and source/terminal
+ledger digests are read back exactly in the P4 evidence. Attempts 01 and 02
+failed before mutation with verified cleanup; attempt 03 succeeded. The
+sanitized remote evidence and retained mode-0600 pgdump are hash-bound. Four
+seals are stopped and no transient resources remain. Payment is `memory`,
+external payment-provider traffic is off, and Listing AI is `on_device`.
+
+The currently healthy exact-c2da runtime is `e08a420f…`; FCM is the sole
+environment delta (`memory` → `fcm`). The controlled activation evidence is
+the private remote artifact
+`/docker/shareittoo/evidence/green-fcm-activation-c2da-20260925T214445Z.json`
+with SHA-256 `7c2f18da3fdd1c618c7788a3634b518ed51995693dbe4cc0a78ac2613cd26e2e`;
+the retained pgdump begins `9b0b8201…`. Database schema `98` and ledger
+`796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196` are unchanged. Payments, mail and identity remain `memory`, with
+zero real money; a stopped rollback seal exists. A transient `502` caused by
+an erroneous preflight deletion was recovered by immediately reconstructing
+the same c2da Memory runtime; controlled FCM activation then passed, with no
+data, schema or ledger change.
+
+This closes technical P4 only; it is not provider, payment, Play, production,
+legal, pilot or Gemini/Astra approval. See
+`docs/operations/P4_GREEN_STAGING_CLOSURE_2026-09-25.md` and
+`docs/evidence/release-readiness/p4-green-staging-closure-20260925.json`.
+
 ## WP261-B CI hermeticity and migration inventory — SOURCE PASS; external gates separate
 
 WP261-B closes the exact-head CI boundary introduced by WP261-A. Database
