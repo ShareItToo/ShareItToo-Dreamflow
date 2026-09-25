@@ -74,6 +74,12 @@ discover a mechanically stale source hash.
   in the declared runtime image, UID, network and mounted-file context; tests
   must not mock away host/runtime/network assumptions that the live command
   depends on.
+- Read-only mount composition invariant: never plan child-file bind mounts
+  beneath a read-only parent-directory mount. Before execution, construct one
+  merged directory containing every consumed file (without symlinks), record
+  its exact source commit and SHA256 manifest, then mount that directory once
+  read-only; verify the merged files in the exact runtime context before the
+  first mutation.
 - A derived runtime env file must pass the exact candidate image's real config
   import before the first service start. Preserve each setting's accepted
   encoding from verified runtime state; never guess that `false` and `0` (or
