@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "android-current-rollover-candidate",
-  "status": "built-and-archived-internal-staging-upload-pending",
+  "status": "built-and-archived-internal-staging-release-active",
   "generatedAt": "2026-09-26T01:41:56+02:00",
   "candidate": {
     "applicationId": "com.shareittoo.app",
@@ -63,7 +63,33 @@
     "githubCodeqlRunId": 36200450965,
     "githubCodeqlConclusion": "success"
   },
-  "playConsoleReadback": "not-performed",
+  "playConsoleReadback": {
+    "performedAt": "2026-09-26T03:10:19+02:00",
+    "track": "internal-testing",
+    "releaseId": 30,
+    "releaseDetailsPath": "/console/u/0/developers/4653202812150286845/app/4973917320514947988/tracks/4701593427959921264/releases/30/details",
+    "releaseName": "2026092601 (1.0.0)",
+    "versionName": "1.0.0",
+    "versionCode": "2026092601",
+    "status": "available-to-internal-testers",
+    "reviewed": false,
+    "reviewStatusObserved": "not-reviewed",
+    "sentForReview": false,
+    "releasedAtConsoleLocal": "2026-09-26 03:09",
+    "temporaryAppName": "com.shareittoo.app (unreviewed)",
+    "testerListName": "SIT interner Test",
+    "testerCount": 2,
+    "testerListUnchanged": true,
+    "joinLinkAvailable": true,
+    "deviceInstallation": {
+      "status": "pending-play-propagation-on-pixel-7-pro",
+      "packageName": "com.shareittoo.app",
+      "previousVersionCode": "2026092206",
+      "expectedVersionCode": "2026092601",
+      "installerPackage": "com.android.vending",
+      "splitDeliveryVerified": false
+    }
+  },
   "preUploadPlayConsoleReadback": {
     "performedAt": "2026-09-26T01:41:56+02:00",
     "track": "internal-testing",
@@ -77,11 +103,11 @@
     "testerListUnchanged": true
   },
   "playStateAtLastReadback": {
-    "readbackPerformed": false,
-    "candidateUploaded": false,
-    "candidateActivated": false,
+    "readbackPerformed": true,
+    "candidateUploaded": true,
+    "candidateActivated": true,
     "testerListChanged": false,
-    "consoleActionPerformed": false
+    "consoleActionPerformed": true
   },
   "providerAndLiveHolds": {
     "externalListingAiEnabled": false,
@@ -90,7 +116,7 @@
     "firebaseProjectChanged": false,
     "cloudVpsDnsChanged": false,
     "pullRequestMerged": false,
-    "deviceInstalledOrContacted": false
+    "deviceInstalledOrContacted": true
   },
   "evidenceRef": "owner-only-private-archive/2026092601-ae7d1898f833058bb834d2e7b177a681e45d2ff2",
   "containsSecrets": false,
