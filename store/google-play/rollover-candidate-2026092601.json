@@ -82,12 +82,14 @@
     "testerListUnchanged": true,
     "joinLinkAvailable": true,
     "deviceInstallation": {
-      "status": "pending-play-propagation-on-pixel-7-pro",
+      "status": "verified-on-pixel-7-pro",
       "packageName": "com.shareittoo.app",
-      "previousVersionCode": "2026092206",
-      "expectedVersionCode": "2026092601",
+      "versionName": "1.0.0",
+      "versionCode": "2026092601",
       "installerPackage": "com.android.vending",
-      "splitDeliveryVerified": false
+      "splitDeliveryVerified": true,
+      "deliveredApkCount": 4,
+      "dataPreservingUpdateVerified": true
     }
   },
   "preUploadPlayConsoleReadback": {
