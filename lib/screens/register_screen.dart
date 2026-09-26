@@ -1,17 +1,23 @@
 import 'dart:ui';
 
-import 'package:flutter/gestures.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:lendify/models/mfa.dart';
 import 'package:lendify/navigation/main_navigation.dart';
 import 'package:lendify/screens/legal_privacy_screen.dart';
 import 'package:lendify/screens/legal_terms_screen.dart';
+import 'package:lendify/screens/login_screen.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/developer_preview_service.dart';
+import 'package:lendify/services/firebase_runtime.dart';
+import 'package:lendify/services/mfa_auth_flow.dart';
 import 'package:lendify/theme.dart';
+import 'package:lendify/utils/registration_consent_bundle.dart';
+import 'package:lendify/utils/registration_input_policy.dart';
 import 'package:lendify/widgets/app_popup.dart';
+import 'package:lendify/widgets/mfa_challenge_dialog.dart';
 import 'package:lendify/widgets/social_auth_button.dart';
+import 'package:lendify/widgets/tracked_dialog_route.dart';
 import 'package:provider/provider.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -30,19 +36,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _pwCtrl = TextEditingController();
-  final _pw2Ctrl = TextEditingController();
+
+  Future<void> _syncRentalCartAfterAuthentication() async {
+    try {
+      await DataService.syncGuestRentalCartAfterAuthentication();
+    } catch (error) {
+      // Preserve the guest copy. RentalCartScreen retries after navigation.
+      debugPrint('[RegisterScreen] rental cart sync pending: $error');
+    }
+  }
 
   final _nameFocus = FocusNode();
   final _emailFocus = FocusNode();
   final _pwFocus = FocusNode();
-  final _pw2Focus = FocusNode();
 
   bool _busy = false;
   bool _pwVisible = false;
-  bool _pw2Visible = false;
   bool _peekBackdrop = false;
-
   bool _didInteract = false;
+  int _socialActionEpoch = 0;
+  TrackedDialogRouteHandle<String>? _activeMfaRoute;
 
   @override
   void initState() {
@@ -55,7 +68,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _nameCtrl.addListener(markDirty);
     _emailCtrl.addListener(markDirty);
     _pwCtrl.addListener(markDirty);
-    _pw2Ctrl.addListener(markDirty);
   }
 
   void _openTerms() {
@@ -70,15 +82,73 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
+    _socialActionEpoch += 1;
+    _activeMfaRoute?.dismiss();
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _pwCtrl.dispose();
-    _pw2Ctrl.dispose();
     _nameFocus.dispose();
     _emailFocus.dispose();
     _pwFocus.dispose();
-    _pw2Focus.dispose();
     super.dispose();
+  }
+
+  Future<String?> _showMfaCodeDialog(AuthMfaChallenge challenge) async {
+    final handle = TrackedDialogRouteHandle<String>();
+    _activeMfaRoute = handle;
+    try {
+      return await showMfaChallengeDialog(
+        context,
+        challenge: challenge,
+        handle: handle,
+      );
+    } finally {
+      if (identical(_activeMfaRoute, handle)) _activeMfaRoute = null;
+    }
+  }
+
+  Future<AuthResult?> _resolveMfaChallenge(
+    AuthResult initial, {
+    required int noSessionEpoch,
+    required int actionEpoch,
+  }) {
+    return resolveMfaChallenge(
+      initial: initial,
+      prompt: _showMfaCodeDialog,
+      submit: (challenge, code) => AuthService.completeMfaChallenge(
+        challenge: challenge,
+        code: code,
+        expectedSessionEpoch: noSessionEpoch,
+        isActionCurrent: () => _isSocialActionCurrent(actionEpoch),
+      ),
+      isCurrent: () => mounted && _isSocialActionCurrent(actionEpoch),
+      onExpired: () => AppPopup.toast(
+        context,
+        icon: Icons.timer_off_outlined,
+        title: 'Der Zwei-Faktor-Code ist abgelaufen.',
+      ),
+      onRejected: () => AppPopup.toast(
+        context,
+        icon: Icons.error_outline,
+        title: 'Code nicht akzeptiert. Versuche es erneut.',
+      ),
+      onLocked: () => AppPopup.toast(
+        context,
+        icon: Icons.lock_outline,
+        title: 'Zwei-Faktor-Schutz ist vorübergehend gesperrt.',
+      ),
+      onInvalid: () => AppPopup.toast(
+        context,
+        icon: Icons.refresh_outlined,
+        title:
+            'Die Sicherheitsanforderung ist nicht mehr gültig. Bitte neu anmelden.',
+      ),
+      onFailed: () => AppPopup.toast(
+        context,
+        icon: Icons.wifi_off_outlined,
+        title: 'Zwei-Faktor-Anmeldung konnte nicht abgeschlossen werden.',
+      ),
+    );
   }
 
   bool _isOutsideInteractiveArea(Offset globalPosition) {
@@ -104,10 +174,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   String? _validateName(String? v) {
-    final value = (v ?? '').trim();
-    if (value.isEmpty) return 'Bitte gib deinen Namen ein.';
-    if (value.length < 2) return 'Bitte gib einen gültigen Namen ein.';
-    return null;
+    return registrationDisplayNameError(v);
   }
 
   String? _validateEmail(String? v) {
@@ -121,14 +188,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _validatePassword(String? v) {
     final value = (v ?? '');
     if (value.trim().isEmpty) return 'Bitte gib dein Passwort ein.';
-    if (value.length < 8) return 'Das Passwort ist zu kurz.';
-    return null;
-  }
-
-  String? _validatePassword2(String? v) {
-    final value = (v ?? '');
-    if (value.trim().isEmpty) return 'Bitte bestätige dein Passwort.';
-    if (value != _pwCtrl.text) return 'Die Passwörter stimmen nicht überein.';
+    if (value.length < 10) return 'Mindestens 10 Zeichen erforderlich.';
+    if (!RegExp(r'\p{L}', unicode: true).hasMatch(value) ||
+        !RegExp(r'\d').hasMatch(value)) {
+      return 'Nutze mindestens einen Buchstaben und eine Zahl.';
+    }
     return null;
   }
 
@@ -137,16 +201,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
     FocusScope.of(context).unfocus();
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
-
     setState(() => _busy = true);
     try {
       await Future<void>.delayed(const Duration(milliseconds: 600));
       final result = await AuthService.registerLocalAccount(
-          email: _emailCtrl.text.trim(), password: _pwCtrl.text);
+        email: _emailCtrl.text.trim(),
+        password: _pwCtrl.text,
+        displayName: _nameCtrl.text.trim(),
+        termsAccepted: true,
+        privacyAccepted: true,
+        minimumAgeConfirmed: true,
+        privateUseConfirmed: true,
+        registrationActionLabel: 'Kostenlos registrieren',
+      );
       if (!mounted) return;
       if (!result.ok) {
         final msg = switch (result.failure) {
           AuthFailure.emailInUse => 'Diese E-Mail ist bereits registriert.',
+          AuthFailure.weakPassword =>
+            'Das Passwort muss mindestens 10 Zeichen, einen Buchstaben und eine Zahl enthalten.',
+          AuthFailure.consentRequired =>
+            'Die erforderlichen Angaben konnten nicht bestätigt werden. Bitte versuche es erneut.',
+          AuthFailure.verificationDeliveryUnavailable =>
+            'Dein Konto wurde vorgemerkt, aber die Bestätigungs-E-Mail konnte nicht angefordert werden. Bitte versuche die Registrierung später mit derselben E-Mail erneut.',
           AuthFailure.network =>
             'Es ist ein Netzwerkfehler aufgetreten. Bitte versuche es erneut.',
           _ => 'Es ist ein Fehler aufgetreten. Bitte versuche es erneut.',
@@ -155,9 +232,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
         return;
       }
 
+      if (result.session == null) {
+        final pendingEmail = _emailCtrl.text.trim();
+        _pwCtrl.clear();
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => LoginScreen(
+              returnTabIndex: widget.returnTabIndex,
+              initialEmail: pendingEmail,
+              verificationPending: true,
+            ),
+          ),
+        );
+        return;
+      }
+
       await DataService.syncCurrentUserForSessionEmail(
         _emailCtrl.text.trim(),
       );
+      await _syncRentalCartAfterAuthentication();
       final registeredUser = await DataService.getCurrentUser();
       final displayName = _nameCtrl.text.trim();
       if (registeredUser != null && displayName.isNotEmpty) {
@@ -171,7 +265,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
           context,
           icon: Icons.mark_email_read_outlined,
           title: 'Bestätigungs-E-Mail gesendet',
-          message: 'Öffne den Link in deiner E-Mail, um dein Konto zu bestätigen.',
+          message:
+              'Öffne den Link in deiner E-Mail, um dein Konto zu bestätigen.',
+        );
+      } else if (result.verificationPending && mounted) {
+        await AppPopup.toast(
+          context,
+          icon: Icons.mark_email_unread_outlined,
+          title: 'E-Mail-Bestätigung ausstehend',
+          message:
+              'Der Versandstatus ist unklar. Öffne im Hinweis oben die erneute Anforderung.',
         );
       }
 
@@ -199,14 +302,199 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _socialRegister(AuthSocialProvider provider) async {
     if (_busy || !mounted) return;
-    final providerLabel =
-        provider == AuthSocialProvider.google ? 'Google' : 'Apple';
-    await AppPopup.toast(
-      context,
-      icon: Icons.info_outline,
-      title: '$providerLabel-Anmeldung noch nicht verfügbar',
-      message: 'Bitte nutze aktuell die Registrierung per E-Mail.',
+    final actionEpoch = ++_socialActionEpoch;
+    final noSessionEpoch = AuthService.sessionEpoch;
+    final providerLabel = switch (provider) {
+      AuthSocialProvider.google => 'Google',
+      AuthSocialProvider.apple => 'Apple',
+      AuthSocialProvider.facebook => 'Facebook',
+    };
+    AuthSessionOwner? successfulSessionOwner;
+    setState(() => _busy = true);
+    try {
+      final definitelySignedOut =
+          await AuthService.isStoredSessionDefinitelyAbsent();
+      if (!_isSocialActionCurrent(actionEpoch) ||
+          AuthService.sessionEpoch != noSessionEpoch ||
+          !definitelySignedOut) {
+        return;
+      }
+      var result = await AuthService.signInWithSocialProvider(
+        provider,
+        termsAccepted: true,
+        privacyAccepted: true,
+        minimumAgeConfirmed: true,
+        privateUseConfirmed: true,
+        registrationActionLabel: 'Mit $providerLabel registrieren',
+        expectedSessionEpoch: noSessionEpoch,
+        isActionCurrent: () => _isSocialActionCurrent(actionEpoch),
+      );
+      final mfaResult = await _resolveMfaChallenge(
+        result,
+        noSessionEpoch: noSessionEpoch,
+        actionEpoch: actionEpoch,
+      );
+      if (mfaResult == null) return;
+      result = mfaResult;
+      if (!_isSocialActionCurrent(actionEpoch)) {
+        final staleSession = result.session;
+        if (staleSession != null) {
+          await AuthService.clearSessionOwnerIfMatches(
+            AuthService.captureSessionOwner(staleSession),
+            runLogoutCleanup: false,
+          );
+        }
+        return;
+      }
+      if (!result.ok) {
+        if (result.failure == AuthFailure.socialCancelled ||
+            result.failure == AuthFailure.principalChanged) {
+          return;
+        }
+        final message = switch (result.failure) {
+          AuthFailure.socialEmailRequired =>
+            '$providerLabel hat keine E-Mail-Adresse übermittelt. Bitte gib sie dort frei oder nutze eine andere Anmeldung.',
+          AuthFailure.socialEmailVerificationRequired =>
+            'Die von $providerLabel übermittelte E-Mail ist noch nicht bestätigt.',
+          AuthFailure.socialProviderAlreadyLinked =>
+            'Dieses SIT-Konto ist bereits mit einem anderen $providerLabel-Konto verbunden.',
+          AuthFailure.socialAccountLinkRequiresReauthentication =>
+            'Diese E-Mail gehört bereits zu einem SIT-Konto. Melde dich einmal wie bisher an, bevor du $providerLabel verbindest.',
+          AuthFailure.accountNotActive =>
+            'Dieses SIT-Konto ist derzeit nicht aktiv.',
+          AuthFailure.providerUnavailable =>
+            '$providerLabel ist noch nicht freigeschaltet. Bitte nutze vorübergehend E-Mail.',
+          _ =>
+            'Die $providerLabel-Registrierung ist gerade nicht erreichbar. Bitte versuche es erneut.',
+        };
+        if (!mounted) return;
+        await AppPopup.toast(
+          context,
+          icon: Icons.error_outline,
+          title: message,
+        );
+        return;
+      }
+      if (result.session == null) {
+        final pendingEmail = result.pendingEmail ?? '';
+        if (!_isSocialActionCurrent(actionEpoch)) return;
+        if (!mounted) return;
+        await AppPopup.toast(
+          context,
+          icon: Icons.mark_email_read_outlined,
+          title: 'Bestätigungs-E-Mail gesendet',
+          message:
+              'Bestätige einmal deine E-Mail und melde dich danach erneut mit $providerLabel an.',
+        );
+        if (!_isSocialActionCurrent(actionEpoch)) return;
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => LoginScreen(
+              returnTabIndex: widget.returnTabIndex,
+              initialEmail: pendingEmail,
+              verificationPending: true,
+            ),
+          ),
+        );
+        return;
+      }
+      final successfulSession = result.session!;
+      successfulSessionOwner =
+          AuthService.captureSessionOwner(successfulSession);
+      final email = successfulSession.email;
+      await DataService.syncCurrentUserForSessionEmail(email);
+      if (!await _retainSuccessfulSocialRegistrationOwner(
+        actionEpoch,
+        successfulSessionOwner,
+      )) {
+        return;
+      }
+      await _syncRentalCartAfterAuthentication();
+      if (!await _retainSuccessfulSocialRegistrationOwner(
+        actionEpoch,
+        successfulSessionOwner,
+      )) {
+        return;
+      }
+      await FirebaseRuntime.syncPushRegistration();
+      if (!await _retainSuccessfulSocialRegistrationOwner(
+        actionEpoch,
+        successfulSessionOwner,
+      )) {
+        return;
+      }
+      if (result.verificationPending &&
+          !result.verificationEmailSent &&
+          mounted) {
+        await AppPopup.toast(
+          context,
+          icon: Icons.mark_email_unread_outlined,
+          title: 'E-Mail-Bestätigung ausstehend',
+          message:
+              'Der Versandstatus ist unklar. Nutze den Hinweis oben für eine erneute Anforderung.',
+        );
+      }
+      if (!mounted) return;
+      await context
+          .read<DeveloperPreviewController>()
+          .setState(DeveloperUserState.loggedIn);
+      if (!await _retainSuccessfulSocialRegistrationOwner(
+        actionEpoch,
+        successfulSessionOwner,
+      )) {
+        return;
+      }
+      final targetIndex = widget.returnTabIndex;
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => MainNavigation(initialIndex: targetIndex ?? 0),
+        ),
+        (route) => false,
+      );
+    } catch (error) {
+      debugPrint('[RegisterScreen] social registration failed: $error');
+      final completedOwner = successfulSessionOwner;
+      if (completedOwner != null) {
+        await AuthService.clearSessionOwnerIfMatches(
+          completedOwner,
+          runLogoutCleanup: false,
+        );
+      }
+      if (!_isSocialActionCurrent(actionEpoch)) return;
+      if (!mounted) return;
+      await AppPopup.toast(
+        context,
+        icon: Icons.wifi_off_outlined,
+        title: 'Registrierung nicht abgeschlossen.',
+        message: 'Bitte versuche es erneut.',
+      );
+    } finally {
+      if (_isSocialActionCurrent(actionEpoch)) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  bool _isSocialActionCurrent(int actionEpoch) =>
+      mounted && actionEpoch == _socialActionEpoch;
+
+  Future<bool> _retainSuccessfulSocialRegistrationOwner(
+    int actionEpoch,
+    AuthSessionOwner successfulSessionOwner,
+  ) async {
+    if (_isSocialActionCurrent(actionEpoch) &&
+        await AuthService.isSessionOwnerDefinitelyCurrent(
+          successfulSessionOwner,
+        )) {
+      return true;
+    }
+    await AuthService.clearSessionOwnerIfMatches(
+      successfulSessionOwner,
+      runLogoutCleanup: false,
     );
+    return false;
   }
 
   @override
@@ -217,7 +505,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final nameOk = _validateName(_nameCtrl.text) == null;
     final emailOk = _validateEmail(_emailCtrl.text) == null;
     final pwOk = _validatePassword(_pwCtrl.text) == null;
-    final pw2Ok = _validatePassword2(_pw2Ctrl.text) == null;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -251,6 +538,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: Row(children: [
                         _GlassIconButton(
                             icon: Icons.arrow_back,
+                            semanticLabel: MaterialLocalizations.of(context)
+                                .backButtonTooltip,
                             onTap: () => Navigator.of(context).maybePop()),
                         const SizedBox(width: 10),
                         Expanded(
@@ -397,12 +686,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                       placeholder: '••••••••',
                                                       controller: _pwCtrl,
                                                       focusNode: _pwFocus,
-                                                      nextFocusNode: _pw2Focus,
                                                       keyboardType:
                                                           TextInputType
                                                               .visiblePassword,
                                                       textInputAction:
-                                                          TextInputAction.next,
+                                                          TextInputAction.done,
                                                       validator:
                                                           _validatePassword,
                                                       prefixIcon:
@@ -423,12 +711,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                       textCapitalization:
                                                           TextCapitalization
                                                               .none,
+                                                      onSubmitted: (_) =>
+                                                          _register(),
                                                       suffix: _GlassSuffixIconButton(
                                                           icon: _pwVisible
                                                               ? Icons
                                                                   .visibility_off_outlined
                                                               : Icons
                                                                   .visibility_outlined,
+                                                          semanticLabel: _pwVisible
+                                                              ? 'Passwort verbergen'
+                                                              : 'Passwort anzeigen',
                                                           onTap: () => setState(
                                                               () => _pwVisible =
                                                                   !_pwVisible)),
@@ -439,82 +732,76 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                             .check_circle_outline,
                                                         ok: pwOk,
                                                         text:
-                                                            'Mind. 8 Zeichen'),
-                                                    const SizedBox(height: 10),
-                                                    _SITTextField(
-                                                      label:
-                                                          'Passwort wiederholen',
-                                                      placeholder: '••••••••',
-                                                      controller: _pw2Ctrl,
-                                                      focusNode: _pw2Focus,
-                                                      keyboardType:
-                                                          TextInputType
-                                                              .visiblePassword,
-                                                      textInputAction:
-                                                          TextInputAction.done,
-                                                      validator:
-                                                          _validatePassword2,
-                                                      prefixIcon:
-                                                          Icons.lock_outline,
-                                                      status: _didInteract &&
-                                                              _pw2Ctrl.text
-                                                                  .isNotEmpty
-                                                          ? (pw2Ok
-                                                              ? _FieldStatus
-                                                                  .success
-                                                              : _FieldStatus
-                                                                  .error)
-                                                          : _FieldStatus
-                                                              .neutral,
-                                                      obscureText: !_pw2Visible,
-                                                      autocorrect: false,
-                                                      enableSuggestions: false,
-                                                      textCapitalization:
-                                                          TextCapitalization
-                                                              .none,
-                                                      onSubmitted: (_) =>
-                                                          _register(),
-                                                      suffix: _GlassSuffixIconButton(
-                                                          icon: _pw2Visible
-                                                              ? Icons
-                                                                  .visibility_off_outlined
-                                                              : Icons
-                                                                  .visibility_outlined,
-                                                          onTap: () => setState(
-                                                              () => _pw2Visible =
-                                                                  !_pw2Visible)),
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    _HintRow(
-                                                        icon: Icons
-                                                            .verified_outlined,
-                                                        ok: pw2Ok,
-                                                        text:
-                                                            'Passwörter müssen übereinstimmen'),
+                                                            'Mind. 10 Zeichen, Buchstabe und Zahl'),
                                                     const SizedBox(height: 10),
                                                     const SocialAuthOrDivider(),
                                                     const SizedBox(height: 10),
+                                                    _LegalText(
+                                                      actionLabel:
+                                                          'Mit Google registrieren',
+                                                      onOpenTerms: _openTerms,
+                                                      onOpenPrivacy:
+                                                          _openPrivacy,
+                                                    ),
+                                                    const SizedBox(height: 4),
                                                     SocialAuthButton(
                                                         brand: SocialAuthBrand
                                                             .google,
                                                         label:
                                                             'Mit Google registrieren',
-                                                        onTap: _busy
+                                                        onTap: _busy ||
+                                                                !AuthService.socialProviderEnabled(
+                                                                    AuthSocialProvider
+                                                                        .google)
                                                             ? null
                                                             : () => _socialRegister(
                                                                 AuthSocialProvider
                                                                     .google)),
                                                     const SizedBox(height: 8),
+                                                    _LegalText(
+                                                      actionLabel:
+                                                          'Mit Apple registrieren',
+                                                      onOpenTerms: _openTerms,
+                                                      onOpenPrivacy:
+                                                          _openPrivacy,
+                                                    ),
+                                                    const SizedBox(height: 4),
                                                     SocialAuthButton(
                                                         brand: SocialAuthBrand
                                                             .apple,
                                                         label:
                                                             'Mit Apple registrieren',
-                                                        onTap: _busy
+                                                        onTap: _busy ||
+                                                                !AuthService
+                                                                    .socialProviderEnabled(
+                                                                        AuthSocialProvider
+                                                                            .apple)
                                                             ? null
                                                             : () => _socialRegister(
                                                                 AuthSocialProvider
                                                                     .apple)),
+                                                    const SizedBox(height: 8),
+                                                    _LegalText(
+                                                      actionLabel:
+                                                          'Mit Facebook registrieren',
+                                                      onOpenTerms: _openTerms,
+                                                      onOpenPrivacy:
+                                                          _openPrivacy,
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    SocialAuthButton(
+                                                        brand: SocialAuthBrand
+                                                            .facebook,
+                                                        label:
+                                                            'Mit Facebook registrieren',
+                                                        onTap: _busy ||
+                                                                !AuthService.socialProviderEnabled(
+                                                                    AuthSocialProvider
+                                                                        .facebook)
+                                                            ? null
+                                                            : () => _socialRegister(
+                                                                AuthSocialProvider
+                                                                    .facebook)),
                                                   ]),
                                             ),
                                           ),
@@ -559,6 +846,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 }
+
 class _RegisterBackdrop extends StatelessWidget {
   final bool peekClear;
   const _RegisterBackdrop({required this.peekClear});
@@ -689,24 +977,30 @@ class _RegisterBackdrop extends StatelessWidget {
 
 class _GlassIconButton extends StatelessWidget {
   final IconData icon;
+  final String semanticLabel;
   final VoidCallback onTap;
-  const _GlassIconButton({required this.icon, required this.onTap});
+  const _GlassIconButton(
+      {required this.icon, required this.semanticLabel, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return _Pressable(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        width: 44,
-        height: 44,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: _Pressable(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+          ),
+          child: Icon(icon, color: Colors.white, size: 20),
         ),
-        child: Icon(icon, color: Colors.white, size: 20),
       ),
     );
   }
@@ -714,21 +1008,27 @@ class _GlassIconButton extends StatelessWidget {
 
 class _GlassSuffixIconButton extends StatelessWidget {
   final IconData icon;
+  final String semanticLabel;
   final VoidCallback onTap;
-  const _GlassSuffixIconButton({required this.icon, required this.onTap});
+  const _GlassSuffixIconButton(
+      {required this.icon, required this.semanticLabel, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
 // Keep it “free-floating” inside the text field (no chip/background).
-    return _Pressable(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: SizedBox(
-        width: 40,
-        height: 40,
-        child: Center(
-            child: Icon(icon,
-                color: Colors.white.withValues(alpha: 0.85), size: 20)),
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: _Pressable(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Center(
+              child: Icon(icon,
+                  color: Colors.white.withValues(alpha: 0.85), size: 20)),
+        ),
       ),
     );
   }
@@ -811,66 +1111,83 @@ class _SITTextField extends StatelessWidget {
       _FieldStatus.neutral => BrandColors.primary,
     };
 
-    return TextFormField(
-      controller: controller,
-      focusNode: focusNode,
-      keyboardType: keyboardType,
-      textInputAction: textInputAction,
-      obscureText: obscureText,
-      autocorrect: autocorrect,
-      enableSuggestions: enableSuggestions,
-      textCapitalization: textCapitalization,
-      style: theme.textTheme.bodyMedium?.copyWith(
-          fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
-      validator: validator,
-      onFieldSubmitted: (v) {
-        if (nextFocusNode != null) {
-          FocusScope.of(context).requestFocus(nextFocusNode);
-        } else {
-          onSubmitted?.call(v);
-        }
-      },
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: placeholder,
-        hintStyle: theme.textTheme.bodySmall?.copyWith(
-            color: Colors.white.withValues(alpha: 0.42),
-            fontWeight: FontWeight.w600),
-        labelStyle: theme.textTheme.bodySmall?.copyWith(
-            color: Colors.white.withValues(alpha: 0.78),
-            fontWeight: FontWeight.w700),
-        prefixIcon: Padding(
-          padding: const EdgeInsets.only(left: 12, right: 10),
-          child: Icon(prefixIcon,
-              color: Colors.white.withValues(alpha: 0.78), size: 18),
+    final field = MergeSemantics(
+        child: Semantics(
+      label: label,
+      textField: true,
+      child: TextFormField(
+        controller: controller,
+        focusNode: focusNode,
+        keyboardType: keyboardType,
+        textInputAction: textInputAction,
+        obscureText: obscureText,
+        autocorrect: autocorrect,
+        enableSuggestions: enableSuggestions,
+        textCapitalization: textCapitalization,
+        style: theme.textTheme.bodyMedium?.copyWith(
+            fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
+        validator: validator,
+        onFieldSubmitted: (v) {
+          if (nextFocusNode != null) {
+            FocusScope.of(context).requestFocus(nextFocusNode);
+          } else {
+            onSubmitted?.call(v);
+          }
+        },
+        decoration: InputDecoration(
+          label: ExcludeSemantics(child: Text(label)),
+          hintText: placeholder,
+          hintStyle: theme.textTheme.bodySmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.42),
+              fontWeight: FontWeight.w600),
+          labelStyle: theme.textTheme.bodySmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.78),
+              fontWeight: FontWeight.w700),
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(left: 12, right: 10),
+            child: Icon(prefixIcon,
+                color: Colors.white.withValues(alpha: 0.78), size: 18),
+          ),
+          prefixIconConstraints:
+              const BoxConstraints(minWidth: 0, minHeight: 0),
+          suffixIcon: suffix == null
+              ? null
+              : const ExcludeSemantics(
+                  child: SizedBox(width: 48, height: 40),
+                ),
+          filled: true,
+          fillColor: Colors.black.withValues(alpha: 0.10),
+          contentPadding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+          enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: BorderSide(color: border, width: 1.0)),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: BorderSide(
+                  color: focusedBorder.withValues(alpha: 0.90), width: 1.35)),
+          errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: BorderSide(
+                  color: BrandColors.danger.withValues(alpha: 0.9),
+                  width: 1.2)),
+          focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: BorderSide(
+                  color: BrandColors.danger.withValues(alpha: 0.95),
+                  width: 1.3)),
+          errorStyle: theme.textTheme.bodySmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.92),
+              height: 1.25,
+              fontWeight: FontWeight.w700),
         ),
-        prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-        suffixIcon: suffix == null
-            ? null
-            : Padding(padding: const EdgeInsets.only(right: 8), child: suffix),
-        filled: true,
-        fillColor: Colors.black.withValues(alpha: 0.10),
-        contentPadding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide(color: border, width: 1.0)),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide(
-                color: focusedBorder.withValues(alpha: 0.90), width: 1.35)),
-        errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide(
-                color: BrandColors.danger.withValues(alpha: 0.9), width: 1.2)),
-        focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide(
-                color: BrandColors.danger.withValues(alpha: 0.95), width: 1.3)),
-        errorStyle: theme.textTheme.bodySmall?.copyWith(
-            color: Colors.white.withValues(alpha: 0.92),
-            height: 1.25,
-            fontWeight: FontWeight.w700),
       ),
+    ));
+    if (suffix == null) return field;
+    return Stack(
+      children: [
+        field,
+        PositionedDirectional(top: 8, end: 8, child: suffix!),
+      ],
     );
   }
 }
@@ -931,13 +1248,15 @@ class _StickyAuthBar extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _LegalText(
+                    actionLabel: 'Kostenlos registrieren',
+                    onOpenTerms: onOpenTerms,
+                    onOpenPrivacy: onOpenPrivacy),
+                const SizedBox(height: 8),
                 _PrimaryCTAButton(
                     busy: busy,
                     label: busy ? 'Registrieren…' : 'Kostenlos registrieren',
                     onTap: onSubmit),
-                const SizedBox(height: 8),
-                _LegalText(
-                    onOpenTerms: onOpenTerms, onOpenPrivacy: onOpenPrivacy),
                 const SizedBox(height: 6),
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Text('Schon bei SIT? ',
@@ -1032,9 +1351,14 @@ class _PrimaryCTAButton extends StatelessWidget {
 }
 
 class _LegalText extends StatelessWidget {
+  final String actionLabel;
   final VoidCallback onOpenTerms;
   final VoidCallback onOpenPrivacy;
-  const _LegalText({required this.onOpenTerms, required this.onOpenPrivacy});
+  const _LegalText({
+    required this.actionLabel,
+    required this.onOpenTerms,
+    required this.onOpenPrivacy,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1049,30 +1373,62 @@ class _LegalText extends StatelessWidget {
       decoration: TextDecoration.underline,
       decorationColor: Colors.white.withValues(alpha: 0.80),
     );
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Text.rich(
-        TextSpan(
+    final actionText = registrationConsentActionText(actionLabel);
+    final termsPrefix = actionText.split('SIT-Plattformbedingungen').first;
+    final privacySuffix = actionText.split('Datenschutzerklärung').last;
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      label: actionText,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            TextSpan(
-                text: 'Mit dem Erstellen eines Kontos stimmst du unseren ',
-                style: base),
-            TextSpan(
-                text: 'AGB',
-                style: link,
-                recognizer: TapGestureRecognizer()..onTap = onOpenTerms),
-            TextSpan(text: ' und ', style: base),
-            TextSpan(
-                text: 'Datenschutzbestimmungen',
-                style: link,
-                recognizer: TapGestureRecognizer()..onTap = onOpenPrivacy),
-            TextSpan(text: ' zu.', style: base),
+            Text(termsPrefix, style: base, textAlign: TextAlign.center),
+            _InlineLegalLink(
+              label: 'SIT-Plattformbedingungen',
+              style: link,
+              onTap: onOpenTerms,
+            ),
+            Text(' und nimmst die ', style: base),
+            _InlineLegalLink(
+              label: 'Datenschutzerklärung',
+              style: link,
+              onTap: onOpenPrivacy,
+            ),
+            Text(privacySuffix, style: base),
           ],
         ),
-        textAlign: TextAlign.center,
       ),
     );
   }
+}
+
+class _InlineLegalLink extends StatelessWidget {
+  final String label;
+  final TextStyle? style;
+  final VoidCallback onTap;
+
+  const _InlineLegalLink({
+    required this.label,
+    required this.style,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: label,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+            child: Text(label, style: style),
+          ),
+        ),
+      );
 }
 
 class _TextLink extends StatelessWidget {

@@ -2,6 +2,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/utils/booking_status_copy.dart';
 
 void main() {
+  test('simulation marker overrides every binding-looking booking status', () {
+    for (final category in [
+      'pending',
+      'upcoming',
+      'ongoing',
+      'completed',
+    ]) {
+      expect(
+        bookingCardStatusLabel(
+          category: category,
+          start: DateTime(2026, 11, 15),
+          end: DateTime(2026, 11, 17),
+          booking: const {'simulationOnly': true},
+          now: DateTime(2026, 9, 3),
+        ),
+        'Pilot-Simulation',
+      );
+    }
+  });
+
   test('upcoming labels distinguish pickup vs delivery', () {
     expect(
       bookingCardStatusLabel(

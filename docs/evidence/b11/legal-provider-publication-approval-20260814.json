@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "kind": "legal-provider-publication-approval",
+  "confirmedAt": "2026-08-14T06:19:45Z",
+  "provider": {
+    "legalName": "Walid Chraibi",
+    "legalForm": "individual-sole-proprietor",
+    "address": "Bernhaldenweg 37, 71579 Spiegelberg-Jux",
+    "representative": "Walid Chraibi",
+    "contentResponsible": "Walid Chraibi",
+    "contactEmail": "contact@shareittoo.com"
+  },
+  "authorizedActions": {
+    "publishImprint": true,
+    "publishPrivacy": true,
+    "updateProductionBackend": true,
+    "updateProductionCaddy": true,
+    "savePlayPrivacyPolicy": true,
+    "savePlayDataSafety": true,
+    "buildAndUploadAndroid2026081403": true,
+    "enableFirebasePhone": true,
+    "restrictSmsToGermany": true,
+    "runRealAndroidSmsTest": true
+  },
+  "boundaries": {
+    "termsApproved": false,
+    "legalReviewClaimed": false,
+    "productionAccessClaimed": false,
+    "containsCredentials": false,
+    "containsSecrets": false
+  }
+}

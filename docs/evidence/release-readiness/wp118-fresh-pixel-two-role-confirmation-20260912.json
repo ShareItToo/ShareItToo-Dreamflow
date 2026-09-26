@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP118_FRESH_PIXEL_TWO_ROLE_CONFIRMATION",
+  "status": "passed-fresh-current-candidate-pixel-two-role-core",
+  "recordedAt": "2026-09-11T22:05:46Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091110",
+    "sourceCommit": "c8e2a49e14f5cae0026fa5f2bc327859fe0ff17b",
+    "apkSha256": "711f058c113bd714abb1e4bcedf05d62a382004e1bf9882f6d85d04b876dd0f7",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "privacyScan": "passed",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "device": {
+    "physical": true,
+    "model": "Pixel 7 Pro",
+    "exactInstalledVersion": "1.0.0+2026091110",
+    "containsRawDeviceIdentifier": false
+  },
+  "freshRun": {
+    "kind": "android-email-verified-two-role-product-journey",
+    "status": "passed-pixel-email-verified-two-role-product-journey",
+    "distinctEmailVerifiedPrincipals": true,
+    "ownerDraftPublishThroughPixelUi": "passed-server-confirmed-active",
+    "ownerPublishFeedback": "durable-server-and-public-catalog-confirmed",
+    "renterPublicDiscovery": "passed",
+    "requestAcceptance": "passed-non-binding-simulation",
+    "controlledFcm": "passed-foreground-background-terminated",
+    "controlledFcmNotificationIcon": "private-visual-review-pending",
+    "controlledFcmNotificationIconSha256": "e1c271f5dccb3a6907a1b2b61c9c4a3bfe5a848a8bf7c07471599ffc671748ba",
+    "ownerPresentation": "Pilot-Simulation",
+    "renterPresentation": "Pilot-Simulation",
+    "chatVisibility": "passed-renter-visible",
+    "principalSwitchIsolation": "passed-owner-absent-under-renter",
+    "cleanup": "passed-booking-cancelled-listing-ended",
+    "protectedOwnerSessionRestored": true
+  },
+  "infrastructureObservation": {
+    "initialAttempt": "stopped-safely-before-device-journey-on-transient-public-staging-tls-timeout",
+    "stagingApiContainerHealthy": true,
+    "stagingApiContainerRestartCount": 0,
+    "proxyRouteConfirmed": true,
+    "controlledRetryAfterPublicApiReadback": "passed"
+  },
+  "cleanupReadback": {
+    "journeyStatus": "retired",
+    "listingStatus": "ended",
+    "bookingStatus": "cancelled",
+    "publicListingCount": 0,
+    "emptyFailedPrivateArtifactDirectoryRemoved": true,
+    "successfulPrivateNotificationArtifactRetainedOwnerOnly": true
+  },
+  "verification": {
+    "localTechnicalRegression": "passed",
+    "flutterAnalyzerDiagnostics": 0,
+    "webWasmDryRun": "passed",
+    "loopbackSmoke": "passed",
+    "androidDebugBuild": "passed",
+    "androidMinimumSdk": 24,
+    "githubRegression": "pending-exact-evidence-head",
+    "githubCodeql": "pending-exact-evidence-head"
+  },
+  "boundaries": {
+    "physicalPixelOnly": true,
+    "physicalOnePlusTested": false,
+    "onePlusMacBookHostOnline": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "monetaryEffectMinor": 0,
+    "contractCreated": false,
+    "reservationCreated": false,
+    "listingLeftActive": false,
+    "testBookingLeftActive": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "publicRegistrationChanged": false,
+    "realMoneyUsed": false,
+    "containsAccountIdentity": false,
+    "containsSecrets": false,
+    "containsTokens": false,
+    "containsFixtureIdentifiers": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPaths": false
+  },
+  "remaining": [
+    "physical-oneplus-exact-candidate-two-role-replay-when-macbook-host-is-online",
+    "binding-v52-contract-and-pickup-return-damage-review",
+    "official-stripe-sandbox-payment-refund-and-simulated-payout"
+  ]
+}

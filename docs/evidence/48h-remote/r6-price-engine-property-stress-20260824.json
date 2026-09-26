@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r6-price-engine-property-stress",
+  "status": "verified-r6-regression-and-codeql-passed",
+  "observedOn": "2026-08-24",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "r5VerifiedHead": "b55253d68443c11b5308e63fe3b2e9fc8ea07bbf",
+    "initialCorrectionCommit": "b7d2c6f9b6965b2d1ebbfd9366a53a9dabcd2e88",
+    "implementationHead": "0005a8abab6178d282b4c79bedd2e36870968675",
+    "engineAuthority": "SIT_REGIONAL_PRICE_ENGINE_V2",
+    "engineVersion": "R6-2026-08-24.1",
+    "migration": "069_regional_price_engine_r6_hardening"
+  },
+  "findingsClosed": {
+    "weakFarCohortCouldOutvoteStrongNearEvidence": true,
+    "documentedLowerDemandClampWasUnreachable": true,
+    "historicalN7LowerDemandFixtureWasStale": true,
+    "unknownRecommendationFieldsWereIgnored": true,
+    "workaroundIntroduced": false
+  },
+  "permanentCorrections": {
+    "influenceModel": "pareto-frontier-over-source-geography-similarity-freshness",
+    "dominatedAggregateCapBasisPoints": 9000,
+    "incomparableTradeoffsRemainIndependent": true,
+    "lowerDemandClampBasisPoints": 9000,
+    "upperDemandClampBasisPoints": 11000,
+    "neutralDemandRatio": 2,
+    "unknownRequestFieldsRejected": true,
+    "engineVersionAdvanced": true,
+    "historicalN5SnapshotsRemainValid": true
+  },
+  "requiredCoverage": {
+    "categoryReplacementConditionCombinations": 90,
+    "roundingBoundaryCases": 1818,
+    "geographyScopes": [
+      "within_20_km",
+      "within_50_km",
+      "within_100_km",
+      "baden_wuerttemberg",
+      "germany"
+    ],
+    "sourceClasses": [
+      "completed_sit_rental",
+      "accepted_sit_request",
+      "active_sit_listing",
+      "reviewed_external_c2c_asking_price",
+      "professional_commercial_reference",
+      "synthetic_fixture"
+    ],
+    "confidenceValues": ["HIGH", "MEDIUM", "LOW"],
+    "ownerOptions": ["rent_fast", "sit_recommendation", "set_higher"],
+    "durationBoundaryDays": [1, 2, 3, 6, 7, 13, 14, 30],
+    "zeroObservations": true,
+    "oneObservation": true,
+    "extremeOutlier": true,
+    "manyNearbyComparables": true,
+    "weakDistantComparables": true,
+    "privateAndCommercial": true,
+    "staleMalformedCategoryAndBrandMismatch": true,
+    "weightedMedianMadEffectiveSampleAndShrinkage": true,
+    "demandThresholdAndBothClamps": true,
+    "discountBeforeV52Fee": true,
+    "ownerOverrideAndConfirmation": true,
+    "clientCannotSetAuthoritativePrice": true,
+    "syntheticLearningWeightZero": true,
+    "exactInputReproducibility": true
+  },
+  "deterministicStress": {
+    "classification": "DETERMINISTIC_SYNTHETIC_PROPERTY_STRESS_NOT_PRODUCTION_CAPACITY_CLAIM",
+    "seed": "0x5a17c9e3",
+    "caseCount": 2000,
+    "totalObservationInputs": 16651,
+    "categoryCount": 6,
+    "replacementValueBandCount": 5,
+    "conditionCount": 3,
+    "confidenceCounts": {
+      "HIGH": 0,
+      "MEDIUM": 38,
+      "LOW": 1962
+    },
+    "geographyCounts": {
+      "within_20_km": 0,
+      "within_50_km": 3,
+      "within_100_km": 35,
+      "baden_wuerttemberg": 54,
+      "germany": 1908
+    },
+    "minimumRecommendedMinor": 400,
+    "maximumRecommendedMinor": 5000,
+    "outputDigestSha256": "3e9fb6e3cd65b9efb8a6197de60c9b62812abfc9a93ca86ef3ebc1ba59462ed7",
+    "failures": 0,
+    "externalProviderCalls": 0,
+    "realMoneyOperations": 0,
+    "productionMutations": 0
+  },
+  "migrationVerification": {
+    "previousUpMigrationCount": 68,
+    "currentUpMigrationCount": 69,
+    "previousDownMigrationCount": 41,
+    "currentDownMigrationCount": 42,
+    "emptyDatabaseApplied": true,
+    "secondMigrationRunIdempotent": true,
+    "n5SnapshotContractRetained": true,
+    "r6SnapshotContractAccepted": true,
+    "rollbackRefusesWhenR6SnapshotExists": true,
+    "productionDatabaseTouched": false
+  },
+  "verification": {
+    "engineAndPropertyTests": "passed-28",
+    "historicalN5ValidatorTests": "passed-7",
+    "historicalN5Validator": "passed",
+    "seededStress": "passed-2000-cases-16651-observations",
+    "postgres16MigrationAndWorkflow": "passed-and-cleaned",
+    "fullTechnicalRegression": "passed-candidate-rollover-ci-metadata-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "githubVerification": {
+    "implementationHead": "0005a8abab6178d282b4c79bedd2e36870968675",
+    "verifiedHead": "f4dd649f74c0420faf0117afbd844563e91effda",
+    "regression": {
+      "runId": 32746280246,
+      "conclusion": "success",
+      "postgresJobId": 97492755326,
+      "postgresConclusion": "success",
+      "backendJobId": 97492755400,
+      "backendConclusion": "success",
+      "flutterJobId": 97492754898,
+      "flutterConclusion": "success",
+      "parallelStabilityExecuted": false,
+      "signedCandidateBuilt": false,
+      "apiImageBuilt": true,
+      "apiImagePublished": false,
+      "publishApiImageJobId": 97495255521,
+      "publishApiImageConclusion": "skipped"
+    },
+    "codeql": {
+      "workflowRunId": 32746280233,
+      "workflowConclusion": "success",
+      "advancedSecurityCheckId": 97493148349,
+      "advancedSecurityConclusion": "success",
+      "newAlerts": 0
+    },
+    "preExistingExternalHistoryCheck": {
+      "provider": "GitGuardian",
+      "documentedBaseCommit": "e64defd0df62fb047c6fbc90733e4caf318ac7c4",
+      "documentedBaseCheckId": 97395091283,
+      "currentCheckId": 97492456137,
+      "currentConclusion": "failure",
+      "reportedPullRequestCommitScope": 250,
+      "credentialDetailsInspected": false,
+      "classifiedAsR6Regression": false
+    }
+  },
+  "limitations": {
+    "realMarketObservationsUsed": false,
+    "productionCapacityClaimed": false,
+    "performanceCertificationClaimed": false,
+    "humanPriceComprehensionTested": false,
+    "authenticDemandEvidenceCollected": false,
+    "releaseCertificationClaimed": false
+  },
+  "boundaries": {
+    "paidModelCallPerformed": false,
+    "apiBillingCreated": false,
+    "externalAiProviderCalled": false,
+    "realPersonDataUsed": false,
+    "realMarketDataImported": false,
+    "realMoneyUsed": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "paymentChanged": false,
+    "storeChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "pilotActivated": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false,
+    "containsSecrets": false
+  },
+  "nextPackage": "R7"
+}

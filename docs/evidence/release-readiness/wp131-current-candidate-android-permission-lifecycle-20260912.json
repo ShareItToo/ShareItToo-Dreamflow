@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp131-current-candidate-android-permission-lifecycle",
+  "status": "complete-exact-current-android-permission-lifecycle",
+  "capturedAt": "2026-09-12T20:36:31.406Z",
+  "workPackage": "WP131",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "wp130ClosureHead": "f2ce29ab411b2e5c9c99e45f9d38788e92dc5a8c",
+    "diagnosticHead": "f91783a8dad2f3f59a6f1ffe704efa4253f60a39",
+    "candidateSourceHead": "1546812f625b4e8f1e700bf976410097cd45ac2f",
+    "applicationRuntimePathsChangedAfterCandidateSource": []
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091201",
+    "releaseChannel": "internal",
+    "environment": "staging",
+    "delivery": "direct-apk",
+    "firebaseConfigured": true,
+    "apkSha256": "a8bfda4c1a0e7302b2528db8edfbe1318e88322023f65588da032220a24badd4",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "physicalPixelPackageMatched": true
+  },
+  "device": {
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "manifest": {
+    "declaredPermissionCount": 14,
+    "activeRuntimePermissionCount": 4,
+    "legacyStoragePermissionsInactiveAtApi37": true,
+    "broadMediaPermissionDeclared": false,
+    "microphonePermissionDeclared": false,
+    "contactsPermissionDeclared": false,
+    "smsPermissionDeclared": false,
+    "backgroundLocationPermissionDeclared": false,
+    "advertisingIdPermissionDeclared": false
+  },
+  "lifecycle": {
+    "camera": "deny-allow-authenticated-restarts-passed",
+    "location": "coarse-and-fine-deny-allow-authenticated-restarts-passed",
+    "notifications": "deny-allow-authenticated-restarts-passed",
+    "readOnlyAndroidPermissionSettingsPassed": true,
+    "authenticatedSessionAfterEveryRestart": true,
+    "packageDataIdentityPreserved": true,
+    "exactPermissionStateRestored": true,
+    "exactAppOpStateRestored": true,
+    "packageManagerForegroundHandlerSignalConfirmed": true,
+    "packageManagerBackgroundHandlerSignalConfirmed": true,
+    "broadcastBarrierSignalConfirmed": true,
+    "completionSignalTimeoutSeconds": 60,
+    "retryCount": 0,
+    "elapsedTimeAcceptedAsSuccess": false,
+    "finalAuthenticatedRestartPassed": true
+  },
+  "privateJournal": {
+    "status": "completed-restored",
+    "mode": "0600",
+    "sha256": "20f30a99e1de9be01b1be028acdcf27bfa4dfb5c33c962cfd277bfdd5628c111",
+    "recoveryRequired": false,
+    "containsCredential": false,
+    "containsAccountIdentity": false,
+    "containsRawDeviceIdentifier": false,
+    "containsPrivatePath": false
+  },
+  "portfolioEffect": {
+    "promotedRequirement": "android-permission-lifecycle",
+    "passCount": 16,
+    "partialCount": 8,
+    "openCount": 8,
+    "totalCount": 32,
+    "releaseDecision": "hold-not-production-ready"
+  },
+  "verification": {
+    "focusedTestsPassed": 24,
+    "fullLocalRegression": "success",
+    "webWasmLoopbackAndroidBuildPassed": true,
+    "exactHeadGithubRegressionRequired": true,
+    "exactHeadCodeqlRequired": true
+  },
+  "sourceInventory": [
+    {
+      "path": "docs/evidence/release-readiness/wp128-current-candidate-pixel-visual-permission-20260912.json",
+      "sha256": "96ce52e7e47b3bb175963e99032cccdc7f43b9917a71149c69efb1320ad16ca3"
+    },
+    {
+      "path": "tool/diagnose_current_candidate_android_permission_lifecycle.mjs",
+      "sha256": "f77d28470bc48d6472a5d8b9d4b77ef06dbc488a7539fb9ba41b853d241c42f8"
+    },
+    {
+      "path": "test/tool/diagnose_current_candidate_android_permission_lifecycle.test.mjs",
+      "sha256": "6b2e06eaaff5fff8039ca85281d3e840218c668b51752543f09a217291bc595d"
+    },
+    {
+      "path": "tool/validate_wp128_current_candidate_pixel_visual_permission.mjs",
+      "sha256": "3ca553d2f8b3cebabdbeccc934e4defc8d571f295b3ebac4399edbc5cb9b968b"
+    }
+  ],
+  "technicalDebt": [
+    "The earlier ten-second platform barrier was too narrow while real permission-revocation callbacks were queued; WP131 waits up to sixty seconds for exact PackageManager and broadcast completion signals without sleeping, retrying or accepting elapsed time as success.",
+    "The historical WP128 validator now checks its recorded source inventory against the exact WP128 closure commit, so future reviewed diagnostic hardening cannot invalidate or silently rewrite the earlier partial evidence."
+  ],
+  "boundaries": {
+    "applicationRuntimeChanged": false,
+    "backendChanged": false,
+    "permissionStateTemporarilyChanged": true,
+    "permissionStateRestored": true,
+    "appOpStateRestored": true,
+    "profileChanged": false,
+    "photoCapturedOrSelected": false,
+    "locationReadOrPersisted": false,
+    "notificationPreferenceChanged": false,
+    "pushRegistrationChanged": false,
+    "messageSent": false,
+    "accountMutationPerformed": false,
+    "appDataCleared": false,
+    "packageReinstalled": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "firebaseProjectChanged": false,
+    "paymentEndpointCalled": false,
+    "realMoneyUsed": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "credentialRecorded": false,
+    "accountIdentityRecorded": false,
+    "privateFilesystemPathRecorded": false,
+    "rawDeviceIdentifierRecorded": false
+  }
+}

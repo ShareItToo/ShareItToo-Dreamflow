@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r9-database-recovery",
+  "status": "verified-r9-regression-and-codeql-passed",
+  "observedOn": "2026-08-24",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "r8ClosureHead": "b783b3d18baee40aad9caae673cb0332b956e21e",
+    "implementationHead": "c249221e64c0ede0d1918a431200069064dd3558"
+  },
+  "ciRedFirstFinding": {
+    "failingHead": "c53a43981cc44777c276527801475136d109d1c3",
+    "regressionRunId": 32754735549,
+    "postgresR9JobPassed": true,
+    "flutterUnitImportFailed": "backend-pg-loaded-before-execution",
+    "permanentCorrection": "lazy-load-pg-only-inside-exact-recovery-execution",
+    "dependencyInstalledOutsidePostgresJob": false,
+    "retryOrTimingWorkaround": false
+  },
+  "observation": {
+    "schemaVersion": 1,
+    "kind": "sit-r9-database-recovery-observation",
+    "status": "passed-and-cleaned",
+    "resultClassification": "LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF",
+    "postgresMajor": 16,
+    "migration": {
+      "emptyDatabaseTablesBeforeBootstrap": 0,
+      "totalMigrations": 71,
+      "firstMigration": "001_b3_foundation.up.sql",
+      "lastMigration": "071_stripe_connect_accounts_v2.up.sql",
+      "secondRunAppliedMigrations": 0,
+      "checksumMismatches": 0,
+      "schemaFingerprintSha256": "898c438f03f65f98f5e7a627edb3bb4b54f1aed8f3bcfb3c6c0eada577bc632c",
+      "tableCount": 136,
+      "columnCount": 1925,
+      "constraintCount": 1564,
+      "indexCount": 519,
+      "functionCount": 304,
+      "triggerCount": 174
+    },
+    "syntheticDataset": {
+      "accountCount": 12,
+      "listingCount": 6,
+      "supportPolicySnapshotCount": 1,
+      "listingAiDraftCount": 1,
+      "hardenedPriceSnapshotCount": 1,
+      "realUserRows": 0,
+      "realMoneyRows": 0,
+      "syntheticCredentialsRetained": false
+    },
+    "backupRestore": {
+      "format": "postgres-custom",
+      "archiveReadable": true,
+      "archiveSha256": "1859dabe000c02a75a7df86ab17525900d552930e8396e4bf4788da8eedcf3d7",
+      "restoredIntoFreshDatabase": true,
+      "schemaFingerprintMatch": true,
+      "dataDigestMatch": true,
+      "migrationInventoryMatch": true
+    },
+    "integrity": {
+      "invalidConstraints": 0,
+      "missingMigrationRows": 0,
+      "checksumMismatches": 0,
+      "orphanedListings": 0,
+      "orphanedListingAiDrafts": 0,
+      "orphanedPriceSnapshots": 0
+    },
+    "olderUpgrade": {
+      "startingMigration": "027_g2_persistent_rental_cart.up.sql",
+      "startingMigrationCount": 27,
+      "finalMigrationCount": 71,
+      "secondRunAppliedMigrations": 0,
+      "legacyUsersPreserved": 4,
+      "legacyListingsPreserved": 2,
+      "legacyCartItemsPreserved": 1,
+      "schemaFingerprintMatch": true
+    },
+    "rollback": {
+      "emptyR6RollbackAcceptedInsideRolledBackTransaction": true,
+      "refusedGuards": [
+        "032_support_case_foundation.down.sql:Support rollback blocked: support data exists",
+        "066_blue_ocean_listing_ai_foundation.down.sql:N2 rollback blocked: listing AI foundation data exists",
+        "069_regional_price_engine_r6_hardening.down.sql:R6 rollback blocked: hardened price snapshot data exists",
+        "071_stripe_connect_accounts_v2.down.sql:Stripe Accounts v2 rollback blocked: v2 connected accounts exist"
+      ],
+      "allDestructiveRollbacksRefused": true,
+      "restoredDataDigestUnchanged": true
+    },
+    "networkBoundary": {
+      "postgresHost": "127.0.0.1",
+      "externalNetworkCalls": 0
+    },
+    "cleanup": {
+      "postgresStopped": true,
+      "temporaryClusterRemoved": true,
+      "backupArchiveRemoved": true,
+      "syntheticCredentialsRetained": false,
+      "persistentTestPrerequisiteCreated": false
+    },
+    "boundaries": {
+      "productionChanged": false,
+      "vpsChanged": false,
+      "cloudChanged": false,
+      "paymentChanged": false,
+      "realUserDataUsed": false,
+      "realMoneyUsed": false,
+      "credentialsExtracted": false
+    }
+  },
+  "verification": {
+    "exactRecoveryRunner": "passed-and-cleaned",
+    "runnerUnitTests": "passed-3",
+    "ciWiringTests": "passed-3",
+    "artifactValidatorTests": "passed-5",
+    "artifactValidator": "passed",
+    "fullTechnicalRegression": "passed-candidate-rollover-ci-metadata-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "githubVerification": {
+    "implementationHead": "c249221e64c0ede0d1918a431200069064dd3558",
+    "verifiedHead": "8bd608ebbdd798118867d80412a5948e3eee26cf",
+    "regression": {
+      "runId": 32755197710,
+      "conclusion": "success",
+      "postgresJobId": 97521209463,
+      "postgresConclusion": "success",
+      "r9RecoveryExecuted": true,
+      "backendJobId": 97521209332,
+      "backendConclusion": "success",
+      "flutterJobId": 97521208951,
+      "flutterConclusion": "success",
+      "parallelStabilityExecuted": false,
+      "signedCandidateBuilt": false,
+      "apiImageBuilt": true,
+      "apiImagePublished": false,
+      "publishApiImageJobId": 97523186151,
+      "publishApiImageConclusion": "skipped"
+    },
+    "codeql": {
+      "workflowRunId": 32755197705,
+      "workflowConclusion": "success",
+      "advancedSecurityCheckId": 97521988626,
+      "advancedSecurityConclusion": "success",
+      "newAlerts": 0
+    },
+    "preExistingExternalHistoryCheck": {
+      "provider": "GitGuardian",
+      "documentedBaseCommit": "e64defd0df62fb047c6fbc90733e4caf318ac7c4",
+      "documentedBaseCheckId": 97395091283,
+      "currentCheckId": 97521000640,
+      "currentConclusion": "failure",
+      "reportedPullRequestCommitScope": 250,
+      "credentialDetailsInspected": false,
+      "classifiedAsR9Regression": false
+    }
+  },
+  "limitations": {
+    "isolatedLocalPostgresOnly": true,
+    "productionBackupEvaluated": false,
+    "vpsBackupEvaluated": false,
+    "productionRecoveryTimeClaimed": false,
+    "productionRecoveryPointClaimed": false,
+    "disasterRecoveryCertificationClaimed": false
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "vpsChanged": false,
+    "cloudChanged": false,
+    "paymentChanged": false,
+    "realUserDataUsed": false,
+    "realMoneyUsed": false,
+    "credentialsExtracted": false,
+    "syntheticCredentialsRetained": false,
+    "backupArchiveRetained": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false,
+    "containsSecrets": false
+  },
+  "nextPackage": "R10"
+}

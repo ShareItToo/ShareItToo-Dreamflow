@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "kind": "rw20c-oneplus-play-internal-owner-smoke-readiness",
+  "status": "prepared-not-run-owner-and-release-gated",
+  "recordedOn": "2026-08-27",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026082601",
+    "artifactSourceHead": "a1aa3f2528f1923c092a1fb15bdd3dc083673890",
+    "aabSha256": "8cf36552f39fe9558411809518b374c437125cbd6ef123258ad9df7061acd873",
+    "minSdk": 24,
+    "targetSdk": 35,
+    "delivery": "google-play-internal"
+  },
+  "currentTruth": {
+    "releaseGate": "not-granted",
+    "ownerWindowGate": "not-granted",
+    "candidateExpectedInstalledOnOnePlus": false,
+    "wirelessPairingPerformed": false,
+    "smokeExecutionPerformed": false,
+    "smokeResult": "NOT_RUN"
+  },
+  "authorization": {
+    "bothExactGatesRequiredBeforeFirstAdbQuery": true,
+    "releaseGateLiteral": "GOOGLE_PLAY_INTERNAL_RELEASE_GO",
+    "ownerWindowGateLiteral": "ONEPLUS_PERSONAL_DEVICE_NONDESTRUCTIVE_TEST_GO",
+    "confirmationValuesRecorded": false,
+    "futureCommand": "node tool/run_oneplus_play_internal_owner_smoke.mjs --confirm-release-go GOOGLE_PLAY_INTERNAL_RELEASE_GO --confirm-owner-window ONEPLUS_PERSONAL_DEVICE_NONDESTRUCTIVE_TEST_GO"
+  },
+  "preparedChecks": [
+    {
+      "id": "EXACT_PLAY_CANDIDATE",
+      "result": "NOT_RUN"
+    },
+    {
+      "id": "PHONE_ALREADY_UNLOCKED",
+      "result": "NOT_RUN"
+    },
+    {
+      "id": "BOUNDED_FORCE_STOP_PROCESS_ABSENCE",
+      "result": "NOT_RUN"
+    },
+    {
+      "id": "COLD_START_FOREGROUND",
+      "result": "NOT_RUN"
+    },
+    {
+      "id": "WARM_START_SAME_PROCESS",
+      "result": "NOT_RUN"
+    },
+    {
+      "id": "BACKGROUND_FOREGROUND_SAME_PROCESS",
+      "result": "NOT_RUN"
+    },
+    {
+      "id": "INSTALL_AND_APP_DATA_IDENTITY_PRESERVED",
+      "result": "NOT_RUN"
+    }
+  ],
+  "explicitExclusions": [
+    "aab-byte-equivalence-claim",
+    "play-app-signing-certificate-verification",
+    "screen-or-authenticated-behavior-claim",
+    "ui-hierarchy-capture",
+    "screenshot",
+    "logcat",
+    "tap-or-text-injection",
+    "network-change",
+    "permission-change",
+    "global-setting-change",
+    "install-update-uninstall-or-data-reset",
+    "account-login-or-credential-automation",
+    "repeated-stability-certification",
+    "clean-install"
+  ],
+  "boundaries": {
+    "adbQueried": false,
+    "appLaunched": false,
+    "processStopped": false,
+    "homeKeyPressed": false,
+    "appInstalledOrUpdated": false,
+    "appUninstalled": false,
+    "appDataReset": false,
+    "networkChanged": false,
+    "permissionChanged": false,
+    "globalSettingChanged": false,
+    "accountContentInspected": false,
+    "uiHierarchyCaptured": false,
+    "screenshotCaptured": false,
+    "logcatCaptured": false,
+    "storeChanged": false,
+    "testerListChanged": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "providerChanged": false,
+    "firebaseChanged": false,
+    "cloudVpsDnsChanged": false,
+    "pullRequestMerged": false
+  },
+  "verification": {
+    "state": "verified-exact-sha",
+    "implementationHead": "00ad69eca82df9e2f5d6742d3650574fd87a9203",
+    "localTechnicalRegression": "passed-standard-parallelism-no-workaround",
+    "githubRegression": {
+      "runId": 33030526368,
+      "headSha": "00ad69eca82df9e2f5d6742d3650574fd87a9203",
+      "conclusion": "success",
+      "publishApiImage": "skipped"
+    },
+    "githubCodeql": {
+      "runId": 33030526373,
+      "headSha": "00ad69eca82df9e2f5d6742d3650574fd87a9203",
+      "conclusion": "success"
+    },
+    "openCodeScanningAlerts": 0,
+    "workaroundIntroduced": false
+  },
+  "candidateManifestRef": "store/google-play/rw20-current-internal-candidate-manifest.json",
+  "predecessorPlanRef": "store/google-play/rw20b-oneplus-remote-test-plan.json",
+  "operationRef": "docs/operations/RW20C_ONEPLUS_OWNER_WINDOW_SMOKE_READINESS_2026-08-27.md",
+  "containsSecrets": false,
+  "containsTesterIdentity": false,
+  "containsOptInUrl": false,
+  "containsRawDeviceIdentifier": false,
+  "containsNetworkAddress": false
+}

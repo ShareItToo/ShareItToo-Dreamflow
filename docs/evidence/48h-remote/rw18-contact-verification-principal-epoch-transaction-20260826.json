@@ -1,0 +1,508 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-rw18-contact-verification-principal-epoch-transaction",
+  "status": "verified-regression-and-codeql-passed",
+  "implementationBaseHead": "3f1f6aae4e66356712230ecd6b2a560bf6d72680",
+  "implementationHead": "83706e0e22a1b3fe1a8c876d0515d3eb41740a39",
+  "architecture": "docs/architecture/rw18-contact-verification-principal-epoch-transaction-2026-08-26.md",
+  "report": "docs/operations/RW18_CONTACT_VERIFICATION_PRINCIPAL_EPOCH_TRANSACTION_CLOSURE_2026-08-26.md",
+  "predecessor": {
+    "package": "RW17",
+    "evidence": "docs/evidence/48h-remote/rw17-account-deletion-principal-epoch-transaction-20260826.json",
+    "verifiedImplementationHead": "7ec6a24eadd1b04c9e3c77025d0ebf5f6fe59c34",
+    "closureCommit": "3f1f6aae4e66356712230ecd6b2a560bf6d72680"
+  },
+  "scope": {
+    "allowed": [
+      "contact-email-change-owner-epoch-and-typed-outcome-closure",
+      "contact-phone-verification-owner-attempt-and-provider-cleanup-closure",
+      "contact-email-verification-owner-refresh-truth-closure",
+      "login-email-verification-normalized-input-action-epoch-closure",
+      "identity-bound-dialog-and-modal-sheet-dismissal",
+      "red-first-account-a-to-account-b-and-input-transition-regressions",
+      "security-action-and-call-site-inventory-refresh",
+      "mechanical-predecessor-hash-and-call-site-refresh",
+      "deterministic-local-and-ci-regression-evidence"
+    ],
+    "excluded": [
+      "backend-route-schema-and-auth-provider-change",
+      "timing-retry-parallelism-reduction-and-test-exclusion",
+      "production-vps-dns-cloud-firebase-store-and-play",
+      "payment-provider-ai-pilot-real-money-and-live-traffic",
+      "legal-owner-gitguardian-pr-merge-and-history-rewrite"
+    ],
+    "syntheticOnly": true,
+    "localOnly": true,
+    "timingWorkaroundAllowed": false,
+    "testParallelismReductionAllowed": false,
+    "liveAuthTrafficAllowed": false,
+    "liveEmailOrSmsTrafficAllowed": false
+  },
+  "findings": [
+    {
+      "id": "RW18-P0-EMAIL-CHANGE-OWNER-RESULT-COLLAPSE-001",
+      "state": "resolved-and-tested",
+      "resolution": "Email change captures exact A plus action epoch, uses an owner-bound token and preserves definite rejection, accepted and unknown outcomes."
+    },
+    {
+      "id": "RW18-P0-PHONE-CHALLENGE-SUCCESSOR-TOKEN-RACE-002",
+      "state": "resolved-and-tested",
+      "resolution": "Every phone challenge carries A owner and attempt epoch; token acquisition and backend confirmation cannot use successor B."
+    },
+    {
+      "id": "RW18-P0-PHONE-PROVIDER-CLEANUP-RACE-003",
+      "state": "resolved-and-tested",
+      "resolution": "Temporary Firebase cleanup requires the exact attempt epoch and UID, preserving a newer B or same-UID attempt and typing cleanup failure."
+    },
+    {
+      "id": "RW18-P0-CONTACT-ROUTE-GLOBAL-POP-RACE-004",
+      "state": "resolved-and-tested",
+      "resolution": "Contact dialogs and modal sheets are removed only by exact tracked route identity; B UI is preserved."
+    },
+    {
+      "id": "RW18-P1-CONTACT-EMAIL-EMPTY-TRUTH-005",
+      "state": "resolved-and-tested",
+      "resolution": "Email request and profile refresh are typed; an unavailable refresh cannot become server-confirmed unverified truth."
+    },
+    {
+      "id": "RW18-P1-LOGIN-MUTABLE-EMAIL-RESEND-RACE-006",
+      "state": "resolved-and-tested",
+      "resolution": "Login resend binds the normalized email and action epoch captured before sign-in and rechecks before every result surface."
+    },
+    {
+      "id": "RW18-P0-UNSTRUCTURED-FAILURE-AS-REJECTION-007",
+      "state": "resolved-and-tested",
+      "resolution": "Only exact checked-in status and error-code contracts are rejection; 408, intermediary and non-allowlisted responses remain unknown."
+    },
+    {
+      "id": "RW18-P1-LEGACY-UNGUARDED-AUTH-ENTRYPOINTS-008",
+      "state": "resolved-and-tested",
+      "resolution": "Legacy bool and generic email-change or verification AuthService entry points are removed and permanent call-site inventory requires zero use."
+    }
+  ],
+  "transactionInvariant": {
+    "contactOwner": "exact-user-session-email-created-at-plus-auth-epoch-no-tokens",
+    "loginOwner": "normalized-email-plus-monotonic-action-epoch-no-password",
+    "capture": "exact-owner-and-action-epoch-before-first-await",
+    "revalidation": "before-prompt-transition-token-provider-backend-refresh-result-and-navigation",
+    "definiteRejection": "exact-status-and-structured-error-code-allowlist-only",
+    "acceptedOrConfirmed": "expected-success-shape-remains-true-after-local-failure",
+    "unknown": "timeout-transport-intermediary-malformed-and-nonallowlisted-never-rejected-or-success",
+    "refresh": "confirmed-refresh-deferred-never-empty-or-unverified-on-error",
+    "phoneChallenge": "exact-owner-plus-attempt-epoch",
+    "firebaseCleanup": "exact-attempt-epoch-plus-signed-in-uid-never-global-successor-signout",
+    "routeDismissal": "remove-exact-owned-dialog-or-modal-route-never-pop-current-route"
+  },
+  "definiteRejectionContracts": {
+    "emailChange": [
+      {
+        "status": 400,
+        "code": "invalid_email"
+      },
+      {
+        "status": 400,
+        "code": "email_unchanged"
+      },
+      {
+        "status": 401,
+        "code": "authentication_required"
+      },
+      {
+        "status": 401,
+        "code": "invalid_or_expired_session"
+      },
+      {
+        "status": 401,
+        "code": "account_not_active"
+      },
+      {
+        "status": 401,
+        "code": "invalid_credentials"
+      },
+      {
+        "status": 409,
+        "code": "email_in_use"
+      },
+      {
+        "status": 429,
+        "code": "rate_limit_exceeded"
+      }
+    ],
+    "emailVerificationRequest": [
+      {
+        "status": 429,
+        "code": "rate_limit_exceeded"
+      }
+    ],
+    "phoneConfirmation": [
+      {
+        "status": 400,
+        "code": "invalid_phone"
+      },
+      {
+        "status": 401,
+        "code": "authentication_required"
+      },
+      {
+        "status": 401,
+        "code": "invalid_or_expired_session"
+      },
+      {
+        "status": 401,
+        "code": "account_not_active"
+      },
+      {
+        "status": 401,
+        "code": "invalid_phone_verification_token"
+      },
+      {
+        "status": 401,
+        "code": "invalid_phone_verification_provider"
+      },
+      {
+        "status": 404,
+        "code": "user_not_found"
+      },
+      {
+        "status": 409,
+        "code": "phone_already_verified"
+      },
+      {
+        "status": 409,
+        "code": "phone_identity_cleanup_unsafe"
+      },
+      {
+        "status": 422,
+        "code": "phone_verification_mismatch"
+      },
+      {
+        "status": 429,
+        "code": "rate_limit_exceeded"
+      },
+      {
+        "status": 502,
+        "code": "phone_identity_cleanup_failed"
+      },
+      {
+        "status": 503,
+        "code": "phone_verification_unavailable"
+      }
+    ]
+  },
+  "securityActionInventory": [
+    {
+      "id": "security.password.change",
+      "file": "lib/screens/security_screen.dart",
+      "status": "guarded-rw15"
+    },
+    {
+      "id": "security.remote-session.revoke",
+      "file": "lib/screens/security_screen.dart",
+      "status": "guarded-rw15"
+    },
+    {
+      "id": "security.sessions.logout-all",
+      "file": "lib/screens/security_screen.dart",
+      "status": "guarded-rw15"
+    },
+    {
+      "id": "profile.session.logout",
+      "file": "lib/screens/profile_screen.dart",
+      "status": "guarded-rw16"
+    },
+    {
+      "id": "account.deletion",
+      "file": "lib/screens/account_settings_screen.dart",
+      "status": "guarded-rw17"
+    },
+    {
+      "id": "contact.email-change",
+      "file": "lib/screens/contact_data_screen.dart",
+      "status": "guarded-rw18"
+    },
+    {
+      "id": "contact.phone-verification",
+      "file": "lib/screens/contact_data_screen.dart",
+      "status": "guarded-rw18"
+    },
+    {
+      "id": "contact.email-verification",
+      "file": "lib/screens/contact_data_screen.dart",
+      "status": "guarded-rw18"
+    },
+    {
+      "id": "login.session-clear",
+      "file": "lib/screens/login_screen.dart",
+      "status": "guarded-rw16"
+    },
+    {
+      "id": "login.email-verification",
+      "file": "lib/screens/login_screen.dart",
+      "status": "guarded-rw18"
+    },
+    {
+      "id": "legacy.change-password-placeholder",
+      "file": "lib/screens/change_password_screen.dart",
+      "status": "unreachable-b10-guarded"
+    },
+    {
+      "id": "data-service.test-session-clear-hook",
+      "file": "lib/services/data_service.dart",
+      "status": "test-only"
+    }
+  ],
+  "callSiteInventory": [
+    {
+      "symbol": "AuthService.requestEmailChange",
+      "paths": {}
+    },
+    {
+      "symbol": "AuthService.requestEmailVerification",
+      "paths": {}
+    },
+    {
+      "symbol": "AuthService.accessTokenForOwner",
+      "paths": {
+        "lib/services/backend_repository.dart": 3,
+        "lib/services/contact_verification_service.dart": 1
+      }
+    },
+    {
+      "symbol": ".requestEmailChange",
+      "paths": {
+        "lib/screens/contact_data_screen.dart": 1
+      }
+    },
+    {
+      "symbol": ".requestContactEmailVerification",
+      "paths": {
+        "lib/screens/contact_data_screen.dart": 1
+      }
+    },
+    {
+      "symbol": ".requestLoginEmailVerification",
+      "paths": {
+        "lib/screens/login_screen.dart": 1
+      }
+    },
+    {
+      "symbol": ".requestPhoneVerification",
+      "paths": {
+        "lib/screens/contact_data_screen.dart": 1,
+        "lib/services/contact_verification_service.dart": 1
+      }
+    },
+    {
+      "symbol": ".confirmPhoneVerification",
+      "paths": {
+        "lib/screens/contact_data_screen.dart": 1,
+        "lib/services/contact_verification_service.dart": 1
+      }
+    },
+    {
+      "symbol": ".refreshVerifiedProfile",
+      "paths": {
+        "lib/screens/contact_data_screen.dart": 3
+      }
+    },
+    {
+      "symbol": "showTrackedModalBottomSheet<T>",
+      "paths": {
+        "lib/screens/contact_data_screen.dart": 1,
+        "lib/widgets/profile_mutation_interaction.dart": 1,
+        "lib/widgets/safety_action_interaction.dart": 1,
+        "lib/widgets/tracked_dialog_route.dart": 1
+      }
+    }
+  ],
+  "verification": {
+    "redFirst": "failed-missing-principal-bound-contact-coordinator-phone-owner-attempt-login-owner-and-tracked-modal-contract-before-fix",
+    "focusedRw18Flutter": "passed-17",
+    "rw16Rw17AndPhoneCompatibilityFlutter": "passed-41",
+    "changedFileAnalyze": "passed-zero-issues",
+    "rw18WiringTests": "passed-7",
+    "rw18ValidatorTests": "passed-3",
+    "completeToolInventory": "passed-1934",
+    "completeToolInventorySkipped": 0,
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "inventoryAudit": {
+    "predecessorRepositoryOwnedFiles": 341,
+    "closureRepositoryOwnedFiles": 349,
+    "predecessorPassedTests": 1924,
+    "closurePassedTests": 1934,
+    "skippedTests": 0,
+    "executionPattern": "node --test test/tool/*.test.mjs",
+    "standardNodeParallelism": true
+  },
+  "localRegression": {
+    "head": "83706e0e22a1b3fe1a8c876d0515d3eb41740a39",
+    "command": "CI=true SIT_ALLOW_CANDIDATE_ROLLOVER=1 bash scripts/technical_regression_check.sh",
+    "standardParallelism": true,
+    "timingWorkaroundUsed": false,
+    "parallelismReductionUsed": false,
+    "toolTestsPassed": 1934,
+    "toolTestsSkipped": 0,
+    "flutterTestsPassed": 602,
+    "flutterTestsSkipped": 3,
+    "rw18FocusedTestsPassed": 17,
+    "analyzerIssues": 0,
+    "webDebugAndWasmDryRun": "passed",
+    "loopbackWebSmoke": "passed",
+    "androidDebug": "passed-448-tasks-min-sdk-24",
+    "privateReleaseArchive": "ci-unavailable-metadata-validated-not-claimed"
+  },
+  "githubVerification": {
+    "head": "83706e0e22a1b3fe1a8c876d0515d3eb41740a39",
+    "regressionRunId": 32956904701,
+    "codeqlRunId": 32956904593,
+    "regressionConclusion": "success",
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0,
+    "pr7State": "open-draft-clean-unmerged"
+  },
+  "ratchetAudit": {
+    "cause": "RW18 replaces mutable-principal and generic-result contact or verification actions with exact owner/action epochs, typed remote truth, exact route identity and provider-attempt cleanup.",
+    "privacyDisclosureSemanticsChanged": false,
+    "retentionSemanticsChanged": false,
+    "providerDecisionChanged": false,
+    "providerGateChanged": false,
+    "rw17VerifiedHeadChanged": false,
+    "rw17ClosureHeadChanged": false,
+    "timingWorkaroundIntroduced": false,
+    "mechanicalRefreshes": [
+      "RW15 through RW17 source inventories are re-hashed only for changed contact, login, auth, tracked-route and supported-regression sources.",
+      "RW15 through RW17 call-site inventories and action statuses are mechanically refreshed after legacy direct AuthService email and phone calls move behind the RW18 coordinator; verified implementation and closure heads remain unchanged.",
+      "RW19 mechanically extends the current AuthService accessTokenForOwner and tracked-modal call-site inventories for its exact-owner profile repository and interaction controller; RW18 implementation and closure heads remain unchanged.",
+      "Backend routes, schema, provider configuration, privacy or retention semantics and external gate decisions are unchanged; privacy source bindings and dependent provider-evidence hashes are refreshed mechanically."
+    ]
+  },
+  "gates": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "backendRuntimeChanged": false,
+    "backendRouteOrSchemaChanged": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseConfigurationChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "realAuthTrafficSent": false,
+    "realEmailOrSmsTrafficSent": false,
+    "realProviderTrafficSent": false,
+    "realSupportTrafficSent": false,
+    "externalAiRuntimeEnabled": false,
+    "realTesterEnrolled": false,
+    "candidateCreated": false,
+    "deviceGateClaimed": false,
+    "legalApprovalChanged": false,
+    "gitHistoryRewritten": false,
+    "prMerged": false
+  },
+  "residualRisks": [
+    "No live backend, email, SMS or Firebase provider flow has been exercised; deliverability and provider configuration remain external gates.",
+    "A process termination after remote acceptance or confirmation still needs future durable reconciliation against an explicit backend status contract.",
+    "The checked-in backend contract is verified locally, but no production runtime equivalence is claimed.",
+    "No release artifact, Store, Play, device or owner-gate readiness is claimed."
+  ],
+  "sourceInventory": [
+    {
+      "path": "backend/src/app.js",
+      "sha256": "3a30a389612dddf4b5d636d9da2eaa35451596e7dac3add80c5f0a192badce55"
+    },
+    {
+      "path": "backend/src/firebase_phone_verification.js",
+      "sha256": "ea8fb71aeada7eab59006e789d7890c697e1d6d43fbf7c94a3bed5df615d81dc"
+    },
+    {
+      "path": "backend/test/firebase_phone_verification.test.js",
+      "sha256": "4b5d808182ce0e1b41fd80d1c28fc56f77b6ad31ab81bb9b17e552411b9500dc"
+    },
+    {
+      "path": "backend/test/postgres_foundation.integration.test.js",
+      "sha256": "d2291f42be173042ce7d1e3276994d9624652a7c68f4f9b155089a649b01f103"
+    },
+    {
+      "path": "lib/screens/contact_data_screen.dart",
+      "sha256": "c8fb9ccc3413976b92f07eac264250176f39732eb3feb4f8fab33994eef9b5cc"
+    },
+    {
+      "path": "lib/screens/login_screen.dart",
+      "sha256": "c53f2fb6e0612503869ffc0e81a6bdd8789730a191e06eacf97aa3315de8126a"
+    },
+    {
+      "path": "lib/services/auth_service.dart",
+      "sha256": "1607dfd6d0b7907aa9040d7ec10f649fcaab12b6fef872accc66b4b4602b2687"
+    },
+    {
+      "path": "lib/services/backend_http.dart",
+      "sha256": "0baa03b98fbbdb1263e5d419550a5381285cb72da19e0dbc703559602ac714b5"
+    },
+    {
+      "path": "lib/services/contact_verification_service.dart",
+      "sha256": "d40823c78eb4753e7ca5f67ee5d2aa3f5f954fde19990c562add861552bd43c1"
+    },
+    {
+      "path": "lib/services/data_service.dart",
+      "sha256": "f23002e697a484a16e392e8fcf5dd9de527ecc55eb791dde7fab98386e37375f"
+    },
+    {
+      "path": "lib/services/session_transition_service.dart",
+      "sha256": "f7ff42ca7649ac1681d772e707d87d8a805c63e2962f71707a0490f321389804"
+    },
+    {
+      "path": "lib/services/shared_persistence_sync.dart",
+      "sha256": "b4294550220badf563c3a2fb0ea1929e15b0026483fb3dd3633370c6b486adb2"
+    },
+    {
+      "path": "lib/widgets/tracked_dialog_route.dart",
+      "sha256": "e01ac3c1006f4098e6d5b289fa499272c44e2a314da93351f088879d43012454"
+    },
+    {
+      "path": "docs/evidence/48h-remote/rw17-account-deletion-principal-epoch-transaction-20260826.json",
+      "sha256": "831958cdf464c44d4efecf92704378c0ca8f6b73c0a2d2025de233b6470abaf1"
+    },
+    {
+      "path": "scripts/technical_regression_check.sh",
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
+    },
+    {
+      "path": "test/phone_verification_contract_test.dart",
+      "sha256": "21a6a4f4a16f34926313bb571724ab607b1243687e1b4cafa8c394b10bbe18ec"
+    },
+    {
+      "path": "test/rw18_contact_verification_principal_epoch_transaction_test.dart",
+      "sha256": "c45e4c86c17ff38a7cf7ac3ba9fb9018fbd3194eed34cff9868c3875f1952546"
+    },
+    {
+      "path": "test/tool/rw18_contact_verification_principal_epoch_transaction_wiring.test.mjs",
+      "sha256": "602b66591918c693a9070beec61dbbfc512b9cf3e9e506361578280e87722fa1"
+    },
+    {
+      "path": "test/tool/validate_rw18_contact_verification_principal_epoch_transaction.test.mjs",
+      "sha256": "4c03f8ddceea7a5f34af5e7919fd10bab0ea7b5c7ea03d965a3e27866261c1df"
+    },
+    {
+      "path": "tool/validate_rw18_contact_verification_principal_epoch_transaction.mjs",
+      "sha256": "fcb881a0a1cb6eb839014c74bc522c975cd8df650e2495c88cb1d8f173f2f168"
+    },
+    {
+      "path": "docs/architecture/rw18-contact-verification-principal-epoch-transaction-2026-08-26.md",
+      "sha256": "34470af3ad7820cd250d81406ecea3694db1cf8d4531931a12b9accf1409a3f1"
+    },
+    {
+      "path": "docs/operations/RW18_CONTACT_VERIFICATION_PRINCIPAL_EPOCH_TRANSACTION_CLOSURE_2026-08-26.md",
+      "sha256": "7782e087fd8f27a207bede784dfd466b0f3a8e99af0ce7cc7c69c881bbacd753"
+    }
+  ]
+}

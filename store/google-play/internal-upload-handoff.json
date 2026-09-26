@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "status": "internal-release-active-store-install-verified",
+  "submissionAllowed": false,
+  "track": "internal",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "commit": "3fa045b98897f9551f91da932136c2b100b2d700",
+    "aabSha256": "8295b7cef0de1061acdf4179080deda0fb13133c4d7fd306da0d51062312fcc5",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true
+  },
+  "artifact": {
+    "archiveDirectoryName": "2026081509-3fa045b98897f9551f91da932136c2b100b2d700",
+    "fileName": "shareittoo-1.0.0-2026081509-3fa045b98897f9551f91da932136c2b100b2d700.aab",
+    "ownerOnlyPermissionsRequired": true
+  },
+  "releaseDraft": {
+    "name": "1.0.0-internal-2026081509",
+    "notesPath": "store/google-play/de-DE/internal_release_notes.txt",
+    "language": "de-DE",
+    "saveOnly": false,
+    "rolloutAllowed": true
+  },
+  "preUploadGates": {
+    "personalIdentityVerification": "verified",
+    "deviceVerification": "verified",
+    "phoneVerification": "verified",
+    "developerProgramPoliciesDeclaration": "accepted-with-owner-approval",
+    "playAppSigningTerms": "accepted-with-owner-approval",
+    "usExportLawsDeclaration": "accepted-with-owner-approval",
+    "playAppRecordCreated": true,
+    "immediateArtifactReverification": true
+  },
+  "postUploadChecks": {
+    "uploadedArtifactHashRecorded": "passed-exact-bound-candidate",
+    "playAppSigningFingerprintRecorded": "passed-pre-upload-console",
+    "uploadWarningsReviewed": "passed-only-missing-testers-warning-resolved",
+    "crashlyticsCandidateAssignmentVerified": "pending",
+    "internalStoreInstallCompleted": "passed-google-play-installer",
+    "sharedChatStability": "passed-exact-build",
+    "messageComposerKeyboard": "pending-exact-build",
+    "messageSendPersistence": "passed-exact-build",
+    "messageRefreshPattern": "passed-exact-build"
+  },
+  "postUploadEvidenceRefs": {
+    "sharedChatReviewAccess": "docs/evidence/b11/store-review-access-refresh-2026081509-20260815T142057Z.json",
+    "sharedChatDeepLink": "docs/evidence/b11/android-authenticated-deep-links-2026081509-20260815T132509Z.json",
+    "messagePersistenceAndRefresh": "docs/evidence/b11/android-offline-realtime-2026081509-20260815T132209Z.json"
+  },
+  "hardStops": {
+    "productionRelease": true,
+    "openTestingRelease": true,
+    "closedTestingRelease": true,
+    "sendForReview": true,
+    "publicRollout": true,
+    "differentArtifact": true,
+    "credentialsInRepository": true
+  },
+  "preUploadLiveReadinessEvidenceRef": "docs/evidence/b11/google-play-pre-upload-live-readiness-2026081401-20260814.json",
+  "preUploadLiveReadinessReuse": {
+    "sourceBuildNumber": "2026081401",
+    "scope": "account-console-gates-only",
+    "exactCandidateReverified": true
+  },
+  "internalReleaseEvidenceRef": "docs/evidence/b11/google-play-internal-release-active-2026081509-20260815.json",
+  "crashReleaseEvidenceRef": null,
+  "evidenceRef": "docs/evidence/b11/android-candidate-2026081509.json",
+  "containsSecrets": false,
+  "containsReviewCredentials": false
+}

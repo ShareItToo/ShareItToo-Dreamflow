@@ -1,0 +1,1080 @@
+{
+  "schemaVersion": 1,
+  "state": "draft",
+  "approvalAllowed": false,
+  "sourceInventory": [
+    {
+      "path": "lib/widgets/support_principal_controller.dart",
+      "sha256": "d7b8be389b09ec64656bafe1fc9e54ddc5bdf58b8602b3e76db266a665544d33"
+    },
+    {
+      "path": "lib/main.dart",
+      "sha256": "a736b031c639843f00ebd3ec6de936976bd7709ea329d01fdb08ecb1eb8fa720"
+    },
+    {
+      "path": "lib/screens/privacy_info_screen.dart",
+      "sha256": "939fe3b6b8a6639c149c6a8d7db71385890433f60905a76bf3dac5ce2364396b"
+    },
+    {
+      "path": "lib/services/privacy_export_file_store.dart",
+      "sha256": "47cb180d25ab811e301cc6b20d7649f01b07a4ca62978904b521ef8d026bc1fe"
+    },
+    {
+      "path": "lib/services/privacy_export_file_platform_io.dart",
+      "sha256": "f8c047def6d42e98d05acdd0cc1a86d96b6473ef7960c2fc06b0e92df28ac60a"
+    },
+    {
+      "path": "lib/services/privacy_export_file_platform_stub.dart",
+      "sha256": "6a47cda99904c2093df368deff392bb12051c8b5faa07319bf8167f3810594b5"
+    },
+    {
+      "path": "lib/widgets/privacy_export_cache_lifecycle_host.dart",
+      "sha256": "c377b8ea822cd891ecccb29d99f3a638f2a72e32b8d6c875db99b4400d4ef476"
+    },
+    {
+      "path": "backend/src/app.js",
+      "sha256": "bd3aee887ff5e80f745779d4e25948f408e82a461113f39ac054136f443d6c03"
+    },
+    {
+      "path": "backend/src/rate_limit_policy.js",
+      "sha256": "ad27b721e76c6de200ee7fcd9fa4db8d8edaad65c60155394e9d8274bfe21ba8"
+    },
+    {
+      "path": "backend/src/server.js",
+      "sha256": "1aa0cf59eb86690212a2940062584a372a6a7ba94a1be9d2d7d314bb57b450a9"
+    },
+    {
+      "path": "backend/src/credential_cleanup.js",
+      "sha256": "bf0b51a9acbda223ab0fc87aa212737f76f9f852f929ce24dd4b00fae8393700"
+    },
+    {
+      "path": "backend/src/moderation_workflow.js",
+      "sha256": "4bd2f6addd75e07f2bdd13798144699b581d28de3ac25a071994cb6855ff3209"
+    },
+    {
+      "path": "backend/src/moderation_domain.js",
+      "sha256": "a9cea4e6f25faf3d06762d8a45c04b1f1f3d290062aa6bc118ac6d8f9c050558"
+    },
+    {
+      "path": "backend/src/moderation_decision_workflow.js",
+      "sha256": "086cb86a745e0f54b5e8a145ec007f56ac1c3223f7cefbafdc23e163452af3eb"
+    },
+    {
+      "path": "backend/src/moderation_account_measure_domain.js",
+      "sha256": "25bc46e8e2482cfad9c3271aabd52e7c7fc860c4f02441ce3d7ab2523afb989e"
+    },
+    {
+      "path": "backend/src/moderation_account_measure_workflow.js",
+      "sha256": "d21b2f4f5012e8c682d29c0d6041acaba8033f28608ba91c2c1366bae377fd83"
+    },
+    {
+      "path": "backend/src/moderation_review_correction_workflow.js",
+      "sha256": "28fefb4e50ead0ca634b02b82c17b45135b0a06d98f5842873845cd2681ded24"
+    },
+    {
+      "path": "backend/src/compliance_review.js",
+      "sha256": "af8b855473b6c99cb0b636240880e1bdb9af2eda72f96c5ec19e60aa31f0fe0c"
+    },
+    {
+      "path": "backend/src/operator_readiness.js",
+      "sha256": "29688671ddc7933fbdafab5744b54d3d5c6a97b8e541779fcc096787d583b4e3"
+    },
+    {
+      "path": "backend/src/retention_inventory.js",
+      "sha256": "6e30c300fc90f189cef0bdf043cb3afa5d9d53438a99c54441cce3510c160a74"
+    },
+    {
+      "path": "backend/src/privacy_export.js",
+      "sha256": "6537ec0657120bc0bef152f6109f9e97a58d91245fb351ab06ada5cdfe4ab15a"
+    },
+    {
+      "path": "backend/src/privacy_export_policy.js",
+      "sha256": "917d41fe1602e7ba22143200834a3e7e055feeabf527a5c029c1a73bf5d7e9af"
+    },
+    {
+      "path": "backend/src/observability.js",
+      "sha256": "b971c321aaaadad49da7400280cd74ce8499fc9b5e582e34e5c5a5ab651042d8"
+    },
+    {
+      "path": "backend/src/db.js",
+      "sha256": "c2f2fb197053056ea9d6fd891b04370fbb6cca1af7af3426011fb9c09bbd6740"
+    },
+    {
+      "path": "backend/src/mailer.js",
+      "sha256": "8d642853835b3e2741389d0125c6980a0c7fa3e0dffbfa44f0d0bf4e4c426f27"
+    },
+    {
+      "path": "backend/src/support_case_domain.js",
+      "sha256": "13d5cacc95eb8dbd51c8a7212422b2827f9898dc18b6df77cc21a26188660657"
+    },
+    {
+      "path": "backend/src/special_category_data_guard.js",
+      "sha256": "ec2772a3c3c9eacc51536e1e89e9bc2ec13a4199e3bb93f22a2b915386a4e5e2"
+    },
+    {
+      "path": "backend/src/support_case_workflow.js",
+      "sha256": "8a935a9c786a3469a3c350cc9a7164130a46be499dda1a1d4871b8afa49b72de"
+    },
+    {
+      "path": "backend/src/handover_exception_domain.js",
+      "sha256": "c3e9eebcf7302bd3160ce20715a56928408ea1817957818a5b95fda167b8ee00"
+    },
+    {
+      "path": "backend/src/handover_exception_workflow.js",
+      "sha256": "6039e9e68353139e3cc8aae9ea1a96bfc962ac13851f1211209a94389029d907"
+    },
+    {
+      "path": "backend/src/support_privacy_rights_domain.js",
+      "sha256": "ac0ba9f300be732ed97247a7d054abb4f0d67377b0480e43c3bd1ad1d02941dd"
+    },
+    {
+      "path": "backend/src/support_privacy_rights_workflow.js",
+      "sha256": "4ec6c9dc11fe725af7a299e7006dafff82a75d05443efa55523531e502bac486"
+    },
+    {
+      "path": "backend/src/support_privacy_incident_domain.js",
+      "sha256": "33229a6e5ff5f9a51f73c2b9bfa25d62f3dcf07dc4d4114627a5ec0803241942"
+    },
+    {
+      "path": "backend/src/support_privacy_incident_workflow.js",
+      "sha256": "351695c5de7df747fb35ff96f7ee4b1063d87a4d8d0a0147e5e70d2dbd921603"
+    },
+    {
+      "path": "backend/src/support_article18_domain.js",
+      "sha256": "6c162aeb2a439229d57ca8927e319c27a758cd974a3cbb81b5f85c7ec0b4b2f3"
+    },
+    {
+      "path": "backend/src/support_article18_workflow.js",
+      "sha256": "bca6b9dab19542b186071e2d71491db932cf91094cad53fef3870d77acd6da19"
+    },
+    {
+      "path": "backend/src/support_appeal_domain.js",
+      "sha256": "3a89eec648ae7e2d7c779c78933723099fa15f1fb1ded2454cae7d9480f1cefe"
+    },
+    {
+      "path": "backend/src/support_appeal_workflow.js",
+      "sha256": "7986cc71b5f1b380d03cb1882845577bfa252a049c2b93a733a710a39d6baf49"
+    },
+    {
+      "path": "backend/src/support_decision_domain.js",
+      "sha256": "7537f0451bcd6295c67a03fb502f3052f1f7894082d79e196a57095eb4dfb642"
+    },
+    {
+      "path": "backend/src/support_decision_workflow.js",
+      "sha256": "d99c9c5850241db4d6929896b9ff9f3c753990ab876fc69f4a84f90c5423e492"
+    },
+    {
+      "path": "backend/src/support_break_glass_domain.js",
+      "sha256": "906f4009787e75aecbd64d215f43f9f31029c436f126d86e4f083aac1c19f354"
+    },
+    {
+      "path": "backend/src/support_break_glass_workflow.js",
+      "sha256": "97f03825f02ba2ceb287b61a6a473250f9b3fd460e77eadd7bd9f0a2f33cd74a"
+    },
+    {
+      "path": "backend/src/consumer_dispute_config.js",
+      "sha256": "98e25d3d20bb567255c42a3738eb8dfe1d28afa5706353a26edebad24eaa1311"
+    },
+    {
+      "path": "backend/src/product_safety_config.js",
+      "sha256": "bb33661e09f7a7c96e6510eb1115cf11b9142660961ae703a0fb207674c9ba5b"
+    },
+    {
+      "path": "backend/src/support_account_recovery_domain.js",
+      "sha256": "38ef0839e15b0781f6855ba5d0669d48cc959ead34f8409f600e4be96a5a2d82"
+    },
+    {
+      "path": "backend/src/support_message_domain.js",
+      "sha256": "93392bffb853565e17e202de51716014eca698549e761e51eb3be91274d1dafb"
+    },
+    {
+      "path": "backend/src/support_message_workflow.js",
+      "sha256": "20bc7a652ace8636e46444efe98b54f5bc909cefdf5ac5ca0d7905f83f9a3db2"
+    },
+    {
+      "path": "backend/src/support_progress_update_domain.js",
+      "sha256": "5c62d9c643706e08ea43a061679232c6db4908f40d52bf8f8d2be4023d6ffeb1"
+    },
+    {
+      "path": "backend/src/support_progress_update_workflow.js",
+      "sha256": "9424b59d5b4e7cd44aa03caea43242062940c363b443497620b485fcab323fd2"
+    },
+    {
+      "path": "backend/src/support_notifications.js",
+      "sha256": "22bd79f42bbb80af26f8678f5fedd1303543f1123b0061db2c8edf568764238d"
+    },
+    {
+      "path": "backend/src/support_message_templates_v1.json",
+      "sha256": "0ce1501e12753c98b41c9fa3da9743df7891ad34eb5fd7a2dff77cb01db986b8"
+    },
+    {
+      "path": "backend/src/support_deadline_watchdog.js",
+      "sha256": "d5039cc509ca004406e5bf83f48697afb5acc1e0b0d56fab351b36359d1b8813"
+    },
+    {
+      "path": "backend/src/support_operational_metrics.js",
+      "sha256": "538011825f9ea7aa5847b072094c7ed9533eaecc35b8f5221dfcadb97b5bdc4e"
+    },
+    {
+      "path": "backend/src/support_legacy_migration.js",
+      "sha256": "c878853252bb4a7d3ca53bcb166ee4d955c4a752a84b4432b9cd395353c3c0ff"
+    },
+    {
+      "path": "backend/src/support_evidence_workflow.js",
+      "sha256": "4834b35f16a433e26dc25f4fb73838e0d1a7937dcc1c47196b5ee24c71bde7ee"
+    },
+    {
+      "path": "backend/src/support_safety_impact_domain.js",
+      "sha256": "7b022c639acb2c809b588699c9e80ce9feae3e3ddf8c71d6003ec4429633c824"
+    },
+    {
+      "path": "backend/src/support_safety_impact_workflow.js",
+      "sha256": "988cba60ebc4209e12583483a75968f16435abe7a429abc5fd79f4b4ce86754b"
+    },
+    {
+      "path": "backend/src/support_duplicate_case_domain.js",
+      "sha256": "8da8c914dda5eeeee510194f2ea331db8366e24b9a28f4dc623ac32eda36e8dc"
+    },
+    {
+      "path": "backend/src/support_duplicate_case_workflow.js",
+      "sha256": "f92cdadb4dd6628e7416bcfec418e6a433bb3f07b9f885f7b6a85c2767a74854"
+    },
+    {
+      "path": "backend/src/rental_cart_workflow.js",
+      "sha256": "ee4b54abd4eaac578778afa291a3fee3b2f7928c21ccfd1fea24ca5b83680137"
+    },
+    {
+      "path": "backend/src/planner_inventory_workflow.js",
+      "sha256": "94da6e209f757bce5f732d21b68d3ed7a85e65acf374b0f04eddb60decaf688b"
+    },
+    {
+      "path": "backend/src/listing_supply_enrichment.js",
+      "sha256": "51e9989fb6a6251cc13c7ca1c6f938d12d418b6071e24185e1ea00193fea2578"
+    },
+    {
+      "path": "backend/src/listing_set_workflow.js",
+      "sha256": "c9ec0eb3625dbfc70892aa04f91e702c6c2c36f56e777073175b2f13870abe83"
+    },
+    {
+      "path": "backend/src/account_actions.js",
+      "sha256": "51f002157dcbba92db6800eb504536cac10d0c98ca71c4fef71d860ee3086215"
+    },
+    {
+      "path": "backend/src/auth_session_actions.js",
+      "sha256": "de95cebd76dee280ec4925e8d1c0d6ef723955e35d55afb03183a8e248af824f"
+    },
+    {
+      "path": "backend/src/config.js",
+      "sha256": "70ddaa49289cc1991de3b526e483c9fb1cd0f7397a3b4f075859203f89ae0e52"
+    },
+    {
+      "path": "backend/src/notifications.js",
+      "sha256": "93883c79ac831292e971f2bb567a7779fdbaff863feac8f7246ea51c32c2d471"
+    },
+    {
+      "path": "backend/src/push_sender.js",
+      "sha256": "0b3c1e871c340f16c254c7f84c340ea1c21d859d33b220477736238069525a3e"
+    },
+    {
+      "path": "backend/src/transactional_mail_templates.js",
+      "sha256": "1bdbc6ac443c73bf70ee8ee81e48336ed9f2e9ad4cc4cb7df0bd4cb07bb44339"
+    },
+    {
+      "path": "backend/src/return_lifecycle_workflow.js",
+      "sha256": "be2ab7a751d715bf6e3dd2dde6e7d25a5b609e0729890854579022d2e6c3dae2"
+    },
+    {
+      "path": "backend/src/private_pilot_return_domain.js",
+      "sha256": "2e9db752ad1fdf49db036530daa7414853652899440f7ab357acd1990db77517"
+    },
+    {
+      "path": "backend/src/return_calendar_policy.js",
+      "sha256": "2eef7bc3472ba63a0e4c03886783fadf78be163db2eff6e8c64220c3b06565fa"
+    },
+    {
+      "path": "backend/src/v51_contract_workflow.js",
+      "sha256": "506c735128379bcc2d57d08be12755fc533aa05ca1ddd5dbb8626efe56b78fc6"
+    },
+    {
+      "path": "backend/src/v51_contract_receipt.js",
+      "sha256": "aaf9e2544c82a24a3871c269cffbd2dfb15bf131974b3f9ef1de63815db20ac5"
+    },
+    {
+      "path": "backend/src/v51_withdrawal_workflow.js",
+      "sha256": "98f4c1ee0dbecf9cc44235e41834873e56c9f16aec98e60eae108a7e413d399d"
+    },
+    {
+      "path": "backend/src/booking_workflow.js",
+      "sha256": "874f925abd6fa8809ad7a70f61683e595e424701f026a5f62fae459987cea8e8"
+    },
+    {
+      "path": "backend/src/booking_flow_time.js",
+      "sha256": "28dae048b31ba334a2be9bf98a20b6ae0311e19ef505d2c2ea3d42d702d46082"
+    },
+    {
+      "path": "backend/src/booking_address_reveal_domain.js",
+      "sha256": "4534896ca22be68fb2fc7bc8c84b6bd1b9788d915d24cc60c6690cdfa88c8a08"
+    },
+    {
+      "path": "backend/src/booking_address_reveal_workflow.js",
+      "sha256": "56d9bb6f2c4c3918f9615c24bbacc027e9564c99a0fc7ce207c3ca424cc1ad29"
+    },
+    {
+      "path": "backend/src/v51_termination_domain.js",
+      "sha256": "d98e7560755f9f84d328d3369162d6c5daa4b8b0eddd806e7be4c12115c83f88"
+    },
+    {
+      "path": "backend/src/v52_actual_loss_workflow.js",
+      "sha256": "0c3f4a700c4b66207d1b9c85d72da3573a111cfab9aca7371f00cc68651f9aea"
+    },
+    {
+      "path": "backend/src/v52_handover_return_workflow.js",
+      "sha256": "61afa8496f2af34537c892074e83209f34eb6b447c9c67640efdbba8ebe3ee44"
+    },
+    {
+      "path": "backend/src/booking_condition_evidence_workflow.js",
+      "sha256": "839c3ddcf4cfecb72d5313968fcf6ca16e82e0b3f73fe5dfd71fb736753cfb88"
+    },
+    {
+      "path": "backend/src/financial_documents.js",
+      "sha256": "6e561a95bc221d79f979e90f84b689fad06fee626018ebac595f8f150e99f841"
+    },
+    {
+      "path": "backend/src/firebase_social_auth.js",
+      "sha256": "58843e34ac407b429d2d1886d56fce54a37645e5f92e75ef282953003c235399"
+    },
+    {
+      "path": "backend/src/staging_google_registration.js",
+      "sha256": "f1699603e3b0a0f6e672bdcad1bbaf8c13924f1aec53bea98ad06842c77a3cbb"
+    },
+    {
+      "path": "backend/sql/migrations/095_staging_google_registration_replays.up.sql",
+      "sha256": "6b42056c21dba33e6b5f5db85999d9c3706ac2c8a8c0a2b0d9575f655141bf66"
+    },
+    {
+      "path": "backend/sql/migrations/095_staging_google_registration_replays.down.sql",
+      "sha256": "2ef33390248763e4054070a893477abdc92b76c6d16a4e2c85b4cf27c4715cf9"
+    },
+    {
+      "path": "backend/sql/migrations/096_booking_exact_time_snapshot.up.sql",
+      "sha256": "b3c3ad6d0f279c243ea1e61cba555d9e370d0f5338f3b9cc2256d0da03263677"
+    },
+    {
+      "path": "backend/sql/migrations/096_booking_exact_time_snapshot.down.sql",
+      "sha256": "9855c3315058e63073220d17f7abdb88e565aeb6e13d64b1c2859b99e051aa29"
+    },
+    {
+      "path": "backend/sql/migrations/097_registration_consent_bundle.up.sql",
+      "sha256": "27e60272f42625d920b48538221a0aaf193a582cab789eaa8f2f7da4d477b6c0"
+    },
+    {
+      "path": "backend/sql/migrations/097_registration_consent_bundle.down.sql",
+      "sha256": "5189efec03d7cf9b8cd331621e1f8f764a9f1e4221433934fc5e873862133c1f"
+    },
+    {
+      "path": "backend/sql/migrations/098_booking_checkout_declaration_constraints.up.sql",
+      "sha256": "d03cdf5be85bdeafa04f7dcb65739eb6dc01b83d4f927fe2690f619928e8481b"
+    },
+    {
+      "path": "backend/sql/migrations/098_booking_checkout_declaration_constraints.down.sql",
+      "sha256": "959847e95e017033a0869dba9b1a5c03d1c2a474b49abb3d1ab3b20b29e70aa6"
+    },
+    {
+      "path": "backend/src/firebase_phone_verification.js",
+      "sha256": "ea8fb71aeada7eab59006e789d7890c697e1d6d43fbf7c94a3bed5df615d81dc"
+    },
+    {
+      "path": "backend/src/firebase_identity_cleanup.js",
+      "sha256": "f4f4f77c57cca13b3e63e96fd50add1200bc2c59a99b50125902032d1df93fa5"
+    },
+    {
+      "path": "backend/src/crashlytics_cleanup.js",
+      "sha256": "fef8a5977fabec6c2547d0d6ca0dc7e19e6e0db5bd6e6fe300d194d37d1d36c6"
+    },
+    {
+      "path": "backend/src/maps_proxy.js",
+      "sha256": "e3b3ec6db438488910e8638fe498f0d61652250d803e007a513f74eec8f6b8de"
+    },
+    {
+      "path": "backend/src/google_maps_activation.js",
+      "sha256": "c1e29bb5fc6e94461d3ad47be443b0c987c1d227ba978f9bfe47a478be7aa8e6"
+    },
+    {
+      "path": "backend/sql/schema.sql",
+      "sha256": "fe2442a6fb2b2254df845ffbd0d405a6646569692a3b6fdb0f32eb3a678303f8"
+    },
+    {
+      "path": "backend/sql/migrations/006_b7_communications.up.sql",
+      "sha256": "f1452d85f736cc013c33747ec6de71a9d139a1b6f993eb39f591171cc2a1dd83"
+    },
+    {
+      "path": "backend/sql/migrations/014_account_legal_holds.up.sql",
+      "sha256": "6daf3bf2433be6468399058dce5edeac35027fb211003a30c77ade4a95164123"
+    },
+    {
+      "path": "backend/sql/migrations/078_retention_legal_hold_scope.down.sql",
+      "sha256": "d8094b0f8eefef1788697e3493fc469e68a453598ad3ec9b91605509ef735f53"
+    },
+    {
+      "path": "backend/sql/migrations/079_special_category_intake_minimization.up.sql",
+      "sha256": "353d56b11eb16044a1adb9a70da3f1316e0d047d3fdbb95806b856dc727237dd"
+    },
+    {
+      "path": "backend/sql/migrations/079_special_category_intake_minimization.down.sql",
+      "sha256": "03314e09f068f32cf122fa6f440d1e5aaf164206b177f4c71031be9c83a169ff"
+    },
+    {
+      "path": "backend/sql/migrations/078_retention_legal_hold_scope.up.sql",
+      "sha256": "755fb77925500b6eef3b1a995358d8d473b0ef2f3e47753f5ff9f8064143989c"
+    },
+    {
+      "path": "backend/sql/migrations/015_v51_contract_persistence.up.sql",
+      "sha256": "c2ccc1d20248672cfe164f4cf5bf093dca855aa4794f71a6f9dfe3a8c8253657"
+    },
+    {
+      "path": "backend/sql/migrations/016_v51_booking_quotes.up.sql",
+      "sha256": "70ab8fbfa5ab8d134775532a8122f429e1c77391bbba926ae13fb233ba8a6d89"
+    },
+    {
+      "path": "backend/sql/migrations/017_v51_contract_receipts.up.sql",
+      "sha256": "01f82a6a5cbdea4650faeca82d10c4a1753ab2f9ab78572e4c4303dedb609394"
+    },
+    {
+      "path": "backend/sql/migrations/018_v51_withdrawal_and_refund_obligations.up.sql",
+      "sha256": "cc2e2c0571d0983bf126b46ef181f482d89e6edc5ab790b1cdc4a062db57b134"
+    },
+    {
+      "path": "backend/sql/migrations/019_v51_condition_evidence.up.sql",
+      "sha256": "8ff5dfe3d41517df4d3bd18a0effa30c9f0e41fc3387663cac7b8c5fb96bab07"
+    },
+    {
+      "path": "backend/sql/migrations/020_v51_financial_documents.up.sql",
+      "sha256": "0ed5451601e962c0b3632008db0e3437a1ee9d837d14a1a0512eb6e190567201"
+    },
+    {
+      "path": "backend/sql/migrations/021_firebase_identity_deletion_outbox.up.sql",
+      "sha256": "24766e130717d7a07a892e75326b341340b9818771f949d79e59a2780035bd20"
+    },
+    {
+      "path": "backend/sql/migrations/022_crashlytics_subject_deletion.up.sql",
+      "sha256": "2d018478ee2691a7900a2665c541acc522c634763505e12e65e997a1d1054f9a"
+    },
+    {
+      "path": "backend/sql/migrations/024_v52_actual_loss_resolution.up.sql",
+      "sha256": "855089de18647bf63bb21da90b5172a799c752420970f811f13d2dc5ac11bb91"
+    },
+    {
+      "path": "backend/sql/migrations/025_v52_handover_return_evidence.up.sql",
+      "sha256": "35029b66a26cba807dc07b6aa3b4a32cf0ccb6af7d2c4524fae6e9f67875a194"
+    },
+    {
+      "path": "backend/sql/migrations/026_v52_categories_moderation_operator.up.sql",
+      "sha256": "005bc08898c46fe42952aafd4599672b3c6e769e40d805f7de25091555dac2a4"
+    },
+    {
+      "path": "backend/sql/migrations/027_g2_persistent_rental_cart.up.sql",
+      "sha256": "9ed17578c11eedaf30fb73648d4c4d9c228549f9f954e768929cd32d1bff1e57"
+    },
+    {
+      "path": "backend/sql/migrations/031_g5b_listing_sets.up.sql",
+      "sha256": "7afaa2d39ad4b8adb178e5e3ed25454163cf48762f8e993c83935ab3ef5a0bff"
+    },
+    {
+      "path": "backend/sql/migrations/032_support_case_foundation.up.sql",
+      "sha256": "c0c9809479792fd308ce577aa05a987e1934884a0b9932d94e4445c980aa9c27"
+    },
+    {
+      "path": "backend/sql/migrations/033_support_decision_approval_guard.up.sql",
+      "sha256": "ceeb18ac55c64f43b19e7704ddd64eeaae6ac9215ce856181a43acb62f62c8db"
+    },
+    {
+      "path": "backend/sql/migrations/034_support_user_action_deadline.up.sql",
+      "sha256": "9b9497df34807e71527baa9a2afdda3efb76fd26625d85e31b5892ee86a6fb8f"
+    },
+    {
+      "path": "backend/sql/migrations/035_support_final_decision_publication.up.sql",
+      "sha256": "4946a5a3a358f54e9ade361ad3e365c6c489961b9089bb09e84759feb23198ca"
+    },
+    {
+      "path": "backend/sql/migrations/036_support_closed_case_appeal_submission.up.sql",
+      "sha256": "17753eca5e4677b51e6cd73537b5e993000b408cdb963475c53cd79ee224d913"
+    },
+    {
+      "path": "backend/sql/migrations/037_support_break_glass_access.up.sql",
+      "sha256": "f19d78cb7a48ecb4d8ce6da141037e7b872ac97f5f927ec87692aa51e494e14c"
+    },
+    {
+      "path": "backend/sql/migrations/038_support_message_template_guard.up.sql",
+      "sha256": "a4c88194d6818ddb048510a28260f0b1bfb3d8d48011275779b334d094b71247"
+    },
+    {
+      "path": "backend/sql/migrations/039_support_deadline_watchdog.up.sql",
+      "sha256": "030979892255a1c746e952cae3495a3d335e613f6cd9d4101822b49cb9e8d4e4"
+    },
+    {
+      "path": "backend/sql/migrations/040_support_single_issue_intake.up.sql",
+      "sha256": "0b2b36b6e0b30a6ddf195bdf2be7a9793c7bd23932ea5a09b17444c27e0d8b87"
+    },
+    {
+      "path": "backend/sql/migrations/041_support_closed_account_access_guard.up.sql",
+      "sha256": "3d293850e7ea37f84e51e057156e418e309e1bb2a66ebb1d7ed5492c0eb83235"
+    },
+    {
+      "path": "backend/sql/migrations/042_support_dsa_notice_intake.up.sql",
+      "sha256": "34f9db90b5131aca3e4c05a01102502862de3a2eac740736e8355fa4bfc1c4ea"
+    },
+    {
+      "path": "backend/sql/migrations/043_support_dsa_notice_locator_completion.up.sql",
+      "sha256": "c2f9a30ccf73278c599ad34b27c12a4e8b7861928a9cfde3fb49f5b27830e7d4"
+    },
+    {
+      "path": "backend/sql/migrations/044_moderation_statement_of_reasons.up.sql",
+      "sha256": "16f8f394056171ec735d007dde3d3f2b03c0babd0a21c370a6e61cf935727403"
+    },
+    {
+      "path": "backend/sql/migrations/044_moderation_statement_of_reasons.down.sql",
+      "sha256": "781529c0dd207e8ebaabc0007ea8b97e7220ff552f50f6504a64e190098e0cc9"
+    },
+    {
+      "path": "backend/sql/migrations/045_independent_moderation_review_resolution.up.sql",
+      "sha256": "611c603fcc3114455c38ec801fc0d386254d1af9e5c435ebb3dd4663e30e9ea9"
+    },
+    {
+      "path": "backend/sql/migrations/045_independent_moderation_review_resolution.down.sql",
+      "sha256": "663e28ee3e3ae4774bb77f6409c65be5c634e4608906fa274167cb45c64b39b1"
+    },
+    {
+      "path": "backend/sql/migrations/046_support_article18_authority_referral_guard.up.sql",
+      "sha256": "c3b36a9ff8b208a0fa5c0fb3b0567c7c09d0f99a69a0c429ab573973a720933d"
+    },
+    {
+      "path": "backend/sql/migrations/046_support_article18_authority_referral_guard.down.sql",
+      "sha256": "4d886b350f11e6946c30adcf460711406c315c87d1d33e5ca3e0b6495e94aa20"
+    },
+    {
+      "path": "backend/sql/migrations/047_support_privacy_rights_control_plane.up.sql",
+      "sha256": "d652faf8b2832c23ab55e2b157c83a3665bd14574d5effd262da8215105fbea3"
+    },
+    {
+      "path": "backend/sql/migrations/047_support_privacy_rights_control_plane.down.sql",
+      "sha256": "5daa50ab3bfc1540cdee5684d6daadc758b75154b17d2861db36b86c7b0d9ece"
+    },
+    {
+      "path": "backend/sql/migrations/048_support_privacy_incident_control_plane.up.sql",
+      "sha256": "cba09e89973669f73b50b0379eeb0b66191306793ffe14cc3c246d00d3ef5356"
+    },
+    {
+      "path": "backend/sql/migrations/048_support_privacy_incident_control_plane.down.sql",
+      "sha256": "ceafc1cf1e51660f4dcec9b8034e7a46df74f55704a5f5a22a3dd090702fe74c"
+    },
+    {
+      "path": "backend/sql/migrations/049_support_product_safety_intake.up.sql",
+      "sha256": "219fe7b384b274260b1b44b934f52aa30f750e802436f53c82fd8e454c5f8bf6"
+    },
+    {
+      "path": "backend/sql/migrations/049_support_product_safety_intake.down.sql",
+      "sha256": "51f1754b42d69c9f0b950bee5efc8eec3625e0d2176dfb3345ca7c7226a1a973"
+    },
+    {
+      "path": "backend/sql/migrations/050_support_legacy_history_import.up.sql",
+      "sha256": "2d98df5ca98582f9e9a0225cdf12976a6df767c2e4f47011e184a4ac51cd45b3"
+    },
+    {
+      "path": "backend/sql/migrations/050_support_legacy_history_import.down.sql",
+      "sha256": "63aae15233fdce0515742312cf6e47a775f4f715824d98901f936cc643a54ace"
+    },
+    {
+      "path": "backend/sql/migrations/051_support_evidence_security.up.sql",
+      "sha256": "525fc8605daaa94127b58693c6dd6553259026ff297cd81cec384319f0829fdd"
+    },
+    {
+      "path": "backend/sql/migrations/051_support_evidence_security.down.sql",
+      "sha256": "9e5d0481b3e624d261a010fbfccff47938c14e6cbb8e6844be10df2a11381c9c"
+    },
+    {
+      "path": "backend/sql/migrations/052_support_safety_impact_review.up.sql",
+      "sha256": "eab90a28de2b71a33f0c76a8f4421ae139467cd1d62ade0302a265373fcd5002"
+    },
+    {
+      "path": "backend/sql/migrations/052_support_safety_impact_review.down.sql",
+      "sha256": "24a37e07a74b4ad01dbd8414fd9ca61cac3222db2cd0fc2ba3f7cc6edae7f95c"
+    },
+    {
+      "path": "backend/sql/migrations/053_support_duplicate_case_linking.up.sql",
+      "sha256": "c73018937148ee7913b2765643713539ff73a410f0051ad3e27416daf298a739"
+    },
+    {
+      "path": "backend/sql/migrations/053_support_duplicate_case_linking.down.sql",
+      "sha256": "5f0d7b78b06feaa775c1929a3914363e1b22a3a2fcaf27ffa5d17b6871f9d5c2"
+    },
+    {
+      "path": "backend/sql/migrations/054_support_feedback_priority.up.sql",
+      "sha256": "24bce7023f004d0a8bef5e69b22c3a2b83840fc053a47ce7211ae048e40996ae"
+    },
+    {
+      "path": "backend/sql/migrations/054_support_feedback_priority.down.sql",
+      "sha256": "3dc4c13c1c63c60de4540d9faad450829d803c0f93ed667d752486e31ae8ea42"
+    },
+    {
+      "path": "backend/sql/migrations/055_support_progress_updates.up.sql",
+      "sha256": "f54f6134b8302832beab85997101f31bd403172908437b1f30157ca95b60894b"
+    },
+    {
+      "path": "backend/sql/migrations/055_support_progress_updates.down.sql",
+      "sha256": "c032e2b67aa61841776114ab31cca73f1daaf51a9848d068cef55256668d52c3"
+    },
+    {
+      "path": "backend/sql/migrations/056_support_account_recovery_guard.up.sql",
+      "sha256": "a9227067beba1fcd712427723b0153bbb1c090dd52c51ed63e0a4bd699052e58"
+    },
+    {
+      "path": "backend/sql/migrations/056_support_account_recovery_guard.down.sql",
+      "sha256": "3b5683bdc7fa1dfed4ac2dc54b19b6eaa2d2eca84d4e60c7c2a2744c09955b5f"
+    },
+    {
+      "path": "backend/sql/migrations/057_account_recovery_session_integrity.up.sql",
+      "sha256": "c578bc656aaf489baad1a458ce11125e33bce6b45ba99787dbd5e51f11973b86"
+    },
+    {
+      "path": "backend/sql/migrations/057_account_recovery_session_integrity.down.sql",
+      "sha256": "ce2e626d5ab9f5be3654b6f2387d24e381817af31178e5da11f41a9c5f118105"
+    },
+    {
+      "path": "backend/sql/migrations/058_moderation_account_measure_approval.up.sql",
+      "sha256": "e62f4b25ff55c0120f0c93dbca840181885fe769ec7638b5234ccdaa1a182652"
+    },
+    {
+      "path": "backend/sql/migrations/058_moderation_account_measure_approval.down.sql",
+      "sha256": "ef7478901ef26b51add8ce79dff918e28a43ab21e80be5212515e915f51b37df"
+    },
+    {
+      "path": "backend/sql/migrations/059_support_message_content_block_audit.up.sql",
+      "sha256": "55a48017584420e09238178725d6825912553ba86b2058a17ec4ad9a751b035d"
+    },
+    {
+      "path": "backend/sql/migrations/059_support_message_content_block_audit.down.sql",
+      "sha256": "59ef1b083202afa2067bb6f74264ea47b387215d73ea6843ea2e55a1a5ef2ee0"
+    },
+    {
+      "path": "backend/sql/migrations/060_harassment_block_report_guard.up.sql",
+      "sha256": "b81cd255391a8957e5775f9a7726d19681bec7afeb51a32c1759c5de7e029469"
+    },
+    {
+      "path": "backend/sql/migrations/060_harassment_block_report_guard.down.sql",
+      "sha256": "5bd24011a25dbfcd1cc7fca5d1936be04ae2f61752012daf310e9aa2ecf2dab2"
+    },
+    {
+      "path": "backend/sql/migrations/061_booking_exact_address_reveal_guard.up.sql",
+      "sha256": "d55cb2fdfdb077ebdd1c189f85759821427dbd0eeec3263749c1c30776c855a4"
+    },
+    {
+      "path": "backend/sql/migrations/061_booking_exact_address_reveal_guard.down.sql",
+      "sha256": "b486c7bb67b24e5853c07db0d3ccdd29903c33126db069ae218e1bf4d98f18d7"
+    },
+    {
+      "path": "backend/sql/migrations/062_handover_exception_guard.up.sql",
+      "sha256": "ad6b7d34f4f7057b97164f8807164c387871e4444eeb1f7bcf90f89646f9f078"
+    },
+    {
+      "path": "backend/sql/migrations/062_handover_exception_guard.down.sql",
+      "sha256": "7667960848a6a26c94fdb7931fd54ca4e333bfe95034ff9f81583914af264c22"
+    },
+    {
+      "path": "backend/sql/migrations/063_return_calendar_deadline_guard.up.sql",
+      "sha256": "85ba274607903d75df89c049a6686a8080b078e6b27e4a19797f3c7b126535ea"
+    },
+    {
+      "path": "backend/sql/migrations/063_return_calendar_deadline_guard.down.sql",
+      "sha256": "bf9c7866c6c3fe3b45bba87fac11be767872369ac680dd0d90c2d0815c1ce11c"
+    },
+    {
+      "path": "backend/sql/migrations/064_support_status_machine_v1_alignment.up.sql",
+      "sha256": "e38e396b58fd9ad9d707e4c14f323107bda1043bda7dca2164d60b8c72e6393e"
+    },
+    {
+      "path": "backend/sql/migrations/064_support_status_machine_v1_alignment.down.sql",
+      "sha256": "be30af69387833f0612ab5c2d79835c5012a452a92fe407e98de28b3ec67a10b"
+    },
+    {
+      "path": "backend/sql/migrations/065_support_direct_decision_path.up.sql",
+      "sha256": "682d73ae7c1ede73f9b3d44505d9c224634bd668c3b7d136c1b5a6442fe829ee"
+    },
+    {
+      "path": "backend/sql/migrations/065_support_direct_decision_path.down.sql",
+      "sha256": "5417b1746873ebed591a6592704c68280997767c1bec09a9b2b6b4006d45b6a0"
+    },
+    {
+      "path": "backend/ops/backup.sh",
+      "sha256": "f00667d1b8131f3f3d16f05ff89bd171a9cebc37af1678e02dc872405fc1f8f7"
+    },
+    {
+      "path": "android/app/src/main/AndroidManifest.xml",
+      "sha256": "f1b28ddb811d101e5284df825401f7402d72a2dfc08f9b676b6bd370955a80d1"
+    },
+    {
+      "path": "ios/Runner/Info.plist",
+      "sha256": "f9ec65bbb1f1cdf1bfa001cdc4f5f62d2dd473f557639544697d5b97d77d9037"
+    },
+    {
+      "path": "lib/services/firebase_runtime.dart",
+      "sha256": "2e7a7a257df5145a369f872b607acae85c381fd0c1d9ebf7809e1c704bd8d82f"
+    },
+    {
+      "path": "lib/services/firebase_service_preferences.dart",
+      "sha256": "b3aa13dbeebd4dd17220ac26de1c767e7647022b2dffd1cc2c17c58abd37bd54"
+    },
+    {
+      "path": "lib/services/app_link_service.dart",
+      "sha256": "d3e71f7f10aaa556441722a5b5b036f8d1d9fb9ab891dcbe5eb3922214b597bb"
+    },
+    {
+      "path": "lib/screens/app_link_destination_screen.dart",
+      "sha256": "0b522af484bfc74c33721659ae991cc9c0ef11e80188dd9c76b9188d83f348aa"
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/shareittoo/app/MainActivity.kt",
+      "sha256": "3f728b61bfa6f26415bf344872ce2bded2cd1a05856c26452f5a2100ab3d95a9"
+    },
+    {
+      "path": "lib/services/account_deletion_service.dart",
+      "sha256": "c4f4da84e907f6007e61a04b54654c4386ad93ed7b16657c517ad99bd8599c3a"
+    },
+    {
+      "path": "lib/services/blue_ocean_draft_recovery_service.dart",
+      "sha256": "2c4585835bf70057899706d822e05eafed8f4323d6aad45bdc4c28f9ac51083c"
+    },
+    {
+      "path": "lib/services/data_service.dart",
+      "sha256": "cce04e10456801644408f2100db3b179711d531600c09bff2672b1126b732449"
+    },
+    {
+      "path": "lib/services/local_safety_privacy_service.dart",
+      "sha256": "4f346ac2164be806b19821a77e50f1f11ce835b312dcb37f16828958cfd0d002"
+    },
+    {
+      "path": "lib/services/maps_service.dart",
+      "sha256": "a8cb474b2849d7e894919ae1056e8158d51c66fbfe8e0b1fab40d1db7fdaf32f"
+    },
+    {
+      "path": "lib/services/backend_repository.dart",
+      "sha256": "d306ef5cae20d0d719fb3f782c8c85e7100c5ddfeba1c4d97008b18a9f2de3e4"
+    },
+    {
+      "path": "lib/screens/help_center_screen.dart",
+      "sha256": "48b19241ecb6f10789a950c54b4605f83f9dd39ecfec126686157beb5d549ad4"
+    },
+    {
+      "path": "lib/screens/moderation_admin_screen.dart",
+      "sha256": "8d9902c0eee25988518a5168c0d12a0983ba9aed134b3ffe11bff8c9f1a887a7"
+    },
+    {
+      "path": "lib/screens/moderation_decisions_screen.dart",
+      "sha256": "2a1b30c443a6765b7b3c5cde4fc7e646ab6187db5d0798e589489afd0fd0d836"
+    },
+    {
+      "path": "lib/screens/support_cases_screen.dart",
+      "sha256": "e0395b296cd2d7e16958aff093b524dc6385a313ffab60ec6396191bc70b0d59"
+    },
+    {
+      "path": "lib/screens/support_flow_screen.dart",
+      "sha256": "a66cacd62c8f80305a82bb8113c34de2f95da903a52427294f0f88997d9b95f8"
+    },
+    {
+      "path": "lib/config/supply_enrichment_technical_config.dart",
+      "sha256": "5166531f3e5335702a28e19c9a14daf8ce08c100dad0891f2280c4c7b40b5b92"
+    },
+    {
+      "path": "lib/models/supply_enrichment.dart",
+      "sha256": "19010224715bc7c4e0be768f3ef065c9c896265fa2161db4117b908cd2f2bba1"
+    },
+    {
+      "path": "lib/screens/create_listing_screen.dart",
+      "sha256": "e17fe6e15dc4ca7d5aa5c3bc110b36c841c006b03ce83c79ccba592d08053a81"
+    },
+    {
+      "path": "lib/screens/explore_screen.dart",
+      "sha256": "da3fdd19a41c20d663fb358c5660645f81803f9a5d77c59498def5f35338aef8"
+    },
+    {
+      "path": "lib/widgets/supply_enrichment_dialog.dart",
+      "sha256": "d732956a4b41f9c2604c47b73ed5fe95724585e99146fbc244a691eca133805e"
+    },
+    {
+      "path": "lib/config/listing_sets_technical_config.dart",
+      "sha256": "3e51001d996c2c8347d912043bc32424c35c11a9796902bd7777aaa40ecb6eca"
+    },
+    {
+      "path": "lib/models/listing_set.dart",
+      "sha256": "d1135921a75186116dea1e3a240870c89fda9e849365e2111ffc5394905c9f85"
+    },
+    {
+      "path": "lib/models/rental_cart.dart",
+      "sha256": "f21c5b5a0055063ca15712cf444805603a25e0ca642085f1335f91c0fa46fbc7"
+    },
+    {
+      "path": "lib/screens/payment_methods_screen.dart",
+      "sha256": "3cbfc68ef0b2c92fdc2c8a41f1eb13432a4d4e56f14d5b0862f12944355648c0"
+    },
+    {
+      "path": "lib/screens/stripe_payout_account_screen.dart",
+      "sha256": "6bc62a6da035fdb3d7f9b81c651c05798ff8e3a259e21b1f910121f1f1f75d08"
+    },
+    {
+      "path": "lib/screens/payment_checkout_screen.dart",
+      "sha256": "322206148524f0b42dae31b96b62d023fb79bff0288d7f9ccd62d2100e011ce8"
+    },
+    {
+      "path": "lib/screens/legal_privacy_screen.dart",
+      "sha256": "f396a83fa1c665f65f6a69dd9a7b7e9485182dfd42db9680bd408bab03e6fb16"
+    },
+    {
+      "path": "store/g2-data-lifecycle.json",
+      "sha256": "1753947c8f92f4f6e82a6a7bb5e3a6e990368589b48dc3a1716ca7c9aecd749d"
+    }
+  ],
+  "implementedControls": {
+    "accountErasure": {
+      "status": "implemented-integration-covered",
+      "identity": "anonymized",
+      "directContent": "deleted-or-scrubbed",
+      "notificationResidue": "deleted-or-scrubbed",
+      "activeCredentials": "revoked-and-deleted"
+    },
+    "credentialExpiry": {
+      "status": "lifetime-enforced-and-automatic-purge",
+      "automaticExpiredRowPurge": true,
+      "startupPurge": true,
+      "workerIntervalHours": 6,
+      "maximumAllowedWorkerIntervalHours": 24,
+      "bookingChallengeDigestScrubbed": true,
+      "technicalEvidenceRef": "docs/evidence/b11/expired-credential-cleanup-20260815.json"
+    },
+    "categoryPurge": {
+      "status": "not-implemented"
+    },
+    "localBlueOceanDraftRecovery": {
+      "status": "implemented-encrypted-bounded",
+      "retentionHours": 24,
+      "maximumEncodedBytes": 131072,
+      "ownerBound": true,
+      "clearedOnLogout": true,
+      "clearedOnPublication": true,
+      "rawImageBytesStored": false,
+      "credentialsStored": false
+    },
+    "localSafetyPrivacyPrincipalState": {
+      "status": "implemented-principal-scoped-bounded-user-controlled",
+      "maximumRetainedPrincipals": 12,
+      "legacyUnattributedData": "guest-only-or-quarantine",
+      "corruptPrincipalData": "quarantine-preserve-and-fail-closed",
+      "privacyExport": "current-principal-only",
+      "confirmedAccountDeletion": "confirmed-account-principal-purged-by-explicit-identity-successor-preserved",
+      "retentionPeriodInvented": false
+    },
+    "localOperationalRecords": {
+      "status": "implemented-authenticated-participant-scoped-local-fallback",
+      "accountConvenienceDeletion": "confirmed-account-notifications-read-markers-last-seen-selections-and-thread-user-tombstone-by-explicit-identity",
+      "sharedParticipantRecords": "retained-for-counterparty-and-legal-audit-continuity",
+      "unattributedLegacyNotifications": "preserved-unassigned-and-excluded",
+      "corruptData": "preserve-exact-raw-and-fail-closed",
+      "capacityPolicy": "reject-overflow-without-pruning",
+      "privacyExport": "current-account-and-participant-only",
+      "retentionPeriodInvented": false,
+      "backendAuthorityChanged": false
+    },
+    "localListingCatalog": {
+      "status": "implemented-authenticated-owner-scoped-local-fallback",
+      "accountDeletion": "current-owner-listings-ended-and-retained",
+      "corruptData": "preserve-exact-raw-and-fail-closed",
+      "capacityPolicy": "maximum-1000-reject-overflow-without-media-pruning",
+      "privacyExport": "current-owner-listings-only",
+      "automaticEndedListingDeletion": false,
+      "retentionPeriodInvented": false,
+      "backendAuthorityChanged": false
+    },
+    "localReviewReputation": {
+      "status": "implemented-authenticated-participant-write-public-read-local-fallback",
+      "accountDeletion": "shared-public-reviews-retained-with-account-anonymization",
+      "corruptData": "preserve-exact-raw-and-fail-closed",
+      "capacityPolicy": "maximum-1000-per-document-reject-overflow-without-pruning",
+      "demoSeedPolicy": "explicit-qa-bootstrap-only-no-read-time-seeding",
+      "privacyExport": "current-account-authored-and-received-only",
+      "retentionPeriodInvented": false,
+      "backendAuthorityChanged": false
+    },
+    "localAccountProfile": {
+      "status": "implemented-authenticated-current-account-scoped-local-fallback",
+      "accountDeletion": "confirmed-account-profile-anonymized-exact-current-cache-and-session-cleared-successor-preserved",
+      "otherPublicProfiles": "retained-as-public-cache-until-app-data-clear",
+      "corruptData": "preserve-exact-raw-and-fail-closed",
+      "capacityPolicy": "maximum-1000-profiles-and-16-mib-document-reject-overflow-without-pruning",
+      "privacyExport": "current-account-profile-only-other-cache-and-auth-session-excluded",
+      "retentionPeriodInvented": false,
+      "backendAuthorityChanged": false
+    },
+    "retentionInventory": {
+      "status": "read-only-counts-implemented-policy-open",
+      "aggregatedCountsOnly": true,
+      "identifiersExcluded": true,
+      "adminStepUpRequired": true,
+      "supportRoleDenied": true,
+      "retentionPeriodsApplied": false,
+      "eligibleRowsCalculated": false,
+      "executionEnabled": false,
+      "technicalEvidenceRef": "docs/evidence/b11/retention-inventory-20260815.json"
+    },
+    "retentionExecutionPreflight": {
+      "status": "implemented-fail-closed-policy-and-staging-gates-open",
+      "executionAllowed": false,
+      "destructiveRouteExposed": false,
+      "technicalEvidenceRef": "docs/evidence/b11/v51-retention-execution-preflight-20260817T130000Z.json"
+    },
+    "legalHold": {
+      "status": "technical-enforcement-implemented-policy-process-open",
+      "accountDeletionPreflightBlocked": true,
+      "adminStepUpRequired": true,
+      "supportRoleDenied": true,
+      "idempotentLifecycle": true,
+      "technicalEvidenceRef": "docs/evidence/b11/account-legal-hold-20260815.json",
+      "recordScoped": true,
+      "datasetAndRecordRequired": true,
+      "reviewAndEndRequired": true,
+      "unboundedHoldRejected": true,
+      "expiredHoldDoesNotBlockDeletion": true,
+      "auditIncludesScopeAndWindow": true,
+      "profileRestoreGuard": "isolated-restore-rejects-revived-deleted-profile"
+    },
+    "backups": {
+      "status": "operational-rotation-only",
+      "observedRotationDays": 14,
+      "accountSpecificEraseFromExistingBackups": false
+    }
+  },
+  "retainedAfterAccountErasure": [
+    "pseudonymous-booking-records",
+    "legally-required-financial-records-pending-legal-definition",
+    "pseudonymous-notification-delivery-audit",
+    "security-and-account-erasure-audit"
+  ],
+  "externalProcessors": {
+    "hostingerVps": {
+      "retentionOwnerVerified": false,
+      "deletionProcedureVerified": false,
+      "officialDocumentationReviewed": false,
+      "officialEvidenceRef": null,
+      "serviceReadinessRef": null,
+      "ownerEvidenceRef": null
+    },
+    "firebaseCloudMessaging": {
+      "retentionOwnerVerified": false,
+      "deletionProcedureVerified": false,
+      "officialDocumentationReviewed": true,
+      "officialEvidenceRef": "docs/evidence/b11/privacy-provider-retention-sources-20260812.json",
+      "serviceReadinessRef": "docs/evidence/b11/firebase-cloud-messaging-retention-deletion-readiness-20260817.json",
+      "ownerEvidenceRef": null
+    },
+    "firebaseCrashlytics": {
+      "retentionOwnerVerified": false,
+      "deletionProcedureVerified": false,
+      "officialDocumentationReviewed": true,
+      "officialEvidenceRef": "docs/evidence/b11/privacy-provider-retention-sources-20260812.json",
+      "serviceReadinessRef": "docs/evidence/b11/firebase-crashlytics-retention-deletion-readiness-20260817.json",
+      "ownerEvidenceRef": null
+    },
+    "firebaseAuthentication": {
+      "retentionOwnerVerified": false,
+      "deletionProcedureVerified": false,
+      "officialDocumentationReviewed": true,
+      "officialEvidenceRef": "docs/evidence/b11/privacy-provider-retention-sources-20260812.json",
+      "serviceReadinessRef": "docs/evidence/b11/firebase-authentication-retention-deletion-readiness-20260817.json",
+      "ownerEvidenceRef": null
+    },
+    "googleWorkspaceSmtpRelay": {
+      "retentionOwnerVerified": false,
+      "deletionProcedureVerified": false,
+      "officialDocumentationReviewed": false,
+      "officialEvidenceRef": null,
+      "serviceReadinessRef": null,
+      "ownerEvidenceRef": null
+    },
+    "googleMapsPlatform": {
+      "retentionOwnerVerified": false,
+      "deletionProcedureVerified": false,
+      "officialDocumentationReviewed": true,
+      "officialEvidenceRef": "docs/evidence/b11/privacy-provider-retention-sources-20260812.json",
+      "serviceReadinessRef": "docs/evidence/b11/google-maps-platform-retention-deletion-readiness-20260817.json",
+      "ownerEvidenceRef": null
+    }
+  },
+  "requiredDecisions": {
+    "inactiveAccountPeriod": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "transactionalRecordPeriod": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "communicationPeriod": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "privacyRightsPeriod": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "moderationEvidencePeriod": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "auditSecurityLogPeriod": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "expiredCredentialPurgePeriod": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "backupErasureWindow": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "externalProcessorRetention": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "legalHoldProcess": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    }
+  },
+  "decisionPreparation": {
+    "status": "recommendations-prepared-owner-and-legal-approval-open",
+    "matrixRef": "docs/compliance/retention-deletion-decision-matrix.md",
+    "evidenceRef": "docs/evidence/b11/retention-deletion-decision-preparation-20260817.json",
+    "preparedDecisionCount": 10,
+    "closedDecisionCount": 0,
+    "categoryPurgeEnabled": false
+  },
+  "storeGate": {
+    "privacyDecision": "retentionAndDeletionSchedule",
+    "status": "open"
+  },
+  "boundaries": {
+    "legalPeriodsInvented": false,
+    "legalApproval": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

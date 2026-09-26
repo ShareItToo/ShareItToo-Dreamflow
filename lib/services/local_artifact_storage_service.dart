@@ -1,6 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -58,7 +56,7 @@ class LocalArtifactStorageService {
 
     final registry = await _registry();
     final sourceFingerprint = '${file.path}|${file.name}|${isReturn ? 'return' : 'handover'}';
-    final artifactKey = 'photo:${bookingId}:${_stableHash(sourceFingerprint)}';
+    final artifactKey = 'photo:$bookingId:${_stableHash(sourceFingerprint)}';
     if (registry.containsKey(artifactKey)) {
       return const LocalArtifactSaveResult(attempted: false, success: true, skipped: true, duplicate: true);
     }

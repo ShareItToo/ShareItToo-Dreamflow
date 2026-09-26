@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "kind": "crashlytics-open-issues-triage",
+  "status": "fix-prepared",
+  "capturedAt": "2026-08-10T22:11:42Z",
+  "scope": {
+    "project": "shareittoo-staging",
+    "applicationId": "com.shareittoo.app",
+    "eventType": "fatal-crash",
+    "issueState": "open",
+    "window": "7d"
+  },
+  "observations": [
+    {
+      "id": "transient-realtime-connectivity-recorded-fatal",
+      "eventCount": 342,
+      "affectedUserCount": 1,
+      "newestObservedBuild": "2026081026",
+      "currentCandidateBuildObserved": false,
+      "classification": "expected-connectivity-failure-misclassified-as-fatal"
+    },
+    {
+      "id": "logout-provider-context-after-navigation",
+      "eventCount": 5,
+      "affectedUserCount": 1,
+      "newestObservedBuild": "2026081019",
+      "currentCandidateBuildObserved": false,
+      "classification": "historical-ui-crash"
+    }
+  ],
+  "currentCandidate": {
+    "versionName": "1.0.0",
+    "buildNumber": "2026081029",
+    "observedInOpenFatalGroups": false,
+    "releaseMappingEvidenceRef": "docs/evidence/b11/android-crash-release-check-2026081029.json"
+  },
+  "remediation": {
+    "logoutNavigationNoLongerReadsRemovedWidgetContext": true,
+    "realtimeConnectionReadinessErrorsAreCaught": true,
+    "realtimeConnectivityErrorsAreDefensivelyNonFatal": true,
+    "flutterTestsPassed": 200,
+    "webBuildPassed": true,
+    "androidDebugBuildPassed": true,
+    "installedOnPhysicalDevice": false,
+    "nextExactCandidateBuildRequired": true
+  },
+  "boundaries": {
+    "firebaseIssueStateChanged": false,
+    "stagingDeploymentChanged": false,
+    "productionChanged": false,
+    "storeUploadPerformed": false,
+    "containsSecrets": false,
+    "containsAccountData": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

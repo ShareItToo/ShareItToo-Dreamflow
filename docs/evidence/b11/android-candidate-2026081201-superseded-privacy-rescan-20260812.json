@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-candidate-supersession",
+  "status": "superseded-privacy-rescan-failed",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081201",
+    "commit": "c6ec80002cf664f513afc768c1b643ac0d1d19fb"
+  },
+  "extendedPrivacyRescan": {
+    "status": "failed",
+    "findingClass": "embedded-unrestricted-google-maps-client-credential",
+    "findings": [
+      "Google Maps web-service endpoint embedded in compiled app code",
+      "Google API credential embedded with no application restriction"
+    ],
+    "scannerNowBlocksDirectGoogleMapsWebServices": true
+  },
+  "remediation": {
+    "authenticatedBackendProxyImplemented": true,
+    "automaticStaticMapLoadingRemoved": true,
+    "clientCredentialRemovedFromBuildContract": true,
+    "replacementBuildNumber": "2026081202",
+    "replacementStatus": "pending-build-and-binary-rescan"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "submissionAllowed": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

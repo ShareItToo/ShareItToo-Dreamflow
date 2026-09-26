@@ -1,0 +1,413 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp127-current-candidate-portfolio-convergence",
+  "status": "partial-current-candidate-acceptance-external-gates-open",
+  "capturedOn": "2026-09-12",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "predecessorCandidateSourceHead": "c8e2a49e14f5cae0026fa5f2bc327859fe0ff17b",
+    "candidateSourceHead": "1546812f625b4e8f1e700bf976410097cd45ac2f",
+    "candidateFreezeHead": "f9c4c9523eb0f4dfcdb03d34516795a91e0bcbdd",
+    "portfolioBaseHead": "d68770b95554183e531b46b93d55eccb723d1844",
+    "stagingRuntimeHead": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "runtimePathsChangedAfterCandidateSourceToPortfolioBase": []
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091201",
+    "releaseChannel": "internal",
+    "environment": "staging",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkSha256": "a8bfda4c1a0e7302b2528db8edfbe1318e88322023f65588da032220a24badd4",
+    "aabSha256": "81c204fd65d83a0403d203b606328880acb0787d076093240efab87d00575399",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "pixelExactInstalledCandidateMatched": true,
+    "onePlusCurrentAvailability": "disconnected-owner-took-device"
+  },
+  "runtimeDelta": {
+    "fromVersionCode": "2026091110",
+    "toVersionCode": "2026091201",
+    "changedPaths": [
+      "lib/config/private_pilot_config.dart",
+      "lib/screens/notification_settings_screen.dart",
+      "lib/services/backend_realtime_service.dart",
+      "lib/services/backend_repository.dart",
+      "lib/services/firebase_runtime.dart",
+      "lib/services/firebase_service_preferences.dart",
+      "lib/services/local_principal_scope.dart",
+      "lib/widgets/foreground_push_host.dart",
+      "pubspec.yaml"
+    ],
+    "binaryPatchSha256": "6cc52c587c0bfc15ddc0e7206bf2e7398211bb453c101a1fe66e749bcd6a2f21",
+    "classification": "push-registration-recovery-principal-ownership-and-version-only",
+    "sharedFilesReviewedAtSymbolLevel": true,
+    "unrelatedFeatureBehaviorInheritedWithoutReview": false
+  },
+  "verification": {
+    "wp126PortfolioBaseRegression": {
+      "runId": 34705532395,
+      "headSha": "d68770b95554183e531b46b93d55eccb723d1844",
+      "conclusion": "success",
+      "cleanCheckoutConclusion": "success"
+    },
+    "wp126PortfolioBaseCodeql": {
+      "runId": 34705532322,
+      "headSha": "d68770b95554183e531b46b93d55eccb723d1844",
+      "conclusion": "success"
+    },
+    "openBranchCodeScanningAlerts": 0,
+    "pullRequest7": "draft-open-clean-mergeable-unmerged",
+    "localFullRegression": "success",
+    "portfolioValidator": "success"
+  },
+  "staging": {
+    "apiHealthyAtBoundReadback": true,
+    "databaseHealthyAtBoundReadback": true,
+    "containerRestartCountAtBoundReadback": 0,
+    "fcmExactCandidatePhysicalDelivery": true,
+    "smtpEnabledAtBoundReadback": true,
+    "paymentProvider": "memory",
+    "stripeLivemode": false,
+    "listingAiProvider": "on_device",
+    "externalListingAiEnabled": false
+  },
+  "transferPolicy": {
+    "rule": "A prior physical result is transferred only when the exact predecessor source is known, every runtime delta path is enumerated, changed shared files are reviewed at symbol level, and the requirement's behavior is either freshly replayed or demonstrably outside the changed behavior. Uncertain scope remains PARTIAL or OPEN.",
+    "freshCurrentCandidateRequirementIds": [
+      "candidate-provenance-signature-pixel-install",
+      "exact-staging-backend-health-and-fcm",
+      "exact-source-local-github-security-baseline",
+      "transactional-push-foreground-background-terminated"
+    ],
+    "promotedAfterExactDeltaReviewRequirementIds": [
+      "logout-password-session-account-switch-isolation"
+    ],
+    "promotionsFromWp119": 1,
+    "overclaimOnUncertainTransfer": false
+  },
+  "requirements": [
+    {
+      "id": "candidate-provenance-signature-pixel-install",
+      "state": "PASS",
+      "basis": "fresh-current-candidate",
+      "evidence": "WP126 binds source, package, version, APK/AAB hashes, upload certificate and the data-preserving Pixel installation for 2026091201.",
+      "remaining": null
+    },
+    {
+      "id": "exact-staging-backend-health-and-fcm",
+      "state": "PASS",
+      "basis": "fresh-current-candidate",
+      "evidence": "WP126 proves exact-candidate Staging FCM while its bound Staging readback retains healthy API/database, zero restarts and enabled SMTP/FCM.",
+      "remaining": null
+    },
+    {
+      "id": "exact-source-local-github-security-baseline",
+      "state": "PASS",
+      "basis": "fresh-current-candidate",
+      "evidence": "The portfolio base passes complete local Regression, exact-head GitHub Regression including clean checkout, CodeQL and zero open branch alerts.",
+      "remaining": null
+    },
+    {
+      "id": "two-role-publish-discover-request-accept-chat",
+      "state": "PASS",
+      "basis": "transferred-after-exact-delta-review",
+      "evidence": "WP118 proves the complete non-binding Pixel two-role core on 2026091110; the exact 1110-to-1201 runtime delta changes only push registration ownership/recovery and the build version, with affected FCM freshly replayed by WP126.",
+      "remaining": null
+    },
+    {
+      "id": "transactional-push-foreground-background-terminated",
+      "state": "PASS",
+      "basis": "fresh-current-candidate",
+      "evidence": "WP126 physically proves foreground, background and terminated-process FCM on exact installed 2026091201; WP125 deterministically proves uncertain-response recovery and principal/epoch isolation.",
+      "remaining": null
+    },
+    {
+      "id": "listing-create-edit-publish-pause-activate-end",
+      "state": "PASS",
+      "basis": "transferred-after-exact-delta-review",
+      "evidence": "WP114 and WP118 prove the lifecycle on 2026091110; no listing form, lifecycle or publication behavior changed in the exact successor delta.",
+      "remaining": null
+    },
+    {
+      "id": "themes-backgrounds-large-text-and-restart",
+      "state": "PARTIAL",
+      "basis": "retained-partial-no-new-proof",
+      "evidence": "WP100 provides physical theme/background and large-text evidence, but WP127 adds no complete exact-2026091201 visual and 200-percent-text replay.",
+      "remaining": "Replay the complete theme, background, 200-percent text and restart matrix on exact 2026091201 with settings restoration."
+    },
+    {
+      "id": "offline-online-process-recovery",
+      "state": "PASS",
+      "basis": "transferred-after-exact-delta-review",
+      "evidence": "WP114 proves offline/online and process recovery; the successor adds an authenticated push recovery signal without changing existing request/message catch-up semantics, and exact-candidate FCM recovery is freshly proven.",
+      "remaining": null
+    },
+    {
+      "id": "listing-ai-safe-review-contract",
+      "state": "PASS",
+      "basis": "transferred-after-exact-delta-review",
+      "evidence": "WP115 proves on-device proposal generation and mandatory user review; no Listing-AI implementation, model or review path changed in the successor delta.",
+      "remaining": null
+    },
+    {
+      "id": "staging-support-simulation-lifecycle",
+      "state": "PARTIAL",
+      "basis": "retained-partial-no-new-proof",
+      "evidence": "Existing support lifecycle evidence remains valid source evidence, but no full support intake/readback replay was performed on exact 2026091201.",
+      "remaining": "Replay critical support intake and readback on exact 2026091201; retained real-case deadlines remain a separate staff action."
+    },
+    {
+      "id": "payment-idempotency-and-uncertain-reconciliation",
+      "state": "PASS",
+      "basis": "transferred-after-exact-delta-review",
+      "evidence": "The deterministic payment idempotency and unknown-outcome contracts remain unchanged; neither the immutable Staging backend nor payment surfaces changed for 2026091201.",
+      "remaining": null
+    },
+    {
+      "id": "support-report-block",
+      "state": "PARTIAL",
+      "basis": "retained-partial-no-new-proof",
+      "evidence": "Report/block source and earlier physical evidence exist, but no complete exact-2026091201 report, block/unblock and isolation replay was added.",
+      "remaining": "Replay report, block/unblock, listing isolation and message isolation on exact 2026091201."
+    },
+    {
+      "id": "email-registration-verification-login-recovery",
+      "state": "PARTIAL",
+      "basis": "retained-partial-no-new-proof",
+      "evidence": "Earlier verified registration and recovery evidence exists; WP120 closes password/session behavior but does not freshly replay registration, verification-link single use and recovery on the successor.",
+      "remaining": "Replay fresh registration, verification-link single use and password recovery on exact 2026091201."
+    },
+    {
+      "id": "logout-password-session-account-switch-isolation",
+      "state": "PASS",
+      "basis": "promoted-by-wp120-and-exact-delta-review",
+      "evidence": "WP120 physically proves password change/rollback, targeted revoke, logout-all, server-confirmed empty truth, cold starts and Account-A-to-B isolation on 2026091110. The successor delta does not change auth/session actions; its LocalPrincipalScope addition is an isolated opaque helper used only by push cleanup ownership.",
+      "remaining": null
+    },
+    {
+      "id": "google-signin",
+      "state": "PARTIAL",
+      "basis": "retained-partial-no-new-proof",
+      "evidence": "Official Android Google sign-in has earlier physical evidence, but no exact-2026091201 first-use, cancellation, repeat-login and cold-start replay was added.",
+      "remaining": "Replay Google first sign-in, cancellation, repeat sign-in and cold-start persistence on exact 2026091201."
+    },
+    {
+      "id": "search-filter-favorites-wishlists",
+      "state": "PASS",
+      "basis": "transferred-after-exact-delta-review",
+      "evidence": "WP114 proves search, filters, favorites and wishlists; none of their application paths changed in the successor delta.",
+      "remaining": null
+    },
+    {
+      "id": "offer-request-accept-decline",
+      "state": "PARTIAL",
+      "basis": "retained-partial-no-new-proof",
+      "evidence": "Request and acceptance are physically proven; complete decline and competing-request outcomes remain without exact-current replay.",
+      "remaining": "Prove decline and competing-request outcomes on exact 2026091201 with cleanup."
+    },
+    {
+      "id": "messages-attachments-location-appointments",
+      "state": "PARTIAL",
+      "basis": "retained-partial-no-new-proof",
+      "evidence": "Core chat and attachment/appointment coverage exists, but the lawful positive location-reveal window and later denial remain incompletely proven.",
+      "remaining": "Prove the lawful positive location-reveal window and subsequent denial without leaking location early."
+    },
+    {
+      "id": "handover-return-cancel-withdrawal-damage",
+      "state": "PARTIAL",
+      "basis": "retained-partial-external-gate",
+      "evidence": "Technical state machines and non-binding cancellation evidence exist; lawful binding pickup, return, withdrawal and damage proof remains blocked by approved immutable V5.2 documents and a sandbox booking.",
+      "remaining": "Provision professionally approved immutable V5.2 snapshots and a lawful sandbox booking before binding lifecycle proof."
+    },
+    {
+      "id": "reviews-and-invoices",
+      "state": "PARTIAL",
+      "basis": "retained-partial-external-gate",
+      "evidence": "Review and invoice surfaces are implemented and source-tested, while end-to-end generation depends on the V5.2 and Stripe sandbox lifecycle.",
+      "remaining": "Complete after the V5.2 and Stripe sandbox gates."
+    },
+    {
+      "id": "privacy-export-and-account-deletion",
+      "state": "PARTIAL",
+      "basis": "retained-partial-no-new-proof",
+      "evidence": "WP113 and prior deletion evidence prove guarded privacy behavior, but WP127 does not freshly delete a disposable exact-2026091201 account and confirm cold-start Guest truth.",
+      "remaining": "Replay disposable account deletion, cold-start Guest truth and cleanup on exact 2026091201."
+    },
+    {
+      "id": "cart-projects-and-booking-groups",
+      "state": "PARTIAL",
+      "basis": "retained-partial-external-gate",
+      "evidence": "Non-binding cart and project surfaces are proven; a binding booking-group lifecycle still depends on V5.2 and Stripe sandbox prerequisites.",
+      "remaining": "Prove the binding group lifecycle only after V5.2 and Stripe sandbox prerequisites."
+    },
+    {
+      "id": "android-permission-lifecycle",
+      "state": "PARTIAL",
+      "basis": "retained-partial-affected-surface",
+      "evidence": "The exact candidate has notification permission and successful FCM, but notification settings changed and no complete deny, grant, revoke and settings-restoration matrix was replayed.",
+      "remaining": "Replay deny, grant, revoke and settings restoration for every supported Android permission on exact 2026091201."
+    },
+    {
+      "id": "facebook-signin",
+      "state": "OPEN",
+      "basis": "retained-open-provider-gate",
+      "evidence": "No officially configured Meta application/provider and no exact-candidate Android acceptance evidence are present.",
+      "remaining": "Complete official Meta application/provider configuration and exact-candidate Android acceptance if this provider remains in pilot scope."
+    },
+    {
+      "id": "apple-signin",
+      "state": "OPEN",
+      "basis": "retained-open-provider-gate",
+      "evidence": "No approved Apple Services ID/membership/provider configuration and no exact-candidate Android acceptance evidence are present.",
+      "remaining": "Complete official Apple provider configuration and Android acceptance only if retained in pilot scope."
+    },
+    {
+      "id": "real-image-analysis-listing-proposal",
+      "state": "PASS",
+      "basis": "transferred-after-exact-delta-review",
+      "evidence": "WP115 physically proves real on-device image inference proposing title, description, category, price and safe fields subject to user review; no related runtime path changed.",
+      "remaining": null
+    },
+    {
+      "id": "stripe-sandbox-payment-refund-simulated-payout",
+      "state": "OPEN",
+      "basis": "retained-open-provider-gate",
+      "evidence": "The last bound provider evidence requires test-mode reauthentication plus truthful owner profile facts and personal terms; WP127 makes no provider claim or mutation.",
+      "remaining": "Reauthenticate test mode, complete truthful owner profile and terms, then prove sandbox payment, refund and simulated payout with no live money."
+    },
+    {
+      "id": "binding-v52-contract-return-damage",
+      "state": "OPEN",
+      "basis": "retained-open-legal-gate",
+      "evidence": "The candidate fails closed with typed v52_contract_documents_unavailable and no professional V5.2 approval or approved immutable snapshots exist.",
+      "remaining": "Obtain professional legal approval and provision approved immutable V5.2 snapshots before any binding proof."
+    },
+    {
+      "id": "manual-talkback-traversal",
+      "state": "OPEN",
+      "basis": "retained-open-human-gate",
+      "evidence": "WP116 verifies the runtime prerequisite but no human auditory traversal of the critical flows is recorded.",
+      "remaining": "Complete a human TalkBack traversal of all critical flows on the exact candidate."
+    },
+    {
+      "id": "oneplus-cross-device-two-role",
+      "state": "OPEN",
+      "basis": "retained-open-device-unavailable",
+      "evidence": "The owner disconnected and took the OnePlus after the earlier fail-closed partial attempt; WP127 performs no OnePlus access and makes no cross-device success claim.",
+      "remaining": "Wait for a future explicit device reconnection, then restore exact owner truth and run the bounded current-candidate two-role journey."
+    },
+    {
+      "id": "durable-private-registry-pull",
+      "state": "OPEN",
+      "basis": "retained-open-infrastructure-gate",
+      "evidence": "No current package-read-only private-registry pull has been proven; a local build is not accepted as a release dependency substitute.",
+      "remaining": "Prove least-privilege package-read-only registry access without making local build state a release prerequisite."
+    },
+    {
+      "id": "historical-support-deadline-recovery",
+      "state": "OPEN",
+      "basis": "retained-open-staff-gate",
+      "evidence": "Historical support cases still require authorized staff correction with audit history preserved.",
+      "remaining": "Perform the authorized staff recovery and independently verify compliant deadlines without deleting audit history."
+    }
+  ],
+  "aggregate": {
+    "passCount": 12,
+    "partialCount": 12,
+    "openCount": 8,
+    "totalCount": 32,
+    "changeFromWp119": "one-auth-session-requirement-promoted-from-partial-to-pass",
+    "releaseDecision": "hold-not-production-ready"
+  },
+  "sourceInventory": [
+    {
+      "path": "store/google-play/current-rollover-candidate.json",
+      "sha256": "0637c6565a2f1c00058f84132e0319f121732a86727bb67b975169a70c9b5cd2"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp119-current-candidate-goal-acceptance-20260912.json",
+      "sha256": "6e8ab6d9a4fa652f2cdb69b2417d78448ffc9c413c687a891b7fe2cc0a1c31aa"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp120-current-candidate-auth-session-closure-20260912.json",
+      "sha256": "e14c9d03425f26a08d53f5f9b45725aad92b58dd0237333328f403e59ab943ee"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp125-push-registration-recovery-20260912.json",
+      "sha256": "6708bf9acb43668e03fff36b605276dc0f5ac00ef90e8ac2143f0dfbad7f7622"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp126-exact-successor-pixel-push-closure-20260912.json",
+      "sha256": "c5fe67e7eafb1c4c1ef98b158c4166b07ec9754cdbb17a80bc9b6a7885673c5f"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp113-current-candidate-staging-pixel-privacy-20260911.json",
+      "sha256": "b9477d77de69d2a0a617b928c9005a765c5e32ed8c31d0418202d4dd493efdc4"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp114-current-candidate-complete-pixel-renter-owner-20260911.json",
+      "sha256": "bbd7456ad34d828299e813af78168b0c1f60141ef471aee1f2bb18a8356b3526"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp115-current-candidate-pixel-on-device-listing-ai-20260911.json",
+      "sha256": "59bdb266fda2f18c5873cd93acbe5343307e9c9999cfa7ec6673f88a1bda9417"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp116-current-candidate-pixel-talkback-runtime-gate-20260911.json",
+      "sha256": "07f2a390b82089840b12c14053ca37220f31248c2024701b1d364267aaabf3ed"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp118-fresh-pixel-two-role-confirmation-20260912.json",
+      "sha256": "7a472a5567b8688df99ad701c08f5a96550de59c6e1e299f46440d4c09cfed5b"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp12-google-signin-current-candidate-acceptance-20260905.json",
+      "sha256": "0523f0dcfd6efca0467f0ff751ed8db07017113708b7d1ef4c43f13fe8b7dd67"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp15-email-registration-password-recovery-current-candidate-20260905.json",
+      "sha256": "cef503247a588aab08a47451596ff3377549304daa1b277b3994de2d8f0741c1"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp71-current-candidate-account-deletion-20260909.json",
+      "sha256": "1062b963f99dec7d901f25636528b22c1d28715a4cc6e330071c576f31435b68"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp11-stripe-test-platform-readiness-gate-20260905.json",
+      "sha256": "a7aa82917fa72e51e3c20a68b83d80deb3cdea0ecd43a45e807e747c427bb83b"
+    },
+    {
+      "path": "docs/operations/WP117_ONEPLUS_CURRENT_CANDIDATE_TWO_ROLE_RUNWAY_2026-09-11.md",
+      "sha256": "53bcb7d743eb3e825bb364701a26c363b69d769a22f5c58139916b8c190e9c22"
+    }
+  ],
+  "nextExecutionOrder": [
+    "exact-current-pixel-theme-background-large-text-and-permission-replay",
+    "exact-current-email-registration-recovery-google-and-privacy-replay",
+    "exact-current-support-report-block-and-decline-location-replay",
+    "stripe-test-mode-owner-gate-and-sandbox-lifecycle",
+    "professional-v52-and-human-talkback-owner-gates",
+    "oneplus-only-after-future-explicit-reconnection"
+  ],
+  "boundaries": {
+    "appRuntimeChanged": false,
+    "backendChanged": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "firebaseProjectChanged": false,
+    "backendDeploymentChanged": false,
+    "paymentProviderCalled": false,
+    "realMoneyUsed": false,
+    "vpsDnsChanged": false,
+    "publicRegistrationChanged": false,
+    "pixelMutated": false,
+    "onePlusContacted": false,
+    "prMerged": false,
+    "containsSecrets": false,
+    "containsAccountIdentity": false,
+    "containsRawDeviceIdentifier": false,
+    "containsPrivateFilesystemPath": false
+  }
+}

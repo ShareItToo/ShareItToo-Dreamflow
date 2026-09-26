@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "version": "G3L-DRAFT-2026-08-20.1",
+  "status": "draft-blocked",
+  "approvalAllowed": false,
+  "professionalApprovalClaimAllowed": false,
+  "activationAllowed": false,
+  "productionProvisioningAllowed": false,
+  "realMoneyAllowed": false,
+  "effectiveDate": null,
+  "locale": "de",
+  "source": {
+    "architectureDecision": {
+      "path": "docs/architecture/g3a-same-owner-multi-item-decision-2026-08-20.md",
+      "sha256": "39db40f9b4d16dc11bca4cae5b09c87c657fcb36611ab744ed5a21710ce9af7b"
+    },
+    "g3eEvidence": {
+      "path": "docs/compliance/g3e-disabled-multi-item-ux-2026-08-20.md",
+      "sha256": "ecc83fffbbfaa34dff84d3375df642c2792cf9587c710c6058046f65699c916b"
+    },
+    "coreSpecification": {
+      "driveFileId": "1HQR2EWJg6FUcU41l5uwditfFzNoCe6Zx",
+      "title": "V5.2 Core Specification"
+    },
+    "legalSource": {
+      "driveFileId": "1kKuZl9OJ4nb9F02E8fepTxY8O-GZBkn2",
+      "title": "ShareItToo Rechtsmappe Privat-Launch V5.2",
+      "sha256": "aa6f631457c9b73fdae3c5d4415ba6681b86f63b51df3fd5937c50f80a27b8a8"
+    },
+    "growthMaster": {
+      "driveFileId": "159xMd9qoMqp_5x0x0evYG511auKgk4Nu",
+      "title": "Growth Produkt Projektkorb und Planer"
+    }
+  },
+  "parentDocumentSet": {
+    "version": "V5.2-2026-08-16",
+    "manifestPath": "assets/legal/de/legal_manifest_v52.json",
+    "manifestSha256": "757289c45dfe50c9f3f3ec9c96953f06b62f15b282bb1d6cdedc6e8e07d2e69b",
+    "historicalMutationAllowed": false,
+    "documents": [
+      {
+        "part": "A",
+        "path": "assets/legal/de/v52/part_a_platform_terms.html",
+        "sha256": "58fc3bcd3422081e157a941e1851fb31c0442df8d55f4fde84e693e2d6f3009a"
+      },
+      {
+        "part": "B",
+        "path": "assets/legal/de/v52/part_b_private_rental_terms.html",
+        "sha256": "b71af619bf2db2172dfdb95cf2c2f6f113533939dc2c702ab3b00897d86e3483"
+      },
+      {
+        "part": "C",
+        "path": "assets/legal/de/v52/part_c_cancellation_refund.html",
+        "sha256": "dcfa17dfd8e2fec5ecb17a2a30f5cce4af1d5a62233a2208289d826d89b82349"
+      },
+      {
+        "part": "D",
+        "path": "assets/legal/de/v52/part_d_handover_return_damage.html",
+        "sha256": "5a73e7b92c73810c8cb3eb9532a88bc7a73aa817afe017bc29595709ddfd3a91"
+      },
+      {
+        "part": "E",
+        "path": "assets/legal/de/v52/part_e_payment_payout.html",
+        "sha256": "145258409f65e555d139fd2d808e060734a75e6304a202481005f5fc61ef9a2e"
+      },
+      {
+        "part": "F",
+        "path": "assets/legal/de/v52/part_f_community_safety.html",
+        "sha256": "d40168ccea475696b8384f2806dccd77ac54934d4499368fee7cf21fe7b46e59"
+      },
+      {
+        "part": "G",
+        "path": "assets/legal/de/v52/part_g_reporting_moderation_review.html",
+        "sha256": "3e74628b6835cbfe4893eed8569648373364a344e3414abc500a35ae9b2625b1"
+      },
+      {
+        "part": "H",
+        "path": "assets/legal/de/v52/part_h_privacy.html",
+        "sha256": "632a5a58f7aa8ab0e91c30f722228593ea3ce40db4672139ce47fdea666d304c"
+      },
+      {
+        "part": "I",
+        "path": "assets/legal/de/v52/part_i_imprint_withdrawal_shorttexts.html",
+        "sha256": "0b1bc9913d8c56088796497014946da32d7ec881f340a4765397ea53a505a460"
+      }
+    ]
+  },
+  "affectedScopes": [
+    "platformTerms",
+    "privateRentalTerms",
+    "cancellationRefund",
+    "paymentPayout",
+    "handoverReturnDamage",
+    "needsReviewAudit",
+    "privacy",
+    "accountExport",
+    "retentionDeletion",
+    "receipts",
+    "evidence"
+  ],
+  "draftDocuments": [
+    {
+      "type": "multi_item_change_matrix",
+      "path": "assets/legal/de/g3l-draft-2026-08-20.1/01_multi_item_change_matrix.md",
+      "sha256": "5bebba6f5dafbca9bd3745d769c567d9a7e8fc5a55a1d50167f7b115c879f4f2",
+      "status": "draft-blocked"
+    },
+    {
+      "type": "document_binding_spec",
+      "path": "assets/legal/de/g3l-draft-2026-08-20.1/02_document_binding_spec.md",
+      "sha256": "623b87af89c1923ec13aca18d6d595cae791e9b5cfa33f1e73e3ab4ee0df4e5e",
+      "status": "draft-blocked"
+    },
+    {
+      "type": "professional_review_checklist",
+      "path": "assets/legal/de/g3l-draft-2026-08-20.1/03_professional_review_checklist.md",
+      "sha256": "e00909326660fb433d424cbfb7b8b62c58d663757c44a5177a33bbaf11af24c7",
+      "status": "all-open"
+    },
+    {
+      "type": "release_gate",
+      "path": "assets/legal/de/g3l-draft-2026-08-20.1/04_release_gate.md",
+      "sha256": "4ea209c54e9f2dff3a3bc974745fd69962f1c11fbb9e988394b511de5e5b9d2d",
+      "status": "hard-stop"
+    }
+  ],
+  "technicalBinding": {
+    "backendModulePath": "backend/src/booking_group_legal_document.js",
+    "backendModuleSha256": "1cc7b6d0bcf0a4edb7c69fba605322736d353a0ea6f589e2170ae98bfe547966",
+    "bookingGroupLegalDocumentSetVersion": "G3L-DRAFT-2026-08-20.1",
+    "historicalV52SnapshotsUntouched": true,
+    "groupContractProvisioned": false,
+    "groupReceiptGenerated": false,
+    "publicCheckoutAvailable": false
+  },
+  "openReviewDecisions": [
+    "groupPrivateRentalContractModel",
+    "groupPlatformContractScope",
+    "completeOfferAndCounterOfferSemantics",
+    "partialPerformanceAndDivisibilityConsequences",
+    "groupAndPositionCancellationRefundRules",
+    "sharedAppointmentAndPositionEvidenceEffect",
+    "positionNeedsReviewAndUnrelatedRelease",
+    "groupPaymentAuthorizationAndProviderContract",
+    "positionLedgerRefundAndChargebackAllocation",
+    "groupConfirmationAndReceiptIssuerContent",
+    "privacyPurposesLegalBasesAndRecipients",
+    "accountExportCompletenessAndCounterpartyProtection",
+    "retentionDeletionLegalHoldPeriodsAndTriggers",
+    "businessGlobalConsumerAndTraderVariants"
+  ],
+  "releaseGate": {
+    "professionalLegalApproval": false,
+    "finalDocumentHashesApproved": false,
+    "checkoutAndDeclarationWordingApproved": false,
+    "partialPerformanceRulesApproved": false,
+    "privacyExportRetentionApproved": false,
+    "paymentProviderAndRealMoneyApproved": false,
+    "closedPilotEvidenceApproved": false,
+    "explicitPublicActivationDecision": false,
+    "hardStopBeforePublicActivation": true
+  }
+}

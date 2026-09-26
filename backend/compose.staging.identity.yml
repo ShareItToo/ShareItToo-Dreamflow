@@ -1,0 +1,21 @@
+services:
+  api:
+    environment:
+      IDENTITY_VERIFICATION_TRANSPORT: stripe
+      IDENTITY_STRIPE_SECRET_KEY: ""
+      IDENTITY_VERIFICATION_WEBHOOK_SECRET: ""
+      IDENTITY_STRIPE_SECRET_KEY_FILE: /run/secrets/identity-stripe-secret-key
+      IDENTITY_VERIFICATION_WEBHOOK_SECRET_FILE: /run/secrets/identity-verification-webhook-secret
+    volumes:
+      - type: bind
+        source: ${IDENTITY_STRIPE_SECRET_KEY_HOST_FILE:?IDENTITY_STRIPE_SECRET_KEY_HOST_FILE must be set for the Staging Identity overlay}
+        target: /run/secrets/identity-stripe-secret-key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${IDENTITY_VERIFICATION_WEBHOOK_SECRET_HOST_FILE:?IDENTITY_VERIFICATION_WEBHOOK_SECRET_HOST_FILE must be set for the Staging Identity overlay}
+        target: /run/secrets/identity-verification-webhook-secret
+        read_only: true
+        bind:
+          create_host_path: false

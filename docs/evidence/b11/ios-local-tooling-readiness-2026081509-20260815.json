@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "kind": "ios-local-tooling-readiness",
+  "status": "pending-local-tooling",
+  "capturedAt": "2026-08-15T14:35:12Z",
+  "candidate": {
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "observed": {
+    "hostPlatform": "macos",
+    "fullXcodeApplicationPresent": false,
+    "activeDeveloperDirectory": "command-line-tools-only",
+    "xcodebuildAvailable": false,
+    "xcodeVersion": null,
+    "cocoaPodsAvailable": false,
+    "cocoaPodsVersion": null
+  },
+  "blockers": [
+    "full-xcode-application-missing",
+    "full-xcode-not-selected",
+    "xcodebuild-unavailable",
+    "cocoapods-unavailable"
+  ],
+  "boundaries": {
+    "accountChecked": false,
+    "membershipChecked": false,
+    "agreementAccepted": false,
+    "signingChanged": false,
+    "archiveAttempted": false,
+    "uploadAttempted": false,
+    "containsSecrets": false,
+    "containsAccountIdentifiers": false,
+    "containsFilesystemPaths": false
+  },
+  "generatedBy": "node tool/diagnose_ios_tooling_readiness.mjs"
+}

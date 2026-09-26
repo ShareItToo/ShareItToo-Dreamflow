@@ -9,26 +9,27 @@ class LegalCancellationPolicyScreen extends StatelessWidget {
     return LegalDetailScaffold(
       title: 'Stornierungsbedingungen',
       intro:
-          'Stornierungen sollen fair für beide Seiten sein. Diese Übersicht erklärt, wann storniert werden kann, welche Gebühren entstehen können und wie Rückerstattungen funktionieren.',
+          'Vertragliche Privat-Launch-Regel nach V5.1. Echtgeld und automatische Erstattungen bleiben bis zur geprüften PSP-Aktivierung ausgeschaltet.',
       sections: [
         LegalSectionCard(
           icon: Icons.event_busy_outlined,
           title: 'Wann kann storniert werden?',
           children: const [
             LegalBullets(items: [
-              'Vor Buchungsbeginn: in der Regel möglich, je nach Frist und Status.',
-              'Während einer laufenden Buchung: nur bei besonderen Umständen und nach Abstimmung.',
+              'Mindestens 24 Stunden vor Mietbeginn: Mietpreis und SIT-Plattformgebühr werden vollständig erstattet.',
+              'Weniger als 24 Stunden vor Mietbeginn: 50 % des Mietpreises bleiben grundsätzlich geschuldet; der verbleibende Gebührenanteil beträgt 10 % dieses Mietpreises, höchstens die gebuchte SIT-Plattformgebühr.',
+              'Ab Mietbeginn oder bei Mieter-No-Show: keine vertragliche Stornopauschale. Die Abrechnung berücksichtigt ersparte Aufwendungen, tatsächliche Ersatzvermietung und einen nachgewiesenen geringeren oder fehlenden Schaden.',
+              'Storniert der Vermieter oder scheitert die Übergabe aus seiner Sphäre: grundsätzlich 100 % Erstattung.',
             ]),
           ],
         ),
         LegalSectionCard(
           icon: Icons.payments_outlined,
-          title: 'Mögliche Gebühren',
+          title: '60-Minuten-Karenz',
           children: const [
-            LegalBullets(items: [
-              'Je kurzfristiger die Stornierung, desto eher können Gebühren anfallen.',
-              'Bei wiederholtem Missbrauch kann das Konto eingeschränkt werden.',
-            ]),
+            LegalParagraph(
+              'Entsteht der Mietvertrag weniger als 24 Stunden vor Mietbeginn, kann der Mieter innerhalb von 60 Minuten nach der Buchungsbestätigung kostenlos stornieren, höchstens bis Mietbeginn. Die App zeigt den genauen Zeitpunkt.',
+            ),
           ],
         ),
         LegalSectionCard(
@@ -36,8 +37,10 @@ class LegalCancellationPolicyScreen extends StatelessWidget {
           title: 'Rückerstattungen',
           children: const [
             LegalBullets(items: [
-              'Erstattungen erfolgen abhängig von Stornozeitpunkt, Gebühren und ggf. Streitfällen.',
-              'Bei späterer Zahlungsabwicklung kann die Bearbeitungszeit vom Zahlungsdienstleister abhängen.',
+              'Ohne aktivierte Echtgeldzahlung gibt es im aktuellen Store-Kandidaten keine reale Rückerstattung.',
+              'Mietpreis-Erstattung und SIT-Gebühren-Erstattung werden getrennt mit ihrem jeweiligen Schuldner gespeichert.',
+              'Ersparte Aufwendungen, Ersatzvermietung und der Nachweis eines geringeren Schadens werden berücksichtigt.',
+              'Rückerstattungen erfolgen über die ursprüngliche Zahlungsart und den freigegebenen Marketplace-Zahlungsdienstleister.',
             ]),
           ],
         ),
@@ -45,7 +48,8 @@ class LegalCancellationPolicyScreen extends StatelessWidget {
           icon: Icons.support_agent_outlined,
           title: 'Probleme zwischen Nutzern',
           children: const [
-            LegalParagraph('Wenn Probleme auftreten (z.B. Artikel nicht wie beschrieben, verspätete Rückgabe, Streit über Schäden), kontaktiere den Support so früh wie möglich. Foto‑Dokumentation bei Übergabe/Rückgabe hilft, Fälle fair zu klären.'),
+            LegalParagraph(
+                'Ein No-Show liegt grundsätzlich erst 30 Minuten nach der beidseitig bestätigten Zeit, ohne andere Vereinbarung und nach zwei dokumentierten Kontaktversuchen vor. Sicherheits-, Notfall- und nachweisbare technische Fälle werden einzeln geprüft.'),
           ],
         ),
       ],

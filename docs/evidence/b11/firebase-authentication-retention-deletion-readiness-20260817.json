@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "kind": "firebase-authentication-retention-deletion-readiness",
+  "serviceId": "firebaseAuthentication",
+  "provider": "Google Firebase",
+  "reviewedAt": "2026-08-17T00:00:00Z",
+  "status": "official-controls-structured-owner-contract-and-deletion-approval-open",
+  "productDecision": {
+    "retainedForLaunch": true,
+    "phoneVerificationInLaunchScope": true,
+    "socialLoginActivationApproved": false,
+    "temporaryPhoneIdentityRequired": true,
+    "futureSocialActivationRequiresExternalApprovals": true
+  },
+  "officialSources": [
+    {
+      "purpose": "retention",
+      "url": "https://firebase.google.com/support/privacy/",
+      "finding": "Firebase Authentication keeps logged IP addresses for a few weeks. Other authentication information remains until the customer initiates deletion of the associated user, after which removal from live and backup systems completes within 180 days."
+    },
+    {
+      "purpose": "deletion-control",
+      "url": "https://firebase.google.com/docs/auth/admin/manage-users",
+      "finding": "The trusted Firebase Admin SDK can look up and delete users by UID; individual deletion reports success or an error and requires privileged server credentials."
+    },
+    {
+      "purpose": "processor-role-and-transfer-framework",
+      "url": "https://firebase.google.com/terms/data-processing-terms/",
+      "finding": "Firebase Data Processing and Security Terms describe Google as processor for Customer Personal Data under European data-protection law. Public review does not prove SIT account acceptance, locations or transfer approval."
+    }
+  ],
+  "currentTechnicalControls": {
+    "phoneProviderEnabledInBoundEnvironment": true,
+    "temporaryPhoneIdentityDeletionImplemented": true,
+    "temporaryIdentitySafetyCheckImplemented": true,
+    "firebaseUserIdStoredForLinkedSocialIdentity": true,
+    "persistentSocialIdentityDeletionOnAccountErasureImplemented": true,
+    "providerPasswordOrAccessTokenStoredBySit": false
+  },
+  "retentionAndDeletionReality": {
+    "loggedIpRetention": "a-few-weeks",
+    "otherAuthenticationInformationRemoval": "within-180-days-after-customer-initiated-associated-user-deletion",
+    "temporaryPhoneIdentityProviderDeletionImplemented": true,
+    "persistentSocialIdentityProviderDeletionImplemented": true,
+    "sitCanPromiseImmediateProviderErasure": false,
+    "currentAccountContractAcceptanceVerified": false,
+    "currentProcessingLocationsVerified": false,
+    "internationalTransferMechanismApprovedForSIT": false,
+    "retentionAcceptedByOwner": false,
+    "deletionProcedureVerifiedByOwner": false,
+    "ownerEvidenceRef": null
+  },
+  "activationBoundary": {
+    "socialProvidersRemainDisabled": true,
+    "storeDisclosureApproved": false,
+    "replacementCandidateBuilt": false,
+    "replacementCandidateDeviceVerified": false,
+    "productionChanged": false,
+    "providerConsoleChanged": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

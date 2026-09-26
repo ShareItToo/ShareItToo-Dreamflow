@@ -1,0 +1,6 @@
+// Copy to SocialAuth.xcconfig and fill only the public Meta app values.
+// The Meta App Secret belongs only in Meta/Firebase and never in this file.
+SIT_FACEBOOK_APP_ID=0
+SIT_FACEBOOK_CLIENT_TOKEN=not-configured
+// Copy REVERSED_CLIENT_ID from the console-generated GoogleService-Info.plist.
+SIT_GOOGLE_REVERSED_CLIENT_ID=not-configured

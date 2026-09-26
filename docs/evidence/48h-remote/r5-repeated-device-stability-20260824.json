@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r5-repeated-device-stability",
+  "status": "verified-r5-regression-and-codeql-passed",
+  "observedOn": "2026-08-24",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationHead": "8e31b19f1205088036b4f3f9755dbdca33246ef1",
+    "initialHarnessCommit": "488c6e947244d74c4928e17401d9f9304472c11e",
+    "supportMonotonicityFixCommit": "2a880523ea718a9c21000a280b361bc6dbf664f8",
+    "deviceCandidateCommit": "8e31b19f1205088036b4f3f9755dbdca33246ef1",
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026082405"
+  },
+  "backendObservation": {
+    "status": "passed-25-fresh-runs-and-cleaned",
+    "resultClassification": "LOCAL_REPEAT_STABILITY_OBSERVATION_NOT_PERFORMANCE_CERTIFICATION",
+    "repeatedRuns": 25,
+    "coverage": {
+      "completeBlueOceanMockListingFlows": 25,
+      "freshBackendStartStopCycles": 25,
+      "cartRequestFlows": 25,
+      "g3SameOwnerFlows": 25,
+      "g4DeterministicPlannerFlows": 25,
+      "g5ListingSetFlows": 25,
+      "publicationReplays": 25,
+      "applicationServerRestartScenarios": 25
+    },
+    "failures": {
+      "childProcessFailures": 0,
+      "uncaughtNodeErrors": 0,
+      "unexpectedBackend5xxInTargetFlows": 0,
+      "failedStateRestorations": 0,
+      "detectedDataCorruptions": 0,
+      "failedIdempotencyReplays": 0,
+      "unexpectedNetworkTargets": 0
+    },
+    "networkBoundary": {
+      "postgresHost": "127.0.0.1",
+      "applicationHost": "127.0.0.1",
+      "listingAiProvider": "mock",
+      "listingAiBudgetCents": 0,
+      "externalProviderCalls": 0,
+      "realMoneyOperations": 0
+    },
+    "observation": {
+      "totalDurationMs": 150814.923,
+      "minimumRunDurationMs": 4909.319,
+      "medianRunDurationMs": 5975.027,
+      "maximumRunDurationMs": 7033.736,
+      "rssDeltaBytes": 24608768,
+      "heapUsedDeltaBytes": 9118024,
+      "userCpuDeltaMicros": 597159,
+      "systemCpuDeltaMicros": 3439181,
+      "performanceCertificationClaimed": false
+    },
+    "cleanup": {
+      "freshClusterPerRun": true,
+      "postgresStoppedAfterEveryRun": true,
+      "temporaryClusterRemovedAfterEveryRun": true,
+      "persistentTestPrerequisiteCreated": false
+    }
+  },
+  "flutterDraftObservation": {
+    "status": "passed-25-owner-bound-save-restore-clear-cycles",
+    "repeatedRuns": 25,
+    "encryptedPlatformStorageContract": true,
+    "ownerBound": true,
+    "readyFingerprintRestored": false,
+    "ownerConfirmationsRestored": false,
+    "rawImageBytesStored": false,
+    "failedRestorations": 0,
+    "detectedDataCorruptions": 0
+  },
+  "physicalDeviceObservation": {
+    "status": "passed-25-bounded-physical-start-stop-cycles",
+    "resultClassification": "BOUNDED_PHYSICAL_STABILITY_OBSERVATION_NOT_PERFORMANCE_CERTIFICATION",
+    "capturedAt": "2026-08-24T14:42:18.630Z",
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "completedCycles": 25,
+    "start": {
+      "minimumMs": 1613,
+      "maximumMs": 2105,
+      "firstFiveMeanMs": 1856,
+      "lastFiveMeanMs": 1695,
+      "trendDeltaMs": -161
+    },
+    "memory": {
+      "minimumTotalPssKib": 549194,
+      "maximumTotalPssKib": 555488,
+      "firstFiveMeanTotalPssKib": 552183,
+      "lastFiveMeanTotalPssKib": 553656,
+      "trendDeltaTotalPssKib": 1473
+    },
+    "failures": {
+      "crashesOrAnr": 0,
+      "uncaughtFlutterErrors": 0,
+      "failedMainNavigationRestorations": 0,
+      "unexpectedNetworkTargetsInErrorLogs": 0,
+      "detectedDataCorruptions": 0
+    },
+    "state": {
+      "appDataIdentityPreserved": true,
+      "packageIdentityPreserved": true,
+      "mainNavigationRestoredEveryCycle": true,
+      "containsRawDeviceIdentifier": false
+    }
+  },
+  "candidateUpdate": {
+    "installedVersionBefore": "1.0.0+2026082404",
+    "installedVersionAfter": "1.0.0+2026082405",
+    "strictlyNewerBuildInstalled": true,
+    "canonicalSigningRelationshipVerified": true,
+    "installedCandidateHashMatched": true,
+    "firstInstallTimePreserved": true,
+    "appDataIdentityPreserved": true,
+    "foregroundActivityVerified": true,
+    "uninstallUsed": false,
+    "dataResetUsed": false,
+    "downgradeUsed": false
+  },
+  "permanentCorrections": {
+    "supportProgressTimestamp": "strictly-monotonic-database-expression",
+    "supportIntegrationFixtures": "strictly-monotonic-database-expression",
+    "postgresFailureAttribution": "bounded-child-and-server-log-tail",
+    "repetitionCountReduced": false,
+    "timingSleepMadePrerequisite": false,
+    "parallelismWorkaroundMadePrerequisite": false
+  },
+  "verification": {
+    "focusedR5NodeHarnessTests": "passed-8",
+    "focusedFlutterDraftTests": "passed-5",
+    "freshPostgresIntegrationRuns": "passed-25-and-cleaned",
+    "physicalPixelCycles": "passed-25-data-preserving",
+    "privacyAndRetentionValidators": "passed-draft-fail-closed",
+    "fullTechnicalRegression": "passed-candidate-rollover-ci-metadata-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "githubVerification": {
+    "implementationHead": "8e31b19f1205088036b4f3f9755dbdca33246ef1",
+    "verifiedHead": "cb3735ec66f1190aec14f86d3817c43bd91bdb60",
+    "regression": {
+      "runId": 32742156529,
+      "conclusion": "success",
+      "postgresJobId": 97478929841,
+      "postgresConclusion": "success",
+      "backendJobId": 97478930152,
+      "backendConclusion": "success",
+      "flutterJobId": 97478930292,
+      "flutterConclusion": "success",
+      "parallelStabilityExecuted": false,
+      "signedCandidateBuilt": false,
+      "apiImageBuilt": true,
+      "apiImagePublished": false,
+      "publishApiImageJobId": 97481368883,
+      "publishApiImageConclusion": "skipped"
+    },
+    "codeql": {
+      "workflowRunId": 32742155112,
+      "workflowConclusion": "success",
+      "advancedSecurityCheckId": 97479591110,
+      "advancedSecurityConclusion": "success",
+      "newAlerts": 0
+    },
+    "preExistingExternalHistoryCheck": {
+      "provider": "GitGuardian",
+      "documentedBaseCommit": "e64defd0df62fb047c6fbc90733e4caf318ac7c4",
+      "documentedBaseCheckId": 97395091283,
+      "currentCheckId": 97478903904,
+      "currentConclusion": "failure",
+      "reportedPullRequestCommitScope": 250,
+      "credentialDetailsInspected": false,
+      "classifiedAsR5Regression": false
+    }
+  },
+  "limitations": {
+    "fullBlueOceanUiFlowRepeatedOnDevice": false,
+    "completeBlueOceanFlowRepeatedThroughLocalBackend": true,
+    "expectedNonTarget5xxGateTestsExist": true,
+    "networkObservation": "ERROR_LOG_URL_OBSERVATION_NOT_PACKET_CAPTURE",
+    "performanceCertificationClaimed": false,
+    "memoryLeakCertificationClaimed": false,
+    "releaseCertificationClaimed": false
+  },
+  "boundaries": {
+    "privateDeviceMediaRead": false,
+    "screenshotsCaptured": false,
+    "uiHierarchyPersisted": false,
+    "rawDeviceIdentifierRecorded": false,
+    "deviceUninstalled": false,
+    "deviceDataReset": false,
+    "networkSettingsChanged": false,
+    "accessibilitySettingsChanged": false,
+    "loginPerformed": false,
+    "logoutPerformed": false,
+    "listingPublished": false,
+    "apiBillingCreated": false,
+    "externalAiProviderCalled": false,
+    "realMoneyUsed": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "paymentChanged": false,
+    "storeChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "pilotActivated": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false
+  },
+  "nextPackage": "R6"
+}

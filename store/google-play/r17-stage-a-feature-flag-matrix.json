@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r17-reduced-non-binding-stage-a-feature-matrix",
+  "status": "prepared-not-built-not-activated",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "exactSourceCommit": "pending-r17-implementation-commit",
+    "sourceCommitBound": false,
+    "aabBuilt": false,
+    "aabSha256": null
+  },
+  "surfaces": [
+    {"id": "blue_ocean_listing_assistant", "targetState": "on-internal-staging-only"},
+    {"id": "stage_a_non_binding_pilot", "targetState": "on-required-with-blue-ocean"},
+    {"id": "closed_staging_listing_creation", "targetState": "on-after-human-gate"},
+    {"id": "g2_search_project_saved_cart", "targetState": "on-non-reserving"},
+    {"id": "binding_checkout", "targetState": "off-fail-closed"},
+    {"id": "rental_request_and_contract", "targetState": "not-run"},
+    {"id": "accept_reject", "targetState": "not-run"},
+    {"id": "payment_refund_payout", "targetState": "off-not-run"},
+    {"id": "handover_return_damage_needs_review", "targetState": "not-run"},
+    {"id": "g3_booking_groups", "targetState": "off-release-mode-lock"},
+    {"id": "g4_planner", "targetState": "off-release-mode-lock"},
+    {"id": "g5_supply_and_listing_sets", "targetState": "off-release-mode-lock"},
+    {"id": "external_listing_ai", "targetState": "disabled-manual-fallback"},
+    {"id": "public_registration_and_store", "targetState": "off"}
+  ],
+  "humanWave0": {
+    "participantSlots": ["HW0-A", "HW0-B", "HW0-C"],
+    "allowedTaskFamilies": [
+      "safe-listing-draft-and-explicit-closed-staging-creation",
+      "search",
+      "project-saved",
+      "non-reserving-cart",
+      "structured-feedback"
+    ],
+    "forbiddenTaskFamilies": [
+      "rental-request-contract",
+      "accept-reject",
+      "payment-refund-payout",
+      "handover-return-damage-needs-review",
+      "g3-g4-g5"
+    ],
+    "activated": false
+  },
+  "gateSeparation": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "aabBuilt": false,
+    "playConsoleChanged": false,
+    "testerContacted": false,
+    "humanPilotActivated": false,
+    "providerCalled": false,
+    "billingCreated": false,
+    "realMoneyEnabled": false,
+    "productionChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false
+  }
+}

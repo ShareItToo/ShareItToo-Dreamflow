@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "kind": "wp146-stripe-payout-and-activation-guard-evidence",
+  "version": "WP146-2026-09-14.1",
+  "implementationCommit": "03021ef1206dcbcdb00bfd25b0f4b08f9e7be96f",
+  "state": "hold-provider-contract-credentials-webhooks-connect-and-sandbox-e2e",
+  "providerObservation": {
+    "officialConnectorAuthenticated": true,
+    "accountMode": "sandbox",
+    "livemode": false,
+    "providerReadOnly": true,
+    "connectedAccountCount": 0,
+    "webhookDestinationCount": 0
+  },
+  "activationPreflight": {
+    "runbookVersion": "P0B-PSP-2026-08-21.1",
+    "authorizationToken": "P0B_NEXT_PSP_SANDBOX_E2E_ONLY",
+    "provider": "stripe",
+    "product": "connect-marketplace",
+    "paymentPattern": "separate-charges-and-transfers",
+    "licensedMarketplaceProductVerified": false,
+    "operatorControlVerified": false,
+    "productConfigurationApproved": false,
+    "dpaVerified": false,
+    "processingRegionsVerified": false,
+    "transferMechanismVerified": false,
+    "professionalReviewApproved": false,
+    "checkoutWithdrawalRefundModelApproved": false,
+    "testServerKeyPresent": false,
+    "platformWebhookSecretPresent": false,
+    "connectWebhookSecretPresent": false,
+    "providerCliOrEquivalentAvailable": false,
+    "evidenceReferences": {
+      "licensedProduct": null,
+      "executedContract": null,
+      "approvedProductConfiguration": null,
+      "sandboxAccount": null,
+      "dpa": null,
+      "processingRegions": null,
+      "transferMechanism": null,
+      "professionalReview": null,
+      "providerDashboardIdentity": null,
+      "platformWebhookDestination": null,
+      "connectWebhookDestination": null
+    }
+  },
+  "boundaries": {
+    "sandboxOnly": true,
+    "syntheticUsersOnly": true,
+    "realMoneyAuthorized": false,
+    "productionAuthorized": false,
+    "storeAuthorized": false
+  }
+}

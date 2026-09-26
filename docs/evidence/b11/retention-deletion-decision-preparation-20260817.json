@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "kind": "retention-deletion-decision-preparation",
+  "status": "recommendations-prepared-owner-and-legal-approval-open",
+  "preparedAt": "2026-08-17",
+  "scope": {
+    "decisionCount": 10,
+    "closedDecisionCount": 0,
+    "categoryPurgeEnabled": false,
+    "productionChanged": false,
+    "storeSubmissionChanged": false
+  },
+  "decisions": {
+    "inactiveAccountPeriod": {
+      "classification": "owner-and-legal-decision-required",
+      "recommendation": "Do not auto-delete inactive accounts during the private pilot. Before public launch, approve an inactivity trigger, advance notice, objection path, and separate treatment for accounts tied to open bookings, disputes, legal holds, or statutory records.",
+      "implementationState": "account-erasure-implemented-inactivity-purge-not-implemented",
+      "authorityRefs": [
+        "https://www.bfdi.bund.de/SharedDocs/Downloads/DE/DokumenteBfDI/AccessForAll/2023/2021_Loeschkonzept-BfDI.pdf"
+      ]
+    },
+    "transactionalRecordPeriod": {
+      "classification": "legal-classification-required",
+      "recommendation": "Split immutable accounting documents from ordinary booking and claim evidence. Confirm which SIT records are booking documents or commercial correspondence and calculate each period from the legally correct year-end event; do not apply one blanket period to all transaction data.",
+      "implementationState": "immutable-contract-refund-evidence-and-financial-documents-implemented-purge-disabled",
+      "authorityRefs": [
+        "https://www.gesetze-im-internet.de/hgb/__257.html",
+        "https://www.gesetze-im-internet.de/ao_1977/__147.html",
+        "https://www.gesetze-im-internet.de/bgb/__195.html",
+        "https://www.gesetze-im-internet.de/bgb/__199.html"
+      ]
+    },
+    "communicationPeriod": {
+      "classification": "owner-and-legal-decision-required",
+      "recommendation": "Separate ordinary chat content and attachments from booking-critical declarations, support cases, disputes, and commercial correspondence. Approve purpose-specific periods and user-visible deletion behavior; do not retain every message merely because it belongs to a booking.",
+      "implementationState": "account-erasure-scrubbing-implemented-category-purge-not-implemented",
+      "authorityRefs": [
+        "https://www.bfdi.bund.de/SharedDocs/Downloads/DE/DokumenteBfDI/AccessForAll/2023/2021_Loeschkonzept-BfDI.pdf",
+        "https://www.gesetze-im-internet.de/hgb/__257.html"
+      ]
+    },
+    "privacyRightsPeriod": {
+      "classification": "owner-and-legal-decision-required",
+      "recommendation": "Define a purpose-specific period for privacy-rights requests, identity-verification evidence, deadline extensions and completion records. Keep it separate from ordinary support communication, preserve only the minimum accountability and active-claim evidence, and let a legal hold block only the affected records.",
+      "implementationState": "privacy-rights-intake-deadline-and-identity-control-implemented-category-purge-not-implemented",
+      "authorityRefs": [
+        "https://eur-lex.europa.eu/eli/reg/2016/679/oj/",
+        "https://www.bfdi.bund.de/SharedDocs/Downloads/DE/DokumenteBfDI/AccessForAll/2023/2021_Loeschkonzept-BfDI.pdf"
+      ]
+    },
+    "moderationEvidencePeriod": {
+      "classification": "owner-and-legal-decision-required",
+      "recommendation": "Retain moderation evidence only while a report, appeal, safety investigation, legal hold, or defensible claim purpose remains active. Approve a post-closure review period and shorter handling for rejected or irrelevant evidence.",
+      "implementationState": "moderation-and-legal-hold-workflow-implemented-category-purge-not-implemented",
+      "authorityRefs": [
+        "https://www.bfdi.bund.de/SharedDocs/Downloads/DE/DokumenteBfDI/AccessForAll/2023/2021_Loeschkonzept-BfDI.pdf",
+        "https://www.gesetze-im-internet.de/bgb/__195.html",
+        "https://www.gesetze-im-internet.de/bgb/__199.html"
+      ]
+    },
+    "auditSecurityLogPeriod": {
+      "classification": "security-risk-and-legal-decision-required",
+      "recommendation": "Define separate periods for authentication security events, privileged staff actions, booking transition evidence, notification delivery audit, and account-erasure audit. Use the shortest period that still supports incident detection, accountability, and active claims; restrict access throughout.",
+      "implementationState": "append-only-audit-present-category-purge-not-implemented",
+      "authorityRefs": [
+        "https://www.bfdi.bund.de/SharedDocs/Downloads/DE/DokumenteBfDI/AccessForAll/2023/2021_Loeschkonzept-BfDI.pdf"
+      ]
+    },
+    "expiredCredentialPurgePeriod": {
+      "classification": "technically-ready-for-owner-approval",
+      "recommendation": "Delete expired or consumed action and refresh credentials automatically; scrub expired, consumed, or revoked booking challenge digests. Run at startup and every six hours, with an approved maximum completion window of 24 hours after eligibility.",
+      "implementationState": "implemented-tested-and-automatic",
+      "authorityRefs": [
+        "docs/evidence/b11/expired-credential-cleanup-20260815.json"
+      ]
+    },
+    "backupErasureWindow": {
+      "classification": "operationally-ready-for-owner-approval",
+      "recommendation": "Approve the observed 14-day rolling backup deletion window. Account deletion removes live primary data immediately, while already-created operational backups expire through rotation and are not restored except for disaster recovery with renewed deletion propagation.",
+      "implementationState": "fourteen-day-rotation-present-account-specific-backup-erasure-not-available",
+      "authorityRefs": [
+        "backend/ops/backup.sh"
+      ]
+    },
+    "externalProcessorRetention": {
+      "classification": "owner-contract-and-deletion-procedure-approval-required",
+      "recommendation": "Approve each processor separately. Preserve separate default-off consent for Firebase Cloud Messaging and Firebase Crashlytics. Record the provider deletion request, disable local identifiers promptly, and disclose provider-controlled completion periods without describing them as SIT-controlled deletion deadlines.",
+      "implementationState": "service-specific-controls-structured-owner-verification-open",
+      "authorityRefs": [
+        "docs/evidence/b11/privacy-provider-retention-sources-20260812.json",
+        "docs/evidence/b11/firebase-cloud-messaging-retention-deletion-readiness-20260817.json",
+        "docs/evidence/b11/firebase-crashlytics-retention-deletion-readiness-20260817.json",
+        "docs/evidence/b11/firebase-authentication-retention-deletion-readiness-20260817.json",
+        "docs/evidence/b11/google-maps-platform-retention-deletion-readiness-20260817.json"
+      ]
+    },
+    "legalHoldProcess": {
+      "classification": "owner-and-legal-process-approval-required",
+      "recommendation": "Approve an admin-only, case-bound process with a reason code, documented scope, periodic necessity review, release reason, separation from ordinary support access, and an audit trail. A legal hold blocks conflicting deletion only for the minimum necessary datasets and duration.",
+      "implementationState": "technical-enforcement-implemented-process-approval-open",
+      "authorityRefs": [
+        "docs/evidence/b11/account-legal-hold-20260815.json"
+      ]
+    }
+  },
+  "providerFacts": {
+    "firebaseCloudMessaging": "SIT deletes the local messaging token, the current-session backend registration and the Firebase installation on account deletion with a persisted retry. Provider documentation states that installation-related data is removed from live and backup systems within 180 days after the deletion request. Current-account contract, locations, transfer approval and owner acceptance remain open.",
+    "firebaseCrashlytics": "SIT disables collection and deletes unsent device reports on opt-out or account deletion. Provider documentation states that stored crash reports and associated identifiers are retained for 90 days before removal begins and provides a user-bound stored-report deletion API. A durable server deletion queue is prepared but default-off; the pseudonymous SDK subject is not transmitted and provider invocation is not enabled, so stored-report deletion remains open pending explicit approval and physical verification.",
+    "firebaseAuthentication": "Firebase Authentication keeps logged IP addresses for a few weeks and other authentication information until the customer deletes the associated user, followed by provider removal within 180 days. SIT safely deletes the temporary phone-only identity after verification. Persistent social identities are now transactionally queued before local account erasure, retried durably and removed from the queue only after provider deletion or user-not-found. Social login remains disabled until the separate provider, contract, transfer and Store approvals close.",
+    "googleMapsPlatform": "No single fixed provider retention period applies to every Maps request. SIT routes address autocomplete and place details through an authenticated, rate-limited server proxy without a client credential, but contract acceptance, enabled APIs, logging, transfer and account-scoped deletion reality remain open."
+  },
+  "boundaries": {
+    "recommendationsAreApproval": false,
+    "legalPeriodsInvented": false,
+    "allTenDecisionsRemainOpen": true,
+    "categoryPurgeEnabled": false,
+    "productionChanged": false,
+    "storeSubmissionChanged": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-current-candidate-pixel-direct-diagnostic",
+  "status": "passed-bounded-install-guest-network-and-lifecycle-diagnostic",
+  "capturedAt": "2026-09-02T02:42:00.000Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026090202",
+    "commit": "e7b76f9e5d787e88fb46b6ad5a777d54f8066d63",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "apkSha256": "8e82cda66a80f98b69dfb395bdea27322ae61f12a70abcf43d91a8a24e8bfa94"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "installation": {
+    "installedVersionBefore": "1.0.0+2026090201",
+    "installedVersionAfter": "1.0.0+2026090202",
+    "strictlyNewerBuildInstalled": true,
+    "candidateSignatureMatchedInstalledApp": true,
+    "installedCandidateHashMatches": true,
+    "firstInstallTimePreserved": true,
+    "ceDataInodePreserved": true,
+    "foregroundActivityVerified": true,
+    "method": "adb-install-no-streaming-replace"
+  },
+  "tests": {
+    "signedOutGuestSession": {
+      "status": "passed",
+      "result": "login-actions-visible"
+    },
+    "guestCatalogOnline": {
+      "status": "passed",
+      "result": "server-confirmed-empty-state",
+      "publicListingCount": 0
+    },
+    "offlineTruth": {
+      "status": "passed",
+      "result": "explicit-listings-could-not-be-loaded-error"
+    },
+    "onlineRecovery": {
+      "status": "passed",
+      "result": "catalog-restored-after-validated-staging-reachability"
+    },
+    "processRestart": {
+      "status": "passed",
+      "result": "exact-version-and-apk-hash-process-relaunch-install-and-data-identity-preserved"
+    },
+    "authenticatedPilotMatrix": {
+      "status": "not-run",
+      "result": "blocked-until-approved-v52-snapshots-exist"
+    },
+    "googlePlaySplitDelivery": {
+      "status": "not-run",
+      "result": "direct-apk-diagnostic-only"
+    }
+  },
+  "timingDebt": {
+    "observedIssue": "wifi-enabled-preceded-staging-reachability",
+    "status": "closed",
+    "closure": "deterministic-staging-reachability-before-relaunch",
+    "fixedSleepReleasePrerequisite": false,
+    "regressionTested": true
+  },
+  "boundaries": {
+    "directDiagnosticOnly": true,
+    "storeInstallationGateSatisfied": false,
+    "uninstallUsed": false,
+    "dataResetUsed": false,
+    "downgradeUsed": false,
+    "networkTemporarilyChanged": true,
+    "wifiRestored": true,
+    "loginPerformed": false,
+    "logoutPerformed": false,
+    "accountMutationPerformed": false,
+    "bookingMutationPerformed": false,
+    "realMoneyUsed": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "screenshotsCaptured": false,
+    "rawUiHierarchyRetained": false,
+    "accountContentInspected": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPaths": false,
+    "containsNetworkIdentifiers": false
+  }
+}

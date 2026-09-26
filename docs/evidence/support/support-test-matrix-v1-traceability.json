@@ -1,0 +1,406 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-support-test-matrix-v1-traceability",
+  "state": "technical-coverage-mapped-external-gates-closed",
+  "source": {
+    "packetVersion": "SIT_SUPPORT_PACKET_V1_2026-08-20",
+    "fileName": "13_SIT_SUPPORT_TEST_MATRIX_V1.md",
+    "driveFileId": "1CcCqdsEVveiqoKJqZlA_iHKfZhttU5Le",
+    "sha256": "83cc25371f24b3486230f3ac4e2b7e9c26c49a48bd5aca22a5449636c9ffc6d3",
+    "declaredScenarioCount": 167,
+    "sourceReverification": "drive-read-required-on-source-change"
+  },
+  "summary": {
+    "scenarioCount": 167,
+    "areaCount": 10,
+    "gateCounts": {
+      "PILOT_BLOCKER": 112,
+      "PUBLIC_LAUNCH_BLOCKER": 20,
+      "QUALITY": 8,
+      "REAL_MONEY_BLOCKER": 27
+    },
+    "technicalCoverageCount": 167,
+    "externalEvidenceRequiredCount": 47,
+    "externalEvidencePresentCount": 0,
+    "strictReleaseReady": false
+  },
+  "areas": [
+    {
+      "id": "case_status",
+      "scenarioSpans": [
+        { "first": 1, "last": 14, "gate": "PILOT_BLOCKER" },
+        { "first": 15, "last": 15, "gate": "QUALITY" }
+      ],
+      "technicalCoverage": "automated-non-live",
+      "evidence": [
+        {
+          "path": "test/tool/support_status_machine_v1_alignment_wiring.test.mjs",
+          "anchor": "SUP-001 through SUP-014 bind the exact Drive V1 status machine"
+        },
+        {
+          "path": "test/tool/support_duplicate_case_linking_wiring.test.mjs",
+          "anchor": "SUP-015 duplicate linking is exact, human-reviewed and non-automatic"
+        }
+      ],
+      "externalOpenSpans": [],
+      "limitations": [
+        "Coverage proves the canonical non-live state machine and duplicate-link truth; it is not live case handling evidence."
+      ]
+    },
+    {
+      "id": "intake_rbac",
+      "scenarioSpans": [
+        { "first": 16, "last": 26, "gate": "PILOT_BLOCKER" },
+        { "first": 27, "last": 27, "gate": "PUBLIC_LAUNCH_BLOCKER" },
+        { "first": 28, "last": 29, "gate": "PILOT_BLOCKER" },
+        { "first": 30, "last": 30, "gate": "QUALITY" }
+      ],
+      "technicalCoverage": "automated-non-live",
+      "evidence": [
+        {
+          "path": "test/support_flow_safety_triage_test.dart",
+          "anchor": "multiple independent problems require separation first"
+        },
+        {
+          "path": "backend/test/support_case_workflow.test.js",
+          "anchor": "create validates linked-entity access and records case, event and audit"
+        },
+        {
+          "path": "test/tool/support_account_recovery_guard_wiring.test.mjs",
+          "anchor": "SUP-022 excludes the reported email channel"
+        },
+        {
+          "path": "test/tool/support_break_glass_wiring.test.mjs",
+          "anchor": "break-glass routes require active auth"
+        },
+        {
+          "path": "test/tool/support_dsa_notice_intake_wiring.test.mjs",
+          "anchor": "SUP-027 has a separate user-facing DSA intake"
+        },
+        {
+          "path": "test/tool/support_privacy_intake_wiring.test.mjs",
+          "anchor": "SUP-028 exposes every canonical privacy subtype"
+        },
+        {
+          "path": "test/tool/support_account_deletion_retention_wiring.test.mjs",
+          "anchor": "open support records are disclosed but do not block account deletion"
+        },
+        {
+          "path": "test/tool/support_feedback_priority_wiring.test.mjs",
+          "anchor": "SUP-030 maps explicitly non-urgent feedback to P4"
+        }
+      ],
+      "externalOpenSpans": [
+        { "first": 27, "last": 27 }
+      ],
+      "limitations": [
+        "The DSA public-launch scenario remains bound to the separate legal and operator gate."
+      ]
+    },
+    {
+      "id": "messages",
+      "scenarioSpans": [
+        { "first": 31, "last": 41, "gate": "PILOT_BLOCKER" },
+        { "first": 42, "last": 42, "gate": "QUALITY" },
+        { "first": 43, "last": 45, "gate": "PILOT_BLOCKER" }
+      ],
+      "technicalCoverage": "automated-non-live",
+      "evidence": [
+        {
+          "path": "test/tool/support_message_template_wiring.test.mjs",
+          "anchor": "Drive support packet catalog is exact, complete and fail closed"
+        },
+        {
+          "path": "backend/test/support_message_domain.test.js",
+          "anchor": "missing, unexpected and mismatched placeholders fail closed"
+        },
+        {
+          "path": "backend/test/support_message_workflow.test.js",
+          "anchor": "green template publication records an in-app message without external delivery"
+        },
+        {
+          "path": "test/tool/support_progress_update_wiring.test.mjs",
+          "anchor": "SUP-042 prepares a complete reviewed update without a fake outcome"
+        }
+      ],
+      "externalOpenSpans": [],
+      "limitations": [
+        "Publication evidence is authenticated in-app and non-live; no external transport is claimed."
+      ]
+    },
+    {
+      "id": "booking_handover",
+      "scenarioSpans": [
+        { "first": 46, "last": 54, "gate": "PILOT_BLOCKER" }
+      ],
+      "technicalCoverage": "automated-non-live",
+      "evidence": [
+        {
+          "path": "test/tool/booking_address_reveal_wiring.test.mjs",
+          "anchor": "SUP-046 through SUP-048 use one server-authoritative audited reveal path"
+        },
+        {
+          "path": "backend/test/booking_condition_evidence_workflow.test.js",
+          "anchor": "pickup renter can confirm only after four owner photos"
+        },
+        {
+          "path": "backend/test/booking_confirmation_workflow.test.js",
+          "anchor": "presenter cannot verify their own challenge"
+        },
+        {
+          "path": "backend/test/handover_exception_workflow.test.js",
+          "anchor": "item mismatch creates a neutral server-routed P1 case"
+        }
+      ],
+      "externalOpenSpans": [],
+      "limitations": [
+        "The automated path uses synthetic booking and evidence fixtures, not a production handover."
+      ]
+    },
+    {
+      "id": "return",
+      "scenarioSpans": [
+        { "first": 55, "last": 63, "gate": "PILOT_BLOCKER" },
+        { "first": 64, "last": 64, "gate": "QUALITY" },
+        { "first": 65, "last": 65, "gate": "PILOT_BLOCKER" }
+      ],
+      "technicalCoverage": "automated-non-live",
+      "evidence": [
+        {
+          "path": "test/private_pilot_return_policy_test.dart",
+          "anchor": "missing confirmation stays neutral and does not become a case"
+        },
+        {
+          "path": "test/tool/v51_return_lifecycle_wiring.test.mjs",
+          "anchor": "confirmed return keeps the exact 48-hour report boundary"
+        },
+        {
+          "path": "backend/test/v52_handover_return_workflow.test.js",
+          "anchor": "return case rejects before T0 and after the inclusive 48-hour boundary"
+        },
+        {
+          "path": "test/tool/support_evidence_security_wiring.test.mjs",
+          "anchor": "bind short-lived access to actor, session and live authorization"
+        }
+      ],
+      "externalOpenSpans": [],
+      "limitations": [
+        "Timers and evidence access are deterministic simulations; no real damage or collection action occurs."
+      ]
+    },
+    {
+      "id": "money",
+      "scenarioSpans": [
+        { "first": 66, "last": 86, "gate": "REAL_MONEY_BLOCKER" },
+        { "first": 87, "last": 87, "gate": "PILOT_BLOCKER" },
+        { "first": 88, "last": 92, "gate": "REAL_MONEY_BLOCKER" }
+      ],
+      "technicalCoverage": "automated-non-live",
+      "evidence": [
+        {
+          "path": "backend/test/booking_domain.test.js",
+          "anchor": "V5.2 quote snapshots bind discounts and canonical cent examples"
+        },
+        {
+          "path": "backend/test/v51_booking_quote_binding.test.js",
+          "anchor": "private-pilot creation fails closed without the stored fresh quote"
+        },
+        {
+          "path": "backend/test/payment_domain.test.js",
+          "anchor": "capture, transfer and refund ledger entries always balance"
+        },
+        {
+          "path": "test/private_pilot_cancellation_policy_test.dart",
+          "anchor": "at least 24 hours before start refunds the full total"
+        },
+        {
+          "path": "backend/test/postgres_foundation.integration.test.js",
+          "anchor": "migrations, concurrency guard, and private-resource boundaries work together"
+        },
+        {
+          "path": "test/tool/no_demo_payment_surfaces.test.mjs",
+          "anchor": "local wallet and demo verification sources are absent"
+        },
+        {
+          "path": "backend/test/financial_documents.test.js",
+          "anchor": "refund receipt exists only after success"
+        }
+      ],
+      "externalOpenSpans": [
+        { "first": 66, "last": 86 },
+        { "first": 88, "last": 92 }
+      ],
+      "limitations": [
+        "All 27 real-money blockers remain externally open until a provider contract and exact sandbox E2E evidence exist.",
+        "Memory transport and synthetic webhook evidence do not count as provider evidence."
+      ]
+    },
+    {
+      "id": "trust_security",
+      "scenarioSpans": [
+        { "first": 93, "last": 106, "gate": "PILOT_BLOCKER" },
+        { "first": 107, "last": 108, "gate": "PUBLIC_LAUNCH_BLOCKER" },
+        { "first": 109, "last": 111, "gate": "PILOT_BLOCKER" },
+        { "first": 112, "last": 112, "gate": "QUALITY" }
+      ],
+      "technicalCoverage": "automated-non-live",
+      "evidence": [
+        {
+          "path": "test/support_flow_safety_triage_test.dart",
+          "anchor": "immediate danger shows emergency guidance before categories"
+        },
+        {
+          "path": "backend/test/moderation_account_measure_domain.test.js",
+          "anchor": "database migration binds provisional labels and four-eyes approval evidence"
+        },
+        {
+          "path": "test/tool/account_recovery_session_integrity_wiring.test.mjs",
+          "anchor": "SUP-097 binds credential recovery to the target account and durable audit"
+        },
+        {
+          "path": "test/tool/support_evidence_security_wiring.test.mjs",
+          "anchor": "SUP-099 accepts only detected image bytes"
+        },
+        {
+          "path": "test/tool/support_safety_impact_wiring.test.mjs",
+          "anchor": "SUP-106 through SUP-112 safety review is permanently non-live and proportionate"
+        }
+      ],
+      "externalOpenSpans": [
+        { "first": 107, "last": 108 }
+      ],
+      "limitations": [
+        "Dangerous-item and injury paths remain non-live and require the public legal, safety and operator gates."
+      ]
+    },
+    {
+      "id": "privacy_dsa",
+      "scenarioSpans": [
+        { "first": 113, "last": 122, "gate": "PUBLIC_LAUNCH_BLOCKER" },
+        { "first": 123, "last": 131, "gate": "PILOT_BLOCKER" },
+        { "first": 132, "last": 132, "gate": "PUBLIC_LAUNCH_BLOCKER" },
+        { "first": 133, "last": 133, "gate": "PILOT_BLOCKER" },
+        { "first": 134, "last": 137, "gate": "PUBLIC_LAUNCH_BLOCKER" }
+      ],
+      "technicalCoverage": "automated-non-live",
+      "evidence": [
+        {
+          "path": "test/tool/support_dsa_notice_locator_completion_wiring.test.mjs",
+          "anchor": "SUP-113 records a Notice before exact-locator completeness review"
+        },
+        {
+          "path": "test/tool/s3p_statement_of_reasons_wiring.test.mjs",
+          "anchor": "S3P wires exact reasons from admin input to the authenticated user surface"
+        },
+        {
+          "path": "test/tool/s3q_independent_moderation_review_wiring.test.mjs",
+          "anchor": "independent review is claim-bound, human-only and correction-backed"
+        },
+        {
+          "path": "test/tool/support_article18_guard_wiring.test.mjs",
+          "anchor": "SUP-121 wiring exposes only an admin and step-up guarded internal preparation path"
+        },
+        {
+          "path": "test/tool/support_privacy_rights_control_plane_wiring.test.mjs",
+          "anchor": "SUP-123 to SUP-127 intake is exact, versioned and deadline-bound"
+        },
+        {
+          "path": "test/tool/support_privacy_incident_control_plane_wiring.test.mjs",
+          "anchor": "SUP-128 creates non-live incident awareness"
+        },
+        {
+          "path": "test/external_ai_consumer_dispute_gate_test.dart",
+          "anchor": "all former external-AI helpers use deterministic local fallbacks"
+        },
+        {
+          "path": "test/tool/validate_support_launch_content.test.mjs",
+          "anchor": "accepts only a complete explicitly approved VSBG configuration"
+        },
+        {
+          "path": "test/tool/validate_product_safety_readiness.test.mjs",
+          "anchor": "default candidate keeps public product-safety launch closed"
+        }
+      ],
+      "externalOpenSpans": [
+        { "first": 113, "last": 122 },
+        { "first": 132, "last": 132 },
+        { "first": 134, "last": 137 }
+      ],
+      "limitations": [
+        "All 20 public-launch blockers stay closed pending exact legal, operator and product-safety source truth.",
+        "No authority dispatch, external AI transport or public contact point is activated."
+      ]
+    },
+    {
+      "id": "ui_notification",
+      "scenarioSpans": [
+        { "first": 138, "last": 150, "gate": "PILOT_BLOCKER" },
+        { "first": 151, "last": 152, "gate": "QUALITY" }
+      ],
+      "technicalCoverage": "automated-non-live",
+      "evidence": [
+        {
+          "path": "test/tool/support_notification_wiring.test.mjs",
+          "anchor": "support push stays identifier-free and opens only the authenticated inbox"
+        },
+        {
+          "path": "test/tool/support_case_ui_accessibility_wiring.test.mjs",
+          "anchor": "SUP-143 through SUP-145 keep user copy"
+        },
+        {
+          "path": "test/support_cases_screen_test.dart",
+          "anchor": "support cases remain usable at 200 percent text size"
+        }
+      ],
+      "externalOpenSpans": [],
+      "limitations": [
+        "Automated notification and accessibility coverage does not replace final physical-device review."
+      ]
+    },
+    {
+      "id": "migration_ops",
+      "scenarioSpans": [
+        { "first": 153, "last": 161, "gate": "PILOT_BLOCKER" },
+        { "first": 162, "last": 162, "gate": "REAL_MONEY_BLOCKER" },
+        { "first": 163, "last": 164, "gate": "PUBLIC_LAUNCH_BLOCKER" },
+        { "first": 165, "last": 165, "gate": "QUALITY" },
+        { "first": 166, "last": 167, "gate": "PILOT_BLOCKER" }
+      ],
+      "technicalCoverage": "automated-non-live",
+      "evidence": [
+        {
+          "path": "test/tool/support_legacy_migration_wiring.test.mjs",
+          "anchor": "SUP-153 imports only eligible non-canonical legacy history"
+        },
+        {
+          "path": "test/tool/support_deadline_watchdog_wiring.test.mjs",
+          "anchor": "watchdog scans only active non-live P0 ownership"
+        },
+        {
+          "path": "test/tool/validate_external_gate_setup.test.mjs",
+          "anchor": "accepts exactly eleven technically prepared and externally open gates"
+        },
+        {
+          "path": "test/tool/support_operational_privacy_wiring.test.mjs",
+          "anchor": "SUP-165 exposes only elevated admin aggregate support metrics"
+        }
+      ],
+      "externalOpenSpans": [
+        { "first": 162, "last": 164 }
+      ],
+      "limitations": [
+        "PSP, DSA contact point and Retention approval remain externally open and fail closed.",
+        "No production scheduler, migration or observability mutation is performed by this evidence."
+      ]
+    }
+  ],
+  "boundaries": {
+    "productionChanged": false,
+    "providerTrafficSent": false,
+    "realMoneyUsed": false,
+    "storeSubmitted": false,
+    "cloudChanged": false,
+    "pilotActivated": false,
+    "externalApprovalInvented": false
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "package": "WP153-POSITION-REVIEW-RELEASE-PARITY-20260915",
+  "status": "technical-closure-full-regression-passed-v55-inactive-external-gates-hold",
+  "capturedAt": "2026-09-15T06:49:41Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "baselineHead": "753e32a136284640f3e79df1aaa5f317b3e296d1",
+    "remoteAhead": 0,
+    "remoteBehind": 0
+  },
+  "decision": {
+    "defect": "mutable-request-payload-could-drive-position-payout-hold",
+    "canonicalSource": "exact-v52-return-case-plus-booking-case-status",
+    "reviewScope": "booking-position",
+    "unrelatedPositionRelease": "independent-own-gates-only",
+    "successorVersion": "V5.5-2026-09-15",
+    "successorActivationAllowed": false,
+    "activeBindingVersion": "V5.2-2026-08-16",
+    "professionalLegalApproval": false
+  },
+  "invariants": {
+    "mutablePayloadMayAuthorizeHold": false,
+    "exactBookingCaseRequired": true,
+    "canonicalAmountArithmeticRequired": true,
+    "proportionalOwnerShareHold": true,
+    "unrelatedPositionsBlockedByDerivedGroupState": false,
+    "postLockDatabaseClockRequired": true,
+    "ordinaryReturnCaseAfterPayoutStartAllowed": false,
+    "humanReviewRequired": true,
+    "principalBoundAuditRequired": true
+  },
+  "legalCorrections": {
+    "addressed": [
+      "positionNeedsReviewAndUnrelatedRelease"
+    ],
+    "remaining": [
+      "privacyPurposesLegalBasesAndRecipients",
+      "accountExportCompletenessAndCounterpartyProtection",
+      "retentionDeletionLegalHoldPeriodsAndTriggers",
+      "marketplaceTransparencyDsaAndModeration"
+    ],
+    "insufficientExternalEvidence": [
+      "operatorIdentityAndImprint",
+      "groupPaymentAuthorizationAndProviderContract",
+      "businessGlobalConsumerAndTraderVariants"
+    ]
+  },
+  "verification": {
+    "focusedBackend": "passed-60-of-60",
+    "focusedFlutter": "passed-5-of-5",
+    "focusedLegalAndReadiness": "passed-19-of-19",
+    "backendSuite": "passed-988-top-level-997-pass-skipped-2",
+    "backendStaticCheck": "passed",
+    "postgresIntegration": "passed-2-of-2-and-cleaned",
+    "allToolTests": "passed-3036-of-3036",
+    "fullTechnicalRegression": "passed-ci-equivalent-exit-0",
+    "githubRegression": "pending",
+    "githubCodeql": "pending"
+  },
+  "gates": {
+    "bindingV55Allowed": false,
+    "professionalLegalApproval": false,
+    "realMoneyAllowed": false,
+    "providerActivationAllowed": false,
+    "publicActivationAllowed": false,
+    "productionAllowed": false
+  },
+  "boundaries": {
+    "providerRequestPerformed": false,
+    "paymentPerformed": false,
+    "moneyMoved": false,
+    "deploymentChanged": false,
+    "productionChanged": false,
+    "publicActivationChanged": false,
+    "storeChanged": false,
+    "firebaseChanged": false,
+    "cloudOrVpsChanged": false,
+    "credentialReadOrRecorded": false,
+    "deviceChanged": false,
+    "pullRequestMerged": false
+  },
+  "sourceInventory": {
+    "assets/legal/de/legal_manifest_v52.json": "757289c45dfe50c9f3f3ec9c96953f06b62f15b282bb1d6cdedc6e8e07d2e69b",
+    "assets/legal/de/legal_manifest_v53.json": "d1265d31f68a7c616d782a78cd77c22eadb03dabbbd7e9ebe36a485d6d1a49c6",
+    "assets/legal/de/legal_manifest_v54.json": "061c29a9f3b2b83ee6f1af7efed1c33d4896cdaafd0ad6ade1598c20d69196e4",
+    "assets/legal/de/legal_manifest_v55.json": "2847a20df27917e26b451f7cc152dc0406454c798f29a005f026bb9f85b0a650",
+    "assets/legal/de/p0b-ai-preassessment-2026-09-14.1/01_ai_rechtliche_vorpruefung.md": "a1772c59c24158315f8e23e48bf81e4c225f26a6a1f8087bfb2339c0cc5f6e44",
+    "assets/legal/de/p0b-astra-ai-crosscheck-2026-09-14.1/02_verdict_matrix.json": "f1c66c993d966b0d6c83c1e7b5201e7da9de9d515b53aa77f10aa6faffeb48d8",
+    "assets/legal/de/v55/part_a_platform_terms.html": "4af9b8f99ef570429ea8ff73cd5803740d7d1cdfd49fadf64a28307a79f7e884",
+    "assets/legal/de/v55/part_b_private_rental_terms.html": "ab82873763dd7912dc2e811d443ac0919eab4192a2dee960a87a7cb280707acb",
+    "assets/legal/de/v55/part_c_cancellation_refund.html": "e6df0f43b3cbe1413d261e2d9b4d5d6060aa358f89f4d274f0c0e67591501cfc",
+    "assets/legal/de/v55/part_d_handover_return_damage.html": "7800370b7f4fb790ffffa899caee450301ceec59059ee0f02473c5e0f5dace32",
+    "assets/legal/de/v55/part_e_payment_payout.html": "298f1dd9121db1ca7ff969a7bbc18a916f23aabcfc3ffa47f8f7ba5cf32b06c2",
+    "assets/legal/de/v55/part_f_community_safety.html": "793efa40c04c6fe31ecad2eaf3d7bb1cd17088f89ef225512ccef9db328faf1b",
+    "assets/legal/de/v55/part_g_reporting_moderation_review.html": "b1e6a192979836ca8b837d9f67cd34cbde2002bcfa80093228dedbb1fad5c270",
+    "assets/legal/de/v55/part_h_privacy.html": "12f41838b4b02d8c7e2d3bf0725ecd36f895f4db05b019f4ff634a18f0c3f481",
+    "assets/legal/de/v55/part_i_imprint_withdrawal_shorttexts.html": "5bb340854dfddf0c470469392fc2d5ec59adabf033b8b04256f04c22e1c229fd",
+    "backend/src/booking_group_handover_domain.js": "35c183f55c26301eccfa788205b6ce9a5164b2f94b76fba2c95eebf042d6cd34",
+    "backend/src/booking_group_handover_workflow.js": "e6be1a3548ddb686e399c571718e0c7922716e9ae1a489d03a6b48089830abd1",
+    "backend/src/legal_contract_version_registry.js": "8fc36981c8840d046ca5daca5ae8e5418c1795bffc520a507ee997ac7e6cf178",
+    "backend/src/payment_domain.js": "4c74471b8276a78b4c3566219864a2f5f3800aa8e6cea6842dc48603171bf959",
+    "backend/src/payment_workflow.js": "6fab39f498fc46685c09969281a9207e72f87740cd112cfc53b2cec524b043cc",
+    "backend/src/v52_handover_return_workflow.js": "61afa8496f2af34537c892074e83209f34eb6b447c9c67640efdbba8ebe3ee44",
+    "backend/test/booking_group_handover_workflow.test.js": "0952875ef54dfb0e3b8979137d4b1cefbdaa2e2f13e6b6f6c013403ccfd83aaa",
+    "backend/test/legal_contract_version_registry.test.js": "dccd49f212c2bcb8fd2d183b271f6221e5a842f0f03a0d9671f6795284c6f750",
+    "backend/test/payment_domain.test.js": "437fe69d7abfbe45922834f6b473e73919bdadd0a4fdf8eb4414cf5ebf0f95b0",
+    "backend/test/position_review_release_integrity.test.js": "5f7e545a0c481664fdea57af2738ff21aab061cc33a4433ce485dea49d8f7939",
+    "backend/test/postgres_foundation.integration.test.js": "a096cebc280261d2aa988c12167834db8a86eb9a466d11a2c9d2b006c85a04db",
+    "backend/test/v52_handover_return_workflow.test.js": "6e0164a0c5fee393294fbd36faf1914ff187e3421cb51bc3660f4e9887a7ac6b",
+  "docs/current_state.md": "ed3ce0d12a793adbbeede01f6f8f13657d46abe76cce6b550e88230b0ac62e32",
+  "docs/current_work_package.md": "7b76edc7a5291a160930bb15fa91cd4eeaa7709b75ce40632e0d74ef20d29b52",
+    "docs/operations/WP153_POSITION_REVIEW_AND_UNRELATED_RELEASE_PARITY_2026-09-15.md": "115624b4fd21f0e77ed0667f21ebd86bb6b03bf9492e41e7dc601156c2909692",
+    "lib/models/booking_group.dart": "296615dd8f3b443ec91e60fed455999f449dec92412d2350012a579265ce2e9c",
+    "scripts/technical_regression_check.sh": "80b37877f2e1ac3f062afdeaafedecb9075ee96183527d2816413ca88045ccde",
+    "store/legal-readiness.json": "4465be600f1d029d6d52239761a26e0e868e06ade7bdab19043cc3dff25808ce",
+    "test/tool/validate_legal_readiness.test.mjs": "30310889d2faf27af1ffbbea8031246a355146b71025f5ee27fb4559d9c679f4",
+    "test/tool/validate_v55_legal_assets.test.mjs": "e8a4dc736bb0690ccebbbf8134d7ab2ce78f00fa1e9d210ab814b64b20f3e446",
+    "test/tool/validate_wp153_position_review_release_parity.test.mjs": "6a018a4b97f6f2b34ed811577e9529203bcb2bfc83f6072b3cbe56ba2e8effe4",
+    "tool/validate_legal_readiness.mjs": "f47dfbf8feb1dbbd52c3357ca082d5df202ca91c547361d4d1835f3dccdb6c42",
+    "tool/validate_v55_legal_assets.mjs": "f54bd2f3cb3ff1f166fd5a0e40219b2ab20d3ae06d5a3cf1743bf13d6276ef48",
+    "tool/validate_wp153_position_review_release_parity.mjs": "81410df6fcc19acbcad4a17db168f81b841dba5f13da167ea60bb55ded679119"
+  },
+  "captureAttestation": {
+    "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
+    "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
+  "sourceInventoryDigest": "0b9bcd49df41f5898ff1df3513d3bdc78ef6a8abba51ef39378179471c014ea1"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "1.0",
+  "status": "passed",
+  "environment": "staging",
+  "verifiedAt": "2026-08-12T19:59:13.912Z",
+  "releaseCommit": "f4d9ad2b7deb69c6bdb2f42c2f588d3fac08dda5",
+  "deploymentEvidence": "/docker/shareittoo/releases/staging-20260812T194835Z-f4d9ad2b7deb.json",
+  "acceptance": {
+    "bookingLifecycle": "passed",
+    "idempotentMessaging": "passed",
+    "privateOriginalAndThumbnail": "participant-only",
+    "outsiderAccess": "denied",
+    "reportAndBlock": "passed",
+    "deletionBlockedByOpenReport": "passed",
+    "generatedImageErasure": "database-and-filesystem-passed",
+    "pushTransport": "fcm",
+    "pushWithoutRegisteredTestDevice": "suppressed",
+    "deepLinkFallbacks": "passed"
+  },
+  "cleanup": {
+    "closedUsers": 3,
+    "activeUsers": 0,
+    "activeListings": 0,
+    "remainingTestUploads": 0,
+    "openTestReports": 0,
+    "pendingNotifications": 0,
+    "deadNotifications": 0
+  },
+  "containsCredentials": false,
+  "containsUserData": false
+}

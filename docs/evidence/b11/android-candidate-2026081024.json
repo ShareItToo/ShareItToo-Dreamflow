@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "installed-launched-bounded-diagnostics-controlled-fcm-and-logout-lifecycle-passed-manual-matrix-pending",
+  "generatedAt": "2026-08-10T13:05:08Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081024",
+    "commit": "7f24cb4649637c2dc36e2d2f0a70144da597a511",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "pending",
+    "aabSha256": "28b66cfac7733d4f3318dff0436efcb66b29fc141da0fe1ae012ceb8cb04af20",
+    "apkSha256": "13712679b60fb1926eb26a45a3a24154fc6b2e93734760566e391b6bcb49544c",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "49a33193b7229f8d8c52809f0107bd074a1b1cb14eba51ab48e519c62aa93b47",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics"
+    ],
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "directInstallAndLaunch": "passed",
+    "guestAppLinks": "passed",
+    "authenticatedSessionRestore": "passed",
+    "syntheticRoleBooking": "passed",
+    "authenticatedDeepLinks": "passed",
+    "foregroundFcm": "passed",
+    "backgroundFcm": "passed",
+    "terminatedProcessFcm": "passed",
+    "dedicatedNotificationIcon": "passed",
+    "logoutColdRestartAuthenticationGate": "passed",
+    "postLogoutPushSuppression": "passed",
+    "relevantLogoutRuntimeErrors": "zero"
+  },
+  "logoutAndPushLifecycle": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/android-logout-push-lifecycle-2026081024-20260810T125732Z.json"
+  },
+  "staging": {
+    "serverCommit": "ec570acfddc218cec6d2bfba43d4feb33bda4cfc",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "googleCredentialValidation": "passed",
+    "productionInvariant": "passed"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "installedOnPhysicalDevice": true,
+    "controlledFcmSentToSyntheticAccount": true,
+    "productionPushSent": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

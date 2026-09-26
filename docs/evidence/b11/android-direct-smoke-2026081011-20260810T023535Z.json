@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-direct-device-smoke",
+  "status": "installed-launched-follow-up-required",
+  "capturedAt": "2026-08-10T02:35:35.287Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081011",
+    "commit": "28466f281c0699a2bbf92b0ebc5e3b502bec818e",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "apkSha256": "2f77886a66f74b2e5b39bda037e2c46df83035fd47ad70883b27aac46b2b69a9",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "privacyScan": "passed"
+  },
+  "installation": {
+    "method": "direct-apk-diagnostic",
+    "installed": true,
+    "installedVersionVerified": true,
+    "installedBuildVerified": true,
+    "firstLaunchEvent": "passed",
+    "foregroundActivityVerified": true,
+    "storeInstallationGateSatisfied": false,
+    "guestProfileVerified": true,
+    "guestListingGateVerified": true,
+    "guestDialogBarrierSemanticsVerified": true,
+    "visibleGuestDialogNafActions": 0,
+    "protectedBottomTabGateVerified": false,
+    "addPhotoActionName": "pending-authenticated-physical-verification"
+  },
+  "observedFollowUp": {
+    "summary": "A locally retained but server-invalid session could still expose protected bottom-tab shells after the profile had already resolved to guest mode.",
+    "accountDataExposed": false,
+    "mutationPerformed": false,
+    "requiresNewCandidate": true
+  },
+  "boundaries": {
+    "manualFunctionalMatrixPassed": false,
+    "playInternalInstallPassed": false,
+    "realPushPassed": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  },
+  "nextRequired": [
+    "verify all protected bottom tabs against a guest identity rather than a locally present session record",
+    "manual Android Wi-Fi owner matrix with authenticated account and TalkBack",
+    "manual Android hotspot renter matrix",
+    "controlled FCM foreground/background/terminated delivery",
+    "Google Play Internal installation of the final unchanged build"
+  ],
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  }
+}

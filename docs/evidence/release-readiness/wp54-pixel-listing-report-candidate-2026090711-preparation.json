@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp54-pixel-listing-report-candidate-preparation",
+  "status": "prepared-for-source-freeze",
+  "capturedAt": "2026-09-07T16:20:00Z",
+  "workPackage": "WP54",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "preparationBase": "e30cb30349f19e44e16013fc1951693285cbe8ec",
+    "candidateSourceHead": "preparation-commit",
+    "preparationBaseRemoteDivergence": "0/0"
+  },
+  "candidate": {
+    "versionName": "1.0.0",
+    "versionCode": "2026090711",
+    "packageId": "com.shareittoo.app",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "installedPixelVersionBefore": "2026090610",
+    "archiveCreated": false,
+    "installed": false
+  },
+  "purpose": {
+    "includesWp53ExactListingReport": true,
+    "exactListingTargetRequired": true,
+    "principalEpochIsolationRequired": true,
+    "typedOutcomeSemanticsRequired": true
+  },
+  "verification": {
+    "versionUniqueInLocalGitRefs": true,
+    "versionUniqueInPrivateArchives": true,
+    "completeRegressionPassed": false,
+    "cleanCheckoutPassed": false,
+    "signedArchiveVerified": false,
+    "pixelReplaceUpdateVerified": false,
+    "physicalListingReportAcceptancePassed": false
+  },
+  "boundaries": {
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "firebaseConsoleChanged": false,
+    "providerChanged": false,
+    "cloudVpsDnsChanged": false,
+    "publicRegistrationChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsCredential": false,
+    "containsIdentity": false,
+    "containsRawDeviceIdentifier": false
+  }
+}

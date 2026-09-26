@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp24-codeql-alert-triage-remediation",
+  "status": "complete-open-alerts-zero",
+  "capturedAt": "2026-09-06T09:42:47Z",
+  "workPackage": "WP24",
+  "implementation": {
+    "initialRemediationCommit": "9d0b5d5caecc11926e82f272848033e37a81ab35",
+    "finalImplementationCommit": "3ab44472885dab14e88808e3684c1f13cf0c5cc6",
+    "noFollowDescriptorReads": true,
+    "completeRegexEscaping": true,
+    "passwordDerivedFastDigestRemoved": true,
+    "privateVaultIntegrityUsesHmacSha256": true,
+    "privateDigestUsesConstantTimeComparison": true,
+    "publicCredentialDerivedDigestPresent": false,
+    "globalCodeqlSuppressionAdded": false,
+    "codeqlWorkflowWeakened": false
+  },
+  "alerts": {
+    "initialOpenCount": 10,
+    "structurallyRemovedOriginalCount": 6,
+    "intermediatePasswordAlertRemoved": 1,
+    "reviewedIntentionalEgressCount": 4,
+    "finalOpenCount": 0,
+    "reviewedIntentionalEgress": [
+      {
+        "number": 530,
+        "rule": "js/file-access-to-http",
+        "path": "backend/src/openai_listing_ai_provider.js",
+        "disposition": "dismissed-wont-fix-fixed-official-provider-egress"
+      },
+      {
+        "number": 532,
+        "rule": "js/file-access-to-http",
+        "path": "tool/diagnose_android_password_reset.mjs",
+        "disposition": "dismissed-used-in-tests-fixed-staging-egress"
+      },
+      {
+        "number": 539,
+        "rule": "js/file-access-to-http",
+        "path": "tool/diagnose_android_messaging_media_time_location.mjs",
+        "disposition": "dismissed-used-in-tests-fixed-staging-egress"
+      },
+      {
+        "number": 540,
+        "rule": "js/file-access-to-http",
+        "path": "tool/diagnose_android_messaging_media_time_location.mjs",
+        "disposition": "dismissed-used-in-tests-fixed-staging-egress"
+      }
+    ]
+  },
+  "regression": {
+    "focusedAffectedTests": "passed-39",
+    "repositoryToolTests": "passed-2324",
+    "focusedBackendTests": "passed-20",
+    "n17Readiness": "passed",
+    "completeLocalRegression": "passed",
+    "analyzer": "passed",
+    "webWasm": "passed",
+    "loopbackSmoke": "passed",
+    "androidMinSdk24": "passed",
+    "githubCodeqlRun": 34024441466,
+    "githubCodeql": "passed",
+    "githubRegressionRun": 34024441534,
+    "githubRegression": "passed",
+    "githubBackend": "passed",
+    "githubPostgres": "passed",
+    "githubFlutter": "passed",
+    "githubCleanCheckout": "passed",
+    "githubPublishImage": "skipped",
+    "prMergeAnalysisSha": "ae19d7eadb9584dc6265f9d14e193925a79474fa"
+  },
+  "ratchetAudit": {
+    "n17ProviderSourceHashRefreshed": true,
+    "n17SemanticStatusChanged": false,
+    "providerSelectionChanged": false,
+    "providerExecutionEnabled": false,
+    "budgetOrBillingTruthChanged": false,
+    "productionEligibilityChanged": false,
+    "validatorRulesWeakened": false
+  },
+  "candidateSeparation": {
+    "wp24CreatesAndroidCandidate": false,
+    "wp23CandidateVersion": "1.0.0+2026090606",
+    "wp23CandidateCommit": "637c80d0086f7ad1aa08fe5ba1df5c1624b3e545",
+    "wp23EvidenceChanged": false,
+    "pixelChanged": false
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "onePlusContacted": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "monetaryEffectMinor": 0,
+    "providerConfigurationChanged": false,
+    "firebaseConsoleChanged": false,
+    "cloudVpsDnsChanged": false,
+    "publicRegistrationChanged": false,
+    "prMerged": false,
+    "containsAccountIdentity": false,
+    "containsSecrets": false,
+    "containsTokens": false,
+    "containsFixtureIdentifiers": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPaths": false
+  }
+}

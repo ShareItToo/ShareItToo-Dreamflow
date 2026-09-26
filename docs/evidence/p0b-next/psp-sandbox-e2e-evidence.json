@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "kind": "p0b-marketplace-psp-sandbox-e2e-evidence",
+  "version": "P0B-PSP-2026-08-21.1",
+  "authorizationToken": "P0B_NEXT_PSP_SANDBOX_E2E_ONLY",
+  "preparedOn": "2026-08-21",
+  "state": "hold-provider-contract-credentials-and-sandbox-e2e",
+  "sourceBindings": {
+    "repository": [
+      {
+        "path": "backend/src/stripe_provider.js",
+        "sha256": "da0515456298f197c283742585a445470b822a73e0c159eed3e1d70be94a593a"
+      },
+      {
+        "path": "backend/src/payment_domain.js",
+        "sha256": "753670c55caf486bf1f8a67afd5f668296704f20883ddbca72575660896c6c61"
+      },
+      {
+        "path": "backend/src/payment_workflow.js",
+        "sha256": "7a58f65c83959c3277e1fc69f06ea386b238b0afbaa34d324acb89122edff2a7"
+      },
+      {
+        "path": "backend/test/payment_domain.test.js",
+        "sha256": "f8d92b32cd3d7c9eeadbaa9e02f2f3e179fa7901c764d970353fd0ea6273b718"
+      },
+      {
+        "path": "backend/test/postgres_foundation.integration.test.js",
+        "sha256": "d2291f42be173042ce7d1e3276994d9624652a7c68f4f9b155089a649b01f103"
+      },
+      {
+        "path": "backend/src/psp_sandbox_readiness_gate.js",
+        "sha256": "81e80a617e90b4184e32fa4b7d2f8f7cb6243735b1c85f73b2e880b8b42c6979"
+      },
+      {
+        "path": "backend/test/psp_sandbox_readiness_gate.test.js",
+        "sha256": "575384b897d0b93693c6014e8109bda714ac924c9530f96cc034456780f090ea"
+      },
+      {
+        "path": "docs/operations/P0B_PSP_SANDBOX_E2E_RUNBOOK.md",
+        "sha256": "55ec008f8ad9b790ba2af6f708a01c13362a155991dc7eb6255d01918dcb3dde"
+      },
+      {
+        "path": "docs/evidence/p0b/pilot-go-no-go-dossier.json",
+        "sha256": "3566a46c018b7685adfe0f9df296c2060294f811deb5b61dd79ec818c25f27dd"
+      }
+    ],
+    "drive": [
+      {
+        "fileId": "1HQR2EWJg6FUcU41l5uwditfFzNoCe6Zx",
+        "title": "01_V5.2_CORE_SPECIFICATION.md",
+        "modifiedTime": "2026-08-18T17:51:27.257Z"
+      },
+      {
+        "fileId": "1kKuZl9OJ4nb9F02E8fepTxY8O-GZBkn2",
+        "title": "02_V5.2_RECHTSMAPPE_PRIVATLAUNCH.pdf",
+        "modifiedTime": "2026-08-18T17:51:36.056Z"
+      },
+      {
+        "fileId": "1H7tHdQ6XzfHs94AS4uISgY_7Bwwbk0pY",
+        "title": "04_SIT_GELD_STORNO_WIDERRUF_STREITFAELLE_V1.pdf",
+        "modifiedTime": "2026-08-20T22:25:43.180Z"
+      },
+      {
+        "fileId": "1Vt-yIAjgqMOV8TcRrX5E8X74odRx3gEA",
+        "title": "08_SIT_SUPPORT_TESTKATALOG_PILOT_GATES_V1.pdf",
+        "modifiedTime": "2026-08-20T22:26:56.186Z"
+      },
+      {
+        "fileId": "1j8cpz2uwZBZiu6RLXjPQfo6bAWotUNLN",
+        "title": "09_SIT_SUPPORT_SOURCE_OF_TRUTH_V1.md",
+        "modifiedTime": "2026-08-20T22:27:16.931Z"
+      }
+    ]
+  },
+  "discovery": {
+    "driveQueries": [
+      "PSP Vertrag",
+      "Stripe Connect",
+      "Zahlungsdienstleister Sandbox",
+      "Marketplace PSP"
+    ],
+    "standaloneExecutedPspContractFound": false,
+    "standaloneProviderSandboxAcceptanceFound": false,
+    "codeContainsStripeConnectAdapter": true,
+    "providerContractInferredFromCode": false
+  },
+  "localPreflight": {
+    "nonExampleEnvironmentFilesFound": [],
+    "providerCliOrEquivalentAvailable": false,
+    "processPaymentTransportConfigured": false,
+    "processLivemodeConfigured": false,
+    "testSecretKeyPresent": false,
+    "webhookSecretPresent": false,
+    "legalPspProviderNamePresent": false,
+    "legalPspProcessingRegionsPresent": false,
+    "legalPspDpaDatePresent": false,
+    "legalPspTransferMechanismPresent": false,
+    "valuesOrSecretsRecorded": false
+  },
+  "provider": {
+    "providerName": null,
+    "providerSelected": false,
+    "licensedMarketplaceProductVerified": false,
+    "contractEvidenceRef": null,
+    "productConfigurationEvidenceRef": null,
+    "sandboxAccountEvidenceRef": null,
+    "dpaEvidenceRef": null,
+    "processingRegionsEvidenceRef": null,
+    "transferMechanismEvidenceRef": null,
+    "professionalReviewEvidenceRef": null,
+    "dashboardIdentityVerified": false,
+    "testSecretKeyPresent": false,
+    "webhookSecretPresent": false
+  },
+  "environment": {
+    "transport": "memory",
+    "livemode": false,
+    "testCredentialClass": null,
+    "webhookSecretConfigured": false,
+    "providerCliOrEquivalentAvailable": false,
+    "externalRunAuthorized": false
+  },
+  "scenarios": [
+    {
+      "id": "connected_owner_onboarding_and_capabilities",
+      "status": "not-run",
+      "livemode": false,
+      "realMoneyUsed": false,
+      "evidenceRef": null
+    },
+    {
+      "id": "authorization_capture_and_decline",
+      "status": "not-run",
+      "livemode": false,
+      "realMoneyUsed": false,
+      "evidenceRef": null
+    },
+    {
+      "id": "signed_webhook_replay_and_state_mapping",
+      "status": "not-run",
+      "livemode": false,
+      "realMoneyUsed": false,
+      "evidenceRef": null
+    },
+    {
+      "id": "separate_rent_and_fee_refund",
+      "status": "not-run",
+      "livemode": false,
+      "realMoneyUsed": false,
+      "evidenceRef": null
+    },
+    {
+      "id": "partial_payout_hold_and_undisputed_release",
+      "status": "not-run",
+      "livemode": false,
+      "realMoneyUsed": false,
+      "evidenceRef": null
+    },
+    {
+      "id": "chargeback_and_payout_block",
+      "status": "not-run",
+      "livemode": false,
+      "realMoneyUsed": false,
+      "evidenceRef": null
+    },
+    {
+      "id": "reconciliation_and_financial_documents",
+      "status": "not-run",
+      "livemode": false,
+      "realMoneyUsed": false,
+      "evidenceRef": null
+    },
+    {
+      "id": "idempotent_retry_and_provider_db_mismatch",
+      "status": "not-run",
+      "livemode": false,
+      "realMoneyUsed": false,
+      "evidenceRef": null
+    }
+  ],
+  "technicalEvidence": {
+    "focusedLocalTestsPassed": 37,
+    "paymentDomainTestsPassed": 10,
+    "readinessGateTestsPassed": 4,
+    "syntheticProviderContractUnitTestPassed": true,
+    "actualProviderRequestsPerformed": false,
+    "actualProviderObjectsCreated": false,
+    "providerDashboardChanged": false
+  },
+  "supportProbeRefs": [
+    "SUP-070",
+    "SUP-071",
+    "SUP-072",
+    "SUP-073",
+    "SUP-074",
+    "SUP-075",
+    "SUP-076",
+    "SUP-077",
+    "SUP-078",
+    "SUP-079",
+    "SUP-080",
+    "SUP-081",
+    "SUP-082",
+    "SUP-083",
+    "SUP-084",
+    "SUP-085",
+    "SUP-086",
+    "SUP-087",
+    "SUP-088",
+    "SUP-089",
+    "SUP-090",
+    "SUP-091",
+    "SUP-162"
+  ],
+  "evaluation": {
+    "missingProviderFacts": [
+      "providerSelected",
+      "licensedMarketplaceProductVerified",
+      "contractEvidenceRef",
+      "productConfigurationEvidenceRef",
+      "sandboxAccountEvidenceRef",
+      "dpaEvidenceRef",
+      "processingRegionsEvidenceRef",
+      "transferMechanismEvidenceRef",
+      "professionalReviewEvidenceRef",
+      "dashboardIdentityVerified",
+      "testSecretKeyPresent",
+      "webhookSecretPresent"
+    ],
+    "contractAndProviderFactsReady": false,
+    "sandboxEnvironmentReady": false,
+    "requiredScenarioCount": 8,
+    "passedScenarioCount": 0,
+    "missingScenarioIds": [],
+    "duplicateScenarioIds": false,
+    "providerScenarioClaimWithoutReadyEnvironment": false,
+    "sandboxE2ePassed": false,
+    "realMoneyReady": false
+  },
+  "boundaries": {
+    "secretsRecorded": false,
+    "realPaymentDataUsed": false,
+    "externalProviderRequestPerformed": false,
+    "externalProviderObjectCreated": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "paymentProviderChanged": false,
+    "storeChanged": false,
+    "publicActivationChanged": false,
+    "realMoneyUsed": false
+  }
+}

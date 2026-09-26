@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp13-phone-verification-current-candidate-checkpoint",
+  "status": "partial-fresh-owner-sms-request-required",
+  "observedOn": "2026-09-05",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "diagnosticImplementationHead": "990375dce4695c1d69081cb0f19db4a303dee37f",
+    "candidateSourceHead": "96b97b55983111d9e0ae8d8fcc91e9e241a2cb6f",
+    "candidateVersionName": "1.0.0",
+    "candidateVersionCode": "2026090503",
+    "applicationId": "com.shareittoo.app",
+    "apiEnvironment": "staging"
+  },
+  "physicalObservation": {
+    "deviceModel": "Pixel 7 Pro",
+    "androidVersion": 17,
+    "apiLevel": 37,
+    "installedCandidateExactlyVerified": true,
+    "submittedCodeUsedOnce": true,
+    "serverConfirmedVerifiedState": false,
+    "freshSmsRequestRequired": true,
+    "newSmsRequestedAfterFailure": false,
+    "reconciliationRequired": false,
+    "protectedOwnerSessionRestored": true,
+    "codeRetained": false,
+    "phoneNumberStoredInGit": false,
+    "privateStateMode": "0600",
+    "privateStateSha256": "6240ee2114d0eadff9593ce0b9c68d6a763eac2c125184316ec1559323785b96"
+  },
+  "verification": {
+    "fullLocalRegression": "passed",
+    "cleanCheckout": {
+      "status": "passed",
+      "implementationHead": "990375dce4695c1d69081cb0f19db4a303dee37f",
+      "apkClassification": "byte-identical",
+      "apkBytes": 231344559,
+      "apkSha256": "bc9bd8a7689548c685608eb59ffa7c74e82c9099c9f4fee0f79113d534317ee1",
+      "apkEntries": 794,
+      "privateReportSha256": "2cd24e9f633589b7011b8d90b6b89ca92e64c7535f0d0e89d5f4a7d3421def12"
+    },
+    "github": {
+      "regressionRun": 33964425617,
+      "regressionStatus": "passed",
+      "codeqlRun": 33964425640,
+      "codeqlStatus": "passed",
+      "openCodeScanningAlerts": 0,
+      "prNumber": 7,
+      "prDraft": true,
+      "prMerged": false
+    }
+  },
+  "boundaries": {
+    "phoneVerifiedClaimed": false,
+    "runtimeApplicationChanged": false,
+    "firebaseConfigurationChanged": false,
+    "stagingDeploymentChanged": false,
+    "googlePlayChanged": false,
+    "paymentChanged": false,
+    "productionChanged": false,
+    "onePlusContacted": false,
+    "containsPhoneNumber": false,
+    "containsSmsCode": false,
+    "containsCredential": false
+  }
+}

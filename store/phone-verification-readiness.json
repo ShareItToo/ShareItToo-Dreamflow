@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "kind": "firebase-phone-verification-readiness",
+  "state": "android-real-device-sms-passed",
+  "sourceBuild": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509"
+  },
+  "implementation": {
+    "provider": "firebase-phone",
+    "backendFeatureFlag": "FIREBASE_PHONE_VERIFICATION_ENABLED",
+    "enabledByDefault": false,
+    "backendStatusGate": "/v1/auth/phone-verification/status",
+    "backendConfirmationEndpoint": "/v1/auth/phone-verification/confirm",
+    "firebaseTokenRevocationChecked": true,
+    "firebasePhoneProviderRequired": true,
+    "requestedAndVerifiedPhoneMustMatch": true,
+    "verifiedPhoneUniquePerAccount": true,
+    "phoneNumbersAndSmsCodesExcludedFromAuditMetadata": true,
+    "temporaryFirebasePhoneIdentityDeleted": true,
+    "explicitTransferNoticeBeforeSms": true,
+    "clientSideVerificationBypassRemoved": true
+  },
+  "consoleEvidence": {
+    "firebaseAuthenticationInitialized": true,
+    "enabledSignInProviders": ["phone"],
+    "canonicalAndroidSigningFingerprintsRegistered": true,
+    "phoneProviderEnabled": true,
+    "smsRegionPolicySaved": true,
+    "smsRegionPolicy": "allow-only-de",
+    "evidenceRef": "docs/evidence/b11/firebase-phone-console-activation-20260814.json"
+  },
+  "androidRealDeviceEvidence": {
+    "testedBuildNumber": "2026081403",
+    "delivery": "google-play-internal",
+    "playSigningAllowlistPassed": true,
+    "realSmsDelivered": true,
+    "validLatestCodeAccepted": true,
+    "verifiedStatePersistedAfterFreshLogin": true,
+    "invalidCodeRejected": true,
+    "accountRemainedUnverifiedAfterInvalidCode": true,
+    "currentSourceHasCenteredReasonSpecificErrors": true,
+    "evidenceRefs": [
+      "docs/evidence/b11/firebase-phone-play-signing-allowlist-20260814.json",
+      "docs/evidence/b11/firebase-phone-real-sms-verification-2026081403-20260814.json",
+      "docs/evidence/b11/android-candidate-2026081509.json"
+    ]
+  },
+  "externalGates": {
+    "firebasePhoneProvider": "enabled-owner-authorized",
+    "smsRegionPolicy": "germany-only-saved",
+    "androidAppVerification": "play-signing-passed",
+    "androidRealDeviceSms": "passed",
+    "appleApnsConfiguration": "pending-apple-account-and-apns",
+    "appleRealDeviceSms": "pending",
+    "privacyAndProviderClassification": "successor-candidate-copy-updated-play-form-pending",
+    "abuseAndQuotaObservation": "initial-real-device-observation-passed"
+  },
+  "activationAllowed": true,
+  "storeSubmissionAllowed": false,
+  "boundaries": {
+    "googleProviderEnabled": false,
+    "firebasePhoneProviderEnabled": true,
+    "smsRegionPolicySaved": true,
+    "smsSent": true,
+    "productionChanged": false,
+    "storeSubmissionChanged": false,
+    "externalConsoleChanged": true,
+    "containsPhoneNumbers": false,
+    "containsSmsCodes": false,
+    "containsFirebaseTokens": false,
+    "containsCredentials": false,
+    "containsSecrets": false
+  },
+  "officialReferences": [
+    "https://firebase.google.com/docs/auth/flutter/phone-auth",
+    "https://firebase.google.com/docs/auth/web/phone-auth",
+    "https://firebase.google.com/docs/auth/admin/verify-id-tokens",
+    "https://firebase.google.com/docs/auth/android/phone-auth",
+    "https://firebase.google.com/docs/android/play-data-disclosure"
+  ]
+}

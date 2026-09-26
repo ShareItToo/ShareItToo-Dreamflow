@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-08-17T13:30:07Z",
+  "checkpoint": "16.166",
+  "status": "implemented-default-off-full-regression-passed-explicit-pseudonymous-transfer-approval-open",
+  "sourceBase": {
+    "commit": "1cec30a1400a47d9232a24d697eda84855a4af0f",
+    "note": "This evidence describes uncommitted source changes on top of the named base until the checkpoint commit is created."
+  },
+  "decisionBoundary": {
+    "firebaseCloudMessagingRetained": true,
+    "firebaseCrashlyticsRetained": true,
+    "servicesRemainSeparate": true,
+    "pushCanEnableCrashlytics": false,
+    "nextCandidateDefaults": {
+      "push": false,
+      "crashlytics": false
+    },
+    "adsEnabled": false,
+    "marketingTrackingEnabled": false,
+    "generalAnalyticsEnabled": false,
+    "externalGenerativeAiEnabled": false
+  },
+  "implementation": {
+    "serverDeletionQueueFoundationImplemented": true,
+    "randomSubjectPerPlatformDesigned": true,
+    "queueContainsSitUserId": false,
+    "providerDeletionExecutionDefaultOff": true,
+    "providerDeletionEnvironmentFlag": "FIREBASE_CRASH_REPORT_DELETION_ENABLED",
+    "providerDeletionEnvironmentFlagDefault": false,
+    "pseudonymousSdkSubjectTransmissionImplemented": false,
+    "pseudonymousSdkSubjectTransmissionApproved": false,
+    "storedProviderDeletionInvocationImplemented": false,
+    "migrationAppliedToStaging": false,
+    "migrationAppliedToProduction": false
+  },
+  "safetyProperties": {
+    "accountMappingRemovedAtomicallyWhenQueued": true,
+    "outboxContainsFirebaseAppIdAndRandomSubjectOnly": true,
+    "boundedExponentialRetry": true,
+    "staleClaimRecoveryMinutes": 15,
+    "concurrentWorkerClaim": "FOR UPDATE SKIP LOCKED",
+    "providerNotFoundTreatedAsIdempotentSuccess": true,
+    "providerBodiesLogged": false,
+    "subjectsLogged": false,
+    "sitUserIdsLogged": false
+  },
+  "verification": {
+    "newFoundationTests": "9-passed-0-failed",
+    "targetedPrivacyRetentionTests": "65-passed-0-failed",
+    "backendTests": "209-passed-1-intentional-postgresql-skip",
+    "flutterTests": "282-passed-1-intentional-skip",
+    "flutterAnalyzer": "224-findings-0-errors-baseline-accepted",
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "fullTechnicalRegression": "passed",
+    "privacyValidator": "passed-draft-fail-closed",
+    "retentionValidator": "passed-draft-9-open-20-blockers",
+    "legalValidator": "passed-draft-fail-closed"
+  },
+  "negativeAssertions": {
+    "providerRequestSent": false,
+    "pseudonymousIdentifierSent": false,
+    "crashEventGenerated": false,
+    "deploymentPerformed": false,
+    "uploadPerformed": false,
+    "storeMutationPerformed": false,
+    "candidateBuiltOrRelabeled": false,
+    "productionMutationPerformed": false,
+    "realMoneyActionPerformed": false
+  },
+  "sourceHashesSha256": {
+    "backend/src/app.js": "3a30a389612dddf4b5d636d9da2eaa35451596e7dac3add80c5f0a192badce55",
+    "backend/src/server.js": "b7674bac1790ddda506162e3222e400c524de9c34809abfcf7a50295f7895582",
+    "backend/src/config.js": "90922f999317f81e466f6d120a4655d775587552e52d2004372e36687ad73966",
+    "backend/src/crashlytics_cleanup.js": "fef8a5977fabec6c2547d0d6ca0dc7e19e6e0db5bd6e6fe300d194d37d1d36c6",
+    "backend/sql/migrations/022_crashlytics_subject_deletion.up.sql": "2d018478ee2691a7900a2665c541acc522c634763505e12e65e997a1d1054f9a",
+    "backend/test/crashlytics_cleanup.test.js": "b1dbdfc721d1ca1e53c3388d1b3f27599aa0fd7be5a1aa7fb5e510b27a57faa5",
+    "test/tool/crashlytics_report_deletion_foundation_wiring.test.mjs": "d367e8a0624855db127d92603514e90824b6e3161fafe433277a6865adc4e10c",
+    "store/privacy-disclosures.json": "7b3d11e404c15d7a00954ce8c9154f4f1822ddc7d5e78cdf726ac187ecade25f",
+    "store/retention-deletion-readiness.json": "6d02d68f9f6124e2eaa33a7eb2883bcfaf61d0315e2ff60aba582ca6c47273b5",
+    "docs/evidence/b11/firebase-crashlytics-retention-deletion-readiness-20260817.json": "7d09b3571b2b9e12b82895a8ca4ba16563b38c5a79a1ed75e5554d7e091f2246",
+    "docs/evidence/b11/retention-deletion-decision-preparation-20260817.json": "a15a967e238557142da892668bbe1ce37da83a3515731c2ac7b1014751c61b12"
+  },
+  "officialSources": [
+    "https://firebase.google.com/docs/reference/crashlytics/rest/v1alpha/projects.apps.users/deleteCrashReports",
+    "https://firebase.google.com/docs/crashlytics/android/customize-crash-reports",
+    "https://firebase.google.com/support/privacy/"
+  ],
+  "nextApprovalRequired": "Before implementation, SIT needs Walid's explicit informed approval to transmit a random pseudonymous Crashlytics subject to Firebase and to send irreversible provider deletion requests for that subject."
+}

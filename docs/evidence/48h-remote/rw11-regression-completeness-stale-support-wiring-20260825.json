@@ -1,0 +1,235 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-rw11-regression-completeness-stale-support-wiring",
+  "status": "verified-regression-and-codeql-passed",
+  "implementationBaseHead": "5ad324704db716e39f8b79347167d24813f1596a",
+  "implementationHead": "7768651bf63d266fb8d98f75f2883536e77adde0",
+  "architecture": "docs/architecture/rw11-regression-completeness-stale-support-wiring-2026-08-25.md",
+  "report": "docs/operations/RW11_REGRESSION_COMPLETENESS_STALE_SUPPORT_WIRING_2026-08-25.md",
+  "predecessor": {
+    "package": "RW10",
+    "evidence": "docs/evidence/48h-remote/rw10-local-security-control-truthfulness-20260825.json",
+    "verifiedImplementationHead": "d72e18eb607bb3f9ed7baf09ab7212f3ef695ee5",
+    "closureCommit": "5ad324704db716e39f8b79347167d24813f1596a"
+  },
+  "scope": {
+    "allowed": [
+      "sup094-current-atomic-boundary-assertion-repair",
+      "sup151-152-conditional-blocked-visibility-assertion-repair",
+      "complete-repository-owned-node-tool-test-execution",
+      "red-first-permanent-regression-registration-guard",
+      "mechanical-predecessor-regression-script-hash-refresh",
+      "deterministic-local-and-ci-regression-evidence"
+    ],
+    "excluded": [
+      "product-runtime-and-backend-behavior-change",
+      "rw10-product-or-evidence-semantic-change",
+      "timing-retry-parallelism-reduction-and-test-exclusion",
+      "production-vps-dns-cloud-firebase-store-and-play",
+      "payment-provider-ai-pilot-real-money-and-real-support-traffic",
+      "legal-owner-gitguardian-pr-merge-and-history-rewrite"
+    ],
+    "localOnly": true,
+    "productBehaviorChanged": false,
+    "timingWorkaroundAllowed": false,
+    "testParallelismReductionAllowed": false,
+    "toolTestExclusionAllowed": false
+  },
+  "findings": [
+    {
+      "id": "RW11-P0-DORMANT-TOOL-TEST-INVENTORY-001",
+      "state": "resolved-and-tested",
+      "classification": "regression-governance-gap",
+      "resolution": "The supported regression now executes the complete test/tool wildcard before longer platform gates, and a red-first wiring test permanently requires that exact unconditional invocation."
+    },
+    {
+      "id": "RW11-P1-SUP094-ATOMICITY-ASSERTION-DRIFT-002",
+      "state": "resolved-and-tested",
+      "classification": "stale-assertion-drift",
+      "resolution": "The assertion now requires the transactional backend harassment endpoint and principal-isolated local atomic method while forbidding the obsolete split BlockedUsersService call."
+    },
+    {
+      "id": "RW11-P1-SUP151152-VISIBILITY-ASSERTION-DRIFT-003",
+      "state": "resolved-and-tested",
+      "classification": "stale-assertion-drift",
+      "resolution": "The assertion now binds the formatted conditional collection and its non-empty blocked-user source instead of requiring a one-line FilterPill spelling."
+    }
+  ],
+  "historyAudit": {
+    "sup094OriginalCommit": "3aff92398633876605db1b51c29207cad99e1e84",
+    "sup094CurrentBoundaryCommit": "2dfb487cd3b4f4ebd59d184f1a5186f1da455672",
+    "sup151152OriginalCommit": "3f96e93e721dcf5daef948ca7370856511293829",
+    "productRegressionFound": false
+  },
+  "inventoryAudit": {
+    "baselineRepositoryOwnedFiles": 322,
+    "baselineDirectlyNamedFiles": 273,
+    "baselineNotDirectlyNamedFiles": 49,
+    "closureRepositoryOwnedFiles": 324,
+    "executionPattern": "node --test test/tool/*.test.mjs",
+    "excludedFiles": [],
+    "standardNodeParallelism": true
+  },
+  "verification": {
+    "redFirstCompletenessGuard": "failed-before-fix",
+    "focusedCorrectedMatrix": "passed-7",
+    "completeToolInventory": "passed-1867",
+    "completeToolInventorySkipped": 0,
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "localRegression": {
+    "head": "7768651bf63d266fb8d98f75f2883536e77adde0",
+    "standardParallelism": true,
+    "timingWorkaroundUsed": false,
+    "parallelismReductionUsed": false,
+    "completeToolInventoryPassed": 1867,
+    "completeToolInventorySkipped": 0,
+    "flutterPassed": 523,
+    "documentedProfileSkips": 3,
+    "analyzerIssues": 0,
+    "webDebugBuild": "passed-with-wasm-dry-run",
+    "loopbackSmoke": "passed",
+    "androidDebugTasks": 448,
+    "androidMinSdk": 24,
+    "privateReleaseArtifact": "unavailable-ci-metadata-validated",
+    "storeOrDeviceGateClaimed": false
+  },
+  "githubVerification": {
+    "head": "7768651bf63d266fb8d98f75f2883536e77adde0",
+    "regressionRunId": 32849768221,
+    "codeqlRunId": 32849768459,
+    "regressionConclusion": "success",
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "ratchetAudit": {
+    "cause": "RW11 makes every repository-owned Node tool test part of the supported regression and repairs two static assertions to follow the already accepted stronger implementation boundaries.",
+    "productSourceChanged": false,
+    "privacyManifestChanged": false,
+    "retentionManifestChanged": false,
+    "providerDecisionChanged": false,
+    "providerGateChanged": false,
+    "rw10SemanticsChanged": false,
+    "predecessorRefreshes": [
+      "RW0 through RW10 source inventories are mechanically refreshed only for the supported regression script hash; their findings, implementation heads, verification states and gates remain unchanged.",
+      "S4J and S3X product sources, accepted decisions and package evidence remain unchanged; only their stale static wiring assertions are corrected."
+    ]
+  },
+  "ratchets": {
+    "privacyManifestSha256": "d96fd0ef4917a166daefca4b7defdde14efeec3301764f1bff8f3114c0e114bb",
+    "retentionManifestSha256": "47202c5178792f767b7f638bf93c78e7589c10f1c3fb75005f3979788c164bf3",
+    "activeProviderEvidenceSha256": "94d4d32554f252c712eefdf998d1ca6274f5dea79b3f89460c3d37e8d23d2e07",
+    "activeProviderState": "prepared-hold",
+    "completedOwnerDecisions": 0,
+    "requiredOwnerDecisions": 10,
+    "externalReadiness": false
+  },
+  "gates": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "productRuntimeChanged": false,
+    "backendRuntimeChanged": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "realSupportTrafficSent": false,
+    "realProviderTrafficSent": false,
+    "externalAiRuntimeEnabled": false,
+    "candidateCreated": false,
+    "deviceGateClaimed": false,
+    "legalApprovalChanged": false,
+    "gitHistoryRewritten": false,
+    "prMerged": false
+  },
+  "residualRisks": [
+    "Static wiring assertions complement but do not replace behavioral Backend, Flutter and PostgreSQL coverage.",
+    "The complete wildcard intentionally duplicates package-specific Node invocations and adds a small deterministic runtime cost until the long script is separately consolidated.",
+    "The distinct RW10 post-service success-popup epoch window remains open for a separately bounded product correction and is not claimed closed by RW11."
+  ],
+  "sourceInventory": [
+    {
+      "path": "backend/src/app.js",
+      "sha256": "3a30a389612dddf4b5d636d9da2eaa35451596e7dac3add80c5f0a192badce55"
+    },
+    {
+      "path": "backend/src/moderation_workflow.js",
+      "sha256": "534253d5bcdcb541b73740d9b58e7b70568397dc9f53e04fa28ef2c8158a912a"
+    },
+    {
+      "path": "lib/screens/messages_screen.dart",
+      "sha256": "9c4c80880f0c105674f334a8475069cff6167de67b3400fe9a11e5f7ff2dbf4f"
+    },
+    {
+      "path": "lib/services/backend_repository.dart",
+      "sha256": "e9f5a102ee95f8731bb2b91c068be7bdad358febef4d4de5c51cb9c692d7b840"
+    },
+    {
+      "path": "lib/services/local_safety_privacy_service.dart",
+      "sha256": "4f346ac2164be806b19821a77e50f1f11ce835b312dcb37f16828958cfd0d002"
+    },
+    {
+      "path": "lib/services/user_reports_service.dart",
+      "sha256": "94399bb6798ee4132f0b2ba15f1c3dbf2f755729029410b6d91057e5409f107c"
+    },
+    {
+      "path": "docs/architecture/s4j-non-acute-harassment-block-report-2026-08-22.md",
+      "sha256": "e86872b44543aca403185c50b938b65e3c04a5b1164c8a1b05e774428fdf5263"
+    },
+    {
+      "path": "docs/decisions/ADR-073-atomic-non-acute-harassment-block-report.md",
+      "sha256": "276c33c94f7028b61d0bcbbc3795ba9913ae052989d0e11d1431f5a67e35b53c"
+    },
+    {
+      "path": "docs/architecture/s3x-support-case-ui-accessibility-2026-08-22.md",
+      "sha256": "665415f7ce5e6951ae14b9533f3041459d3f08e8b13c6ed7b77bf512cacc52dc"
+    },
+    {
+      "path": "docs/decisions/ADR-061-support-case-semantic-order-and-empty-blocked-filter.md",
+      "sha256": "60b783937f4e241f30c57ef556eb596150d43395df5d5602c5c8ee4d36b0ff93"
+    },
+    {
+      "path": "scripts/technical_regression_check.sh",
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
+    },
+    {
+      "path": "test/tool/harassment_block_report_wiring.test.mjs",
+      "sha256": "4b9ab9f84d9c608104fbde2e6a76f5ca2b6a3890caa59e01e9ca69326b03a8b8"
+    },
+    {
+      "path": "test/tool/support_case_ui_accessibility_wiring.test.mjs",
+      "sha256": "8daf23c9dd2156d8d46d600c9ae3173ae83816c2dcb134d9859503d59ae5163a"
+    },
+    {
+      "path": "test/tool/rw11_regression_completeness_wiring.test.mjs",
+      "sha256": "e6a9ecf7cda2115d1605b54339d2696bc7edd66f2304bc162d39cbdfedfb13a0"
+    },
+    {
+      "path": "test/tool/validate_rw11_regression_completeness_stale_support_wiring.test.mjs",
+      "sha256": "4193ccb0c8ebd25d3eacc2443e71b4b92468f6855d3116c06acb6b0254640b31"
+    },
+    {
+      "path": "tool/validate_rw11_regression_completeness_stale_support_wiring.mjs",
+      "sha256": "2b7e4e45cef395745e139844b7810612d1324f1fdb5df7112245545b7faf9c35"
+    },
+    {
+      "path": "docs/architecture/rw11-regression-completeness-stale-support-wiring-2026-08-25.md",
+      "sha256": "cf87216854e3b685b038feb62de5ce747c039c88863086ad9b391ea8cb4054fd"
+    },
+    {
+      "path": "docs/operations/RW11_REGRESSION_COMPLETENESS_STALE_SUPPORT_WIRING_2026-08-25.md",
+      "sha256": "f55668a8e38c2ef3eb45a8bda3a8d503ed7f34a5468dee581ef0afd87983135d"
+    }
+  ]
+}

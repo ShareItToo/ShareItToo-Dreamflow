@@ -4,32 +4,27 @@ import 'package:lendify/services/handover_code.dart';
 
 void main() {
   group('AddressPrivacy', () {
-    test('reveals exact pickup address only from six hours before accepted handover', () {
-      final handoverAt = DateTime(2026, 7, 29, 18);
-
+    test('privacy copy binds exact address to six-hour confirmed window', () {
+      expect(AddressPrivacy.privacyNotice(), contains('sechs Stunden'));
       expect(
-        AddressPrivacy.shouldRevealExactAddress(
-          isAccepted: true,
+          AddressPrivacy.privacyNotice(), contains('beidseitig bestätigten'));
+    });
+
+    test('local demo and QA clock boundary is deterministic', () {
+      final handoverAt = DateTime.utc(2026, 7, 29, 18);
+      expect(
+        AddressPrivacy.shouldRevealExactAddressForLocalDemoOrQa(
           handoverAt: handoverAt,
-          now: handoverAt.subtract(const Duration(hours: 6, minutes: 1)),
+          now: handoverAt.subtract(const Duration(hours: 6, seconds: 1)),
         ),
         isFalse,
       );
       expect(
-        AddressPrivacy.shouldRevealExactAddress(
-          isAccepted: true,
+        AddressPrivacy.shouldRevealExactAddressForLocalDemoOrQa(
           handoverAt: handoverAt,
           now: handoverAt.subtract(const Duration(hours: 6)),
         ),
         isTrue,
-      );
-      expect(
-        AddressPrivacy.shouldRevealExactAddress(
-          isAccepted: false,
-          handoverAt: handoverAt,
-          now: handoverAt,
-        ),
-        isFalse,
       );
     });
 
@@ -49,7 +44,8 @@ void main() {
   });
 
   group('HandoverCodeService', () {
-    test('creates deterministic six digit codes per segment and presenter role', () {
+    test('creates deterministic six digit codes per segment and presenter role',
+        () {
       final start = DateTime(2026, 7, 29, 18);
       final pickupOwner = HandoverCodeService.codeForTitleAndStart(
         title: 'Canon EOS R5',
@@ -81,7 +77,8 @@ void main() {
       );
     });
 
-    test('qr payload parsing validates segment role code and booking binding', () {
+    test('qr payload parsing validates segment role code and booking binding',
+        () {
       const code = '123456';
       final payload = HandoverCodeService.qrPayload(
         segment: HandoverCodeService.segmentPickup,

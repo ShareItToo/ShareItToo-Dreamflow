@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp133-current-candidate-search-saved",
+  "status": "complete-exact-current-search-saved",
+  "capturedAt": "2026-09-13T05:26:20.693Z",
+  "workPackage": "WP133",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "wp132FinalHead": "7284258251a5f599ed74a4de63dfdc1f95b73df7",
+    "candidateSourceHead": "abf911d1c944a4e5874269111985d0cc4736546e",
+    "diagnosticHead": "b6f8c8194d34581904e1c97794a44b27f5b03326",
+    "applicationRuntimePathsChangedAfterCandidateSource": []
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091309",
+    "releaseChannel": "internal",
+    "environment": "staging",
+    "delivery": "direct-apk",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "apkSha256": "6f688e3641f54da91caf0e4f7c039f192a0c4e481b3ebb98ac3b2723cbe27ddf",
+    "aabSha256": "6fc8164cd7a941da83aa104e1a238c4b1725c983dab6bb7651fd3f9880bbcb04",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "physicalPixelPackageMatched": true,
+    "dataPreservingInstallPassed": true
+  },
+  "device": {
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "physicalLifecycle": {
+    "exactUniqueSearchPassed": true,
+    "exactCoarseCategoryFilterPassed": true,
+    "exactListingDetailOpened": true,
+    "savedToBuiltInLaterWishlist": true,
+    "processRestartPersistenceStableObservations": 3,
+    "otherPrincipalAbsenceStableObservations": 3,
+    "renterRestorePersistenceStableObservations": 3,
+    "exactRelatedSavedAssignmentRemoved": true,
+    "removedStateStableObservations": 3,
+    "loadingOrErrorAcceptedAsEmptyTruth": false
+  },
+  "cleanup": {
+    "isolatedListingEnded": true,
+    "isolatedListingAbsentFromPublicCatalog": true,
+    "relatedSavedAssignmentRemoved": true,
+    "temporaryFixtureRetired": true,
+    "protectedOwnerSessionRestored": true,
+    "unrelatedSavedItemsChanged": false,
+    "recoveryRequired": false,
+    "paymentEndpointCalled": false,
+    "bookingCreated": false,
+    "contractCreated": false,
+    "reservationCreated": false,
+    "monetaryEffectMinor": 0
+  },
+  "privateRunVault": {
+    "status": "email-linked-product-journey-retired",
+    "mode": "0600",
+    "sha256": "b2d0e2499a12d640bf47fcaf35bc9fe60c9eeaabb815dc04e5b5ae6d4f099cc6",
+    "credentialsRemainOwnerOnly": true,
+    "credentialCopiedToEvidence": false,
+    "accountIdentityCopiedToEvidence": false,
+    "fixtureIdentifierCopiedToEvidence": false,
+    "privatePathCopiedToEvidence": false,
+    "rawDeviceIdentifierCopiedToEvidence": false
+  },
+  "portfolioEffect": {
+    "promotedRequirement": "search-filter-favorites-wishlists",
+    "passCount": 17,
+    "partialCount": 7,
+    "openCount": 8,
+    "totalCount": 32,
+    "releaseDecision": "hold-not-production-ready"
+  },
+  "verification": {
+    "focusedDiagnosticTestsPassed": 13,
+    "predecessorLocalFullRegression": "success",
+    "predecessorGithubRegressionRunId": 34739436871,
+    "predecessorGithubCodeqlRunId": 34739436802,
+    "predecessorHead": "7284258251a5f599ed74a4de63dfdc1f95b73df7",
+    "predecessorGithubRegressionConclusion": "success",
+    "predecessorGithubCodeqlConclusion": "success",
+    "predecessorCleanCheckoutConclusion": "success",
+    "openCodeScanningAlerts": 0,
+    "exactClosureLocalRegressionRequired": true,
+    "exactClosureGithubRegressionRequired": true,
+    "exactClosureCodeqlRequired": true
+  },
+  "sourceInventory": [
+    {"path":"lib/screens/search_results_screen.dart","sha256":"9196a7b58add7015f2148aed3c4bc53e217a3aa870491e31fd3f7120cdee514a"},
+    {"path":"lib/widgets/search_overlay.dart","sha256":"f1c2b2f55ded10999587bf9d6c4fd0103ea26a5b20f500e135e99d081fc025f5"},
+    {"path":"lib/services/latest_search_recompute.dart","sha256":"6f2aa0a46e88f42c251b4b11616a07c8a9ba26245733f598b47e831e6659ce46"},
+    {"path":"lib/services/data_service.dart","sha256":"5294f069ec2d9a06bd96632216fd121ed14e91d873109e9bcb7cb95fc753fa77"},
+    {"path":"lib/screens/wishlists_screen.dart","sha256":"cb64ca5670af401b7259e3d226cdde54047891c842abcf5287522528590f4bba"},
+    {"path":"tool/diagnose_android_search_saved_lifecycle.mjs","sha256":"358d8bb5917e22a3a276262bf0dc5070e84c855429f6c7ec520640b21a825d65"},
+    {"path":"test/tool/diagnose_android_search_saved_lifecycle.test.mjs","sha256":"9fab573e1ee81f0daae5f040d81839e137d4e6937e99f84820c72f29a6fc28e3"},
+    {"path":"tool/run_staging_email_verified_two_role_journey.mjs","sha256":"65a40addae8b6ef1591ca34c0a01675dba3867a837c3d42c1450ae35118e8f79"},
+    {"path":"test/tool/run_staging_email_verified_two_role_journey.test.mjs","sha256":"be1da4408669c01bb4106fcea2c73002d16f087ae239c5d69788a99781f2eaca"}
+  ],
+  "technicalDebt": [
+    "The broad search and saved-state proof from candidate 2026091110 was deliberately held PARTIAL after shared search code changed. WP133 closes that transfer gap with a fresh exact-candidate physical replay instead of relying on historical compatibility.",
+    "Presence and absence after restart and principal changes require three consecutive settled UI observations. Progress indicators and explicit load failures are rejected, so timing alone can never manufacture an empty or persisted truth."
+  ],
+  "boundaries": {
+    "applicationRuntimeChangedAfterCandidateBuild": false,
+    "backendRuntimeChanged": false,
+    "stagingSyntheticDataMutated": true,
+    "stagingSyntheticDataRestored": true,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "firebaseProjectChanged": false,
+    "paymentProviderCalled": false,
+    "realMoneyUsed": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "credentialRecorded": false,
+    "accountIdentityRecorded": false,
+    "fixtureIdentifierRecorded": false,
+    "privateFilesystemPathRecorded": false,
+    "rawDeviceIdentifierRecorded": false
+  }
+}

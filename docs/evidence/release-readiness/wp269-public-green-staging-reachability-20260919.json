@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-pilot-feature-scope-runtime-readback-20260919",
+  "package": "WP269",
+  "capturedOn": "2026-09-19",
+  "source": "real-public-green-staging-readback",
+  "environment": "staging",
+  "runtimeCommit": "9b20afed8f4d4d8edadca61dcd790b4b669f4c33",
+  "opsCommit": "c3920ea66f0d49e470860edaf47d562e8ace8846",
+  "backendShortCommit": "9b20afed8f4d",
+  "schema": 92,
+  "promotionEvidence": {
+    "path": "/docker/shareittoo/green-promotions/9b20afed8f4d-attempt13/evidence.json",
+    "sha256": "c9dc9ab644887fea8e34480e0d651c95c1873fbe3f3ebb4fe2da6044691b28bb",
+    "mode": "0600"
+  },
+  "publicReachability": {
+    "versionHttp": 200,
+    "versionCommit": "9b20afed8f4d4d8edadca61dcd790b4b669f4c33",
+    "liveHttp": 200,
+    "readyHttp": 200,
+    "readyStatus": "ok"
+  },
+  "payment": {
+    "capabilitiesHttp": 200,
+    "provider": null,
+    "providerBacked": false,
+    "normalCheckoutAvailable": false,
+    "liveMoney": false,
+    "transport": "memory",
+    "providerStatus": "disabled",
+    "mode": "unavailable",
+    "livemode": false
+  },
+  "technicalSandbox": {
+    "available": true,
+    "provider": "stripe",
+    "mode": "test",
+    "amountMinor": 100,
+    "currency": "EUR",
+    "maxRuns": 3,
+    "syntheticOnly": true,
+    "liveMoney": false,
+    "bookingEffects": false,
+    "ledgerEffects": false,
+    "connectEffects": false
+  },
+  "mfa": {
+    "statusHttp": 200,
+    "enabled": false,
+    "pending": false,
+    "recoveryCodesRemaining": 0
+  },
+  "identityVerification": {
+    "statusHttp": 200,
+    "status": "not_started",
+    "livemode": false,
+    "redactionStatus": null
+  },
+  "authenticatedSyntheticReadback": {
+    "loginHttp": 200,
+    "authMeHttp": 200,
+    "userId": "synthetic_sandbox_user_pilot_20260919",
+    "userIdMatchesProvisionedIdentity": true,
+    "accountStatus": "active",
+    "syntheticOnly": true,
+    "paymentCapabilities": {
+      "http": 200,
+      "provider": null,
+      "providerBacked": false,
+      "normalCheckoutAvailable": false,
+      "liveMoney": false
+    },
+    "technicalSandbox": {
+      "available": true,
+      "provider": "stripe",
+      "mode": "test",
+      "amountMinor": 100,
+      "currency": "EUR",
+      "maxRuns": 3,
+      "syntheticOnly": true,
+      "liveMoney": false,
+      "bookingEffects": false,
+      "ledgerEffects": false,
+      "connectEffects": false
+    },
+    "mfa": {
+      "statusHttp": 200,
+      "enabled": false,
+      "pending": false,
+      "recoveryCodesRemaining": 0
+    },
+    "identityVerification": {
+      "statusHttp": 200,
+      "status": "not_started",
+      "livemode": false,
+      "redactionStatus": null
+    },
+    "logoutHttp": 204
+  },
+  "boundaries": {
+    "credentialsRecorded": false,
+    "tokensRecorded": false,
+    "providerMutation": false,
+    "production": false,
+    "normalPaymentChanged": false
+  }
+}

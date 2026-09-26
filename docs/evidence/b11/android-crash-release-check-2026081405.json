@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "kind": "release-check",
+  "status": "passed",
+  "capturedAt": "2026-08-14T14:44:40Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081405",
+    "commit": "a00606f979315930ea6c28c0ce7495ef4ec56368",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "releaseCheck": {
+    "id": "crashReleaseMapping",
+    "status": "passed",
+    "verifications": [
+      {
+        "id": "embedded-mapping-bound-to-exact-aab",
+        "status": "passed",
+        "checkedAt": "2026-08-14T14:44:40Z",
+        "summary": "The embedded obfuscation mapping is hash-bound to the exact signed Build 2026081405 AAB."
+      },
+      {
+        "id": "native-symbols-cover-bundled-abis",
+        "status": "passed",
+        "checkedAt": "2026-08-14T14:44:40Z",
+        "summary": "The native-symbol archive covers all three ABIs bundled in the exact candidate."
+      },
+      {
+        "id": "original-mapping-uploaded",
+        "status": "passed",
+        "checkedAt": "2026-08-14T14:44:40Z",
+        "summary": "The original Build 2026081405 mapping was uploaded successfully to Crashlytics without rebuilding the candidate."
+      },
+      {
+        "id": "native-symbols-uploaded-and-cache-drained",
+        "status": "passed",
+        "checkedAt": "2026-08-14T14:44:40Z",
+        "summary": "Crashlytics generated and uploaded the cSYM files successfully, and its transient native-symbol output was empty after upload."
+      },
+      {
+        "id": "controlled-nonfatal-event-sanitized",
+        "status": "passed",
+        "checkedAt": "2026-08-14T14:44:40Z",
+        "summary": "Exactly one bounded nonfatal internal-staging diagnostic was sent without account, message, address, secret, or raw-device data."
+      },
+      {
+        "id": "console-exact-build-assignment",
+        "status": "passed",
+        "checkedAt": "2026-08-14T14:44:40Z",
+        "summary": "Firebase Crashlytics visibly lists one controlled diagnostic event for application version 1.0.0 (2026081405)."
+      }
+    ]
+  },
+  "sources": {
+    "mappingEvidenceRef": "docs/evidence/b11/android-crash-release-mapping-2026081405.json"
+  },
+  "boundaries": {
+    "uploadedToStore": true,
+    "productionCrashGenerated": false,
+    "controlledStagingEventGenerated": true,
+    "eventContainsAccountData": false,
+    "eventContainsMessageOrAddressData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}
