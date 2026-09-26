@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   chmodSync,
@@ -26,10 +25,7 @@ import {
   defaultCurrentHeadAndroidCommandRunner,
 } from './diagnose_current_head_android_main_navigation.mjs';
 import {
-  validateCurrentHeadAndroidReleaseArchive,
-} from './validate_current_head_android_release_archive.mjs';
-import {
-  historicalRolloverCandidatePath,
+  validateCurrentRolloverCandidate,
 } from './validate_google_play_internal_handoff.mjs';
 
 const rolloverInstallStatuses = new Set([
@@ -104,44 +100,14 @@ export function validateRolloverAndroidInstallBinding({
 async function validateCurrentRolloverAndroidReleaseArchive({
   root,
   candidateDirectory,
-  commandRunner = execFileSync,
 } = {}) {
-  const rollover = JSON.parse(readFileSync(resolve(root, historicalRolloverCandidatePath), 'utf8'));
-  const identity = rollover?.candidate ?? {};
-  const candidate = await validateCurrentHeadAndroidReleaseArchive({
-    root,
-    candidateDirectory,
-    expectedIdentity: {
-      versionName: identity.versionName,
-      buildNumber: identity.versionCode,
-      commit: identity.artifactSourceHead,
-    },
+  const current = await validateCurrentRolloverCandidate({
+    repositoryRoot: root,
   });
-  let sourceIsAncestor = true;
-  try {
-    commandRunner('git', ['merge-base', '--is-ancestor', candidate.commit, 'HEAD'], {
-      cwd: root,
-      stdio: ['ignore', 'ignore', 'ignore'],
-    });
-  } catch {
-    sourceIsAncestor = false;
+  if (resolve(candidateDirectory) !== resolve(current.archive.apkPath, '..')) {
+    fail('Explicit candidate directory does not match the current rollover pointer.');
   }
-  const gitLines = (args) => String(commandRunner('git', args, {
-    cwd: root,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'ignore'],
-  })).trim().split('\n').filter(Boolean);
-  const changedPaths = [...new Set([
-    ...gitLines(['diff', '--name-only', `${candidate.commit}..HEAD`]),
-    ...gitLines(['diff', '--name-only']),
-    ...gitLines(['diff', '--cached', '--name-only']),
-  ])];
-  return validateRolloverAndroidInstallBinding({
-    rollover,
-    candidate,
-    sourceIsAncestor,
-    changedPaths,
-  });
+  return current.archive;
 }
 
 export function parseAndroidInstalledPackageSnapshot(output, userId = '0') {
