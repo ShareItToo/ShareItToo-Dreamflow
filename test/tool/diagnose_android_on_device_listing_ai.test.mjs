@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  classifyPostPhotoPickerSurface,
   controlledMediaRow,
   newestPhotoPickerTile,
   onDeviceListingAiUiProof,
@@ -115,6 +116,21 @@ test('accepts the returned listing editor when the photo add tile is below the v
   assert.equal(returnedToListingEditorAfterPhotoPicker(
     '<hierarchy><node text="Fertig" content-desc="Fertig"/></hierarchy>',
   ), false);
+});
+
+test('classifies only a closed vocabulary after the Android photo picker', () => {
+  assert.equal(classifyPostPhotoPickerSurface(
+    '<hierarchy><node package="com.google.android.photopicker"/></hierarchy>',
+  ), 'system-photo-picker');
+  assert.equal(classifyPostPhotoPickerSurface(
+    '<hierarchy>' + node('Fertig') + '</hierarchy>',
+  ), 'photo-selection-confirmation');
+  assert.equal(classifyPostPhotoPickerSurface(
+    '<hierarchy>' + node('Entdecken') + '</hierarchy>',
+  ), 'main-navigation');
+  assert.equal(classifyPostPhotoPickerSurface(
+    '<hierarchy><node text="private content"/></hierarchy>',
+  ), 'unknown-safe-surface');
 });
 
 test('requires the controlled image to be the unique newest media row', () => {

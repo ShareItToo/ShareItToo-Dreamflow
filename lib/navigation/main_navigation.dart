@@ -111,7 +111,14 @@ class _MainNavigationState extends State<MainNavigation>
       final session = await AuthService.readSession();
       if (session == null) return;
       final owner = AuthService.captureSessionOwner(session);
-      await DataService.syncCurrentUserForSessionOwner(owner);
+      // Returning from a native picker only refreshes the current profile.
+      // Publishing that read through the account-security channel makes
+      // account-bound editors correctly interpret it as a principal change
+      // and close themselves, even though the same session is still active.
+      await DataService.syncCurrentUserForSessionOwner(
+        owner,
+        notificationKey: SharedPersistenceSync.profileStateKey,
+      );
       await _loadUser();
     } catch (_) {
       // Keep the cached status visible until the next explicit refresh.

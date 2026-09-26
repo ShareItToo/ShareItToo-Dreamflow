@@ -142,6 +142,45 @@ export function returnedToListingEditorAfterPhotoPicker(hierarchy) {
   return exactMatches.length === 1;
 }
 
+export function classifyPostPhotoPickerSurface(hierarchy) {
+  if (returnedToListingEditorAfterPhotoPicker(hierarchy)) return 'listing-editor';
+  if (String(hierarchy).includes('package="com.google.android.photopicker"')) {
+    return 'system-photo-picker';
+  }
+  if (currentHeadAndroidNamedNodes(hierarchy, 'Fertig').length > 0) {
+    return 'photo-selection-confirmation';
+  }
+  if (currentHeadAndroidNamedNodes(hierarchy, 'Aus Galerie auswählen').length > 0) {
+    return 'photo-source-dialog';
+  }
+  if (currentHeadAndroidNamedNodes(hierarchy, 'Bitte zuerst anmelden').length > 0
+      || currentHeadAndroidNamedNodes(hierarchy, 'Anmelden').length > 0) {
+    return 'unauthenticated-surface';
+  }
+  if (currentHeadAndroidNamedNodes(hierarchy, 'Entdecken').length > 0) {
+    return 'main-navigation';
+  }
+  return 'unknown-safe-surface';
+}
+
+async function waitForListingEditorAfterPhotoPicker({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+  attempts = 30,
+  intervalMs = 650,
+}) {
+  let lastClassification = 'not-yet-observed';
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await wait(intervalMs);
+    const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+    lastClassification = classifyPostPhotoPickerSurface(hierarchy);
+    if (lastClassification === 'listing-editor') return hierarchy;
+  }
+  fail(`The sanitized controlled listing photo surface did not appear; observed ${lastClassification}.`);
+}
+
 export function onDeviceListingAiUiProof(hierarchy) {
   const count = (label) => currentHeadAndroidNamedNodes(hierarchy, label).length;
   const proof = {
@@ -602,13 +641,11 @@ async function main() {
         predicate: (value) => currentHeadAndroidNamedNodes(value, 'Fertig').length === 1,
       });
       tapLabel(commandRunner, adbPath, device, hierarchy, 'Fertig');
-      await waitForHierarchy({
+      await waitForListingEditorAfterPhotoPicker({
         commandRunner,
         adbPath,
         device,
         wait,
-        label: 'controlled listing photo',
-        predicate: returnedToListingEditorAfterPhotoPicker,
       });
       hierarchy = await scrollUntil({
         commandRunner,

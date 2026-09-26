@@ -58,6 +58,10 @@ discover a mechanically stale source hash.
   production-shaped deterministic test, review the fix and re-gate it with
   Sol before re-execution; use Gemini only for a separately defined critical
   gate. Never blind-retry the live tool.
+- Physical Android UI diagnostics on one device are strictly serial. Never run
+  a second UIAutomator hierarchy read or UI-driving process while the bounded
+  diagnostic owns the device; status inspection must use its own output or
+  non-UI process state only.
 - Shell variable hygiene: in zsh never assign `path`, `PATH`, `fpath`, `cdpath`
   or another shell-special array or option as a task variable. Use a
   task-specific name such as `sit_route`; after variable shadowing causes
