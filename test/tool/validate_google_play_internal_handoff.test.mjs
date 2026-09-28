@@ -41,6 +41,8 @@ const explicitRollover = JSON.parse(await readFile(
 test('candidate rollover ignores test-only drift but retains runtime drift', () => {
   assert.deepEqual(candidateRolloverRuntimeDrift([
     'AGENTS.md',
+    'backend/ops/README.md',
+    'backend/ops/green_staging_promotion.mjs',
     'backend/ops/secret_scan_history_baseline.json',
     'backend/test/postgres_foundation.integration.test.js',
     'docs/evidence/current.json',

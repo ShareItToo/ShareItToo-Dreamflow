@@ -125,6 +125,10 @@ export const candidateRolloverNonRuntimePrefixes = Object.freeze([
 
 export const candidateRolloverNonRuntimeExactPaths = Object.freeze([
   'AGENTS.md',
+  // These reviewed Green deployment-contract files are not packaged into the
+  // Android client or the immutable API image bound by the rollover evidence.
+  'backend/ops/README.md',
+  'backend/ops/green_staging_promotion.mjs',
   // This reviewed scanner baseline is consumed only by repository security
   // tooling. It is never packaged into the Android client or API runtime.
   'backend/ops/secret_scan_history_baseline.json',

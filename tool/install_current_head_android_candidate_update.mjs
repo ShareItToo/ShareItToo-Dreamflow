@@ -43,7 +43,11 @@ const postCandidateEvidencePrefixes = [
   'test/',
   'tool/',
 ];
-const postCandidateEvidenceExactPaths = ['AGENTS.md'];
+const postCandidateEvidenceExactPaths = [
+  'AGENTS.md',
+  'backend/ops/README.md',
+  'backend/ops/green_staging_promotion.mjs',
+];
 
 function fail(message) {
   throw new Error(message);

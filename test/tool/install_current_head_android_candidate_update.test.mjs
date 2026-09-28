@@ -362,6 +362,8 @@ test('accepts the exact current rollover archive after evidence-only commits', (
     sourceIsAncestor: true,
     changedPaths: [
       'AGENTS.md',
+      'backend/ops/README.md',
+      'backend/ops/green_staging_promotion.mjs',
       'backend/test/postgres_foundation.integration.test.js',
       'docs/current_state.md',
       'store/google-play/current-rollover-candidate.json',
