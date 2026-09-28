@@ -73,6 +73,10 @@ release evidence.
 - Update only the nearest authoritative instruction; search first and do not
   duplicate the rule across historical handovers. If enforceable, add a focused
   regression, validator or fail-closed guard in the owning package.
+- Required editor fields must become usable before optional remote enrichment
+  (including rental statistics) or media upload completes. Optional work needs
+  a bounded failure state and an explicit retry path; focused coverage must
+  reject a required-field spinner or disabled save action waiting on it.
 - Sol labels the review `PASS`, `FIX` or `GEMINI_GATE_REQUIRED:<gate-id>`.
   `FIX` names the failed assertion and required proof. Gemini is used only for
   a named money, contract, privacy, security, release-truth or user-data gate,

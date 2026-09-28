@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/localization_service.dart';
@@ -131,8 +132,10 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     'Yoga',
   ];
 
-  int _bookingsCount = 0;
-  int _rentalsCount = 0;
+  int? _bookingsCount;
+  int? _rentalsCount;
+  bool _membershipStatsLoading = false;
+  bool _membershipStatsUnavailable = false;
   final _profileActions = ProfileMutationInteractionController();
   StreamSubscription<String>? _persistenceSubscription;
   int _loadRevision = 0;
@@ -170,37 +173,14 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
       final profileContext = await _profileMutationService.loadCurrentContext();
       if (!mounted || revision != _loadRevision) return;
       final u = profileContext?.user;
-      int bookings = 0;
-      int rentals = 0;
-      if (u != null && profileContext != null) {
-        try {
-          final renter = await DataService.getRentalRequestsForRenter(u.id);
-          if (revision != _loadRevision ||
-              !await _profileMutationService.isContextCurrent(profileContext)) {
-            return;
-          }
-          bookings = renter.length;
-        } catch (e) {
-          debugPrint('[ProfileInfo] load bookings failed: $e');
-        }
-        try {
-          final owner = await DataService.getRentalRequestsForOwner(u.id);
-          if (revision != _loadRevision ||
-              !await _profileMutationService.isContextCurrent(profileContext)) {
-            return;
-          }
-          rentals = owner.length;
-        } catch (e) {
-          debugPrint('[ProfileInfo] load rentals failed: $e');
-        }
-      }
-      if (!mounted || revision != _loadRevision) return;
       _profileActions.replaceContext(profileContext);
       setState(() {
         _user = u;
         _loading = false;
-        _bookingsCount = bookings;
-        _rentalsCount = rentals;
+        _bookingsCount = null;
+        _rentalsCount = null;
+        _membershipStatsLoading = u != null && profileContext != null;
+        _membershipStatsUnavailable = false;
         if (u != null) {
           final split = _splitDisplayName(u.displayName);
           _firstNameCtrl.text = split.$1;
@@ -219,6 +199,11 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
             ..addAll(u.interests);
         }
       });
+      if (u != null && profileContext != null) {
+        // Rental counts are optional enrichment. They must never block the
+        // profile editor or its required fields behind a remote timeout.
+        unawaited(_loadMembershipStats(profileContext, revision));
+      }
     } catch (e) {
       // just fallback to empty; DataService already logs critical errors when needed
       if (!mounted || revision != _loadRevision) return;
@@ -226,6 +211,54 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _loadMembershipStats(
+    ProfileMutationContext profileContext,
+    int revision,
+  ) async {
+    try {
+      final counts = await Future.wait<List<RentalRequest>>([
+        DataService.getRentalRequestsForRenter(profileContext.user.id),
+        DataService.getRentalRequestsForOwner(profileContext.user.id),
+      ]).timeout(const Duration(seconds: 5));
+      if (!mounted ||
+          revision != _loadRevision ||
+          !await _profileMutationService.isContextCurrent(profileContext)) {
+        return;
+      }
+      setState(() {
+        _bookingsCount = counts[0].length;
+        _rentalsCount = counts[1].length;
+        _membershipStatsLoading = false;
+        _membershipStatsUnavailable = false;
+      });
+    } catch (e) {
+      debugPrint('[ProfileInfo] load membership stats failed: $e');
+      if (!mounted ||
+          revision != _loadRevision ||
+          !await _profileMutationService.isContextCurrent(profileContext)) {
+        return;
+      }
+      setState(() {
+        _bookingsCount = null;
+        _rentalsCount = null;
+        _membershipStatsLoading = false;
+        _membershipStatsUnavailable = true;
+      });
+    }
+  }
+
+  void _retryMembershipStats() {
+    final profileContext = _profileActions.context;
+    if (profileContext == null || _user == null || _membershipStatsLoading) {
+      return;
+    }
+    setState(() {
+      _membershipStatsLoading = true;
+      _membershipStatsUnavailable = false;
+    });
+    unawaited(_loadMembershipStats(profileContext, _loadRevision));
   }
 
   @override
@@ -249,8 +282,10 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     _photoDraft = null;
     _languages.clear();
     _interests.clear();
-    _bookingsCount = 0;
-    _rentalsCount = 0;
+    _bookingsCount = null;
+    _rentalsCount = null;
+    _membershipStatsLoading = false;
+    _membershipStatsUnavailable = false;
   }
 
   Future<void> _save() async {
@@ -269,41 +304,48 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     final displayName =
         '${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}'.trim();
     setState(() => _saving = true);
+    var remoteMutationMayHaveStarted =
+        _photoDraft?.trim().startsWith('data:') == true;
     try {
-      final persistedPhotoUrl = await _profileMutationService.persistPhotoDraft(
-        context: owner.context,
-        photoDraft: _photoDraft,
-      );
-      if (!await _profileActions.isCurrent(
-        _profileMutationService,
-        owner,
-      )) {
-        return;
-      }
-      final result = await _profileMutationService.updateProfile(
-        context: owner.context,
-        updates: {
-          CurrentUserProfileField.displayName: displayName,
-          CurrentUserProfileField.bio:
-              _bioCtrl.text.trim().isEmpty ? null : _bioCtrl.text.trim(),
-          CurrentUserProfileField.birthDate: birthDate,
-          CurrentUserProfileField.city:
-              _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
-          CurrentUserProfileField.photoURL:
-              persistedPhotoUrl?.trim().isEmpty ?? true
-                  ? null
-                  : persistedPhotoUrl,
-          CurrentUserProfileField.languages: _languages.toList(),
-          CurrentUserProfileField.interests: _interests.toList(),
-          CurrentUserProfileField.homeLocation: null,
-        },
-      );
-      if (!await _profileActions.isCurrent(
-        _profileMutationService,
-        owner,
-      )) {
-        return;
-      }
+      final result = await (() async {
+        final persistedPhotoUrl =
+            await _profileMutationService.persistPhotoDraft(
+          context: owner.context,
+          photoDraft: _photoDraft,
+        );
+        if (!await _profileActions.isCurrent(
+          _profileMutationService,
+          owner,
+        )) {
+          throw const ProfileMutationFailure.principalChanged();
+        }
+        remoteMutationMayHaveStarted = true;
+        final result = await _profileMutationService.updateProfile(
+          context: owner.context,
+          updates: {
+            CurrentUserProfileField.displayName: displayName,
+            CurrentUserProfileField.bio:
+                _bioCtrl.text.trim().isEmpty ? null : _bioCtrl.text.trim(),
+            CurrentUserProfileField.birthDate: birthDate,
+            CurrentUserProfileField.city:
+                _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
+            CurrentUserProfileField.photoURL:
+                persistedPhotoUrl?.trim().isEmpty ?? true
+                    ? null
+                    : persistedPhotoUrl,
+            CurrentUserProfileField.languages: _languages.toList(),
+            CurrentUserProfileField.interests: _interests.toList(),
+            CurrentUserProfileField.homeLocation: null,
+          },
+        );
+        if (!await _profileActions.isCurrent(
+          _profileMutationService,
+          owner,
+        )) {
+          throw const ProfileMutationFailure.principalChanged();
+        }
+        return result;
+      })().timeout(const Duration(seconds: 15));
       setState(() {
         _user = result.user;
         _photoDraft = result.user.photoURL;
@@ -353,7 +395,17 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
       debugPrint('[ProfileInfo] save failed: $e');
       if (await _profileActions.isCurrent(_profileMutationService, owner)) {
         if (mounted) setState(() => _photoDraft = u.photoURL);
-        await _showOwnedStatus(owner, title: 'Speichern fehlgeschlagen');
+        await _showOwnedStatus(
+          owner,
+          title: e is TimeoutException
+              ? 'Speichern nicht abgeschlossen'
+              : 'Speichern fehlgeschlagen',
+          message: e is TimeoutException
+              ? remoteMutationMayHaveStarted
+                  ? 'Der Speicherstatus ist unklar. Lade dein Profil neu, bevor du erneut speicherst.'
+                  : 'Upload oder Speichern hat zu lange gedauert. Prüfe deine Verbindung und versuche es erneut.'
+              : null,
+        );
       }
     } finally {
       if (mounted && _profileActions.isSynchronouslyCurrent(owner)) {
@@ -686,6 +738,9 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                           joinedAt: _user!.createdAt,
                           bookingsCount: _bookingsCount,
                           rentalsCount: _rentalsCount,
+                          statsLoading: _membershipStatsLoading,
+                          statsUnavailable: _membershipStatsUnavailable,
+                          onRetry: _retryMembershipStats,
                           avgRating: _user!.avgRating,
                           reviewCount: _user!.reviewCount,
                         ),
@@ -1540,8 +1595,11 @@ class _PreviewLine extends StatelessWidget {
 
 class _MembershipCard extends StatelessWidget {
   final DateTime joinedAt;
-  final int bookingsCount;
-  final int rentalsCount;
+  final int? bookingsCount;
+  final int? rentalsCount;
+  final bool statsLoading;
+  final bool statsUnavailable;
+  final VoidCallback? onRetry;
   final double avgRating;
   final int reviewCount;
 
@@ -1549,6 +1607,9 @@ class _MembershipCard extends StatelessWidget {
       {required this.joinedAt,
       required this.bookingsCount,
       required this.rentalsCount,
+      required this.statsLoading,
+      required this.statsUnavailable,
+      required this.onRetry,
       required this.avgRating,
       required this.reviewCount});
 
@@ -1566,12 +1627,34 @@ class _MembershipCard extends StatelessWidget {
           _InfoLine(
               icon: Icons.shopping_bag_outlined,
               label: 'Anzahl Buchungen',
-              value: bookingsCount.toString()),
+              value: _countLabel(bookingsCount)),
           const SizedBox(height: 10),
           _InfoLine(
               icon: Icons.storefront_outlined,
               label: 'Anzahl Vermietungen',
-              value: rentalsCount.toString()),
+              value: _countLabel(rentalsCount)),
+          if (statsLoading || statsUnavailable) ...[
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    statsLoading
+                        ? 'Buchungszahlen werden geladen…'
+                        : 'Buchungszahlen sind gerade nicht verfügbar.',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: Colors.white70),
+                  ),
+                ),
+                if (statsUnavailable)
+                  TextButton(
+                    onPressed: onRetry,
+                    child: const Text('Erneut versuchen'),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 10),
           Row(
             children: [
@@ -1613,6 +1696,9 @@ class _MembershipCard extends StatelessWidget {
     ];
     return '${monthsDe[dt.month - 1]} ${dt.year}';
   }
+
+  static String _countLabel(int? count) =>
+      count?.toString() ?? 'Nicht verfügbar';
 }
 
 class _InfoLine extends StatelessWidget {

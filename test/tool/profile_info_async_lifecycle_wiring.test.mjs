@@ -26,14 +26,36 @@ test('late profile-load failure cannot update disposed state', () => {
   );
 });
 
+test('profile editor does not wait for optional rental statistics', () => {
+  const profileReady = source.indexOf('_loading = false;');
+  const statsKickoff = source.indexOf('unawaited(_loadMembershipStats');
+  assert.ok(profileReady >= 0, 'profile readiness state is present');
+  assert.ok(statsKickoff > profileReady, 'stats start after the editor is ready');
+  assert.match(source, /Future\.wait<List<RentalRequest>>\([\s\S]*?\.timeout\(const Duration\(seconds: 5\)\)/u);
+  assert.match(source, /Buchungszahlen sind gerade nicht verfügbar\./u);
+  assert.match(source, /child: const Text\('Erneut versuchen'\)/u);
+});
+
+test('profile save bounds photo persistence and restores user retry', () => {
+  assert.match(
+    source,
+    /persistPhotoDraft\([\s\S]*?updateProfile\([\s\S]*?\}\)\(\)\.timeout\(const Duration\(seconds: 15\)\)/u,
+  );
+  assert.match(source, /e is TimeoutException/u);
+  assert.match(source, /Speichern nicht abgeschlossen/u);
+  assert.match(source, /remoteMutationMayHaveStarted = true/u);
+  assert.match(source, /Speicherstatus ist unklar/u);
+  assert.match(source, /versuche es erneut\./u);
+});
+
 test('successful profile patch rechecks exact owner and refreshes local state', () => {
   assert.match(
     source,
-    /final owner = _profileActions\.capture\(\);[\s\S]*?persistPhotoDraft\([\s\S]*?context: owner\.context,[\s\S]*?if \(!await _profileActions\.isCurrent\([\s\S]*?owner,[\s\S]*?\)\) \{\s+return;\s+\}[\s\S]*?final result = await _profileMutationService\.updateProfile\([\s\S]*?context: owner\.context,/u,
+    /final owner = _profileActions\.capture\(\);[\s\S]*?persistPhotoDraft\([\s\S]*?context: owner\.context,[\s\S]*?if \(!await _profileActions\.isCurrent\([\s\S]*?owner,[\s\S]*?\)\) \{\s+throw const ProfileMutationFailure\.principalChanged\(\);\s+\}[\s\S]*?final result = await _profileMutationService\.updateProfile\([\s\S]*?context: owner\.context,/u,
   );
   assert.match(
     source,
-    /final result = await _profileMutationService\.updateProfile\([\s\S]*?\}[\s\S]*?if \(!await _profileActions\.isCurrent\([\s\S]*?owner,[\s\S]*?\)\) \{\s+return;\s+\}[\s\S]*?setState\(\(\) \{\s+_user = result\.user;\s+_photoDraft = result\.user\.photoURL;/u,
+    /final result = await _profileMutationService\.updateProfile\([\s\S]*?\}[\s\S]*?if \(!await _profileActions\.isCurrent\([\s\S]*?owner,[\s\S]*?\)\) \{\s+throw const ProfileMutationFailure\.principalChanged\(\);\s+\}[\s\S]*?return result;[\s\S]*?setState\(\(\) \{\s+_user = result\.user;\s+_photoDraft = result\.user\.photoURL;/u,
   );
   assert.match(
     source,
