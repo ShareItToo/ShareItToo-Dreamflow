@@ -59,6 +59,57 @@ test('on-device suggestions require an explicit takeover before publication', ()
   );
 });
 
+test('draft readiness is gated by a coherent confident core, including recovery', () => {
+  assert.match(
+    screen,
+    /bool isActionableBlueOceanAssistant\(Map<String, dynamic>\? assistant\)/u,
+  );
+  assert.match(
+    screen,
+    /\['title', 'category', 'subcategory', 'description'\][\s\S]*\.every\(hasConfidentValue\)/u,
+  );
+  assert.match(
+    screen,
+    /value\.trim\(\)\.isNotEmpty[\s\S]*confidence == 'HIGH' \|\| confidence == 'MEDIUM'/u,
+  );
+  assert.match(
+    screen,
+    /if \(assistant\['status'\] == 'draft_ready'\)[\s\S]*?isActionableBlueOceanAssistant\(assistant\)/u,
+  );
+  assert.match(
+    screen,
+    /Analyse abgeschlossen, aber keine sicheren Vorschläge erkannt/u,
+  );
+  assert.match(
+    screen,
+    /if \(_blueOceanDraftId == null \|\|\s*assistant == null \|\|\s*!isActionableBlueOceanAssistant\(assistant\)\)/u,
+  );
+  assert.match(
+    screen,
+    /if \(!isActionableBlueOceanAssistant\(snapshot\.assistant\)\)[\s\S]*?_blueOceanDraftId = null[\s\S]*?BlueOceanSuggestionTakeoverState\.fresh\(\)/u,
+  );
+  assert.match(
+    screen,
+    /if \(_blueOceanDraftId != null\)[\s\S]*?unawaited\(_persistBlueOceanRecoverySnapshot\(\)\)[\s\S]*?else \{[\s\S]*?unawaited\(_clearBlueOceanRecoverySnapshot\(\)\)/u,
+  );
+  const reviewStart = screen.indexOf('Future<void> _reviewBlueOceanAssistant()');
+  const reviewEnd = screen.indexOf('Future<void> _pickFromCamera', reviewStart);
+  assert.match(
+    reviewStart >= 0 && reviewEnd > reviewStart
+      ? screen.slice(reviewStart, reviewEnd)
+      : '',
+    /if \(_blueOceanDraftId != null\)[\s\S]*?unawaited\(_persistBlueOceanRecoverySnapshot\(\)\)[\s\S]*?else \{[\s\S]*?unawaited\(_clearBlueOceanRecoverySnapshot\(\)\)/u,
+  );
+  assert.match(
+    screen,
+    /final restoredBlueOceanPhotos\s*=\s*_pickedImages\.isEmpty\s*\?\s*_blueOceanPhotoUrls/u,
+  );
+  assert.doesNotMatch(
+    screen,
+    /final restoredBlueOceanPhotos\s*=\s*_blueOceanDraftId != null &&/u,
+  );
+});
+
 test('UI exposes progress, editable fields, confidence text and at most three clarifications', () => {
   assert.match(screen, /LinearProgressIndicator/u);
   assert.match(screen, /liveRegion:\s*true/u);

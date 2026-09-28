@@ -75,6 +75,28 @@ String resolveListingEditorProfilePlace(User user) {
 }
 
 @visibleForTesting
+bool isActionableBlueOceanAssistant(Map<String, dynamic>? assistant) {
+  if (assistant == null) return false;
+  final revision = assistant['revision'];
+  if (revision is! Map) return false;
+  final fields = revision['fields'];
+  if (fields is! Map) return false;
+
+  bool hasConfidentValue(String key) {
+    final field = fields[key];
+    if (field is! Map) return false;
+    final value = field['value'];
+    final confidence = field['confidence'];
+    return value is String &&
+        value.trim().isNotEmpty &&
+        (confidence == 'HIGH' || confidence == 'MEDIUM');
+  }
+
+  return <String>['title', 'category', 'subcategory', 'description']
+      .every(hasConfidentValue);
+}
+
+@visibleForTesting
 String resolveListingPayloadCity({
   required String locationText,
   required String? registeredCity,
@@ -721,6 +743,29 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         await _clearBlueOceanRecoverySnapshot();
         return;
       }
+      if (!isActionableBlueOceanAssistant(snapshot.assistant)) {
+        setState(() {
+          _blueOceanDraftId = null;
+          _blueOceanAssistant = snapshot.assistant;
+          _blueOceanPhotoUrls = snapshot.managedPhotoUrls;
+          _applyBlueOceanRecoveryEditableFields(snapshot.editableFields);
+          _blueOceanTakeover =
+              const BlueOceanSuggestionTakeoverState.fresh();
+          _blueOceanConsentAccepted = false;
+          _blueOceanAnsweredQuestions.clear();
+          _blueOceanReplacementBandConfirmed = false;
+          for (final key in _blueOceanConfirmations.keys) {
+            _blueOceanConfirmations[key] = false;
+          }
+          _blueOceanReadyFingerprint = null;
+          _blueOceanProgress = 'Manueller Editor geöffnet.';
+          _blueOceanError =
+              'Analyse abgeschlossen, aber keine sicheren Vorschläge erkannt';
+        });
+        await _clearBlueOceanRecoverySnapshot();
+        _focusBlueOceanMessage();
+        return;
+      }
       setState(() {
         _blueOceanDraftId = snapshot.draftId;
         _blueOceanAssistant = snapshot.assistant;
@@ -898,7 +943,11 @@ class _CreateListingScreenState extends State<CreateListingScreen>
 
   void _acceptBlueOceanSuggestions() {
     final assistant = _blueOceanAssistant;
-    if (_blueOceanDraftId == null || assistant == null) return;
+    if (_blueOceanDraftId == null ||
+        assistant == null ||
+        !isActionableBlueOceanAssistant(assistant)) {
+      return;
+    }
     setState(() {
       _applyBlueOceanDraft(assistant);
       _blueOceanTakeover =
@@ -1009,19 +1058,29 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         _blueOceanPhotoUrls = List<String>.unmodifiable(photoUrls);
         _blueOceanAssistant = assistant;
         if (assistant['status'] == 'draft_ready') {
-          _blueOceanDraftId = draftId;
-          _setBlueOceanSuggestionsAccepted(false);
-          _blueOceanReadyFingerprint = null;
-          _blueOceanAnsweredQuestions.clear();
-          _blueOceanReplacementBandConfirmed = false;
-          for (final key in _blueOceanConfirmations.keys) {
-            _blueOceanConfirmations[key] = false;
+          if (isActionableBlueOceanAssistant(assistant)) {
+            _blueOceanDraftId = draftId;
+            _setBlueOceanSuggestionsAccepted(false);
+            _blueOceanReadyFingerprint = null;
+            _blueOceanAnsweredQuestions.clear();
+            _blueOceanReplacementBandConfirmed = false;
+            for (final key in _blueOceanConfirmations.keys) {
+              _blueOceanConfirmations[key] = false;
+            }
+            _blueOceanProgress =
+                'Vorschläge sind bereit. Übernimm sie bewusst, bevor du sie bearbeitest.';
+          } else {
+            _blueOceanDraftId = null;
+            _setBlueOceanSuggestionsAccepted(false);
+            _blueOceanReadyFingerprint = null;
+            _blueOceanError =
+                'Analyse abgeschlossen, aber keine sicheren Vorschläge erkannt';
+            _blueOceanProgress = 'Manueller Editor geöffnet.';
           }
-          _blueOceanProgress =
-              'Vorschläge sind bereit. Übernimm sie bewusst, bevor du sie bearbeitest.';
         } else {
           _blueOceanDraftId = null;
           _setBlueOceanSuggestionsAccepted(false);
+          _blueOceanReadyFingerprint = null;
           _blueOceanError =
               'Die KI-Analyse wurde sicher beendet. Prüfe oder ersetze die '
               'Fotos und arbeite im manuellen Editor weiter.';
@@ -1030,6 +1089,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       });
       if (_blueOceanDraftId != null) {
         unawaited(_persistBlueOceanRecoverySnapshot());
+      } else {
+        unawaited(_clearBlueOceanRecoverySnapshot());
       }
       if (_blueOceanError != null) _focusBlueOceanMessage();
     } on OnDeviceListingAnalysisException catch (failure) {
@@ -1219,6 +1280,16 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       }
       setState(() {
         _blueOceanAssistant = assistant;
+        if (!isActionableBlueOceanAssistant(assistant)) {
+          _blueOceanDraftId = null;
+          _blueOceanTakeover =
+              const BlueOceanSuggestionTakeoverState.fresh();
+          _blueOceanReadyFingerprint = null;
+          _blueOceanError =
+              'Analyse abgeschlossen, aber keine sicheren Vorschläge erkannt';
+          _blueOceanProgress = 'Manueller Editor geöffnet.';
+          return;
+        }
         _blueOceanProgress = 'Vorschau wurde aktualisiert.';
         final recommendation = assistant['recommendation'];
         if (recommendation is Map && _priceCtrl.text.trim().isEmpty) {
@@ -1235,7 +1306,11 @@ class _CreateListingScreenState extends State<CreateListingScreen>
           _blueOceanReadyFingerprint = _blueOceanEditableFingerprint();
         }
       });
-      unawaited(_persistBlueOceanRecoverySnapshot());
+      if (_blueOceanDraftId != null) {
+        unawaited(_persistBlueOceanRecoverySnapshot());
+      } else {
+        unawaited(_clearBlueOceanRecoverySnapshot());
+      }
     } on ListingMutationFailure catch (failure) {
       if (failure.kind == ListingMutationFailureKind.principalChanged ||
           !mounted ||
@@ -3129,8 +3204,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                         children: [
                           Builder(builder: (context) {
                             final restoredBlueOceanPhotos =
-                                _blueOceanDraftId != null &&
-                                        _pickedImages.isEmpty
+                                _pickedImages.isEmpty
                                     ? _blueOceanPhotoUrls
                                     : const <String>[];
                                 final hasAnyPhotos =

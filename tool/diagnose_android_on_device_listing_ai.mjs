@@ -29,8 +29,11 @@ import { readEmailVerifiedJourneyVault } from './run_staging_email_verified_two_
 import { validatePrivateAndroidReleaseArchive } from './validate_current_head_android_release_archive.mjs';
 
 const repositoryRoot = realpathSync(resolve(fileURLToPath(new URL('..', import.meta.url))));
-const fixtureRelativePath = 'test/fixtures/listing-ai/generic-cordless-drill.png';
-const fixtureSha256 = '85458cb5bc4777c587bfb8994ff0f960c8549f5423df9cc33b4c90fc65ffd420';
+export const listingAiFixtureRelativePath = 'test/fixtures/listing-ai/generic-cordless-drill-v2.png';
+export const listingAiFixtureSha256 = 'b5cebcb7c5f84925beb7c650a5a2ebbda51400a8aee5ca6f310f07362c6adf44';
+export const listingAiFixtureSemantics = 'synthetic-test-only-ocr-path';
+const fixtureRelativePath = listingAiFixtureRelativePath;
+const fixtureSha256 = listingAiFixtureSha256;
 const remoteFixture = '/sdcard/Download/SIT_WP112_CONTROLLED_DRILL.png';
 const fixtureDisplayName = 'SIT_WP112_CONTROLLED_DRILL.png';
 const providerModel = 'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1';
@@ -837,6 +840,7 @@ export async function runAndroidOnDeviceListingAiAcceptance({
     fixture: {
       kind: 'repository-controlled-synthetic-cordless-drill-image',
       sha256: fixtureSha256,
+      semanticScope: listingAiFixtureSemantics,
       personalMediaRead: false,
       retainedOnDevice: false,
     },

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
@@ -14,6 +15,9 @@ import {
   listingAiDraftReady,
   listingAiDraftReadyHeading,
   listingAiDraftReadyProgressText,
+  listingAiFixtureRelativePath,
+  listingAiFixtureSemantics,
+  listingAiFixtureSha256,
   listingAiOnDeviceDisclosurePrefix,
   listingOpenDiagnosticVocabulary,
   listingOpenFailureDiagnostic,
@@ -368,6 +372,19 @@ test('binds the physical runner draft-ready sentinels to the actual app UI sourc
   assert.equal(createListingScreenSource.includes('Bearbeitbarer Entwurf ist bereit.'), false);
 });
 
+test('binds the current physical runner to the explicit synthetic v2 fixture', () => {
+  assert.equal(listingAiFixtureRelativePath, 'test/fixtures/listing-ai/generic-cordless-drill-v2.png');
+  assert.equal(listingAiFixtureSha256,
+    'b5cebcb7c5f84925beb7c650a5a2ebbda51400a8aee5ca6f310f07362c6adf44');
+  assert.equal(listingAiFixtureSemantics, 'synthetic-test-only-ocr-path');
+  const fixtureBytes = readFileSync(
+    new URL('../../test/fixtures/listing-ai/generic-cordless-drill-v2.png', import.meta.url),
+  );
+  assert.equal(createHash('sha256').update(fixtureBytes).digest('hex'), listingAiFixtureSha256);
+  assert.equal(createListingScreenSource.includes('generic-cordless-drill-v2'), false);
+  assert.ok(fixtureBytes.length > 0);
+});
+
 test('reports only sanitized field-language signals when chips are outside the viewport', () => {
   const signals = observedListingAiSignals(
     '<hierarchy><node text="Bearbeitbarer KI-Entwurf" content-desc=""/></hierarchy>',
@@ -717,6 +734,9 @@ test('closes physical on-device Listing-AI with zero-cost non-public evidence', 
   assert.equal(result.tests.providerOnDevice, true);
   assert.equal(result.tests.zeroUnitsAndCost, true);
   assert.equal(result.tests.notPublished, true);
+  assert.equal(result.fixture.kind, 'repository-controlled-synthetic-cordless-drill-image');
+  assert.equal(result.fixture.sha256, listingAiFixtureSha256);
+  assert.equal(result.fixture.semanticScope, 'synthetic-test-only-ocr-path');
   assert.equal(result.tests.controlledMediaRemoved, true);
   assert.equal(result.runtime.externalProviderExecutionAllowed, false);
   assert.equal(result.boundaries.containsSecrets, false);

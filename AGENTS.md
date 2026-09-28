@@ -70,6 +70,11 @@ discover a mechanically stale source hash.
   semantic route or app-readiness failures must never be masked by retries.
 - Listing-AI create-action readiness may have one exact relaunch/reopen recovery;
   editor failures and unrelated exceptions must never be retried.
+- Workflow or backend status such as `draft_ready` is never UI readiness by
+  itself: visible Ready/takeover text and positive acceptance require a
+  non-empty, semantically usable, sufficiently confident core suggestion;
+  empty or LOW results fall honestly into the manual editor without losing
+  photos or form data.
 - A physical UI diagnostic must give every independently fallible transition
   in a multi-action chain its own fixed, privacy-safe substage. After a broad
   code has hidden which transition failed, split the chain and add a bounded
@@ -385,6 +390,7 @@ discover a mechanically stale source hash.
 - Routine tests must not send real email, SMS, push, payment, KYC or other live
   provider traffic.
 - Synthetic PEM or credential markers in tests must be assembled from separate runtime fragments; a baseline is never their replacement and may review an exact immutable historical finding only after its marker has landed in history.
+- Synthetic test credentials must never be tracked as static `password` property or assignment literals; immediately reuse a runtime factory or fragmented construction. If an immutable history finding remains, first clean the current tree, then allow only one exact commit+rule+file reviewed-baseline entry with a dedicated test; never loosen scanner rules or use baseline wildcards.
 - Germany/private-adult pilot boundaries remain active: no vehicles/transport,
   paid delivery, shipping, express, deposit, SIT insurance/protection, real
   money, ads, marketing analytics or external generative AI.

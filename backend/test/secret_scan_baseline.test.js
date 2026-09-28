@@ -84,6 +84,20 @@ test('reviews the historical Green fixed-path finding exactly once', () => {
   }]);
 });
 
+test('reviews the historical Android login restoration fixture exactly once', () => {
+  const matches = baseline.reviewedFindings.filter((entry) => (
+    entry.rule === 'static_password_property'
+    && entry.source === 'c896f69e3a145481a01a52ba501f216940a24c58'
+    && entry.file === 'test/tool/diagnose_android_logout_lifecycle.test.mjs'
+  ));
+  assert.deepEqual(matches, [{
+    rule: 'static_password_property',
+    source: 'c896f69e3a145481a01a52ba501f216940a24c58',
+    file: 'test/tool/diagnose_android_logout_lifecycle.test.mjs',
+    reason: 'Historical synthetic Android login restoration fixture; the current test constructs its non-secret value at runtime.',
+  }]);
+});
+
 test('reviews the historical staging Google synthetic PEM finding exactly once', () => {
   const matches = baseline.reviewedFindings.filter((entry) => (
     entry.rule === 'private_key'

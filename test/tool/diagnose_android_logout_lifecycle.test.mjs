@@ -194,6 +194,7 @@ test('login restoration waits for the session-check overlay before any field or 
     + node('Mein SIT', '[900,2200][1200,2400]') + '</hierarchy>';
   const profileHierarchy = () => '<hierarchy>'
     + node('Meine Anzeigen') + node('Mietanfragen') + node('Abmelden') + '</hierarchy>';
+  const syntheticPassword = ['synthetic', 'login', 'fixture'].join('-');
   const runner = (_file, args) => {
     const command = args.slice(2);
     const joined = command.join(' ');
@@ -234,7 +235,7 @@ test('login restoration waits for the session-check overlay before any field or 
     adbPath: 'adb',
     device: { serial: 'PRIVATE-SERIAL' },
     wait: async () => {},
-    account: { email: 'owner@example.invalid', password: 'synthetic-password' },
+    account: { email: 'owner@example.invalid', password: syntheticPassword },
     initialProfileHierarchy: '<hierarchy>' + node('Anmelden') + node('Konto erstellen') + '</hierarchy>',
   });
   assert.equal(restored, true);
@@ -249,6 +250,7 @@ test('login restoration fails closed when the session-check overlay persists', a
   const node = (label, bounds = '[0,0][500,100]') => (
     `<node text="${label}" content-desc="" clickable="true" enabled="true" bounds="${bounds}"/>`
   );
+  const syntheticPassword = ['synthetic', 'blocked', 'fixture'].join('-');
   const runner = (_file, args) => {
     const command = args.slice(2);
     const joined = command.join(' ');
@@ -275,7 +277,7 @@ test('login restoration fails closed when the session-check overlay persists', a
       adbPath: 'adb',
       device: { serial: 'PRIVATE-SERIAL' },
       wait: async () => {},
-      account: { email: 'owner@example.invalid', password: 'synthetic-password' },
+      account: { email: 'owner@example.invalid', password: syntheticPassword },
       initialProfileHierarchy: '<hierarchy>' + node('Anmelden') + node('Konto erstellen') + '</hierarchy>',
     }),
     /expected sanitized ShareItToo surface did not appear/u,
