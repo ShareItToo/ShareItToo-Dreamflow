@@ -51,7 +51,20 @@ test('failure path is fail-closed and always attempts restore and cleanup', asyn
     candidate: { applicationId: 'com.shareittoo.app', versionName: '1.0.0', versionCode: '2026092803', apiBaseUrl: 'https://staging.shareittoo.com/api/v1' },
     deviceSummary: { physical: true, manufacturer: 'Google', model: 'Pixel' },
     operations: {
-      prepare: async () => { calls.push('prepare'); return { }; },
+      prepare: async () => {
+        calls.push('prepare');
+        return {
+          photoPicker: {
+            systemSurface: 'com.google.android.photopicker',
+            selected: true,
+            returnedToEditor: true,
+          },
+          save: {
+            successDialogVisible: true,
+            returnedToAccountSettings: true,
+          },
+        };
+      },
       mutate: async () => { calls.push('mutate'); throw new Error('bounded synthetic mutation failed'); },
       readSynthetic: async () => {}, restartSynthetic: async () => {},
       restore: async () => { calls.push('restore'); return true; },
@@ -71,18 +84,48 @@ test('success evidence stays sanitized and records restart plus exact restore ga
     candidate: { applicationId: 'com.shareittoo.app', versionName: '1.0.0', versionCode: '2026092803', artifactSourceHead: 'a'.repeat(40), apiBaseUrl: 'https://staging.shareittoo.com/api/v1' },
     deviceSummary: { physical: true, manufacturer: 'Google', model: 'Pixel 7 Pro' },
     operations: {
-      prepare: async () => ({ photoPicker: { systemSurface: 'com.google.android.photopicker', selected: true }, save: { successDialogVisible: true } }),
+      prepare: async () => ({
+        photoPicker: {
+          systemSurface: 'com.google.android.photopicker',
+          selected: true,
+          returnedToEditor: true,
+        },
+        save: { successDialogVisible: true, returnedToAccountSettings: true },
+      }),
       mutate: async () => {},
-      readSynthetic: async () => ({ ownUrl: 'synthetic', publicUrl: 'synthetic' }),
-      restartSynthetic: async () => ({ displayNameVisible: true }),
+      readSynthetic: async () => ({
+        authMePhotoUrlSha256: '1'.repeat(64),
+        publicProfilePhotoUrlSha256: '1'.repeat(64),
+        changedFromOriginal: true,
+      }),
+      restartSynthetic: async () => ({
+        profileCardVisible: true,
+        navigationVisible: true,
+        publicProfileVisible: true,
+        avatarImageWidgetObserved: true,
+        publicProfileImageWidgetObserved: true,
+      }),
       restore: async () => {},
-      readRestored: async () => ({ ownUrl: null, publicUrl: null }),
-      restartRestored: async () => ({ displayNameVisible: true }),
-      cleanup: async () => ({ mediaIdsRemoved: true, remoteFixtureRemoved: true, tempFilesRemoved: true }),
+      readRestored: async () => ({
+        authMeExactOriginal: true,
+        publicProfileExactOriginal: true,
+      }),
+      restartRestored: async () => ({
+        profileCardVisible: true,
+        navigationVisible: true,
+        publicProfileVisible: true,
+      }),
+      cleanup: async () => ({
+        mediaIdsRemoved: true,
+        remoteMediaIds: 1,
+        remoteDeleteSecond404: true,
+        remoteFixtureRemoved: true,
+        tempFilesRemoved: true,
+      }),
     },
   });
   assert.equal(result.status, 'passed-profile-avatar-regression');
-  assert.equal(result.checks.restartPersistence.displayNameVisible, true);
+  assert.equal(result.checks.restartPersistence.profileCardVisible, true);
   assert.equal(result.checks.cleanup.mediaIdsRemoved, true);
   assert.equal(result.boundaries.containsSecrets, false);
   assert.doesNotMatch(JSON.stringify(result), /password|token|\/Users\//iu);

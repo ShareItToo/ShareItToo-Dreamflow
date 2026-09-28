@@ -270,14 +270,19 @@ async function captureOwnerSurfaces({ commandRunner, adbPath, device, wait, disp
   const profile = await openMainDestination({ commandRunner, adbPath, device, wait, label: 'Mein SIT' });
   const card = surfaceEvidence(profile, displayName);
   let publicProfileVisible = false;
-  if (card.displayNameVisible) {
+  let publicProfileImageWidgetObserved = false;
+  if (card.displayNameVisible && hasLabel(profile, 'Mein Profil anzeigen')) {
     try {
-      tapLabel(commandRunner, adbPath, device, profile, displayName, { chooseLast: true });
+      tapLabel(commandRunner, adbPath, device, profile, 'Mein Profil anzeigen');
       const publicProfile = await waitForHierarchy({
         commandRunner, adbPath, device, wait, label: 'public profile',
-        predicate: (h) => hasLabel(h, 'Öffentliches Profil') || hasLabel(h, 'Über mich'),
+        predicate: (h) => hasLabel(h, 'Öffentliches Profil') && hasLabel(h, displayName),
       });
       publicProfileVisible = Boolean(publicProfile);
+      publicProfileImageWidgetObserved = surfaceEvidence(
+        publicProfile,
+        displayName,
+      ).imageWidgetObserved;
       currentHeadAndroidAdb(commandRunner, adbPath, device, ['shell', 'input', 'keyevent', '4']);
     } catch {
       // A route without a deterministic public-profile action is evidence of
@@ -289,8 +294,29 @@ async function captureOwnerSurfaces({ commandRunner, adbPath, device, wait, disp
     navigationVisible: hasLabel(profile, 'Mein SIT'),
     publicProfileVisible,
     avatarImageWidgetObserved: card.imageWidgetObserved,
+    publicProfileImageWidgetObserved,
     avatarRenderDeterministic: false,
   };
+}
+
+async function restartAndCaptureOwnerSurfaces({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+  displayName,
+}) {
+  currentHeadAndroidAdb(commandRunner, adbPath, device, [
+    'shell', 'am', 'force-stop', applicationId,
+  ]);
+  await wait(750);
+  return captureOwnerSurfaces({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+    displayName,
+  });
 }
 
 export async function runAndroidProfileAvatarRegression({ candidate, deviceSummary, operations, capturedAt = new Date().toISOString() }) {
@@ -298,13 +324,48 @@ export async function runAndroidProfileAvatarRegression({ candidate, deviceSumma
   let primary = null; let restore = null; let cleanup = null; let state;
   try {
     state = await operations.prepare();
+    if (state?.photoPicker?.systemSurface !== pickerPackage
+        || state.photoPicker.selected !== true
+        || state.photoPicker.returnedToEditor !== true
+        || state?.save?.successDialogVisible !== true
+        || state.save.returnedToAccountSettings !== true) {
+      fail('Profile-avatar picker or save proof is incomplete.');
+    }
     await operations.mutate(state);
     const synthetic = await operations.readSynthetic(state);
+    if (synthetic?.changedFromOriginal !== true
+        || synthetic.authMePhotoUrlSha256 === null
+        || synthetic.authMePhotoUrlSha256 !== synthetic.publicProfilePhotoUrlSha256) {
+      fail('Profile-avatar synthetic server proof is incomplete.');
+    }
     const restartSynthetic = await operations.restartSynthetic(state);
+    if (restartSynthetic?.profileCardVisible !== true
+        || restartSynthetic.navigationVisible !== true
+        || restartSynthetic.publicProfileVisible !== true
+        || restartSynthetic.avatarImageWidgetObserved !== true
+        || restartSynthetic.publicProfileImageWidgetObserved !== true) {
+      fail('Profile-avatar restarted UI proof is incomplete.');
+    }
     await operations.restore(state);
     restore = await operations.readRestored(state);
+    if (restore?.authMeExactOriginal !== true
+        || restore.publicProfileExactOriginal !== true) {
+      fail('Profile-avatar restored server proof is incomplete.');
+    }
     const restartRestored = await operations.restartRestored(state);
+    if (restartRestored?.profileCardVisible !== true
+        || restartRestored.navigationVisible !== true
+        || restartRestored.publicProfileVisible !== true) {
+      fail('Profile-avatar restored UI proof is incomplete.');
+    }
     cleanup = await operations.cleanup(state);
+    if (cleanup?.mediaIdsRemoved !== true
+        || cleanup.remoteMediaIds !== 1
+        || cleanup.remoteDeleteSecond404 !== true
+        || cleanup.remoteFixtureRemoved !== true
+        || cleanup.tempFilesRemoved !== true) {
+      fail('Profile-avatar cleanup proof is incomplete.');
+    }
     return {
       schemaVersion: 1,
       kind: 'sit-pixel-profile-avatar-regression',
@@ -406,10 +467,10 @@ async function concreteRunner({ sourceVaultFile, candidateDirectory, adbPath = '
     },
     mutate: async (state) => { if (!state?.uiUpload?.id) fail('The UI profile upload identifier is unavailable.'); },
     readSynthetic: async (state) => { const read = await readProfiles({ fetchImpl, baseUrl: current.candidate.apiBaseUrl, token, id }); if (read.ownUrl !== state.uiUpload.url || read.publicUrl !== state.uiUpload.url) fail('Synthetic avatar server readback did not match.'); return { authMePhotoUrlSha256: read.ownHash, publicProfilePhotoUrlSha256: read.publicHash, changedFromOriginal: true }; },
-    restartSynthetic: async () => captureOwnerSurfaces({ commandRunner, adbPath, device, wait, displayName: vault.accounts.find((a) => a.role === 'owner').displayName }),
+    restartSynthetic: async () => restartAndCaptureOwnerSurfaces({ commandRunner, adbPath, device, wait, displayName: vault.accounts.find((a) => a.role === 'owner').displayName }),
     restore: async () => { await request(fetchImpl, '/profile', { baseUrl: current.candidate.apiBaseUrl, method: 'PATCH', token, body: { photoURL: original } }); },
     readRestored: async () => { const read = await readProfiles({ fetchImpl, baseUrl: current.candidate.apiBaseUrl, token, id }); if (read.ownUrl !== original || read.publicUrl !== original) fail('Original avatar server readback did not restore exactly.'); return { authMeExactOriginal: true, publicProfileExactOriginal: true, originalPhotoUrlSha256: original ? sha256(original) : null }; },
-    restartRestored: async () => captureOwnerSurfaces({ commandRunner, adbPath, device, wait, displayName: vault.accounts.find((a) => a.role === 'owner').displayName }),
+    restartRestored: async () => restartAndCaptureOwnerSurfaces({ commandRunner, adbPath, device, wait, displayName: vault.accounts.find((a) => a.role === 'owner').displayName }),
     cleanup: async (state) => { cleanupMedia(); const ids = [...new Set([state?.uiUpload?.id, uiUpload?.id].filter(Boolean))]; for (const remoteId of ids) { const path = `/uploads/${encodeURIComponent(remoteId)}`; await request(fetchImpl, path, { baseUrl: current.candidate.apiBaseUrl, method: 'DELETE', token, expected: [204, 404] }); await request(fetchImpl, path, { baseUrl: current.candidate.apiBaseUrl, method: 'DELETE', token, expected: [404] }); } rmSync(temp, { recursive: true, force: true }); return { mediaIdsRemoved: true, remoteMediaIds: ids.length, remoteDeleteSecond404: true, remoteFixtureRemoved: true, tempFilesRemoved: true }; },
   };
   try { return await runAndroidProfileAvatarRegression({ candidate: current.candidate, deviceSummary, operations }); } finally { if (existsSync(temp)) rmSync(temp, { recursive: true, force: true }); }
