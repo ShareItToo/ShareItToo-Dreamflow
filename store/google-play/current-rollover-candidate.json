@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "android-current-rollover-candidate",
-  "status": "built-and-archived-internal-staging-upload-pending",
+  "status": "built-and-archived-internal-staging-release-active",
   "generatedAt": "2026-09-28T17:13:42Z",
   "candidate": {
     "applicationId": "com.shareittoo.app",
@@ -64,7 +64,26 @@
     "githubCodeqlConclusion": "success",
     "ghcrApiDigest": "sha256:521d7e555d9c09f3d385f82eda1f32d28c13f2627a383e91a9ed973d50d81106"
   },
-  "playConsoleReadback": "not-performed",
+  "playConsoleReadback": {
+    "performedAt": "2026-09-28T22:58:00+02:00",
+    "track": "internal-testing",
+    "releaseId": 33,
+    "releaseDetailsPath": "/console/u/0/developers/4653202812150286845/app/4973917320514947988/tracks/4701593427959921264/releases/33/details",
+    "releaseName": "2026092802 (1.0.0)",
+    "versionName": "1.0.0",
+    "versionCode": "2026092802",
+    "status": "available-to-internal-testers",
+    "reviewed": false,
+    "reviewStatusObserved": "not-reviewed",
+    "sentForReview": false,
+    "releasedAtConsoleLocal": "2026-09-28 22:58",
+    "temporaryAppName": "com.shareittoo.app (unreviewed)",
+    "testerListName": "SIT interner Test",
+    "testerCount": 2,
+    "testerListUnchanged": true,
+    "joinLinkAvailable": true,
+    "deviceInstallation": "pending-play-store-propagation"
+  },
   "preUploadPlayConsoleReadback": {
     "performedAt": "2026-09-28T18:00:13+02:00",
     "track": "internal-testing",
@@ -78,11 +97,11 @@
     "testerListUnchanged": true
   },
   "playStateAtLastReadback": {
-    "readbackPerformed": false,
-    "candidateUploaded": false,
-    "candidateActivated": false,
+    "readbackPerformed": true,
+    "candidateUploaded": true,
+    "candidateActivated": true,
     "testerListChanged": false,
-    "consoleActionPerformed": false
+    "consoleActionPerformed": true
   },
   "providerAndLiveHolds": {
     "externalListingAiEnabled": false,
