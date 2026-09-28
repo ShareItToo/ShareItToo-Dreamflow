@@ -24,11 +24,18 @@ const greenRuntimeGid = 101;
 export const greenTarget = Object.freeze({
   composeProject: 'sit-green',
   apiContainer: 'shareittoo-staging-api',
-  // The next promotion seals the exact active c2da runtime.  All older
+  // The next promotion seals the exact active 01f runtime.  All older
   // stopped seals remain immutable read-only witnesses and are never mutation
   // targets of this runner.
-  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-c2da8585',
+  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-01f81655',
   retainedSealed: Object.freeze([
+    Object.freeze({
+      name: 'shareittoo-staging-api-alt-sealed-green-c2da8585',
+      image: 'ghcr.io/shareittoo/shareittoo-api:c2da8585b1f822e123307d7c763530dc0f598893@sha256:cb7f92814225044a677106d9979b95bc7d019a549ca223228c17bd281a2b97d8',
+      greenLabel: 'true',
+      runId: '20260918011528-wp254',
+      running: false,
+    }),
     Object.freeze({
       name: 'shareittoo-staging-api-sealed-green-c2da-memory-20260925T214445Z',
       image: 'ghcr.io/shareittoo/shareittoo-api:c2da8585b1f822e123307d7c763530dc0f598893@sha256:cb7f92814225044a677106d9979b95bc7d019a549ca223228c17bd281a2b97d8',
@@ -75,8 +82,8 @@ export const greenTarget = Object.freeze({
   runId: '20260918011528-wp254',
   sourceSchema: 98,
   currentSchema: 98,
-  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:c2da8585b1f822e123307d7c763530dc0f598893',
-  prePromotionImageDigest: 'sha256:cb7f92814225044a677106d9979b95bc7d019a549ca223228c17bd281a2b97d8',
+  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:01f81655a8dfcb59a6f15c6ff7b817dd5dcef75d',
+  prePromotionImageDigest: 'sha256:98add690a9a0aac2416d8a39a3ff288549d3726b23a4ba10b0d6373000b13edf',
   sourceLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentMigration: '098_booking_checkout_declaration_constraints.up.sql',

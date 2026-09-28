@@ -47,9 +47,11 @@ discover a mechanically stale source hash.
   nearest authoritative instruction. Add a deterministic test, validator or
   fail-closed guard when the pattern is technically enforceable. Duplicate UI
   output or repeated reporting of one still-open incident remains one finding.
-  Repeat-promotion pre-state contracts must derive from the last verified final
-  runtime shape, not a stale first-promotion source shape; deterministic tests
-  must assert the exact live tuple and reject extra, missing or changed mounts.
+  After every successful promotion, the next repeat-promotion package must
+  freshly refresh the active pre-state image, digest and sealed inventory from
+  the verified live tuple; it must never reuse a stale first-promotion source
+  shape. Deterministic tests must assert that exact tuple and reject extra,
+  missing or changed mounts.
 - Recovery mutations must target the captured immutable provider/container ID,
   never a mutable name; stateful test executors must model or explicitly reject
   every accepted security/resource option.

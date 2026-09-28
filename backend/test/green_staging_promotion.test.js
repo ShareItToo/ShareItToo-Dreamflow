@@ -48,7 +48,7 @@ import { readListingAiGatewayConfiguration } from '../src/listing_ai_gateway_con
 import { isMfaProbeContainer, runMfaProbe } from '../ops/staging_controlled_acceptance.mjs';
 
 const runtimeCommit = '01f81655a8dfcb59a6f15c6ff7b817dd5dcef75d';
-const opsCommit = '928861bd4cfd080f90463d0445d59810c3280ad2';
+const opsCommit = '30382acc09834fa0144dc204cd83075aaac04cac';
 const targetNetworkId = '4'.repeat(64);
 const providerNetworkId = '5'.repeat(64);
 const isolatedNetworkId = '1'.repeat(64);
@@ -66,7 +66,7 @@ const targetManifest = {
   retainedSealed: greenTarget.retainedSealed.map((descriptor) => ({ ...descriptor })),
 };
 targetManifest.targetDigest = normalizedGreenTargetDigest(targetManifest);
-assert.equal(targetManifest.targetDigest, 'e58ff2381213a79f4a0e46d0cec25e6e63e9df8050345080dbaebd09cba69c35');
+assert.equal(targetManifest.targetDigest, 'dd3f773efade986034a4848edb6bc195da2149a37f74d505c85bda378ddf07a3');
 const prePromotionImageReference = `${greenTarget.prePromotionImage}@${greenTarget.prePromotionImageDigest}`;
 const config = {
   environment: 'test', envFile: '/docker/shareittoo/staging-secrets/green.env',
@@ -179,9 +179,10 @@ function restoreFixture(options, running = true) {
 test('Green target accepts only the exact verified resource identities', () => {
   assert.deepEqual(assertGreenTargetManifest(targetManifest), targetManifest);
   assert.equal(targetManifest.schemaVersion, 3);
-  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:c2da8585b1f822e123307d7c763530dc0f598893');
-  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:cb7f92814225044a677106d9979b95bc7d019a549ca223228c17bd281a2b97d8');
+  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:01f81655a8dfcb59a6f15c6ff7b817dd5dcef75d');
+  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:98add690a9a0aac2416d8a39a3ff288549d3726b23a4ba10b0d6373000b13edf');
   assert.deepEqual(targetManifest.retainedSealed.map((descriptor) => descriptor.name), [
+    'shareittoo-staging-api-alt-sealed-green-c2da8585',
     'shareittoo-staging-api-sealed-green-c2da-memory-20260925T214445Z',
     'shareittoo-staging-api-alt-sealed-green-56ec5dc1',
     'shareittoo-staging-api-alt-sealed-green-cffb4e43',

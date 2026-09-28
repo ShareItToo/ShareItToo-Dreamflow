@@ -128,11 +128,12 @@ legacy `shareittoo_staging` is never used by this lane.
 The source readback is exactly schema `98` with the manifest-bound ledger
 digest `796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196`.
 The pre-promotion image is exactly
-`ghcr.io/shareittoo/shareittoo-api:c2da8585b1f822e123307d7c763530dc0f598893`
+`ghcr.io/shareittoo/shareittoo-api:01f81655a8dfcb59a6f15c6ff7b817dd5dcef75d`
 with digest
-`sha256:cb7f92814225044a677106d9979b95bc7d019a549ca223228c17bd281a2b97d8`.
+`sha256:98add690a9a0aac2416d8a39a3ff288549d3726b23a4ba10b0d6373000b13edf`.
 The new seal is
-`shareittoo-staging-api-alt-sealed-green-c2da8585`. The five historical seals
+`shareittoo-staging-api-alt-sealed-green-01f81655`. The six historical seals
+`shareittoo-staging-api-alt-sealed-green-c2da8585` (c2da tag plus exact digest),
 `shareittoo-staging-api-sealed-green-c2da-memory-20260925T214445Z` (c2da memory
 runtime plus exact digest),
 `shareittoo-staging-api-alt-sealed-green-56ec5dc1` (56ec tag plus exact digest),
