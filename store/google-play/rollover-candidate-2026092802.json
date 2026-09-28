@@ -97,6 +97,5 @@
   "containsSecrets": false,
   "containsTesterIdentity": false,
   "containsOptInUrl": false,
-  "containsPrivateFilesystemPath": false,
-  "candidateManifestRef": "store/google-play/rollover-candidate-2026092802.json"
+  "containsPrivateFilesystemPath": false
 }
