@@ -54,13 +54,15 @@
     "runtimeDriftBasis": "artifact-manifest-and-privacy-match-source-head;successor-drift-test-and-audit-only-non-runtime",
     "currentHeadArchive": "passed",
     "currentConsumerClosure": "passed",
-    "fullTechnicalRegression": "in_progress",
-    "githubRegression": "in_progress",
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed",
     "githubVerifiedHead": "3c40ded07b58b8164d806628926ac4cb579afb0d",
     "githubRegressionRunId": 36486234979,
-    "githubRegressionConclusion": "in_progress",
+    "githubRegressionConclusion": "success",
     "githubCodeqlRunId": 36485516089,
-    "githubCodeqlConclusion": "success"
+    "githubCodeqlConclusion": "success",
+    "ghcrApiDigest": "sha256:23c6bf4397dad4cd84764102b47980205e6bb97519f3b610aaa26ebf4a6fc683"
   },
   "playConsoleReadback": "not-performed",
   "preUploadPlayConsoleReadback": {
