@@ -413,11 +413,14 @@ discover a mechanically stale source hash.
 
 ### Candidate version binding
 
-- Every Android candidate bump updates `pubspec.yaml`, the V5.2
+- Android `pubspec.yaml` version/build, the V5.2
   `PrivatePilotConfig.v52ClientBuild` fallback and the backend
-  `listingAiSupportedClientVersion` capability handshake atomically. Release
-  preflight must fail before any binary build when those values drift; never
-  repair the mismatch by reusing or rebinding an already archived candidate.
+  `listingAiSupportedClientVersion` capability handshake form one atomic
+  release contract: never change or release one alone; always test them
+  together and refresh exact current `sourceInventory` hashes for source
+  changes. Release preflight must fail before any binary build when those
+  values drift; never repair the mismatch by reusing or rebinding an already
+  archived candidate.
 - An Internal/Staging candidate rollover (`SIT_ALLOW_CANDIDATE_ROLLOVER=1`) must
   explicitly bind the complete private-pilot profile before Firebase,
   preflight or artifact work: Google=true, Apple=false, Facebook=false,
