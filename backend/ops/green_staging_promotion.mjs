@@ -17,10 +17,10 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.
 export const greenTarget = Object.freeze({
   composeProject: 'sit-green',
   apiContainer: 'shareittoo-staging-api',
-  // The next promotion seals the exact active d91 runtime. Every existing
+  // The next promotion seals the exact active bc86 runtime. Every existing
   // stopped Green seal remains an immutable read-only witness and is never a
   // mutation target of this runner.
-  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-d91b50a9',
+  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-bc86f831',
   retainedSealed: Object.freeze([
     Object.freeze({
       name: 'shareittoo-staging-api-alt-sealed-green',
@@ -78,6 +78,14 @@ export const greenTarget = Object.freeze({
       runId: '20260918011528-wp254',
       running: false,
     }),
+    Object.freeze({
+      name: 'shareittoo-staging-api-alt-sealed-green-d91b50a9',
+      image: 'ghcr.io/shareittoo/shareittoo-api:d91b50a92880b4f46a5c9028482bdf013f8c5233@sha256:4343e2a0006b841f3bdaba6b914ed782caaf1dcb16aa5e1aeaaefffda7f23d71',
+      imageDigest: 'sha256:4343e2a0006b841f3bdaba6b914ed782caaf1dcb16aa5e1aeaaefffda7f23d71',
+      greenLabel: 'true',
+      runId: '20260918011528-wp254',
+      running: false,
+    }),
   ]),
   databaseContainer: 'sit-green-postgres-20260918011528-wp254',
   databaseVolume: 'sit-green-volume-20260918011528-wp254',
@@ -89,8 +97,8 @@ export const greenTarget = Object.freeze({
   runId: '20260918011528-wp254',
   sourceSchema: 98,
   currentSchema: 98,
-  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:d91b50a92880b4f46a5c9028482bdf013f8c5233',
-  prePromotionImageDigest: 'sha256:4343e2a0006b841f3bdaba6b914ed782caaf1dcb16aa5e1aeaaefffda7f23d71',
+  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:bc86f8318e2c96af5d703007399dc582bc14b5f7',
+  prePromotionImageDigest: 'sha256:521d7e555d9c09f3d385f82eda1f32d28c13f2627a383e91a9ed973d50d81106',
   sourceLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentMigration: '098_booking_checkout_declaration_constraints.up.sql',
@@ -1943,7 +1951,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       const entryEnv = entry.envFile === configFile ? protectedEnv : entry.envFile === plan.isolated.envFile ? isolatedEnv : {};
       const env = { ...commandEnv, ...entryEnv, ...(boundEntry.runtimeEnv ?? {}) };
       // Starting this canonical command is the irreversible boundary even
-      // when runMigrations is idempotent at 98; the sealed d91 image must
+      // when runMigrations is idempotent at 98; the sealed bc86 image must
       // never be restarted after this point.
       if (entry.phase === 'canonical_idempotent_migration_98_to_98') schemaMutationStarted = true;
       let result;

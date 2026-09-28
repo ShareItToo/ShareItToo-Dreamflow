@@ -128,11 +128,11 @@ legacy `shareittoo_staging` is never used by this lane.
 The source readback is exactly schema `98` with the manifest-bound ledger
 digest `796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196`.
 The pre-promotion image is exactly
-`ghcr.io/shareittoo/shareittoo-api:d91b50a92880b4f46a5c9028482bdf013f8c5233`
+`ghcr.io/shareittoo/shareittoo-api:bc86f8318e2c96af5d703007399dc582bc14b5f7`
 with digest
-`sha256:4343e2a0006b841f3bdaba6b914ed782caaf1dcb16aa5e1aeaaefffda7f23d71`.
+`sha256:521d7e555d9c09f3d385f82eda1f32d28c13f2627a383e91a9ed973d50d81106`.
 The new seal is
-`shareittoo-staging-api-alt-sealed-green-d91b50a9`. All seven existing
+`shareittoo-staging-api-alt-sealed-green-bc86f831`. All eight existing
 historical seals remain separately read-only validated, stopped containers
 with the exact Green label, run ID and immutable image digest; none is ever
 renamed, removed, restarted or network-targeted.
@@ -207,14 +207,14 @@ when cleanup or target/config preservation is uncertain.
 Preparation is local/read-only until the separately authorized operational
 gate is supplied; the target and config manifests stay outside Git:
 
-The 2026-09-28 read-only VPS inventory found the live d91 image, schema 98,
-and seven stopped Green seals. The protected VPS target manifest still points
-to the previous `01f81655` pre-promotion image and six retained seals; its
+The 2026-09-28 read-only VPS inventory found the live bc86 image, schema 98,
+and eight stopped Green seals. The protected VPS target manifest still points
+to the previous d91 pre-promotion image and seven retained seals; its
 readback is therefore intentionally rejected by this exact contract. Before
 executing the next promotion, refresh that mode-0600 manifest atomically to
-the verified d91 prestate and all seven retained descriptors. The expected
+the verified bc86 prestate and all eight retained descriptors. The expected
 refreshed target digest is
-`b3be0ca620c9ed02d8fdaaf76f09c8a14bd32e8d432f26f166b12e8d5ef19228`.
+`a7af683937965b813bb7e8f4536959c198dd90502c71ad88ae625cf2f60b7217`.
 Do not run the promotion against the stale manifest.
 
 ```sh

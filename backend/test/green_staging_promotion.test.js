@@ -65,7 +65,7 @@ const targetManifest = {
   retainedSealed: greenTarget.retainedSealed.map((descriptor) => ({ ...descriptor })),
 };
 targetManifest.targetDigest = normalizedGreenTargetDigest(targetManifest);
-assert.equal(targetManifest.targetDigest, 'b3be0ca620c9ed02d8fdaaf76f09c8a14bd32e8d432f26f166b12e8d5ef19228');
+assert.equal(targetManifest.targetDigest, 'a7af683937965b813bb7e8f4536959c198dd90502c71ad88ae625cf2f60b7217');
 const prePromotionImageReference = `${greenTarget.prePromotionImage}@${greenTarget.prePromotionImageDigest}`;
 const config = {
   environment: 'test', envFile: '/docker/shareittoo/staging-secrets/green.env',
@@ -178,8 +178,9 @@ function restoreFixture(options, running = true) {
 test('Green target accepts only the exact verified resource identities', () => {
   assert.deepEqual(assertGreenTargetManifest(targetManifest), targetManifest);
   assert.equal(targetManifest.schemaVersion, 3);
-  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:d91b50a92880b4f46a5c9028482bdf013f8c5233');
-  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:4343e2a0006b841f3bdaba6b914ed782caaf1dcb16aa5e1aeaaefffda7f23d71');
+  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:bc86f8318e2c96af5d703007399dc582bc14b5f7');
+  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:521d7e555d9c09f3d385f82eda1f32d28c13f2627a383e91a9ed973d50d81106');
+  assert.equal(targetManifest.sealedApiContainer, 'shareittoo-staging-api-alt-sealed-green-bc86f831');
   assert.deepEqual(targetManifest.retainedSealed.map((descriptor) => descriptor.name), [
     'shareittoo-staging-api-alt-sealed-green',
     'shareittoo-staging-api-alt-sealed-green-01f81655',
@@ -188,6 +189,7 @@ test('Green target accepts only the exact verified resource identities', () => {
     'shareittoo-staging-api-sealed-green-c2da-memory-20260925T214445Z',
     'shareittoo-staging-api-alt-sealed-green-cffb4e43',
     'shareittoo-staging-api-alt-sealed-green-ea25e7cb',
+    'shareittoo-staging-api-alt-sealed-green-d91b50a9',
   ]);
   const retainedReadbacks = greenTarget.retainedSealed.map((descriptor) => ({
     Name: `/${descriptor.name}`,
