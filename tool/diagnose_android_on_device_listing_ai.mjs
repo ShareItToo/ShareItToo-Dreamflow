@@ -40,16 +40,192 @@ const allowedStages = new Set([
   'open-listing', 'photo-picker', 'consent', 'analyze', 'wait-draft',
   'collect-fields', 'server-readback', 'cleanup', 'restore-owner',
 ]);
+const photoPickerDiagnosticCatalog = Object.freeze({
+  'open-source-dialog': Object.freeze({
+    code: 'PHOTO_PICKER_SOURCE_DIALOG_OPEN_FAILED',
+    classification: 'source-dialog-open-failed',
+  }),
+  'wait-source-dialog': Object.freeze({
+    code: 'PHOTO_PICKER_SOURCE_DIALOG_UNAVAILABLE',
+    classification: 'source-dialog-unavailable',
+  }),
+  'open-system-picker': Object.freeze({
+    code: 'PHOTO_PICKER_SYSTEM_SURFACE_OPEN_FAILED',
+    classification: 'system-picker-open-failed',
+  }),
+  'wait-system-picker': Object.freeze({
+    code: 'PHOTO_PICKER_SYSTEM_SURFACE_UNAVAILABLE',
+    classification: 'system-picker-unavailable',
+  }),
+  'verify-controlled-media': Object.freeze({
+    code: 'PHOTO_PICKER_CONTROLLED_MEDIA_INVALID',
+    classification: 'controlled-media-invalid',
+  }),
+  'find-controlled-tile': Object.freeze({
+    code: 'PHOTO_PICKER_CONTROLLED_TILE_UNAVAILABLE',
+    classification: 'controlled-tile-unavailable',
+  }),
+  'select-controlled-tile': Object.freeze({
+    code: 'PHOTO_PICKER_CONTROLLED_TILE_SELECT_FAILED',
+    classification: 'controlled-tile-select-failed',
+  }),
+  'wait-selection-confirmation': Object.freeze({
+    code: 'PHOTO_PICKER_SELECTION_CONFIRMATION_UNAVAILABLE',
+    classification: 'selection-confirmation-unavailable',
+  }),
+  'confirm-selection': Object.freeze({
+    code: 'PHOTO_PICKER_SELECTION_CONFIRM_FAILED',
+    classification: 'selection-confirm-failed',
+  }),
+  'return-listing-editor': Object.freeze({
+    code: 'PHOTO_PICKER_LISTING_EDITOR_UNAVAILABLE',
+    classification: 'listing-editor-unavailable',
+  }),
+  'find-analysis-control': Object.freeze({
+    code: 'PHOTO_PICKER_ANALYSIS_CONTROL_UNAVAILABLE',
+    classification: 'analysis-control-unavailable',
+  }),
+  'find-analysis-consent-surface': Object.freeze({
+    code: 'PHOTO_PICKER_ANALYSIS_CONSENT_SURFACE_UNAVAILABLE',
+    classification: 'analysis-consent-surface-unavailable',
+  }),
+  'tap-analysis-consent': Object.freeze({
+    code: 'PHOTO_PICKER_ANALYSIS_CONSENT_TAP_FAILED',
+    classification: 'analysis-consent-tap-failed',
+  }),
+  'reacquire-analysis-action': Object.freeze({
+    code: 'PHOTO_PICKER_ANALYSIS_ACTION_UNAVAILABLE',
+    classification: 'analysis-action-unavailable',
+  }),
+  'tap-analysis-action': Object.freeze({
+    code: 'PHOTO_PICKER_ANALYSIS_ACTION_TAP_FAILED',
+    classification: 'analysis-action-tap-failed',
+  }),
+  unknown: Object.freeze({
+    code: 'PHOTO_PICKER_UNCLASSIFIED_FAILURE',
+    classification: 'unclassified-photo-picker-failure',
+  }),
+});
+export const photoPickerDiagnosticVocabulary = photoPickerDiagnosticCatalog;
 export const onDeviceListingAiViewportAttemptLimit = 24;
 let activeStage = 'load-vault';
+let activePhotoPickerSubstage = 'unknown';
+export const listingAiOnDeviceDisclosurePrefix =
+  'SIT wertet deine ausgewählten Bilder direkt auf diesem Android-Gerät aus.';
+
+export function listingAiConsentSurfaceReady(hierarchy) {
+  return currentHeadAndroidNamedNodes(
+    hierarchy,
+    listingAiOnDeviceDisclosurePrefix,
+  ).length === 1;
+}
+
+export async function waitForListingCreateAction({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+}) {
+  return waitForHierarchy({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+    label: 'new listing action',
+    predicate: (hierarchy) => currentHeadAndroidNamedNodes(
+      hierarchy,
+      'Neue Anzeige erstellen',
+    ).length === 1,
+  });
+}
+
+export async function waitForListingAiAnalyzeAction({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+}) {
+  return scrollUntil({
+    commandRunner,
+    adbPath,
+    device,
+    pause: wait,
+    predicate: (hierarchy) => currentHeadAndroidNamedNodes(
+      hierarchy,
+      'Ausgewählte Fotos analysieren',
+    ).length === 1,
+  });
+}
 
 function fail(message) {
-  throw new Error(message);
+  const error = new Error(message);
+  if (activeStage === 'photo-picker') attachPhotoPickerDiagnostic(error, activePhotoPickerSubstage);
+  throw error;
 }
 
 function setStage(stage) {
   if (!allowedStages.has(stage)) fail('The Listing-AI diagnostic stage is invalid.');
   activeStage = stage;
+  if (stage === 'photo-picker') activePhotoPickerSubstage = 'unknown';
+}
+
+export function photoPickerFailureDiagnostic(substage) {
+  const key = Object.hasOwn(photoPickerDiagnosticCatalog, substage)
+    ? substage
+    : 'unknown';
+  const entry = photoPickerDiagnosticCatalog[key];
+  return Object.freeze({
+    stage: 'photo-picker',
+    substage: key,
+    code: entry.code,
+    classification: entry.classification,
+  });
+}
+
+export function formatPhotoPickerFailureReport(report) {
+  const requested = report?.primary;
+  const diagnostic = photoPickerFailureDiagnostic(requested?.substage);
+  const exact = requested?.stage === diagnostic.stage
+    && requested?.code === diagnostic.code
+    && requested?.classification === diagnostic.classification;
+  const primary = exact ? requested : diagnostic;
+  const cleanup = report?.cleanup === 'passed' ? 'passed' : 'failed';
+  const ownerRestore = report?.ownerRestore === 'passed' ? 'passed' : 'failed';
+  return `ERROR: SIT stage photo-picker: ${primary.code}/${primary.classification}/${primary.substage}`
+    + ` cleanup=${cleanup} ownerRestore=${ownerRestore}`;
+}
+
+function attachPhotoPickerDiagnostic(error, substage) {
+  if (error === null || (typeof error !== 'object' && typeof error !== 'function')) return error;
+  const diagnostic = photoPickerFailureDiagnostic(substage);
+  try {
+    Object.defineProperty(error, 'listingAiDiagnostic', {
+      value: diagnostic,
+      enumerable: false,
+      configurable: true,
+    });
+  } catch {
+    // The original failure remains authoritative even if it is not extensible.
+  }
+  return error;
+}
+
+async function photoPickerAction(substage, action) {
+  activePhotoPickerSubstage = substage;
+  try {
+    return await action();
+  } catch (error) {
+    throw attachPhotoPickerDiagnostic(error, substage);
+  }
+}
+
+function photoPickerActionSync(substage, action) {
+  activePhotoPickerSubstage = substage;
+  try {
+    return action();
+  } catch (error) {
+    throw attachPhotoPickerDiagnostic(error, substage);
+  }
 }
 
 function sha256(value) {
@@ -282,6 +458,7 @@ export async function runAndroidOnDeviceListingAiAcceptance({
   let primaryFailure = null;
   let primaryStage = null;
   let cleanupFailure = null;
+  let restoreFailure = null;
   try {
     performed = await operations.perform();
     server = exactServerProof(await operations.verifyServer(performed));
@@ -293,15 +470,23 @@ export async function runAndroidOnDeviceListingAiAcceptance({
     primaryStage = typeof error?.sitStage === 'string' && allowedStages.has(error.sitStage)
       ? error.sitStage
       : (allowedStages.has(operationStage) ? operationStage : activeStage);
+    if (primaryStage === 'photo-picker') {
+      attachPhotoPickerDiagnostic(
+        error,
+        error?.listingAiDiagnostic?.substage
+          ?? (typeof operations.currentSubstage === 'function'
+            ? operations.currentSubstage()
+            : activePhotoPickerSubstage),
+      );
+    }
     if (typeof primaryFailure.sitStage !== 'string') {
       primaryFailure.sitStage = primaryStage;
     }
   } finally {
     try {
       cleanup = await operations.cleanup(performed);
-      if (primaryFailure === null
-          && (cleanup?.localRecoveryCleared !== true
-            || cleanup?.controlledMediaRemoved !== true)) {
+      if (cleanup?.localRecoveryCleared !== true
+          || cleanup?.controlledMediaRemoved !== true) {
         fail('The controlled Listing-AI device cleanup did not close exactly.');
       }
     } catch (error) {
@@ -312,11 +497,45 @@ export async function runAndroidOnDeviceListingAiAcceptance({
         fail('The protected owner session was not restored.');
       }
     } catch (error) {
-      cleanupFailure ??= error;
+      restoreFailure = error;
+    }
+  }
+  const failureReport = primaryFailure?.listingAiDiagnostic?.stage === 'photo-picker'
+    ? Object.freeze({
+      schemaVersion: 1,
+      stage: primaryFailure.listingAiDiagnostic.stage,
+      primary: primaryFailure.listingAiDiagnostic,
+      cleanup: cleanupFailure === null ? 'passed' : 'failed',
+      ownerRestore: restoreFailure === null ? 'passed' : 'failed',
+    })
+    : null;
+  if (failureReport !== null) {
+    try {
+      Object.defineProperty(primaryFailure, 'listingAiFailureReport', {
+        value: failureReport,
+        enumerable: false,
+        configurable: true,
+      });
+    } catch {
+      // Preserve the original primary failure if it is not extensible.
     }
   }
   if (primaryFailure !== null) throw primaryFailure;
-  if (cleanupFailure !== null) throw cleanupFailure;
+  if (cleanupFailure !== null) {
+    if (restoreFailure !== null) {
+      try {
+        Object.defineProperty(cleanupFailure, 'listingAiCleanupReport', {
+          value: Object.freeze({ cleanup: 'failed', ownerRestore: 'failed' }),
+          enumerable: false,
+          configurable: true,
+        });
+      } catch {
+        // Preserve the cleanup failure if it is not extensible.
+      }
+    }
+    throw cleanupFailure;
+  }
+  if (restoreFailure !== null) throw restoreFailure;
   if (performed?.ui === undefined || performed?.fixtureSelected !== true) {
     fail('The physical on-device Listing-AI result is incomplete.');
   }
@@ -393,6 +612,7 @@ function scrollUntil({
   predicate,
   attempts = 36,
   toward = 'later',
+  pause = (duration) => new Promise((resolvePromise) => setTimeout(resolvePromise, duration)),
 }) {
   return (async () => {
     if (!['earlier', 'later'].includes(toward)) {
@@ -408,10 +628,35 @@ function scrollUntil({
         toward === 'later' ? '430' : '1740',
         '260',
       ]);
-      await new Promise((resolvePromise) => setTimeout(resolvePromise, 260));
+      await pause(260);
     }
     fail('The sanitized on-device Listing-AI action is unavailable after bounded scrolling.');
   })();
+}
+
+async function scrollToListingAiConsentSurface({
+  commandRunner,
+  adbPath,
+  device,
+}) {
+  const actionVisible = (hierarchy) => currentHeadAndroidNamedNodes(
+    hierarchy,
+    'Ausgewählte Fotos analysieren',
+  ).length === 1;
+  const first = await scrollUntil({
+    commandRunner,
+    adbPath,
+    device,
+    predicate: actionVisible,
+  });
+  if (listingAiConsentSurfaceReady(first)) return first;
+  return scrollUntil({
+    commandRunner,
+    adbPath,
+    device,
+    toward: 'earlier',
+    predicate: listingAiConsentSurfaceReady,
+  });
 }
 
 function mediaInventory(commandRunner, adbPath, device) {
@@ -576,6 +821,7 @@ async function main() {
   let createSurfaceOpened = false;
   const operations = {
     currentStage: () => activeStage,
+    currentSubstage: () => activePhotoPickerSubstage,
     perform: async () => {
       const startedAt = new Date().toISOString();
       setStage('prepare-fixture');
@@ -597,6 +843,12 @@ async function main() {
       let hierarchy = await openMainDestination({
         commandRunner, adbPath, device, wait, label: 'Entdecken',
       });
+      hierarchy = await waitForListingCreateAction({
+        commandRunner,
+        adbPath,
+        device,
+        wait,
+      });
       tapLabel(commandRunner, adbPath, device, hierarchy, 'Neue Anzeige erstellen');
       hierarchy = await waitForHierarchy({
         commandRunner,
@@ -609,64 +861,85 @@ async function main() {
       });
       createSurfaceOpened = true;
       setStage('photo-picker');
-      tapLabel(commandRunner, adbPath, device, hierarchy, 'Foto hinzufügen');
-      hierarchy = await waitForHierarchy({
+      photoPickerActionSync('open-source-dialog', () => tapLabel(
+        commandRunner, adbPath, device, hierarchy, 'Foto hinzufügen',
+      ));
+      hierarchy = await photoPickerAction('wait-source-dialog', () => waitForHierarchy({
         commandRunner,
         adbPath,
         device,
         wait,
         label: 'photo source',
         predicate: (value) => currentHeadAndroidNamedNodes(value, 'Aus Galerie auswählen').length === 1,
-      });
-      tapLabel(commandRunner, adbPath, device, hierarchy, 'Aus Galerie auswählen');
-      hierarchy = await waitForHierarchy({
+      }));
+      photoPickerActionSync('open-system-picker', () => tapLabel(
+        commandRunner, adbPath, device, hierarchy, 'Aus Galerie auswählen',
+      ));
+      hierarchy = await photoPickerAction('wait-system-picker', () => waitForHierarchy({
         commandRunner,
         adbPath,
         device,
         wait,
         label: 'system photo picker',
         predicate: (value) => String(value).includes('package="com.google.android.photopicker"'),
-      });
-      const currentMediaRow = controlledMediaRow(mediaInventory(commandRunner, adbPath, device));
+      }));
+      const currentMediaRow = photoPickerActionSync(
+        'verify-controlled-media',
+        () => controlledMediaRow(mediaInventory(commandRunner, adbPath, device)),
+      );
       if (currentMediaRow.id !== mediaRow.id) {
         fail('The controlled Android media fixture changed before selection.');
       }
-      tapNode(commandRunner, adbPath, device, newestPhotoPickerTile(hierarchy).node, 'controlled photo-picker tile');
-      hierarchy = await waitForHierarchy({
+      const tile = photoPickerActionSync(
+        'find-controlled-tile',
+        () => newestPhotoPickerTile(hierarchy),
+      );
+      photoPickerActionSync('select-controlled-tile', () => tapNode(
+        commandRunner, adbPath, device, tile.node, 'controlled photo-picker tile',
+      ));
+      hierarchy = await photoPickerAction('wait-selection-confirmation', () => waitForHierarchy({
         commandRunner,
         adbPath,
         device,
         wait,
         label: 'selected photo',
         predicate: (value) => currentHeadAndroidNamedNodes(value, 'Fertig').length === 1,
-      });
-      tapLabel(commandRunner, adbPath, device, hierarchy, 'Fertig');
-      await waitForListingEditorAfterPhotoPicker({
+      }));
+      photoPickerActionSync('confirm-selection', () => tapLabel(
+        commandRunner, adbPath, device, hierarchy, 'Fertig',
+      ));
+      await photoPickerAction('return-listing-editor', () => waitForListingEditorAfterPhotoPicker({
         commandRunner,
         adbPath,
         device,
         wait,
-      });
-      hierarchy = await scrollUntil({
+      }));
+      hierarchy = await photoPickerAction('find-analysis-consent-surface', () => scrollToListingAiConsentSurface({
         commandRunner,
         adbPath,
         device,
-        predicate: (value) => currentHeadAndroidNamedNodes(
-          value,
-          'Ausgewählte Fotos analysieren',
-        ).length === 1,
-      });
-      tapLabel(
+      }));
+      photoPickerActionSync('tap-analysis-consent', () => tapLabel(
         commandRunner,
         adbPath,
         device,
         hierarchy,
-        'SIT wertet deine ausgewählten Bilder direkt auf diesem Android-Gerät aus.',
-      );
+        listingAiOnDeviceDisclosurePrefix,
+      ));
+      hierarchy = await photoPickerAction('reacquire-analysis-action', () => waitForListingAiAnalyzeAction({
+        commandRunner,
+        adbPath,
+        device,
+        wait,
+      }));
+      photoPickerActionSync('tap-analysis-action', () => tapLabel(
+        commandRunner,
+        adbPath,
+        device,
+        hierarchy,
+        'Ausgewählte Fotos analysieren',
+      ));
       setStage('consent');
-      await wait(350);
-      hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
-      tapLabel(commandRunner, adbPath, device, hierarchy, 'Ausgewählte Fotos analysieren');
       setStage('analyze');
       hierarchy = await waitForHierarchy({
         commandRunner,
@@ -739,7 +1012,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       && allowedStages.has(error.sitStage)
       ? error.sitStage
       : activeStage;
-    process.stderr.write(`ERROR: SIT stage ${stage}: ${sanitizedFailure(error)}\n`);
+    const report = error?.listingAiFailureReport;
+    if (report?.stage === 'photo-picker') {
+      process.stderr.write(`${formatPhotoPickerFailureReport(report)}\n`);
+    } else {
+      process.stderr.write(`ERROR: SIT stage ${stage}: ${sanitizedFailure(error)}\n`);
+    }
     process.exitCode = 1;
   });
 }

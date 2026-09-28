@@ -62,6 +62,14 @@ discover a mechanically stale source hash.
   a second UIAutomator hierarchy read or UI-driving process while the bounded
   diagnostic owns the device; status inspection must use its own output or
   non-UI process state only.
+- Physical Android destination readiness must assert route-specific content or
+  the exact next action, never a shared bottom-navigation label. Every fix for
+  this timing class requires deterministic delayed-content coverage before the
+  physical diagnostic is re-executed.
+- A physical UI diagnostic must give every independently fallible transition
+  in a multi-action chain its own fixed, privacy-safe substage. After a broad
+  code has hidden which transition failed, split the chain and add a bounded
+  deterministic reproducer before any further physical re-execution.
 - Shell variable hygiene: in zsh never assign `path`, `PATH`, `fpath`, `cdpath`
   or another shell-special array or option as a task variable. Use a
   task-specific name such as `sit_route`; after variable shadowing causes
@@ -395,10 +403,11 @@ discover a mechanically stale source hash.
 
 ### Candidate version binding
 
-- Every Android candidate bump updates `pubspec.yaml` and the V5.2
-  `PrivatePilotConfig.v52ClientBuild` fallback atomically. Release preflight
-  must fail before any binary build when those values drift; never repair the
-  mismatch by reusing or rebinding an already archived candidate.
+- Every Android candidate bump updates `pubspec.yaml`, the V5.2
+  `PrivatePilotConfig.v52ClientBuild` fallback and the backend
+  `listingAiSupportedClientVersion` capability handshake atomically. Release
+  preflight must fail before any binary build when those values drift; never
+  repair the mismatch by reusing or rebinding an already archived candidate.
 - An Internal/Staging candidate rollover (`SIT_ALLOW_CANDIDATE_ROLLOVER=1`) must
   explicitly bind the complete private-pilot profile before Firebase,
   preflight or artifact work: Google=true, Apple=false, Facebook=false,

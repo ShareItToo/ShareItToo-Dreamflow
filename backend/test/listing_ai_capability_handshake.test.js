@@ -27,6 +27,7 @@ test('capability handshake exposes exact provider mode disclosure and private ca
   assert.equal(onDevice.available, true);
   assert.equal(onDevice.provider, 'on_device');
   assert.equal(onDevice.mode, 'on_device');
+  assert.equal(onDevice.supportedClientVersion, '1.0.0+2026092602');
   assert.equal(onDevice.imageLimit, listingAiImageLimit);
   assert.equal(
     onDevice.disclosureHash,

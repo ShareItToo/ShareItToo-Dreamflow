@@ -144,14 +144,22 @@ test('Android packaging exposes a preflight-only path before either binary build
   assert.ok(preflightOnly < androidBuild.indexOf('node tool/run_checked_android_build.mjs apk'));
 });
 
-test('candidate preflight fails fast on V5.2 fallback version drift', () => {
+test('candidate preflight fails fast on app and Listing-AI handshake version drift', () => {
   assert.ok(releasePreflight.includes('version="$(awk'));
   assert.match(releasePreflight, /v52_client_build_fallback=/u);
   assert.match(releasePreflight, /V5\.2 client-build fallback \$v52_client_build_fallback drifts from pubspec \$version/u);
+  assert.match(releasePreflight, /listing_ai_supported_client_version=/u);
+  assert.match(
+    releasePreflight,
+    /Listing-AI supported client version \$listing_ai_supported_client_version drifts from pubspec \$version/u,
+  );
   const parityCheck = releasePreflight.indexOf('v52_client_build_fallback=');
+  const capabilityParityCheck = releasePreflight.indexOf('listing_ai_supported_client_version=');
   const firstToolchainCheck = releasePreflight.indexOf('node tool/validate_android_toolchain.mjs');
   assert.ok(parityCheck > 0);
+  assert.ok(capabilityParityCheck > parityCheck);
   assert.ok(parityCheck < firstToolchainCheck);
+  assert.ok(capabilityParityCheck < firstToolchainCheck);
   const preflightInvocation = androidBuild.indexOf('SIT_FIREBASE_VALIDATION_PLATFORM=android bash scripts/release_candidate_preflight.sh');
   const firstBinaryBuild = androidBuild.indexOf('node tool/run_checked_android_build.mjs appbundle');
   assert.ok(preflightInvocation > 0);

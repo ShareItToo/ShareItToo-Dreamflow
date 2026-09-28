@@ -32,6 +32,16 @@ v52_client_build_fallback="$(
 [[ "$v52_client_build_fallback" == "$version" ]] || \
   fail "V5.2 client-build fallback $v52_client_build_fallback drifts from pubspec $version."
 
+listing_ai_supported_client_version="$(
+  grep -m1 -oE "listingAiSupportedClientVersion = '[^']+'" \
+    backend/src/listing_ai_gateway_config.js \
+    | cut -d"'" -f2
+)"
+[[ -n "$listing_ai_supported_client_version" ]] || \
+  fail "Listing-AI supported client version is missing or unreadable."
+[[ "$listing_ai_supported_client_version" == "$version" ]] || \
+  fail "Listing-AI supported client version $listing_ai_supported_client_version drifts from pubspec $version."
+
 command -v dart >/dev/null 2>&1 || fail "dart is required for store metadata validation."
 command -v node >/dev/null 2>&1 || fail "node is required for public store page validation."
 node tool/validate_android_toolchain.mjs
