@@ -119,6 +119,10 @@ const listingOpenDiagnosticCatalog = Object.freeze({
     code: 'LISTING_AI_OPEN_LISTING_CREATE_ACTION_UNAVAILABLE',
     classification: 'create-action-unavailable',
   }),
+  'create-action-recovery': Object.freeze({
+    code: 'LISTING_AI_OPEN_LISTING_CREATE_ACTION_RECOVERY_FAILED',
+    classification: 'create-action-recovery-failed',
+  }),
   'open-editor': Object.freeze({
     code: 'LISTING_AI_OPEN_LISTING_EDITOR_UNAVAILABLE',
     classification: 'open-editor-unavailable',
@@ -166,6 +170,32 @@ export async function waitForListingCreateAction({
       'Neue Anzeige erstellen',
     ).length === 1,
   });
+}
+
+export async function waitForListingCreateActionWithRecovery({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+  reopenMainDestination,
+  waitForCreateAction = () => waitForListingCreateAction({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+  }),
+} = {}) {
+  try {
+    return await waitForCreateAction();
+  } catch (error) {
+    if (error?.message !== 'The sanitized new listing action surface did not appear.') throw error;
+    try {
+      await reopenMainDestination();
+      return await waitForCreateAction();
+    } catch (recoveryError) {
+      throw attachListingOpenDiagnostic(recoveryError, 'create-action-recovery');
+    }
+  }
 }
 
 export async function waitForListingAiAnalyzeAction({
@@ -306,6 +336,7 @@ async function listingOpenAction(substage, action) {
   try {
     return await action();
   } catch (error) {
+    if (error?.listingAiDiagnostic?.stage === 'open-listing') throw error;
     throw attachListingOpenDiagnostic(error, substage);
   }
 }
@@ -992,11 +1023,14 @@ async function main() {
       let hierarchy = await listingOpenAction('main-destination', () => openMainDestination({
         commandRunner, adbPath, device, wait, label: 'Entdecken',
       }));
-      hierarchy = await listingOpenAction('create-action', () => waitForListingCreateAction({
+      hierarchy = await listingOpenAction('create-action', () => waitForListingCreateActionWithRecovery({
         commandRunner,
         adbPath,
         device,
         wait,
+        reopenMainDestination: () => openMainDestination({
+          commandRunner, adbPath, device, wait, label: 'Entdecken',
+        }),
       }));
       await listingOpenAction('create-action', () => tapLabel(
         commandRunner, adbPath, device, hierarchy, 'Neue Anzeige erstellen',

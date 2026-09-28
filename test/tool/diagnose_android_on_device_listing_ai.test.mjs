@@ -28,6 +28,7 @@ import {
   verifyStaging,
   waitForListingAiAnalyzeAction,
   waitForListingCreateAction,
+  waitForListingCreateActionWithRecovery,
 } from '../../tool/diagnose_android_on_device_listing_ai.mjs';
 
 const candidate = Object.freeze({
@@ -181,6 +182,65 @@ test('waits for exactly one delayed listing-create action after main navigation'
   assert.equal(result, hierarchyWithCreateAction);
   assert.deepEqual(waits, [650, 650, 650]);
   assert.equal(commandCalls.filter((args) => args.includes('exec-out') && args.includes('cat')).length, 3);
+});
+
+test('performs exactly one relaunch and Entdecken reopen after a create-action timeout', async () => {
+  let createAttempts = 0;
+  let reopens = 0;
+  const result = await waitForListingCreateActionWithRecovery({
+    waitForCreateAction: async () => {
+      createAttempts += 1;
+      if (createAttempts === 1) throw new Error('The sanitized new listing action surface did not appear.');
+      return '<hierarchy><node text="Neue Anzeige erstellen"/></hierarchy>';
+    },
+    reopenMainDestination: async () => { reopens += 1; },
+  });
+  assert.match(result, /Neue Anzeige erstellen/u);
+  assert.equal(createAttempts, 2);
+  assert.equal(reopens, 1);
+});
+
+test('persistent create-action absence gets one recovery and then fails with its recovery substage', async () => {
+  let createAttempts = 0;
+  let reopens = 0;
+  await assert.rejects(
+    () => waitForListingCreateActionWithRecovery({
+      waitForCreateAction: async () => {
+        createAttempts += 1;
+        throw new Error('The sanitized new listing action surface did not appear.');
+      },
+      reopenMainDestination: async () => { reopens += 1; },
+    }),
+    (error) => {
+      assert.deepEqual(error.listingAiDiagnostic, {
+        stage: 'open-listing',
+        substage: 'create-action-recovery',
+        code: 'LISTING_AI_OPEN_LISTING_CREATE_ACTION_RECOVERY_FAILED',
+        classification: 'create-action-recovery-failed',
+      });
+      return true;
+    },
+  );
+  assert.equal(createAttempts, 2);
+  assert.equal(reopens, 1);
+});
+
+test('unrelated create-action errors are not retried or reopened', async () => {
+  const unrelated = new Error('hierarchy dump failed');
+  let createAttempts = 0;
+  let reopens = 0;
+  await assert.rejects(
+    () => waitForListingCreateActionWithRecovery({
+      waitForCreateAction: async () => {
+        createAttempts += 1;
+        throw unrelated;
+      },
+      reopenMainDestination: async () => { reopens += 1; },
+    }),
+    (error) => error === unrelated,
+  );
+  assert.equal(createAttempts, 1);
+  assert.equal(reopens, 0);
 });
 
 test('finds a long offset disclosure surface and waits for delayed consent readiness', async () => {

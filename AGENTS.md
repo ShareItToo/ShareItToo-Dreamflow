@@ -68,6 +68,8 @@ discover a mechanically stale source hash.
   physical diagnostic is re-executed.
 - Transient UIAutomator hierarchy reads may use a fixed bounded retry budget;
   semantic route or app-readiness failures must never be masked by retries.
+- Listing-AI create-action readiness may have one exact relaunch/reopen recovery;
+  editor failures and unrelated exceptions must never be retried.
 - A physical UI diagnostic must give every independently fallible transition
   in a multi-action chain its own fixed, privacy-safe substage. After a broad
   code has hidden which transition failed, split the chain and add a bounded
