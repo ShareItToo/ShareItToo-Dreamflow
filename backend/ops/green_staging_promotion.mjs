@@ -23,6 +23,13 @@ export const greenTarget = Object.freeze({
   sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-c2da8585',
   retainedSealed: Object.freeze([
     Object.freeze({
+      name: 'shareittoo-staging-api-sealed-green-c2da-memory-20260925T214445Z',
+      image: 'ghcr.io/shareittoo/shareittoo-api:c2da8585b1f822e123307d7c763530dc0f598893@sha256:cb7f92814225044a677106d9979b95bc7d019a549ca223228c17bd281a2b97d8',
+      greenLabel: 'true',
+      runId: '20260918011528-wp254',
+      running: false,
+    }),
+    Object.freeze({
       name: 'shareittoo-staging-api-alt-sealed-green-56ec5dc1',
       image: 'ghcr.io/shareittoo/shareittoo-api:56ec5dc15a18d3fee77d1f9db8252d851afd48f2@sha256:e5fed4491335e8164fa747663f13cdb34028d5f1ca6f90ee66f662524e705814',
       greenLabel: 'true',

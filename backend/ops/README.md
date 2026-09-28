@@ -132,7 +132,9 @@ The pre-promotion image is exactly
 with digest
 `sha256:cb7f92814225044a677106d9979b95bc7d019a549ca223228c17bd281a2b97d8`.
 The new seal is
-`shareittoo-staging-api-alt-sealed-green-c2da8585`. The four historical seals
+`shareittoo-staging-api-alt-sealed-green-c2da8585`. The five historical seals
+`shareittoo-staging-api-sealed-green-c2da-memory-20260925T214445Z` (c2da memory
+runtime plus exact digest),
 `shareittoo-staging-api-alt-sealed-green-56ec5dc1` (56ec tag plus exact digest),
 `shareittoo-staging-api-alt-sealed-green-cffb4e43` (cffb tag plus exact digest),
 `shareittoo-staging-api-alt-sealed-green-ea25e7cb` (ea25 tag plus exact digest),
