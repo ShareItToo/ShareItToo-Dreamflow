@@ -290,6 +290,7 @@ export function hasEnteredNamedLoginInput(hierarchy, label) {
 }
 
 export const loginSessionCheckOverlayLabel = 'Session prüfen…';
+export const loginSurfaceAttemptLimit = 36;
 
 export function isLoginSessionCheckComplete(hierarchy) {
   return namedNodes(hierarchy, loginSessionCheckOverlayLabel).length === 0;
@@ -396,7 +397,7 @@ export async function dismissAndroidSoftwareKeyboard({
   return false;
 }
 
-async function openProfile({
+export async function openProfile({
   commandRunner,
   adbPath,
   device,
@@ -457,6 +458,7 @@ export async function restoreSyntheticSession({
       && namedNodes(hierarchy, 'E-Mail').length >= 1
       && namedNodes(hierarchy, 'Passwort').length >= 1,
     wait,
+    attempts: loginSurfaceAttemptLimit,
   });
   inputText(commandRunner, adbPath, device, form, 'E-Mail', nonEmptyString(account.email, 'account.email'));
   const passwordForm = await waitForHierarchy({
@@ -466,7 +468,7 @@ export async function restoreSyntheticSession({
     predicate: (hierarchy) => isLoginSessionCheckComplete(hierarchy)
       && hasEnteredNamedLoginInput(hierarchy, 'E-Mail'),
     wait,
-    attempts: 12,
+    attempts: loginSurfaceAttemptLimit,
   });
   inputText(commandRunner, adbPath, device, passwordForm, 'Passwort', nonEmptyString(account.password, 'account.password'));
   if (isAndroidSoftwareKeyboardShown(
@@ -486,7 +488,7 @@ export async function restoreSyntheticSession({
         (tag) => attribute(tag, 'clickable') === 'true' && attribute(tag, 'enabled') !== 'false',
       ),
     wait,
-    attempts: 12,
+    attempts: loginSurfaceAttemptLimit,
   });
   tapNamedNode(commandRunner, adbPath, device, submitForm, 'Anmelden', { chooseLast: true });
   const mainAfterLogin = await waitForHierarchy({

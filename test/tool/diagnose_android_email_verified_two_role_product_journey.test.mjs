@@ -8,6 +8,8 @@ import {
   renterBookingChatSurfaceClassification,
   renterBookingChatVisible,
   renterNonBindingDetailVisible,
+  bindExactRole,
+  restoreExactRoleWithFreshProfileRetry,
   restoreExactRoleWithBoundedRetries,
   retryIdempotentPixelState,
   waitForExactOwnerDraftWithBoundedRecovery,
@@ -184,6 +186,116 @@ test('retries an idempotent Pixel state transition exactly once', async () => {
   assert.equal(attempts, 2);
 });
 
+test('reacquires a fresh guest profile before retrying a partially advanced role restore', async () => {
+  const profiles = [];
+  let reacquisitions = 0;
+  const restored = await restoreExactRoleWithFreshProfileRetry({
+    initialProfileHierarchy: 'stale-guest-profile',
+    reacquireProfile: async () => {
+      reacquisitions += 1;
+      return 'fresh-guest-profile';
+    },
+    restore: async (profile) => {
+      profiles.push(profile);
+      if (profile === 'stale-guest-profile') throw new Error('login surface advanced before timeout');
+      return true;
+    },
+  });
+  assert.equal(restored, true);
+  assert.deepEqual(profiles, ['stale-guest-profile', 'fresh-guest-profile']);
+  assert.equal(reacquisitions, 1);
+});
+
+test('bindExactRole reaches the fresh-profile retry path after a stuck login surface', async () => {
+  let screen = 'main';
+  let loginAttempts = 0;
+  let focusedField = null;
+  let emailEntered = false;
+  let passwordEntered = false;
+  const substages = [];
+  const node = (label, bounds = '[0,0][500,100]', extra = '') => (
+    `<node text="${label}" content-desc="" clickable="true" enabled="true" bounds="${bounds}"${extra}/>`
+  );
+  const main = () => '<hierarchy>'
+    + node('Entdecken', '[0,2200][300,2400]')
+    + node('Nachrichten', '[600,2200][900,2400]')
+    + node('Mein SIT', '[900,2200][1200,2400]')
+    + '</hierarchy>';
+  const guestProfile = () => '<hierarchy>'
+    + node('Anmelden', '[0,300][500,400]')
+    + node('Konto erstellen', '[0,400][500,500]')
+    + '</hierarchy>';
+  const login = () => '<hierarchy>'
+    + (loginAttempts === 1 ? node('Session prüfen…') : '')
+    + `<node class="android.widget.EditText" hint="E-Mail" text="${emailEntered ? 'owner@example.invalid' : ''}" bounds="[0,100][500,200]"/>`
+    + `<node class="android.widget.EditText" hint="Passwort" text="${passwordEntered ? '••••••••' : ''}" bounds="[0,200][500,300]"/>`
+    + (emailEntered && passwordEntered ? node('Anmelden', '[0,300][500,400]') : '')
+    + '</hierarchy>';
+  const authenticatedProfile = () => '<hierarchy>'
+    + node('Owner Fixture') + node('Meine Anzeigen') + node('Mietanfragen') + node('Abmelden')
+    + '</hierarchy>';
+  const hierarchy = () => {
+    if (screen === 'main' || screen === 'main-authenticated') return main();
+    if (screen === 'guest-profile') return guestProfile();
+    if (screen === 'login-stuck' || screen === 'login-ready') return login();
+    return authenticatedProfile();
+  };
+  const commandRunner = (_file, args) => {
+    const command = args.slice(2);
+    const joined = command.join(' ');
+    if (joined === 'shell am force-stop com.shareittoo.app') return '';
+    if (command[0] === 'shell' && command[1] === 'monkey') {
+      screen = 'main';
+      return 'Events injected: 1';
+    }
+    if (command[0] === 'shell' && command[1] === 'uiautomator' && command[2] === 'dump') return 'UI hierarchy dumped';
+    if (command[0] === 'exec-out' && command[1] === 'cat') return hierarchy();
+    if (command[0] === 'shell' && command[1] === 'rm' && command[2] === '-f') return '';
+    if (command[0] === 'shell' && command[1] === 'input' && command[2] === 'tap') {
+      const y = Number(command.at(-1));
+      if (screen === 'main') screen = 'guest-profile';
+      else if (screen === 'guest-profile') {
+        loginAttempts += 1;
+        screen = loginAttempts === 1 ? 'login-stuck' : 'login-ready';
+      } else if (screen === 'login-ready') {
+        if (y >= 100 && y < 200) focusedField = 'email';
+        else if (y >= 200 && y < 300) focusedField = 'password';
+        else if (emailEntered && passwordEntered) screen = 'main-authenticated';
+      } else if (screen === 'main-authenticated') {
+        screen = 'authenticated-profile';
+      }
+      return '';
+    }
+    if (command[0] === 'shell' && command[1] === 'input' && command[2] === 'text') {
+      if (focusedField === 'email') emailEntered = true;
+      if (focusedField === 'password') passwordEntered = true;
+      return '';
+    }
+    if (joined === 'shell dumpsys input_method') return 'mInputShown=false mIsInputViewShown=false';
+    throw new Error(`Unexpected fake ADB command: ${joined}`);
+  };
+  const result = await bindExactRole({
+    vault: {
+      accounts: [
+        { role: 'owner', email: 'owner@example.invalid', password: 'synthetic-password', displayName: 'Owner Fixture' },
+        { role: 'renter', email: 'renter@example.invalid', password: 'synthetic-password', displayName: 'Renter Fixture' },
+      ],
+    },
+    role: 'owner',
+    commandRunner,
+    adbPath: 'adb',
+    device: { serial: 'synthetic-device' },
+    wait: async () => {},
+    onSubstage: (substage) => substages.push(substage),
+  });
+  assert.equal(result.account.displayName, 'Owner Fixture');
+  assert.deepEqual(substages, [
+    'guest-reset', 'guest-profile-read', 'login-restore',
+    'guest-profile-read', 'login-restore', 'exact-principal',
+  ]);
+  assert.equal(loginAttempts, 2);
+});
+
 test('recovers one exact-draft wait miss with one saved-listings retap', async () => {
   let waits = 0;
   let reads = 0;
@@ -248,7 +360,7 @@ test('does not read or retap after an exact-draft wait succeeds', async () => {
   assert.equal(retaps, 0);
 });
 
-test('reuses the restored profile and avoids a second cold launch per role bind', () => {
+test('reuses the restored profile first and reacquires it before a retry', () => {
   const journey = readFileSync(
     new URL('../../tool/diagnose_android_email_verified_two_role_product_journey.mjs', import.meta.url),
     'utf8',
@@ -259,6 +371,7 @@ test('reuses the restored profile and avoids a second cold launch per role bind'
   );
   assert.doesNotMatch(bind, /launchCurrentHeadAndroidCandidate\(/u);
   assert.match(bind, /initialProfileHierarchy: guestProfile/u);
+  assert.match(bind, /reacquireProfile: async \(\) =>/u);
 
   const logout = readFileSync(
     new URL('../../tool/diagnose_android_logout_lifecycle.mjs', import.meta.url),

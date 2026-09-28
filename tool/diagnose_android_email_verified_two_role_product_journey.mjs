@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   ensureAndroidGuestSession,
+  openProfile,
   restoreSyntheticSession,
 } from './diagnose_android_logout_lifecycle.mjs';
 import {
@@ -126,6 +127,26 @@ export async function retryIdempotentPixelState(operation) {
     }
   }
   throw lastFailure;
+}
+
+export async function restoreExactRoleWithFreshProfileRetry({
+  initialProfileHierarchy,
+  reacquireProfile,
+  restore,
+} = {}) {
+  if (typeof initialProfileHierarchy !== 'string'
+      || typeof reacquireProfile !== 'function'
+      || typeof restore !== 'function') {
+    fail('The exact-role fresh-profile retry contract is invalid.');
+  }
+  let attempt = 0;
+  return retryIdempotentPixelState(async () => {
+    const profile = attempt === 0
+      ? initialProfileHierarchy
+      : await reacquireProfile();
+    attempt += 1;
+    return restore(profile);
+  });
 }
 
 export async function waitForExactOwnerDraftWithBoundedRecovery({
@@ -444,15 +465,24 @@ export async function bindExactRole({
   const guestProfile = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
   let sessionRestored = false;
   try {
-    onSubstage('login-restore');
-    sessionRestored = await retryIdempotentPixelState(() => restoreSyntheticSession({
-        commandRunner,
-        adbPath,
-        device,
-        wait,
-        account,
-        initialProfileHierarchy: guestProfile,
-      })) === true;
+    sessionRestored = await restoreExactRoleWithFreshProfileRetry({
+      initialProfileHierarchy: guestProfile,
+      reacquireProfile: async () => {
+        onSubstage('guest-profile-read');
+        return openProfile({ commandRunner, adbPath, device, wait });
+      },
+      restore: async (profile) => {
+        onSubstage('login-restore');
+        return restoreSyntheticSession({
+          commandRunner,
+          adbPath,
+          device,
+          wait,
+          account,
+          initialProfileHierarchy: profile,
+        });
+      },
+    }) === true;
   } catch {
     fail(`The exact ${role} Pixel login-restore surface did not appear.`);
   }

@@ -8,6 +8,7 @@ import {
   isAndroidSoftwareKeyboardShown,
   isLoginSessionCheckComplete,
   loginSessionCheckOverlayLabel,
+  loginSurfaceAttemptLimit,
   isV52ForegroundPushPopup,
   restoreSyntheticSession,
   sendOppositeRoleMessage,
@@ -283,7 +284,7 @@ test('login restoration fails closed when the session-check overlay persists', a
     /expected sanitized ShareItToo surface did not appear/u,
   );
   assert.equal(inputOrSubmit, 0);
-  assert.equal(dumps, 16);
+  assert.equal(dumps, loginSurfaceAttemptLimit);
 });
 
 test('taps the visible part of an action overlapped by persistent bottom navigation', () => {
