@@ -6,6 +6,7 @@ const source = readFileSync(
   new URL('../../lib/screens/profile_info_screen.dart', import.meta.url),
   'utf8',
 );
+const compactSource = source.replace(/\s+/gu, ' ');
 const mutationService = readFileSync(
   new URL('../../lib/services/profile_mutation_service.dart', import.meta.url),
   'utf8',
@@ -48,18 +49,46 @@ test('profile save bounds photo persistence and restores user retry', () => {
   assert.match(source, /versuche es erneut\./u);
 });
 
+test('profile save coalesces its own projection event without stranding busy state', () => {
+  assert.match(
+    source,
+    /key == SharedPersistenceSync\.profileStateKey[\s\S]*?if \(_saving\) \{\s+_profileRefreshPending = true;[\s\S]*?unawaited\(_load\(\)\);/u,
+  );
+  assert.match(
+    source,
+    /_user = result\.user;[\s\S]*?_profileRefreshPending = false;[\s\S]*?_profileActions\.replaceContext/u,
+  );
+  assert.match(
+    source,
+    /void _finishSave\(\)[\s\S]*?if \(_saving\) setState\(\(\) => _saving = false\);[\s\S]*?if \(refreshPending\) unawaited\(_load\(\)\);/u,
+  );
+  assert.match(source, /finally \{[\s\S]*?_finishSave\(\);\s+\}/u);
+  assert.match(
+    source,
+    /_isActionCurrentForFeedback[\s\S]*?\.timeout\(const Duration\(seconds: 3\), onTimeout: \(\) => false\)/u,
+  );
+});
+
 test('successful profile patch rechecks exact owner and refreshes local state', () => {
   assert.match(
-    source,
-    /final owner = _profileActions\.capture\(\);[\s\S]*?persistPhotoDraft\([\s\S]*?context: owner\.context,[\s\S]*?if \(!await _profileActions\.isCurrent\([\s\S]*?owner,[\s\S]*?\)\) \{\s+throw const ProfileMutationFailure\.principalChanged\(\);\s+\}[\s\S]*?final result = await _profileMutationService\.updateProfile\([\s\S]*?context: owner\.context,/u,
+    compactSource,
+    /persistPhotoDraft\( context: owner\.context, photoDraft: _photoDraft, \)/u,
   );
   assert.match(
-    source,
-    /final result = await _profileMutationService\.updateProfile\([\s\S]*?\}[\s\S]*?if \(!await _profileActions\.isCurrent\([\s\S]*?owner,[\s\S]*?\)\) \{\s+throw const ProfileMutationFailure\.principalChanged\(\);\s+\}[\s\S]*?return result;[\s\S]*?setState\(\(\) \{\s+_user = result\.user;\s+_photoDraft = result\.user\.photoURL;/u,
+    compactSource,
+    /final result = await _profileMutationService\.updateProfile\( context: owner\.context,/u,
+  );
+  assert.equal(
+    [...compactSource.matchAll(/if \(!await _profileActions\.isCurrent\( _profileMutationService, owner, \)\) \{ throw const ProfileMutationFailure\.principalChanged\(\); \}/gu)].length,
+    2,
   );
   assert.match(
-    source,
-    /_profileActions\.replaceContext\(ProfileMutationContext\([\s\S]*?owner: owner\.context\.owner,[\s\S]*?final refreshedOwner = _profileActions\.capture\(\);[\s\S]*?await _showOwnedStatus\([\s\S]*?refreshedOwner,[\s\S]*?if \(!await _profileActions\.isCurrent\([\s\S]*?refreshedOwner,[\s\S]*?\)\) \{\s+return;\s+\}[\s\S]*?_profileActions\.removeOwnedNavigationRoute\(screenRoute\);/u,
+    compactSource,
+    /return result; \}\)\(\)\.timeout[\s\S]*?setState\(\(\) \{ _user = result\.user; _photoDraft = result\.user\.photoURL;/u,
+  );
+  assert.match(
+    compactSource,
+    /_profileActions\.replaceContext\([\s\S]*?owner: owner\.context\.owner[\s\S]*?final refreshedOwner = _profileActions\.capture\(\);[\s\S]*?_showOwnedStatus\( refreshedOwner,[\s\S]*?if \(!await _isActionCurrentForFeedback\(refreshedOwner\)\) \{ return; \}[\s\S]*?_profileActions\.removeOwnedNavigationRoute\(screenRoute\);/u,
   );
   assert.match(source, /on ProfileMutationFailure catch \(failure\)/u);
   assert.doesNotMatch(source, /DataService\.updateCurrentUserProfile\(/u);

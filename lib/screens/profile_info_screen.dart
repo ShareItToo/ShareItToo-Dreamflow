@@ -139,6 +139,7 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
   final _profileActions = ProfileMutationInteractionController();
   StreamSubscription<String>? _persistenceSubscription;
   int _loadRevision = 0;
+  bool _profileRefreshPending = false;
 
   ProfileMutationService get _profileMutationService =>
       widget.profileMutationService;
@@ -148,10 +149,18 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     super.initState();
     _persistenceSubscription = SharedPersistenceSync.changes.listen((key) {
       if (key == SharedPersistenceSync.profileStateKey) {
-        unawaited(_load());
+        // updateProfile emits this key while it is still producing the
+        // authoritative result for this save. Reloading here would replace
+        // the action context and invalidate the save that caused the event.
+        if (_saving) {
+          _profileRefreshPending = true;
+        } else {
+          unawaited(_load());
+        }
         return;
       }
       if (key != SharedPersistenceSync.accountSecurityStateKey) return;
+      _profileRefreshPending = false;
       _profileActions.invalidate();
       _loadRevision += 1;
       if (mounted) {
@@ -288,12 +297,35 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     _membershipStatsUnavailable = false;
   }
 
+  Future<bool> _isActionCurrentForFeedback(
+    ProfileMutationActionOwner owner,
+  ) async {
+    if (!mounted || !_profileActions.isSynchronouslyCurrent(owner)) {
+      return false;
+    }
+    try {
+      return await _profileActions
+          .isCurrent(_profileMutationService, owner)
+          .timeout(const Duration(seconds: 3), onTimeout: () => false);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _finishSave() {
+    if (!mounted) return;
+    final refreshPending = _profileRefreshPending;
+    _profileRefreshPending = false;
+    if (_saving) setState(() => _saving = false);
+    if (refreshPending) unawaited(_load());
+  }
+
   Future<void> _save() async {
     final l10n = context.read<LocalizationController>();
     final u = _user;
     final owner = _profileActions.capture();
     final screenRoute = ModalRoute.of(context);
-    if (u == null || owner == null) return;
+    if (u == null || owner == null || _saving) return;
 
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) return;
@@ -350,6 +382,9 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
         _user = result.user;
         _photoDraft = result.user.photoURL;
       });
+      // The returned user is the authenticated projection read back after the
+      // PATCH. It supersedes this save's coalesced profile-state event.
+      _profileRefreshPending = false;
       _profileActions.replaceContext(ProfileMutationContext(
         user: result.user,
         owner: owner.context.owner,
@@ -360,19 +395,17 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
         refreshedOwner,
         title: l10n.t('Gespeichert'),
       );
-      if (!await _profileActions.isCurrent(
-        _profileMutationService,
-        refreshedOwner,
-      )) {
+      if (!await _isActionCurrentForFeedback(refreshedOwner)) {
         return;
       }
       _profileActions.removeOwnedNavigationRoute(screenRoute);
     } on ProfileMutationFailure catch (failure) {
+      if (failure.remoteAccepted ||
+          failure.kind == ProfileMutationFailureKind.outcomeUnknown) {
+        _profileRefreshPending = true;
+      }
       if (failure.kind == ProfileMutationFailureKind.principalChanged ||
-          !await _profileActions.isCurrent(
-            _profileMutationService,
-            owner,
-          )) {
+          !await _isActionCurrentForFeedback(owner)) {
         return;
       }
       if (mounted && _profileActions.isSynchronouslyCurrent(owner)) {
@@ -393,7 +426,8 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
       );
     } catch (e) {
       debugPrint('[ProfileInfo] save failed: $e');
-      if (await _profileActions.isCurrent(_profileMutationService, owner)) {
+      if (remoteMutationMayHaveStarted) _profileRefreshPending = true;
+      if (await _isActionCurrentForFeedback(owner)) {
         if (mounted) setState(() => _photoDraft = u.photoURL);
         await _showOwnedStatus(
           owner,
@@ -408,9 +442,10 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
         );
       }
     } finally {
-      if (mounted && _profileActions.isSynchronouslyCurrent(owner)) {
-        setState(() => _saving = false);
-      }
+      // `_saving` is screen-local UI state, not principal-owned data. Every
+      // terminal path on this still-mounted screen must release it, even when
+      // the action owner was invalidated meanwhile.
+      _finishSave();
     }
   }
 
