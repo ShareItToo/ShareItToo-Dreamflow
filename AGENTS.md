@@ -436,6 +436,10 @@ discover a mechanically stale source hash.
   `store/google-play/current-rollover-candidate.json.candidateManifestRef` to
   the exact canonical in-repo versioned manifest, then bind its build and
   source fields; never hardcode a historical rollover manifest path.
+- A post-artifact compatibility exception must bind every allowed changed file
+  to its exact reviewed SHA-256 and verify those bytes at use time. A path-only
+  allowlist is never sufficient, especially for broad runtime files such as
+  `backend/src/app.js`; same-path content drift remains fail-closed.
 
 - Play-delivered Android installations may contain bounded base/split APK sets;
   device-update and runtime-diagnostic preflight must inspect every installed

@@ -134,6 +134,44 @@ export const candidateRolloverNonRuntimeExactPaths = Object.freeze([
   'backend/ops/secret_scan_history_baseline.json',
 ]);
 
+// Exact, reviewed additive backend compatibility lane for the already signed
+// Android candidate. Arbitrary backend runtime changes remain a hard stop.
+export const candidateRolloverAndroidCompatibilityPaths = Object.freeze([
+  'backend/src/app.js',
+  'backend/src/profile_upload_cleanup.js',
+]);
+export const candidateRolloverAndroidCompatibilityFiles = Object.freeze([
+  Object.freeze({
+    path: 'backend/src/app.js',
+    sha256: '2ef9d687abb26b8b4f7b5ca2299848f0039a17be2fac99c0f512423e8e198c8c',
+  }),
+  Object.freeze({
+    path: 'backend/src/profile_upload_cleanup.js',
+    sha256: '77e44518b97ea806726aae31f806d453bda5ffea296ba26a29e1ea5e725a97ac',
+  }),
+]);
+
+export function validateCandidateRolloverAndroidCompatibilityFiles({
+  repositoryRoot,
+} = {}) {
+  const root = resolve(repositoryRoot ?? fileURLToPath(new URL('../', import.meta.url)));
+  const canonicalRoot = realpathSync(root);
+  for (const file of candidateRolloverAndroidCompatibilityFiles) {
+    const filePath = resolve(canonicalRoot, file.path);
+    if (!filePath.startsWith(`${canonicalRoot}/`)) {
+      fail('Android compatibility file left the repository.');
+    }
+    const metadata = lstatSync(filePath, { throwIfNoEntry: false });
+    if (metadata === undefined || metadata.isSymbolicLink() || !metadata.isFile()) {
+      fail(`Android compatibility file is not a regular file: ${file.path}.`);
+    }
+    if (sha256File(filePath) !== file.sha256) {
+      fail(`Android compatibility file bytes changed: ${file.path}.`);
+    }
+  }
+  return candidateRolloverAndroidCompatibilityPaths;
+}
+
 // This historical path is retained only for the direct-device installer.
 // Current-candidate validation must resolve the manifest from the pointer.
 export const historicalRolloverCandidatePath =
@@ -145,10 +183,19 @@ export const activeRolloverStatus =
 export const currentRolloverCandidatePointerPath =
   'store/google-play/current-rollover-candidate.json';
 
-export function candidateRolloverRuntimeDrift(changedPaths) {
+export function candidateRolloverRuntimeDrift(
+  changedPaths,
+  { allowReviewedAndroidBackendCompatibility = false } = {},
+) {
+  const allowed = new Set(
+    allowReviewedAndroidBackendCompatibility
+      ? candidateRolloverAndroidCompatibilityPaths
+      : [],
+  );
   return [...changedPaths].filter((path) =>
     !candidateRolloverNonRuntimeExactPaths.includes(path)
-    && !candidateRolloverNonRuntimePrefixes.some((prefix) => path.startsWith(prefix)));
+    && !candidateRolloverNonRuntimePrefixes.some((prefix) => path.startsWith(prefix))
+    && !allowed.has(path));
 }
 
 function git(repositoryRoot, args) {
@@ -178,6 +225,7 @@ export async function validateExplicitHistoricalRolloverCandidate({
   archiveRoot = resolve(homedir(), 'Library', 'Application Support', 'ShareItToo', 'release', 'android'),
   rolloverPath,
   changedPaths = null,
+  allowReviewedAndroidBackendCompatibility = false,
 } = {}) {
   const root = resolve(repositoryRoot ?? fileURLToPath(new URL('../', import.meta.url)));
   if (typeof rolloverPath !== 'string' || rolloverPath.trim() === '') {
@@ -290,7 +338,12 @@ export async function validateExplicitHistoricalRolloverCandidate({
     fail('The explicit rollover artifact source is not an ancestor of the current repository HEAD.');
   }
   const paths = changedPaths ?? changedPathsSince(root, expectedIdentity.commit);
-  const runtimeDrift = candidateRolloverRuntimeDrift(paths);
+  if (allowReviewedAndroidBackendCompatibility) {
+    validateCandidateRolloverAndroidCompatibilityFiles({ repositoryRoot: root });
+  }
+  const runtimeDrift = candidateRolloverRuntimeDrift(paths, {
+    allowReviewedAndroidBackendCompatibility,
+  });
   if (runtimeDrift.length > 0) {
     fail(`Runtime-affecting files changed after the rollover artifact source commit: ${runtimeDrift[0]}.`);
   }
@@ -393,6 +446,7 @@ export async function validateCurrentRolloverCandidate({
   currentPath = null,
   candidateManifestPath = null,
   changedPaths = null,
+  allowReviewedAndroidBackendCompatibility = false,
   beforeManifestOpen = null,
 } = {}) {
   const root = resolve(repositoryRoot ?? fileURLToPath(new URL('../', import.meta.url)));
@@ -438,6 +492,7 @@ export async function validateCurrentRolloverCandidate({
     archiveRoot,
     rolloverPath: manifestPath,
     changedPaths,
+    allowReviewedAndroidBackendCompatibility,
   });
   return Object.freeze({
     ...result,

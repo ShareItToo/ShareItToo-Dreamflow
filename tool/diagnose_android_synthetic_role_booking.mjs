@@ -12,8 +12,8 @@ import {
 } from './prepare_android_device_test.mjs';
 import { runSyntheticRoleBookingLifecycle } from './run_staging_synthetic_booking.mjs';
 import {
-  validateCurrentHeadAndroidReleaseArchive,
-} from './validate_current_head_android_release_archive.mjs';
+  validateCurrentRolloverCandidate,
+} from './validate_google_play_internal_handoff.mjs';
 
 const applicationId = 'com.shareittoo.app';
 
@@ -256,13 +256,18 @@ async function run() {
   const root = fileURLToPath(new URL('../', import.meta.url));
   const args = parseArguments(process.argv.slice(2));
   if (args.candidateDirectory === null) {
-    fail('--candidate-dir is required for an exact current-head role-booking diagnostic.');
+    fail('--candidate-dir is required for an exact current-rollover role-booking diagnostic.');
   }
   const candidateDirectory = resolve(args.candidateDirectory);
-  const archive = await validateCurrentHeadAndroidReleaseArchive({
-    root,
-    candidateDirectory,
+  const current = await validateCurrentRolloverCandidate({
+    repositoryRoot: root,
+    allowReviewedAndroidBackendCompatibility: true,
   });
+  const archiveDirectory = resolve(current.archive.apkPath, '..');
+  if (candidateDirectory !== archiveDirectory) {
+    fail('Explicit candidate directory does not match the current rollover pointer.');
+  }
+  const archive = current.archive;
   const candidate = {
     ...archive,
     paymentMode: 'memory',

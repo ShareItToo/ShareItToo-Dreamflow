@@ -117,8 +117,9 @@ test('refuses a locked phone without entering a passcode', async () => {
   assert.equal(fake.calls.some((args) => args.includes('input')), false);
 });
 
-test('the executable runner requires the explicit current-head archive', () => {
-  assert.match(runnerSource, /validateCurrentHeadAndroidReleaseArchive/u);
+test('the executable runner requires the explicit current rollover archive', () => {
+  assert.match(runnerSource, /validateCurrentRolloverCandidate/u);
+  assert.match(runnerSource, /allowReviewedAndroidBackendCompatibility: true/u);
   assert.match(runnerSource, /--candidate-dir is required/u);
   assert.doesNotMatch(runnerSource, /store\/device-validation\.json/u);
   assert.doesNotMatch(runnerSource, /validateCandidateArchive/u);

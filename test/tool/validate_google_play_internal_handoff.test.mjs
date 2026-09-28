@@ -15,10 +15,13 @@ import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 
 import {
+  candidateRolloverAndroidCompatibilityPaths,
+  candidateRolloverAndroidCompatibilityFiles,
   candidateRolloverRuntimeDrift,
   explicitHistoricalRolloverStatus,
   historicalRolloverCandidatePath,
   validateCurrentRolloverCandidate,
+  validateCandidateRolloverAndroidCompatibilityFiles,
   validateExplicitHistoricalRolloverCandidate,
   validateGooglePlayInternalHandoff,
 } from '../../tool/validate_google_play_internal_handoff.mjs';
@@ -63,6 +66,36 @@ test('candidate rollover ignores test-only drift but retains runtime drift', () 
     'backend/ops/secret_scan_history_baseline.json.backup',
     'android/app/build.gradle',
   ]);
+});
+
+test('candidate rollover allows only the explicit reviewed Android backend compatibility lane', () => {
+  assert.deepEqual(candidateRolloverRuntimeDrift([
+    'backend/src/app.js',
+    'backend/src/profile_upload_cleanup.js',
+    'backend/test/profile_upload_cleanup.test.js',
+  ], { allowReviewedAndroidBackendCompatibility: true }), []);
+  assert.deepEqual(candidateRolloverRuntimeDrift([
+    'backend/src/app.js',
+    'backend/src/unknown_runtime.js',
+  ], { allowReviewedAndroidBackendCompatibility: true }), ['backend/src/unknown_runtime.js']);
+  assert.deepEqual(candidateRolloverAndroidCompatibilityFiles.map((file) => file.path),
+    candidateRolloverAndroidCompatibilityPaths);
+});
+
+test('rejects same-path Android compatibility byte mutation', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'sit-android-compatibility-bytes-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  for (const file of candidateRolloverAndroidCompatibilityFiles) {
+    const destination = join(root, file.path);
+    await mkdir(dirname(destination), { recursive: true });
+    await writeFile(destination, await readFile(resolve(repositoryRoot, file.path)));
+  }
+  assert.deepEqual(validateCandidateRolloverAndroidCompatibilityFiles({ repositoryRoot: root }),
+    candidateRolloverAndroidCompatibilityPaths);
+  const appPath = join(root, 'backend/src/app.js');
+  await writeFile(appPath, `${await readFile(appPath, 'utf8')}\n// mutation\n`);
+  assert.throws(() => validateCandidateRolloverAndroidCompatibilityFiles({ repositoryRoot: root }),
+    /bytes changed: backend\/src\/app\.js/u);
 });
 
 async function explicitRolloverFixture({ versionCode = explicitRollover.candidate.versionCode } = {}) {
@@ -227,6 +260,29 @@ test('validates the dynamic current pointer through its versioned manifest', asy
   assert.equal(result.buildNumber, data.rollover.candidate.versionCode);
   assert.equal(result.candidateManifestPath, data.manifestPath);
   assert.deepEqual(result.runtimeDrift, []);
+});
+
+test('current pointer can bind the exact reviewed backend compatibility lane only', async (t) => {
+  const data = await currentRolloverFixture();
+  t.after(async () => {
+    await rm(data.root, { recursive: true, force: true });
+    await rm(data.manifestPath, { force: true });
+  });
+  const result = await validateCurrentRolloverCandidate({
+    repositoryRoot,
+    archiveRoot: data.archiveRoot,
+    currentPath: data.pointerPath,
+    changedPaths: ['backend/src/app.js'],
+    allowReviewedAndroidBackendCompatibility: true,
+  });
+  assert.deepEqual(result.runtimeDrift, []);
+  await assert.rejects(() => validateCurrentRolloverCandidate({
+    repositoryRoot,
+    archiveRoot: data.archiveRoot,
+    currentPath: data.pointerPath,
+    changedPaths: ['backend/src/unknown_runtime.js'],
+    allowReviewedAndroidBackendCompatibility: true,
+  }), /Runtime-affecting files changed/u);
 });
 
 test('rejects a missing ref and stale or mismatched build/ref binding', async (t) => {

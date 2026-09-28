@@ -65,7 +65,7 @@ const targetManifest = {
   retainedSealed: greenTarget.retainedSealed.map((descriptor) => ({ ...descriptor })),
 };
 targetManifest.targetDigest = normalizedGreenTargetDigest(targetManifest);
-assert.equal(targetManifest.targetDigest, 'a7af683937965b813bb7e8f4536959c198dd90502c71ad88ae625cf2f60b7217');
+assert.equal(targetManifest.targetDigest, '2a7aa2030ac2f589fc1e64e64a0e28209eb7533482776c360e504efbb8bf768f');
 const prePromotionImageReference = `${greenTarget.prePromotionImage}@${greenTarget.prePromotionImageDigest}`;
 const config = {
   environment: 'test', envFile: '/docker/shareittoo/staging-secrets/green.env',
@@ -178,10 +178,11 @@ function restoreFixture(options, running = true) {
 test('Green target accepts only the exact verified resource identities', () => {
   assert.deepEqual(assertGreenTargetManifest(targetManifest), targetManifest);
   assert.equal(targetManifest.schemaVersion, 3);
-  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:bc86f8318e2c96af5d703007399dc582bc14b5f7');
-  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:521d7e555d9c09f3d385f82eda1f32d28c13f2627a383e91a9ed973d50d81106');
-  assert.equal(targetManifest.sealedApiContainer, 'shareittoo-staging-api-alt-sealed-green-bc86f831');
+  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:3c40ded07b58b8164d806628926ac4cb579afb0d');
+  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:23c6bf4397dad4cd84764102b47980205e6bb97519f3b610aaa26ebf4a6fc683');
+  assert.equal(targetManifest.sealedApiContainer, 'shareittoo-staging-api-alt-sealed-green-3c40ded0');
   assert.deepEqual(targetManifest.retainedSealed.map((descriptor) => descriptor.name), [
+    'shareittoo-staging-api-alt-sealed-green-bc86f831',
     'shareittoo-staging-api-alt-sealed-green',
     'shareittoo-staging-api-alt-sealed-green-01f81655',
     'shareittoo-staging-api-alt-sealed-green-56ec5dc1',

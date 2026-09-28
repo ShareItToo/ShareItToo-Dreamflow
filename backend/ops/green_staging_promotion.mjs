@@ -17,11 +17,19 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.
 export const greenTarget = Object.freeze({
   composeProject: 'sit-green',
   apiContainer: 'shareittoo-staging-api',
-  // The next promotion seals the exact active bc86 runtime. Every existing
+  // The next promotion seals the exact active 3c40 runtime. Every existing
   // stopped Green seal remains an immutable read-only witness and is never a
   // mutation target of this runner.
-  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-bc86f831',
+  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-3c40ded0',
   retainedSealed: Object.freeze([
+    Object.freeze({
+      name: 'shareittoo-staging-api-alt-sealed-green-bc86f831',
+      image: 'ghcr.io/shareittoo/shareittoo-api:bc86f8318e2c96af5d703007399dc582bc14b5f7@sha256:521d7e555d9c09f3d385f82eda1f32d28c13f2627a383e91a9ed973d50d81106',
+      imageDigest: 'sha256:521d7e555d9c09f3d385f82eda1f32d28c13f2627a383e91a9ed973d50d81106',
+      greenLabel: 'true',
+      runId: '20260918011528-wp254',
+      running: false,
+    }),
     Object.freeze({
       name: 'shareittoo-staging-api-alt-sealed-green',
       image: 'ghcr.io/shareittoo/shareittoo-api:ccc72004247d50656ac1064a758eb5f05c795e04',
@@ -97,8 +105,8 @@ export const greenTarget = Object.freeze({
   runId: '20260918011528-wp254',
   sourceSchema: 98,
   currentSchema: 98,
-  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:bc86f8318e2c96af5d703007399dc582bc14b5f7',
-  prePromotionImageDigest: 'sha256:521d7e555d9c09f3d385f82eda1f32d28c13f2627a383e91a9ed973d50d81106',
+  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:3c40ded07b58b8164d806628926ac4cb579afb0d',
+  prePromotionImageDigest: 'sha256:23c6bf4397dad4cd84764102b47980205e6bb97519f3b610aaa26ebf4a6fc683',
   sourceLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentMigration: '098_booking_checkout_declaration_constraints.up.sql',
