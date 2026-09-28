@@ -120,23 +120,22 @@ mode `0600` and bind exactly `shareittoo-staging-api`,
 `sit-green-network-20260918011528-wp254`,
 `sit-staging-provider-egress` and
 `sit-green-uploads-20260918011528-wp254`, with Green label and manifest-bound
-source readback schema `97`. The current target is also schema `97`; isolated
+source readback schema `98`. The current target is also schema `98`; isolated
 and canonical readbacks verify the exact idempotent terminal state
-`097_registration_consent_bundle.up.sql` migration.
+`098_booking_checkout_declaration_constraints.up.sql` migration.
 The database identity is exactly `shareittoo_green` / `shareittoo_green`;
 legacy `shareittoo_staging` is never used by this lane.
-The source readback is exactly schema `97` with the manifest-bound ledger
-digest `950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0`.
+The source readback is exactly schema `98` with the manifest-bound ledger
+digest `796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196`.
 The pre-promotion image is exactly
-`ghcr.io/shareittoo/shareittoo-api:cffb4e43accee5de4bf6d33d553adde18a33d16f`
+`ghcr.io/shareittoo/shareittoo-api:d91b50a92880b4f46a5c9028482bdf013f8c5233`
 with digest
-`sha256:c63bc16223d81e845a423c5728c0e697bc05809b3699449755b83f3e0763a2a0`.
+`sha256:4343e2a0006b841f3bdaba6b914ed782caaf1dcb16aa5e1aeaaefffda7f23d71`.
 The new seal is
-`shareittoo-staging-api-alt-sealed-green-cffb4e43`. The two historical seals
-`shareittoo-staging-api-alt-sealed-green-ea25e7cb` (ea25 tag plus exact digest)
-and `shareittoo-staging-api-alt-sealed-green` (exact ccc720 tag) remain
-separately read-only validated, stopped containers with the exact Green label
-and run ID; neither is ever renamed, removed, restarted or network-targeted.
+`shareittoo-staging-api-alt-sealed-green-d91b50a9`. All seven existing
+historical seals remain separately read-only validated, stopped containers
+with the exact Green label, run ID and immutable image digest; none is ever
+renamed, removed, restarted or network-targeted.
 Unknown extra Green containers fail the all-containers inventory gate. The
 observed source API tuple includes user `shareittoo`, group `65532`, no host
 port, the two approved networks, and exactly three mounts: writable uploads
@@ -148,11 +147,11 @@ Legacy `sit-staging`, production names, lookalike networks and mutable image
 tags are rejected before a command is planned.
 
 The plan takes a fresh protected backup, restores the manifest-bound Green
-source readback `97` into a run-scoped internal target and runs the migration
-runner idempotently at `97_to_97` through
-`097_registration_consent_bundle.up.sql`, then proves
-the full source-to-current migration ledger (expected 97-row digest
-`950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0`) and
+source readback `98` into a run-scoped internal target and runs the migration
+runner idempotently at `98_to_98` through
+`098_booking_checkout_declaration_constraints.up.sql`, then proves
+the full source-to-current migration ledger (expected 98-row digest
+`796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196`) and
 the official PostgreSQL init-complete log marker followed by two stable
 `SELECT 1` readbacks before restore/provisioning. The network, Postgres and
 candidate creation responses are captured as immutable IDs; all later
@@ -192,8 +191,8 @@ implicitly enabled by this runner. After the exact target readback, the observed
 sealed before foreign-writer checks, the protected backup and the isolated
 rehearsal. The isolated candidate is then run and cleaned up before the
 canonical Green database is
-explicitly passed through the idempotent `97_to_97` migration command and
-`097_registration_consent_bundle.up.sql` and read back before the
+explicitly passed through the idempotent `98_to_98` migration command and
+`098_booking_checkout_declaration_constraints.up.sql` and read back before the
 final image is created. If that canonical mutation starts, the sealed old image is never
 restarted; recovery is a forward candidate path.
 
@@ -207,6 +206,16 @@ when cleanup or target/config preservation is uncertain.
 
 Preparation is local/read-only until the separately authorized operational
 gate is supplied; the target and config manifests stay outside Git:
+
+The 2026-09-28 read-only VPS inventory found the live d91 image, schema 98,
+and seven stopped Green seals. The protected VPS target manifest still points
+to the previous `01f81655` pre-promotion image and six retained seals; its
+readback is therefore intentionally rejected by this exact contract. Before
+executing the next promotion, refresh that mode-0600 manifest atomically to
+the verified d91 prestate and all seven retained descriptors. The expected
+refreshed target digest is
+`b3be0ca620c9ed02d8fdaaf76f09c8a14bd32e8d432f26f166b12e8d5ef19228`.
+Do not run the promotion against the stale manifest.
 
 ```sh
 GREEN_STAGING_TARGET_MANIFEST=/docker/shareittoo/ops/green-target.json \
