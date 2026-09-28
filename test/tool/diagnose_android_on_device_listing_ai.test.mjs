@@ -6,6 +6,8 @@ import {
   classifyPostPhotoPickerSurface,
   controlledMediaRow,
   cleanupListingAiLocalRecovery,
+  bindOwnerDiagnosticVocabulary,
+  bindOwnerFailureDiagnostic,
   formatListingAiFailureReport,
   formatPhotoPickerFailureReport,
   listingAiConsentSurfaceReady,
@@ -22,6 +24,8 @@ import {
   photoPickerFailureDiagnostic,
   observedListingAiSignals,
   returnedToListingEditorAfterPhotoPicker,
+  restoreOwnerDiagnosticVocabulary,
+  restoreOwnerFailureDiagnostic,
   runAndroidOnDeviceListingAiAcceptance,
   stagingReadbackCommand,
   validateStagingDatabaseContainer,
@@ -484,6 +488,93 @@ test('reports fixed sanitized open-listing substages with cleanup and owner rest
       },
     );
   }
+});
+
+test('reports fixed sanitized bind-owner and restore-owner substages', async () => {
+  for (const [substage, value] of Object.entries(bindOwnerDiagnosticVocabulary)) {
+    const diagnostic = bindOwnerFailureDiagnostic(substage);
+    assert.deepEqual(diagnostic, {
+      stage: 'bind-owner',
+      substage,
+      code: value.code,
+      classification: value.classification,
+    });
+    if (substage === 'unknown') continue;
+    await assert.rejects(
+      () => runAndroidOnDeviceListingAiAcceptance({
+        candidate,
+        deviceSummary: device,
+        operations: {
+          currentStage: () => 'bind-owner',
+          currentSubstage: () => substage,
+          perform: async () => { throw new Error('/private/bind-owner-surface'); },
+          verifyServer: async () => server,
+          cleanup: async () => ({ localRecoveryCleared: true, controlledMediaRemoved: true }),
+          restoreOwner: async () => true,
+        },
+      }),
+      (error) => {
+        assert.deepEqual(error.listingAiFailureReport.primary, diagnostic);
+        assert.equal(
+          formatListingAiFailureReport(error.listingAiFailureReport),
+          `ERROR: SIT stage bind-owner: ${value.code}/${value.classification}/${substage}`
+            + ' cleanup=passed ownerRestore=passed',
+        );
+        assert.doesNotMatch(JSON.stringify(error.listingAiFailureReport), /(?:private|bind-owner-surface|\/)/iu);
+        return true;
+      },
+    );
+  }
+  for (const [substage, value] of Object.entries(restoreOwnerDiagnosticVocabulary)) {
+    const diagnostic = restoreOwnerFailureDiagnostic(substage);
+    assert.deepEqual(diagnostic, {
+      stage: 'restore-owner',
+      substage,
+      code: value.code,
+      classification: value.classification,
+    });
+    if (substage === 'unknown') continue;
+    await assert.rejects(
+      () => runAndroidOnDeviceListingAiAcceptance({
+        candidate,
+        deviceSummary: device,
+        operations: {
+          currentStage: () => 'restore-owner',
+          currentSubstage: () => substage,
+          perform: async () => { throw new Error('/private/restore-owner-surface'); },
+          verifyServer: async () => server,
+          cleanup: async () => ({ localRecoveryCleared: true, controlledMediaRemoved: true }),
+          restoreOwner: async () => true,
+        },
+      }),
+      (error) => {
+        assert.deepEqual(error.listingAiFailureReport.primary, diagnostic);
+        assert.equal(
+          formatListingAiFailureReport(error.listingAiFailureReport),
+          `ERROR: SIT stage restore-owner: ${value.code}/${value.classification}/${substage}`
+            + ' cleanup=passed ownerRestore=passed',
+        );
+        return true;
+      },
+    );
+  }
+  await assert.rejects(
+    () => runAndroidOnDeviceListingAiAcceptance({
+      candidate,
+      deviceSummary: device,
+      operations: {
+        perform: async () => ({ fixtureSelected: true, ui: successfulHierarchy }),
+        verifyServer: async () => server,
+        cleanup: async () => ({ localRecoveryCleared: true, controlledMediaRemoved: true }),
+        restoreOwner: async () => { throw new Error('/private/restore-owner'); },
+      },
+    }),
+    (error) => {
+      assert.deepEqual(error.listingAiFailureReport.primary, restoreOwnerFailureDiagnostic('restore-owner'));
+      assert.equal(error.listingAiFailureReport.ownerRestore, 'failed');
+      return true;
+    },
+  );
 });
 
 test('cleans the opened listing surface even when analyze fails before a performed result exists', async () => {

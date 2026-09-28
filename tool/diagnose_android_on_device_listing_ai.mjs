@@ -133,6 +133,40 @@ const listingOpenDiagnosticCatalog = Object.freeze({
   }),
 });
 export const listingOpenDiagnosticVocabulary = listingOpenDiagnosticCatalog;
+const bindOwnerDiagnosticCatalog = Object.freeze({
+  'guest-reset': Object.freeze({
+    code: 'LISTING_AI_BIND_OWNER_GUEST_RESET_FAILED',
+    classification: 'guest-reset-failed',
+  }),
+  'guest-profile-read': Object.freeze({
+    code: 'LISTING_AI_BIND_OWNER_GUEST_PROFILE_READ_FAILED',
+    classification: 'guest-profile-read-failed',
+  }),
+  'login-restore': Object.freeze({
+    code: 'LISTING_AI_BIND_OWNER_LOGIN_RESTORE_FAILED',
+    classification: 'login-restore-failed',
+  }),
+  'exact-principal': Object.freeze({
+    code: 'LISTING_AI_BIND_OWNER_EXACT_PRINCIPAL_FAILED',
+    classification: 'exact-principal-failed',
+  }),
+  unknown: Object.freeze({
+    code: 'LISTING_AI_BIND_OWNER_UNCLASSIFIED_FAILURE',
+    classification: 'unclassified-bind-owner-failure',
+  }),
+});
+export const bindOwnerDiagnosticVocabulary = bindOwnerDiagnosticCatalog;
+const restoreOwnerDiagnosticCatalog = Object.freeze({
+  'restore-owner': Object.freeze({
+    code: 'LISTING_AI_RESTORE_OWNER_FAILED',
+    classification: 'restore-owner-failed',
+  }),
+  unknown: Object.freeze({
+    code: 'LISTING_AI_RESTORE_OWNER_UNCLASSIFIED_FAILURE',
+    classification: 'unclassified-restore-owner-failure',
+  }),
+});
+export const restoreOwnerDiagnosticVocabulary = restoreOwnerDiagnosticCatalog;
 const stageFailureCatalog = Object.freeze({
   analyze: Object.freeze({
     code: 'LISTING_AI_ANALYZE_RESULT_UNAVAILABLE',
@@ -143,6 +177,8 @@ export const onDeviceListingAiViewportAttemptLimit = 24;
 let activeStage = 'load-vault';
 let activePhotoPickerSubstage = 'unknown';
 let activeListingOpenSubstage = 'unknown';
+let activeBindOwnerSubstage = 'unknown';
+let activeRestoreOwnerSubstage = 'restore-owner';
 export const listingAiOnDeviceDisclosurePrefix =
   'SIT wertet deine ausgewählten Bilder direkt auf diesem Android-Gerät aus.';
 
@@ -220,6 +256,8 @@ function fail(message) {
   const error = new Error(message);
   if (activeStage === 'photo-picker') attachPhotoPickerDiagnostic(error, activePhotoPickerSubstage);
   if (activeStage === 'open-listing') attachListingOpenDiagnostic(error, activeListingOpenSubstage);
+  if (activeStage === 'bind-owner') attachBindOwnerDiagnostic(error, activeBindOwnerSubstage);
+  if (activeStage === 'restore-owner') attachRestoreOwnerDiagnostic(error, activeRestoreOwnerSubstage);
   throw error;
 }
 
@@ -228,6 +266,8 @@ function setStage(stage) {
   activeStage = stage;
   if (stage === 'photo-picker') activePhotoPickerSubstage = 'unknown';
   if (stage === 'open-listing') activeListingOpenSubstage = 'unknown';
+  if (stage === 'bind-owner') activeBindOwnerSubstage = 'unknown';
+  if (stage === 'restore-owner') activeRestoreOwnerSubstage = 'restore-owner';
 }
 
 export function photoPickerFailureDiagnostic(substage) {
@@ -258,6 +298,8 @@ export function formatPhotoPickerFailureReport(report) {
 
 function stageFailureDiagnostic(stage, substage) {
   if (stage === 'open-listing') return listingOpenFailureDiagnostic(substage);
+  if (stage === 'bind-owner') return bindOwnerFailureDiagnostic(substage);
+  if (stage === 'restore-owner') return restoreOwnerFailureDiagnostic(substage);
   const entry = stageFailureCatalog[stage] ?? Object.freeze({
     code: 'LISTING_AI_STAGE_FAILED',
     classification: 'stage-failed',
@@ -319,6 +361,62 @@ export function listingOpenFailureDiagnostic(substage) {
 function attachListingOpenDiagnostic(error, substage) {
   if (error === null || (typeof error !== 'object' && typeof error !== 'function')) return error;
   const diagnostic = listingOpenFailureDiagnostic(substage);
+  try {
+    Object.defineProperty(error, 'listingAiDiagnostic', {
+      value: diagnostic,
+      enumerable: false,
+      configurable: true,
+    });
+  } catch {
+    // Preserve the original failure if it is not extensible.
+  }
+  return error;
+}
+
+export function bindOwnerFailureDiagnostic(substage) {
+  const key = Object.hasOwn(bindOwnerDiagnosticCatalog, substage)
+    ? substage
+    : 'unknown';
+  const entry = bindOwnerDiagnosticCatalog[key];
+  return Object.freeze({
+    stage: 'bind-owner',
+    substage: key,
+    code: entry.code,
+    classification: entry.classification,
+  });
+}
+
+function attachBindOwnerDiagnostic(error, substage) {
+  if (error === null || (typeof error !== 'object' && typeof error !== 'function')) return error;
+  const diagnostic = bindOwnerFailureDiagnostic(substage);
+  try {
+    Object.defineProperty(error, 'listingAiDiagnostic', {
+      value: diagnostic,
+      enumerable: false,
+      configurable: true,
+    });
+  } catch {
+    // Preserve the original failure if it is not extensible.
+  }
+  return error;
+}
+
+export function restoreOwnerFailureDiagnostic(substage) {
+  const key = Object.hasOwn(restoreOwnerDiagnosticCatalog, substage)
+    ? substage
+    : 'unknown';
+  const entry = restoreOwnerDiagnosticCatalog[key];
+  return Object.freeze({
+    stage: 'restore-owner',
+    substage: key,
+    code: entry.code,
+    classification: entry.classification,
+  });
+}
+
+function attachRestoreOwnerDiagnostic(error, substage) {
+  if (error === null || (typeof error !== 'object' && typeof error !== 'function')) return error;
+  const diagnostic = restoreOwnerFailureDiagnostic(substage);
   try {
     Object.defineProperty(error, 'listingAiDiagnostic', {
       value: diagnostic,
@@ -622,6 +720,22 @@ export async function runAndroidOnDeviceListingAiAcceptance({
             ? operations.currentSubstage()
             : activeListingOpenSubstage),
       );
+    } else if (primaryStage === 'bind-owner') {
+      attachBindOwnerDiagnostic(
+        error,
+        error?.listingAiDiagnostic?.substage
+          ?? (typeof operations.currentSubstage === 'function'
+            ? operations.currentSubstage()
+            : activeBindOwnerSubstage),
+      );
+    } else if (primaryStage === 'restore-owner') {
+      attachRestoreOwnerDiagnostic(
+        error,
+        error?.listingAiDiagnostic?.substage
+          ?? (typeof operations.currentSubstage === 'function'
+            ? operations.currentSubstage()
+            : activeRestoreOwnerSubstage),
+      );
     }
     if (typeof primaryFailure.sitStage !== 'string') {
       primaryFailure.sitStage = primaryStage;
@@ -641,8 +755,13 @@ export async function runAndroidOnDeviceListingAiAcceptance({
         fail('The protected owner session was not restored.');
       }
     } catch (error) {
+      attachRestoreOwnerDiagnostic(error, activeRestoreOwnerSubstage);
       restoreFailure = error;
     }
+  }
+  if (primaryFailure === null && cleanupFailure === null && restoreFailure !== null) {
+    primaryFailure = restoreFailure;
+    primaryStage = 'restore-owner';
   }
   const failureReport = primaryFailure === null
     ? null
@@ -653,7 +772,11 @@ export async function runAndroidOnDeviceListingAiAcceptance({
         ? primaryFailure.listingAiDiagnostic
         : primaryFailure.listingAiDiagnostic?.stage === 'open-listing'
           ? primaryFailure.listingAiDiagnostic
-          : stageFailureDiagnostic(primaryStage ?? activeStage),
+          : primaryFailure.listingAiDiagnostic?.stage === 'bind-owner'
+            ? primaryFailure.listingAiDiagnostic
+            : primaryFailure.listingAiDiagnostic?.stage === 'restore-owner'
+              ? primaryFailure.listingAiDiagnostic
+              : stageFailureDiagnostic(primaryStage ?? activeStage),
       cleanup: cleanupFailure === null ? 'passed' : 'failed',
       ownerRestore: restoreFailure === null ? 'passed' : 'failed',
     });
@@ -1001,7 +1124,13 @@ async function main() {
   let createSurfaceOpened = false;
   const operations = {
     currentStage: () => activeStage,
-    currentSubstage: () => activePhotoPickerSubstage,
+    currentSubstage: () => activeStage === 'photo-picker'
+      ? activePhotoPickerSubstage
+      : activeStage === 'open-listing'
+        ? activeListingOpenSubstage
+        : activeStage === 'bind-owner'
+          ? activeBindOwnerSubstage
+          : activeRestoreOwnerSubstage,
     perform: async () => {
       const startedAt = new Date().toISOString();
       setStage('prepare-fixture');
@@ -1018,7 +1147,10 @@ async function main() {
       await wait(800);
       mediaRow = controlledMediaRow(mediaInventory(commandRunner, adbPath, device));
       setStage('bind-owner');
-      await bindExactRole({ vault, role: 'owner', commandRunner, adbPath, device, wait });
+      await bindExactRole({
+        vault, role: 'owner', commandRunner, adbPath, device, wait,
+        onSubstage: (substage) => { activeBindOwnerSubstage = substage; },
+      });
       setStage('open-listing');
       let hierarchy = await listingOpenAction('main-destination', () => openMainDestination({
         commandRunner, adbPath, device, wait, label: 'Entdecken',

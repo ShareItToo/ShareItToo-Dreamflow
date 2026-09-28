@@ -289,6 +289,12 @@ export function hasEnteredNamedLoginInput(hierarchy, label) {
   ));
 }
 
+export const loginSessionCheckOverlayLabel = 'Session prüfen…';
+
+export function isLoginSessionCheckComplete(hierarchy) {
+  return namedNodes(hierarchy, loginSessionCheckOverlayLabel).length === 0;
+}
+
 function hasProtectedChatGate(hierarchy) {
   return hierarchy.includes('Bitte zuerst anmelden')
     && hierarchy.includes('Anmelden')
@@ -447,7 +453,8 @@ export async function restoreSyntheticSession({
     commandRunner,
     adbPath,
     device,
-    predicate: (hierarchy) => namedNodes(hierarchy, 'E-Mail').length >= 1
+    predicate: (hierarchy) => isLoginSessionCheckComplete(hierarchy)
+      && namedNodes(hierarchy, 'E-Mail').length >= 1
       && namedNodes(hierarchy, 'Passwort').length >= 1,
     wait,
   });
@@ -456,7 +463,8 @@ export async function restoreSyntheticSession({
     commandRunner,
     adbPath,
     device,
-    predicate: (hierarchy) => hasEnteredNamedLoginInput(hierarchy, 'E-Mail'),
+    predicate: (hierarchy) => isLoginSessionCheckComplete(hierarchy)
+      && hasEnteredNamedLoginInput(hierarchy, 'E-Mail'),
     wait,
     attempts: 12,
   });
@@ -471,7 +479,8 @@ export async function restoreSyntheticSession({
     commandRunner,
     adbPath,
     device,
-    predicate: (hierarchy) => hasEnteredNamedLoginInput(hierarchy, 'E-Mail')
+    predicate: (hierarchy) => isLoginSessionCheckComplete(hierarchy)
+      && hasEnteredNamedLoginInput(hierarchy, 'E-Mail')
       && hasEnteredNamedLoginInput(hierarchy, 'Passwort')
       && namedNodes(hierarchy, 'Anmelden').some(
         (tag) => attribute(tag, 'clickable') === 'true' && attribute(tag, 'enabled') !== 'false',

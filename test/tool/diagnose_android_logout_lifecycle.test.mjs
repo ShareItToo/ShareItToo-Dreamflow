@@ -6,6 +6,8 @@ import {
   ensureAndroidGuestSession,
   hasEnteredNamedLoginInput,
   isAndroidSoftwareKeyboardShown,
+  isLoginSessionCheckComplete,
+  loginSessionCheckOverlayLabel,
   isV52ForegroundPushPopup,
   restoreSyntheticSession,
   sendOppositeRoleMessage,
@@ -165,6 +167,121 @@ test('login restoration allows the bounded post-login profile hydration window',
   });
   assert.equal(restored, true);
   assert.equal(profileDumps, 40);
+});
+
+test('login restoration waits for the session-check overlay before any field or submit action', async () => {
+  let screen = 'guest';
+  let loginDumps = 0;
+  let emailEntered = false;
+  let passwordEntered = false;
+  let focusedField = null;
+  const actions = [];
+  const node = (label, bounds = '[0,0][500,100]') => (
+    `<node text="${label}" content-desc="" clickable="true" enabled="true" bounds="${bounds}"/>`
+  );
+  const loginHierarchy = () => {
+    loginDumps += 1;
+    const overlay = loginDumps <= 2 ? node(loginSessionCheckOverlayLabel) : '';
+    return '<hierarchy>' + overlay
+      + `<node class="android.widget.EditText" hint="E-Mail" text="${emailEntered ? 'owner@example.invalid' : ''}" bounds="[0,100][500,200]" />`
+      + `<node class="android.widget.EditText" hint="Passwort" text="${passwordEntered ? '••••••••' : ''}" bounds="[0,200][500,300]" />`
+      + (emailEntered && passwordEntered ? node('Anmelden', '[0,300][500,400]') : '')
+      + '</hierarchy>';
+  };
+  const mainHierarchy = () => '<hierarchy>'
+    + node('Entdecken', '[0,2200][300,2400]')
+    + node('Nachrichten', '[600,2200][900,2400]')
+    + node('Mein SIT', '[900,2200][1200,2400]') + '</hierarchy>';
+  const profileHierarchy = () => '<hierarchy>'
+    + node('Meine Anzeigen') + node('Mietanfragen') + node('Abmelden') + '</hierarchy>';
+  const runner = (_file, args) => {
+    const command = args.slice(2);
+    const joined = command.join(' ');
+    if (joined === 'shell uiautomator dump /sdcard/sit-logout-lifecycle.xml') return 'UI hierarchy dumped';
+    if (joined === 'exec-out cat /sdcard/sit-logout-lifecycle.xml') {
+      if (screen === 'login') return loginHierarchy();
+      if (screen === 'main') return mainHierarchy();
+      if (screen === 'profile') return profileHierarchy();
+      return '<hierarchy>' + node('Anmelden') + node('Konto erstellen') + '</hierarchy>';
+    }
+    if (joined === 'shell rm -f /sdcard/sit-logout-lifecycle.xml') return '';
+    if (command[0] === 'shell' && command[1] === 'input' && command[2] === 'tap') {
+      const y = Number(command.at(-1));
+      actions.push({ type: 'tap', y, beforeOverlayGone: loginDumps <= 2 });
+      if (screen === 'guest') {
+        screen = 'login';
+        return '';
+      }
+      if (y >= 100 && y < 200) focusedField = 'email';
+      else if (y >= 200 && y < 300) focusedField = 'password';
+      else if (screen === 'login' && emailEntered && passwordEntered) {
+        actions.push({ type: 'submit' });
+        screen = 'main';
+      } else if (screen === 'main') screen = 'profile';
+      return '';
+    }
+    if (command[0] === 'shell' && command[1] === 'input' && command[2] === 'text') {
+      actions.push({ type: 'input', beforeOverlayGone: loginDumps <= 2 });
+      if (focusedField === 'email') emailEntered = true;
+      if (focusedField === 'password') passwordEntered = true;
+      return '';
+    }
+    if (joined === 'shell dumpsys input_method') return 'mInputShown=false\n mIsInputViewShown=false';
+    throw new Error(`Unexpected fake ADB command: ${joined}`);
+  };
+  const restored = await restoreSyntheticSession({
+    commandRunner: runner,
+    adbPath: 'adb',
+    device: { serial: 'PRIVATE-SERIAL' },
+    wait: async () => {},
+    account: { email: 'owner@example.invalid', password: 'synthetic-password' },
+    initialProfileHierarchy: '<hierarchy>' + node('Anmelden') + node('Konto erstellen') + '</hierarchy>',
+  });
+  assert.equal(restored, true);
+  assert.equal(actions.filter((action) => action.type === 'input').some((action) => action.beforeOverlayGone), false);
+  assert.equal(actions.filter((action) => action.type === 'submit').some((action) => action.beforeOverlayGone), false);
+  assert.equal(isLoginSessionCheckComplete(loginHierarchy()), true);
+});
+
+test('login restoration fails closed when the session-check overlay persists', async () => {
+  let dumps = 0;
+  let inputOrSubmit = 0;
+  const node = (label, bounds = '[0,0][500,100]') => (
+    `<node text="${label}" content-desc="" clickable="true" enabled="true" bounds="${bounds}"/>`
+  );
+  const runner = (_file, args) => {
+    const command = args.slice(2);
+    const joined = command.join(' ');
+    if (joined === 'shell uiautomator dump /sdcard/sit-logout-lifecycle.xml') return 'UI hierarchy dumped';
+    if (joined === 'exec-out cat /sdcard/sit-logout-lifecycle.xml') {
+      dumps += 1;
+      return '<hierarchy>' + node(loginSessionCheckOverlayLabel)
+        + node('E-Mail', '[0,100][500,200]') + node('Passwort', '[0,200][500,300]') + '</hierarchy>';
+    }
+    if (joined === 'shell rm -f /sdcard/sit-logout-lifecycle.xml') return '';
+    if (command[0] === 'shell' && command[1] === 'input' && command[2] === 'tap') {
+      if (dumps > 1) inputOrSubmit += 1;
+      return '';
+    }
+    if (command[0] === 'shell' && command[1] === 'input' && command[2] === 'text') {
+      inputOrSubmit += 1;
+      return '';
+    }
+    throw new Error(`Unexpected fake ADB command: ${joined}`);
+  };
+  await assert.rejects(
+    () => restoreSyntheticSession({
+      commandRunner: runner,
+      adbPath: 'adb',
+      device: { serial: 'PRIVATE-SERIAL' },
+      wait: async () => {},
+      account: { email: 'owner@example.invalid', password: 'synthetic-password' },
+      initialProfileHierarchy: '<hierarchy>' + node('Anmelden') + node('Konto erstellen') + '</hierarchy>',
+    }),
+    /expected sanitized ShareItToo surface did not appear/u,
+  );
+  assert.equal(inputOrSubmit, 0);
+  assert.equal(dumps, 16);
 });
 
 test('taps the visible part of an action overlapped by persistent bottom navigation', () => {

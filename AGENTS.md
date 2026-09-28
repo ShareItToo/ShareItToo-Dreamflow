@@ -556,6 +556,8 @@ login and immediately revoke that temporary session, then use a bounds-based
 UI dump with `input keycombination` to clear and fill the current login form.
 Never use ad-hoc repeated login taps, print credentials/tokens, or retain a UI
 dump after success or failure; its fake-ADB contract test must remain green.
+Login input and submit readiness must require the exact `Session prüfen…`
+overlay to be absent; a persistent overlay fails closed without input or tap.
 
 ## External-create recovery invariant
 
