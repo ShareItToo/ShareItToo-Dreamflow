@@ -13,6 +13,8 @@ import {
   listingAiDraftReadyHeading,
   listingAiDraftReadyProgressText,
   listingAiOnDeviceDisclosurePrefix,
+  listingOpenDiagnosticVocabulary,
+  listingOpenFailureDiagnostic,
   newestPhotoPickerTile,
   onDeviceListingAiUiProof,
   onDeviceListingAiViewportAttemptLimit,
@@ -385,6 +387,43 @@ test('reports a late analyze failure with sanitized cleanup and owner-restore ou
     },
   );
   assert.deepEqual(calls, ['cleanup', 'restore']);
+});
+
+test('reports fixed sanitized open-listing substages with cleanup and owner restore', async () => {
+  for (const [substage, value] of Object.entries(listingOpenDiagnosticVocabulary)) {
+    const diagnostic = listingOpenFailureDiagnostic(substage);
+    assert.deepEqual(diagnostic, {
+      stage: 'open-listing',
+      substage,
+      code: value.code,
+      classification: value.classification,
+    });
+    if (substage === 'unknown') continue;
+    await assert.rejects(
+      () => runAndroidOnDeviceListingAiAcceptance({
+        candidate,
+        deviceSummary: device,
+        operations: {
+          currentStage: () => 'open-listing',
+          currentSubstage: () => substage,
+          perform: async () => { throw new Error('/private/open-listing-surface'); },
+          verifyServer: async () => server,
+          cleanup: async () => ({ localRecoveryCleared: true, controlledMediaRemoved: true }),
+          restoreOwner: async () => true,
+        },
+      }),
+      (error) => {
+        assert.deepEqual(error.listingAiFailureReport.primary, diagnostic);
+        assert.equal(
+          formatListingAiFailureReport(error.listingAiFailureReport),
+          `ERROR: SIT stage open-listing: ${value.code}/${value.classification}/${substage}`
+            + ' cleanup=passed ownerRestore=passed',
+        );
+        assert.doesNotMatch(JSON.stringify(error.listingAiFailureReport), /(?:private|open-listing-surface|\/)/iu);
+        return true;
+      },
+    );
+  }
 });
 
 test('cleans the opened listing surface even when analyze fails before a performed result exists', async () => {

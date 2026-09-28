@@ -110,6 +110,25 @@ const photoPickerDiagnosticCatalog = Object.freeze({
   }),
 });
 export const photoPickerDiagnosticVocabulary = photoPickerDiagnosticCatalog;
+const listingOpenDiagnosticCatalog = Object.freeze({
+  'main-destination': Object.freeze({
+    code: 'LISTING_AI_OPEN_LISTING_MAIN_DESTINATION_FAILED',
+    classification: 'main-destination-failed',
+  }),
+  'create-action': Object.freeze({
+    code: 'LISTING_AI_OPEN_LISTING_CREATE_ACTION_UNAVAILABLE',
+    classification: 'create-action-unavailable',
+  }),
+  'open-editor': Object.freeze({
+    code: 'LISTING_AI_OPEN_LISTING_EDITOR_UNAVAILABLE',
+    classification: 'open-editor-unavailable',
+  }),
+  unknown: Object.freeze({
+    code: 'LISTING_AI_OPEN_LISTING_UNCLASSIFIED_FAILURE',
+    classification: 'unclassified-open-listing-failure',
+  }),
+});
+export const listingOpenDiagnosticVocabulary = listingOpenDiagnosticCatalog;
 const stageFailureCatalog = Object.freeze({
   analyze: Object.freeze({
     code: 'LISTING_AI_ANALYZE_RESULT_UNAVAILABLE',
@@ -119,6 +138,7 @@ const stageFailureCatalog = Object.freeze({
 export const onDeviceListingAiViewportAttemptLimit = 24;
 let activeStage = 'load-vault';
 let activePhotoPickerSubstage = 'unknown';
+let activeListingOpenSubstage = 'unknown';
 export const listingAiOnDeviceDisclosurePrefix =
   'SIT wertet deine ausgewählten Bilder direkt auf diesem Android-Gerät aus.';
 
@@ -169,6 +189,7 @@ export async function waitForListingAiAnalyzeAction({
 function fail(message) {
   const error = new Error(message);
   if (activeStage === 'photo-picker') attachPhotoPickerDiagnostic(error, activePhotoPickerSubstage);
+  if (activeStage === 'open-listing') attachListingOpenDiagnostic(error, activeListingOpenSubstage);
   throw error;
 }
 
@@ -176,6 +197,7 @@ function setStage(stage) {
   if (!allowedStages.has(stage)) fail('The Listing-AI diagnostic stage is invalid.');
   activeStage = stage;
   if (stage === 'photo-picker') activePhotoPickerSubstage = 'unknown';
+  if (stage === 'open-listing') activeListingOpenSubstage = 'unknown';
 }
 
 export function photoPickerFailureDiagnostic(substage) {
@@ -204,7 +226,8 @@ export function formatPhotoPickerFailureReport(report) {
     + ` cleanup=${cleanup} ownerRestore=${ownerRestore}`;
 }
 
-function stageFailureDiagnostic(stage) {
+function stageFailureDiagnostic(stage, substage) {
+  if (stage === 'open-listing') return listingOpenFailureDiagnostic(substage);
   const entry = stageFailureCatalog[stage] ?? Object.freeze({
     code: 'LISTING_AI_STAGE_FAILED',
     classification: 'stage-failed',
@@ -226,9 +249,12 @@ export function formatListingAiFailureReport(report) {
   const classification = /^[a-z-]+$/u.test(diagnostic?.classification ?? '')
     ? diagnostic.classification
     : 'stage-failed';
+  const substage = /^[a-z-]+$/u.test(diagnostic?.substage ?? '')
+    ? `/${diagnostic.substage}`
+    : '';
   const cleanup = report?.cleanup === 'passed' ? 'passed' : 'failed';
   const ownerRestore = report?.ownerRestore === 'passed' ? 'passed' : 'failed';
-  return `ERROR: SIT stage ${stage}: ${code}/${classification}`
+  return `ERROR: SIT stage ${stage}: ${code}/${classification}${substage}`
     + ` cleanup=${cleanup} ownerRestore=${ownerRestore}`;
 }
 
@@ -245,6 +271,43 @@ function attachPhotoPickerDiagnostic(error, substage) {
     // The original failure remains authoritative even if it is not extensible.
   }
   return error;
+}
+
+export function listingOpenFailureDiagnostic(substage) {
+  const key = Object.hasOwn(listingOpenDiagnosticCatalog, substage)
+    ? substage
+    : 'unknown';
+  const entry = listingOpenDiagnosticCatalog[key];
+  return Object.freeze({
+    stage: 'open-listing',
+    substage: key,
+    code: entry.code,
+    classification: entry.classification,
+  });
+}
+
+function attachListingOpenDiagnostic(error, substage) {
+  if (error === null || (typeof error !== 'object' && typeof error !== 'function')) return error;
+  const diagnostic = listingOpenFailureDiagnostic(substage);
+  try {
+    Object.defineProperty(error, 'listingAiDiagnostic', {
+      value: diagnostic,
+      enumerable: false,
+      configurable: true,
+    });
+  } catch {
+    // Preserve the original failure if it is not extensible.
+  }
+  return error;
+}
+
+async function listingOpenAction(substage, action) {
+  activeListingOpenSubstage = substage;
+  try {
+    return await action();
+  } catch (error) {
+    throw attachListingOpenDiagnostic(error, substage);
+  }
 }
 
 async function photoPickerAction(substage, action) {
@@ -520,6 +583,14 @@ export async function runAndroidOnDeviceListingAiAcceptance({
             ? operations.currentSubstage()
             : activePhotoPickerSubstage),
       );
+    } else if (primaryStage === 'open-listing') {
+      attachListingOpenDiagnostic(
+        error,
+        error?.listingAiDiagnostic?.substage
+          ?? (typeof operations.currentSubstage === 'function'
+            ? operations.currentSubstage()
+            : activeListingOpenSubstage),
+      );
     }
     if (typeof primaryFailure.sitStage !== 'string') {
       primaryFailure.sitStage = primaryStage;
@@ -549,7 +620,9 @@ export async function runAndroidOnDeviceListingAiAcceptance({
       stage: primaryStage ?? activeStage,
       primary: primaryFailure.listingAiDiagnostic?.stage === 'photo-picker'
         ? primaryFailure.listingAiDiagnostic
-        : stageFailureDiagnostic(primaryStage ?? activeStage),
+        : primaryFailure.listingAiDiagnostic?.stage === 'open-listing'
+          ? primaryFailure.listingAiDiagnostic
+          : stageFailureDiagnostic(primaryStage ?? activeStage),
       cleanup: cleanupFailure === null ? 'passed' : 'failed',
       ownerRestore: restoreFailure === null ? 'passed' : 'failed',
     });
@@ -916,17 +989,19 @@ async function main() {
       setStage('bind-owner');
       await bindExactRole({ vault, role: 'owner', commandRunner, adbPath, device, wait });
       setStage('open-listing');
-      let hierarchy = await openMainDestination({
+      let hierarchy = await listingOpenAction('main-destination', () => openMainDestination({
         commandRunner, adbPath, device, wait, label: 'Entdecken',
-      });
-      hierarchy = await waitForListingCreateAction({
+      }));
+      hierarchy = await listingOpenAction('create-action', () => waitForListingCreateAction({
         commandRunner,
         adbPath,
         device,
         wait,
-      });
-      tapLabel(commandRunner, adbPath, device, hierarchy, 'Neue Anzeige erstellen');
-      hierarchy = await waitForHierarchy({
+      }));
+      await listingOpenAction('create-action', () => tapLabel(
+        commandRunner, adbPath, device, hierarchy, 'Neue Anzeige erstellen',
+      ));
+      hierarchy = await listingOpenAction('open-editor', () => waitForHierarchy({
         commandRunner,
         adbPath,
         device,
@@ -934,7 +1009,7 @@ async function main() {
         label: 'new listing',
         predicate: (value) => currentHeadAndroidNamedNodes(value, 'Neue Anzeige').length === 1
           && currentHeadAndroidNamedNodes(value, 'Foto hinzufügen').length === 1,
-      });
+      }));
       createSurfaceOpened = true;
       setStage('photo-picker');
       photoPickerActionSync('open-source-dialog', () => tapLabel(

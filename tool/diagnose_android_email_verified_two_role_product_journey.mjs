@@ -16,6 +16,7 @@ import {
   currentHeadAndroidNodeAttribute,
   defaultCurrentHeadAndroidCommandRunner,
   dumpCurrentHeadAndroidUi,
+  dumpCurrentHeadAndroidUiWithRetries,
   launchCurrentHeadAndroidCandidate,
   verifyCurrentHeadAndroidInstalledCandidate,
   waitForCurrentHeadAndroidMainNavigation,
@@ -244,7 +245,12 @@ export async function waitForHierarchy({
 }) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     await wait(intervalMs);
-    const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+    const hierarchy = await dumpCurrentHeadAndroidUiWithRetries({
+      commandRunner,
+      adbPath,
+      device,
+      wait,
+    });
     if (predicate(hierarchy)) return hierarchy;
   }
   fail(`The sanitized ${label} surface did not appear.`);

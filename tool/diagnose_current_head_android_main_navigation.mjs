@@ -64,6 +64,8 @@ const navigationChecks = Object.freeze([
 ]);
 
 const navigationCheckByLabel = new Map(navigationChecks.map((check) => [check.label, check]));
+export const currentHeadAndroidUiDumpRetryLimit = 2;
+export const currentHeadAndroidUiDumpRetryDelayMs = 100;
 
 function fail(message) {
   throw new Error(message);
@@ -336,6 +338,28 @@ export function dumpCurrentHeadAndroidUi(commandRunner, adbPath, device) {
   }
 }
 
+export async function dumpCurrentHeadAndroidUiWithRetries({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+  retryLimit = currentHeadAndroidUiDumpRetryLimit,
+  retryDelayMs = currentHeadAndroidUiDumpRetryDelayMs,
+} = {}) {
+  let failures = 0;
+  while (true) {
+    try {
+      return dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+    } catch {
+      failures += 1;
+      if (failures > retryLimit) {
+        fail('The current-head ShareItToo main-navigation hierarchy dump failed after bounded retries (hierarchy-dump-failed).');
+      }
+      await wait(retryDelayMs);
+    }
+  }
+}
+
 function xmlValue(value) {
   return String(value)
     .replace(/&#(\d+);/gu, (_match, decimal) => String.fromCodePoint(Number(decimal)))
@@ -419,7 +443,12 @@ export async function waitForCurrentHeadAndroidMainNavigation({
   // seven seconds was shorter than the observed valid OnePlus cold start.
   for (let attempt = 0; attempt < 36; attempt += 1) {
     await wait(600);
-    const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+    const hierarchy = await dumpCurrentHeadAndroidUiWithRetries({
+      commandRunner,
+      adbPath,
+      device,
+      wait,
+    });
     lastAbsence = classifyCurrentHeadAndroidMainNavigationAbsence(hierarchy);
     if (lastAbsence === 'system-notification-overlay') {
       currentHeadAndroidAdb(
@@ -447,6 +476,7 @@ function safeNavigationFailureClass(error) {
     'bottom-navigation-absent',
     'bottom-navigation-incomplete',
     'navigation-labels-present-surface-pending',
+    'hierarchy-dump-failed',
   ]);
   return permitted.has(observed) ? observed : 'other-fail-closed-navigation-error';
 }

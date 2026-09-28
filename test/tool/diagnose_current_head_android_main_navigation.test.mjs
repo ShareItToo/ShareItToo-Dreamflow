@@ -8,6 +8,8 @@ import {
   diagnoseCurrentHeadAndroidColdStartStability,
   diagnoseCurrentHeadAndroidMainNavigation,
   canonicalPlayAppSigningCertificateSha256,
+  currentHeadAndroidUiDumpRetryLimit,
+  dumpCurrentHeadAndroidUiWithRetries,
   launchCurrentHeadAndroidCandidateExplicitly,
   normalizeCurrentHeadAndroidCommandOptions,
   parseMainNavigationArguments,
@@ -68,10 +70,13 @@ function fakeRunner({
   omitMessagesSurface = false,
   hideNavigationOnLaunch = null,
   hideInitialDumpCount = 0,
+  transientDumpFailures = 0,
+  persistentDumpFailure = false,
 } = {}) {
   let active = 'Entdecken';
   let launches = 0;
   let dumps = 0;
+  let dumpFailuresRemaining = transientDumpFailures;
   return (_file, args, options = {}) => {
     const command = args.slice(2);
     const joined = command.join(' ');
@@ -92,6 +97,10 @@ function fakeRunner({
       return 'Events injected: 1';
     }
     if (joined === 'shell uiautomator dump /sdcard/sit-main-navigation-diagnostic.xml') {
+      if (persistentDumpFailure || dumpFailuresRemaining > 0) {
+        if (!persistentDumpFailure) dumpFailuresRemaining -= 1;
+        throw new Error('synthetic transient UIAutomator failure');
+      }
       return 'UI hierarchy dumped';
     }
     if (joined === 'exec-out cat /sdcard/sit-main-navigation-diagnostic.xml') {
@@ -291,6 +300,60 @@ test('accepts a valid physical-device navigation surface after bounded slow cold
   });
   assert.equal(classifyCurrentHeadAndroidMainNavigationAbsence(observed), 'navigation-labels-present-surface-pending');
   assert.equal(waits, 21);
+});
+
+test('recovers from up to the bounded transient UI hierarchy dump failures', async () => {
+  const waits = [];
+  const observed = await waitForCurrentHeadAndroidMainNavigation({
+    commandRunner: fakeRunner({ transientDumpFailures: currentHeadAndroidUiDumpRetryLimit }),
+    adbPath: 'adb',
+    device: { serial: 'PRIVATE-SERIAL', state: 'device', attributes: {} },
+    wait: async (milliseconds) => {
+      waits.push(milliseconds);
+    },
+  });
+  assert.equal(classifyCurrentHeadAndroidMainNavigationAbsence(observed), 'navigation-labels-present-surface-pending');
+  assert.deepEqual(waits, [600, 100, 100]);
+});
+
+test('fails closed with a specific hierarchy-dump class when the dump remains unavailable', async () => {
+  await assert.rejects(
+    () => waitForCurrentHeadAndroidMainNavigation({
+      commandRunner: fakeRunner({ persistentDumpFailure: true }),
+      adbPath: 'adb',
+      device: { serial: 'PRIVATE-SERIAL', state: 'device', attributes: {} },
+      wait: async () => {},
+    }),
+    /hierarchy dump failed after bounded retries \(hierarchy-dump-failed\)/u,
+  );
+});
+
+test('shared hierarchy reads recover transient failures for destination waits', async () => {
+  const waits = [];
+  const hierarchy = await dumpCurrentHeadAndroidUiWithRetries({
+    commandRunner: fakeRunner({ transientDumpFailures: 2 }),
+    adbPath: 'adb',
+    device: { serial: 'PRIVATE-SERIAL', state: 'device', attributes: {} },
+    wait: async (milliseconds) => { waits.push(milliseconds); },
+  });
+  assert.equal(classifyCurrentHeadAndroidMainNavigationAbsence(hierarchy), 'navigation-labels-present-surface-pending');
+  assert.deepEqual(waits, [100, 100]);
+  await assert.rejects(
+    () => dumpCurrentHeadAndroidUiWithRetries({
+      commandRunner: fakeRunner({ persistentDumpFailure: true }),
+      adbPath: 'adb',
+      device: { serial: 'PRIVATE-SERIAL', state: 'device', attributes: {} },
+      wait: async () => {},
+    }),
+    /hierarchy dump failed after bounded retries \(hierarchy-dump-failed\)/u,
+  );
+});
+
+test('transient dump recovery does not mask a missing authenticated destination surface', async () => {
+  await assert.rejects(
+    () => diagnose({ commandRunner: fakeRunner({ transientDumpFailures: 1, omitMessagesSurface: true }) }),
+    /authenticated Nachrichten navigation surface did not appear/u,
+  );
 });
 
 test('proves one explicitly scoped destination without representing it as the full matrix', async () => {
