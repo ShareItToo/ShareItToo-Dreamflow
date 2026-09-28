@@ -39,6 +39,7 @@ import {
   runGreenForwardRecovery,
   runGreenCommandWithBufferInput,
   runGreenPromotion,
+  assertGreenRuntimeSourceFiles,
   syntheticSandboxCredentialFilePath,
   containsForbiddenGreenTargetIdentifier,
 } from '../ops/green_staging_promotion.mjs';
@@ -611,6 +612,30 @@ test('control executable preflight fails before any mutating executor command an
   );
   assert.equal(calls.length, 0, 'missing control executable must fail before Docker/quiesce/backup commands');
   assert.equal(await assertGreenControlExecutables({ commands, executableAvailable: async () => true }).then((value) => value.join(',')), 'bash,curl,docker,node');
+});
+
+test('runtime-mounted Green source files reject owner-only modes before mutation and accept runtime-readable modes', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'sit-green-runtime-sources-'));
+  const files = [path.join(root, 'provision_synthetic_sandbox_user.mjs'), path.join(root, 'stable_private_file.mjs')];
+  try {
+    files.forEach((filePath) => {
+      writeFileSync(filePath, 'export {}\n', { mode: 0o600 });
+      chmodSync(filePath, 0o600);
+    });
+    let mutationCalls = 0;
+    await assert.rejects(
+      async () => {
+        await assertGreenRuntimeSourceFiles({ files });
+        mutationCalls += 1;
+      },
+      (error) => error?.code === 'green_runtime_source_file_not_readable',
+    );
+    assert.equal(mutationCalls, 0, 'unreadable mounted source must fail before mutation');
+    files.forEach((filePath) => chmodSync(filePath, 0o644));
+    assert.equal(await assertGreenRuntimeSourceFiles({ files }), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('isolated Postgres init-marker readback retries past an early readiness-only log', () => {

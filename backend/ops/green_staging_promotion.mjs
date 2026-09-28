@@ -14,6 +14,13 @@ import { technicalSandboxHealthProjection } from '../src/technical_sandbox_confi
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
+const greenRuntimeSourceFiles = Object.freeze([
+  resolve(repositoryRoot, 'backend/ops/provision_synthetic_sandbox_user.mjs'),
+  resolve(repositoryRoot, 'backend/ops/stable_private_file.mjs'),
+]);
+const greenRuntimeUid = 100;
+const greenRuntimeGid = 101;
+
 export const greenTarget = Object.freeze({
   composeProject: 'sit-green',
   apiContainer: 'shareittoo-staging-api',
@@ -546,6 +553,29 @@ async function assertProtectedFile(filePath, mode, uid, gid, code) {
   } catch (error) {
     if (error?.code === `${code}_metadata_invalid`) throw error;
     fail(error?.code === 'ELOOP' ? `${code}_symlink_forbidden` : `${code}_missing`);
+  }
+  return true;
+}
+
+function readableByRuntimeIdentity(stat, runtimeUid, runtimeGid) {
+  const mode = stat.mode & 0o777;
+  if (stat.uid === runtimeUid) return (mode & 0o400) !== 0;
+  if (stat.gid === runtimeGid) return (mode & 0o040) !== 0;
+  return (mode & 0o004) !== 0;
+}
+
+export async function assertGreenRuntimeSourceFiles({ files = greenRuntimeSourceFiles, runtimeUid = greenRuntimeUid, runtimeGid = greenRuntimeGid } = {}) {
+  if (!Array.isArray(files) || files.length !== greenRuntimeSourceFiles.length) fail('green_runtime_source_file_set_invalid');
+  for (const filePath of files) {
+    let metadata;
+    try {
+      metadata = await lstat(filePath);
+    } catch (error) {
+      fail(error?.code === 'ELOOP' ? 'green_runtime_source_file_symlink_forbidden' : 'green_runtime_source_file_missing');
+    }
+    if (metadata.isSymbolicLink()) fail('green_runtime_source_file_symlink_forbidden');
+    if (!metadata.isFile()) fail('green_runtime_source_file_not_regular');
+    if (!readableByRuntimeIdentity(metadata, runtimeUid, runtimeGid)) fail('green_runtime_source_file_not_readable');
   }
   return true;
 }
@@ -1873,6 +1903,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
   await assertGreenControlExecutables({ commands, executableAvailable });
   const protectedEnv = await readProtectedEnv(configFile);
   assertGreenProtectedEnvironment(protectedEnv, config);
+  await assertGreenRuntimeSourceFiles();
   await assertRuntimeFiles(config, protectedEnv);
   const isolatedPassword = crypto.randomBytes(32).toString('base64url');
   await mkdir(dirname(plan.isolated.envFile), { recursive: true, mode: 0o700 });

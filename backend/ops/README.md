@@ -431,6 +431,12 @@ main memory payment transport remains intact.
 
 ### Reproducible technical Sandbox pilot user
 
+Green promotion bind-mounts the repository-owned provisioner and
+`stable_private_file.mjs` into a container running as UID `100`. A remote
+checkout must keep both regular, non-symlink files runtime-readable (for a
+root-owned checkout, mode `0644` or equivalent other-read); owner-only `0600`
+files are rejected before Docker mutation.
+
 `ops/provision_synthetic_sandbox_user.mjs` provisions exactly
 `synthetic_sandbox_user_pilot_20260919` with the matching
 `@example.invalid` address. It is a staging-only, transactional database
