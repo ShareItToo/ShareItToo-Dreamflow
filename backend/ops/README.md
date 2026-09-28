@@ -294,6 +294,57 @@ adds `compose.staging.fcm.yml`, mounts the file read-only without creating a
 missing host path, and records `stagingFcm=true` in the release evidence. The
 same flag is rejected for production.
 
+## Green post-promotion FCM activation
+
+`green_staging_promotion.mjs` is deliberately provider-off: its protected
+promotion contract leaves `PUSH_TRANSPORT=memory`. After a successful,
+read-back-complete promotion, the Green-only provider switch must use
+`green_staging_fcm_activation.mjs`; the ordinary `deploy_release.sh` FCM
+overlay targets the legacy `sit-staging` Compose project and is not a Green
+runtime recovery path.
+
+The activation runner requires the exact runtime commit and immutable image
+digest, protected Green target/config manifests, a read-only
+`shareittoo-staging` Firebase service account accepted by
+`validate_fcm_staging_secret.mjs`, and both explicit execute and exact-commit
+confirmation gates. It verifies the canonical Green API identity, Green and
+provider networks, no host ports, the database/uploads/MFA/Firebase mount
+tuple, Green labels and the provider-off baseline before any mutation.
+
+The runtime environment is compared key-for-key against the source readback;
+the only allowed value delta is `PUSH_TRANSPORT=memory` to `fcm`. The existing
+Firebase project and read-only credential mount are reused unchanged. Firebase Auth and phone
+verification remain false; payment and Identity remain memory-only, mail
+memory-only, Listing AI on-device with zero budget/external execution false,
+and the technical Sandbox remains off. The previous memory API is stopped and
+renamed by immutable ID to a new run-scoped retained seal; all later create,
+network, start, cleanup and rollback operations use immutable IDs. Lost Docker
+responses are reconciled by identity readback, foreign-name collisions fail
+before mutation, and failed activation restores the memory runtime by ID.
+
+Health/live, ready, version, image and sanitized environment readbacks are
+required before success. Evidence is owner-readable, mode `0600`, written
+outside the repository and contains no secret values. No retained historical
+Green seal is renamed, removed, restarted or network-targeted.
+
+```sh
+GREEN_STAGING_TARGET_MANIFEST=/docker/shareittoo/ops/green-target.json \
+GREEN_STAGING_CONFIG_MANIFEST=/docker/shareittoo/ops/green-config.json \
+GREEN_STAGING_OPS_COMMIT=FULL_40_CHARACTER_OPS_COMMIT \
+GREEN_RUNTIME_IMAGE_DIGEST=sha256:IMMUTABLE_IMAGE_DIGEST \
+FIREBASE_PROJECT_ID=shareittoo-staging \
+FIREBASE_SERVICE_ACCOUNT_HOST_FILE=/absolute/secret/path/firebase-service-account.json \
+GREEN_STAGING_FCM_EVIDENCE_FILE=/docker/shareittoo/evidence/green-fcm-activation.json \
+GREEN_STAGING_FCM_ACTIVATION_EXECUTE=1 \
+GREEN_STAGING_FCM_ACTIVATION_CONFIRM=FULL_40_CHARACTER_RUNTIME_COMMIT \
+node ops/green_staging_fcm_activation.mjs FULL_40_CHARACTER_RUNTIME_COMMIT
+```
+
+This command is an explicit operational gate and is not run by CI or by the
+source-only Green promotion. The focused contract is covered by
+`test/green_staging_fcm_activation.test.js`, including preflight rejection,
+lost-response reconciliation, foreign-name collision, rollback and cleanup.
+
 ## Staging pilot listing-AI boundary
 
 When `SIT_STAGING_PILOT_ID=heilbronn_wave0` is supplied to the public Staging
