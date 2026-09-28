@@ -13,9 +13,11 @@ import {
   restoreExactRoleWithBoundedRetries,
   retryIdempotentPixelState,
   waitForExactOwnerDraftWithBoundedRecovery,
+  waitForPublishedServerReadback,
   waitForRenterAcceptedCardRecovery,
   runOwnerPublishUiSubphase,
   runAndroidEmailVerifiedTwoRoleProductJourney,
+  tapLabel,
 } from '../../tool/diagnose_android_email_verified_two_role_product_journey.mjs';
 
 const candidate = Object.freeze({
@@ -88,6 +90,59 @@ function passingOperations(calls) {
 function node(label) {
   return `<node text="${label}" content-desc="" bounds="[0,0][100,100]"/>`;
 }
+
+test('targets the last matching publish action when the obscured page repeats its label', () => {
+  const taps = [];
+  tapLabel(
+    (_command, args) => {
+      taps.push(args);
+      return '';
+    },
+    'adb',
+    { serial: 'PRIVATE-SERIAL' },
+    '<hierarchy>'
+      + '<node text="Veröffentlichen" content-desc="" bounds="[10,10][110,110]"/>'
+      + '<node text="Veröffentlichen" content-desc="" bounds="[300,600][700,760]"/>'
+      + '</hierarchy>',
+    'Veröffentlichen',
+    { chooseLast: true },
+  );
+  assert.deepEqual(taps, [[
+    '-s', 'PRIVATE-SERIAL', 'shell', 'input', 'tap', '500', '680',
+  ]]);
+});
+
+test('waits for the durable server publish readback after the UI action returns', async () => {
+  let attempts = 0;
+  const waits = [];
+  const result = await waitForPublishedServerReadback({
+    wait: async (milliseconds) => { waits.push(milliseconds); },
+    verify: async () => {
+      attempts += 1;
+      if (attempts < 3) throw new Error('listing not active yet');
+      return { status: 'pixel-owner-publish-server-confirmed' };
+    },
+  });
+  assert.equal(result.status, 'pixel-owner-publish-server-confirmed');
+  assert.equal(attempts, 3);
+  assert.deepEqual(waits, [650, 650]);
+});
+
+test('fails closed after the bounded server publish readback window', async () => {
+  let attempts = 0;
+  await assert.rejects(
+    () => waitForPublishedServerReadback({
+      attempts: 2,
+      intervalMs: 0,
+      verify: async () => {
+        attempts += 1;
+        throw new Error('listing stayed draft');
+      },
+    }),
+    /listing stayed draft/u,
+  );
+  assert.equal(attempts, 2);
+});
 
 test('binds owner and renter detail truth to their distinct shipped copy', () => {
   const ownerHierarchy = `<hierarchy>${node('Pilot-Simulation · Kommende Vermietung')}${node('Unverbindliche Pilot-Simulation: kein Vertrag, keine Reservierung und keine Zahlung.')}</hierarchy>`;

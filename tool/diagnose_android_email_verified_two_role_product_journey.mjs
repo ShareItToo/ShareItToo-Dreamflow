@@ -181,6 +181,34 @@ export async function waitForExactOwnerDraftWithBoundedRecovery({
   });
 }
 
+export async function waitForPublishedServerReadback({
+  verify,
+  wait = async () => {},
+  attempts = 30,
+  intervalMs = 650,
+} = {}) {
+  if (typeof verify !== 'function'
+      || typeof wait !== 'function'
+      || !Number.isInteger(attempts)
+      || attempts < 1
+      || attempts > 60
+      || !Number.isInteger(intervalMs)
+      || intervalMs < 0
+      || intervalMs > 2_000) {
+    fail('The server publish-readback retry contract is invalid.');
+  }
+  let lastFailure = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await verify();
+    } catch (error) {
+      lastFailure = error;
+    }
+    if (attempt + 1 < attempts) await wait(intervalMs);
+  }
+  throw lastFailure;
+}
+
 export async function restoreExactRoleWithBoundedRetries({
   operation,
   wait = async () => {},
@@ -615,6 +643,7 @@ async function publishOwnerDraftOnPixel({
       device,
       hierarchy,
       'Veröffentlichen',
+      { chooseLast: true },
     ),
   });
   // The success UI is intentionally a two-second toast. It is useful visual
@@ -1055,7 +1084,10 @@ async function main() {
     publishOwnerDraft: ({ vaultFile }) => publishOwnerDraftOnPixel({
       vaultFile, commandRunner, adbPath, device, wait,
     }),
-    verifyPublished: ({ vaultFile }) => verifyStagingEmailVerifiedJourneyPublished({ vaultFile }),
+    verifyPublished: ({ vaultFile }) => waitForPublishedServerReadback({
+      wait,
+      verify: () => verifyStagingEmailVerifiedJourneyPublished({ vaultFile }),
+    }),
     simulate: ({ vaultFile }) => runStagingEmailVerifiedTwoRoleSimulation({ vaultFile }),
     verifyFcm: ({ vaultFile }) => diagnoseAndroidControlledFcm({
       vaultFile,

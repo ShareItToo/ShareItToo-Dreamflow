@@ -421,6 +421,11 @@ import {
 } from './listing_catalog.js';
 import { authorizeProfilePhoto } from './profile_media_authorization.js';
 import {
+  exactUploadStorageNames,
+  isUploadId,
+  ownedUploadCleanupDecision,
+} from './profile_upload_cleanup.js';
+import {
   assertBlueOceanExplicitPublication,
   BlueOceanListingWorkflowError,
   createBlueOceanListingWorkflow,
@@ -7490,6 +7495,74 @@ export function createApp({
     });
   }));
 
+  app.delete('/v1/uploads/:id', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
+    const uploadId = safeText(req.params.id, 120);
+    if (!isUploadId(uploadId)) throw new HttpError(404, 'upload_not_found');
+    const deleted = await inTransaction(async (client) => {
+      // Owner scoping is part of the lookup so a foreign UUID is
+      // indistinguishable from a missing one.
+      const uploadResult = await client.query(
+        `SELECT id, owner_id, purpose, storage_name, thumbnail_storage_name
+           FROM uploads
+          WHERE id = $1::uuid AND owner_id = $2
+          FOR UPDATE`,
+        [uploadId, req.auth.userId],
+      );
+      const upload = uploadResult.rows[0] ?? null;
+      const storageNames = exactUploadStorageNames(upload);
+      const fullUrl = upload
+        ? `${config.publicBaseUrl}/uploads/${upload.storage_name}`
+        : null;
+      const referenceResult = upload
+        ? await client.query(
+          `SELECT
+             EXISTS (
+               SELECT 1 FROM users
+                WHERE profile->>'photoURL' = $3
+             ) AS profile,
+             EXISTS (
+               SELECT 1 FROM listings
+                WHERE payload->'photos' @> jsonb_build_array($3::text)
+             ) AS listing,
+             EXISTS (
+               SELECT 1 FROM messages
+                WHERE attachments @> jsonb_build_array(jsonb_build_object('id', $1::text))
+                   OR attachments @> jsonb_build_array(jsonb_build_object('storageName', $2::text))
+             ) AS thread,
+             EXISTS (SELECT 1 FROM report_evidence WHERE upload_id = $1::uuid) AS report,
+             EXISTS (SELECT 1 FROM booking_condition_evidence WHERE upload_id = $1::uuid) AS condition,
+             EXISTS (SELECT 1 FROM v52_return_case_evidence WHERE upload_id = $1::uuid) AS v52_return,
+             EXISTS (SELECT 1 FROM v52_actual_loss_statement_evidence WHERE upload_id = $1::uuid) AS v52_loss`,
+          [uploadId, upload.storage_name, fullUrl],
+        )
+        : { rows: [{}] };
+      const decision = ownedUploadCleanupDecision({
+        upload,
+        references: referenceResult.rows[0],
+      });
+      if (decision.status === 404) throw new HttpError(404, 'upload_not_found');
+      if (decision.status === 409) throw new HttpError(409, 'upload_in_use');
+      const result = await client.query(
+        `DELETE FROM uploads
+          WHERE id = $1::uuid AND owner_id = $2
+        RETURNING id`,
+        [uploadId, req.auth.userId],
+      );
+      if (!result.rowCount) throw new HttpError(404, 'upload_not_found');
+      await writeAudit(client, {
+        actor: req.actor,
+        action: 'upload.deleted',
+        resourceType: 'upload',
+        resourceId: uploadId,
+        metadata: { source: 'owner_cleanup', storageCount: storageNames.length },
+      });
+      return { storageNames };
+    });
+    const failures = await removeErasedUploadFiles(deleted.storageNames);
+    if (failures.length) throw new HttpError(500, 'upload_file_cleanup_failed');
+    res.status(204).end();
+  }));
+
   app.get('/v1/uploads/:storageName', asyncRoute(async (req, res) => {
     const storageName = safeText(req.params.storageName, 160);
     if (config.stagingAccess.enabled
@@ -7520,6 +7593,7 @@ export function createApp({
           && uploadRecord.listing_is_active === true
         )
       );
+    let ownerAuthorized = false;
     if (!publiclyReadable) {
       const token = bearerToken(req);
       if (!token) throw new HttpError(401, 'authentication_required');
@@ -7545,6 +7619,26 @@ export function createApp({
       if (![uploadRecord.owner_id, uploadRecord.user1_id, uploadRecord.user2_id].includes(userId)) {
         throw new HttpError(403, 'upload_forbidden');
       }
+      ownerAuthorized = userId === uploadRecord.owner_id;
+    } else {
+      const token = bearerToken(req);
+      if (token) {
+        try {
+          const payload = verifyAccessToken(token);
+          const ownerSession = await pool.query(
+            `SELECT u.id
+             FROM users AS u
+             JOIN auth_sessions AS session
+               ON session.id = $2 AND session.user_id = u.id AND session.revoked_at IS NULL
+             WHERE u.id = $1 AND u.account_status = 'active' AND u.deactivated_at IS NULL`,
+            [payload?.sub ?? null, payload?.sid ?? null],
+          );
+          ownerAuthorized = ownerSession.rowCount > 0
+            && payload?.sub === uploadRecord.owner_id;
+        } catch {
+          ownerAuthorized = false;
+        }
+      }
     }
 
     const isThumbnail = storageName === uploadRecord.thumbnail_storage_name;
@@ -7560,6 +7654,9 @@ export function createApp({
         : 'private, no-store',
       'X-Content-Type-Options': 'nosniff',
     });
+    if (ownerAuthorized && uploadRecord.purpose === 'profile_image') {
+      res.set('X-Upload-Id', String(uploadRecord.id));
+    }
     res.send(contents);
   }));
 
