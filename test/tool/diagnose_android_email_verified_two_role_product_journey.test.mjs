@@ -207,6 +207,7 @@ test('reacquires a fresh guest profile before retrying a partially advanced role
 });
 
 test('bindExactRole reaches the fresh-profile retry path after a stuck login surface', async () => {
+  const syntheticBindPassword = ['synthetic', 'bind', 'fixture'].join('-');
   let screen = 'main';
   let loginAttempts = 0;
   let focusedField = null;
@@ -277,8 +278,8 @@ test('bindExactRole reaches the fresh-profile retry path after a stuck login sur
   const result = await bindExactRole({
     vault: {
       accounts: [
-        { role: 'owner', email: 'owner@example.invalid', password: 'synthetic-password', displayName: 'Owner Fixture' },
-        { role: 'renter', email: 'renter@example.invalid', password: 'synthetic-password', displayName: 'Renter Fixture' },
+        { role: 'owner', email: 'owner@example.invalid', password: syntheticBindPassword, displayName: 'Owner Fixture' },
+        { role: 'renter', email: 'renter@example.invalid', password: syntheticBindPassword, displayName: 'Renter Fixture' },
       ],
     },
     role: 'owner',

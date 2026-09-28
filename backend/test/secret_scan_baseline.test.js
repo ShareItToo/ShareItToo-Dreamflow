@@ -98,6 +98,20 @@ test('reviews the historical Android login restoration fixture exactly once', ()
   }]);
 });
 
+test('reviews the historical Android role-binding retry fixture exactly once', () => {
+  const matches = baseline.reviewedFindings.filter((entry) => (
+    entry.rule === 'static_password_property'
+    && entry.source === 'f75df321209c0db4afcf0e851b6732fa90e578d9'
+    && entry.file === 'test/tool/diagnose_android_email_verified_two_role_product_journey.test.mjs'
+  ));
+  assert.deepEqual(matches, [{
+    rule: 'static_password_property',
+    source: 'f75df321209c0db4afcf0e851b6732fa90e578d9',
+    file: 'test/tool/diagnose_android_email_verified_two_role_product_journey.test.mjs',
+    reason: 'Historical synthetic Android role-binding fixture; the current test constructs its non-secret value at runtime.',
+  }]);
+});
+
 test('reviews the historical staging Google synthetic PEM finding exactly once', () => {
   const matches = baseline.reviewedFindings.filter((entry) => (
     entry.rule === 'private_key'
