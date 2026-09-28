@@ -1,11 +1,17 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
   classifyPostPhotoPickerSurface,
   controlledMediaRow,
+  cleanupListingAiLocalRecovery,
+  formatListingAiFailureReport,
   formatPhotoPickerFailureReport,
   listingAiConsentSurfaceReady,
+  listingAiDraftReady,
+  listingAiDraftReadyHeading,
+  listingAiDraftReadyProgressText,
   listingAiOnDeviceDisclosurePrefix,
   newestPhotoPickerTile,
   onDeviceListingAiUiProof,
@@ -31,6 +37,11 @@ const candidate = Object.freeze({
   apkSha256: '1'.repeat(64),
   signingCertificateSha256: '2'.repeat(64),
 });
+
+const createListingScreenSource = readFileSync(
+  new URL('../../lib/screens/create_listing_screen.dart', import.meta.url),
+  'utf8',
+);
 
 const device = Object.freeze({
   physical: true,
@@ -64,8 +75,8 @@ function node(label) {
 }
 
 const successfulHierarchy = '<hierarchy>'
-  + node('Bearbeitbarer Entwurf ist bereit.')
-  + node('Bearbeitbarer KI-Entwurf')
+  + node(listingAiDraftReadyProgressText)
+  + node(listingAiDraftReadyHeading)
   + node('title: bitte prüfen')
   + node('category: bitte prüfen')
   + node('subcategory: bitte prüfen')
@@ -269,6 +280,28 @@ test('accepts only a meaningful editable local-analysis UI result', () => {
   );
 });
 
+test('requires both real draft-ready signals and rejects the stale runner-only text', () => {
+  assert.equal(listingAiDraftReady(successfulHierarchy), true);
+  const staleOnly = '<hierarchy>'
+    + node('Bearbeitbarer Entwurf ist bereit.')
+    + node(listingAiDraftReadyHeading)
+    + node('title: bitte prüfen')
+    + node('category: bitte prüfen')
+    + node('subcategory: bitte prüfen')
+    + node('description: bitte prüfen')
+    + node('projectTags: bitte prüfen')
+    + node('useCases: bitte prüfen')
+    + '</hierarchy>';
+  assert.equal(listingAiDraftReady(staleOnly), false);
+  assert.throws(() => onDeviceListingAiUiProof(staleOnly), /result is incomplete/u);
+});
+
+test('binds the physical runner draft-ready sentinels to the actual app UI source', () => {
+  assert.equal(createListingScreenSource.includes(listingAiDraftReadyProgressText), true);
+  assert.equal(createListingScreenSource.includes(listingAiDraftReadyHeading), true);
+  assert.equal(createListingScreenSource.includes('Bearbeitbarer Entwurf ist bereit.'), false);
+});
+
 test('reports only sanitized field-language signals when chips are outside the viewport', () => {
   const signals = observedListingAiSignals(
     '<hierarchy><node text="Bearbeitbarer KI-Entwurf" content-desc=""/></hierarchy>',
@@ -315,6 +348,61 @@ test('preserves the primary stage when cleanup and restore also run', async () =
     (error) => error?.sitStage === 'collect-fields',
   );
   assert.deepEqual(calls, ['cleanup', 'restore']);
+});
+
+test('reports a late analyze failure with sanitized cleanup and owner-restore outcomes', async () => {
+  const calls = [];
+  await assert.rejects(
+    () => runAndroidOnDeviceListingAiAcceptance({
+      candidate,
+      deviceSummary: device,
+      operations: {
+        currentStage: () => 'analyze',
+        perform: async () => { throw new Error('stale result text was not observed'); },
+        verifyServer: async () => server,
+        cleanup: async () => { calls.push('cleanup'); return { localRecoveryCleared: true, controlledMediaRemoved: true }; },
+        restoreOwner: async () => { calls.push('restore'); return true; },
+      },
+    }),
+    (error) => {
+      assert.deepEqual(error.listingAiFailureReport, {
+        schemaVersion: 1,
+        stage: 'analyze',
+        primary: {
+          stage: 'analyze',
+          code: 'LISTING_AI_ANALYZE_RESULT_UNAVAILABLE',
+          classification: 'analyze-result-unavailable',
+        },
+        cleanup: 'passed',
+        ownerRestore: 'passed',
+      });
+      assert.equal(
+        formatListingAiFailureReport(error.listingAiFailureReport),
+        'ERROR: SIT stage analyze: LISTING_AI_ANALYZE_RESULT_UNAVAILABLE'
+          + '/analyze-result-unavailable cleanup=passed ownerRestore=passed',
+      );
+      return true;
+    },
+  );
+  assert.deepEqual(calls, ['cleanup', 'restore']);
+});
+
+test('cleans the opened listing surface even when analyze fails before a performed result exists', async () => {
+  const calls = [];
+  const localRecoveryCleared = await cleanupListingAiLocalRecovery({
+    createSurfaceOpened: true,
+    performed: null,
+    commandRunner: 'runner',
+    adbPath: 'adb',
+    device: 'device',
+    removeThumbnail: async (...args) => { calls.push(['remove', ...args]); return true; },
+    navigateBack: (...args) => { calls.push(['back', ...args]); },
+  });
+  assert.equal(localRecoveryCleared, true);
+  assert.deepEqual(calls, [
+    ['remove', 'runner', 'adb', 'device'],
+    ['back', 'runner', 'adb', 'device'],
+  ]);
 });
 
 test('retains the primary photo-picker failure and separate cleanup and owner-restore outcomes', async () => {

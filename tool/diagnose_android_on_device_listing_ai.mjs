@@ -35,6 +35,9 @@ const remoteFixture = '/sdcard/Download/SIT_WP112_CONTROLLED_DRILL.png';
 const fixtureDisplayName = 'SIT_WP112_CONTROLLED_DRILL.png';
 const providerModel = 'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1';
 const disclosureVersion = 'listing-ai-on-device-disclosure-v1';
+export const listingAiDraftReadyProgressText =
+  'Vorschläge sind bereit. Übernimm sie bewusst, bevor du sie bearbeitest.';
+export const listingAiDraftReadyHeading = 'Bearbeitbarer KI-Entwurf';
 const allowedStages = new Set([
   'load-vault', 'verify-play-install', 'bind-owner', 'prepare-fixture',
   'open-listing', 'photo-picker', 'consent', 'analyze', 'wait-draft',
@@ -107,6 +110,12 @@ const photoPickerDiagnosticCatalog = Object.freeze({
   }),
 });
 export const photoPickerDiagnosticVocabulary = photoPickerDiagnosticCatalog;
+const stageFailureCatalog = Object.freeze({
+  analyze: Object.freeze({
+    code: 'LISTING_AI_ANALYZE_RESULT_UNAVAILABLE',
+    classification: 'analyze-result-unavailable',
+  }),
+});
 export const onDeviceListingAiViewportAttemptLimit = 24;
 let activeStage = 'load-vault';
 let activePhotoPickerSubstage = 'unknown';
@@ -192,6 +201,34 @@ export function formatPhotoPickerFailureReport(report) {
   const cleanup = report?.cleanup === 'passed' ? 'passed' : 'failed';
   const ownerRestore = report?.ownerRestore === 'passed' ? 'passed' : 'failed';
   return `ERROR: SIT stage photo-picker: ${primary.code}/${primary.classification}/${primary.substage}`
+    + ` cleanup=${cleanup} ownerRestore=${ownerRestore}`;
+}
+
+function stageFailureDiagnostic(stage) {
+  const entry = stageFailureCatalog[stage] ?? Object.freeze({
+    code: 'LISTING_AI_STAGE_FAILED',
+    classification: 'stage-failed',
+  });
+  return Object.freeze({
+    stage: allowedStages.has(stage) ? stage : 'unknown',
+    code: entry.code,
+    classification: entry.classification,
+  });
+}
+
+export function formatListingAiFailureReport(report) {
+  if (report?.stage === 'photo-picker') return formatPhotoPickerFailureReport(report);
+  const diagnostic = report?.primary;
+  const stage = allowedStages.has(report?.stage) ? report.stage : 'unknown';
+  const code = /^[A-Z0-9_]+$/u.test(diagnostic?.code ?? '')
+    ? diagnostic.code
+    : 'LISTING_AI_STAGE_FAILED';
+  const classification = /^[a-z-]+$/u.test(diagnostic?.classification ?? '')
+    ? diagnostic.classification
+    : 'stage-failed';
+  const cleanup = report?.cleanup === 'passed' ? 'passed' : 'failed';
+  const ownerRestore = report?.ownerRestore === 'passed' ? 'passed' : 'failed';
+  return `ERROR: SIT stage ${stage}: ${code}/${classification}`
     + ` cleanup=${cleanup} ownerRestore=${ownerRestore}`;
 }
 
@@ -310,6 +347,11 @@ export function observedListingAiSignals(hierarchy) {
   return Object.freeze(Object.fromEntries(keys.map((key) => [key, text.includes(key)])));
 }
 
+export function listingAiDraftReady(hierarchy) {
+  return currentHeadAndroidNamedNodes(hierarchy, listingAiDraftReadyProgressText).length > 0
+    && currentHeadAndroidNamedNodes(hierarchy, listingAiDraftReadyHeading).length > 0;
+}
+
 export function returnedToListingEditorAfterPhotoPicker(hierarchy) {
   const exactMatches = allNodes(hierarchy).filter((node) => [
     currentHeadAndroidNodeAttribute(node, 'text') ?? '',
@@ -360,8 +402,8 @@ async function waitForListingEditorAfterPhotoPicker({
 export function onDeviceListingAiUiProof(hierarchy) {
   const count = (label) => currentHeadAndroidNamedNodes(hierarchy, label).length;
   const proof = {
-    draftReady: count('Bearbeitbarer Entwurf ist bereit.') > 0,
-    editableDraftVisible: count('Bearbeitbarer KI-Entwurf') > 0,
+    draftReady: count(listingAiDraftReadyProgressText) > 0,
+    editableDraftVisible: count(listingAiDraftReadyHeading) > 0,
     titleSuggested: count('title: bitte prüfen') + count('title: hoch – bearbeitbar') > 0,
     categorySuggested: count('category: bitte prüfen') + count('category: hoch – bearbeitbar') > 0,
     subcategorySuggested: count('subcategory: bitte prüfen')
@@ -500,15 +542,17 @@ export async function runAndroidOnDeviceListingAiAcceptance({
       restoreFailure = error;
     }
   }
-  const failureReport = primaryFailure?.listingAiDiagnostic?.stage === 'photo-picker'
-    ? Object.freeze({
+  const failureReport = primaryFailure === null
+    ? null
+    : Object.freeze({
       schemaVersion: 1,
-      stage: primaryFailure.listingAiDiagnostic.stage,
-      primary: primaryFailure.listingAiDiagnostic,
+      stage: primaryStage ?? activeStage,
+      primary: primaryFailure.listingAiDiagnostic?.stage === 'photo-picker'
+        ? primaryFailure.listingAiDiagnostic
+        : stageFailureDiagnostic(primaryStage ?? activeStage),
       cleanup: cleanupFailure === null ? 'passed' : 'failed',
       ownerRestore: restoreFailure === null ? 'passed' : 'failed',
-    })
-    : null;
+    });
   if (failureReport !== null) {
     try {
       Object.defineProperty(primaryFailure, 'listingAiFailureReport', {
@@ -694,7 +738,7 @@ function removeControlledThumbnail(commandRunner, adbPath, device) {
         && currentHeadAndroidNodeAttribute(node, 'class') === 'android.widget.ImageView'
         && currentHeadAndroidNodeAttribute(node, 'clickable') === 'true'
         && area.width >= 150 && area.height >= 150);
-    if (image === undefined) return;
+    if (image === undefined) return false;
     const close = nodes
       .map((node) => ({ node, area: bounds(node) }))
       .find(({ node, area }) => area !== null
@@ -707,10 +751,42 @@ function removeControlledThumbnail(commandRunner, adbPath, device) {
     tapNode(commandRunner, adbPath, device, close.node, 'controlled listing-photo cleanup');
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 650));
     const cleared = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
-    if (currentHeadAndroidNamedNodes(cleared, 'Bearbeitbarer KI-Entwurf').length !== 0) {
+    if (currentHeadAndroidNamedNodes(cleared, listingAiDraftReadyHeading).length !== 0) {
       fail('The local Listing-AI recovery state was not cleared.');
     }
+    return true;
   });
+}
+
+export async function cleanupListingAiLocalRecovery({
+  createSurfaceOpened,
+  performed,
+  commandRunner,
+  adbPath,
+  device,
+  removeThumbnail = removeControlledThumbnail,
+  navigateBack = (runner, adb, target) => currentHeadAndroidAdb(
+    runner, adb, target, ['shell', 'input', 'keyevent', '4'],
+  ),
+} = {}) {
+  let localRecoveryCleared = performed === null && createSurfaceOpened !== true;
+  if (createSurfaceOpened === true) {
+    let cleanupError = null;
+    try {
+      localRecoveryCleared = await removeThumbnail(commandRunner, adbPath, device) === true;
+    } catch (error) {
+      cleanupError = error;
+    }
+    let navigationError = null;
+    try {
+      navigateBack(commandRunner, adbPath, device);
+    } catch (error) {
+      navigationError = error;
+    }
+    if (cleanupError !== null) throw cleanupError;
+    if (navigationError !== null) throw navigationError;
+  }
+  return localRecoveryCleared;
 }
 
 function stagingReadbackSql(startedAt) {
@@ -948,10 +1024,7 @@ async function main() {
         wait,
         attempts: 70,
         label: 'on-device Listing-AI result',
-        predicate: (value) => currentHeadAndroidNamedNodes(
-          value,
-          'Bearbeitbarer Entwurf ist bereit.',
-        ).length === 1,
+        predicate: listingAiDraftReady,
       });
       setStage('collect-fields');
       hierarchy = await collectOnDeviceListingAiUiProof({
@@ -969,12 +1042,13 @@ async function main() {
     },
     cleanup: async (performed) => {
       setStage('cleanup');
-      let localRecoveryCleared = performed === null;
-      if (createSurfaceOpened && performed !== null) {
-        await removeControlledThumbnail(commandRunner, adbPath, device);
-        currentHeadAndroidAdb(commandRunner, adbPath, device, ['shell', 'input', 'keyevent', '4']);
-        localRecoveryCleared = true;
-      }
+      const localRecoveryCleared = await cleanupListingAiLocalRecovery({
+        createSurfaceOpened,
+        performed,
+        commandRunner,
+        adbPath,
+        device,
+      });
       if (mediaRow !== null) {
         currentHeadAndroidAdb(commandRunner, adbPath, device, [
           'shell', 'content', 'delete',
@@ -1013,8 +1087,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       ? error.sitStage
       : activeStage;
     const report = error?.listingAiFailureReport;
-    if (report?.stage === 'photo-picker') {
-      process.stderr.write(`${formatPhotoPickerFailureReport(report)}\n`);
+    if (report !== undefined) {
+      process.stderr.write(`${formatListingAiFailureReport(report)}\n`);
     } else {
       process.stderr.write(`ERROR: SIT stage ${stage}: ${sanitizedFailure(error)}\n`);
     }
