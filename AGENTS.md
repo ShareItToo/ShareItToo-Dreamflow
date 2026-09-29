@@ -69,6 +69,9 @@ discover a mechanically stale source hash.
   contract. Every field added by a builder must be present in the positive
   validator fixture and exercised by a real generated-manifest test before a
   build is reported ready.
+- A transient QA-session writer and its physical runner validator are one
+  manifest contract. Before launching the app, validate a freshly generated
+  session from the actual writer; a matching stdout summary is not evidence.
 - Recovery mutations must target the captured immutable provider/container ID,
   never a mutable name; stateful test executors must model or explicitly reject
   every accepted security/resource option.

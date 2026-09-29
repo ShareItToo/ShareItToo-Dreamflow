@@ -220,7 +220,8 @@ function writeSyntheticSession({ email, password, accounts, cloneManifest }) {
     email,
     password,
     accounts,
-    syntheticClone: cloneManifest,
+    transientCredentialsOwnerOnly: true,
+    syntheticClone: { ...cloneManifest, enabled: true },
     createdAt: new Date().toISOString(),
     })}\n`);
   } catch {

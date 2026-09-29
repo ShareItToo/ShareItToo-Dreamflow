@@ -30,4 +30,8 @@ test('local Android QA harness remains loopback-only, synthetic and cleanup-safe
   ]) {
     assert.ok(harness.includes(marker), `missing harness marker: ${marker}`);
   }
+  assert.match(
+    harness,
+    /writeFileSync\(descriptor,[\s\S]*accounts,\s*transientCredentialsOwnerOnly: true,\s*syntheticClone: \{ \.\.\.cloneManifest, enabled: true \}/u,
+  );
 });
