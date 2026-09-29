@@ -183,7 +183,7 @@ function requiredForPhase(phase) {
       c.status.active,
       c.challengeIdField,
       c.fallbackField,
-      c.fallbackVerify,
+      // The exact confirm button is revealed and required after both fields are entered.
     ],
     returned: [...common, c.status.returned, c.returned],
     audit: [...common, c.audit, c.auditLoad, c.cleanup],

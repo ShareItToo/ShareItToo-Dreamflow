@@ -172,14 +172,19 @@ test('camera pickup viewport requires its scan action without manual or fallback
   ]), 'pickupCameraVerifier'), /synthetic_clone_ui_contract_missing:pickupCameraVerifier/u);
 });
 
-test('return fallback viewport retains all challenge and fallback requirements', () => {
+test('return fallback pre-entry viewport accepts both fields while confirmation is off-screen', () => {
   const c = SYNTHETIC_CLONE_UI_CONTRACT;
-  const visible = [c.title, c.status.active, c.challengeIdField, c.fallbackField, c.fallbackVerify];
+  const visible = [c.title, c.status.active, c.challengeIdField, c.fallbackField];
   assert.equal(assertSyntheticCloneInterface(screenXml(visible), 'returnVerifier').phase, 'returnVerifier');
-  for (const missing of [c.challengeIdField, c.fallbackField, c.fallbackVerify]) {
+  for (const missing of [c.challengeIdField, c.fallbackField]) {
     assert.throws(() => assertSyntheticCloneInterface(screenXml(visible.filter((label) => label !== missing)),
       'returnVerifier'), (error) => error.message === `synthetic_clone_ui_contract_missing:returnVerifier:${missing}`);
   }
+});
+
+test('return fallback still requires exact semantic confirmation followed by returned state', () => {
+  assert.match(runnerSource,
+    /await primary\.waitContract\('returnVerifier'\);[\s\S]*?await primary\.enterField\(\s*SYNTHETIC_CLONE_UI_CONTRACT\.challengeIdField,\s*returnChallengeId,[\s\S]*?await primary\.enterField\(SYNTHETIC_CLONE_UI_CONTRACT\.fallbackField, fallback,[\s\S]*?await primary\.tapVisibleLabel\(SYNTHETIC_CLONE_UI_CONTRACT\.fallbackVerify, 'return-fallback'\);\s*await primary\.waitContract\('returned', \{ timeoutMs: 15_000 \}\);/u);
 });
 
 function photoPickerFixture({ image = [], confirm = [] } = {}) {
