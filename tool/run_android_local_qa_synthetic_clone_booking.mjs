@@ -159,6 +159,26 @@ function requiredForPhase(phase) {
   return stages[phase] ?? fail(`synthetic_clone_runner_unknown_ui_phase:${phase}`);
 }
 
+export function findPhotoPickerImageNode(nodes) {
+  return nodes.find((node) => (
+    node.bounds && node.enabled
+      && /(?:Foto|Photo|Image).*(?:aufgenommen|taken)/iu.test(node.contentDesc)
+  ));
+}
+
+export function findPhotoPickerConfirmNode(nodes) {
+  const labels = new Set([
+    'Done',
+    'Fertig',
+    'Select',
+    'Auswählen',
+    'Dieses Foto verwenden',
+    'Use this photo',
+  ]);
+  return nodes.find((node) => node.bounds && node.enabled
+    && (labels.has(node.text) || labels.has(node.contentDesc)));
+}
+
 /**
  * Validate the exact screen contract before an action.  This intentionally
  * checks visible semantics, not a shared bottom-nav label, and returns only
@@ -621,13 +641,12 @@ async function selectPhoto(driver, slot, segment) {
   const label = `${slot} – ${SYNTHETIC_CLONE_UI_CONTRACT.pickerSuffix}`;
   await driver.tapLabel(label, `${segment}-photos`);
   const picker = await driver.dump(`${segment}-photo-picker`);
-  const image = picker.nodes.find((node) => node.bounds && node.clickable && /ImageView$/u.test(node.className));
+  const image = findPhotoPickerImageNode(picker.nodes);
   if (!image) fail(`synthetic_clone_runner_photo_picker_image_missing:${segment}`);
   const [x, y] = center(image.bounds);
   await driver.shell(['input', 'tap', String(x), String(y)]);
   const doneDump = await driver.dump(`${segment}-photo-picker-done`);
-  const done = doneDump.nodes.find((node) => node.bounds && node.enabled
-    && ['Done', 'Select', 'Auswählen', 'Dieses Foto verwenden', 'Use this photo'].includes(node.text));
+  const done = findPhotoPickerConfirmNode(doneDump.nodes);
   if (!done) fail(`synthetic_clone_runner_photo_picker_confirm_missing:${segment}`);
   const [doneX, doneY] = center(done.bounds);
   await driver.shell(['input', 'tap', String(doneX), String(doneY)]);

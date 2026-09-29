@@ -7,6 +7,8 @@ import {
   assertCloneReadiness,
   assertSyntheticCloneInterface,
   buildSyntheticCloneEvidence,
+  findPhotoPickerConfirmNode,
+  findPhotoPickerImageNode,
   parseUiNodes,
   SerialUiAutomator,
   validateManualQrV3Payload,
@@ -88,6 +90,14 @@ test('screen contract recognizes any semantic line in a compound field hint', ()
   ].map((value) => `<node content-desc="${value}" />`).join('');
   const xml = `<hierarchy>${diagnostic}<node hint="Buchung&#10;${SYNTHETIC_CLONE_UI_CONTRACT.bookingField}"><node content-desc="nested" /></node></hierarchy>`;
   assert.equal(assertSyntheticCloneInterface(xml, 'diagnostic').phase, 'diagnostic');
+});
+
+test('Android Photo Picker nodes resolve from media semantics and German confirmation', () => {
+  const nodes = parseUiNodes(
+    '<hierarchy><node class="android.view.View" clickable="true" bounds="[0,0][100,100]"><node class="android.view.View" content-desc="Foto wurde am 28.09.2026 16:37 aufgenommen" enabled="true" bounds="[0,0][100,100]" /></node><node text="Fertig" enabled="true" bounds="[100,100][200,150]" /></hierarchy>',
+  );
+  assert.equal(findPhotoPickerImageNode(nodes)?.contentDesc.startsWith('Foto wurde'), true);
+  assert.equal(findPhotoPickerConfirmNode(nodes)?.text, 'Fertig');
 });
 
 function screenXml(labels) {
