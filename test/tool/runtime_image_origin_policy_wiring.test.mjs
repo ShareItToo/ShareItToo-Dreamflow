@@ -43,7 +43,8 @@ test('all Flutter network image rendering is centralized in AppImage', () => {
 
 test('managed images retain authenticated loading and safe fallback', () => {
   const source = read('lib/widgets/app_image.dart');
-  assert.match(source, /AuthService\.accessToken\(\)/u);
+  assert.match(source, /AuthService\.accessTokenForOwner\(owner\)/u);
+  assert.match(source, /SharedPersistenceSync\.affectsProfileSync\(key\)/u);
   assert.match(source, /'Authorization': 'Bearer \$token'/u);
   assert.match(source, /final Widget\? fallback;/u);
   assert.match(

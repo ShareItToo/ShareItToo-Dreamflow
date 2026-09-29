@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:io' show File;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/backend_config.dart';
+import 'package:lendify/services/shared_persistence_sync.dart';
 
 /// AppImage renders policy-approved URLs, data: URIs, and local file paths.
 /// Signed releases fetch only authenticated SIT-managed image URLs and fall
@@ -19,14 +21,15 @@ class AppImage extends StatelessWidget {
   final BorderRadius? borderRadius;
   final Widget? fallback;
 
-  const AppImage(
-      {super.key,
-      required this.url,
-      this.fit = BoxFit.cover,
-      this.width,
-      this.height,
-      this.borderRadius,
-      this.fallback});
+  const AppImage({
+    super.key,
+    required this.url,
+    this.fit = BoxFit.cover,
+    this.width,
+    this.height,
+    this.borderRadius,
+    this.fallback,
+  });
 
   Widget _fallback() => fallback ?? const ColoredBox(color: Color(0x14000000));
 
@@ -103,11 +106,25 @@ class _ManagedNetworkImage extends StatefulWidget {
 
 class _ManagedNetworkImageState extends State<_ManagedNetworkImage> {
   late Future<String?> _accessToken;
+  StreamSubscription<String>? _profileSubscription;
 
   @override
   void initState() {
     super.initState();
     _accessToken = _loadAccessToken();
+    _profileSubscription = SharedPersistenceSync.changes.listen((key) {
+      if (!mounted || !SharedPersistenceSync.affectsProfileSync(key)) return;
+      final refreshed = _loadAccessToken();
+      setState(() {
+        _accessToken = refreshed;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _profileSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -118,8 +135,11 @@ class _ManagedNetworkImageState extends State<_ManagedNetworkImage> {
     }
   }
 
-  Future<String?> _loadAccessToken() {
-    return AuthService.accessToken();
+  Future<String?> _loadAccessToken() async {
+    final session = await AuthService.readSession();
+    if (session == null) return null;
+    final owner = AuthService.captureSessionOwner(session);
+    return AuthService.accessTokenForOwner(owner);
   }
 
   @override
@@ -131,12 +151,13 @@ class _ManagedNetworkImageState extends State<_ManagedNetworkImage> {
           return widget.fallback ?? const ColoredBox(color: Color(0x14000000));
         }
         final token = snapshot.data;
+        if (token == null || token.isEmpty) {
+          return widget.fallback ?? const ColoredBox(color: Color(0x14000000));
+        }
         return Image.network(
           widget.url,
           fit: widget.fit,
-          headers: token == null || token.isEmpty
-              ? null
-              : <String, String>{'Authorization': 'Bearer $token'},
+          headers: <String, String>{'Authorization': 'Bearer $token'},
           errorBuilder: (_, __, ___) =>
               widget.fallback ?? const ColoredBox(color: Color(0x14000000)),
         );

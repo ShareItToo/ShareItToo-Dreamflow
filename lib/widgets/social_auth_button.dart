@@ -10,11 +10,14 @@ class SocialAuthButton extends StatelessWidget {
   final SocialAuthBrand brand;
   final String label;
   final VoidCallback? onTap;
-  const SocialAuthButton(
-      {super.key,
-      required this.brand,
-      required this.label,
-      required this.onTap});
+  final bool available;
+  const SocialAuthButton({
+    super.key,
+    required this.brand,
+    required this.label,
+    this.available = true,
+    required this.onTap,
+  });
 
   static const double _blurSigma = 4;
   static const double _tintOpacity = 0.18;
@@ -23,50 +26,77 @@ class SocialAuthButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final action = available ? onTap : null;
+    const unavailableLabel = 'Im Privatpiloten nicht verfügbar';
     final (Widget leading, Color fg) = switch (brand) {
       SocialAuthBrand.google => (const _SocialGlyph(text: 'G'), Colors.white),
       SocialAuthBrand.apple => (
           const Icon(Icons.apple, color: Colors.white, size: 20),
-          Colors.white
+          Colors.white,
         ),
       SocialAuthBrand.facebook => (const _SocialGlyph(text: 'f'), Colors.white),
     };
 
     return Semantics(
       button: true,
-      enabled: onTap != null,
-      label: label,
-      onTap: onTap,
+      enabled: action != null,
+      label: available ? label : '$label. $unavailableLabel',
+      onTap: action,
       excludeSemantics: true,
       child: _Pressable(
-        onTap: onTap,
+        onTap: action,
         borderRadius: BorderRadius.circular(18),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: _blurSigma, sigmaY: _blurSigma),
             child: Container(
-              height: 52,
+              constraints: const BoxConstraints(minHeight: 52),
               decoration: BoxDecoration(
                 // Match the auth glass panels (same tint + stroke as the form card).
                 color: Colors.black.withValues(alpha: _tintOpacity),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                    color: Colors.white.withValues(alpha: _strokeOpacity)),
+                  color: Colors.white.withValues(alpha: _strokeOpacity),
+                ),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(children: [
-                leading,
-                const SizedBox(width: 12),
-                Expanded(
-                    child: Text(label,
-                        style: theme.textTheme.bodyMedium?.copyWith(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                children: [
+                  leading,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label,
+                          style: theme.textTheme.bodyMedium?.copyWith(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w800,
-                            color: fg))),
-                Icon(Icons.arrow_forward_ios_rounded,
-                    size: 14, color: Colors.white.withValues(alpha: 0.55)),
-              ]),
+                            color: fg,
+                          ),
+                        ),
+                        if (!available)
+                          Text(
+                            unavailableLabel,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: fg,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    available
+                        ? Icons.arrow_forward_ios_rounded
+                        : Icons.lock_outline,
+                    size: 14,
+                    color: Colors.white.withValues(alpha: 0.55),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

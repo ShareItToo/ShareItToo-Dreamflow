@@ -58,6 +58,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.text('Im Privatpiloten nicht verfügbar'), findsNWidgets(2));
 
     for (final entry in {
       'Mit Google anmelden': Tristate.isTrue,
@@ -83,6 +84,7 @@ void main() {
 
       await tester.pumpWidget(const MaterialApp(home: RegisterScreen()));
       await tester.pumpAndSettle();
+      expect(find.text('Im Privatpiloten nicht verfügbar'), findsNWidgets(2));
 
       for (final entry in {
         'Mit Google registrieren': Tristate.isTrue,

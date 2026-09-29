@@ -422,6 +422,8 @@ void main() {
     await update(<CurrentUserProfileField, Object?>{
       CurrentUserProfileField.bio: 'Persisted before restart',
       CurrentUserProfileField.addressExtra: 'Hinterhof',
+      CurrentUserProfileField.photoURL:
+          'https://shareittoo.com/api/v1/uploads/11111111-1111-4111-8111-111111111111-full.webp',
     });
     final beforeRestart = await SharedPreferences.getInstance();
     final persistedCurrent = beforeRestart.getString('currentUser')!;
@@ -438,6 +440,8 @@ void main() {
     final restored = await DataService.getCurrentUser();
     expect(restored!.bio, 'Persisted before restart');
     expect(restored.addressExtra, 'Hinterhof');
+    expect(restored.photoURL,
+        contains('/uploads/11111111-1111-4111-8111-111111111111-full.webp'));
     final updatedAfterRestart = await update(<CurrentUserProfileField, Object?>{
       CurrentUserProfileField.city: 'Düsseldorf',
     });

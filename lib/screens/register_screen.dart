@@ -749,6 +749,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                             .google,
                                                         label:
                                                             'Mit Google registrieren',
+                                                        available: AuthService
+                                                            .socialProviderEnabled(
+                                                                AuthSocialProvider
+                                                                    .google),
                                                         onTap: _busy ||
                                                                 !AuthService.socialProviderEnabled(
                                                                     AuthSocialProvider
@@ -771,6 +775,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                             .apple,
                                                         label:
                                                             'Mit Apple registrieren',
+                                                        available: AuthService
+                                                            .socialProviderEnabled(
+                                                                AuthSocialProvider
+                                                                    .apple),
                                                         onTap: _busy ||
                                                                 !AuthService
                                                                     .socialProviderEnabled(
@@ -794,6 +802,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                             .facebook,
                                                         label:
                                                             'Mit Facebook registrieren',
+                                                        available: AuthService
+                                                            .socialProviderEnabled(
+                                                                AuthSocialProvider
+                                                                    .facebook),
                                                         onTap: _busy ||
                                                                 !AuthService.socialProviderEnabled(
                                                                     AuthSocialProvider

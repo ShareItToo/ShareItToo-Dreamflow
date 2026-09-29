@@ -1011,6 +1011,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                               SocialAuthButton(
                                                   brand: SocialAuthBrand.google,
                                                   label: 'Mit Google anmelden',
+                                                  available: AuthService
+                                                      .socialProviderEnabled(
+                                                          AuthSocialProvider
+                                                              .google),
                                                   onTap: _busy ||
                                                           !AuthService
                                                               .socialProviderEnabled(
@@ -1024,6 +1028,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                               SocialAuthButton(
                                                   brand: SocialAuthBrand.apple,
                                                   label: 'Mit Apple anmelden',
+                                                  available: AuthService
+                                                      .socialProviderEnabled(
+                                                          AuthSocialProvider
+                                                              .apple),
                                                   onTap: _busy ||
                                                           !AuthService
                                                               .socialProviderEnabled(
@@ -1039,6 +1047,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                                       SocialAuthBrand.facebook,
                                                   label:
                                                       'Mit Facebook anmelden',
+                                                  available: AuthService
+                                                      .socialProviderEnabled(
+                                                          AuthSocialProvider
+                                                              .facebook),
                                                   onTap: _busy ||
                                                           !AuthService
                                                               .socialProviderEnabled(
