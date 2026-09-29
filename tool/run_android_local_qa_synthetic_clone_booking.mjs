@@ -534,8 +534,7 @@ async function login(driver, roleAccount) {
 
 async function openClone(driver, expectedRole) {
   let dump = await driver.dump('navigation');
-  if (!hasLabel(dump.nodes, SYNTHETIC_CLONE_UI_CONTRACT.title)
-      || !hasLabel(dump.nodes, SYNTHETIC_CLONE_UI_CONTRACT.notice)) {
+  if (!hasLabel(dump.nodes, SYNTHETIC_CLONE_UI_CONTRACT.statusRefresh)) {
     if (!hasLabel(dump.nodes, SYNTHETIC_CLONE_UI_CONTRACT.title)) {
       await driver.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.navigation.profile, 'navigation');
     }

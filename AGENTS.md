@@ -72,6 +72,9 @@ discover a mechanically stale source hash.
 - A transient QA-session writer and its physical runner validator are one
   manifest contract. Before launching the app, validate a freshly generated
   session from the actual writer; a matching stdout summary is not evidence.
+- Android route readiness must require a route-specific actionable label. A
+  shared page title, global test banner or navigation-card text is not proof
+  that the destination route opened.
 - Recovery mutations must target the captured immutable provider/container ID,
   never a mutable name; stateful test executors must model or explicitly reject
   every accepted security/resource option.

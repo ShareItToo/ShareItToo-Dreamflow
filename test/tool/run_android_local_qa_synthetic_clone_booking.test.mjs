@@ -50,6 +50,10 @@ test('physical runner launches the side-by-side local-QA package only', () => {
   assert.match(runnerSource, /`\$\{APPLICATION_ID\}\/\$\{MAIN_ACTIVITY\}`/u);
   assert.doesNotMatch(runnerSource, /const APPLICATION_ID = 'com\.shareittoo\.app';/u);
   assert.doesNotMatch(runnerSource, /`\$\{APPLICATION_ID\}\/\.MainActivity`/u);
+  assert.match(
+    runnerSource,
+    /if \(!hasLabel\(dump\.nodes, SYNTHETIC_CLONE_UI_CONTRACT\.statusRefresh\)\)/u,
+  );
 });
 
 test('UI parser decodes Android XML entities and keeps the bottom-nav label', () => {
