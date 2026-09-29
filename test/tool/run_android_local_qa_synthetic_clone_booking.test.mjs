@@ -205,7 +205,7 @@ test('label tapping accepts the first line of Android bottom-navigation semantic
       calls.push(args);
       if (args.includes('cat')) {
         return {
-          stdout: '<hierarchy><node content-desc="Mein SIT&#10;Tab 5 of 5" enabled="true" bounds="[0,0][20,20]" /></hierarchy>',
+          stdout: '<hierarchy><node content-desc="Mein SIT&#10;Tab 5 of 5" clickable="true" enabled="true" bounds="[0,0][20,20]" /></hierarchy>',
         };
       }
       return { stdout: '' };
@@ -215,6 +215,28 @@ test('label tapping accepts the first line of Android bottom-navigation semantic
   assert.ok(calls.some((args) => (
     args.at(-4) === 'input' && args.at(-3) === 'tap'
       && args.at(-2) === '10' && args.at(-1) === '10'
+  )));
+});
+
+test('label tapping selects the actionable control when a title has the same label', async () => {
+  const calls = [];
+  const driver = new SerialUiAutomator({
+    device: 'physical-test',
+    now: () => 123,
+    execFileImpl: async (_file, args) => {
+      calls.push(args);
+      if (args.includes('cat')) {
+        return {
+          stdout: '<hierarchy><node content-desc="Anmelden" clickable="false" enabled="true" bounds="[0,0][20,20]" /><node content-desc="Anmelden" clickable="true" enabled="true" bounds="[20,20][40,40]" /></hierarchy>',
+        };
+      }
+      return { stdout: '' };
+    },
+  });
+  await driver.tapLabel('Anmelden', 'login');
+  assert.ok(calls.some((args) => (
+    args.at(-4) === 'input' && args.at(-3) === 'tap'
+      && args.at(-2) === '30' && args.at(-1) === '30'
   )));
 });
 

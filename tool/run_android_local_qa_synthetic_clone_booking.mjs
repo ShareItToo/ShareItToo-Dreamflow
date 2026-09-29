@@ -365,7 +365,7 @@ export class SerialUiAutomator {
 
   async tapLabel(label, phase) {
     const { nodes } = await this.dump(phase);
-    const node = nodes.find((candidate) => candidate.bounds && candidate.enabled
+    const node = nodes.find((candidate) => candidate.bounds && candidate.enabled && candidate.clickable
       && [candidate.text, candidate.contentDesc, candidate.hint]
         .flatMap(labelVariants).includes(label));
     if (!node) fail(`synthetic_clone_runner_action_missing:${phase}:${label}`);
@@ -496,10 +496,13 @@ async function login(driver, roleAccount) {
   }
   const emailField = initial.nodes.find((node) => node.hint === 'E-Mail' && node.bounds);
   const passwordField = initial.nodes.find((node) => node.hint === 'Passwort' && node.bounds);
-  const submit = initial.nodes.find((node) => node.contentDesc === 'Anmelden' && node.bounds);
+  const submit = initial.nodes.find((node) => (
+    node.contentDesc === 'Anmelden' && node.bounds && node.clickable
+  ));
   if (!emailField || !passwordField || !submit) fail('synthetic_clone_runner_login_contract_missing');
   await driver.enterField('E-Mail', roleAccount.email, 'login');
   await driver.enterField('Passwort', roleAccount.password, 'login');
+  await driver.shell(['input', 'keyevent', 'KEYCODE_BACK']);
   await driver.tapLabel('Anmelden', 'login');
   await driver.waitForAny(['Mein SIT', SYNTHETIC_CLONE_UI_CONTRACT.title], 'post-login');
 }
