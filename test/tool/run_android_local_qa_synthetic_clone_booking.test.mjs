@@ -240,6 +240,28 @@ test('label tapping selects the actionable control when a title has the same lab
   )));
 });
 
+test('runner scrolls a clipped profile action above bottom navigation before tapping', async () => {
+  const calls = [];
+  const driver = new SerialUiAutomator({
+    device: 'physical-test',
+    now: () => 123,
+    execFileImpl: async (_file, args) => {
+      calls.push(args);
+      if (args.includes('cat')) {
+        return {
+          stdout: '<hierarchy><node bounds="[0,0][1440,3120]" /><node content-desc="Synthetischer Zwei-Rollen-Test&#10;Synthetischer Test" clickable="true" enabled="true" bounds="[48,3031][1392,3120]" /></hierarchy>',
+        };
+      }
+      return { stdout: '' };
+    },
+  });
+  await driver.revealLabel('Synthetischer Zwei-Rollen-Test', 'profile-clone-route');
+  assert.ok(calls.some((args) => (
+    JSON.stringify(args.slice(-7))
+      === JSON.stringify(['input', 'swipe', '720', '2434', '720', '1092', '350'])
+  )));
+});
+
 test('readiness requires actual route readback rather than manifest alone', async () => {
   const calls = [];
   const fetchImpl = async (url, options) => {

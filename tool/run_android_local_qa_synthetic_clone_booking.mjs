@@ -373,6 +373,28 @@ export class SerialUiAutomator {
     await this.shell(['input', 'tap', String(x), String(y)]);
   }
 
+  async revealLabel(label, phase) {
+    const { nodes } = await this.dump(phase);
+    const node = nodes.find((candidate) => candidate.bounds && candidate.enabled && candidate.clickable
+      && [candidate.text, candidate.contentDesc, candidate.hint]
+        .flatMap(labelVariants).includes(label));
+    if (!node) fail(`synthetic_clone_runner_action_missing:${phase}:${label}`);
+    const screenRight = Math.max(...nodes.map((candidate) => candidate.bounds?.right ?? 0));
+    const screenBottom = Math.max(...nodes.map((candidate) => candidate.bounds?.bottom ?? 0));
+    if (screenRight > 0 && screenBottom > 0 && node.bounds.top >= screenBottom * 0.85) {
+      await this.shell([
+        'input',
+        'swipe',
+        String(Math.round(screenRight * 0.5)),
+        String(Math.round(screenBottom * 0.78)),
+        String(Math.round(screenRight * 0.5)),
+        String(Math.round(screenBottom * 0.35)),
+        '350',
+      ]);
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 350));
+    }
+  }
+
   async enterField(label, value, phase) {
     const { nodes } = await this.dump(phase);
     const node = nodes.find((candidate) => candidate.bounds && (candidate.hint === label || candidate.text === label));
@@ -518,6 +540,7 @@ async function openClone(driver, expectedRole) {
     if (!hasLabel(dump.nodes, SYNTHETIC_CLONE_UI_CONTRACT.title)) {
       fail('synthetic_clone_runner_clone_route_missing');
     }
+    await driver.revealLabel(SYNTHETIC_CLONE_UI_CONTRACT.title, 'profile-clone-route');
     await driver.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.title, 'profile-clone-route');
   }
   dump = await driver.waitContract('diagnostic');
