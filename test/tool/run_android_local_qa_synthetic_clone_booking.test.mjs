@@ -65,6 +65,10 @@ test('physical runner launches the side-by-side local-QA package only', () => {
     runnerSource,
     /async function enterIsolatedRole[\s\S]*resetLocalQaApp\(\)[\s\S]*launch\(\)[\s\S]*login\(driver, roleAccount\)/u,
   );
+  assert.match(
+    runnerSource,
+    /async function loadBooking[\s\S]*bookingField[\s\S]*KEYCODE_ENTER[\s\S]*bookingLoad/u,
+  );
 });
 
 test('UI parser decodes Android XML entities and keeps the bottom-nav label', () => {

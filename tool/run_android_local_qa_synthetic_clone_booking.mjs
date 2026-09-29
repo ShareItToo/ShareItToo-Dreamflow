@@ -539,7 +539,7 @@ async function login(driver, roleAccount) {
   if (!emailField || !passwordField || !submit) fail('synthetic_clone_runner_login_contract_missing');
   await driver.enterField('E-Mail', roleAccount.email, 'login');
   await driver.enterField('Passwort', roleAccount.password, 'login');
-  await driver.shell(['input', 'keyevent', 'KEYCODE_BACK']);
+  await driver.shell(['input', 'keyevent', 'KEYCODE_ENTER']);
   await driver.tapLabel('Anmelden', 'login');
   await driver.waitForAny(['Mein SIT', SYNTHETIC_CLONE_UI_CONTRACT.title], 'post-login');
 }
@@ -636,6 +636,12 @@ async function selectFourPhotos(driver, segment) {
   for (const slot of PHOTO_SLOTS) await selectPhoto(driver, slot, segment);
 }
 
+async function loadBooking(driver, bookingId, phase) {
+  await driver.enterField(SYNTHETIC_CLONE_UI_CONTRACT.bookingField, bookingId, phase);
+  await driver.shell(['input', 'keyevent', 'KEYCODE_ENTER']);
+  await driver.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.bookingLoad, phase);
+}
+
 async function enterIsolatedRole(driver, roleAccount) {
   await driver.resetLocalQaApp();
   await driver.launch();
@@ -655,6 +661,8 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
 
   await enterIsolatedRole(primary, validated.owner);
   await openClone(primary, 'owner');
+  await loadBooking(primary, bookingId, 'owner-requested');
+  await primary.waitContract('requested');
   await primary.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.accept, 'accepted');
   await primary.waitContract('accepted');
   await selectFourPhotos(primary, 'pickup');
@@ -684,8 +692,7 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
     // verifier never receives a payload through ADB or an API shortcut.
     await enterIsolatedRole(qrDisplay, validated.owner);
     await openClone(qrDisplay, 'owner');
-    await qrDisplay.enterField(SYNTHETIC_CLONE_UI_CONTRACT.bookingField, bookingId, 'pickup-display');
-    await qrDisplay.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.bookingLoad, 'pickup-display');
+    await loadBooking(qrDisplay, bookingId, 'pickup-display');
     await qrDisplay.waitContract('pickupChallenge');
     // Re-issue on the display device so the QR is visible to the real camera;
     // the backend keeps this inside the same synthetic accepted booking.
@@ -695,6 +702,7 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
 
   await enterIsolatedRole(primary, validated.renter);
   await openClone(primary, 'renter');
+  await loadBooking(primary, bookingId, 'renter-pickup-verifier');
   await primary.waitContract('pickupVerifier');
   if (qrDisplay) {
     await primary.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.qrScan, 'pickup-qr-scan');
@@ -703,6 +711,7 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
     // The server verifies the exact payload cryptographically; this is not a
     // fallback to the six-digit code and is reported separately in evidence.
     await primary.enterField(SYNTHETIC_CLONE_UI_CONTRACT.qrPayloadField, manualPayload, 'pickup-qr-payload');
+    await primary.shell(['input', 'keyevent', 'KEYCODE_ENTER']);
     await primary.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.qrPayloadVerify, 'pickup-qr-payload');
   }
   await primary.waitContract('active', { timeoutMs: 60_000, intervalMs: 500 });
@@ -718,8 +727,10 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
   if (!fallback) fail('synthetic_clone_runner_return_fallback_not_visible');
   await enterIsolatedRole(primary, validated.owner);
   await openClone(primary, 'owner');
+  await loadBooking(primary, bookingId, 'owner-return-verifier');
   await primary.waitContract('returnVerifier');
   await primary.enterField(SYNTHETIC_CLONE_UI_CONTRACT.fallbackField, fallback, 'return-fallback');
+  await primary.shell(['input', 'keyevent', 'KEYCODE_ENTER']);
   await primary.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.fallbackVerify, 'return-fallback');
   await primary.waitContract('returned', { timeoutMs: 15_000 });
   await primary.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.auditLoad, 'audit');
