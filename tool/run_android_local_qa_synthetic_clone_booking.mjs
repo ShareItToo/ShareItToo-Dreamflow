@@ -103,7 +103,7 @@ function decodeXmlAttribute(value) {
 }
 
 export function parseUiNodes(xml) {
-  return [...String(xml ?? '').matchAll(/<node\b([^>]*)\/>/gu)].map((match) => {
+  return [...String(xml ?? '').matchAll(/<node\b([^>]*)>/gu)].map((match) => {
     const attrs = {};
     for (const [, key, value] of match[1].matchAll(/([\w-]+)="([^"]*)"/gu)) attrs[key] = value;
     return {

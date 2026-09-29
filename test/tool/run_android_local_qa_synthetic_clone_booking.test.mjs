@@ -70,7 +70,7 @@ test('screen contract recognizes any semantic line in a compound field hint', ()
     SYNTHETIC_CLONE_UI_CONTRACT.statusRefresh,
     SYNTHETIC_CLONE_UI_CONTRACT.bookingLoad,
   ].map((value) => `<node content-desc="${value}" />`).join('');
-  const xml = `<hierarchy>${diagnostic}<node hint="Buchung&#10;${SYNTHETIC_CLONE_UI_CONTRACT.bookingField}" /></hierarchy>`;
+  const xml = `<hierarchy>${diagnostic}<node hint="Buchung&#10;${SYNTHETIC_CLONE_UI_CONTRACT.bookingField}"><node content-desc="nested" /></node></hierarchy>`;
   assert.equal(assertSyntheticCloneInterface(xml, 'diagnostic').phase, 'diagnostic');
 });
 
