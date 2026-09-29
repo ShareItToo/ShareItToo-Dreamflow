@@ -19,6 +19,10 @@ const runnerSource = readFileSync(
   new URL('../../tool/run_android_local_qa_synthetic_clone_booking.mjs', import.meta.url),
   'utf8',
 );
+const diagnosticScreenSource = readFileSync(
+  new URL('../../lib/screens/synthetic_clone_diagnostic_screen.dart', import.meta.url),
+  'utf8',
+);
 
 const ownerId = '11111111-1111-4111-8111-111111111111';
 const renterId = '22222222-2222-4222-8222-222222222222';
@@ -72,6 +76,17 @@ test('physical runner launches the side-by-side local-QA package only', () => {
     /async function loadBooking[\s\S]*bookingField[\s\S]*KEYCODE_ENTER[\s\S]*bookingLoad/u,
   );
   assert.match(runnerSource, /const submitReady = await driver\.dump\('login-submit-ready'\)/u);
+});
+
+test('runner QR input contract matches the rendered diagnostic field', () => {
+  assert.equal(
+    SYNTHETIC_CLONE_UI_CONTRACT.qrPayloadField,
+    'QR-v3-Payload eingeben (kein Kamera-Scan)',
+  );
+  assert.match(
+    diagnosticScreenSource,
+    /labelText: 'QR-v3-Payload eingeben \(kein Kamera-Scan\)'/u,
+  );
 });
 
 test('UI parser decodes Android XML entities and keeps the bottom-nav label', () => {

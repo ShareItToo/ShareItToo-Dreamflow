@@ -53,7 +53,7 @@ export const SYNTHETIC_CLONE_UI_CONTRACT = Object.freeze({
   pickupChallenge: 'Pickup-QR-v3 ausstellen',
   returnChallenge: 'Return-QR-v3 ausstellen',
   qrScan: 'QR-v3 scannen und verifizieren',
-  qrPayloadField: 'QR-v3-Payload (manueller Clone-Fallback)',
+  qrPayloadField: 'QR-v3-Payload eingeben (kein Kamera-Scan)',
   qrPayloadVerify: 'QR-v3-Payload verifizieren',
   fallbackField: 'Exakter 6-stelliger Fallback-Code',
   fallbackVerify: 'Fallback verifizieren',
