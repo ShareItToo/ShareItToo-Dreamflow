@@ -144,6 +144,10 @@ test('canonical debug signing and cleartext are both explicit debug-only excepti
   );
   assert.doesNotMatch(debugManifest, /usesCleartextTraffic/u);
   assert.match(mainManifest, /android:usesCleartextTraffic="\$\{sitUsesCleartextTraffic\}"/u);
+  assert.match(
+    preflight,
+    /manifestPlaceholders\.sitAppLinksAutoVerify = qaPackageRequested \? "false" : "true"/u,
+  );
   assert.match(preflight, /manifestPlaceholders\.sitUsesCleartextTraffic = "false"/u);
   assert.match(preflight, /guarded manifest placeholder/u);
 });

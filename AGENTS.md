@@ -63,6 +63,8 @@ discover a mechanically stale source hash.
   invent it.
 - Copy every full Git commit SHA from authoritative `git rev-parse` or provider
   output. Never expand, complete or infer a 7-character prefix manually.
+- Any Android identity or manifest-placeholder wiring change must update and
+  execute the release preflight's matching static guard before it may PASS.
 - Artifact builders and their validators must use the same exact manifest
   contract. Every field added by a builder must be present in the positive
   validator fixture and exercised by a real generated-manifest test before a

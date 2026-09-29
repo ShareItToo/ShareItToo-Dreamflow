@@ -266,9 +266,9 @@ grep -Fq '<key>aps-environment</key>' ios/Runner/Runner.entitlements || \
 grep -Fq 'android:autoVerify="${sitAppLinksAutoVerify}"' \
   android/app/src/main/AndroidManifest.xml || \
   fail "Android verified links must use the guarded manifest placeholder."
-grep -Fq 'manifestPlaceholders.sitAppLinksAutoVerify = remoteQaRequested ? "false" : "true"' \
+grep -Fq 'manifestPlaceholders.sitAppLinksAutoVerify = qaPackageRequested ? "false" : "true"' \
   android/app/build.gradle || \
-  fail "Android verified links must remain enabled for production identities and disabled for Remote QA."
+  fail "Android verified links must remain enabled for production identities and disabled for QA packages."
 grep -Fq 'android:label="${sitAppLabel}"' android/app/src/main/AndroidManifest.xml || \
   fail "Android app labels must use the guarded manifest placeholder."
 grep -Fq 'android:allowBackup="false"' android/app/src/main/AndroidManifest.xml || \
