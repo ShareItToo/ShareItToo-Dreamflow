@@ -174,6 +174,7 @@ export async function validateAndroidLocalQaCandidate({
     apiBaseUrl: 'http://127.0.0.1:18080/api/v1',
     adbReverseRequired: 'tcp:18080',
     blueOceanMockUi: true,
+    stageANonBindingPilotEnabled: true,
     syntheticCloneBookingLane: true,
     syntheticCloneNotice,
     syntheticCloneRequiredRoles: ['owner', 'renter'],
