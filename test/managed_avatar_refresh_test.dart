@@ -7,8 +7,9 @@ import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/widgets/user_avatar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const avatar =
-    'https://shareittoo.com/api/v1/uploads/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa-full.webp';
+final avatar = BackendConfig.uri(
+  '/uploads/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa-full.webp',
+).toString();
 
 String session(String owner, String token) => jsonEncode({
       'userId': owner,
@@ -21,14 +22,19 @@ String session(String owner, String token) => jsonEncode({
           DateTime.now().add(const Duration(hours: 1)).toIso8601String(),
     });
 
-Widget surface() => const MaterialApp(
-    home: Scaffold(body: SitUserAvatar(url: avatar, radius: 24)));
+Widget surface() =>
+    MaterialApp(home: Scaffold(body: SitUserAvatar(url: avatar, radius: 24)));
 
 NetworkImage renderedImage(WidgetTester tester) =>
     tester.widget<Image>(find.byType(Image)).image as NetworkImage;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    expect(BackendConfig.isManagedImageUrl(avatar), isTrue,
+        reason:
+            'exercise the configured managed path, never external fallback');
+  });
 
   testWidgets(
       'same avatar URL reloads owner-bound credentials on profile and account refresh',
