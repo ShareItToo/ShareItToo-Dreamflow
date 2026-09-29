@@ -503,7 +503,7 @@ export async function assertCloneReadiness(session, { fetchImpl = fetch } = {}) 
 
 async function login(driver, roleAccount) {
   let initial = await driver.dump('login');
-  if (hasLabel(initial.nodes, SYNTHETIC_CLONE_UI_CONTRACT.title)) {
+  if (hasLabel(initial.nodes, SYNTHETIC_CLONE_UI_CONTRACT.statusRefresh)) {
     if (hasLabel(initial.nodes, `Rolle: ${roleAccount.role}`)) return;
     await logout(driver);
     initial = await driver.dump('login-after-role-switch');
@@ -513,11 +513,12 @@ async function login(driver, roleAccount) {
         && hasLabel(initial.nodes, SYNTHETIC_CLONE_UI_CONTRACT.navigation.profile)) {
       await driver.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.navigation.profile, 'guest-navigation');
       initial = await driver.waitForAny(
-        ['Anmelden', SYNTHETIC_CLONE_UI_CONTRACT.title],
+        ['Anmelden', SYNTHETIC_CLONE_UI_CONTRACT.statusRefresh],
         'guest-profile',
       );
     }
-    if (hasLabel(initial.nodes, SYNTHETIC_CLONE_UI_CONTRACT.title)) return;
+    if (hasLabel(initial.nodes, SYNTHETIC_CLONE_UI_CONTRACT.statusRefresh)
+        && hasLabel(initial.nodes, `Rolle: ${roleAccount.role}`)) return;
     if (hasLabel(initial.nodes, 'Anmelden')) {
       await driver.tapLabel('Anmelden', 'guest-profile');
       initial = await driver.waitForAny(['E-Mail'], 'login-route');
@@ -594,7 +595,13 @@ async function logout(driver) {
     if (hasLabel(confirm.nodes, SYNTHETIC_CLONE_UI_CONTRACT.navigation.logout)) {
       await driver.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.navigation.logout, 'logout-confirm');
     }
-    await driver.waitForAny(['E-Mail', 'Anmelden'], 'post-logout');
+    const deadline = Date.now() + 8_000;
+    while (Date.now() < deadline) {
+      const signedOut = await driver.dump('post-logout');
+      if (!hasLabel(signedOut.nodes, SYNTHETIC_CLONE_UI_CONTRACT.navigation.logout)) return;
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+    }
+    fail('synthetic_clone_runner_logout_not_completed');
   }
 }
 
