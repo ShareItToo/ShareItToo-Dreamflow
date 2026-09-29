@@ -5910,7 +5910,9 @@ if (!databaseUrl) {
       );
       const privateBeforeBinding = await fetch(localMediaUrl(listingUpload.url));
       assert.equal(privateBeforeBinding.status, 401);
-      assert.equal((await privateBeforeBinding.json()).error, 'authentication_required');
+      // Missing bearer input is verified fail-closed and maps to the same
+      // invalid-session response as any malformed upload token.
+      assert.equal((await privateBeforeBinding.json()).error, 'invalid_or_expired_session');
 
       const blueOceanUploadForm = new FormData();
       blueOceanUploadForm.append('purpose', 'listing_image');
