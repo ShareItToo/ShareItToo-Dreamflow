@@ -1037,6 +1037,18 @@ flutter test --reporter expanded \
   --dart-define=SIT_SOCIAL_FACEBOOK_ENABLED=false \
   test/social_auth_google_only_profile_test.dart
 
+# Exercise the active local-QA payment UI with its complete fail-closed build
+# envelope. The default suite only covers the disabled lane; these tests use
+# synthetic in-process fixtures, never a device, provider or real payment.
+flutter test --reporter expanded \
+  --dart-define=SIT_BACKEND_ENABLED=true \
+  --dart-define=SIT_API_BASE_URL=http://127.0.0.1:18080/api/v1 \
+  --dart-define=SIT_RELEASE_CHANNEL=internal \
+  --dart-define=SIT_BUNDLE_ID=com.shareittoo.app.qa \
+  --dart-define=SIT_SYNTHETIC_CLONE_BOOKING_LANE=true \
+  --dart-define=SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE=true \
+  test/synthetic_payment_test.dart
+
 # Offline SDK mocks exercise enabled providers without a release artifact,
 # real credentials, SMS, provider login or network access. Cold Google init
 # owns a fresh process because the production SDK initialization is cached.
