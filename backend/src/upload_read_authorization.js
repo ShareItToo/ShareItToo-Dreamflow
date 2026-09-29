@@ -22,7 +22,6 @@ export async function resolveUploadReadAuthorization({
   findActiveSession,
 }) {
   const normalizedToken = typeof token === 'string' ? token.trim() : '';
-  if (!normalizedToken) return emptyAuthorization();
 
   let payload;
   try {

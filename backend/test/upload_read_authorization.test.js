@@ -27,14 +27,20 @@ function verifyToken(token) {
   return { sub: ownerId, sid: ownerSessionId };
 }
 
-test('empty token remains anonymous and cannot expose X-Upload-Id', async () => {
+test('empty token is sent through verification and cannot expose X-Upload-Id', async () => {
+  let verifierCalls = 0;
   const authorization = await resolveUploadReadAuthorization({
     token: '   ',
     uploadRecord: profileUpload,
-    verifyToken,
-    findActiveSession: async () => assert.fail('anonymous request must not query a session'),
+    verifyToken: (token) => {
+      verifierCalls += 1;
+      assert.equal(token, '');
+      throw new Error('invalid token');
+    },
+    findActiveSession: async () => assert.fail('invalid token must not query a session'),
   });
-  assert.equal(authorization.status, 'anonymous');
+  assert.equal(verifierCalls, 1);
+  assert.equal(authorization.status, 'invalid_token');
   assert.equal(shouldExposeUploadId({ authorization, uploadRecord: profileUpload }), false);
 });
 
