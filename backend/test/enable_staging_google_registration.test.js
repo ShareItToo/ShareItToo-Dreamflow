@@ -22,6 +22,8 @@ const userId = 'synthetic_google_registration_user';
 const registrationAllowlistKey = 'SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST';
 const migrationLedgerDigest = '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196';
 const originalAllowedIds = 'synthetic-owner,synthetic-renter,synthetic-sandbox';
+const primaryNetworkId = 'd'.repeat(64);
+const providerNetworkId = 'e'.repeat(64);
 
 function envContent({ unrelated = 'preserve-me', registration = false, allowlist = null } = {}) {
   return [
@@ -87,7 +89,7 @@ async function fixture({ apiContainer = 'shareittoo-staging-api', image = `regis
       SecurityOpt: ['no-new-privileges'], NoNewPrivileges: true, Memory: 64,
     },
     Mounts: manifest.mounts.map((mount) => ({ Type: mount.type, Name: mount.type === 'volume' ? mount.name : null, Source: mount.source, Destination: mount.destination, RW: !mount.readOnly })),
-    NetworkSettings: { Ports: {}, Networks: { [manifest.network]: {}, [manifest.providerNetwork]: {} } },
+    NetworkSettings: { Ports: {}, Networks: { [manifest.network]: { NetworkID: primaryNetworkId }, [manifest.providerNetwork]: { NetworkID: providerNetworkId } } },
   };
   if (finalize) {
     manifest.kind = 'sit-staging-google-registration-finalization-runtime-manifest';
@@ -137,8 +139,8 @@ function statefulDockerExecutor(fx, {
 } = {}) {
   const db = { Name: `/${fx.manifest.databaseContainer}`, State: { Running: true }, Config: { Image: `postgres:16-alpine@sha256:${'c'.repeat(64)}`, Env: ['POSTGRES_DB=shareittoo_green', 'POSTGRES_USER=shareittoo_green'] } };
   const volume = { Name: fx.manifest.databaseVolume };
-  const network = { Name: fx.manifest.network, Internal: true };
-  const providerNetwork = { Name: fx.manifest.providerNetwork };
+  const network = { Name: fx.manifest.network, Id: primaryNetworkId, Internal: true };
+  const providerNetwork = { Name: fx.manifest.providerNetwork, Id: providerNetworkId };
   const uploads = { Name: fx.manifest.uploadsVolume };
   const image = { RepoTags: [fx.image], Config: { User: 'shareittoo', Labels: { 'org.opencontainers.image.revision': revision } }, RepoDigests: [`${fx.image}@${imageDigest}`] };
   const containers = new Map([[fx.manifest.apiContainer, fx.api]]);
@@ -329,6 +331,7 @@ function statefulDockerExecutor(fx, {
       if (createMutation === 'memory-drift') replaceOption('--memory', '99');
       if (createMutation === 'cap-add-drift') replaceOption('--cap-add', 'CHOWN');
       if (createMutation === 'memory-swap-drift') replaceOption('--memory-swap', '256');
+      if (createMutation === 'network-name-drift') replaceOption('--network', fx.manifest.network);
       if (createMutation === 'health-drift') {
         const networkOption = effectiveArgs.indexOf('--network');
         effectiveArgs.splice(networkOption, 0, '--health-cmd', 'false', '--health-interval', '1000000000');
@@ -353,7 +356,7 @@ function statefulDockerExecutor(fx, {
       const networkIndex = effectiveArgs.indexOf('--network');
       const networkName = optionFirst('--network');
       const imageArg = effectiveArgs[networkIndex + 2];
-      if (!name || envFile !== fx.envFile || networkIndex < 0 || networkName !== fx.manifest.network || imageArg !== `${fx.image}@${imageDigest}`
+      if (!name || envFile !== fx.envFile || networkIndex < 0 || ![fx.manifest.network, network.Id].includes(networkName) || imageArg !== `${fx.image}@${imageDigest}`
           || JSON.stringify(effectiveArgs.slice(networkIndex + 3)) !== JSON.stringify(fx.api.Config.Cmd)) fail('unexpected_create_args', options.phase);
       const env = (await readFile(envFile, 'utf8')).trim().split('\n');
       const labels = Object.fromEntries(optionValues('--label').map((entry) => {
@@ -449,7 +452,7 @@ function statefulDockerExecutor(fx, {
         source.Config.Healthcheck.StartInterval = Number(optionFirst('--health-start-interval') ?? 0);
       }
       source.Mounts = parsedMounts;
-      source.NetworkSettings = { Ports: {}, Networks: { [networkName]: {} } };
+      source.NetworkSettings = { Ports: {}, Networks: { [network.Name]: { NetworkID: network.Id } } };
       if (createMode === 'mismatched-registration') {
         source.Config.Env = source.Config.Env.map((entry) => entry.startsWith(`${registrationAllowlistKey}=`) ? `${registrationAllowlistKey}=${'c'.repeat(64)}=other-user` : entry);
       }
@@ -471,7 +474,7 @@ function statefulDockerExecutor(fx, {
       const networkName = args[2];
       if (networkName !== fx.manifest.providerNetwork || args[3] !== 'b'.repeat(64)) fail('unexpected_network_connect', options.phase);
       const container = inspectContainerReference(args[3]);
-      container.NetworkSettings.Networks[networkName] = {};
+      container.NetworkSettings.Networks[networkName] = { NetworkID: providerNetwork.Id };
       return { stdout: '', code: 0 };
     }
     if (operation === 'start') {
@@ -518,6 +521,122 @@ test('default-off preflight validates schema 98 and does not mutate or expose ma
     assert.ok(fake.calls.some((call) => call.phase === 'candidate_registration_config_import'));
     assert.equal(fake.calls.some((call) => call.phase === 'stop_current_api'), false);
   } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('enable and finalization preserve the exact primary network name or full ID through generated create commands', async () => {
+  for (const finalize of [false, true]) {
+    for (const useId of [false, true]) {
+      const fx = await fixture({ finalize });
+      try {
+        const mode = useId ? primaryNetworkId : fx.manifest.network;
+        fx.api.HostConfig.NetworkMode = mode;
+        const fake = statefulDockerExecutor(fx);
+        const options = finalize ? finalizeOptions(fx, fake.command) : {
+          manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+          command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+        };
+        await (finalize ? runStagingGoogleRegistrationFinalize : runStagingGoogleRegistrationEnable)(options);
+        const args = fake.calls.find((call) => call.phase === 'create_replacement_api').args;
+        assert.equal(args[args.indexOf('--network') + 1], mode);
+        const replacement = fake.state.containers.get(fx.manifest.apiContainer);
+        assert.equal(replacement.HostConfig.NetworkMode, mode);
+        assert.deepEqual(replacement.NetworkSettings.Networks, {
+          [fx.manifest.network]: { NetworkID: primaryNetworkId },
+          [fx.manifest.providerNetwork]: { NetworkID: providerNetworkId },
+        });
+      } finally { await rm(fx.root, { recursive: true, force: true }); }
+    }
+  }
+});
+
+test('foreign shortened missing or ambiguously bound primary network modes fail before mutation', async () => {
+  const cases = [
+    (fx) => { fx.api.HostConfig.NetworkMode = fx.manifest.providerNetwork; },
+    (fx) => { fx.api.HostConfig.NetworkMode = providerNetworkId; },
+    (fx) => { fx.api.HostConfig.NetworkMode = 'f'.repeat(64); },
+    (fx) => { fx.api.HostConfig.NetworkMode = primaryNetworkId.slice(0, 12); },
+    (fx) => { fx.api.HostConfig.NetworkMode = 'host'; },
+    (fx) => { delete fx.api.HostConfig.NetworkMode; },
+    (fx) => { fx.api.NetworkSettings.Networks[fx.manifest.network].NetworkID = providerNetworkId; },
+    (fx) => { delete fx.api.NetworkSettings.Networks[fx.manifest.network].NetworkID; },
+    (fx) => { fx.api.NetworkSettings.Networks[fx.manifest.providerNetwork].NetworkID = primaryNetworkId; },
+  ];
+  const inventoryCases = [
+    ['current_network_inspect', (record) => { record.Id = 'f'.repeat(64); }],
+    ['current_network_inspect', (record) => { delete record.Id; }],
+    ['current_network_inspect', (record) => { record.Id = primaryNetworkId.slice(0, 12); }],
+    ['current_provider_network_inspect', (record) => { record.Id = primaryNetworkId; }],
+  ];
+  for (const [configure, inventory] of [
+    ...cases.map((configure) => [configure, null]),
+    ...inventoryCases.map((inventory) => [() => {}, inventory]),
+  ]) {
+    const fx = await fixture();
+    try {
+      configure(fx);
+      const fake = statefulDockerExecutor(fx);
+      const command = async (cmd, args, options) => {
+        const result = await fake.command(cmd, args, options);
+        if (!inventory || options.phase !== inventory[0]) return result;
+        const record = JSON.parse(result.stdout);
+        inventory[1](record);
+        return { ...result, stdout: JSON.stringify(record) };
+      };
+      await assert.rejects(runStagingGoogleRegistrationEnable({
+        manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+        command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+      }), { code: 'api_primary_network_binding_invalid' });
+      assert.equal(fake.calls.some((call) => ['stop', 'rename', 'create', 'start', 'network'].includes(call.args[0])), false);
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('equivalent primary network name is not normalized over captured ID drift', async () => {
+  const fx = await fixture();
+  try {
+    fx.api.HostConfig.NetworkMode = primaryNetworkId;
+    const fake = statefulDockerExecutor(fx, { createMutation: 'network-name-drift' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({
+      manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+      command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+    }), (error) => {
+      assert.equal(error.code, 'replacement_config_drift');
+      assert.deepEqual(sanitizeGoogleRegistrationEnableError(error).configDrift.fields, ['host.NetworkMode']);
+      assert.equal(error.rollback.restored, true);
+      return true;
+    });
+    assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
+    assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('replacement must retain exactly both bound network identities', async () => {
+  for (const mutate of [
+    (record, fx) => { delete record.NetworkSettings.Networks[fx.manifest.providerNetwork]; },
+    (record) => { record.NetworkSettings.Networks.foreign = { NetworkID: 'f'.repeat(64) }; },
+    (record, fx) => { record.NetworkSettings.Networks[fx.manifest.providerNetwork].NetworkID = 'f'.repeat(64); },
+    (record, fx) => { record.NetworkSettings.Networks[fx.manifest.network].NetworkID = 'f'.repeat(64); },
+  ]) {
+    const fx = await fixture();
+    try {
+      const fake = statefulDockerExecutor(fx);
+      const command = async (cmd, args, options) => {
+        const result = await fake.command(cmd, args, options);
+        if (options.phase !== 'replacement_config_readback') return result;
+        const record = JSON.parse(result.stdout);
+        mutate(record, fx);
+        return { ...result, stdout: JSON.stringify(record) };
+      };
+      await assert.rejects(runStagingGoogleRegistrationEnable({
+        manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+        command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+      }), (error) => ['network_inventory_invalid', 'api_primary_network_binding_invalid'].includes(error.code) && error.rollback.restored);
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
 });
 
 test('successful execution appends exactly one allowed ID and changes only three env keys', async () => {

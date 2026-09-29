@@ -245,6 +245,21 @@ function assertNetworks(record, manifest, code = 'network_inventory_invalid') {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(code);
 }
 
+function boundPrimaryNetworkMode(record, manifest, network, providerNetwork) {
+  const mode = record?.HostConfig?.NetworkMode;
+  const attached = record?.NetworkSettings?.Networks ?? {};
+  if (network?.Name !== manifest.network || network?.Internal !== true
+      || providerNetwork?.Name !== manifest.providerNetwork
+      || !/^[0-9a-f]{64}$/u.test(network?.Id ?? '')
+      || !/^[0-9a-f]{64}$/u.test(providerNetwork?.Id ?? '')
+      || network.Id === providerNetwork.Id
+      || attached[manifest.network]?.NetworkID !== network.Id
+      || attached[manifest.providerNetwork]?.NetworkID !== providerNetwork.Id
+      || (mode !== manifest.network && mode !== network.Id)) fail('api_primary_network_binding_invalid');
+  // Preserve the captured name-or-full-ID representation; do not normalize drift away.
+  return mode;
+}
+
 function assertImageReadback(record, manifest, code = 'image_readback_invalid') {
   const tags = record?.RepoTags ?? [];
   const labels = record?.Config?.Labels ?? {};
@@ -483,6 +498,7 @@ async function collectPreflight(manifest, command, mapping, originalEnv) {
   if (readbacks.uploads?.Name !== manifest.uploadsVolume) fail('uploads_volume_runtime_inventory_invalid');
   assertNoHostPort(readbacks.api);
   assertNetworks(readbacks.api, manifest);
+  const primaryNetworkMode = boundPrimaryNetworkMode(readbacks.api, manifest, readbacks.network, readbacks.providerNetwork);
   if (readbacks.api?.Config?.Labels?.[manifest.label.key] !== manifest.label.value) fail('api_green_label_invalid');
   if (readbacks.flags?.DEPLOYMENT_ENVIRONMENT !== 'test' || readbacks.flags?.FIREBASE_AUTH_ENABLED !== 'true') fail('runtime_auth_pre_state_invalid');
   const finalize = isFinalization(manifest);
@@ -507,7 +523,7 @@ async function collectPreflight(manifest, command, mapping, originalEnv) {
   const configProbe = await command('docker', ['exec', manifest.apiContainer, 'node', '--input-type=module', '-e', `Object.assign(process.env,${JSON.stringify(nextValues)});const {config}=await import('./src/config.js');process.stdout.write(JSON.stringify({enabled:config.stagingGoogleRegistration.enabled,mappingCount:config.stagingGoogleRegistration.allowlist.length,targetAllowed:config.stagingAccess.allowedUserIds.includes(${JSON.stringify(mapping.userId)})}));`], { phase: 'candidate_registration_config_import' });
   const candidateConfig = parseJson(configProbe.stdout, 'candidate_registration_config_invalid');
   if (candidateConfig.enabled !== !finalize || candidateConfig.mappingCount !== (finalize ? 0 : 1) || candidateConfig.targetAllowed !== true) fail('candidate_registration_config_invalid');
-  return Object.freeze({ entries: Object.freeze([...entries, { phase: 'candidate_registration_config_import' }]), readbacks });
+  return Object.freeze({ entries: Object.freeze([...entries, { phase: 'candidate_registration_config_import' }]), readbacks, primaryNetworkMode });
 }
 
 function registrationEnv(expectedEnv, mapping, finalize = false) {
@@ -910,7 +926,7 @@ async function runRegistrationTransition({
       error.renameResponseUnknown = true;
       throw error;
     }
-    const createArgs = [...buildReplacementCreateArgs({ manifest: target, envFile: target.envFile, currentApi: preflight.readbacks.api })];
+    const createArgs = [...buildReplacementCreateArgs({ manifest: target, envFile: target.envFile, currentApi: preflight.readbacks.api, networkName: preflight.primaryNetworkMode })];
     const imageIndex = createArgs.lastIndexOf(target.image);
     if (imageIndex < 0) fail('replacement_image_argument_missing');
     createArgs[imageIndex] = `${target.image}@${target.imageDigest}`;
@@ -934,6 +950,7 @@ async function runRegistrationTransition({
     assertRegistrationDelta(preflight.readbacks.api, comparableReplacement, mapping, finalize);
     assertNoHostPort(replacementRecord);
     assertNetworks(replacementRecord, target);
+    boundPrimaryNetworkMode(replacementRecord, target, preflight.readbacks.network, preflight.readbacks.providerNetwork);
     const startup = await runBoundedStartupProbe(command, target.apiContainer, commandEnv, 'replacement_public_runtime_probe');
     assertRuntimeFlags(startup.flags, null);
     if (startup.version?.commit !== target.runtimeRevision || startup.version?.environment !== 'test') fail('replacement_version_readback_invalid');
