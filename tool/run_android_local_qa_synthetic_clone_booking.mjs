@@ -462,11 +462,32 @@ export class SerialUiAutomator {
     throw new Error(`synthetic_clone_runner_readiness_timeout:${phase}`);
   }
 
-  async waitForPattern(pattern, phase, { timeoutMs = 8_000, intervalMs = 250 } = {}) {
+  async waitForPattern(
+    pattern,
+    phase,
+    { timeoutMs = 8_000, intervalMs = 250, revealBelowViewport = false } = {},
+  ) {
     const deadline = Date.now() + timeoutMs;
+    let revealed = false;
     while (Date.now() < deadline) {
       const dump = await this.dump(phase);
       if ([...nodeLabels(dump.nodes)].some((label) => pattern.test(label))) return dump;
+      if (revealBelowViewport && !revealed) {
+        const screenRight = Math.max(...dump.nodes.map((candidate) => candidate.bounds?.right ?? 0));
+        const screenBottom = Math.max(...dump.nodes.map((candidate) => candidate.bounds?.bottom ?? 0));
+        if (screenRight > 0 && screenBottom > 0) {
+          await this.shell([
+            'input',
+            'swipe',
+            String(Math.round(screenRight * 0.5)),
+            String(Math.round(screenBottom * 0.78)),
+            String(Math.round(screenRight * 0.5)),
+            String(Math.round(screenBottom * 0.35)),
+            '350',
+          ]);
+          revealed = true;
+        }
+      }
       await new Promise((resolvePromise) => setTimeout(resolvePromise, intervalMs));
     }
     throw new Error(`synthetic_clone_runner_readiness_timeout:${phase}`);
@@ -706,7 +727,11 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
   await primary.waitContract('accepted');
   await selectFourPhotos(primary, 'pickup');
   await primary.tapVisibleLabel(SYNTHETIC_CLONE_UI_CONTRACT.pickupChallenge, 'pickup-challenge');
-  await primary.waitForPattern(/^Challenge-ID:\s*[0-9a-f-]{36}$/iu, 'pickup-challenge-issued');
+  await primary.waitForPattern(
+    /^Challenge-ID:\s*[0-9a-f-]{36}$/iu,
+    'pickup-challenge-issued',
+    { revealBelowViewport: true },
+  );
   await primary.waitContract('pickupChallenge');
   let manualPayload = null;
   if (!qrDisplay) {
@@ -737,7 +762,11 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
     // Re-issue on the display device so the QR is visible to the real camera;
     // the backend keeps this inside the same synthetic accepted booking.
     await qrDisplay.tapVisibleLabel(SYNTHETIC_CLONE_UI_CONTRACT.pickupChallenge, 'pickup-display');
-    await qrDisplay.waitForPattern(/^Challenge-ID:\s*[0-9a-f-]{36}$/iu, 'pickup-display-issued');
+    await qrDisplay.waitForPattern(
+      /^Challenge-ID:\s*[0-9a-f-]{36}$/iu,
+      'pickup-display-issued',
+      { revealBelowViewport: true },
+    );
     await qrDisplay.waitContract('pickupChallenge');
   }
 
@@ -758,7 +787,11 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
   await primary.waitContract('active', { timeoutMs: 60_000, intervalMs: 500 });
   await selectFourPhotos(primary, 'return');
   await primary.tapVisibleLabel(SYNTHETIC_CLONE_UI_CONTRACT.returnChallenge, 'return-challenge');
-  await primary.waitForPattern(/^Fallback-Code:\s*\d{6}$/u, 'return-challenge-issued');
+  await primary.waitForPattern(
+    /^Fallback-Code:\s*\d{6}$/u,
+    'return-challenge-issued',
+    { revealBelowViewport: true },
+  );
   await primary.waitContract('returnChallenge');
 
   // The return path intentionally uses the exact six-digit fallback after a

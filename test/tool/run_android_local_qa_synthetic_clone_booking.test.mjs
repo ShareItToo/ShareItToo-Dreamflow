@@ -332,6 +332,34 @@ test('runner waits for a concrete challenge payload instead of the issuing butto
   assert.equal(dump.nodes[0].text.startsWith('Challenge-ID:'), true);
 });
 
+test('runner reveals a challenge payload rendered below the QR viewport', async () => {
+  const calls = [];
+  let scrolled = false;
+  const driver = new SerialUiAutomator({
+    device: 'physical-test',
+    now: () => 123,
+    execFileImpl: async (_file, args) => {
+      calls.push(args);
+      if (args.includes('swipe')) scrolled = true;
+      if (args.includes('cat')) {
+        return {
+          stdout: scrolled
+            ? '<hierarchy><node bounds="[0,0][1440,3120]" /><node text="Challenge-ID: 33333333-3333-4333-8333-333333333333" /></hierarchy>'
+            : '<hierarchy><node bounds="[0,0][1440,3120]" /><node content-desc="qr code" bounds="[48,2662][1392,3120]" /></hierarchy>',
+        };
+      }
+      return { stdout: '' };
+    },
+  });
+  const dump = await driver.waitForPattern(
+    /^Challenge-ID:\s*[0-9a-f-]{36}$/iu,
+    'pickup-challenge-issued',
+    { intervalMs: 0, revealBelowViewport: true },
+  );
+  assert.equal(dump.nodes.some((node) => node.text.startsWith('Challenge-ID:')), true);
+  assert.ok(calls.some((args) => args.includes('swipe')));
+});
+
 test('readiness requires actual route readback rather than manifest alone', async () => {
   const calls = [];
   const fetchImpl = async (url, options) => {
