@@ -1047,6 +1047,93 @@ test('stop fail-before and response-loss-after-stop are recovered from real stat
   } finally { await rm(foreignIdentity.root, { recursive: true, force: true }); }
 });
 
+test('Docker reconstruction drift reports fixed fields only and still restores the exact original', async () => {
+  const cases = [
+    ['attachment defaults', (api) => { api.Config.AttachStdout = false; api.Config.AttachStderr = false; },
+      (api) => { api.Config.AttachStdout = true; api.Config.AttachStderr = true; }, ['config.attachStdout', 'config.attachStderr']],
+    ['bind representation', (api) => { api.HostConfig.Binds = ['/private/synthetic:/data/uploads:rw']; },
+      (api) => { api.HostConfig.Binds = null; }, ['host.Binds']],
+    ['private env and label drift', () => {}, (api) => {
+      api.Config.Env.push(`SYNTHETIC_PRIVATE_KEY=${mappingLine().trim()}`);
+      api.Config.Labels[`private-${userId}`] = mappingLine();
+    }, ['config.labels', 'config.env']],
+    ['security resource and mount drift', () => {}, (api) => {
+      api.HostConfig.SecurityOpt = ['seccomp=unconfined'];
+      api.HostConfig.Memory = 999;
+      api.Mounts[0].RW = !api.Mounts[0].RW;
+    }, ['host.SecurityOpt', 'host.resources', 'mounts']],
+  ];
+  for (const [name, configure, mutateReadback, fields] of cases) {
+    const fx = await fixture();
+    try {
+      configure(fx.api);
+      const fake = statefulDockerExecutor(fx);
+      const command = async (cmd, args, options) => {
+        const result = await fake.command(cmd, args, options);
+        if (options.phase !== 'replacement_config_readback') return result;
+        const record = JSON.parse(result.stdout);
+        mutateReadback(record);
+        return { ...result, stdout: JSON.stringify(record) };
+      };
+      await assert.rejects(runStagingGoogleRegistrationEnable({
+        manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+        command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+      }), (error) => {
+        assert.equal(error.code, 'replacement_config_drift', name);
+        assert.equal(error.rollback.restored, true, name);
+        const sanitized = sanitizeGoogleRegistrationEnableError(error);
+        assert.deepEqual(sanitized.configDrift, { schemaVersion: 1, fields }, name);
+        const serialized = JSON.stringify(sanitized);
+        for (const secret of [userId, mappingDigest, 'SYNTHETIC_PRIVATE_KEY', '/private/synthetic', 'seccomp=unconfined']) {
+          assert.equal(serialized.includes(secret), false, name);
+        }
+        return true;
+      });
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent(), name);
+      assert.equal(fake.state.containers.size, 1, name);
+      assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, fx.api.Id, name);
+      assert.equal(fake.state.containers.get(fx.manifest.apiContainer).State.Running, true, name);
+      assert.equal(fake.calls.some((call) => call.phase === 'replacement_public_runtime_probe'), false, name);
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('exec healthcheck reconstruction remains strict when CLI converts it to a shell healthcheck', async () => {
+  const fx = await fixture();
+  try {
+    fx.api.Config.Healthcheck = { Test: ['CMD', 'node', 'synthetic-health.js'], Interval: 1000000000 };
+    const fake = statefulDockerExecutor(fx);
+    await assert.rejects(runStagingGoogleRegistrationEnable({
+      manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+      command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+    }), (error) => {
+      assert.equal(error.code, 'replacement_config_drift');
+      assert.equal(error.rollback.restored, true);
+      assert.deepEqual(sanitizeGoogleRegistrationEnableError(error).configDrift, {
+        schemaVersion: 1, fields: ['config.healthcheck'],
+      });
+      return true;
+    });
+    const args = fx.state.acceptedCreateArgs;
+    assert.equal(args[args.indexOf('--health-cmd') + 1], 'node synthetic-health.js');
+    assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+    await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('drift sanitizer rejects injected values, dynamic paths and unrelated error details', () => {
+  const details = { schemaVersion: mappingLine(), fields: [
+    'config.env', `config.env.${userId}`, 'host.Binds', 'config.env', mappingLine(), { value: mappingLine() },
+  ], original: mappingLine(), replacement: mappingLine() };
+  assert.deepEqual(sanitizeGoogleRegistrationEnableError({ code: 'replacement_config_drift', configDrift: details }), {
+    status: 'failed', code: 'replacement_config_drift',
+    configDrift: { schemaVersion: 1, fields: ['config.env', 'host.Binds'] },
+  });
+  assert.equal(sanitizeGoogleRegistrationEnableError({ code: 'other_failure', configDrift: details }).configDrift, undefined);
+  assert.deepEqual(sanitizeGoogleRegistrationEnableError({ code: 'replacement_config_drift', configDrift: { fields: mappingLine() } }).configDrift.fields, []);
+});
+
 test('resource and env ownership drift fail closed without overwriting concurrent bytes', async () => {
   for (const option of [{ driftHealth: true }, { driftMemory: true }, { driftMaskedPaths: true }]) {
     const fx = await fixture();

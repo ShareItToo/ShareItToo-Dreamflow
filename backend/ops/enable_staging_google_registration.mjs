@@ -55,9 +55,10 @@ export function readGoogleRegistrationRuntimeManifest(filePath, options) {
   return assertGoogleRegistrationRuntimeManifest(parseJson(content, 'manifest_json_invalid'), options);
 }
 
-function fail(code) {
+function fail(code, configDrift) {
   const error = new Error(`Staging Google registration enable failed: ${code}`);
   error.code = code;
+  if (configDrift) error.configDrift = configDrift;
   throw error;
 }
 
@@ -190,6 +191,24 @@ function sameExceptRegistrationFlags(left, right) {
   return JSON.stringify(normalizedContainer(left, true)) === JSON.stringify(normalizedContainer(right, true));
 }
 
+const diagnosticShape = normalizedContainer({});
+const configDriftFields = Object.freeze([
+  ...Object.keys(diagnosticShape.config).map((key) => `config.${key}`),
+  ...Object.keys(diagnosticShape.host).map((key) => `host.${key}`),
+  'mounts',
+]);
+
+export function registrationConfigDrift(left, right) {
+  const original = normalizedContainer(left, true);
+  const replacement = normalizedContainer(right, true);
+  const valueAt = (record, path) => path.split('.').reduce((value, key) => value?.[key], record);
+  // Preserve strict comparison; normalize only proven Docker round-trip equivalence.
+  // Emit fixed schema fields only: values and dynamic env/label/path keys stay private.
+  return { schemaVersion: 1, fields: configDriftFields.filter((path) => (
+    JSON.stringify(valueAt(original, path)) !== JSON.stringify(valueAt(replacement, path))
+  )) };
+}
+
 function sameOriginalContainer(left, right) {
   return JSON.stringify(normalizedContainer(left)) === JSON.stringify(normalizedContainer(right));
 }
@@ -199,7 +218,9 @@ function expectedAllowedUserIds(originalApi, userId) {
 }
 
 function assertRegistrationDelta(originalApi, replacement, mapping, finalize = false) {
-  if (!sameExceptRegistrationFlags(originalApi, replacement)) fail('replacement_config_drift');
+  if (!sameExceptRegistrationFlags(originalApi, replacement)) {
+    fail('replacement_config_drift', registrationConfigDrift(originalApi, replacement));
+  }
   const entries = replacement?.Config?.Env ?? [];
   const values = envMap(entries);
   const expected = {
@@ -942,6 +963,13 @@ export function sanitizeGoogleRegistrationEnableError(error) {
   return {
     status: 'failed',
     code: error?.code ?? 'staging_google_registration_enable_failed',
+    ...(error?.code === 'replacement_config_drift' && error?.configDrift ? {
+      configDrift: {
+        schemaVersion: 1,
+        fields: configDriftFields.filter((field) => Array.isArray(error.configDrift.fields)
+          && error.configDrift.fields.includes(field)),
+      },
+    } : {}),
     ...(error?.failurePhase ? { failurePhase: String(error.failurePhase) } : {}),
     ...(error?.rollback ? { rollback: {
       restored: error.rollback.restored === true,
