@@ -22,24 +22,37 @@ const registrationAllowlistKey = 'SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST';
 const allowedUserIdsKey = 'SIT_STAGING_ALLOWED_USER_IDS';
 const apiContainer = 'shareittoo-staging-api';
 
-export function assertGoogleRegistrationRuntimeManifest(manifest) {
-  if (manifest?.kind !== 'sit-staging-google-registration-runtime-manifest'
+const finalizationKind = 'sit-staging-google-registration-finalization-runtime-manifest';
+const isFinalization = (manifest) => manifest?.kind === finalizationKind;
+const rollbackName = (manifest) => `${manifest.apiContainer}-google-registration-${isFinalization(manifest) ? 'finalization-' : ''}rollback-${manifest.runtimeRevision.slice(0, 12)}`;
+
+export function assertGoogleRegistrationRuntimeManifest(manifest, { finalize = false } = {}) {
+  if (manifest?.kind !== (finalize ? finalizationKind : 'sit-staging-google-registration-runtime-manifest')
       || manifest?.safetyEnv?.FIREBASE_AUTH_ENABLED !== 'true'
       || !/^[0-9a-f]{64}$/u.test(manifest?.apiContainerId ?? '')) fail('registration_manifest_pre_state_invalid');
   const { apiContainerId, ...shared } = manifest;
+  if (finalize) {
+    exactKeys(shared.finalizationBinding, ['mappingDigest', 'allowedUserIdsDigest', 'allowedUserIdsCount'], 'finalization_binding_invalid');
+    if (!/^[0-9a-f]{64}$/u.test(shared.finalizationBinding.mappingDigest ?? '')
+        || !/^[0-9a-f]{64}$/u.test(shared.finalizationBinding.allowedUserIdsDigest ?? '')
+        || !Number.isSafeInteger(shared.finalizationBinding.allowedUserIdsCount)
+        || shared.finalizationBinding.allowedUserIdsCount < 1) fail('finalization_binding_invalid');
+    delete shared.finalizationBinding;
+    shared.kind = 'sit-staging-google-registration-runtime-manifest';
+  }
   // Reuse the topology schema, while this successor binds the already-enabled
   // Firebase pre-state and the immutable current container explicitly.
   const validated = assertGoogleAuthRuntimeManifest(shared, { registrationSuccessor: true });
-  return Object.freeze({ ...validated, kind: manifest.kind, apiContainerId, safetyEnv: Object.freeze({ ...manifest.safetyEnv }) });
+  return Object.freeze({ ...validated, kind: manifest.kind, apiContainerId, safetyEnv: Object.freeze({ ...manifest.safetyEnv }), ...(finalize ? { finalizationBinding: Object.freeze({ ...manifest.finalizationBinding }) } : {}) });
 }
 
-export function readGoogleRegistrationRuntimeManifest(filePath) {
+export function readGoogleRegistrationRuntimeManifest(filePath, options) {
   safeExternalPath(filePath, 'manifest_path_invalid');
   const content = readStablePrivateFile(filePath, {
     expectedMode: 0o600, expectedUid: process.getuid?.(), expectedGid: process.getgid?.(),
     minBytes: 1, maxBytes: 64 * 1024, code: 'manifest_metadata_invalid',
   });
-  return assertGoogleRegistrationRuntimeManifest(parseJson(content, 'manifest_json_invalid'));
+  return assertGoogleRegistrationRuntimeManifest(parseJson(content, 'manifest_json_invalid'), options);
 }
 
 function fail(code) {
@@ -185,14 +198,14 @@ function expectedAllowedUserIds(originalApi, userId) {
   return `${envMap(originalApi.Config.Env)[allowedUserIdsKey]},${userId}`;
 }
 
-function assertRegistrationDelta(originalApi, replacement, mapping) {
+function assertRegistrationDelta(originalApi, replacement, mapping, finalize = false) {
   if (!sameExceptRegistrationFlags(originalApi, replacement)) fail('replacement_config_drift');
   const entries = replacement?.Config?.Env ?? [];
   const values = envMap(entries);
   const expected = {
-    [registrationEnabledKey]: 'true',
-    [registrationAllowlistKey]: `${mapping.digest}=${mapping.userId}`,
-    [allowedUserIdsKey]: expectedAllowedUserIds(originalApi, mapping.userId),
+    [registrationEnabledKey]: finalize ? 'false' : 'true',
+    [registrationAllowlistKey]: finalize ? '' : `${mapping.digest}=${mapping.userId}`,
+    [allowedUserIdsKey]: finalize ? envMap(originalApi.Config.Env)[allowedUserIdsKey] : expectedAllowedUserIds(originalApi, mapping.userId),
   };
   for (const [name, value] of Object.entries(expected)) {
     if (entries.filter((entry) => String(entry).startsWith(`${name}=`)).length !== 1
@@ -315,12 +328,19 @@ function assertPreState({ values, api, manifest, mapping }) {
       || values.STRIPE_LIVEMODE !== 'false'
       || values.SIT_STAGING_ACCESS_GATE_ENABLED !== 'true') fail('runtime_pre_state_invalid');
   const enabled = values[registrationEnabledKey];
-  if (enabled !== undefined && enabled !== '' && enabled !== 'false') fail('registration_not_disabled_pre_state');
-  if (values[registrationAllowlistKey] !== undefined && values[registrationAllowlistKey] !== '') fail('registration_allowlist_not_empty_pre_state');
+  if (isFinalization(manifest)) {
+    if (enabled !== 'true' || values[registrationAllowlistKey] !== `${mapping.digest}=${mapping.userId}`) fail('finalization_enabled_lane_mismatch');
+    const ids = allowedUserIds(values[allowedUserIdsKey]);
+    if (!ids.includes(mapping.userId) || ids.length !== manifest.finalizationBinding.allowedUserIdsCount
+        || sha256(values[allowedUserIdsKey]) !== manifest.finalizationBinding.allowedUserIdsDigest) fail('finalization_access_list_mismatch');
+  } else {
+    if (enabled !== undefined && enabled !== '' && enabled !== 'false') fail('registration_not_disabled_pre_state');
+    if (values[registrationAllowlistKey] !== undefined && values[registrationAllowlistKey] !== '') fail('registration_allowlist_not_empty_pre_state');
+    if (allowedUserIds(values[allowedUserIdsKey]).includes(mapping.userId)) fail('mapping_target_already_access_allowed');
+  }
   if (values.SIT_STAGING_GOOGLE_REGISTRATION_PROVIDER !== undefined
       && values.SIT_STAGING_GOOGLE_REGISTRATION_PROVIDER !== ''
       && values.SIT_STAGING_GOOGLE_REGISTRATION_PROVIDER !== 'google') fail('registration_provider_pre_state_invalid');
-  if (allowedUserIds(values[allowedUserIdsKey]).includes(mapping.userId)) fail('mapping_target_already_access_allowed');
 }
 
 function replaceEnvKey(content, name, value) {
@@ -368,6 +388,11 @@ async function readEnv(manifest) {
   }
 }
 
+export function buildEnrolledIdentitySql(mapping) {
+  if (!/^[0-9a-f]{64}$/u.test(mapping?.digest ?? '') || typeof mapping?.userId !== 'string') fail('enrolled_identity_input_invalid');
+  return `WITH target AS (SELECT * FROM users WHERE encode(sha256(convert_to(id, 'UTF8')), 'hex') = '${sha256(mapping.userId)}'), linked AS (SELECT identity.* FROM auth_identities AS identity JOIN target ON target.id = identity.user_id WHERE identity.provider = 'google') SELECT (SELECT count(*) FROM target) || '|' || (SELECT count(*) FROM linked) || '|' || (SELECT count(*) FROM linked JOIN target ON target.id = linked.user_id WHERE target.account_status = 'active' AND target.deactivated_at IS NULL AND linked.email_verified = true AND lower(btrim(target.email)) = lower(btrim(linked.email_at_link)) AND encode(sha256(convert_to('google' || E'\\n' || linked.provider_subject || E'\\n' || linked.firebase_user_id || E'\\n' || lower(btrim(linked.email_at_link)), 'UTF8')), 'hex') = '${mapping.digest}')`;
+}
+
 export function buildGoogleRegistrationPreflightCommands(manifest, mapping) {
   const inspect = (name, phase) => ({ phase, command: 'docker', args: ['inspect', '--format', '{{json .}}', name] });
   const dbExec = (phase, sql) => ({ phase, command: 'docker', args: ['exec', manifest.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', manifest.databaseUser, '-d', manifest.databaseName, '-Atc', sql] });
@@ -380,9 +405,9 @@ export function buildGoogleRegistrationPreflightCommands(manifest, mapping) {
     inspect(manifest.providerNetwork, 'current_provider_network_inspect'),
     inspect(manifest.uploadsVolume, 'current_uploads_volume_inspect'),
     { phase: 'current_image_inspect', command: 'docker', args: ['image', 'inspect', '--format', '{{json .}}', manifest.image] },
-    { phase: 'sealed_name_conflict_check', command: 'docker', args: ['ps', '--all', '--filter', `name=^/${manifest.apiContainer}-google-registration-rollback-${manifest.runtimeRevision.slice(0, 12)}$`, '--format', '{{.Names}}'] },
+    { phase: 'sealed_name_conflict_check', command: 'docker', args: ['ps', '--all', '--filter', `name=^/${rollbackName(manifest)}$`, '--format', '{{.Names}}'] },
     dbExec('current_database_probe', 'SELECT 1'),
-    dbExec('current_mapping_target_absent', `SELECT count(*) FROM users WHERE encode(sha256(convert_to(id, 'UTF8')), 'hex') = '${sha256(mapping.userId)}'`),
+    ...(isFinalization(manifest) ? [dbExec('current_enrolled_identity_readback', buildEnrolledIdentitySql(mapping))] : [dbExec('current_mapping_target_absent', `SELECT count(*) FROM users WHERE encode(sha256(convert_to(id, 'UTF8')), 'hex') = '${sha256(mapping.userId)}'`)]),
     dbExec('current_schema_migration_readback', 'SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1'),
     { phase: 'current_migration_ledger_readback', command: 'docker', args: ['exec', manifest.databaseContainer, 'sh', '-c', `set -eu; psql -X --set ON_ERROR_STOP=1 -U '${manifest.databaseUser}' -d '${manifest.databaseName}' -Atc "SELECT string_agg(name || '|' || checksum, E'\\n' ORDER BY name) FROM schema_migrations" | sha256sum | awk '{print $1}'`] },
     runtimeProbe('current_live_probe', "const r=await fetch('http://127.0.0.1:8080/health/live'); process.stdout.write(JSON.stringify({status:r.status,payload:await r.json()})); if(r.status!==200) process.exit(1)"),
@@ -412,6 +437,7 @@ async function collectPreflight(manifest, command, mapping, originalEnv) {
     if (entry.phase === 'sealed_name_conflict_check' && readbacks[entry.phase]) fail('rollback_name_conflict');
     if (entry.phase === 'current_database_probe' && readbacks[entry.phase] !== '1') fail('database_probe_invalid');
     if (entry.phase === 'current_mapping_target_absent' && readbacks[entry.phase] !== '0') fail('mapping_target_already_exists');
+    if (entry.phase === 'current_enrolled_identity_readback' && readbacks[entry.phase] !== '1|1|1') fail('finalization_enrolled_identity_mismatch');
     if (entry.phase === 'current_schema_migration_readback') assertTerminalMigration(readbacks[entry.phase], 'current_schema_migration_readback_invalid');
     if (entry.phase === 'current_migration_ledger_readback') parseSchemaLedger(readbacks[entry.phase]);
     if (entry.phase === 'current_live_probe') assertHealthPayload(readbacks[entry.phase], 'current_live_probe_invalid');
@@ -438,8 +464,12 @@ async function collectPreflight(manifest, command, mapping, originalEnv) {
   assertNetworks(readbacks.api, manifest);
   if (readbacks.api?.Config?.Labels?.[manifest.label.key] !== manifest.label.value) fail('api_green_label_invalid');
   if (readbacks.flags?.DEPLOYMENT_ENVIRONMENT !== 'test' || readbacks.flags?.FIREBASE_AUTH_ENABLED !== 'true') fail('runtime_auth_pre_state_invalid');
-  assertRuntimeFlags(readbacks.flags, false);
-  if (readbacks.registration.enabled || readbacks.registration.allowlist !== 'absent' || readbacks.registration.allowlistEntryCount !== 0) fail('registration_not_disabled_pre_state');
+  const finalize = isFinalization(manifest);
+  assertRuntimeFlags(readbacks.flags, finalize);
+  if (finalize) {
+    if (!readbacks.registration.enabled || readbacks.registration.allowlist !== 'present'
+        || readbacks.registration.allowlistEntryCount !== 1 || readbacks.registration.allowlistDigest !== mapping.mappingDigest) fail('finalization_enabled_lane_mismatch');
+  } else if (readbacks.registration.enabled || readbacks.registration.allowlist !== 'absent' || readbacks.registration.allowlistEntryCount !== 0) fail('registration_not_disabled_pre_state');
   if (readbacks.registration.accessGateEnabled !== true) fail('access_gate_readback_invalid');
   if (readbacks.version?.commit !== manifest.runtimeRevision || readbacks.version?.environment !== 'test') fail('version_readback_invalid');
   const values = parseEnvContent(originalEnv);
@@ -449,18 +479,19 @@ async function collectPreflight(manifest, command, mapping, originalEnv) {
     if (apiValues[name] !== value) fail('env_file_container_drift');
   }
   const nextValues = {
-    [registrationEnabledKey]: 'true',
-    [registrationAllowlistKey]: `${mapping.digest}=${mapping.userId}`,
-    [allowedUserIdsKey]: `${values[allowedUserIdsKey]},${mapping.userId}`,
+    [registrationEnabledKey]: finalize ? 'false' : 'true',
+    [registrationAllowlistKey]: finalize ? '' : `${mapping.digest}=${mapping.userId}`,
+    [allowedUserIdsKey]: finalize ? values[allowedUserIdsKey] : `${values[allowedUserIdsKey]},${mapping.userId}`,
   };
   const configProbe = await command('docker', ['exec', manifest.apiContainer, 'node', '--input-type=module', '-e', `Object.assign(process.env,${JSON.stringify(nextValues)});const {config}=await import('./src/config.js');process.stdout.write(JSON.stringify({enabled:config.stagingGoogleRegistration.enabled,mappingCount:config.stagingGoogleRegistration.allowlist.length,targetAllowed:config.stagingAccess.allowedUserIds.includes(${JSON.stringify(mapping.userId)})}));`], { phase: 'candidate_registration_config_import' });
   const candidateConfig = parseJson(configProbe.stdout, 'candidate_registration_config_invalid');
-  if (candidateConfig.enabled !== true || candidateConfig.mappingCount !== 1 || candidateConfig.targetAllowed !== true) fail('candidate_registration_config_invalid');
+  if (candidateConfig.enabled !== !finalize || candidateConfig.mappingCount !== (finalize ? 0 : 1) || candidateConfig.targetAllowed !== true) fail('candidate_registration_config_invalid');
   return Object.freeze({ entries: Object.freeze([...entries, { phase: 'candidate_registration_config_import' }]), readbacks });
 }
 
-function registrationEnv(expectedEnv, mapping) {
+function registrationEnv(expectedEnv, mapping, finalize = false) {
   const values = parseEnvContent(expectedEnv);
+  if (finalize) return replaceEnvKey(replaceEnvKey(expectedEnv, registrationEnabledKey, 'false'), registrationAllowlistKey, '');
   if (allowedUserIds(values[allowedUserIdsKey]).includes(mapping.userId)) fail('mapping_target_already_access_allowed');
   let next = replaceEnvKey(expectedEnv, registrationEnabledKey, 'true');
   next = replaceEnvKey(next, registrationAllowlistKey, `${mapping.digest}=${mapping.userId}`);
@@ -470,7 +501,7 @@ function registrationEnv(expectedEnv, mapping) {
 async function applyRegistrationFlags(manifest, expectedEnv, next) {
   const current = await readEnv(manifest);
   if (current.content !== expectedEnv) fail('env_changed_since_preflight');
-  if (registrationEnabledValue(current.content) !== undefined
+  if (!isFinalization(manifest) && registrationEnabledValue(current.content) !== undefined
       && registrationEnabledValue(current.content) !== ''
       && registrationEnabledValue(current.content) !== 'false') fail('registration_not_disabled_pre_state');
   await atomicReplace(next, manifest);
@@ -529,13 +560,14 @@ function isExactCreatedReplacement(record, manifest, originalApi, name, expected
     const comparable = structuredClone(record);
     comparable.Config.Image = originalApi.Config.Image;
     const separator = expectedAllowlist.indexOf('=');
-    assertRegistrationDelta(originalApi, comparable, { digest: expectedAllowlist.slice(0, separator), userId: expectedAllowlist.slice(separator + 1) });
+    assertRegistrationDelta(originalApi, comparable, { digest: expectedAllowlist.slice(0, separator), userId: expectedAllowlist.slice(separator + 1) }, isFinalization(manifest));
     const entries = record?.Config?.Env ?? [];
     const enabledEntries = entries.filter((entry) => String(entry).startsWith(`${registrationEnabledKey}=`));
     const allowlistEntries = entries.filter((entry) => String(entry).startsWith(`${registrationAllowlistKey}=`));
     const values = envMap(entries);
     if (enabledEntries.length !== 1 || allowlistEntries.length !== 1
-        || values[registrationEnabledKey] !== 'true' || values[registrationAllowlistKey] !== expectedAllowlist) return false;
+        || values[registrationEnabledKey] !== (isFinalization(manifest) ? 'false' : 'true')
+        || values[registrationAllowlistKey] !== (isFinalization(manifest) ? '' : expectedAllowlist)) return false;
     const names = Object.keys(record?.NetworkSettings?.Networks ?? {}).sort();
     if (JSON.stringify(names) !== JSON.stringify([manifest.network])) return false;
     assertNoHostPort(record, 'replacement_identity_host_port_invalid');
@@ -802,39 +834,50 @@ async function writeEvidence(filePath, evidence) {
   }
 }
 
-export async function runStagingGoogleRegistrationEnable({
+export const runStagingGoogleRegistrationEnable = (options) => runRegistrationTransition(options, false);
+export const runStagingGoogleRegistrationFinalize = (options) => runRegistrationTransition(options, true);
+
+async function runRegistrationTransition({
   manifest,
   mappingFile,
   evidenceFile,
   command = runCommand,
   commandEnv = process.env,
   execute = false,
-} = {}) {
-  const target = assertGoogleRegistrationRuntimeManifest(manifest);
+} = {}, finalize = false) {
+  const target = assertGoogleRegistrationRuntimeManifest(manifest, { finalize });
   if (typeof command !== 'function') fail('command_runner_required');
   if (target.apiContainer !== apiContainer) fail('target_api_container_invalid');
   const mapping = readRegistrationMapping(mappingFile);
+  if (finalize && mapping.mappingDigest !== target.finalizationBinding.mappingDigest) fail('finalization_mapping_binding_mismatch');
   const original = await readEnv(target);
   const preflight = await collectPreflight(target, command, mapping, original.content);
   const confirmedMapping = readRegistrationMapping(mappingFile);
   if (confirmedMapping.content !== mapping.content) fail('mapping_changed_since_preflight');
-  if (!execute) return Object.freeze({ status: 'preflight-passed-no-mutation', firstIrreversiblePhase: 'atomic_registration_enable', mappingDigest: mapping.mappingDigest, commands: Object.freeze(preflight.entries.map((entry) => entry.phase)) });
-  if (commandEnv.STAGING_GOOGLE_REGISTRATION_EXECUTE !== '1'
-      || commandEnv.STAGING_GOOGLE_REGISTRATION_CONFIRM !== target.runtimeRevision) fail('explicit_execute_confirmation_required');
+  const firstIrreversiblePhase = finalize ? 'atomic_registration_finalize' : 'atomic_registration_enable';
+  if (!execute) return Object.freeze({ status: 'preflight-passed-no-mutation', firstIrreversiblePhase, mappingDigest: mapping.mappingDigest, commands: Object.freeze(preflight.entries.map((entry) => entry.phase)) });
+  const prefix = finalize ? 'STAGING_GOOGLE_REGISTRATION_FINALIZE' : 'STAGING_GOOGLE_REGISTRATION';
+  if (commandEnv[`${prefix}_EXECUTE`] !== '1'
+      || commandEnv[`${prefix}_CONFIRM`] !== target.runtimeRevision) fail('explicit_execute_confirmation_required');
   if (typeof evidenceFile !== 'string' || !evidenceFile) fail('evidence_path_required');
   await assertEvidenceTarget(evidenceFile);
-  const sealedName = `${target.apiContainer}-google-registration-rollback-${target.runtimeRevision.slice(0, 12)}`;
+  const sealedName = rollbackName(target);
   let currentStopped = false;
   let sealed = false;
   let replacementCreated = false;
   let replacementId = null;
   let envMutationOwned = false;
-  const appliedEnv = registrationEnv(original.content, mapping);
+  const appliedEnv = registrationEnv(original.content, mapping, finalize);
+  const verifyEnrollment = async (phase) => {
+    const result = await command('docker', ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', target.databaseUser, '-d', target.databaseName, '-Atc', buildEnrolledIdentitySql(mapping)], { phase, env: commandEnv });
+    if (String(result.stdout ?? '').trim() !== '1|1|1') fail('finalization_enrolled_identity_mismatch');
+  };
   try {
     const unchangedApi = await command('docker', ['inspect', '--format', '{{json .}}', target.apiContainer], { phase: 'pre_mutation_api_readback', env: commandEnv });
     const unchangedRecord = parseJson(unchangedApi.stdout, 'pre_mutation_api_readback_invalid');
     assertOriginalIdentity(unchangedRecord, target, preflight.readbacks.api, target.apiContainer, 'pre_mutation_api_changed');
     if (unchangedRecord.State?.Running !== true) fail('pre_mutation_api_stopped');
+    if (finalize) await verifyEnrollment('pre_mutation_enrolled_identity_readback');
     await applyRegistrationFlags(target, original.content, appliedEnv);
     envMutationOwned = true;
     const stopResult = await stopCurrentApi({ manifest: target, originalApi: preflight.readbacks.api, command, commandEnv });
@@ -867,7 +910,7 @@ export async function runStagingGoogleRegistrationEnable({
     assertReplacementImageReadback(replacementRecord, target);
     const comparableReplacement = structuredClone(replacementRecord);
     comparableReplacement.Config.Image = preflight.readbacks.api.Config.Image;
-    assertRegistrationDelta(preflight.readbacks.api, comparableReplacement, mapping);
+    assertRegistrationDelta(preflight.readbacks.api, comparableReplacement, mapping, finalize);
     assertNoHostPort(replacementRecord);
     assertNetworks(replacementRecord, target);
     const startup = await runBoundedStartupProbe(command, target.apiContainer, commandEnv, 'replacement_public_runtime_probe');
@@ -875,7 +918,7 @@ export async function runStagingGoogleRegistrationEnable({
     if (startup.version?.commit !== target.runtimeRevision || startup.version?.environment !== 'test') fail('replacement_version_readback_invalid');
     const registration = await command('docker', ['exec', target.apiContainer, 'node', '--input-type=module', '-e', `import crypto from 'node:crypto'; const raw=process.env.${registrationAllowlistKey}??''; process.stdout.write(JSON.stringify({enabled:process.env.${registrationEnabledKey}==='true',allowlist:raw?'present':'absent',allowlistDigest:crypto.createHash('sha256').update(raw).digest('hex'),allowlistEntryCount:raw?raw.split(',').length:0,accessGateEnabled:process.env.SIT_STAGING_ACCESS_GATE_ENABLED==='true'}));`], { phase: 'replacement_registration_config_readback', env: commandEnv });
     const registrationReadback = parseRegistrationConfigReadback(registration.stdout);
-    if (!registrationReadback.enabled || registrationReadback.allowlist !== 'present' || registrationReadback.allowlistEntryCount !== 1 || registrationReadback.accessGateEnabled !== true || registrationReadback.allowlistDigest !== sha256(`${mapping.digest}=${mapping.userId}`)) fail('registration_config_readback_invalid');
+    if (registrationReadback.enabled !== !finalize || registrationReadback.allowlist !== (finalize ? 'absent' : 'present') || registrationReadback.allowlistEntryCount !== (finalize ? 0 : 1) || registrationReadback.accessGateEnabled !== true || registrationReadback.allowlistDigest !== sha256(finalize ? '' : `${mapping.digest}=${mapping.userId}`)) fail('registration_config_readback_invalid');
     const schema = await command('docker', ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', target.databaseUser, '-d', target.databaseName, '-Atc', 'SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1'], { phase: 'replacement_schema_readback', env: commandEnv });
     assertTerminalMigration(schema.stdout);
     const ledger = await command('docker', ['exec', target.databaseContainer, 'sh', '-c', `set -eu; psql -X --set ON_ERROR_STOP=1 -U '${target.databaseUser}' -d '${target.databaseName}' -Atc "SELECT string_agg(name || '|' || checksum, E'\\n' ORDER BY name) FROM schema_migrations" | sha256sum | awk '{print $1}'`], { phase: 'replacement_migration_ledger_readback', env: commandEnv });
@@ -883,8 +926,10 @@ export async function runStagingGoogleRegistrationEnable({
     const invalidToken = await command('docker', ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/v1/auth/social',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({idToken:'synthetic-invalid-token'}),signal:AbortSignal.timeout(5000)});const p=await r.json();process.stdout.write(JSON.stringify({status:r.status,error:p.error}));if(r.status!==401||p.error!=='invalid_social_token')process.exit(1)"], { phase: 'replacement_invalid_social_token_probe', env: commandEnv });
     const invalidTokenPayload = parseJson(invalidToken.stdout, 'invalid_social_token_probe_invalid');
     if (invalidTokenPayload.status !== 401 || invalidTokenPayload.error !== 'invalid_social_token') fail('invalid_social_token_probe_invalid');
-    const result = Object.freeze({ status: 'enabled-awaiting-live-google-token-gate', firstIrreversiblePhase: 'atomic_registration_enable', mappingDigest: mapping.mappingDigest, targetUserIdDigest: sha256(mapping.userId), schemaMigration: requiredTerminalMigration, migrationLedger: requiredMigrationLedger, requiresLaterGate: 'real HTTP Google-token registration proof with an approved live staging identity', sealedName });
-    await writeEvidence(evidenceFile, { kind: 'sit-staging-google-registration-enable', schemaVersion: 2, status: result.status, runtimeRevision: target.runtimeRevision, apiContainer: target.apiContainer, imageDigest: target.imageDigest, mappingDigest: mapping.mappingDigest, targetUserIdDigest: sha256(mapping.userId), mappingEntryCount: 1, allowedUserCountBefore: allowedUserIds(original.values[allowedUserIdsKey]).length, allowedUserCountAfter: allowedUserIds(original.values[allowedUserIdsKey]).length + 1, changedEnvironmentKeys: [allowedUserIdsKey, registrationEnabledKey, registrationAllowlistKey], deploymentEnvironment: 'test', invalidTokenProbe: '401-invalid_social_token', validGoogleTokenSubmitted: false, schemaMigration: requiredTerminalMigration, migrationLedger: requiredMigrationLedger, stripeLivemode: false, requiresLaterGate: result.requiresLaterGate });
+    if (finalize) await verifyEnrollment('replacement_enrolled_identity_readback');
+    if ((await readEnv(target)).content !== appliedEnv) fail('final_env_readback_drift');
+    const result = Object.freeze({ status: finalize ? 'finalized-registration-closed-existing-google-preserved' : 'enabled-awaiting-live-google-token-gate', firstIrreversiblePhase, mappingDigest: mapping.mappingDigest, targetUserIdDigest: sha256(mapping.userId), schemaMigration: requiredTerminalMigration, migrationLedger: requiredMigrationLedger, requiresLaterGate: finalize ? 'physical existing Google login remains a separate live gate' : 'real HTTP Google-token registration proof with an approved live staging identity', sealedName });
+    await writeEvidence(evidenceFile, { kind: finalize ? 'sit-staging-google-registration-finalize' : 'sit-staging-google-registration-enable', schemaVersion: 2, status: result.status, runtimeRevision: target.runtimeRevision, apiContainer: target.apiContainer, imageDigest: target.imageDigest, mappingDigest: mapping.mappingDigest, targetUserIdDigest: sha256(mapping.userId), mappingEntryCount: finalize ? 0 : 1, allowedUserCountBefore: allowedUserIds(original.values[allowedUserIdsKey]).length, allowedUserCountAfter: allowedUserIds(original.values[allowedUserIdsKey]).length + (finalize ? 0 : 1), ...(finalize ? { allowedUserIdsDigest: sha256(original.values[allowedUserIdsKey]), enrolledIdentityReadback: '1|1|1', firebaseAuth: true } : {}), changedEnvironmentKeys: [...(finalize ? [] : [allowedUserIdsKey]), registrationEnabledKey, registrationAllowlistKey], deploymentEnvironment: 'test', invalidTokenProbe: '401-invalid_social_token', validGoogleTokenSubmitted: false, schemaMigration: requiredTerminalMigration, migrationLedger: requiredMigrationLedger, stripeLivemode: false, requiresLaterGate: result.requiresLaterGate });
     return result;
   } catch (error) {
     envMutationOwned ||= error.envReplaced === true;

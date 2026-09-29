@@ -5,6 +5,10 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import { buildEnrolledIdentitySql } from '../ops/enable_staging_google_registration.mjs';
 
 const privateKeyBegin = ['-----BEGIN', 'PRIVATE', 'KEY-----'].join(' ');
 const privateKeyEnd = ['-----END', 'PRIVATE', 'KEY-----'].join(' ');
@@ -256,6 +260,21 @@ if (!databaseUrl) {
         .filter((call) => call.rawToken === rawToken)
         .map((call) => call.fresh);
       assert.deepEqual(verificationModes(token2), [false]);
+      // A fresh process imports the real disabled-lane config; only token
+      // verification is synthetic. Existing login must work without reopening
+      // registration, and the finalizer's exact SQL runs against real PG16.
+      const enrolledSql = buildEnrolledIdentitySql({ digest: identityDigest, userId });
+      assert.equal(Object.values((await setupPool.query(enrolledSql)).rows[0])[0], '1|1|1');
+      const wrongIdentitySql = buildEnrolledIdentitySql({ digest: '0'.repeat(64), userId });
+      assert.equal(Object.values((await setupPool.query(wrongIdentitySql)).rows[0])[0], '1|1|0');
+      const closedProbe = await promisify(execFile)(process.execPath, [fileURLToPath(new URL('./fixtures/google_post_enrollment_login_probe.mjs', import.meta.url))], {
+        env: { ...process.env, SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: '', SIT_TEST_POST_ENROLLMENT_IDENTITY: JSON.stringify({ identity, userId }) },
+        timeout: 30_000, maxBuffer: 64 * 1024,
+      });
+      const probeResults = closedProbe.stdout.split('\n').filter((line) => line.startsWith('FINALIZER_PROBE='));
+      assert.equal(probeResults.length, 1);
+      assert.deepEqual(JSON.parse(probeResults[0].slice('FINALIZER_PROBE='.length)), { existing: 200, unknown: 403, newUsers: 0, newIdentities: 0 });
+      assert.equal(Object.values((await setupPool.query(enrolledSql)).rows[0])[0], '1|1|1');
       const mutationCounts = async () => (await setupPool.query(
         `SELECT
            (SELECT count(*)::int FROM auth_identities WHERE user_id = $1) AS identities,

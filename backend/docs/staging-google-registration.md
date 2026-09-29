@@ -71,6 +71,12 @@ current registration consents through the UI. Occupied IDs, wrong digests,
 expired tokens and replays remain rejected by the unchanged application lane.
 Registration is not a migration of historical profile or consent rows.
 
+After physical enrollment, use the separately gated
+[post-enrollment finalizer](staging-google-registration-finalization.md) to
+close the one-time lane while preserving Firebase and the exact access list.
+Its fresh manifest and confirmation namespace are distinct from this enable
+operation. Source preparation alone does not authorize live finalization.
+
 ## Separate recurrence package
 
 The Green promotion runner now has an explicit, digest-bound post-enrollment

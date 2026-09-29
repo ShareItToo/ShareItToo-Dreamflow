@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import test from 'node:test';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -10,6 +10,8 @@ import {
   readGoogleRegistrationRuntimeManifest,
   readRegistrationMapping,
   runStagingGoogleRegistrationEnable,
+  runStagingGoogleRegistrationFinalize,
+  buildEnrolledIdentitySql,
   sanitizeGoogleRegistrationEnableError,
 } from '../ops/enable_staging_google_registration.mjs';
 
@@ -39,7 +41,7 @@ function mappingLine() {
   return `${mappingDigest}=${userId}\n`;
 }
 
-async function fixture({ apiContainer = 'shareittoo-staging-api', image = `registry.example/shareittoo-api:${revision}`, mapping = mappingLine(), hostname = null } = {}) {
+async function fixture({ apiContainer = 'shareittoo-staging-api', image = `registry.example/shareittoo-api:${revision}`, mapping = mappingLine(), hostname = null, finalize = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'sit-google-registration-enable-'));
   const envFile = join(root, 'green.env');
   const mappingFile = join(root, 'mapping.txt');
@@ -48,7 +50,8 @@ async function fixture({ apiContainer = 'shareittoo-staging-api', image = `regis
   const mfa = join(root, 'mfa.key');
   await writeFile(firebase, '{}');
   await writeFile(mfa, 'm'.repeat(32));
-  await writeFile(envFile, envContent(), { mode: 0o600 });
+  const originalEnv = finalize ? envContent({ registration: true, allowlist: mappingLine().trimEnd() }).replace(`SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds}`, `SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds},${userId}`) : envContent();
+  await writeFile(envFile, originalEnv, { mode: 0o600 });
   await chmod(envFile, 0o600);
   await writeFile(mappingFile, mapping, { mode: 0o600 });
   await chmod(mappingFile, 0o600);
@@ -75,7 +78,7 @@ async function fixture({ apiContainer = 'shareittoo-staging-api', image = `regis
   };
   const api = {
     Id: 'a'.repeat(64), Name: `/${apiContainer}`, State: { Running: true }, Config: {
-      Image: image, Env: envContent().trim().split('\n'), Cmd: ['node', 'src/server.js'], Entrypoint: null,
+      Image: image, Env: originalEnv.trim().split('\n'), Cmd: ['node', 'src/server.js'], Entrypoint: null,
       WorkingDir: '/app', User: 'shareittoo', Hostname: hostname ?? 'a'.repeat(12), Tty: false, OpenStdin: false,
       Labels: { 'com.shareittoo.sit.green': 'true' },
     },
@@ -86,7 +89,15 @@ async function fixture({ apiContainer = 'shareittoo-staging-api', image = `regis
     Mounts: manifest.mounts.map((mount) => ({ Type: mount.type, Name: mount.type === 'volume' ? mount.name : null, Source: mount.source, Destination: mount.destination, RW: !mount.readOnly })),
     NetworkSettings: { Ports: {}, Networks: { [manifest.network]: {}, [manifest.providerNetwork]: {} } },
   };
-  return { root, envFile, mappingFile, evidenceFile, manifest, api, image, state: { api, stopped: false, sealed: false, created: false, failurePhase: null } };
+  if (finalize) {
+    manifest.kind = 'sit-staging-google-registration-finalization-runtime-manifest';
+    manifest.finalizationBinding = {
+      mappingDigest: crypto.createHash('sha256').update(mappingLine().trimEnd()).digest('hex'),
+      allowedUserIdsDigest: crypto.createHash('sha256').update(`${originalAllowedIds},${userId}`).digest('hex'),
+      allowedUserIdsCount: 4,
+    };
+  }
+  return { root, envFile, mappingFile, evidenceFile, manifest, api, image, originalEnv, finalize, state: { api, stopped: false, sealed: false, created: false, failurePhase: null } };
 }
 
 function startupPayload(fx, enabled) {
@@ -206,6 +217,7 @@ function statefulDockerExecutor(fx, {
         const ledgerShell = args[2] === 'sh' && args[3] === '-c' && !args.includes('-e');
         if ((!directPsql && !ledgerShell) || args.length < 3) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
         if (script.includes('SELECT 1')) return { stdout: '1\n', code: 0 };
+        if (script.includes('WITH target AS')) return { stdout: '1|1|1\n', code: 0 };
         if (script.includes('SELECT count(*) FROM users')) return { stdout: `${occupiedTarget ? 1 : 0}\n`, code: 0 };
         if (script.includes('ORDER BY applied_at')) return { stdout: `${wrongSchema ? '097_registration_consent_bundle.up.sql' : '098_booking_checkout_declaration_constraints.up.sql'}\n`, code: 0 };
         if (script.includes('string_agg')) return { stdout: `${migrationLedgerDigest}\n`, code: 0 };
@@ -217,11 +229,11 @@ function statefulDockerExecutor(fx, {
         assert.ok(assignment, 'candidate imports exact derived env in the same current image');
         const derived = JSON.parse(assignment);
         assert.deepEqual(derived, {
-          SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'true',
-          SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: `${mappingDigest}=${userId}`,
+          SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: fx.finalize ? 'false' : 'true',
+          SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: fx.finalize ? '' : `${mappingDigest}=${userId}`,
           SIT_STAGING_ALLOWED_USER_IDS: `${originalAllowedIds},${userId}`,
         });
-        return json({ enabled: true, mappingCount: 1, targetAllowed: true });
+        return json({ enabled: !fx.finalize, mappingCount: fx.finalize ? 0 : 1, targetAllowed: true });
       }
       if (script.includes('runtimeNames')) {
         if (failOperation === 'replacement-startup' && inspectContainer(container).Id === 'b'.repeat(64)) fail('replacement_public_runtime_probe', options.phase);
@@ -1092,6 +1104,224 @@ test('resource and env ownership drift fail closed without overwriting concurren
     owner.manifest.envUid = (process.getuid?.() ?? 0) + 1;
     await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: owner.manifest, mappingFile: owner.mappingFile, command: statefulDockerExecutor(owner).command }), /env_file_metadata_invalid/u);
   } finally { await rm(owner.root, { recursive: true, force: true }); }
+});
+
+const finalizeOptions = (fx, command, execute = true) => ({
+  manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command, execute,
+  commandEnv: { STAGING_GOOGLE_REGISTRATION_FINALIZE_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_FINALIZE_CONFIRM: revision },
+});
+
+test('finalizer preflight is separate and successful closure changes exactly two keys', async () => {
+  const fx = await fixture({ finalize: true });
+  try {
+    const fake = statefulDockerExecutor(fx);
+    await assert.rejects(runStagingGoogleRegistrationEnable(finalizeOptions(fx, fake.command, false)), /registration_manifest_pre_state_invalid/u);
+    const preflight = await runStagingGoogleRegistrationFinalize(finalizeOptions(fx, fake.command, false));
+    assert.equal(preflight.status, 'preflight-passed-no-mutation');
+    assert.equal(preflight.firstIrreversiblePhase, 'atomic_registration_finalize');
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    const options = finalizeOptions(fx, fake.command);
+    await assert.rejects(runStagingGoogleRegistrationFinalize({ ...options, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision } }), /explicit_execute_confirmation_required/u);
+    const result = await runStagingGoogleRegistrationFinalize(options);
+    assert.equal(result.status, 'finalized-registration-closed-existing-google-preserved');
+    const before = envMap(fx.originalEnv.trim().split('\n'));
+    const after = envMap((await readFile(fx.envFile, 'utf8')).trim().split('\n'));
+    assert.deepEqual(Object.keys(after).filter((key) => after[key] !== before[key]).sort(), ['SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED']);
+    assert.equal(after.SIT_STAGING_GOOGLE_REGISTRATION_ENABLED, 'false');
+    assert.equal(after.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST, '');
+    assert.equal(after.SIT_STAGING_ALLOWED_USER_IDS, before.SIT_STAGING_ALLOWED_USER_IDS);
+    assert.equal(after.FIREBASE_AUTH_ENABLED, 'true');
+    const evidence = JSON.parse(await readFile(fx.evidenceFile, 'utf8'));
+    assert.equal((await lstat(fx.evidenceFile)).mode & 0o777, 0o600);
+    assert.equal(evidence.mappingEntryCount, 0);
+    assert.equal(evidence.allowedUserCountBefore, evidence.allowedUserCountAfter);
+    assert.equal(JSON.stringify(evidence).includes(userId), false);
+    assert.equal(JSON.stringify(evidence).includes(mappingDigest), false);
+    for (const phase of ['current_enrolled_identity_readback', 'pre_mutation_enrolled_identity_readback', 'replacement_enrolled_identity_readback']) assert.ok(fake.calls.some((call) => call.phase === phase));
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('finalizer rejects missing duplicate wrong or inactive identity before mutation', async () => {
+  for (const counts of ['0|0|0', '2|1|1', '1|0|0', '1|2|1', '1|1|0', '', '1|1|2']) {
+    const fx = await fixture({ finalize: true });
+    try {
+      const fake = statefulDockerExecutor(fx);
+      const command = (cmd, args, options) => options.phase === 'current_enrolled_identity_readback' ? { stdout: counts } : fake.command(cmd, args, options);
+      await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, command)), /finalization_enrolled_identity_mismatch/u);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      assert.equal(fake.calls.some((call) => call.phase === 'stop_current_api'), false);
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+  const sql = buildEnrolledIdentitySql({ digest: mappingDigest, userId });
+  assert.equal(sql.includes(userId), false);
+  assert.match(sql, /email_verified = true/u);
+  assert.match(sql, /account_status = 'active'/u);
+  assert.match(sql, /firebase_user_id/u);
+});
+
+test('finalizer rejects stale manifest bindings mapping changes and evidence collision before mutation', async () => {
+  for (const mutate of [
+    (fx) => { fx.manifest.apiContainerId = 'f'.repeat(64); },
+    (fx) => { fx.manifest.finalizationBinding.mappingDigest = '0'.repeat(64); },
+    (fx) => { fx.manifest.finalizationBinding.allowedUserIdsDigest = '0'.repeat(64); },
+    (fx) => { fx.manifest.finalizationBinding.allowedUserIdsCount = 5; },
+    (fx) => { fx.manifest.finalizationBinding.extra = true; },
+    async (fx) => { await chmod(fx.mappingFile, 0o644); },
+  ]) {
+    const fx = await fixture({ finalize: true });
+    try {
+      await mutate(fx);
+      const fake = statefulDockerExecutor(fx);
+      await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, fake.command)));
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      assert.equal(fake.calls.some((call) => call.phase === 'stop_current_api'), false);
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+  const fx = await fixture({ finalize: true });
+  try {
+    const fake = statefulDockerExecutor(fx);
+    const command = async (cmd, args, options) => {
+      const result = await fake.command(cmd, args, options);
+      if (options.phase === 'candidate_registration_config_import') await writeFile(fx.mappingFile, `${'c'.repeat(64)}=${userId}\n`, { mode: 0o600 });
+      return result;
+    };
+    await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, command)), /mapping_changed_since_preflight/u);
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('finalizer refuses to overwrite concurrent env bytes during recovery', async () => {
+  const fx = await fixture({ finalize: true });
+  try {
+    const fake = statefulDockerExecutor(fx);
+    let changed;
+    const command = async (cmd, args, options) => {
+      const result = await fake.command(cmd, args, options);
+      if (options.phase === 'replacement_enrolled_identity_readback') {
+        changed = `${await readFile(fx.envFile, 'utf8')}CONCURRENT=preserve\n`;
+        await writeFile(fx.envFile, changed, { mode: 0o600 });
+      }
+      return result;
+    };
+    await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, command)), (error) => {
+      assert.equal(error.code, 'final_env_readback_drift');
+      assert.equal(error.rollback.restored, false);
+      assert.ok(error.rollback.results.some((entry) => entry.code === 'rollback_env_changed_after_mutation'));
+      return true;
+    });
+    assert.equal(await readFile(fx.envFile, 'utf8'), changed);
+    await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('finalizer requires exact enabled mapping and manifest-bound ordered access list', async () => {
+  for (const [key, value] of [
+    ['SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'false'],
+    ['SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST', ''],
+    ['SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST', `${'c'.repeat(64)}=${userId}`],
+    ['SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST', `${mappingLine().trimEnd()},${mappingLine().trimEnd()}`],
+    ['SIT_STAGING_ALLOWED_USER_IDS', originalAllowedIds],
+    ['SIT_STAGING_ALLOWED_USER_IDS', `${originalAllowedIds},${userId},extra`],
+    ['SIT_STAGING_ALLOWED_USER_IDS', `${userId},${originalAllowedIds}`],
+    ['SIT_STAGING_ALLOWED_USER_IDS', `${originalAllowedIds},${userId},${userId}`],
+    ['FIREBASE_AUTH_ENABLED', 'false'], ['FIREBASE_PHONE_VERIFICATION_ENABLED', 'true'],
+  ]) {
+    const fx = await fixture({ finalize: true });
+    try {
+      const changed = fx.originalEnv.replace(new RegExp(`^${key}=.*$`, 'mu'), `${key}=${value}`);
+      await writeFile(fx.envFile, changed, { mode: 0o600 });
+      fx.api.Config.Env = changed.trim().split('\n');
+      const fake = statefulDockerExecutor(fx);
+      await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, fake.command)));
+      assert.equal(await readFile(fx.envFile, 'utf8'), changed);
+      assert.equal(fake.calls.some((call) => call.phase === 'stop_current_api'), false);
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('finalizer every forward failure restores exact enabled lane and original container', async () => {
+  for (const phase of [
+    'pre_mutation_api_readback', 'pre_mutation_enrolled_identity_readback', 'stop_current_api', 'seal_current_api',
+    'create_replacement_api', 'attach_provider_network', 'start_replacement_api', 'replacement_config_readback',
+    'replacement_public_runtime_probe', 'replacement_registration_config_readback', 'replacement_schema_readback',
+    'replacement_migration_ledger_readback', 'replacement_invalid_social_token_probe', 'replacement_enrolled_identity_readback',
+  ]) {
+    const fx = await fixture({ finalize: true });
+    try {
+      const fake = statefulDockerExecutor(fx);
+      let fired = false;
+      const command = (cmd, args, options) => {
+        if (!fired && options.phase === phase) { fired = true; throw Object.assign(new Error('fault'), { code: 'finalizer_fault' }); }
+        return fake.command(cmd, args, options);
+      };
+      await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, command)), (error) => error.code === 'finalizer_fault' && error.rollback.restored);
+      assert.equal(fired, true, phase);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv, phase);
+      assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, fx.api.Id, phase);
+      assert.equal(fake.state.containers.get(fx.manifest.apiContainer).State.Running, true, phase);
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('finalizer rejects replacement access-list and unrelated configuration drift', async () => {
+  for (const replacement of [`SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds}`, `SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds},${userId},extra`, 'UNRELATED=drift', 'FIREBASE_AUTH_ENABLED=false']) {
+    const fx = await fixture({ finalize: true });
+    try {
+      const fake = statefulDockerExecutor(fx);
+      const command = async (cmd, args, options) => {
+        const result = await fake.command(cmd, args, options);
+        if (options.phase !== 'replacement_config_readback') return result;
+        const record = JSON.parse(result.stdout);
+        record.Config.Env = record.Config.Env.map((entry) => entry.startsWith(`${replacement.split('=')[0]}=`) ? replacement : entry);
+        return { stdout: JSON.stringify(record) };
+      };
+      await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, command)), (error) => error.rollback.restored);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('finalizer evidence collisions preserve independent artifacts and rollback failures are explicit', async () => {
+  for (const scenario of ['early-collision', 'late-collision', 'rollback_replacement_remove', 'rollback_restore_start']) {
+    const fx = await fixture({ finalize: true });
+    try {
+      const collision = scenario.includes('collision');
+      if (scenario === 'early-collision') await writeFile(fx.evidenceFile, 'independent', { flag: 'wx', mode: 0o600 });
+      const fake = statefulDockerExecutor(fx, { invalidTokenStatus: collision ? 401 : 403 });
+      const command = async (cmd, args, options) => {
+        if (options.phase === scenario) throw Object.assign(new Error('rollback fault'), { code: 'rollback_fault' });
+        const result = await fake.command(cmd, args, options);
+        if (scenario === 'late-collision' && options.phase === 'replacement_enrolled_identity_readback') await writeFile(fx.evidenceFile, 'independent', { flag: 'wx', mode: 0o600 });
+        return result;
+      };
+      await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, command)), (error) => {
+        if (collision) assert.equal(error.code, 'evidence_already_exists');
+        if (scenario !== 'early-collision') assert.equal(error.rollback.restored, collision);
+        return true;
+      });
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      if (collision) assert.equal(await readFile(fx.evidenceFile, 'utf8'), 'independent');
+      else await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('finalizer lost stop rename and create responses reconcile only exact owned state', async () => {
+  for (const options of [{ stopMode: 'response-loss' }, { renameMode: 'response-loss' }, { createMode: 'response-loss' }]) {
+    const fx = await fixture({ finalize: true });
+    try {
+      const fake = statefulDockerExecutor(fx, options);
+      if (options.stopMode) {
+        const result = await runStagingGoogleRegistrationFinalize(finalizeOptions(fx, fake.command));
+        assert.equal(result.status, 'finalized-registration-closed-existing-google-preserved');
+      } else {
+        await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, fake.command)), (error) => error.rollback.restored);
+        assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      }
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
 });
 
 test('sanitized failure output contains no mapping material', () => {
