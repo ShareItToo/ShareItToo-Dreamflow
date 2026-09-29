@@ -503,7 +503,11 @@ export async function assertCloneReadiness(session, { fetchImpl = fetch } = {}) 
 
 async function login(driver, roleAccount) {
   let initial = await driver.dump('login');
-  if (hasLabel(initial.nodes, SYNTHETIC_CLONE_UI_CONTRACT.title)) return;
+  if (hasLabel(initial.nodes, SYNTHETIC_CLONE_UI_CONTRACT.title)) {
+    if (hasLabel(initial.nodes, `Rolle: ${roleAccount.role}`)) return;
+    await logout(driver);
+    initial = await driver.dump('login-after-role-switch');
+  }
   if (!hasLabel(initial.nodes, 'E-Mail') || !hasLabel(initial.nodes, 'Passwort')) {
     if (!hasLabel(initial.nodes, 'Anmelden')
         && hasLabel(initial.nodes, SYNTHETIC_CLONE_UI_CONTRACT.navigation.profile)) {
@@ -569,6 +573,15 @@ async function openClone(driver, expectedRole) {
 
 async function logout(driver) {
   let dump = await driver.dump('logout');
+  if (!hasLabel(dump.nodes, SYNTHETIC_CLONE_UI_CONTRACT.navigation.logout)
+      && hasLabel(dump.nodes, 'Back')) {
+    await driver.tapLabel('Back', 'logout-back');
+    dump = await driver.waitForAny(
+      [SYNTHETIC_CLONE_UI_CONTRACT.navigation.logout,
+        SYNTHETIC_CLONE_UI_CONTRACT.navigation.profile],
+      'logout-back',
+    );
+  }
   if (!hasLabel(dump.nodes, SYNTHETIC_CLONE_UI_CONTRACT.navigation.logout)
       && hasLabel(dump.nodes, SYNTHETIC_CLONE_UI_CONTRACT.navigation.profile)) {
     await driver.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.navigation.profile, 'logout-profile');

@@ -75,6 +75,9 @@ discover a mechanically stale source hash.
 - Android route readiness must require a route-specific actionable label. A
   shared page title, global test banner or navigation-card text is not proof
   that the destination route opened.
+- Multi-role device runners must verify the visible current role before reusing
+  an authenticated route. They must navigate back and complete logout before
+  entering credentials for the next principal.
 - Recovery mutations must target the captured immutable provider/container ID,
   never a mutable name; stateful test executors must model or explicitly reject
   every accepted security/resource option.
