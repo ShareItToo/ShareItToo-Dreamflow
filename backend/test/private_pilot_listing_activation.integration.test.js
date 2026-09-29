@@ -22,11 +22,18 @@ if (!databaseUrl) {
     process.env.DEPLOYMENT_ENVIRONMENT = 'test';
     process.env.MAIL_TRANSPORT = 'memory';
     process.env.PAYMENT_TRANSPORT = 'memory';
-    const [{ createApp }, { runMigrations }, { signAccessToken }] = await Promise.all([
+    // This isolated fixture must activate the policy whose rejection it proves;
+    // do not depend on an operator's inherited environment or default region.
+    process.env.PRIVATE_PILOT_V4_ENABLED = 'true';
+    process.env.PRIVATE_PILOT_ALLOWED_REGIONS = 'berlin';
+    const [{ createApp }, { runMigrations }, { signAccessToken }, { config }] = await Promise.all([
       import('../src/app.js'),
       import('../src/migrations.js'),
       import('../src/security.js'),
+      import('../src/config.js'),
     ]);
+    assert.equal(config.privatePilotV4Enabled, true);
+    assert.deepEqual(config.privatePilot.allowedRegions, ['berlin']);
     const pool = new pg.Pool({ connectionString: databaseUrl, max: 2 });
     const currentDir = path.dirname(fileURLToPath(import.meta.url));
     const schema = await fs.readFile(path.resolve(currentDir, '../sql/schema.sql'), 'utf8');

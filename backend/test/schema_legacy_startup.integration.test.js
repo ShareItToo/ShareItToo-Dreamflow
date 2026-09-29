@@ -65,9 +65,20 @@ if (!databaseUrl) {
       // index; migration 078 then validates and tightens them.
       await scopedPool.query(schemaSql);
       await runMigrations(scopedPool);
-      assert.equal(
-        (await scopedPool.query('SELECT count(*)::int AS count FROM schema_migrations')).rows[0].count,
-        90,
+      const migrationDirectory = path.resolve(currentDir, '../sql/migrations');
+      const migrationNames = (await fs.readdir(migrationDirectory, { withFileTypes: true }))
+        .filter((entry) => entry.isFile() && entry.name.endsWith('.up.sql'))
+        .map((entry) => entry.name)
+        .sort();
+      const expectedMigrations = await Promise.all(migrationNames.map(async (name) => ({
+        name,
+        checksum: crypto.createHash('sha256')
+          .update(await fs.readFile(path.join(migrationDirectory, name), 'utf8'))
+          .digest('hex'),
+      })));
+      assert.deepEqual(
+        (await scopedPool.query('SELECT name, checksum FROM schema_migrations ORDER BY name')).rows,
+        expectedMigrations,
       );
       const columns = await scopedPool.query(
         `SELECT column_name FROM information_schema.columns
