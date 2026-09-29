@@ -55,6 +55,14 @@ discover a mechanically stale source hash.
   behavior. A package report may claim an allowed or rejected configuration
   only when the final source and a focused positive/negative test prove that
   exact matrix.
+- Local Android QA is side-by-side only: its package is
+  `com.shareittoo.app.qa` and it must never target, replace or uninstall the
+  Play package `com.shareittoo.app`. An upload certificate must never be
+  treated as Play update compatibility. Copy a full certificate SHA-256 only
+  from authoritative `apksigner verify --print-certs` output; never infer or
+  invent it.
+- Copy every full Git commit SHA from authoritative `git rev-parse` or provider
+  output. Never expand, complete or infer a 7-character prefix manually.
 - Artifact builders and their validators must use the same exact manifest
   contract. Every field added by a builder must be present in the positive
   validator fixture and exercised by a real generated-manifest test before a

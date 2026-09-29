@@ -14,10 +14,12 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { canonicalAndroidSigningCertificateSha256 } from './validate_current_head_android_release_archive.mjs';
+import {
+  canonicalAndroidSigningCertificateSha256 as canonicalQaSigningCertificateSha256,
+} from './validate_current_head_android_release_archive.mjs';
 
 const versionName = '1.0.0';
-const applicationId = 'com.shareittoo.app';
+const applicationId = 'com.shareittoo.app.qa';
 const syntheticCloneNotice = 'Synthetischer Test – keine vertragliche oder finanzielle Wirkung';
 
 function parseBuildNumber(value, label) {
@@ -170,6 +172,7 @@ export async function validateAndroidLocalQaCandidate({
   const configuration = manifest.configuration;
   if (JSON.stringify(configuration) !== JSON.stringify({
     buildType: 'debug-canonical-local-qa',
+    applicationId,
     releaseChannel: 'internal',
     apiBaseUrl: 'http://127.0.0.1:18080/api/v1',
     adbReverseRequired: 'tcp:18080',
@@ -194,7 +197,7 @@ export async function validateAndroidLocalQaCandidate({
   if (Object.values(manifest.boundaries ?? {}).some((value) => value !== false)
       || manifest.artifact?.fileName !== apkName
       || manifest.artifact.ownerOnly !== true
-      || manifest.artifact.canonicalSigningRelationshipVerified !== true
+      || manifest.artifact.canonicalQaSigningVerified !== true
       || manifest.artifact.debuggable !== true
       || !/^[a-f0-9]{64}$/u.test(manifest.artifact.apkSha256 ?? '')
       || await sha256(apkPath) !== manifest.artifact.apkSha256) {
@@ -206,8 +209,8 @@ export async function validateAndroidLocalQaCandidate({
   ));
   const certificate = /^(?:V\d+ Signer:|Signer #\d+) certificate SHA-256 digest:\s*([a-f0-9]{64})\s*$/imu
     .exec(signer)?.[1]?.toLowerCase();
-  if (certificate !== canonicalAndroidSigningCertificateSha256) {
-    fail('R2 APK does not have the canonical installed-app signing relationship.');
+  if (certificate !== canonicalQaSigningCertificateSha256) {
+    fail('R2 APK does not have the canonical local-QA signing certificate.');
   }
   const badging = String(commandRunner(
     aaptPath ?? resolveTool(repositoryRoot, 'aapt'),
@@ -240,7 +243,7 @@ export async function validateAndroidLocalQaCandidate({
     status: 'verified-owner-only-not-installed',
     commit,
     buildNumber,
-    canonicalSigningRelationshipVerified: true,
+    canonicalQaSigningVerified: true,
     debuggable: true,
     localLoopbackOnly: true,
     containsSecrets: false,
@@ -256,7 +259,7 @@ async function run() {
   });
   console.log(
     `R2 local QA candidate valid: build=${result.buildNumber}, `
-      + `commit=${result.commit}, signing=canonical, installed=false`,
+      + `commit=${result.commit}, signing=canonical-qa, installed=false`,
   );
 }
 

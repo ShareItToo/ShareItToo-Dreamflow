@@ -143,7 +143,7 @@ export const candidateRolloverAndroidCompatibilityPaths = Object.freeze([
 export const candidateRolloverAndroidCompatibilityFiles = Object.freeze([
   Object.freeze({
     path: 'backend/src/app.js',
-    sha256: '2ef9d687abb26b8b4f7b5ca2299848f0039a17be2fac99c0f512423e8e198c8c',
+    sha256: 'a860bd597fd313e864e553b1d6713f9501bc4d0599c688fff136f5491b74b88b',
   }),
   Object.freeze({
     path: 'backend/src/profile_upload_cleanup.js',

@@ -36,7 +36,7 @@ function fixture(buildNumber = explicitBuildNumber) {
     source: {
       branch: 'codex/master-workflow-20260808',
       commit,
-      applicationId: 'com.shareittoo.app',
+      applicationId: 'com.shareittoo.app.qa',
       versionName: '1.0.0',
       buildNumber,
     },
@@ -44,11 +44,12 @@ function fixture(buildNumber = explicitBuildNumber) {
       fileName: apkName,
       apkSha256: createHash('sha256').update(apk).digest('hex'),
       ownerOnly: true,
-      canonicalSigningRelationshipVerified: true,
+      canonicalQaSigningVerified: true,
       debuggable: true,
     },
     configuration: {
       buildType: 'debug-canonical-local-qa',
+      applicationId: 'com.shareittoo.app.qa',
       releaseChannel: 'internal',
       apiBaseUrl: 'http://127.0.0.1:18080/api/v1',
       adbReverseRequired: 'tcp:18080',
@@ -98,7 +99,7 @@ function runnerFor(buildNumber = explicitBuildNumber) {
       return `Signer #1 certificate SHA-256 digest: ${canonicalAndroidSigningCertificateSha256}\n`;
     }
     if (args[0] === 'dump') {
-      return `package: name='com.shareittoo.app' versionCode='${buildNumber}' versionName='1.0.0'\n`;
+      return `package: name='com.shareittoo.app.qa' versionCode='${buildNumber}' versionName='1.0.0'\n`;
     }
     throw new Error('Unexpected fake Android tool command.');
   };
@@ -120,7 +121,7 @@ test('accepts the exact owner-only local QA candidate without exposing paths or 
     aaptPath: 'aapt',
   });
   assert.equal(result.status, 'verified-owner-only-not-installed');
-  assert.equal(result.canonicalSigningRelationshipVerified, true);
+  assert.equal(result.canonicalQaSigningVerified, true);
   assert.equal(JSON.stringify(result).includes(canonicalAndroidSigningCertificateSha256), false);
   assert.equal(JSON.stringify(result).includes(value.directory), false);
 });
@@ -139,12 +140,36 @@ test('returns private installation facts only behind the explicit in-process opt
     aaptPath: 'aapt',
     includePrivateArtifact: true,
   });
-  assert.equal(result.applicationId, 'com.shareittoo.app');
+  assert.equal(result.applicationId, 'com.shareittoo.app.qa');
   assert.equal(result.buildNumber, explicitBuildNumber);
   assert.equal(result.apkPath, resolve(value.directory, value.manifest.artifact.fileName));
   assert.equal(result.signingCertificateSha256, canonicalAndroidSigningCertificateSha256);
   assert.equal(result.apiBaseUrl, 'http://127.0.0.1:18080/api/v1');
   assert.equal(result.firebaseConfigured, false);
+});
+
+test('rejects the Play package identity for a local-QA candidate', async () => {
+  const value = fixture();
+  value.manifest.source.applicationId = 'com.shareittoo.app';
+  writeFileSync(
+    resolve(value.directory, 'manifest.json'),
+    `${JSON.stringify(value.manifest, null, 2)}\n`,
+    { mode: 0o600 },
+  );
+  await assert.rejects(
+    () => validateAndroidLocalQaCandidate({
+      root: value.root,
+      candidateDirectory: value.directory,
+      expectedCommit: commit,
+      expectedBuildNumber: explicitBuildNumber,
+      expectedInstalledPlayBuildNumber: installedPlayBuildNumber,
+      expectedFinalPlaySuccessorBuildNumber: finalPlaySuccessorBuildNumber,
+      commandRunner: runner,
+      apksignerPath: 'apksigner',
+      aaptPath: 'aapt',
+    }),
+    /R2 candidate identity is invalid/u,
+  );
 });
 
 test('accepts any explicitly supplied local-QA build number', async () => {

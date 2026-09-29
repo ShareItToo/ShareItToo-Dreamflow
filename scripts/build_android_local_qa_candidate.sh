@@ -7,7 +7,7 @@ BUILD_NUMBER="${SIT_LOCAL_QA_BUILD_NUMBER:-}"
 INSTALLED_PLAY_BUILD_NUMBER="${SIT_INSTALLED_PLAY_BUILD_NUMBER:-}"
 FINAL_PLAY_SUCCESSOR_BUILD_NUMBER="${SIT_FINAL_PLAY_SUCCESSOR_BUILD_NUMBER:-}"
 API_BASE_URL="http://127.0.0.1:18080/api/v1"
-APPLICATION_ID="com.shareittoo.app"
+APPLICATION_ID="com.shareittoo.app.qa"
 
 cd "$ROOT"
 
@@ -78,6 +78,7 @@ cleanup_generated
 
 SIT_LOCAL_INTERNAL_QA_SIGNING=1 \
 SIT_CONFIRM_LOCAL_INTERNAL_QA=1 \
+SIT_DISABLE_FIREBASE_ANDROID_PLUGINS=1 \
 flutter build apk \
   --debug \
   "--build-name=$BUILD_NAME" \
@@ -122,9 +123,11 @@ build_tools="$(find "$build_tools_root" -mindepth 1 -maxdepth 1 -type d | sort -
 certificate="$($build_tools/apksigner verify --print-certs "$apk" | \
   sed -E -n 's/^(V[0-9]+ Signer:|Signer #[0-9]+) certificate SHA-256 digest: ([0-9A-Fa-f]{64})$/\2/p' | \
   head -n1 | tr '[:upper:]' '[:lower:]')"
-canonical_certificate="098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4"
-[[ "$certificate" == "$canonical_certificate" ]] || {
-  echo "ERROR: R2 APK does not match the canonical installed-app signing relationship." >&2
+# This full SHA-256 was copied from authoritative apksigner output for the QA
+# signing key; it does not establish Play update compatibility.
+canonical_qa_certificate="098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4"
+[[ "$certificate" == "$canonical_qa_certificate" ]] || {
+  echo "ERROR: R2 APK does not match the canonical QA signing certificate." >&2
   exit 1
 }
 "$build_tools/aapt" dump badging "$apk" | \
@@ -142,7 +145,7 @@ grep -Fq 'android:usesCleartextTraffic(0x010104ec)=(type 0x12)0xffffffff' <<< "$
   echo "ERROR: R2 APK cannot reach the ADB-reversed local backend." >&2
   exit 1
 }
-unset manifest_dump certificate canonical_certificate
+unset manifest_dump certificate canonical_qa_certificate
 
 archive_root="$HOME/Library/Application Support/ShareItToo/qa/android"
 archive_dir="$archive_root/$BUILD_NUMBER-$commit"
@@ -174,11 +177,12 @@ printf '%s\n' \
   "    \"fileName\": \"$apk_name\"," \
   "    \"apkSha256\": \"$apk_sha\"," \
   "    \"ownerOnly\": true," \
-  "    \"canonicalSigningRelationshipVerified\": true," \
+  "    \"canonicalQaSigningVerified\": true," \
   "    \"debuggable\": true" \
   "  }," \
   "  \"configuration\": {" \
   "    \"buildType\": \"debug-canonical-local-qa\"," \
+  "    \"applicationId\": \"$APPLICATION_ID\"," \
   "    \"releaseChannel\": \"internal\"," \
   "    \"apiBaseUrl\": \"$API_BASE_URL\"," \
   "    \"adbReverseRequired\": \"tcp:18080\"," \

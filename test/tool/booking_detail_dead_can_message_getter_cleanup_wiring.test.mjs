@@ -194,7 +194,7 @@ test('completed renter review keeps its eligibility guard and direction', () => 
   );
   assert.match(
     bottomActions,
-    /if \(isTrulyCompleted && isRenterView && !isHeldForReview\)/,
+    /if \((?:SyntheticCloneConfig\.reviewActionsEnabled &&\s+)?isTrulyCompleted && isRenterView && !isHeldForReview\)/,
   );
   assert.match(bottomActions, /_reviewAlreadySubmitted\s+\? null/);
   assert.match(bottomActions, /ReviewPromptSheet\.show\(/);

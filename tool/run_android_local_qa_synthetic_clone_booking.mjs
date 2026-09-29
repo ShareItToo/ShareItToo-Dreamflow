@@ -29,7 +29,7 @@ const DEFAULT_MANIFEST_PATH = resolve(
   'session.json',
 );
 const LOOPBACK_API_BASE = 'http://127.0.0.1:18080/api/v1';
-const APPLICATION_ID = 'com.shareittoo.app';
+const APPLICATION_ID = 'com.shareittoo.app.qa';
 const MARKER = 'Synthetischer Test – keine vertragliche oder finanzielle Wirkung';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const PHOTO_SLOTS = Object.freeze(['Übersicht', 'Detail', 'Zubehör', 'Kritischer Bereich']);

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -11,6 +12,11 @@ import {
   validateManualQrV3Payload,
   validateSyntheticCloneSessionManifest,
 } from '../../tool/run_android_local_qa_synthetic_clone_booking.mjs';
+
+const runnerSource = readFileSync(
+  new URL('../../tool/run_android_local_qa_synthetic_clone_booking.mjs', import.meta.url),
+  'utf8',
+);
 
 const ownerId = '11111111-1111-4111-8111-111111111111';
 const renterId = '22222222-2222-4222-8222-222222222222';
@@ -37,6 +43,11 @@ const session = {
     marker: 'Synthetischer Test – keine vertragliche oder finanzielle Wirkung',
   },
 };
+
+test('physical runner launches the side-by-side local-QA package only', () => {
+  assert.match(runnerSource, /const APPLICATION_ID = 'com\.shareittoo\.app\.qa'/u);
+  assert.doesNotMatch(runnerSource, /const APPLICATION_ID = 'com\.shareittoo\.app';/u);
+});
 
 function screenXml(labels) {
   return `<hierarchy>${labels.map((text, index) =>

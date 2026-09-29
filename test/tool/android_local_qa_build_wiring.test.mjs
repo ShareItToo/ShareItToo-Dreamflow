@@ -66,6 +66,8 @@ test('R2 build is explicit, local-loopback-only and enables only technical QA su
   ]) {
     assert.match(build, new RegExp(marker.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
   }
+  assert.match(build, /APPLICATION_ID="com\.shareittoo\.app\.qa"/u);
+  assert.match(build, /SIT_DISABLE_FIREBASE_ANDROID_PLUGINS=1 \\\n/u);
 });
 
 test('synthetic clone is local-QA-only and release candidates fail closed', () => {
@@ -129,6 +131,10 @@ test('local-QA shell guard rejects equal and reversed Play ordering inputs', () 
 
 test('canonical debug signing and cleartext are both explicit debug-only exceptions', () => {
   assert.match(gradle, /localInternalQaRequested/u);
+  assert.match(gradle, /qaPackageRequested = remoteQaRequested \|\| localInternalQaRequested/u);
+  assert.match(gradle, /if \(qaPackageRequested\) \{\s*applicationId = "com\.shareittoo\.app\.qa"/u);
+  assert.match(gradle, /applicationId = "com\.shareittoo\.app"/u);
+  assert.match(gradle, /qaPackageRequested != firebaseAndroidPluginsDisabled/u);
   assert.match(gradle, /contains\('debug'\)/u);
   assert.match(gradle, /debug \{[\s\S]*signingConfig = signingConfigs\.getByName\("release"\)/u);
   assert.match(gradle, /manifestPlaceholders\.sitUsesCleartextTraffic = "false"/u);

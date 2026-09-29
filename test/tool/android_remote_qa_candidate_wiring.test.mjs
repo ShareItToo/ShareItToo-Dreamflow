@@ -15,7 +15,8 @@ test('Remote QA Android wiring is separate, staging-only and owner-distributed',
 
   assert.match(gradle, /SIT_REMOTE_QA_BUILD/u);
   assert.match(gradle, /SIT_DISABLE_FIREBASE_ANDROID_PLUGINS/u);
-  assert.match(gradle, /remoteQaRequested != firebaseAndroidPluginsDisabled/u);
+  assert.match(gradle, /qaPackageRequested = remoteQaRequested \|\| localInternalQaRequested/u);
+  assert.match(gradle, /qaPackageRequested != firebaseAndroidPluginsDisabled/u);
   assert.match(gradle, /com\.shareittoo\.app\.qa/u);
   assert.match(gradle, /ShareItToo QA/u);
   assert.match(manifest, /\$\{sitAppLabel\}/u);

@@ -4,6 +4,11 @@ The synthetic full-booking lane is compiled into the owner-only local-QA APK
 only. `scripts/build_android_local_qa_candidate.sh` passes
 `SIT_SYNTHETIC_CLONE_BOOKING_LANE=true`; release and Store candidates pass an
 explicit `false` value and reject any attempt to set the flag otherwise.
+The APK application ID is `com.shareittoo.app.qa`, so it can coexist with the
+Play app `com.shareittoo.app`; this lane never replaces or uninstalls the Play
+app. Its QA signing verification is not evidence of Play update compatibility:
+the full certificate SHA-256 is copied only from authoritative
+`apksigner verify --print-certs` output.
 
 The local-QA archive manifest records the exact persistent notice
 `Synthetischer Test – keine vertragliche oder finanzielle Wirkung` and requires

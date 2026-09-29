@@ -8,11 +8,14 @@ plugins {
 }
 
 def remoteQaRequested = System.getenv('SIT_REMOTE_QA_BUILD') == '1'
+def localInternalQaRequested =
+        System.getenv('SIT_LOCAL_INTERNAL_QA_SIGNING') == '1'
+def qaPackageRequested = remoteQaRequested || localInternalQaRequested
 def firebaseAndroidPluginsDisabled =
         System.getenv('SIT_DISABLE_FIREBASE_ANDROID_PLUGINS') == '1'
-if (remoteQaRequested != firebaseAndroidPluginsDisabled) {
+if (qaPackageRequested != firebaseAndroidPluginsDisabled) {
     throw new GradleException(
-            'Remote QA builds must explicitly disable the production Firebase Android plugins, and only Remote QA builds may disable them.'
+            'QA package builds must explicitly disable the production Firebase Android plugins, and only QA package builds may disable them.'
     )
 }
 
@@ -34,8 +37,6 @@ if (keystorePropertiesFile.exists()) {
 def releaseRequested = gradle.startParameter.taskNames.any {
     it.toLowerCase().contains('release')
 }
-def localInternalQaRequested =
-        System.getenv('SIT_LOCAL_INTERNAL_QA_SIGNING') == '1'
 if (localInternalQaRequested &&
         System.getenv('SIT_CONFIRM_LOCAL_INTERNAL_QA') != '1') {
     throw new GradleException(
@@ -114,7 +115,7 @@ android {
         // so it can coexist with Google Play's differently signed package.
         // It is selected only through the paired environment gates above.
         applicationId = "com.shareittoo.app"
-        if (remoteQaRequested) {
+        if (qaPackageRequested) {
             applicationId = "com.shareittoo.app.qa"
         }
         // Meta requires both values to be Android string resources. Direct
@@ -129,16 +130,16 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         manifestPlaceholders.sitUsesCleartextTraffic = "false"
-        manifestPlaceholders.sitAppLabel = remoteQaRequested ? "ShareItToo QA" : "ShareItToo"
-        manifestPlaceholders.sitAppLinksAutoVerify = remoteQaRequested ? "false" : "true"
+        manifestPlaceholders.sitAppLabel = qaPackageRequested ? "ShareItToo QA" : "ShareItToo"
+        manifestPlaceholders.sitAppLinksAutoVerify = qaPackageRequested ? "false" : "true"
     }
 
     buildTypes {
         debug {
             if (localInternalQaRequested) {
-                // R2 local-device QA only: preserve the canonical installed
-                // app signature while retaining non-release-only G3/G4/G5
-                // technical surfaces. Ordinary debug builds stay unchanged.
+                // R2 local-device QA only: use the canonical QA signing
+                // certificate while retaining non-release-only G3/G4/G5
+                // technical surfaces. The package remains separate from Play.
                 signingConfig = signingConfigs.getByName("release")
                 manifestPlaceholders.sitUsesCleartextTraffic = "true"
             }
