@@ -169,6 +169,26 @@ test('UIAutomator hierarchy ownership is serialized per device', async () => {
   assert.equal(calls.filter(({ args }) => args.includes('uiautomator')).length, 2);
 });
 
+test('physical runner clears only the side-by-side QA app before login', async () => {
+  const calls = [];
+  const driver = new SerialUiAutomator({
+    device: 'physical-test',
+    execFileImpl: async (_file, args) => {
+      calls.push(args);
+      return { stdout: 'Success\n' };
+    },
+  });
+  await driver.resetLocalQaApp();
+  assert.deepEqual(calls, [[
+    '-s',
+    'physical-test',
+    'shell',
+    'pm',
+    'clear',
+    'com.shareittoo.app.qa',
+  ]]);
+});
+
 test('readiness requires actual route readback rather than manifest alone', async () => {
   const calls = [];
   const fetchImpl = async (url, options) => {

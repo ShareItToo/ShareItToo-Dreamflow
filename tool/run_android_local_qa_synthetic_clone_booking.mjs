@@ -394,6 +394,11 @@ export class SerialUiAutomator {
     await this.shell(['am', 'start', '-W', '-n', `${APPLICATION_ID}/${MAIN_ACTIVITY}`]);
   }
 
+  async resetLocalQaApp() {
+    const output = await this.shell(['pm', 'clear', APPLICATION_ID]);
+    if (String(output).trim() !== 'Success') fail('synthetic_clone_runner_qa_reset_failed');
+  }
+
   async reverseLoopback(port = 18080) {
     return this.#serial(async () => {
       await this.execFileImpl(this.adbPath, [
@@ -645,10 +650,12 @@ async function main() {
   const readiness = await assertCloneReadiness(session);
   const primary = new SerialUiAutomator({ device });
   const qrDisplay = qrDevice ? new SerialUiAutomator({ device: qrDevice }) : null;
+  await primary.resetLocalQaApp();
   if (qrDisplay) {
     // The backend helper binds the primary phone.  The optional QR display is
     // attached after manifest readiness and receives the same loopback reverse;
     // no public/server endpoint is introduced.
+    await qrDisplay.resetLocalQaApp();
     await qrDisplay.reverseLoopback();
   }
   const flow = await runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayload, session });
