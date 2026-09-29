@@ -31,6 +31,7 @@ import 'package:lendify/utils/cancellation_policy_text.dart';
 import 'package:lendify/config/private_pilot_config.dart';
 import 'package:lendify/widgets/private_pilot_risk_notice.dart';
 import 'package:lendify/widgets/listing_mutation_interaction.dart';
+import 'package:lendify/widgets/listing_suggestion_preview.dart';
 import 'package:lendify/theme.dart';
 
 @visibleForTesting
@@ -2564,6 +2565,13 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                         ?.copyWith(fontWeight: FontWeight.w700)),
                 if (!_blueOceanSuggestionsAccepted) ...[
                   const SizedBox(height: 8),
+                  ListingSuggestionPreview(
+                    fields: fields,
+                    categoryLabels: {
+                      for (final category in _categories)
+                        category.id: category.name,
+                    },
+                  ),
                   const Text(
                     'Die KI-Vorschläge werden erst nach deiner bewussten '
                     'Übernahme in die bearbeitbaren Felder eingesetzt.',

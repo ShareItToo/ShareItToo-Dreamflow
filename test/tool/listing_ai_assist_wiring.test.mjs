@@ -15,6 +15,22 @@ const app = readFileSync(
   'utf8',
 );
 
+test('pending listing suggestions are visible before explicit takeover without price or photo writes', () => {
+  const regression = readFileSync(new URL('../../scripts/technical_regression_check.sh', import.meta.url), 'utf8');
+  assert.match(regression, /^node --test test\/tool\/listing_ai_assist_wiring\.test\.mjs$/mu);
+  const previewStart = listing.indexOf('ListingSuggestionPreview(');
+  const takeOver = listing.indexOf("label: const Text('Vorschläge übernehmen')", previewStart);
+  assert.ok(previewStart > 0 && takeOver > previewStart);
+  assert.match(listing.slice(previewStart - 110, previewStart), /if \(!_blueOceanSuggestionsAccepted\)/u);
+  assert.match(listing.slice(previewStart, takeOver), /fields: fields/u);
+  assert.match(listing.slice(previewStart, takeOver), /category\.id: category\.name/u);
+  assert.match(listing.slice(previewStart, takeOver), /: _acceptBlueOceanSuggestions/u);
+  const apply = listing.slice(listing.indexOf('void _applyBlueOceanDraft('), listing.indexOf('void _acceptBlueOceanSuggestions('));
+  assert.doesNotMatch(apply, /_priceCtrl|_pickedImages|_blueOceanPhotoUrls|_submit|\.execute\(/u);
+  const preview = readFileSync(new URL('../../lib/widgets/listing_suggestion_preview.dart', import.meta.url), 'utf8');
+  assert.doesNotMatch(preview, /services\/|dart:io|http|Image\(|onPressed|TextEditingController|TextField/u);
+});
+
 test('automatic listing paths stay local while price recalculation is explicit', () => {
   const schedule = listing.slice(
     listing.indexOf('void _schedulePriceRecalc'),
