@@ -303,6 +303,26 @@ test('runner scrolls a clipped profile action above bottom navigation before tap
   )));
 });
 
+test('runner waits for a concrete challenge payload instead of the issuing button', async () => {
+  const driver = new SerialUiAutomator({
+    device: 'physical-test',
+    now: () => 123,
+    execFileImpl: async (_file, args) => {
+      if (args.includes('cat')) {
+        return {
+          stdout: '<hierarchy><node text="Challenge-ID: 33333333-3333-4333-8333-333333333333" /></hierarchy>',
+        };
+      }
+      return { stdout: '' };
+    },
+  });
+  const dump = await driver.waitForPattern(
+    /^Challenge-ID:\s*[0-9a-f-]{36}$/iu,
+    'pickup-challenge-issued',
+  );
+  assert.equal(dump.nodes[0].text.startsWith('Challenge-ID:'), true);
+});
+
 test('readiness requires actual route readback rather than manifest alone', async () => {
   const calls = [];
   const fetchImpl = async (url, options) => {
