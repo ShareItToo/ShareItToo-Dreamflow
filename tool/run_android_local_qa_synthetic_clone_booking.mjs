@@ -16,6 +16,8 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
 import { readStablePrivateFile } from '../backend/ops/stable_private_file.mjs';
+import { runSyntheticPaymentUiFlow } from './synthetic_payment_ui_flow.mjs';
+import { validateSyntheticPaymentReadback } from './run_android_local_qa_backend.mjs';
 
 const execFile = promisify(execFileCallback);
 const DEFAULT_MANIFEST_PATH = resolve(
@@ -257,6 +259,7 @@ export function validateSyntheticCloneSessionManifest(manifest) {
     fail('synthetic_clone_manifest_account_principal_mismatch');
   }
   if (manifest.transientCredentialsOwnerOnly !== true) fail('synthetic_clone_manifest_credentials_scope_invalid');
+  if (clone.paymentTest !== undefined) validateSyntheticPaymentReadback(clone.paymentTest, { enabled: true, runId: clone.runId });
   return Object.freeze({
     apiBaseUrl: manifest.apiBaseUrl,
     owner,
@@ -612,6 +615,7 @@ export async function assertCloneReadiness(session, { fetchImpl = fetch } = {}) 
       || status.payload.sideEffects?.notification !== false) {
     fail('synthetic_clone_runner_route_readiness_invalid');
   }
+  if (session.syntheticClone?.paymentTest) validateSyntheticPaymentReadback(status.payload.paymentTest, { enabled: true, runId: validated.runId });
   return { validated, ownerToken: token, status: status.payload };
 }
 
@@ -766,7 +770,7 @@ async function enterIsolatedRole(driver, roleAccount) {
   await login(driver, roleAccount);
 }
 
-export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayload, session, sleep = (ms) => new Promise((resolvePromise) => setTimeout(resolvePromise, ms)) }) {
+export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayload, session, paymentReadback, sleep = (ms) => new Promise((resolvePromise) => setTimeout(resolvePromise, ms)) }) {
   const validated = validateSyntheticCloneSessionManifest(session);
   await enterIsolatedRole(primary, validated.renter);
   await openClone(primary, 'renter');
@@ -776,6 +780,14 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
   const requestedDump = await primary.dump('requested-booking-id');
   const bookingId = requestedDump.nodes.find((node) => UUID.test(node.text))?.text;
   if (!bookingId) fail('synthetic_clone_runner_booking_id_not_visible');
+  let paymentTest;
+  if (session.syntheticClone?.paymentTest) {
+    if (!paymentReadback) fail('synthetic_payment_readback_required');
+    paymentTest = await runSyntheticPaymentUiFlow({ driver: primary, runId: validated.runId, bookingId,
+      readBooking: () => paymentReadback(`/synthetic-clone/bookings/${bookingId}`),
+      readPayment: () => paymentReadback(`/synthetic-clone/bookings/${bookingId}/payment-test?runId=${encodeURIComponent(validated.runId)}`),
+    });
+  }
 
   await enterIsolatedRole(primary, validated.owner);
   await openClone(primary, 'owner');
@@ -872,6 +884,13 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
   await primary.shell(['input', 'keyevent', 'KEYCODE_ENTER']);
   await primary.tapVisibleLabel(SYNTHETIC_CLONE_UI_CONTRACT.fallbackVerify, 'return-fallback');
   await primary.waitContract('returned', { timeoutMs: 15_000 });
+  if (paymentTest) {
+    await primary.tapVisibleLabel('Lokalen Zahlungstest öffnen', 'payment-owner');
+    await primary.waitForPattern(/^Server-Teststatus: refunded$/u, 'payment-owner-readback');
+    await primary.waitForPattern(/^Vermieteransicht: nur Serverstatus; keine Zahlungsaktion\.$/u, 'payment-owner-role');
+    await primary.shell(['input', 'keyevent', 'KEYCODE_BACK']);
+    paymentTest.ownerReadback = true;
+  }
   await primary.tapVisibleLabel(SYNTHETIC_CLONE_UI_CONTRACT.auditLoad, 'audit');
   await primary.waitContract('audit');
   await primary.tapVisibleLabel(SYNTHETIC_CLONE_UI_CONTRACT.cleanup, 'audit');
@@ -884,6 +903,7 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
     pickupVerification: 'qr-v3',
     qrVerificationMode: qrDisplay ? 'camera' : 'manual-payload',
     returnVerification: 'six_digit_fallback',
+    ...(paymentTest ? { paymentTest } : {}),
   };
 }
 
@@ -914,7 +934,11 @@ async function main() {
     // no public/server endpoint is introduced.
     await qrDisplay.reverseLoopback();
   }
-  const flow = await runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayload, session });
+  const flow = await runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayload, session, paymentReadback: async (path) => {
+    const value = await apiJson(readiness.validated.apiBaseUrl, path, { token: readiness.ownerToken });
+    if (!value.response.ok) fail('synthetic_payment_readback_failed');
+    return value.payload;
+  } });
   const evidence = buildSyntheticCloneEvidence({
     session,
     physicalDevice: { physical: true, apiLevel: null },
@@ -923,6 +947,11 @@ async function main() {
   const finalStatus = await apiJson(readiness.validated.apiBaseUrl, '/synthetic-clone/status', { token: readiness.ownerToken });
   if (!finalStatus.response.ok || finalStatus.payload.cleaned !== true || finalStatus.payload.bookings !== 0) {
     fail('synthetic_clone_runner_cleanup_readback_failed');
+  }
+  if (flow.paymentTest) {
+    const state = finalStatus.payload.paymentTest;
+    if (state?.enabled !== false || state?.runId !== readiness.validated.runId || state.states !== 0 || state.commands !== 0 || state.auditEvents !== 0) fail('synthetic_payment_cleanup_readback_failed');
+    evidence.paymentTest = { ...flow.paymentTest, cleanupVerified: true };
   }
   process.stdout.write(`${JSON.stringify(evidence)}\n`);
 }

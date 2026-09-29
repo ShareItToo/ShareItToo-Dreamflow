@@ -22,6 +22,7 @@ import 'package:lendify/services/privacy_export_file_store.dart';
 import 'package:lendify/widgets/privacy_export_cache_lifecycle_host.dart';
 import 'package:lendify/widgets/synthetic_clone_non_binding_banner.dart';
 import 'package:lendify/config/synthetic_clone_config.dart';
+import 'package:lendify/config/synthetic_payment_config.dart';
 
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -32,6 +33,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   ReleaseIdentity.validateCurrentBuild();
   SyntheticCloneConfig.validateCurrentBuild();
+  SyntheticPaymentConfig.validateCurrentBuild();
   try {
     await const PrivacyExportFileStore().purgeRetainedCopies();
   } catch (_) {

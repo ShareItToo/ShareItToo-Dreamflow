@@ -56,6 +56,7 @@ function fixture(buildNumber = explicitBuildNumber) {
       blueOceanMockUi: true,
       stageANonBindingPilotEnabled: true,
       syntheticCloneBookingLane: true,
+      syntheticPaymentTestLane: true,
       syntheticCloneNotice: 'Synthetischer Test – keine vertragliche oder finanzielle Wirkung',
       syntheticCloneRequiredRoles: ['owner', 'renter'],
       buildOrdering: {

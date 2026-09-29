@@ -170,6 +170,7 @@ common_args=(
   "--dart-define=SIT_BLUE_OCEAN_LISTING_ASSISTANT=$blue_ocean_listing_assistant"
   "--dart-define=SIT_STAGE_A_NON_BINDING_PILOT=$stage_a_non_binding_pilot"
   "--dart-define=SIT_SYNTHETIC_CLONE_BOOKING_LANE=$synthetic_clone_booking_lane"
+  "--dart-define=SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE=false"
   "--dart-define=SIT_STAGE_A_PILOT_ID=$stage_a_pilot_id"
   "--dart-define=SIT_BOOKING_GROUPS_TECHNICAL_UI_ENABLED=$booking_groups_technical_ui"
   "--dart-define=SIT_BOOKING_GROUPS_PUBLIC_RELEASE_ALLOWED=false"

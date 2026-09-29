@@ -54,6 +54,7 @@ commit="$(git rev-parse HEAD)"
 }
 
 SIT_ALLOW_CANDIDATE_ROLLOVER=1 \
+  SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE=0 \
   SIT_FIREBASE_VALIDATION_PLATFORM=android \
   SIT_BUILD_PREFLIGHT_ONLY=1 \
   bash scripts/build_android_release_candidate.sh
@@ -96,6 +97,7 @@ flutter build apk \
   --dart-define=SIT_BLUE_OCEAN_LISTING_ASSISTANT=true \
   --dart-define=SIT_STAGE_A_NON_BINDING_PILOT=true \
   --dart-define=SIT_SYNTHETIC_CLONE_BOOKING_LANE=true \
+  --dart-define=SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE=true \
   --dart-define=SIT_BOOKING_GROUPS_TECHNICAL_UI_ENABLED=true \
   --dart-define=SIT_BOOKING_GROUPS_PUBLIC_RELEASE_ALLOWED=false \
   --dart-define=SIT_PLANNER_TECHNICAL_UI_ENABLED=true \
@@ -189,6 +191,7 @@ printf '%s\n' \
   "    \"blueOceanMockUi\": true," \
   "    \"stageANonBindingPilotEnabled\": true," \
   "    \"syntheticCloneBookingLane\": true," \
+  "    \"syntheticPaymentTestLane\": true," \
   "    \"syntheticCloneNotice\": \"Synthetischer Test – keine vertragliche oder finanzielle Wirkung\"," \
   "    \"syntheticCloneRequiredRoles\": [\"owner\", \"renter\"]," \
   "    \"buildOrdering\": {\"installedPlayBuildNumber\": \"$INSTALLED_PLAY_BUILD_NUMBER\", \"localQaBuildNumber\": \"$BUILD_NUMBER\", \"finalPlaySuccessorBuildNumber\": \"$FINAL_PLAY_SUCCESSOR_BUILD_NUMBER\"}," \

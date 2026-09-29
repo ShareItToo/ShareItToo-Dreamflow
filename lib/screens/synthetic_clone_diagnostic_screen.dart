@@ -8,6 +8,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/synthetic_clone_config.dart';
+import '../config/synthetic_payment_config.dart';
+import 'synthetic_payment_test_screen.dart';
 import '../services/auth_service.dart';
 import '../services/backend_http.dart';
 import '../services/synthetic_clone_booking_service.dart';
@@ -406,6 +408,15 @@ class _SyntheticCloneDiagnosticScreenState
                 style: const TextStyle(fontWeight: FontWeight.w800)),
             Text('Owner: ${booking.ownerId}'),
             Text('Renter: ${booking.renterId}'),
+            if (SyntheticPaymentConfig.enabled && _status != null && !_status!.cleaned)
+              OutlinedButton(
+                onPressed: _busy ? null : () async {
+                  final runId = _status!.runId;
+                  await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SyntheticPaymentTestScreen(runId: runId, bookingId: booking.id)));
+                  if (mounted) await _load();
+                },
+                child: const Text('Lokalen Zahlungstest öffnen'),
+              ),
             const SizedBox(height: 8),
             if (_role == 'owner' && booking.status == 'requested')
               FilledButton(

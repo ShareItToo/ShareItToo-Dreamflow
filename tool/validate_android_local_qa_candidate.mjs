@@ -179,6 +179,7 @@ export async function validateAndroidLocalQaCandidate({
     blueOceanMockUi: true,
     stageANonBindingPilotEnabled: true,
     syntheticCloneBookingLane: true,
+    syntheticPaymentTestLane: true,
     syntheticCloneNotice,
     syntheticCloneRequiredRoles: ['owner', 'renter'],
     buildOrdering,
