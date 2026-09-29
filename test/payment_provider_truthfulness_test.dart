@@ -264,14 +264,100 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('Zahlung bestätigt'), findsOneWidget);
+    expect(find.text('Testzahlung bestätigt'), findsOneWidget);
 
     failRefresh = true;
     await tester.tap(find.byIcon(Icons.refresh));
     await tester.pumpAndSettle();
 
-    expect(find.text('Zahlung bestätigt'), findsNothing);
+    expect(find.text('Testzahlung bestätigt'), findsNothing);
     expect(find.text('Zahlung noch nicht freigeschaltet'), findsOneWidget);
     expect(find.byType(FilledButton), findsNothing);
   });
+
+  for (final mode in ['test', 'live']) {
+    for (final status in [
+      'requires_action',
+      'captured',
+      'partially_refunded',
+      'refunded'
+    ]) {
+      testWidgets(
+          '$mode $status keeps payment, refund and payout truth separate',
+          (tester) async {
+        await tester.pumpWidget(MaterialApp(
+          home: PaymentCheckoutScreen(
+            bookingId: 'synthetic-status',
+            loadCapabilities: () async => {
+              'provider': 'stripe',
+              'providerBacked': true,
+              'checkoutAvailable': true,
+              'mode': mode,
+            },
+            loadPayment: (_) async => {
+              'payment': {
+                'status': status,
+                'livemode': mode == 'live',
+                'refundTruthStatus':
+                    status.contains('refunded') ? 'providerBound' : 'none',
+                'amountMinor': 6600,
+                'platformFeeMinor': 600,
+                'ownerPayoutMinor': 6000,
+                'refundedMinor': 3300,
+                'currency': 'EUR',
+              },
+              'payout': null,
+            },
+          ),
+        ));
+        await tester.pumpAndSettle();
+        final title = switch (status) {
+          'requires_action' => 'Bestätigung im Checkout erforderlich',
+          'captured' =>
+            mode == 'test' ? 'Testzahlung bestätigt' : 'Zahlung bestätigt',
+          'partially_refunded' => mode == 'test'
+              ? 'Testzahlung teilweise erstattet'
+              : 'Teilweise erstattet',
+          _ => mode == 'test' ? 'Testzahlung erstattet' : 'Zahlung erstattet',
+        };
+        expect(find.text(title), findsOneWidget);
+        expect(find.textContaining('Es fließt kein echtes Geld'),
+            mode == 'test' ? findsOneWidget : findsNothing);
+        if (status != 'requires_action') {
+          expect(find.byType(FilledButton), findsNothing);
+          expect(find.textContaining('Keine Auszahlung bestätigt.'),
+              findsOneWidget);
+        }
+        if (status.contains('refunded')) {
+          expect(find.text('33,00 EUR'), findsOneWidget);
+          expect(find.text('Zahlung bestätigt'), findsNothing);
+        }
+      });
+    }
+  }
+
+  for (final paidAt in [null, '2026-09-29T12:00:00Z']) {
+    testWidgets('test payout requires durable paid timestamp: $paidAt',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: PaymentCheckoutScreen(
+          bookingId: 'synthetic-payout',
+          loadCapabilities: () async => const {
+            'provider': 'stripe',
+            'checkoutAvailable': true,
+            'mode': 'test',
+          },
+          loadPayment: (_) async => {
+            'payment': {'status': 'captured', 'currency': 'EUR'},
+            'payout': {'status': 'paid', 'paidAt': paidAt},
+          },
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Testauszahlung bestätigt.'),
+          paidAt == null ? findsNothing : findsOneWidget);
+      expect(find.textContaining('Es fließt kein echtes Geld'), findsOneWidget);
+      expect(find.byType(FilledButton), findsNothing);
+    });
+  }
 }

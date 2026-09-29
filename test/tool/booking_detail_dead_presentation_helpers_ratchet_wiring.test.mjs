@@ -57,7 +57,11 @@ test('active cancellation policy and completion facts remain central and visible
   );
   assert.match(completion, /_FactRow\(/u);
   assert.match(completion, /needsReview \? 'Wird geprüft' : 'Abgeschlossen'/u);
-  assert.match(completion, /'Erstattung gem\. Richtlinien'/u);
+  assert.match(completion, /label: 'Erstattungsstatus'/u);
+  assert.match(completion, /Hier nicht bestätigt\./u);
+  assert.match(completion, /Geplantes Mietende/u);
+  assert.doesNotMatch(completion, /Erstattung gem\. Richtlinien|Ausgezahlt am|Rückgabe bestätigt/u);
+  assert.doesNotMatch(source, /_formatPayoutDate|payoutFormatter/u);
 });
 
 test('booking presentation-helper ratchet is permanently registered', () => {

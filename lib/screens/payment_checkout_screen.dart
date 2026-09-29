@@ -129,7 +129,8 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen>
           'Für diese Buchung läuft bereits ein sicherer Checkout. Es wird kein zweiter Zahlungsvorgang gestartet.',
         'payment_checkout_reconciliation_required' =>
           'Der Status des bisherigen Checkouts wird sicher abgeglichen. Bitte später aktualisieren; es wird kein zweiter Zahlungsvorgang gestartet.',
-        'booking_already_paid' => 'Diese Buchung wurde bereits bezahlt.',
+        'booking_already_paid' =>
+          'Für diese Buchung liegt bereits eine Zahlungsbestätigung vor. Bitte den Status aktualisieren.',
         _ => 'Die Zahlungsaktion konnte gerade nicht abgeschlossen werden.',
       };
 
@@ -159,12 +160,24 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen>
         .contains(paymentStatus);
     final providerAvailable = _providerAvailable(_capabilities);
     final testMode = providerAvailable && _capabilities?['mode'] == 'test';
+    final payout = _state?['payout'] as Map?;
+    final payoutStatus = payout?['status']?.toString();
+    final statusTitle = switch (paymentStatus) {
+      'captured' => testMode ? 'Testzahlung bestätigt' : 'Zahlung bestätigt',
+      'partially_refunded' =>
+        testMode ? 'Testzahlung teilweise erstattet' : 'Teilweise erstattet',
+      'refunded' => testMode ? 'Testzahlung erstattet' : 'Zahlung erstattet',
+      'requires_action' => 'Bestätigung im Checkout erforderlich',
+      'failed' => 'Zahlung nicht erfolgreich',
+      _ => testMode ? 'Zahlungstest' : 'Buchung bezahlen',
+    };
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Zahlungsstatus'),
         actions: [
           IconButton(
+              tooltip: 'Zahlungsstatus aktualisieren',
               onPressed: _working ? null : _refresh,
               icon: const Icon(Icons.refresh)),
         ],
@@ -189,11 +202,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen>
                                 ? 'Zahlung noch nicht freigeschaltet'
                                 : (refundVerificationPending
                                     ? 'Erstattungsstatus wird geprüft'
-                                    : captured
-                                    ? 'Zahlung bestätigt'
-                                    : (testMode
-                                        ? 'Zahlungstest'
-                                        : 'Buchung bezahlen')),
+                                    : statusTitle),
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
                           const SizedBox(height: 8),
@@ -203,11 +212,16 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen>
                                 : (refundVerificationPending
                                     ? 'Anbieterbestätigung und lokale Verbuchung werden sicher abgeglichen. Bis dahin wird weder ein bestätigter Erstattungsbetrag noch ein neuer Checkout angezeigt.'
                                     : captured
-                                    ? 'Der freigeschaltete Zahlungsdienst hat die Zahlung bestätigt. Der Status stammt direkt vom Server.'
-                                    : (testMode
-                                        ? 'Dieser Checkout ist ausschließlich für gekennzeichnete Tests vorgesehen. Es fließt kein echtes Geld.'
-                                        : 'Betrag und Gebühr werden vom ShareItToo-Server festgelegt. Deine Zahlungsdaten werden ausschließlich im sicheren Stripe-Checkout eingegeben.')),
+                                        ? 'Der Zahlungs- und Erstattungsstatus stammt direkt vom Server. Eine Zahlungsbestätigung ist keine Auszahlungsbestätigung.'
+                                        : (testMode
+                                            ? 'Dieser Checkout ist ausschließlich für gekennzeichnete Tests vorgesehen.'
+                                            : 'Betrag und Gebühr werden vom ShareItToo-Server festgelegt. Deine Zahlungsdaten werden ausschließlich im sicheren Stripe-Checkout eingegeben.')),
                           ),
+                          if (testMode) ...[
+                            const SizedBox(height: 8),
+                            const Text(
+                                'Testmodus: Es fließt kein echtes Geld. Auch Erstattungen und Auszahlungen sind nur Tests.'),
+                          ],
                           if (amounts != null) ...[
                             const SizedBox(height: 18),
                             _AmountRow(
@@ -222,6 +236,31 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen>
                                 label: 'Vermietererlös',
                                 value: _money(
                                     amounts['ownerPayoutMinor'], currency)),
+                            if (!refundVerificationPending &&
+                                const {'partially_refunded', 'refunded'}
+                                    .contains(paymentStatus))
+                              _AmountRow(
+                                label: testMode
+                                    ? 'Im Test erstattet'
+                                    : 'Erstattet',
+                                value:
+                                    _money(payment?['refundedMinor'], currency),
+                              ),
+                          ],
+                          if (providerAvailable && captured) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              refundVerificationPending
+                                  ? 'Auszahlungsstatus wird geprüft.'
+                                  : payoutStatus == 'paid' &&
+                                          payout?['paidAt'] != null
+                                      ? (testMode
+                                          ? 'Testauszahlung bestätigt. Keine echte Auszahlung.'
+                                          : 'Auszahlung vom Server bestätigt.')
+                                      : payoutStatus == 'reversed'
+                                          ? 'Auszahlung zurückgeführt.'
+                                          : 'Keine Auszahlung bestätigt. Freigabe erst nach Rückgabe und Ablauf der geltenden Prüf- und Haltefristen; offene Klärungen können sie weiter zurückhalten.',
+                            ),
                           ],
                           if (providerAvailable &&
                               !captured &&

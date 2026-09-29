@@ -1779,9 +1779,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                     const SizedBox(height: 2),
                     if (!isHeldForReview)
                       Text(
-                        end != null
-                            ? 'Auszahlung am ${_formatPayoutDate(end)}'
-                            : 'Auszahlung nach Rückgabe',
+                        'Noch keine Auszahlung bestätigt. Freigabe erst nach Rückgabe und Ablauf der geltenden Prüf- und Haltefristen.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: Colors.white70,
                         ),
@@ -2681,9 +2679,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                     const SizedBox(height: 2),
                     if (!isHeldForReview)
                       Text(
-                        end != null
-                            ? 'Auszahlung am ${_formatPayoutDate(end)}'
-                            : 'Auszahlung nach Rückgabe',
+                        'Noch keine Auszahlung bestätigt. Freigabe erst nach Rückgabe und Ablauf der geltenden Prüf- und Haltefristen.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: Colors.white70,
                         ),
@@ -3076,14 +3072,16 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         // Entfernt: Der Zurückziehen-Button wandert an das Seitenende (nur für Ausstehende Buchung)
         const SizedBox(height: 12),
         if (isCompleted) ...[
-          _CompletionSummaryCard(
-            booking: widget.booking,
-            isOwnerView: _isViewerOwnerSync(),
-            needsReview: widget.booking['needsReview'] == true,
-            payoutFormatter: _formatPayoutDate,
-            euroFormatter: _formatEuro,
-            serviceFee: _serviceFee,
-          ),
+          if (_simulationOnly)
+            const _SimulationPaymentNotice()
+          else
+            _CompletionSummaryCard(
+              booking: widget.booking,
+              isOwnerView: _isViewerOwnerSync(),
+              needsReview: widget.booking['needsReview'] == true,
+              euroFormatter: _formatEuro,
+              serviceFee: _serviceFee,
+            ),
           const SizedBox(height: 12),
           // Review button moved to bottomNavigationBar for completed renter view
         ] else ...[
@@ -3275,27 +3273,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   bool _isViewerOwnerSync() {
     // Owner-view is explicitly passed by the caller (e.g., Meine Anzeigen > Laufend)
     return widget.viewerIsOwner;
-  }
-
-  String _formatPayoutDate(DateTime end) {
-    final payout = end.add(const Duration(days: 1));
-    final months = [
-      'Jan',
-      'Feb',
-      'Mär',
-      'Apr',
-      'Mai',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Okt',
-      'Nov',
-      'Dez',
-    ];
-    final m = months[(payout.month - 1).clamp(0, 11)];
-    final dd = payout.day.toString().padLeft(2, '0');
-    return '$dd. $m';
   }
 
   String _formatPickupCountdown(Duration d, {String modeLabel = 'Abholung'}) {
@@ -4926,7 +4903,6 @@ class _CompletionSummaryCard extends StatelessWidget {
   final Map<String, dynamic> booking;
   final bool isOwnerView;
   final bool needsReview;
-  final String Function(DateTime) payoutFormatter;
   final String Function(double) euroFormatter;
   final double Function(double) serviceFee;
 
@@ -4934,7 +4910,6 @@ class _CompletionSummaryCard extends StatelessWidget {
     required this.booking,
     required this.isOwnerView,
     required this.needsReview,
-    required this.payoutFormatter,
     required this.euroFormatter,
     required this.serviceFee,
   });
@@ -4943,7 +4918,7 @@ class _CompletionSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final status = (booking['status'] as String?) ?? 'Abgeschlossen';
-    final (start, end) = _parseStaticDateRange(booking);
+    final (_, end) = _parseStaticDateRange(booking);
     final boundPrice = _BoundBookingPriceSnapshot.fromBooking(booking);
     final totalPaid = boundPrice?.total ??
         _parseStaticEuro((booking['pricePaid'] as String?) ?? '');
@@ -4951,9 +4926,8 @@ class _CompletionSummaryCard extends StatelessWidget {
     final ownerPayout =
         boundPrice?.ownerPayout ?? (totalPaid - fee).clamp(0.0, totalPaid);
 
-    // Dates: use end as return date fallback
+    // The scheduled end is not a return, refund or payout receipt.
     final returnedAt = end;
-    final payoutAt = end?.add(const Duration(days: 1));
 
     List<Widget> rows = [];
     if (status == 'Storniert') {
@@ -4967,13 +4941,13 @@ class _CompletionSummaryCard extends StatelessWidget {
         if (returnedAt != null)
           _FactRow(
             icon: Icons.event_busy,
-            label: 'Storniert am',
+            label: 'Geplantes Mietende',
             value: _fmtDate(returnedAt),
           ),
         _FactRow(
           icon: Icons.receipt_long_outlined,
-          label: 'Beleg',
-          value: 'Erstattung gem. Richtlinien',
+          label: 'Erstattungsstatus',
+          value: 'Hier nicht bestätigt. Den aktuellen Stand findest du unter Zahlungsstatus.',
         ),
       ]);
     } else {
@@ -4990,7 +4964,7 @@ class _CompletionSummaryCard extends StatelessWidget {
         if (returnedAt != null)
           _FactRow(
             icon: Icons.assignment_turned_in_outlined,
-            label: 'Rückgabe bestätigt',
+            label: 'Geplantes Mietende',
             value: _fmtDate(returnedAt),
           ),
         if (isOwnerView && needsReview)
@@ -5002,14 +4976,14 @@ class _CompletionSummaryCard extends StatelessWidget {
         if (isOwnerView && !needsReview)
           _FactRow(
             icon: Icons.payments_outlined,
-            label: 'Auszahlung',
+            label: 'Vorauss. Vermietererlös',
             value: euroFormatter(ownerPayout),
           ),
-        if (isOwnerView && !needsReview && payoutAt != null)
+        if (isOwnerView && !needsReview)
           _FactRow(
-            icon: Icons.event_available_outlined,
-            label: 'Ausgezahlt am',
-            value: payoutFormatter(payoutAt),
+            icon: Icons.info_outline,
+            label: 'Auszahlungsstatus',
+            value: 'Hier nicht bestätigt. Rückgabe allein bestätigt keine Auszahlung; Prüf- und Haltefristen gelten weiterhin. Den aktuellen Stand findest du unter Zahlungsstatus.',
           ),
         if (needsReview)
           _FactRow(

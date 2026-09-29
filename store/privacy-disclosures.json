@@ -752,7 +752,7 @@
     },
     {
       "path": "lib/widgets/app_image.dart",
-      "sha256": "8cfa1d5d5f4478a79169880d0413c099b595e55599bb17bb9eb1fe6983196152"
+      "sha256": "531c7d68c4dcc1948d45f8a43c1cd173c628758a803de587ba4bf4bdf404bf80"
     },
     {
       "path": "lib/services/address_privacy.dart",
@@ -820,11 +820,11 @@
     },
     {
       "path": "lib/screens/login_screen.dart",
-      "sha256": "21f0137b30d80cf4f6ee2c2c1d65d6741c880abf14ca6f4e5bf41c9a889333fb"
+      "sha256": "2010ade0fe6b0381c4ea45dd3568597fe0a28a859de8f7e2aec3ce84448a9b8e"
     },
     {
       "path": "lib/screens/register_screen.dart",
-      "sha256": "5408bd66a7cb2b85b82dfb029be0e27d7baa254fdbe3be9ebfe09600d05adc0f"
+      "sha256": "fc8125ba6461e3c8408d8715a95ac560f8a7eb5cd77833a59973576224be7817"
     },
     {
       "path": "lib/screens/wishlists_screen.dart",
@@ -880,7 +880,7 @@
     },
     {
       "path": "lib/screens/payment_checkout_screen.dart",
-      "sha256": "322206148524f0b42dae31b96b62d023fb79bff0288d7f9ccd62d2100e011ce8"
+      "sha256": "33765e594cfdaa9490901559973687eb88e61b3815a2d9b0f3c65864175a43b1"
     },
     {
       "path": "lib/models/invoice.dart",
@@ -904,7 +904,7 @@
     },
     {
       "path": "lib/screens/booking_detail_screen.dart",
-      "sha256": "db32d3d20900522cf0ef77f6076cee81648181d8e50f7e60d8553d9603d203af"
+      "sha256": "fe6ea35b3af7d22cb08e02352128e782926c05709dabc04db800586191004738"
     },
     {
       "path": "lib/screens/ongoing_owner_detail_screen.dart",
