@@ -540,7 +540,12 @@ async function login(driver, roleAccount) {
   await driver.enterField('E-Mail', roleAccount.email, 'login');
   await driver.enterField('Passwort', roleAccount.password, 'login');
   await driver.shell(['input', 'keyevent', 'KEYCODE_ENTER']);
-  await driver.tapLabel('Anmelden', 'login');
+  const submitReady = await driver.dump('login-submit-ready');
+  if (!hasLabel(submitReady.nodes, SYNTHETIC_CLONE_UI_CONTRACT.navigation.profile)
+      && !hasLabel(submitReady.nodes, SYNTHETIC_CLONE_UI_CONTRACT.navigation.logout)
+      && !hasLabel(submitReady.nodes, SYNTHETIC_CLONE_UI_CONTRACT.statusRefresh)) {
+    await driver.tapLabel('Anmelden', 'login');
+  }
   await driver.waitForAny(['Mein SIT', SYNTHETIC_CLONE_UI_CONTRACT.title], 'post-login');
 }
 

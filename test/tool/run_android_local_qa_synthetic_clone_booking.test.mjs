@@ -69,6 +69,7 @@ test('physical runner launches the side-by-side local-QA package only', () => {
     runnerSource,
     /async function loadBooking[\s\S]*bookingField[\s\S]*KEYCODE_ENTER[\s\S]*bookingLoad/u,
   );
+  assert.match(runnerSource, /const submitReady = await driver\.dump\('login-submit-ready'\)/u);
 });
 
 test('UI parser decodes Android XML entities and keeps the bottom-nav label', () => {
