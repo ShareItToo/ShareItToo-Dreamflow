@@ -14,6 +14,7 @@ import {
   SerialUiAutomator,
   validateManualQrV3Payload,
   validateSyntheticCloneSessionManifest,
+  viewportBounds,
 } from '../../tool/run_android_local_qa_synthetic_clone_booking.mjs';
 
 const runnerSource = readFileSync(
@@ -327,14 +328,16 @@ test('label tapping selects the actionable control when a title has the same lab
 
 test('runner scrolls a clipped profile action above bottom navigation before tapping', async () => {
   const calls = [];
+  let scrolled = false;
   const driver = new SerialUiAutomator({
     device: 'physical-test',
     now: () => 123,
     execFileImpl: async (_file, args) => {
       calls.push(args);
+      if (args.includes('swipe')) scrolled = true;
       if (args.includes('cat')) {
         return {
-          stdout: '<hierarchy><node bounds="[0,0][1440,3120]" /><node content-desc="Synthetischer Zwei-Rollen-Test&#10;Synthetischer Test" clickable="true" enabled="true" bounds="[48,3031][1392,3120]" /></hierarchy>',
+          stdout: `<hierarchy><node bounds="[0,0][1440,3120]" /><node content-desc="Synthetischer Zwei-Rollen-Test&#10;Synthetischer Test" clickable="true" enabled="true" bounds="[48,${scrolled ? '1800' : '3031'}][1392,${scrolled ? '1943' : '3120'}]" /></hierarchy>`,
         };
       }
       return { stdout: '' };
@@ -345,6 +348,38 @@ test('runner scrolls a clipped profile action above bottom navigation before tap
     JSON.stringify(args.slice(-7))
       === JSON.stringify(['input', 'swipe', '720', '2434', '720', '1092', '350'])
   )));
+});
+
+test('bounded reveal finds an initially omitted action and keeps swipes inside the root viewport', async () => {
+  const calls = [];
+  let scrolled = false;
+  const driver = new SerialUiAutomator({
+    device: 'physical-test',
+    now: () => 123,
+    execFileImpl: async (_file, args) => {
+      calls.push(args);
+      if (args.includes('swipe')) scrolled = true;
+      if (args.includes('cat')) {
+        return {
+          stdout: scrolled
+            ? '<hierarchy><node bounds="[0,0][1440,3120]" /><node bounds="[0,0][1440,9000]" /><node content-desc="Cleanup" clickable="true" enabled="true" bounds="[101,1800][1339,1943]" /></hierarchy>'
+            : '<hierarchy><node bounds="[0,0][1440,3120]" /><node bounds="[0,0][1440,9000]" /></hierarchy>',
+        };
+      }
+      return { stdout: '' };
+    },
+  });
+  await driver.tapVisibleLabel('Cleanup', 'audit');
+  const swipe = calls.find((args) => args.includes('swipe'));
+  assert.deepEqual(swipe.slice(-7), ['input', 'swipe', '720', '2434', '720', '1092', '350']);
+  assert.ok(calls.some((args) => (
+    args.at(-4) === 'input' && args.at(-3) === 'tap'
+      && args.at(-2) === '720' && args.at(-1) === '1872'
+  )));
+  assert.deepEqual(viewportBounds([
+    { bounds: { left: 0, top: 0, right: 1440, bottom: 3120 } },
+    { bounds: { left: 0, top: 0, right: 1440, bottom: 9000 } },
+  ]), { left: 0, top: 0, right: 1440, bottom: 3120 });
 });
 
 test('runner waits for a concrete challenge payload instead of the issuing button', async () => {

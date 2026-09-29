@@ -138,6 +138,20 @@ function hasLabel(nodes, label) {
   return nodeLabels(nodes).has(label);
 }
 
+export function viewportBounds(nodes) {
+  const root = nodes.find((node) => (
+    node.bounds?.left === 0 && node.bounds?.top === 0
+      && node.bounds.right > 0 && node.bounds.bottom > 0
+  ));
+  if (root) return root.bounds;
+  return {
+    left: 0,
+    top: 0,
+    right: Math.max(0, ...nodes.map((node) => node.bounds?.right ?? 0)),
+    bottom: Math.max(0, ...nodes.map((node) => node.bounds?.bottom ?? 0)),
+  };
+}
+
 function requiredForPhase(phase) {
   const common = [SYNTHETIC_CLONE_UI_CONTRACT.title];
   const c = SYNTHETIC_CLONE_UI_CONTRACT;
@@ -415,31 +429,40 @@ export class SerialUiAutomator {
     await this.shell(['input', 'tap', String(x), String(y)]);
   }
 
-  async revealLabel(label, phase) {
-    const { nodes } = await this.dump(phase);
-    const node = nodes.find((candidate) => candidate.bounds && candidate.enabled && candidate.clickable
-      && [candidate.text, candidate.contentDesc, candidate.hint]
-        .flatMap(labelVariants).includes(label));
-    if (!node) fail(`synthetic_clone_runner_action_missing:${phase}:${label}`);
-    const screenRight = Math.max(...nodes.map((candidate) => candidate.bounds?.right ?? 0));
-    const screenBottom = Math.max(...nodes.map((candidate) => candidate.bounds?.bottom ?? 0));
-    if (screenRight > 0 && screenBottom > 0 && node.bounds.top >= screenBottom * 0.85) {
-      await this.shell([
-        'input',
-        'swipe',
-        String(Math.round(screenRight * 0.5)),
-        String(Math.round(screenBottom * 0.78)),
-        String(Math.round(screenRight * 0.5)),
-        String(Math.round(screenBottom * 0.35)),
-        '350',
-      ]);
-      await new Promise((resolvePromise) => setTimeout(resolvePromise, 1_000));
+  async #scrollForward(nodes) {
+    const viewport = viewportBounds(nodes);
+    if (viewport.right <= 0 || viewport.bottom <= 0) {
+      fail('synthetic_clone_runner_viewport_missing');
     }
+    await this.shell([
+      'input',
+      'swipe',
+      String(Math.round(viewport.right * 0.5)),
+      String(Math.round(viewport.bottom * 0.78)),
+      String(Math.round(viewport.right * 0.5)),
+      String(Math.round(viewport.bottom * 0.35)),
+      '350',
+    ]);
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 1_000));
+  }
+
+  async revealLabel(label, phase, { maxScrolls = 4 } = {}) {
+    for (let attempt = 0; attempt <= maxScrolls; attempt += 1) {
+      const { nodes } = await this.dump(`${phase}-reveal-${attempt}`);
+      const node = nodes.find((candidate) => candidate.bounds && candidate.enabled && candidate.clickable
+        && [candidate.text, candidate.contentDesc, candidate.hint]
+          .flatMap(labelVariants).includes(label));
+      const viewport = viewportBounds(nodes);
+      if (node && node.bounds.top < viewport.bottom * 0.85) return node;
+      if (attempt < maxScrolls) await this.#scrollForward(nodes);
+    }
+    fail(`synthetic_clone_runner_action_missing:${phase}:${label}`);
   }
 
   async tapVisibleLabel(label, phase) {
-    await this.revealLabel(label, phase);
-    await this.tapLabel(label, phase);
+    const node = await this.revealLabel(label, phase);
+    const [x, y] = center(node.bounds);
+    await this.shell(['input', 'tap', String(x), String(y)]);
   }
 
   async enterField(label, value, phase) {
@@ -493,8 +516,9 @@ export class SerialUiAutomator {
       const dump = await this.dump(phase);
       if ([...nodeLabels(dump.nodes)].some((label) => pattern.test(label))) return dump;
       if (revealBelowViewport && !revealed) {
-        const screenRight = Math.max(...dump.nodes.map((candidate) => candidate.bounds?.right ?? 0));
-        const screenBottom = Math.max(...dump.nodes.map((candidate) => candidate.bounds?.bottom ?? 0));
+        const viewport = viewportBounds(dump.nodes);
+        const screenRight = viewport.right;
+        const screenBottom = viewport.bottom;
         if (screenRight > 0 && screenBottom > 0) {
           await this.shell([
             'input',
