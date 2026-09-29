@@ -46,7 +46,10 @@ const session = {
 
 test('physical runner launches the side-by-side local-QA package only', () => {
   assert.match(runnerSource, /const APPLICATION_ID = 'com\.shareittoo\.app\.qa'/u);
+  assert.match(runnerSource, /const MAIN_ACTIVITY = 'com\.shareittoo\.app\.MainActivity'/u);
+  assert.match(runnerSource, /`\$\{APPLICATION_ID\}\/\$\{MAIN_ACTIVITY\}`/u);
   assert.doesNotMatch(runnerSource, /const APPLICATION_ID = 'com\.shareittoo\.app';/u);
+  assert.doesNotMatch(runnerSource, /`\$\{APPLICATION_ID\}\/\.MainActivity`/u);
 });
 
 function screenXml(labels) {
