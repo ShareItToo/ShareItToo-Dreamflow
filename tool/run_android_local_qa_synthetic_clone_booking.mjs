@@ -509,6 +509,13 @@ async function login(driver, roleAccount) {
     initial = await driver.dump('login-after-role-switch');
   }
   if (!hasLabel(initial.nodes, 'E-Mail') || !hasLabel(initial.nodes, 'Passwort')) {
+    if (!hasLabel(initial.nodes, 'Anmelden') && hasLabel(initial.nodes, 'Back')) {
+      await driver.tapLabel('Back', 'guest-profile-back');
+      initial = await driver.waitForAny(
+        [SYNTHETIC_CLONE_UI_CONTRACT.navigation.profile],
+        'guest-profile-back',
+      );
+    }
     if (!hasLabel(initial.nodes, 'Anmelden')
         && hasLabel(initial.nodes, SYNTHETIC_CLONE_UI_CONTRACT.navigation.profile)) {
       await driver.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.navigation.profile, 'guest-navigation');
