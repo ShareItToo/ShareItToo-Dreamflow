@@ -146,6 +146,42 @@ function screenXml(labels) {
 const pickerImageXml = '<node content-desc="Foto wurde am 29.09.2026 11:37 aufgenommen" enabled="true" bounds="[20,40][120,140]" />';
 const pickerConfirmXml = '<node text="Fertig" enabled="true" bounds="[100,200][220,260]" />';
 
+test('manual pickup viewport is ready with QR controls while fallback and camera controls are off-screen', () => {
+  const c = SYNTHETIC_CLONE_UI_CONTRACT;
+  const visible = [c.title, c.status.accepted, c.qrPayloadField, c.qrPayloadVerify];
+  assert.equal(assertSyntheticCloneInterface(screenXml(visible), 'pickupVerifier').phase, 'pickupVerifier');
+  assert.match(runnerSource, /waitContract\(qrDisplay \? 'pickupCameraVerifier' : 'pickupVerifier'\)/u);
+});
+
+test('manual pickup viewport still fails closed without either QR input or QR verification button', () => {
+  const c = SYNTHETIC_CLONE_UI_CONTRACT;
+  for (const missing of [c.qrPayloadField, c.qrPayloadVerify]) {
+    const visible = [c.title, c.status.accepted, c.qrPayloadField, c.qrPayloadVerify,
+      c.qrScan, c.fallbackField, c.fallbackVerify].filter((label) => label !== missing);
+    assert.throws(() => assertSyntheticCloneInterface(screenXml(visible), 'pickupVerifier'),
+      (error) => error.message === `synthetic_clone_ui_contract_missing:pickupVerifier:${missing}`);
+  }
+});
+
+test('camera pickup viewport requires its scan action without manual or fallback controls', () => {
+  const c = SYNTHETIC_CLONE_UI_CONTRACT;
+  assert.equal(assertSyntheticCloneInterface(screenXml([c.title, c.status.accepted, c.qrScan]),
+    'pickupCameraVerifier').phase, 'pickupCameraVerifier');
+  assert.throws(() => assertSyntheticCloneInterface(screenXml([
+    c.title, c.status.accepted, c.qrPayloadField, c.qrPayloadVerify,
+  ]), 'pickupCameraVerifier'), /synthetic_clone_ui_contract_missing:pickupCameraVerifier/u);
+});
+
+test('return fallback viewport retains all challenge and fallback requirements', () => {
+  const c = SYNTHETIC_CLONE_UI_CONTRACT;
+  const visible = [c.title, c.status.active, c.challengeIdField, c.fallbackField, c.fallbackVerify];
+  assert.equal(assertSyntheticCloneInterface(screenXml(visible), 'returnVerifier').phase, 'returnVerifier');
+  for (const missing of [c.challengeIdField, c.fallbackField, c.fallbackVerify]) {
+    assert.throws(() => assertSyntheticCloneInterface(screenXml(visible.filter((label) => label !== missing)),
+      'returnVerifier'), (error) => error.message === `synthetic_clone_ui_contract_missing:returnVerifier:${missing}`);
+  }
+});
+
 function photoPickerFixture({ image = [], confirm = [] } = {}) {
   let time = 0;
   const events = [];

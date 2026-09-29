@@ -172,7 +172,9 @@ function requiredForPhase(phase) {
     accepted: [...common, c.status.accepted, c.pickupPhotos],
     pickupPhotos: [...common, c.status.accepted, c.pickupPhotos, ...PHOTO_SLOTS.map((slot) => `${slot} – ${c.pickerSuffix}`)],
     pickupChallenge: [...common, c.status.accepted, c.pickupChallenge],
-    pickupVerifier: [...common, c.status.accepted, c.qrScan, c.qrPayloadField, c.qrPayloadVerify, c.fallbackField, c.fallbackVerify],
+    // Require only this verification path's controls; other paths may be off-screen.
+    pickupVerifier: [...common, c.status.accepted, c.qrPayloadField, c.qrPayloadVerify],
+    pickupCameraVerifier: [...common, c.status.accepted, c.qrScan],
     active: [...common, c.status.active, c.returnPhotos],
     returnPhotos: [...common, c.status.active, c.returnPhotos, ...PHOTO_SLOTS.map((slot) => `${slot} – ${c.pickerSuffix}`)],
     returnChallenge: [...common, c.status.active, c.returnChallenge],
@@ -875,7 +877,7 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
   await enterIsolatedRole(primary, validated.renter);
   await openClone(primary, 'renter');
   await loadBooking(primary, bookingId, 'renter-pickup-verifier');
-  await primary.waitContract('pickupVerifier');
+  await primary.waitContract(qrDisplay ? 'pickupCameraVerifier' : 'pickupVerifier');
   if (qrDisplay) {
     await primary.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.qrScan, 'pickup-qr-scan');
   } else {
