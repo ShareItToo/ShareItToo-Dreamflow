@@ -45,6 +45,7 @@ import {
 import { readStagingAccessConfiguration, stagingAnonymousPathAllowed } from '../src/staging_access_gate.js';
 import { readListingAiGatewayConfiguration } from '../src/listing_ai_gateway_config.js';
 import { isMfaProbeContainer, runMfaProbe } from '../ops/staging_controlled_acceptance.mjs';
+import { summarizeGreenAllowedIds } from '../ops/green_auth_profile.mjs';
 
 const runtimeCommit = '266f69c21dd61bfcdb212c24a0c8788b172bed9e';
 const opsCommit = '8fecd57018ab10a0c6733531539472e6179a02db';
@@ -67,6 +68,22 @@ const targetManifest = {
 targetManifest.targetDigest = normalizedGreenTargetDigest(targetManifest);
 assert.equal(targetManifest.targetDigest, '2a7aa2030ac2f589fc1e64e64a0e28209eb7533482776c360e504efbb8bf768f');
 const prePromotionImageReference = `${greenTarget.prePromotionImage}@${greenTarget.prePromotionImageDigest}`;
+const enrolledGoogleId = 'synthetic-enrolled-google';
+const enrolledAllowedIds = `synthetic_sandbox_user_pilot_20260919,synthetic-owner,synthetic-renter,${enrolledGoogleId}`;
+function enrolledTargetManifest() {
+  const manifest = {
+    ...targetManifest,
+    schemaVersion: 4,
+    authProfile: {
+      kind: 'google-post-enrollment', schemaVersion: 1,
+      sourceImageDigest: targetManifest.prePromotionImageDigest,
+      ...summarizeGreenAllowedIds(enrolledAllowedIds),
+      googleUserIdDigest: crypto.createHash('sha256').update(enrolledGoogleId).digest('hex'),
+    },
+  };
+  manifest.targetDigest = normalizedGreenTargetDigest(manifest);
+  return manifest;
+}
 const config = {
   environment: 'test', envFile: '/docker/shareittoo/staging-secrets/green.env',
   envNames: ['NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'JWT_SECRET', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'MAIL_TRANSPORT', 'PUSH_TRANSPORT', 'IDENTITY_VERIFICATION_TRANSPORT', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_ALLOWED_USER_IDS', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'MAIL_FROM', 'FIREBASE_PROJECT_ID', 'FIREBASE_AUTH_ENABLED', 'FIREBASE_PHONE_VERIFICATION_ENABLED', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_LISTING_AI_BUDGET_CENTS', 'ENABLE_STAGING_STRIPE', 'TECHNICAL_SANDBOX_ENABLED', 'TECHNICAL_SANDBOX_KILL_SWITCH', 'TECHNICAL_SANDBOX_ACCOUNT_ID', 'TECHNICAL_SANDBOX_USER_IDS', 'TECHNICAL_SANDBOX_AUTHORIZATION_ID', 'TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT', 'TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT', 'TECHNICAL_SANDBOX_SECRET_KEY_FILE', 'TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE', 'SIT_STAGING_PILOT_ID', 'SYNTHETIC_SANDBOX_PASSWORD_FILE'],
@@ -114,7 +131,7 @@ const greenRuntimeEnvEntries = Object.entries({ ...greenBroadPromotionEnvironmen
 const originalApiIdentityRecord = {
   Id: 'api-original-id',
   State: { Running: false },
-  Config: { Image: greenTarget.prePromotionImage, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DATABASE_URL=postgres://shareittoo_green@green-db/shareittoo_green'] },
+  Config: { Image: greenTarget.prePromotionImage, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DATABASE_URL=postgres://shareittoo_green@green-db/shareittoo_green', 'FIREBASE_AUTH_ENABLED=false'] },
   NetworkSettings: { Networks: {
     [greenTarget.network]: {
       NetworkID: targetNetworkId,
@@ -651,7 +668,7 @@ test('buffer restore input preserves exact bytes and fails closed on early stdin
   );
 });
 
-test('executor runs provisioners in the declared runtime image before quiesce', async () => {
+for (const postEnrollment of [false, true]) test(`executor preserves ${postEnrollment ? 'post-enrollment auth' : 'provider-off defaults'} through candidate, recovery and rollback`, async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'sit-green-runner-'));
   const configFile = path.join(root, 'green.env');
   const evidenceFile = path.join(root, 'green-promotion.json');
@@ -670,10 +687,11 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     ...greenTechnicalSandboxEnvironment, SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
     SYNTHETIC_SANDBOX_PASSWORD_FILE: syntheticSandboxCredentialFilePath,
   };
+  if (postEnrollment) Object.assign(envValues, { FIREBASE_AUTH_ENABLED: 'true', SIT_STAGING_ALLOWED_USER_IDS: enrolledAllowedIds });
   writeFileSync(configFile, `${Object.entries(envValues).map(([key, value]) => `${key}=${value}`).join('\n')}\n`, { mode: 0o600 });
   chmodSync(configFile, 0o600);
   const plan = buildGreenPromotionPlan({
-    targetManifest, config: runtimeConfig, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`,
+    targetManifest: postEnrollment ? enrolledTargetManifest() : targetManifest, config: runtimeConfig, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`,
     opsCommit, evidenceFile,
   });
   const imageReadback = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`${plan.runtime.image}@${plan.runtime.digest}`] };
@@ -681,10 +699,12 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   const prePromotionRecord = (image) => ({
     Id: originalApiIdentityRecord.Id, Name: `/${greenTarget.apiContainer}`, State: { Running: true },
     NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
-    Config: { Image: image, User: 'shareittoo', Labels: {}, Env: [`DATABASE_URL=${envValues.DATABASE_URL}`] },
+    Config: { Image: image, User: 'shareittoo', Labels: {}, Env: Object.entries(envValues).map(([key, value]) => `${key}=${value}`) },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: sourceMounts.map((mount) => ({ Destination: mount.destination, Type: mount.type, Source: mount.source, Name: mount.volume, RW: !mount.readOnly })),
   });
   const databaseRecord = { Name: `/${greenTarget.databaseContainer}`, State: { Running: true }, Config: { Labels: { 'com.shareittoo.sit.green': 'true' } } };
+  let candidateAuthOverride = null;
+  let missingEnrollmentPhase = null;
   const fakeRun = async (image, isolatedLedger = currentMigrationLedger, initLog = 'PostgreSQL init process complete; ready for start up.\n', stableSelect2 = '1\n', targetSet = targetContainerSet, foreignBefore = '[]\n', foreignAfter = foreignBefore, candidateFinding = emptyFindingFingerprint, stopAtPhase = 'quiesce_green_api', restoreCode, postgresIdentityOverrides = {}) => {
     const calls = [];
     let recoveryRecord = null;
@@ -694,6 +714,8 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': plan.target.runId, 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
       HostConfig: { GroupAdd: ['65532'], NetworkMode: isolatedNetworkId, PortBindings: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18082' }] } }, Mounts: [...finalMounts.map((mount) => mount.Destination === '/data/uploads' ? { ...mount, Name: 'anonymous-uploads-id' } : mount), { Type: 'bind', Source: syntheticSandboxCredentialFilePath, Destination: '/run/secrets/synthetic-sandbox-user-password', RW: false }],
     };
+    if (postEnrollment) candidateRecord.Config.Env = candidateRecord.Config.Env.map((entry) => entry.startsWith('FIREBASE_AUTH_ENABLED=') ? 'FIREBASE_AUTH_ENABLED=true' : entry.startsWith('SIT_STAGING_ALLOWED_USER_IDS=') ? `SIT_STAGING_ALLOWED_USER_IDS=${enrolledAllowedIds}` : entry);
+    if (candidateAuthOverride) candidateRecord.Config.Env = candidateRecord.Config.Env.map((entry) => entry.startsWith(`${candidateAuthOverride.key}=`) ? `${candidateAuthOverride.key}=${candidateAuthOverride.value}` : entry);
     const recoveryFinalRecord = (running = false, attached = false) => ({
       Id: 'a'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: running },
       NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: running ? targetNetworkId : '' }, ...(attached ? { [greenTarget.providerNetwork]: { NetworkID: running ? providerNetworkId : '' } } : {}) } },
@@ -703,10 +725,15 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
     const fake = async (command, args, options = {}) => {
       calls.push({ command, args, phase: options.phase, env: options.env });
       const phase = options.phase;
+      if (phase.endsWith('_post_enrollment_identity_readback')) {
+        if (phase === 'isolated_post_enrollment_identity_readback') assert.equal(args[1], isolatedDatabaseId);
+        return { stdout: phase === missingEnrollmentPhase ? '0\n' : '1\n' };
+      }
       if (phase.startsWith('recovery_')) {
         const recoveryPhase = phase.slice('recovery_'.length);
         if (recoveryPhase === 'canonical_schema_readback') return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n' };
         if (recoveryPhase === 'canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
+        if (recoveryPhase === 'canonical_post_enrollment_identity_readback') return { stdout: '1\n' };
         if (recoveryPhase === 'successor_identity_readback') {
           if (args.at(-1) === greenTarget.apiContainer && !recoveryRecord) return { code: 1, stdout: '' };
           return { stdout: JSON.stringify(recoveryRecord ?? recoveryFinalRecord(false, false)) };
@@ -826,7 +853,7 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
       if (phase === 'failure_candidate_identity_readback') return { stdout: JSON.stringify({ Id: candidateId, Name: `/${plan.isolated.candidate}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } }) };
       if (phase === 'failure_isolated_database_identity_readback') return { stdout: JSON.stringify({ Id: isolatedDatabaseId, Name: `/${plan.isolated.database}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } }) };
       if (phase === 'failure_isolated_network_identity_readback') return { stdout: JSON.stringify({ Id: isolatedNetworkId, Name: plan.isolated.network, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
-      if (phase === 'candidate_runtime_flags_readback') return { stdout: JSON.stringify({ DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment, googleRegistrationAllowlistEmpty: true }) };
+      if (phase === 'candidate_runtime_flags_readback') return { stdout: JSON.stringify({ DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment, googleRegistrationAllowlistEmpty: true, ...(postEnrollment ? { FIREBASE_AUTH_ENABLED: 'true', ...summarizeGreenAllowedIds(enrolledAllowedIds) } : {}) }) };
       if (phase === 'candidate_health_and_feature_probes' || phase === 'candidate_ready_probe') return { stdout: JSON.stringify(payload) };
       if (phase === 'candidate_version_probe') return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'test' }) };
       if (phase === 'fresh_protected_backup') return { stdout: 'synthetic protected backup' };
@@ -860,6 +887,39 @@ test('executor runs provisioners in the declared runtime image before quiesce', 
   assert.equal(good.result?.code, 'test_stop_before_quiesce', `${good.result?.message ?? 'no-error'} :: ${good.calls.map((entry) => entry.phase).join('|')}`);
   const quiesceIndex = good.calls.findIndex((entry) => entry.phase === 'quiesce_green_api');
   assert.ok(quiesceIndex > 0);
+  for (const [key, value] of postEnrollment ? [
+    ['FIREBASE_AUTH_ENABLED', 'false'],
+    ['SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'true'],
+    ['SIT_STAGING_ALLOWED_USER_IDS', enrolledAllowedIds.split(',').slice(0, -1).join(',')],
+    ['SIT_STAGING_ALLOWED_USER_IDS', `${enrolledAllowedIds},unapproved`],
+    ['SIT_STAGING_ALLOWED_USER_IDS', enrolledAllowedIds.split(',').reverse().join(',')],
+  ] : [['FIREBASE_AUTH_ENABLED', 'true']]) {
+    const previous = envValues[key];
+    envValues[key] = value;
+    const rejected = await fakeRun(prePromotionImageReference);
+    envValues[key] = previous;
+    assert.equal(rejected.calls.some((entry) => entry.phase === 'quiesce_green_api'), false, key);
+    assert.match(rejected.result.code, /green_(?:post_enrollment|runtime_prestate)/u);
+  }
+  if (postEnrollment) {
+    for (const [key, value] of [
+      ['FIREBASE_AUTH_ENABLED', 'false'], ['SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'true'],
+      ['SIT_STAGING_ALLOWED_USER_IDS', enrolledAllowedIds.split(',').slice(0, -1).join(',')],
+      ['SIT_STAGING_ALLOWED_USER_IDS', `${enrolledAllowedIds},unapproved`],
+    ]) {
+      candidateAuthOverride = { key, value };
+      const rejected = await fakeRun(prePromotionImageReference, currentMigrationLedger, undefined, '1\n', targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint, 'candidate_start');
+      assert.equal(rejected.calls.some((entry) => entry.phase === 'candidate_start'), false, key);
+      assert.equal(rejected.result.cleanup.restored, true, key);
+      rmSync(`${evidenceFile}.pgdump`, { force: true });
+    }
+    candidateAuthOverride = null;
+    missingEnrollmentPhase = 'source_post_enrollment_identity_readback';
+    const notEnrolled = await fakeRun(prePromotionImageReference);
+    assert.equal(notEnrolled.result.code, 'green_post_enrollment_identity_missing');
+    assert.equal(notEnrolled.calls.some((entry) => entry.phase === 'quiesce_green_api'), false);
+    missingEnrollmentPhase = null;
+  }
   rmSync(`${evidenceFile}.pgdump`, { force: true });
   for (const [label, postgresIdentityOverrides] of [
     ['wrong NetworkMode', { HostConfig: { NetworkMode: 'bridge' } }],
@@ -1064,14 +1124,26 @@ test('repeat-promotion inventory requires the exact Green DB host and retained f
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, prePromotionTuple: true, greenLabel: true, image: 'ghcr.io/shareittoo/shareittoo-api:wrong' } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
 });
 
-test('final readback is authoritative for no-port Green routing, mounts, image and protected cohort', () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+for (const postEnrollment of [false, true]) test(`final readback binds topology and protected cohort (enrolled=${postEnrollment})`, () => {
+  const plan = buildGreenPromotionPlan({ targetManifest: postEnrollment ? enrolledTargetManifest() : targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const record = {
     Id: 'a'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
     Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
     HostConfig: { GroupAdd: ['65532'], NetworkMode: targetNetworkId }, Mounts: finalMounts,
   };
   const expectedNetworkIds = { [greenTarget.network]: targetNetworkId, [greenTarget.providerNetwork]: providerNetworkId };
+  if (postEnrollment) {
+    record.Config.Env = record.Config.Env.map((entry) => entry.startsWith('FIREBASE_AUTH_ENABLED=') ? 'FIREBASE_AUTH_ENABLED=true' : entry.startsWith('SIT_STAGING_ALLOWED_USER_IDS=') ? `SIT_STAGING_ALLOWED_USER_IDS=${enrolledAllowedIds}` : entry);
+    for (const [key, value] of [
+      ['FIREBASE_AUTH_ENABLED', 'false'], ['SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'true'],
+      ['SIT_STAGING_ALLOWED_USER_IDS', enrolledAllowedIds.split(',').slice(0, -1).join(',')],
+      ['SIT_STAGING_ALLOWED_USER_IDS', `${enrolledAllowedIds},extra`],
+      ['SIT_STAGING_ALLOWED_USER_IDS', enrolledAllowedIds.split(',').reverse().join(',')],
+    ]) {
+      const drifted = { ...record, Config: { ...record.Config, Env: record.Config.Env.map((entry) => entry.startsWith(`${key}=`) ? `${key}=${value}` : entry) } };
+      assert.throws(() => assertGreenFinalContainerReadback({ record: drifted, plan, expectedId: record.Id, expectedNetworkIds }), /green_(?:post_enrollment|broad_promotion|runtime)/u);
+    }
+  }
   assert.equal(assertGreenFinalContainerReadback({ record, plan, expectedId: record.Id, expectedNetworkIds }), true);
   assert.equal(summarizeGreenFinalContainerReadback(record, plan, expectedNetworkIds, record.Id).hostPorts, 0);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Id: 'b'.repeat(64) }, plan, expectedId: record.Id, expectedNetworkIds }), /green_final_inventory_mismatch/u);
@@ -1091,6 +1163,56 @@ test('final readback is authoritative for no-port Green routing, mounts, image a
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: [...record.Mounts, { Type: 'bind', Source: '/wrong/extra', Destination: '/extra', RW: false }] }, plan, expectedNetworkIds }), /green_final_(?:inventory_mismatch|mount_inventory_mismatch)/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Source: '/wrong/source' } : mount) }, plan, expectedNetworkIds }), /green_final_mount_inventory_mismatch/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Type: 'volume', Name: 'foreign-secret-volume', Source: undefined } : mount) }, plan, expectedNetworkIds }), /green_final_mount_inventory_mismatch/u);
+});
+
+test('post-enrollment target profile is required, digest-bound and rejects stale source binding', () => {
+  const valid = enrolledTargetManifest();
+  assert.equal(assertGreenTargetManifest(valid).authProfile.allowedUserIdsCount, 4);
+  for (const invalid of [
+    { ...valid, authProfile: undefined },
+    { ...valid, schemaVersion: 3 },
+    { ...valid, authProfile: { ...valid.authProfile, allowedUserIdsCount: 5 } },
+  ]) assert.throws(() => assertGreenTargetManifest(invalid));
+  const stale = { ...valid, authProfile: { ...valid.authProfile, sourceImageDigest: `sha256:${'f'.repeat(64)}` } };
+  stale.targetDigest = normalizedGreenTargetDigest(stale);
+  assert.throws(() => assertGreenTargetManifest(stale), /profile_invalid/u);
+});
+
+test('post-enrollment rollback refuses auth or allowed-ID drift before rename/start', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest: enrolledTargetManifest(), config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const original = { ...renamedSealedApiIdentityRecord, Config: { ...renamedSealedApiIdentityRecord.Config, Env: ['FIREBASE_AUTH_ENABLED=true', `SIT_STAGING_ALLOWED_USER_IDS=${enrolledAllowedIds}`, 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false'] } };
+  const identity = { ...originalApiIdentity, config: JSON.stringify(stableIdentityValue(original.Config)) };
+  for (const replacement of ['FIREBASE_AUTH_ENABLED=false', `SIT_STAGING_ALLOWED_USER_IDS=${enrolledAllowedIds},extra`, 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=true']) {
+    const key = replacement.split('=')[0];
+    const drifted = { ...original, Config: { ...original.Config, Env: original.Config.Env.map((entry) => entry.startsWith(`${key}=`) ? replacement : entry) } };
+    const calls = [];
+    const command = async (name, args, options) => {
+      calls.push({ name, args, phase: options.phase });
+      if (options.phase === 'failure_restore_sealed_api_identity_readback') return { stdout: JSON.stringify(drifted) };
+      if (options.phase === 'failure_restore_current_api_identity_readback') return { code: 'not_found', stdout: '' };
+      return { stdout: '' };
+    };
+    const result = await runGreenEmergencyCleanup({ plan, command, completed: ['quiesce_green_api', 'seal_green_api'], phaseStarted: 'seal_green_api', originalApiIdentity: identity });
+    assert.equal(result.clean, false);
+    assert.equal(calls.some(({ args }) => ['rename', 'start'].includes(args[0])), false);
+  }
+});
+
+test('post-enrollment forward recovery refuses missing or ambiguous Google identity before successor creation', async () => {
+  const plan = buildGreenPromotionPlan({ targetManifest: enrolledTargetManifest(), config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
+  for (const count of ['0', '2', '']) {
+    const phases = [];
+    const command = async (name, args, options) => {
+      phases.push(options.phase);
+      if (options.phase === 'recovery_canonical_schema_readback') return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n' };
+      if (options.phase === 'recovery_canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
+      if (options.phase === 'recovery_canonical_post_enrollment_identity_readback') return { stdout: count };
+      throw new Error('unexpected command');
+    };
+    await assert.rejects(runGreenForwardRecovery({ plan, commands, command, targetNetworkId, providerNetworkId }), /green_post_enrollment_identity_missing/u);
+    assert.equal(phases.length, 3);
+  }
 });
 
 test('emergency cleanup is bounded and never restores sealed Green after schema mutation', async () => {

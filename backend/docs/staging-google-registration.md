@@ -71,12 +71,11 @@ current registration consents through the UI. Occupied IDs, wrong digests,
 expired tokens and replays remain rejected by the unchanged application lane.
 Registration is not a migration of historical profile or consent rows.
 
-## Separate recurrence package — still open
+## Separate recurrence package
 
-The Green promotion runner currently requires Firebase and Google registration
-off. It must not be used to claim preservation of this activated state. A
-separate reviewed promotion package must bind the current allowed-ID set and
-approved auth state, preserve them through the candidate/replacement/rollback,
-and test that no approved ID disappears and no extra identity is admitted.
-Do not silently relax the existing provider-off promotion contract in this
-registration package.
+The Green promotion runner now has an explicit, digest-bound post-enrollment
+profile, documented in [green-post-enrollment-auth.md](green-post-enrollment-auth.md).
+The default provider-off contract is unchanged. This profile cannot be used
+during open registration: actual enrollment, registration closure and a fresh
+approved source manifest are prerequisites. Source support is not proof of a
+live promotion, login or registration closure.

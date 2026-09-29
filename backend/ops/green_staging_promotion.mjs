@@ -11,6 +11,7 @@ import { Readable } from 'node:stream';
 import { closeStablePrivateFile, openStablePrivateFile, readStablePrivateFile } from './stable_private_file.mjs';
 import { assertReadinessFindingsUnchanged, buildReadinessFindingSql, normalizeReadinessFindings } from './staging_forward_migration_rehearsal.mjs';
 import { technicalSandboxHealthProjection } from '../src/technical_sandbox_config.js';
+import { assertGreenPostEnrollmentProfile, assertGreenAuthProfileReadback, greenAllowedIdsProbeExpression } from './green_auth_profile.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -216,9 +217,9 @@ const requiredGreenEnvNames = Object.freeze([
   'SIT_STAGING_PILOT_ID', 'SYNTHETIC_SANDBOX_PASSWORD_FILE',
 ]);
 
-export function assertGreenProtectedEnvironment(values, config) {
+export function assertGreenProtectedEnvironment(values, config, authProfile = null) {
   if (values.NODE_ENV !== 'production' || values.DEPLOYMENT_ENVIRONMENT !== 'test'
-      || values.FIREBASE_AUTH_ENABLED !== 'false'
+      || values.FIREBASE_AUTH_ENABLED !== (authProfile ? 'true' : 'false')
       || values.FIREBASE_PHONE_VERIFICATION_ENABLED !== 'false'
       || values.SIT_STAGING_GOOGLE_REGISTRATION_ENABLED !== 'false'
       || String(values.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST ?? '').trim() !== ''
@@ -229,7 +230,8 @@ export function assertGreenProtectedEnvironment(values, config) {
       || values.SYNTHETIC_SANDBOX_PASSWORD_FILE !== syntheticSandboxCredentialFilePath
       || !String(values.SIT_STAGING_ALLOWED_USER_IDS ?? '').split(',').map((entry) => entry.trim()).includes('synthetic_sandbox_user_pilot_20260919')
       || config?.mfaFile === undefined) fail('green_runtime_environment_boundary_invalid');
-  assertGreenBroadPromotionEnvironment(values);
+  assertGreenBroadPromotionEnvironment(values, authProfile);
+  assertGreenAuthProfileReadback(values, authProfile);
   assertGreenTechnicalSandboxProviderOff(values);
   for (const name of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_CONNECT_WEBHOOK_SECRET', 'OPENAI_API_KEY']) {
     if (Object.hasOwn(values, name) && values[name] !== '') fail('green_main_provider_secret_forbidden');
@@ -237,9 +239,9 @@ export function assertGreenProtectedEnvironment(values, config) {
   return true;
 }
 
-export function assertGreenBroadPromotionEnvironment(values) {
+export function assertGreenBroadPromotionEnvironment(values, authProfile = null) {
   for (const [name, expected] of Object.entries(greenBroadPromotionEnvironment)) {
-    if (values?.[name] !== expected) fail('green_broad_promotion_provider_off_invalid');
+    if (values?.[name] !== (name === 'FIREBASE_AUTH_ENABLED' && authProfile ? 'true' : expected)) fail('green_broad_promotion_provider_off_invalid');
   }
   return true;
 }
@@ -251,19 +253,20 @@ export function assertGreenTechnicalSandboxProviderOff(values) {
   return true;
 }
 
-export function assertGreenRuntimeEnvironmentReadback(values) {
+export function assertGreenRuntimeEnvironmentReadback(values, authProfile = null) {
   const allowlistEmpty = Object.hasOwn(values ?? {}, 'googleRegistrationAllowlistEmpty')
     ? values.googleRegistrationAllowlistEmpty === true
     : String(values?.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST ?? '').trim() === '';
   if (values?.DEPLOYMENT_ENVIRONMENT !== 'test'
-      || values?.FIREBASE_AUTH_ENABLED !== 'false'
+      || values?.FIREBASE_AUTH_ENABLED !== (authProfile ? 'true' : 'false')
       || values?.FIREBASE_PHONE_VERIFICATION_ENABLED !== 'false'
       || values?.SIT_STAGING_GOOGLE_REGISTRATION_ENABLED !== 'false'
       || !allowlistEmpty
       || values?.SIT_STAGING_ACCESS_GATE_ENABLED !== 'true'
       || values?.PAYMENT_TRANSPORT !== 'memory'
       || values?.STRIPE_LIVEMODE !== 'false') fail('green_runtime_prestate_readback_invalid');
-  assertGreenBroadPromotionEnvironment(values);
+  assertGreenBroadPromotionEnvironment(values, authProfile);
+  assertGreenAuthProfileReadback(values, authProfile);
   assertGreenTechnicalSandboxProviderOff(values);
   return true;
 }
@@ -404,6 +407,7 @@ function safeDigest(value, code) {
 
 export function normalizedGreenTargetDigest(manifest) {
   const fields = ['kind', 'schemaVersion', 'composeProject', 'greenLabel', 'runId', 'apiContainer', 'databaseContainer', 'databaseVolume', 'network', 'providerNetwork', 'uploadsVolume', 'networkInternal', 'sourceSchema', 'currentSchema', 'sourceLedgerDigest', 'currentLedgerDigest', 'prePromotionImage', 'prePromotionImageDigest', 'sealedApiContainer', 'retainedSealed'];
+  if (manifest?.schemaVersion === 4) fields.push('authProfile');
   return sha256(JSON.stringify(Object.fromEntries(fields.map((field) => [field, manifest?.[field]]))));
 }
 
@@ -464,6 +468,7 @@ export function assertGreenTargetManifest(manifest) {
     'providerNetwork', 'uploadsVolume', 'networkInternal', 'sourceSchema',
     'currentSchema', 'sourceLedgerDigest', 'currentLedgerDigest',
     'prePromotionImage', 'prePromotionImageDigest', 'sealedApiContainer', 'retainedSealed', 'targetDigest',
+    ...(manifest?.schemaVersion === 4 ? ['authProfile'] : []),
   ], 'green_target_manifest_shape_invalid');
   if (!Array.isArray(manifest.retainedSealed) || manifest.retainedSealed.length !== greenTarget.retainedSealed.length) fail('green_retained_sealed_descriptor_shape_invalid');
   manifest.retainedSealed.forEach((descriptor) => {
@@ -477,7 +482,7 @@ export function assertGreenTargetManifest(manifest) {
       fail('green_retained_sealed_descriptor_invalid');
     }
   });
-  if (manifest.kind !== 'sit-green-staging-target' || manifest.schemaVersion !== 3
+  if (manifest.kind !== 'sit-green-staging-target' || ![3, 4].includes(manifest.schemaVersion)
       || manifest.composeProject !== greenTarget.composeProject
       || manifest.greenLabel !== 'com.shareittoo.sit.green=true'
       || manifest.runId !== greenTarget.runId
@@ -499,10 +504,11 @@ export function assertGreenTargetManifest(manifest) {
     fail('green_target_identity_mismatch');
   }
   if (!/^[0-9a-f]{64}$/u.test(manifest.targetDigest ?? '') || manifest.targetDigest !== normalizedGreenTargetDigest(manifest)) fail('green_target_digest_invalid');
+  const authProfile = manifest.schemaVersion === 4 ? assertGreenPostEnrollmentProfile(manifest.authProfile, manifest.prePromotionImageDigest) : null;
   const serialized = JSON.stringify(manifest);
   if (/shareittoo_staging|shareittoo-staging-postgres|latest|lookalike/iu.test(serialized)
       || containsForbiddenGreenTargetIdentifier(serialized)) fail('legacy_or_production_target_forbidden');
-  return Object.freeze({ ...manifest });
+  return Object.freeze({ ...manifest, ...(authProfile ? { authProfile } : {}) });
 }
 
 export async function readProtectedGreenManifest(filePath) {
@@ -790,7 +796,7 @@ export function assertGreenFinalContainerReadback({
   if (mounts.some((mount) => typeof mount.RW !== 'boolean')) fail('green_mount_rw_readback_invalid');
   const destinations = mounts.map((mount) => mount.Destination).sort();
   const env = Object.fromEntries((record.Config?.Env ?? []).map((entry) => entry.split(/=(.*)/u, 2)));
-  assertGreenRuntimeEnvironmentReadback(env);
+  assertGreenRuntimeEnvironmentReadback(env, plan.target.authProfile);
   if ((expectedId !== null && record.Id !== expectedId)
       || name !== expectedName
       || record.State?.Running !== true
@@ -917,7 +923,8 @@ export function summarizeGreenFinalContainerReadback(record, plan, expectedNetwo
     greenRunId: record.Config.Labels['com.shareittoo.sit.green.run_id'], image: record.Config.Image,
     groupAdd: [...(record.HostConfig.GroupAdd ?? [])].sort(),
     mountDestinations: (record.Mounts ?? []).map((mount) => ({ destination: mount.Destination, volume: mount.Name ?? null, readOnly: mount.RW !== true })).sort((left, right) => left.destination.localeCompare(right.destination)),
-    protectedEnvDigest: sha256((record.Config.Env ?? []).filter((entry) => /^(?:PAYMENT_TRANSPORT|STRIPE_LIVEMODE|MAIL_TRANSPORT|PUSH_TRANSPORT|IDENTITY_VERIFICATION_TRANSPORT|SIT_LISTING_AI_PROVIDER|SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED|SIT_LISTING_AI_BUDGET_CENTS|SIT_STAGING_COMPOSE_PROJECT|SIT_STAGING_ALLOWED_USER_IDS)=/u.test(entry)).sort().join('\n')),
+    protectedEnvDigest: sha256((record.Config.Env ?? []).filter((entry) => /^(?:FIREBASE_AUTH_ENABLED|FIREBASE_PHONE_VERIFICATION_ENABLED|SIT_STAGING_ACCESS_GATE_ENABLED|SIT_STAGING_GOOGLE_REGISTRATION_ENABLED|SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST|PAYMENT_TRANSPORT|STRIPE_LIVEMODE|MAIL_TRANSPORT|PUSH_TRANSPORT|IDENTITY_VERIFICATION_TRANSPORT|SIT_LISTING_AI_PROVIDER|SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED|SIT_LISTING_AI_BUDGET_CENTS|SIT_STAGING_COMPOSE_PROJECT|SIT_STAGING_ALLOWED_USER_IDS)=/u.test(entry)).sort().join('\n')),
+    ...(plan.target.authProfile ? { authProfile: plan.target.authProfile } : {}),
   });
 }
 
@@ -1021,6 +1028,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
   if (!target || typeof target.sealedApiContainer !== 'string'
       || target.sealedApiContainer !== greenTarget.sealedApiContainer) fail('green_sealed_target_invalid');
   if (!Array.isArray(target.retainedSealed) || JSON.stringify(target.retainedSealed) !== JSON.stringify(greenTarget.retainedSealed)) fail('green_sealed_target_invalid');
+  assertGreenTargetManifest(plan.target);
   const inspect = (name) => ({ command: 'docker', args: ['inspect', '--format', '{{json .}}', name] });
   const provisionerSource = resolve(repositoryRoot, 'backend/ops/provision_synthetic_sandbox_user.mjs');
   const stablePrivateFileSource = resolve(repositoryRoot, 'backend/ops/stable_private_file.mjs');
@@ -1087,7 +1095,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'candidate_live_wait', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/live'] },
     { phase: 'candidate_health_and_feature_probes', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/ready'] },
     { phase: 'candidate_ready_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/ready'] },
-    { phase: 'candidate_runtime_flags_readback', command: 'docker', args: ['exec', isolated.candidate, 'node', '--input-type=module', '-e', "const names=['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','SIT_STAGING_ACCESS_GATE_ENABLED','SIT_STAGING_GOOGLE_REGISTRATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','MAIL_TRANSPORT','PUSH_TRANSPORT','IDENTITY_VERIFICATION_TRANSPORT','SIT_LISTING_AI_PROVIDER','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED','SIT_LISTING_AI_BUDGET_CENTS','TECHNICAL_SANDBOX_ENABLED','TECHNICAL_SANDBOX_KILL_SWITCH','TECHNICAL_SANDBOX_ACCOUNT_ID','TECHNICAL_SANDBOX_USER_IDS','TECHNICAL_SANDBOX_AUTHORIZATION_ID','TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT','TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT','TECHNICAL_SANDBOX_SECRET_KEY_FILE','TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE']; process.stdout.write(JSON.stringify({...Object.fromEntries(names.map((name)=>[name,process.env[name]??null])),googleRegistrationAllowlistEmpty:(process.env.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST??'').trim()===''}))"] },
+    { phase: 'candidate_runtime_flags_readback', command: 'docker', args: ['exec', isolated.candidate, 'node', '--input-type=module', '-e', `import crypto from 'node:crypto';const names=['DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','SIT_STAGING_ACCESS_GATE_ENABLED','SIT_STAGING_GOOGLE_REGISTRATION_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','MAIL_TRANSPORT','PUSH_TRANSPORT','IDENTITY_VERIFICATION_TRANSPORT','SIT_LISTING_AI_PROVIDER','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED','SIT_LISTING_AI_BUDGET_CENTS','TECHNICAL_SANDBOX_ENABLED','TECHNICAL_SANDBOX_KILL_SWITCH','TECHNICAL_SANDBOX_ACCOUNT_ID','TECHNICAL_SANDBOX_USER_IDS','TECHNICAL_SANDBOX_AUTHORIZATION_ID','TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT','TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT','TECHNICAL_SANDBOX_SECRET_KEY_FILE','TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE'];process.stdout.write(JSON.stringify({...Object.fromEntries(names.map((name)=>[name,process.env[name]??null])),googleRegistrationAllowlistEmpty:(process.env.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST??'').trim()==='',${greenAllowedIdsProbeExpression}}))`] },
     { phase: 'candidate_version_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/version'] },
     { phase: 'candidate_mfa_identity_probes', command: 'node', args: ['backend/ops/staging_controlled_acceptance.mjs', 'probe'], envFile: isolated.envFile, runtimeEnv: { STAGING_ACCEPTANCE_CONTAINER: isolated.candidate }, redacted: true },
     { phase: 'candidate_cleanup', command: 'docker', args: ['rm', '--force', '--volumes', isolated.candidate] },
@@ -1118,6 +1126,18 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'final_ready_wait', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/health/ready`] },
     { phase: 'final_version_readback', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/version`] },
   ];
+  if (target.authProfile) {
+    const sql = `SELECT count(*) FROM auth_identities AS identity JOIN users AS account ON account.id = identity.user_id WHERE identity.provider = 'google' AND encode(sha256(convert_to(account.id, 'UTF8')), 'hex') = '${target.authProfile.googleUserIdDigest}' AND account.account_status = 'active' AND account.deactivated_at IS NULL`;
+    for (const [after, phase, database, user, name] of [
+      ['source_migration_ledger_readback', 'source_post_enrollment_identity_readback', target.databaseContainer, greenTarget.databaseUser, greenTarget.databaseName],
+      ['synthetic_sandbox_provision_isolated', 'isolated_post_enrollment_identity_readback', isolated.database, isolated.databaseUser, isolated.databaseName],
+      ['synthetic_sandbox_provision_canonical', 'canonical_post_enrollment_identity_readback', target.databaseContainer, greenTarget.databaseUser, greenTarget.databaseName],
+    ]) {
+      commands.splice(commands.findIndex((entry) => entry.phase === after) + 1, 0, {
+        phase, command: 'docker', args: ['exec', database, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', user, '-d', name, '-Atc', sql],
+      });
+    }
+  }
   if (commands.some((entry) => entry.args?.some((arg) => /(?:JWT_SECRET|DATABASE_URL|password|token|whsec_|sk_live_|sk_test_)=/iu.test(arg)))) {
     fail('green_command_secret_leak');
   }
@@ -1214,7 +1234,7 @@ function bindGreenRuntimeCommand(entry, plan, identities) {
   if (['isolated_postgres_create', 'isolated_idempotent_migration_98_to_98', 'isolated_integrity_and_functional_probes', 'synthetic_sandbox_provision_isolated', 'candidate_acceptance_create'].includes(phase)) {
     replaceArgs(plan.isolated.network, requireId(isolatedNetworkId, 'green_isolated_network_id_missing'));
   }
-  if (['isolated_postgres_identity_readback', 'isolated_postgres_start', 'isolated_postgres_wait', 'isolated_postgres_init_complete_log_readback', 'isolated_postgres_stable_select_1', 'isolated_postgres_stable_select_2', 'isolated_restore', 'isolated_migration_readback', 'isolated_migration_ledger_readback', 'isolated_finding_fingerprint_readback'].includes(phase)) {
+  if (['isolated_postgres_identity_readback', 'isolated_postgres_start', 'isolated_postgres_wait', 'isolated_postgres_init_complete_log_readback', 'isolated_postgres_stable_select_1', 'isolated_postgres_stable_select_2', 'isolated_restore', 'isolated_migration_readback', 'isolated_migration_ledger_readback', 'isolated_finding_fingerprint_readback', 'isolated_post_enrollment_identity_readback'].includes(phase)) {
     replaceArgs(plan.isolated.database, requireId(isolatedDatabaseId, 'green_isolated_database_id_missing'));
     if (phase === 'isolated_postgres_init_complete_log_readback' && args?.[1]) args[1] = args[1].replaceAll(plan.isolated.database, isolatedDatabaseId);
   }
@@ -1298,6 +1318,7 @@ export function sanitizeGreenEvidence({ plan, backupDigest, configDigest, target
       sealedApiContainer: plan.target.sealedApiContainer,
       retainedSealed: plan.target.retainedSealed.map((descriptor) => ({ ...descriptor })),
       targetDigest: plan.target.targetDigest,
+      ...(plan.target.authProfile ? { authProfile: plan.target.authProfile } : {}),
     },
     runtime: { commit: plan.runtime.runtimeCommit, image: plan.runtime.image, digest: plan.runtime.digest },
     safety: {
@@ -1307,7 +1328,7 @@ export function sanitizeGreenEvidence({ plan, backupDigest, configDigest, target
       pushTransport: 'memory',
       identityTransport: 'memory',
       googleRegistration: false,
-      firebaseAuth: false,
+      firebaseAuth: Boolean(plan.target.authProfile),
       listingAiProvider: 'on_device',
       listingAiExternalExecutionApproved: false,
       listingAiBudgetCents: 0,
@@ -1506,6 +1527,11 @@ export async function runGreenForwardRecovery({ plan, commands, command, command
   readbacks.canonical_migration_ledger_readback = result.stdout ?? '';
   assertMigrationLedgerReadback(readbacks.canonical_migration_ledger_readback, plan.target.currentSchema, greenTarget.currentLedgerDigest, 'green_forward_recovery_migration_ledger_invalid');
   recovered.push('canonical_migration_ledger_readback');
+  if (plan.target.authProfile) {
+    result = await run(entryFor('canonical_post_enrollment_identity_readback'), 'canonical_post_enrollment_identity_readback');
+    if (String(result.stdout ?? '').trim() !== '1') fail('green_post_enrollment_identity_missing');
+    recovered.push('canonical_post_enrollment_identity_readback');
+  }
 
   const createEntry = entryFor('final_create_no_host_port');
   const attachEntry = entryFor('final_provider_network_attach');
@@ -1920,7 +1946,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
   await assertGreenEvidenceArtifactFamilyAvailable({ evidenceFile: plan?.evidenceFile, isolatedEnvFile: plan?.isolated?.envFile });
   await assertGreenControlExecutables({ commands, executableAvailable });
   const protectedEnv = await readProtectedEnv(configFile);
-  assertGreenProtectedEnvironment(protectedEnv, config);
+  assertGreenProtectedEnvironment(protectedEnv, config, plan.target.authProfile);
   await assertRuntimeFiles(config, protectedEnv);
   const isolatedPassword = crypto.randomBytes(32).toString('base64url');
   await mkdir(dirname(plan.isolated.envFile), { recursive: true, mode: 0o700 });
@@ -2027,6 +2053,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
             : (result.stdout?.trim() ?? '');
       }
       if (entry.phase === 'target_container_set_readback') assertGreenTargetContainerSet(readbacks[entry.phase], plan.target);
+      if (entry.phase.endsWith('_post_enrollment_identity_readback') && String(result.stdout ?? '').trim() !== '1') fail('green_post_enrollment_identity_missing');
       if (entry.phase === 'quiesce_green_api_verify' && readbacks[entry.phase] !== 'false') fail('green_quiesce_verify_invalid');
       if (entry.phase === 'sealed_name_conflict_check' && readbacks[entry.phase]) fail('green_sealed_name_conflict');
       if (entry.phase.startsWith('retained_sealed_inventory_readback_')) {
@@ -2046,6 +2073,8 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
         ({ networkId: targetNetworkId, providerNetworkId } = greenSourceNetworkIdsFromReadback(apiRecord, networkRecord, providerRecord, plan));
         const volumeRecord = unwrap(parseInspect('target_inventory_uploads'));
         const apiEnv = Object.fromEntries((apiRecord?.Config?.Env ?? []).map((item) => item.split(/=(.*)/u, 2)));
+        if (plan.target.authProfile) assertGreenRuntimeEnvironmentReadback(apiEnv, plan.target.authProfile);
+        else if (apiEnv.FIREBASE_AUTH_ENABLED !== 'false') fail('green_post_enrollment_profile_required');
         originalApiIdentity = greenRollbackIdentityFromRecord(apiRecord);
         if (!originalApiIdentity) fail('green_original_api_identity_missing');
         const apiMounts = apiRecord?.Mounts ?? [];
@@ -2077,7 +2106,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       if (entry.phase === 'isolated_migration_ledger_readback') assertMigrationLedgerReadback(result.stdout, plan.target.currentSchema, greenTarget.currentLedgerDigest, 'green_isolated_migration_ledger_invalid');
       if (entry.phase === 'canonical_schema_readback') currentMigrationFromReadback(result.stdout, 'green_canonical_schema_readback_invalid');
       if (entry.phase === 'canonical_migration_ledger_readback') assertMigrationLedgerReadback(result.stdout, plan.target.currentSchema, greenTarget.currentLedgerDigest, 'green_canonical_migration_ledger_invalid');
-      if (entry.phase === 'candidate_runtime_flags_readback') assertGreenRuntimeEnvironmentReadback(JSON.parse(readbacks.candidate_runtime_flags_readback));
+      if (entry.phase === 'candidate_runtime_flags_readback') assertGreenRuntimeEnvironmentReadback(JSON.parse(readbacks.candidate_runtime_flags_readback), plan.target.authProfile);
       if (entry.phase === 'candidate_version_probe') assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.candidate_version_probe), health: JSON.parse(readbacks.candidate_health_and_feature_probes), ready: JSON.parse(readbacks.candidate_ready_probe), runtimeCommit: plan.runtime.runtimeCommit });
       if (entry.phase === 'final_inventory_readback') assertGreenFinalContainerReadback({ record: JSON.parse(readbacks.final_inventory_readback), plan, expectedId: finalApiId, expectedNetworkIds: { [plan.target.network]: targetNetworkId, [plan.target.providerNetwork]: providerNetworkId } });
       if (entry.phase === 'final_image_readback') assertGreenImageReadback(JSON.parse(readbacks.final_image_readback), plan.runtime);
