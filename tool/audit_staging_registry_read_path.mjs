@@ -40,15 +40,24 @@ function parseRuntime(value) {
   const parts = value.split('|');
   if (parts.length !== 5) fail('WP139 runtime observation is invalid.');
   const [image, imageId, revision, version, restartCount] = parts;
-  if (!new RegExp(`^${imageRepository}:[a-f0-9]{40}$`, 'u').test(image)
+  const imageMatch = new RegExp(
+    `^(${imageRepository}:([a-f0-9]{40}))(?:@(sha256:[a-f0-9]{64}))?$`,
+    'u',
+  ).exec(image);
+  const imageDigest = imageMatch?.[3] ?? null;
+  if (imageMatch === null
       || !/^sha256:[a-f0-9]{64}$/u.test(imageId)
       || !/^[a-f0-9]{40}$/u.test(revision)
+      || imageMatch[2] !== revision
+      || (imageDigest !== null && imageDigest !== imageId)
       || version !== `0.1.0-${revision.slice(0, 12)}`
       || !/^\d+$/u.test(restartCount)) {
     fail('WP139 runtime observation is invalid.');
   }
   return {
     image,
+    imageTag: imageMatch[1],
+    imageDigest,
     imageId,
     revision,
     version,

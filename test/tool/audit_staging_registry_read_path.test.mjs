@@ -14,11 +14,14 @@ function successfulRunner(overrides = {}) {
     const remote = args.at(-1);
     if (remote.startsWith('stat ')) return '{"mode":"600","owner":"root","size":135}';
     if (remote.startsWith('runtime_image=')) {
+      const runtimeCommit = overrides.runtimeCommit ?? '1'.repeat(40);
+      const runtimeImageId = overrides.runtimeImageId ?? `sha256:${'2'.repeat(64)}`;
       return [
-        `ghcr.io/shareittoo/shareittoo-api:${'1'.repeat(40)}`,
-        `sha256:${'2'.repeat(64)}`,
-        '1'.repeat(40),
-        `0.1.0-${'1'.repeat(12)}`,
+        overrides.runtimeImage
+          ?? `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}@${runtimeImageId}`,
+        runtimeImageId,
+        runtimeCommit,
+        `0.1.0-${runtimeCommit.slice(0, 12)}`,
         '0',
       ].join('|');
     }
@@ -55,6 +58,9 @@ test('proves only authenticated manifest/config reads and preserves honest limit
   });
   assert.equal(result.status, 'authenticated-manifest-and-config-read-passed');
   assert.equal(result.target.digest, digest);
+  assert.equal(result.runtime.imageTag,
+    `ghcr.io/shareittoo/shareittoo-api:${'1'.repeat(40)}`);
+  assert.equal(result.runtime.imageDigest, `sha256:${'2'.repeat(64)}`);
   assert.equal(result.protectedDockerConfig.credentialContentRead, false);
   assert.deepEqual(result.limits, {
     credentialScopeInspected: false,
@@ -64,6 +70,30 @@ test('proves only authenticated manifest/config reads and preserves honest limit
     dockerLoginChanged: false,
     packageVisibilityChanged: false,
   });
+});
+
+test('accepts a legacy tag-only runtime and rejects an immutable digest mismatch', () => {
+  const runtimeCommit = '1'.repeat(40);
+  const tagOnly = auditStagingRegistryReadPath({
+    commit,
+    expectedDigest: digest,
+    run: successfulRunner({
+      runtimeImage: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`,
+    }),
+  });
+  assert.equal(tagOnly.runtime.imageDigest, null);
+
+  assert.throws(
+    () => auditStagingRegistryReadPath({
+      commit,
+      expectedDigest: digest,
+      run: successfulRunner({
+        runtimeImage:
+          `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}@sha256:${'3'.repeat(64)}`,
+      }),
+    }),
+    /runtime observation is invalid/u,
+  );
 });
 
 test('rejects a registry digest or immutable revision mismatch', () => {
