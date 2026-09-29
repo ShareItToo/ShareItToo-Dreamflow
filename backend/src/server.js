@@ -24,6 +24,11 @@ import { reconcilePaymentLifecycle } from './payment_workflow.js';
 import { recoverTechnicalSandboxPendingRuns } from './technical_sandbox_workflow.js';
 import { reconcileReturnLifecycle } from './return_lifecycle_workflow.js';
 import { reconcileSupportDeadlines } from './support_deadline_watchdog.js';
+import {
+  assertSyntheticCloneLoopbackBinding,
+  createSyntheticCloneBookingLane,
+  SYNTHETIC_CLONE_PRINCIPALS,
+} from './synthetic_clone_booking_lane.js';
 
 async function writeIdentityVerificationWorkerAudit(client, {
   actor = null,
@@ -40,8 +45,28 @@ async function writeIdentityVerificationWorkerAudit(client, {
 }
 
 async function main() {
+  const syntheticCloneEnabled = process.env.SIT_SYNTHETIC_CLONE_BOOKING_LANE === '1';
+  assertSyntheticCloneLoopbackBinding({
+    enabled: syntheticCloneEnabled,
+    bindHost: config.bindHost,
+  });
+
   await initializeDatabase();
   await verifyMailer();
+
+  const syntheticCloneBookingLane = syntheticCloneEnabled
+    ? createSyntheticCloneBookingLane({
+      enabled: true,
+      deploymentEnvironment: config.deploymentEnvironment,
+      targetKind: process.env.SIT_SYNTHETIC_TARGET_KIND?.trim() || 'clone',
+      datasetId: process.env.SIT_SYNTHETIC_DATASET_ID?.trim(),
+      runId: process.env.SIT_SYNTHETIC_CLONE_RUN_ID?.trim(),
+      ownerId: process.env.SIT_SYNTHETIC_CLONE_OWNER_ID?.trim(),
+      renterId: process.env.SIT_SYNTHETIC_CLONE_RENTER_ID?.trim(),
+      listingId: SYNTHETIC_CLONE_PRINCIPALS.listingId,
+      secret: process.env.SIT_SYNTHETIC_CLONE_CONFIRMATION_SECRET?.trim(),
+    })
+    : null;
 
   const identityProvider = new StripeProvider({
     mode: config.identityVerification.transport,
@@ -52,9 +77,10 @@ async function main() {
 
   const app = createApp({
     ...createLocalQaSyntheticImageScreeningOptions({
-    configuration: config,
+      configuration: config,
     }),
     identityVerificationProvider: identityProvider,
+    syntheticCloneBookingLane,
   });
   const server = http.createServer(app);
   attachRealtime(server);

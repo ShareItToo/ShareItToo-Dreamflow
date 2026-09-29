@@ -1,34 +1,44 @@
 # ShareItToo Current State
 
-## P5 Google Play Internal — ACTIVE; P6 successor gate blocked
+## Current synthetic clone-lane successor — SOURCE PASS; external gates open
 
-The exact signed candidate `1.0.0+2026092206` from source commit
-`c2da8585b1f822e123307d7c763530dc0f598893` is active in the **Internal
-testing** track. Play shows latest release VersionCode `2026092206` (`1.0.0`),
-release id `29`, and **Available to internal testers**; the UI release time is
-25 September 2026, 22:48 Europe/Berlin. The temporary app name remains
-`com.shareittoo.app (unreviewed)`. Tester list `SIT interner Test` is unchanged
-at 2 users and the internal-test join link is available. Release details path:
-`/console/u/0/developers/4653202812150286845/app/4973917320514947988/tracks/4701593427959921264/releases/29/details`.
+The accepted source package on branch `codex/master-workflow-20260808` binds
+the final normal Play successor `1.0.0+2026092902`; its strictly intermediate
+local-QA build is `2026092901`, above the currently Play-installed baseline
+`2026092803`. No `2026092902` release artifact or external gate is claimed by
+this source state. The local-QA-only loopback lane is
+fail-closed behind `SyntheticCloneConfig`, keeps normal/Play behavior unchanged
+when disabled, and renders the exact persistent notice
+`Synthetischer Test – keine vertragliche oder finanzielle Wirkung`. Its source
+path covers two run-scoped roles, requested→accepted→active→returned, 4+4
+named photos, QR-v3, exact six-digit fallback, audit/status and verified
+cleanup, with no contract, payment, payout, review, ranking, reminder,
+notification or provider effect.
 
-GitHub Regression `36183779963` and CodeQL `36179682061` both succeeded for
-the exact candidate source. A sanitized Pixel readback verifies the
-Play-installed package `com.shareittoo.app` `1.0.0+2026092206`, installer
-`com.android.vending`, and split delivery; no device serial or other raw device
-identity is retained. No provider, payment, production, Firebase, DNS or
-PR-merge action is claimed. P6 is blocked on a strictly higher successor
-because the exact-2206 physical listing-AI pass was not achieved; this does
-not close legal, pilot or production readiness.
+Local source evidence is green: focused Flutter `8/8`, backend clone `8/8`,
+physical-runner contract `10/10`, Android build tooling `34/34`, full Flutter
+regression, full analyzer, backend `1375` pass / `15` skip / `0` fail,
+privacy/retention/current-consumer closure, dependency audit and working-tree
+secret scan. Physical workflow
+execution, CI/GitHub, Green/Staging and Play Internal/Store remain **OPEN** for
+this successor; no source evidence is release, device, Green or Play proof.
 
-## P6 Pixel/OnePlus truth — BLOCKED; successor required
+## Current Play baseline — ACTIVE; successor not yet published
 
-The exact-2206 listing-AI physical PASS was not achieved. The runner exposed a
-real app-route loss during token rotation and photo-picker handling. The source
-fix is currently uncommitted: token rotation within the same logical session
-no longer invalidates the principal. A strictly higher successor build is
-required; 2206 is not claimed fixed. The core Pixel two-role rerun is deferred
-to that successor. OnePlus exact-current physical proof remains pending and
-the user device is absent.
+The exact signed `1.0.0+2026092803` candidate from source
+`3c40ded07b58b8164d806628926ac4cb579afb0d` is the verified active Internal
+testing baseline (release id `34`). A sanitized Pixel readback verifies
+`com.shareittoo.app` `1.0.0+2026092803`, installer `com.android.vending`, and
+Play split delivery. The successor `2026092902` remains unpublished until its
+exact source, CI, Green, local-QA and artifact gates complete.
+
+## P6 Pixel/OnePlus truth — SUCCESSOR PACKAGE READY; external proof open
+
+The local `2026092901` clone run must prove the two-role booking, 4+4 handover
+photos, QR-v3 plus six-digit fallback and cleanup before the normal
+`2026092902` candidate is published. Pixel is available; OnePlus exact-current
+physical proof remains separate and no source-only result is treated as device
+or Play evidence.
 
 ## P4 Green Staging closure — PASS; technical gate only
 

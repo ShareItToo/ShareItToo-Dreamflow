@@ -55,7 +55,17 @@ void main() {
     );
     expect(
       loadSource,
-      contains("status == 'completed' && !entry.r.needsReview"),
+      contains('SyntheticCloneConfig.reviewActionsEnabled'),
+      reason: 'review hydration must stay disabled in the synthetic clone',
+    );
+    expect(
+      loadSource,
+      contains("status == 'completed' &&"),
+      reason: 'review state is needed only for completed requests',
+    );
+    expect(
+      loadSource,
+      contains('!entry.r.needsReview'),
       reason: 'review state is needed only for eligible completed requests',
     );
   });

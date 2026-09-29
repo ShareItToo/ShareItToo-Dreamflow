@@ -23,6 +23,7 @@ import 'package:lendify/services/private_pilot_cancellation_policy.dart';
 import 'package:lendify/services/private_pilot_return_policy.dart';
 import 'package:lendify/services/local_principal_scope.dart';
 import 'package:lendify/config/private_pilot_config.dart';
+import 'package:lendify/config/synthetic_clone_config.dart';
 import 'package:lendify/models/category.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/user.dart';
@@ -11601,6 +11602,7 @@ class DataService {
     String requestId, {
     required String source,
   }) async {
+    if (!SyntheticCloneConfig.reviewActionsEnabled) return false;
     try {
       final request = await getRentalRequestById(requestId);
       if (request == null || !request.needsReview) return false;
@@ -12575,6 +12577,7 @@ class DataService {
     required String direction, // 'renter_to_owner' | 'owner_to_renter'
     required DateTime dueAt,
   }) async {
+    if (!SyntheticCloneConfig.reviewActionsEnabled) return;
     try {
       final req = await getRentalRequestById(requestId);
       if (req != null && req.needsReview) return;
@@ -12610,6 +12613,7 @@ class DataService {
   static Future<Map<String, dynamic>?> takeDueReviewReminder({
     required String reviewerId,
   }) async {
+    if (!SyntheticCloneConfig.reviewActionsEnabled) return null;
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_reviewRemindersKey);
@@ -12660,6 +12664,7 @@ class DataService {
     required Map<String, dynamic> reminder,
     required Duration by,
   }) async {
+    if (!SyntheticCloneConfig.reviewActionsEnabled) return;
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_reviewRemindersKey);

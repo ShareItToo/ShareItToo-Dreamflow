@@ -6,6 +6,14 @@ CHANNEL="${SIT_RELEASE_CHANNEL:-internal}"
 API_BASE_URL="${SIT_API_BASE_URL:-https://staging.shareittoo.com/api/v1}"
 REQUIRE_CLEAN="${SIT_REQUIRE_CLEAN:-1}"
 
+case "${SIT_SYNTHETIC_CLONE_BOOKING_LANE:-0}" in
+  0|false|'') synthetic_clone_booking_lane=false ;;
+  *)
+    echo "ERROR: Synthetic clone booking is local-QA-only and cannot be carried by a release or Store candidate." >&2
+    exit 1
+    ;;
+esac
+
 case "${SIT_BLUE_OCEAN_LISTING_ASSISTANT:-0}" in
   1|true) blue_ocean_listing_assistant=true ;;
   0|false|'') blue_ocean_listing_assistant=false ;;
@@ -153,6 +161,7 @@ common_args=(
   "--dart-define=SIT_CLIENT_BUILD=$build_name+$build_number"
   "--dart-define=SIT_BLUE_OCEAN_LISTING_ASSISTANT=$blue_ocean_listing_assistant"
   "--dart-define=SIT_STAGE_A_NON_BINDING_PILOT=$stage_a_non_binding_pilot"
+  "--dart-define=SIT_SYNTHETIC_CLONE_BOOKING_LANE=$synthetic_clone_booking_lane"
   "--dart-define=SIT_STAGE_A_PILOT_ID=$stage_a_pilot_id"
   "--dart-define=SIT_BOOKING_GROUPS_TECHNICAL_UI_ENABLED=$booking_groups_technical_ui"
   "--dart-define=SIT_BOOKING_GROUPS_PUBLIC_RELEASE_ALLOWED=false"
@@ -387,6 +396,7 @@ printf '%s\n' \
   "  \"listingAiModel\": \"$listing_ai_model\"," \
   "  \"listingAiExternalImageProviderEnabled\": false," \
   "  \"stageANonBindingPilotEnabled\": $stage_a_non_binding_pilot," \
+  "  \"syntheticCloneBookingLane\": $synthetic_clone_booking_lane," \
   "  \"closedPilotEnvelopeEnabled\": $closed_pilot_envelope," \
   "  \"stageAPilotId\": \"$stage_a_pilot_id\"," \
   "  \"g3TechnicalUiEnabled\": $booking_groups_technical_ui," \

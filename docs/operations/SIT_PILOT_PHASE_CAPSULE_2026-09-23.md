@@ -34,6 +34,29 @@ This file is the compact entry point before large status histories. It records
 the current source-bound runway and the next bounded gate; it does not replace
 historical evidence or grant any external, legal, provider or release approval.
 
+## Current synthetic clone-lane successor — source PASS; external gates open
+
+The accepted package on branch `codex/master-workflow-20260808` binds the
+normal Play successor `1.0.0+2026092902` and the strictly intermediate
+local-QA build `2026092901`, above the installed Play baseline `2026092803`.
+It contains a local-QA-only successor for the synthetic non-binding full-booking lane. The
+loopback-only internal build flag is fail-closed, the persistent notice is
+exactly `Synthetischer Test – keine vertragliche oder finanzielle Wirkung`, and
+the clone path covers two run-scoped roles, requested→accepted→active→returned,
+four named pickup plus four named return photo slots, QR-v3, exact six-digit
+fallback, audit/status readback and verified cleanup. Normal/Play behavior is
+unchanged when the flag is false; the lane has no contract, payment, payout,
+review, ranking, reminder, notification or provider effect.
+
+Local source evidence is green: focused Flutter `8/8`, backend clone `8/8`,
+physical-runner contract `10/10`, Android build tooling `34/34`, full Flutter
+regression, full analyzer, backend `1375` pass / `15` skip / `0` fail,
+privacy/retention/current-consumer closure, dependency audit and working-tree
+secret scan. No successor release artifact or external proof is bound to this
+source state. Physical workflow execution,
+CI/GitHub, Green/Staging, and Play Internal/Store gates for this successor
+remain **OPEN** and must not be inferred from the source checks.
+
 ## Fixed phases and exit criteria
 
 1. **P1 — Source convergence**

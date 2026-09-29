@@ -20,7 +20,7 @@
     },
     {
       "path": "pubspec.yaml",
-      "sha256": "4b037bad3e1a6da746523e57214caf4f2fc23d7e32438ac120492657fa5b9577"
+      "sha256": "de2274fe058eedb855fac046f031f882aa38d16c615b76ea9ec9422b6a676edb"
     },
     {
       "path": "android/app/src/main/AndroidManifest.xml",
@@ -48,7 +48,7 @@
     },
     {
       "path": "lib/main.dart",
-      "sha256": "a736b031c639843f00ebd3ec6de936976bd7709ea329d01fdb08ecb1eb8fa720"
+      "sha256": "4160ba0491f0491865cd4df7e864e65781ce598e0028e2ab25a1a49372be98b3"
     },
     {
       "path": "lib/screens/privacy_info_screen.dart",
@@ -92,7 +92,7 @@
     },
     {
       "path": "backend/src/server.js",
-      "sha256": "1aa0cf59eb86690212a2940062584a372a6a7ba94a1be9d2d7d314bb57b450a9"
+      "sha256": "7a96d866a592fa92f0b8619df5ee7217d800db953ef545b4974239a559a56fa3"
     },
     {
       "path": "backend/src/credential_cleanup.js",
@@ -760,7 +760,7 @@
     },
     {
       "path": "lib/services/data_service.dart",
-      "sha256": "cce04e10456801644408f2100db3b179711d531600c09bff2672b1126b732449"
+      "sha256": "3a470c7b88cc5949ee637e657521aad9cde014e9f595ff4c44d1115c0440d4ed"
     },
     {
       "path": "lib/services/local_safety_privacy_service.dart",
@@ -836,7 +836,7 @@
     },
     {
       "path": "lib/config/private_pilot_config.dart",
-      "sha256": "869a1691425d661dbe2910d0b19d2ee82220f884c1a04ceffd33d922e26f8d63"
+      "sha256": "8906b9cb6f69e52de2e0c7cbd3a561421b076a55768a4eeae5d4087e13774643"
     },
     {
       "path": "lib/config/supply_enrichment_technical_config.dart",
@@ -868,7 +868,7 @@
     },
     {
       "path": "lib/screens/bookings_screen.dart",
-      "sha256": "3893dc641dbf77e963512387c84d92fcf39b361c31132ef0fa7f59ab2537322b"
+      "sha256": "7dc83b0fd9a98d4a024b6166c37c8e300f33ef93f1f311625cf414c902e6f5f7"
     },
     {
       "path": "lib/screens/payment_methods_screen.dart",
@@ -904,11 +904,11 @@
     },
     {
       "path": "lib/screens/booking_detail_screen.dart",
-      "sha256": "5239439913202e4dc97797af204f232b779c6d4881772a08b2ee3b772fb61daa"
+      "sha256": "db32d3d20900522cf0ef77f6076cee81648181d8e50f7e60d8553d9603d203af"
     },
     {
       "path": "lib/screens/ongoing_owner_detail_screen.dart",
-      "sha256": "e4ed3c58ba94464e00787deaa4d349102c4efbdd3154e5d741228273c2d6e9de"
+      "sha256": "169a17498073788b2dbedd10f458b14f2d2152308192849b2871bc511f582ef6"
     },
     {
       "path": "lib/screens/platform_withdrawal_screen.dart",
@@ -944,7 +944,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "2ef9d687abb26b8b4f7b5ca2299848f0039a17be2fac99c0f512423e8e198c8c"
+      "sha256": "a860bd597fd313e864e553b1d6713f9501bc4d0599c688fff136f5491b74b88b"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
@@ -964,7 +964,7 @@
     },
     {
       "path": "lib/screens/explore_screen.dart",
-      "sha256": "da3fdd19a41c20d663fb358c5660645f81803f9a5d77c59498def5f35338aef8"
+      "sha256": "f6ae966f1ee2afeb0d03440ac099bed3eff12a28bea3802a7d4e602b950e58bf"
     },
     {
       "path": "lib/widgets/supply_enrichment_dialog.dart",
@@ -972,7 +972,7 @@
     },
     {
       "path": "lib/screens/message_thread_screen.dart",
-      "sha256": "1675d5984c2bfc39105b05b0a71ec3fde614806fc2dde1b7cfa44f655ef22cb1"
+      "sha256": "7bf86f5758aaea4e5a95d0037de26581e490f18028c9aaf45f51514e1dfcdb67"
     },
     {
       "path": "lib/widgets/return_handover_stepper_sheet.dart",

@@ -35,6 +35,7 @@ import 'package:lendify/services/invoice_pdf_service.dart';
 import 'package:lendify/services/invoices_service.dart';
 import 'package:lendify/services/local_artifact_storage_service.dart';
 import 'package:printing/printing.dart';
+import 'package:lendify/config/synthetic_clone_config.dart';
 
 class OngoingOwnerDetailScreen extends StatefulWidget {
   final String requestId;
@@ -937,7 +938,10 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
           final isTrulyCompleted = (cat == 'completed') &&
               r.status != 'cancelled' &&
               r.status != 'declined';
-          if (!isTrulyCompleted || r.needsReview || r.simulationOnly) {
+          if (!SyntheticCloneConfig.reviewActionsEnabled ||
+              !isTrulyCompleted ||
+              r.needsReview ||
+              r.simulationOnly) {
             return const SizedBox.shrink();
           }
           return SafeArea(
@@ -2132,6 +2136,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     if (!mounted) return;
     // Schedule a review reminder for the owner in 10 minutes instead of immediate prompt
     try {
+      if (!SyntheticCloneConfig.reviewActionsEnabled) return;
       final owner = _owner;
       if (owner != null) {
         await DataService.scheduleReviewReminder(
@@ -2171,6 +2176,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
   }
 
   Future<void> _showReviewSheet(BuildContext context, User renter) async {
+    if (!SyntheticCloneConfig.reviewActionsEnabled) return;
     final request = _req;
     final item = _item;
     final owner = _owner;

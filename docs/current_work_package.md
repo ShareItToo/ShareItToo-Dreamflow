@@ -1,3 +1,25 @@
+# Current synthetic clone-lane successor — SOURCE PASS; external gates open
+
+The accepted package on branch `codex/master-workflow-20260808` binds the
+normal Play successor `1.0.0+2026092902` and its strictly intermediate local-QA
+build `2026092901`, above the installed Play baseline `2026092803`. It has no
+release artifact or external successor proof yet. The loopback-only internal
+local-QA lane is fail-closed behind `SyntheticCloneConfig` and shows the exact
+notice `Synthetischer Test – keine vertragliche oder finanzielle Wirkung` on
+every route. It covers the two run-scoped roles and
+requested→accepted→active→returned with 4+4 named photos, QR-v3, exact
+six-digit fallback, audit/status readback and verified cleanup. Contract,
+payment, payout, review, ranking, reminder, notification and provider effects
+are excluded; normal/Play builds remain unchanged when the flag is false.
+
+Local source evidence is green: focused Flutter `8/8`, backend clone `8/8`,
+physical-runner contract `10/10`, Android build tooling `34/34`, full Flutter
+regression, full analyzer, backend `1375` pass / `15` skip / `0` fail,
+privacy/retention/current-consumer closure, dependency audit and working-tree
+secret scan. Physical workflow
+execution, CI/GitHub, Green/Staging, and Play Internal/Store remain **OPEN**
+for this successor.
+
 # P6 Pixel/OnePlus and listing-AI — BLOCKED; successor required
 
 The exact signed candidate `1.0.0+2026092206` from source commit

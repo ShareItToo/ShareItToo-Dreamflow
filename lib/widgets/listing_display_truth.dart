@@ -1,8 +1,10 @@
 import 'package:lendify/services/private_pilot_pricing.dart';
+import 'package:lendify/config/synthetic_clone_config.dart';
 
 /// Returns a real rating that is safe to show, or `null` when no valid
 /// rating exists. A zero value means the owner has not been rated yet.
 double? listingRatingForDisplay(double? rating) {
+  if (isSyntheticCloneNonBinding) return null;
   if (rating == null || !rating.isFinite || rating <= 0 || rating > 5) {
     return null;
   }

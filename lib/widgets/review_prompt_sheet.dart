@@ -5,6 +5,7 @@ import 'package:lendify/services/backend_repository.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
+import 'package:lendify/config/synthetic_clone_config.dart';
 import 'package:lendify/services/review_metrics_service.dart';
 import 'package:lendify/theme.dart';
 import 'package:lendify/widgets/blur_modal.dart';
@@ -80,6 +81,7 @@ class ReviewPromptSheet extends StatefulWidget {
     required String direction,
     AuthSessionOwner? sessionOwner,
   }) async {
+    if (!SyntheticCloneConfig.reviewActionsEnabled) return null;
     final isDark = AppTheme.isDark(context);
     if (!BackendConfig.enabled || QaRuntimeService.isEnabled) {
       try {

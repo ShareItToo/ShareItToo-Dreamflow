@@ -3,8 +3,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_NAME="1.0.0"
-DEFAULT_BUILD_NUMBER="2026082303"
-BUILD_NUMBER="${SIT_LOCAL_QA_BUILD_NUMBER:-$DEFAULT_BUILD_NUMBER}"
+BUILD_NUMBER="${SIT_LOCAL_QA_BUILD_NUMBER:-}"
+INSTALLED_PLAY_BUILD_NUMBER="${SIT_INSTALLED_PLAY_BUILD_NUMBER:-}"
+FINAL_PLAY_SUCCESSOR_BUILD_NUMBER="${SIT_FINAL_PLAY_SUCCESSOR_BUILD_NUMBER:-}"
 API_BASE_URL="http://127.0.0.1:18080/api/v1"
 APPLICATION_ID="com.shareittoo.app"
 
@@ -14,9 +15,26 @@ if [[ "${SIT_CONFIRM_LOCAL_INTERNAL_QA:-0}" != "1" ]]; then
   echo "ERROR: Set SIT_CONFIRM_LOCAL_INTERNAL_QA=1 for the bounded R2 local candidate." >&2
   exit 1
 fi
+if [[ -z "$BUILD_NUMBER" ]]; then
+  echo "ERROR: SIT_LOCAL_QA_BUILD_NUMBER is required; never reuse an observed build number." >&2
+  exit 1
+fi
+if [[ -z "$INSTALLED_PLAY_BUILD_NUMBER" || -z "$FINAL_PLAY_SUCCESSOR_BUILD_NUMBER" ]]; then
+  echo "ERROR: Explicit installed Play and final Play successor build numbers are required." >&2
+  exit 1
+fi
 if [[ ! "$BUILD_NUMBER" =~ ^[0-9]{10,12}$ ]] ||
-   (( 10#$BUILD_NUMBER < 10#$DEFAULT_BUILD_NUMBER )); then
-  echo "ERROR: Local QA build number must be numeric and must not precede the R2 baseline." >&2
+   [[ ! "$INSTALLED_PLAY_BUILD_NUMBER" =~ ^[0-9]{10,12}$ ]] ||
+   [[ ! "$FINAL_PLAY_SUCCESSOR_BUILD_NUMBER" =~ ^[0-9]{10,12}$ ]] ||
+   (( 10#$BUILD_NUMBER > 2100000000 ||
+       10#$INSTALLED_PLAY_BUILD_NUMBER > 2100000000 ||
+       10#$FINAL_PLAY_SUCCESSOR_BUILD_NUMBER > 2100000000 )); then
+  echo "ERROR: All explicit ordering build numbers must be numeric Android versionCodes within the Play limit." >&2
+  exit 1
+fi
+if (( 10#$INSTALLED_PLAY_BUILD_NUMBER >= 10#$BUILD_NUMBER ||
+      10#$BUILD_NUMBER >= 10#$FINAL_PLAY_SUCCESSOR_BUILD_NUMBER )); then
+  echo "ERROR: Build ordering must be installed Play < local QA < final Play successor." >&2
   exit 1
 fi
 if [[ -n "$(git status --porcelain)" ]]; then
@@ -76,6 +94,7 @@ flutter build apk \
   --dart-define=SIT_SOCIAL_FACEBOOK_ENABLED=false \
   --dart-define=SIT_BLUE_OCEAN_LISTING_ASSISTANT=true \
   --dart-define=SIT_STAGE_A_NON_BINDING_PILOT=true \
+  --dart-define=SIT_SYNTHETIC_CLONE_BOOKING_LANE=true \
   --dart-define=SIT_BOOKING_GROUPS_TECHNICAL_UI_ENABLED=true \
   --dart-define=SIT_BOOKING_GROUPS_PUBLIC_RELEASE_ALLOWED=false \
   --dart-define=SIT_PLANNER_TECHNICAL_UI_ENABLED=true \
@@ -165,6 +184,10 @@ printf '%s\n' \
   "    \"adbReverseRequired\": \"tcp:18080\"," \
   "    \"blueOceanMockUi\": true," \
   "    \"stageANonBindingPilotEnabled\": true," \
+  "    \"syntheticCloneBookingLane\": true," \
+  "    \"syntheticCloneNotice\": \"Synthetischer Test – keine vertragliche oder finanzielle Wirkung\"," \
+  "    \"syntheticCloneRequiredRoles\": [\"owner\", \"renter\"]," \
+  "    \"buildOrdering\": {\"installedPlayBuildNumber\": \"$INSTALLED_PLAY_BUILD_NUMBER\", \"localQaBuildNumber\": \"$BUILD_NUMBER\", \"finalPlaySuccessorBuildNumber\": \"$FINAL_PLAY_SUCCESSOR_BUILD_NUMBER\"}," \
   "    \"requiredLocalBackendProvider\": \"mock\"," \
   "    \"g3TechnicalUi\": true," \
   "    \"g4TechnicalUi\": true," \
@@ -188,6 +211,9 @@ printf '%s\n' \
   "}" > "$archive_dir/manifest.json"
 chmod 600 "$archive_dir/manifest.json"
 
+SIT_LOCAL_QA_BUILD_NUMBER="$BUILD_NUMBER" \
+SIT_INSTALLED_PLAY_BUILD_NUMBER="$INSTALLED_PLAY_BUILD_NUMBER" \
+SIT_FINAL_PLAY_SUCCESSOR_BUILD_NUMBER="$FINAL_PLAY_SUCCESSOR_BUILD_NUMBER" \
 node tool/validate_android_local_qa_candidate.mjs
 
 cleanup_generated

@@ -43,6 +43,7 @@ import 'package:lendify/screens/platform_withdrawal_screen.dart';
 import 'package:lendify/widgets/sit_glass_time_picker.dart';
 import 'package:lendify/widgets/sit_overflow_menu.dart';
 import 'package:lendify/services/handover_code.dart';
+import 'package:lendify/config/synthetic_clone_config.dart';
 import 'package:lendify/utils/cancellation_policy_text.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -476,7 +477,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         if (requestId.isNotEmpty) {
           final state = await DataService.getHandoverReturnState(requestId);
           final current = await DataService.getCurrentUser();
-          final alreadyReviewed = current != null
+          final alreadyReviewed = SyntheticCloneConfig.reviewActionsEnabled && current != null
               ? await DataService.hasSubmittedReview(
                   requestId: requestId,
                   reviewerId: current.id,
@@ -510,7 +511,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final counterparty = counterpartyId.isEmpty
         ? null
         : await DataService.getUserById(counterpartyId);
-    final alreadyReviewed = current != null
+    final alreadyReviewed = SyntheticCloneConfig.reviewActionsEnabled && current != null
         ? await DataService.hasSubmittedReview(
             requestId: requestId,
             reviewerId: current.id,
@@ -1257,7 +1258,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           final isHeldForReview = widget.booking['needsReview'] == true;
 
           Widget? child;
-          if (isTrulyCompleted && isRenterView && !isHeldForReview) {
+          if (SyntheticCloneConfig.reviewActionsEnabled &&
+              isTrulyCompleted && isRenterView && !isHeldForReview) {
             child = SizedBox(
               height: 46,
               child: FilledButton.icon(
@@ -3497,7 +3499,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         context,
         icon: Icons.check_circle_outline,
         title: 'Rückgabe von "$titleTxt" erfolgreich durchgeführt',
-        message: 'Danke! Eine Erinnerung zum Bewerten erscheint in 10 Minuten.',
+        message: SyntheticCloneConfig.reviewActionsEnabled
+            ? 'Danke! Eine Erinnerung zum Bewerten erscheint in 10 Minuten.'
+            : 'Die unverbindliche Rückgabe wurde dokumentiert.',
         barrierDismissible: true,
         showCloseIcon: false,
         plainCloseIcon: true,
@@ -3513,7 +3517,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       // Schedule a 10-minute review reminder for the current viewer (renter in this page)
       try {
         final current = await DataService.getCurrentUser();
-        if (current != null &&
+        if (SyntheticCloneConfig.reviewActionsEnabled &&
+            current != null &&
             requestId != null &&
             itemId != null &&
             listerId != null &&
@@ -3853,7 +3858,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         final requestId = widget.booking['requestId'] as String?;
         final itemId = widget.booking['itemId'] as String?;
         final listerId = widget.booking['listerId'] as String?;
-        if (current != null &&
+        if (SyntheticCloneConfig.reviewActionsEnabled &&
+            current != null &&
             requestId != null &&
             itemId != null &&
             listerId != null) {
@@ -3967,7 +3973,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         final requestId = widget.booking['requestId'] as String?;
         final itemId = widget.booking['itemId'] as String?;
         final listerId = widget.booking['listerId'] as String?;
-        if (current != null &&
+        if (SyntheticCloneConfig.reviewActionsEnabled &&
+            current != null &&
             requestId != null &&
             itemId != null &&
             listerId != null) {

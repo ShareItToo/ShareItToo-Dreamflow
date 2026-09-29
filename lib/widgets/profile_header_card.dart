@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/widgets/user_avatar.dart';
+import 'package:lendify/config/synthetic_clone_config.dart';
 import 'package:provider/provider.dart';
 
 class ProfileHeaderCard extends StatelessWidget {
@@ -88,6 +89,7 @@ class ProfileHeaderCard extends StatelessWidget {
   }
 
   static String _ratingText(BuildContext context, User user) {
+    if (isSyntheticCloneNonBinding) return '—';
     final l10n = context.read<LocalizationController>();
     final c = user.reviewCount;
     if (c <= 0) return l10n.t('Keine Bewertung');

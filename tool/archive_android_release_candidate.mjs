@@ -105,6 +105,7 @@ export function archiveAndroidReleaseCandidate({
         manifest.listingAiModel !== ''
       )) ||
       typeof manifest.stageANonBindingPilotEnabled !== 'boolean' ||
+      manifest.syntheticCloneBookingLane !== false ||
       typeof manifest.closedPilotEnvelopeEnabled !== 'boolean' ||
       typeof manifest.stageAPilotId !== 'string' ||
       typeof manifest.g3TechnicalUiEnabled !== 'boolean' ||
@@ -190,6 +191,7 @@ export function archiveAndroidReleaseCandidate({
       listingAiExternalImageProviderEnabled:
         manifest.listingAiExternalImageProviderEnabled,
       stageANonBindingPilotEnabled: manifest.stageANonBindingPilotEnabled,
+      syntheticCloneBookingLane: manifest.syntheticCloneBookingLane,
       closedPilotEnvelopeEnabled: manifest.closedPilotEnvelopeEnabled,
       stageAPilotId: manifest.stageAPilotId,
       g3TechnicalUiEnabled: manifest.g3TechnicalUiEnabled,

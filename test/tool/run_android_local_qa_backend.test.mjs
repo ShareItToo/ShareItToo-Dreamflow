@@ -18,6 +18,13 @@ test('local Android QA harness remains loopback-only, synthetic and cleanup-safe
     'cloud: false',
     "payment: 'memory-no-real-money'",
     'store: false',
+    "SIT_SYNTHETIC_CLONE_BOOKING_LANE: '1'",
+    'SIT_SYNTHETIC_CLONE_OWNER_ID',
+    'SIT_SYNTHETIC_CLONE_RENTER_ID',
+    'SIT_SYNTHETIC_CLONE_CONFIRMATION_SECRET',
+    'syntheticAccounts: 2',
+    'Synthetischer Test – keine vertragliche oder finanzielle Wirkung',
+    'Synthetic local QA clone cleanup verification failed.',
     'if (sessionPath) rmSync(sessionPath, { force: true });',
     'rmSync(runRoot, { recursive: true, force: true });',
   ]) {

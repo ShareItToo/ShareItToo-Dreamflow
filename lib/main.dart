@@ -20,6 +20,8 @@ import 'package:lendify/screens/app_link_destination_screen.dart';
 import 'package:lendify/widgets/foreground_push_host.dart';
 import 'package:lendify/services/privacy_export_file_store.dart';
 import 'package:lendify/widgets/privacy_export_cache_lifecycle_host.dart';
+import 'package:lendify/widgets/synthetic_clone_non_binding_banner.dart';
+import 'package:lendify/config/synthetic_clone_config.dart';
 
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -29,6 +31,7 @@ Future<void> main() async {
   // Initialize bindings once in the same zone as runApp to avoid zone mismatch warnings.
   WidgetsFlutterBinding.ensureInitialized();
   ReleaseIdentity.validateCurrentBuild();
+  SyntheticCloneConfig.validateCurrentBuild();
   try {
     await const PrivacyExportFileStore().purgeRetainedCopies();
   } catch (_) {
@@ -130,7 +133,7 @@ class MyApp extends StatelessWidget {
                 navigatorKey: rootNavigatorKey,
                 messengerKey: rootScaffoldMessengerKey,
                 child: AppGradientBackground(
-                  child: child ?? const SizedBox.shrink(),
+                  child: buildSyntheticCloneMaterialAppShell(child: child),
                 ),
               ),
             ),

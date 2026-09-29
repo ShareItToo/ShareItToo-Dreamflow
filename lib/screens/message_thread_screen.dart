@@ -28,6 +28,7 @@ import 'package:lendify/services/handover_code.dart';
 import 'package:lendify/services/safety_action_service.dart';
 import 'package:lendify/theme.dart';
 import 'package:lendify/widgets/app_image.dart';
+import 'package:lendify/config/synthetic_clone_config.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/private_pilot_owner_acceptance_dialog.dart';
 import 'package:lendify/widgets/return_handover_stepper_sheet.dart';
@@ -1429,6 +1430,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
           }
           break;
         case _ChatState.completed:
+          if (!SyntheticCloneConfig.reviewActionsEnabled) break;
           final reviewRequest = _request;
           final reviewOwner = _safetyActions.capture();
           final currentUser = _currentUser;

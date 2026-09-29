@@ -50,6 +50,11 @@ discover a mechanically stale source hash.
   Repeat-promotion pre-state contracts must derive from the last verified final
   runtime shape, not a stale first-promotion source shape; deterministic tests
   must assert the exact live tuple and reject extra, missing or changed mounts.
+- Safety-mode build flags must fail startup whenever their requested
+  configuration is invalid; they must never silently downgrade to normal
+  behavior. A package report may claim an allowed or rejected configuration
+  only when the final source and a focused positive/negative test prove that
+  exact matrix.
 - Recovery mutations must target the captured immutable provider/container ID,
   never a mutable name; stateful test executors must model or explicitly reject
   every accepted security/resource option.

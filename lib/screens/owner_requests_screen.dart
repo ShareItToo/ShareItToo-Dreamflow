@@ -19,6 +19,7 @@ import 'package:lendify/widgets/box_chat_icon.dart';
 import 'package:lendify/widgets/review_prompt_sheet.dart';
 import 'package:lendify/widgets/item_details_overlay.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
+import 'package:lendify/config/synthetic_clone_config.dart';
 
 /// Owner-side requests hub: Tabs for Laufend, Kommend, Anfragen, Abgeschlossen
 class OwnerRequestsScreen extends StatefulWidget {
@@ -111,6 +112,7 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
 
   bool _showingReminder = false;
   Future<void> _maybeShowReviewReminder() async {
+    if (!SyntheticCloneConfig.reviewActionsEnabled) return;
     if (_showingReminder) return;
     final owner = await DataService.getCurrentUser();
     if (owner == null) return;
@@ -322,7 +324,9 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
         final flowState = status == 'accepted' || status == 'running'
             ? await DataService.getHandoverReturnState(entry.r.id)
             : const <String, dynamic>{};
-        final reviewed = status == 'completed' && !entry.r.needsReview
+        final reviewed = SyntheticCloneConfig.reviewActionsEnabled &&
+            status == 'completed' &&
+            !entry.r.needsReview
             ? await DataService.hasSubmittedReview(
                 requestId: entry.r.id,
                 reviewerId: owner.id,
@@ -1333,7 +1337,8 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
         ]);
       case 'completed':
         // Show a small inline "Bewerten" action for completed rentals (not for cancelled/declined)
-        if (e.r.status == 'completed' &&
+        if (SyntheticCloneConfig.reviewActionsEnabled &&
+            e.r.status == 'completed' &&
             !e.r.needsReview &&
             !e.hasSubmittedReview) {
           return _TinyTextButton(

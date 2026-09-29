@@ -26,12 +26,17 @@ test('local QA harness stays ephemeral, mock-only and zero-billing', () => {
     "DEPLOYMENT_ENVIRONMENT: 'test'",
     "SIT_LISTING_AI_PROVIDER: 'mock'",
     "SIT_LISTING_AI_BUDGET_CENTS: '0'",
+    "SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0'",
     "SIT_LOCAL_QA_SYNTHETIC_IMAGE_SCREENING: 'true'",
     "PAYMENT_TRANSPORT: 'memory'",
     "STRIPE_LIVEMODE: 'false'",
     "FIREBASE_AUTH_ENABLED: 'false'",
+    "FIREBASE_CRASH_REPORT_DELETION_ENABLED: '0'",
+    "APPLE_REVOCATION_ENABLED: '0'",
     "PUBLIC_COMPLIANCE_APPROVED: 'false'",
     "IDENTITY_VERIFICATION_TRANSPORT: 'memory'",
+    "TECHNICAL_SANDBOX_ENABLED: '0'",
+    "TECHNICAL_SANDBOX_KILL_SWITCH: '1'",
   ]) {
     assert.match(runner, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
   }

@@ -182,7 +182,7 @@ async function closeServer(server) {
   });
 }
 
-function writeSyntheticSession({ email, password }) {
+function writeSyntheticSession({ email, password, accounts, cloneManifest }) {
   const directory = resolve(
     homedir(),
     'Library',
@@ -219,6 +219,8 @@ function writeSyntheticSession({ email, password }) {
     apiBaseUrl: `http://127.0.0.1:${publicPort}/api/v1`,
     email,
     password,
+    accounts,
+    syntheticClone: cloneManifest,
     createdAt: new Date().toISOString(),
     })}\n`);
   } catch {
@@ -248,6 +250,7 @@ async function main() {
   let proxy;
   let postgresStarted = false;
   let sessionPath;
+  let cloneCleanupToken;
   let device;
   let logDescriptor;
   let primaryError;
@@ -277,8 +280,15 @@ async function main() {
       databaseName,
     ], { cwd: repositoryRoot });
 
-    const email = `r3-${crypto.randomBytes(8).toString('hex')}@example.invalid`;
-    const password = `Qa${crypto.randomBytes(18).toString('hex')}9!`;
+    const ownerEmail = `r3-owner-${crypto.randomBytes(8).toString('hex')}@example.invalid`;
+    const renterEmail = `r3-renter-${crypto.randomBytes(8).toString('hex')}@example.invalid`;
+    const ownerPassword = `Qa${crypto.randomBytes(18).toString('hex')}9!`;
+    const renterPassword = `Qa${crypto.randomBytes(18).toString('hex')}9!`;
+    const email = ownerEmail;
+    const password = ownerPassword;
+    const cloneRunId = `wp255-${new Date().toISOString().replace(/[-:TZ.]/gu, '').slice(0, 14)}-${crypto.randomBytes(4).toString('hex')}`;
+    const cloneDatasetId = `wp255-green-clone-${crypto.randomBytes(6).toString('hex')}`;
+    const cloneConfirmationSecret = crypto.randomBytes(48).toString('base64url');
     const backendEnvironment = {
       ...process.env,
       NODE_ENV: 'test',
@@ -307,9 +317,12 @@ async function main() {
       SIT_LISTING_AI_PROVIDER: 'mock',
       SIT_LISTING_AI_MODEL: 'listing-ai-mock-v1',
       SIT_LISTING_AI_BUDGET_CENTS: '0',
+      SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0',
       SIT_LOCAL_QA_SYNTHETIC_IMAGE_SCREENING: 'true',
       FIREBASE_AUTH_ENABLED: 'false',
       FIREBASE_PHONE_VERIFICATION_ENABLED: 'false',
+      FIREBASE_CRASH_REPORT_DELETION_ENABLED: '0',
+      APPLE_REVOCATION_ENABLED: '0',
       PUBLIC_COMPLIANCE_APPROVED: 'false',
       FINANCIAL_DOCUMENTS_LIVE_ISSUANCE_APPROVED: 'false',
       // Local QA must exercise the server-authoritative MFA and identity
@@ -317,39 +330,112 @@ async function main() {
       // The key is generated per process, never logged or persisted.
       MFA_ENCRYPTION_KEY: crypto.randomBytes(32).toString('base64url'),
       IDENTITY_VERIFICATION_TRANSPORT: 'memory',
+      TECHNICAL_SANDBOX_ENABLED: '0',
+      TECHNICAL_SANDBOX_KILL_SWITCH: '1',
+      SIT_STAGING_ACCESS_GATE_ENABLED: 'false',
+      SIT_STAGING_ALLOWED_USER_IDS: '',
+      SIT_SYNTHETIC_CLONE_BOOKING_LANE: '0',
     };
     logDescriptor = openSync(backendLog, 'a', 0o600);
-    backendChild = spawn(process.execPath, ['src/server.js'], {
-      cwd: backendRoot,
-      env: backendEnvironment,
-      stdio: ['ignore', logDescriptor, logDescriptor],
-    });
+    const startBackend = (environment) => spawn(process.execPath, ['src/server.js'], {
+        cwd: backendRoot,
+        env: environment,
+        stdio: ['ignore', logDescriptor, logDescriptor],
+      });
+    backendChild = startBackend(backendEnvironment);
     await waitForReady(`http://127.0.0.1:${backendPort}/health/ready`, backendChild);
-    const registration = await fetch(`http://127.0.0.1:${backendPort}/v1/auth/register`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        password,
-        displayName: 'SIT R3 Synthetic',
-        termsAccepted: true,
-        privacyAccepted: true,
-        minimumAgeConfirmed: true,
-        privateUseConfirmed: true,
-        registrationActionLabel: 'Kostenlos registrieren',
-      }),
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (registration.status !== 202) fail('Synthetic local QA registration failed.');
+    const registerAccount = async ({ accountEmail, accountPassword, displayName }) => {
+      const registration = await fetch(`http://127.0.0.1:${backendPort}/v1/auth/register`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: accountEmail,
+          password: accountPassword,
+          displayName,
+          termsAccepted: true,
+          privacyAccepted: true,
+          minimumAgeConfirmed: true,
+          privateUseConfirmed: true,
+          registrationActionLabel: 'Kostenlos registrieren',
+        }),
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (registration.status !== 202) fail('Synthetic local QA registration failed.');
+    };
+    await registerAccount({ accountEmail: ownerEmail, accountPassword: ownerPassword, displayName: 'SIT R3 Synthetic Owner' });
+    await registerAccount({ accountEmail: renterEmail, accountPassword: renterPassword, displayName: 'SIT R3 Synthetic Renter' });
     await run(pg('psql'), [
       '-h', '127.0.0.1',
       '-p', String(postgresPort),
       '-U', databaseUser,
       '-d', databaseName,
       '-v', 'ON_ERROR_STOP=1',
-      '-c', `UPDATE users SET email_verified_at = now(), profile = jsonb_set(profile, '{emailVerified}', 'true'::jsonb) WHERE email = '${email}';`,
+      '-c', `UPDATE users SET email_verified_at = now(), profile = jsonb_set(profile, '{emailVerified}', 'true'::jsonb) WHERE email IN ('${ownerEmail}', '${renterEmail}');`,
     ], { cwd: repositoryRoot });
-    sessionPath = writeSyntheticSession({ email, password });
+    const loginAccount = async ({ accountEmail, accountPassword }) => {
+      const response = await fetch(`http://127.0.0.1:${backendPort}/v1/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: accountEmail, password: accountPassword }),
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!response.ok) fail(`Synthetic local QA login failed for ${accountEmail}.`);
+      const session = await response.json();
+      if (!session.accessToken) fail(`Synthetic local QA access token missing for ${accountEmail}.`);
+      const me = await fetch(`http://127.0.0.1:${backendPort}/v1/auth/me`, {
+        headers: { authorization: `Bearer ${session.accessToken}` },
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!me.ok) fail(`Synthetic local QA /auth/me failed for ${accountEmail}.`);
+      const user = (await me.json()).user;
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(user?.id ?? '')) {
+        fail(`Synthetic local QA /auth/me did not return a UUID for ${accountEmail}.`);
+      }
+      return { email: accountEmail, password: accountPassword, userId: user.id, accessToken: session.accessToken };
+    };
+    const ownerAccount = await loginAccount({ accountEmail: ownerEmail, accountPassword: ownerPassword });
+    const renterAccount = await loginAccount({ accountEmail: renterEmail, accountPassword: renterPassword });
+    if (ownerAccount.userId === renterAccount.userId) fail('Synthetic local QA owner and renter IDs must be distinct.');
+
+    await terminateChild(backendChild);
+    backendChild = undefined;
+    const cloneEnvironment = {
+      ...backendEnvironment,
+      SIT_SYNTHETIC_CLONE_BOOKING_LANE: '1',
+      SIT_SYNTHETIC_CLONE_OWNER_ID: ownerAccount.userId,
+      SIT_SYNTHETIC_CLONE_RENTER_ID: renterAccount.userId,
+      SIT_SYNTHETIC_DATASET_ID: cloneDatasetId,
+      SIT_SYNTHETIC_CLONE_RUN_ID: cloneRunId,
+      SIT_SYNTHETIC_CLONE_CONFIRMATION_SECRET: cloneConfirmationSecret,
+    };
+    backendChild = startBackend(cloneEnvironment);
+    await waitForReady(`http://127.0.0.1:${backendPort}/health/ready`, backendChild);
+    const cloneStatusResponse = await fetch(`http://127.0.0.1:${backendPort}/v1/synthetic-clone/status`, {
+      headers: { authorization: `Bearer ${ownerAccount.accessToken}` },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!cloneStatusResponse.ok) fail('Synthetic local QA clone status readback failed.');
+    const cloneStatus = await cloneStatusResponse.json();
+    if (cloneStatus.principals.ownerId !== ownerAccount.userId
+        || cloneStatus.principals.renterId !== renterAccount.userId
+        || cloneStatus.cleaned !== false) {
+      fail('Synthetic local QA clone status principal binding is invalid.');
+    }
+    cloneCleanupToken = ownerAccount.accessToken;
+    sessionPath = writeSyntheticSession({
+      email,
+      password,
+      accounts: [ownerAccount, renterAccount].map(({ accessToken: _accessToken, ...account }) => account),
+      cloneManifest: {
+        runId: cloneRunId,
+        datasetId: cloneDatasetId,
+        ownerId: ownerAccount.userId,
+        renterId: renterAccount.userId,
+        listingId: 'synthetic_clone_listing_wp255',
+        routePrefix: '/api/v1/synthetic-clone',
+        marker: 'Synthetischer Test – keine vertragliche oder finanzielle Wirkung',
+      },
+    });
 
     const devices = parseAdbDevices(String(await run('adb', ['devices', '-l'], {
       cwd: repositoryRoot,
@@ -371,6 +457,18 @@ async function main() {
       apiBinding: 'loopback-adb-reverse-only',
       apiPrefix: '/api/v1',
       syntheticAccountSeeded: true,
+      syntheticAccounts: 2,
+      syntheticClone: {
+        enabled: true,
+        runId: cloneRunId,
+        datasetId: cloneDatasetId,
+        ownerId: ownerAccount.userId,
+        renterId: renterAccount.userId,
+        listingId: 'synthetic_clone_listing_wp255',
+        routePrefix: '/api/v1/synthetic-clone',
+        marker: 'Synthetischer Test – keine vertragliche oder finanzielle Wirkung',
+        sideEffects: cloneStatus.sideEffects,
+      },
       transientCredentialsOwnerOnly: true,
       listingAiProvider: 'mock',
       listingAiBudgetCents: 0,
@@ -390,6 +488,20 @@ async function main() {
   } catch (error) {
     primaryError = error;
   } finally {
+    if (backendChild && cloneCleanupToken) {
+      try {
+        const cleanupResponse = await fetch(`http://127.0.0.1:${backendPort}/v1/synthetic-clone/bookings`, {
+          method: 'DELETE',
+          headers: { authorization: `Bearer ${cloneCleanupToken}` },
+          signal: AbortSignal.timeout(5_000),
+        });
+        if (!cleanupResponse.ok || (await cleanupResponse.json()).cleanupVerified !== true) {
+          primaryError ??= new Error('Synthetic local QA clone cleanup verification failed.');
+        }
+      } catch {
+        primaryError ??= new Error('Synthetic local QA clone cleanup request failed.');
+      }
+    }
     try {
       if (device) {
         await run('adb', [

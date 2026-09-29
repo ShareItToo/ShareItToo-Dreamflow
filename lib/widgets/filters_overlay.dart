@@ -7,6 +7,7 @@ import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/utils/category_label.dart';
 import 'package:lendify/utils/condition_labels.dart';
 import 'package:lendify/theme.dart';
+import 'package:lendify/config/synthetic_clone_config.dart';
 
 class FiltersOverlay {
   static Future<Map<String, dynamic>?> show(BuildContext context,
@@ -542,26 +543,28 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        _Section(
-                            label: context
-                                .watch<LocalizationController>()
-                                .t('Bewertung'),
-                            child: Row(children: [
-                              for (int i = 1; i <= 5; i++)
-                                IconButton(
-                                  onPressed: () =>
-                                      setState(() => _minRating = i.toDouble()),
-                                  icon: Icon(
-                                      i <= _minRating
-                                          ? Icons.star
-                                          : Icons.star_border,
-                                      color: i <= _minRating
-                                          ? const Color(0xFFFB923C)
-                                          : AppTheme.textDisabled(context)),
-                                ),
-                              const SizedBox.shrink(),
-                            ])),
-                        const SizedBox(height: 12),
+                        if (!isSyntheticCloneNonBinding) ...[
+                          _Section(
+                              label: context
+                                  .watch<LocalizationController>()
+                                  .t('Bewertung'),
+                              child: Row(children: [
+                                for (int i = 1; i <= 5; i++)
+                                  IconButton(
+                                    onPressed: () => setState(
+                                        () => _minRating = i.toDouble()),
+                                    icon: Icon(
+                                        i <= _minRating
+                                            ? Icons.star
+                                            : Icons.star_border,
+                                        color: i <= _minRating
+                                            ? const Color(0xFFFB923C)
+                                            : AppTheme.textDisabled(context)),
+                                  ),
+                                const SizedBox.shrink(),
+                              ])),
+                          const SizedBox(height: 12),
+                        ],
                         _Section(
                             label: context
                                 .watch<LocalizationController>()
@@ -896,17 +899,16 @@ class _SortPager extends StatelessWidget {
   final ValueChanged<String> onChanged;
   const _SortPager({required this.selected, required this.onChanged});
 
-  static const List<String> _options = [
-    'Preis',
-    'Entfernung',
-    'Bewertung',
-    'Neueste'
-  ];
-
   @override
   Widget build(BuildContext context) {
     final l10n = context.watch<LocalizationController>();
     final primary = Theme.of(context).colorScheme.primary;
+    final options = <String>[
+      'Preis',
+      'Entfernung',
+      if (!isSyntheticCloneNonBinding) 'Bewertung',
+      'Neueste',
+    ];
     return SizedBox(
       height: 40,
       child: SingleChildScrollView(
@@ -915,7 +917,7 @@ class _SortPager extends StatelessWidget {
         child: Row(
           children: [
             const SizedBox(width: 4),
-            for (final opt in _options) ...[
+            for (final opt in options) ...[
               InkWell(
                 onTap: () => onChanged(opt),
                 borderRadius: BorderRadius.circular(6),

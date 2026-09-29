@@ -17,6 +17,7 @@ import 'package:lendify/widgets/review_prompt_sheet.dart';
 import 'package:lendify/widgets/item_details_overlay.dart';
 import 'package:lendify/widgets/local_state_error_panel.dart';
 import 'package:lendify/utils/booking_status_copy.dart';
+import 'package:lendify/config/synthetic_clone_config.dart';
 
 class BookingsScreen extends StatefulWidget {
   final int?
@@ -114,6 +115,7 @@ class _BookingsScreenState extends State<BookingsScreen>
   }
 
   bool _canReviewCompletedBooking(Map<String, dynamic> booking) {
+    if (!SyntheticCloneConfig.reviewActionsEnabled) return false;
     final rawStatus =
         ((booking['rawStatus'] as String?) ?? '').toLowerCase().trim();
     final requestId = (booking['requestId'] as String?)?.trim() ?? '';
@@ -131,6 +133,7 @@ class _BookingsScreenState extends State<BookingsScreen>
 
   bool _showingReminder = false;
   Future<void> _maybeShowReviewReminder() async {
+    if (!SyntheticCloneConfig.reviewActionsEnabled) return;
     if (_showingReminder) return;
     final current = await DataService.getCurrentUser();
     if (current == null) return;
@@ -409,7 +412,8 @@ class _BookingsScreenState extends State<BookingsScreen>
     final flowState = _requiresHandoverState(r)
         ? await _safeHandoverReturnState(r.id)
         : const <String, dynamic>{};
-    final reviewSubmitted = r.status == 'completed'
+    final reviewSubmitted = SyntheticCloneConfig.reviewActionsEnabled &&
+        r.status == 'completed'
         ? await _safeReviewSubmittedState(
             requestId: r.id,
             reviewerId: reviewerId,

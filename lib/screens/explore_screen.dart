@@ -10,6 +10,7 @@ import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/services/listing_mutation_service.dart';
 import 'package:lendify/config/supply_enrichment_technical_config.dart';
+import 'package:lendify/config/synthetic_clone_config.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/widgets/search_header.dart';
@@ -744,7 +745,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
     // Now stores coarse/top-level category labels (not fine-grained IDs)
     final List<String> catGroups =
         (f?['categories'] as List<String>?) ?? const [];
-    final double minRating = (f?['minRating'] as double?) ?? 0;
+    final double minRating = isSyntheticCloneNonBinding
+        ? 0
+        : (f?['minRating'] as double?) ?? 0;
     final List<String> delivery = (f?['delivery'] as List<String>?) ?? const [];
 
     final double minPerDay =
@@ -826,9 +829,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
         }
         break;
       case 'Bewertung':
-        double ratingOf(String ownerId) =>
-            _usersById[ownerId]?.avgRating ?? 0.0;
-        list.sort((a, b) => ratingOf(b.ownerId).compareTo(ratingOf(a.ownerId)));
+        if (!isSyntheticCloneNonBinding) {
+          double ratingOf(String ownerId) =>
+              _usersById[ownerId]?.avgRating ?? 0.0;
+          list.sort(
+              (a, b) => ratingOf(b.ownerId).compareTo(ratingOf(a.ownerId)));
+        }
         break;
       case 'Neueste':
         list.sort((a, b) => b.createdAt.compareTo(a.createdAt));

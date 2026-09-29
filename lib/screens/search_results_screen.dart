@@ -11,6 +11,7 @@ import 'package:lendify/widgets/app_image.dart';
 import 'package:lendify/widgets/listing_display_truth.dart';
 import 'package:lendify/widgets/local_state_error_panel.dart';
 import 'package:lendify/widgets/listing_options_dialog.dart';
+import 'package:lendify/config/synthetic_clone_config.dart';
 import 'package:provider/provider.dart';
 import 'package:lendify/widgets/wishlist_selection_sheet.dart';
 
@@ -234,6 +235,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
         list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         break;
       case 'Bewertung':
+        if (isSyntheticCloneNonBinding) break;
       case 'Entfernung':
       default:
         // Distance sorting only works if we were given an origin ("Wo").

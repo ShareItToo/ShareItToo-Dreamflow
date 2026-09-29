@@ -16,9 +16,38 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { canonicalAndroidSigningCertificateSha256 } from './validate_current_head_android_release_archive.mjs';
 
-const defaultBuildNumber = '2026082303';
 const versionName = '1.0.0';
 const applicationId = 'com.shareittoo.app';
+const syntheticCloneNotice = 'Synthetischer Test – keine vertragliche oder finanzielle Wirkung';
+
+function parseBuildNumber(value, label) {
+  const normalized = String(value ?? '');
+  if (!/^\d{10,12}$/u.test(normalized) || BigInt(normalized) > 2100000000n) {
+    fail(`${label} is invalid.`);
+  }
+  return normalized;
+}
+
+export function validateLocalQaBuildOrdering({
+  installedPlayBuildNumber,
+  localQaBuildNumber,
+  finalPlaySuccessorBuildNumber,
+} = {}) {
+  const installed = parseBuildNumber(installedPlayBuildNumber, 'SIT_INSTALLED_PLAY_BUILD_NUMBER');
+  const localQa = parseBuildNumber(localQaBuildNumber, 'SIT_LOCAL_QA_BUILD_NUMBER');
+  const successor = parseBuildNumber(
+    finalPlaySuccessorBuildNumber,
+    'SIT_FINAL_PLAY_SUCCESSOR_BUILD_NUMBER',
+  );
+  if (!(BigInt(installed) < BigInt(localQa) && BigInt(localQa) < BigInt(successor))) {
+    fail('Build ordering must be installed Play < local QA < final Play successor.');
+  }
+  return Object.freeze({
+    installedPlayBuildNumber: installed,
+    localQaBuildNumber: localQa,
+    finalPlaySuccessorBuildNumber: successor,
+  });
+}
 
 function fail(message) {
   throw new Error(message);
@@ -81,18 +110,27 @@ export async function validateAndroidLocalQaCandidate({
   root,
   candidateDirectory,
   expectedCommit,
-  expectedBuildNumber = defaultBuildNumber,
+  expectedBuildNumber,
+  expectedInstalledPlayBuildNumber,
+  expectedFinalPlaySuccessorBuildNumber,
   commandRunner = defaultRunner,
   apksignerPath,
   aaptPath,
   includePrivateArtifact = false,
 } = {}) {
   const repositoryRoot = resolve(root ?? fileURLToPath(new URL('../', import.meta.url)));
-  const buildNumber = String(expectedBuildNumber);
-  if (!/^\d{10,12}$/u.test(buildNumber)
-      || BigInt(buildNumber) < BigInt(defaultBuildNumber)) {
-    fail('Local QA build number is invalid.');
+  const requestedBuildNumber = expectedBuildNumber ?? process.env.SIT_LOCAL_QA_BUILD_NUMBER;
+  if (requestedBuildNumber === undefined || requestedBuildNumber === '') {
+    fail('SIT_LOCAL_QA_BUILD_NUMBER is required; observed build numbers must not be reused.');
   }
+  const buildNumber = parseBuildNumber(requestedBuildNumber, 'SIT_LOCAL_QA_BUILD_NUMBER');
+  const buildOrdering = validateLocalQaBuildOrdering({
+    installedPlayBuildNumber: expectedInstalledPlayBuildNumber
+      ?? process.env.SIT_INSTALLED_PLAY_BUILD_NUMBER,
+    localQaBuildNumber: buildNumber,
+    finalPlaySuccessorBuildNumber: expectedFinalPlaySuccessorBuildNumber
+      ?? process.env.SIT_FINAL_PLAY_SUCCESSOR_BUILD_NUMBER,
+  });
   const commit = expectedCommit ?? String(commandRunner('git', ['rev-parse', 'HEAD'], {
     cwd: repositoryRoot,
   })).trim();
@@ -136,6 +174,10 @@ export async function validateAndroidLocalQaCandidate({
     apiBaseUrl: 'http://127.0.0.1:18080/api/v1',
     adbReverseRequired: 'tcp:18080',
     blueOceanMockUi: true,
+    syntheticCloneBookingLane: true,
+    syntheticCloneNotice,
+    syntheticCloneRequiredRoles: ['owner', 'renter'],
+    buildOrdering,
     requiredLocalBackendProvider: 'mock',
     g3TechnicalUi: true,
     g4TechnicalUi: true,
@@ -184,6 +226,7 @@ export async function validateAndroidLocalQaCandidate({
       commit,
       releaseChannel: configuration.releaseChannel,
       apiBaseUrl: configuration.apiBaseUrl,
+      buildOrdering: configuration.buildOrdering,
       firebaseConfigured: false,
       apkSha256: manifest.artifact.apkSha256,
       signingCertificateSha256: certificate,
@@ -206,8 +249,9 @@ export async function validateAndroidLocalQaCandidate({
 
 async function run() {
   const result = await validateAndroidLocalQaCandidate({
-    expectedBuildNumber: process.env.SIT_LOCAL_QA_BUILD_NUMBER
-      ?? defaultBuildNumber,
+    expectedBuildNumber: process.env.SIT_LOCAL_QA_BUILD_NUMBER,
+    expectedInstalledPlayBuildNumber: process.env.SIT_INSTALLED_PLAY_BUILD_NUMBER,
+    expectedFinalPlaySuccessorBuildNumber: process.env.SIT_FINAL_PLAY_SUCCESSOR_BUILD_NUMBER,
   });
   console.log(
     `R2 local QA candidate valid: build=${result.buildNumber}, `

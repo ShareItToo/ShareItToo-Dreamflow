@@ -48,6 +48,7 @@ async function fixture(mutate = () => {}) {
     listingAiModel: '',
     listingAiExternalImageProviderEnabled: false,
     stageANonBindingPilotEnabled: false,
+    syntheticCloneBookingLane: false,
     closedPilotEnvelopeEnabled: false,
     stageAPilotId: '',
     g3TechnicalUiEnabled: false,
@@ -133,6 +134,14 @@ test('rejects a non-canonical upload certificate', async (t) => {
   });
   t.after(() => rm(data.root, { recursive: true, force: true }));
   assert.throws(() => archive(data), /exact internal Staging candidate/);
+});
+
+test('rejects a release archive that carries the local-QA synthetic clone flag', async (t) => {
+  const data = await fixture(({ manifest }) => {
+    manifest.syntheticCloneBookingLane = true;
+  });
+  t.after(() => rm(data.root, { recursive: true, force: true }));
+  assert.throws(() => archive(data), /exact internal Staging candidate/u);
 });
 
 test('rejects a Blue Ocean candidate without the non-binding Stage-A gate', async (t) => {

@@ -32,6 +32,9 @@ import 'package:lendify/navigation/main_nav_controller.dart';
 import 'package:lendify/screens/notifications_screen.dart';
 import 'package:lendify/screens/verification_screen.dart';
 import 'package:lendify/widgets/tracked_dialog_route.dart';
+import 'package:lendify/config/synthetic_clone_config.dart';
+import 'package:lendify/screens/synthetic_clone_diagnostic_screen.dart';
+import 'package:lendify/widgets/synthetic_clone_non_binding_banner.dart';
 
 typedef ProfileFeedbackSubmitter = Future<Map<String, dynamic>> Function(
   AuthSessionOwner owner,
@@ -973,6 +976,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ]),
           ),
           const SizedBox(height: 16),
+          if (isSyntheticCloneNonBinding) ...[
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.science_outlined),
+                title: const Text('Synthetischer Zwei-Rollen-Test'),
+                subtitle: const Text(
+                  syntheticCloneNonBindingBannerText,
+                ),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SyntheticCloneDiagnosticScreen(),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           _buildFeedbackSection(),
           const SizedBox(height: 24),
         ]),

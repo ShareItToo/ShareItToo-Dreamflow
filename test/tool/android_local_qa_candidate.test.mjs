@@ -8,15 +8,20 @@ import {
 import { resolve } from 'node:path';
 import test from 'node:test';
 
-import { validateAndroidLocalQaCandidate } from '../../tool/validate_android_local_qa_candidate.mjs';
+import {
+  validateAndroidLocalQaCandidate,
+  validateLocalQaBuildOrdering,
+} from '../../tool/validate_android_local_qa_candidate.mjs';
 import { canonicalAndroidSigningCertificateSha256 } from '../../tool/validate_current_head_android_release_archive.mjs';
 import { createTestTempTracker } from './test_temp_fixtures.mjs';
 
 const tempFixtures = createTestTempTracker();
 const commit = 'b'.repeat(40);
-const defaultBuildNumber = '2026082303';
+const explicitBuildNumber = '2099123101';
+const installedPlayBuildNumber = '2099123001';
+const finalPlaySuccessorBuildNumber = '2099123102';
 
-function fixture(buildNumber = defaultBuildNumber) {
+function fixture(buildNumber = explicitBuildNumber) {
   const root = tempFixtures.makeSync('sit-r2-candidate-');
   const directory = resolve(root, 'candidate');
   mkdirSync(directory, { mode: 0o700 });
@@ -48,6 +53,14 @@ function fixture(buildNumber = defaultBuildNumber) {
       apiBaseUrl: 'http://127.0.0.1:18080/api/v1',
       adbReverseRequired: 'tcp:18080',
       blueOceanMockUi: true,
+      syntheticCloneBookingLane: true,
+      syntheticCloneNotice: 'Synthetischer Test – keine vertragliche oder finanzielle Wirkung',
+      syntheticCloneRequiredRoles: ['owner', 'renter'],
+      buildOrdering: {
+        installedPlayBuildNumber,
+        localQaBuildNumber: buildNumber,
+        finalPlaySuccessorBuildNumber,
+      },
       requiredLocalBackendProvider: 'mock',
       g3TechnicalUi: true,
       g4TechnicalUi: true,
@@ -78,7 +91,7 @@ function fixture(buildNumber = defaultBuildNumber) {
   return { root, directory, manifest };
 }
 
-function runnerFor(buildNumber = defaultBuildNumber) {
+function runnerFor(buildNumber = explicitBuildNumber) {
   return (_file, args) => {
     if (args[0] === 'verify') {
       return `Signer #1 certificate SHA-256 digest: ${canonicalAndroidSigningCertificateSha256}\n`;
@@ -98,6 +111,9 @@ test('accepts the exact owner-only local QA candidate without exposing paths or 
     root: value.root,
     candidateDirectory: value.directory,
     expectedCommit: commit,
+    expectedBuildNumber: explicitBuildNumber,
+    expectedInstalledPlayBuildNumber: installedPlayBuildNumber,
+    expectedFinalPlaySuccessorBuildNumber: finalPlaySuccessorBuildNumber,
     commandRunner: runner,
     apksignerPath: 'apksigner',
     aaptPath: 'aapt',
@@ -114,32 +130,83 @@ test('returns private installation facts only behind the explicit in-process opt
     root: value.root,
     candidateDirectory: value.directory,
     expectedCommit: commit,
+    expectedBuildNumber: explicitBuildNumber,
+    expectedInstalledPlayBuildNumber: installedPlayBuildNumber,
+    expectedFinalPlaySuccessorBuildNumber: finalPlaySuccessorBuildNumber,
     commandRunner: runner,
     apksignerPath: 'apksigner',
     aaptPath: 'aapt',
     includePrivateArtifact: true,
   });
   assert.equal(result.applicationId, 'com.shareittoo.app');
-  assert.equal(result.buildNumber, '2026082303');
+  assert.equal(result.buildNumber, explicitBuildNumber);
   assert.equal(result.apkPath, resolve(value.directory, value.manifest.artifact.fileName));
   assert.equal(result.signingCertificateSha256, canonicalAndroidSigningCertificateSha256);
   assert.equal(result.apiBaseUrl, 'http://127.0.0.1:18080/api/v1');
   assert.equal(result.firebaseConfigured, false);
 });
 
-test('accepts an explicitly newer local QA build without changing the R2 default', async () => {
-  const buildNumber = '2026082401';
+test('accepts any explicitly supplied local-QA build number', async () => {
+  const buildNumber = '2099123002';
   const value = fixture(buildNumber);
   const result = await validateAndroidLocalQaCandidate({
     root: value.root,
     candidateDirectory: value.directory,
     expectedCommit: commit,
     expectedBuildNumber: buildNumber,
+    expectedInstalledPlayBuildNumber: installedPlayBuildNumber,
+    expectedFinalPlaySuccessorBuildNumber: finalPlaySuccessorBuildNumber,
     commandRunner: runnerFor(buildNumber),
     apksignerPath: 'apksigner',
     aaptPath: 'aapt',
   });
   assert.equal(result.buildNumber, buildNumber);
+});
+
+test('requires an explicit local-QA build number instead of an observed default', async () => {
+  const value = fixture();
+  const previous = process.env.SIT_LOCAL_QA_BUILD_NUMBER;
+  delete process.env.SIT_LOCAL_QA_BUILD_NUMBER;
+  try {
+    await assert.rejects(
+      () => validateAndroidLocalQaCandidate({
+        root: value.root,
+        candidateDirectory: value.directory,
+        expectedCommit: commit,
+        commandRunner: runner,
+        apksignerPath: 'apksigner',
+        aaptPath: 'aapt',
+      }),
+      /SIT_LOCAL_QA_BUILD_NUMBER is required/u,
+    );
+  } finally {
+    if (previous === undefined) delete process.env.SIT_LOCAL_QA_BUILD_NUMBER;
+    else process.env.SIT_LOCAL_QA_BUILD_NUMBER = previous;
+  }
+});
+
+test('requires the exact two-role clone marker in the local-QA manifest', async () => {
+  const value = fixture();
+  value.manifest.configuration.syntheticCloneRequiredRoles = ['owner'];
+  writeFileSync(
+    resolve(value.directory, 'manifest.json'),
+    `${JSON.stringify(value.manifest, null, 2)}\n`,
+    { mode: 0o600 },
+  );
+  await assert.rejects(
+    () => validateAndroidLocalQaCandidate({
+      root: value.root,
+      candidateDirectory: value.directory,
+      expectedCommit: commit,
+      expectedBuildNumber: explicitBuildNumber,
+      expectedInstalledPlayBuildNumber: installedPlayBuildNumber,
+      expectedFinalPlaySuccessorBuildNumber: finalPlaySuccessorBuildNumber,
+      commandRunner: runner,
+      apksignerPath: 'apksigner',
+      aaptPath: 'aapt',
+    }),
+    /R2 candidate configuration is invalid/u,
+  );
 });
 
 test('rejects a live boundary or noncanonical signature', async () => {
@@ -155,10 +222,50 @@ test('rejects a live boundary or noncanonical signature', async () => {
       root: value.root,
       candidateDirectory: value.directory,
       expectedCommit: commit,
+      expectedBuildNumber: explicitBuildNumber,
+      expectedInstalledPlayBuildNumber: installedPlayBuildNumber,
+      expectedFinalPlaySuccessorBuildNumber: finalPlaySuccessorBuildNumber,
       commandRunner: runner,
       apksignerPath: 'apksigner',
       aaptPath: 'aapt',
     }),
     /artifact or mutation boundary/u,
   );
+});
+
+test('enforces strict installed Play < local QA < final Play successor ordering', () => {
+  assert.deepEqual(
+    validateLocalQaBuildOrdering({
+      installedPlayBuildNumber,
+      localQaBuildNumber: explicitBuildNumber,
+      finalPlaySuccessorBuildNumber,
+    }),
+    {
+      installedPlayBuildNumber,
+      localQaBuildNumber: explicitBuildNumber,
+      finalPlaySuccessorBuildNumber,
+    },
+  );
+  for (const ordering of [
+    {
+      installedPlayBuildNumber: explicitBuildNumber,
+      localQaBuildNumber: explicitBuildNumber,
+      finalPlaySuccessorBuildNumber,
+    },
+    {
+      installedPlayBuildNumber,
+      localQaBuildNumber: finalPlaySuccessorBuildNumber,
+      finalPlaySuccessorBuildNumber,
+    },
+    {
+      installedPlayBuildNumber: finalPlaySuccessorBuildNumber,
+      localQaBuildNumber: explicitBuildNumber,
+      finalPlaySuccessorBuildNumber,
+    },
+  ]) {
+    assert.throws(
+      () => validateLocalQaBuildOrdering(ordering),
+      /Build ordering must be installed Play < local QA < final Play successor/u,
+    );
+  }
 });

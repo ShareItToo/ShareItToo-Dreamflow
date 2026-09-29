@@ -101,6 +101,10 @@ import {
   verifyBookingConfirmationChallenge,
 } from './booking_confirmation_workflow.js';
 import {
+  registerSyntheticCloneBookingLaneRoutes,
+  SyntheticCloneBookingLaneError,
+} from './synthetic_clone_booking_lane.js';
+import {
   getMailerStatus,
   sendAccountDeletionEmail,
   sendEmailChangeAlert,
@@ -465,6 +469,11 @@ import {
   reviseListingSet,
 } from './listing_set_workflow.js';
 import { ImageProcessingError, sanitizeImage } from './media_pipeline.js';
+import {
+  resolveUploadReadAuthorization,
+  resolveUploadStoragePath,
+  shouldExposeUploadId,
+} from './upload_read_authorization.js';
 import {
   assertListingPhotoTruthPolicy,
   ListingPhotoTruthPolicyError,
@@ -2121,6 +2130,7 @@ export function createApp({
   recordPlannerFunnelEvent = (event) => console.info(JSON.stringify(event)),
   screenBlueOceanListingImage,
   openAiListingAiProvider,
+  syntheticCloneBookingLane = null,
 } = {}) {
   const app = express();
   const identityVerificationProvider = identityVerificationProviderOverride ?? new StripeProvider({
@@ -2307,6 +2317,14 @@ export function createApp({
   }));
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: false, limit: '20kb' }));
+  if (syntheticCloneBookingLane) {
+    registerSyntheticCloneBookingLaneRoutes(app, {
+      lane: syntheticCloneBookingLane,
+      requireAuth,
+      requireActiveAccount,
+      asyncRoute,
+    });
+  }
   // Evaluate verification-sensitive capabilities from the current DB row at request time.
   // Webhooks are registered above this middleware and remain provider-authenticated.
   app.use(emailVerificationRouteGate);
@@ -7565,6 +7583,9 @@ export function createApp({
 
   app.get('/v1/uploads/:storageName', asyncRoute(async (req, res) => {
     const storageName = safeText(req.params.storageName, 160);
+    if (!resolveUploadStoragePath(config.uploadDir, storageName)) {
+      throw new HttpError(404, 'upload_not_found');
+    }
     if (config.stagingAccess.enabled
         && !req.stagingAccess?.authenticated
         && !stagingGuestUploadAllowed(config.stagingAccess, storageName)) {
@@ -7593,59 +7614,45 @@ export function createApp({
           && uploadRecord.listing_is_active === true
         )
       );
-    let ownerAuthorized = false;
+    let uploadAuthorization = null;
     if (!publiclyReadable) {
-      const token = bearerToken(req);
-      if (!token) throw new HttpError(401, 'authentication_required');
-      let userId = null;
-      let sessionId = null;
-      try {
-        const payload = verifyAccessToken(token);
-        userId = payload.sub;
-        sessionId = payload.sid;
-      } catch {
-        throw new HttpError(401, 'invalid_or_expired_session');
-      }
-      if (!userId || !sessionId) throw new HttpError(401, 'authentication_required');
-      const actor = await pool.query(
-        `SELECT u.id
-         FROM users AS u
-         JOIN auth_sessions AS session
-           ON session.id = $2 AND session.user_id = u.id AND session.revoked_at IS NULL
-         WHERE u.id = $1 AND u.account_status = 'active' AND u.deactivated_at IS NULL`,
-        [userId, sessionId],
-      );
-      if (!actor.rowCount) throw new HttpError(401, 'account_not_active');
-      if (![uploadRecord.owner_id, uploadRecord.user1_id, uploadRecord.user2_id].includes(userId)) {
-        throw new HttpError(403, 'upload_forbidden');
-      }
-      ownerAuthorized = userId === uploadRecord.owner_id;
-    } else {
-      const token = bearerToken(req);
-      if (token) {
-        try {
-          const payload = verifyAccessToken(token);
-          const ownerSession = await pool.query(
+      uploadAuthorization = await resolveUploadReadAuthorization({
+        token: bearerToken(req),
+        uploadRecord,
+        verifyToken: verifyAccessToken,
+        findActiveSession: async ({ userId, sessionId }) => {
+          const actor = await pool.query(
             `SELECT u.id
              FROM users AS u
              JOIN auth_sessions AS session
                ON session.id = $2 AND session.user_id = u.id AND session.revoked_at IS NULL
              WHERE u.id = $1 AND u.account_status = 'active' AND u.deactivated_at IS NULL`,
-            [payload?.sub ?? null, payload?.sid ?? null],
+            [userId, sessionId],
           );
-          ownerAuthorized = ownerSession.rowCount > 0
-            && payload?.sub === uploadRecord.owner_id;
-        } catch {
-          ownerAuthorized = false;
-        }
+          return actor.rowCount > 0;
+        },
+      });
+      if (uploadAuthorization.status === 'anonymous') {
+        throw new HttpError(401, 'authentication_required');
+      }
+      if (uploadAuthorization.status === 'invalid_token') {
+        throw new HttpError(401, 'invalid_or_expired_session');
+      }
+      if (uploadAuthorization.status === 'inactive_session') {
+        throw new HttpError(401, 'account_not_active');
+      }
+      if (!uploadAuthorization.participantAuthorized) {
+        throw new HttpError(403, 'upload_forbidden');
       }
     }
 
     const isThumbnail = storageName === uploadRecord.thumbnail_storage_name;
     const requestedStorageName = isThumbnail ? uploadRecord.thumbnail_storage_name : uploadRecord.storage_name;
+    const requestedStoragePath = resolveUploadStoragePath(config.uploadDir, requestedStorageName);
+    if (!requestedStoragePath) throw new HttpError(404, 'upload_not_found');
     const requestedMimeType = isThumbnail ? uploadRecord.thumbnail_mime_type : uploadRecord.mime_type;
     const requestedByteSize = isThumbnail ? uploadRecord.thumbnail_byte_size : uploadRecord.byte_size;
-    const contents = await fs.readFile(path.join(config.uploadDir, requestedStorageName));
+    const contents = await fs.readFile(requestedStoragePath);
     res.set({
       'Content-Type': requestedMimeType,
       'Content-Length': String(requestedByteSize),
@@ -7654,7 +7661,7 @@ export function createApp({
         : 'private, no-store',
       'X-Content-Type-Options': 'nosniff',
     });
-    if (ownerAuthorized && uploadRecord.purpose === 'profile_image') {
+    if (shouldExposeUploadId({ authorization: uploadAuthorization, uploadRecord })) {
       res.set('X-Upload-Id', String(uploadRecord.id));
     }
     res.send(contents);
@@ -7684,6 +7691,7 @@ export function createApp({
     const pilotCockpitError = error instanceof PilotCockpitError;
     const mapsProxyError = error instanceof MapsProxyError;
     const bookingConfirmationError = error instanceof BookingConfirmationError;
+    const syntheticCloneBookingLaneError = error instanceof SyntheticCloneBookingLaneError;
     const v51WithdrawalError = error instanceof V51WithdrawalError;
     const v52ActualLossError = error instanceof V52ActualLossError;
     const v52HandoverReturnError = error instanceof V52HandoverReturnError;
@@ -7693,7 +7701,7 @@ export function createApp({
           ? 413
           : (uploadFieldsExceeded
               ? 400
-              : (invalidProcessedImage ? 422 : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.status : (error?.status ?? 500)))));
+              : (invalidProcessedImage ? 422 : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.status : (error?.status ?? 500)))));
     const code = uploadTooLarge
       ? 'image_too_large'
       : (uploadFieldsExceeded
@@ -7702,7 +7710,7 @@ export function createApp({
               ? error.code
               : (bookingConflict
               ? 'booking_period_unavailable'
-              : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.code : (status === 500 ? 'internal_error' : 'request_failed')))));
+              : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.code : (status === 500 ? 'internal_error' : 'request_failed')))));
     if (status >= 500) console.error(safeErrorLog(req, status, code, error));
     res.status(status).json(errorPayload(req, code, error?.details));
   });
