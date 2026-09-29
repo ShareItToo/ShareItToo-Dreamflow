@@ -53,6 +53,7 @@ export const SYNTHETIC_CLONE_UI_CONTRACT = Object.freeze({
   pickupChallenge: 'Pickup-QR-v3 ausstellen',
   returnChallenge: 'Return-QR-v3 ausstellen',
   qrScan: 'QR-v3 scannen und verifizieren',
+  challengeIdField: 'Challenge-ID',
   qrPayloadField: 'QR-v3-Payload eingeben (kein Kamera-Scan)',
   qrPayloadVerify: 'QR-v3-Payload verifizieren',
   fallbackField: 'Exakter 6-stelliger Fallback-Code',
@@ -152,7 +153,13 @@ function requiredForPhase(phase) {
     active: [...common, c.status.active, c.returnPhotos],
     returnPhotos: [...common, c.status.active, c.returnPhotos, ...PHOTO_SLOTS.map((slot) => `${slot} – ${c.pickerSuffix}`)],
     returnChallenge: [...common, c.status.active, c.returnChallenge],
-    returnVerifier: [...common, c.status.active, c.fallbackField, c.fallbackVerify],
+    returnVerifier: [
+      ...common,
+      c.status.active,
+      c.challengeIdField,
+      c.fallbackField,
+      c.fallbackVerify,
+    ],
     returned: [...common, c.status.returned, c.returned],
     audit: [...common, c.audit, c.auditLoad, c.cleanup],
   };
@@ -246,6 +253,19 @@ export function validateManualQrV3Payload(value) {
     fail('synthetic_clone_runner_manual_qr_payload_invalid');
   }
   return payload;
+}
+
+export function extractVisibleChallengeParts(nodes, phase) {
+  const challengeId = nodes
+    .find((node) => /Challenge-ID:\s*[0-9a-f-]{36}/iu.test(node.text))
+    ?.text.match(/[0-9a-f-]{36}/iu)?.[0];
+  const fallbackCode = nodes
+    .find((node) => /Fallback-Code:\s*\d{6}/u.test(node.text))
+    ?.text.match(/\d{6}/u)?.[0];
+  if (!challengeId || !fallbackCode) {
+    fail(`synthetic_clone_runner_${phase}_challenge_parts_not_visible`);
+  }
+  return Object.freeze({ challengeId, fallbackCode });
 }
 
 function safeEvidenceText(value) {
@@ -740,9 +760,10 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
     // id, so one-device mode can enter the exact payload in the diagnostic UI
     // without an API-side challenge mutation or a camera-scan claim.
     const presenter = await primary.dump('pickup-presenter-payload');
-    const challengeId = presenter.nodes.find((node) => /Challenge-ID:\s*[0-9a-f-]{36}/iu.test(node.text))?.text.match(/[0-9a-f-]{36}/iu)?.[0];
-    const code = presenter.nodes.find((node) => /Fallback-Code:\s*\d{6}/u.test(node.text))?.text.match(/\d{6}/u)?.[0];
-    if (!challengeId || !code) fail('synthetic_clone_runner_pickup_payload_parts_not_visible');
+    const { challengeId, fallbackCode: code } = extractVisibleChallengeParts(
+      presenter.nodes,
+      'pickup',
+    );
     manualPayload = validateManualQrV3Payload(
       `shareittoo:v3:pickup:owner:${challengeId}:${code}:${bookingId}`,
     );
@@ -798,12 +819,17 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
   // fresh role switch; the code is read transiently from the visible presenter
   // screen and never emitted into evidence or command arguments.
   const returnPresenter = await primary.dump('return-presenter-code');
-  const fallback = returnPresenter.nodes.find((node) => /Fallback-Code:\s*\d{6}/u.test(node.text))?.text.match(/\d{6}/u)?.[0];
-  if (!fallback) fail('synthetic_clone_runner_return_fallback_not_visible');
+  const { challengeId: returnChallengeId, fallbackCode: fallback } =
+    extractVisibleChallengeParts(returnPresenter.nodes, 'return');
   await enterIsolatedRole(primary, validated.owner);
   await openClone(primary, 'owner');
   await loadBooking(primary, bookingId, 'owner-return-verifier');
   await primary.waitContract('returnVerifier');
+  await primary.enterField(
+    SYNTHETIC_CLONE_UI_CONTRACT.challengeIdField,
+    returnChallengeId,
+    'return-challenge-id',
+  );
   await primary.enterField(SYNTHETIC_CLONE_UI_CONTRACT.fallbackField, fallback, 'return-fallback');
   await primary.shell(['input', 'keyevent', 'KEYCODE_ENTER']);
   await primary.tapVisibleLabel(SYNTHETIC_CLONE_UI_CONTRACT.fallbackVerify, 'return-fallback');

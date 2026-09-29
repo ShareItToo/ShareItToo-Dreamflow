@@ -7,6 +7,7 @@ import {
   assertCloneReadiness,
   assertSyntheticCloneInterface,
   buildSyntheticCloneEvidence,
+  extractVisibleChallengeParts,
   findPhotoPickerConfirmNode,
   findPhotoPickerImageNode,
   parseUiNodes,
@@ -86,6 +87,25 @@ test('runner QR input contract matches the rendered diagnostic field', () => {
   assert.match(
     diagnosticScreenSource,
     /labelText: 'QR-v3-Payload eingeben \(kein Kamera-Scan\)'/u,
+  );
+});
+
+test('return fallback carries both the visible challenge id and exact six-digit code', () => {
+  const parts = extractVisibleChallengeParts([
+    { text: 'Challenge-ID: 33333333-3333-4333-8333-333333333333' },
+    { text: 'Fallback-Code: 246810' },
+  ], 'return');
+  assert.deepEqual(parts, {
+    challengeId: '33333333-3333-4333-8333-333333333333',
+    fallbackCode: '246810',
+  });
+  assert.match(
+    runnerSource,
+    /challengeIdField[\s\S]*returnChallengeId[\s\S]*fallbackField[\s\S]*fallback/u,
+  );
+  assert.throws(
+    () => extractVisibleChallengeParts([{ text: 'Fallback-Code: 246810' }], 'return'),
+    /synthetic_clone_runner_return_challenge_parts_not_visible/u,
   );
 });
 
