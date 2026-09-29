@@ -1050,6 +1050,13 @@ flutter test --reporter expanded \
   --dart-define=SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE=true \
   test/synthetic_payment_test.dart
 
+# Managed avatar ownership/restart tests are skipped in the default build.
+# Exercise their real managed-origin branch with synthetic stored sessions.
+flutter test --reporter expanded \
+  --dart-define=SIT_BACKEND_ENABLED=true \
+  --dart-define=SIT_API_BASE_URL=http://127.0.0.1:1/api/v1 \
+  test/managed_avatar_refresh_test.dart
+
 # Offline SDK mocks exercise enabled providers without a release artifact,
 # real credentials, SMS, provider login or network access. Cold Google init
 # owns a fresh process because the production SDK initialization is cached.

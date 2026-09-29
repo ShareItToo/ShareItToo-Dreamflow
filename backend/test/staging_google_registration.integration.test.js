@@ -267,7 +267,7 @@ if (!databaseUrl) {
       assert.equal(Object.values((await setupPool.query(enrolledSql)).rows[0])[0], '1|1|1');
       const wrongIdentitySql = buildEnrolledIdentitySql({ digest: '0'.repeat(64), userId });
       assert.equal(Object.values((await setupPool.query(wrongIdentitySql)).rows[0])[0], '1|1|0');
-      const closedProbe = await promisify(execFile)(process.execPath, [fileURLToPath(new URL('./fixtures/google_post_enrollment_login_probe.mjs', import.meta.url))], {
+      const closedProbe = await promisify(execFile)(process.execPath, [fileURLToPath(new URL('../test_support/google_post_enrollment_login_probe.mjs', import.meta.url))], {
         env: { ...process.env, SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: '', SIT_TEST_POST_ENROLLMENT_IDENTITY: JSON.stringify({ identity, userId }) },
         timeout: 30_000, maxBuffer: 64 * 1024,
       });

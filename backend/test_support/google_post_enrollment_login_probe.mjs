@@ -1,9 +1,9 @@
 // Isolated child of the PG16 integration suite, using synthetic identity only.
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { createApp } from '../../src/app.js';
-import { config } from '../../src/config.js';
-import { pool } from '../../src/db.js';
+import { createApp } from '../src/app.js';
+import { config } from '../src/config.js';
+import { pool } from '../src/db.js';
 
 const { identity, userId } = JSON.parse(process.env.SIT_TEST_POST_ENROLLMENT_IDENTITY);
 assert.equal(config.socialAuth.enabled, true);
