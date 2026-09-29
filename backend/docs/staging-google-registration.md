@@ -1,49 +1,82 @@
-# Staging-only Google registration lane
+# Closed Staging Google registration
 
-This lane is disabled by default. The Green promotion preserves the existing
-pre-state with `DEPLOYMENT_ENVIRONMENT=test`, Firebase Auth and phone
-verification false, Google registration disabled, an empty/absent allowlist,
-the access gate enabled, payment memory, and Stripe live mode false. A later
-activation is separately reviewed; the allowlist is runtime-only and must
-contain no plaintext email, Firebase UID, token, or secret.
+The application lane remains default-off. The schema-98 Ops successor in
+`backend/ops/enable_staging_google_registration.mjs` enables exactly one
+reviewed identity on the existing Green API. It does not import old account
+rows, reassign an occupied identity, submit a real Google token, or claim a
+successful physical login.
 
-## Activation checklist
+## Exact pre-state and inputs
 
-1. Run the Green promotion from the manifest-bound source readback schema
-   `92` through current schema `97`. Require the source ledger digest before
-   rehearsal, the full isolated 97 ledger digest before candidate provisioning,
-   and the exact `097_registration_consent_bundle.up.sql` readback for
-   isolated and canonical targets. The runner rejects any other readback and
-   leaves Google registration disabled.
-2. Run the existing separate Firebase-auth activation runner for its reviewed
-   `test` to `staging` transition and its `FIREBASE_AUTH_ENABLED=false` to
-   `true` transition. This promotion package does not change that runner.
-3. In the later Google-registration activation step, outside Git, compute one SHA-256 digest over the exact UTF-8 bytes
-   `google\n<provider-subject>\n<firebase-uid>\n<lowercase-email>` and set
-   `SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST` to
-   `<digest>=<staging-user-id>`. The user ID must also be present in
-   `SIT_STAGING_ALLOWED_USER_IDS`.
-4. Set `SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=true`, keep
-   `FIREBASE_AUTH_ENABLED=true`, `STRIPE_LIVEMODE=false`, and verify the
-   runtime configuration readback without printing environment values.
-5. Restart only the reviewed staging API and verify health, version, and the
-   social-auth HTTP contract. Use a fresh, verified Firebase ID token for each
-   attempt; the lane rejects expired tokens and durable token replays.
+- The service is the verified Green `shareittoo-staging-api`, with an immutable
+  container ID, image revision/digest, two networks and exactly three mounts:
+  Firebase credentials, MFA key and uploads. Runtime deployment environment is
+  `test`; the externally selected project/environment is still Staging.
+- Firebase authentication is already true; phone verification and Stripe live
+  mode are false; payment transport is memory; the access gate is true.
+- Registration is disabled with an empty/absent identity allowlist. Schema is
+  exactly `098_booking_checkout_declaration_constraints.up.sql`; the ledger
+  digest is `796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196`.
+- A newly captured `sit-staging-google-registration-runtime-manifest`, schema
+  version 1, binds `apiContainerId`, all topology and current safety flags.
+  The old Firebase-activation manifest is not accepted. Read-only reconstruction
+  may retain only selected manifest fields, never raw Docker inspect/env data.
+- The private mapping contains one line, `<digest>=<user-id>`, optionally with
+  one final newline. Digest bytes are SHA-256 of
+  `google\n<provider-subject>\n<firebase-uid>\n<lowercase-email>`.
+  The ID must be absent from both the current users table and the configured
+  access list. Use the verified historical stable ID when restoring the same
+  approved pilot participant; preserve the old database and its audit evidence.
+- Both input files must be owner-only `0600`, owned by the executing operator,
+  outside the repository, opened without following symlinks. The env file is
+  independently bound to its manifest owner. Evidence needs a new path inside
+  an operator-owned `0700` directory outside the repository.
 
-The separate Google-registration enablement runner for step 3 is not present
-in this package and remains an operational blocker; do not infer or synthesize
-its command or account mapping.
+## Invocation and verification
 
-An allowlisted identity is linked to an existing account with the exact
-allowlisted user ID, or created with that ID after normal consent checks. A
-different owner, provider, email verification state, or identity digest fails
-closed. Audit metadata contains only provider and operation state.
+Run from the exact reviewed Ops source/runtime with Docker and Node available.
+Supply `STAGING_GOOGLE_REGISTRATION_RUNTIME_MANIFEST` and
+`STAGING_GOOGLE_REGISTRATION_MAPPING_FILE`, then run:
 
-## Rollback
+```sh
+node backend/ops/enable_staging_google_registration.mjs
+```
 
-Set `SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false` and remove the runtime
-allowlist, then perform the normal reviewed staging restart. Do not delete the
-replay table as part of an operational rollback. If the migration itself must
-be reverted, use the paired reviewed `095_...down.sql` only after confirming no
-lane requests are in flight and the feature is disabled. No production or
-livemode activation is supported by this module.
+This defaults to read-only preflight. It reaches the mutation boundary without
+altering configuration, account data or containers. Do not infer a mapping or
+reuse a manifest after the captured API identity changes.
+
+Only for the separately reviewed execution, also set
+`STAGING_GOOGLE_REGISTRATION_EXECUTE=1`,
+`STAGING_GOOGLE_REGISTRATION_CONFIRM` to the manifest's exact runtime revision,
+and `STAGING_GOOGLE_REGISTRATION_EVIDENCE_FILE` to the new private evidence path.
+
+The execution atomically changes exactly three env keys: appends the single
+mapped ID to `SIT_STAGING_ALLOWED_USER_IDS`, sets registration enabled, and
+writes the one identity mapping. All prior allowed IDs, unrelated env bytes,
+image identity and topology remain bound. It retains the stopped original API
+as a rollback seal. Readbacks require exact configuration, live/ready health,
+version, schema/ledger and a synthetic invalid-token response of precisely
+HTTP 401 / `invalid_social_token`. The invalid-token check uses the normal
+limiter; let its natural window expire before a later physical login gate.
+
+Failure restores the original env bytes and captured container where ownership
+is proven; ambiguous/concurrently changed state fails closed and reports
+unrestored status rather than overwriting it. Container mutations use immutable
+IDs. No raw env/container snapshot is written as evidence. The result is only
+`enabled-awaiting-live-google-token-gate`.
+
+The subsequent app journey must obtain a fresh verified Google token and the
+current registration consents through the UI. Occupied IDs, wrong digests,
+expired tokens and replays remain rejected by the unchanged application lane.
+Registration is not a migration of historical profile or consent rows.
+
+## Separate recurrence package — still open
+
+The Green promotion runner currently requires Firebase and Google registration
+off. It must not be used to claim preservation of this activated state. A
+separate reviewed promotion package must bind the current allowed-ID set and
+approved auth state, preserve them through the candidate/replacement/rollback,
+and test that no approved ID disappears and no extra identity is admitted.
+Do not silently relax the existing provider-off promotion contract in this
+registration package.

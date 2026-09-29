@@ -193,7 +193,7 @@ function assertExactContainerNetworks(record, manifest, code = 'api_network_inve
   if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(code);
 }
 
-export function assertGoogleAuthRuntimeManifest(manifest) {
+export function assertGoogleAuthRuntimeManifest(manifest, { registrationSuccessor = false } = {}) {
   exactKeys(manifest, [
   'kind', 'schemaVersion', 'environment', 'composeProject', 'apiContainer',
     'databaseContainer', 'databaseVolume', 'databaseName', 'databaseUser',
@@ -201,7 +201,8 @@ export function assertGoogleAuthRuntimeManifest(manifest) {
     'image', 'runtimeRevision', 'imageDigest', 'envFile', 'envUid', 'envGid',
     'mounts', 'safetyEnv', 'label',
   ], 'manifest_shape_invalid');
-  if (manifest.kind !== manifestKind || manifest.schemaVersion !== 1
+  const expectedKind = registrationSuccessor ? 'sit-staging-google-registration-runtime-manifest' : manifestKind;
+  if (manifest.kind !== expectedKind || manifest.schemaVersion !== 1
       || manifest.environment !== 'staging'
       || manifest.composeProject !== 'sit-green'
       || manifest.apiContainer !== apiContainer) fail('target_not_staging_green');
@@ -250,14 +251,15 @@ export function assertGoogleAuthRuntimeManifest(manifest) {
   }
   const exactGreenMountDestinations = [
     '/data/uploads', '/run/secrets/firebase-service-account.json', '/run/secrets/mfa-encryption-key',
-    '/run/secrets/technical-sandbox-key', '/run/secrets/technical-sandbox-webhook',
+    ...(registrationSuccessor ? [] : ['/run/secrets/technical-sandbox-key', '/run/secrets/technical-sandbox-webhook']),
   ].sort();
   if (JSON.stringify([...destinations].sort()) !== JSON.stringify(exactGreenMountDestinations)) fail('exact_mount_destinations_invalid');
   exactKeys(manifest.safetyEnv, Object.keys(requiredSafetyEnv), 'safety_env_shape_invalid');
-  for (const [name, value] of Object.entries(requiredSafetyEnv)) {
+  const expectedSafetyEnv = { ...requiredSafetyEnv, FIREBASE_AUTH_ENABLED: registrationSuccessor ? 'true' : 'false' };
+  for (const [name, value] of Object.entries(expectedSafetyEnv)) {
     if (manifest.safetyEnv[name] !== value) fail(`safety_env_${name.toLowerCase()}_invalid`);
   }
-  if (manifest.safetyEnv.FIREBASE_AUTH_ENABLED !== 'false') fail('auth_must_start_disabled');
+  if (!registrationSuccessor && manifest.safetyEnv.FIREBASE_AUTH_ENABLED !== 'false') fail('auth_must_start_disabled');
   exactKeys(manifest.label, ['key', 'value'], 'label_shape_invalid');
   if (manifest.label.key !== 'com.shareittoo.sit.green' || manifest.label.value !== 'true') fail('green_label_invalid');
   return Object.freeze({ ...manifest, mounts: manifest.mounts.map((mount) => Object.freeze({ ...mount })) });

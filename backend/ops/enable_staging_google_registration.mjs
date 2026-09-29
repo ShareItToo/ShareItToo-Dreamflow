@@ -9,19 +9,38 @@ import { fileURLToPath } from 'node:url';
 import {
   assertGoogleAuthRuntimeManifest,
   buildReplacementCreateArgs,
-  readGoogleAuthRuntimeManifest,
   runBoundedStartupProbe,
   runCommand,
 } from './activate_staging_google_auth.mjs';
 import { readStablePrivateFile } from './stable_private_file.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const requiredTerminalMigration = '097_registration_consent_bundle.up.sql';
-const requiredMigrationLedger = '950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0';
+const requiredTerminalMigration = '098_booking_checkout_declaration_constraints.up.sql';
+const requiredMigrationLedger = '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196';
 const registrationEnabledKey = 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED';
 const registrationAllowlistKey = 'SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST';
 const allowedUserIdsKey = 'SIT_STAGING_ALLOWED_USER_IDS';
 const apiContainer = 'shareittoo-staging-api';
+
+export function assertGoogleRegistrationRuntimeManifest(manifest) {
+  if (manifest?.kind !== 'sit-staging-google-registration-runtime-manifest'
+      || manifest?.safetyEnv?.FIREBASE_AUTH_ENABLED !== 'true'
+      || !/^[0-9a-f]{64}$/u.test(manifest?.apiContainerId ?? '')) fail('registration_manifest_pre_state_invalid');
+  const { apiContainerId, ...shared } = manifest;
+  // Reuse the topology schema, while this successor binds the already-enabled
+  // Firebase pre-state and the immutable current container explicitly.
+  const validated = assertGoogleAuthRuntimeManifest(shared, { registrationSuccessor: true });
+  return Object.freeze({ ...validated, kind: manifest.kind, apiContainerId, safetyEnv: Object.freeze({ ...manifest.safetyEnv }) });
+}
+
+export function readGoogleRegistrationRuntimeManifest(filePath) {
+  safeExternalPath(filePath, 'manifest_path_invalid');
+  const content = readStablePrivateFile(filePath, {
+    expectedMode: 0o600, expectedUid: process.getuid?.(), expectedGid: process.getgid?.(),
+    minBytes: 1, maxBytes: 64 * 1024, code: 'manifest_metadata_invalid',
+  });
+  return assertGoogleRegistrationRuntimeManifest(parseJson(content, 'manifest_json_invalid'));
+}
 
 function fail(code) {
   const error = new Error(`Staging Google registration enable failed: ${code}`);
@@ -50,7 +69,9 @@ function envMap(entries) {
   for (const entry of entries ?? []) {
     const index = String(entry).indexOf('=');
     if (index < 1) continue;
-    result[String(entry).slice(0, index)] = String(entry).slice(index + 1);
+    const name = String(entry).slice(0, index);
+    if (Object.hasOwn(result, name)) fail('duplicate_container_env_key');
+    result[name] = String(entry).slice(index + 1);
   }
   return result;
 }
@@ -99,6 +120,7 @@ function normalizedContainer(record, omitRegistrationEnv = false) {
   if (omitRegistrationEnv) {
     delete entries[registrationEnabledKey];
     delete entries[registrationAllowlistKey];
+    delete entries[allowedUserIdsKey];
   }
   const healthcheck = config.Healthcheck ? {
     Test: config.Healthcheck.Test ?? null,
@@ -155,6 +177,29 @@ function sameExceptRegistrationFlags(left, right) {
   return JSON.stringify(normalizedContainer(left, true)) === JSON.stringify(normalizedContainer(right, true));
 }
 
+function sameOriginalContainer(left, right) {
+  return JSON.stringify(normalizedContainer(left)) === JSON.stringify(normalizedContainer(right));
+}
+
+function expectedAllowedUserIds(originalApi, userId) {
+  return `${envMap(originalApi.Config.Env)[allowedUserIdsKey]},${userId}`;
+}
+
+function assertRegistrationDelta(originalApi, replacement, mapping) {
+  if (!sameExceptRegistrationFlags(originalApi, replacement)) fail('replacement_config_drift');
+  const entries = replacement?.Config?.Env ?? [];
+  const values = envMap(entries);
+  const expected = {
+    [registrationEnabledKey]: 'true',
+    [registrationAllowlistKey]: `${mapping.digest}=${mapping.userId}`,
+    [allowedUserIdsKey]: expectedAllowedUserIds(originalApi, mapping.userId),
+  };
+  for (const [name, value] of Object.entries(expected)) {
+    if (entries.filter((entry) => String(entry).startsWith(`${name}=`)).length !== 1
+        || values[name] !== value) fail('replacement_registration_delta_invalid');
+  }
+}
+
 function assertNoHostPort(record, code = 'host_port_forbidden') {
   if (Object.values(record?.HostConfig?.PortBindings ?? {}).flat().filter(Boolean).length > 0
       || Object.values(record?.NetworkSettings?.Ports ?? {}).flat().filter(Boolean).length > 0) fail(code);
@@ -183,7 +228,7 @@ function assertReplacementImageReadback(record, manifest, code = 'replacement_im
 }
 
 function assertRuntimeFlags(flags, expectedRegistration, mappingDigest = null, code = 'runtime_flags_invalid') {
-  if (flags?.DEPLOYMENT_ENVIRONMENT !== 'staging'
+  if (flags?.DEPLOYMENT_ENVIRONMENT !== 'test'
       || flags?.FIREBASE_AUTH_ENABLED !== 'true'
       || flags?.FIREBASE_PHONE_VERIFICATION_ENABLED !== 'false'
       || flags?.PAYMENT_TRANSPORT !== 'memory'
@@ -223,7 +268,7 @@ function readRegistrationMapping(filePath) {
   safeExternalPath(filePath, 'mapping_path_invalid');
   let content;
   try {
-    content = readStablePrivateFile(filePath, { expectedMode: 0o600, minBytes: 1, maxBytes: 256, code: 'mapping_metadata_invalid' });
+    content = readStablePrivateFile(filePath, { expectedMode: 0o600, expectedUid: process.getuid?.(), expectedGid: process.getgid?.(), minBytes: 1, maxBytes: 256, code: 'mapping_metadata_invalid' });
   } catch (error) {
     if (error?.code === 'mapping_metadata_invalid') throw error;
     fail(error?.code === 'ELOOP' ? 'mapping_symlink_forbidden' : 'mapping_unreadable');
@@ -243,14 +288,18 @@ function readRegistrationMapping(filePath) {
 }
 
 function allowedUserIds(value) {
-  return String(value ?? '').split(',').map((entry) => entry.trim()).filter(Boolean);
+  const entries = String(value ?? '').split(',');
+  if (entries.some((entry) => !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/u.test(entry))
+      || new Set(entries).size !== entries.length) fail('access_allowed_ids_invalid');
+  return entries;
 }
 
 function assertPreState({ values, api, manifest, mapping }) {
   if (api?.Name?.replace(/^\//u, '') !== manifest.apiContainer || manifest.apiContainer !== apiContainer
+      || api?.Id !== manifest.apiContainerId
       || api?.State?.Running !== true) fail('api_container_pre_state_invalid');
   assertNoHostPort(api, 'api_host_port_forbidden');
-  if (api?.Config?.Image !== manifest.image) fail('api_image_pre_state_invalid');
+  if (![manifest.image, `${manifest.image}@${manifest.imageDigest}`].includes(api?.Config?.Image)) fail('api_image_pre_state_invalid');
   if (api?.Config?.User !== 'shareittoo' || !(api?.HostConfig?.GroupAdd ?? []).map(String).includes('65532')) fail('api_identity_pre_state_invalid');
   if (api?.Config?.Labels?.[manifest.label.key] !== manifest.label.value) fail('api_green_label_pre_state_invalid');
   const expectedMounts = manifest.mounts.map((mount) => ({
@@ -259,7 +308,7 @@ function assertPreState({ values, api, manifest, mapping }) {
   })).sort((left, right) => left.Destination.localeCompare(right.Destination));
   if (JSON.stringify(normalizedMounts(api.Mounts)) !== JSON.stringify(expectedMounts)) fail('api_mount_pre_state_invalid');
   assertNetworks(api, manifest, 'api_network_pre_state_invalid');
-  if (values.DEPLOYMENT_ENVIRONMENT !== 'staging'
+  if (values.DEPLOYMENT_ENVIRONMENT !== 'test'
       || values.FIREBASE_AUTH_ENABLED !== 'true'
       || values.FIREBASE_PHONE_VERIFICATION_ENABLED !== 'false'
       || values.PAYMENT_TRANSPORT !== 'memory'
@@ -271,7 +320,7 @@ function assertPreState({ values, api, manifest, mapping }) {
   if (values.SIT_STAGING_GOOGLE_REGISTRATION_PROVIDER !== undefined
       && values.SIT_STAGING_GOOGLE_REGISTRATION_PROVIDER !== ''
       && values.SIT_STAGING_GOOGLE_REGISTRATION_PROVIDER !== 'google') fail('registration_provider_pre_state_invalid');
-  if (!allowedUserIds(values[allowedUserIdsKey]).includes(mapping.userId)) fail('mapping_target_not_access_allowed');
+  if (allowedUserIds(values[allowedUserIdsKey]).includes(mapping.userId)) fail('mapping_target_already_access_allowed');
 }
 
 function replaceEnvKey(content, name, value) {
@@ -288,6 +337,7 @@ function registrationEnabledValue(content) {
 async function atomicReplace(content, manifest) {
   const temporary = `${manifest.envFile}.google-registration-${process.pid}-${crypto.randomBytes(8).toString('hex')}.tmp`;
   let handle;
+  let replaced = false;
   try {
     handle = await open(temporary, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | fsConstants.O_NOFOLLOW, 0o600);
     await handle.writeFile(content, 'utf8');
@@ -297,9 +347,11 @@ async function atomicReplace(content, manifest) {
     await handle.close();
     handle = undefined;
     await rename(temporary, manifest.envFile);
+    replaced = true;
     const parent = await open(dirname(manifest.envFile), fsConstants.O_RDONLY | fsConstants.O_DIRECTORY);
     try { await parent.sync(); } finally { await parent.close(); }
   } catch (error) {
+    error.envReplaced = replaced;
     if (handle) await handle.close().catch(() => {});
     await unlink(temporary).catch(() => {});
     throw error;
@@ -316,7 +368,7 @@ async function readEnv(manifest) {
   }
 }
 
-export function buildGoogleRegistrationPreflightCommands(manifest) {
+export function buildGoogleRegistrationPreflightCommands(manifest, mapping) {
   const inspect = (name, phase) => ({ phase, command: 'docker', args: ['inspect', '--format', '{{json .}}', name] });
   const dbExec = (phase, sql) => ({ phase, command: 'docker', args: ['exec', manifest.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', manifest.databaseUser, '-d', manifest.databaseName, '-Atc', sql] });
   const runtimeProbe = (phase, expression) => ({ phase, command: 'docker', args: ['exec', manifest.apiContainer, 'node', '--input-type=module', '-e', expression] });
@@ -330,6 +382,7 @@ export function buildGoogleRegistrationPreflightCommands(manifest) {
     { phase: 'current_image_inspect', command: 'docker', args: ['image', 'inspect', '--format', '{{json .}}', manifest.image] },
     { phase: 'sealed_name_conflict_check', command: 'docker', args: ['ps', '--all', '--filter', `name=^/${manifest.apiContainer}-google-registration-rollback-${manifest.runtimeRevision.slice(0, 12)}$`, '--format', '{{.Names}}'] },
     dbExec('current_database_probe', 'SELECT 1'),
+    dbExec('current_mapping_target_absent', `SELECT count(*) FROM users WHERE encode(sha256(convert_to(id, 'UTF8')), 'hex') = '${sha256(mapping.userId)}'`),
     dbExec('current_schema_migration_readback', 'SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1'),
     { phase: 'current_migration_ledger_readback', command: 'docker', args: ['exec', manifest.databaseContainer, 'sh', '-c', `set -eu; psql -X --set ON_ERROR_STOP=1 -U '${manifest.databaseUser}' -d '${manifest.databaseName}' -Atc "SELECT string_agg(name || '|' || checksum, E'\\n' ORDER BY name) FROM schema_migrations" | sha256sum | awk '{print $1}'`] },
     runtimeProbe('current_live_probe', "const r=await fetch('http://127.0.0.1:8080/health/live'); process.stdout.write(JSON.stringify({status:r.status,payload:await r.json()})); if(r.status!==200) process.exit(1)"),
@@ -351,13 +404,14 @@ function assertHealthPayload(stdout, code) {
 }
 
 async function collectPreflight(manifest, command, mapping, originalEnv) {
-  const entries = buildGoogleRegistrationPreflightCommands(manifest);
+  const entries = buildGoogleRegistrationPreflightCommands(manifest, mapping);
   const readbacks = {};
   for (const entry of entries) {
     const result = await command(entry.command, entry.args, { phase: entry.phase });
     readbacks[entry.phase] = result?.stdout?.trim() ?? '';
     if (entry.phase === 'sealed_name_conflict_check' && readbacks[entry.phase]) fail('rollback_name_conflict');
     if (entry.phase === 'current_database_probe' && readbacks[entry.phase] !== '1') fail('database_probe_invalid');
+    if (entry.phase === 'current_mapping_target_absent' && readbacks[entry.phase] !== '0') fail('mapping_target_already_exists');
     if (entry.phase === 'current_schema_migration_readback') assertTerminalMigration(readbacks[entry.phase], 'current_schema_migration_readback_invalid');
     if (entry.phase === 'current_migration_ledger_readback') parseSchemaLedger(readbacks[entry.phase]);
     if (entry.phase === 'current_live_probe') assertHealthPayload(readbacks[entry.phase], 'current_live_probe_invalid');
@@ -373,7 +427,7 @@ async function collectPreflight(manifest, command, mapping, originalEnv) {
     if (entry.phase === 'current_uploads_volume_inspect') readbacks.uploads = parseJson(readbacks[entry.phase], 'uploads_inspect_invalid');
     if (entry.phase === 'current_image_inspect') readbacks.image = parseJson(readbacks[entry.phase], 'image_inspect_invalid');
   }
-  if (readbacks.api?.Config?.Image !== manifest.image) fail('api_image_pre_state_invalid');
+  if (![manifest.image, `${manifest.image}@${manifest.imageDigest}`].includes(readbacks.api?.Config?.Image)) fail('api_image_pre_state_invalid');
   assertImageReadback(readbacks.image, manifest);
   if (readbacks.database?.Name?.replace(/^\//u, '') !== manifest.databaseContainer || readbacks.database?.State?.Running !== true) fail('database_runtime_inventory_invalid');
   if (readbacks.databaseVolume?.Name !== manifest.databaseVolume) fail('database_volume_runtime_inventory_invalid');
@@ -383,29 +437,49 @@ async function collectPreflight(manifest, command, mapping, originalEnv) {
   assertNoHostPort(readbacks.api);
   assertNetworks(readbacks.api, manifest);
   if (readbacks.api?.Config?.Labels?.[manifest.label.key] !== manifest.label.value) fail('api_green_label_invalid');
-  if (readbacks.flags?.DEPLOYMENT_ENVIRONMENT !== 'staging' || readbacks.flags?.FIREBASE_AUTH_ENABLED !== 'true') fail('runtime_auth_pre_state_invalid');
+  if (readbacks.flags?.DEPLOYMENT_ENVIRONMENT !== 'test' || readbacks.flags?.FIREBASE_AUTH_ENABLED !== 'true') fail('runtime_auth_pre_state_invalid');
   assertRuntimeFlags(readbacks.flags, false);
   if (readbacks.registration.enabled || readbacks.registration.allowlist !== 'absent' || readbacks.registration.allowlistEntryCount !== 0) fail('registration_not_disabled_pre_state');
   if (readbacks.registration.accessGateEnabled !== true) fail('access_gate_readback_invalid');
-  if (readbacks.version?.commit !== manifest.runtimeRevision || readbacks.version?.environment !== 'staging') fail('version_readback_invalid');
+  if (readbacks.version?.commit !== manifest.runtimeRevision || readbacks.version?.environment !== 'test') fail('version_readback_invalid');
   const values = parseEnvContent(originalEnv);
   assertPreState({ values, api: readbacks.api, manifest, mapping });
   const apiValues = envMap(readbacks.api.Config.Env);
   for (const [name, value] of Object.entries(values)) {
     if (apiValues[name] !== value) fail('env_file_container_drift');
   }
-  return Object.freeze({ entries, readbacks });
+  const nextValues = {
+    [registrationEnabledKey]: 'true',
+    [registrationAllowlistKey]: `${mapping.digest}=${mapping.userId}`,
+    [allowedUserIdsKey]: `${values[allowedUserIdsKey]},${mapping.userId}`,
+  };
+  const configProbe = await command('docker', ['exec', manifest.apiContainer, 'node', '--input-type=module', '-e', `Object.assign(process.env,${JSON.stringify(nextValues)});const {config}=await import('./src/config.js');process.stdout.write(JSON.stringify({enabled:config.stagingGoogleRegistration.enabled,mappingCount:config.stagingGoogleRegistration.allowlist.length,targetAllowed:config.stagingAccess.allowedUserIds.includes(${JSON.stringify(mapping.userId)})}));`], { phase: 'candidate_registration_config_import' });
+  const candidateConfig = parseJson(configProbe.stdout, 'candidate_registration_config_invalid');
+  if (candidateConfig.enabled !== true || candidateConfig.mappingCount !== 1 || candidateConfig.targetAllowed !== true) fail('candidate_registration_config_invalid');
+  return Object.freeze({ entries: Object.freeze([...entries, { phase: 'candidate_registration_config_import' }]), readbacks });
 }
 
-async function applyRegistrationFlags(manifest, expectedEnv, mapping) {
+function registrationEnv(expectedEnv, mapping) {
+  const values = parseEnvContent(expectedEnv);
+  if (allowedUserIds(values[allowedUserIdsKey]).includes(mapping.userId)) fail('mapping_target_already_access_allowed');
+  let next = replaceEnvKey(expectedEnv, registrationEnabledKey, 'true');
+  next = replaceEnvKey(next, registrationAllowlistKey, `${mapping.digest}=${mapping.userId}`);
+  return replaceEnvKey(next, allowedUserIdsKey, `${values[allowedUserIdsKey]},${mapping.userId}`);
+}
+
+async function applyRegistrationFlags(manifest, expectedEnv, next) {
   const current = await readEnv(manifest);
   if (current.content !== expectedEnv) fail('env_changed_since_preflight');
   if (registrationEnabledValue(current.content) !== undefined
       && registrationEnabledValue(current.content) !== ''
       && registrationEnabledValue(current.content) !== 'false') fail('registration_not_disabled_pre_state');
-  let next = replaceEnvKey(current.content, registrationEnabledKey, 'true');
-  next = replaceEnvKey(next, registrationAllowlistKey, `${mapping.digest}=${mapping.userId}`);
   await atomicReplace(next, manifest);
+  try {
+    if ((await readEnv(manifest)).content !== next) fail('registration_env_readback_invalid');
+  } catch (error) {
+    error.envReplaced = true;
+    throw error;
+  }
   return next;
 }
 
@@ -437,7 +511,7 @@ function isExactOriginalContainer(record, manifest, originalApi, name, stopped =
     if (record?.Name?.replace(/^\//u, '') !== name
         || !originalApi?.Id || record?.Id !== originalApi.Id
         || record?.Config?.Image !== originalApi.Config?.Image
-        || !sameExceptRegistrationFlags(originalApi, record)) return false;
+        || !sameOriginalContainer(originalApi, record)) return false;
     assertNetworks(record, manifest, 'original_identity_network_invalid');
     assertNoHostPort(record, 'original_identity_host_port_invalid');
     return stopped ? record?.State?.Running === false : true;
@@ -454,7 +528,8 @@ function isExactCreatedReplacement(record, manifest, originalApi, name, expected
     assertReplacementImageReadback(record, manifest, 'replacement_identity_image_invalid');
     const comparable = structuredClone(record);
     comparable.Config.Image = originalApi.Config.Image;
-    if (!sameExceptRegistrationFlags(originalApi, comparable)) return false;
+    const separator = expectedAllowlist.indexOf('=');
+    assertRegistrationDelta(originalApi, comparable, { digest: expectedAllowlist.slice(0, separator), userId: expectedAllowlist.slice(separator + 1) });
     const entries = record?.Config?.Env ?? [];
     const enabledEntries = entries.filter((entry) => String(entry).startsWith(`${registrationEnabledKey}=`));
     const allowlistEntries = entries.filter((entry) => String(entry).startsWith(`${registrationAllowlistKey}=`));
@@ -479,7 +554,7 @@ async function reconcileUnknownCreate({ manifest, originalApi, expectedAllowlist
   if (observed.unknown) return Object.freeze({ ok: false, code: observed.code });
   if (!observed.exists) return Object.freeze({ ok: true, removed: false });
   if (!isExactCreatedReplacement(observed.record, manifest, originalApi, manifest.apiContainer, expectedAllowlist)) return Object.freeze({ ok: false, code: 'replacement_target_ambiguous' });
-  const removal = await safeCommand(command, ['rm', '--force', manifest.apiContainer], 'rollback_replacement_remove', commandEnv);
+  const removal = await safeCommand(command, ['rm', '--force', observed.record.Id], 'rollback_replacement_remove', commandEnv);
   if (!removal.ok) return Object.freeze({ ok: false, code: removal.code });
   const absent = await inspectNamedContainer(command, manifest.apiContainer, 'rollback_replacement_verify', commandEnv);
   if (absent.unknown || absent.exists) return Object.freeze({ ok: false, code: absent.unknown ? absent.code : 'replacement_present' });
@@ -519,7 +594,7 @@ async function stopCurrentApi({ manifest, originalApi, command, commandEnv }) {
     throw error;
   };
   try {
-    const result = await command('docker', ['stop', manifest.apiContainer], { phase: 'stop_current_api', env: commandEnv });
+    const result = await command('docker', ['stop', originalApi.Id], { phase: 'stop_current_api', env: commandEnv });
     if (result?.code !== undefined && result.code !== 0) {
       const error = new Error('stop_current_api_failed');
       error.code = 'stop_current_api_failed';
@@ -549,7 +624,7 @@ async function stopCurrentApi({ manifest, originalApi, command, commandEnv }) {
     if (!originalApi?.Id || record?.Id !== originalApi.Id) {
       unknownState(error, 'stop_state_identity_invalid');
     }
-    if (!sameExceptRegistrationFlags(originalApi, record)) {
+    if (!sameOriginalContainer(originalApi, record)) {
       unknownState(error, 'stop_state_config_drift');
     }
     try {
@@ -568,7 +643,7 @@ async function stopCurrentApi({ manifest, originalApi, command, commandEnv }) {
   }
 }
 
-async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, originalApi, expectedAllowlist, command, commandEnv, sealedName, sealed: initialSealed, currentStopped: initialCurrentStopped, stopStateUnknown = false, replacementCreated, createResponseUnknown = false, renameResponseUnknown = false }) {
+async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, originalApi, expectedAllowlist, command, commandEnv, sealedName, sealed: initialSealed, currentStopped: initialCurrentStopped, stopStateUnknown = false, replacementCreated, replacementId, createResponseUnknown = false, renameResponseUnknown = false }) {
   const results = [];
   let ok = true;
   let attemptedRestart = false;
@@ -583,6 +658,7 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
       const current = await readEnv(manifest);
       if (current.content !== appliedEnv) fail('rollback_env_changed_after_mutation');
       await atomicReplace(originalEnv, manifest);
+      if ((await readEnv(manifest)).content !== originalEnv) fail('rollback_env_readback_invalid');
       results.push({ phase: 'rollback_env_restore', ok: true });
     } catch (error) {
       results.push({ phase: 'rollback_env_restore', ok: false, code: error?.code ?? 'rollback_env_restore' });
@@ -606,7 +682,7 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
     if (reconciled.removed) results.push({ phase: 'rollback_replacement_remove', ok: true });
   }
   if (topologySafe && replacementCreated) {
-    const removal = await safeCommand(command, ['rm', '--force', manifest.apiContainer], 'rollback_replacement_remove', commandEnv);
+    const removal = await safeCommand(command, ['rm', '--force', replacementId], 'rollback_replacement_remove', commandEnv);
     results.push({ phase: removal.phase, ok: removal.ok, ...(removal.ok ? {} : { code: removal.code }) });
     ok &&= removal.ok;
   }
@@ -627,7 +703,7 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
     if (!absent) {
       topologySafe = false;
     } else {
-    const renameResult = await safeCommand(command, ['rename', sealedName, manifest.apiContainer], 'rollback_restore_rename', commandEnv);
+    const renameResult = await safeCommand(command, ['rename', originalApi.Id, manifest.apiContainer], 'rollback_restore_rename', commandEnv);
     results.push({ phase: renameResult.phase, ok: renameResult.ok, ...(renameResult.ok ? {} : { code: renameResult.code }) });
     ok &&= renameResult.ok;
     attemptedRestart = true;
@@ -643,7 +719,7 @@ async function rollback({ manifest, originalEnv, appliedEnv, envMutationOwned, o
         assertNetworks(restored, manifest, 'rollback_network_inventory_invalid');
         assertNoHostPort(restored, 'rollback_host_port_forbidden');
         results.push({ phase: 'rollback_api_readback', ok: true });
-        const startup = await runBoundedStartupProbe(command, manifest.apiContainer, commandEnv, 'rollback_public_runtime_probe', { deadlineMs: 100, retryDelayMs: 1 });
+        const startup = await runBoundedStartupProbe(command, manifest.apiContainer, commandEnv, 'rollback_public_runtime_probe');
         assertRuntimeFlags(startup.flags, null);
         results.push({ phase: 'rollback_runtime_readback', ok: true });
       } catch (error) {
@@ -734,7 +810,7 @@ export async function runStagingGoogleRegistrationEnable({
   commandEnv = process.env,
   execute = false,
 } = {}) {
-  const target = assertGoogleAuthRuntimeManifest(manifest);
+  const target = assertGoogleRegistrationRuntimeManifest(manifest);
   if (typeof command !== 'function') fail('command_runner_required');
   if (target.apiContainer !== apiContainer) fail('target_api_container_invalid');
   const mapping = readRegistrationMapping(mappingFile);
@@ -751,15 +827,20 @@ export async function runStagingGoogleRegistrationEnable({
   let currentStopped = false;
   let sealed = false;
   let replacementCreated = false;
+  let replacementId = null;
   let envMutationOwned = false;
-  let appliedEnv = null;
+  const appliedEnv = registrationEnv(original.content, mapping);
   try {
-    appliedEnv = await applyRegistrationFlags(target, original.content, mapping);
+    const unchangedApi = await command('docker', ['inspect', '--format', '{{json .}}', target.apiContainer], { phase: 'pre_mutation_api_readback', env: commandEnv });
+    const unchangedRecord = parseJson(unchangedApi.stdout, 'pre_mutation_api_readback_invalid');
+    assertOriginalIdentity(unchangedRecord, target, preflight.readbacks.api, target.apiContainer, 'pre_mutation_api_changed');
+    if (unchangedRecord.State?.Running !== true) fail('pre_mutation_api_stopped');
+    await applyRegistrationFlags(target, original.content, appliedEnv);
     envMutationOwned = true;
     const stopResult = await stopCurrentApi({ manifest: target, originalApi: preflight.readbacks.api, command, commandEnv });
     currentStopped = stopResult.stopped;
     try {
-      await command('docker', ['rename', target.apiContainer, sealedName], { phase: 'seal_current_api', env: commandEnv });
+      await command('docker', ['rename', preflight.readbacks.api.Id, sealedName], { phase: 'seal_current_api', env: commandEnv });
       sealed = true;
     } catch (error) {
       error.renameResponseUnknown = true;
@@ -770,25 +851,28 @@ export async function runStagingGoogleRegistrationEnable({
     if (imageIndex < 0) fail('replacement_image_argument_missing');
     createArgs[imageIndex] = `${target.image}@${target.imageDigest}`;
     try {
-      await command('docker', createArgs, { phase: 'create_replacement_api', env: commandEnv });
+      const created = await command('docker', createArgs, { phase: 'create_replacement_api', env: commandEnv });
+      replacementId = String(created?.stdout ?? '').trim();
+      if (!/^[0-9a-f]{64}$/u.test(replacementId) || replacementId === preflight.readbacks.api.Id) fail('replacement_create_identity_invalid');
       replacementCreated = true;
     } catch (error) {
       error.createResponseUnknown = true;
       throw error;
     }
-    await command('docker', ['network', 'connect', target.providerNetwork, target.apiContainer], { phase: 'attach_provider_network', env: commandEnv });
-    await command('docker', ['start', target.apiContainer], { phase: 'start_replacement_api', env: commandEnv });
+    await command('docker', ['network', 'connect', target.providerNetwork, replacementId], { phase: 'attach_provider_network', env: commandEnv });
+    await command('docker', ['start', replacementId], { phase: 'start_replacement_api', env: commandEnv });
     const replacement = await command('docker', ['inspect', '--format', '{{json .}}', target.apiContainer], { phase: 'replacement_config_readback', env: commandEnv });
     const replacementRecord = parseJson(replacement.stdout, 'replacement_config_readback_invalid');
+    if (replacementRecord?.Id !== replacementId || replacementRecord?.State?.Running !== true) fail('replacement_runtime_identity_invalid');
     assertReplacementImageReadback(replacementRecord, target);
     const comparableReplacement = structuredClone(replacementRecord);
     comparableReplacement.Config.Image = preflight.readbacks.api.Config.Image;
-    if (!sameExceptRegistrationFlags(preflight.readbacks.api, comparableReplacement)) fail('replacement_config_drift');
+    assertRegistrationDelta(preflight.readbacks.api, comparableReplacement, mapping);
     assertNoHostPort(replacementRecord);
     assertNetworks(replacementRecord, target);
-    const startup = await runBoundedStartupProbe(command, target.apiContainer, commandEnv, 'replacement_public_runtime_probe', { deadlineMs: 100, retryDelayMs: 1 });
+    const startup = await runBoundedStartupProbe(command, target.apiContainer, commandEnv, 'replacement_public_runtime_probe');
     assertRuntimeFlags(startup.flags, null);
-    if (startup.version?.commit !== target.runtimeRevision || startup.version?.environment !== 'staging') fail('replacement_version_readback_invalid');
+    if (startup.version?.commit !== target.runtimeRevision || startup.version?.environment !== 'test') fail('replacement_version_readback_invalid');
     const registration = await command('docker', ['exec', target.apiContainer, 'node', '--input-type=module', '-e', `import crypto from 'node:crypto'; const raw=process.env.${registrationAllowlistKey}??''; process.stdout.write(JSON.stringify({enabled:process.env.${registrationEnabledKey}==='true',allowlist:raw?'present':'absent',allowlistDigest:crypto.createHash('sha256').update(raw).digest('hex'),allowlistEntryCount:raw?raw.split(',').length:0,accessGateEnabled:process.env.SIT_STAGING_ACCESS_GATE_ENABLED==='true'}));`], { phase: 'replacement_registration_config_readback', env: commandEnv });
     const registrationReadback = parseRegistrationConfigReadback(registration.stdout);
     if (!registrationReadback.enabled || registrationReadback.allowlist !== 'present' || registrationReadback.allowlistEntryCount !== 1 || registrationReadback.accessGateEnabled !== true || registrationReadback.allowlistDigest !== sha256(`${mapping.digest}=${mapping.userId}`)) fail('registration_config_readback_invalid');
@@ -796,11 +880,15 @@ export async function runStagingGoogleRegistrationEnable({
     assertTerminalMigration(schema.stdout);
     const ledger = await command('docker', ['exec', target.databaseContainer, 'sh', '-c', `set -eu; psql -X --set ON_ERROR_STOP=1 -U '${target.databaseUser}' -d '${target.databaseName}' -Atc "SELECT string_agg(name || '|' || checksum, E'\\n' ORDER BY name) FROM schema_migrations" | sha256sum | awk '{print $1}'`], { phase: 'replacement_migration_ledger_readback', env: commandEnv });
     parseSchemaLedger(ledger.stdout);
+    const invalidToken = await command('docker', ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/v1/auth/social',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({idToken:'synthetic-invalid-token'}),signal:AbortSignal.timeout(5000)});const p=await r.json();process.stdout.write(JSON.stringify({status:r.status,error:p.error}));if(r.status!==401||p.error!=='invalid_social_token')process.exit(1)"], { phase: 'replacement_invalid_social_token_probe', env: commandEnv });
+    const invalidTokenPayload = parseJson(invalidToken.stdout, 'invalid_social_token_probe_invalid');
+    if (invalidTokenPayload.status !== 401 || invalidTokenPayload.error !== 'invalid_social_token') fail('invalid_social_token_probe_invalid');
     const result = Object.freeze({ status: 'enabled-awaiting-live-google-token-gate', firstIrreversiblePhase: 'atomic_registration_enable', mappingDigest: mapping.mappingDigest, targetUserIdDigest: sha256(mapping.userId), schemaMigration: requiredTerminalMigration, migrationLedger: requiredMigrationLedger, requiresLaterGate: 'real HTTP Google-token registration proof with an approved live staging identity', sealedName });
-    await writeEvidence(evidenceFile, { kind: 'sit-staging-google-registration-enable', schemaVersion: 1, status: result.status, runtimeRevision: target.runtimeRevision, apiContainer: target.apiContainer, imageDigest: target.imageDigest, mappingDigest: mapping.mappingDigest, targetUserIdDigest: sha256(mapping.userId), mappingEntryCount: 1, schemaMigration: requiredTerminalMigration, migrationLedger: requiredMigrationLedger, providerTraffic: 'none', stripeLivemode: false, requiresLaterGate: result.requiresLaterGate });
+    await writeEvidence(evidenceFile, { kind: 'sit-staging-google-registration-enable', schemaVersion: 2, status: result.status, runtimeRevision: target.runtimeRevision, apiContainer: target.apiContainer, imageDigest: target.imageDigest, mappingDigest: mapping.mappingDigest, targetUserIdDigest: sha256(mapping.userId), mappingEntryCount: 1, allowedUserCountBefore: allowedUserIds(original.values[allowedUserIdsKey]).length, allowedUserCountAfter: allowedUserIds(original.values[allowedUserIdsKey]).length + 1, changedEnvironmentKeys: [allowedUserIdsKey, registrationEnabledKey, registrationAllowlistKey], deploymentEnvironment: 'test', invalidTokenProbe: '401-invalid_social_token', validGoogleTokenSubmitted: false, schemaMigration: requiredTerminalMigration, migrationLedger: requiredMigrationLedger, stripeLivemode: false, requiresLaterGate: result.requiresLaterGate });
     return result;
   } catch (error) {
-    error.rollback = await rollback({ manifest: target, originalEnv: original.content, appliedEnv, envMutationOwned, originalApi: preflight.readbacks.api, expectedAllowlist: `${mapping.digest}=${mapping.userId}`, command, commandEnv, sealedName, sealed, currentStopped, stopStateUnknown: error.stopStateUnknown === true, replacementCreated, createResponseUnknown: error.createResponseUnknown === true, renameResponseUnknown: error.renameResponseUnknown === true });
+    envMutationOwned ||= error.envReplaced === true;
+    error.rollback = await rollback({ manifest: target, originalEnv: original.content, appliedEnv, envMutationOwned, originalApi: preflight.readbacks.api, expectedAllowlist: `${mapping.digest}=${mapping.userId}`, command, commandEnv, sealedName, sealed, currentStopped, stopStateUnknown: error.stopStateUnknown === true, replacementCreated, replacementId, createResponseUnknown: error.createResponseUnknown === true, renameResponseUnknown: error.renameResponseUnknown === true });
     throw error;
   }
 }
@@ -820,10 +908,10 @@ export function sanitizeGoogleRegistrationEnableError(error) {
 }
 
 async function main() {
-  const manifestPath = process.env.STAGING_GOOGLE_AUTH_RUNTIME_MANIFEST ?? '';
+  const manifestPath = process.env.STAGING_GOOGLE_REGISTRATION_RUNTIME_MANIFEST ?? '';
   const mappingFile = process.env.STAGING_GOOGLE_REGISTRATION_MAPPING_FILE ?? '';
   const evidenceFile = process.env.STAGING_GOOGLE_REGISTRATION_EVIDENCE_FILE ?? '';
-  const manifest = await readGoogleAuthRuntimeManifest(manifestPath);
+  const manifest = readGoogleRegistrationRuntimeManifest(manifestPath);
   const result = await runStagingGoogleRegistrationEnable({ manifest, mappingFile, evidenceFile, execute: process.env.STAGING_GOOGLE_REGISTRATION_EXECUTE === '1' });
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
