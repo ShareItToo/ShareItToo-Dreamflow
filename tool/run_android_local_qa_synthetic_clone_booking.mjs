@@ -735,17 +735,48 @@ async function logout(driver) {
   }
 }
 
-async function selectPhoto(driver, slot, segment) {
+async function waitForPhotoPickerNode(driver, phase, findNode, errorCode, {
+  timeoutMs = 8000,
+  intervalMs = 250,
+  now = Date.now,
+  sleep = (ms) => new Promise((resolvePromise) => setTimeout(resolvePromise, ms)),
+} = {}) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 8000
+      || !Number.isFinite(intervalMs) || intervalMs <= 0 || intervalMs > timeoutMs) {
+    fail('synthetic_clone_runner_photo_picker_wait_invalid');
+  }
+  const deadline = now() + timeoutMs;
+  // External Android pickers populate asynchronously; never assume one snapshot is ready.
+  while (now() < deadline) {
+    let timer;
+    let snapshot;
+    try {
+      snapshot = await Promise.race([
+        driver.dump(phase),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error(errorCode)), Math.max(0, deadline - now()));
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+    if (now() >= deadline) break;
+    const node = findNode(snapshot.nodes);
+    if (node) return node;
+    await sleep(Math.min(intervalMs, deadline - now()));
+  }
+  fail(errorCode);
+}
+
+export async function selectPhoto(driver, slot, segment, waitOptions) {
   const label = `${slot} – ${SYNTHETIC_CLONE_UI_CONTRACT.pickerSuffix}`;
   await driver.tapVisibleLabel(label, `${segment}-photos`);
-  const picker = await driver.dump(`${segment}-photo-picker`);
-  const image = findPhotoPickerImageNode(picker.nodes);
-  if (!image) fail(`synthetic_clone_runner_photo_picker_image_missing:${segment}`);
+  const image = await waitForPhotoPickerNode(driver, `${segment}-photo-picker`,
+    findPhotoPickerImageNode, `synthetic_clone_runner_photo_picker_image_missing:${segment}`, waitOptions);
   const [x, y] = center(image.bounds);
   await driver.shell(['input', 'tap', String(x), String(y)]);
-  const doneDump = await driver.dump(`${segment}-photo-picker-done`);
-  const done = findPhotoPickerConfirmNode(doneDump.nodes);
-  if (!done) fail(`synthetic_clone_runner_photo_picker_confirm_missing:${segment}`);
+  const done = await waitForPhotoPickerNode(driver, `${segment}-photo-picker-done`,
+    findPhotoPickerConfirmNode, `synthetic_clone_runner_photo_picker_confirm_missing:${segment}`, waitOptions);
   const [doneX, doneY] = center(done.bounds);
   await driver.shell(['input', 'tap', String(doneX), String(doneY)]);
   // A completed slot intentionally disappears as a picker action.  Readiness

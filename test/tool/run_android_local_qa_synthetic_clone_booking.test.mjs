@@ -13,6 +13,7 @@ import {
   parseUiNodes,
   SerialUiAutomator,
   scrollViewportBounds,
+  selectPhoto,
   validateManualQrV3Payload,
   validateSyntheticCloneSessionManifest,
   viewportBounds,
@@ -141,6 +142,117 @@ function screenXml(labels) {
   return `<hierarchy>${labels.map((text, index) =>
     `<node text="${text}" clickable="true" enabled="true" bounds="[${index},0][200,80]" />`).join('')}</hierarchy>`;
 }
+
+const pickerImageXml = '<node content-desc="Foto wurde am 29.09.2026 11:37 aufgenommen" enabled="true" bounds="[20,40][120,140]" />';
+const pickerConfirmXml = '<node text="Fertig" enabled="true" bounds="[100,200][220,260]" />';
+
+function photoPickerFixture({ image = [], confirm = [] } = {}) {
+  let time = 0;
+  const events = [];
+  const snapshots = { image: [...image], confirm: [...confirm] };
+  return {
+    events,
+    advance: (ms) => { time += ms; },
+    waitOptions: {
+      timeoutMs: 100,
+      intervalMs: 25,
+      now: () => time,
+      sleep: async (ms) => { events.push(['sleep', ms]); time += ms; },
+    },
+    driver: {
+      tapVisibleLabel: async (...args) => { events.push(['open', ...args]); },
+      dump: async (phase) => {
+        events.push(['dump', phase]);
+        const queue = snapshots[phase.endsWith('-done') ? 'confirm' : 'image'];
+        return { nodes: parseUiNodes(`<hierarchy>${queue.shift() ?? ''}</hierarchy>`) };
+      },
+      shell: async (args) => { events.push(['shell', args]); },
+      waitContract: async (phase) => { events.push(['ready', phase]); },
+    },
+  };
+}
+
+for (const [segment, readyPhase] of [['pickup', 'accepted'], ['return', 'active']]) {
+  test(`Photo Picker waits for delayed image and confirmation in ${segment}`, async () => {
+    const fixture = photoPickerFixture({
+      image: ['', pickerImageXml.replace('enabled="true"', 'enabled="false"'), pickerImageXml],
+      confirm: ['', '', '', pickerConfirmXml],
+    });
+    await selectPhoto(fixture.driver, 'Übersicht', segment, fixture.waitOptions);
+    assert.deepEqual(fixture.events.filter(([kind]) => kind === 'shell'), [
+      ['shell', ['input', 'tap', '70', '90']],
+      ['shell', ['input', 'tap', '160', '230']],
+    ]);
+    assert.equal(fixture.events.filter(([kind, phase]) => kind === 'dump' && phase === `${segment}-photo-picker`).length, 3);
+    assert.equal(fixture.events.filter(([kind, phase]) => kind === 'dump' && phase === `${segment}-photo-picker-done`).length, 4);
+    assert.deepEqual(fixture.events.at(-1), ['ready', readyPhase]);
+    const firstTap = fixture.events.findIndex(([kind]) => kind === 'shell');
+    const firstConfirmation = fixture.events.findIndex(([kind, phase]) => kind === 'dump' && phase.endsWith('-done'));
+    assert.ok(firstConfirmation > firstTap);
+  });
+}
+
+test('Photo Picker image deadline fails closed without tapping or reading confirmation', async () => {
+  const fixture = photoPickerFixture();
+  await assert.rejects(selectPhoto(fixture.driver, 'Detail', 'pickup', fixture.waitOptions),
+    /^Error: synthetic_clone_runner_photo_picker_image_missing:pickup$/);
+  assert.equal(fixture.events.filter(([kind]) => kind === 'dump').length, 4);
+  assert.equal(fixture.events.some(([kind]) => kind === 'shell' || kind === 'ready'), false);
+  assert.equal(fixture.events.some(([kind, phase]) => kind === 'dump' && phase.endsWith('-done')), false);
+});
+
+test('Photo Picker confirmation deadline never invents confirmation or readiness', async () => {
+  const fixture = photoPickerFixture({ image: [pickerImageXml] });
+  await assert.rejects(selectPhoto(fixture.driver, 'Detail', 'return', fixture.waitOptions),
+    /^Error: synthetic_clone_runner_photo_picker_confirm_missing:return$/);
+  assert.deepEqual(fixture.events.filter(([kind]) => kind === 'shell'), [
+    ['shell', ['input', 'tap', '70', '90']],
+  ]);
+  assert.equal(fixture.events.filter(([kind, phase]) => kind === 'dump' && phase.endsWith('-done')).length, 4);
+  assert.equal(fixture.events.some(([kind]) => kind === 'ready'), false);
+});
+
+test('Photo Picker rejects a matching image returned at the deadline', async () => {
+  const fixture = photoPickerFixture();
+  fixture.driver.dump = async () => {
+    fixture.advance(100);
+    return { nodes: parseUiNodes(pickerImageXml) };
+  };
+  await assert.rejects(selectPhoto(fixture.driver, 'Detail', 'pickup', fixture.waitOptions),
+    /synthetic_clone_runner_photo_picker_image_missing:pickup/);
+  assert.equal(fixture.events.some(([kind]) => kind === 'shell' || kind === 'ready'), false);
+});
+
+test('Photo Picker deadline also bounds a stalled dump and ignores its late result', async () => {
+  const fixture = photoPickerFixture();
+  let completeDump;
+  fixture.driver.dump = () => new Promise((resolve) => { completeDump = resolve; });
+  await assert.rejects(selectPhoto(fixture.driver, 'Detail', 'pickup', {
+    timeoutMs: 20, intervalMs: 5,
+  }), /synthetic_clone_runner_photo_picker_image_missing:pickup/);
+  completeDump({ nodes: parseUiNodes(pickerImageXml) });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(fixture.events.some(([kind]) => kind === 'shell' || kind === 'ready'), false);
+});
+
+test('Photo Picker transport errors abort immediately rather than retrying as absent media', async () => {
+  const fixture = photoPickerFixture();
+  let dumps = 0;
+  fixture.driver.dump = async () => { dumps += 1; throw new Error('synthetic_dump_failure'); };
+  await assert.rejects(selectPhoto(fixture.driver, 'Detail', 'pickup', fixture.waitOptions),
+    /^Error: synthetic_dump_failure$/);
+  assert.equal(dumps, 1);
+  assert.equal(fixture.events.some(([kind]) => kind === 'shell' || kind === 'sleep' || kind === 'ready'), false);
+});
+
+test('Photo Picker rejects unbounded or invalid polling configuration', async () => {
+  for (const options of [{ timeoutMs: Infinity }, { timeoutMs: 8001 }, { intervalMs: 0 }, { intervalMs: -1 }]) {
+    const fixture = photoPickerFixture();
+    await assert.rejects(selectPhoto(fixture.driver, 'Detail', 'pickup', options),
+      /synthetic_clone_runner_photo_picker_wait_invalid/);
+    assert.equal(fixture.events.some(([kind]) => kind === 'dump' || kind === 'shell'), false);
+  }
+});
 
 test('screen contract accepts exact persistent marker and route-specific pickup UI', () => {
   const xml = screenXml([
