@@ -128,12 +128,13 @@ legacy `shareittoo_staging` is never used by this lane.
 The source readback is exactly schema `98` with the manifest-bound ledger
 digest `796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196`.
 The pre-promotion image is exactly
-`ghcr.io/shareittoo/shareittoo-api:3c40ded07b58b8164d806628926ac4cb579afb0d`
+`ghcr.io/shareittoo/shareittoo-api:5d3b42613da73451e9d9169a7b99ca1aba0c4227`
 with digest
-`sha256:23c6bf4397dad4cd84764102b47980205e6bb97519f3b610aaa26ebf4a6fc683`.
+`sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90`.
 The new seal is
-`shareittoo-staging-api-alt-sealed-green-3c40ded0`. The existing bc86 seal
-and all eight older historical seals remain separately read-only validated, stopped containers
+`shareittoo-staging-api-alt-sealed-green-5d3b4261`. All 13 existing seals
+(the previous nine, the 3c40 seal and the three Google activation/registration/finalization seals)
+remain separately read-only validated, stopped containers
 with the exact Green label, run ID and immutable image digest; none is ever
 renamed, removed, restarted or network-targeted.
 Unknown extra Green containers fail the all-containers inventory gate. The
@@ -162,8 +163,8 @@ accepted first against that isolated database on loopback `127.0.0.1:18082`
 with memory mail, push, Identity and payment transports, on-device Listing
 AI, `SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED=0`, zero Listing-AI budget,
 the existing access/provider configuration and read-only MFA/Firebase mounts.
-In this
-provider-off lane the technical-sandbox paths are source
+In this post-enrollment lane, all payment and external Listing-AI providers
+remain off. The technical-sandbox paths are source
 readback only: the candidate receives only the read-only MFA/Firebase mounts
 and never opens or mounts either provider file. The synthetic user
 `synthetic_sandbox_user_pilot_20260919` is
@@ -172,8 +173,8 @@ again on canonical Green using its protected password file; credentials never
 enter commands, logs or evidence.
 
 Promotion preserves the protected pre-state: `DEPLOYMENT_ENVIRONMENT=test`,
-Firebase Auth and phone verification false, Google registration disabled,
-allowlist empty/absent, access gate true, payment memory, and Stripe live mode
+Firebase Auth true, phone verification false, Google registration disabled,
+registration mapping empty/absent, access gate true, payment memory, and Stripe live mode
 false. It also hard-pins `MAIL_TRANSPORT=memory`, `PUSH_TRANSPORT=memory`,
 `IDENTITY_VERIFICATION_TRANSPORT=memory`, `SIT_LISTING_AI_PROVIDER=on_device`,
 `SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED=0`, and
@@ -207,12 +208,22 @@ when cleanup or target/config preservation is uncertain.
 Preparation is local/read-only until the separately authorized operational
 gate is supplied; the target and config manifests stay outside Git:
 
-The 2026-09-29 read-only VPS inventory found the live 3c40 image, schema 98,
-and nine stopped Green seals including the retained bc86 witness. The
-protected VPS target manifest must bind that exact 3c40 prestate, the new
-3c40 seal name, and all nine retained descriptors. Its expected target digest
-is
-`2a7aa2030ac2f589fc1e64e64a0e28209eb7533482776c360e504efbb8bf768f`.
+The 2026-09-29 post-enrollment VPS readback binds the live 5d3 image, schema 98,
+and 13 stopped Green seals, including the retained bc86 witness. The protected
+target manifest must use schemaVersion `4`; schema `3`/provider-off promotion
+is rejected for this current target. Its required `authProfile` has kind
+`google-post-enrollment`, schemaVersion `1`, sourceImageDigest
+`sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90`,
+allowedUserIdsDigest
+`dea1a23d836f0c5966a889ac2bf8098ade2392e7a74e7d2819391dbc1ea7e2fd`,
+allowedUserIdsCount `4`, and googleUserIdDigest
+`8009329bd0eec86d923640e8d878ae2bf9117948a64d0f82f9460b03fef44a16`.
+The exact ordered access list must remain unchanged through candidate, final
+runtime and rollback; Firebase Auth stays enabled and registration stays closed.
+The separate finalized enrollment readback is `1|1|1`; never place raw user or
+provider identities in this contract. These live profile values, the new 5d3
+seal name and all 13 retained descriptors produce the normalized target digest
+`6e756c5734a47fd25d53185376aa1fbddc8212607011ffa35c0f04322e802fa4`.
 Do not run the promotion against a stale manifest.
 
 ```sh

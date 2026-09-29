@@ -18,10 +18,10 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.
 export const greenTarget = Object.freeze({
   composeProject: 'sit-green',
   apiContainer: 'shareittoo-staging-api',
-  // The next promotion seals the exact active 3c40 runtime. Every existing
+  // The next promotion seals the exact active 5d3 post-enrollment runtime. Every existing
   // stopped Green seal remains an immutable read-only witness and is never a
   // mutation target of this runner.
-  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-3c40ded0',
+  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-5d3b4261',
   retainedSealed: Object.freeze([
     Object.freeze({
       name: 'shareittoo-staging-api-alt-sealed-green-bc86f831',
@@ -95,6 +95,26 @@ export const greenTarget = Object.freeze({
       runId: '20260918011528-wp254',
       running: false,
     }),
+    Object.freeze({
+      name: 'shareittoo-staging-api-alt-sealed-green-3c40ded0',
+      image: 'ghcr.io/shareittoo/shareittoo-api:3c40ded07b58b8164d806628926ac4cb579afb0d@sha256:23c6bf4397dad4cd84764102b47980205e6bb97519f3b610aaa26ebf4a6fc683',
+      imageDigest: 'sha256:23c6bf4397dad4cd84764102b47980205e6bb97519f3b610aaa26ebf4a6fc683',
+      greenLabel: 'true',
+      runId: '20260918011528-wp254',
+      running: false,
+    }),
+    ...[
+      'shareittoo-staging-api-google-auth-rollback-fe00faaeb46a',
+      'shareittoo-staging-api-google-registration-rollback-5d3b42613da7',
+      'shareittoo-staging-api-google-registration-finalization-rollback-5d3b42613da7',
+    ].map((name) => Object.freeze({
+      name,
+      image: 'ghcr.io/shareittoo/shareittoo-api:5d3b42613da73451e9d9169a7b99ca1aba0c4227@sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90',
+      imageDigest: 'sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90',
+      greenLabel: 'true',
+      runId: '20260918011528-wp254',
+      running: false,
+    })),
   ]),
   databaseContainer: 'sit-green-postgres-20260918011528-wp254',
   databaseVolume: 'sit-green-volume-20260918011528-wp254',
@@ -106,8 +126,8 @@ export const greenTarget = Object.freeze({
   runId: '20260918011528-wp254',
   sourceSchema: 98,
   currentSchema: 98,
-  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:3c40ded07b58b8164d806628926ac4cb579afb0d',
-  prePromotionImageDigest: 'sha256:23c6bf4397dad4cd84764102b47980205e6bb97519f3b610aaa26ebf4a6fc683',
+  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:5d3b42613da73451e9d9169a7b99ca1aba0c4227',
+  prePromotionImageDigest: 'sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90',
   sourceLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentMigration: '098_booking_checkout_declaration_constraints.up.sql',
@@ -140,7 +160,8 @@ export const greenTechnicalSandboxHealth = technicalSandboxHealthProjection({
   mode: 'disabled',
 });
 
-// The broad Green promotion lane is provider-off. Keep this contract shared by
+// Shared defaults keep providers off; the required current-target authProfile
+// overrides only Firebase Auth to preserve the enrolled Google pilot. Keep this contract shared by
 // protected-env validation, runtime readback and final inventory validation so
 // stale compose overrides cannot silently select an external transport.
 export const greenBroadPromotionEnvironment = Object.freeze({
@@ -468,7 +489,7 @@ export function assertGreenTargetManifest(manifest) {
     'providerNetwork', 'uploadsVolume', 'networkInternal', 'sourceSchema',
     'currentSchema', 'sourceLedgerDigest', 'currentLedgerDigest',
     'prePromotionImage', 'prePromotionImageDigest', 'sealedApiContainer', 'retainedSealed', 'targetDigest',
-    ...(manifest?.schemaVersion === 4 ? ['authProfile'] : []),
+    'authProfile',
   ], 'green_target_manifest_shape_invalid');
   if (!Array.isArray(manifest.retainedSealed) || manifest.retainedSealed.length !== greenTarget.retainedSealed.length) fail('green_retained_sealed_descriptor_shape_invalid');
   manifest.retainedSealed.forEach((descriptor) => {
@@ -482,7 +503,7 @@ export function assertGreenTargetManifest(manifest) {
       fail('green_retained_sealed_descriptor_invalid');
     }
   });
-  if (manifest.kind !== 'sit-green-staging-target' || ![3, 4].includes(manifest.schemaVersion)
+  if (manifest.kind !== 'sit-green-staging-target' || manifest.schemaVersion !== 4
       || manifest.composeProject !== greenTarget.composeProject
       || manifest.greenLabel !== 'com.shareittoo.sit.green=true'
       || manifest.runId !== greenTarget.runId
@@ -504,7 +525,7 @@ export function assertGreenTargetManifest(manifest) {
     fail('green_target_identity_mismatch');
   }
   if (!/^[0-9a-f]{64}$/u.test(manifest.targetDigest ?? '') || manifest.targetDigest !== normalizedGreenTargetDigest(manifest)) fail('green_target_digest_invalid');
-  const authProfile = manifest.schemaVersion === 4 ? assertGreenPostEnrollmentProfile(manifest.authProfile, manifest.prePromotionImageDigest) : null;
+  const authProfile = assertGreenPostEnrollmentProfile(manifest.authProfile, manifest.prePromotionImageDigest);
   const serialized = JSON.stringify(manifest);
   if (/shareittoo_staging|shareittoo-staging-postgres|latest|lookalike/iu.test(serialized)
       || containsForbiddenGreenTargetIdentifier(serialized)) fail('legacy_or_production_target_forbidden');

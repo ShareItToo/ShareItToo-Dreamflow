@@ -54,8 +54,10 @@ const providerNetworkId = '5'.repeat(64);
 const isolatedNetworkId = '1'.repeat(64);
 const isolatedDatabaseId = '2'.repeat(64);
 const candidateId = '3'.repeat(64);
+const enrolledGoogleId = 'synthetic-enrolled-google';
+const enrolledAllowedIds = `synthetic_sandbox_user_pilot_20260919,synthetic-owner,synthetic-renter,${enrolledGoogleId}`;
 const targetManifest = {
-  kind: 'sit-green-staging-target', schemaVersion: 3, composeProject: 'sit-green',
+  kind: 'sit-green-staging-target', schemaVersion: 4, composeProject: 'sit-green',
   greenLabel: 'com.shareittoo.sit.green=true', runId: greenTarget.runId,
   apiContainer: greenTarget.apiContainer, databaseContainer: greenTarget.databaseContainer,
   databaseVolume: greenTarget.databaseVolume, network: greenTarget.network,
@@ -64,12 +66,15 @@ const targetManifest = {
   sourceLedgerDigest: greenTarget.sourceLedgerDigest, currentLedgerDigest: greenTarget.currentLedgerDigest,
   prePromotionImage: greenTarget.prePromotionImage, prePromotionImageDigest: greenTarget.prePromotionImageDigest, sealedApiContainer: greenTarget.sealedApiContainer,
   retainedSealed: greenTarget.retainedSealed.map((descriptor) => ({ ...descriptor })),
+  authProfile: {
+    kind: 'google-post-enrollment', schemaVersion: 1,
+    sourceImageDigest: greenTarget.prePromotionImageDigest,
+    ...summarizeGreenAllowedIds(enrolledAllowedIds),
+    googleUserIdDigest: crypto.createHash('sha256').update(enrolledGoogleId).digest('hex'),
+  },
 };
 targetManifest.targetDigest = normalizedGreenTargetDigest(targetManifest);
-assert.equal(targetManifest.targetDigest, '2a7aa2030ac2f589fc1e64e64a0e28209eb7533482776c360e504efbb8bf768f');
 const prePromotionImageReference = `${greenTarget.prePromotionImage}@${greenTarget.prePromotionImageDigest}`;
-const enrolledGoogleId = 'synthetic-enrolled-google';
-const enrolledAllowedIds = `synthetic_sandbox_user_pilot_20260919,synthetic-owner,synthetic-renter,${enrolledGoogleId}`;
 function enrolledTargetManifest() {
   const manifest = {
     ...targetManifest,
@@ -127,11 +132,11 @@ const finalMounts = sourceMounts.filter((mount) => mount.destination === '/data/
   ...(mount.type === 'bind' ? { Source: mount.source } : { Name: mount.volume }),
   RW: !mount.readOnly,
 }));
-const greenRuntimeEnvEntries = Object.entries({ ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment }).map(([name, value]) => `${name}=${value}`);
+const greenRuntimeEnvEntries = Object.entries({ ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment, FIREBASE_AUTH_ENABLED: 'true', SIT_STAGING_ALLOWED_USER_IDS: enrolledAllowedIds }).map(([name, value]) => `${name}=${value}`);
 const originalApiIdentityRecord = {
   Id: 'api-original-id',
   State: { Running: false },
-  Config: { Image: greenTarget.prePromotionImage, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DATABASE_URL=postgres://shareittoo_green@green-db/shareittoo_green', 'FIREBASE_AUTH_ENABLED=false'] },
+  Config: { Image: greenTarget.prePromotionImage, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId }, Env: ['DATABASE_URL=postgres://shareittoo_green@green-db/shareittoo_green', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', ...greenRuntimeEnvEntries] },
   NetworkSettings: { Networks: {
     [greenTarget.network]: {
       NetworkID: targetNetworkId,
@@ -194,10 +199,10 @@ function restoreFixture(options, running = true) {
 
 test('Green target accepts only the exact verified resource identities', () => {
   assert.deepEqual(assertGreenTargetManifest(targetManifest), targetManifest);
-  assert.equal(targetManifest.schemaVersion, 3);
-  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:3c40ded07b58b8164d806628926ac4cb579afb0d');
-  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:23c6bf4397dad4cd84764102b47980205e6bb97519f3b610aaa26ebf4a6fc683');
-  assert.equal(targetManifest.sealedApiContainer, 'shareittoo-staging-api-alt-sealed-green-3c40ded0');
+  assert.equal(targetManifest.schemaVersion, 4);
+  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:5d3b42613da73451e9d9169a7b99ca1aba0c4227');
+  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90');
+  assert.equal(targetManifest.sealedApiContainer, 'shareittoo-staging-api-alt-sealed-green-5d3b4261');
   assert.deepEqual(targetManifest.retainedSealed.map((descriptor) => descriptor.name), [
     'shareittoo-staging-api-alt-sealed-green-bc86f831',
     'shareittoo-staging-api-alt-sealed-green',
@@ -208,6 +213,10 @@ test('Green target accepts only the exact verified resource identities', () => {
     'shareittoo-staging-api-alt-sealed-green-cffb4e43',
     'shareittoo-staging-api-alt-sealed-green-ea25e7cb',
     'shareittoo-staging-api-alt-sealed-green-d91b50a9',
+    'shareittoo-staging-api-alt-sealed-green-3c40ded0',
+    'shareittoo-staging-api-google-auth-rollback-fe00faaeb46a',
+    'shareittoo-staging-api-google-registration-rollback-5d3b42613da7',
+    'shareittoo-staging-api-google-registration-finalization-rollback-5d3b42613da7',
   ]);
   const retainedReadbacks = greenTarget.retainedSealed.map((descriptor) => ({
     Name: `/${descriptor.name}`,
@@ -668,7 +677,8 @@ test('buffer restore input preserves exact bytes and fails closed on early stdin
   );
 });
 
-for (const postEnrollment of [false, true]) test(`executor preserves ${postEnrollment ? 'post-enrollment auth' : 'provider-off defaults'} through candidate, recovery and rollback`, async () => {
+test('executor preserves required post-enrollment auth through candidate, recovery and rollback', async () => {
+  const postEnrollment = true;
   const root = mkdtempSync(path.join(os.tmpdir(), 'sit-green-runner-'));
   const configFile = path.join(root, 'green.env');
   const evidenceFile = path.join(root, 'green-promotion.json');
@@ -1124,7 +1134,8 @@ test('repeat-promotion inventory requires the exact Green DB host and retained f
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, prePromotionTuple: true, greenLabel: true, image: 'ghcr.io/shareittoo/shareittoo-api:wrong' } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
 });
 
-for (const postEnrollment of [false, true]) test(`final readback binds topology and protected cohort (enrolled=${postEnrollment})`, () => {
+test('final readback binds topology and required post-enrollment cohort', () => {
+  const postEnrollment = true;
   const plan = buildGreenPromotionPlan({ targetManifest: postEnrollment ? enrolledTargetManifest() : targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const record = {
     Id: 'a'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
@@ -1163,6 +1174,29 @@ for (const postEnrollment of [false, true]) test(`final readback binds topology 
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: [...record.Mounts, { Type: 'bind', Source: '/wrong/extra', Destination: '/extra', RW: false }] }, plan, expectedNetworkIds }), /green_final_(?:inventory_mismatch|mount_inventory_mismatch)/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Source: '/wrong/source' } : mount) }, plan, expectedNetworkIds }), /green_final_mount_inventory_mismatch/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Type: 'volume', Name: 'foreign-secret-volume', Source: undefined } : mount) }, plan, expectedNetworkIds }), /green_final_mount_inventory_mismatch/u);
+});
+
+test('live post-enrollment manifest binds all thirteen seals and the exact approved digests without raw IDs', () => {
+  const manifest = {
+    ...targetManifest,
+    authProfile: {
+      kind: 'google-post-enrollment', schemaVersion: 1,
+      sourceImageDigest: 'sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90',
+      allowedUserIdsDigest: 'dea1a23d836f0c5966a889ac2bf8098ade2392e7a74e7d2819391dbc1ea7e2fd',
+      allowedUserIdsCount: 4,
+      googleUserIdDigest: '8009329bd0eec86d923640e8d878ae2bf9117948a64d0f82f9460b03fef44a16',
+    },
+  };
+  manifest.targetDigest = normalizedGreenTargetDigest(manifest);
+  assert.equal(manifest.targetDigest, '6e756c5734a47fd25d53185376aa1fbddc8212607011ffa35c0f04322e802fa4');
+  assert.equal(assertGreenTargetManifest(manifest).retainedSealed.length, 13);
+  const readme = readFileSync(new URL('../ops/README.md', import.meta.url), 'utf8');
+  for (const value of [manifest.targetDigest, manifest.authProfile.sourceImageDigest,
+    manifest.authProfile.allowedUserIdsDigest, manifest.authProfile.googleUserIdDigest]) assert.ok(readme.includes(value));
+  const legacy = { ...manifest, schemaVersion: 3 };
+  delete legacy.authProfile;
+  legacy.targetDigest = normalizedGreenTargetDigest(legacy);
+  assert.throws(() => assertGreenTargetManifest(legacy), /green_target_manifest_shape_invalid/u);
 });
 
 test('post-enrollment target profile is required, digest-bound and rejects stale source binding', () => {
@@ -1539,6 +1573,7 @@ test('post-schema forward recovery creates only the successor and verifies its p
       currentRecord = preStartRecord;
       return { stdout: `${record.Id}\n` };
     }
+    if (options.phase === 'recovery_canonical_post_enrollment_identity_readback') return { stdout: '1\n' };
     if (options.phase.endsWith('final_image_readback')) return { stdout: JSON.stringify(image) };
     if (options.phase.endsWith('final_inventory_readback')) return { stdout: JSON.stringify(wrongFinalIdentity ? { ...(currentRecord ?? record), Id: 'b'.repeat(64) } : (currentRecord ?? record)) };
     if (options.phase.endsWith('final_health_probe') || options.phase.endsWith('final_ready_wait')) return { stdout: JSON.stringify(payload) };
@@ -1589,6 +1624,7 @@ test('stateful successor lifecycle reconciles lost attach/start responses and re
     const phase = options.phase;
     if (phase === 'recovery_canonical_schema_readback') return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n' };
     if (phase === 'recovery_canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
+    if (phase === 'recovery_canonical_post_enrollment_identity_readback') return { stdout: '1\n' };
     if (phase === 'recovery_successor_identity_readback') return { stdout: JSON.stringify(current) };
     if (phase === 'recovery_successor_exact_id_readback') {
       assert.deepEqual(args, ['inspect', '--format', '{{json .}}', id]);
@@ -1692,6 +1728,7 @@ test('forward recovery stops on a foreign final-name conflict before network att
     calls.push({ command, args, options });
     if (options.phase === 'recovery_canonical_schema_readback') return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n' };
     if (options.phase === 'recovery_canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
+    if (options.phase === 'recovery_canonical_post_enrollment_identity_readback') return { stdout: '1\n' };
     if (options.phase === 'recovery_final_create_no_host_port') return { code: 17, stdout: '' };
     if (options.phase === 'recovery_existing_final_inspect') return { stdout: JSON.stringify(foreign) };
     return { stdout: '' };
@@ -1707,6 +1744,7 @@ test('forward recovery stops on a foreign final-name conflict before network att
     if (options.phase === 'recovery_canonical_schema_readback') return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n' };
     if (options.phase === 'recovery_canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
     if (options.phase === 'recovery_final_create_no_host_port') return { code: 17, stdout: '' };
+    if (options.phase === 'recovery_canonical_post_enrollment_identity_readback') return { stdout: '1\n' };
     if (options.phase === 'recovery_existing_final_inspect') return { stdout: JSON.stringify(wrongExecution) };
     return { stdout: '' };
   };
