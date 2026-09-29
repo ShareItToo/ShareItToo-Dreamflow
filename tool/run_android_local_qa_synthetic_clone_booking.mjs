@@ -152,6 +152,13 @@ export function viewportBounds(nodes) {
   };
 }
 
+export function scrollViewportBounds(nodes) {
+  return nodes.find((node) => (
+    node.className === 'android.widget.ScrollView'
+      && node.bounds?.right > 0 && node.bounds?.bottom > 0
+  ))?.bounds ?? viewportBounds(nodes);
+}
+
 function requiredForPhase(phase) {
   const common = [SYNTHETIC_CLONE_UI_CONTRACT.title];
   const c = SYNTHETIC_CLONE_UI_CONTRACT;
@@ -430,7 +437,7 @@ export class SerialUiAutomator {
   }
 
   async #scrollForward(nodes) {
-    const viewport = viewportBounds(nodes);
+    const viewport = scrollViewportBounds(nodes);
     if (viewport.right <= 0 || viewport.bottom <= 0) {
       fail('synthetic_clone_runner_viewport_missing');
     }
@@ -452,7 +459,7 @@ export class SerialUiAutomator {
       const node = nodes.find((candidate) => candidate.bounds && candidate.enabled && candidate.clickable
         && [candidate.text, candidate.contentDesc, candidate.hint]
           .flatMap(labelVariants).includes(label));
-      const viewport = viewportBounds(nodes);
+      const viewport = scrollViewportBounds(nodes);
       if (node && node.bounds.top < viewport.bottom * 0.85) return node;
       if (attempt < maxScrolls) await this.#scrollForward(nodes);
     }
@@ -465,10 +472,17 @@ export class SerialUiAutomator {
     await this.shell(['input', 'tap', String(x), String(y)]);
   }
 
-  async enterField(label, value, phase) {
-    const { nodes } = await this.dump(phase);
-    const node = nodes.find((candidate) => candidate.bounds
-      && [candidate.hint, candidate.text].flatMap(labelVariants).includes(label));
+  async enterField(label, value, phase, { maxScrolls = 4 } = {}) {
+    let node;
+    for (let attempt = 0; attempt <= maxScrolls; attempt += 1) {
+      const { nodes } = await this.dump(`${phase}-field-${attempt}`);
+      node = nodes.find((candidate) => candidate.bounds
+        && [candidate.hint, candidate.text].flatMap(labelVariants).includes(label));
+      const viewport = scrollViewportBounds(nodes);
+      if (node && node.bounds.top < viewport.bottom * 0.92) break;
+      node = undefined;
+      if (attempt < maxScrolls) await this.#scrollForward(nodes);
+    }
     if (!node) fail(`synthetic_clone_runner_field_missing:${phase}:${label}`);
     const [x, y] = center(node.bounds);
     await this.shell(['input', 'tap', String(x), String(y)]);
@@ -516,7 +530,7 @@ export class SerialUiAutomator {
       const dump = await this.dump(phase);
       if ([...nodeLabels(dump.nodes)].some((label) => pattern.test(label))) return dump;
       if (revealBelowViewport && !revealed) {
-        const viewport = viewportBounds(dump.nodes);
+        const viewport = scrollViewportBounds(dump.nodes);
         const screenRight = viewport.right;
         const screenBottom = viewport.bottom;
         if (screenRight > 0 && screenBottom > 0) {

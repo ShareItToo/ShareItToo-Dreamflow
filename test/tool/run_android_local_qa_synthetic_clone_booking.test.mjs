@@ -12,6 +12,7 @@ import {
   findPhotoPickerImageNode,
   parseUiNodes,
   SerialUiAutomator,
+  scrollViewportBounds,
   validateManualQrV3Payload,
   validateSyntheticCloneSessionManifest,
   viewportBounds,
@@ -380,6 +381,42 @@ test('bounded reveal finds an initially omitted action and keeps swipes inside t
     { bounds: { left: 0, top: 0, right: 1440, bottom: 3120 } },
     { bounds: { left: 0, top: 0, right: 1440, bottom: 9000 } },
   ]), { left: 0, top: 0, right: 1440, bottom: 3120 });
+});
+
+test('field entry scrolls inside the resized app viewport when the keyboard hides the target', async () => {
+  const calls = [];
+  let scrolled = false;
+  const driver = new SerialUiAutomator({
+    device: 'physical-test',
+    now: () => 123,
+    spawnImpl: () => {
+      const listeners = new Map();
+      const child = {
+        once: (event, callback) => listeners.set(event, callback),
+        stdin: { end: () => queueMicrotask(() => listeners.get('close')?.(0)) },
+      };
+      return child;
+    },
+    execFileImpl: async (_file, args) => {
+      calls.push(args);
+      if (args.includes('swipe')) scrolled = true;
+      if (args.includes('cat')) {
+        return {
+          stdout: scrolled
+            ? '<hierarchy><node class="android.widget.FrameLayout" bounds="[0,0][1440,3120]" /><node class="android.widget.ScrollView" bounds="[0,556][1440,1975]" /><node hint="Exakter 6-stelliger Fallback-Code" enabled="true" bounds="[101,1500][1339,1647]" /></hierarchy>'
+            : '<hierarchy><node class="android.widget.FrameLayout" bounds="[0,0][1440,3120]" /><node class="android.widget.ScrollView" bounds="[0,556][1440,1975]" /></hierarchy>',
+        };
+      }
+      return { stdout: '' };
+    },
+  });
+  await driver.enterField('Exakter 6-stelliger Fallback-Code', '246810', 'return-fallback');
+  const swipe = calls.find((args) => args.includes('swipe'));
+  assert.deepEqual(swipe.slice(-7), ['input', 'swipe', '720', '1541', '720', '691', '350']);
+  assert.deepEqual(scrollViewportBounds([
+    { className: 'android.widget.FrameLayout', bounds: { left: 0, top: 0, right: 1440, bottom: 3120 } },
+    { className: 'android.widget.ScrollView', bounds: { left: 0, top: 556, right: 1440, bottom: 1975 } },
+  ]), { left: 0, top: 556, right: 1440, bottom: 1975 });
 });
 
 test('runner waits for a concrete challenge payload instead of the issuing button', async () => {
