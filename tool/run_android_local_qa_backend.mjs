@@ -233,7 +233,25 @@ function writeSyntheticSession({ email, password, accounts, cloneManifest }) {
   return path;
 }
 
+export function validateSyntheticPaymentReadback(value, { enabled, runId, cleaned = false }) {
+  if (!enabled) {
+    if (value !== undefined) fail('Unexpected synthetic payment capability.');
+    return;
+  }
+  if (!value || value.enabled !== !cleaned || value.runId !== runId
+      || value.marker?.persistentNotice !== 'Synthetischer Zahlungstest – kein echtes Geld/kein Vertrag/keine Auszahlung'
+      || value.marker?.syntheticTestOnly !== true || value.marker?.monetaryEffectMinor !== 0
+      || value.marker?.contractEligible !== false || value.marker?.payoutEligible !== false
+      || JSON.stringify(value.methods) !== '["synthetic"]'
+      || JSON.stringify(value.scenarios) !== '["challenge_then_capture","decline"]'
+      || value.states !== 0 || value.commands !== 0 || value.auditEvents !== 0) {
+    fail('Synthetic payment capability or cleanup binding is invalid.');
+  }
+}
+
 async function main() {
+  const syntheticPaymentFlag = process.env.SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE ?? '0';
+  if (!['0', '1'].includes(syntheticPaymentFlag)) fail('Synthetic payment flag must be 0 or 1.');
   const repositoryRoot = resolve(fileURLToPath(new URL('../', import.meta.url)));
   const backendRoot = resolve(repositoryRoot, 'backend');
   const postgresBin = await resolvePostgresBinDir();
@@ -255,6 +273,7 @@ async function main() {
   let device;
   let logDescriptor;
   let primaryError;
+  const cloneRunId = `wp255-${new Date().toISOString().replace(/[-:TZ.]/gu, '').slice(0, 14)}-${crypto.randomBytes(4).toString('hex')}`;
 
   try {
     await run(pg('initdb'), [
@@ -287,7 +306,6 @@ async function main() {
     const renterPassword = `Qa${crypto.randomBytes(18).toString('hex')}9!`;
     const email = ownerEmail;
     const password = ownerPassword;
-    const cloneRunId = `wp255-${new Date().toISOString().replace(/[-:TZ.]/gu, '').slice(0, 14)}-${crypto.randomBytes(4).toString('hex')}`;
     const cloneDatasetId = `wp255-green-clone-${crypto.randomBytes(6).toString('hex')}`;
     const cloneConfirmationSecret = crypto.randomBytes(48).toString('base64url');
     const backendEnvironment = {
@@ -306,6 +324,7 @@ async function main() {
       MAIL_TRANSPORT: 'memory',
       PUSH_TRANSPORT: 'memory',
       PAYMENT_TRANSPORT: 'memory',
+      SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE: '0',
       STRIPE_LIVEMODE: 'false',
       BOOKING_PILOT_MODE: 'pilot',
       PRIVATE_PILOT_V4_ENABLED: 'false',
@@ -407,6 +426,7 @@ async function main() {
     const cloneEnvironment = {
       ...backendEnvironment,
       SIT_SYNTHETIC_CLONE_BOOKING_LANE: '1',
+      SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE: syntheticPaymentFlag,
       SIT_SYNTHETIC_CLONE_OWNER_ID: ownerAccount.userId,
       SIT_SYNTHETIC_CLONE_RENTER_ID: renterAccount.userId,
       SIT_SYNTHETIC_DATASET_ID: cloneDatasetId,
@@ -414,6 +434,7 @@ async function main() {
       SIT_SYNTHETIC_CLONE_CONFIRMATION_SECRET: cloneConfirmationSecret,
     };
     backendChild = startBackend(cloneEnvironment);
+    cloneCleanupToken = ownerAccount.accessToken;
     await waitForReady(`http://127.0.0.1:${backendPort}/health/ready`, backendChild);
     const cloneStatusResponse = await fetch(`http://127.0.0.1:${backendPort}/v1/synthetic-clone/status`, {
       headers: { authorization: `Bearer ${ownerAccount.accessToken}` },
@@ -421,12 +442,12 @@ async function main() {
     });
     if (!cloneStatusResponse.ok) fail('Synthetic local QA clone status readback failed.');
     const cloneStatus = await cloneStatusResponse.json();
+    validateSyntheticPaymentReadback(cloneStatus.paymentTest, { enabled: syntheticPaymentFlag === '1', runId: cloneRunId });
     if (cloneStatus.principals.ownerId !== ownerAccount.userId
         || cloneStatus.principals.renterId !== renterAccount.userId
         || cloneStatus.cleaned !== false) {
       fail('Synthetic local QA clone status principal binding is invalid.');
     }
-    cloneCleanupToken = ownerAccount.accessToken;
     sessionPath = writeSyntheticSession({
       email,
       password,
@@ -439,6 +460,7 @@ async function main() {
         listingId: 'synthetic_clone_listing_wp255',
         routePrefix: '/api/v1/synthetic-clone',
         marker: 'Synthetischer Test – keine vertragliche oder finanzielle Wirkung',
+        ...(cloneStatus.paymentTest ? { paymentTest: cloneStatus.paymentTest } : {}),
       },
     });
 
@@ -500,9 +522,11 @@ async function main() {
           headers: { authorization: `Bearer ${cloneCleanupToken}` },
           signal: AbortSignal.timeout(5_000),
         });
-        if (!cleanupResponse.ok || (await cleanupResponse.json()).cleanupVerified !== true) {
+        const cleanup = await cleanupResponse.json();
+        if (!cleanupResponse.ok || cleanup.cleanupVerified !== true) {
           primaryError ??= new Error('Synthetic local QA clone cleanup verification failed.');
         }
+        validateSyntheticPaymentReadback(cleanup.paymentTest, { enabled: syntheticPaymentFlag === '1', runId: cloneRunId, cleaned: true });
       } catch {
         primaryError ??= new Error('Synthetic local QA clone cleanup request failed.');
       }

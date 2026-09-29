@@ -29,6 +29,7 @@ import {
   createSyntheticCloneBookingLane,
   SYNTHETIC_CLONE_PRINCIPALS,
 } from './synthetic_clone_booking_lane.js';
+import { assertSyntheticPaymentTestEnvelope } from './synthetic_clone_payment_test.js';
 
 async function writeIdentityVerificationWorkerAudit(client, {
   actor = null,
@@ -50,6 +51,16 @@ async function main() {
     enabled: syntheticCloneEnabled,
     bindHost: config.bindHost,
   });
+  const paymentTestEnvelope = {
+    requested: process.env.SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE ?? '0',
+    cloneEnabled: syntheticCloneEnabled,
+    localQa: process.env.SIT_LOCAL_QA_SYNTHETIC_IMAGE_SCREENING === 'true',
+    deploymentEnvironment: config.deploymentEnvironment,
+    bindHost: config.bindHost,
+    transport: config.payments.transport,
+    livemode: config.payments.livemode,
+  };
+  const paymentTestEnabled = assertSyntheticPaymentTestEnvelope(paymentTestEnvelope);
 
   await initializeDatabase();
   await verifyMailer();
@@ -57,6 +68,7 @@ async function main() {
   const syntheticCloneBookingLane = syntheticCloneEnabled
     ? createSyntheticCloneBookingLane({
       enabled: true,
+      paymentTestEnvelope: paymentTestEnabled ? paymentTestEnvelope : undefined,
       deploymentEnvironment: config.deploymentEnvironment,
       targetKind: process.env.SIT_SYNTHETIC_TARGET_KIND?.trim() || 'clone',
       datasetId: process.env.SIT_SYNTHETIC_DATASET_ID?.trim(),

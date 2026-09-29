@@ -285,6 +285,7 @@ node --check tool/prepare_android_local_qa_update.mjs
 node --test test/tool/android_local_qa_update_gate.test.mjs
 node --test test/tool/android_local_qa_update_evidence.test.mjs
 node --check tool/run_android_local_qa_backend.mjs
+node --test test/tool/synthetic_payment_local_qa_contract.test.mjs
 node --test backend/test/local_qa_server_boundary.test.js
 node --test backend/test/local_qa_synthetic_image_screening.test.js
 node --check tool/codex_local_dev.mjs

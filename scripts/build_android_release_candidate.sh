@@ -6,6 +6,14 @@ CHANNEL="${SIT_RELEASE_CHANNEL:-internal}"
 API_BASE_URL="${SIT_API_BASE_URL:-https://staging.shareittoo.com/api/v1}"
 REQUIRE_CLEAN="${SIT_REQUIRE_CLEAN:-1}"
 
+case "${SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE:-0}" in
+  0|'') ;;
+  *)
+    echo "ERROR: Synthetic payment tests are local-QA-only; release and Store candidates are forbidden." >&2
+    exit 1
+    ;;
+esac
+
 case "${SIT_SYNTHETIC_CLONE_BOOKING_LANE:-0}" in
   0|false|'') synthetic_clone_booking_lane=false ;;
   *)

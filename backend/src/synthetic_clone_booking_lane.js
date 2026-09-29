@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { createSyntheticClonePaymentTest, SyntheticPaymentTestError } from './synthetic_clone_payment_test.js';
 
 import {
   confirmationDigest,
@@ -239,6 +240,7 @@ export function createSyntheticCloneBookingLane({
   secret,
   clock = () => new Date(),
   fallbackCode = DEFAULT_FALLBACK_CODE,
+  paymentTestEnvelope = undefined,
 } = {}) {
   validateCloneIdentity({
     enabled,
@@ -257,6 +259,13 @@ export function createSyntheticCloneBookingLane({
   const bookings = new Map();
   const audit = [];
   let cleaned = false;
+  if (paymentTestEnvelope && (deploymentEnvironment !== 'test'
+      || paymentTestEnvelope.deploymentEnvironment !== deploymentEnvironment)) {
+    fail(503, 'synthetic_payment_clone_environment_mismatch');
+  }
+  const paymentTest = paymentTestEnvelope
+    ? createSyntheticClonePaymentTest({ envelope: paymentTestEnvelope, runId, getBooking, renterId })
+    : null;
 
   function timestamp() {
     return nowIso(clock());
@@ -498,6 +507,7 @@ export function createSyntheticCloneBookingLane({
       booking.audit.push(audit[audit.length - 1]);
     }
     bookings.clear();
+    const paymentCleanup = paymentTest?.cleanup();
     cleaned = true;
     const after = { bookings: bookings.size, listings: 0, photos: 0, challenges: 0 };
     record('synthetic_clone.cleanup_verified', { actorId, metadata: { before, after } });
@@ -505,6 +515,7 @@ export function createSyntheticCloneBookingLane({
       marker: SYNTHETIC_CLONE_NON_BINDING_MARKER,
       cleanupVerified: true,
       remainingResources: after,
+      ...(paymentCleanup ? { paymentTest: paymentCleanup } : {}),
       auditRetained: true,
       auditEventCount: audit.length,
       audit: clone(audit),
@@ -525,6 +536,7 @@ export function createSyntheticCloneBookingLane({
       bookings: bookings.size,
       auditEventCount: audit.length,
       cleaned,
+      ...(paymentTest ? { paymentTest: paymentTest.capability() } : {}),
       sideEffects: {
         platformContract: false,
         c2cContract: false,
@@ -540,6 +552,7 @@ export function createSyntheticCloneBookingLane({
 
   return Object.freeze({
     principals,
+    paymentTest,
     createBooking,
     acceptBooking,
     addPhoto,
@@ -570,11 +583,19 @@ export function registerSyntheticCloneBookingLaneRoutes(app, {
     try {
       await handler(req, res);
     } catch (error) {
-      if (error instanceof SyntheticCloneBookingLaneError) return errorJson(res, error);
+      if (error instanceof SyntheticCloneBookingLaneError || error instanceof SyntheticPaymentTestError) return errorJson(res, error);
       throw error;
     }
   });
   const actor = routeActor;
+  if (lane.paymentTest) {
+    app.get(`${SYNTHETIC_CLONE_BOOKING_ROUTE_PREFIX}/:id/payment-test`, ...auth, route(async (req, res) => {
+      res.json(lane.paymentTest.read({ actorId: actor(req), bookingId: req.params.id, requestedRunId: req.query.runId }));
+    }));
+    app.post(`${SYNTHETIC_CLONE_BOOKING_ROUTE_PREFIX}/:id/payment-test/commands`, ...auth, route(async (req, res) => {
+      res.json(lane.paymentTest.execute({ actorId: actor(req), bookingId: req.params.id, body: req.body }));
+    }));
+  }
   app.post(`${SYNTHETIC_CLONE_BOOKING_ROUTE_PREFIX}`, ...auth, route(async (req, res) => {
     res.status(201).json(lane.createBooking({ actorId: actor(req), listingId: req.body?.listingId }));
   }));
