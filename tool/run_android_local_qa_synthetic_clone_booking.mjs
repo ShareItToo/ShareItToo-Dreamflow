@@ -90,14 +90,26 @@ export function parseBounds(value) {
   return { left, top, right, bottom };
 }
 
+function decodeXmlAttribute(value) {
+  const named = Object.freeze({ amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' });
+  return String(value ?? '').replace(
+    /&#(\d+);|&#x([0-9a-f]+);|&(amp|quot|apos|lt|gt);/giu,
+    (_match, decimal, hexadecimal, entity) => {
+      if (decimal) return String.fromCodePoint(Number.parseInt(decimal, 10));
+      if (hexadecimal) return String.fromCodePoint(Number.parseInt(hexadecimal, 16));
+      return named[String(entity).toLowerCase()] ?? '';
+    },
+  );
+}
+
 export function parseUiNodes(xml) {
   return [...String(xml ?? '').matchAll(/<node\b([^>]*)\/>/gu)].map((match) => {
     const attrs = {};
     for (const [, key, value] of match[1].matchAll(/([\w-]+)="([^"]*)"/gu)) attrs[key] = value;
     return {
-      text: attrs.text ?? '',
-      hint: attrs.hint ?? '',
-      contentDesc: attrs['content-desc'] ?? '',
+      text: decodeXmlAttribute(attrs.text),
+      hint: decodeXmlAttribute(attrs.hint),
+      contentDesc: decodeXmlAttribute(attrs['content-desc']),
       className: attrs.class ?? '',
       clickable: attrs.clickable === 'true',
       enabled: attrs.enabled !== 'false',
@@ -106,8 +118,17 @@ export function parseUiNodes(xml) {
   });
 }
 
+function labelVariants(value) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return [];
+  const firstLine = normalized.split(/\r?\n/u)[0]?.trim();
+  return firstLine && firstLine !== normalized ? [normalized, firstLine] : [normalized];
+}
+
 function nodeLabels(nodes) {
-  return new Set(nodes.flatMap((node) => [node.text, node.contentDesc, node.hint].filter(Boolean)));
+  return new Set(nodes.flatMap((node) => (
+    [node.text, node.contentDesc, node.hint].flatMap(labelVariants)
+  )));
 }
 
 function hasLabel(nodes, label) {
@@ -345,7 +366,8 @@ export class SerialUiAutomator {
   async tapLabel(label, phase) {
     const { nodes } = await this.dump(phase);
     const node = nodes.find((candidate) => candidate.bounds && candidate.enabled
-      && (candidate.text === label || candidate.contentDesc === label || candidate.hint === label));
+      && [candidate.text, candidate.contentDesc, candidate.hint]
+        .flatMap(labelVariants).includes(label));
     if (!node) fail(`synthetic_clone_runner_action_missing:${phase}:${label}`);
     const [x, y] = center(node.bounds);
     await this.shell(['input', 'tap', String(x), String(y)]);
@@ -455,8 +477,23 @@ export async function assertCloneReadiness(session, { fetchImpl = fetch } = {}) 
 }
 
 async function login(driver, roleAccount) {
-  const initial = await driver.dump('login');
+  let initial = await driver.dump('login');
   if (hasLabel(initial.nodes, SYNTHETIC_CLONE_UI_CONTRACT.title)) return;
+  if (!hasLabel(initial.nodes, 'E-Mail') || !hasLabel(initial.nodes, 'Passwort')) {
+    if (!hasLabel(initial.nodes, 'Anmelden')
+        && hasLabel(initial.nodes, SYNTHETIC_CLONE_UI_CONTRACT.navigation.profile)) {
+      await driver.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.navigation.profile, 'guest-navigation');
+      initial = await driver.waitForAny(
+        ['Anmelden', SYNTHETIC_CLONE_UI_CONTRACT.title],
+        'guest-profile',
+      );
+    }
+    if (hasLabel(initial.nodes, SYNTHETIC_CLONE_UI_CONTRACT.title)) return;
+    if (hasLabel(initial.nodes, 'Anmelden')) {
+      await driver.tapLabel('Anmelden', 'guest-profile');
+      initial = await driver.waitForAny(['E-Mail'], 'login-route');
+    }
+  }
   const emailField = initial.nodes.find((node) => node.hint === 'E-Mail' && node.bounds);
   const passwordField = initial.nodes.find((node) => node.hint === 'Passwort' && node.bounds);
   const submit = initial.nodes.find((node) => node.contentDesc === 'Anmelden' && node.bounds);

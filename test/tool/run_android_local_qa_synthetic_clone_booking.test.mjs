@@ -52,6 +52,13 @@ test('physical runner launches the side-by-side local-QA package only', () => {
   assert.doesNotMatch(runnerSource, /`\$\{APPLICATION_ID\}\/\.MainActivity`/u);
 });
 
+test('UI parser decodes Android XML entities and keeps the bottom-nav label', () => {
+  const [node] = parseUiNodes(
+    '<hierarchy><node content-desc="Mein SIT&#10;Tab 5 of 5" bounds="[0,0][20,20]" /></hierarchy>',
+  );
+  assert.equal(node.contentDesc, 'Mein SIT\nTab 5 of 5');
+});
+
 function screenXml(labels) {
   return `<hierarchy>${labels.map((text, index) =>
     `<node text="${text}" clickable="true" enabled="true" bounds="[${index},0][200,80]" />`).join('')}</hierarchy>`;
@@ -187,6 +194,28 @@ test('physical runner clears only the side-by-side QA app before login', async (
     'clear',
     'com.shareittoo.app.qa',
   ]]);
+});
+
+test('label tapping accepts the first line of Android bottom-navigation semantics', async () => {
+  const calls = [];
+  const driver = new SerialUiAutomator({
+    device: 'physical-test',
+    now: () => 123,
+    execFileImpl: async (_file, args) => {
+      calls.push(args);
+      if (args.includes('cat')) {
+        return {
+          stdout: '<hierarchy><node content-desc="Mein SIT&#10;Tab 5 of 5" enabled="true" bounds="[0,0][20,20]" /></hierarchy>',
+        };
+      }
+      return { stdout: '' };
+    },
+  });
+  await driver.tapLabel('Mein SIT', 'guest-navigation');
+  assert.ok(calls.some((args) => (
+    args.at(-4) === 'input' && args.at(-3) === 'tap'
+      && args.at(-2) === '10' && args.at(-1) === '10'
+  )));
 });
 
 test('readiness requires actual route readback rather than manifest alone', async () => {
