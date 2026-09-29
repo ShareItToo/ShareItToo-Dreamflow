@@ -138,12 +138,12 @@ function hasLabel(nodes, label) {
 }
 
 function requiredForPhase(phase) {
-  const common = [SYNTHETIC_CLONE_UI_CONTRACT.title, SYNTHETIC_CLONE_UI_CONTRACT.notice];
+  const common = [SYNTHETIC_CLONE_UI_CONTRACT.title];
   const c = SYNTHETIC_CLONE_UI_CONTRACT;
   const stages = {
     // The audit card is rendered only after a booking exists; requiring it on
     // the initial route would make the route readiness check self-contradictory.
-    diagnostic: [...common, c.statusRefresh, c.bookingField, c.bookingLoad],
+    diagnostic: [...common, c.notice, c.statusRefresh, c.bookingField, c.bookingLoad],
     requested: [...common, c.status.requested, c.bookingField, c.bookingLoad],
     accepted: [...common, c.status.accepted, c.pickupPhotos],
     pickupPhotos: [...common, c.status.accepted, c.pickupPhotos, ...PHOTO_SLOTS.map((slot) => `${slot} – ${c.pickerSuffix}`)],

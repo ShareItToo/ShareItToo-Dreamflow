@@ -119,6 +119,15 @@ test('screen contract accepts exact persistent marker and route-specific pickup 
   assert.equal(parseUiNodes(xml).length, 8);
 });
 
+test('post-entry phases tolerate the notice being above the scrolled viewport', () => {
+  const xml = screenXml([
+    SYNTHETIC_CLONE_UI_CONTRACT.title,
+    SYNTHETIC_CLONE_UI_CONTRACT.status.accepted,
+    SYNTHETIC_CLONE_UI_CONTRACT.pickupPhotos,
+  ]);
+  assert.equal(assertSyntheticCloneInterface(xml, 'accepted').phase, 'accepted');
+});
+
 test('screen contract fails closed on missing marker or status action', () => {
   assert.throws(
     () => assertSyntheticCloneInterface(screenXml([SYNTHETIC_CLONE_UI_CONTRACT.title]), 'diagnostic'),
