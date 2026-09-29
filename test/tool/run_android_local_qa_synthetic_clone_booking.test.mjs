@@ -59,6 +59,17 @@ test('UI parser decodes Android XML entities and keeps the bottom-nav label', ()
   assert.equal(node.contentDesc, 'Mein SIT\nTab 5 of 5');
 });
 
+test('screen contract recognizes any semantic line in a compound field hint', () => {
+  const diagnostic = [
+    SYNTHETIC_CLONE_UI_CONTRACT.title,
+    SYNTHETIC_CLONE_UI_CONTRACT.notice,
+    SYNTHETIC_CLONE_UI_CONTRACT.statusRefresh,
+    SYNTHETIC_CLONE_UI_CONTRACT.bookingLoad,
+  ].map((value) => `<node content-desc="${value}" />`).join('');
+  const xml = `<hierarchy>${diagnostic}<node hint="Buchung&#10;${SYNTHETIC_CLONE_UI_CONTRACT.bookingField}" /></hierarchy>`;
+  assert.equal(assertSyntheticCloneInterface(xml, 'diagnostic').phase, 'diagnostic');
+});
+
 function screenXml(labels) {
   return `<hierarchy>${labels.map((text, index) =>
     `<node text="${text}" clickable="true" enabled="true" bounds="[${index},0][200,80]" />`).join('')}</hierarchy>`;

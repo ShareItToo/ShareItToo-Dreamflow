@@ -121,8 +121,10 @@ export function parseUiNodes(xml) {
 function labelVariants(value) {
   const normalized = String(value ?? '').trim();
   if (!normalized) return [];
-  const firstLine = normalized.split(/\r?\n/u)[0]?.trim();
-  return firstLine && firstLine !== normalized ? [normalized, firstLine] : [normalized];
+  return [...new Set([
+    normalized,
+    ...normalized.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean),
+  ])];
 }
 
 function nodeLabels(nodes) {
@@ -397,7 +399,8 @@ export class SerialUiAutomator {
 
   async enterField(label, value, phase) {
     const { nodes } = await this.dump(phase);
-    const node = nodes.find((candidate) => candidate.bounds && (candidate.hint === label || candidate.text === label));
+    const node = nodes.find((candidate) => candidate.bounds
+      && [candidate.hint, candidate.text].flatMap(labelVariants).includes(label));
     if (!node) fail(`synthetic_clone_runner_field_missing:${phase}:${label}`);
     const [x, y] = center(node.bounds);
     await this.shell(['input', 'tap', String(x), String(y)]);
