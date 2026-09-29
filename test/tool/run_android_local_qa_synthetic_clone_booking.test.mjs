@@ -61,6 +61,10 @@ test('physical runner launches the side-by-side local-QA package only', () => {
     /if \(hasLabel\(initial\.nodes, SYNTHETIC_CLONE_UI_CONTRACT\.statusRefresh\)\)/u,
   );
   assert.match(runnerSource, /tapLabel\('Back', 'guest-profile-back'\)/u);
+  assert.match(
+    runnerSource,
+    /async function enterIsolatedRole[\s\S]*resetLocalQaApp\(\)[\s\S]*launch\(\)[\s\S]*login\(driver, roleAccount\)/u,
+  );
 });
 
 test('UI parser decodes Android XML entities and keeps the bottom-nav label', () => {

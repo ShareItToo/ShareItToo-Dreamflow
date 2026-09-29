@@ -636,10 +636,15 @@ async function selectFourPhotos(driver, segment) {
   for (const slot of PHOTO_SLOTS) await selectPhoto(driver, slot, segment);
 }
 
+async function enterIsolatedRole(driver, roleAccount) {
+  await driver.resetLocalQaApp();
+  await driver.launch();
+  await login(driver, roleAccount);
+}
+
 export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayload, session, sleep = (ms) => new Promise((resolvePromise) => setTimeout(resolvePromise, ms)) }) {
   const validated = validateSyntheticCloneSessionManifest(session);
-  await primary.launch();
-  await login(primary, validated.renter);
+  await enterIsolatedRole(primary, validated.renter);
   await openClone(primary, 'renter');
   await primary.waitContract('diagnostic');
   await primary.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.createRequested, 'requested');
@@ -648,8 +653,7 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
   const bookingId = requestedDump.nodes.find((node) => UUID.test(node.text))?.text;
   if (!bookingId) fail('synthetic_clone_runner_booking_id_not_visible');
 
-  await logout(primary);
-  await login(primary, validated.owner);
+  await enterIsolatedRole(primary, validated.owner);
   await openClone(primary, 'owner');
   await primary.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.accept, 'accepted');
   await primary.waitContract('accepted');
@@ -678,8 +682,7 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
   if (qrDisplay) {
     // An optional second physical display enables a real camera scan.  The
     // verifier never receives a payload through ADB or an API shortcut.
-    await qrDisplay.launch();
-    await login(qrDisplay, validated.owner);
+    await enterIsolatedRole(qrDisplay, validated.owner);
     await openClone(qrDisplay, 'owner');
     await qrDisplay.enterField(SYNTHETIC_CLONE_UI_CONTRACT.bookingField, bookingId, 'pickup-display');
     await qrDisplay.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.bookingLoad, 'pickup-display');
@@ -690,8 +693,7 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
     await qrDisplay.waitContract('pickupChallenge');
   }
 
-  await logout(primary);
-  await login(primary, validated.renter);
+  await enterIsolatedRole(primary, validated.renter);
   await openClone(primary, 'renter');
   await primary.waitContract('pickupVerifier');
   if (qrDisplay) {
@@ -714,8 +716,7 @@ export async function runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayl
   const returnPresenter = await primary.dump('return-presenter-code');
   const fallback = returnPresenter.nodes.find((node) => /Fallback-Code:\s*\d{6}/u.test(node.text))?.text.match(/\d{6}/u)?.[0];
   if (!fallback) fail('synthetic_clone_runner_return_fallback_not_visible');
-  await logout(primary);
-  await login(primary, validated.owner);
+  await enterIsolatedRole(primary, validated.owner);
   await openClone(primary, 'owner');
   await primary.waitContract('returnVerifier');
   await primary.enterField(SYNTHETIC_CLONE_UI_CONTRACT.fallbackField, fallback, 'return-fallback');
@@ -757,12 +758,10 @@ async function main() {
   const readiness = await assertCloneReadiness(session);
   const primary = new SerialUiAutomator({ device });
   const qrDisplay = qrDevice ? new SerialUiAutomator({ device: qrDevice }) : null;
-  await primary.resetLocalQaApp();
   if (qrDisplay) {
     // The backend helper binds the primary phone.  The optional QR display is
     // attached after manifest readiness and receives the same loopback reverse;
     // no public/server endpoint is introduced.
-    await qrDisplay.resetLocalQaApp();
     await qrDisplay.reverseLoopback();
   }
   const flow = await runSyntheticClonePhysicalFlow({ primary, qrDisplay, qrPayload, session });

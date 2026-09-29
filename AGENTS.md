@@ -76,8 +76,9 @@ discover a mechanically stale source hash.
   shared page title, global test banner or navigation-card text is not proof
   that the destination route opened.
 - Multi-role device runners must verify the visible current role before reusing
-  an authenticated route. They must navigate back and complete logout before
-  entering credentials for the next principal.
+  an authenticated route. Before entering the next principal they must either
+  complete and verify logout or clear only the isolated side-by-side QA app;
+  they must never clear or replace the Play app.
 - Recovery mutations must target the captured immutable provider/container ID,
   never a mutable name; stateful test executors must model or explicitly reject
   every accepted security/resource option.
