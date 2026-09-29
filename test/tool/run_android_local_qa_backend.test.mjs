@@ -35,3 +35,19 @@ test('local Android QA harness remains loopback-only, synthetic and cleanup-safe
     /writeFileSync\(descriptor,[\s\S]*accounts,\s*transientCredentialsOwnerOnly: true,\s*syntheticClone: \{ \.\.\.cloneManifest, enabled: true \}/u,
   );
 });
+
+test('backend child is isolated so terminal shutdown leaves clone cleanup reachable', () => {
+  assert.match(
+    harness,
+    /const startBackend = \(environment\) => spawn\(process\.execPath,[\s\S]*?detached: true,[\s\S]*?stdio: \['ignore', logDescriptor, logDescriptor\]/u,
+  );
+  const finallyBlock = harness.slice(harness.lastIndexOf('  } finally {'));
+  const cloneCleanup = finallyBlock.indexOf("/v1/synthetic-clone/bookings");
+  const reverseCleanup = finallyBlock.indexOf("'--remove'");
+  const proxyCleanup = finallyBlock.indexOf('await closeServer(proxy)');
+  const backendCleanup = finallyBlock.indexOf('await terminateChild(backendChild)');
+  assert.ok(cloneCleanup >= 0, 'clone cleanup must run during finalization');
+  assert.ok(cloneCleanup < reverseCleanup, 'clone cleanup must precede ADB cleanup');
+  assert.ok(reverseCleanup < proxyCleanup, 'ADB cleanup must precede proxy shutdown');
+  assert.ok(proxyCleanup < backendCleanup, 'proxy shutdown must precede backend termination');
+});

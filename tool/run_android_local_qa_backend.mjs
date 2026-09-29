@@ -341,6 +341,10 @@ async function main() {
     const startBackend = (environment) => spawn(process.execPath, ['src/server.js'], {
         cwd: backendRoot,
         env: environment,
+        // Keep the backend out of the harness terminal process group. A
+        // Ctrl-C must let the parent delete the synthetic clone over HTTP
+        // before it asks the child to shut down.
+        detached: true,
         stdio: ['ignore', logDescriptor, logDescriptor],
       });
     backendChild = startBackend(backendEnvironment);
