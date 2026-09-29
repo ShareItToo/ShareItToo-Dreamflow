@@ -393,7 +393,7 @@ export class SerialUiAutomator {
         String(Math.round(screenBottom * 0.35)),
         '350',
       ]);
-      await new Promise((resolvePromise) => setTimeout(resolvePromise, 350));
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 1_000));
     }
   }
 
@@ -543,8 +543,23 @@ async function openClone(driver, expectedRole) {
     if (!hasLabel(dump.nodes, SYNTHETIC_CLONE_UI_CONTRACT.title)) {
       fail('synthetic_clone_runner_clone_route_missing');
     }
-    await driver.revealLabel(SYNTHETIC_CLONE_UI_CONTRACT.title, 'profile-clone-route');
-    await driver.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.title, 'profile-clone-route');
+    let opened = false;
+    let lastOpenError;
+    for (let attempt = 0; attempt < 2 && !opened; attempt += 1) {
+      try {
+        await driver.revealLabel(SYNTHETIC_CLONE_UI_CONTRACT.title, 'profile-clone-route');
+        await driver.tapLabel(SYNTHETIC_CLONE_UI_CONTRACT.title, 'profile-clone-route');
+        await driver.waitForAny(
+          [SYNTHETIC_CLONE_UI_CONTRACT.statusRefresh],
+          'profile-clone-open',
+          { timeoutMs: 5_000 },
+        );
+        opened = true;
+      } catch (error) {
+        lastOpenError = error;
+      }
+    }
+    if (!opened) throw lastOpenError ?? new Error('synthetic_clone_runner_clone_route_open_failed');
   }
   dump = await driver.waitContract('diagnostic');
   if (!hasLabel(dump.nodes, `Rolle: ${expectedRole}`)) {
