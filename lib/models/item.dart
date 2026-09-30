@@ -54,6 +54,13 @@ class Item {
   final bool privateStatusConfirmed;
   // Server-owned optimistic-concurrency token for owner mutations.
   final int catalogRevision;
+  final String? catalogClass;
+  static const syntheticCatalogClass = 'synthetic_noncontractual_catalog_only';
+  static const syntheticCatalogNotice =
+      'Synthetische Katalogfixture – kein reales Angebot, kein Vertrag, keine Zahlung';
+  bool get isSyntheticCatalog => catalogClass == syntheticCatalogClass;
+  bool get bookingAllowed => !isSyntheticCatalog;
+  bool get paymentAllowed => !isSyntheticCatalog;
 
   const Item({
     required this.id,
@@ -95,6 +102,7 @@ class Item {
     this.approximateLocation = false,
     this.privateStatusConfirmed = false,
     this.catalogRevision = 1,
+    this.catalogClass,
   }) : priceRaw = priceRaw ?? pricePerDay;
 
   factory Item.fromJson(Map<String, dynamic> json) {
@@ -163,6 +171,7 @@ class Item {
       approximateLocation: json['approximateLocation'] == true,
       privateStatusConfirmed: json['privateStatusConfirmed'] == true,
       catalogRevision: (json['catalogRevision'] as num?)?.toInt() ?? 1,
+      catalogClass: json['catalogClass'] as String?,
     );
   }
 
@@ -213,6 +222,12 @@ class Item {
         'approximateLocation': approximateLocation,
         'privateStatusConfirmed': privateStatusConfirmed,
         'catalogRevision': catalogRevision,
+        if (isSyntheticCatalog) ...{
+          'catalogClass': catalogClass,
+          'bookingAllowed': false,
+          'paymentAllowed': false,
+          'syntheticNotice': syntheticCatalogNotice,
+        },
       };
 }
 

@@ -1,4 +1,5 @@
 import { parseRentalDates } from './booking_domain.js';
+import { assertNotSyntheticCatalogListing } from './staging_synthetic_catalog.js';
 import { BookingWorkflowError, quoteBooking } from './booking_workflow.js';
 import { postgresDateText } from './postgres_date.js';
 
@@ -262,6 +263,7 @@ export async function putRentalCartItem(client, {
   const itemId = clientIdentifier(clientItemId, 'invalid_rental_cart_item_id');
   const candidate = object(raw);
   const listingId = text(candidate.listingId ?? candidate.itemId, 120);
+  assertNotSyntheticCatalogListing(listingId);
   if (!listingId) throw new RentalCartError(400, 'rental_cart_listing_required');
   const dates = parseRentalDates(
     text(candidate.startDate, 10),
@@ -385,6 +387,7 @@ export async function recheckRentalCart(client, {
       FOR UPDATE`,
     [cart.id],
   );
+  items.rows.forEach((item) => assertNotSyntheticCatalogListing(item.listing_id));
   for (const item of items.rows) {
     try {
       const quote = await quoteBooking(client, {

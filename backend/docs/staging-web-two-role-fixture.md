@@ -1,16 +1,40 @@
 # Staging Web two-role fixture: preparation only
 
-Source boundary: `a16822038a4da747adb94713ec6f3b1e887adc89`.
-This package adds a **read-only preflight**, not a provisioner, live correction,
+Original preflight source: `a16822038a4da747adb94713ec6f3b1e887adc89`.
+Default-off catalog successor base: `c0fcb9b34227dfb8bf21e4ce6f40acb9629c62bd`.
+The Ops contract remains a **read-only preflight**, not a provisioner, live correction,
 catalog activation, authenticated browser acceptance or cleanup executor.
-No application, category filter, access gate or provider flag is changed.
+No live application, category filter, access gate or provider flag is changed.
 
 ## Why execution is blocked
 
+Source successor: `SIT_STAGING_SYNTHETIC_CATALOG_ENABLED` defines a default-off,
+test/staging-only class for the sole existing guest listing/upload binding.
+Production activation and invalid/multiple/non-Heilbronn bindings fail startup.
+Activation additionally requires exact `PAYMENT_TRANSPORT=memory` and
+`STRIPE_LIVEMODE=false`; absent values are rejected.
+The isolated catalog branch requires a synthetic owner, active moderation,
+approved category, Heilbronn/Germany display region, and an owner-matching,
+scanned allowlisted upload. No publication declaration is manufactured.
+Normal listing filters remain unchanged. Guest/authenticated projections carry
+`catalogClass`, `bookingAllowed:false`, `paymentAllowed:false` and the notice.
+Flutter cards/details/calendar entry show a nonbookable test view without real
+owner, price, condition or availability claims. Quote/create/group/cart workflow
+guards precede writes; bounded exact-route checks also block legacy sync.
+Both supply-enrichment POST routes are immutable for the fixture and return
+`409 synthetic_catalog_booking_forbidden` after the existing Staging access
+gate and before DB work. Anonymous requests retain the normal authentication
+rejection, without revealing fixture classification.
+No new unauthenticated relation queries or extra authentication passes exist.
+
+Activation requires a fresh proof of zero existing booking/group/cart/message/
+payment/evidence dependencies. This package neither activates the class nor
+provides the future manifest-bound activation/credential/cleanup executor.
+
 The existing `/v1/listings` route in `src/app.js` requires a private listing
 declaration and an allowed region before returning an active listing. Its
-normal booking path does not provide a server-enforced, noncontractual
-synthetic-catalog class. Setting the missing declaration/region on the observed
+normal booking path must not substitute for the separately gated synthetic
+class. Setting the missing declaration/region on the observed
 guest fixture would therefore fabricate normal publication evidence, not merely
 enable a harmless test illustration. A label alone is not a booking safeguard.
 
@@ -18,7 +42,7 @@ The local `synthetic_clone_booking_lane.js` is a separate loopback-only run
 contract. It must not be enabled on public Staging as a shortcut.
 
 The new preflight always returns `executable: false` and the explicit blocker
-`synthetic_catalog_domain_boundary_missing`, even when every input passes.
+`synthetic_catalog_activation_not_prepared`, even when every input passes.
 `execute: true`, extra CLI arguments, `SIT_WEB_FIXTURE_EXECUTE` and
 `SIT_WEB_FIXTURE_CONFIRM` are rejected before a database query. There are no
 credential-generation, SQL mutation, upload, HTTP login or cleanup branches.
@@ -145,6 +169,13 @@ pnpm test
 Focused tests cover read-only positive preparation, environment/principal/
 photo/availability drift, excluded prestate, dependencies, every query failure,
 rollback failure and mutation rejection. No real PG, login, image replacement
-or live cleanup pass is claimed. Next package must introduce and test a real
-server-enforced synthetic noncontractual catalog boundary plus UI notice and
-booking denial before any mutating adapter is built or enabled.
+or live cleanup pass is claimed. Next is the separately reviewed activation/
+credential/semantic-cleanup adapter with complete dependency and media-provenance
+binding. No live field or flag change follows from source-only boundary tests.
+
+This is a Web-only source successor, not an Android artifact approval. The old
+Android handoff's immutable app-source pin remains unchanged. Consumer closure
+requires its exact `Android compatibility file bytes changed: backend/src/app.js.`
+rejection; an unexpected PASS or different error fails that negative gate.
+A separately built and reviewed Android candidate is required for a successor
+Android claim.

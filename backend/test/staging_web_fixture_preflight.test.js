@@ -67,7 +67,7 @@ test('positive preparation reads exact two roles; never claims executable or cat
   const f = fixture(); const result = await preflightWebFixture(f);
   assert.equal(result.status, 'preflight-passed-no-mutation');
   assert.equal(result.executable, false);
-  assert.equal(result.blocker, 'synthetic_catalog_domain_boundary_missing');
+  assert.equal(result.blocker, 'synthetic_catalog_activation_not_prepared');
   assert.equal(f.calls[0], 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
   assert.equal(f.calls.at(-1), 'ROLLBACK');
   assert.ok(f.calls.every((sql) => /^(SELECT|BEGIN|SET LOCAL|ROLLBACK)\b/u.test(sql)));

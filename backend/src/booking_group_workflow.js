@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { assertNotSyntheticCatalogListing } from './staging_synthetic_catalog.js';
 
 import {
   buildBookingGroupFoundation,
@@ -414,6 +415,7 @@ export async function requestBookingGroup(client, {
   const candidate = object(raw, 'invalid_booking_group_request');
   const key = idempotencyKey(rawKey ?? candidate.idempotencyKey);
   const listingIds = uniqueListingIds(candidate.listingIds, { minimum: 2 });
+  listingIds.forEach((id) => assertNotSyntheticCatalogListing(id));
   const replay = await startCommand(client, {
     key,
     actorId: actor.id,

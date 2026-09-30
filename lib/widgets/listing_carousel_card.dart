@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lendify/widgets/synthetic_catalog_listing.dart';
 import 'package:lendify/models/item.dart';
 import 'package:provider/provider.dart';
 import 'package:lendify/services/localization_service.dart';
@@ -28,6 +29,7 @@ class ListingCarouselCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (item.isSyntheticCatalog) return SyntheticCatalogCard(item: item);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final cs = theme.colorScheme;

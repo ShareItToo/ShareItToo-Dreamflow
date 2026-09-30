@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:lendify/models/item.dart';
+import 'package:lendify/widgets/synthetic_catalog_listing.dart';
 import 'package:lendify/widgets/item_details_overlay.dart';
 import 'package:provider/provider.dart';
 import 'package:lendify/services/localization_service.dart';
@@ -68,6 +69,7 @@ class ItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (item.isSyntheticCatalog) return SyntheticCatalogCard(item: item);
     return LongPressFeedbackWrapper(
       child: InkWell(
         onTap: () => ItemDetailsOverlay.showFullPage(context,

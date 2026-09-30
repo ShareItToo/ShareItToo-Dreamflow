@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { rmSync, symlinkSync } from 'node:fs';
 import {
   chmod,
@@ -88,7 +89,11 @@ test('rejects same-path Android compatibility byte mutation', async (t) => {
   for (const file of candidateRolloverAndroidCompatibilityFiles) {
     const destination = join(root, file.path);
     await mkdir(dirname(destination), { recursive: true });
-    await writeFile(destination, await readFile(resolve(repositoryRoot, file.path)));
+    // Frozen accepted bytes: today's Web successor must not refresh this pin.
+    const bytes = execFileSync('git', ['show', `c0fcb9b34227dfb8bf21e4ce6f40acb9629c62bd:${file.path}`],
+      { cwd: repositoryRoot });
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), file.sha256);
+    await writeFile(destination, bytes);
   }
   assert.deepEqual(validateCandidateRolloverAndroidCompatibilityFiles({ repositoryRoot: root }),
     candidateRolloverAndroidCompatibilityPaths);
@@ -262,26 +267,25 @@ test('validates the dynamic current pointer through its versioned manifest', asy
   assert.deepEqual(result.runtimeDrift, []);
 });
 
-test('current pointer can bind the exact reviewed backend compatibility lane only', async (t) => {
+test('current Web successor cannot reuse the historical Android compatibility lane', async (t) => {
   const data = await currentRolloverFixture();
   t.after(async () => {
     await rm(data.root, { recursive: true, force: true });
     await rm(data.manifestPath, { force: true });
   });
-  const result = await validateCurrentRolloverCandidate({
+  await assert.rejects(() => validateCurrentRolloverCandidate({
     repositoryRoot,
     archiveRoot: data.archiveRoot,
     currentPath: data.pointerPath,
     changedPaths: ['backend/src/app.js'],
     allowReviewedAndroidBackendCompatibility: true,
-  });
-  assert.deepEqual(result.runtimeDrift, []);
+  }), { message: 'Android compatibility file bytes changed: backend/src/app.js.' });
   await assert.rejects(() => validateCurrentRolloverCandidate({
     repositoryRoot,
     archiveRoot: data.archiveRoot,
     currentPath: data.pointerPath,
     changedPaths: ['backend/src/unknown_runtime.js'],
-    allowReviewedAndroidBackendCompatibility: true,
+    allowReviewedAndroidBackendCompatibility: false,
   }), /Runtime-affecting files changed/u);
 });
 

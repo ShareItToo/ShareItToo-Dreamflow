@@ -313,6 +313,7 @@ import {
   listFinancialDocuments,
 } from './financial_documents.js';
 import { releaseMetadata } from './release.js';
+import { syntheticCatalogProjection, syntheticCatalogMutationGuard, SyntheticCatalogError } from './staging_synthetic_catalog.js';
 import {
   assertPrivatePilotAccountState,
   assertPrivatePilotStoredListing,
@@ -1282,7 +1283,7 @@ function assertBlueOceanListingCapabilityHandshake(raw) {
   return expected;
 }
 
-function buildCatalogSearch(search, { publicListingIds = null } = {}) {
+export function buildCatalogSearch(search, { publicListingIds = null, syntheticCatalog = config.syntheticCatalog } = {}) {
   const values = [];
   const bind = (value) => {
     values.push(value);
@@ -1298,9 +1299,14 @@ function buildCatalogSearch(search, { publicListingIds = null } = {}) {
     clauses.push(`listing.id = ANY(${bind(publicListingIds)}::text[])`);
   }
   if (config.privatePilotV4Enabled) {
+    const synthetic = syntheticCatalog.enabled ? bind(syntheticCatalog.listingId) : null;
     clauses.push(
-      'listing.private_status_confirmed_at IS NOT NULL',
-      `listing.private_pilot_region_code = ANY(${bind(config.privatePilot.allowedRegions)}::text[])`,
+      synthetic ? `(listing.private_status_confirmed_at IS NOT NULL OR listing.id = ${synthetic})`
+        : 'listing.private_status_confirmed_at IS NOT NULL',
+      synthetic ? `(listing.private_pilot_region_code = ANY(${bind(config.privatePilot.allowedRegions)}::text[])
+        OR (listing.id = ${synthetic} AND lower(btrim(listing.city)) = 'heilbronn'
+          AND lower(btrim(listing.country)) IN ('de', 'deutschland', 'germany')))`
+        : `listing.private_pilot_region_code = ANY(${bind(config.privatePilot.allowedRegions)}::text[])`,
       `concat(listing.category_id, E'\\x1f', listing.subcategory) = ANY(${bind(privatePilotAllowedCatalogKeys)}::text[])`,
       `EXISTS (
         SELECT 1 FROM users AS pilot_owner
@@ -1311,6 +1317,13 @@ function buildCatalogSearch(search, { publicListingIds = null } = {}) {
           AND pilot_owner.private_marketplace_review_status = 'clear'
       )`,
     );
+    if (synthetic) clauses.push(`(listing.id <> ${synthetic} OR (
+      lower(btrim(listing.city)) = 'heilbronn'
+      AND lower(btrim(listing.country)) IN ('de', 'deutschland', 'germany')
+      AND EXISTS (
+      SELECT 1 FROM users fixture_owner WHERE fixture_owner.id = listing.owner_id
+        AND fixture_owner.profile->>'syntheticOnly' = 'true'
+        AND length(fixture_owner.profile->>'syntheticMarker') > 0)))`);
   }
   let distanceExpression = 'NULL::double precision';
   if (search.latitude !== null && search.longitude !== null) {
@@ -1356,7 +1369,7 @@ function buildCatalogSearch(search, { publicListingIds = null } = {}) {
   const limit = bind(search.limit + 1);
   const offset = bind(search.offset);
   return {
-    text: `SELECT listing.payload, media.storage_names, ${distanceExpression} AS distance_km
+    text: `SELECT listing.id AS catalog_listing_id, listing.payload, media.storage_names, ${distanceExpression} AS distance_km
       FROM listings AS listing
       JOIN LATERAL (
         SELECT array_agg(upload.storage_name ORDER BY upload.created_at) AS storage_names
@@ -1365,6 +1378,9 @@ function buildCatalogSearch(search, { publicListingIds = null } = {}) {
           AND upload.purpose = 'listing_image'
           AND upload.visibility = 'public'
           AND upload.content_scan_status = 'passed'
+          ${syntheticCatalog.enabled ? `AND (listing.id <> ${bind(syntheticCatalog.listingId)}
+            OR (upload.storage_name = ${bind(syntheticCatalog.uploadName)}
+              AND upload.owner_id = listing.owner_id))` : ''}
       ) AS media ON cardinality(media.storage_names) > 0
       WHERE ${clauses.join('\n AND ')}
       ORDER BY ${orderBy}
@@ -1383,7 +1399,8 @@ function publicListingFromRow(row) {
         return storageName && allowed.has(storageName);
       })
     : [];
-  return shapePublicListing({ ...payload, photos }, { distanceKm: row.distance_km });
+  return syntheticCatalogProjection(shapePublicListing({ ...payload, photos }, { distanceKm: row.distance_km }),
+    config.syntheticCatalog, row.catalog_listing_id ?? payload.id);
 }
 
 function rentalPayload(raw, { id, itemId, ownerId, renterId, existingStatus = null }) {
@@ -2317,6 +2334,7 @@ export function createApp({
   }));
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: false, limit: '20kb' }));
+  app.use(syntheticCatalogMutationGuard({ configuration: config.syntheticCatalog }));
   if (syntheticCloneBookingLane) {
     registerSyntheticCloneBookingLaneRoutes(app, {
       lane: syntheticCloneBookingLane,
@@ -4434,7 +4452,7 @@ export function createApp({
 
   app.get('/v1/listings/mine', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
     const result = await pool.query(
-      `SELECT payload, catalog_revision
+      `SELECT id, payload, catalog_revision
          FROM listings
         WHERE owner_id = $1
         ORDER BY created_at DESC
@@ -4442,10 +4460,10 @@ export function createApp({
       [req.auth.userId],
     );
     res.json({
-      listings: result.rows.map((row) => ownedListingPayload(
+      listings: result.rows.map((row) => syntheticCatalogProjection(ownedListingPayload(
         row.payload,
         row.catalog_revision,
-      )),
+      ), config.syntheticCatalog, row.id ?? row.payload.id)),
     });
   }));
 
@@ -7673,7 +7691,7 @@ export function createApp({
     const uploadFieldsExceeded = error instanceof multer.MulterError && error.code === 'LIMIT_FIELD_COUNT';
     const invalidProcessedImage = error instanceof ImageProcessingError;
     const bookingConflict = error?.code === '23P01';
-    const workflowError = error instanceof BookingWorkflowError;
+    const workflowError = error instanceof BookingWorkflowError || error instanceof SyntheticCatalogError;
     const rentalCartError = error instanceof RentalCartError;
     const plannerInventoryError = error instanceof PlannerInventoryError;
     const listingSupplyEnrichmentError = error instanceof ListingSupplyEnrichmentError;

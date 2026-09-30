@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' as f;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lendify/models/item.dart';
+import 'package:lendify/widgets/synthetic_catalog_listing.dart';
 import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/models/user.dart' as model;
 import 'package:lendify/services/data_service.dart';
@@ -40,6 +41,7 @@ import 'package:lendify/theme.dart';
 class ItemDetailsOverlay {
   static Future<void> show(BuildContext context,
       {required Item item, model.User? owner}) async {
+    if (item.isSyntheticCatalog) return showFullPage(context, item: item);
     final userFuture =
         owner != null ? Future.value(owner) : _loadOwner(item.ownerId);
     await showModalBottomSheet<void>(
@@ -82,6 +84,12 @@ class ItemDetailsOverlay {
   }) async {
     if (savedCartScope != null && !await savedCartScope.isCurrent()) return;
     if (!context.mounted) return;
+    if (item.isSyntheticCatalog) {
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => SyntheticCatalogDetails(item: item),
+      ));
+      return;
+    }
     final userFuture =
         owner != null ? Future.value(owner) : _loadOwner(item.ownerId);
     final route = MaterialPageRoute<void>(
@@ -113,10 +121,12 @@ class LinkedListingDetailsScreen extends StatelessWidget {
   const LinkedListingDetailsScreen({super.key, required this.item});
 
   @override
-  Widget build(BuildContext context) => _ItemDetailsPage(
-        item: item,
-        ownerFuture: DataService.getUserById(item.ownerId),
-      );
+  Widget build(BuildContext context) => item.isSyntheticCatalog
+      ? SyntheticCatalogDetails(item: item)
+      : _ItemDetailsPage(
+          item: item,
+          ownerFuture: DataService.getUserById(item.ownerId),
+        );
 }
 
 class OwnerListingDetailsScreen extends StatelessWidget {
@@ -130,12 +140,14 @@ class OwnerListingDetailsScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => _ItemDetailsPage(
-        item: item,
-        ownerFuture: DataService.getUserById(item.ownerId),
-        isOwnerPreview: true,
-        overrideAppBarTitle: overrideAppBarTitle,
-      );
+  Widget build(BuildContext context) => item.isSyntheticCatalog
+      ? SyntheticCatalogDetails(item: item)
+      : _ItemDetailsPage(
+          item: item,
+          ownerFuture: DataService.getUserById(item.ownerId),
+          isOwnerPreview: true,
+          overrideAppBarTitle: overrideAppBarTitle,
+        );
 }
 
 class _ItemDetailsSheet extends StatefulWidget {

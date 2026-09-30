@@ -39,6 +39,7 @@ export const fixtureEnvironmentKeys = Object.freeze([
   'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST',
   'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'MAIL_TRANSPORT', 'PUSH_TRANSPORT',
   'SIT_WEB_FIXTURE_EXECUTE', 'SIT_WEB_FIXTURE_CONFIRM',
+  'SIT_STAGING_SYNTHETIC_CATALOG_ENABLED',
   'PGUSER', 'PGDATABASE', 'PGPORT', 'PGHOST', 'PGPASSWORD', 'PGPASSFILE',
   'PGBINARY', 'PGOPTIONS', 'PGSSLMODE', 'PGSSLNEGOTIATION',
   'PGCLIENT_ENCODING', 'PGREPLICATION', 'PGAPPNAME', 'PGCONNECT_TIMEOUT',
@@ -123,6 +124,7 @@ export function validateFixtureEnvironment(manifest, environment) {
   requireThat(environment.PRIVATE_PILOT_V4_ENABLED === 'true'
     && environment.PRIVATE_PILOT_ALLOWED_REGIONS === 'heilbronn'
     && environment.SIT_STAGING_GOOGLE_REGISTRATION_ENABLED === 'false'
+    && ['false', undefined].includes(environment.SIT_STAGING_SYNTHETIC_CATALOG_ENABLED)
     && !environment.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST
     && environment.PAYMENT_TRANSPORT === 'memory' && environment.STRIPE_LIVEMODE === 'false'
     && ['disabled', 'memory'].includes(environment.MAIL_TRANSPORT)
@@ -207,7 +209,7 @@ export async function preflightWebFixture({ manifest, environment, client, photo
   validateFixtureSnapshot(manifest, await readFixtureSnapshot(client, manifest));
   return { status: 'preflight-passed-no-mutation', executable: false,
     roles: 2, listings: 1, uploads: 1,
-    blocker: 'synthetic_catalog_domain_boundary_missing',
+    blocker: 'synthetic_catalog_activation_not_prepared',
     cleanup: 'semantic_safety_restore_audits_retained_no_session_reactivation' };
 }
 

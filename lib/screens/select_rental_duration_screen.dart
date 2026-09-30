@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:lendify/widgets/synthetic_catalog_listing.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/data_service.dart';
@@ -53,6 +54,7 @@ class _SelectRentalDurationScreenState
   @override
   void initState() {
     super.initState();
+    if (widget.item.isSyntheticCatalog) return;
     final now = DateTime.now();
     _firstDate = DateTime(now.year, now.month, now.day);
     _lastDate = DateTime(now.year + 1, now.month, now.day);
@@ -273,6 +275,9 @@ class _SelectRentalDurationScreenState
 
   @override
   Widget build(BuildContext context) {
+    if (widget.item.isSyntheticCatalog) {
+      return SyntheticCatalogDetails(item: widget.item);
+    }
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark
         ? Colors.black.withValues(alpha: 0.34)

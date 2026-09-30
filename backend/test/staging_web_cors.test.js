@@ -44,8 +44,10 @@ test('Compose defaults preserve internal Staging origin without adding Staging t
   const production = readFileSync(new URL('../compose.prod.yml', import.meta.url), 'utf8');
   assert.ok(staging.includes(`CORS_ORIGINS: \${CORS_ORIGINS:-${greenWebCorsOrigins}}`));
   const productionOrigins = /^\s+CORS_ORIGINS: (.+)$/mu.exec(production)[1];
-  assert.ok(productionOrigins.split(',').includes('https://shareittoo.com'));
-  assert.ok(!productionOrigins.includes('staging'));
+  const parsedOrigins = productionOrigins.split(',').map((origin) => new URL(origin));
+  assert.ok(parsedOrigins.some((origin) => origin.protocol === 'https:'
+    && origin.hostname === 'shareittoo.com' && origin.port === ''));
+  assert.ok(parsedOrigins.every((origin) => origin.hostname !== 'staging.shareittoo.com'));
   const promotion = readFileSync(new URL('../ops/green_staging_promotion.mjs', import.meta.url), 'utf8');
   assert.match(promotion, /candidate_runtime_flags_readback[^\n]+const names=\['CORS_ORIGINS'/u);
 });

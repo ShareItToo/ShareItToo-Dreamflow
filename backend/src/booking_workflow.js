@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { assertNotSyntheticCatalogListing } from './staging_synthetic_catalog.js';
 
 import {
   actorRoleForBooking,
@@ -714,6 +715,7 @@ export async function quoteBooking(client, {
   privatePilotAllowedRegions = [],
   persist = true,
 }) {
+  assertNotSyntheticCatalogListing(raw?.itemId ?? raw?.listingId);
   await expireBookingHolds(client);
   const candidate = object(raw);
   if (privatePilot) {
@@ -814,6 +816,7 @@ export async function createBooking(client, {
   privatePilotAllowedRegions = [],
   allowNonBindingSimulation = false,
 }) {
+  assertNotSyntheticCatalogListing(raw?.itemId ?? raw?.listingId);
   const candidate = object(raw);
   const simulationOnly = candidate.simulationOnly === true;
   if (simulationOnly && !allowNonBindingSimulation) {
