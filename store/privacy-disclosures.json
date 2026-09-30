@@ -824,7 +824,7 @@
     },
     {
       "path": "lib/screens/register_screen.dart",
-      "sha256": "fc8125ba6461e3c8408d8715a95ac560f8a7eb5cd77833a59973576224be7817"
+      "sha256": "7d48f249d84e6fcb99ebe32638267ba75b169bf4facb54b7b982cd92a910f0fc"
     },
     {
       "path": "lib/screens/wishlists_screen.dart",

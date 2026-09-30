@@ -31,7 +31,7 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _cardKey = GlobalKey();
-  final _stickyBarKey = GlobalKey();
+  final _actionsKey = GlobalKey();
 
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
@@ -161,7 +161,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         if (rect.contains(globalPosition)) return false;
       }
     }
-    final barCtx = _stickyBarKey.currentContext;
+    final barCtx = _actionsKey.currentContext;
     if (barCtx != null) {
       final box = barCtx.findRenderObject();
       if (box is RenderBox) {
@@ -500,8 +500,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final media = MediaQuery.of(context);
-
     final nameOk = _validateName(_nameCtrl.text) == null;
     final emailOk = _validateEmail(_emailCtrl.text) == null;
     final pwOk = _validatePassword(_pwCtrl.text) == null;
@@ -558,17 +556,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        const bottomBarHeight = _StickyAuthBar.kMinHeight;
-                        final bottomPadding =
-                            bottomBarHeight + 8 + media.padding.bottom;
-                        final availableHeight =
-                            constraints.maxHeight - bottomPadding - 8;
+                        final availableHeight = (constraints.maxHeight - 24)
+                            .clamp(0.0, double.infinity)
+                            .toDouble();
 
                         return SingleChildScrollView(
                           keyboardDismissBehavior:
                               ScrollViewKeyboardDismissBehavior.onDrag,
-                          padding:
-                              EdgeInsets.fromLTRB(16, 12, 16, bottomPadding),
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                           child: ConstrainedBox(
                             constraints:
                                 BoxConstraints(minHeight: availableHeight),
@@ -736,14 +731,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                     const SizedBox(height: 10),
                                                     const SocialAuthOrDivider(),
                                                     const SizedBox(height: 10),
-                                                    _LegalText(
-                                                      actionLabel:
-                                                          'Mit Google registrieren',
-                                                      onOpenTerms: _openTerms,
-                                                      onOpenPrivacy:
-                                                          _openPrivacy,
-                                                    ),
-                                                    const SizedBox(height: 4),
+                                                    if (AuthService
+                                                        .socialProviderEnabled(
+                                                            AuthSocialProvider
+                                                                .google)) ...[
+                                                      _LegalText(
+                                                        actionLabel:
+                                                            'Mit Google registrieren',
+                                                        onOpenTerms: _openTerms,
+                                                        onOpenPrivacy:
+                                                            _openPrivacy,
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                    ],
                                                     SocialAuthButton(
                                                         brand: SocialAuthBrand
                                                             .google,
@@ -762,14 +762,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                                 AuthSocialProvider
                                                                     .google)),
                                                     const SizedBox(height: 8),
-                                                    _LegalText(
-                                                      actionLabel:
-                                                          'Mit Apple registrieren',
-                                                      onOpenTerms: _openTerms,
-                                                      onOpenPrivacy:
-                                                          _openPrivacy,
-                                                    ),
-                                                    const SizedBox(height: 4),
+                                                    if (AuthService
+                                                        .socialProviderEnabled(
+                                                            AuthSocialProvider
+                                                                .apple)) ...[
+                                                      _LegalText(
+                                                        actionLabel:
+                                                            'Mit Apple registrieren',
+                                                        onOpenTerms: _openTerms,
+                                                        onOpenPrivacy:
+                                                            _openPrivacy,
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                    ],
                                                     SocialAuthButton(
                                                         brand: SocialAuthBrand
                                                             .apple,
@@ -789,14 +794,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                                 AuthSocialProvider
                                                                     .apple)),
                                                     const SizedBox(height: 8),
-                                                    _LegalText(
-                                                      actionLabel:
-                                                          'Mit Facebook registrieren',
-                                                      onOpenTerms: _openTerms,
-                                                      onOpenPrivacy:
-                                                          _openPrivacy,
-                                                    ),
-                                                    const SizedBox(height: 4),
+                                                    if (AuthService
+                                                        .socialProviderEnabled(
+                                                            AuthSocialProvider
+                                                                .facebook)) ...[
+                                                      _LegalText(
+                                                        actionLabel:
+                                                            'Mit Facebook registrieren',
+                                                        onOpenTerms: _openTerms,
+                                                        onOpenPrivacy:
+                                                            _openPrivacy,
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                    ],
                                                     SocialAuthButton(
                                                         brand: SocialAuthBrand
                                                             .facebook,
@@ -819,6 +829,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                           ),
                                         ),
                                       ),
+                                      // Consent and CTA share the form's scroll flow:
+                                      // wrapped legal text has no fixed footer height.
+                                      KeyedSubtree(
+                                        key: _actionsKey,
+                                        child: _RegistrationActions(
+                                          busy: _busy,
+                                          onSubmit: _busy ? null : _register,
+                                          onOpenTerms: _openTerms,
+                                          onOpenPrivacy: _openPrivacy,
+                                          onLogin: () =>
+                                              Navigator.of(context).maybePop(),
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -830,26 +853,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                 ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 140),
-              curve: Curves.easeOut,
-              opacity: _peekBackdrop ? 0.0 : 1.0,
-              child: KeyedSubtree(
-                key: _stickyBarKey,
-                child: _StickyAuthBar(
-                  busy: _busy,
-                  onSubmit: _busy ? null : _register,
-                  onOpenTerms: _openTerms,
-                  onOpenPrivacy: _openPrivacy,
-                  onLogin: () => Navigator.of(context).maybePop(),
-                ),
               ),
             ),
           ),
@@ -1230,14 +1233,13 @@ class _HintRow extends StatelessWidget {
   }
 }
 
-class _StickyAuthBar extends StatelessWidget {
-  static const kMinHeight = 130.0;
+class _RegistrationActions extends StatelessWidget {
   final bool busy;
   final VoidCallback? onSubmit;
   final VoidCallback onOpenTerms;
   final VoidCallback onOpenPrivacy;
   final VoidCallback onLogin;
-  const _StickyAuthBar(
+  const _RegistrationActions(
       {required this.busy,
       required this.onSubmit,
       required this.onOpenTerms,
@@ -1270,13 +1272,16 @@ class _StickyAuthBar extends StatelessWidget {
                     label: busy ? 'Registrieren…' : 'Kostenlos registrieren',
                     onTap: onSubmit),
                 const SizedBox(height: 6),
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Text('Schon bei SIT? ',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.85),
-                          fontSize: 13)),
-                  _TextLink(label: 'Anmelden', onTap: onLogin),
-                ]),
+                Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text('Schon bei SIT? ',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              fontSize: 13)),
+                      _TextLink(label: 'Anmelden', onTap: onLogin),
+                    ]),
               ],
             ),
           ),
@@ -1301,7 +1306,7 @@ class _PrimaryCTAButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        height: 56,
+        constraints: const BoxConstraints(minHeight: 56),
         decoration: BoxDecoration(
           gradient: onTap == null
               ? LinearGradient(colors: [
@@ -1328,7 +1333,7 @@ class _PrimaryCTAButton extends StatelessWidget {
                 offset: const Offset(0, 16))
           ],
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -1350,7 +1355,7 @@ class _PrimaryCTAButton extends StatelessWidget {
             ],
             Flexible(
                 child: Text(label,
-                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium?.copyWith(
                         fontSize: 14,
                         fontWeight: FontWeight.w900,
