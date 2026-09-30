@@ -593,6 +593,11 @@ Reproducible input preparation after separate authorization (no DB operation):
    nonce/name and verifies absence, including a lost create-response case.
    Cleanup failure overrides success; there is no automatic retry.
 
+   A read-only replay reports the already committed truth instead of failing:
+   activation may return `already-prepared-runtime-still-blocked`, while cleanup
+   may return `already-cleaned`. The runner accepts those only for their matching
+   operation; write-mode and cross-operation status combinations remain rejected.
+
 For cleanup, retain the original activation digest and unchanged semantic scope
 (including canonical photo path), but supply a fresh cleanup snapshot/draft and
 new host input/binding directories. The builder refuses to remap a historical

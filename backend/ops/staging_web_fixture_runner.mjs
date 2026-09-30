@@ -231,6 +231,27 @@ const docker = (args) => {
 };
 const inspect = (id) => JSON.parse(docker(['inspect', '--format', '{{json .}}', id]));
 
+const adapterResultStatuses = Object.freeze({
+  activate: Object.freeze({
+    readOnly: Object.freeze(['preflight-passed-no-mutation', 'already-prepared-runtime-still-blocked']),
+    execute: Object.freeze(['database-prepared-runtime-still-blocked', 'already-prepared-runtime-still-blocked']),
+  }),
+  cleanup: Object.freeze({
+    readOnly: Object.freeze(['preflight-passed-no-mutation', 'already-cleaned']),
+    execute: Object.freeze(['cleaned-noncatalogued-audits-retained', 'already-cleaned']),
+  }),
+});
+
+export function validateFixtureRunnerAdapterResult({ result, manifest, args, source }) {
+  const mode = args?.execute === false ? 'readOnly' : args?.execute === true ? 'execute' : null;
+  const allowed = adapterResultStatuses[manifest?.operation]?.[mode];
+  check(Array.isArray(allowed) && result?.operation === manifest.operation
+    && allowed.includes(result.status) && result.runtimeActivated === false
+    && result.sourceCommit === source.commit
+    && /^[a-f0-9]{64}$/u.test(result.manifestDigest)
+    && /^[a-f0-9]{64}$/u.test(result.activationDigest), 'fixture_runner_result_invalid');
+}
+
 export async function runFixtureContainer({ binding, args, source = readAdapterSource(), command = docker,
   inspectRecord = inspect, readInput = privateRuntimeInput, readEnv = () => readStablePrivateFile(envFile, { encoding: null, expectedMode: 0o600, expectedUid: 0 }),
   runtimeTreeDigest = fixtureRunnerTree(resolve(root, 'backend/src')), inputNames = () => readdirSync(binding.inputDirectory),
@@ -243,6 +264,7 @@ export async function runFixtureContainer({ binding, args, source = readAdapterS
     network: inspectRecord(binding.networkId), volume: inspectRecord(uploadsName),
     image: JSON.parse(command(['image', 'inspect', '--format', '{{json .}}', `ghcr.io/shareittoo/shareittoo-api:${binding.runtimeCommit}@${binding.imageDigest}`])), envBytes };
   const expectedEnv = validateFixtureRunnerInventory(inventory);
+  let manifest;
   if (draftPhoto) {
     check(args.execute === false && args.confirmSource === undefined && args.confirmRun === undefined
       && draftPhoto.sha256 === binding.photoSha256, 'fixture_runner_draft_read_only');
@@ -250,7 +272,7 @@ export async function runFixtureContainer({ binding, args, source = readAdapterS
   } else {
   check(args.file === binding.adapterFile && args.fileHash === binding.adapterFileSha256, 'fixture_runner_adapter_binding');
   const bytes = readInput(args.file); check(hash(bytes) === args.fileHash, 'fixture_runner_adapter_binding');
-  const manifest = JSON.parse(bytes); validateFixtureManifest(manifest.preflight);
+  manifest = JSON.parse(bytes); validateFixtureManifest(manifest.preflight);
   const bootstrap = binding.kind === 'sit-green-web-fixture-bootstrap';
   if (bootstrap) {
     const passwords = readPasswords(binding.inputDirectory);
@@ -295,9 +317,7 @@ export async function runFixtureContainer({ binding, args, source = readAdapterS
         ...(args.execute ? ['dedicated-seed-prepared-runtime-blocked', 'dedicated-seed-cleaned'] : [])].includes(result.status),
       'fixture_runner_bootstrap_result_invalid');
     } else {
-    check(result.runtimeActivated === false && result.sourceCommit === source.commit
-      && /^[a-f0-9]{64}$/u.test(result.manifestDigest) && /^[a-f0-9]{64}$/u.test(result.activationDigest)
-      && (!args.execute ? result.status === 'preflight-passed-no-mutation' : ['database-prepared-runtime-still-blocked', 'already-prepared-runtime-still-blocked', 'cleaned-noncatalogued-audits-retained', 'already-cleaned'].includes(result.status)), 'fixture_runner_result_invalid');
+    validateFixtureRunnerAdapterResult({ result, manifest, args, source });
     }
   } catch (error) { failure = error; }
   finally {

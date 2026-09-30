@@ -11,7 +11,8 @@ import { fixtureDigest, fixtureEnvironmentDigest, fixtureNotice, fixtureTarget }
 import { fixtureRunnerFingerprint, fixtureRunnerTree, verifyFixtureRunnerSourceFiles, validateFixtureRunnerBinding,
   validateFixtureRunnerInventory, buildFixtureRunnerLaunch, runFixtureContainer,
   assertFixtureRunnerReadableSources, prepareFixtureRunnerInput, buildFixtureRunnerBinding,
-  prepareBootstrapRunnerInput, writeBootstrapRunnerInput } from '../ops/staging_web_fixture_runner.mjs';
+  prepareBootstrapRunnerInput, writeBootstrapRunnerInput,
+  validateFixtureRunnerAdapterResult } from '../ops/staging_web_fixture_runner.mjs';
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const networkName = 'sit-green-network-20260918011528-wp254';
 const dbName = 'sit-green-postgres-20260918011528-wp254';
@@ -102,7 +103,7 @@ function fixture() {
         runtimeActivated: false, ...f.resultOverride });
       if (f.draftPhoto) return JSON.stringify({ status: 'draft-generated-read-only', runtimeActivated: false,
         sourceCommit: source.commit, manifestDigest: hash(JSON.stringify(f.manifest)), draft: f.manifest, ...f.resultOverride });
-      return JSON.stringify({ status: args.execute ? 'database-prepared-runtime-still-blocked' : 'preflight-passed-no-mutation', runtimeActivated: false,
+      return JSON.stringify({ status: args.execute ? 'database-prepared-runtime-still-blocked' : 'preflight-passed-no-mutation', operation: f.manifest.operation, runtimeActivated: false,
         sourceCommit: source.commit, manifestDigest: '7'.repeat(64), activationDigest: '7'.repeat(64), ...f.resultOverride });
     }
     if (command[0] === 'rm') { assert.equal(command.at(-1), f.runner.Id); if (f.failCleanup) throw Error('cleanup-failed'); f.runner = null; return ''; }
@@ -231,6 +232,45 @@ test('default container contract is read-only, exact immutable image/Green only,
   for (const [key, value] of Object.entries(result)) if (!['status', 'cleanup', 'runtimeActivated'].includes(key)) assert.match(value, /^(sha256:)?[a-f0-9]{40,64}$/u);
   const check = spawnSync(process.execPath, ['--input-type=module', '--check'], { input: create.at(-1), encoding: 'utf8' });
   assert.equal(check.status, 0, check.stderr);
+});
+
+test('adapter result contract accepts only the exact operation and execute replay matrix', () => {
+  const f = fixture();
+  const statuses = ['preflight-passed-no-mutation', 'already-prepared-runtime-still-blocked',
+    'database-prepared-runtime-still-blocked', 'already-cleaned', 'cleaned-noncatalogued-audits-retained'];
+  const matrix = {
+    activate: {
+      readOnly: ['preflight-passed-no-mutation', 'already-prepared-runtime-still-blocked'],
+      execute: ['database-prepared-runtime-still-blocked', 'already-prepared-runtime-still-blocked'],
+    },
+    cleanup: {
+      readOnly: ['preflight-passed-no-mutation', 'already-cleaned'],
+      execute: ['cleaned-noncatalogued-audits-retained', 'already-cleaned'],
+    },
+  };
+  for (const operation of ['activate', 'cleanup']) for (const execute of [false, true]) for (const status of statuses) {
+    const manifest = { ...f.manifest, operation };
+    const result = { status, operation, runtimeActivated: false, sourceCommit: f.source.commit,
+      manifestDigest: '7'.repeat(64), activationDigest: '8'.repeat(64) };
+    const input = { result, manifest, args: { execute }, source: f.source };
+    const allowed = matrix[operation][execute ? 'execute' : 'readOnly'].includes(status);
+    if (allowed) assert.doesNotThrow(() => validateFixtureRunnerAdapterResult(input));
+    else assert.throws(() => validateFixtureRunnerAdapterResult(input), /fixture_runner_result_invalid/u,
+      `${operation}/${execute ? 'execute' : 'readOnly'} must reject ${status}`);
+  }
+});
+
+test('read-only activation replay is truthful while result identity and digests remain fail-closed', async () => {
+  const f = fixture(); f.resultOverride = { status: 'already-prepared-runtime-still-blocked' };
+  assert.equal((await f.run()).status, 'already-prepared-runtime-still-blocked');
+  assert.equal(f.runner, null);
+  const strict = fixture(); strict.resultOverride = { status: 'already-prepared-runtime-still-blocked' };
+  for (const override of [{ operation: 'cleanup' }, { runtimeActivated: true }, { sourceCommit: 'f'.repeat(40) },
+    { manifestDigest: 'f'.repeat(63) }, { activationDigest: 'private-value' }]) {
+    strict.resultOverride = { status: 'already-prepared-runtime-still-blocked', ...override };
+    await assert.rejects(strict.run(), /fixture_runner_result_invalid/u);
+    assert.equal(strict.runner, null);
+  }
 });
 
 test('write mode requires exact source and run; environment or runtime SHA is not source authority', async () => {
