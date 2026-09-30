@@ -250,8 +250,102 @@ private media/provenance/runtime/schema inputs and protected Green witnesses.
 
 ## Verification / next gate
 
+### Green container runner (Ops successor; not runtime activation)
+
+`backend/ops/staging_web_fixture_runner.mjs` closes the host-Git/runtime-network
+gap. Run it on the Docker host from a clean, reviewed **Ops** checkout with
+Node >=22 and the locked dependencies. The Ops SHA is separate from the API
+runtime SHA. The original adapter CLI still requires real Git; neither an env
+value nor a manifest can replace that check. The host verifies clean Git and
+actual source hashes, then the immutable Docker image/digest, image revision and
+APP_COMMIT, current exact Green API/DB IDs and fingerprints, internal Green
+network ID, uploads volume, and exact protected `green.env` bytes/current values.
+
+The short-lived runner uses only that network, no provider network or host port,
+UID/GID `100:101`, read-only root/mounts, dropped capabilities and no new
+privileges. No Firebase/MFA/provider credential file is mounted. It rehashes the
+actual mounted adapter/runner sources, the **complete** runtime `src` tree
+(including transitive imports) against the source tree, and all 98 image
+migration checksums before opening a DB connection. Node resolves `pg` from the
+immutable image; Git never needs to exist there. A changed app-source tree needs
+a separately built compatible runtime image, not a claimed compatibility flag.
+
+Before starting, every bound source file must be readable by the runtime UID:
+nonsecret file modes `0644`, traversable source directories `0755`, no symlinks
+or group/other writes. The checkout's outer private directory may stay `0700`:
+Docker bind-mounts only the exact source files and source subtree. The runner
+fails before create on root-only `0600` source files. This is distinct from the
+private inputs, which must remain `0600`, never `0644`.
+
+Reproducible preparation after separate authorization (no DB operation):
+
+1. Supply a reviewed, fresh adapter draft and matching private JPEG in an
+   external root-owned `0700` directory, both root-owned `0600`. The draft must
+   already carry truthful provenance, exact principals/media/snapshot,
+   availability and security-environment digests from fresh read-only evidence.
+   No builder invents or refreshes those facts. Create one new root-owned `0700`
+   run parent under `/docker/shareittoo/evidence/`; do not reuse an earlier run.
+2. From the clean checkout, using the verified private Node binary, run:
+
+   ```sh
+   node backend/ops/staging_web_fixture_runner.mjs --prepare-inputs \
+     /absolute/private/draft.json EXACT_DRAFT_SHA256 \
+     /absolute/private/photo.jpg EXACT_PHOTO_SHA256 \
+     /docker/shareittoo/evidence/NEW_RUN/inputs
+   ```
+
+   This exclusively creates `inputs` (`0700`, owner `100:101`), `adapter.json`
+   and `photo.jpg` (`0600`, `100:101`); no credential or SQL operation occurs.
+   The source fields come from actual clean Git/file/ledger reads. Creation
+   fails if the directory exists. Output contains hashes only. Partial file
+   preparation is a failure, not a reusable input; inspect it before any
+   separately authorized cleanup. The runner mounts this directory read-only
+   at `/run/sit-fixture-input`, so the manifest's canonical photo path stays
+   identical across activation and cleanup despite fresh host directories.
+3. Bind the fresh live Docker readbacks and the prepared inputs:
+
+   ```sh
+   node backend/ops/staging_web_fixture_runner.mjs --prepare-binding \
+     /docker/shareittoo/evidence/NEW_RUN/inputs \
+     /docker/shareittoo/evidence/NEW_RUN/binding.json
+   ```
+
+   This creates only a new root-owned `0600` binding and returns its SHA-256.
+   The exact binding schema is `validateFixtureRunnerBinding`; it expires after
+   one hour. No image pull, container creation, DB or provider call occurs in
+   this preparation mode. Do not hand-edit fingerprints, source fields or time.
+4. Separately authorized default runner preflight (creates/removes its own
+   transient container, but the adapter performs no DB writes):
+
+   ```sh
+   node backend/ops/staging_web_fixture_runner.mjs \
+     /docker/shareittoo/evidence/NEW_RUN/binding.json EXACT_BINDING_SHA256
+   ```
+
+   A DB-write operation is separate and adds
+   `--execute EXACT_OPS_SOURCE_COMMIT EXACT_FIXTURE_RUN_ID`. Both confirmations
+   and all source/runtime/media/schema checks remain mandatory. No runtime flag,
+   Green container, env file, upload or provider is changed. The runner inspects
+   the stopped transient container's command, security settings, mounts and
+   environment before start. Cleanup removes only its captured ID with matching
+   nonce/name and verifies absence, including a lost create-response case.
+   Cleanup failure overrides success; there is no automatic retry.
+
+For cleanup, retain the original activation digest and unchanged semantic scope
+(including canonical photo path), but supply a fresh cleanup snapshot/draft and
+new host input/binding directories. The builder refuses to remap a historical
+cleanup photo path. Existing pre-runner activation scopes require their original
+execution path or an explicitly reviewed migration; they are not silently rebound.
+Runtime flag-off and session/semantic cleanup rules above remain unchanged.
+
+Local evidence for this successor is deterministic orchestration and actual-file
+hash/permission testing, plus the existing adapter/PG contracts. A real Docker
+UID/import/mount probe is a separate gate where Docker is available; a mocked
+Docker response is not that proof. No such live probe is authorized by this
+source package.
+
 ```sh
-node --test backend/test/staging_web_fixture_preflight.test.js backend/test/staging_web_fixture_adapter.test.js backend/test/local_postgres_integration_runner.test.js
+node --test backend/test/staging_web_fixture_preflight.test.js backend/test/staging_web_fixture_adapter.test.js backend/test/staging_web_fixture_runner.test.js backend/test/local_postgres_integration_runner.test.js
 SIT_POSTGRES_FOCUSED_WEB_FIXTURE=1 node tool/run_local_postgres_integration.mjs
 cd backend
 pnpm test
