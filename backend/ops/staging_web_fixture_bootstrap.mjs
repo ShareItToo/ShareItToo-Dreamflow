@@ -1,7 +1,8 @@
 // Dedicated insert-only seed. Never reuses or edits an existing pilot principal.
-import { createHash } from 'node:crypto';
+import crypto from 'node:crypto';
 import { constants, openSync, closeSync, fstatSync, writeFileSync, fsyncSync, lstatSync, readFileSync, unlinkSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { promisify } from 'node:util';
 import { readPasswordFile } from './provision_synthetic_sandbox_user.mjs';
 import { readStablePrivateFile, writeExclusivePrivateFile } from './stable_private_file.mjs';
 import { fixtureDigest, fixtureEnvironmentDigest, fixtureNotice, fixtureTarget, validateFixtureManifest,
@@ -15,12 +16,34 @@ export const dedicatedFixture = Object.freeze({
   listing: 'synthetic_web_catalog_listing_v1', upload: 'synthetic_web_catalog_placeholder_v1.webp',
   uploadId: '6b61b134-9576-44b4-a503-1e1707d633af', purpose: 'noncontractual_web_catalog_only_v1',
 });
-const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const scrypt = promisify(crypto.scrypt);
+const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const check = (v, code) => { if (!v) throw Object.assign(Error(code), { code }); };
 const ids = [dedicatedFixture.owner, dedicatedFixture.renter];
 const emails = ids.map((id) => `${id}@example.invalid`);
 const digest = (manifest) => fixtureDigest({ sourceCommit: manifest.sourceCommit, sourceHashes: manifest.sourceHashes,
   runId: manifest.preflight.runId, photo: manifest.preflight.photo, scope: dedicatedFixture });
+
+export async function hashFixturePassword(password) {
+  if (typeof password !== 'string' || password.length < 10 || password.length > 200
+    || !/\p{L}/u.test(password) || !/\d/u.test(password)) throw new Error('Invalid password');
+  const salt = crypto.randomBytes(16);
+  const derived = await scrypt(password, salt, 64);
+  return `scrypt$${salt.toString('hex')}$${Buffer.from(derived).toString('hex')}`;
+}
+
+export async function verifyFixturePassword(password, encoded) {
+  if (typeof password !== 'string' || typeof encoded !== 'string') return false;
+  const [scheme, saltHex, hashHex] = encoded.split('$');
+  if (scheme !== 'scrypt' || !saltHex || !hashHex) return false;
+  try {
+    const expected = Buffer.from(hashHex, 'hex');
+    const actual = Buffer.from(await scrypt(password, Buffer.from(saltHex, 'hex'), expected.length));
+    return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+  } catch {
+    return false;
+  }
+}
 
 export function buildFixtureBootstrapManifest({ source, environment, photo, passwords, runId, now = new Date() }) {
   const url = new URL(environment.DATABASE_URL);
@@ -224,9 +247,8 @@ export async function runFixtureBootstrap(input) {
       const refresh = (await client.query('SELECT count(*)::int AS count FROM refresh_tokens WHERE user_id=ANY($1::text[])', [ids])).rows[0]?.count;
       check(refresh === 0 && snapshot.sessions.length === 0 && snapshot.identities.length === 0 && snapshot.push.length === 0,
         'fixture_bootstrap_used_seed');
-      const { verifyPassword } = await import('../src/security.js');
       const hashes = (await client.query('SELECT id,password_hash FROM users WHERE id=ANY($1::text[])', [ids])).rows;
-      for (let i = 0; i < ids.length; i++) check(await verifyPassword(passwords[i], hashes.find((r) => r.id === ids[i])?.password_hash), 'fixture_bootstrap_password_drift');
+      for (let i = 0; i < ids.length; i++) check(await verifyFixturePassword(passwords[i], hashes.find((r) => r.id === ids[i])?.password_hash), 'fixture_bootstrap_password_drift');
       await client.query('ROLLBACK'); return response('dedicated-seed-already-prepared-runtime-blocked');
     }
     check(events.length === 0, 'fixture_bootstrap_run_retired');
@@ -234,12 +256,11 @@ export async function runFixtureBootstrap(input) {
     check(['absent', 'owned'].includes(state), 'fixture_bootstrap_file_recovery_required');
     if (!execute) { await client.query('ROLLBACK'); return response('preflight-passed-no-mutation'); }
     created = files.create(photoBytes);
-    const { hashPassword } = await import('../src/security.js');
     for (let i = 0; i < ids.length; i++) await client.query(`INSERT INTO users
       (id,email,password_hash,profile,role,account_status,email_verified_at,terms_accepted_at,privacy_accepted_at,
        minimum_age_confirmed_at,private_use_confirmed_at,private_marketplace_review_status,phone_e164)
       VALUES ($1,$2,$3,$4::jsonb,'user','active',now(),now(),now(),now(),now(),'clear',NULL)`,
-    [ids[i], emails[i], await hashPassword(passwords[i]), JSON.stringify(profile(m, i))]);
+    [ids[i], emails[i], await hashFixturePassword(passwords[i]), JSON.stringify(profile(m, i))]);
     await client.query(`INSERT INTO listings (id,owner_id,payload,is_active,catalog_version,status,currency,price_per_day_minor,
       title,description,category_id,subcategory,condition,location_text,city,country,min_days,max_days,protection_model)
       VALUES ($1,$2,$3::jsonb,true,1,'active','EUR',100,$4,$4,'cat3','Sonstiges','good','Synthetic test only','Heilbronn','Deutschland',1,30,'none')`,
