@@ -28,9 +28,11 @@ export function readCleanFixtureEnvSource(run = execFileSync) {
   return commit;
 }
 
-export function readFixtureEnvBootstrapManifest(filePath, expectedSha256) {
-  const bytes = readStablePrivateFile(filePath, {
-    encoding: null, expectedMode: 0o600, expectedUid: process.getuid?.(), expectedGid: process.getgid?.(),
+export function readFixtureEnvBootstrapManifest(filePath, expectedSha256, {
+  readPrivateFile = readStablePrivateFile,
+} = {}) {
+  const bytes = readPrivateFile(filePath, {
+    encoding: null, expectedMode: 0o600, expectedUid: 100, expectedGid: 101,
     minBytes: 1, maxBytes: 128 * 1024, code: 'fixture_env_bootstrap_metadata_invalid',
   });
   if (!/^[a-f0-9]{64}$/u.test(expectedSha256 ?? '')

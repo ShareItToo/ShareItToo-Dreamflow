@@ -15,6 +15,7 @@ import {
 } from '../ops/staging_web_fixture_env_transition.mjs';
 import { fixtureEnvironmentDigest } from '../ops/staging_web_fixture_preflight.mjs';
 import { corsContainerFingerprint } from '../ops/staging_web_cors_transition.mjs';
+import { readFixtureEnvBootstrapManifest } from '../ops/promote_staging_web_fixture_env.mjs';
 
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const opsCommit = 'f'.repeat(40);
@@ -204,6 +205,37 @@ function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false } = {}) {
   };
   return { command, calls, containers };
 }
+
+function simulatedBootstrapReader(bytes, metadata) {
+  return (_filePath, options) => {
+    assert.deepEqual(options, { encoding: null, expectedMode: 0o600, expectedUid: 100, expectedGid: 101,
+      minBytes: 1, maxBytes: 128 * 1024, code: 'fixture_env_bootstrap_metadata_invalid' });
+    if (metadata.symbolicLink) throw Object.assign(new Error('simulated symlink'), { code: 'ELOOP' });
+    if (!metadata.regular || metadata.mode !== options.expectedMode || metadata.uid !== options.expectedUid
+        || metadata.gid !== options.expectedGid || bytes.length < options.minBytes || bytes.length > options.maxBytes) {
+      throw Object.assign(new Error(options.code), { code: options.code });
+    }
+    return bytes;
+  };
+}
+
+test('host reader accepts only the runner-owned 0600 UID100:GID101 bootstrap contract', async (t) => {
+  const bytes = Buffer.from('runner-owned-private-bootstrap');
+  const sha256 = hash(bytes);
+  const accepted = { regular: true, symbolicLink: false, mode: 0o600, uid: 100, gid: 101 };
+  assert.deepEqual(readFixtureEnvBootstrapManifest('/private/adapter.json', sha256,
+    { readPrivateFile: simulatedBootstrapReader(bytes, accepted) }), bytes);
+  const rejected = [
+    ['root-owned', { ...accepted, uid: 0, gid: 0 }, 'fixture_env_bootstrap_metadata_invalid'],
+    ['foreign-owned', { ...accepted, uid: 501, gid: 20 }, 'fixture_env_bootstrap_metadata_invalid'],
+    ['wrong-mode', { ...accepted, mode: 0o640 }, 'fixture_env_bootstrap_metadata_invalid'],
+    ['symlink', { ...accepted, symbolicLink: true }, 'ELOOP'],
+  ];
+  for (const [name, metadata, code] of rejected) await t.test(name, () => {
+    assert.throws(() => readFixtureEnvBootstrapManifest('/private/adapter.json', sha256,
+      { readPrivateFile: simulatedBootstrapReader(bytes, metadata) }), (error) => error.code === code);
+  });
+});
 
 test('read-only prepare derives and exclusively writes the protected 0600 runtime manifest', async (t) => {
   const fx = await fixture(); t.after(() => rm(fx.root, { recursive: true, force: true }));

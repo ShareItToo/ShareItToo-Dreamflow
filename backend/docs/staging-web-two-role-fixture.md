@@ -199,13 +199,17 @@ forward delta is:
 
 Do not hand-author `fixtureBinding`. The protected prepare mode derives it from
 fresh read-only Docker/env/database inventory plus the exact private bootstrap
-manifest. It binds the clean Ops HEAD, immutable current API fingerprint,
-protected env digest, bootstrap file/source/run digests, seeded audit scope and
-snapshot digests, old allowed-ID digest/count, exact handoff digest and the new
-unused backup target. It never prints IDs, passwords, password hashes, env
-values, database URLs or raw Docker inspection. The only persistent prepare
-effect is one exclusive owner-only `0600` runtime manifest in an existing
-owner-only `0700` directory; the old-env backup target must still be absent.
+manifest. That input is the runner-created
+`/docker/shareittoo/evidence/NEW_RUN/input/adapter.json`: it must remain exactly
+`0600`, UID `100`, GID `101`, and is read in place by the root host process—do
+not copy or chown it. The builder binds the clean Ops HEAD, immutable current
+API fingerprint, protected env digest, bootstrap file/source/run digests,
+seeded audit scope and snapshot digests, old allowed-ID digest/count, exact
+handoff digest and the new unused backup target. It never prints IDs, passwords,
+password hashes, env values, database URLs or raw Docker inspection. The only
+persistent prepare effect is one exclusive root-owned `0600` runtime manifest
+in an existing root-owned `0700` directory; the root-owned `0600` old-env backup
+target must still be absent.
 
 From the exact clean reviewed checkout, use a new backup path and output path:
 
@@ -217,8 +221,9 @@ node backend/ops/promote_staging_web_fixture_env.mjs --prepare \
 ```
 
 Record the returned runtime-manifest SHA-256 privately. Default invocation is a
-read-only preflight. It reopens both inputs through stable owner-only `0600`
-descriptors, requires their exact SHA-256 values, rechecks all live inventory,
+read-only preflight. It reopens the root-owned runtime manifest and the unchanged
+runner-owned `0600` UID100:GID101 `adapter.json` through stable descriptors,
+requires their exact SHA-256 values, rechecks all live inventory,
 schema 98/ledger, seeded audit digests, current runtime health/version and a
 real config import with the proposed four values. It creates no lock, backup,
 evidence, container or env change:
