@@ -1,4 +1,40 @@
-# Current synthetic clone-lane successor — SOURCE PASS; external gates open
+# Current Work Package: Staging Web Pilot delivery — ACTIVE
+
+Walid changed the execution lane on 30 September 2026: accepted changes are
+first exposed on the closed Staging Web surface and iterated there. Routine UI
+or shared-flow corrections must not consume Google Play releases. Production
+`shareittoo.com` and Play remain unchanged until Web acceptance and the later
+native Android checkpoint are complete.
+
+The current source is clean and remote-aligned at
+`8a90ec61fbe2a0c67265191809ddf332dd26a6b4`. A Flutter Web release build bound
+to `https://staging.shareittoo.com/api/v1` and the current closed-pilot feature
+profile completed successfully; the repository Web smoke passed. Live
+readback confirms that the Staging API runs the same commit with test-only
+boundaries, memory payment, Stripe live mode off and external Listing-AI off.
+The Staging root is not yet the Flutter client and therefore is not yet a
+usable browser-pilot link.
+
+The complete repository technical regression for this source package passed
+locally with exit 0 on 30 September 2026, including the full application test
+suite, a fresh Web release build and smoke, and the Android debug build. Exact
+GitHub verification and the reversible first Staging-Web installation remain
+the next gates; this local result is not live deployment evidence.
+
+This package will:
+
+1. add a fail-closed, reproducible Web-pilot build/deployment contract with
+   exact source identity and rollback,
+2. publish only that client to `staging.shareittoo.com`, never Production,
+3. verify the public Staging root, API binding, access boundary and decisive
+   browser flows,
+4. record which remaining functions require Android-native proof,
+5. continue with focused Web fixes before producing another Play candidate.
+
+No Google Play upload, Production deployment, real payment, external
+generative-AI execution or pilot-completion claim belongs to this package.
+
+# Previous Work Package: synthetic clone-lane successor — SOURCE PASS; external gates open
 
 The accepted package on branch `codex/master-workflow-20260808` binds the
 normal Play successor `1.0.0+2026092902` and its strictly intermediate local-QA

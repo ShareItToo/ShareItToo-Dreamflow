@@ -75,10 +75,17 @@ test('the live inspector accepts only the two bounded HTTPS origins', () => {
   assert.match(source, /staging-routes-active-production-pending/u);
 });
 
-test('saved readiness evidence is bound to the canonical Caddyfile and records no change', () => {
+test('historical readiness remains bound to the pre-Web canonical file, not a new live claim', () => {
+  // Preserve frozen 20260811 evidence. Only the separately tested Staging Web
+  // shell is new; Production, API, legal and assetlink bytes must still match.
+  const [unchangedPrefix, staging] = caddyfile.split('staging.shareittoo.com {');
+  const historicStaging = staging.replace(
+    /\n\thandle \{\n\t\theader Cache-Control "no-store"[\s\S]*?\n\t\}\n\}\s*$/u,
+    '\n\thandle {\n\t\theader Cache-Control "no-store"\n\t\trespond "ShareItToo staging gateway" 200\n\t}\n}\n',
+  );
   assert.equal(
     evidence.localCaddySha256,
-    createHash('sha256').update(caddyfile).digest('hex'),
+    createHash('sha256').update(`${unchangedPrefix}staging.shareittoo.com {${historicStaging}`).digest('hex'),
   );
   assert.equal(evidence.deployedState, 'deployed-config-out-of-date');
   assert.deepEqual(evidence.boundaries, {

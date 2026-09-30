@@ -1,5 +1,50 @@
 # SIT Pilot Phase Capsule — 2026-09-23
 
+## Web-first pilot execution addendum — 2026-09-30
+
+Walid changed the active execution order on 30 September 2026. Routine product
+changes are no longer uploaded to Google Play one by one. The active bounded
+package is now the closed **Staging Web Pilot**:
+
+- build the accepted ShareItToo Flutter source as a browser client bound to
+  `https://staging.shareittoo.com/api/v1`,
+- serve it from `https://staging.shareittoo.com` behind the existing Staging
+  access and no-real-money boundaries,
+- use that browser surface for fast iterative UX and functional acceptance,
+- keep `https://shareittoo.com`, Production and Google Play unchanged during
+  ordinary iterations,
+- use direct Android QA only for native behavior that the browser cannot prove,
+  especially native provider login, push delivery, Android permissions,
+  camera/QR behavior, installation and update compatibility,
+- create and upload a new Play candidate only after Web acceptance plus the
+  required native checkpoint are complete.
+
+This addendum supersedes the Android/Play-first ordering in the older “Exact
+next sequence” paragraph below. It does not relax any pilot rule, release
+truth, security, privacy, legal, payment or data-integrity gate.
+
+Current verified baseline for this package:
+
+- clean branch `codex/master-workflow-20260808` at
+  `8a90ec61fbe2a0c67265191809ddf332dd26a6b4`, aligned with its remote,
+- exact-source Flutter Web release build passed locally with the Staging API
+  binding and the current closed-pilot feature profile,
+- the repository Web smoke passed on a loopback-bound ephemeral port,
+- the complete local technical regression passed with exit 0 on 30 September
+  2026, including the full app suite, a fresh Web release build/smoke and the
+  Android debug build; exact-HEAD GitHub and live Staging evidence remain open,
+- Staging API readback reports exact commit `8a90ec61…`, environment `test`,
+  memory-only payment, `STRIPE_LIVEMODE=false` and no external Listing-AI
+  execution,
+- `shareittoo.com` still serves the older public Web/Production state, while
+  the Staging root still returns only the gateway placeholder; neither was
+  changed by this decision.
+
+Exit criteria for the active package are a reversible exact-source Web
+deployment, a Staging-root/browser readback, focused functional acceptance,
+an explicit browser/native capability matrix and a compact next-package
+capsule. A Web PASS is not Android or Play proof.
+
 ## P4 closure addendum — 2026-09-25
 
 P4 Green Staging promotion/readback is **CLOSED — technical PASS only** for

@@ -105,6 +105,14 @@ staging.shareittoo.com {
 
 	handle {
 		header Cache-Control "no-store"
-		respond "ShareItToo staging gateway" 200
+		header X-Content-Type-Options "nosniff"
+		header X-Frame-Options "DENY"
+		header Referrer-Policy "strict-origin-when-cross-origin"
+		header Permissions-Policy "camera=(self), microphone=(self), geolocation=(self)"
+		# Existing /docker/shareittoo -> /app read-only mount; Production stays /app/current.
+		root * /app/staging-web/current
+		encode zstd gzip
+		try_files {path} /index.html
+		file_server
 	}
 }
