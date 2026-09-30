@@ -277,14 +277,47 @@ Docker bind-mounts only the exact source files and source subtree. The runner
 fails before create on root-only `0600` source files. This is distinct from the
 private inputs, which must remain `0600`, never `0644`.
 
-Reproducible preparation after separate authorization (no DB operation):
+Fresh activation draft after separate authorization (read-only DB operation):
 
-1. Supply a reviewed, fresh adapter draft and matching private JPEG in an
-   external root-owned `0700` directory, both root-owned `0600`. The draft must
-   already carry truthful provenance, exact principals/media/snapshot,
-   availability and security-environment digests from fresh read-only evidence.
-   No builder invents or refreshes those facts. Create one new root-owned `0700`
-   run parent under `/docker/shareittoo/evidence/`; do not reuse an earlier run.
+Provide only the already verified private JPEG and its exact provenance JSON
+(the discriminated `photo` schema above), root-owned `0600` in a private `0700`
+directory. No download, new rights assertion or real-product evidence is implied.
+Create a new root-owned `0700` run parent under `/docker/shareittoo/evidence/`.
+From the exact clean Ops checkout and verified private Node binary:
+
+```sh
+node backend/ops/staging_web_fixture_runner.mjs --draft \
+  /absolute/private/photo-provenance.json EXACT_DESCRIPTOR_SHA256 \
+  /absolute/private/photo.jpg EXACT_PHOTO_SHA256 \
+  /docker/shareittoo/evidence/NEW_RUN/draft.json
+```
+
+This derives an ephemeral one-hour runtime binding from fresh Docker/env reads,
+then uses the same isolated immutable-image runner to read the actual DB. It
+requires exactly one guest-bound listing/upload and exactly two eligible
+`syntheticOnly`, `@example.invalid`, phone-null roles among all allowed accounts
+(four allowed accounts are supported; a third eligible role is ambiguity).
+The listing determines the owner; no caller-supplied IDs/snapshots are accepted.
+Actual 98-migration ledger, complete snapshot/availability and protected security
+environment are bound. The stored upload bytes must match the separate photo.
+Every draft transaction rolls back; the unchanged adapter default preflight
+rechecks all dependencies/session/refresh-token boundaries before acceptance.
+
+The only persistent output is a new exclusive root-owned `0600` draft. Standard
+output contains only `draft-created-read-only` and its SHA-256, never the draft,
+identities or environment. Docker logging is disabled (`--log-driver none`);
+private child output travels through captured `start --attach` only. An actual
+Docker attach/UID/mount probe remains a separate required operational gate.
+Any failure/cleanup drift returns no success; do not print child output for debug.
+There are no DB writes, credentials, downloads, provider/payment calls or flags.
+The draft is not approval for activation, and never means runtime activation.
+
+Reproducible input preparation after separate authorization (no DB operation):
+
+1. Use the fresh activation draft above and matching private JPEG, both
+   root-owned `0600`; review its exact source/runtime/provenance binding privately.
+   Reuse this run's protected parent, never another historical run's inputs.
+   Subsequent preparation does not refresh or invent snapshot/environment facts.
 2. From the clean checkout, using the verified private Node binary, run:
 
    ```sh

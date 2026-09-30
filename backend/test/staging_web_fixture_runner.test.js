@@ -58,7 +58,7 @@ function fixture() {
       const mounts = command.flatMap((arg, index) => arg === '--mount' ? [command[index + 1]] : []).map((item) => Object.fromEntries(item.split(',').map((part) => part.split('='))));
       f.runner = { Id: '6'.repeat(64), Name: `/${value('--name')}`, Image: image.Id, State: { Running: false },
         Config: { Image: api.Config.Image, User: '100:101', Env: api.Config.Env, Labels: { 'com.shareittoo.fixture-runner': value('--label').split('=')[1] }, Entrypoint: ['node'], Cmd: command.slice(-3) },
-        HostConfig: { ReadonlyRootfs: true, Privileged: false, NetworkMode: binding.networkId, PortBindings: {}, CapDrop: ['ALL'], CapAdd: null, SecurityOpt: ['no-new-privileges'], Devices: [] },
+        HostConfig: { ReadonlyRootfs: true, Privileged: false, NetworkMode: binding.networkId, PortBindings: {}, CapDrop: ['ALL'], CapAdd: null, SecurityOpt: ['no-new-privileges'], Devices: [], LogConfig: { Type: 'none' } },
         NetworkSettings: { Networks: { [networkName]: { NetworkID: '' } } },
         Mounts: mounts.map((m) => ({ Type: m.type, Source: m.type === 'bind' ? m.src : undefined, Name: m.type === 'volume' ? m.src : undefined, Destination: m.dst, RW: false })) };
       if (f.alterRunner) f.alterRunner(f.runner);
@@ -67,6 +67,8 @@ function fixture() {
     }
     if (command[0] === 'start') {
       if (f.failStart) throw Error('child-failed');
+      if (f.draftPhoto) return JSON.stringify({ status: 'draft-generated-read-only', runtimeActivated: false,
+        sourceCommit: source.commit, manifestDigest: hash(JSON.stringify(f.manifest)), draft: f.manifest, ...f.resultOverride });
       return JSON.stringify({ status: args.execute ? 'database-prepared-runtime-still-blocked' : 'preflight-passed-no-mutation', runtimeActivated: false,
         sourceCommit: source.commit, manifestDigest: '7'.repeat(64), activationDigest: '7'.repeat(64), ...f.resultOverride });
     }
@@ -140,6 +142,7 @@ for (const [name, mutate] of Object.entries({
   ports: (r) => { r.HostConfig.PortBindings['8080/tcp'] = [{}]; },
   command: (r) => { r.Config.Cmd = ['-e', 'process.exit(0)']; },
   env: (r) => { r.Config.Env = [...r.Config.Env, 'SIT_WEB_FIXTURE_EXECUTE=1']; },
+  logging: (r) => { r.HostConfig.LogConfig.Type = 'json-file'; },
 })) test(`stopped runner drift is never started and only its ID is cleaned: ${name}`, async () => {
   const f = fixture(); f.alterRunner = mutate; await assert.rejects(f.run());
   assert.equal(f.runner, null); assert.ok(!f.calls.some((args) => args[0] === 'start'));
@@ -213,4 +216,23 @@ test('binding builder derives one-hour authority from actual immutable readbacks
   assert.match(text, /mkdirSync\(argv\[5\], \{ mode: 0o700 \}\); chownSync\(argv\[5\], uid, gid\)/u);
   assert.match(text, /writeExclusivePrivateFile\(.*photo\.jpg.*\{ uid, gid \}/u);
   assert.match(text, /writeExclusivePrivateFile\(argv\[2\], bytes, \{ uid: 0, gid: 0 \}\)/u);
+});
+
+test('draft mode shares exact runtime validation/cleanup, disables logs and cannot execute writes', async () => {
+  const f = fixture(); f.draftPhoto = f.manifest.preflight.photo;
+  f.binding = buildFixtureRunnerBinding({ ...f, draftPhoto: f.draftPhoto });
+  // The existing fixture closures resolve the same immutable runtime identities.
+  const result = await f.run(); assert.deepEqual(result, f.manifest); assert.equal(f.runner, null);
+  const create = f.calls.find((args) => args[0] === 'create');
+  assert.equal(create[create.indexOf('--log-driver') + 1], 'none');
+  assert.ok(!create.some((value) => value.includes('dst=/run/sit-fixture-input')));
+  const syntax = spawnSync(process.execPath, ['--input-type=module', '--check'], { input: create.at(-1), encoding: 'utf8' });
+  assert.equal(syntax.status, 0, syntax.stderr);
+  f.args.execute = true; await assert.rejects(f.run(), /draft_read_only/u);
+  const text = readFileSync(new URL('../ops/staging_web_fixture_runner.mjs', import.meta.url), 'utf8');
+  const draftCli = text.slice(text.indexOf("if (argv[0] === '--draft')"), text.indexOf("if (argv[0] === '--prepare-inputs')"));
+  assert.match(draftCli, /args: \{ execute: false \}/u);
+  assert.match(draftCli, /writeExclusivePrivateFile\(argv\[5\], bytes, \{ uid: 0, gid: 0 \}\)/u);
+  assert.match(draftCli, /status: 'draft-created-read-only', draftSha256: hash\(bytes\)/u);
+  assert.doesNotMatch(draftCli, /JSON\.stringify\(\{[^\n]*(?:draft,|snapshot|roles)/u);
 });

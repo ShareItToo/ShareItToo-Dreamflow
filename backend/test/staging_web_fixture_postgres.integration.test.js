@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { runMigrations } from '../src/migrations.js';
 import { adapterSources, runFixtureAdapter } from '../ops/staging_web_fixture_adapter.mjs';
+import { generateFixtureDraft } from '../ops/staging_web_fixture_draft.mjs';
 import { fixtureDigest, fixtureEnvironmentDigest, fixtureNotice, fixtureTarget,
   isolatedFixtureRehearsal, readFixtureSnapshot } from '../ops/staging_web_fixture_preflight.mjs';
 
@@ -108,6 +109,35 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
       await runMigrations(pool);
       assert.equal(ledger.length, 98);
       assert.deepEqual((await client.query('SELECT name,checksum FROM schema_migrations ORDER BY name')).rows, ledger);
+
+      await t.test('fresh draft selects two safe roles from four accounts and leaves real PG unchanged', async () => {
+        const f = await seed(client); const extra = await seed(client);
+        const extraIds = extra.manifest.preflight.roles.map((r) => r.userId);
+        await client.query("UPDATE users SET profile='{}'::jsonb WHERE id=ANY($1::text[])", [extraIds]);
+        f.environment.SIT_STAGING_ALLOWED_USER_IDS += `,${extraIds.join(',')}`;
+        const before = await readFixtureSnapshot(client, f.manifest.preflight);
+        const draft = () => generateFixtureDraft({ source, environment: f.environment,
+          photo: f.manifest.preflight.photo, client, rehearsal: isolatedFixtureRehearsal,
+          readPhoto: () => photoBytes }); // Real default adapter preflight, no SQL mock.
+        const result = await draft();
+        assert.deepEqual(result.preflight.roles, f.manifest.preflight.roles);
+        assert.equal(result.preflight.snapshotDigest, fixtureDigest(before));
+        assert.equal(result.preflight.environmentDigest, fixtureEnvironmentDigest(f.environment));
+        assert.equal(result.ledgerDigest, source.ledgerDigest);
+        assert.deepEqual(await readFixtureSnapshot(client, result.preflight), before);
+        assert.equal((await events(f)).length, 0);
+        assert.equal((await client.query('SHOW transaction_read_only')).rows[0].transaction_read_only, 'off');
+        await client.query("UPDATE users SET profile=$1::jsonb WHERE id=$2",
+          [JSON.stringify({ syntheticOnly: true, syntheticMarker: 'ambiguous-test' }), extraIds[0]]);
+        await assert.rejects(draft(), /fixture_draft_roles_ambiguous/u);
+        await client.query("UPDATE users SET profile='{}'::jsonb WHERE id=$1", [extraIds[0]]);
+        await client.query('UPDATE listings SET moderated_by=$1 WHERE id=$2',
+          [f.manifest.preflight.roles[0].userId, extra.manifest.preflight.listingId]);
+        await assert.rejects(draft(), /fixture_adapter_dependencies_present/u);
+        assert.deepEqual(await readFixtureSnapshot(client, f.manifest.preflight), before);
+        assert.equal((await events(f)).length, 0);
+        assert.equal((await client.query('SHOW transaction_read_only')).rows[0].transaction_read_only, 'off');
+      });
 
       await t.test('default is read-only; activate/cleanup/replays retain truth and append-only audits', async () => {
         const f = await seed(client); const m = f.manifest.preflight;

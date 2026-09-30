@@ -9,6 +9,7 @@ import { adapterSources, readAdapterSource, parseAdapterArguments } from './stag
 import { fixtureDigest, fixtureEnvironmentDigest, readPrivateFixtureInput, validateFixtureManifest,
   validateFixtureEnvironment } from './staging_web_fixture_preflight.mjs';
 import { readStablePrivateFile, writeExclusivePrivateFile } from './stable_private_file.mjs';
+import { fixtureDraftScope } from './staging_web_fixture_draft.mjs';
 
 const root = realpathSync(fileURLToPath(new URL('../..', import.meta.url)));
 const codeRoot = '/app/fixture-source';
@@ -78,18 +79,19 @@ export function assertFixtureRunnerReadableSources(directory = root) {
 }
 
 export function validateFixtureRunnerBinding(binding, source, now = Date.now()) {
+  const draft = binding?.kind === 'sit-green-web-fixture-draft';
   exact(binding, ['kind', 'schemaVersion', 'createdAt', 'opsCommit', 'runtimeCommit', 'imageDigest',
     'apiId', 'apiFingerprint', 'databaseId', 'databaseFingerprint', 'networkId',
-    'envSha256', 'inputDirectory', 'adapterFile', 'adapterFileSha256']);
-  check(binding.kind === 'sit-green-web-fixture-runner' && binding.schemaVersion === 1
+    'envSha256', ...(draft ? ['photoSha256'] : ['inputDirectory', 'adapterFile', 'adapterFileSha256'])]);
+  check((draft || binding.kind === 'sit-green-web-fixture-runner') && binding.schemaVersion === 1
     && Number.isFinite(Date.parse(binding.createdAt)) && now - Date.parse(binding.createdAt) >= 0
     && now - Date.parse(binding.createdAt) <= 3600000, 'fixture_runner_binding_stale');
   check(binding.opsCommit === source.commit && /^[a-f0-9]{40}$/u.test(source.commit)
     && /^[a-f0-9]{40}$/u.test(binding.runtimeCommit)
     && /^sha256:[a-f0-9]{64}$/u.test(binding.imageDigest), 'fixture_runner_source_binding');
-  for (const key of ['apiId', 'apiFingerprint', 'databaseId', 'databaseFingerprint', 'networkId', 'envSha256', 'adapterFileSha256'])
+  for (const key of ['apiId', 'apiFingerprint', 'databaseId', 'databaseFingerprint', 'networkId', 'envSha256', draft ? 'photoSha256' : 'adapterFileSha256'])
     check(/^[a-f0-9]{64}$/u.test(binding[key]), 'fixture_runner_digest');
-  check(binding.inputDirectory.startsWith('/docker/shareittoo/evidence/')
+  if (!draft) check(binding.inputDirectory.startsWith('/docker/shareittoo/evidence/')
     && resolve(binding.inputDirectory) === binding.inputDirectory && !binding.inputDirectory.includes(',')
     && dirname(binding.adapterFile) === binding.inputDirectory, 'fixture_runner_input_scope');
 }
@@ -133,17 +135,17 @@ function privateRuntimeInput(path, maxBytes = 65536) {
   return readStablePrivateFile(path, { encoding: null, expectedMode: 0o600, expectedUid: uid, expectedGid: gid, minBytes: 1, maxBytes });
 }
 
-export function buildFixtureRunnerLaunch({ binding, source, runtimeTreeDigest, args, name, nonce }) {
+export function buildFixtureRunnerLaunch({ binding, source, runtimeTreeDigest, args, name, nonce, draftPhoto }) {
   check(/^sit-web-fixture-[a-f0-9]{24}$/u.test(name) && /^[a-f0-9]{24}$/u.test(nonce), 'fixture_runner_name');
   const mounts = [
     ...adapterSources.filter((path) => path.startsWith('backend/ops/')).map((path) => `type=bind,src=${resolve(root, path)},dst=${codeRoot}/${path},readonly`),
     `type=bind,src=${resolve(root, 'backend/src')},dst=${codeRoot}/backend/src,readonly`,
-    `type=bind,src=${binding.inputDirectory},dst=${inputRoot},readonly`,
+    ...(draftPhoto ? [] : [`type=bind,src=${binding.inputDirectory},dst=${inputRoot},readonly`]),
     `type=volume,src=${uploadsName},dst=/data/uploads,readonly`,
   ];
   // These assertions originate from clean host Git plus immutable Docker
   // readbacks, never from an env-provided source override. Rehash before imports.
-  const input = { binding, source, runtimeTreeDigest, args: { ...args, file: `${inputRoot}/adapter.json` } };
+  const input = { binding, source, runtimeTreeDigest, args: { ...args, file: `${inputRoot}/adapter.json` }, draftPhoto };
   const bootstrap = `
 import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, readdirSync } from 'node:fs';
@@ -159,17 +161,28 @@ try {
   verifySource({ source: input.source, sourceRoot: '${codeRoot}', runtimeBackend: '/app', runtimeTreeDigest: input.runtimeTreeDigest });
   const pre = await import('${codeRoot}/backend/ops/staging_web_fixture_preflight.mjs');
   const adapter = await import('${codeRoot}/backend/ops/staging_web_fixture_adapter.mjs');
+  const { Pool } = await import('pg');
+  if (input.draftPhoto) {
+    const { generateFixtureDraft } = await import('${codeRoot}/backend/ops/staging_web_fixture_draft.mjs');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    try { const client = await pool.connect(); try {
+      const draft = await generateFixtureDraft({ source: input.source, environment: process.env, photo: input.draftPhoto, client });
+      process.stdout.write(JSON.stringify({ status: 'draft-generated-read-only', runtimeActivated: false,
+        sourceCommit: input.source.commit, manifestDigest: hash(JSON.stringify(draft)), draft }) + '\\n');
+    } finally { client.release(); } } finally { await pool.end(); }
+  } else {
   const bytes = pre.readPrivateFixtureInput(input.args.file);
   check(hash(bytes) === input.args.fileHash, 'fixture_runner_manifest_drift');
   const manifest = JSON.parse(bytes);
   const request = { ...input.args, manifest, manifestHash: hash(Buffer.from(JSON.stringify(manifest))), source: input.source, environment: process.env,
     photoBytes: pre.readPrivateFixtureInput(manifest.preflight.photo.file, { maxBytes: 8388608 }), storedPhotoBytes: adapter.readAdapterStoredPhoto(manifest, process.env) };
   adapter.validateAdapterInputs(request);
-  const { Pool } = await import('pg'); const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   try { const client = await pool.connect(); try { process.stdout.write(JSON.stringify(await adapter.runFixtureAdapter({ ...request, client })) + '\\n'); } finally { client.release(); } } finally { await pool.end(); }
+  }
 } catch { process.stderr.write('fixture_runner_child_failed\\n'); process.exitCode = 1; }
 `;
-  return { command: 'docker', args: ['create', '--pull=never', '--name', name, '--label', `com.shareittoo.fixture-runner=${nonce}`,
+  return { command: 'docker', args: ['create', '--pull=never', '--log-driver', 'none', '--name', name, '--label', `com.shareittoo.fixture-runner=${nonce}`,
     '--user', '100:101', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
     '--network', binding.networkId, '--env-file', envFile, ...mounts.flatMap((mount) => ['--mount', mount]),
     '--entrypoint', 'node', `ghcr.io/shareittoo/shareittoo-api:${binding.runtimeCommit}@${binding.imageDigest}`,
@@ -184,6 +197,7 @@ export function assertFixtureRunnerContainer({ runner, id, name, nonce, binding,
     && runner.Config.User === '100:101' && runner.HostConfig?.ReadonlyRootfs === true && runner.HostConfig.Privileged === false
     && JSON.stringify(runner.HostConfig.CapDrop) === JSON.stringify(['ALL']) && !runner.HostConfig.CapAdd?.length
     && runner.HostConfig.SecurityOpt?.includes('no-new-privileges')
+    && runner.HostConfig.LogConfig?.Type === 'none'
     && runner.HostConfig.NetworkMode === binding.networkId
     && JSON.stringify(Object.keys(runner.NetworkSettings?.Networks ?? {})) === JSON.stringify([networkName])
     && Object.keys(runner.HostConfig.PortBindings ?? {}).length === 0 && !runner.HostConfig.Devices?.length
@@ -205,14 +219,20 @@ const inspect = (id) => JSON.parse(docker(['inspect', '--format', '{{json .}}', 
 export async function runFixtureContainer({ binding, args, source = readAdapterSource(), command = docker,
   inspectRecord = inspect, readInput = privateRuntimeInput, readEnv = () => readStablePrivateFile(envFile, { encoding: null, expectedMode: 0o600, expectedUid: 0 }),
   runtimeTreeDigest = fixtureRunnerTree(resolve(root, 'backend/src')), inputNames = () => readdirSync(binding.inputDirectory),
-  assertSourceReadable = assertFixtureRunnerReadableSources }) {
+  assertSourceReadable = assertFixtureRunnerReadableSources, draftPhoto }) {
   validateFixtureRunnerBinding(binding, source);
+  check(Boolean(draftPhoto) === (binding.kind === 'sit-green-web-fixture-draft'), 'fixture_runner_mode_binding');
   assertSourceReadable();
   const envBytes = readEnv();
   const inventory = { binding, api: inspectRecord(binding.apiId), database: inspectRecord(binding.databaseId),
     network: inspectRecord(binding.networkId), volume: inspectRecord(uploadsName),
     image: JSON.parse(command(['image', 'inspect', '--format', '{{json .}}', `ghcr.io/shareittoo/shareittoo-api:${binding.runtimeCommit}@${binding.imageDigest}`])), envBytes };
   const expectedEnv = validateFixtureRunnerInventory(inventory);
+  if (draftPhoto) {
+    check(args.execute === false && args.confirmSource === undefined && args.confirmRun === undefined
+      && draftPhoto.sha256 === binding.photoSha256, 'fixture_runner_draft_read_only');
+    fixtureDraftScope({ source, environment: expectedEnv, photo: draftPhoto });
+  } else {
   check(args.file === binding.adapterFile && args.fileHash === binding.adapterFileSha256, 'fixture_runner_adapter_binding');
   const bytes = readInput(args.file); check(hash(bytes) === args.fileHash, 'fixture_runner_adapter_binding');
   const manifest = JSON.parse(bytes); validateFixtureManifest(manifest.preflight);
@@ -225,8 +245,9 @@ export async function runFixtureContainer({ binding, args, source = readAdapterS
   check(manifest.preflight.photo.file === `${inputRoot}/photo.jpg` && basename(args.file) === 'adapter.json', 'fixture_runner_photo_scope');
   check(hash(readInput(`${binding.inputDirectory}/photo.jpg`, 8388608)) === manifest.preflight.photo.sha256, 'fixture_runner_photo_hash');
   check(fixtureDigest(inputNames().sort()) === fixtureDigest(['adapter.json', 'photo.jpg']), 'fixture_runner_input_directory_scope');
+  }
   const nonce = randomBytes(12).toString('hex'); const name = `sit-web-fixture-${nonce}`;
-  const launch = buildFixtureRunnerLaunch({ binding, source, runtimeTreeDigest, args, name, nonce });
+  const launch = buildFixtureRunnerLaunch({ binding, source, runtimeTreeDigest, args, name, nonce, draftPhoto });
   let id; let result; let failure;
   try {
     id = command(launch.args); check(/^[a-f0-9]{64}$/u.test(id), 'fixture_runner_container_id');
@@ -236,9 +257,18 @@ export async function runFixtureContainer({ binding, args, source = readAdapterS
       && fixtureRunnerFingerprint(inspectRecord(binding.databaseId)) === binding.databaseFingerprint
       && hash(readEnv()) === binding.envSha256, 'fixture_runner_prestart_drift');
     result = JSON.parse(command(['start', '--attach', id]));
+    if (draftPhoto) {
+      check(result.status === 'draft-generated-read-only' && result.runtimeActivated === false && result.sourceCommit === source.commit
+        && hash(JSON.stringify(result.draft)) === result.manifestDigest, 'fixture_runner_draft_result');
+      validateFixtureManifest(result.draft.preflight); validateFixtureEnvironment(result.draft.preflight, expectedEnv);
+      check(result.draft.sourceCommit === source.commit && fixtureDigest(result.draft.sourceHashes) === fixtureDigest(source.hashes)
+        && result.draft.ledgerDigest === source.ledgerDigest && result.draft.schemaCount === 98
+        && fixtureDigest(result.draft.preflight.photo) === fixtureDigest({ ...draftPhoto, file: `${inputRoot}/photo.jpg` }), 'fixture_runner_draft_result');
+    } else {
     check(result.runtimeActivated === false && result.sourceCommit === source.commit
       && /^[a-f0-9]{64}$/u.test(result.manifestDigest) && /^[a-f0-9]{64}$/u.test(result.activationDigest)
       && (!args.execute ? result.status === 'preflight-passed-no-mutation' : ['database-prepared-runtime-still-blocked', 'already-prepared-runtime-still-blocked', 'cleaned-noncatalogued-audits-retained', 'already-cleaned'].includes(result.status)), 'fixture_runner_result_invalid');
+    }
   } catch (error) { failure = error; }
   finally {
     if (!/^[a-f0-9]{64}$/u.test(id ?? '')) {
@@ -257,6 +287,7 @@ export async function runFixtureContainer({ binding, args, source = readAdapterS
   check(fixtureRunnerFingerprint(inspectRecord(binding.apiId)) === binding.apiFingerprint
     && fixtureRunnerFingerprint(inspectRecord(binding.databaseId)) === binding.databaseFingerprint
     && hash(readEnv()) === binding.envSha256, 'fixture_runner_final_witness_drift');
+  if (draftPhoto) return result.draft; // Private return to exclusive writer, never logged.
   return { status: result.status, runtimeActivated: false, opsCommit: source.commit,
     runtimeCommit: binding.runtimeCommit, imageDigest: binding.imageDigest,
     manifestDigest: result.manifestDigest, activationDigest: result.activationDigest, cleanup: 'verified' };
@@ -280,16 +311,17 @@ export function prepareFixtureRunnerInput({ manifest: draft, photoBytes, source 
   return Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
 }
 
-export function buildFixtureRunnerBinding({ source, api, database, network, volume, image, envBytes, inputDirectory, adapterBytes }) {
+export function buildFixtureRunnerBinding({ source, api, database, network, volume, image, envBytes, inputDirectory, adapterBytes, draftPhoto }) {
   const match = /^ghcr\.io\/shareittoo\/shareittoo-api:([a-f0-9]{40})@(sha256:[a-f0-9]{64})$/u.exec(api.Config?.Image ?? '');
   check(match, 'fixture_runner_current_image');
-  const binding = { kind: 'sit-green-web-fixture-runner', schemaVersion: 1, createdAt: new Date().toISOString(),
+  const binding = { kind: draftPhoto ? 'sit-green-web-fixture-draft' : 'sit-green-web-fixture-runner', schemaVersion: 1, createdAt: new Date().toISOString(),
     opsCommit: source.commit, runtimeCommit: match[1], imageDigest: match[2], apiId: api.Id,
     apiFingerprint: fixtureRunnerFingerprint(api), databaseId: database.Id, databaseFingerprint: fixtureRunnerFingerprint(database),
-    networkId: network.Id, envSha256: hash(envBytes), inputDirectory,
-    adapterFile: `${inputDirectory}/adapter.json`, adapterFileSha256: hash(adapterBytes) };
+    networkId: network.Id, envSha256: hash(envBytes), ...(draftPhoto ? { photoSha256: draftPhoto.sha256 } : { inputDirectory,
+      adapterFile: `${inputDirectory}/adapter.json`, adapterFileSha256: hash(adapterBytes) }) };
   validateFixtureRunnerBinding(binding, source);
   const environment = validateFixtureRunnerInventory({ binding, api, database, network, volume, image, envBytes });
+  if (draftPhoto) { fixtureDraftScope({ source, environment, photo: draftPhoto }); return binding; }
   const manifest = JSON.parse(adapterBytes);
   validateFixtureManifest(manifest.preflight); validateFixtureEnvironment(manifest.preflight, environment);
   check(manifest.sourceCommit === source.commit && fixtureDigest(manifest.sourceHashes) === fixtureDigest(source.hashes)
@@ -309,6 +341,27 @@ function assertOutputParent(path) {
 async function main() {
   check(process.getuid() === 0 && Number(process.versions.node.split('.')[0]) >= 22, 'fixture_runner_host_required');
   const argv = process.argv.slice(2);
+  if (argv[0] === '--draft') {
+    check(argv.length === 6, 'fixture_runner_arguments'); assertOutputParent(argv[5]);
+    // Require absence before any Docker operation. Never overwrite an old draft.
+    try { lstatSync(argv[5]); check(false, 'fixture_runner_draft_exists'); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    const metadataBytes = readPrivateFixtureInput(argv[1]); check(hash(metadataBytes) === argv[2], 'fixture_runner_private_binding');
+    const photoBytes = readPrivateFixtureInput(argv[3], { maxBytes: 8388608 }); check(hash(photoBytes) === argv[4], 'fixture_runner_private_binding');
+    const draftPhoto = JSON.parse(metadataBytes); check(draftPhoto.sha256 === hash(photoBytes)
+      && photoBytes[0] === 255 && photoBytes[1] === 216 && photoBytes[2] === 255, 'fixture_runner_input_photo');
+    const source = readAdapterSource(); assertFixtureRunnerReadableSources();
+    const api = inspect(apiName); const database = inspect(dbName); const network = inspect(networkName); const volume = inspect(uploadsName);
+    check(/^ghcr\.io\/shareittoo\/shareittoo-api:[a-f0-9]{40}@sha256:[a-f0-9]{64}$/u.test(api.Config?.Image ?? ''), 'fixture_runner_current_image');
+    const image = JSON.parse(docker(['image', 'inspect', '--format', '{{json .}}', api.Config.Image]));
+    const binding = buildFixtureRunnerBinding({ source, api, database, network, volume, image, draftPhoto,
+      envBytes: readStablePrivateFile(envFile, { encoding: null, expectedMode: 0o600, expectedUid: 0 }) });
+    const draft = await runFixtureContainer({ binding, args: { execute: false }, source, draftPhoto });
+    const bytes = Buffer.from(`${JSON.stringify(draft, null, 2)}\n`); writeExclusivePrivateFile(argv[5], bytes, { uid: 0, gid: 0 });
+    check(hash(readPrivateFixtureInput(argv[5])) === hash(bytes), 'fixture_runner_draft_file_drift');
+    process.stdout.write(`${JSON.stringify({ status: 'draft-created-read-only', draftSha256: hash(bytes) })}\n`);
+    return;
+  }
   if (argv[0] === '--prepare-inputs') {
     check(argv.length === 6, 'fixture_runner_arguments');
     const draft = readPrivateFixtureInput(argv[1]); check(hash(draft) === argv[2], 'fixture_runner_private_binding');
