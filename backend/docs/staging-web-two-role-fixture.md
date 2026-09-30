@@ -442,9 +442,11 @@ DB preparation readback SHA-256
 `109e29f5e0f13db97b0423cc6e00dbc1501f8a8daed85209d76f1565071acc32`, and
 the exact login-proof SHA-256
 `f1b8310c88d0bc1937d4ef5d6f0efb41af09f261b6c75deae2a77938765e5419`.
-The latter remains historically bound to Ops commit
+The bootstrap manifest and login proof remain historically bound to their
+original protected runs; neither is rewritten for catalog activation. The
+login proof remains bound to Ops commit
 `ef5eae4472f6349f6da0cec6249dc8ca88f96fa3`; it must not be rewritten to the
-new activation commit. Its canonical-row ledger digest is
+new activation commit. Both protected inputs use the canonical-row ledger digest
 `4fff35fbe15c64a38f0ca423222b32298b5595da8dab81e306a7ad5a48e80f08`;
 that historical algorithm is deliberately distinct from the current DB
 text-ledger digest `796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196`.
@@ -471,6 +473,15 @@ zero booking/request/identity/push/payment/provider/notification effects; closed
 registration; memory payment; Stripe false; provider boundaries off; catalog
 flag false; and public catalog count zero. Candidate config is imported with
 only the proposed flag true before any mutation.
+
+The bootstrap run remains the private double-confirmation value and must match
+the exact seed audit. The separately generated database-preparation activation
+run is discovered read-only from the listing payload and the single exact
+`staging_web_fixture.activated` audit. Those two values must be valid and equal;
+only their SHA-256 digest is retained in the runtime manifest and result
+evidence. It is never equated with or printed alongside the private bootstrap
+run. These checks remain a Phase-0 prerequisite and are not final Mission
+completion evidence.
 
 ```sh
 STAGING_WEB_FIXTURE_CATALOG_RUNTIME_MANIFEST=/docker/shareittoo/evidence/NEW_RUN.catalog-activation-runtime.json \

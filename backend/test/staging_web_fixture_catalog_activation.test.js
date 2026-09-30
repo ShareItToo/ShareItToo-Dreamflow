@@ -7,14 +7,18 @@ import test from 'node:test';
 
 import { dedicatedFixture } from '../ops/staging_web_fixture_bootstrap.mjs';
 import {
+  assertCatalogActivationState,
   assertCatalogActivationManifest,
+  catalogActivationStateSql,
   catalogActivationKey,
   prepareCatalogActivationManifest,
+  requiredBootstrapLedgerDigest,
   requiredDatabasePreparationEvidenceSha256,
   requiredLoginProofEvidenceSha256,
   requiredLoginProofLedgerDigest,
   requiredLoginProofOpsCommit,
   runCatalogActivation,
+  validateCatalogActivationBootstrap,
   validateLoginProofEvidence,
 } from '../ops/staging_web_fixture_catalog_activation.mjs';
 import { fixtureNotice } from '../ops/staging_web_fixture_preflight.mjs';
@@ -34,6 +38,10 @@ const imageDigest = `sha256:${'c'.repeat(64)}`;
 const migrationLedger = '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196';
 const primaryNetworkId = '7'.repeat(64);
 const providerNetworkId = '8'.repeat(64);
+const activationRunId = 'web-fixture-catalog-activation-run';
+const seedScopeDigest = '4'.repeat(64);
+const seedSnapshotDigest = '5'.repeat(64);
+const forbiddenRunHashInterpolation = `:${String.fromCharCode(39)}run_hash${String.fromCharCode(39)}`;
 
 function environment() {
   return {
@@ -61,6 +69,7 @@ const envText = (values) => `${Object.entries(values).map(([key, value]) => `${k
 
 function activationState() {
   return { users: 2, listing: 1, upload: 1, seedAudits: 1, activationAudits: 1,
+    activationRunDigest: hash(activationRunId),
     activeSessions: 0, activeRefresh: 0, mfaFactors: 0,
     retainedSessions: 2, retainedRefresh: 2, loginAudits: 2,
     bookings: 0, requests: 0, identities: 0, pushDevices: 0, paymentCommands: 0,
@@ -107,7 +116,7 @@ async function fixture() {
   const originalEnv = envText(envFileValues); await writeFile(envFile, originalEnv, { mode: 0o600 });
   const runId = 'web-fixture-catalog-activation-test';
   const bootstrap = { kind: 'sit-dedicated-web-fixture-bootstrap', schemaVersion: 1, operation: 'seed',
-    sourceCommit: bootstrapCommit, schemaCount: 98, ledgerDigest: migrationLedger,
+    sourceCommit: bootstrapCommit, schemaCount: 98, ledgerDigest: requiredBootstrapLedgerDigest,
     passwordDigests: ['4'.repeat(64), '5'.repeat(64)],
     preflight: { runId, listingId: dedicatedFixture.listing, uploadName: dedicatedFixture.upload,
       roles: [{ role: 'owner', userId: dedicatedFixture.owner }, { role: 'renter', userId: dedicatedFixture.renter }] } };
@@ -135,6 +144,7 @@ async function fixture() {
   const state = activationState(); const before = publicState(false);
   const fixtureBinding = { opsCommit, loginProofOpsCommit: requiredLoginProofOpsCommit,
     bootstrapManifestSha256: bootstrapSha, bootstrapRunIdSha256: hash(runId),
+    seedScopeDigest, seedSnapshotDigest, activationRunDigest: state.activationRunDigest,
     databasePreparationEvidenceSha256: requiredDatabasePreparationEvidenceSha256,
     loginProofEvidenceSha256: requiredLoginProofEvidenceSha256,
     loginIdentityDigest: state.identityDigest, loginCatalogDigest: state.catalogDigest,
@@ -201,6 +211,11 @@ function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false } = {}) {
     if (args[0] === 'exec') {
       if (args[1] === fx.manifest.databaseContainer) {
         const sql = String(args.at(-1));
+        assert.ok(!sql.includes(forbiddenRunHashInterpolation));
+        assert.ok(!args.some((arg) => String(arg).startsWith('run_hash=')));
+        if (sql.includes('FROM seeded CROSS JOIN later CROSS JOIN fixture')) {
+          return { stdout: `1|${seedScopeDigest}|${seedSnapshotDigest}|${hash(fx.runId)}|0|2|1|1\n`, code: 0 };
+        }
         if (sql.includes("count(*) || '|'")) return { stdout: `98|098_booking_checkout_declaration_constraints.up.sql\n`, code: 0 };
         if (sql.includes('string_agg')) return { stdout: `${migrationLedger}\n`, code: 0 };
         return { stdout: `${JSON.stringify(fx.state)}\n`, code: 0 };
@@ -261,6 +276,19 @@ test('login proof remains bound to its historical commit and canonical-row ledge
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
+test('bootstrap binds the real canonical-row ledger, not the current DB text ledger', async () => {
+  const fx = await fixture();
+  try {
+    assert.doesNotThrow(() => validateCatalogActivationBootstrap(fx.bootstrapBytes, fx.bootstrapSha));
+    for (const ledgerDigest of [migrationLedger, '6'.repeat(64)]) {
+      const manifest = { ...JSON.parse(fx.bootstrapBytes), ledgerDigest };
+      const bytes = Buffer.from(`${JSON.stringify(manifest)}\n`);
+      assert.throws(() => validateCatalogActivationBootstrap(bytes, hash(bytes)),
+        /catalog_activation_bootstrap_invalid/u);
+    }
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
 test('prepare is read-only and binds exact prerequisite evidence plus one-key transition', async () => {
   const fx = await fixture();
   try {
@@ -275,6 +303,9 @@ test('prepare is read-only and binds exact prerequisite evidence plus one-key tr
     assert.deepEqual(result.changedEnvironmentKeys, [catalogActivationKey]);
     const prepared = JSON.parse(await readFile(fx.outputFile)); assertCatalogActivationManifest(prepared);
     assert.equal(prepared.fixtureBinding.loginProofOpsCommit, requiredLoginProofOpsCommit);
+    assert.equal(prepared.fixtureBinding.seedScopeDigest, seedScopeDigest);
+    assert.equal(prepared.fixtureBinding.seedSnapshotDigest, seedSnapshotDigest);
+    assert.equal(prepared.fixtureBinding.activationRunDigest, hash(activationRunId));
     assert.equal((await lstat(fx.outputFile)).mode & 0o777, 0o600);
     assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
     await assert.rejects(readFile(fx.backupFile), { code: 'ENOENT' });
@@ -350,6 +381,18 @@ test('activation source contains no login, booking, payment, Play or external-pr
   const source = await readFile(new URL('../ops/staging_web_fixture_catalog_activation.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source,
     /\/v1\/auth|\/v1\/bookings|\/v1\/rental-requests|stripe\.com|googleapis\.com|play\.google/u);
+  assert.ok(!source.includes(forbiddenRunHashInterpolation));
+  assert.ok(!catalogActivationStateSql.includes(forbiddenRunHashInterpolation));
+});
+
+test('database state binds only the protected activation run digest', async () => {
+  const fx = await fixture();
+  try {
+    assert.doesNotThrow(() => assertCatalogActivationState(JSON.stringify(fx.state), fx.manifest.fixtureBinding));
+    assert.throws(() => assertCatalogActivationState(JSON.stringify(fx.state), {
+      ...fx.manifest.fixtureBinding, activationRunDigest: '6'.repeat(64),
+    }), /catalog_activation_database_state_invalid/u);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
 test('default preflight is read-only and execute changes only catalog flag with exact public projection', async () => {
@@ -390,6 +433,7 @@ test('all activation replacement and public/evidence faults restore exact old en
     'fixture_env_replacement_runtime_probe', 'catalog_activation_replacement_config_readback',
     'catalog_activation_replacement_public_readback', 'catalog_activation_final_database_readback',
     'catalog_activation_final_database_integrity_schema', 'catalog_activation_final_database_integrity_ledger',
+    'catalog_activation_final_seed_readback',
     'catalog_activation_final_public_readback'];
   for (const phase of phases) await t.test(phase, async () => {
     const fx = await fixture();

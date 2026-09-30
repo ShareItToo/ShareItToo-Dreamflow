@@ -16,6 +16,8 @@ import { bootstrapFileStore, buildFixtureBootstrapManifest, dedicatedFixture, ru
 import { createFixtureLoginProofStore, loginProofMarker } from '../ops/staging_web_fixture_login_verifier.mjs';
 import { assertCatalogActivationState,
   catalogActivationStateSql } from '../ops/staging_web_fixture_catalog_activation.mjs';
+import { assertFixtureSeedReadback,
+  fixtureSeedReadbackSql } from '../ops/staging_web_fixture_env_transition.mjs';
 import { fixtureDigest, fixtureEnvironmentDigest, fixtureNotice, fixtureTarget,
   isolatedFixtureRehearsal, readFixtureSnapshot } from '../ops/staging_web_fixture_preflight.mjs';
 
@@ -361,10 +363,14 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
       await t.test('catalog activation attestation SQL runs on PG16/98 and ignores foreign rows', async () => {
         const f = await seed(client); const activated = await runFixtureAdapter(bind(f));
         assert.equal(activated.status, 'database-prepared-runtime-still-blocked');
+        const bootstrapRunId = `web-fixture-${randomUUID()}`;
+        const seedScopeDigest = sha('catalog-activation-pg-seed-scope');
+        const seedSnapshotDigest = sha('catalog-activation-pg-seed-snapshot');
         await client.query(`INSERT INTO audit_log
           (actor_role,action,resource_type,resource_id,request_id,metadata)
-          VALUES ('system','staging_web_fixture_seed.seeded','staging_web_fixture_seed',$1,$2,'{}'::jsonb)`,
-        [f.manifest.preflight.listingId, f.manifest.preflight.runId]);
+          VALUES ('system','staging_web_fixture_seed.seeded','staging_web_fixture_seed',$1,$2,$3::jsonb)`,
+        [f.manifest.preflight.listingId, bootstrapRunId,
+          JSON.stringify({ scope: seedScopeDigest, snapshotHash: seedSnapshotDigest })]);
         for (const role of f.manifest.preflight.roles) {
           const sessionId = randomUUID();
           await client.query(`INSERT INTO auth_sessions (id,user_id,device_label,user_agent,revoked_at)
@@ -380,14 +386,27 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
           [role.userId, sessionId, `catalog-attestation-${sessionId}`]);
         }
         const m = f.manifest.preflight;
+        const seedSql = fixtureSeedReadbackSql
+          .replaceAll(dedicatedFixture.owner, m.roles[0].userId)
+          .replaceAll(dedicatedFixture.renter, m.roles[1].userId)
+          .replaceAll(dedicatedFixture.listing, m.listingId)
+          .replaceAll(dedicatedFixture.upload, m.uploadName);
+        const seedReadback = (await client.query(seedSql)).rows[0];
+        assertFixtureSeedReadback(Object.values(seedReadback).join('|'), {
+          seedScopeDigest, seedSnapshotDigest, bootstrapRunIdSha256: sha(bootstrapRunId),
+        });
         const sql = catalogActivationStateSql
           .replaceAll(dedicatedFixture.owner, m.roles[0].userId)
           .replaceAll(dedicatedFixture.renter, m.roles[1].userId)
           .replaceAll(dedicatedFixture.listing, m.listingId)
-          .replaceAll(dedicatedFixture.upload, m.uploadName)
-          .replaceAll(":'run_hash'", '$1');
-        const row = (await client.query(sql, [sha(m.runId)])).rows[0]?.json_build_object;
-        const attested = assertCatalogActivationState(JSON.stringify(row));
+          .replaceAll(dedicatedFixture.upload, m.uploadName);
+        const forbiddenRunHashInterpolation = `:${String.fromCharCode(39)}run_hash${String.fromCharCode(39)}`;
+        assert.ok(!sql.includes(forbiddenRunHashInterpolation));
+        const readState = async () => (await client.query(sql)).rows[0]?.json_build_object;
+        const row = await readState();
+        const attested = assertCatalogActivationState(JSON.stringify(row), { activationRunDigest: sha(m.runId) });
+        assert.equal(attested.activationRunDigest, sha(m.runId));
+        assert.notEqual(attested.activationRunDigest, sha(bootstrapRunId));
         assert.equal(attested.activeSessions, 0); assert.equal(attested.activeRefresh, 0);
         assert.equal(attested.mfaFactors, 0);
         assert.equal(attested.retainedSessions, 2); assert.equal(attested.retainedRefresh, 2);
@@ -395,17 +414,38 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
           (user_id,encrypted_secret,status,enabled_at) VALUES ($1,'test-encrypted-secret','enabled',now())`,
         [m.roles[0].userId]);
         await assert.rejects(async () => assertCatalogActivationState(JSON.stringify(
-          (await client.query(sql, [sha(m.runId)])).rows[0].json_build_object)),
+          await readState())),
         /catalog_activation_database_state_invalid/u);
         await client.query('DELETE FROM mfa_totp_factors WHERE user_id=$1', [m.roles[0].userId]);
         const foreign = await seed(client);
+        const foreignActivated = await runFixtureAdapter(bind(foreign));
+        assert.equal(foreignActivated.status, 'database-prepared-runtime-still-blocked');
         await client.query(`INSERT INTO mfa_totp_factors
           (user_id,encrypted_secret,status,enabled_at) VALUES ($1,'foreign-encrypted-secret','enabled',now())`,
         [foreign.manifest.preflight.roles[0].userId]);
-        const afterForeign = assertCatalogActivationState(JSON.stringify((await client.query(sql, [sha(m.runId)])).rows[0]
-          .json_build_object));
+        const afterForeign = assertCatalogActivationState(JSON.stringify(await readState()), {
+          activationRunDigest: sha(m.runId),
+        });
         assert.deepEqual(afterForeign, attested);
         assert.equal((await readFixtureSnapshot(client, foreign.manifest.preflight)).users.length, 2);
+        const expectRejectedState = async (mutate) => {
+          await client.query('BEGIN');
+          try {
+            await mutate();
+            await assert.rejects(async () => assertCatalogActivationState(JSON.stringify(await readState())),
+              /catalog_activation_database_state_invalid/u);
+          } finally { await client.query('ROLLBACK'); }
+        };
+        await expectRejectedState(() => client.query(`UPDATE listings
+          SET payload=jsonb_set(payload,'{syntheticFixtureRun}',to_jsonb($1::text),true) WHERE id=$2`,
+        [`web-fixture-${randomUUID()}`, m.listingId]));
+        await expectRejectedState(() => client.query(`INSERT INTO audit_log
+          (actor_role,action,resource_type,resource_id,request_id,metadata)
+          VALUES ('system','staging_web_fixture.activated','staging_web_fixture',$1,$2,'{}'::jsonb)`,
+        [m.listingId, `web-fixture-${randomUUID()}`]));
+        await expectRejectedState(() => client.query(`UPDATE listings
+          SET payload=jsonb_set(payload,'{syntheticFixtureRun}',to_jsonb('invalid'::text),true) WHERE id=$1`,
+        [m.listingId]));
         const cleaned = await runFixtureAdapter(bind(await cleanupManifest(f, activated.activationDigest)));
         assert.equal(cleaned.status, 'cleaned-noncatalogued-audits-retained');
       });

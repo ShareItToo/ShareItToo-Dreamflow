@@ -26,6 +26,7 @@ export const catalogActivationKey = 'SIT_STAGING_SYNTHETIC_CATALOG_ENABLED';
 export const requiredDatabasePreparationEvidenceSha256 = '109e29f5e0f13db97b0423cc6e00dbc1501f8a8daed85209d76f1565071acc32';
 export const requiredLoginProofEvidenceSha256 = 'f1b8310c88d0bc1937d4ef5d6f0efb41af09f261b6c75deae2a77938765e5419';
 export const requiredLoginProofOpsCommit = 'ef5eae4472f6349f6da0cec6249dc8ca88f96fa3';
+export const requiredBootstrapLedgerDigest = '4fff35fbe15c64a38f0ca423222b32298b5595da8dab81e306a7ad5a48e80f08';
 export const requiredLoginProofLedgerDigest = '4fff35fbe15c64a38f0ca423222b32298b5595da8dab81e306a7ad5a48e80f08';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -88,12 +89,12 @@ function parseEnvContent(content) {
   return values;
 }
 
-function validateBootstrap(bytes, expectedSha256) {
+export function validateCatalogActivationBootstrap(bytes, expectedSha256) {
   check(Buffer.isBuffer(bytes) && hash(bytes) === expectedSha256, 'catalog_activation_bootstrap_digest_invalid');
   const manifest = parseJson(bytes, 'catalog_activation_bootstrap_json_invalid');
   check(manifest?.kind === 'sit-dedicated-web-fixture-bootstrap' && manifest.schemaVersion === 1
     && manifest.operation === 'seed' && commitPattern.test(manifest.sourceCommit ?? '')
-    && manifest.schemaCount === 98 && manifest.ledgerDigest === requiredMigrationLedger
+    && manifest.schemaCount === 98 && manifest.ledgerDigest === requiredBootstrapLedgerDigest
     && Array.isArray(manifest.passwordDigests) && manifest.passwordDigests.length === 2
     && manifest.passwordDigests.every((value) => digestPattern.test(value ?? ''))
     && typeof manifest.preflight?.runId === 'string'
@@ -137,7 +138,25 @@ export function validateLoginProofEvidence(evidence, { runtimeRevision, imageDig
   return evidence;
 }
 
-export const catalogActivationStateSql = `SELECT json_build_object(
+export const catalogActivationStateSql = `WITH activation_listing AS (
+  SELECT count(*)::int AS count, min(payload->>'syntheticFixtureRun') AS run_id FROM listings
+  WHERE id='${dedicatedFixture.listing}'
+), activation_audits AS (
+  SELECT count(*)::int AS count, min(request_id) AS run_id FROM audit_log
+  WHERE resource_type='staging_web_fixture'
+    AND resource_id='${dedicatedFixture.listing}'
+    AND actor_role='system'
+    AND action='staging_web_fixture.activated'
+), activation_binding AS (
+  SELECT CASE WHEN
+    listing.count=1 AND audit.count=1
+    AND listing.run_id ~ '^web-fixture-[a-z0-9-]{8,48}$'
+    AND audit.run_id ~ '^web-fixture-[a-z0-9-]{8,48}$'
+    AND listing.run_id=audit.run_id
+    THEN encode(sha256(convert_to(listing.run_id,'UTF8')),'hex')
+    ELSE NULL END AS digest FROM activation_listing listing CROSS JOIN activation_audits audit
+)
+SELECT json_build_object(
   'users',(SELECT count(*)::int FROM users WHERE id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}')
     AND role='user' AND account_status='active' AND deactivated_at IS NULL AND profile->>'syntheticOnly'='true'),
   'listing',(SELECT count(*)::int FROM listings WHERE id='${dedicatedFixture.listing}'
@@ -146,17 +165,14 @@ export const catalogActivationStateSql = `SELECT json_build_object(
     AND private_status_confirmed_at IS NULL AND COALESCE(private_pilot_region_code,'') <> 'heilbronn'
     AND title='Synthetische Katalogfixture' AND description='${fixtureNotice}'
     AND lower(btrim(city))='heilbronn' AND lower(btrim(country)) IN ('de','deutschland','germany')
-    AND encode(sha256(convert_to(payload->>'syntheticFixtureRun','UTF8')),'hex')=:'run_hash'
     AND payload->>'syntheticNotice'='${fixtureNotice}'),
   'upload',(SELECT count(*)::int FROM uploads WHERE storage_name='${dedicatedFixture.upload}'
     AND listing_id='${dedicatedFixture.listing}' AND owner_id='${dedicatedFixture.owner}'
     AND purpose='listing_image' AND visibility='public' AND content_scan_status='passed'),
   'seedAudits',(SELECT count(*)::int FROM audit_log WHERE resource_type='staging_web_fixture_seed'
     AND resource_id='${dedicatedFixture.listing}' AND action='staging_web_fixture_seed.seeded'),
-  'activationAudits',(SELECT count(*)::int FROM audit_log WHERE resource_type='staging_web_fixture'
-    AND resource_id='${dedicatedFixture.listing}'
-    AND encode(sha256(convert_to(request_id,'UTF8')),'hex')=:'run_hash'
-    AND action='staging_web_fixture.activated'),
+  'activationAudits',(SELECT count FROM activation_audits),
+  'activationRunDigest',(SELECT digest FROM activation_binding),
   'activeSessions',(SELECT count(*)::int FROM auth_sessions WHERE user_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}') AND revoked_at IS NULL),
   'activeRefresh',(SELECT count(*)::int FROM refresh_tokens WHERE user_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}') AND revoked_at IS NULL),
   'mfaFactors',(SELECT count(*)::int FROM mfa_totp_factors
@@ -190,7 +206,8 @@ export function assertCatalogActivationState(stdout, binding = {}) {
     'activeRefresh', 'retainedSessions', 'retainedRefresh', 'loginAudits', 'bookings', 'requests',
     'identities', 'pushDevices', 'paymentCommands', 'identityProviderSessions', 'technicalProviderRuns',
     'notifications', 'notificationOutbox'];
-  exactKeys(value, [...countKeys, 'identityDigest', 'catalogDigest'], 'catalog_activation_database_state_invalid');
+  exactKeys(value, [...countKeys, 'activationRunDigest', 'identityDigest', 'catalogDigest'],
+    'catalog_activation_database_state_invalid');
   check(countKeys.every((key) => Number.isInteger(value[key]) && value[key] >= 0)
     && value.users === 2 && value.listing === 1 && value.upload === 1
     && value.seedAudits === 1 && value.activationAudits === 1
@@ -198,7 +215,9 @@ export function assertCatalogActivationState(stdout, binding = {}) {
     && value.retainedSessions === 2 && value.retainedRefresh === 2 && value.loginAudits === 2
     && ['bookings', 'requests', 'identities', 'pushDevices', 'paymentCommands', 'identityProviderSessions',
       'technicalProviderRuns', 'notifications', 'notificationOutbox'].every((key) => value[key] === 0)
+    && digestPattern.test(value.activationRunDigest ?? '')
     && digestPattern.test(value.identityDigest ?? '') && digestPattern.test(value.catalogDigest ?? '')
+    && (!binding.activationRunDigest || value.activationRunDigest === binding.activationRunDigest)
     && (!binding.loginIdentityDigest || value.identityDigest === binding.loginIdentityDigest)
     && (!binding.loginCatalogDigest || value.catalogDigest === binding.loginCatalogDigest)
     && (!binding.databaseStateDigest || digest(value) === binding.databaseStateDigest),
@@ -268,6 +287,7 @@ function assertActivationEnvironment(environment, runtimeRevision) {
 
 function assertBinding(binding) {
   const keys = ['opsCommit', 'loginProofOpsCommit', 'bootstrapManifestSha256', 'bootstrapRunIdSha256',
+    'seedScopeDigest', 'seedSnapshotDigest', 'activationRunDigest',
     'databasePreparationEvidenceSha256', 'loginProofEvidenceSha256', 'loginIdentityDigest',
     'loginCatalogDigest', 'databaseStateDigest', 'publicBeforeDigest', 'envSha256',
     'environmentDigest', 'apiFingerprint', 'backupFile', 'evidenceFile'];
@@ -342,11 +362,28 @@ function assertInventory({ manifest, api, database, volume, network, provider, u
   return Object.freeze({ [manifest.network]: network.Id, [manifest.providerNetwork]: provider.Id });
 }
 
-async function databaseState(command, manifest, runId, phase, commandEnv) {
+async function databaseState(command, manifest, phase, commandEnv) {
   const result = await command('docker', ['exec', manifest.databaseContainer, 'psql', '-X',
-    '--set', 'ON_ERROR_STOP=1', '--set', `run_hash=${hash(runId)}`, '-U', manifest.databaseUser,
-    '-d', manifest.databaseName, '-Atc', catalogActivationStateSql], { phase, env: commandEnv });
+    '--set', 'ON_ERROR_STOP=1', '-U', manifest.databaseUser, '-d', manifest.databaseName,
+    '-Atc', catalogActivationStateSql], { phase, env: commandEnv });
   return result.stdout;
+}
+
+async function seedState(command, manifest, phase, commandEnv) {
+  const result = await command('docker', ['exec', manifest.databaseContainer, 'psql', '-X',
+    '--set', 'ON_ERROR_STOP=1', '-U', manifest.databaseUser, '-d', manifest.databaseName,
+    '-Atc', fixtureSeedReadbackSql], { phase, env: commandEnv });
+  return result.stdout;
+}
+
+function captureSeedState(stdout, bootstrapRunIdSha256) {
+  const parts = String(stdout ?? '').trim().split('|');
+  check(parts.length === 8 && parts.slice(1, 4).every((value) => digestPattern.test(value))
+    && parts[3] === bootstrapRunIdSha256, 'catalog_activation_seed_readback_invalid');
+  const binding = Object.freeze({ seedScopeDigest: parts[1], seedSnapshotDigest: parts[2],
+    bootstrapRunIdSha256 });
+  assertFixtureSeedReadback(stdout, binding);
+  return binding;
 }
 
 async function databaseIntegrity(command, manifest, phase, commandEnv) {
@@ -369,7 +406,7 @@ async function publicState(command, containerId, visible, phase, commandEnv) {
   return assertCatalogActivationPublic(result.stdout, visible);
 }
 
-async function collectPreflight({ manifest, bootstrap, sourceCommit, evidenceFile, command, commandEnv }) {
+async function collectPreflight({ manifest, sourceCommit, evidenceFile, command, commandEnv }) {
   check(sourceCommit === manifest.fixtureBinding.opsCommit, 'catalog_activation_source_binding_invalid');
   check(!evidenceFile || evidenceFile === manifest.fixtureBinding.evidenceFile,
     'catalog_activation_evidence_path_invalid');
@@ -395,7 +432,9 @@ async function collectPreflight({ manifest, bootstrap, sourceCommit, evidenceFil
   }
   assertActivationEnvironment(apiValues, manifest.runtimeRevision);
   await databaseIntegrity(command, manifest, 'catalog_activation_database_integrity', commandEnv);
-  const state = assertCatalogActivationState(await databaseState(command, manifest, bootstrap.runId,
+  assertFixtureSeedReadback(await seedState(command, manifest, 'catalog_activation_seed_readback', commandEnv),
+    manifest.fixtureBinding);
+  const state = assertCatalogActivationState(await databaseState(command, manifest,
     'catalog_activation_database_state_readback', commandEnv), manifest.fixtureBinding);
   const publicBefore = await publicState(command, manifest.apiContainerId, false,
     'catalog_activation_public_before_readback', commandEnv);
@@ -418,7 +457,8 @@ async function collectPreflight({ manifest, bootstrap, sourceCommit, evidenceFil
       'catalog_activation_current_database_volume_inspect', 'catalog_activation_current_network_inspect',
       'catalog_activation_current_provider_network_inspect', 'catalog_activation_current_uploads_volume_inspect',
       'catalog_activation_current_image_inspect', 'catalog_activation_database_integrity_schema',
-      'catalog_activation_database_integrity_ledger', 'catalog_activation_database_state_readback',
+      'catalog_activation_database_integrity_ledger', 'catalog_activation_seed_readback',
+      'catalog_activation_database_state_readback',
       'catalog_activation_public_before_readback', 'catalog_activation_candidate_config_import',
       'catalog_activation_sealed_name_conflict']) });
 }
@@ -438,7 +478,7 @@ export async function prepareCatalogActivationManifest({
     && loginEvidenceSha256 === requiredLoginProofEvidenceSha256, 'catalog_activation_prepare_evidence_hash_invalid');
   check(new Set([resolve(backupFile ?? ''), resolve(evidenceFile ?? ''), resolve(outputFile ?? ''),
     resolve(envFile ?? '')]).size === 4, 'catalog_activation_prepare_output_paths_alias');
-  const bootstrap = validateBootstrap(bootstrapManifestBytes, bootstrapManifestSha256);
+  const bootstrap = validateCatalogActivationBootstrap(bootstrapManifestBytes, bootstrapManifestSha256);
   validateEvidenceBytes(databaseEvidenceBytes, databaseEvidenceSha256,
     'catalog_activation_database_evidence', testOnlyEvidenceHash);
   const loginEvidence = validateEvidenceBytes(loginEvidenceBytes, loginEvidenceSha256,
@@ -485,9 +525,13 @@ export async function prepareCatalogActivationManifest({
     bootstrapManifestSha256, bootstrapRunIdSha256 });
   await databaseIntegrity(command, { databaseContainer, databaseUser: 'shareittoo_green',
     databaseName: 'shareittoo_green' }, 'catalog_activation_prepare_database_integrity', commandEnv);
+  const databaseManifest = { databaseContainer, databaseUser: 'shareittoo_green',
+    databaseName: 'shareittoo_green' };
+  const seed = captureSeedState(await seedState(command, databaseManifest,
+    'catalog_activation_prepare_seed_readback', commandEnv), bootstrapRunIdSha256);
   const state = assertCatalogActivationState(await databaseState(command, {
     databaseContainer, databaseUser: 'shareittoo_green', databaseName: 'shareittoo_green',
-  }, bootstrap.runId, 'catalog_activation_prepare_database_state', commandEnv), {
+  }, 'catalog_activation_prepare_database_state', commandEnv), {
     loginIdentityDigest: loginEvidence.identityDigest, loginCatalogDigest: loginEvidence.catalogStateDigest,
   });
   const publicBefore = await publicState(command, api.Id, false, 'catalog_activation_prepare_public_before', commandEnv);
@@ -510,6 +554,8 @@ export async function prepareCatalogActivationManifest({
     label: { key: 'com.shareittoo.sit.green', value: 'true' }, fixtureBinding: {
       opsCommit: sourceCommit, loginProofOpsCommit: requiredLoginProofOpsCommit,
       bootstrapManifestSha256, bootstrapRunIdSha256,
+      seedScopeDigest: seed.seedScopeDigest, seedSnapshotDigest: seed.seedSnapshotDigest,
+      activationRunDigest: state.activationRunDigest,
       databasePreparationEvidenceSha256: databaseEvidenceSha256,
       loginProofEvidenceSha256: loginEvidenceSha256, loginIdentityDigest: loginEvidence.identityDigest,
       loginCatalogDigest: loginEvidence.catalogStateDigest, databaseStateDigest: digest(state),
@@ -524,6 +570,8 @@ export async function prepareCatalogActivationManifest({
     manifestSha256: hash(bytes), opsCommit: sourceCommit, runtimeRevision,
     loginProofOpsCommit: requiredLoginProofOpsCommit,
     bootstrapManifestSha256, bootstrapRunIdSha256,
+    seedScopeDigest: seed.seedScopeDigest, seedSnapshotDigest: seed.seedSnapshotDigest,
+    activationRunDigest: state.activationRunDigest,
     databasePreparationEvidenceSha256: databaseEvidenceSha256,
     loginProofEvidenceSha256: loginEvidenceSha256, envSha256: hash(envContent),
     changedEnvironmentKeys: [catalogActivationKey], syntheticCatalogEnabled: false });
@@ -546,7 +594,8 @@ export async function runCatalogActivation({ manifest, bootstrapManifestBytes, d
   check(testOnlyEvidenceHash === hash || command !== runCommand,
     'catalog_activation_test_hash_seam_forbidden');
   const target = assertCatalogActivationManifest(manifest);
-  const bootstrap = validateBootstrap(bootstrapManifestBytes, target.fixtureBinding.bootstrapManifestSha256);
+  const bootstrap = validateCatalogActivationBootstrap(bootstrapManifestBytes,
+    target.fixtureBinding.bootstrapManifestSha256);
   validateEvidenceBytes(databaseEvidenceBytes, target.fixtureBinding.databasePreparationEvidenceSha256,
     'catalog_activation_database_evidence', testOnlyEvidenceHash);
   validateLoginProofEvidence(validateEvidenceBytes(loginEvidenceBytes,
@@ -556,7 +605,7 @@ export async function runCatalogActivation({ manifest, bootstrapManifestBytes, d
     bootstrapRunIdSha256: target.fixtureBinding.bootstrapRunIdSha256,
   });
   const run = async () => {
-    const preflight = await collectPreflight({ manifest: target, bootstrap, sourceCommit, evidenceFile, command, commandEnv });
+    const preflight = await collectPreflight({ manifest: target, sourceCommit, evidenceFile, command, commandEnv });
     if (!execute) {
       check(confirmSource === undefined && confirmRun === undefined
         && commandEnv.STAGING_WEB_FIXTURE_CATALOG_EXECUTE === undefined
@@ -582,7 +631,9 @@ export async function runCatalogActivation({ manifest, bootstrapManifestBytes, d
       changedKeys: [catalogActivationKey], command, commandEnv,
       preMutationReadback: async () => {
         await databaseIntegrity(command, target, 'catalog_activation_pre_mutation_database_integrity', commandEnv);
-        assertCatalogActivationState(await databaseState(command, target, bootstrap.runId,
+        assertFixtureSeedReadback(await seedState(command, target,
+          'catalog_activation_pre_mutation_seed_readback', commandEnv), target.fixtureBinding);
+        assertCatalogActivationState(await databaseState(command, target,
           'catalog_activation_pre_mutation_database_readback', commandEnv), target.fixtureBinding);
         await publicState(command, preflight.api.Id, false,
           'catalog_activation_pre_mutation_public_readback', commandEnv);
@@ -596,14 +647,18 @@ export async function runCatalogActivation({ manifest, bootstrapManifestBytes, d
       },
       finalReadback: async ({ replacementId }) => {
         await databaseIntegrity(command, target, 'catalog_activation_final_database_integrity', commandEnv);
-        assertCatalogActivationState(await databaseState(command, target, bootstrap.runId,
+        assertFixtureSeedReadback(await seedState(command, target,
+          'catalog_activation_final_seed_readback', commandEnv), target.fixtureBinding);
+        assertCatalogActivationState(await databaseState(command, target,
           'catalog_activation_final_database_readback', commandEnv), target.fixtureBinding);
         await publicState(command, replacementId, true,
           'catalog_activation_final_public_readback', commandEnv);
       },
       rollbackReadback: async () => {
         await databaseIntegrity(command, target, 'catalog_activation_rollback_database_integrity', commandEnv);
-        assertCatalogActivationState(await databaseState(command, target, bootstrap.runId,
+        assertFixtureSeedReadback(await seedState(command, target,
+          'catalog_activation_rollback_seed_readback', commandEnv), target.fixtureBinding);
+        assertCatalogActivationState(await databaseState(command, target,
           'catalog_activation_rollback_database_readback', commandEnv), target.fixtureBinding);
         const config = await command('docker', ['exec', preflight.api.Id, 'node', '--input-type=module', '-e',
           catalogActivationConfigScript(false)], { phase: 'catalog_activation_rollback_config_readback', env: commandEnv });
@@ -617,6 +672,9 @@ export async function runCatalogActivation({ manifest, bootstrapManifestBytes, d
         loginProofOpsCommit: target.fixtureBinding.loginProofOpsCommit,
         bootstrapManifestSha256: target.fixtureBinding.bootstrapManifestSha256,
         bootstrapRunIdSha256: target.fixtureBinding.bootstrapRunIdSha256,
+        seedScopeDigest: target.fixtureBinding.seedScopeDigest,
+        seedSnapshotDigest: target.fixtureBinding.seedSnapshotDigest,
+        activationRunDigest: target.fixtureBinding.activationRunDigest,
         databasePreparationEvidenceSha256: target.fixtureBinding.databasePreparationEvidenceSha256,
         loginProofEvidenceSha256: target.fixtureBinding.loginProofEvidenceSha256,
         databaseStateDigest: target.fixtureBinding.databaseStateDigest,
