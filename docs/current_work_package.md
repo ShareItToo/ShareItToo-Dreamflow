@@ -1,12 +1,37 @@
 # Current Work Package: Staging Web Pilot delivery — ACTIVE
 
+## Bounded first-install transaction — source preparation only
+
+Authoritative baseline: clean `0d130b481eac873a0702e4088c6d37ef204862fb`.
+This successor adds a separate fail-closed bootstrap executor; ordinary Web
+deployment still requires a genuine prior Web artifact. First-install rollback
+uses the exact currently served gateway and a protected original Caddyfile,
+not a fabricated Web release. Source/artifact/runtime/mount/inode bindings,
+inode-preserving file-bind install/restore, shared deployment lock, bounded
+Caddy validation/reload and static readback are rehearsed with injected local
+failures (51 bootstrap tests plus 53 existing contract/route/smoke tests).
+Production/API/legal/assets remain byte-preserved outside the Staging
+handler. No live deployment or reload is performed by this source package.
+
+Sol's independent review found and fixed one interrupted-write race: automatic
+recovery now refuses foreign host-file bytes even before the candidate write
+completed. The focused package is 104/104 green and consumer closure/diff
+checks pass. Residual gate: exact-HEAD GitHub checks, accepted exact-source
+artifact and fresh owner-only bootstrap manifest/backup, then default server preflight.
+Only a separately authorized `--execute-bootstrap` may install. Functional
+Web Google/listing-AI and browser acceptance remain subsequent packages;
+the initial Web-shell flags remain fail-closed. See
+`docs/operations/STAGING_WEB_PILOT.md` for exact inputs and command.
+
+## Existing Web-first delivery context
+
 Walid changed the execution lane on 30 September 2026: accepted changes are
 first exposed on the closed Staging Web surface and iterated there. Routine UI
 or shared-flow corrections must not consume Google Play releases. Production
 `shareittoo.com` and Play remain unchanged until Web acceptance and the later
 native Android checkpoint are complete.
 
-The current source is clean and remote-aligned at
+The prior backend/native source baseline was recorded clean and remote-aligned at
 `8a90ec61fbe2a0c67265191809ddf332dd26a6b4`. A Flutter Web release build bound
 to `https://staging.shareittoo.com/api/v1` and the current closed-pilot feature
 profile completed successfully; the repository Web smoke passed. Live
@@ -15,11 +40,12 @@ boundaries, memory payment, Stripe live mode off and external Listing-AI off.
 The Staging root is not yet the Flutter client and therefore is not yet a
 usable browser-pilot link.
 
-The complete repository technical regression for this source package passed
+The previously recorded complete repository technical regression passed
 locally with exit 0 on 30 September 2026, including the full application test
 suite, a fresh Web release build and smoke, and the Android debug build. Exact
 GitHub verification and the reversible first Staging-Web installation remain
-the next gates; this local result is not live deployment evidence.
+the next gates. This is historical context, not a full regression or live
+deployment result for the bootstrap successor above.
 
 This package will:
 

@@ -54,17 +54,13 @@ also replaces old installations without a fetch handler. Neither path runs on
 Production; user/application storage is not erased. Caddy sets `no-store` on all
 Staging shell/assets, including entry, bootstrap and retirement worker.
 
-## Required separately authorized first-install gate
+## Separately authorized first installation
 
-The installer intentionally has **no bootstrap mode**. Before using it, verify
-the exact live Caddy mount inventory and preserve the gateway/Caddy configuration
-as an owner-only backup. Provision a separate, owner-controlled
-`/docker/shareittoo/staging-web` with `releases/` and a reviewed, checksum-valid
-prior release; `current` must be the relative symlink
-`releases/<prior-manifest-sha256>/web`. Do not fabricate prior-Web evidence from
-the gateway placeholder. If no accepted prior release exists, stop and request
-a bounded initial-seed/rehearsal package. That prerequisite is currently not
-proved by this source-only package.
+Ordinary `deploy_staging_web.mjs` still requires a real prior Web release and has
+**no bootstrap bypass**. The separate `bootstrap_staging_web.mjs` transaction
+accepts only an absent Web current/previous pointer. Its rollback truth is the
+currently served exact `ShareItToo staging gateway` response plus the exact
+original Caddyfile, never an invented prior Web manifest.
 
 Caddy uses the already live-verified **existing read-only directory bind**
 `/docker/shareittoo -> /app`. Its exact Staging root is
@@ -75,8 +71,82 @@ prerequisite. Do not replace or alias Production `/app/current`. The source
 Caddyfile changes only the Staging default handler; API, legal, support and
 assetlinks stay ahead of the SPA fallback. Reconfirm the binding in deployment
 preflight, validate the actual Caddy configuration, then obtain separate approval
-before its live reload. No helper performs SSH, Caddy reload, container recreation,
-DNS or Production actions.
+before its live reload. Ordinary deployment performs no Caddy reload. Only the
+explicit first-install transaction below can validate/reload the bound Caddy
+instance; neither helper performs SSH, container recreation, DNS or Production
+content changes.
+
+### Protected preflight inputs
+
+The CLI requires root, an exact clean source checkout containing the executor,
+and the matching accepted Web artifact. It accepts a root-owned `0600` manifest
+in a root-owned `0700` directory, plus its independently verified SHA256. Before
+this transaction, separately authorize preparation of the exact root-owned
+`0600` backup at
+`/docker/shareittoo/backups/staging-web-bootstrap/Caddyfile.<gatewayConfigHash>.backup`;
+that immediate directory must be root-owned `0700`. The transaction never
+overwrites or prints this backup. Do not include environment, credentials or raw
+Docker inspect output in either input. Manifest fields:
+
+| Field | Required value / fresh evidence |
+| --- | --- |
+| `schemaVersion`, `target` | `1`, `https://staging.shareittoo.com` |
+| `runId` | New `web-bootstrap-` plus 1–64 lowercase letters/digits/hyphens |
+| `source`, `artifactHash` | Exact 40-character source SHA and accepted artifact manifest SHA256 |
+| `gatewayConfigHash`, `candidateConfigHash` | Backup/live gateway Caddyfile SHA256 and source `backend/ops/Caddyfile` SHA256 |
+| `containerId`, `containerName` | Fresh full Docker ID; fixed `shareittoo-web` |
+| `image`, `imageId`, `version` | Exact image reference, immutable image SHA256 without prefix, Caddy version token |
+| `mountsHash` | `mountDigest()` of fresh `.Mounts`; sorted Type/Source/Destination/RW/Mode projection only |
+| `hostFile` | Fresh numeric `{inode, device, uid:0, gid:0}`; regular single-link root:root `0644` file required |
+
+Observed 2026-09-30 binding (context, **not** reusable execution authority):
+`caddy:2.10-alpine`, Caddy `v2.10.2`; host inode `853592`, size `2825`;
+host and container Caddyfile SHA256
+`6e5bf590292e7a28fc38ac1d43a68b1d4697831db33d6b49c0b9d1f21c0aca5b`.
+The config is a read-only **file bind** from `/docker/shareittoo/Caddyfile` to
+`/etc/caddy/Caddyfile`. Fresh inspect must prove both this binding and the
+read-only `/docker/shareittoo -> /app` directory binding, no shadow mount and no
+automatic `--watch` reload. Drift aborts; no stale-value fallback exists.
+
+```sh
+# Default: preflight only, no copying, file changes or Caddy reload.
+node /absolute/clean/source/tool/bootstrap_staging_web.mjs /absolute/private/manifest.json MANIFEST_SHA /absolute/clean/source /absolute/accepted/artifact
+# A separately authorized first install appends exactly --execute-bootstrap.
+```
+
+Preflight reads the mounted bytes, Caddy active JSON via its container-local
+admin endpoint, and the HTTPS gateway body. It validates/adapts both configs
+through `docker exec -i <exact-id> caddy validate|adapt --config /dev/stdin
+--adapter caddyfile`. The active JSON must equal the adapted gateway config;
+missing admin readback/tool support fails closed. Reconstructing the gateway
+from the candidate is restricted to the exact Staging handler, so every other
+Production/API/legal/assetlink byte must be unchanged.
+
+Execution uses the ordinary deployment lock, validates/copies the artifact,
+atomically creates `current` (no replacement), and installs config bytes through
+the opened original host inode, with truncate/write/fsync and host/container
+hash readback. **Never rename this Caddyfile:** its file bind would retain the
+old inode. It then runs `docker exec <exact-id> caddy reload --config
+/etc/caddy/Caddyfile --adapter caddyfile`, verifies active JSON, and compares the
+four served static identity/bootstrap bytes. Commands and HTTPS requests are
+bounded; no API/provider request is made.
+
+On any failure after config mutation, restore the exact backup through the same
+inode, validate/reload it, verify active gateway config and exact gateway body,
+then remove only this transaction's exact `current` symlink. Before config
+mutation, failures verify the unchanged gateway without an unnecessary reload.
+Partial/failed copied releases are retained, never served as rollback truth.
+A foreign runtime/config drift or failed recovery retains the lock and reports
+`bootstrap_rollback_failed_manual_recovery_required`; never overwrite a foreign
+active configuration or automatically remove that lock. The owner-only
+`<runId>.json` journal in the backup directory records PASS only after readback,
+otherwise restored/failure state. Colliding journal/release paths abort.
+
+Local injected rehearsals prove transaction branches, not actual Caddy command,
+mount, network or browser acceptance. No live first installation has occurred
+in this source package. Interrupted processes/power loss require operator
+inspection of the journal, original backup, inode, active JSON and current;
+this is not a promise of crash-atomic multi-resource deployment.
 
 ## Preflight, switch and rollback
 
@@ -117,7 +187,7 @@ provides atomic process-level switching, not a power-loss durability guarantee.
 ## Focused proof
 
 ```sh
-node --test test/tool/staging_web_contract.test.mjs test/tool/p0a_web_smoke_readiness.test.mjs test/tool/prepare_public_store_route_rollout.test.mjs
+node --test test/tool/staging_web_bootstrap.test.mjs test/tool/staging_web_contract.test.mjs test/tool/p0a_web_smoke_readiness.test.mjs test/tool/prepare_public_store_route_rollout.test.mjs
 node tool/check_current_consumer_closure.mjs
 git diff --check
 ```
